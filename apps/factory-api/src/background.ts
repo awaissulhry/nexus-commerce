@@ -62,7 +62,8 @@ import { systemHoldsCron, systemHoldsHandler } from './modules/shipping/holds/sy
 // B-W2b-393: the suggested matches of the bank lines, looked at again when payments, invoices or deposit requests change.
 import { suggestionHandlers } from './modules/payments/matching/suggest'
 // B-W2b-F48: the TD02 of a deposit paid through an accepted bank line.
-import { bankDepositInvoiceHandler } from './modules/payments/deposit-invoice'
+// B-W2b-F55: + the TD02 of a deposit request money was placed on by any other command (typed by hand, the office without it, an online late success).
+import { allocatedDepositInvoiceHandler, bankDepositInvoiceHandler } from './modules/payments/deposit-invoice'
 // B-W2b-407
 import { ppvHandlers } from './modules/costing/ppv/handlers'
 import { costOfSalesHandlers } from './modules/costing/cost-of-sales/handlers'
@@ -301,7 +302,8 @@ const W2B_377_HANDLERS: readonly EventHandler[] = [releasedReceiptHandler()]
 const W2B_386_HANDLERS: readonly EventHandler[] = [systemHoldsHandler()]
 // B-W2b-393: a payment recorded, placed, taken back or voided, an invoice issued, a deposit request made or waived → the company's bank line suggestions.
 // B-W2b-F48: + a bank line's acceptance that recorded its payment → the deposit invoice (TD02) of each deposit request it paid before the goods left.
-const W2B_393_HANDLERS: readonly EventHandler[] = [...suggestionHandlers(), bankDepositInvoiceHandler()]
+// B-W2b-F55: + money placed on a deposit request by any other command (payments.record, payments.allocate, deposit received without it, an online late success) → its deposit invoice (TD02), the same rule.
+const W2B_393_HANDLERS: readonly EventHandler[] = [...suggestionHandlers(), bankDepositInvoiceHandler(), allocatedDepositInvoiceHandler()]
 // B-W2b-394: a sorted mail → the capture address's match and its team inbox; a mail to an inquiry address → its inquiry; a bounce → the sender's task.
 const W2B_394_HANDLERS: readonly EventHandler[] = [mailRouteHandler(), inquiryFromAddressHandler(), bounceTaskHandler()]
 // B-W2b-398

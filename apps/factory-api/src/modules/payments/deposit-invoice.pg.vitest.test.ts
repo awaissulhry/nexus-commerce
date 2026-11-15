@@ -6,12 +6,13 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { buildApp } from '../../core/app'
-import { callerFor } from '../../core/command'
+import { callerFor, command } from '../../core/command'
 import { testAuthenticator, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { addTenant, startHarness, type Harness, type TestTenant } from '../../platform/auth/sessions/testing/harness'
 import { systemContext } from '../../platform/outbox/system'
-import { afterBankAcceptance, bankDepositInvoiceHandler } from './deposit-invoice'
+import { afterBankAcceptance, afterDepositAllocation, allocatedDepositInvoiceHandler, bankDepositInvoiceHandler } from './deposit-invoice'
+import { applyIntentEvent } from './online/webhook'
 
 /**
  * B-W2b-F48 — a deposit paid through an accepted bank line gets its deposit invoice (TD02) like the other two ways a deposit
@@ -28,6 +29,16 @@ import { afterBankAcceptance, bankDepositInvoiceHandler } from './deposit-invoic
  *                         request is invoiced only for what passes the kept TD02
  *   by hand first         a DRAFT deposit invoice a person started: the worker makes no second one
  *   held                  a customer without a tax identity: no TD02, the refusal audited on the request
+ * B-W2b-F55 — money placed on a deposit request by any other command, the worker's `payments.allocatedDepositInvoice` run
+ * on the very payment.allocated event that command wrote:
+ *   POST /payments        allocated to the request: exactly one TD02 for the amount allocated, on the order; a retry: still one
+ *   a part, then later    a part typed (its TD02 for the part), the rest placed later by POST /payments/:id/allocations (its TD02)
+ *   reversal              a part's allocation taken back and the payment voided: the TD02 stays ISSUED, no credit note, a retry
+ *                         makes nothing; the request's right payment is invoiced only for what passes the kept TD02
+ *   by hand first         a DRAFT deposit invoice a person started: no second one
+ *   the office without it "deposit received" with issueDepositInvoice: false: the TD02 follows by the worker, once
+ *   online, late          a success after the intent failed (no intent step runs): its TD02 by the worker; a finished intent's
+ *                         payment and the bank lines' acceptances are their own steps' (nothing here)
  * Every company, customer, VAT number, IBAN (bank and branch code 00000) and amount is made up. Run with
  * `node scripts/factory/run-pg-tests.mjs modules/payments`.
  */
@@ -266,5 +277,191 @@ describe('a deposit request paid by an accepted bank line gets its TD02 by the w
     expect(await td02sOf(requests.held)).toEqual([])
     const audit = await admin<{ after: Json }>(`SELECT after FROM "AuditLog" WHERE action = 'payments.bankDepositInvoiceHeld' AND "recordId" = $1`, [requests.held])
     expect(audit.map((row) => row.after)).toEqual([expect.objectContaining({ matchId: chosen.matchId, paymentId: chosen.paymentId, reason: expect.stringContaining('tax identity') })])
+  })
+})
+
+// ---- B-W2b-F55: money placed on a deposit request by any other command ----------------------------------------------
+
+describe('a deposit request paid by any other command gets its TD02 by the worker, by the same rule (B-W2b-F55)', () => {
+  /** One order and its deposit request (30 %, TD02) per case, made here (after the bank's cases, so their suggestions stay as they were). */
+  const PLACED = {
+    whole: { number: 'OV-F55-1001', amount: 48800 },
+    part: { number: 'OV-F55-2002', amount: 60000 },
+    back: { number: 'OV-F55-3003', amount: 90000 },
+    draft: { number: 'OV-F55-4004', amount: 36000 },
+    office: { number: 'OV-F55-5005', amount: 27000 },
+    late: { number: 'OV-F55-6006', amount: 33000 },
+    online: { number: 'OV-F55-7007', amount: 21000 },
+  } as const
+  type Placed = keyof typeof PLACED
+  const placedOrders = {} as Record<Placed, string>
+  const placedRequests = {} as Record<Placed, string>
+  const paymentAccount = newId()
+  let refs = 0
+  const typed = (amount: number, allocations?: readonly Json[]) => ok('POST', '/payments', { companyId: company(), partyId: ids.customer, amount, receivedOn: TODAY, externalRef: `CRO-F55-${String(++refs).padStart(4, '0')}`, ...(allocations ? { allocations } : {}) }, 201)
+  const system = () => callerFor(h.database, systemContext(tenant.id, newId()))
+
+  /** The worker's run of the handler on every payment.allocated event of the payment (the envelope as the relay sends it, its source the command). */
+  async function runPlaced(paymentId: string): Promise<void> {
+    const rows = await admin<{ id: string; source: string; payload: Json }>(`SELECT id, source, payload FROM "OutboxEvent" WHERE type = 'payment.allocated' AND payload->>'paymentId' = $1 ORDER BY "occurredAt", id`, [paymentId])
+    expect(rows.length, `the payment.allocated events of ${paymentId}`).toBeGreaterThan(0)
+    for (const row of rows) {
+      const envelope = { eventId: row.id, type: 'payment.allocated', version: 1, tenantId: tenant.id, companyId: company(), source: row.source, payload: row.payload } as never
+      await allocatedDepositInvoiceHandler().handle(envelope, { caller: system(), attempt: 1 } as never)
+    }
+  }
+  const placedOutcome = (paymentId: string, allocationId: string, requestId: string, placedBy: string) => afterDepositAllocation(system(), { paymentId, allocationId, target: 'DEPOSIT_REQUEST', targetId: requestId, placedBy }, newId())
+  const placedAudits = (requestId: string) => admin<{ action: string; after: Json }>(`SELECT action, after FROM "AuditLog" WHERE action LIKE 'payments.allocatedDepositInvoice%' AND "recordId" = $1 ORDER BY at, id`, [requestId])
+
+  /** An online payment intent for the request (CREATED), on the FAKE payment account. */
+  async function intentFor(requestId: string, amount: number): Promise<string> {
+    const intentId = newId()
+    await admin(`INSERT INTO "PaymentIntent" (id, "tenantId", "companyId", "partyId", "depositRequestId", method, amount, currency, "providerAccountId") VALUES ($1, $2, $3, $4, $5, 'CARD', $6, 'EUR', $7)`, [intentId, tenant.id, company(), ids.customer, requestId, amount, paymentAccount])
+    return intentId
+  }
+  /** The provider's word about the intent, applied as the inbound webhook applies it. */
+  const providerSays = (intentId: string, providerRef: string, type: 'payment_intent.succeeded' | 'payment_intent.payment_failed', amount: number) =>
+    command(system(), { name: 'payments.testProvider', input: { intentId, type } }, async (tools) => {
+      const applied = await applyIntentEvent(tools, paymentAccount, { eventId: `evt_${newId()}`, type, providerRef, intentId, state: type === 'payment_intent.succeeded' ? 'succeeded' : 'requires_payment_method', amount, currency: 'EUR', failureCode: type === 'payment_intent.payment_failed' ? 'card_declined' : null })
+      tools.audit({ recordType: 'PaymentIntent', recordId: intentId, after: { applied } })
+      return { applied }
+    })
+
+  beforeAll(async () => {
+    for (const [key, entry] of Object.entries(PLACED) as [Placed, (typeof PLACED)[Placed]][]) {
+      placedOrders[key] = newId()
+      placedRequests[key] = newId()
+      await admin(`INSERT INTO "SalesOrder" (id, "tenantId", "companyId", "partyId", number, "orderDate", "taxMode", "billTo", "shipTo") VALUES ($1, $2, $3, $4, $5, '2026-10-01', 'IT_B2B', '{}', '{}')`, [placedOrders[key], tenant.id, company(), ids.customer, entry.number])
+      await admin(
+        `INSERT INTO "DepositRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, "depositPct", currency, amount, "dueDate", "fiscalDocument", "fiscalRule") VALUES ($1, $2, $3, $4, $5, 'ACCONTO', 30, 'EUR', $6, '2026-12-31', 'TD02', 'DEPOSIT_INVOICE_IT')`,
+        [placedRequests[key], tenant.id, company(), ids.customer, placedOrders[key], entry.amount],
+      )
+    }
+    await admin(`INSERT INTO "IntegrationAccount" (id, "tenantId", "companyId", provider, code, label, mode, "rateLimitPerMinute", "rateLimitBurst") VALUES ($1, $2, $3, 'PAYMENT_FAKE', 'pay-fake-f55', 'Card payments (fake)', 'FAKE', 6000, 1000)`, [paymentAccount, tenant.id, company()])
+  })
+
+  let wholePayment: Json = {}
+
+  it('POST /payments allocated to the request: PAID, no TD02 in the command, then exactly one TD02 for the amount allocated, on the order, issued', async () => {
+    const { payment } = await typed(PLACED.whole.amount, [{ depositRequestId: placedRequests.whole }])
+    wholePayment = payment
+    expect(await requestStatus(placedRequests.whole)).toBe('PAID')
+    // The typed command stays as it was: the TD02 is the worker's.
+    expect(await td02sOf(placedRequests.whole)).toEqual([])
+    await runPlaced(payment.id)
+    const made = await td02sOf(placedRequests.whole)
+    expect(made).toHaveLength(1)
+    expect(made[0]).toMatchObject({ status: 'ISSUED', grossTotal: PLACED.whole.amount, salesOrderId: placedOrders.whole, depositRequestId: placedRequests.whole, number: expect.stringMatching(new RegExp(`^FT-${YEAR}-\\d{5}$`)) })
+    expect(made[0]!.causale).toContain(`pagamento ricevuto il ${dmy(TODAY)}`)
+    expect((await placedAudits(placedRequests.whole)).map((row) => [row.action, row.after])).toEqual([['payments.allocatedDepositInvoice', expect.objectContaining({ allocationId: payment.allocations[0].id, placedBy: 'payments.record', paymentId: payment.id, invoiceId: made[0]!.id, number: made[0]!.number })]])
+  })
+
+  it('a retry of the worker changes nothing: still one TD02, and nothing left for the deposit draft by hand', async () => {
+    await runPlaced(wholePayment.id)
+    expect(await placedOutcome(wholePayment.id, wholePayment.allocations[0].id, placedRequests.whole, 'payments.record')).toBe('exists')
+    expect(await td02sOf(placedRequests.whole)).toHaveLength(1)
+    expect(await placedAudits(placedRequests.whole)).toHaveLength(1)
+    const byHand = await call('POST', '/invoicing/invoices/deposit-draft', { depositRequestId: placedRequests.whole })
+    expect(byHand.statusCode, byHand.body).toBe(409)
+    expect(byHand.json().error.message).toContain('Nothing paid on this deposit request is waiting for a deposit invoice')
+  })
+
+  it('a part typed now gets the TD02 of the part; the rest placed later (POST /payments/:id/allocations) gets the TD02 of the rest', async () => {
+    const PART = 25000
+    const first = (await typed(PART, [{ depositRequestId: placedRequests.part }])).payment
+    expect(await requestStatus(placedRequests.part)).toBe('OPEN')
+    await runPlaced(first.id)
+    expect((await td02sOf(placedRequests.part)).map((row) => [row.status, row.grossTotal])).toEqual([['ISSUED', PART]])
+    // Money on account first, placed on the request later by a person.
+    const onAccount = (await typed(PLACED.part.amount)).payment
+    expect(onAccount.allocations).toEqual([])
+    const placed = (await ok('POST', `/payments/${onAccount.id}/allocations`, { version: onAccount.version, allocations: [{ depositRequestId: placedRequests.part }] })).payment
+    expect(placed.allocations).toEqual([expect.objectContaining({ target: 'DEPOSIT_REQUEST', targetId: placedRequests.part, amount: PLACED.part.amount - PART })])
+    expect(await requestStatus(placedRequests.part)).toBe('PAID')
+    await runPlaced(onAccount.id)
+    await runPlaced(onAccount.id)
+    const both = await td02sOf(placedRequests.part)
+    expect(both.map((row) => [row.status, row.grossTotal, row.salesOrderId])).toEqual([
+      ['ISSUED', PART, placedOrders.part],
+      ['ISSUED', PLACED.part.amount - PART, placedOrders.part],
+    ])
+    expect((await placedAudits(placedRequests.part)).map((row) => row.after.placedBy)).toEqual(['payments.record', 'payments.allocate'])
+  })
+
+  it('reversal: a part’s allocation taken back and the payment voided — its TD02 stays ISSUED with no credit note; a retry makes nothing; the right payment is invoiced for what passes it', async () => {
+    const PART = 40000
+    const wrong = (await typed(PART, [{ depositRequestId: placedRequests.back }])).payment
+    await runPlaced(wrong.id)
+    const [kept] = await td02sOf(placedRequests.back)
+    expect(kept).toMatchObject({ status: 'ISSUED', grossTotal: PART })
+    const reversed = (await ok('POST', `/payments/${wrong.id}/allocations/${wrong.allocations[0].id}/reverse`, { note: 'Test: another customer paid it' })).payment
+    expect(reversed.allocations).toEqual(expect.arrayContaining([expect.objectContaining({ reversalOfId: wrong.allocations[0].id, amount: -PART })]))
+    const voided = (await ok('POST', `/payments/${wrong.id}/void`, { version: reversed.version, reason: 'Test: typed on the wrong customer' })).payment
+    expect(voided.status).toBe('VOIDED')
+    expect(await requestStatus(placedRequests.back)).toBe('OPEN')
+    // The issued TD02 never changes or goes (DPR 633/1972 art. 26): a credit note is a person's decision.
+    expect(await td02sOf(placedRequests.back)).toEqual([expect.objectContaining({ id: kept!.id, status: 'ISSUED', grossTotal: PART })])
+    expect(await creditNotesOf([kept!.id])).toEqual([])
+    // A retry of the allocated event after the reversal: the payment places nothing now, nothing is made.
+    await runPlaced(wrong.id)
+    expect(await placedOutcome(wrong.id, wrong.allocations[0].id, placedRequests.back, 'payments.record')).toBe('not_required')
+    expect(await td02sOf(placedRequests.back)).toHaveLength(1)
+    // The request's right payment, whole: invoiced only for what passes the kept TD02 (never two TD02s for the same money).
+    const right = (await typed(PLACED.back.amount, [{ depositRequestId: placedRequests.back }])).payment
+    expect(await requestStatus(placedRequests.back)).toBe('PAID')
+    await runPlaced(right.id)
+    expect((await td02sOf(placedRequests.back)).map((row) => [row.status, row.grossTotal])).toEqual([
+      ['ISSUED', PART],
+      ['ISSUED', PLACED.back.amount - PART],
+    ])
+  })
+
+  it('a DRAFT deposit invoice a person started by hand: the worker makes no second one', async () => {
+    const { payment } = await typed(PLACED.draft.amount, [{ depositRequestId: placedRequests.draft }])
+    const draft = (await ok('POST', '/invoicing/invoices/deposit-draft', { depositRequestId: placedRequests.draft }, 201)).invoice
+    expect(draft).toMatchObject({ docType: 'TD02', status: 'DRAFT', grossTotal: PLACED.draft.amount })
+    await runPlaced(payment.id)
+    expect(await placedOutcome(payment.id, payment.allocations[0].id, placedRequests.draft, 'payments.record')).toBe('exists')
+    expect(await td02sOf(placedRequests.draft)).toEqual([expect.objectContaining({ id: draft.id, status: 'DRAFT' })])
+  })
+
+  it('the office’s "deposit received" without the TD02 (issueDepositInvoice: false, no code): the worker issues it right after, once', async () => {
+    const office = await ok('POST', '/payments/deposit-received', { depositRequestId: placedRequests.office, amount: PLACED.office.amount, receivedOn: TODAY, externalRef: 'CRO-F55-OFFICE', issueDepositInvoice: false }, 201)
+    expect(office.depositInvoice).toMatchObject({ required: true, invoice: null })
+    expect(await requestStatus(placedRequests.office)).toBe('PAID')
+    expect(await td02sOf(placedRequests.office)).toEqual([])
+    await runPlaced(office.payment.id)
+    await runPlaced(office.payment.id)
+    expect(await td02sOf(placedRequests.office)).toEqual([expect.objectContaining({ status: 'ISSUED', grossTotal: PLACED.office.amount, salesOrderId: placedOrders.office })])
+    expect((await placedAudits(placedRequests.office)).map((row) => [row.action, row.after.placedBy])).toEqual([['payments.allocatedDepositInvoice', 'payments.depositReceived']])
+  })
+
+  it('online, a success after the intent failed (no intent step runs): its TD02 by the worker; a finished intent’s payment is its own step’s', async () => {
+    const late = await intentFor(placedRequests.late, PLACED.late.amount)
+    expect((await providerSays(late, 'pi_f55_late_0001', 'payment_intent.payment_failed', PLACED.late.amount)).result.applied).toBe('failed')
+    expect((await providerSays(late, 'pi_f55_late_0001', 'payment_intent.succeeded', PLACED.late.amount)).result.applied).toBe('late_success')
+    const [latePayment] = await admin<{ id: string }>(`SELECT id FROM "Payment" WHERE "externalRef" = 'pi_f55_late_0001'`)
+    expect(await admin(`SELECT status::text AS status, "paymentId" FROM "PaymentIntent" WHERE id = $1`, [late])).toEqual([{ status: 'FAILED', paymentId: null }])
+    expect(await requestStatus(placedRequests.late)).toBe('PAID')
+    await runPlaced(latePayment!.id)
+    expect(await td02sOf(placedRequests.late)).toEqual([expect.objectContaining({ status: 'ISSUED', grossTotal: PLACED.late.amount, salesOrderId: placedOrders.late })])
+    expect(await placedAudits(placedRequests.late)).toEqual([expect.objectContaining({ action: 'payments.allocatedDepositInvoice', after: expect.objectContaining({ paymentId: latePayment!.id }) })])
+    // A finished intent (SUCCEEDED, naming its payment): the intent's own step (payments.onlineFinished) makes the TD02, not this one.
+    const finished = await intentFor(placedRequests.online, PLACED.online.amount)
+    expect((await providerSays(finished, 'pi_f55_paid_0002', 'payment_intent.succeeded', PLACED.online.amount)).result.applied).toBe('succeeded')
+    const [onlinePayment] = await admin<{ id: string; allocationId: string }>(`SELECT p.id, a.id AS "allocationId" FROM "Payment" p JOIN "PaymentAllocation" a ON a."paymentId" = p.id WHERE p."externalRef" = 'pi_f55_paid_0002'`)
+    await runPlaced(onlinePayment!.id)
+    expect(await placedOutcome(onlinePayment!.id, onlinePayment!.allocationId, placedRequests.online, 'integration.processInbound')).toBeNull()
+    expect(await td02sOf(placedRequests.online)).toEqual([])
+    expect(await placedAudits(placedRequests.online)).toEqual([])
+  })
+
+  it('a bank line’s acceptances are their own step’s: the handler adds nothing to them', async () => {
+    const bank = await admin<{ paymentId: string }>(`SELECT DISTINCT payload->>'paymentId' AS "paymentId" FROM "OutboxEvent" WHERE type = 'payment.allocated' AND source LIKE 'payments.bank.%'`)
+    expect(bank.length).toBeGreaterThan(0)
+    const before = (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "Invoice" WHERE "docType" = 'TD02'`))[0]!.n
+    for (const row of bank) await runPlaced(row.paymentId)
+    expect((await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "Invoice" WHERE "docType" = 'TD02'`))[0]!.n).toBe(before)
+    expect(await admin(`SELECT id FROM "AuditLog" WHERE action LIKE 'payments.allocatedDepositInvoice%' AND "recordId" = ANY($1::uuid[])`, [Object.values(requests)])).toEqual([])
   })
 })

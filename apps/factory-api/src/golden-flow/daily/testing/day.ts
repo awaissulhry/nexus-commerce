@@ -51,7 +51,8 @@ import { supplyLateHandler } from '../../../modules/planning/exceptions/supply-l
 import { systemHoldsHandler } from '../../../modules/shipping/holds/system'
 import { suggestionHandlers } from '../../../modules/payments/matching/suggest'
 // B-W2b-F48: the TD02 of a deposit paid through an accepted bank line.
-import { bankDepositInvoiceHandler } from '../../../modules/payments/deposit-invoice'
+// B-W2b-F55: + the TD02 of a deposit request money was placed on by any other command.
+import { allocatedDepositInvoiceHandler, bankDepositInvoiceHandler } from '../../../modules/payments/deposit-invoice'
 // B-W2b-394
 import { mailRouteHandler } from '../../../platform/email-in/team-inbox/route'
 import { inquiryFromAddressHandler } from '../../../modules/sales/inquiries/from-mail'
@@ -153,7 +154,8 @@ const W2A_LISTS: ReadonlyArray<readonly [string, readonly string[]]> = [
   ['W2B_386_HANDLERS', ['systemHoldsHandler']],
   // B-W2b-393: the bank lines' suggested matches looked at again after payments, invoices and deposit requests change.
   // B-W2b-F48: + the deposit invoice (TD02) of a deposit request a bank line's accepted match paid.
-  ['W2B_393_HANDLERS', ['suggestionHandlers', 'bankDepositInvoiceHandler']],
+  // B-W2b-F55: + the deposit invoice (TD02) of a deposit request money was placed on by any other command (typed by hand, …).
+  ['W2B_393_HANDLERS', ['suggestionHandlers', 'bankDepositInvoiceHandler', 'allocatedDepositInvoiceHandler']],
   // B-W2b-394: the capture address's match and the team inboxes' routing, inquiries from an inquiry address, a bounce's task.
   ['W2B_394_HANDLERS', ['mailRouteHandler', 'inquiryFromAddressHandler', 'bounceTaskHandler']],
   // B-W2b-398: the customer notice (its site switch), tracking problems, the carrier's proof of delivery, used return labels.
@@ -178,7 +180,7 @@ export async function searchIndexers(): Promise<readonly SearchIndexer[]> {
 
 /** Every handler the worker runs: W1's HANDLERS, then the W2a lists, as background.ts hands them to startEventWorkers. */
 export function everyHandler(indexers: readonly SearchIndexer[]): readonly EventHandler[] {
-  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers(), trackingLinkHandler(), sharesNotifyHandler(), ...routingCheckpointHandlers(), ...buildPackHandlers(), ...distributorHandlers(), ...declarationHandlers(), ...reevaluateHandlers(), ...gateHandlers(), lotLifecycleHandler(), ...warehouseTaskHandlers(), approvedSendHandler(), ...creditHandlers(), supplyLateHandler(), orderScheduleHandler(), /* B-W2b-340 */ orderOptionsHandler(), /* B-W2b-377 */ releasedReceiptHandler(), /* B-W2b-386 */ systemHoldsHandler(), /* B-W2b-393 */ ...suggestionHandlers(), /* B-W2b-F48 */ bankDepositInvoiceHandler(), /* B-W2b-394 */ mailRouteHandler(), inquiryFromAddressHandler(), bounceTaskHandler(), /* B-W2b-398 */ customerNoticeHandler(), trackingProblemsHandler(), carrierPodHandler(), returnLabelsUsedHandler(), /* B-W2b-407 */ ...ppvHandlers(), ...costOfSalesHandlers(), /* B-W2b-428 */ factsHandler(), /* B-W2b-401 */ sdiTestAnswerHandler(), sdiArchiveCopyHandler(), /* B-W2b-402 */ trustedRemindersHandler(), paymentNoticeHandler(), /* B-W2b-405 */ ...collectPackageHandlers(), /* B-W2b-395 */ collectionDeliveredHandler()]
+  return [...workerHandlers(), notificationsHandler(), ...searchHandlers(indexers), alertsRecheckHandler(), ...ladderHandlers(), ...creditNoteHandlers(), ...payablesHandlers(), releaseOnWorkOrderDoneHandler(), pauseAtClockOutHandler(), ...attendanceHandlers(), ...overtimeHandlers(), ...earningsHandlers(), ...inspectionTriggerHandlers(), alertRulesHandler(), ...incidentHandlers(), ...healthHandlers(), stripPicturesHandler(), partnerNotificationsHandler({ cookieSecret: () => LOCAL_COOKIE_SECRET }), ...onlinePaymentHandlers(), trackingLinkHandler(), sharesNotifyHandler(), ...routingCheckpointHandlers(), ...buildPackHandlers(), ...distributorHandlers(), ...declarationHandlers(), ...reevaluateHandlers(), ...gateHandlers(), lotLifecycleHandler(), ...warehouseTaskHandlers(), approvedSendHandler(), ...creditHandlers(), supplyLateHandler(), orderScheduleHandler(), /* B-W2b-340 */ orderOptionsHandler(), /* B-W2b-377 */ releasedReceiptHandler(), /* B-W2b-386 */ systemHoldsHandler(), /* B-W2b-393 */ ...suggestionHandlers(), /* B-W2b-F48 */ bankDepositInvoiceHandler(), /* B-W2b-F55 */ allocatedDepositInvoiceHandler(), /* B-W2b-394 */ mailRouteHandler(), inquiryFromAddressHandler(), bounceTaskHandler(), /* B-W2b-398 */ customerNoticeHandler(), trackingProblemsHandler(), carrierPodHandler(), returnLabelsUsedHandler(), /* B-W2b-407 */ ...ppvHandlers(), ...costOfSalesHandlers(), /* B-W2b-428 */ factsHandler(), /* B-W2b-401 */ sdiTestAnswerHandler(), sdiArchiveCopyHandler(), /* B-W2b-402 */ trustedRemindersHandler(), paymentNoticeHandler(), /* B-W2b-405 */ ...collectPackageHandlers(), /* B-W2b-395 */ collectionDeliveredHandler()]
 }
 
 /** background.ts starts exactly W1's HANDLERS and the W2a lists above: a list or factory a step adds fails the day until it runs here too. */
