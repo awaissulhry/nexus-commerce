@@ -1,13 +1,11 @@
-import { DomainError, InvalidStateError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { InvalidStateError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { businessDate, businessDayRange, toUtcIso } from '@nexus/factory-domain/core/time'
-import { depositInvoiceDecision } from '@nexus/factory-domain/invoicing/deposit'
 import { amountText, receiptMail, type IntentMethod } from '@nexus/factory-domain/payments/online/rules'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { sendEmail } from '../../../platform/email-out/outbound'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { closeTasksInCommand, moveDueInCommand, openTaskInCommand, reopenInCommand, tasksOfRecord } from '../../../platform/portal/tasks/store'
-import { insertDepositDraft, readDepositRequest } from '../../invoicing/drafts'
-import { issueInCommand, seriesKindFor } from '../../invoicing/issue'
+import { depositInvoiceAfterPayment } from '../deposit-invoice'
 import { lockMoney } from '../locks'
 import { processPayments, type PaymentsRuntime } from './runtime'
 import { readIntent, targetFacts, targetOf, type IntentRow, type Reader } from './store'
@@ -71,6 +69,11 @@ export async function syncPayTask(caller: CommandCaller, invoiceId: string, caus
   const planned = await caller.withClient((db) => payTaskMove(db, invoiceId))
   if (planned.move === null) return null
   const { result } = await command(caller, { name: 'payments.payInvoiceTask', input: { invoiceId }, ...(causationId ? { causationId } : {}) }, async (tools) => {
+    // B-W2b-436: the invoice's money lock first. The relay hands a batch's events to the handlers at once, so two events of one
+    // invoice (its issue and its send in one command, a send and an allocation) ran two of these side by side on the same
+    // request: one answered "This request changed meanwhile" and the worker tried again. Under the lock the second plans after
+    // the first has written.
+    await lockMoney(tools.tx, tools.context, 'invoice', invoiceId)
     const { move, facts, dueAt } = await payTaskMove(tools.tx, invoiceId)
     const [task] = await tasksOfRecord(tools.tx, 'Invoice', invoiceId, { kinds: ['PAY_INVOICE'], sourceKey: payInvoiceKey(invoiceId) })
     if (move === 'open') await openTaskInCommand(tools, { companyId: facts!.companyId, partyId: facts!.partyId, kind: 'PAY_INVOICE', record: { type: 'Invoice', id: invoiceId, label: facts!.number ?? '' }, sourceKey: payInvoiceKey(invoiceId), dueAt, askedBy: null })
@@ -107,43 +110,12 @@ export async function afterIntentFinished(caller: CommandCaller, intentId: strin
   return { cancelledAtProvider: false, depositInvoice, receipt }
 }
 
-/** The TD02 of a deposit paid online, when the rule requires one (see the file's comment). */
+/**
+ * The TD02 of a deposit paid online, when the rule requires one (see the file's comment). B-W2b-F48: through the one rule
+ * of every path a deposit is paid by (../deposit-invoice.ts, shared with an accepted bank line), the office's code making it.
+ */
 async function depositInvoiceOf(caller: CommandCaller, intent: IntentRow, causationId: string): Promise<FinishedOutcome['depositInvoice']> {
-  const requestId = intent.depositRequestId!
-  const plan = await caller.withClient(async (db) => {
-    const request = await db.depositRequest.findUnique({ where: { id: requestId }, select: { id: true, companyId: true, fiscalDocument: true, fiscalRule: true, orderId: true } })
-    if (!request) return null
-    const existing = await db.invoice.findFirst({ where: { depositRequestId: requestId, docType: 'TD02' }, select: { id: true } })
-    const allocated = (await db.paymentAllocation.aggregate({ where: { paymentId: intent.paymentId!, depositRequestId: requestId }, _sum: { amount: true } }))._sum.amount ?? 0
-    const shipped = request.orderId ? await db.shipment.findFirst({ where: { salesOrderId: request.orderId, shippedAt: { not: null } }, orderBy: { shippedAt: 'asc' }, select: { shippedAt: true } }) : null
-    const paidOn = businessDate(intent.finishedAt ?? new Date())
-    const decision = depositInvoiceDecision({ fiscalDocument: request.fiscalDocument, fiscalRule: request.fiscalRule, paidAmount: allocated, paidOn, goodsLeftOn: shipped?.shippedAt ? businessDate(shipped.shippedAt) : null })
-    return { request, existing, allocated, paidOn, decision }
-  })
-  if (!plan) return null
-  if (!plan.decision.required || plan.allocated <= 0) return 'not_required'
-  if (plan.existing) return 'exists'
-  try {
-    await command(caller, { name: 'payments.onlineDepositInvoice', idempotencyKey: `online-td02.${intent.id}`, input: { intentId: intent.id, depositRequestId: requestId }, causationId }, async (tools) => {
-      await lockMoney(tools.tx, tools.context, 'deposit', requestId)
-      if (await tools.tx.invoice.findFirst({ where: { depositRequestId: requestId, docType: 'TD02' }, select: { id: true } })) throw new InvalidStateError('The deposit request has its deposit invoice already.')
-      if ((await seriesKindFor(tools.tx, plan.request.companyId, 'TD02')) === null) throw new DomainError('conflict', 'This company has no active deposit invoice or invoice number series: an admin sets it up under numbering.', [{ path: 'numbering', message: 'No series.' }])
-      const request = (await readDepositRequest(tools.tx, requestId))!
-      const invoiceId = await insertDepositDraft(tools, request, plan.allocated, plan.paidOn)
-      const issued = await issueInCommand(tools, invoiceId)
-      tools.audit({ action: 'payments.onlineDepositInvoice', recordType: 'DepositRequest', recordId: requestId, companyId: plan.request.companyId, after: { intentId: intent.id, paymentId: intent.paymentId, invoiceId, number: issued.number } })
-      return { invoiceId }
-    })
-    return 'issued'
-  } catch (error) {
-    if (!(error instanceof DomainError)) throw error
-    const reason = `${error.message}${error.issues && error.issues.length > 1 ? ` ${error.issues.map((issue) => issue.message).join(' ')}` : ''}`.slice(0, 500)
-    await command(caller, { name: 'payments.onlineDepositInvoiceHeld', idempotencyKey: `online-td02-held.${intent.id}`, input: { intentId: intent.id }, causationId }, async (tools) => {
-      tools.audit({ action: 'payments.onlineDepositInvoiceHeld', recordType: 'DepositRequest', recordId: requestId, companyId: plan.request.companyId, after: { intentId: intent.id, paymentId: intent.paymentId, reason } })
-      return { held: true }
-    })
-    return 'held'
-  }
+  return depositInvoiceAfterPayment(caller, { paymentId: intent.paymentId!, depositRequestId: intent.depositRequestId!, paidOn: businessDate(intent.finishedAt ?? new Date()), through: { kind: 'ONLINE', intentId: intent.id } }, causationId)
 }
 
 /** The receipt mail (see the file's comment). */
