@@ -285,6 +285,8 @@ import { events as mailDepth } from '../mail-depth/events'
 // B-W2b-398: delivery and return labels (shipment.customer_notice_sent, .tracking_problem_raised, .tracking_problem_resolved,
 // .pod_recorded, return_label.changed).
 import { events as shippingDelivery } from '../shipping-delivery/events'
+// B-W2b-409: export and customs (customs.document_made, customs.declaration_changed, customs.settings_changed).
+import { events as shippingCustoms } from '../shipping-customs/events'
 // B-W2b-396: invoicing in depth (invoice_run.changed, deposit_cancellation_rule.changed, deposit_cancellation.decided, fee_credit.changed).
 import { events as invoicingDepth } from '../invoicing-depth/events'
 // B-W2b-419: cost rates (cost_per_minute.changed, overhead_rule.changed).
@@ -669,6 +671,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...mailDepth,
   // B-W2b-398
   ...shippingDelivery,
+  // B-W2b-409
+  ...shippingCustoms,
   // B-W2b-396
   ...invoicingDepth,
   // B-W2b-419

@@ -593,6 +593,7 @@
       "why.RULE_ALERT.recipient": "La regola \"{rule}\" avvisa te.",
       "alerts.UNKNOWN": "Avviso su {label}.",
       "alerts.RETURN_ARRIVED_LATE": "Il reso {label} è arrivato il {receivedDate}, {days} giorni dopo la scadenza ({dueDate}).",
+      "alerts.EXIT_PROOF_MISSING": "La spedizione {label} è partita il {shippedDate}: la prova dell'uscita manca ancora dopo {days} giorni (senza, l'esportazione non resta non imponibile).",
       "INQUIRY_WAITING.ASSIGNED": "La richiesta {number} di {from} aspetta la tua risposta da più di un giorno lavorativo.",
       "INQUIRY_WAITING.NEW": "La richiesta {number} di {from} aspetta da più di un giorno lavorativo e nessuno la segue ancora.",
       "INQUIRY_WAITING.blocks": "Il cliente aspetta una risposta.",
