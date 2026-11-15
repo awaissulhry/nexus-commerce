@@ -34,6 +34,8 @@ import { collectedProblems, voidAllPlan, voidAllProblems, voidOutcomeWords } fro
 import { expectedDeliveryOf, shipmentEtaOf, trackingPageOf } from '@nexus/factory-domain/shipping/labels/tracking'
 import { isTestLabel } from '@nexus/factory-domain/shipping/test-mode/rules'
 import { assertCarrierRules } from '../validate/validate'
+// B-W2b-400 (LOG-033, LOG-038, LOG-041, LOG-042): the booking (who the carrier bills, the services, the values).
+import { auditBooking, bookingForBuy, withBooking } from '../services/booking'
 
 /**
  * Carrier labels (B-W1-48; LOG-025, LOG-032, LOG-059; A2 SCR-067 in the office, SCR-098 on the floor).
@@ -114,6 +116,10 @@ export async function buyLabels(runtime: { carrier: CarrierRuntime; files: Files
   if (todo.length === 0) {
     return { created: false, answer: { ...(await caller.withClient((client) => labelsView(client, shipment, serverClock.now()))), outcomes: [], problem: null } }
   }
+  // B-W2b-400: the booking checked before anything is bought (409 in words: a service the carrier does not offer, an export
+  // without who pays the duties, a service not chosen for live use, our own contract that cannot be used): its extras ride
+  // each parcel's request.
+  const booking = await bookingForBuy(caller, shipment, todo.map((parcel) => parcel.id))
 
   // Outside any transaction: the carrier and the file store, parcel by parcel.
   const formats = labelFormatsFor(read.labelPrinter?.kind ?? null)
@@ -121,7 +127,7 @@ export async function buyLabels(runtime: { carrier: CarrierRuntime; files: Files
   const bought: Bought[] = []
   for (const parcel of todo) {
     try {
-      const request = labelRequestOf(read.facts, parcel)
+      const request = withBooking(labelRequestOf(read.facts, parcel), booking, parcel.id)
       const label = accountId === null ? carrier.test.createLabel(request) : await carrier.createLabel(caller, accountId, request)
       const prepared: PreparedGeneratedFile[] = []
       for (const format of formats) {
@@ -171,6 +177,8 @@ export async function buyLabels(runtime: { carrier: CarrierRuntime; files: Files
         if (testMode) await assertStillInTestMode(tools, current.siteId)
         const recorded = await recordBought(tools, current, accountId, bought)
         surplus = recorded.surplus
+        // B-W2b-400: who the carrier billed and which services the labels carried.
+        auditBooking(tools, current, booking, recorded.parcels)
         return { recorded: recorded.parcels }
       },
     )
