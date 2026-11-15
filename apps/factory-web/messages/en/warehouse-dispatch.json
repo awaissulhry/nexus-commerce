@@ -664,7 +664,7 @@
       "NO_SETTINGS": "The site has no shipping settings yet: set them above first.",
       "ALREADY_LIVE": "The site buys live labels already.",
       "ALREADY_TEST": "The site is in test mode already.",
-      "NO_CARRIER_ACCOUNT": "The company has no usable carrier connection yet (Admin › Connections): nothing could be bought."
+      "NO_CARRIER_ACCOUNT": "The company has no usable carrier connection yet (Admin › Connections & API): nothing could be bought."
     },
     "held": {
       "noRight": "Your role cannot change the shipping settings (shipping.settings.manage).",

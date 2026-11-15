@@ -664,7 +664,7 @@
       "NO_SETTINGS": "Il sito non ha ancora le impostazioni di spedizione: impostale prima sopra.",
       "ALREADY_LIVE": "Il sito acquista già etichette reali.",
       "ALREADY_TEST": "Il sito è già in modalità test.",
-      "NO_CARRIER_ACCOUNT": "L'azienda non ha ancora una connessione vettore utilizzabile (Admin › Connessioni): non si potrebbe acquistare nulla."
+      "NO_CARRIER_ACCOUNT": "L'azienda non ha ancora una connessione vettore utilizzabile (Admin › Connessioni e API): non si potrebbe acquistare nulla."
     },
     "held": {
       "noRight": "Il tuo ruolo non può cambiare le impostazioni di spedizione (shipping.settings.manage).",
