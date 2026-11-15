@@ -176,8 +176,23 @@ function within(column: ScopeColumn | undefined, set: ScopeSet): WhereClause | n
  * the caller's own filter as `{ AND: [scopeWhere(…), filter] }`, never by spreading.
  */
 export function scopeWhere(actor: Actor, permission: Permission, columns: ScopeColumns): WhereClause {
+  return grantsWhere(actor, grantsFor(actor, permission), columns)
+}
+
+// ── B-W2b-F49 ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * The rows ANY of the actor's grants reaches, whatever permission it holds: the companies and sites a person works in,
+ * the same filter as scopeWhere() over every grant. Only for what every signed-in person may be told about the places
+ * they work in (the shell's TEST MODE notices: names and on/off), never for a record's data, which needs its permission.
+ */
+export function reachWhere(actor: Actor, columns: ScopeColumns): WhereClause {
+  return grantsWhere(actor, actor.grants, columns)
+}
+// ── end B-W2b-F49 ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The rows these grants of the actor reach (scopeWhere's filter, for any set of the actor's grants). */
+function grantsWhere(actor: Actor, grants: readonly Grant[], columns: ScopeColumns): WhereClause {
   if (!audienceIsValid(actor)) return NO_ROWS
-  const grants = grantsFor(actor, permission)
   if (grants.length === 0) return NO_ROWS
 
   const fixed: WhereClause[] = []
