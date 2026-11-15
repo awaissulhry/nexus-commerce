@@ -10,6 +10,8 @@ import { failed, loaded, loading, problemKey, problemNotice, type Loaded, type N
 import { listFloorLanguages, setFloorLanguages } from './api'
 import { completenessOf, floorRefusalOf, type CompanyLanguage, type FloorProblem, type FloorSite } from './model'
 import { LanguagesView } from './view/LanguagesView'
+// B-W2b-432: the languages per partner contact.
+import { PartnerLanguagesSection } from './partner/PartnerLanguagesSection'
 
 /**
  * `/w/<company>/admin/languages` (SCR-016): the companies with their sites (`GET /org/companies`: language, time zone),
@@ -75,6 +77,7 @@ export function LanguagesPage() {
 
   return (
     <LanguagesView
+      partners={<PartnerLanguagesSection />}
       model={{ prefix, companies, people, floor, floorProblem, floorBusy, completeness, can: { manage: held.has('companies.manage') }, asOf, busy, notice }}
       actions={{
         onDismissNotice: () => setNotice(null),
