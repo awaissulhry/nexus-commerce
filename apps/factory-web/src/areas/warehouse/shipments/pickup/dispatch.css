@@ -1,0 +1,102 @@
+/* Pickups, the day's close, export and shipping settings (B-W2b-412; SCR-650 … SCR-659): layout only, semantic tokens, prefix fw-dsp-. */
+
+.fw-dsp-h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-dsp-h1 {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-dsp-error {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-danger-text);
+}
+
+.fw-dsp-lines {
+  white-space: pre-line;
+}
+
+.fw-dsp-inline {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+/* One paper of the Export tab (the commercial invoice, the CN 22 / CN 23): its head, its words, its versions. */
+.fw-dsp-sub {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+/* The EORI field and its Save on one line where they fit. */
+.fw-dsp-inline-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-dsp-inline-form > :first-child {
+  flex: 1 1 16rem;
+  min-width: 0;
+}
+
+/* The W2b cards of Carriers & shipping below the W1 form: the page's own grid of cards. */
+.fw-dsp-settings {
+  margin-top: var(--nds-space-14);
+}
+
+/* The PDF windows (the End-of-day manifest, the commercial invoice): the band, then the sheet beside its PDF on a wide screen. */
+.fw-dsp-window {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  padding: var(--nds-space-16);
+}
+
+.fw-dsp-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-dsp-window-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .fw-dsp-window-grid {
+    grid-template-columns: minmax(22rem, 2fr) minmax(0, 3fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .fw-dsp-window {
+    padding: var(--nds-space-10);
+  }
+}

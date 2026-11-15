@@ -302,7 +302,8 @@ function ReadyRecord({ shipment, model, actions, panels, trackingLink, depth }: 
           {model.tab === 'documents' && <DocumentsTab shipment={shipment} model={model} actions={actions} papers={depth?.papers} />}
           {model.tab === 'carrier' && <CarrierTab shipment={shipment} model={model} actions={actions} depth={depth ? { booking: depth.booking, labels: depth.labels, noLabels: depth.noLabels } : undefined} />}
           {model.tab === 'tracking' && <TrackingTab shipment={shipment} model={model} actions={actions} trackingLink={trackingLink} depth={depth ? { delivery: depth.delivery, notice: depth.notice } : undefined} />}
-          {model.tab === 'export' && <ExportTab shipment={shipment} model={model} actions={actions} />}
+          {/* B-W2b-412: the export papers in place of W2a's destination card. */}
+          {model.tab === 'export' && <ExportTab shipment={shipment} model={model} actions={actions} papers={depth?.exportPapers} />}
           {model.tab === 'invoice' && <InvoiceTab shipment={shipment} model={model} actions={actions} />}
           {model.tab === 'activity' && (activity ?? <p className="fw-sh-hint">{t('record.noPanels')}</p>)}
         </div>

@@ -13,7 +13,7 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import type { ListKey } from '../../../../../list-frame/model'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { holdable } from '../../holds/model'
-import type { NotPlanned, ProblemRow, QueueRow, SearchRow } from '../api'
+import type { CarrierCard, NotPlanned, ProblemRow, QueueRow, SearchRow } from '../api'
 import { cardName, RISK_TONE, todayRows, type QueueDepthActions, type QueueDepthModel } from '../model'
 import { dayInstant, DEPTH_NAMESPACES } from '../shared/depth'
 import { PartRead, useDepthWords } from '../shared/DepthDialog'
@@ -33,15 +33,16 @@ import '../shared/depth.css'
 type T = (key: string, params?: Record<string, string | number>) => string
 
 /** The carrier cut-off cards of the chosen site (in place of W1's computed cards), the site picker and the closed day. */
-export function QueueCutOffs({ model, actions }: { model: QueueDepthModel; actions?: QueueDepthActions }) {
+// B-W2b-412: `cardExtra`, a carrier card's pickups of the day ("Pickup booked 16:00").
+export function QueueCutOffs({ model, actions, cardExtra }: { model: QueueDepthModel; actions?: QueueDepthActions; cardExtra?: (card: CarrierCard) => ReactNode }) {
   return (
     <WithMessages namespaces={DEPTH_NAMESPACES}>
-      <CutOffs model={model} actions={actions} />
+      <CutOffs model={model} actions={actions} cardExtra={cardExtra} />
     </WithMessages>
   )
 }
 
-function CutOffs({ model, actions }: { model: QueueDepthModel; actions?: QueueDepthActions }) {
+function CutOffs({ model, actions, cardExtra }: { model: QueueDepthModel; actions?: QueueDepthActions; cardExtra?: (card: CarrierCard) => ReactNode }) {
   const { t, say } = useDepthWords()
   const locale = useLocale()
   const picker =
@@ -106,6 +107,7 @@ function CutOffs({ model, actions }: { model: QueueDepthModel; actions?: QueueDe
                   {card.willMiss > 0 && <Tag tone="warning">{t('today.willMiss', { count: card.willMiss })}</Tag>}
                 </span>
               )}
+              {cardExtra?.(card)}
             </Card>
           ))}
         </div>
@@ -116,10 +118,13 @@ function CutOffs({ model, actions }: { model: QueueDepthModel; actions?: QueueDe
 }
 
 /** The grid of this step's views and of the search, in place of the W1 list (same toolbar: the page's search and Rows ▾). */
-export function QueueGrid({ model, actions, search, tools, keys, onHelp }: { model: QueueDepthModel; actions?: QueueDepthActions; search?: ReactNode; tools?: ReactNode; keys?: readonly ListKey[]; onHelp?: () => void }) {
+// B-W2b-412: `selectionExtra`, Book pickup and Mark handed over beside Hold N on the selection row.
+export type SelectionExtra = (picked: readonly (QueueRow | SearchRow)[]) => ReactNode
+
+export function QueueGrid({ model, actions, search, tools, keys, onHelp, selectionExtra }: { model: QueueDepthModel; actions?: QueueDepthActions; search?: ReactNode; tools?: ReactNode; keys?: readonly ListKey[]; onHelp?: () => void; selectionExtra?: SelectionExtra }) {
   return (
     <WithMessages namespaces={DEPTH_NAMESPACES}>
-      <Grid model={model} actions={actions} search={search} tools={tools} keys={keys} onHelp={onHelp} />
+      <Grid model={model} actions={actions} search={search} tools={tools} keys={keys} onHelp={onHelp} selectionExtra={selectionExtra} />
     </WithMessages>
   )
 }
@@ -130,7 +135,7 @@ function useSelection(ids: string, initial: readonly string[] | undefined) {
   return [selected, setSelected] as const
 }
 
-function Grid(props: { model: QueueDepthModel; actions?: QueueDepthActions; search?: ReactNode; tools?: ReactNode; keys?: readonly ListKey[]; onHelp?: () => void }) {
+function Grid(props: { model: QueueDepthModel; actions?: QueueDepthActions; search?: ReactNode; tools?: ReactNode; keys?: readonly ListKey[]; onHelp?: () => void; selectionExtra?: SelectionExtra }) {
   if (props.model.grid === 'search') return <SearchGrid {...props} />
   if (props.model.grid === 'exceptions') return <ExceptionsGrid {...props} />
   return <RowsGrid {...props} />
@@ -248,7 +253,7 @@ function holdButton(t: T, model: QueueDepthModel, actions: QueueDepthActions | u
   )
 }
 
-function RowsGrid({ model, actions, search, tools, keys, onHelp }: { model: QueueDepthModel; actions?: QueueDepthActions; search?: ReactNode; tools?: ReactNode; keys?: readonly ListKey[]; onHelp?: () => void }) {
+function RowsGrid({ model, actions, search, tools, keys, onHelp, selectionExtra }: { model: QueueDepthModel; actions?: QueueDepthActions; search?: ReactNode; tools?: ReactNode; keys?: readonly ListKey[]; onHelp?: () => void; selectionExtra?: SelectionExtra }) {
   const { t } = useDepthWords()
   const locale = useLocale()
   const columns = useRowColumns(model, t, locale)
@@ -287,6 +292,7 @@ function RowsGrid({ model, actions, search, tools, keys, onHelp }: { model: Queu
                 <Download size={13} aria-hidden /> <SelectionLabel>{t('grid.export', { count: picked.length })}</SelectionLabel>
               </Button>
               {holdButton(t, model, actions, picked)}
+              {selectionExtra?.(picked)}
             </>
           ),
         }}
@@ -393,7 +399,7 @@ function ExceptionsGrid({ model, actions, search, tools, keys, onHelp }: { model
   )
 }
 
-function SearchGrid({ model, actions, search, tools, keys, onHelp }: { model: QueueDepthModel; actions?: QueueDepthActions; search?: ReactNode; tools?: ReactNode; keys?: readonly ListKey[]; onHelp?: () => void }) {
+function SearchGrid({ model, actions, search, tools, keys, onHelp, selectionExtra }: { model: QueueDepthModel; actions?: QueueDepthActions; search?: ReactNode; tools?: ReactNode; keys?: readonly ListKey[]; onHelp?: () => void; selectionExtra?: SelectionExtra }) {
   const { t } = useDepthWords()
   const locale = useLocale()
   const read = model.search
@@ -486,7 +492,17 @@ function SearchGrid({ model, actions, search, tools, keys, onHelp }: { model: Qu
         tools={tools}
         listKey="warehouse.shipments.2"
         title={t('grid.searchLabel')}
-        selection={{ selected, onChange: setSelected, actions: holdButton(t, model, actions, picked), exportSelected: true }}
+        selection={{
+          selected,
+          onChange: setSelected,
+          actions: (
+            <>
+              {holdButton(t, model, actions, picked)}
+              {selectionExtra?.(picked)}
+            </>
+          ),
+          exportSelected: true,
+        }}
         more={model.searchMore && rows && rows.length > 0 ? { label: t('grid.more'), onMore: () => actions?.onSearchMore?.() } : null}
         keys={keys}
         onHelp={onHelp}

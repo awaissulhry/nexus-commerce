@@ -15,6 +15,8 @@ import { Papers } from '../papers/Papers'
 import { Delivery } from '../pod/Delivery'
 import { depthAbilitiesOf, DEPTH_NS } from './shared/depth'
 import { Split } from './split/Split'
+// B-W2b-412
+import { ExportPapers } from '../export/ExportPapers'
 
 /**
  * What B-W2b-410 adds to a shipment's record (SCR-067; SCR-592 … SCR-598), each part its own container slotted into the W1
@@ -37,6 +39,8 @@ export interface ShipmentDepthSlots {
   readonly papers: ReactNode
   readonly delivery: ReactNode
   readonly notice: ReactNode
+  /** B-W2b-412: the Export tab's papers (commercial invoice, CN 22 / CN 23, the declaration, the broker's pack). */
+  readonly exportPapers: ReactNode
   /** Items of the record's ⋯ (Place a hold…, Split…). */
   readonly more: readonly { id: string; label: string; disabled?: boolean; description?: string; onSelect: () => void }[]
   readonly dialogs: ReactNode
@@ -83,7 +87,7 @@ export function useRecordDepth(input: RecordDepthInput): ShipmentDepthSlots {
     return [...seen.values()]
   }, [shipment?.lines])
 
-  if (!shipment) return { banner: null, stepHeld: null, holds: null, held: false, noLabels: false, cartons: null, booking: null, labels: null, papers: null, delivery: null, notice: null, more: [], dialogs: null }
+  if (!shipment) return { banner: null, stepHeld: null, holds: null, held: false, noLabels: false, cartons: null, booking: null, labels: null, papers: null, delivery: null, notice: null, exportPapers: null, more: [], dialogs: null }
 
   const held = holds.holds?.held ?? false
   const reasons = holds.holds ? [...new Set(inForce(holds.holds).map((hold) => t(`holdReason.${hold.reason}`)))].join(', ') : ''
@@ -112,6 +116,7 @@ export function useRecordDepth(input: RecordDepthInput): ShipmentDepthSlots {
     papers: <Papers shipment={shipment} version={version} styles={styles} can={can} />,
     delivery: <Delivery shipment={shipment} version={version} can={can} facts={{ expectedAt: input.expectedAt, returnedAt: input.returnedAt }} />,
     notice: <CustomerNotice shipmentId={shipment.id} version={version} />,
+    exportPapers: input.tab === 'export' ? <ExportPapers shipmentId={shipment.id} companyId={shipment.companyId} prefix={input.prefix} /> : null,
     more: [
       ...(open
         ? [
