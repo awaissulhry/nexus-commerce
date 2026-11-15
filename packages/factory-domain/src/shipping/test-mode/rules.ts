@@ -43,6 +43,9 @@ export interface TestModeSettings {
   readonly testMode: boolean
 }
 
+/** B-W2b-F49: the site's carrier is in test mode (no settings yet: test mode, every site starts so). */
+export const inTestMode = (settings: TestModeSettings | null): boolean => settings?.testMode ?? true
+
 /** Why the site cannot switch to live labels now (null: it can). `account` = the buy's own account problems. */
 export function goLiveRefusal(settings: TestModeSettings | null, account: readonly Issue[]): { readonly code: TestModeRefusalCode; readonly message: string } | null {
   if (!settings) return { code: 'NO_SETTINGS', message: 'This site has no shipping settings yet: save its sender address first; it starts in test mode.' }

@@ -6,6 +6,8 @@ import { defineManifest } from '../../../core/manifest'
  * The floor reads its site's test mode in the labels and check reads (shipping.pack).
  */
 export const manifest = defineManifest({
-  'GET /shipping/test-mode': { audiences: ['office'], permission: 'shipping.view', scope: 'record' },
+  // B-W2b-F49: the settings page's own right (Carriers & shipping asks shipping.settings.view), so the admin who switches a site
+  // reads it; the shell's banner reads GET /shell/notices (every office person).
+  'GET /shipping/test-mode': { audiences: ['office'], permission: 'shipping.settings.view', scope: 'record' },
   'PUT /shipping/sites/:siteId/test-mode': { audiences: ['office'], permission: 'shipping.settings.manage', scope: 'record' },
 })

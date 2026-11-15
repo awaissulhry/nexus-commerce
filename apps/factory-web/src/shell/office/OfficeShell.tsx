@@ -63,6 +63,7 @@ export function OfficeShell({ session, company, site: initialSite = null, childr
   // B-W2a-40: the bell — unread notifications, one light read, then live (only for a person who reaches Home).
   const bell = useBell(company, session.permissions.includes('home.view'))
   // B-W2b-437: TEST MODE while the carrier (a site) or e-invoicing (a company) of this company is in test mode.
+  // B-W2b-F49: for every office person (GET /shell/notices); the rights only hold the links to the settings pages.
   const testModeRightsOf = useMemo(() => testModeRights(permissionCheck(session.permissions)), [session.permissions])
   const testMode = useTestModeBanner(company, session.company?.id ?? null, testModeRightsOf)
   const banners: SystemBanner[] = testMode ? [testMode] : []
