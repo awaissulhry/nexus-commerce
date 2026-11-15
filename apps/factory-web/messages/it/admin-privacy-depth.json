@@ -274,7 +274,7 @@
       "blocked": {
         "PORTAL_USER": "Questa persona accede ancora al portale con l'e-mail del contatto: chiudi prima il suo accesso (Accesso al portale › Termina accesso), poi rendila anonima.",
         "STILL_ACTIVE": "Questa persona lavora ancora qui (un dipendente o un account di reparto attivo): rendila anonima dopo che è uscita.",
-        "ACCOUNT_OPEN": "Questo account d'ufficio è ancora aperto: disattivalo prima (Amministrazione › Utenti), poi rendilo anonimo.",
+        "ACCOUNT_OPEN": "Questo account d'ufficio è ancora aperto: disattivalo prima (Admin › Utenti), poi rendilo anonimo.",
         "NOT_A_PROSPECT": "Questa richiesta nomina il contatto di un cliente, non un potenziale cliente: rendi anonimo il contatto.",
         "TOO_MANY": "Questa persona ha più schede di quante una cancellazione ne scriva in una volta: chiedi all'amministratore di dividerla."
       },
