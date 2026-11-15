@@ -1,4 +1,5 @@
 import { heldGrains } from '../auth/grains/grains'
+import { THREADS_READ } from '../auth/permissions/catalogue'
 import { can, holds, type Actor, type Permission, type ScopedRecord } from '../core/permissions'
 import type { EventType } from '../events/catalogue'
 import { PURCHASING_VIEW } from '../purchasing/permissions'
@@ -13,7 +14,17 @@ import { amountWords, visibleAmounts, type AttentionRecord, type AttentionScope,
  * company, site and party); amounts follow their grains as on Today. Nudge (a reminder in the record's thread) is W2a.
  */
 
-export const WAITING_KINDS = ['APPROVAL_REQUEST', 'PO_CONFIRMATION', 'QUOTE_ANSWER'] as const
+export const WAITING_KINDS = [
+  'APPROVAL_REQUEST',
+  'PO_CONFIRMATION',
+  'QUOTE_ANSWER',
+  // B-W2b-388 (COL-035; design waiting-on "external messages with no reply in 3 working days · links sent and not opened"): a
+  // mail I sent from a record's conversation that its party has not answered in 3 working days (the record's company
+  // calendar), and a one-off link I made that nobody opened yet (live, not expired, a day old). Both are seen through the
+  // record's conversation (threads.read over its company, site and party).
+  'MESSAGE_REPLY',
+  'LINK_UNOPENED',
+] as const
 export type WaitingKind = (typeof WAITING_KINDS)[number]
 
 export interface WaitingRule {
@@ -32,7 +43,27 @@ export const WAITING_RULES: Readonly<Record<WaitingKind, WaitingRule>> = Object.
     live: ['purchase_order.sent', 'purchase_order.confirmed', 'purchase_order.declined', 'purchase_order.changes_proposed', 'purchase_order.cancelled'],
   },
   QUOTE_ANSWER: { kind: 'QUOTE_ANSWER', label: 'Quotes I sent, not answered', view: QUOTES_VIEW, live: ['quote.sent', 'quote.accepted', 'quote.declined', 'quote.revised', 'quote.cancelled'] },
+  // B-W2b-388
+  MESSAGE_REPLY: { kind: 'MESSAGE_REPLY', label: 'Mail I sent with no reply in 3 working days', view: THREADS_READ, live: ['thread.message_posted'] },
+  LINK_UNOPENED: { kind: 'LINK_UNOPENED', label: 'Links I sent, not opened', view: THREADS_READ, live: ['link.used', 'link.renewed'] },
 })
+
+/** B-W2b-388: a mail waits for a reply this many working days before it counts as waiting (design: "no reply in 3 working days"). */
+export const REPLY_WORKING_DAYS = 3
+/** B-W2b-388: a mail older than this is no longer something one waits on (it is history), in days. */
+export const REPLY_LOOKBACK_DAYS = 30
+/** B-W2b-388: a link counts as not opened once it is this many hours old. */
+export const LINK_UNOPENED_HOURS = 24
+
+/** B-W2b-388: the sentence of a mail with no reply (English; the screen composes its own words from the kind and the record). */
+export function messageReplyWords(facts: { readonly label: string; readonly party: string }): string {
+  return `${facts.party} has not answered your mail on ${facts.label}.`
+}
+
+/** B-W2b-388: the sentence of a link nobody opened (English; the screen composes its own words). */
+export function linkUnopenedWords(facts: { readonly label: string; readonly party: string }): string {
+  return `${facts.party} has not opened the link you sent for ${facts.label}.`
+}
 
 export interface WaitingCandidate {
   readonly kind: WaitingKind

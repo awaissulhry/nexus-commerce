@@ -2,6 +2,10 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { DEMO_USER } from '../../../../shell/design-data'
 import { can, DETAIL, NOW, RULES, V2, V2_DATED, withoutCost } from '../_demo/fixtures'
 import { PriceListPrintView, type PriceListPrintModel } from './view/PriceListPrintView'
+// B-W2b-380 (XF6:01): the PDF kept for mail above the paper.
+import { createElement } from 'react'
+import { designScreen as keptScreen } from '../pdf/fixtures'
+import { KeptPdfPart } from '../pdf/view/KeptPdfPart'
 
 /**
  * SCR-420 — the price list PDF (design sales.pricelists tab:pricelists.pdf "Sent to a customer or printed for a fair";
@@ -34,5 +38,6 @@ export const designScreen = defineDesignScreen<PriceListPrintModel>({
     { id: 'loading', label: 'Still reading (Print held with the reason)', model: model({ prices: null, rules: null }) },
     { id: 'error', label: "The price list couldn't be read", model: model({ list: null, prices: null, rules: null, problem: 'problem.read.unavailable' }) },
     { id: 'no-permission', label: 'Planner: no pricelists.view', model: model({ can: can('planner'), list: null, prices: null, rules: null }) },
+    { id: 'kept', label: 'B-W2b-380 · the PDF kept for mail above the paper (never printed)', model: model({ kept: createElement(KeptPdfPart, { model: keptScreen.cases[0]!.model }) }), note: 'Its own cases: SCR-531.' },
   ],
 })

@@ -1,0 +1,117 @@
+/* Remind me (RemindMeDialog) and the record's "Reminders I set" (RemindersISet): the choices one per line, the whole width;
+   the record's reminders as short lines with their actions at the end. Layout only, with semantic tokens. */
+.fw-remind {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-remind-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-remind-list .nds-btn {
+  width: 100%;
+  justify-content: flex-start;
+  gap: var(--nds-space-8);
+}
+
+.fw-remind-when {
+  margin-left: auto;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-remind-muted {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-remind-problem {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-remind-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-remind-set {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-remind-set-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-remind-set-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-remind-set-item {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-4) var(--nds-space-8);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  min-width: 0;
+}
+
+.fw-remind-set-item.is-back {
+  border-color: var(--nds-border-strong);
+  background: var(--nds-surface-raised);
+}
+
+.fw-remind-set-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.fw-remind-set-when {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-remind-set-note {
+  overflow-wrap: anywhere;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-remind-set-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--nds-space-4);
+}
+
+.fw-remind-set-notice:empty {
+  display: none;
+}

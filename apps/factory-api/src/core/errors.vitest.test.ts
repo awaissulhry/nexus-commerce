@@ -131,6 +131,15 @@ describe('mapError()', () => {
     expect(mapError(other).status).toBe(500)
   })
 
+  it("B-W2b-388: answers the database's reminder refusals (done from another tab, a message of another record) as a 409 in words, never a 500", () => {
+    const done = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'tasks: reminder x is done; it changes no more (Undo clears done first)' } } })
+    expect(mapError(done)).toEqual({ status: 409, code: 'conflict', message: 'This reminder is done: undo it first.', issues: [{ path: 'reminder/DONE', message: 'This reminder is done: undo it first.' }], unexpected: false })
+    const message = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'tasks: the message of reminder x is of the thread of its record (PO-1), not of Quote' } } })
+    expect(mapError(message)).toMatchObject({ status: 409, issues: [{ path: 'body/messageId' }] })
+    const truncate = prismaError('P2010', 'Raw query failed.', { driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'tasks: TRUNCATE on "Reminder" is refused' } } })
+    expect(mapError(truncate).status).toBe(500)
+  })
+
   it("B-W2b-370: answers the database's write-off, reminder stop and handed-over refusals as a 409 in words, never a 500", () => {
     const refusal = prismaError('P2010', 'Raw query failed.', {
       driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'payments: payment x has a write-off still standing; reverse the write-off before the payment is voided' } },

@@ -1,0 +1,134 @@
+{
+  "cost": {
+    "up": "Cost +{amount} since priced",
+    "down": "Cost −{amount} since priced",
+    "upHint": "The cost sheet now gives {amount} more a piece than the cost this line was priced at: price it again from the cost or the list.",
+    "downHint": "The cost sheet now gives {amount} less a piece than the cost this line was priced at."
+  },
+  "minimums": {
+    "col": {
+      "per": "Per",
+      "surcharge": "Small-run surcharge"
+    },
+    "per": {
+      "ORDER": "per order",
+      "COLOURWAY": "per colourway",
+      "LINE": "per line"
+    },
+    "edit": {
+      "minQuantity": "Minimum pieces of {subject}",
+      "per": "What the minimum of {subject} counts",
+      "action": "What happens below the minimum of {subject}",
+      "surcharge": "Small-run surcharge of {subject}",
+      "note": "Note on the minimum of {subject}"
+    },
+    "surchargeHint": "12.50 {currency} or 3%",
+    "noPrice": "Not shown without selling prices",
+    "cell": {
+      "saving": "Saving…",
+      "failed": "Not saved"
+    },
+    "dismiss": "Dismiss",
+    "saved": "Minimum saved.",
+    "problem": {
+      "quantity": "A minimum is a whole number of pieces, from 2 to 1,000,000.",
+      "per": "Choose what the minimum counts: per order, per colourway or per line.",
+      "action": "Choose what happens below the minimum: warn, block or a small-run surcharge.",
+      "surchargeFirst": "Type the small-run surcharge in its cell (an amount or a %): the minimum then becomes a small-run surcharge.",
+      "surchargeNeeded": "A small-run surcharge needs its amount or percent: choose warn or block to have none.",
+      "surcharge": "A surcharge is an amount above 0 (12.50) or a percent above 0 and at most 100 (3%).",
+      "note": "A note of at most {limit} characters."
+    },
+    "held": {
+      "noManage": "Changing minimums needs the right to manage price lists.",
+      "listArchived": "The price list is archived: reactivate it to change its minimums.",
+      "archived": "This minimum is archived: reactivate it to change it.",
+      "noPrice": "The surcharge is a price: your role does not see selling prices."
+    },
+    "refused": {
+      "moved": "Someone else changed this minimum: it is read again. Type the change once more.",
+      "conflict": "Not saved: another active minimum already counts the same way for this subject.",
+      "invalid": "Not saved: the minimum is not valid as typed.",
+      "unavailable": "Not saved: the server could not be reached. Try again."
+    }
+  },
+  "pdf": {
+    "title": "PDF kept for mail",
+    "sub": "A copy of this version kept as a PDF: a mail to a customer attaches that same file.",
+    "dismiss": "Dismiss",
+    "loading": "Reading the kept PDFs…",
+    "failed": "The kept PDFs couldn't be read",
+    "retry": "Try again",
+    "newest": "Newest",
+    "version": "PDF {version}",
+    "upToDateHint": "Shows this version as it is now.",
+    "state": "State",
+    "upToDate": "Up to date",
+    "outdated": "Version changed since",
+    "outdatedHint": "Keep it again before sending: the mail sends a new one by itself.",
+    "language": "Language",
+    "lang": {
+      "it": "Italian",
+      "en": "English"
+    },
+    "keptBy": "Kept by",
+    "system": "The system",
+    "count": "PDFs kept",
+    "none": "No PDF kept for this version yet.",
+    "keep": "Keep this version as a PDF",
+    "keepAgain": "Keep again",
+    "open": "Open the PDF",
+    "send": "Send…",
+    "sendHeld": {
+      "sent": "Sent: close the dialog.",
+      "bad": "Not an e-mail address: {list}.",
+      "subject": "A subject of at most 200 characters.",
+      "customer": "Choose the customer it goes to."
+    },
+    "sendTitle": "Send the price list",
+    "sendNewest": "The newest PDF in {language} goes attached.",
+    "sendKeepsFirst": "A new PDF in {language} is kept first, then it goes attached.",
+    "close": "Close",
+    "cancel": "Cancel",
+    "sendGo": "Send",
+    "sentTo": "Sent to {to} at {at}.",
+    "to": "To",
+    "toHint": "Empty: the customer's contact (its orders contact first). Or addresses, separated by commas.",
+    "cc": "Copy to",
+    "ccHint": "Optional; up to 10 addresses.",
+    "subject": "Subject",
+    "subjectHint": "Empty: “Price list” with the list's code and name.",
+    "message": "Message",
+    "messageHint": "Empty: a short message naming the list and its version.",
+    "kept": "PDF {version} is kept.",
+    "keptSame": "PDF {version} already shows this version: nothing new was kept.",
+    "sent": "Sent with PDF {version} attached.",
+    "held": {
+      "noPrice": "The PDF holds the prices: your role does not see selling prices.",
+      "noManage": "Keeping and sending a price list needs the right to manage price lists.",
+      "noVersion": "The price list has no version to print yet.",
+      "loading": "Still reading the price list.",
+      "busy": "Wait: the last change is still being saved.",
+      "everyCompany": "A list of every company has no company to send from: keep its PDF and send it from a company's mail.",
+      "noCustomer": "No customer has this list yet: give it to a customer first (Customers tab)."
+    },
+    "problem": {
+      "forbidden": "Your role may not do this with this price list.",
+      "conflict": "Refused: the company's legal data for the letterhead is not complete, or the list changed meanwhile.",
+      "invalid": "Refused: something in the request is not valid.",
+      "notFound": "The price list or its version is gone.",
+      "unavailable": "The server could not be reached. Try again."
+    },
+    "customer": "Customer",
+    "customerHint": "One of the customers that have this list: the mail goes on its conversation, a copy of the kept PDF with it."
+  },
+  "design": {
+    "title": "Lines and their cost",
+    "sub": "The cost each line was priced at, and how far it moved since.",
+    "col": {
+      "line": "Line",
+      "pieces": "Pcs",
+      "cost": "Unit cost"
+    }
+  }
+}

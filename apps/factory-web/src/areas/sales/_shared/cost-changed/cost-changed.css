@@ -1,0 +1,16 @@
+/* B-W2b-380 — "cost changed since priced" beside a line's cost (quote Pricing by line, order lines): layout only. */
+
+.fw-cc-cost {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--nds-space-2);
+  line-height: 1.2;
+}
+
+.fw-cc-line {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+}

@@ -17,6 +17,8 @@ import { PriceDepthMessages, usePriceWords } from '../words'
 import { ManualChange, type ManualModel } from './ManualChange'
 import { signedPrice } from './signed'
 import '../price-depth.css'
+// B-W2b-380 (XF6:02)
+import { CostChangedMark } from '../../../../_shared/cost-changed/view/CostChangedMark'
 
 export interface PricingByLineModel {
   quote: QuoteDetail
@@ -36,6 +38,8 @@ export interface PricingByLineModel {
   resetKey?: number
   /** Design cases: the row that has the focus. */
   focusRow?: number
+  /** B-W2b-380 (XF6:02): how far each line's cost moved since it was priced (the cost grain; absent: not read). */
+  costChanges?: ReadonlyMap<string, number | null>
 }
 
 export interface PricingByLineActions {
@@ -75,8 +79,8 @@ function Pricing({ model, actions }: { model: PricingByLineModel; actions?: Pric
   const ready = model.pricing.status === 'ready' ? model.pricing.value : null
   const rows = useMemo<Row[] | null>(() => (ready ? pricingRows(ready, quote) : null), [ready, quote])
   const editable = model.readOnly === null
-  const live = useRef({ actions, cells: model.cells, editable, reasons: model.reasons, list: model.listPrices, resetKey: model.resetKey ?? 0 })
-  live.current = { actions, cells: model.cells, editable, reasons: model.reasons, list: model.listPrices, resetKey: model.resetKey ?? 0 }
+  const live = useRef({ actions, cells: model.cells, editable, reasons: model.reasons, list: model.listPrices, resetKey: model.resetKey ?? 0, costChanges: model.costChanges })
+  live.current = { actions, cells: model.cells, editable, reasons: model.reasons, list: model.listPrices, resetKey: model.resetKey ?? 0, costChanges: model.costChanges }
   const lang = locale === 'it' ? 'it' : 'en'
 
   const columns = useMemo<ColDef<Row>[]>(() => {
@@ -201,7 +205,21 @@ function Pricing({ model, actions }: { model: PricingByLineModel; actions?: Pric
       { colId: 'net', headerName: t(quote.current.priceBasis === 'GROSS' ? 'col.netGross' : 'col.net'), minWidth: 170, flex: 1.1, type: 'rightAligned', cellRenderer: NetCell, valueGetter: (params) => params.data?.pricing.unitPrice ?? '' },
       ...(grains.cost
         ? [
-            { colId: 'cost', headerName: t('col.cost'), minWidth: 120, flex: 0.9, type: 'rightAligned', valueGetter: (params) => (params.data?.line ? (params.data.line.costComplete ? unitPrice(params.data.line.unitCost, currency, locale) : sales('lines.costMissing')) : '—') } as ColDef<Row>,
+            {
+              colId: 'cost',
+              headerName: t('col.cost'),
+              minWidth: 150,
+              flex: 1,
+              type: 'rightAligned',
+              valueGetter: (params) => (params.data?.line ? (params.data.line.costComplete ? unitPrice(params.data.line.unitCost, currency, locale) : sales('lines.costMissing')) : '—'),
+              // B-W2b-380 (XF6:02): the cost kept, and how far it moved since the line was priced.
+              cellRenderer: ({ data, value }: ICellRendererParams<Row>) => (
+                <span className="fw-cc-cost">
+                  <span>{String(value ?? '—')}</span>
+                  {data?.line ? <CostChangedMark change={live.current.costChanges?.get(data.line.id)} currency={currency} /> : null}
+                </span>
+              ),
+            } as ColDef<Row>,
             { colId: 'source', headerName: t('col.source'), minWidth: 170, flex: 1.1, cellRenderer: SourceCell, valueGetter: (params) => params.data?.pricing.suggested?.basedOn?.revision ?? '' } as ColDef<Row>,
           ]
         : []),
@@ -210,7 +228,7 @@ function Pricing({ model, actions }: { model: PricingByLineModel; actions?: Pric
     ]
     return cols
     // Words, grains, the basis and the language rebuild the cells; the edit state is read through `live`.
-  }, [t, sales, locale, lang, currency, quote.current.priceBasis, grains.cost, grains.margin, editable, model.cells, model.resetKey])
+  }, [t, sales, locale, lang, currency, quote.current.priceBasis, grains.cost, grains.margin, editable, model.cells, model.resetKey, model.costChanges])
 
   const picked = (rows ?? []).filter((row) => model.selected.includes(row.pricing.lineId))
   const reach = (how: 'LIST' | 'SUGGESTED') => picked.filter((row) => lineHeld(row.pricing, how) === null)

@@ -1,0 +1,401 @@
+{
+  "loading": "Still loading…",
+  "retry": "Try again",
+  "dismiss": "Dismiss",
+  "held": {
+    "offline": "Offline — do this when you are back online.",
+    "busy": "A change is being saved…"
+  },
+  "band": {
+    "more": "More on notifications",
+    "push": "Push on this device…",
+    "digest": "Daily digest by e-mail…"
+  },
+  "remind": {
+    "title": "Remind me: {what}",
+    "titleMessage": "Remind me about a message on {what}",
+    "aboutMessage": "Remind me about this message",
+    "body": "It comes back to your Today at the time you choose, or when something changes on the record.",
+    "note": "Your note",
+    "noteHint": "Optional, at most {count} characters. Only you see it.",
+    "notePlaceholder": "Supplier promised a date",
+    "noteLong": "At most {count} characters.",
+    "choices": "When it comes back",
+    "laterToday": "Later today, {time}",
+    "tomorrow": "Tomorrow, {time}",
+    "monday": "Monday, {time}",
+    "pick": "Pick a date…",
+    "onChange": "When something changes",
+    "pickLabel": "Date and time",
+    "pickHint": "In the site's time, at most {count} days ahead.",
+    "pickFirst": "Pick a date and a time first.",
+    "past": "Pick a moment after now.",
+    "tooFar": "At most {count} days ahead.",
+    "set": "Set reminder",
+    "cancel": "Cancel",
+    "comesBack": "It comes back to Today then.",
+    "held": {
+      "offline": "Offline — set reminders when you are back online.",
+      "busy": "A reminder is being saved…"
+    },
+    "when": {
+      "at": "Comes back {at}",
+      "onChange": "Comes back when the record changes",
+      "back": "Came back {at}",
+      "done": "Done {at}"
+    },
+    "problem": {
+      "read": "Your reminders could not be read.",
+      "failed": "The reminder could not be saved. Try again.",
+      "done": "This reminder is done already: undo it first.",
+      "tooMany": "You keep 500 open reminders already: finish some first.",
+      "changed": "This reminder changed meanwhile: it was read again.",
+      "gone": "This reminder or its record is not there any more.",
+      "invalid": "That time cannot be used: choose another.",
+      "forbidden": "You may not set a reminder on this record.",
+      "offline": "Offline — try again when you are back online."
+    }
+  },
+  "set": {
+    "label": "Remind me and the reminders I set on this record",
+    "title": "Reminders I set",
+    "remind": "Remind me",
+    "count_one": "{count} reminder I set",
+    "count_other": "{count} reminders I set",
+    "message": "About a message",
+    "done": "Done: the reminder on {record}",
+    "remove": "Remove the reminder on {record}",
+    "notice": {
+      "set": "Reminder set.",
+      "done": "Reminder done.",
+      "removed": "Reminder removed."
+    }
+  },
+  "waiting": {
+    "title": "Waiting on others",
+    "count_one": "{count} wait",
+    "count_other": "{count} waits",
+    "error": "Couldn't load what you wait on.",
+    "empty": {
+      "title": "You are not waiting on anyone.",
+      "body": "What you ask for or send — approvals, purchase orders, quotes, mail, links — shows here until it is answered."
+    },
+    "kind": {
+      "APPROVAL_REQUEST": "Approval of {record}",
+      "PO_CONFIRMATION": "Confirmation of {record}",
+      "QUOTE_ANSWER": "The customer's answer to {record}",
+      "MESSAGE_REPLY": "A reply to your mail on {record}",
+      "LINK_UNOPENED": "The link you sent for {record}, not opened"
+    },
+    "tag": {
+      "APPROVAL_REQUEST": "Approval",
+      "PO_CONFIRMATION": "Purchase order",
+      "QUOTE_ANSWER": "Quote",
+      "MESSAGE_REPLY": "No reply in 3 working days",
+      "LINK_UNOPENED": "Link"
+    },
+    "who": {
+      "approver": "You wait for an approver",
+      "party": "You wait for {name}"
+    },
+    "since": {
+      "today": "since today",
+      "days_one": "for {count} day",
+      "days_other": "for {count} days"
+    },
+    "due": "matters by {date}",
+    "open": "Open {record}",
+    "keys": {
+      "move": "Move between the waits and their actions"
+    },
+    "nudge": {
+      "label": "Nudge",
+      "on": "Nudge the approvers of {record}",
+      "done_one": "{record}: {count} person who may decide was reminded.",
+      "done_other": "{record}: {count} people who may decide were reminded.",
+      "failed": "The nudge could not be sent. Try again.",
+      "gone": "This is not something you wait on any more.",
+      "refusal": {
+        "OUTSIDE": "This waits on a customer or supplier: remind them from the record.",
+        "TODAY_ALREADY": "You nudged them today already. Nudge again tomorrow.",
+        "NOBODY": "Nobody may decide this now: ask an administrator who should."
+      }
+    },
+    "problem": {
+      "read": "What you wait on could not be read.",
+      "forbidden": "Your roles do not show what you wait on.",
+      "offline": "Offline — try again when you are back online."
+    }
+  },
+  "following": {
+    "title": "Changed since you looked",
+    "error": "Couldn't load what changed.",
+    "empty": {
+      "title": "Nothing you follow has changed since you last looked.",
+      "body": "Follow a record (Follow, on any record) or pin a saved view: what changes shows here, one line each."
+    },
+    "notBuilt": "This list has no page of its own yet.",
+    "more_one": "and {count} more",
+    "more_other": "and {count} more",
+    "seen": "Seen",
+    "seenOn": "Mark the news of {record} seen",
+    "unfollow": "Unfollow",
+    "unfollowOn": "Stop following {record}",
+    "unpin": "Unpin",
+    "unpinOn": "Unpin the view {record} from Today",
+    "partial": "More changed than one page shows: mark some seen to see the rest.",
+    "keys": {
+      "move": "Move between the lines and their actions",
+      "seen": "Mark the line seen"
+    },
+    "notice": {
+      "seen": "Seen: {record}.",
+      "unfollowed": "You no longer follow {record}.",
+      "unpinned": "{record} is no longer pinned to Today."
+    },
+    "problem": {
+      "read": "What changed could not be read.",
+      "forbidden": "Your roles do not reach this.",
+      "gone": "It is not there any more.",
+      "offline": "Offline — try again when you are back online."
+    }
+  },
+  "views": {
+    "title": "My saved views",
+    "error": "Couldn't load your saved views.",
+    "empty": {
+      "title": "No view pinned to Today.",
+      "body": "Pin a view from any list with Columns ▾ › Pin to Today: its count shows here, and a change tells you."
+    },
+    "count": "{count}",
+    "capped": "{count}+",
+    "open": "Open {name}: {count}",
+    "notCounted": "Open {name}: not counted yet",
+    "notBuilt": "{name}: its list has no page here yet",
+    "notBuiltShort": "No page yet",
+    "unpin": "Unpin {name} from Today",
+    "unpinned": "{name} is no longer pinned to Today.",
+    "problem": {
+      "read": "Your saved views could not be read.",
+      "forbidden": "Your roles do not reach these views.",
+      "offline": "Offline — try again when you are back online."
+    }
+  },
+  "reminders": {
+    "title": "Reminders",
+    "hint": "Records and messages you asked to see again. They come back to Today at their time, or when the record changes.",
+    "views": "Which reminders",
+    "view": {
+      "OPEN": "Open",
+      "CAME_BACK": "Came back",
+      "WAITING": "Waiting",
+      "DONE": "Done",
+      "count": "{view} · {count}"
+    },
+    "countRows_one": "{count} reminder",
+    "countRows_other": "{count} reminders",
+    "col": {
+      "record": "Record",
+      "note": "Your note",
+      "when": "When",
+      "state": "State"
+    },
+    "state": {
+      "WAITING": "Waiting",
+      "CAME_BACK": "Came back",
+      "DONE": "Done"
+    },
+    "noNote": "No note",
+    "open": "Open {record}",
+    "menu": "Actions on the reminder on {record}",
+    "done": "Done",
+    "putOff": "Snooze…",
+    "remove": "Remove",
+    "undo": "Undo",
+    "bulk": {
+      "done": "Done {count}",
+      "remove": "Remove {count}"
+    },
+    "held": {
+      "noneOpen": "None of the chosen reminders is open.",
+      "tooMany": "At most {count} at once."
+    },
+    "keys": {
+      "done": "Done",
+      "putOff": "Snooze"
+    },
+    "error": "Couldn't load your reminders.",
+    "empty": {
+      "title": "No reminders.",
+      "done": "No reminder done yet.",
+      "body": "On any record or message choose Remind me: it comes back to Today then."
+    },
+    "notice": {
+      "done": "Done: the reminder on {record}.",
+      "undone": "The reminder on {record} is open again.",
+      "removed": "The reminder on {record} is removed.",
+      "putOff": "Snoozed: {record}. It comes back at the time you chose.",
+      "putOffChange": "Snoozed: {record}. It comes back when the record changes.",
+      "bulkDone_one": "{count} reminder done.",
+      "bulkDone_other": "{count} reminders done.",
+      "bulkRemoved_one": "{count} reminder removed.",
+      "bulkRemoved_other": "{count} reminders removed."
+    }
+  },
+  "board": {
+    "dueDate": "Due date",
+    "late": "Overdue",
+    "ownTask": "A task of its own",
+    "lane": {
+      "OPEN": "Open",
+      "DONE": "Done",
+      "CANCELLED": "Cancelled"
+    },
+    "held": {
+      "readOnly": "You can see this task, not change it.",
+      "cancel": "Cancel a task from the task itself, where the reason is seen.",
+      "reopenFirst": "Reopen the task first."
+    }
+  },
+  "prefs": {
+    "title": "Notification preferences",
+    "body": "Choose how each kind of news reaches you. Each choice is saved at once; where you chose nothing, your role's default or the quiet default holds.",
+    "tabs": "Whose preferences",
+    "tab": {
+      "mine": "Mine",
+      "roles": "Role defaults"
+    },
+    "caption": "Kinds of news by channel",
+    "col": {
+      "event": "News"
+    },
+    "channel": {
+      "IN_APP": "In app",
+      "EMAIL": "E-mail",
+      "PUSH": "Push"
+    },
+    "cadence": {
+      "INSTANT": "As it happens",
+      "DAILY_DIGEST": "Daily digest",
+      "OFF": "Off"
+    },
+    "event": {
+      "MENTIONED": { "label": "Mentioned", "hint": "someone @mentioned you" },
+      "ASSIGNED": { "label": "Assigned", "hint": "a task or a Today row given to you" },
+      "APPROVAL_WAITING": { "label": "Approval waiting", "hint": "a request waits for your yes" },
+      "APPROVAL_DECIDED": { "label": "Approval decided", "hint": "a request you asked for was decided" },
+      "FOLLOWING_CHANGED": { "label": "Record I follow changed", "hint": "a followed record or saved view changed" },
+      "AREA_ALERT": { "label": "Alert on my area", "hint": "an alert rule fired for you" },
+      "MAIL_ASSIGNED": { "label": "Mail assigned", "hint": "a mail of a team inbox given to you" }
+    },
+    "cellLabel": "{event} by {channel}",
+    "source": {
+      "PERSON": "Your choice",
+      "ROLE": "Default for {role}",
+      "QUIET": "Quiet default"
+    },
+    "sourceHint": {
+      "PERSON": "You chose this. Reset to my role's defaults takes it back.",
+      "ROLE": "Your role's default: choose here to make it your own."
+    },
+    "quietHint": "Nobody chose: the quiet default is {cadence}.",
+    "reset": "Reset to my role's defaults",
+    "close": "Close",
+    "held": {
+      "nothingToReset": "You have not chosen anything yet: your role's defaults hold already."
+    },
+    "digestOff": "Your daily digest is off: news you send to it waits until you turn it on.",
+    "digestOpen": "Daily digest…",
+    "digestNote": "The daily digest is one e-mail a day, at the time and on the days you choose in Daily digest.",
+    "pushNone": "No device has push on yet: push news reaches nobody.",
+    "pushOpen": "Push on this device…",
+    "error": "Couldn't load your preferences.",
+    "notice": {
+      "reset": "Your choices are gone: your role's defaults hold again."
+    },
+    "roles": {
+      "pick": "Role",
+      "body": "A default holds for everyone with the role who has not chosen themselves. With several roles, the loudest default wins.",
+      "caption": "The role's defaults by channel",
+      "noDefault": "No default ({cadence})",
+      "none": "No office role yet.",
+      "noneBody": "Make an office role in Admin › Roles & permissions first."
+    },
+    "problem": {
+      "failed": "Not saved. Try again.",
+      "forbidden": "You may not change this.",
+      "invalid": "This channel has no such choice.",
+      "offline": "Offline — try again when you are back online."
+    }
+  },
+  "push": {
+    "title": "Get urgent items on this phone",
+    "step": {
+      "urgent": "What counts as urgent",
+      "install": "Add to the home screen",
+      "turnOn": "Turn on push",
+      "test": "Test"
+    },
+    "back": "Back",
+    "next": "Next",
+    "done": "Done",
+    "turnOn": "Turn on push",
+    "error": "Couldn't read push for you.",
+    "unavailableBody": "Push needs the push service connected for this company. Your choices are kept; nothing is sent until then.",
+    "urgent": {
+      "body": "A push brings only what you chose in the Push column of your notification preferences, never a price you may not see.",
+      "none": "Your Push column brings nothing now.",
+      "change": "Change what a push brings…"
+    },
+    "install": {
+      "body": "On an iPhone or iPad push reaches only the app added to the home screen (iOS 16.4 or later).",
+      "one": "Open this page in Safari.",
+      "two": "Tap Share, then Add to Home Screen.",
+      "three": "Open Nexus Factory from the home screen and turn push on there.",
+      "note": "Android phones and computers turn push on right here."
+    },
+    "label": "This device's name",
+    "labelHint": "So you know it in the list, at most {count} characters.",
+    "permission": "Your browser asks whether this site may show notifications: choose Allow.",
+    "on": "Push is on in this browser.",
+    "test": {
+      "body": "Send a test push to every device with push on.",
+      "send": "Send a test push",
+      "SENT": "Test sent",
+      "GONE": "Turned off by the push service",
+      "FAILED": "Test failed"
+    },
+    "devices": {
+      "title": "Devices with push on ({count} of {max})",
+      "none": "No device has push on.",
+      "this": "This device",
+      "used": "Last push {at}",
+      "since": "On since {at}",
+      "off": "Turn push off on {name}",
+      "offShort": "Turn off"
+    },
+    "held": {
+      "reading": "Reading…",
+      "unavailable": "Push is not connected here yet.",
+      "ios-install": "On an iPhone or iPad add the app to the home screen first.",
+      "insecure": "Push needs a secure (https) page.",
+      "unsupported": "This browser cannot receive push.",
+      "already": "Push is on in this browser already.",
+      "label": "Give this device a name first.",
+      "tooMany": "You have push on {count} devices already: turn one off first."
+    },
+    "notice": {
+      "on": "Push is on for this device.",
+      "off": "Push is off on {name}.",
+      "tested_one": "Test push sent to {count} device.",
+      "tested_other": "Test push sent to {count} devices.",
+      "testFailed": "The test push reached no device."
+    },
+    "problem": {
+      "denied": "Your browser does not allow notifications for this site: allow them in its settings, then try again.",
+      "browser": "This browser could not subscribe to push.",
+      "failed": "That did not work. Try again.",
+      "none": "No device has push on."
+    }
+  }
+}
