@@ -107,9 +107,7 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // B-W2b-403, 906 → 909 and 1446 → 1449.
     // B-W2b-380: two events (price_list.pdf_kept, price_list.pdf_sent) and four literal emits (the PDF kept and mailed; the
     // import's size surcharges of a style and its version row's rules_changed): 912 → 914, 1449 → 1453.
-    // B-W2b-388: three events (reminder.set, reminder.came_back, reminder.changed; emitted through eventFor, not literals): with
-    // B-W2b-380, 914 → 917 (1453 literal emits).
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(917 declared event version\(s\), 1453 literal emit/) })
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(923 declared event version\(s\), 1463 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

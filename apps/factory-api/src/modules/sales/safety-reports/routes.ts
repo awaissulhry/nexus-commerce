@@ -77,7 +77,7 @@ export default defineRoutes('sales.safety-reports', manifest, async (app) => {
   app.post('/portal/safety-reports/:reportId/photos', { schema: portalPhotoContract }, async (request, reply) => reply.code(201).send(await portalPhoto(app, request, request.params.reportId, request.body, idempotencyKeyFrom(request))))
   app.post('/portal/safety-reports/:reportId/photos/:fileId/complete', { schema: portalPhotoDoneContract }, async (request) => portalPhotoDone(app, request, request.params.reportId, request.params.fileId, idempotencyKeyFrom(request)))
 
-  app.get('/public/safety-reports/status', { schema: publicStatusContract }, async () => publicStatus())
+  app.get('/public/safety-reports/status', { schema: publicStatusContract }, async (request) => publicStatus(request, request.query))
   app.post('/public/safety-reports', { schema: publicSendContract, config: { rateLimit: SEND_RATE } }, async (request, reply) => reply.code(201).send(await sendPublicReport(app, request, reply, request.body, idempotencyKeyFrom(request))))
   app.post('/public/safety-reports/photos', { schema: publicPhotoContract, config: { rateLimit: PHOTO_RATE } }, async (request, reply) => reply.code(201).send(await publicPhoto(app, request, request.body, idempotencyKeyFrom(request))))
   app.post('/public/safety-reports/photos/:fileId/complete', { schema: publicPhotoDoneContract, config: { rateLimit: PHOTO_RATE } }, async (request) => publicPhotoDone(app, request, request.params.fileId, request.body, idempotencyKeyFrom(request)))
