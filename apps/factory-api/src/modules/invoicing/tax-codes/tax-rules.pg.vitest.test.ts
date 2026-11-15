@@ -30,6 +30,8 @@ const YEAR = TODAY.slice(0, 4)
 const NEXT_YEAR = String(Number(YEAR) + 1)
 const FAKE_VAT = { company: '12345670009', customer: '76543210009' } as const
 const PROTOCOL = `${YEAR.slice(2)}000000000000077-000001`
+// B-W2b-F53: a protocol is never dated in the future: 10 January of this year, or today in the first days of January.
+const PROTOCOL_DATE = TODAY < `${YEAR}-01-10` ? TODAY : `${YEAR}-01-10`
 const customer = newId()
 const c1 = () => tenant.companies[0]!.id
 const c2 = () => tenant.companies[1]!.id
@@ -265,9 +267,9 @@ describe('declarations of intent checked and used up (FIN-100)', () => {
   let first: Json
 
   it('records the declaration while the switch is off, but no invoice names it yet', async () => {
-    declaration = (await as('POST', '/invoicing/declarations-of-intent', { companyId: c1(), partyId: customer, protocolNumber: PROTOCOL, protocolDate: `${YEAR}-01-10`, amount: 100000 }, 201)).declaration
+    declaration = (await as('POST', '/invoicing/declarations-of-intent', { companyId: c1(), partyId: customer, protocolNumber: PROTOCOL, protocolDate: PROTOCOL_DATE, amount: 100000 }, 201)).declaration
     expect(declaration).toMatchObject({ state: 'UNCHECKED', amount: 100000, usedAmount: 0, leftAmount: 100000, year: Number(YEAR), waits: expect.stringContaining('Waits for the accountant') })
-    const twice = await finance.post('/invoicing/declarations-of-intent', { companyId: c1(), partyId: customer, protocolNumber: PROTOCOL, protocolDate: `${YEAR}-01-10`, amount: 5 })
+    const twice = await finance.post('/invoicing/declarations-of-intent', { companyId: c1(), partyId: customer, protocolNumber: PROTOCOL, protocolDate: PROTOCOL_DATE, amount: 5 })
     expect(twice.status).toBe(409)
     expect(refusal(twice.body as Json)).toEqual(['refusal/PROTOCOL_LIVE'])
     const invoice = await draft([goods('500.00')])
@@ -317,7 +319,7 @@ describe('declarations of intent checked and used up (FIN-100)', () => {
     expect(declaration).toMatchObject({ usedAmount: 50000, leftAmount: 50000, invoices: [{ id: first.id, intentAmount: 50000 }] })
     const presigned = await as('GET', `/files/${issued.invoice.xmlFileId}/download`)
     const xml = (await h.app.inject({ method: 'GET', url: presigned.download.url })).body
-    expect(xml).toMatch(new RegExp(`<TipoDato>INTENTO</TipoDato>\\s*<RiferimentoTesto>${PROTOCOL}</RiferimentoTesto>\\s*<RiferimentoData>${YEAR}-01-10</RiferimentoData>`))
+    expect(xml).toMatch(new RegExp(`<TipoDato>INTENTO</TipoDato>\\s*<RiferimentoTesto>${PROTOCOL}</RiferimentoTesto>\\s*<RiferimentoData>${PROTOCOL_DATE}</RiferimentoData>`))
     expect(xml).toContain('<ImportoBollo>2.00</ImportoBollo>')
   })
 
