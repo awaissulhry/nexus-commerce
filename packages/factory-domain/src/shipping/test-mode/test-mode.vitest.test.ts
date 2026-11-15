@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CarrierLabelRequest } from '../../ports/carrier'
-import { backToTestRefusal, goLiveRefusal, isTestLabel, TEST_LABEL_PREFIX, testLabelOf, testLabelText, testTrackingNumberOf } from './rules'
+import { backToTestRefusal, goLiveRefusal, inTestMode, isTestLabel, TEST_LABEL_PREFIX, testLabelOf, testLabelText, testTrackingNumberOf } from './rules'
 
 const address = { name: 'Made-up Racing', companyName: null, line1: 'Via Esempio 12', line2: null, postalCode: '20121', city: 'Milano', province: 'MI', country: 'IT', phone: null, email: null }
 const request: CarrierLabelRequest = {
@@ -73,5 +73,12 @@ describe('switching a site (LOG-035)', () => {
     expect(backToTestRefusal(null)?.code).toBe('NO_SETTINGS')
     expect(backToTestRefusal({ testMode: true })?.code).toBe('ALREADY_TEST')
     expect(backToTestRefusal({ testMode: false })).toBeNull()
+  })
+
+  // B-W2b-F49: the rule the page and the shell's notices share.
+  it('a site without settings is in test mode; with settings, as they say', () => {
+    expect(inTestMode(null)).toBe(true)
+    expect(inTestMode({ testMode: true })).toBe(true)
+    expect(inTestMode({ testMode: false })).toBe(false)
   })
 })
