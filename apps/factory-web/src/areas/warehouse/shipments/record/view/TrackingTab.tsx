@@ -23,7 +23,8 @@ import { PartState } from './ShipmentRecordView'
 const safePage = (url: string | null | undefined): string | null => (url && /^https:\/\/\S+$/i.test(url) ? url : null)
 
 // B-W2b-170: `trackingLink`, the customer's tracking-page card (the container's), under the tracking whatever the transport.
-export function TrackingTab({ shipment, model, actions, trackingLink }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; trackingLink?: ReactNode }) {
+// B-W2b-410: `depth` — the proof of delivery with signer, time and image (in place of W1's card), the tracking problems, the customer notice.
+export function TrackingTab({ shipment, model, actions, trackingLink, depth }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; trackingLink?: ReactNode; depth?: { delivery?: ReactNode; notice?: ReactNode } }) {
   const t = useT('shipments')
   const locale = useLocale()
   if (!model.tracking) {
@@ -32,6 +33,8 @@ export function TrackingTab({ shipment, model, actions, trackingLink }: { shipme
         <Card padded>
           <EmptyState title={t('tracking.none.title')} description={shipment.transportBy === 'CARRIER' ? t('tracking.none.body') : t(`tracking.none.${shipment.transportBy}`)} />
         </Card>
+        {depth?.delivery}
+        {depth?.notice}
         {trackingLink}
       </div>
     )
@@ -88,23 +91,26 @@ export function TrackingTab({ shipment, model, actions, trackingLink }: { shipme
           </ol>
         )}
       </Card>
-      <Card padded>
-        <h2 className="fw-sh-h2">
-          <PackageCheck size={16} aria-hidden /> {t('tracking.pod')}
-        </h2>
-        <KeyValue
-          labelCase="sentence"
-          items={[
-            { label: t('tracking.shippedAt'), value: shipment.shippedAt ? formatDateTime(shipment.shippedAt, { locale }) : t('tracking.notYet') },
-            ...(tracking.shipment.expectedDeliveryAt && !shipment.deliveredAt && !shipment.returnedAt
-              ? [{ label: t('tracking.expectedAt'), value: formatDateTime(tracking.shipment.expectedDeliveryAt, { locale }) }]
-              : []),
-            { label: t('tracking.deliveredAt'), value: shipment.deliveredAt ? formatDateTime(shipment.deliveredAt, { locale }) : t('tracking.notDelivered') },
-            ...(shipment.returnedAt ? [{ label: t('tracking.returnedAt'), value: formatDateTime(shipment.returnedAt, { locale }) }] : []),
-          ]}
-        />
-        <p className="fw-sh-hint">{t('tracking.podLater')}</p>
-      </Card>
+      {depth?.delivery ?? (
+        <Card padded>
+          <h2 className="fw-sh-h2">
+            <PackageCheck size={16} aria-hidden /> {t('tracking.pod')}
+          </h2>
+          <KeyValue
+            labelCase="sentence"
+            items={[
+              { label: t('tracking.shippedAt'), value: shipment.shippedAt ? formatDateTime(shipment.shippedAt, { locale }) : t('tracking.notYet') },
+              ...(tracking.shipment.expectedDeliveryAt && !shipment.deliveredAt && !shipment.returnedAt
+                ? [{ label: t('tracking.expectedAt'), value: formatDateTime(tracking.shipment.expectedDeliveryAt, { locale }) }]
+                : []),
+              { label: t('tracking.deliveredAt'), value: shipment.deliveredAt ? formatDateTime(shipment.deliveredAt, { locale }) : t('tracking.notDelivered') },
+              ...(shipment.returnedAt ? [{ label: t('tracking.returnedAt'), value: formatDateTime(shipment.returnedAt, { locale }) }] : []),
+            ]}
+          />
+          <p className="fw-sh-hint">{t('tracking.podLater')}</p>
+        </Card>
+      )}
+      {depth?.notice}
       {trackingLink}
     </div>
   )

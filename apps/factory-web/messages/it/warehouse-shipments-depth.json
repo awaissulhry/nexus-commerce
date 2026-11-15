@@ -1,0 +1,947 @@
+{
+  "common": {
+    "cancel": "Annulla",
+    "done": "Fatto",
+    "retry": "Riprova"
+  },
+  "part": {
+    "failed": "Impossibile leggere {part}.",
+    "loading": "Lettura di {part}…"
+  },
+  "problem": {
+    "read": {
+      "internal": "Si è verificato un problema da parte nostra.",
+      "signed_out": "Sei stato disconnesso: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non ti permette di vederlo.",
+      "not_found": "Non esiste più.",
+      "unavailable": "Il server non è raggiungibile: riprova tra poco.",
+      "rate_limited": "Troppe richieste: attendi un momento."
+    },
+    "write": {
+      "internal": "Non salvato: si è verificato un problema da parte nostra.",
+      "moved": "Qualcuno ha modificato la spedizione nel frattempo: è stata riletta, controlla e riprova.",
+      "state": "La spedizione non è più in uno stato che lo consente: è stata riletta.",
+      "invalid": "Qualcosa nel modulo non va: controlla i campi.",
+      "signed_out": "Sei stato disconnesso: accedi di nuovo.",
+      "forbidden": "Il tuo ruolo non ti permette di farlo.",
+      "not_found": "Non esiste più.",
+      "rate_limited": "Troppe richieste: attendi un momento.",
+      "unavailable": "Il server non è raggiungibile: non è cambiato nulla.",
+      "step_up": "Serve un nuovo codice dall'app di autenticazione."
+    }
+  },
+  "status": {
+    "DRAFT": "Bozza",
+    "PACKED": "Imballata",
+    "SHIPPED": "Spedita",
+    "DELIVERED": "Consegnata",
+    "RETURNED": "Resa",
+    "CANCELLED": "Annullata"
+  },
+  "risk": {
+    "LATE": "In ritardo",
+    "HELD": "Bloccata",
+    "MISSED_CUT_OFF": "Orario limite superato",
+    "AT_RISK": "A rischio",
+    "DUE_TODAY": "Da spedire oggi",
+    "LATER": "Più avanti",
+    "NO_DATE": "Nessuna data promessa"
+  },
+  "holdReason": {
+    "CREDIT": "Credito",
+    "DEPOSIT": "Acconto",
+    "BALANCE_UNPAID": "Saldo prima della spedizione",
+    "QUALITY": "Qualità",
+    "CUSTOMER_REQUEST": "Richiesta del cliente",
+    "OTHER": "Altro"
+  },
+  "match": {
+    "NUMBER": "Numero spedizione",
+    "ORDER": "Ordine",
+    "CUSTOMER_PO": "Ordine del cliente",
+    "CUSTOMER": "Cliente",
+    "TRACKING": "Numero di tracciamento",
+    "CARTON": "Etichetta del collo",
+    "SERIAL": "Numero di serie"
+  },
+  "trackingStatus": {
+    "LABEL_CREATED": "Etichetta creata",
+    "IN_TRANSIT": "In transito",
+    "OUT_FOR_DELIVERY": "In consegna",
+    "DELIVERED": "Consegnata",
+    "EXCEPTION": "Un problema",
+    "RETURNED": "Resa"
+  },
+  "printState": {
+    "QUEUED": "In coda",
+    "SENT": "Inviato",
+    "PRINTED": "Stampato",
+    "FAILED": "Non riuscito"
+  },
+  "packagingKind": {
+    "CARTON": "Cartone",
+    "PALLET": "Pallet",
+    "POLYBAG": "Busta",
+    "HANGER": "Appendiabito",
+    "BOX": "Scatola"
+  },
+  "mailState": {
+    "QUEUED": "In coda",
+    "SENDING": "In invio",
+    "SENT": "Inviata",
+    "DELIVERED": "Recapitata",
+    "BOUNCED": "Respinta",
+    "COMPLAINED": "Segnalata come spam",
+    "FAILED": "Non riuscita"
+  },
+  "taskState": {
+    "OPEN": "aperta",
+    "DONE": "fatta",
+    "CANCELLED": "annullata"
+  },
+  "language": {
+    "it": "Italiano",
+    "en": "Inglese"
+  },
+  "rows": {
+    "today": "Da spedire oggi",
+    "atRisk": "A rischio di mancare la promessa",
+    "open": "Aperte (non ancora partite)",
+    "exceptions": "Eccezioni (problemi di tracciamento)"
+  },
+  "tile": {
+    "exceptions": "Eccezioni"
+  },
+  "today": {
+    "label": "Orari limite dei vettori oggi",
+    "site": "Sede",
+    "counts": "{due} da spedire oggi o prima · {toPack} ancora da imballare · {willMiss} mancheranno la promessa",
+    "nothing": "Niente da spedire oggi",
+    "closed": "La sede oggi non lavora ({reason}): quanto è dovuto oggi manca l'orario limite.",
+    "closedNext": "La sede oggi non lavora ({reason}); prossimo giorno lavorativo {next}: quanto è dovuto oggi manca l'orario limite.",
+    "left": "{left} alle {time}",
+    "passed": "Orario limite {time} superato",
+    "noCutOff": "Nessun orario limite",
+    "noCutOffCollects": "Ritira il cliente: nessun orario limite",
+    "cardCounts": "{packed} imballate · {toPack} da imballare · {parcels} colli",
+    "source": {
+      "CARRIER": "orario del vettore",
+      "SITE": "orario della sede"
+    },
+    "held_one": "{count} bloccata",
+    "held_other": "{count} bloccate",
+    "willMiss_one": "{count} mancherà la promessa",
+    "willMiss_other": "{count} mancheranno la promessa",
+    "truncated": "Qui sono contate solo le prime 200 spedizioni aperte."
+  },
+  "closedReason": {
+    "WEEK": "fuori dalla settimana lavorativa",
+    "DAY_OFF": "giorno di riposo",
+    "HOLIDAY": "festività",
+    "CLOSURE": "chiusura",
+    "WORKING": "giorno lavorativo"
+  },
+  "carrier": {
+    "ownVan": "Nostro furgone",
+    "collects": "Ritira il cliente",
+    "named": "{name}",
+    "none": "Nessun vettore scelto"
+  },
+  "col": {
+    "number": "Spedizione",
+    "risk": "Rischio · stato",
+    "customer": "Cliente · ordine",
+    "shipTo": "Destinazione",
+    "carrier": "Vettore",
+    "parcels": "Colli",
+    "shipBy": "Spedire entro",
+    "holds": "Blocchi",
+    "more": "Altro",
+    "order": "Ordine",
+    "garments": "Capi",
+    "plan": "Pianifica",
+    "problem": "Problema",
+    "raised": "Segnalato",
+    "expected": "Prevista",
+    "status": "Stato",
+    "carrierTracking": "Vettore · tracciamento",
+    "matched": "Trovata per",
+    "when": "Quando"
+  },
+  "grid": {
+    "todayLabel": "Da spedire oggi",
+    "atRiskLabel": "A rischio di mancare la promessa",
+    "exceptionsLabel": "Problemi di tracciamento",
+    "searchLabel": "Ricerca e storico",
+    "count_one": "{count} spedizione",
+    "count_other": "{count} spedizioni",
+    "countMore_one": "Prima {count} spedizione",
+    "countMore_other": "Prime {count} spedizioni",
+    "failed": "Impossibile leggere l'elenco",
+    "split": "Separata da un'altra spedizione",
+    "po": "Ord. cliente {po}",
+    "parcels_one": "{count} collo",
+    "parcels_other": "{count} colli",
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "noPromise": "Nessuna data promessa",
+    "noCutOff": "Nessun orario limite",
+    "rowMenu": "Azioni per {number}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "cartons": "Righe e colli",
+    "carrier": "Vettore ed etichetta",
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)",
+    "atRiskNone": {
+      "title": "Niente a rischio",
+      "body": "Nessuna spedizione aperta è in ritardo, bloccata o vicina all'orario limite."
+    },
+    "carrierNone": {
+      "title": "Niente per questo vettore oggi",
+      "body": "Togli il vettore per vedere tutte le spedizioni di oggi."
+    },
+    "clearCarrier": "Togli il vettore",
+    "todayNone": {
+      "body": "Nessuna spedizione aperta è dovuta oggi o prima in questa sede."
+    },
+    "exceptionsNone": {
+      "title": "Nessun problema di tracciamento aperto",
+      "body": "Qui compaiono ritardi, problemi di indirizzo, consegne mancate e colli senza notizie."
+    },
+    "searchNone": {
+      "title": "Nessuna spedizione trovata",
+      "body": "Prova con il numero d'ordine, un numero di tracciamento, l'ordine del cliente, l'etichetta di un collo o un numero di serie."
+    },
+    "heldFor": "Bloccata: {reasons}",
+    "deliveredAt": "Consegnata il {date}",
+    "shippedAt": "Partita il {date}",
+    "cancelledAt": "Annullata il {date}",
+    "createdAt": "Creata il {date}",
+    "more": "Mostra altre"
+  },
+  "search": {
+    "ssccNotKept": "L'SSCC non è ancora registrato: un collo si trova con il codice della sua etichetta (numero spedizione e collo).",
+    "note": "La ricerca guarda tutte le spedizioni, in qualunque stato; una vista per stato la restringe."
+  },
+  "notPlanned": {
+    "title": "Dovuti e non ancora su una spedizione",
+    "count_one": "{count} ordine",
+    "count_other": "{count} ordini",
+    "none": "Ogni capo rilasciato e dovuto è su una spedizione.",
+    "plan": "Pianifica una spedizione",
+    "noManage": "Per pianificare una spedizione serve il permesso di gestire le spedizioni."
+  },
+  "csv": {
+    "number": "Spedizione",
+    "status": "Stato",
+    "risk": "Rischio",
+    "order": "Ordine",
+    "customerPo": "Ordine del cliente",
+    "customer": "Cliente",
+    "carrier": "Vettore",
+    "shipBy": "Spedire entro",
+    "parcels": "Colli",
+    "garments": "Capi",
+    "holds": "Blocchi"
+  },
+  "holds": {
+    "title": "Blocchi",
+    "check": "Nessun blocco",
+    "checkOk": "Niente trattiene la merce.",
+    "checkOpen": "Bloccata: {reasons}.",
+    "inForce": "Blocchi attivi",
+    "bySystem": "Messo dal sistema",
+    "byPerson": "Messo da {name}",
+    "someone": "qualcuno",
+    "theSystem": "il sistema",
+    "since": "Dal {when}",
+    "releasedBy": {
+      "finance": "Lo sblocca l'amministrazione",
+      "warehouse": "Lo sblocca il magazzino"
+    },
+    "release": "Sblocca",
+    "releaseOf": "Sblocca il blocco: {reason}",
+    "releasedLine": "Sbloccato il {when} da {who}",
+    "released_one": "{count} blocco sbloccato",
+    "released_other": "{count} blocchi sbloccati",
+    "place": "Metti un blocco…",
+    "placeMenu": "Metti un blocco…",
+    "placeTitle": "Metti un blocco su {number}",
+    "placeBody": "Una spedizione bloccata non può essere imballata, etichettata né consegnata finché il blocco non viene sbloccato.",
+    "placeGo": "Blocca: {reason}",
+    "reason": "Perché",
+    "alreadyHeld": "Un motivo già attivo non viene proposto di nuovo.",
+    "wordsRequired": "Cosa non va (necessario per Altro)",
+    "wordsOptional": "Cosa non va (facoltativo)",
+    "wordsHint": "Resta sulla spedizione; il reparto vede solo il motivo.",
+    "releaseTitle": "Sblocca il blocco: {reason}",
+    "releaseSystem": "Questo blocco l'ha messo il sistema: sbloccato a mano, non viene rimesso per la stessa causa.",
+    "stillHeld_one": "Resta attivo {count} altro blocco.",
+    "stillHeld_other": "Restano attivi {count} altri blocchi.",
+    "freeAfter": "Dopo questo la spedizione può proseguire.",
+    "why": "Perché ora può partire",
+    "whyHint": "Resta sulla spedizione con lo sblocco.",
+    "banner": "Bloccata: {reasons}",
+    "bannerFinance": "Non può essere imballata, etichettata né consegnata. L'amministrazione sblocca un blocco di pagamento o uno messo dal sistema.",
+    "bannerWarehouse": "Non può essere imballata, etichettata né consegnata finché il magazzino non la sblocca.",
+    "openHolds": "Vedi i blocchi",
+    "stepHeld": "Bloccata ({reasons}): prima sblocca il blocco",
+    "done": {
+      "placed": "Il blocco è attivo.",
+      "released": "Il blocco è sbloccato."
+    },
+    "held": {
+      "noManage": "I blocchi richiedono il permesso di gestire i blocchi.",
+      "notOpen": "Si può bloccare solo una spedizione non ancora partita.",
+      "busy": "Attendi: l'ultima modifica è ancora in salvataggio.",
+      "notInForce": "Questo blocco è già sbloccato.",
+      "financeOnly": "Solo l'amministrazione sblocca un blocco di pagamento o uno messo dal sistema."
+    },
+    "form": {
+      "pickReason": "Scegli un motivo.",
+      "wordsNeeded": "Scrivi cosa non va.",
+      "whyNeeded": "Scrivi perché ora può partire.",
+      "tooLong": "Al massimo {max} caratteri."
+    },
+    "refusal": {
+      "NOT_OPEN": "È partita o annullata.",
+      "ALREADY_HELD": "Già bloccata per questo motivo.",
+      "NOT_IN_FORCE": "Il blocco non è più attivo.",
+      "MAY_NOT_RELEASE": "Solo l'amministrazione può sbloccarlo."
+    },
+    "bulk": {
+      "button_one": "Blocca {count}",
+      "button_other": "Blocca {count}",
+      "title_one": "Blocca {count} spedizione",
+      "title_other": "Blocca {count} spedizioni",
+      "go_one": "Blocca {count}",
+      "go_other": "Blocca {count}",
+      "body": "Ogni spedizione scelta riceve lo stesso blocco; una già bloccata per quel motivo resta com'è.",
+      "picked_one": "{count} spedizione scelta",
+      "picked_other": "{count} spedizioni scelte",
+      "gone_one": "{count} è partita o annullata ed è esclusa: {numbers}",
+      "gone_other": "{count} sono partite o annullate e sono escluse: {numbers}",
+      "noneOpen": "Nessuna delle spedizioni scelte è aperta.",
+      "placed_one": "{count} spedizione ora è bloccata.",
+      "placed_other": "{count} spedizioni ora sono bloccate.",
+      "skipped_one": "{count} è rimasta com'era:",
+      "skipped_other": "{count} sono rimaste com'erano:"
+    }
+  },
+  "split": {
+    "menu": "Dividi…",
+    "title": "Dividi la spedizione",
+    "titleOf": "Dividi {number}",
+    "how": "Come dividere",
+    "byHand": "A mano",
+    "byRule": "Per data promessa",
+    "go": "Dividi",
+    "goHand_one": "Sposta {count} capo",
+    "goHand_other": "Sposta {count} capi",
+    "goRule_one": "Crea {count} spedizione",
+    "goRule_other": "Crea {count} spedizioni",
+    "heldCarried": "I blocchi attivi passano alle nuove spedizioni.",
+    "ruleBody": "I capi promessi per giorni diversi partono separati; questa spedizione tiene quelli del {day}.",
+    "ruleLine_one": "{day}: una nuova spedizione con {count} capo",
+    "ruleLine_other": "{day}: una nuova spedizione con {count} capi",
+    "handBody": "Quanti capi di ogni riga passano su una nuova bozza dello stesso ordine. I capi in un collo o con un numero di serie restano.",
+    "lines": "Righe",
+    "col": {
+      "line": "Riga",
+      "shipBy": "Spedire entro",
+      "stays": "Resta",
+      "moves": "Si sposta"
+    },
+    "lineFacts": "{quantity} sulla riga · {packed} nei colli · {serials} con numero di serie",
+    "movesOf": "Capi di {line} {size} che si spostano",
+    "fewer": "Uno in meno",
+    "more": "Uno in più",
+    "cannotMove": "Non spostabile",
+    "noDate": "nessuna data",
+    "totals": "{moving} si spostano · {staying} restano",
+    "reason": "Perché",
+    "transportBy": "Chi trasporta la nuova spedizione",
+    "transport": {
+      "CARRIER": "Un vettore",
+      "SENDER": "Nostro furgone",
+      "RECIPIENT": "Ritira il cliente"
+    },
+    "carrierCode": "Codice vettore",
+    "carrierHint": "Come lo chiamano le impostazioni di spedizione (per esempio brt, gls).",
+    "serviceCode": "Codice servizio",
+    "shipToNote": "Un altro indirizzo di consegna: pianifica una nuova spedizione dall'ordine.",
+    "done_one": "{number} è stata divisa: {count} nuova spedizione.",
+    "done_other": "{number} è stata divisa: {count} nuove spedizioni.",
+    "held": {
+      "noManage": "Per dividere serve il permesso di gestire le spedizioni.",
+      "notDraft": "Si può dividere solo una bozza: prima disfa l'imballo.",
+      "busy": "Attendi: la divisione è in corso.",
+      "reading": "Attendi: lettura di cosa si può spostare.",
+      "pickGarments": "Scegli i capi che si spostano.",
+      "pickReason": "Scegli il perché.",
+      "carrierNeeded": "Indica il nuovo vettore.",
+      "serviceNeeded": "Indica il nuovo servizio."
+    },
+    "refusal": {
+      "NOT_DRAFT": "Si può dividere solo una bozza.",
+      "NOTHING_TO_MOVE": "Niente si può spostare: ogni capo è in un collo o ha un numero di serie.",
+      "NOTHING_STAYS": "Qualcosa deve restare su questa spedizione.",
+      "ONE_DAY": "Tutti i capi sono promessi per lo stesso giorno: niente da dividere per data."
+    }
+  },
+  "splitReason": {
+    "PART_READY": "Una parte è pronta",
+    "CUSTOMER_REQUEST": "Richiesta del cliente",
+    "CARRIER": "Un altro vettore",
+    "SERVICE": "Un altro servizio",
+    "PROMISE_DATE": "Date promesse diverse",
+    "OTHER": "Altro"
+  },
+  "cartons": {
+    "title": "Colli",
+    "count_one": "{count} collo",
+    "count_other": "{count} colli",
+    "add": "Aggiungi collo",
+    "nOfN": "Collo {n} di {count}",
+    "open": "Collo {n} (aperto)",
+    "openOf": "Apri {carton}",
+    "weighOf": "Pesa e misura {carton}",
+    "removeOf": "Togli {carton}",
+    "col": {
+      "carton": "Collo",
+      "packaging": "Imballo",
+      "contents": "Contenuto per taglia",
+      "weight": "Peso",
+      "size": "L × P × A",
+      "tracking": "N. tracciamento",
+      "label": "Segnacolli · etichetta",
+      "actions": "Azioni",
+      "style": "Modello · colore",
+      "sizes": "Imballati su ordinati",
+      "lot": "Lotto"
+    },
+    "noPackaging": "Nessun imballo indicato",
+    "packagingAtClose": "Indicato alla chiusura",
+    "empty": "Vuoto",
+    "garments_one": "{count} capo",
+    "garments_other": "{count} capi",
+    "serialsCount_one": "{count} numero di serie",
+    "serialsCount_other": "{count} numeri di serie",
+    "notWeighed": "Non pesato",
+    "gross": "{value} kg lordi",
+    "net": "{value} kg netti",
+    "kg": "{value} kg",
+    "cm": "{size} cm",
+    "labelled": "Etichettato",
+    "noLabel": "Nessuna etichetta",
+    "marks": {
+      "current": "Segnacolli stampato",
+      "stale": "Segnacolli superato",
+      "notPrinted": "Segnacolli non stampato",
+      "open": "Aperto"
+    },
+    "problem": {
+      "NOT_SCANNED": "Capi ancora da scansionare",
+      "SERIALS_NOT_IN_CARTONS": "Numeri di serie non in un collo",
+      "CARTON_OPEN": "Un collo è ancora aperto",
+      "MARKS_NOT_PRINTED": "Segnacolli da stampare"
+    },
+    "none": {
+      "title": "Ancora nessun collo",
+      "body": "L'imballo si fa alla postazione di imballo (ogni capo scansionato nel suo collo) o qui."
+    },
+    "bySize": "Imballati per taglia: {packed} di {ordered}",
+    "bySizeLabel": "Imballati per taglia",
+    "serialTracked": "Tracciato per numero di serie",
+    "sizeOf": "{size}: {packed}/{ordered}",
+    "serials": "Numeri di serie su questa spedizione ({count})",
+    "serialsLabel": "Numeri di serie e il loro collo",
+    "foot": "La postazione di imballo riempie i colli in tempo reale; l'ufficio può aggiungere o correggere.",
+    "packingList": "Packing list",
+    "held": {
+      "noPack": "I colli richiedono il permesso di imballare.",
+      "notDraft": "Solo finché la spedizione è una bozza: prima disfa l'imballo.",
+      "left": "La merce è partita.",
+      "labelled": "Il collo ha l'etichetta del vettore: prima annulla le etichette.",
+      "notEmpty": "Prima togli i capi (alla postazione di imballo).",
+      "busy": "Attendi: l'ultima modifica è ancora in salvataggio."
+    },
+    "drawer": {
+      "close": "Chiudi il collo",
+      "position": "{index} di {count} · {number}",
+      "previous": "Collo precedente",
+      "next": "Collo successivo",
+      "first": "È il primo collo.",
+      "last": "È l'ultimo collo.",
+      "contents": "Contenuto per taglia",
+      "lot": "lotto {lot} · ordine di lavoro {order}",
+      "origin": "origine {country}",
+      "serialsOf": "Numeri di serie di {style} {size}",
+      "scanned": "scansionato il {when}",
+      "facts": "Pesi, misure ed etichetta",
+      "gross": "Peso lordo",
+      "net": "Peso netto",
+      "marks": "Segnacolli",
+      "marksHint": "Ristampa il segnacolli dalla postazione di imballo o dalle stampe etichette in Vettore ed etichetta."
+    }
+  },
+  "arrangement": {
+    "CARRIER": "Vettore",
+    "MANUAL_CARRIER": "Vettore prenotato a mano",
+    "OWN_VAN": "Nostro furgone",
+    "CUSTOMER_COLLECTS": "Ritira il cliente"
+  },
+  "arrangementLong": {
+    "CARRIER": "Un vettore, etichette acquistate tramite l'aggregatore",
+    "OWN_VAN": "Il nostro furgone",
+    "CUSTOMER_COLLECTS": "Ritira il cliente (franco fabbrica)"
+  },
+  "transport": {
+    "title": "Come viaggia",
+    "how": "Chi la trasporta",
+    "manualNamed": "{carrier}, prenotato a mano",
+    "trackingNumber": "Numero di tracciamento",
+    "noTracking": "Non ancora inserito",
+    "ddt": "DDT",
+    "ddtNotYet": "Non ancora emesso",
+    "ddtNotNeeded": "Non necessario",
+    "labels": "Etichette del vettore",
+    "labelsCount_one": "{count} acquistata",
+    "labelsCount_other": "{count} acquistate",
+    "labelsTest": "{count}, di cui {test} etichette TEST (non è stato acquistato nulla)",
+    "explain": {
+      "CARRIER": "Le etichette si acquistano per ogni collo tramite l'aggregatore collegato; il tracciamento del vettore segue da solo.",
+      "MANUAL_CARRIER": "Prenotato per telefono o sul sito del vettore: qui non si acquista nessuna etichetta; inserisci il numero di tracciamento e gli stati raggiunti.",
+      "OWN_VAN": "La porta il nostro furgone: nessuna etichetta, nessun vettore; il DDT ci indica come vettore; inserisci gli stati come li riferisce l'autista.",
+      "CUSTOMER_COLLECTS": "Il cliente ritira presso la nostra sede (franco fabbrica): nessuna etichetta e nessun vettore; il DDT si firma al ritiro."
+    },
+    "arrange": "Nostro furgone o vettore a mano…",
+    "change": "Cambia come viaggia…",
+    "typeTracking": "Inserisci il numero di tracciamento…",
+    "changeTracking": "Cambia il numero di tracciamento…",
+    "typeStatus": "Inserisci uno stato…",
+    "typed": "Stati inseriti",
+    "noTyped": "Nessuno stato inserito.",
+    "typedAfterLeft": "Gli stati si inseriscono quando la merce è partita.",
+    "typedAt": "inserito il {when}",
+    "arrangeTitle": "Come viaggia {number}",
+    "arrangeGo": "Salva",
+    "ownVanHint": "Nessun vettore, nessuna etichetta: il DDT indica noi.",
+    "manualHint": "Un vettore prenotato fuori: il nome e, quando noto, il numero di tracciamento.",
+    "carrierName": "Vettore",
+    "trackingHint": "Facoltativo; si può inserire dopo.",
+    "arrangeNote": "Non si può più cambiare una volta acquistata un'etichetta o emesso il DDT (indica il vettore).",
+    "trackingTitle": "Numero di tracciamento di {carrier}",
+    "trackingClearHint": "Lascialo vuoto per cancellarlo.",
+    "saveTracking": "Salva",
+    "clearTracking": "Cancellalo",
+    "statusTitle": "Uno stato di {number}",
+    "status": "Cosa è successo",
+    "statusGo": "Salva: {status}",
+    "movesIt": "Aggiorna la spedizione",
+    "when": "Quando",
+    "whenHint": "Vuoto: adesso. Non prima della partenza.",
+    "location": "Dove",
+    "description": "Nota",
+    "done": {
+      "ownVan": "Ora la porta il nostro furgone.",
+      "manual": "Il vettore prenotato a mano è salvato.",
+      "tracking": "Il numero di tracciamento è salvato.",
+      "trackingCleared": "Il numero di tracciamento è cancellato.",
+      "status": "Lo stato è salvato.",
+      "delivered": "Segnata come consegnata.",
+      "returned": "Segnata come resa."
+    },
+    "held": {
+      "noManage": "Serve il permesso di gestire le spedizioni.",
+      "notNow": "Non possibile ora.",
+      "busy": "Attendi: l'ultima modifica è ancora in salvataggio."
+    },
+    "form": {
+      "carrierNeeded": "Indica il vettore.",
+      "tooLong": "Al massimo {max} caratteri.",
+      "trackingTooLong": "Una riga di al massimo {max} caratteri.",
+      "pickStatus": "Scegli cosa è successo.",
+      "when": "L'orario non è valido.",
+      "future": "L'orario è nel futuro.",
+      "beforeLeft": "L'orario è prima della partenza della merce."
+    },
+    "refusal": {
+      "LEFT": "La merce è partita.",
+      "LABELLED": "È stata acquistata un'etichetta: prima annulla le etichette.",
+      "DECLARED": "Il DDT è emesso e indica il vettore: prima annullalo.",
+      "NOT_A_CARRIER": "Solo una spedizione con vettore accetta un numero di tracciamento inserito.",
+      "CANCELLED": "La spedizione è annullata.",
+      "NOT_LEFT": "La merce non è ancora partita.",
+      "CARRIER_TRACKED": "La segue il tracciamento del vettore: niente da inserire.",
+      "CUSTOMER_COLLECTS": "Ritira il cliente: nessuno stato da inserire.",
+      "ARRIVED": "È già arrivata."
+    }
+  },
+  "check": {
+    "title": "Controllo prima della stampa",
+    "testMode": "Modalità test: le etichette dicono TEST e nulla viene inviato al vettore.",
+    "notApplying": {
+      "OWN_VAN": "La porta il nostro furgone: nessuna etichetta del vettore.",
+      "CUSTOMER_COLLECTS": "Ritira il cliente: nessuna etichetta del vettore.",
+      "MANUAL_CARRIER": "Un vettore prenotato a mano: qui non si acquista nessuna etichetta."
+    },
+    "allLabelled": "Ogni collo ha la sua etichetta.",
+    "noParcels": "Ancora nessun collo: il controllo si fa quando la merce è imballata.",
+    "ok_one": "Il collo supera i controlli di {carrier}.",
+    "ok_other": "Tutti i {count} colli superano i controlli di {carrier}.",
+    "problems_one": "{count} problema",
+    "problems_other": "{count} problemi",
+    "limitsKept": "I limiti di peso e misura registrati per {carrier} sono valori iniziali, non verificati con il vettore.",
+    "noLimits": "Per {carrier} non è registrato alcun limite di peso o misura: un suo rifiuto resta del vettore.",
+    "incomplete": {
+      "sender": {
+        "name": "L'indirizzo del mittente (impostazioni di spedizione della sede) non ha il destinatario.",
+        "line1": "L'indirizzo del mittente (impostazioni di spedizione della sede) non ha la via.",
+        "postalCode": "L'indirizzo del mittente (impostazioni di spedizione della sede) non ha il CAP.",
+        "city": "L'indirizzo del mittente (impostazioni di spedizione della sede) non ha la città.",
+        "country": "L'indirizzo del mittente (impostazioni di spedizione della sede) non ha il paese."
+      },
+      "recipient": {
+        "name": "L'indirizzo di consegna non ha il destinatario.",
+        "line1": "L'indirizzo di consegna non ha la via.",
+        "postalCode": "L'indirizzo di consegna non ha il CAP.",
+        "city": "L'indirizzo di consegna non ha la città.",
+        "country": "L'indirizzo di consegna non ha il paese."
+      }
+    },
+    "POSTAL_CODE": "Il CAP di consegna \"{value}\" non è un CAP di {country} (come {example}).",
+    "POSTAL_CODE_sender": "Il CAP del mittente \"{value}\" non è un CAP di {country} (come {example}).",
+    "PHONE_NEEDED": "{carrier} richiede il telefono del destinatario: aggiungilo all'indirizzo di consegna.",
+    "PHONE_NEEDED_eu": "Un collo che lascia l'Unione europea richiede il telefono del destinatario (per la dogana): aggiungilo all'indirizzo di consegna.",
+    "PHONE_FORMAT": "Il telefono del destinatario \"{value}\" non è un numero di telefono (cifre, con + e spazi).",
+    "NO_SERVICE": "Scegli il servizio del vettore per la spedizione (o uno predefinito nelle impostazioni della sede).",
+    "NO_WEIGHT": "Il collo {seq} non ha un peso: prima pesalo.",
+    "SIZES_PARTIAL": "Il collo {seq} ha solo alcune misure: indica lunghezza, larghezza e altezza, o nessuna.",
+    "TOO_HEAVY": "Il collo {seq} pesa {weight} kg; {carrier} accetta al massimo {max} kg a collo: reimballa in colli più leggeri.",
+    "TOO_LONG": "Il collo {seq} misura {length} cm sul lato più lungo; {carrier} accetta al massimo {max} cm.",
+    "TOO_BIG": "Il collo {seq} misura {sum} cm tra lunghezza e circonferenza; {carrier} accetta al massimo {max} cm.",
+    "DOES_NOT_FIT": "Il collo {seq} ({sizes} cm) non entra nel collo più grande di {carrier} ({box} cm)."
+  },
+  "reprint": {
+    "title": "Stampe delle etichette",
+    "all_one": "Ristampa {count} etichetta…",
+    "all_other": "Ristampa {count} etichette…",
+    "one": "Ristampa…",
+    "oneOf": "Ristampa {kind} del collo {seq}",
+    "parcel": "Collo {seq}",
+    "noTracking": "Nessun numero di tracciamento",
+    "kind": {
+      "CARRIER": "Etichetta del vettore",
+      "MARKS": "Segnacolli",
+      "OTHER": "Altra etichetta"
+    },
+    "test": "TEST",
+    "again": "Ristampa",
+    "line": "{printer} · {copies} cop. · {when}",
+    "why": "Perché: {reason}",
+    "by": {
+      "office": "richiesta da {name}",
+      "floor": "dal tablet {device}",
+      "floorNamed": "dal tablet {device} ({name})",
+      "system": "dal sistema"
+    },
+    "none": {
+      "title": "Ancora nessuna etichetta stampata",
+      "body": "Le etichette del vettore e i segnacolli compaiono qui una volta stampati."
+    },
+    "note": "Una ristampa stampa di nuovo la stessa etichetta su una stampante di etichette della sede: nulla viene acquistato o rifatto; il motivo resta sulla spedizione.",
+    "dialogTitle_one": "Ristampa {count} etichetta",
+    "dialogTitle_other": "Ristampa {count} etichette",
+    "go_one": "Ristampa {count}",
+    "go_other": "Ristampa {count}",
+    "pickedLine": "{kind} · collo {seq} · {printer}",
+    "reason": "Perché viene ristampata",
+    "reasonHint": "Una riga, resta sulla spedizione (per esempio: l'etichetta si è strappata).",
+    "nothingBought": "Nulla viene riacquistato: la stessa etichetta va alla stampante.",
+    "done_one": "{count} etichetta è in coda di stampa.",
+    "done_other": "{count} etichette sono in coda di stampa.",
+    "doneTest": "Le etichette TEST restano TEST: non per la spedizione.",
+    "held": {
+      "noRight": "Una ristampa richiede i permessi di imballare e di stampare etichette.",
+      "pickOne": "Scegli un'etichetta.",
+      "notReprintable": "Una delle etichette scelte non può essere ristampata.",
+      "notNow": "Non si può ristampare ora.",
+      "busy": "Attendi: la ristampa è in coda."
+    },
+    "form": {
+      "reasonShort": "Scrivi il perché in almeno {min} caratteri.",
+      "reasonLong": "Al massimo {max} caratteri.",
+      "oneLine": "Una sola riga."
+    },
+    "refusal": {
+      "NOT_A_LABEL": "Non è un'etichetta (una stampa PDF).",
+      "GOODS_GONE": "La merce è stata consegnata, resa o annullata.",
+      "LABEL_VOIDED": "L'etichetta è stata annullata o sostituita nel frattempo.",
+      "MARKS_CHANGED": "Il collo è stato rinumerato nel frattempo: stampa di nuovo il segnacolli alla postazione di imballo.",
+      "REASON": "Il motivo deve avere da 3 a 200 caratteri su una riga.",
+      "PRINTER": "Nessuna stampante di etichette la accetta: imposta la stampante della sede nelle impostazioni di spedizione."
+    }
+  },
+  "pack": {
+    "title": "Documenti per l'autista (un PDF)",
+    "test": "Etichette TEST",
+    "parts": "Cosa contiene",
+    "part": {
+      "LABELS": "Etichette del vettore",
+      "PACKING_LIST": "Packing list",
+      "DDT": "DDT",
+      "COMMERCIAL_INVOICE": "Fattura commerciale",
+      "PROFORMA": "Proforma"
+    },
+    "state": {
+      "READY": "Pronto",
+      "MISSING": "Manca",
+      "NONE": "Non necessario",
+      "NOT_SHOWN": "Con prezzi"
+    },
+    "ready": {
+      "numbered_one": "{number} · {count} file",
+      "numbered_other": "{number} · {count} file",
+      "files_one": "{count} file",
+      "files_other": "{count} file"
+    },
+    "missing": {
+      "LABELS": "Un collo non ha ancora l'etichetta (o un'etichetta solo sulla stampante di etichette).",
+      "PACKING_LIST": "Nessuna packing list corrisponde ancora ai colli: creando i documenti viene creata.",
+      "DDT": "Il DDT non è ancora emesso, o manca il suo file.",
+      "COMMERCIAL_INVOICE": "Ancora nessuna fattura commerciale.",
+      "PROFORMA": "Ancora nessuna proforma."
+    },
+    "none": {
+      "LABELS": "Nessuna etichetta del vettore: nostro furgone, ritiro del cliente o vettore prenotato a mano.",
+      "PACKING_LIST": "Nessuna packing list.",
+      "DDT": "Nessun DDT per questa spedizione.",
+      "COMMERCIAL_INVOICE": "Non necessaria per questa spedizione.",
+      "PROFORMA": "Nessuna creata."
+    },
+    "notShown": "Contiene prezzi: entra nei documenti solo per chi vede i prezzi.",
+    "latest": "Ultima: versione {version}, {when}, {pages} pagine.",
+    "latestOld": "Ultima: versione {version}, {when}, {pages} pagine — i documenti sono cambiati: creala di nuovo.",
+    "notMade": "Non ancora creata.",
+    "makePrint": "Crea e stampa su {printer}",
+    "makePrintNone": "Crea e stampa",
+    "makeOnly": "Crea il PDF",
+    "open": "Apri il PDF",
+    "note": "Mai inviata al cliente: è per l'autista e la banchina.",
+    "pdfTitle": "Documenti di {number}, versione {version}",
+    "pdfLoading": "Lettura del PDF…",
+    "done": {
+      "made": "Versione {version} creata ({pages} pagine).",
+      "printed": "Versione {version} creata ({pages} pagine) e inviata alla stampante.",
+      "same": "La versione {version} contiene già questi documenti: non è stato creato nulla di nuovo.",
+      "notPrinted": {
+        "NO_PRINTER": "Versione {version} creata; non stampata: la sede non ha una stampante di documenti. Apri il PDF per stamparlo.",
+        "PRINTER": "Versione {version} creata; la stampante non l'ha accettata. Apri il PDF per stamparlo."
+      }
+    },
+    "held": {
+      "noPack": "I documenti richiedono il permesso di imballare.",
+      "cancelled": "La spedizione è annullata.",
+      "nothing": "Nessuna parte è ancora pronta.",
+      "noPrint": "Per stampare documenti serve il permesso di stampare documenti.",
+      "noPrinter": "La sede non ha una stampante di documenti: crea il PDF e stampalo dal browser.",
+      "notMade": "Prima crealo.",
+      "busy": "Attendi: i documenti sono in creazione."
+    }
+  },
+  "proforma": {
+    "title": "Fattura proforma",
+    "purpose": {
+      "CUSTOMS": "Per la dogana: la merce e i suoi valori. Non è una fattura.",
+      "SAMPLES": "Per campioni inviati: solo per la dogana.",
+      "PREPAYMENT": "Una richiesta di pagamento anticipato."
+    },
+    "blockers": "Cosa impedisce ora una proforma",
+    "problem": {
+      "cancelled": "La spedizione è annullata.",
+      "noLines": "La spedizione non ha ancora capi.",
+      "noPrice": "Una riga non ha un prezzo sul suo ordine.",
+      "vat": "L'IVA dell'ordine non si può stampare su una proforma.",
+      "currency": "L'ordine non ha una valuta.",
+      "other": "Qualcosa sull'ordine o sulla spedizione non è completo."
+    },
+    "none": "Ancora nessuna proforma.",
+    "versions": "Versioni",
+    "version": "{number} · versione {version}",
+    "current": "Ultima",
+    "older": "Precedente",
+    "openOf": "Apri {number} versione {version}",
+    "make": "Crea una proforma…",
+    "makeAgain": "Crea una nuova versione…",
+    "note": "Il numero si prende una volta; una nuova versione lo mantiene. Il PDF contiene prezzi.",
+    "dialogTitle": "Proforma per {number}",
+    "dialogBody": "Merce, valori e riferimenti vengono letti dall'ordine e dalla spedizione così come sono ora.",
+    "language": "Lingua",
+    "languageDefault": "La lingua dell'ordine",
+    "notes": "Note stampate",
+    "notesHint": "Facoltative.",
+    "notesLong": "Al massimo {max} caratteri.",
+    "go": "Crea la proforma",
+    "done": {
+      "made": "Proforma {number} versione {version} creata.",
+      "same": "La proforma {number} versione {version} dice già questo: non è stato creato nulla di nuovo."
+    },
+    "held": {
+      "noRight": "Una proforma richiede il permesso di emettere proforma e di vedere i prezzi.",
+      "problems_one": "{count} cosa la impedisce: vedi sopra.",
+      "problems_other": "{count} cose la impediscono: vedi sopra.",
+      "busy": "Attendi: la proforma è in creazione.",
+      "noFiles": "Per aprire un file serve il permesso di leggere i file."
+    }
+  },
+  "publicDoc": {
+    "title": "Pagine pubbliche della DdC",
+    "body": "L'indirizzo contenuto nel QR code dell'etichetta: la Dichiarazione di conformità e le informazioni per l'utilizzatore di ogni modello.",
+    "none": "Ancora nessun modello su questa spedizione.",
+    "live": "Oggi mostra la sua dichiarazione.",
+    "notLive": "Non mostra ancora una dichiarazione: pubblicala in Conformità › Dichiarazioni e istruzioni.",
+    "copyOf": "Copia l'indirizzo di {style}",
+    "openOf": "Apri la pagina di {style}",
+    "copied": "Indirizzo copiato.",
+    "copyFailed": "Impossibile copiarlo: {address}"
+  },
+  "pod": {
+    "title": "Prova di consegna",
+    "via": {
+      "CARRIER": "Dal vettore",
+      "TYPED": "Inserita dall'ufficio"
+    },
+    "shippedAt": "Partita",
+    "expectedAt": "Prevista",
+    "deliveredAt": "Consegnata",
+    "returnedAt": "Resa",
+    "signedBy": "Firmata da",
+    "signedAt": "Firmata il",
+    "image": "Immagine o scansione",
+    "noImage": "Nessuna",
+    "notYet": "Non ancora",
+    "notDelivered": "Non ancora consegnata",
+    "notDeliveredHint": "La prova si registra quando la merce è consegnata.",
+    "carrierAsked": "Al vettore è stata chiesta la prova: compare qui quando risponde.",
+    "record": "Registra la prova…",
+    "download": "Scarica per una contestazione",
+    "keptNote": "Ogni parte è registrata: la prova non cambia più.",
+    "recordTitle": "Prova di consegna di {number}",
+    "recordGo": "Registra la prova",
+    "onceNote": "Ogni parte si registra una volta e poi non cambia più.",
+    "signerHint": "La persona del cliente che ha firmato, come scritto sulla prova.",
+    "imageHint": "Una foto (JPEG, PNG) o una scansione (PDF), al massimo 15 MB.",
+    "picked": "Scelto: {name}",
+    "keptSigner": "Firmata da {name} (registrato).",
+    "keptTime": "Firmata il {when} (registrato).",
+    "keptImage": "Immagine {name} (registrata).",
+    "done": "La prova di consegna è registrata.",
+    "held": {
+      "noManage": "Per registrare la prova serve il permesso di gestire le spedizioni.",
+      "notDelivered": "Non ancora consegnata.",
+      "kept": "Ogni parte è registrata: non cambia più.",
+      "busy": "Attendi: l'ultima modifica è ancora in salvataggio.",
+      "noImage": "Nessuna immagine registrata.",
+      "noFiles": "Per scaricare serve il permesso di leggere i file."
+    },
+    "form": {
+      "nothing": "Inserisci almeno una parte.",
+      "signerLong": "Al massimo {max} caratteri.",
+      "oneLine": "Una sola riga.",
+      "when": "L'orario non è valido.",
+      "future": "L'orario è nel futuro.",
+      "beforeLeft": "L'orario è prima della partenza della merce.",
+      "noUpload": "Per aggiungere un file serve il permesso di caricare file.",
+      "type": "Solo una foto (JPEG, PNG) o un PDF.",
+      "size": "Al massimo 15 MB."
+    },
+    "refusal": {
+      "KEPT": "Quella parte è già registrata: non cambia più.",
+      "NOT_DELIVERED": "La spedizione non è consegnata."
+    }
+  },
+  "problems": {
+    "title": "Problemi di tracciamento",
+    "open_one": "{count} aperto",
+    "open_other": "{count} aperti",
+    "none": "Nessun problema segnalato. Un collo senza notizie dal vettore per {days} giorni ne segnala uno da solo.",
+    "what": {
+      "DELAYED": "Avvisa il cliente se la promessa si sposta.",
+      "ADDRESS_PROBLEM": "Verifica l'indirizzo con il cliente e il vettore.",
+      "FAILED_DELIVERY": "Concorda una nuova consegna con il vettore.",
+      "NO_SCAN": "Chiedi al vettore dove si trova il collo."
+    },
+    "bySystem": "Segnalato dal controllo giornaliero",
+    "byCarrier": "Dalle notizie del vettore",
+    "raised": "Segnalato il {when}",
+    "task": "attività {state}",
+    "resolved": "Risolto il {when}",
+    "resolve": "Risolvi",
+    "resolveOf": "Risolvi: {kind}",
+    "resolveTitle": "Risolvi: {kind}",
+    "taskDone": "La sua attività viene segnata come fatta da te.",
+    "noTask": "Non ha un'attività.",
+    "note": "Cosa è stato fatto",
+    "noteHint": "Facoltativo; resta sulla registrazione.",
+    "noteLong": "Al massimo {max} caratteri.",
+    "done": "Il problema è risolto.",
+    "held": {
+      "resolved": "Già risolto."
+    },
+    "refusal": {
+      "RESOLVED": "Era già risolto."
+    }
+  },
+  "problemKind": {
+    "DELAYED": "In ritardo",
+    "ADDRESS_PROBLEM": "Problema di indirizzo",
+    "FAILED_DELIVERY": "Consegna non riuscita",
+    "NO_SCAN": "Nessuna notizia da {days} giorni"
+  },
+  "notice": {
+    "title": "Avviso al cliente",
+    "switchOn": "Invio automatico",
+    "switchOff": "Solo a mano",
+    "auto": {
+      "on": "La mail di spedizione parte da sola verso i contatti ordini del cliente, nella loro lingua, quando la merce parte.",
+      "off": "L'avviso al cliente della sede è spento (Impostazioni di spedizione): nulla parte da solo; Invia di nuovo lo manda a mano.",
+      "sent": "L'avviso di questa spedizione è stato inviato."
+    },
+    "why": {
+      "SWITCH_OFF": "L'avviso al cliente della sede è spento: nulla parte da solo.",
+      "NOT_LEFT": "La merce non è ancora partita: l'avviso parte quando parte con i suoi numeri di tracciamento.",
+      "CANCELLED": "La spedizione è annullata: nessun avviso.",
+      "TEST_LABELS": "È partita con etichette TEST (modalità test): nessun cliente riceve mai un numero di tracciamento TEST.",
+      "NO_TRACKING": "Nessun numero di tracciamento del vettore (nostro furgone, o ritiro del cliente): niente da seguire.",
+      "NO_RECIPIENT": "Il cliente non ha un contatto ordini attivo con un indirizzo e-mail: prima aggiungilo sul cliente.",
+      "SENT": "L'avviso di questa spedizione è già stato inviato."
+    },
+    "mails": "Mail inviate",
+    "noMail": "Ancora nessuna mail inviata.",
+    "automatic": "Automatica",
+    "byHand": "A mano",
+    "mailLine": "{when} · {language}",
+    "sentAt": "inviata il {when}",
+    "sendAgain": "Invia di nuovo…",
+    "sendTitle": "Invia la mail di spedizione di {number}",
+    "sendBody": "Ogni contatto riceve la mail nella sua lingua, con i numeri di tracciamento e il contenuto dei colli (senza prezzi).",
+    "to": "A",
+    "fake": "Su questo sistema la mail va alla casella di test: nulla arriva a un cliente reale.",
+    "sendGo_one": "Invia a {count} contatto",
+    "sendGo_other": "Invia a {count} contatti",
+    "outcome": {
+      "sent_one": "Inviata a {count} contatto.",
+      "sent_other": "Inviata a {count} contatti.",
+      "failed": "{sent} inviate, {failed} non inviate: riprova più tardi.",
+      "none": "Non è stato inviato nulla.",
+      "skipped": "Non inviata agli indirizzi che rifiutano le nostre mail: {addresses}"
+    },
+    "held": {
+      "noManage": "Per inviare serve il permesso di gestire le spedizioni.",
+      "busy": "Attendi: la mail è in invio.",
+      "pickOne": "Scegli almeno un contatto."
+    }
+  }
+}

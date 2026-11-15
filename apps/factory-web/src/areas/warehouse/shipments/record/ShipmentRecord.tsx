@@ -71,6 +71,9 @@ import { PART_LOADING, type Loaded, type Part, type PdfPart, type RecordDialog, 
 import { ShipmentRecordView } from './view/ShipmentRecordView'
 // B-W2b-170
 import { TrackingLinkCard } from '../tracking-link/TrackingLinkCard'
+// B-W2b-410
+import { useRecordDepth } from '../queue/record-depth'
+import { DEPTH_NS } from '../queue/shared/depth'
 
 /**
  * `/w/<company>/warehouse/shipments/<id>` (SCR-067): loads the shipment (shipping.view; the API checks its company,
@@ -86,7 +89,7 @@ import { TrackingLinkCard } from '../tracking-link/TrackingLinkCard'
  */
 export function ShipmentRecord({ shipmentId }: { shipmentId: string }) {
   return (
-    <WithMessages namespaces={['shipments', 'lists', 'records']}>
+    <WithMessages namespaces={['shipments', 'lists', 'records', DEPTH_NS]}>
       <RecordContainer shipmentId={shipmentId} />
     </WithMessages>
   )
@@ -403,9 +406,34 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     voided,
   }
 
+  // B-W2b-410: the parts in depth, each its own container; the cartons card lends W1's carton dialogs and writes.
+  const packingList = () =>
+    void write(async () => {
+      const answer = await makePackingList(api, shipmentId)
+      setNotice({ tone: 'success', words: { key: answer.reused ? 'notice.packingListSame' : 'notice.packingListVersion', params: { number: answer.number, version: answer.version } } })
+    }, null)
+  const openDialog = (next: RecordDialog) => {
+    setDialog(next)
+    setDialogProblem(null)
+  }
+  const depth = useRecordDepth({
+    shipment: value,
+    prefix,
+    tab,
+    busy,
+    expectedAt: tracking?.value?.shipment.expectedDeliveryAt ?? null,
+    returnedAt: value?.returnedAt ?? null,
+    onAddCarton: () => openDialog({ kind: 'parcel', parcelId: null }),
+    onWeigh: (parcelId) => openDialog({ kind: 'parcel', parcelId }),
+    onRemoveCarton: (parcelId) => void write(async () => void (await removeParcel(api, shipmentId, parcelId, version())), 'notice.parcelRemoved'),
+    onPackingList: packingList,
+    onReload: () => void load(),
+  })
+
   return (
     <ShipmentRecordView
       model={model}
+      depth={depth}
       panels={value ? <RecordPanels record={{ type: 'Shipment', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName, emails: [] }} /> : null}
       // B-W2b-170: the customer's tracking page (links.tracking) on the Tracking & delivery tab.
       trackingLink={value ? <TrackingLinkCard shipmentId={value.id} /> : null}
@@ -450,11 +478,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           }, parcelId ? 'notice.parcelSaved' : 'notice.parcelAdded')
         },
         onRemoveParcel: (parcelId) => void write(async () => void (await removeParcel(api, shipmentId, parcelId, version())), 'notice.parcelRemoved'),
-        onPackingList: () =>
-          void write(async () => {
-            const answer = await makePackingList(api, shipmentId)
-            setNotice({ tone: 'success', words: { key: answer.reused ? 'notice.packingListSame' : 'notice.packingListVersion', params: { number: answer.number, version: answer.version } } })
-          }, null),
+        onPackingList: packingList,
         // Documents
         onDdtForm: (form) => setDdtForm(form),
         onPreview: () => {
