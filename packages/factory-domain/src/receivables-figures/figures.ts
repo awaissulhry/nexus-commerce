@@ -300,13 +300,16 @@ export function figuresOf(figures: TheirFigures): TheirFigures {
   }
 }
 
+/** A whole amount read back from the database's JSON (its guard keeps whole numbers; anything else reads as 0). */
+const wholeOf = (value: unknown): MinorUnits => (typeof value === 'number' && Number.isSafeInteger(value) ? value : 0)
+
 /** The figures as the database keeps them, read back (anything else is refused: the guard keeps the form). */
 export function figuresFromJson(value: unknown): TheirFigures {
   const json = value as { orders?: unknown; payments?: unknown; balance?: unknown } | null
   const list = (entries: unknown) => (Array.isArray(entries) ? entries : []) as Record<string, unknown>[]
   return {
-    orders: list(json?.orders).map((entry) => ({ reference: String(entry.reference), amount: Number(entry.amount) })),
-    payments: list(json?.payments).map((entry) => ({ reference: String(entry.reference), date: String(entry.date) as BusinessDate, amount: Number(entry.amount) })),
-    balance: Number(json?.balance ?? 0),
+    orders: list(json?.orders).map((entry) => ({ reference: String(entry.reference), amount: wholeOf(entry.amount) })),
+    payments: list(json?.payments).map((entry) => ({ reference: String(entry.reference), date: String(entry.date) as BusinessDate, amount: wholeOf(entry.amount) })),
+    balance: wholeOf(json?.balance),
   }
 }

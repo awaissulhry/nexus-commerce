@@ -10,16 +10,14 @@ import { LINE_STATES, MAX_FIGURE_ENTRIES, MAX_FIGURES_NOTE, PAYMENT_FOUND_BY } f
  */
 
 const ref = output({ id: id(), code: z.string(), name: z.string() })
-const price = () => money.price(z.number().int())
-const figureAmount = () => money.price(amountMinor())
 
 export const FIGURES_STATES = ['AGREES', 'DIFFERS'] as const
 export type FiguresState = (typeof FIGURES_STATES)[number]
 
 const figuresBody = input({
-  orders: z.array(input({ reference: z.string().max(200), amount: figureAmount() })).max(MAX_FIGURE_ENTRIES),
-  payments: z.array(input({ reference: z.string().max(200), date: businessDate(), amount: figureAmount() })).max(MAX_FIGURE_ENTRIES),
-  balance: figureAmount(),
+  orders: z.array(input({ reference: z.string().max(200), amount: money.price(amountMinor()) })).max(MAX_FIGURE_ENTRIES),
+  payments: z.array(input({ reference: z.string().max(200), date: businessDate(), amount: money.price(amountMinor()) })).max(MAX_FIGURE_ENTRIES),
+  balance: money.price(amountMinor()),
 })
 
 export const figuresParams = input({ figuresId: id() })
@@ -54,9 +52,9 @@ export type CorrectFiguresBody = z.infer<typeof correctFiguresBody>
 
 const summary = output({
   /** Our balance as of their day. */
-  ours: price(),
+  ours: money.price(z.number().int()),
   /** Their balance − ours. */
-  difference: price(),
+  difference: money.price(z.number().int()),
   /** Lines (and the balance) that do not agree. */
   differences: z.number().int(),
   state: z.enum(FIGURES_STATES),
@@ -68,7 +66,7 @@ export const figuresRowView = output({
   customer: ref,
   asOf: businessDate(),
   currency: z.string(),
-  theirs: output({ orders: z.number().int(), payments: z.number().int(), balance: price() }),
+  theirs: output({ orders: z.number().int(), payments: z.number().int(), balance: money.price(z.number().int()) }),
   summary,
   file: output({ id: id(), name: z.string() }).nullable(),
   note: z.string().nullable(),
@@ -84,21 +82,21 @@ const ourDocument = output({
   kind: z.enum(['INVOICE', 'ORDER']),
   id: id(),
   number: z.string(),
-  invoices: z.array(output({ id: id(), number: z.string(), open: price() })),
-  open: price(),
+  invoices: z.array(output({ id: id(), number: z.string(), open: money.price(z.number().int()) })),
+  open: money.price(z.number().int()),
 })
 
 export const comparisonView = output({
-  balance: output({ theirs: price(), ours: price(), difference: price(), state: z.enum(['SAME', 'DIFFERS']) }),
+  balance: output({ theirs: money.price(z.number().int()), ours: money.price(z.number().int()), difference: money.price(z.number().int()), state: z.enum(['SAME', 'DIFFERS']) }),
   orders: z.array(
     output({
       /** Their entry's place in what they listed (null: only ours). */
       index: z.number().int().nullable(),
       reference: z.string().nullable(),
-      theirs: price(),
+      theirs: money.price(z.number().int()),
       ours: ourDocument.nullable(),
       state: z.enum(LINE_STATES),
-      difference: price(),
+      difference: money.price(z.number().int()),
     }),
   ),
   payments: z.array(
@@ -106,11 +104,11 @@ export const comparisonView = output({
       index: z.number().int().nullable(),
       reference: z.string().nullable(),
       date: businessDate().nullable(),
-      theirs: price(),
-      ours: output({ id: id(), reference: z.string(), receivedOn: businessDate(), amount: price() }).nullable(),
+      theirs: money.price(z.number().int()),
+      ours: output({ id: id(), reference: z.string(), receivedOn: businessDate(), amount: money.price(z.number().int()) }).nullable(),
       foundBy: z.enum(PAYMENT_FOUND_BY).nullable(),
       state: z.enum(LINE_STATES),
-      difference: price(),
+      difference: money.price(z.number().int()),
     }),
   ),
   paymentsFrom: businessDate().nullable(),

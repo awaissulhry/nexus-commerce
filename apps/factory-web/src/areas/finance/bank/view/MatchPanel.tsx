@@ -71,7 +71,8 @@ export function MatchPanel({ model, focusNonce, actions, onRetry }: { model: Ban
   const amount = (minor: number | undefined, currency: string) => (can.price ? money(minor === undefined ? null : minor, currency, locale) : '—')
 
   const picked = line ? (line.suggestions.find((match) => match.id === state.picked) ?? line.suggestions.find((match) => !match.stale) ?? null) : null
-  const held = line && picked ? acceptHeld(line, picked, can) : line && line.state === 'MATCHED' ? { key: 'held.matched' } : { key: 'held.noPick' }
+  // The missing right first (it holds every line), then what holds this line.
+  const held = !can.match ? { key: 'held.match' } : line && picked ? acceptHeld(line, picked, can) : line && line.state === 'MATCHED' ? { key: 'held.matched' } : { key: 'held.noPick' }
   const acceptHeldWords = state.busy ? t('held.busy') : held ? phrase(held) : state.writeOff.on && state.writeOff.reason === 'OTHER' && state.writeOff.note.trim() === '' ? t('held.writeOffNote') : state.lockAsked && state.lockReason.trim() === '' ? t('held.lockReason') : null
   const chooseWords = line ? chooseHeld(line, can) : { key: 'held.noLine' }
   const reverseWords = line ? reverseHeld(line, can) : { key: 'held.noLine' }

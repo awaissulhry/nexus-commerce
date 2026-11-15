@@ -9,7 +9,7 @@ import { ApiError } from '../../../lib/api/errors'
 import en from '../../../../messages/en/finance-bank.json'
 import itWords from '../../../../messages/it/finance-bank.json'
 import { BANK_FORMATS, BANK_LINE_PROBLEMS, FORMAT_EXTENSIONS, IMPORT_REFUSALS, LINE_VERDICTS, MATCH_CONFIDENCES, MATCH_REASONS, NUMBER_FORMATS, STATEMENT_COLUMNS, STATEMENT_REFUSALS, WRITE_OFF_KINDS, WRITE_OFF_REASONS, WRITE_OFF_REFUSALS } from './api'
-import { F1_ANSWER, L_FEES, L_MATCHED, L_OUT, L_STALE, L_SURE, L_TWO, PLAN, ROLES, TO_MATCH } from './demo'
+import { F1_ANSWER, L_FEES, L_MATCHED, L_OUT, L_STALE, L_SURE, L_TWO, PLAN, ROLES, TO_MATCH } from './demo/fixtures'
 import {
   acceptHeld,
   addressOf,

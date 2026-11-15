@@ -156,6 +156,8 @@ export function useLines(api: ApiClient, can: BankCan, companyId: string | null,
         ...(match.lockAsked && match.lockReason.trim() ? { periodLockOverride: { reason: match.lockReason.trim() } } : {}),
       })
       setMatch({ ...MATCH_IDLE, accepted: { lineId: line.id, paymentId: answer.paymentId, recorded: answer.recorded } })
+      // Said on the page too: the next line opens in the panel.
+      setNotice({ tone: 'success', phrases: [{ key: answer.recorded ? 'panel.acceptedRecorded' : 'panel.accepted' }] })
       await afterWrite(line.id)
     } catch (error) {
       setMatch((state) => ({ ...state, busy: false, problems: writeProblem(error), lockAsked: state.lockAsked || softLocked(error) }))
@@ -213,6 +215,7 @@ export function useLines(api: ApiClient, can: BankCan, companyId: string | null,
       const lineId = choose.line.id
       setChoose(null)
       setMatch({ ...MATCH_IDLE, accepted: { lineId, paymentId: answer.paymentId, recorded: answer.recorded } })
+      setNotice({ tone: 'success', phrases: [{ key: answer.recorded ? 'panel.acceptedRecorded' : 'panel.accepted' }] })
       await afterWrite(lineId)
     } catch (error) {
       setChoose((state) => (state ? { ...state, busy: false, problems: writeProblem(error), lockAsked: state.lockAsked || softLocked(error) } : state))

@@ -1,14 +1,14 @@
 import { createElement, type ReactNode } from 'react'
 import type { FiguresAnswer } from '@nexus/factory-domain/receivables-figures/contracts'
-import { permissionCheck } from '../../../lib/session/session'
-import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../shell/design-data'
-import { officeNavFor } from '../../../shell/nav/office-nav'
-import { OfficeShellView, type OfficeShellViewModel } from '../../../shell/office/view/OfficeShellView'
-import type { CustomerRow, OpenItem } from '../_shared/api'
-import type { BankAccount, BankLine, BankMatch, FiguresRow, ImportPlan, LineCounts } from './api'
-import { bankCanOf, EMPTY_ADDRESS, type BankCan } from './model'
-import { MATCH_IDLE } from './view/MatchPanel'
-import type { BankModel } from './view/BankView'
+import { permissionCheck } from '../../../../lib/session/session'
+import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../../shell/design-data'
+import { officeNavFor } from '../../../../shell/nav/office-nav'
+import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
+import type { CustomerRow, OpenItem } from '../../_shared/api'
+import type { BankAccount, BankLine, BankMatch, FiguresRow, ImportPlan, LineCounts } from '../api'
+import { bankCanOf, EMPTY_ADDRESS, type BankCan } from '../model'
+import { MATCH_IDLE } from '../view/MatchPanel'
+import type { BankModel } from '../view/BankView'
 
 /**
  * Made-up data for the design cases of Finance › Bank (SCR-152, SCR-570 … SCR-574): an invented company ("Officina Demo

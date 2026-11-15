@@ -1990,6 +1990,7 @@
     "receivables_riba_manage": "Preparare le distinte Ri.Ba., creare il file CBI e registrare ogni rata pagata o insoluta",
     "receivables_collections_switch": "Attivare o disattivare le Ri.Ba. di un'azienda e gli avvisi di pagamento ricevuto ai clienti",
     "receivables_reminders_trust": "Impostare il livello fino al quale i solleciti a un cliente partono senza una persona",
+    "receivables_theirFigures_manage": "Registrare l'estratto conto di un cliente (per ordine, pagamenti, saldo) per confrontarlo con la nostra contabilità, e correggere un errore di battitura",
     "payables_view": "Vedere le fatture fornitori, il riscontro e l'approvazione",
     "payables_manage": "Registrare, abbinare e contestare le fatture fornitori",
     "payables_differences_accept": "Accettare a parole una differenza di una fattura fornitore",

@@ -74,22 +74,26 @@ export function useFigures(api: ApiClient, can: BankCan, companyId: string | nul
     [api, companyId],
   )
 
-  // The address asks for the editor: a new one, or the open figures' correction once they are read.
-  const wantsNew = address.figures === 'new'
+  // The address asks for the editor: a new one, or the open figures' correction once they are read. It opens when the
+  // address starts asking (never again while it still asks: a save closes it before the address moves on).
   const wantsCorrect = address.correct && open?.answer ? open.answer : null
+  const want = address.figures === 'new' ? 'new' : wantsCorrect ? `correct:${wantsCorrect.figures.id}` : null
+  const wanted = useRef<string | null>(null)
   useEffect(() => {
-    if (wantsNew && editor?.mode !== 'new') {
+    if (want === wanted.current) return
+    wanted.current = want
+    if (want === 'new') {
       file.current = null
       key.current = newIdempotencyKey()
       setEditor({ mode: 'new', figuresId: null, version: null, draft: emptyFigures(today), q: '', customers: null, customersProblem: null, busy: false, tried: false, problems: null })
       void searchCustomers('')
-    } else if (wantsCorrect && (editor?.mode !== 'correct' || editor.figuresId !== wantsCorrect.figures.id)) {
+    } else if (want && wantsCorrect) {
       key.current = newIdempotencyKey()
       setEditor({ mode: 'correct', figuresId: wantsCorrect.figures.id, version: wantsCorrect.figures.version, draft: draftOf(wantsCorrect, locale), q: '', customers: null, customersProblem: null, busy: false, tried: false, problems: null })
-    } else if (!wantsNew && !address.correct && editor) {
+    } else {
       setEditor(null)
     }
-  }, [wantsNew, wantsCorrect, address.correct, editor, today, locale, searchCustomers])
+  }, [want, wantsCorrect, today, locale, searchCustomers])
 
   const submit = async () => {
     if (!editor || editor.busy || !companyId) return
@@ -154,7 +158,8 @@ export function useFigures(api: ApiClient, can: BankCan, companyId: string | nul
       onNew: () => go({ figures: 'new', correct: false }),
       onOpen: (figuresId: string) => go({ figures: figuresId, correct: false }),
       onCloseOpen: () => go({ figures: null, correct: false }),
-      onCorrect: () => go({ correct: true }),
+      // The open figures' own id: right after a record the address may still say `new`.
+      onCorrect: () => open && go({ figures: open.id, correct: true }),
       onRetry: (part: 'list' | 'open') => void (part === 'list' ? loadList() : loadOpen()),
       onDownload: (fileId: string) => void download(fileId),
       editor: {
