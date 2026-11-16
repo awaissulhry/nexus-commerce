@@ -126,6 +126,11 @@ export interface ReturnsListModel {
   readonly newReturn: NewReturnModel | null
   readonly newRepair: NewRepairModel | null
   readonly close: CloseModel | null
+  /**
+   * B-TH-201: the customer the address narrows the list to (`?party=`): its name once known (undefined while it is looked up;
+   * null when the person may not open that customer: the chip names no one); null/absent: every customer.
+   */
+  readonly customer?: { readonly id: string; readonly name: string | null | undefined } | null
   /** Design cases: rows picked, the keys panel open, the focused row. */
   readonly selected?: readonly string[]
   readonly helpOpen?: boolean

@@ -53,9 +53,14 @@ import { confirmHeld, draftKey, headerFromAddress, manualBody, newOrderAddress, 
 import { designScreen as changesScreen } from './record/changes/fixtures'
 import { runWithStepUp } from './hooks'
 import { designScreen as listScreen } from './list/fixtures'
+// B-TH-201
+import { getBoard, listOrders } from './api'
+import { listPromiseLines } from './depth/api'
 import {
   boardLanes,
   closeHeld,
+  customerChip,
+  partyFromAddress,
   depositGate,
   depositSteps,
   knownIds,
@@ -585,3 +590,63 @@ describe('B-W2b-16: waive a step, the close\'s reason code', () => {
     expect(closeChoiceProblem(value, [first], ' ', 'CUSTOMER_REQUEST', reasons)?.key).toBe('closeLines.problem.reason')
   })
 })
+
+// ── B-TH-201 (SHEET-G11, SHEET-G01): one customer's orders, `?party=<id>` ─────────────────────────────────────────────────
+describe('one customer’s orders from the address (B-TH-201)', () => {
+  const PARTY_A = '0190a1b2-0000-7000-8000-00000000000a'
+  const recorder = () => {
+    const calls: Array<{ path: string; query: Record<string, unknown> }> = []
+    const api = { get: async (path: string, options?: { query?: Record<string, unknown> }) => (calls.push({ path, query: options?.query ?? {} }), {}) } as unknown as Parameters<typeof listOrders>[0]
+    return { api, calls }
+  }
+
+  it('reads ?party= (an id only) and writes it back with every rows view, search and layout', () => {
+    expect(partyFromAddress(params(`party=${PARTY_A}`))).toBe(PARTY_A)
+    expect(partyFromAddress(params(`party=${PARTY_A.toUpperCase()}`))).toBe(PARTY_A)
+    // The code the old drill sent, or anything else, is no customer: every customer stays on screen, nothing is narrowed by a guess.
+    expect(partyFromAddress(params('party=DEMO-C1'))).toBeNull()
+    expect(partyFromAddress(params(''))).toBeNull()
+    expect(partyFromAddress(null)).toBeNull()
+    for (const rows of ROW_VIEWS) {
+      const address = new URL(listAddress('/w/DEMO/sales/orders', { rows, q: 'SO', layout: 'board', party: PARTY_A }), 'http://x').searchParams
+      expect(partyFromAddress(address), rows).toBe(PARTY_A)
+      expect(rowsFromAddress(address), rows).toBe(rows)
+    }
+    expect(listAddress('/p', { rows: 'all', q: '', layout: 'list', party: PARTY_A })).toBe(`/p?rows=all&party=${PARTY_A}`)
+    expect(listAddress('/p', { rows: 'open', q: '', layout: 'list', party: null })).toBe('/p')
+  })
+
+  it('passes partyId to the list, each board lane, the tiles and By promise week; none without the term', async () => {
+    expect(rowsQuery('late', 'x', null, PARTY_A)).toMatchObject({ late: true, q: 'x', partyId: PARTY_A })
+    expect(rowsQuery('open', '')).not.toHaveProperty('partyId')
+    expect(laneQuery('READY', 'all', '', PARTY_A)).toMatchObject({ status: 'READY', partyId: PARTY_A })
+    expect(laneQuery('READY', 'all', '')).not.toHaveProperty('partyId')
+    const { api, calls } = recorder()
+    await listOrders(api, rowsQuery('all', '', null, PARTY_A))
+    await getBoard(api, '', undefined, PARTY_A)
+    await listPromiseLines(api, 'site-1', { q: '', partyId: PARTY_A })
+    await listOrders(api, rowsQuery('all', ''))
+    await getBoard(api, '')
+    await listPromiseLines(api, 'site-1', { q: '' })
+    expect(calls.map((call) => [call.path, call.query.partyId])).toEqual([
+      ['/sales/orders', PARTY_A],
+      ['/sales/orders/board', PARTY_A],
+      ['/planning/promises', PARTY_A],
+      ['/sales/orders', undefined],
+      ['/sales/orders/board', undefined],
+      ['/planning/promises', undefined],
+    ])
+  })
+
+  it('the chip names the customer once known, "…" while it is looked up, and no one when the person may not open it (W27)', () => {
+    expect(customerChip({ name: 'Brand Alpha S.r.l.' })).toEqual({ key: 'list.customerChip', name: 'Brand Alpha S.r.l.' })
+    expect(customerChip({ name: undefined })).toEqual({ key: 'list.customerChip', name: '…' })
+    expect(customerChip({ name: null })).toEqual({ key: 'list.customerHidden', name: '' })
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
+      expect(t('list.customerChip', { name: 'Brand Alpha S.r.l.' })).toMatch(/^(Customer|Cliente): Brand Alpha S\.r\.l\.$/)
+      expect(t('list.customerHidden')).not.toMatch(/Brand|\{/)
+    }
+  })
+})
+// ── end B-TH-201 ──

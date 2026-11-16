@@ -113,6 +113,8 @@ export interface OrderQuery {
   deposit?: 'OPEN' | null
   /** B-W2b-323: only orders whose change waits for the customer to accept it. */
   reaccept?: boolean
+  /** B-TH-201: one customer's orders (`?party=` on the page). */
+  partyId?: string | null
   q?: string
   cursor?: string | null
   limit?: number
@@ -126,6 +128,7 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       late: query.late ? 'true' : undefined,
       deposit: query.deposit ?? undefined,
       reaccept: query.reaccept ? 'true' : undefined, // B-W2b-323
+      partyId: query.partyId ?? undefined, // B-TH-201
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -144,8 +147,8 @@ export const boardSchema = z.object({
 export type OrderBoard = z.infer<typeof boardSchema>
 
 /** The counts by state and the tiles (each the list's total under its filter), under the search. */
-export function getBoard(api: ApiClient, q: string, signal?: AbortSignal): Promise<OrderBoard> {
-  return api.get('/sales/orders/board', { query: { q: q.trim() || undefined }, schema: boardSchema, signal })
+export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null): Promise<OrderBoard> {
+  return api.get('/sales/orders/board', { query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */ }, schema: boardSchema, signal })
 }
 
 // ---- the record ----------------------------------------------------------------------------------------------------------

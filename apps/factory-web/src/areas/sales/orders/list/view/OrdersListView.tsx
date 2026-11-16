@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
-import { Download, ExternalLink, MoreHorizontal, Plus, Search } from 'lucide-react'
+import { Download, ExternalLink, MoreHorizontal, Plus, Search, X } from 'lucide-react'
 import { Banner, EmptyState, Menu, MetricStrip, ProgressBar } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Input, Pill, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
+import { Button, FilterChip, Input, Pill, SegmentedControl, Select, Tag } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
@@ -14,7 +14,7 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { money } from '../../../quotes/model'
 import type { OrderRow } from '../../api'
-import { dayInstant, depositTone, ROW_VIEWS, shippedPercent, STATUS_TONE, tileCount, TILES, type Layout, type RowView } from '../../model'
+import { customerChip, dayInstant, depositTone, ROW_VIEWS, shippedPercent, STATUS_TONE, tileCount, TILES, type Layout, type RowView } from '../../model'
 import type { OrdersListActions, OrdersListModel } from '../list-model'
 import { NewOrderDialog } from './NewOrderDialog'
 import { marginColumn } from '../margin/MarginColumn'
@@ -219,12 +219,23 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
     ]
   }, [t, d, locale, model.prefix, model.today, model.can.price, model.can.makeWorkOrders, model.margins, model.depth, actions?.depth])
 
-  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all')
+  const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer // B-TH-201
   const clearFilters = () => {
     setQuery('')
     actions?.onSearch?.('')
     actions?.onRows?.('all')
+    if (model.customer) actions?.onClearCustomer?.() // B-TH-201
   }
+  // ── B-TH-201: "Customer: <name> ✕" above the rows while the address names one customer (Sales › Reports' drill). ──
+  const chip = model.customer ? customerChip(model.customer) : null
+  const customerFilter = chip ? (
+    <div className="fw-so-inline" aria-label={t('list.activeFilters')}>
+      <FilterChip pressed onClick={() => actions?.onClearCustomer?.()} aria-label={t('list.removeCustomer', { name: t(chip.key, { name: chip.name }) })}>
+        {t(chip.key, { name: chip.name })} <X size={12} aria-hidden />
+      </FilterChip>
+    </div>
+  ) : null
+  // ── end B-TH-201 ──
   const state = model.list.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.list.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
   ) : items && items.length === 0 ? (
@@ -278,7 +289,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
             ]}
           />
           <Button size="sm" variant="quiet" asChild>
-            <a href={`${model.prefix}/sales/orders?view=board`} target="_blank" rel="noopener" title={t('board.newTabHint')}>
+            <a href={`${model.prefix}/sales/orders?view=board${model.customer ? `&party=${encodeURIComponent(model.customer.id)}` : '' /* B-TH-201 */}`} target="_blank" rel="noopener" title={t('board.newTabHint')}>
               <ExternalLink size={14} aria-hidden /> <span>{t('board.newTab')}</span>
             </a>
           </Button>
@@ -326,6 +337,8 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
           }
         })}
       />
+
+      {customerFilter /* B-TH-201 */}
 
       {model.layout === 'week' && model.week ? (
         // B-W2b-323: By promise week (the search narrows it; the rows view does not apply: every open line).

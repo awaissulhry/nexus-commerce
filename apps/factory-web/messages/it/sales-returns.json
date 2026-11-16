@@ -469,6 +469,8 @@
     "countMore_other": "Primi {count} — restringi la ricerca",
     "count_one": "{count} reso o riparazione",
     "count_other": "{count} resi e riparazioni",
+    "customerChip": "Cliente: {name}",
+    "customerHidden": "Un cliente che non puoi aprire",
     "empty": "Ancora nessun reso o riparazione",
     "emptyBody": "Nessun reso. Un reso parte dall’ordine fatturato del cliente; una riparazione dalla matricola del capo.",
     "exportNothing": "Niente da esportare in questa vista",

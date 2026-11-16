@@ -158,7 +158,7 @@ const returnCountsSchema = z.object({
 })
 export type ReturnCounts = z.infer<typeof returnCountsSchema>['counts']
 
-export const returnCounts = (api: ApiClient, signal?: AbortSignal) => api.get('/sales/returns/counts', { schema: returnCountsSchema, signal })
+export const returnCounts = (api: ApiClient, signal?: AbortSignal, partyId?: string | null) => api.get('/sales/returns/counts', { query: clean({ partyId: partyId ?? undefined }) /* B-TH-201 */, schema: returnCountsSchema, signal })
 
 // ---- returns: the record ------------------------------------------------------------------------------------------------
 
@@ -518,7 +518,7 @@ const repairCountsSchema = z.object({
 })
 export type RepairCounts = z.infer<typeof repairCountsSchema>['counts']
 
-export const repairCounts = (api: ApiClient, signal?: AbortSignal) => api.get('/sales/repairs/counts', { schema: repairCountsSchema, signal })
+export const repairCounts = (api: ApiClient, signal?: AbortSignal, partyId?: string | null) => api.get('/sales/repairs/counts', { query: clean({ partyId: partyId ?? undefined }) /* B-TH-201 */, schema: repairCountsSchema, signal })
 
 // ---- repairs: the record ------------------------------------------------------------------------------------------------
 

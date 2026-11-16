@@ -137,8 +137,28 @@ export function rowsFromAddress(params: { get(name: string): string | null } | n
 
 export const layoutFromAddress = (params: { get(name: string): string | null } | null): Layout => (params?.get('view') === 'board' ? 'board' : params?.get('view') === 'week' ? 'week' /* B-W2b-323 */ : 'list')
 
+// ── B-TH-201 (SHEET-G11, SHEET-G01): one customer's orders, `?party=<id>` ──
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** The customer the address narrows the list to (`?party=<id>`; Sales › Reports' drill sends it), or null. */
+export function partyFromAddress(params: { get(name: string): string | null } | null): string | null {
+  const value = params?.get('party')?.trim() ?? ''
+  return UUID.test(value) ? value.toLowerCase() : null
+}
+
+/**
+ * The chip's words for the customer of the address: its name once known (from the rows, else the customer's record), "…"
+ * while it is looked up, and words that name no one when the person may not open that customer (W27: a link to another
+ * customer's orders shows an empty list and never says whose).
+ */
+export function customerChip(customer: { readonly name: string | null | undefined }): { readonly key: 'list.customerChip' | 'list.customerHidden'; readonly name: string } {
+  if (customer.name === null) return { key: 'list.customerHidden', name: '' }
+  return { key: 'list.customerChip', name: customer.name === undefined ? '…' : customer.name }
+}
+// ── end B-TH-201 ──
+
 /** The page's address for a saved rows view, a search and a layout (the defaults leave the address clean). */
-export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout }): string {
+export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null }): string {
   const query = new URLSearchParams()
   if (next.layout === 'board') query.set('view', 'board')
   if (next.layout === 'week') query.set('view', 'week') // B-W2b-323
@@ -147,14 +167,15 @@ export function listAddress(path: string, next: { rows: RowView; q: string; layo
   else if (next.rows === 'deposit') query.set('deposit', 'OPEN')
   else if (next.rows === 'reaccept') query.set('reaccept', 'true') // B-W2b-323
   else if (isStatus(next.rows)) query.set('status', next.rows)
+  if (next.party) query.set('party', next.party) // B-TH-201
   if (next.q.trim()) query.set('q', next.q.trim())
   const qs = query.toString()
   return `${path}${qs ? `?${qs}` : ''}`
 }
 
-/** The API's query for a saved rows view (and the search). */
-export function rowsQuery(rows: RowView, q: string, cursor?: string | null): OrderQuery {
-  const base: OrderQuery = { q, cursor: cursor ?? null, limit: 50 }
+/** The API's query for a saved rows view (and the search; B-TH-201: and the customer of the address). */
+export function rowsQuery(rows: RowView, q: string, cursor?: string | null, partyId?: string | null): OrderQuery {
+  const base: OrderQuery = { q, cursor: cursor ?? null, limit: 50, ...(partyId ? { partyId } : {}) }
   if (rows === 'open') return { ...base, open: true }
   if (rows === 'late') return { ...base, late: true }
   if (rows === 'deposit') return { ...base, deposit: 'OPEN' }
@@ -186,9 +207,9 @@ export function boardLanes(rows: RowView): BoardLane[] {
   return [...BOARD_LANES]
 }
 
-/** The API query of one lane: its state, with the saved rows' other filter (late, deposit) and the search. */
-export function laneQuery(lane: BoardLane, rows: RowView, q: string): OrderQuery {
-  return { status: lane, late: rows === 'late', deposit: rows === 'deposit' ? 'OPEN' : null, reaccept: rows === 'reaccept' /* B-W2b-323 */, q, limit: 50 }
+/** The API query of one lane: its state, with the saved rows' other filter (late, deposit), the search (and the customer). */
+export function laneQuery(lane: BoardLane, rows: RowView, q: string, partyId?: string | null): OrderQuery {
+  return { status: lane, late: rows === 'late', deposit: rows === 'deposit' ? 'OPEN' : null, reaccept: rows === 'reaccept' /* B-W2b-323 */, q, limit: 50, ...(partyId ? { partyId } : {}) /* B-TH-201 */ }
 }
 
 export interface Lane {

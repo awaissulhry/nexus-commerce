@@ -151,6 +151,10 @@
       "body": "Change the search or the rows, or clear the filters."
     },
     "clearFilters": "Clear filters",
+    "activeFilters": "Active filters",
+    "customerChip": "Customer: {name}",
+    "customerHidden": "A customer you cannot open",
+    "removeCustomer": "Remove the filter {name}",
     "empty": {
       "title": "No orders yet",
       "body": "Orders appear here when a customer accepts a quote, or when the office types one with New order.",

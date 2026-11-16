@@ -90,26 +90,32 @@ export type AfterSalesTile = (typeof TILES)[number]
 export interface ListAddress {
   readonly view: AfterSalesView
   readonly q: string
+  /** B-TH-201: one customer's returns and repairs (`?party=<id>`; Sales › Reports' drill sends it), or null. */
+  readonly party?: string | null
 }
 
 export const DEFAULT_VIEW: AfterSalesView = 'open'
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export function addressOf(params: { get(name: string): string | null } | null): ListAddress {
   const view = params?.get('view') ?? ''
-  return { view: (AFTER_SALES_VIEWS as readonly string[]).includes(view) ? (view as AfterSalesView) : DEFAULT_VIEW, q: params?.get('q') ?? '' }
+  const party = params?.get('party')?.trim() ?? '' // B-TH-201
+  return { view: (AFTER_SALES_VIEWS as readonly string[]).includes(view) ? (view as AfterSalesView) : DEFAULT_VIEW, q: params?.get('q') ?? '', ...(UUID.test(party) ? { party: party.toLowerCase() } : {}) }
 }
 
 /** The address's query (the default view and an empty search are left out). */
 export function queryOf(address: ListAddress, extra: Readonly<Record<string, string | null | undefined>> = {}): string {
   const search = new URLSearchParams()
   if (address.view !== DEFAULT_VIEW) search.set('view', address.view)
+  if (address.party) search.set('party', address.party) // B-TH-201
   if (address.q.trim()) search.set('q', address.q.trim())
   for (const [name, value] of Object.entries(extra)) if (value) search.set(name, value)
   const text = search.toString()
   return text ? `?${text}` : ''
 }
 
-export const isFiltered = (address: ListAddress): boolean => address.view !== DEFAULT_VIEW || address.q.trim() !== ''
+export const isFiltered = (address: ListAddress): boolean => address.view !== DEFAULT_VIEW || address.q.trim() !== '' || !!address.party
 
 /** Which API list each view reads (null: that source has no rows in the view). */
 export function sourcesOf(view: AfterSalesView): { returns: ReturnListView | null; repairs: RepairListView | null } {

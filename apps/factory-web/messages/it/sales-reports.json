@@ -302,9 +302,9 @@
       "returns": "Vendite › Resi e riparazioni"
     },
     "listHint": {
-      "intake": "Tutti gli ordini, cercati per cliente quando è di un solo cliente: l'elenco non filtra per periodo, modello o stagione.",
-      "backlog": "Gli ordini aperti, cercati per cliente quando è di un solo cliente: l'elenco non filtra per settimana promessa.",
-      "returns": "Tutti i resi, cercati per cliente quando è di un solo cliente: l'elenco non filtra per motivo o periodo."
+      "intake": "Tutti gli ordini, del solo cliente quando il numero è di un cliente: l'elenco non filtra per periodo, modello o stagione.",
+      "backlog": "Gli ordini aperti, del solo cliente quando il numero è di un cliente: l'elenco non filtra per settimana promessa.",
+      "returns": "Tutti i resi, del solo cliente quando il numero è di un cliente: l'elenco non filtra per motivo o periodo."
     },
     "empty": "Nulla qui",
     "emptyHint": "Nessun documento forma questo numero.",
