@@ -5608,6 +5608,14 @@ CREATE POLICY "factory_floor_runtime_select" ON "public"."Style" AS PERMISSIVE F
 CREATE POLICY "factory_runtime_select" ON "public"."Style" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_insert" ON "public"."Style" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 CREATE POLICY "factory_runtime_update" ON "public"."Style" AS PERMISSIVE FOR UPDATE TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid) WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+-- "public"."StyleCuttingLoss"
+ALTER TABLE "public"."StyleCuttingLoss" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "public"."StyleCuttingLoss" FORCE ROW LEVEL SECURITY;
+DO $$ DECLARE existing record; BEGIN FOR existing IN SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = 'StyleCuttingLoss' LOOP EXECUTE format('DROP POLICY %I ON %I.%I', existing.policyname, 'public', 'StyleCuttingLoss'); END LOOP; END $$;
+REVOKE ALL ON TABLE "public"."StyleCuttingLoss" FROM PUBLIC, "factory_floor_runtime", "factory_partner_runtime", "factory_platform", "factory_runtime";
+GRANT SELECT, INSERT ON TABLE "public"."StyleCuttingLoss" TO "factory_runtime";
+CREATE POLICY "factory_runtime_select" ON "public"."StyleCuttingLoss" AS PERMISSIVE FOR SELECT TO "factory_runtime" USING ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
+CREATE POLICY "factory_runtime_insert" ON "public"."StyleCuttingLoss" AS PERMISSIVE FOR INSERT TO "factory_runtime" WITH CHECK ("tenantId" = NULLIF(current_setting('factory.tenant_id', true), '')::uuid);
 -- "public"."StyleImage"
 ALTER TABLE "public"."StyleImage" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "public"."StyleImage" FORCE ROW LEVEL SECURITY;
