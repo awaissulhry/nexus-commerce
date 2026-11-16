@@ -366,6 +366,10 @@
         }
       },
       "privacy": {
+        "purgePackages": {
+          "name": "Data packages deleted on time",
+          "what": "Every hour: a person's data package is deleted 30 days after it was made."
+        },
         "retentionSweep": {
           "name": "Retention sweep",
           "what": "Every night at 02:50: each retention rule reports what is due and applies only where switched on."

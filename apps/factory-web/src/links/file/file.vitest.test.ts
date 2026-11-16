@@ -61,7 +61,9 @@ describe('the link registry sends every file link to this page', () => {
   it('SECURE_FILE and DOCUMENT_VIEW of files, and the payroll file', () => {
     expect(linkTaskOf({ purpose: 'SECURE_FILE', record: { type: 'StoredFile' } })).toBe('files')
     expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'StoredFile' } })).toBe('files')
-    expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'PayrollExport' } })).toBe('payroll-file')
+    // B-W2b-GF1 (G212): the payroll file is a SECURE_FILE link; a DOCUMENT_VIEW of a PayrollExport is no page of ours any more.
+    expect(linkTaskOf({ purpose: 'SECURE_FILE', record: { type: 'PayrollExport' } })).toBe('payroll-file')
+    expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'PayrollExport' } })).not.toBe('payroll-file')
     expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'Shipment' } })).toBe('shipment-documents')
   })
 })
@@ -76,7 +78,7 @@ describe('the page as read (pure)', () => {
     expect(pageOfSet(fileSetSchema.parse({ ...SET_ANSWER, link: { ...SET_ANSWER.link, purpose: 'DOCUMENT_VIEW' } })).kind).toBe('shared')
   })
 
-  it('the payroll file: the data file first, then the summary; hours only, no password, no receipt', () => {
+  it('the payroll file: the data file first, then the summary; hours only; the password and the receipt as the API says (B-W2b-GF1)', () => {
     const read = pageOfPayroll(
       payrollFilesSchema.parse({
         sender: 'Officina Demo S.r.l.',
@@ -84,7 +86,8 @@ describe('the page as read (pure)', () => {
         label: 'ottobre 2026',
         number: 'PAY-2026-0010',
         revision: 1,
-        link: { expiresAt: '2026-12-09T17:00:00.000Z', usesLeft: 18 },
+        link: { expiresAt: '2026-12-09T17:00:00.000Z', usesLeft: 18, password: { asked: true, unlocked: true, heldUntil: null }, receipt: { asked: true, at: null, name: null } },
+        count: 2,
         files: [
           { id: 's', kind: 'SUMMARY', name: 'summary.pdf', sizeBytes: 1, sha256: 's'.repeat(64) },
           { id: 'd', kind: 'DATA', name: 'data.txt', sizeBytes: 1, sha256: 'd'.repeat(64) },
@@ -92,8 +95,9 @@ describe('the page as read (pure)', () => {
       }),
     )
     expect(read.files.map((file) => file.payrollKind)).toEqual(['DATA', 'SUMMARY'])
-    expect(read.password.asked).toBe(false)
-    expect(read.receipt.asked).toBe(false)
+    expect(read.password).toEqual({ asked: true, unlocked: true, heldUntil: null })
+    expect(read.receipt.asked).toBe(true)
+    expect(read.count).toBe(2)
     expect(downloadsCount(read)).toBe(true)
   })
 

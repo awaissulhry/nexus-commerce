@@ -30,8 +30,7 @@ const FILES_READ = 'files.read' satisfies Permission
  *   purpose           record                    actions (counted)                       grains  days      uses     more
  *   QUOTE_ACCEPT      Quote                     accept*, decline*                       price   30 / 90   1 / 1
  *   PO_CONFIRM        PurchaseOrder             confirm*, decline*                      none    14 / 60   1 / 1
- *   DOCUMENT_VIEW     StoredFile, Shipment,     open*, download                         price   30 / 365  20 / 100 files, password
- *                     PayrollExport
+ *   DOCUMENT_VIEW     StoredFile, Shipment      open*, download                         price   30 / 365  20 / 100 files, password
  *   DEPOSIT_INFO      DepositRequest            open*                                   price   30 / 90   20 / 100
  *   SHIPMENT_TRACK    Shipment                  open, download                          none    60 / 180  1 / 1
  *   MEASUREMENTS      MeasurementProfile        submit*                                 none    21 / 60   1 / 1    draft
@@ -41,7 +40,8 @@ const FILES_READ = 'files.read' satisfies Permission
  *   JOB_ACCEPT        SubcontractOrder          accept*, decline*, moveDate*            none    7 / 30    1 / 1
  *   APPROVAL          ApprovalRequest           approve*, refuse* (typed name)          price   14 / 60   1 / 1
  *   RECORD_INVITE     a record with a thread    post, upload                            none    30 / 180  1 / 1
- *   SECURE_FILE       StoredFile                download*, receive                      none    7 / 30    5 / 20   files, password, receipt
+ *   SECURE_FILE       StoredFile,               download*, receive                      none    7 / 30    5 / 20   files, password, receipt
+ *                     PayrollExport
  *   RETURN_LABEL      ReturnAuthorisation       confirm, download                       none    30 / 60   1 / 1    (B-W2b-398)
  *   BROKER_PACK       CustomsDeclaration        download, submit* (the MRN)             none    14 / 30   1 / 1    (B-W2b-409)
  *
@@ -54,9 +54,10 @@ const FILES_READ = 'files.read' satisfies Permission
  * A DOCUMENT_VIEW session also reads files (files.read, over the link's company and party): platform/files lets a link
  * see only the files shared with its party's links that are its record or belong to it (audienceSees), behind the
  * partner role's wall; so do an APPROVAL session (the request's own files) and a RECORD_INVITE session (the shared
- * record's). The shipping module's link of a Shipment shows its DDT, DoC and leaflet copies (B-W1-49). A link of a
- * PayrollExport (B-W2b-54; MES-274) brings the labour consultant the month's file through that module's own route; its
- * party id is the export's own.
+ * record's). The shipping module's link of a Shipment shows its DDT, DoC and leaflet copies (B-W1-49). A SECURE_FILE link of a
+ * PayrollExport (B-W2b-54; MES-274; B-W2b-GF1, G212: was a DOCUMENT_VIEW link without password or receipt) brings the labour
+ * consultant the month's files through that module's own routes, with the password sent apart and the receipt; its party id
+ * is the export's own.
  *
  * A set of files (COL-051, MES-274; links-depth.prisma LinkFile) is a DOCUMENT_VIEW or SECURE_FILE link of a StoredFile:
  * the link's record is the set's first file, and platform/links serves the set itself (in the tenant's system scope, the
@@ -228,8 +229,8 @@ export const PURPOSE_RULES: Readonly<Record<LinkPurpose, PurposeRule>> = Object.
   DOCUMENT_VIEW: rule({
     purpose: 'DOCUMENT_VIEW',
     description:
-      'The customer or supplier opens one of its own documents (an invoice copy, a DDT, a declaration of conformity), a set of them with an optional password sent apart, or the documents of one of its shipments, to read or download them; the labour consultant downloads a payroll file.',
-    recordTypes: ['StoredFile', 'Shipment', 'PayrollExport'],
+      'The customer or supplier opens one of its own documents (an invoice copy, a DDT, a declaration of conformity), a set of them with an optional password sent apart, or the documents of one of its shipments, to read or download them.',
+    recordTypes: ['StoredFile', 'Shipment'],
     // Every open counts; a download is logged (DOWNLOADED) but uses nothing (B-W1-49).
     actions: { open: counted('none'), download: notCounted },
     grains: ['price'],
@@ -353,8 +354,9 @@ export const PURPOSE_RULES: Readonly<Record<LinkPurpose, PurposeRule>> = Object.
   }),
   SECURE_FILE: rule({
     purpose: 'SECURE_FILE',
-    description: 'A set of files to download (a payroll export, a tech pack), with an optional password sent apart and the receipt "I received these files".',
-    recordTypes: ['StoredFile'],
+    description: 'A set of files to download (a tech pack; the labour consultant\'s payroll file of hours), with an optional password sent apart and the receipt "I received these files".',
+    // B-W2b-GF1 (G212): the payroll module's own SECURE_FILE link of a PayrollExport (its routes serve the export's files).
+    recordTypes: ['StoredFile', 'PayrollExport'],
     // Opening never counts; each download uses the link ("5 downloads left"); the receipt is evidence, never a use.
     actions: { open: notCounted, download: counted('none'), receive: notCountedNamed('optional') },
     grains: [],

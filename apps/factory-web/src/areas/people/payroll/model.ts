@@ -2,6 +2,7 @@ import { PEOPLE_CHECKS } from '@nexus/factory-domain/people/payroll/checks'
 import { CODE_MEANINGS, codeOrder, isFixedCode } from '@nexus/factory-domain/people/payroll/codes'
 import { COLUMN_KEYS, definitionProblems, DELIMITERS, LAYOUT_LIMITS, PAYROLL_TO_CONFIRM, printsProviderCode } from '@nexus/factory-domain/people/payroll/layouts'
 import { PAY_BY_LINK_REFUSAL, PAYROLL_EXPORT, payByLinkProblem } from '@nexus/factory-domain/links/pay'
+import { LINK_PASSWORD, linkPasswordProblem } from '@nexus/factory-domain/links/password'
 import { PAYROLL_LINK_TERMS, PAYROLL_REFUSALS } from '@nexus/factory-domain/people/payroll/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Locale } from '../../../lib/i18n/locales'
@@ -503,9 +504,11 @@ export interface SendDraft {
   uses: string
   message: string
   language: 'it' | 'en'
+  /** B-W2b-GF1 (G212): an optional password sent apart ('' = none). */
+  password: string
 }
 
-export const sendDraftOf = (locale: Locale, email = ''): SendDraft => ({ email, days: String(PAYROLL_LINK_TERMS.expiryDays.default), uses: String(PAYROLL_LINK_TERMS.uses.default), message: '', language: locale === 'en' ? 'en' : 'it' })
+export const sendDraftOf = (locale: Locale, email = ''): SendDraft => ({ email, days: String(PAYROLL_LINK_TERMS.expiryDays.default), uses: String(PAYROLL_LINK_TERMS.uses.default), message: '', language: locale === 'en' ? 'en' : 'it', password: '' })
 
 const wholeIn = (text: string, max: number): boolean => /^\d+$/.test(text.trim()) && Number(text) >= 1 && Number(text) <= max
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -517,12 +520,14 @@ export function sendHeld(draft: SendDraft, can: PayrollCan, busy: boolean): Word
   if (!EMAIL.test(draft.email.trim())) return { key: 'send.held.email' }
   if (!wholeIn(draft.days, PAYROLL_LINK_TERMS.expiryDays.max)) return { key: 'send.held.days', params: { max: PAYROLL_LINK_TERMS.expiryDays.max } }
   if (!wholeIn(draft.uses, PAYROLL_LINK_TERMS.uses.max)) return { key: 'send.held.uses', params: { max: PAYROLL_LINK_TERMS.uses.max } }
+  // B-W2b-GF1 (G212): a password, when one is typed, as the API takes it.
+  if (draft.password !== '' && linkPasswordProblem(draft.password)) return { key: 'send.held.password', params: { min: LINK_PASSWORD.minLength, max: LINK_PASSWORD.maxLength } }
   return null
 }
 
 export function sendBody(draft: SendDraft): SendBody {
   const message = draft.message.trim()
-  return { email: draft.email.trim(), expiresInDays: Number(draft.days), maxUses: Number(draft.uses), ...(message ? { message } : {}), language: draft.language }
+  return { email: draft.email.trim(), expiresInDays: Number(draft.days), maxUses: Number(draft.uses), ...(message ? { message } : {}), language: draft.language, ...(draft.password !== '' ? { password: draft.password } : {}) }
 }
 
 // ---- words of API answers --------------------------------------------------------------------------------------------------------

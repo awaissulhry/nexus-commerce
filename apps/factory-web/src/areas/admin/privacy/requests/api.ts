@@ -13,7 +13,8 @@ const id = z.string()
 const ref = z.object({ id, name: z.string() })
 const may = z.object({ allowed: z.boolean(), held: z.object({ code: z.enum(REQUEST_HELD) }).nullable() })
 
-export const packageSchema = z.object({ fileId: id, name: z.string(), sizeBytes: z.number(), sha256: z.string(), madeAt: z.string().nullable() })
+// B-W2b-GF1 (G274): `deleteAfter`, the day the package is deleted (30 days after it was made); optional for an older API.
+export const packageSchema = z.object({ fileId: id, name: z.string(), sizeBytes: z.number(), sha256: z.string(), madeAt: z.string().nullable(), deleteAfter: z.string().nullable().optional() })
 /** NONE: never asked; RUNNING: being collected; READY: the package is there; FAILED: the worker could not make it. */
 export const collectSchema = z.object({ state: z.enum(['NONE', 'RUNNING', 'READY', 'FAILED']), at: z.string().nullable() })
 

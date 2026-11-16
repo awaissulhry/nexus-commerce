@@ -3,7 +3,7 @@ import type { FastifyRequest } from 'fastify'
 import { DomainError, InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { PRIVACY_REQUESTS_MANAGE } from '@nexus/factory-domain/privacy/retention/permissions'
-import { REQUEST_HELD_WORDS, type DataSubjectKind } from '@nexus/factory-domain/privacy/retention/requests'
+import { PACKAGE_KEEP_DAYS, REQUEST_HELD_WORDS, type DataSubjectKind } from '@nexus/factory-domain/privacy/retention/requests'
 import { writeZip, type ZipEntry } from '../../../modules/accounting/guest/zip'
 import { command, type CommandCaller } from '../../../core/command'
 import { downloadFile, putGeneratedFile, recordGeneratedFile, storeCall, systemCallerOf } from '../../files/files'
@@ -12,7 +12,7 @@ import { defineHandler, type EventHandler } from '../../outbox/dispatch'
 import { sourcesFor } from '../erasure/sources'
 import { personFacts } from '../erasure/sources/person'
 import type { Section } from '../erasure/sources/type'
-import { COLLECT_ACTIONS, readRequest, REQUEST_SELECT } from './read'
+import { COLLECT_ACTIONS, packageHeld, readRequest, REQUEST_SELECT } from './read'
 import { emitChange } from './requests'
 
 /**
@@ -25,8 +25,10 @@ import { emitChange } from './requests'
  *   2. the AVAILABLE files of the records the sources name (their photos, the documents they sent, the mails' attachments), read
  *      from the store and checked against their SHA-256 (files/<nnn>-<name>); a file the store does not give as kept is left out
  *      and named (README.txt, data.json `missingFiles`): the person gets the rest now; README.txt says what is in it; SHA256SUMS.txt;
- *   3. ONE command: the ZIP recorded as the request's file (office only, read only through the privacy routes), the request's
- *      package set (an earlier package of the request is deleted), the audit row, privacy.request_changed PACKAGE_READY.
+ *   3. ONE command: the ZIP recorded as the request's file (office only, read only through the privacy routes) with its delete
+ *      date (B-W2b-GF1, G274: PACKAGE_KEEP_DAYS after it was made; the hourly privacy.purgePackages deletes it then: purge.ts),
+ *      the request's package set (an earlier package of the request is deleted), the audit row, privacy.request_changed
+ *      PACKAGE_READY.
  * A refusal in words (more than 25 MiB or 200 files) → an audit row with why and PACKAGE_FAILED;
  * nothing changes on the request. Any other failure is retried; after the last attempt → PACKAGE_FAILED "stopped".
  *
@@ -36,6 +38,7 @@ import { emitChange } from './requests'
 export const COLLECT_HANDLER = 'privacy.collectPackage'
 export const COLLECT_ATTEMPTS = 3
 export const PACKAGE_LIMITS = Object.freeze({ zipBytes: 25 * 1024 * 1024, files: 200 })
+const DAY_MS = 24 * 60 * 60 * 1000
 
 class Refused extends DomainError {
   override name = 'Refused'
@@ -61,6 +64,8 @@ function readme(person: { kind: string; name: string }, madeAt: Date, sections: 
     ...sections.map((entry) => `  ${entry.key}.json  ${entry.title}: ${entry.rows.length} ${entry.rows.length === 1 ? 'row' : 'rows'}${entry.truncated ? ' (the oldest 2000; ask for the rest)' : ''}`),
     `Files: ${files}`,
     ...(missing.length === 0 ? [] : ['', 'Files we hold a record of but could not read from the store (ask the company for them):', ...missing.map((file) => `  ${file.name}`)]),
+    '',
+    `This package is deleted ${PACKAGE_KEEP_DAYS} days after it was made: download it before then (ask again for a new one).`,
     '',
     'Not in this package: health surveillance records, which are opened only where each opening is recorded; ask the company and',
     'they are handed to you in person. Who keeps your data, why and for how long: the company privacy notice (/privacy/<company>).',
@@ -145,10 +150,13 @@ export async function collectPackage(caller: CommandCaller, requestId: string, w
       const current = await tools.tx.dataRequest.findUniqueOrThrow({ where: { id: requestId }, select: { status: true, packageFileId: true } })
       if (current.status !== 'IN_PROGRESS') throw new InvalidStateError(REQUEST_HELD_WORDS.CLOSED)
       const file = await recordGeneratedFile(tools, prepared, { details: { documentType: 'PERSONAL_DATA_PACKAGE', sections: collected.sections.length, files: added, missingFiles: missing.length } })
+      // B-W2b-GF1 (G274): the package is never kept as a second copy of the person's data: deleted on its date.
+      const deleteAfter = new Date(tools.now.getTime() + PACKAGE_KEEP_DAYS * DAY_MS)
+      await tools.tx.storedFile.update({ where: { id: file.id }, data: { deleteAfter }, select: { id: true } })
       await tools.tx.dataRequest.update({ where: { id: requestId }, data: { packageFileId: file.id, updatedAt: tools.now }, select: { id: true } })
       // The earlier package of the request goes (a person's data is not kept twice).
       if (current.packageFileId) await tools.tx.storedFile.updateMany({ where: { id: current.packageFileId, status: 'AVAILABLE' }, data: { status: 'DELETED', deletedAt: tools.now } })
-      tools.audit({ recordType: 'DataRequest', recordId: requestId, companyId: request.companyId, before: { packageFileId: current.packageFileId }, after: { packageFileId: file.id, sections: collected.sections.length, files: added, missingFiles: missing.length, sha256: prepared.sha256 } })
+      tools.audit({ recordType: 'DataRequest', recordId: requestId, companyId: request.companyId, before: { packageFileId: current.packageFileId }, after: { packageFileId: file.id, sections: collected.sections.length, files: added, missingFiles: missing.length, sha256: prepared.sha256, deleteAfter: toUtcIso(deleteAfter) } })
       emitChange(tools, request, 'IN_PROGRESS', 'PACKAGE_READY')
       return null
     })
@@ -179,6 +187,6 @@ export function collectPackageHandlers(): EventHandler[] {
 /** GET /privacy/requests/:requestId/package: a link to download the package (60 seconds); the read log records it (DOWNLOAD). */
 export async function packageDownload(request: FastifyRequest, requestId: string) {
   const { request: row } = await readRequest(request, requestId, PRIVACY_REQUESTS_MANAGE)
-  if (!row.packageFileId || row.packageFile?.status !== 'AVAILABLE') throw new InvalidStateError(REQUEST_HELD_WORDS.NO_PACKAGE)
+  if (!row.packageFileId || row.packageFile?.status !== 'AVAILABLE') throw new InvalidStateError(REQUEST_HELD_WORDS[packageHeld(row.packageFile)])
   return { download: await downloadFile(processFiles(), { caller: request, system: systemCallerOf(request) }, row.packageFileId, { viaModule: true }) }
 }

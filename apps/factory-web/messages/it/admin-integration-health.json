@@ -366,6 +366,10 @@
         }
       },
       "privacy": {
+        "purgePackages": {
+          "name": "Pacchetti di dati cancellati in tempo",
+          "what": "Ogni ora: il pacchetto di dati di una persona è cancellato 30 giorni dopo la preparazione."
+        },
         "retentionSweep": {
           "name": "Pulizia per conservazione",
           "what": "Ogni notte alle 02:50: ogni regola di conservazione riporta cosa è dovuto e applica solo dove attiva."

@@ -127,6 +127,11 @@ describe('Anonymise …?', () => {
     expect(sectionsOf(preview).map((entry) => entry.section)).toEqual(['anonymised'])
     expect(fieldKeys(['email', 'secretColumn', 'zzz'])).toEqual(['dp.erase.field.email', 'dp.erase.field.other'])
     expect(eraseTypeKey('NewTable')).toBe('dp.erase.type.other')
+    // B-W2b-GF1 (F54): the files attached to what the person sent are named, and a mail keeps no envelope sender.
+    expect(eraseTypeKey('StoredFile')).toBe('dp.erase.type.StoredFile')
+    const contactGroups = [...contact.deleted, ...contact.kept].filter((group) => group.recordType === 'StoredFile')
+    expect(contactGroups.map((group) => [group.method, group.why?.code ?? null])).toEqual([['DELETED', null], ['KEPT', 'RETAINED']])
+    expect(preview.anonymised.find((group) => group.recordType === 'InboundEmail')).toMatchObject({ keptFields: [], why: null })
   })
 })
 

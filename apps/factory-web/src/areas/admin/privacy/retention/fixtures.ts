@@ -58,7 +58,7 @@ function rule(n: number, extra: Partial<Rule>): Rule {
 const RULES: Rule[] = [
   rule(1, { recordType: 'CronRun', keepMonths: 3, legalReason: 'Security log practice: 3 months of job runs to trace a failure.', applyOn: true, applyOnAt: at(10, 11, 0), applyOnBy: { id: uid('3333', 1), name: 'Alex Demo' }, lastSweep: sweep(1, { mode: 'APPLY', keepMonths: 3, due: 214, applied: 214, cutoffOn: '2026-08-14' }), actions: { change: may, switchOff: may, switchOn: no('ACTIVE'), applyOn: no('APPLYING'), applyOff: may, sweepNow: may } }),
   rule(2, { recordType: 'ExportJob', company: demo, keepMonths: 3, legalReason: 'Exports are files of personal data: 3 months.', active: false, holdsAll: { code: 'NEVER_DELETED' }, actions: { change: no('NO_ACTION'), switchOff: no('SWITCHED_OFF'), switchOn: may, applyOn: no('SWITCHED_OFF'), applyOff: no('SWITCHED_OFF'), sweepNow: no('SWITCHED_OFF') } }),
-  rule(3, { recordType: 'InboundEmail', company: demo, keepMonths: 24, thenAction: 'ANONYMISE', legalReason: 'Mails answered: 2 years for follow-ups and claims.', holdsAll: { code: 'IMMUTABLE' }, lastSweep: sweep(3, { keepMonths: 24, thenAction: 'ANONYMISE', due: 37, held: 0, cutoffOn: '2024-11-14' }) }),
+  rule(3, { recordType: 'InboundEmail', company: demo, keepMonths: 24, thenAction: 'ANONYMISE', legalReason: 'Mails answered: 2 years for follow-ups and claims.', holdsAll: null, lastSweep: sweep(3, { keepMonths: 24, thenAction: 'ANONYMISE', due: 37, held: 0, cutoffOn: '2024-11-14' }) }),
   rule(4, { recordType: 'IntegrationErrorItem', company: demo, keepMonths: 6, legalReason: 'Closed errors: 6 months to see a pattern again.', lastSweep: sweep(4, { keepMonths: 6, due: 12, cutoffOn: '2026-05-14' }) }),
   rule(5, { recordType: 'Invoice', company: demo, keepMonths: 120, thenAction: 'ARCHIVE', legalReason: 'c.c. art. 2220: 10 years; DPR 633/72 art. 39.', holdsAll: { code: 'ARCHIVE_STAYS' }, lastSweep: sweep(5, { status: 'FAILED', keepMonths: 120, thenAction: 'ARCHIVE', failures: [{ code: 'DB_REFUSED', recordId: null }] }) }),
   rule(6, { recordType: 'ReportRun', lastSweep: sweep(6, { due: 41 }) }),
@@ -70,7 +70,8 @@ const LIST: RetentionList = {
     { recordType: 'ReportRun', companyScoped: false, actions: ['DELETE'], holdsAll: null },
     { recordType: 'CronRun', companyScoped: false, actions: ['DELETE'], holdsAll: null },
     { recordType: 'IntegrationErrorItem', companyScoped: true, actions: ['DELETE'], holdsAll: null },
-    { recordType: 'InboundEmail', companyScoped: true, actions: ['ANONYMISE'], holdsAll: { code: 'IMMUTABLE' } },
+    // B-W2b-GF1 (F54): the sweep may anonymise a settled mail (the Owner's decision of 15 Nov 2026).
+    { recordType: 'InboundEmail', companyScoped: true, actions: ['ANONYMISE'], holdsAll: null },
     { recordType: 'ExportJob', companyScoped: true, actions: [], holdsAll: { code: 'NEVER_DELETED' } },
     { recordType: 'Invoice', companyScoped: true, actions: ['ARCHIVE'], holdsAll: { code: 'ARCHIVE_STAYS' } },
   ],
@@ -81,6 +82,7 @@ const LIST: RetentionList = {
     { key: 'linkDrafts', job: 'links.purgeDrafts', recordType: 'LinkDraft' },
     { key: 'largeUploads', job: 'files.expireLargeUploads', recordType: 'FileUploadSession' },
     { key: 'exportFiles', job: 'exports.expire', recordType: 'ExportJob' },
+    { key: 'accessPackages', job: 'privacy.purgePackages', recordType: 'StoredFile' },
   ],
   keptForGood: ['DataRequest', 'ErasureRecord', 'RetentionRule', 'RetentionSweep'],
   sweep: { schedule: '50 2 * * *' },

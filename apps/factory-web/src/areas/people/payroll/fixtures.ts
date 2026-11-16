@@ -150,7 +150,7 @@ export const designScreen = defineDesignScreen<PayrollCase>({
     { id: 'confirm', label: "The consultant's confirmation", model: wizard('send', 'hr', MONTH, {}, { confirm: { layout: LAYOUT_ZUCCHETTI, draft: { by: '', on: TODAY }, busy: false, problem: null } }, LAYOUT_ZUCCHETTI) },
     { id: 'confirm-back', label: 'A confirmation can be taken back', model: wizard('send', 'hr', MONTH, {}, { confirm: { layout: LAYOUT_CONFIRMED, draft: { by: 'Studio Demo', on: '2026-10-20' }, busy: false, problem: null } }, LAYOUT_CONFIRMED) },
 
-    { id: 'send-dialog', label: 'Send to the labour consultant: it says a browser cannot fetch the file yet', model: page('hr', MONTH_EXPORTED, { dialogs: send() }) },
+    { id: 'send-dialog', label: 'Send to the labour consultant: recipient, expiry, uses, the optional password given apart, message', model: page('hr', MONTH_EXPORTED, { dialogs: send() }) },
     { id: 'send-dialog-empty', label: 'Send held: no address', model: page('hr', MONTH_EXPORTED, { dialogs: send({ draft: sendDraftOf('it') }) }) },
     { id: 'send-dialog-unconfirmed', label: 'Send with a layout nobody confirmed', model: page('hr', MONTH_EXPORTED, { dialogs: { ...send(), send: { ...send().send!, target: unconfirmedTarget } } }) },
     { id: 'send-dialog-refused', label: 'Send refused: an address that does not take our mail', model: page('hr', MONTH_EXPORTED, { dialogs: send({ problem: { key: 'refusal.SUPPRESSED' } }) }) },

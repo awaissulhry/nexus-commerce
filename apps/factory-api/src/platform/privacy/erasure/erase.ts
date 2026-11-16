@@ -14,6 +14,7 @@ import { PRIVACY_ERASE, PRIVACY_REQUESTS_VIEW } from '@nexus/factory-domain/priv
 import { REQUEST_HELD_WORDS, type DataSubjectKind } from '@nexus/factory-domain/privacy/retention/requests'
 import type { ErasureMethod } from '@nexus/factory-domain/privacy/retention/retention'
 import { command, type CommandCaller } from '../../../core/command'
+import { processFiles, type FilesRuntime } from '../../files/service'
 import { refuse } from '../access'
 import { actionsOf, readRequest, requestAnswer, type RequestRow } from '../requests/read'
 import { personFacts } from './sources/person'
@@ -126,7 +127,9 @@ export async function erasePerson(caller: CommandCaller, requestId: string, body
   refuse([eraseReasonProblem(body.reason), confirmNameProblem(body.confirmName, person.name)].filter((issue) => issue !== null), 'The erasure needs its reason and the typed name.')
   // GDPR art. 17 is a decision in the company's name: a fresh code every time (step-up-actions.ts: a fixed LEGAL action).
   writes.stepUp()
-  const { result } = await command(
+  // B-W2b-GF1: what runs after the commit (a deleted attachment's object removed from the store), never inside it.
+  let afterCommit: PlannedRecord[] = []
+  const { result, replayed } = await command(
     caller,
     { name: 'privacy.erase', idempotencyKey: writes.idempotencyKey, input: { requestId, version: body.version, reason: body.reason }, record: { type: 'DataRequest', id: requestId, expectedVersion: body.version } },
     async (tools) => {
@@ -154,6 +157,7 @@ export async function erasePerson(caller: CommandCaller, requestId: string, body
       }))
       await tx.erasureRecord.createMany({ data: records })
       for (const [index, record] of planned.entries()) await record.apply?.({ tx, now, actorId: context.actorId, erasureId: records[index]!.id, emit: tools.emit })
+      afterCommit = planned.filter((record) => record.after !== undefined)
       const counts = { anonymised: planned.filter((record) => record.method === 'ANONYMISED').length, deleted: planned.filter((record) => record.method === 'DELETED').length, kept: planned.filter((record) => record.method === 'KEPT').length }
       // The decision is logged: what was asked (the reason, without the person's details), by whom, and what happened (counts).
       tools.audit({ recordType: 'DataRequest', recordId: request.id, companyId: request.companyId, after: { erasedAt: toUtcIso(now), personKind: request.personKind, ...counts, groups: groupsOf(planned).map((group) => ({ recordType: group.recordType, method: group.method, count: group.count, why: group.why?.code ?? null })) }, reason: body.reason.trim() })
@@ -162,5 +166,14 @@ export async function erasePerson(caller: CommandCaller, requestId: string, body
       return counts
     },
   )
+  if (!replayed && afterCommit.length > 0) {
+    let files: FilesRuntime | null = null
+    try {
+      files = processFiles()
+    } catch {
+      files = null
+    }
+    if (files) for (const record of afterCommit) await record.after!(files, caller, writes.now)
+  }
   return { request: await requestAnswer(caller, request.id, writes.now), erased: result }
 }

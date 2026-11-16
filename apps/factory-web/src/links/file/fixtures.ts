@@ -56,7 +56,8 @@ const PAYROLL: FilePage = {
   expiresAt: '2026-12-09T17:00:00.000Z',
   usesLeft: 18,
   password: { asked: false, unlocked: false, heldUntil: null },
-  receipt: { asked: false, at: null, name: null },
+  // B-W2b-GF1 (G212): a secure file — the receipt is asked.
+  receipt: { asked: true, at: null, name: null },
   count: 2,
   files: [
     file(11, { name: 'PAGHE-2026-10-OFFDEMO.txt', sizeBytes: 9_812, contentType: 'application/octet-stream', payrollKind: 'DATA' }),
@@ -124,8 +125,11 @@ export const designScreen = defineDesignScreen<FileLinkDesignModel>({
       id: 'payroll',
       label: 'The payroll file of October 2026: the hours file and its summary (no pay figures)',
       model: model({ page: PAYROLL }),
-      note: 'DOCUMENT_VIEW of a PayrollExport (B-W2b-54’s routes): each download counts; no password, no receipt.',
+      note: 'SECURE_FILE of a PayrollExport (B-W2b-54’s routes; B-W2b-GF1): each download counts; the receipt asked; here without a password.',
     },
+    // B-W2b-GF1 (G212): the payroll file with a password given apart: nothing listed until it is typed.
+    { id: 'payroll-password', label: 'The payroll file with a password sent apart: locked', model: model({ page: { ...PAYROLL, password: { asked: true, unlocked: false, heldUntil: null }, files: [] } }) },
+    { id: 'payroll-received', label: 'The payroll file: received, confirmed with a name', model: model({ page: { ...PAYROLL, usesLeft: 17, receipt: { asked: true, at: '2026-11-09T09:42:00.000Z', name: 'Studio Demo' } }, downloads: { [uid(11)]: 'done' } }) },
     { id: 'payroll-correction', label: 'The payroll file, correction 2', model: model({ page: { ...PAYROLL, payroll: { month: '2026-10', number: 'PAY-2026-0010', revision: 2 } } }) },
     { id: 'payroll-downloaded', label: 'The payroll data file downloaded', model: model({ page: { ...PAYROLL, usesLeft: 17 }, downloads: { [uid(11)]: 'done' } }) },
     { id: 'expired', label: 'Expired while open: the frame’s end with Ask for a new link', model: model({ link: 'expired', expiredAt: '2026-11-16T17:00:00.000Z' }) },
