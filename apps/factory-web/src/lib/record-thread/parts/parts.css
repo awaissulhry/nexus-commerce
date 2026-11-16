@@ -30,3 +30,28 @@
   height: 20px;
   font-size: 9px;
 }
+
+/* Words only a screen reader reads (a live line, a field's name). */
+.fw-rt-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* SCR-006-feed, -composer, -attach, -send (design review): a column as tall as the docked thread's feed at 1440 × 900. */
+.fw-rt-case {
+  display: flex;
+  flex-direction: column;
+  height: 640px;
+  min-width: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  overflow: hidden;
+}

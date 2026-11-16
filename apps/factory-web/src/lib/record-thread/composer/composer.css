@@ -1,0 +1,193 @@
+/*
+ * The composer (B-TH-205, T5; picture 3): the box takes the audience's colour — warning-soft with the lock for an Office note,
+ * info-soft for a reply — and the words say it too (colour-blind safe). DS tokens only.
+ */
+.fw-rt-composer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface);
+  position: relative;
+  min-width: 0;
+}
+
+.fw-rt-cx-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fw-rt-composer[data-mode='note'] .fw-rt-cx-seg [role='radio'][aria-checked='true'] {
+  background: var(--nds-warning-soft);
+  color: var(--nds-warning-text);
+}
+
+.fw-rt-composer[data-mode='reply'] .fw-rt-cx-seg [role='radio'][aria-checked='true'] {
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+}
+
+.fw-rt-cx-box {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  transition: background 0.15s ease, border-color 0.15s ease;
+  min-width: 0;
+}
+
+.fw-rt-composer[data-mode='note'] .fw-rt-cx-box {
+  background: var(--nds-warning-soft);
+  border-color: var(--nds-warning);
+}
+
+.fw-rt-composer[data-mode='reply'] .fw-rt-cx-box {
+  background: var(--nds-info-soft);
+  border-color: var(--nds-info);
+}
+
+.fw-rt-cx-box:focus-within {
+  box-shadow: 0 0 0 2px var(--nds-text);
+}
+
+.fw-rt-cx-mark {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 700;
+}
+
+.fw-rt-composer[data-mode='note'] .fw-rt-cx-mark {
+  color: var(--nds-warning-text);
+}
+
+.fw-rt-composer[data-mode='reply'] .fw-rt-cx-mark {
+  color: var(--nds-info-text);
+}
+
+.fw-rt-cx-text {
+  width: 100%;
+  min-height: 40px;
+  resize: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--nds-text);
+  font: inherit;
+  font-size: var(--nds-font-size-base);
+  line-height: 1.55;
+  padding: 0;
+  overflow-y: hidden;
+}
+
+.fw-rt-cx-text::placeholder {
+  color: var(--nds-placeholder);
+}
+
+.fw-rt-cx-drop {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  border: 2px dashed var(--nds-primary);
+  border-radius: inherit;
+  background: var(--nds-primary-soft);
+  color: var(--nds-text);
+  font-weight: 700;
+  text-align: center;
+}
+
+.fw-rt-cx-notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fw-rt-cx-line {
+  margin: 0;
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-2);
+  line-height: 1.45;
+}
+
+.fw-rt-cx-warn {
+  margin: 0;
+  padding: 6px 9px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.fw-rt-cx-floor {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fw-rt-cx-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fw-rt-cx-grow {
+  flex: 1 1 auto;
+}
+
+.fw-rt-cx-heldtext,
+.fw-rt-cx-count {
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-2);
+  text-align: end;
+  line-height: 1.3;
+}
+
+.fw-rt-cx-count.is-over {
+  color: var(--nds-danger-text);
+  font-weight: 600;
+}
+
+.fw-rt-cx-held {
+  padding: 12px;
+  border: 1px dashed var(--nds-border-strong);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm-plus);
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.fw-rt-cx-held > span {
+  flex: 1 1 200px;
+}
+
+/* SCR-006-composer (design review): the composer at the foot of a thread-tall column. */
+.fw-rt-case-fill {
+  flex: 1;
+  min-height: 0;
+  background: var(--nds-surface-raised);
+}

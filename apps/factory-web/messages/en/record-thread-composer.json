@@ -1,0 +1,62 @@
+{
+  "modeLabel": "Who reads what you write",
+  "mode": {
+    "note": "Office note",
+    "reply": "Reply to {party}",
+    "replyProspect": "Reply to {party} (new)"
+  },
+  "mark": {
+    "note": "Office note · only your colleagues read it",
+    "reply": "Email to {party} · the people in To and Cc read it"
+  },
+  "placeholder": {
+    "note": "Write an office note for your colleagues · @ mentions a colleague",
+    "reply": "Write to {party}"
+  },
+  "send": {
+    "note": "Add note",
+    "reply": "Send to {party}"
+  },
+  "live": {
+    "note": "Office note — only your colleagues read it",
+    "reply": "Reply to {party} — {party} reads this"
+  },
+  "held": {
+    "offline": "You are offline · your text stays on this device",
+    "sending": "Sending…",
+    "prospect": "Make the customer first",
+    "empty": "Write a message first",
+    "tooLong": "Cut {count} characters to send it"
+  },
+  "box": {
+    "closed": "Closed by {who}, {date}. The customer cannot write here.",
+    "closedPlain": "This thread is closed. The customer cannot write here.",
+    "reopen": "Reopen",
+    "noRight": "You can read this thread; writing in it needs another role.",
+    "noParty": "This record has no customer: notes only."
+  },
+  "prospect": {
+    "line": "{party} is a prospect, not a customer yet.",
+    "make": "Make the customer"
+  },
+  "switch": {
+    "mentions": "Mentions stay in office notes: taken out of this message: {names}."
+  },
+  "floor": {
+    "label": "For the floor",
+    "on": "The tablets of {record} show it: no prices, the first {limit} characters, for 14 days, no file, no name. Nobody records who read it.",
+    "off": "Off: only the office reads this note.",
+    "long": "The tablet shows the first {limit} characters."
+  },
+  "drop": {
+    "note": "Drop the files to add them to this office note (office only)",
+    "reply": "Drop the files to send them to {party}"
+  },
+  "counter": "{count} characters left",
+  "leave": {
+    "title": "Leave with unsent text?",
+    "body": "What you wrote on {record} is not sent yet.",
+    "stay": "Stay",
+    "discard": "Discard"
+  }
+}

@@ -12,6 +12,7 @@ import { authorWords, type CardContext, type CardMessage } from '../../card/mode
 import { MessageCard, type CardActions } from '../../card/view/MessageCard'
 import { dayOf, dayWord, shortDateOf, timeOf } from '../../parts/time'
 import { arrivedAtEnd, feedRows, gistOf, PAGE_SIZE, verbKey, walkTarget, whoWords, type FeedEvent, type FeedRow } from '../model'
+import '../../parts/parts.css'
 import '../feed.css'
 
 export interface FeedModel {
