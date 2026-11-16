@@ -196,7 +196,8 @@ describe('the daily ECB rates (PLT-133)', () => {
     fake.answerNext([
       { day: today(), rates: [{ currency: 'JPY', rate: '160.00' }, { currency: 'SEK', rate: '11.50' }] },
       { day: yesterday, rates: [{ currency: 'JPY', rate: '159.00' }, { currency: 'SEK', rate: '11.40' }] },
-      ...missed.map((day) => ({ day, rates: [{ currency: 'JPY', rate: '158.00' }, { currency: 'SEK', rate: '11.30' }] })),
+      // The missed days in a currency no other test reads (the rates table and the follow-ups read JPY, SEK, NOK, CHF).
+      ...missed.map((day) => ({ day, rates: [{ currency: 'HUF', rate: '390.00' }, { currency: 'PLN', rate: '4.30' }] })),
     ])
     const filesBefore = fake.files.length
     const first = await ok('finance', 'POST', '/exchange-rates/fetch', {})
@@ -215,7 +216,9 @@ describe('the daily ECB rates (PLT-133)', () => {
       ['FEED_ON', 0],
       ['ECB_READ', 4 + 2 * missed.length], // B-W2b-GB02 (G058)
     ])
-    expect(await admin(`SELECT key FROM "ExchangeRate" WHERE "tenantId" = $1 AND quote = 'JPY' AND source = 'ECB' ORDER BY key`, [A.tenant])).toEqual([...missed, yesterday, today()].map((day) => ({ key: `EUR:JPY:${day}:ECB` })))
+    expect(await admin(`SELECT key FROM "ExchangeRate" WHERE "tenantId" = $1 AND quote = 'JPY' AND source = 'ECB' ORDER BY key`, [A.tenant])).toEqual([{ key: `EUR:JPY:${yesterday}:ECB` }, { key: `EUR:JPY:${today()}:ECB` }])
+    // B-W2b-GB02 (G058): the missed days, from the 90-day file.
+    expect(await admin(`SELECT key FROM "ExchangeRate" WHERE "tenantId" = $1 AND quote = 'HUF' AND source = 'ECB' ORDER BY key`, [A.tenant])).toEqual(missed.map((day) => ({ key: `EUR:HUF:${day}:ECB` })))
 
     // The job: the tenant is on, so it reads (the fake's own made-up file: the last weekday).
     const said: unknown[] = []

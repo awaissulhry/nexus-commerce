@@ -507,20 +507,18 @@ describe('self-invoices TD17-TD19 (FIN-095): listed with their deadline, issued 
 describe('self-invoice TD16 (G150): an Italian supplier under the reverse charge', () => {
   it('lists it as a TD16 candidate, integrates only its N6 lines at 22 %, and issues a valid TD16 with the supplier as cedente', async () => {
     const today = TODAY()
-    const supplier = (
-      await as('POST', '/payables/invoices', {
-        companyId: c1(),
-        partyId: ids.supplierIt,
-        source: 'MANUAL',
-        number: 'TF-2026-31',
-        issueDate: today,
-        currency: 'EUR',
-        lines: [
-          { kind: 'SUBCONTRACT', description: 'Cucitura conto terzi (fittizia)', netAmount: 60000, vatRatePct: '0', vatNature: 'N6.3' },
-          { kind: 'GOODS', description: 'Filo (fittizio)', netAmount: 5000, vatRatePct: '22' },
-        ],
-      }, 201)
-    ).invoice
+    // An Italian supplier's invoice arrives through SDI (typing one is refused): written as the pickup records it, made up.
+    const supplier = { id: newId() }
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(
+        `INSERT INTO "SupplierInvoice" (id, "tenantId", "companyId", "partyId", source, kind, number, "issueDate", "receivedOn", "sdiIdentifier", "sdiFileName", currency, "netTotal", "vatTotal", "grossTotal", "vatSummary") VALUES ($1, $2, $3, $4, 'SDI', 'INVOICE', 'TF-2026-31', $5::date, $5::date, '9990031', 'IT11111110009_00031.xml', 'EUR', 65000, 1100, 66100, $6::jsonb)`,
+        [supplier.id, tenant.id, c1(), ids.supplierIt, today, JSON.stringify([{ rate: null, nature: 'N6.3', taxable: 60000, vat: 0 }, { rate: '22.00', nature: null, taxable: 5000, vat: 1100 }])],
+      )
+      await admin(`INSERT INTO "SupplierInvoiceLine" (id, "tenantId", "partyId", "invoiceId", seq, kind, description, "netAmount", "vatRatePct", "vatNature") VALUES ($1, $2, $3, $4, 1, 'SUBCONTRACT', 'Cucitura conto terzi (fittizia)', 60000, 0, 'N6.3'), ($5, $2, $3, $4, 2, 'GOODS', 'Filo (fittizio)', 5000, 22, NULL)`, [newId(), tenant.id, ids.supplierIt, supplier.id, newId()])
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
     const { candidates } = await as('GET', `/invoicing/self-invoices/candidates?companyId=${c1()}`)
     expect(candidates.find((row: Json) => row.supplierInvoiceId === supplier.id)).toMatchObject({ supplier: { country: 'IT' }, suggestion: { kind: 'TD16' } })
     // A TD17 of an Italian supplier is refused in words.
