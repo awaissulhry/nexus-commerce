@@ -66,6 +66,7 @@
       "OPEN": "Aperta."
     },
     "noNote": "Una nota sull'ordine richiede il permesso di scrivere note interne.",
+    "sampleNoCustomer": "Un campione interno non ha un cliente a cui chiedere: il suo ordine di lavoro è nostro.",
     "notMustBuy": "Solo una riga da comprare ha una bozza d'ordine.",
     "busy": "Attendi: l'ultima azione è in corso."
   },
@@ -78,6 +79,8 @@
     "line": "riga {seq}",
     "due": "consegna {date}",
     "noDue": "nessuna data",
+    "sample": "Campione · {workOrder}",
+    "sampleOfRound": "Campione {round} · {workOrder}",
     "sizes_one": "taglie {sizes} · {count} pz",
     "sizes_other": "taglie {sizes} · {count} pz",
     "thickness": "{min}–{max} mm",

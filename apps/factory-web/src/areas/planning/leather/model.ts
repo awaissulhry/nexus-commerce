@@ -192,7 +192,8 @@ export function shadeOptions(row: NeedRow, can: LeatherCan): { option: ShadeOpti
   if (row.feasibility === 'FITS') out.push({ option: 'reserve', held: !can.reserve ? 'held.noReserve' : !row.proposal ? 'held.noProposalHides' : null })
   if (row.split) out.push({ option: 'split', held: !can.reserve ? 'held.noReserve' : null })
   if (row.buy && Number(row.buy.area) > 0) out.push({ option: 'buy', held: !can.draftPo ? 'held.noDraftPo' : row.requirement.decision !== 'OPEN' ? `held.requirement.${row.requirement.decision}` : null })
-  if (row.feasibility !== 'FITS' && row.feasibility !== 'COVERED') out.push({ option: 'ask', held: !can.note ? 'held.noNote' : null })
+  // B-W2b-GB29 (G222): an internal sample has no customer to ask (its work order is ours).
+  if (row.feasibility !== 'FITS' && row.feasibility !== 'COVERED') out.push({ option: 'ask', held: row.sample ? 'held.sampleNoCustomer' : !can.note ? 'held.noNote' : null })
   return out
 }
 

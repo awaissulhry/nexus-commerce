@@ -88,6 +88,8 @@ describe('leather plan: options and decisions, held with the reason', () => {
       { option: 'ask', held: 'held.noNote' },
     ])
     expect(shadeOptions(FIXTURES.COVERED, PLANNER)).toEqual([])
+    // B-W2b-GB29 (G222): a sample work order has no customer to ask.
+    expect(shadeOptions(FIXTURES.SAMPLE_ROW, PLANNER).find((entry) => entry.option === 'ask')).toEqual({ option: 'ask', held: 'held.sampleNoCustomer' })
     expect(draftPoHeld({ ...FIXTURES.MUST_BUY, requirement: { ...FIXTURES.MUST_BUY.requirement, decision: 'ORDERED' } }, leatherCan(['purchasing.manage']))).toBe('held.requirement.ORDERED')
     expect(draftPoHeld(FIXTURES.FITS, leatherCan(['purchasing.manage']))).toBe('held.notMustBuy')
   })

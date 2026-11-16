@@ -22,6 +22,8 @@ const lot = z.object({ key: z.string(), lotId: z.string(), lotCode: z.string(), 
 export const needRowSchema = z.object({
   id: z.string(),
   order: z.object({ id: z.string(), number: z.string() }),
+  // B-W2b-GB29 (G222): a sample work order of no order line (its round in `order`); null or left out: an order line.
+  sample: z.object({ workOrderId: z.string(), workOrderNumber: z.string(), roundId: z.string().nullable(), roundNumber: z.string().nullable() }).nullable().optional(),
   orderLine: z.object({ id: z.string(), seq: z.number(), dueDate: z.string().nullable() }),
   style: named,
   revision: z.object({ id: z.string(), revision: z.number(), status: z.string() }).nullable(),

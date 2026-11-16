@@ -397,5 +397,15 @@ describe('B-W2b-GB29: a sample work order of no order line is planned by MRP (G2
     const pegs = await admin<{ demandKind: string; salesOrderLineId: string | null }>(`SELECT "demandKind", "salesOrderLineId" FROM "RequirementPegging" WHERE "workOrderId" = $1`, [workOrder.id])
     expect(pegs.length).toBeGreaterThan(0)
     expect(pegs.every((peg) => peg.demandKind === 'WORK_ORDER' && peg.salesOrderLineId === null)).toBe(true)
+    // B-W2b-GB29 (G222 × B-W2b-132): its leather is on Planning › Leather's need page, a row of its own named by the work order
+    // and its round, held for the work order (never a customer's order line).
+    const need = await as(planner, 'GET', `/planning/leather/need?siteId=${siteA}`)
+    const sampleRows = (need.rows as Json[]).filter((row) => row.sample)
+    expect(sampleRows.length).toBeGreaterThan(0)
+    for (const row of sampleRows) {
+      expect(row).toMatchObject({ order: { id: round.id, number: workOrder.number }, sample: { workOrderId: workOrder.id, workOrderNumber: workOrder.number, roundId: round.id, roundNumber: 'SEED-SR-0001' }, workOrders: [{ id: workOrder.id, number: workOrder.number }], demand: { workOrderId: workOrder.id, salesOrderLineId: null } })
+      expect(row.pieces).toBeGreaterThan(0)
+    }
+    expect((need.rows as Json[]).filter((row) => !row.sample).every((row) => row.sample === null)).toBe(true)
   })
 })

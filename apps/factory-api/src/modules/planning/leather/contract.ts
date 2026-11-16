@@ -26,6 +26,8 @@ const needRow = output({
   id: z.string(),
   order: output({ id: id(), number: z.string() }),
   orderLine: output({ id: id(), seq: z.number().int(), dueDate: businessDate().nullable() }),
+  /** B-W2b-GB29 (G222): a sample work order of no order line (its round in `order`, the run's stand-in line in `orderLine`); null: an order line. */
+  sample: output({ workOrderId: id(), workOrderNumber: z.string(), roundId: id().nullable(), roundNumber: z.string().nullable() }).nullable(),
   style: ref,
   revision: output({ id: id(), revision: z.number().int(), status: z.enum(['DRAFT', 'RELEASED', 'OBSOLETE']) }).nullable(),
   colourway: ref.nullable(),

@@ -748,6 +748,7 @@
       "reservedFor_one": "Riservato per {count} richiesta",
       "reservedFor_other": "Riservato per {count} richieste",
       "wholeHide": "pelle {code}, intera",
+      "cell": "per la taglia {size} · {colourway}",
       "needed": "serve il {date}",
       "stale": "concluso: libera la riserva"
     },
