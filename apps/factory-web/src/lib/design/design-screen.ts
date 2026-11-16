@@ -17,6 +17,8 @@ export type ScreenId = `SCR-${string}` | 'list-frame' | 'ds-words' | 'ds-parts' 
   | 'ds-portal-parts'
   // B-W2b-207: the product DS parts.
   | 'ds-product-parts'
+  // F-PR-01: the shared production parts (lib/production).
+  | 'production-parts'
 
 export interface DesignCase<M> {
   /** Unique in the screen; part of the frame's address (`/design/SCR-003/normal`). */

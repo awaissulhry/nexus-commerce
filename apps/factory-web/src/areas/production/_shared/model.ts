@@ -1,5 +1,7 @@
 import type { Tone } from '@nexus/ui/primitives'
 import { isApiError, issuePath } from '../../../lib/api/errors'
+// F-PR-01: the one progress rule lives with the shared production parts (office and portal).
+import { percentOf, progressFigure, type ProgressFigure } from '../../../lib/production/model'
 import type { BundleRow, CutEntry, CutLog, ListQuery, ReleaseCheck, ReleaseCheckCode, WorkOrder, WorkOrderCounts, WorkOrderRow, WorkOrderStatus, WorkOrderWip } from './api'
 
 /**
@@ -132,21 +134,21 @@ export function quantityText(value: string, locale: string): string {
 
 // ---- progress ------------------------------------------------------------------------------------------------------------------
 
-/** A share in whole percent (0–100), or null when nothing is counted or nothing is planned. */
-export function percentOf(done: number | null, total: number): number | null {
-  if (done === null || total <= 0) return null
-  return Math.max(0, Math.min(100, Math.round((done / total) * 100)))
+/** A share in whole percent (0–100), or null when nothing is counted or nothing is planned (lib/production's one rule). */
+export { percentOf }
+
+/**
+ * F-PR-01 — a work order's short progress as ONE figure (lib/production `progressFigure`): the furthest step counted,
+ * its words ("Sewn 80 of 100") and its bar (80 %) from the same number — the list's bar no longer shows finished 0 %
+ * beside "Sewn 80 of 100" (rule R5, "a bar shows the figure its words name"). A draft is not released yet: no bar.
+ */
+export function listProgress(row: Pick<WorkOrderRow, 'progress' | 'pieces' | 'status'>): ProgressFigure {
+  return progressFigure(row.progress, row.pieces, row.status !== 'DRAFT')
 }
 
 /** The furthest step a work order's progress counts, for one short phrase in the list ("finished 6 of 24"). */
 export function progressPhrase(row: Pick<WorkOrderRow, 'progress' | 'pieces' | 'status'>): Phrase {
-  if (row.status === 'DRAFT' || !row.progress) return phrase('progress.notFrozen')
-  const p = row.progress
-  for (const step of ['finished', 'sewn', 'bundled', 'cut'] as const) {
-    const value = p[step]
-    if (value !== null && value > 0) return phrase(`progress.${step}`, { done: value, total: row.pieces })
-  }
-  return phrase('progress.none', { total: row.pieces })
+  return listProgress(row).words
 }
 
 // ---- the record --------------------------------------------------------------------------------------------------------------

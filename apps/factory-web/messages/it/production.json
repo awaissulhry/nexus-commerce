@@ -42,7 +42,7 @@
     "rev": "Rev {revision}",
     "daysLate_one": "{count} giorno di ritardo",
     "daysLate_other": "{count} giorni di ritardo",
-    "progressLabel": "Capi finiti di {number}",
+    "progressLabel": "Avanzamento di {number}: {figure}",
     "rowMenu": "Altro per {number}",
     "open": "Apri",
     "openNewTab": "Apri in una nuova scheda",
@@ -862,5 +862,160 @@
     "plannedCell_one": "{count} capo",
     "plannedCell_other": "{count} capi",
     "offPlan": "Fuori dal piano"
+  },
+  "parts": {
+    "stage": {
+      "PREPARING": "In preparazione",
+      "CUTTING": "Taglio",
+      "SEWING": "Confezione",
+      "QUALITY": "Controllo qualità",
+      "READY": "Pronto per la spedizione",
+      "label": "Fasi di produzione",
+      "unknown": "Fase non ancora nota",
+      "blocked": "Bloccato",
+      "blockedWhy": "Bloccato: {why}",
+      "sewingNotCounted": "Confezione non contata qui",
+      "loading": "Lettura delle fasi…",
+      "failed": "Impossibile caricare le fasi",
+      "office": {
+        "planned": "Pianificato per il {date}",
+        "promised": "Franco fabbrica {date}"
+      },
+      "customer": {
+        "expected": "Previsto entro il {date}",
+        "promised": "Previsto il {date}"
+      }
+    },
+    "waiting": {
+      "office": {
+        "US": "Tocca a noi",
+        "BRAND": "Tocca al cliente",
+        "SUPPLIER": "Tocca al fornitore",
+        "WORKSHOP": "Tocca al terzista"
+      },
+      "customer": {
+        "you": "Tocca a voi",
+        "us": "Tocca a noi"
+      },
+      "unknown": "In attesa di: non noto"
+    },
+    "age": {
+      "minutes": "{count} min",
+      "hours": "{count} h",
+      "days": "{count} g"
+    },
+    "health": {
+      "LATE": "In ritardo",
+      "lateBy": "In ritardo · {count} g",
+      "AT_RISK": "A rischio",
+      "NOT_PROMISED": "Data da definire",
+      "ON_TIME": "In linea",
+      "none": "Nessun piano ancora",
+      "unknown": "Stato non noto",
+      "withReason": "{health} · {reason}",
+      "withNote": "{health}, con una nota",
+      "open": "Stato: {health}. Mostra perché",
+      "title": "Perché: {health}",
+      "fromDates": "Dalle date: pianificato il {plan}, promesso il {promise}",
+      "fromDatesNoPlan": "Dalle date: promesso il {promise}, ancora nessuna fine pianificata",
+      "noPromise": "Ancora nessuna data promessa",
+      "lateDays_one": "in ritardo di {count} giorno",
+      "lateDays_other": "in ritardo di {count} giorni",
+      "raised": "Portato a A rischio da una persona: {reason}",
+      "officeOnly": "Solo ufficio",
+      "note": "{by}, {date}: {note}",
+      "noteBy": "{by}: {note}"
+    },
+    "pieces": {
+      "stages": {
+        "ORDERED": "Ordinati",
+        "CUT": "Tagliati e in fasci",
+        "SEWN": "Cuciti",
+        "INSPECTED": "Controllati",
+        "PACKED": "Imballati"
+      },
+      "of": "{done} di {total}",
+      "notCounted": "Non contato qui",
+      "stage": "Fase",
+      "size": "Taglia",
+      "total": "Totale",
+      "bars": "Pezzi per fase: {name}",
+      "bySize": "Pezzi per taglia: {name}",
+      "nothingCut": "Ancora niente tagliato",
+      "none": "Ancora nessun pezzo da mostrare",
+      "loading": "Lettura dei pezzi…",
+      "failed": "Impossibile caricare i pezzi"
+    },
+    "request": {
+      "label": "Richiesta: {kind}",
+      "kind": {
+        "CHANGE": "Modifica",
+        "CANCEL": "Annullamento",
+        "RUSH": "Urgente – richiesto",
+        "HOLD": "Pausa",
+        "RESUME": "Ripresa",
+        "SPLIT_SHIPMENT": "Spedire ciò che è pronto",
+        "SAMPLE_ROUND": "Un altro giro di campioni"
+      },
+      "office": {
+        "OPEN": "Tocca a noi",
+        "COUNTERED": "Controproposta inviata",
+        "ACCEPTED": "Accettata",
+        "REFUSED": "Rifiutata",
+        "WITHDRAWN": "Ritirata"
+      },
+      "customer": {
+        "OPEN": "In esame",
+        "COUNTERED": "La nostra controproposta attende voi",
+        "ACCEPTED": "Accettata",
+        "REFUSED": "Non accettata",
+        "WITHDRAWN": "Ritirata"
+      },
+      "askedAt": "Chiesta il {when}",
+      "askedBy": "Chiesta da {name} · {when}",
+      "askedByYou": "L'avete chiesta il {when}",
+      "changes": "Cosa cambia la richiesta: {kind}",
+      "was": "Prima",
+      "wanted": "Chiesto",
+      "yourNote": "La vostra nota: {note}",
+      "theirNote": "Le loro parole: {note}",
+      "impact": "Impatto",
+      "frozen": "Già fissato",
+      "nothingFrozen": "Ancora niente di fissato",
+      "earliest": "Data più vicina",
+      "earliestRange": "{best} al meglio · {likely} probabile · {worst} al peggio",
+      "price": "Prezzo",
+      "priceNone": "Nessuna variazione di prezzo",
+      "priceMay": "Potrebbe esserci un costo",
+      "answer": "La nostra risposta, {date}: {words}",
+      "answered": "Risposta il {date}",
+      "answerBy": "Risposta di {name}, {date}: {words}",
+      "answeredBy": "Risposta di {name}, {date}"
+    },
+    "hold": {
+      "office": {
+        "title": "In sospeso dal {date}",
+        "titleWhy": "In sospeso dal {date} · {reason}",
+        "QUALITY": "Torna In lavorazione quando la qualità lo rilascia.",
+        "PRODUCTION": "Torna In lavorazione quando il blocco viene tolto.",
+        "BRAND": "In pausa su richiesta del cliente; torna In lavorazione quando il blocco viene tolto."
+      },
+      "customer": {
+        "paused": "In pausa su vostra richiesta dal {date}",
+        "title": "In sospeso dal {date}",
+        "titleWhy": "In sospeso dal {date}: {words}",
+        "next": "Vi avvisiamo quando riprende."
+      },
+      "more_one": "{count} altro blocco",
+      "more_other": "altri {count} blocchi"
+    },
+    "fresh": {
+      "live": "In diretta · alle {time}",
+      "everyMinute": "Aggiornato alle {time} · si aggiorna ogni minuto",
+      "everySeconds": "Aggiornato alle {time} · si aggiorna ogni {count} secondi",
+      "offline": "Non in linea · alle {time}",
+      "connecting": "Connessione…",
+      "never": "Non ancora letto"
+    }
   }
 }
