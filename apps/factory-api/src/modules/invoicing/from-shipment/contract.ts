@@ -287,3 +287,45 @@ export const creditNoteContract = defineContract({
   }),
   response: { 201: output({ invoice: invoiceView, creditableAmount: money.price(z.number().int()), refundDueAmount: money.price(z.number().int()) }) },
 })
+
+// ---- B-TH-062 (threads plan TH-4, N21): the shipped goods of chosen orders, as the drafts Finance's From-DDTs dialog makes.
+export const CANDIDATE_HELD_REASONS = ['NOTHING_SHIPPED', 'SHIPPED_WITHOUT_DDT', 'IN_DRAFT', 'INVOICED'] as const
+/** Up to 100 orders, comma-separated (the rows picked on the orders list). */
+const candidateOrderIds = z
+  .string()
+  .trim()
+  .max(100 * 37)
+  .transform((value) => [...new Set(value.split(',').map((part) => part.trim()).filter((part) => part !== ''))])
+  .pipe(z.array(id()).min(1).max(100))
+
+export const fromDdtsCandidatesContract = defineContract({
+  querystring: input({ orderIds: candidateOrderIds }),
+  response: {
+    200: output({
+      asOf: businessDate(),
+      /** One draft per customer and company (and per calendar month of the DDTs, as one TD24 covers one month, and currency). */
+      drafts: z.array(
+        output({
+          partyId: id(),
+          companyId: id(),
+          code: z.string(),
+          legalName: z.string(),
+          month: z.string(),
+          currency: z.string(),
+          orders: z.array(output({ id: id(), number: z.string() })),
+          ddts: z.array(output({ ddtId: id(), number: z.string(), date: z.string(), shipmentNumber: z.string(), orderNumber: z.string(), garments: z.string() })),
+          /** Garments a new draft takes (shipped less what issued invoices and other drafts hold). */
+          garments: z.string(),
+          valueAmount: money.price(z.number().int()),
+          /** The type the rule suggests for these DDTs together, the ones allowed and the deadline, in words. */
+          choice: output({ suggested: shipType.nullable(), allowed: z.array(shipType), deadline: deadline.nullable(), words: z.string() }),
+          /** What POST /invoicing/invoices/from-ddts takes for this draft: the dialog opens with it; nothing is made here. */
+          body: output({ ddtIds: z.array(id()) }),
+        }),
+      ),
+      /** The chosen orders with nothing to invoice from a DDT now, and why (orders the reader may not invoice are left out). */
+      held: z.array(output({ orderId: id(), number: z.string(), reason: z.enum(CANDIDATE_HELD_REASONS), words: z.string(), drafts: z.array(id()) })),
+    }),
+  },
+})
+// ---- end B-TH-062
