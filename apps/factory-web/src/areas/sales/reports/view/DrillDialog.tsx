@@ -22,7 +22,7 @@ export const DRILL_ROWS = 500
  * behind an intake bar, bucket, group or tile; the open sizes behind a backlog week, group or cell; the return lines behind a
  * reason, a group or a heatmap cell — each row a link to its record. J / K (and the buttons) open the next and previous bucket or
  * week. Export writes the rows as a CSV file; "Open the list" opens Orders or Returns as close as their address can say (a
- * customer's code when the bar is one customer's) and says what the list does not filter.
+ * customer when the bar is one customer's: B-TH-201) and says what the list does not filter.
  */
 export function DrillDialog({ model, actions }: { model: ReportsModel; actions?: ReportsActions | undefined }) {
   const t = useT(NAMESPACE)
@@ -36,7 +36,7 @@ export function DrillDialog({ model, actions }: { model: ReportsModel; actions?:
   const previous = neighbourOf(target, keys, -1)
   const steps = target.section !== 'returns' && (target.section === 'intake' ? target.bucket !== null : target.week !== null)
   const day = (date: string | null) => (date ? formatDate(`${date}T12:00:00Z`, { locale }) : '—')
-  const { title, name, customerCode, rows, header, csv } = describe(target, answer, model, { t, locale, day })
+  const { title, name, customerId, rows, header, csv } = describe(target, answer, model, { t, locale, day })
   const onKeyDown = (event: React.KeyboardEvent) => {
     const element = event.target as HTMLElement
     if (element.closest('input, textarea, select')) return
@@ -61,7 +61,7 @@ export function DrillDialog({ model, actions }: { model: ReportsModel; actions?:
         <Download size={14} aria-hidden /> {t('drill.export')}
       </Button>
       <Button size="sm" variant="primary" asChild>
-        <Link href={listHref(model.prefix, target, customerCode)}>{t(`drill.openList.${target.section}`)}</Link>
+        <Link href={listHref(model.prefix, target, customerId)}>{t(`drill.openList.${target.section}`)}</Link>
       </Button>
     </>
   )
@@ -87,8 +87,8 @@ interface Words {
   day: (date: string | null) => string
 }
 
-/** The dialog's title, the bar's name, its customer (for the list's search), its rows and its file. */
-function describe(target: DrillTarget, answer: Intake | Backlog | Returns, model: ReportsModel, { t, locale, day }: Words): { title: string; name: string; customerCode: string | null; rows: Row[]; header: string[]; csv: (string | number | null)[][] } {
+/** The dialog's title, the bar's name, its customer (the list's `?party=`), its rows and its file. */
+function describe(target: DrillTarget, answer: Intake | Backlog | Returns, model: ReportsModel, { t, locale, day }: Words): { title: string; name: string; customerId: string | null; rows: Row[]; header: string[]; csv: (string | number | null)[][] } {
   const prefix = model.prefix
   if (target.section === 'intake') {
     const intake = answer as Intake
@@ -103,7 +103,7 @@ function describe(target: DrillTarget, answer: Intake | Backlog | Returns, model
     return {
       title: t('drill.title.intake'),
       name,
-      customerCode: intake.split === 'customer' && group ? group.code : null,
+      customerId: intake.split === 'customer' && group ? group.key : null, // B-TH-201: the list's ?party=
       header,
       rows: orders.map((order) => {
         const own = part(order)
@@ -146,7 +146,7 @@ function describe(target: DrillTarget, answer: Intake | Backlog | Returns, model
     return {
       title: t('drill.title.backlog'),
       name,
-      customerCode: backlog.by === 'customer' && group ? group.code : null,
+      customerId: backlog.by === 'customer' && group ? group.key : null, // B-TH-201
       header,
       rows: lines.map((line) => ({
         id: `${line.lineId}|${line.size ?? ''}`,
@@ -186,7 +186,7 @@ function describe(target: DrillTarget, answer: Intake | Backlog | Returns, model
   return {
     title: t('drill.title.returns'),
     name,
-    customerCode: target.by === 'customer' && group ? group.code : null,
+    customerId: target.by === 'customer' && group ? group.key : null, // B-TH-201
     header,
     rows: lines.map((line) => ({
       id: line.lineId,

@@ -4,7 +4,7 @@ import type { ExportCell } from '@nexus/factory-domain/views/exports'
 import type { CommandCaller } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { ApiError } from '../../core/errors'
-import { rowIdOf, type AnyExportSource, type ExportColumn, type ExportPage, type ExportReadOptions } from '../exports/source'
+import { rowIdOf, type AnyExportSource, type ExportColumn, type ExportPage, type ExportReadOptions, type ExportTitleFacts } from '../exports/source'
 import { CUSTOM_RECORDS } from './records'
 import { customFilter, fieldsOfModel, fieldsSeen, kept, referenceWords, valuesOfRecords } from './registry'
 
@@ -91,6 +91,8 @@ export function withCustomFields(source: AnyExportSource): AnyExportSource {
     idOf: (row: CustomRow) => rowIdOf(source, row.row) ?? '',
     ...(source.count ? { count: async (caller: CommandCaller, query: unknown) => ((query as CustomQuery).cf ? countFiltered(caller, query) : source.count!(caller, (query as CustomQuery).inner)) } : {}),
     ...(source.reimport ? { reimport: { importer: source.reimport.importer, key: (row: CustomRow) => source.reimport!.key(row.row) } } : {}),
+    // B-TH-008: the file's title reads the list's own query (a customer's sheet), never the wrapper's.
+    ...(source.title ? { title: (caller: CommandCaller, query: unknown, facts: ExportTitleFacts) => source.title!(caller, (query as CustomQuery).inner, facts) } : {}),
   }
   /** With a `cf` term the module's own count is too many: count by reading the view (filtered) once. */
   async function countFiltered(caller: CommandCaller, query: unknown): Promise<number> {

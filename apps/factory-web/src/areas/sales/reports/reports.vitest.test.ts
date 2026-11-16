@@ -125,9 +125,19 @@ describe('Sales reports — what a number counts', () => {
     expect(neighbourOf({ section: 'intake', bucket: '2026-W46', group: null }, keys, 1)).toBeNull()
     expect(neighbourOf({ section: 'intake', bucket: null, group: 'x' }, keys, 1)).toBeNull()
     expect(neighbourOf({ section: 'returns', by: 'reason', key: 'DEFECT' }, [], 1)).toBeNull()
-    expect(listHref('/w/DEMO', { section: 'intake', bucket: null, group: 'c' }, 'DEMO-C1')).toBe('/w/DEMO/sales/orders?rows=all&q=DEMO-C1')
     expect(listHref('/w/DEMO', { section: 'backlog', week: null, group: null, horizon: null }, null)).toBe('/w/DEMO/sales/orders')
     expect(listHref('/w/DEMO', { section: 'returns', by: null, key: null }, null)).toBe('/w/DEMO/sales/returns?view=all')
+  })
+
+  // B-TH-201 (SHEET-G11): "Open the list" opens that customer's orders — the customer's id as `?party=`, never its code as a
+  // search (the lists search numbers and PO numbers only: a code found nothing).
+  it('opens one customer’s Orders and Returns by ?party=<id>, never q=<code>; "no customer" narrows nothing', () => {
+    const id = '0190a1b2-0000-7000-8000-00000000000a'
+    expect(listHref('/w/DEMO', { section: 'intake', bucket: null, group: id }, id)).toBe(`/w/DEMO/sales/orders?rows=all&party=${id}`)
+    expect(listHref('/w/DEMO', { section: 'backlog', week: null, group: id, horizon: null }, id)).toBe(`/w/DEMO/sales/orders?party=${id}`)
+    expect(listHref('/w/DEMO', { section: 'returns', by: 'customer', key: id }, id)).toBe(`/w/DEMO/sales/returns?view=all&party=${id}`)
+    expect(listHref('/w/DEMO', { section: 'intake', bucket: null, group: 'none' }, 'none')).toBe('/w/DEMO/sales/orders?rows=all')
+    for (const target of [{ section: 'intake', bucket: null, group: id }, { section: 'backlog', week: null, group: id, horizon: null }, { section: 'returns', by: 'customer', key: id }] as const) expect(listHref('/w/DEMO', target, id)).not.toMatch(/[?&]q=/)
   })
 })
 

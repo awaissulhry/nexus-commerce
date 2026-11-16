@@ -376,6 +376,6 @@ export type PromiseLine = z.infer<typeof promiseLineSchema>
 export const promisesSchema = z.object({ site: z.object({ id: z.string(), code: z.string(), name: z.string() }), today: day, asOf: instant, complete: z.boolean(), lines: z.array(promiseLineSchema) })
 export type Promises = z.infer<typeof promisesSchema>
 
-export function listPromiseLines(api: ApiClient, siteId: string, query: { q?: string; limit?: number } = {}, signal?: AbortSignal): Promise<Promises> {
-  return api.get('/planning/promises', { query: { siteId, q: query.q?.trim() || undefined, limit: query.limit ?? 300 }, schema: promisesSchema, signal })
+export function listPromiseLines(api: ApiClient, siteId: string, query: { q?: string; limit?: number; partyId?: string | null } = {}, signal?: AbortSignal): Promise<Promises> {
+  return api.get('/planning/promises', { query: { siteId, q: query.q?.trim() || undefined, partyId: query.partyId ?? undefined /* B-TH-201 */, limit: query.limit ?? 300 }, schema: promisesSchema, signal })
 }

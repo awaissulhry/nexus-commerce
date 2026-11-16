@@ -25,7 +25,7 @@ export interface WeekModel {
  * read sales holds: planning.promise.view; the address's `?site=`, else the first by code), the search of the list as its `q`,
  * read again on the list's live changes. Never re-ranks: the backlog's own place rides on each line.
  */
-export function usePromiseWeek(api: ApiClient, session: OfficeSession, input: { enabled: boolean; asked: string | null; q: string; tick: number }): WeekModel & { retry: () => void } {
+export function usePromiseWeek(api: ApiClient, session: OfficeSession, input: { enabled: boolean; asked: string | null; q: string; tick: number; partyId?: string | null }): WeekModel & { retry: () => void } {
   const can = useMemo(() => depthCanOf(session.permissions), [session.permissions])
   const sites = useMemo(() => [...session.sites].sort((a, b) => (a.code ?? '').localeCompare(b.code ?? '')).map((site) => ({ id: site.id, code: site.code ?? '', name: site.name })), [session.sites])
   const siteId = siteOf(sites, input.asked)
@@ -43,7 +43,7 @@ export function usePromiseWeek(api: ApiClient, session: OfficeSession, input: { 
     }
     const abort = new AbortController()
     setState((known) => (known.status === 'ready' ? known : { status: 'loading' }))
-    listPromiseLines(api, siteId, { q: input.q, limit: 300 }, abort.signal)
+    listPromiseLines(api, siteId, { q: input.q, limit: 300, partyId: input.partyId ?? null /* B-TH-201 */ }, abort.signal)
       .then((answer) => !abort.signal.aborted && setState({ status: 'ready', columns: weekColumns(answer.lines, answer.today), complete: answer.complete, asOf: answer.asOf, today: answer.today }))
       .catch((error: unknown) => {
         if (abort.signal.aborted) return
@@ -51,7 +51,7 @@ export function usePromiseWeek(api: ApiClient, session: OfficeSession, input: { 
         setState(problem === 'problem.read.forbidden' ? { status: 'forbidden' } : { status: 'error', problem })
       })
     return () => abort.abort()
-  }, [api, can.promise, siteId, input.enabled, input.q, input.tick, again])
+  }, [api, can.promise, siteId, input.enabled, input.q, input.partyId, input.tick, again])
   const retry = useCallback(() => setAgain((value) => value + 1), [])
   return { state, sites, siteId, retry }
 }

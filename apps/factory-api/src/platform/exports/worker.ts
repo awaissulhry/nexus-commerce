@@ -19,7 +19,7 @@ import { defineHandler, type EventHandler } from '../outbox/dispatch'
 import { JOB, moveJob, queryOf, sourceOf, type JobRow } from './jobs'
 import { exportMailHandler } from './mail'
 import { reimportAdapterOf, reimportColumns, reimportPage, writeReimport } from './reimport'
-import { rowIdOf, type AnyExportSource, type ExportReadOptions } from './source'
+import { rowIdOf, titleText, type AnyExportSource, type ExportReadOptions } from './source'
 import { writeExport } from './writer'
 
 /**
@@ -257,10 +257,14 @@ export async function runExport(caller: CommandCaller, jobId: string, work: Expo
 
     const now = clock.now()
     const omittedLabels = query.columns.filter((column) => omitted.has(column.key)).map((column) => column.label)
+    // B-TH-008 (screen = file): the file and its Excel tab named after what they hold when the list says so (a customer's
+    // sheet, the saved view), with the rows written; read as the person who asked. Else the screen's title, as before.
+    const named = (await source.title?.(reader, params, { locale: query.locale, viewName: query.viewName, rows: count })) ?? null
+    const title = titleText(named, query.title)
     const body =
       adapter && layout
         ? await writeReimport({ adapter, layout, rows: reimportRows, locale: query.locale })
-        : await writeExport({ format: job.format as 'CSV' | 'XLSX' | 'XLSX_REIMPORT', locale: query.locale, title: query.title, note: omittedNote(omittedLabels, query.locale), headings: columns.map((column) => column.label), rows })
+        : await writeExport({ format: job.format as 'CSV' | 'XLSX' | 'XLSX_REIMPORT', locale: query.locale, title, tail: named?.rows ?? null, note: omittedNote(omittedLabels, query.locale), headings: columns.map((column) => column.label), rows })
     if (body.byteLength > KIND_RULES.DOCUMENT.maxBytes) throw new Refused(`The file would be larger than ${KIND_RULES.DOCUMENT.maxBytes / 1_048_576} MB: narrow the view or show fewer columns, and export it again.`)
     const files = work.files ?? processFiles()
     const prepared = await putGeneratedFile(files, caller, {
@@ -268,7 +272,7 @@ export async function runExport(caller: CommandCaller, jobId: string, work: Expo
       recordType: 'ExportJob',
       recordId: job.id,
       kind: 'DOCUMENT',
-      originalName: exportFileName(query.title, job.format as 'CSV', businessDate(now)),
+      originalName: exportFileName(title, job.format as 'CSV', businessDate(now)),
       contentType: EXPORT_CONTENT_TYPES[job.format as 'CSV'],
       body,
     })
@@ -277,7 +281,8 @@ export async function runExport(caller: CommandCaller, jobId: string, work: Expo
       const file = await recordGeneratedFile(tools, prepared, { details: { exportJobId: jobId, format: done.format, rows: count } })
       const expiresAt = new Date(tools.now.getTime() + EXPORT_LIMITS.keepDays * 86_400_000)
       await moveJob(tools.tx, jobId, 'DONE', { rowsDone: count, rowCount: count, fileId: file.id, finishedAt: tools.now, expiresAt })
-      tools.audit({ recordType: 'ExportJob', recordId: jobId, companyId: done.companyId, before: { status: 'RUNNING' }, after: { status: 'DONE', rowCount: count, fileId: file.id, expiresAt: expiresAt.toISOString() } })
+      // B-TH-008: the job keeps what was asked (the database refuses a change of its query); the file's own title is audited.
+      tools.audit({ recordType: 'ExportJob', recordId: jobId, companyId: done.companyId, before: { status: 'RUNNING' }, after: { status: 'DONE', rowCount: count, fileId: file.id, expiresAt: expiresAt.toISOString(), ...(title !== query.title ? { fileTitle: title } : {}) } })
       tools.emit({ type: 'export.finished', subject: jobId, companyId: done.companyId, payload: { jobId, listKey: done.listKey, status: 'DONE', rowCount: count, fileId: file.id, requestedById: done.requestedById } })
       return { fileId: file.id }
     })

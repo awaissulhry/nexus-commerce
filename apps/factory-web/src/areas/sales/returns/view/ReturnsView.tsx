@@ -251,6 +251,8 @@ function ReturnsList({ model, actions }: { model: ReturnsListModel; actions?: Re
         <span className="fw-q-chips" aria-label={t('list.activeFilters')}>
           {address.view !== 'open' && chip('view', viewLabel(address.view), () => actions?.onAddress?.({ view: 'open' }))}
           {address.q.trim() !== '' && chip('q', `“${address.q.trim()}”`, () => actions?.onAddress?.({ q: '' }))}
+          {/* B-TH-201: "Customer: <name> ✕" (Sales › Reports' drill); a customer the person may not open is named by no one. */}
+          {model.customer && chip('party', model.customer.name === null ? t('list.customerHidden') : t('list.customerChip', { name: model.customer.name ?? '…' }), () => actions?.onAddress?.({ party: null }))}
           <Button size="sm" variant="quiet" onClick={() => actions?.onClearFilters?.()}>
             {t('list.clearAll')}
           </Button>

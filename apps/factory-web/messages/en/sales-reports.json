@@ -302,9 +302,9 @@
       "returns": "Sales › Returns & repairs"
     },
     "listHint": {
-      "intake": "Every order, searched by the customer when this is one customer's: the list takes no period, style or season.",
-      "backlog": "The open orders, searched by the customer when this is one customer's: the list takes no promise week.",
-      "returns": "Every return, searched by the customer when this is one customer's: the list takes no reason or period."
+      "intake": "Every order, narrowed to the customer when this is one customer's: the list takes no period, style or season.",
+      "backlog": "The open orders, narrowed to the customer when this is one customer's: the list takes no promise week.",
+      "returns": "Every return, narrowed to the customer when this is one customer's: the list takes no reason or period."
     },
     "empty": "Nothing here",
     "emptyHint": "No record makes this number.",

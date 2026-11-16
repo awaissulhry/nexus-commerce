@@ -110,7 +110,8 @@ export const getDepth = (api: ApiClient, returnId: string, signal?: AbortSignal)
 // ---- Arrived after the deadline (the tile and its view) -----------------------------------------------------------------
 
 const lateSchema = z.object({
-  rows: z.array(z.object({ id: z.string(), number: z.string(), status: z.enum(RETURN_STATUSES), goodsDueBy: z.string().nullable(), receivedOn: z.string().nullable(), daysLate: z.number() })),
+  // B-TH-201: + the customer (one customer's tile on Sales › Returns with `?party=`).
+  rows: z.array(z.object({ id: z.string(), number: z.string(), party: z.object({ id: z.string() }).nullable().optional(), status: z.enum(RETURN_STATUSES), goodsDueBy: z.string().nullable(), receivedOn: z.string().nullable(), daysLate: z.number() })),
   count: z.number(),
   truncated: z.boolean(),
   asOf: z.string(),

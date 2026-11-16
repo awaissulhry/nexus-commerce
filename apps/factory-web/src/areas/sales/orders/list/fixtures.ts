@@ -129,5 +129,19 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'w2b-323-week-empty', label: 'W2b · By promise week: nothing open to finish', model: base('sales', { layout: 'week', depth: listDepth('sales'), week: weekModel({ status: 'ready', columns: [], complete: true, asOf: at(29, 9, 42), today: TODAY }), importer: { held: null, sheet: null } }) },
     { id: 'w2b-323-week-forbidden', label: 'W2b · Finance · By promise week without the promises right', model: base('finance', { layout: 'week', depth: listDepth('finance'), week: weekModel({ status: 'forbidden' }), importer: { held: 'import.held.manage', sheet: null } }) },
     { id: 'w2b-323-import', label: 'W2b · Sales · Import orders: the dry run (orders it would make, refused rows with their reasons)', model: base('sales', { depth: listDepth('sales'), week: weekModel(), importer: { held: null, sheet: demoOrdersImport('planned'), inline: true } }) },
+    // ── B-TH-201 (SHEET-G11, SHEET-G01): Sales › Reports' "Open the list" lands here with ?party=<id> ──
+    {
+      id: 'th-201-customer',
+      label: 'TH-0 · Sales · One customer’s orders (Sales › Reports › Open the list: ?party=…): the chip “Customer: …” clears it',
+      model: base('owner', { rows: 'all', customer: { id: LIST_ROWS[0]!.partyId, name: LIST_ROWS[0]!.partyName }, list: { items: rowsFor('owner', LIST_ROWS.filter((entry) => entry.partyId === LIST_ROWS[0]!.partyId)), more: false, problem: null } }),
+      note: 'The tiles, the board and By promise week count the same customer; ✕ on the chip shows every customer again.',
+    },
+    { id: 'th-201-customer-board', label: 'TH-0 · Sales · One customer’s orders on the board', model: board('sales', { customer: { id: LIST_ROWS[0]!.partyId, name: LIST_ROWS[0]!.partyName }, lanes: lanesOf('sales', LIST_ROWS.filter((entry) => entry.partyId === LIST_ROWS[0]!.partyId)) }) },
+    {
+      id: 'th-201-customer-hidden',
+      label: 'TH-0 · A person limited to other customers opens a link to a customer they may not open: no row, and the chip names no one (W27)',
+      model: base('sales', { rows: 'all', customer: { id: '0190f0e2-6666-7000-8000-00000000ffff', name: null }, list: { items: [], more: false, problem: null } }),
+    },
+    // ── end B-TH-201 ──
   ],
 })

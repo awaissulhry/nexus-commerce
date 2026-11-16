@@ -54,6 +54,7 @@ import type { CloseModel, NewRepairModel, NewReturnModel, Notice, ReturnsListMod
 import { ReturnsMessages, say, useWords } from './view/parts'
 import { ReturnsView } from './view/ReturnsView'
 import { finishReturn, getOutcomes, listArrivedLate } from './depth/api'
+import { getParty } from '../quotes/api'
 import { finishOptionsOf, lateRowsOf } from './depth/model'
 
 /**
@@ -122,7 +123,8 @@ function ReturnsContainer() {
   const [dismissed, setDismissed] = useState<readonly string[]>([])
   const readId = useRef(0)
   const sources = sourcesOf(address.view)
-  const listKey = JSON.stringify({ sources, q: address.q.trim(), repairs: can.repairsView })
+  const party = address.party ?? null // B-TH-201: one customer's returns and repairs (Sales › Reports' drill)
+  const listKey = JSON.stringify({ sources, q: address.q.trim(), repairs: can.repairsView, party })
 
   useEffect(() => {
     try {
@@ -135,24 +137,28 @@ function ReturnsContainer() {
   const loadCounts = useCallback(async () => {
     if (!can.view) return
     listArrivedLate(api, 'open')
-      .then((answer) => setLate({ ids: answer.rows.map((row) => row.id), count: answer.count, truncated: answer.truncated }))
+      .then((answer) => {
+        // B-TH-201: one customer's late returns (their count only when the answer holds them all).
+        const rows = party ? answer.rows.filter((row) => row.party?.id === party) : answer.rows
+        setLate({ ids: rows.map((row) => row.id), count: party ? rows.length : answer.count, truncated: answer.truncated })
+      })
       .catch(() => setLate(null))
     try {
-      const [returnsAnswer, repairsAnswer] = await Promise.all([returnCounts(api), can.repairsView ? repairCounts(api) : Promise.resolve(null)])
+      const [returnsAnswer, repairsAnswer] = await Promise.all([returnCounts(api, undefined, party), can.repairsView ? repairCounts(api, undefined, party) : Promise.resolve(null)])
       setCounts({ returns: returnsAnswer.counts, repairs: repairsAnswer?.counts ?? null, failed: false })
     } catch {
       setCounts((current) => ({ ...current, failed: true }))
     }
-  }, [api, can.view, can.repairsView])
+  }, [api, can.view, can.repairsView, party])
 
   const load = useCallback(async () => {
     if (!can.view) return
     const id = ++readId.current
-    const { sources: wanted, q, repairs: withRepairs } = JSON.parse(listKey) as { sources: ReturnType<typeof sourcesOf>; q: string; repairs: boolean }
+    const { sources: wanted, q, repairs: withRepairs, party: partyId } = JSON.parse(listKey) as { sources: ReturnType<typeof sourcesOf>; q: string; repairs: boolean; party: string | null }
     try {
       const [returnsAnswer, repairsAnswer] = await Promise.all([
-        wanted.returns ? listReturns(api, { view: wanted.returns, q }) : Promise.resolve({ returns: [], truncated: false }),
-        wanted.repairs && withRepairs ? listRepairs(api, { view: wanted.repairs, q }) : Promise.resolve({ repairs: [], truncated: false, people: [], asOf: '' }),
+        wanted.returns ? listReturns(api, { view: wanted.returns, q, partyId }) : Promise.resolve({ returns: [], truncated: false }),
+        wanted.repairs && withRepairs ? listRepairs(api, { view: wanted.repairs, q, partyId }) : Promise.resolve({ repairs: [], truncated: false, people: [], asOf: '' }),
       ])
       if (id !== readId.current) return
       setReturns({ items: returnsAnswer.returns, truncated: returnsAnswer.truncated })
@@ -371,11 +377,29 @@ function ReturnsContainer() {
     [can.price, t, today],
   )
 
+  // ── B-TH-201: the customer's name for the chip — from the rows read, else the customer's record (404 when the person may
+  // not open it: then the chip names no one). ──
+  const nameInRows = useMemo(() => (party ? ([...(returns.items ?? []), ...(repairs.items ?? [])].find((row) => row.party?.id === party)?.party?.legalName ?? null) : null), [party, returns.items, repairs.items])
+  const [looked, setLooked] = useState<{ id: string; name: string | null } | null>(null)
+  useEffect(() => {
+    if (!party || nameInRows || looked?.id === party) return
+    let gone = false
+    getParty(api, party)
+      .then((found) => !gone && setLooked({ id: party, name: found.legalName }))
+      .catch(() => !gone && setLooked({ id: party, name: null }))
+    return () => {
+      gone = true
+    }
+  }, [api, party, nameInRows, looked?.id])
+  const customer = party ? { id: party, name: nameInRows ?? (looked?.id === party ? looked.name : undefined) } : null
+  // ── end B-TH-201 ──
+
   const model: ReturnsListModel = {
     prefix,
     can,
     me,
     address,
+    customer, // B-TH-201
     rows: { items, problem: rowsProblem, truncated: returns.truncated || repairs.truncated || (lateView && (lateRows?.truncated ?? false)) },
     counts: { ...counts, arrivedLate: late === undefined ? undefined : late === null ? null : late.count },
     people: [...people, ...repairs.people.filter((person) => !people.some((known) => known.id === person.id))],

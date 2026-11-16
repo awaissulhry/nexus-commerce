@@ -14,6 +14,7 @@ import { RETURNABLE, REPAIR_RECEIVED, REPAIR_REPAIRED, REPAIR_ROWS, RETURN_ROWS,
 import { designScreen as listScreen } from './fixtures'
 import {
   addressOf,
+  isFiltered,
   BLANK_CHECKLIST,
   BLANK_DDT,
   BLANK_RETURN,
@@ -71,6 +72,18 @@ describe('the list: one filter model, two sources, one grid', () => {
     expect(addressOf(params('view=nonsense')).view).toBe('open')
     expect(queryOf({ view: 'open', q: '' })).toBe('')
     expect(queryOf({ view: 'waiting', q: ' x ' }, { new: 'return' })).toBe('?view=waiting&q=x&new=return')
+  })
+
+  // B-TH-201 (SHEET-G11): Sales › Reports' drill opens one customer's returns and repairs by `?party=<id>`.
+  it('reads ?party= (an id only), keeps it with every view and search, and counts it as a filter', () => {
+    const id = '0190a1b2-0000-7000-8000-00000000000a'
+    expect(addressOf(params(`view=all&party=${id}`))).toEqual({ view: 'all', q: '', party: id })
+    expect(addressOf(params('party=DEMO-C1'))).toEqual({ view: 'open', q: '' })
+    expect(queryOf({ view: 'all', q: '', party: id })).toBe(`?view=all&party=${id}`)
+    expect(queryOf({ ...addressOf(params(`party=${id}`)), view: 'late' })).toBe(`?view=late&party=${id}`)
+    expect(queryOf({ ...addressOf(params(`party=${id}`)), party: null })).toBe('')
+    expect(isFiltered({ view: 'open', q: '', party: id })).toBe(true)
+    expect(isFiltered({ view: 'open', q: '' })).toBe(false)
   })
 
   it('each view names which source it reads (the tiles and Rows ▾ are one set)', () => {

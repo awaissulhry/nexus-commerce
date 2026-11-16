@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -356,6 +357,9 @@ describe('the list, its tiles and the record’s thread', () => {
     expect((await refused('viewer', 'GET', '/sales/repairs?stage=NOPE', undefined, 400)).issues[0].path).toBe('querystring/stage')
     const { counts } = await ok('viewer', 'GET', '/sales/repairs/counts')
     expect(counts).toMatchObject({ awaiting: 1, received: 1, inRepair: 0, toCheck: 0, toShip: 0, open: 2 })
+    // B-TH-201: one customer's tiles (Sales › Returns with `?party=`).
+    expect((await ok('viewer', 'GET', `/sales/repairs/counts?partyId=${P1}`)).counts).toMatchObject({ received: 1 })
+    expect((await ok('viewer', 'GET', `/sales/repairs/counts?partyId=${randomUUID()}`)).counts).toEqual({ awaiting: 0, received: 0, inRepair: 0, toCheck: 0, toShip: 0, open: 0 })
   })
 
   it('keeps notes on the repair’s own thread (its company, site and customer)', async () => {
