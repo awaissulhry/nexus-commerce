@@ -62,7 +62,7 @@ async function local<T>(work: () => Promise<T>): Promise<T> {
 
 export default defineRoutes('files', manifest, async (app) => {
   app.post('/files', { schema: requestUploadContract }, async (request, reply) => {
-    return reply.code(201).send(await requestUpload(processFiles(), request, request.body, idempotencyKeyFrom(request)))
+    return reply.code(201).send(await requestUpload(processFiles(), request, request.body, idempotencyKeyFrom(request), { generic: true })) // B-TH-003
   })
 
   app.post('/files/:fileId/complete', { schema: completeUploadContract }, async (request) => {

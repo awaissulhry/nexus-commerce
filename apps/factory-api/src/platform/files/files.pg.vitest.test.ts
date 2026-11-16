@@ -22,6 +22,7 @@ import { testRedis, type TestRedis } from '../outbox/testing'
 import { createSecretsService } from '../secrets/envelope'
 import { localKeyProvider } from '../secrets/local'
 import { SECRET_PURPOSES, storeSecret } from '../secrets/store'
+import { useThreadRecords } from '../threads/records' // B-TH-003
 import { MISSING_FILE_WORDS, MissingFileError, prepareFileCopy, putGeneratedFile, readStoredFile, recordGeneratedFile } from './files'
 import { createFilesRuntime, processFiles, useFiles } from './service'
 
@@ -54,6 +55,8 @@ const partyTwo = newId()
 const user = newId()
 const quote = newId()
 const otherQuote = newId()
+/** B-TH-003: a made-up quote of party two (the others are party one's): a file shared outside reaches its record's party only. */
+const quoteTwo = newId()
 const fakeStore = newId()
 const fakeStoreB = newId()
 let liveStore: string
@@ -125,6 +128,10 @@ const list = async (session: string, recordId = quote) => {
 }
 
 beforeAll(async () => {
+  // B-TH-003: the made-up quotes' party, as the sales module's thread resolver would answer it.
+  useThreadRecords({
+    Quote: async (_client, id) => (id === quote || id === otherQuote ? { companyId: companyOne, siteId: null, partyId: partyOne } : id === quoteTwo ? { companyId: companyOne, siteId: null, partyId: partyTwo } : null),
+  })
   db = await migratedDatabase('files')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   redis = testRedis()
@@ -185,6 +192,7 @@ beforeAll(async () => {
 }, 60_000)
 
 afterAll(async () => {
+  useThreadRecords(undefined)
   useFiles(undefined)
   await app?.close()
   await redis?.cleanup()
@@ -252,7 +260,8 @@ describe('upload → confirm → download (COL-045)', () => {
       [{ sha256: 'not-a-checksum' }, 'body/sha256'],
       [{ originalName: '../' }, 'body/originalName'],
       [{ visibility: ['FLOOR'] }, 'body/floorSiteId'],
-      [{ visibility: ['PARTNER'] }, 'body/partyId'],
+      // B-TH-003: shared outside, a file's party is its record's: a record without one (the company) is refused.
+      [{ visibility: ['PARTNER'], recordType: 'Company', recordId: companyOne }, 'body/partyId'],
       [{ partyId: partyOne }, 'body/partyId'],
       [{ companyId: null, visibility: ['FLOOR'], floorSiteId: siteOne }, 'body/companyId'],
       [{ kind: 'FISCAL_ARCHIVE', contentType: 'application/xml', retainUntil: '2030-01-01T00:00:00.000Z' }, 'body/retainUntil'],
@@ -313,7 +322,7 @@ describe('who sees a file (COL-050)', () => {
 
   it('a portal sees only its party\'s portal files; a link only its party\'s link files of its own record', async () => {
     const portalOne = await uploaded('portal one', { visibility: ['PARTNER'], partyId: partyOne })
-    const portalTwo = await uploaded('portal two', { visibility: ['PARTNER'], partyId: partyTwo })
+    const portalTwo = await uploaded('portal two', { visibility: ['PARTNER'], partyId: partyTwo, recordId: quoteTwo })
     const linkOne = await uploaded('link one', { visibility: ['LINK'], partyId: partyOne })
     const linkElsewhere = await uploaded('link elsewhere', { visibility: ['LINK'], partyId: partyOne, recordId: otherQuote })
     const both = await uploaded('both', { visibility: ['PARTNER', 'LINK'], partyId: partyOne })
@@ -324,7 +333,8 @@ describe('who sees a file (COL-050)', () => {
     expect((await download('partner-one', portalOne.id)).status).toBe(200)
     for (const fileId of [portalTwo.id, linkOne.id]) expect((await call('partner-one', 'GET', `/files/${fileId}`)).statusCode).toBe(404)
     expect((await list('partner-one')).sort()).toEqual([portalOne.id, both.id].sort())
-    expect(await list('partner-two')).toEqual([portalTwo.id])
+    expect(await list('partner-two', quoteTwo)).toEqual([portalTwo.id])
+    expect(await list('partner-two')).toEqual([])
 
     expect((await call('link-one', 'GET', `/files/${linkOne.id}`)).statusCode).toBe(200)
     const { status, download: get } = await download('link-one', linkOne.id)
@@ -336,7 +346,7 @@ describe('who sees a file (COL-050)', () => {
   })
 
   it('shares a file later (files.manage), audited, with a stale version refused', async () => {
-    const file = await uploaded('shared later')
+    const file = await uploaded('shared later', { recordId: quoteTwo })
     expect((await call('floor-one', 'GET', `/files/${file.id}`)).statusCode).toBe(404)
     const shared = await call('admin', 'PUT', `/files/${file.id}/visibility`, { visibility: ['FLOOR', 'PARTNER'], floorSiteId: siteOne, partyId: partyTwo, version: file.version })
     expect(shared.statusCode, shared.body).toBe(200)

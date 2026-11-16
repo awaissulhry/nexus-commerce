@@ -121,6 +121,9 @@ describe('Portal access in the office (B-W2b-180)', () => {
     const conflict = (message: string, issues: Array<{ path: string; message: string }> = []) => new ApiError('conflict', 409, 'conflict', message, 'r', issues)
     expect(partnerProblem(conflict(PARTNER_WORDS.officeAddress, [{ path: 'email', message: PARTNER_WORDS.officeAddress }]))).toBe('problem.officeAddress')
     expect(partnerProblem(conflict(PARTNER_WORDS.alreadyIn))).toBe('problem.alreadyIn')
+    // B-TH-202 (B-TH-007): the office's Portal access keeps the real reason (the portal hears one neutral sentence).
+    expect(partnerProblem(conflict(PARTNER_WORDS.otherOrganisation, [{ path: 'email', message: PARTNER_WORDS.otherOrganisation }]))).toBe('problem.otherOrganisation')
+    expect((messagesFor('en', ['portal-access'])['portal-access'] as Record<string, string>)['problem.otherOrganisation']).toContain('another organisation')
     expect(partnerProblem(conflict('The portal of Moda Demo holds at most 5 people, and 5 are invited or active. Deactivate someone first, or ask for more.'))).toBe('problem.seatsFull')
     expect(partnerProblem(new ApiError('invalid', 400, 'validation_failed', 'The access is not valid.', 'r', [{ path: 'roleKey', message: 'x' }]))).toBe('problem.roleNotOffered')
     expect(partnerProblem(new ApiError('forbidden', 403, 'forbidden', 'x', 'r'))).toBe('problem.forbidden')

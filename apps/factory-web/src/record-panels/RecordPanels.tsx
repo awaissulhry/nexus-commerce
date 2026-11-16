@@ -112,6 +112,13 @@ function quarantineNotice(reason: string | null): { key: string; tone: 'danger' 
 }
 
 export function sendNotice(error: unknown): Notice {
+  // B-TH-202 (the brand wall, B-TH-004): the recipient rule's refusals in words — another customer's address without the tick,
+  // a blind copy outside our people (never the other customer's name: the notice says what to do).
+  if (isApiError(error) && error.kind === 'conflict') {
+    const paths = issuePaths(error)
+    if (paths.includes('refusal/OTHER_PARTY')) return { key: 'notice.outsideCustomer', tone: 'danger' }
+    if (paths.includes('refusal/HIDDEN_OUTSIDE')) return { key: 'notice.hiddenOutside', tone: 'danger' }
+  }
   if (isApiError(error) && error.kind === 'invalid') {
     const paths = issuePaths(error)
     if (paths.some((path) => path === 'body/identityId')) return { key: 'notice.noSender', tone: 'danger' }
@@ -332,12 +339,13 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
   const party = useMemo<PanelParty | null>(() => givenParty ?? (threadParty ? { id: threadParty, name: '', emails: [] } : null), [givenParty, threadParty])
   const names = useMemo(() => new Map<string, string>([...people.map((person) => [person.id, person.name] as const), [session.user.id, session.user.displayName]]), [people, session.user])
 
-  const send = async (draft: ComposerDraft): Promise<boolean> => {
+  const send = async (draft: ComposerDraft, choice: { readonly sendOutside: boolean } = { sendOutside: false }): Promise<boolean> => {
     setSending(true)
     setNotice(null)
     try {
       if (draft.mode === 'note') await postNote(api, key, { body: draft.body, mentions: draft.mentions, attachments: draft.attachments, forFloor: draft.forFloor })
-      else await sendEmail(api, key, { to: parseAddresses(draft.to).valid, subject: draft.subject.trim() || undefined, body: draft.body, attachments: draft.attachments })
+      // B-TH-202: with the recorded "Send outside this customer" tick of the mis-send dialog.
+      else await sendEmail(api, key, { to: parseAddresses(draft.to).valid, subject: draft.subject.trim() || undefined, body: draft.body, attachments: draft.attachments, sendOutside: choice.sendOutside })
       setNotice({ key: draft.mode === 'note' ? (draft.forFloor ? 'notice.noteAddedFloor' : 'notice.noteAdded') : 'notice.emailQueued', tone: 'success' })
       void loadThread()
       void loadEmails()
@@ -410,7 +418,10 @@ export function RecordPanels({ record, title, party: givenParty = null, tab }: R
         error instanceof StoreError
           ? 'files.problem.store'
           : isApiError(error) && error.kind === 'invalid'
-            ? 'files.problem.refused'
+            ? // B-TH-202 (B-TH-003): a file shared outside reaches its record's own customer or supplier only.
+              issuePaths(error).includes('body/partyId')
+              ? 'files.problem.otherParty'
+              : 'files.problem.refused'
             : // 409: a kind of file only the record's own module uploads (platform/files/owned.ts).
               isApiError(error) && error.kind === 'conflict'
               ? 'files.problem.moduleOwned'

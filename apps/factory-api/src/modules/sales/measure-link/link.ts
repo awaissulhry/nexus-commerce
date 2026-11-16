@@ -395,6 +395,8 @@ export async function renewMeasureLink(email: EmailRuntime, request: FastifyRequ
       to: link.email,
       contactId: link.contactId,
       send: true,
+      // B-TH-004: a renewal goes to the address the office already chose for this link (its recipient rule was asked then).
+      sendOutside: true,
       photos: found.terms.photos,
       orderNumber: found.terms.orderNumber,
       salesOrderLineId: found.terms.salesOrderLineId,

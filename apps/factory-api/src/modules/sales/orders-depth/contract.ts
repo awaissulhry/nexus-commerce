@@ -91,7 +91,7 @@ export const makeConfirmationContract = defineContract({
 const address = z.string().trim().email().max(254)
 export const sendConfirmationContract = defineContract({
   params: orderParams,
-  body: input({ to: z.array(address).max(10).optional(), cc: z.array(address).max(10).optional(), subject: z.string().max(200).nullable().optional(), message: z.string().max(10_000).nullable().optional(), language: z.enum(DOCUMENT_LANGUAGES).optional() }),
+  body: input({ to: z.array(address).max(10).optional(), cc: z.array(address).max(10).optional(), subject: z.string().max(200).nullable().optional(), message: z.string().max(10_000).nullable().optional(), language: z.enum(DOCUMENT_LANGUAGES).optional(), /* B-TH-004 */ sendOutside: z.boolean().optional() }),
   response: { 201: output({ version: z.number().int(), made: z.boolean(), outboundId: id(), threadId: id(), confirmation: confirmationState }) },
 })
 

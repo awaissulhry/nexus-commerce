@@ -74,6 +74,8 @@ export const createLinkContract = defineContract({
     expiresInDays: z.number().int().optional(),
     /** Default: the purpose's (QUOTE_ACCEPT 1); at most the purpose's maximum. */
     maxUses: z.number().int().optional(),
+    /** B-TH-004: "Send outside this customer" ticked: the address may be another party's contact (recorded). */
+    sendOutside: z.boolean().optional(),
   }),
   response: {
     201: output({

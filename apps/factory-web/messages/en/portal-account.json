@@ -178,9 +178,10 @@
       "role": "Choose a role."
     },
     "failed": {
-      "address": "This address cannot be invited here: it is already in your portal, or it belongs to another account. Ask us if it should be yours.",
+      "address": "This person is already in your portal (or suspended): change their role instead of inviting them.",
       "seats": "We could not invite them now: every place of your portal may be taken, or the role is not ready. Ask us.",
-      "invalid": "This role is not open to your organisation, or a field was refused. Check and try again."
+      "invalid": "This role is not open to your organisation, or a field was refused. Check and try again.",
+      "notInvitable": "We could not invite this address. Ask us."
     }
   },
   "roleDialog": {
