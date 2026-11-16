@@ -54,6 +54,37 @@ export async function followInCommand(tools: FollowTools, record: FollowedRecord
   return true
 }
 
+// ---- B-PR-08a (T5) (production plan R-58; threads lead YES 2026-11-17): the other half of followInCommand's seam.
+/** The reasons a command may take back: an automatic follow's (never the person's own choice, never a mention). */
+export type AutomaticFollowReason = Extract<FollowReason, 'CREATOR' | 'ASSIGNEE'>
+
+/**
+ * Inside a command: the person stops following the record for this reason — their follow row goes, with the same audit row
+ * (`threads.unfollow`, naming whose follow went) and `thread.followers_changed` event as their own unfollow — only when the row
+ * was made for exactly that reason and is not muted. A follow they chose (CHOSE, also one a colleague added), a mention's
+ * (MENTIONED), another reason's, and a muted row (their own word on the record: nothing follows or unfollows them on its own)
+ * stay. True when the row went. No permission check: the caller decided (an assignment taken back, a supervisor replaced).
+ */
+export async function unfollowInCommand(tools: FollowTools, record: FollowedRecord, userId: string, reason: AutomaticFollowReason): Promise<boolean> {
+  if (reason !== 'CREATOR' && reason !== 'ASSIGNEE') return false
+  await tools.tx.$queryRaw`SELECT id FROM "RecordFollower" WHERE "recordType" = ${record.type} AND "recordId" = ${record.id}::uuid AND "userId" = ${userId}::uuid FOR UPDATE`
+  const row = await tools.tx.recordFollower.findFirst({ where: { recordType: record.type, recordId: record.id, userId }, select: { id: true, reason: true, muted: true } })
+  if (!row || row.reason !== reason || row.muted) return false
+  await tools.tx.recordFollower.delete({ where: { id: row.id } })
+  tools.audit({
+    action: 'threads.unfollow',
+    recordType: 'RecordFollower',
+    recordId: row.id,
+    companyId: record.companyId,
+    siteId: record.siteId,
+    before: { reason: row.reason, muted: row.muted },
+    after: { following: false, recordType: record.type, recordId: record.id, userId },
+  })
+  tools.emit(eventFor(followersChanged, { subject: record.id, companyId: record.companyId, siteId: record.siteId, payload: { recordType: record.type, recordId: record.id } }))
+  return true
+}
+// ---- end B-PR-08a (T5)
+
 /** The people who follow a record and did not mute it (the fan-out's readers of its news). */
 export async function followersOf(client: FactoryClient | CommandTx, record: RecordRef): Promise<string[]> {
   const rows = await client.recordFollower.findMany({ where: { recordType: record.type, recordId: record.id, muted: false }, orderBy: { createdAt: 'asc' }, select: { userId: true } })
