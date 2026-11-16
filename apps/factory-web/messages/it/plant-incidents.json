@@ -176,6 +176,10 @@
     "choosePerson": "Scegli la persona",
     "daysHint": "Giorni di assenza oltre il giorno dell’evento.",
     "dueBy": "Da inviare entro il {at} (48 ore dopo).",
+    "fatal": "Infortunio mortale o con pericolo di morte",
+    "fatalHint": "Entro {at}: 24 ore dall’infortunio, con qualsiasi mezzo che ne provi l’invio (DPR 1124/1965 art. 53). Non si attendono assenza né certificato.",
+    "fatalTitle": "Denuncia entro 24 ore dall’infortunio",
+    "fatalTypeHint": "Scade 24 ore dopo l’infortunio; non richiede assenza né certificato.",
     "filedAt": "Inviata il",
     "filedHint": "Una volta inviata: quando, il numero di protocollo INAIL e la sua ricevuta.",
     "filedLegend": "Inviata sul portale INAIL",
@@ -208,6 +212,7 @@
     "WAITING_CERTIFICATE": "In attesa del certificato"
   },
   "filingType": {
+    "FATAL": "Denuncia di infortunio mortale",
     "INSURANCE": "Denuncia a fini assicurativi",
     "STATISTICAL": "Comunicazione a fini statistici"
   },
@@ -479,7 +484,9 @@
     "CERTIFICATE_IN_FUTURE": "Il certificato è arrivato al più tardi adesso.",
     "CERTIFICATE_MISSING": "Registra prima quando è arrivato il certificato medico: fa partire le 48 ore.",
     "COURSE_NOT_ACTIVE": "Il corso non è un corso attivo dell’azienda.",
+    "FATAL_NO_CERTIFICATE": "Un infortunio mortale si denuncia entro 24 ore dall’infortunio, non dal certificato: niente certificato né assenza.",
     "FILED_BEFORE_CERTIFICATE": "La denuncia si invia dopo la ricezione del certificato.",
+    "FILED_BEFORE_EVENT": "La denuncia si invia dopo che l’incidente è avvenuto.",
     "FILED_IN_FUTURE": "È stata inviata al più tardi adesso.",
     "FILING_EXISTS": "Questa persona ha già una denuncia di quel tipo: modifica quella.",
     "FILING_FILED": "Questa denuncia è registrata come inviata; non cambia più.",

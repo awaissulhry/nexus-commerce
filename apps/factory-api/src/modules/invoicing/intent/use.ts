@@ -15,6 +15,9 @@ import { declarationFactsOf, DECLARATION_COLUMNS, type DeclarationRow } from './
  *   - a credit note (TD04) of an invoice that named one gives back what it credits of N3.5 (never below 0; a revoked
  *     declaration keeps what it had).
  * Each with an audit row and `declaration_of_intent.changed`.
+ *
+ * B-W2b-GF2: a REJECTED invoice corrected with new lines (sdi/correct.ts) moves its use from the old N3.5 net to the new
+ * one (`useDeclarationAtCorrection`), after the same checks with this invoice's own share given back first.
  */
 
 async function lockDeclaration(tools: CommandTools, declarationId: string): Promise<DeclarationRow | null> {
@@ -49,4 +52,37 @@ export async function useDeclarationAtIssue(
   await tools.tx.declarationOfIntent.update({ where: { id: credited }, data: { usedAmount: { decrement: back }, version: { increment: 1 } }, select: { id: true } })
   tools.audit({ action: 'invoices.returnDeclarationOfIntent', recordType: 'DeclarationOfIntent', recordId: credited, companyId: invoice.companyId, before: { usedAmount: markMoney('price', declaration.usedAmount) }, after: { usedAmount: markMoney('price', declaration.usedAmount - back), invoiceId: invoice.id } })
   tools.emit({ type: 'declaration_of_intent.changed', subject: credited, companyId: invoice.companyId, payload: { declarationId: credited, partyId: declaration.partyId, action: 'RETURNED', invoiceId: invoice.id } })
+}
+
+// ---- B-W2b-GF2: the correction of a REJECTED invoice (sdi/correct.ts) -------------------------------------------------
+
+/**
+ * Inside the correction's command, when its new lines replace the old ones on an invoice that names a declaration: the
+ * declaration's row locked FOR UPDATE, the issue's checks run again on the new lines with this invoice's own share (the
+ * old lines' N3.5 net, added at the issue) given back first — switched on, not revoked, checked, of the invoice's year,
+ * enough left: a problem refuses the correction in words (409, nothing written) — then the use moves to the new lines'
+ * N3.5 net: USED when it grew, RETURNED when it shrank, each with its audit row and event. A correction that leaves the
+ * N3.5 net as it was changes nothing.
+ */
+export async function useDeclarationAtCorrection(
+  tools: CommandTools,
+  invoice: { readonly id: string; readonly companyId: string; readonly docType: string },
+  before: readonly IntentLine[],
+  after: readonly IntentLine[],
+  date: BusinessDate,
+  switches: SwitchesRow,
+): Promise<void> {
+  const named = (await tools.tx.invoice.findUnique({ where: { id: invoice.id }, select: { declarationOfIntentId: true } }))?.declarationOfIntentId ?? null
+  if (named === null) return
+  const declaration = await lockDeclaration(tools, named)
+  const was = intentAmountOf(before)
+  const facts = declaration ? { ...declarationFactsOf(declaration), usedAmount: Math.max(0, declaration.usedAmount - was) } : null
+  const problems = intentIssueProblems({ switchOn: switches.declarationsOfIntentOn, docType: invoice.docType, declaration: facts, lines: after, issueDate: date })
+  if (problems.length > 0) throw issueRefusal(problems)
+  const delta = intentAmountOf(after) - was
+  if (delta === 0 || !declaration) return
+  const next = Math.max(0, declaration.usedAmount + delta)
+  await tools.tx.declarationOfIntent.update({ where: { id: named }, data: { usedAmount: next, version: { increment: 1 } }, select: { id: true } })
+  tools.audit({ action: delta > 0 ? 'invoices.useDeclarationOfIntent' : 'invoices.returnDeclarationOfIntent', recordType: 'DeclarationOfIntent', recordId: named, companyId: invoice.companyId, before: { usedAmount: markMoney('price', declaration.usedAmount) }, after: { usedAmount: markMoney('price', next), invoiceId: invoice.id, corrected: true } })
+  tools.emit({ type: 'declaration_of_intent.changed', subject: named, companyId: invoice.companyId, payload: { declarationId: named, partyId: declaration.partyId, action: delta > 0 ? 'USED' : 'RETURNED', invoiceId: invoice.id } })
 }

@@ -124,6 +124,8 @@ export const markingContract = defineContract({
     /** The name with the postal and the electronic address, lines allowed; null or empty: none. */
     gpsrContact: z.string().max(500).nullable().optional(),
     qrTarget: z.enum(LABEL_QR_TARGETS).optional(),
+    /** B-W2b-GF2 (G032): the origin claim it prints, its phrase's key ("claim.made-in-italy"); null: none. */
+    originClaimKey: z.string().max(80).nullable().optional(),
   }),
   response: { 200: output({ template: templateDetail }) },
 })

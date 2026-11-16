@@ -9,7 +9,9 @@ import { BOM_COLUMNS, bomImporter, exportedValues, numberText, type ExportedLine
 import { bomPaper, type BomPaper } from '@nexus/factory-domain/product/bom/paper'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 import { readColourways, readLines, readMaterials, readRevisionFor, type LineRecord } from './store'
 
 /**
@@ -20,8 +22,8 @@ import { readColourways, readLines, readMaterials, readRevisionFor, type LineRec
  *               header, so the file goes back through the import unchanged (UTF-8 CSV with `;` between cells, numbers
  *               in the number format asked, Italian by default; an Excel workbook with numbers as numbers and a second
  *               sheet that explains each column)
- *   pdf         the BOM sheet (factory-domain product/bom/paper), A4 landscape, pdfkit's standard fonts (the documents
- *               platform's WinAnsi rule)
+ *   pdf         the BOM sheet (factory-domain product/bom/paper), A4 landscape, the documents platform's
+ *               embedded fonts (B-W2b-GF2)
  *
  * product.bom.view over the style's company. No money in either: a cost is the cost sheet's, with its grain. Made on
  * request, stored nowhere.
@@ -127,8 +129,8 @@ export async function bomExportFile(caller: CommandCaller, styleId: string, revi
 
 // ---- the PDF ------------------------------------------------------------------------------------------------------------
 
-const REGULAR = 'Helvetica'
-const BOLD = 'Helvetica-Bold'
+const REGULAR = FONT.regular
+const BOLD = FONT.bold
 const TEXT = '#111111'
 const MUTED = '#555555'
 const RULE = '#9a9a9a'
@@ -145,8 +147,9 @@ export async function renderBomPaper(paper: BomPaper): Promise<Buffer> {
     compress: true,
     lang: paper.language,
     displayTitle: true,
-    info: { Title: winAnsi(paper.meta.title), Subject: winAnsi(paper.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(paper.meta.createdAt) },
+    info: { Title: printableText(paper.meta.title), Subject: printableText(paper.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(paper.meta.createdAt) },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -160,10 +163,10 @@ export async function renderBomPaper(paper: BomPaper): Promise<Buffer> {
   const bottom = (): number => pdf.page.height - MARGIN.bottom
   const text = (value: string, x: number, y: number, options: PDFKit.Mixins.TextOptions & { font?: string; size?: number; color?: string } = {}): number => {
     const { font = REGULAR, size = 8, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1, ...rest })
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1, ...rest })
     return pdf.y
   }
-  const heightOf = (value: string, w: number, font = REGULAR, size = 8): number => pdf.font(font).fontSize(size).heightOfString(winAnsi(value), { width: w, lineGap: 1 })
+  const heightOf = (value: string, w: number, font = REGULAR, size = 8): number => pdf.font(font).fontSize(size).heightOfString(printableText(value), { width: w, lineGap: 1 })
 
   let y = text(paper.title, left, MARGIN.top, { font: BOLD, size: 14, width })
   y = text(paper.subtitle, left, y + 1, { size: 10, color: MUTED, width }) + 8

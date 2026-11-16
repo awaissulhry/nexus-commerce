@@ -3,6 +3,7 @@ import type { DocumentLanguage, DocumentParty, DocumentReference, PostalAddress 
 import { incotermWords } from '@nexus/factory-domain/sales/quote-terms/rules'
 import type { CustomsLineInput } from '@nexus/factory-domain/shipping/customs/commercial-invoice'
 import { destinationClassOf, type DestinationClass } from '@nexus/factory-domain/shipping/customs/rules'
+import { specialTerritoryOf, type SpecialTerritory } from '@nexus/factory-domain/tax/special-territories'
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandTx } from '../../../core/command'
 import type { ShipmentHeader } from '../store'
@@ -28,6 +29,13 @@ export function postalOf(value: unknown): (PostalAddress & { name?: string | nul
   const country = str(row.country)
   if (!line1 || !postalCode || !city || !country) return null
   return { line1, line2: str(row.line2), postalCode, city, province: str(row.province), country: country.toUpperCase(), name: str(row.name) }
+}
+
+/** B-W2b-GF2: the postal code and town a shipment's ship-to names (each null when it is not there). */
+export function shipToPlace(shipTo: unknown): { readonly postalCode: string | null; readonly city: string | null } {
+  if (!shipTo || typeof shipTo !== 'object' || Array.isArray(shipTo)) return { postalCode: null, city: null }
+  const row = shipTo as Record<string, unknown>
+  return { postalCode: str(row.postalCode), city: str(row.city) }
 }
 
 /** The country a shipment's ship-to names (even when the rest of the address is not complete). */
@@ -58,6 +66,8 @@ export interface ParcelFacts {
 export interface CustomsFacts {
   readonly country: string | null
   readonly destination: DestinationClass | null
+  /** B-W2b-GF2: the EU special fiscal territory the ship-to is in (told apart by its postal code and town), or null. */
+  readonly territory: SpecialTerritory | null
   readonly eori: string | null
   readonly language: DocumentLanguage
   readonly currency: string
@@ -167,9 +177,12 @@ export async function customsFactsOf(db: CommandTx, shipment: ShipmentHeader): P
     ...(live ? [{ kind: 'DDT' as const, number: live.number }] : []),
   ]
   const country = countryOf(shipment.shipTo)
+  // B-W2b-GF2: the postal code and town tell a special fiscal territory apart (Livigno, the Canary Islands …).
+  const where = shipToPlace(shipment.shipTo)
   return {
     country,
-    destination: destinationClassOf(country),
+    destination: destinationClassOf(country, undefined, where),
+    territory: country ? specialTerritoryOf({ country, ...where }) : null,
     eori: company?.eori ?? null,
     language,
     currency: order?.currency ?? 'EUR',

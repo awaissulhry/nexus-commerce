@@ -157,6 +157,18 @@ describe('incidents: the record’s holds, the actions and the filing', () => {
     expect(filingDraftHeld(filingDraftOf(FILED, PEOPLE), FILED, facts)).toBe('refusal.FILING_FILED')
   })
 
+  // B-W2b-GF2 (Owner G505 A): a fatal or presumed fatal accident.
+  it('the fatal accident: the person only, no absence or certificate, filed after the accident; the API makes it due in 24 hours', () => {
+    const facts = { occurredAt: '2026-10-31T08:00:00.000Z', now: NOW }
+    const fatal = { ...filingDraftOf(null, PEOPLE), fatal: true }
+    expect(filingDraftHeld(fatal, null, facts)).toBeNull()
+    expect(filingPlan(fatal, null)).toEqual({ add: { incidentPersonId: PEOPLE[0]!.id, fatal: true }, edit: null, file: null, receipt: null })
+    expect(filingDraftHeld({ ...fatal, expectedAbsenceDays: '5' }, null, facts)).toBe('refusal.FATAL_NO_CERTIFICATE')
+    expect(filingDraftHeld({ ...fatal, certificateReceivedAt: '2026-11-01T09:00:00.000Z' }, null, facts)).toBe('refusal.FATAL_NO_CERTIFICATE')
+    expect(filingDraftHeld({ ...fatal, filedAt: '2026-10-31T07:00:00.000Z', protocolNumber: 'P-9' }, null, facts)).toBe('refusal.FILED_BEFORE_EVENT')
+    expect(filingDraftHeld({ ...fatal, filedAt: '2026-10-31T09:00:00.000Z', protocolNumber: 'P-9' }, null, facts)).toBeNull()
+  })
+
   it('every refusal code is said in our words; a read problem never shows a refusal', () => {
     expect(problemOf(refused('FILED_BEFORE_CERTIFICATE', 'filedAt'))).toEqual({ key: 'refusal.FILED_BEFORE_CERTIFICATE', field: 'filedAt' })
     expect(problemOf(refused('SOMETHING_NEW'))).toEqual({ key: 'problem.conflict', field: null })

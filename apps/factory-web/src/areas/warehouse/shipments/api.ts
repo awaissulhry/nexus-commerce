@@ -62,7 +62,8 @@ export const shipmentRowSchema = z.object({
   carrierCode: z.string().nullable(),
   carrierName: z.string().nullable(),
   serviceCode: z.string().nullable(),
-  shipTo: z.object({ city: z.string().nullable(), country: z.string().nullable() }),
+  // B-W2b-GF2: the postal code tells a special fiscal territory apart (the Export column).
+  shipTo: z.object({ city: z.string().nullable(), country: z.string().nullable(), postalCode: z.string().nullable().optional() }),
   lines: z.number(),
   garments: z.number(),
   parcels: z.number(),

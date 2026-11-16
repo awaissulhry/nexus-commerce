@@ -8,7 +8,9 @@ import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/pe
 import { travellerPaper, type TravellerPaper, type TravellerTable } from '@nexus/factory-domain/production/work-orders/traveller'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 import { assertMay, officeContextOf } from './access'
 import { readBasics } from './facts'
 import { readWorkOrder, type Header, type Reader } from './store'
@@ -20,8 +22,8 @@ import { cellsPrinted } from '../../sales/configurator/printed'
 /**
  * The work order traveller (B-W2b-51; MES-014 "Printable traveller (paper fallback)"; design production.workorders tab
  * wo-tab-traveller "Traveller PDF with QR", h.more "Print travellers (W2b)", the record's Documents tab): composed by
- * factory-domain production/work-orders/traveller and painted here on A4 portrait with pdfkit's standard fonts (the
- * documents platform's WinAnsi rule), the QR code drawn from the `qrcode` package's modules (no image, no font).
+ * factory-domain production/work-orders/traveller and painted here on A4 portrait with the documents platform's
+ * embedded fonts (B-W2b-GF2), the QR code drawn from the `qrcode` package's modules (no image, no font).
  *
  *   GET /production/work-orders/:id/traveller?language=it|en     workorders.view: one work order's traveller
  *   GET /production/work-orders/travellers?ids=a,b,…&language=   workorders.view: several in one PDF, in the order asked
@@ -32,8 +34,8 @@ import { cellsPrinted } from '../../sales/configurator/printed'
  * Per work order, operation and station: no person, no customer name, no money.
  */
 
-const REGULAR = 'Helvetica'
-const BOLD = 'Helvetica-Bold'
+const REGULAR = FONT.regular
+const BOLD = FONT.bold
 const TEXT = '#111111'
 const MUTED = '#555555'
 const RULE = '#9a9a9a'
@@ -131,13 +133,14 @@ export async function renderTravellers(papers: readonly TravellerPaper[]): Promi
     lang: first.language,
     displayTitle: true,
     info: {
-      Title: winAnsi(papers.length === 1 ? first.meta.title : `${first.title} (${papers.length})`),
-      Subject: winAnsi(papers.map((paper) => paper.number).join(', ')),
+      Title: printableText(papers.length === 1 ? first.meta.title : `${first.title} (${papers.length})`),
+      Subject: printableText(papers.map((paper) => paper.number).join(', ')),
       Creator: PDF_CREATOR,
       Producer: PDF_CREATOR,
       CreationDate: new Date(first.meta.createdAt),
     },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -162,10 +165,10 @@ type TextOptions = PDFKit.Mixins.TextOptions & { font?: string; size?: number; c
 function writer(pdf: PDFKit.PDFDocument) {
   const text = (value: string, x: number, y: number, options: TextOptions = {}): number => {
     const { font = REGULAR, size = 8.5, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1, ...rest })
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1, ...rest })
     return pdf.y
   }
-  const heightOf = (value: string, width: number, font = REGULAR, size = 8.5): number => pdf.font(font).fontSize(size).heightOfString(winAnsi(value), { width, lineGap: 1 })
+  const heightOf = (value: string, width: number, font = REGULAR, size = 8.5): number => pdf.font(font).fontSize(size).heightOfString(printableText(value), { width, lineGap: 1 })
   return { text, heightOf }
 }
 
@@ -197,7 +200,7 @@ function paint(pdf: PDFKit.PDFDocument, paper: TravellerPaper): void {
   y = text(paper.number, left, y + 1, { font: BOLD, size: 24, width: headWidth })
   if (paper.batch) y = text(paper.batch, left, y + 1, { font: BOLD, size: 11, width: headWidth })
   if (paper.rush) {
-    const boxWidth = pdf.font(BOLD).fontSize(14).widthOfString(winAnsi(paper.rush)) + 20
+    const boxWidth = pdf.font(BOLD).fontSize(14).widthOfString(printableText(paper.rush)) + 20
     pdf.save().rect(left, y + 6, boxWidth, 22).fillColor(RUSH).fill().restore()
     text(paper.rush, left, y + 11, { font: BOLD, size: 14, color: '#ffffff', width: boxWidth, align: 'center' })
     y += 32

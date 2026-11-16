@@ -276,3 +276,28 @@ describe('the garment label in ZPL', () => {
     expect(() => garmentLabelZpl(renderLabel(TEMPLATE, VALUES), 150)).toThrow(RangeError)
   })
 })
+
+// ---- B-W2b-GF2 (G032): the origin claim -----------------------------------------------------------------------------------
+
+describe('the origin claim ("Made in Italy"; D.L. 135/2009 art. 16)', () => {
+  const claimed: LabelTemplateFacts = { ...TEMPLATE, originClaimKey: 'claim.made-in-italy', layout: layoutOf({ fields: ['composition', 'care', 'origin', 'gpsrContact', 'qr'] }).layout }
+
+  it('"origin" is a field the layout knows (the seeded fibre and care label keeps no stored problem), printed only with a claim', () => {
+    expect(layoutOf({ fields: ['composition', 'care', 'origin', 'gpsrContact', 'qr'] }).problems).toEqual([])
+    expect(printedFields(claimed, true)).toContain('origin')
+    expect(printedFields(TEMPLATE, true)).not.toContain('origin')
+  })
+
+  it('prints its approved words once per distinct text, and holds the label when a language has none or the phrase is missing', () => {
+    const words = { key: 'claim.made-in-italy', texts: [{ language: 'it', text: 'Made in Italy' }, { language: 'en', text: 'Made in Italy' }] }
+    const label = renderLabel(claimed, { ...VALUES, originClaim: words })
+    expect(block(label, 'origin')).toMatchObject({ value: 'Made in Italy', lines: [{ text: 'Made in Italy', language: 'it' }], source: { kind: 'TEMPLATE' } })
+    expect(paths(label.problems).filter((path) => /origin|claim/.test(path))).toEqual([])
+    const half = renderLabel(claimed, { ...VALUES, originClaim: { ...words, texts: [{ language: 'it', text: 'Made in Italy' }, { language: 'en', text: null }] } })
+    expect(paths(half.problems)).toContain('phrases/claim.made-in-italy')
+    expect(half.problems.find((problem) => problem.path === 'phrases/claim.made-in-italy')?.message).toContain('no approved words in en')
+    expect(paths(renderLabel(claimed, VALUES).problems)).toContain('originClaimKey')
+    // The fit check makes room for it before the label is activated.
+    expect(activationProblems(claimed, STYLE, '2026-10-29').filter((problem) => /origin|claim/.test(problem.path))).toEqual([])
+  })
+})

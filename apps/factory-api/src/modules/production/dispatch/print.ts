@@ -6,7 +6,9 @@ import { dispatchPaper, type DispatchPaper, type PaperFacts, type PaperLanguage,
 import { PRODUCTION_DISPATCH_VIEW } from '@nexus/factory-domain/production/dispatch/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 import { contextOf, may, readerOf } from './access'
 import { sortCards } from './board'
 import { lineMinutesOf, stationOperators } from './facts'
@@ -100,7 +102,8 @@ export async function printedPdf(caller: CommandCaller, query: PrintQuery): Prom
 }
 
 export async function render(paper: DispatchPaper): Promise<Buffer> {
-  const pdf = new PDFDocument({ size: 'A4', layout: 'landscape', margins: MARGIN, bufferPages: true, compress: true, lang: paper.language, displayTitle: true, info: { Title: winAnsi(`${paper.title} ${paper.heading}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR } })
+  const pdf = new PDFDocument({ size: 'A4', layout: 'landscape', margins: MARGIN, bufferPages: true, compress: true, lang: paper.language, displayTitle: true, info: { Title: printableText(`${paper.title} ${paper.heading}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR } })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -112,22 +115,22 @@ export async function render(paper: DispatchPaper): Promise<Buffer> {
   const bottom = pdf.page.height - MARGIN.bottom
   const widths = SHARES.map((share) => share * width)
   const text = (value: string, x: number, y: number, options: PDFKit.Mixins.TextOptions & { font?: string; size?: number; color?: string } = {}): number => {
-    const { font = 'Helvetica', size = 8, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1, ...rest })
+    const { font = FONT.regular, size = 8, color = TEXT, ...rest } = options
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1, ...rest })
     return pdf.y
   }
-  const heightOf = (cells: readonly string[]): number => Math.max(...cells.map((cell, index) => pdf.font('Helvetica').fontSize(8).heightOfString(winAnsi(cell || ' '), { width: widths[index]! - 6, lineGap: 1 }))) + 6
+  const heightOf = (cells: readonly string[]): number => Math.max(...cells.map((cell, index) => pdf.font(FONT.regular).fontSize(8).heightOfString(printableText(cell || ' '), { width: widths[index]! - 6, lineGap: 1 }))) + 6
   const tableHead = (y: number): number => {
     pdf.save().rect(left, y, width, 15).fillColor(SHADE).fill().restore()
     let x = left
     paper.columns.forEach((column, index) => {
-      text(column, x + 3, y + 4, { font: 'Helvetica-Bold', size: 7, width: widths[index]! - 6 })
+      text(column, x + 3, y + 4, { font: FONT.bold, size: 7, width: widths[index]! - 6 })
       x += widths[index]!
     })
     return y + 15
   }
   let y = text(paper.title, left, MARGIN.top, { size: 10, color: MUTED, width })
-  y = text(paper.heading, left, y + 1, { font: 'Helvetica-Bold', size: 16, width })
+  y = text(paper.heading, left, y + 1, { font: FONT.bold, size: 16, width })
   y = text(paper.facts.map((fact) => `${fact.label}: ${fact.value}`).join('   ·   '), left, y + 3, { size: 8.5, color: MUTED, width }) + 8
   if (paper.empty) text(paper.empty, left, y + 12, { size: 12, width })
   for (const section of paper.sections) {
@@ -135,7 +138,7 @@ export async function render(paper: DispatchPaper): Promise<Buffer> {
       pdf.addPage()
       y = MARGIN.top
     }
-    y = text(section.title, left, y + 4, { font: 'Helvetica-Bold', size: 10.5, width })
+    y = text(section.title, left, y + 4, { font: FONT.bold, size: 10.5, width })
     if (section.operators) y = text(section.operators, left, y + 1, { size: 8.5, width })
     y = tableHead(y + 4)
     for (const row of section.rows) {
@@ -152,7 +155,7 @@ export async function render(paper: DispatchPaper): Promise<Buffer> {
       })
       y += height
     }
-    y = text(section.footer, left, y + 3, { font: 'Helvetica-Bold', size: 8.5, width, align: 'right' }) + 8
+    y = text(section.footer, left, y + 3, { font: FONT.bold, size: 8.5, width, align: 'right' }) + 8
   }
   const range = pdf.bufferedPageRange()
   for (let index = range.start; index < range.start + range.count; index++) {

@@ -5,7 +5,7 @@ import { careWords, careWordsOf, missingCareGroups } from './care'
 import { compareWithLabel, computeComposition, lineWeight, textileShareOf, weightOf, wholePercents, type LineFacts, type MaterialFacts } from './composition'
 import { officialName, readFibre } from './fibres'
 import { leatherNaming, reservedWords } from './leather'
-import { originCheck, type PlaceFacts, type StepFacts } from './origin'
+import { originCheck, ORIGIN_CLAIM_KEYS, type PlaceFacts, type StepFacts } from './origin'
 import { DEFAULT_SWITCHES, textileChecks, type LabelFacts, type TextileFacts } from './rules'
 
 // Every code, name and weight here is made up.
@@ -127,6 +127,21 @@ describe('Made in Italy from the routing (PRD-344)', () => {
     expect(sewnAbroad.findings).toEqual([expect.objectContaining({ path: 'steps/20', severity: 'WARN' })])
     // Claimed IT on the style: a failure.
     expect(originCheck([step(20, 'SEWING', abroad)], plants, 'IT').findings).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'style/originCountry', severity: 'FAIL' })]))
+  })
+
+  // B-W2b-GF2 (G032): the label's own claim is checked against the routing too.
+  it('holds a label that claims "Made in Italy" (or 100%) the routing does not allow, and warns while it cannot tell', () => {
+    expect(ORIGIN_CLAIM_KEYS).toEqual(['claim.made-in-italy', 'claim.100-made-in-italy'])
+    const sewnAbroad = originCheck([step(10, 'CUTTING'), step(20, 'SEWING', abroad)], plants, null, 'claim.made-in-italy')
+    expect(sewnAbroad.claim).toEqual({ key: 'claim.made-in-italy', verdict: 'NOT_ALLOWED' })
+    expect(sewnAbroad.findings).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'label/originClaimKey', severity: 'FAIL' }), expect.objectContaining({ path: 'steps/20', severity: 'FAIL' })]))
+    const cutAbroad = originCheck([step(10, 'CUTTING', abroad), step(20, 'SEWING')], plants, null, 'claim.100-made-in-italy')
+    expect(cutAbroad.claim).toEqual({ key: 'claim.100-made-in-italy', verdict: 'NOT_ALLOWED' })
+    expect(cutAbroad.findings).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'label/originClaimKey', severity: 'FAIL', message: expect.stringContaining('100% Made in Italy') })]))
+    expect(originCheck([step(10, 'CUTTING', abroad), step(20, 'SEWING')], plants, null, 'claim.made-in-italy').findings.filter((finding) => finding.path === 'label/originClaimKey')).toEqual([])
+    expect(originCheck([step(20, 'SEWING', { code: 'WS', name: 'Somewhere', country: null })], plants, null, 'claim.made-in-italy').findings).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'label/originClaimKey', severity: 'WARN' })]))
+    expect(originCheck([step(20, 'SEWING')], plants, null, 'claim.best-in-town').findings).toEqual([expect.objectContaining({ path: 'label/originClaimKey', severity: 'FAIL' })])
+    expect(originCheck([step(20, 'SEWING')], plants, null).claim).toBeNull()
   })
 
   it('says it does not know when a country is missing or the plants are in two countries', () => {

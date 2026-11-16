@@ -22,6 +22,15 @@ import type { Finding } from './composition'
 
 export const ITALY = 'IT'
 
+/**
+ * B-W2b-GF2 (G032): the origin claims a label may print, by their phrase's key (the phrase library holds the words), and
+ * what each needs: "Made in Italy" the making-up in Italy, "100% Made in Italy" every step there (D.L. 135/2009 art. 16).
+ */
+export const ORIGIN_CLAIMS = Object.freeze({ 'claim.made-in-italy': 'MADE_IN_ITALY', 'claim.100-made-in-italy': 'FULL_MADE_IN_ITALY' } as const)
+export type OriginClaimKey = keyof typeof ORIGIN_CLAIMS
+export const ORIGIN_CLAIM_KEYS = Object.keys(ORIGIN_CLAIMS) as [OriginClaimKey, ...OriginClaimKey[]]
+export const isOriginClaimKey = (key: string): key is OriginClaimKey => (ORIGIN_CLAIM_KEYS as readonly string[]).includes(key)
+
 /** The kinds of work centre whose steps make the garment up after cutting (origin); inspection and packing do not. */
 export const MAKE_UP_KINDS: ReadonlySet<string> = new Set(['SEWING', 'ASSEMBLY', 'FINISHING', 'SUBCONTRACT'])
 
@@ -62,6 +71,8 @@ export interface OriginCheck {
   readonly steps: readonly StepPlace[]
   /** The style's customs country of origin (Style.originCountry). */
   readonly styleOrigin: string | null
+  /** B-W2b-GF2: the origin claim the label prints (its phrase's key), and the verdict it needs; null: none. */
+  readonly claim: { readonly key: string; readonly verdict: Verdict } | null
   readonly findings: readonly Finding[]
 }
 
@@ -80,8 +91,11 @@ const verdictOf = (steps: readonly StepPlace[]): Verdict => {
 const placeWords = (step: StepPlace): string =>
   step.where === 'WORKSHOP' ? `workshop ${step.places[0]?.name ?? '?'}` : step.places.length === 1 ? `plant ${step.places[0]!.code}` : `our plants (${step.places.map((place) => place.code).join(', ')})`
 
-/** The check over the steps (`plants`: where in-house steps are done). */
-export function originCheck(steps: readonly StepFacts[], plants: readonly PlaceFacts[], styleOrigin: string | null): OriginCheck {
+/**
+ * The check over the steps (`plants`: where in-house steps are done). B-W2b-GF2 (G032): `claimKey`, the origin claim the
+ * label prints: claimed and NOT_ALLOWED is a FAIL at the label (L. 350/2003 art. 4(49)), not decided yet a WARN.
+ */
+export function originCheck(steps: readonly StepFacts[], plants: readonly PlaceFacts[], styleOrigin: string | null, claimKey: string | null = null): OriginCheck {
   const findings: Finding[] = []
   const placed: StepPlace[] = steps.map((step) => {
     const places = step.workshop ? [step.workshop] : plants
@@ -124,9 +138,15 @@ export function originCheck(steps: readonly StepFacts[], plants: readonly PlaceF
   if (styleOrigin !== null && styleOrigin !== ITALY && madeInItaly === 'ALLOWED') {
     findings.push({ path: 'style/originCountry', severity: 'WARN', message: `The style's country of origin says ${styleOrigin}, but every making-up step is done in Italy: check the origin.` })
   }
-  // A failing step's FAIL stands only when the origin is claimed: without a claim it is what the check found.
-  if (madeInItaly === 'NOT_ALLOWED' && styleOrigin !== ITALY) {
+  // B-W2b-GF2: the label's claim, against the verdict it needs.
+  const claimed = claimKey ? (ORIGIN_CLAIMS as Readonly<Record<string, string>>)[claimKey] : undefined
+  const claim = claimKey ? { key: claimKey, verdict: claimed === 'FULL_MADE_IN_ITALY' ? fullMadeInItaly : madeInItaly } : null
+  if (claimKey && claimed === undefined) findings.push({ path: 'label/originClaimKey', severity: 'FAIL', message: `The label claims an origin with the phrase ${claimKey}, which is no origin claim this check knows (${ORIGIN_CLAIM_KEYS.join(', ')}).` })
+  else if (claim?.verdict === 'NOT_ALLOWED') findings.push({ path: 'label/originClaimKey', severity: 'FAIL', message: `The label says "${claimed === 'FULL_MADE_IN_ITALY' ? '100% Made in Italy' : 'Made in Italy'}", and the routing does not allow it: remove the claim or change the routing (L. 350/2003 art. 4(49): a false origin is an offence).` })
+  else if (claim?.verdict === 'UNKNOWN') findings.push({ path: 'label/originClaimKey', severity: 'WARN', message: `The label says "${claimed === 'FULL_MADE_IN_ITALY' ? '100% Made in Italy' : 'Made in Italy'}", and the routing cannot prove it yet: check where each step is done before the label prints.` })
+  // A failing step's FAIL stands only when the origin is claimed (by the style or by the label): without a claim it is what the check found.
+  if (madeInItaly === 'NOT_ALLOWED' && styleOrigin !== ITALY && claim === null) {
     for (let index = 0; index < findings.length; index += 1) if (findings[index]!.severity === 'FAIL') findings[index] = { ...findings[index]!, severity: 'WARN' }
   }
-  return { madeInItaly, fullMadeInItaly, steps: placed, styleOrigin, findings }
+  return { madeInItaly, fullMadeInItaly, steps: placed, styleOrigin, claim, findings }
 }

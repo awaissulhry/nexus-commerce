@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { rulesInForce, type LimitRule, type PlannedWork } from '../shifts/limits'
-import { averageCheck, blockingChecks, limitChecks, raisedChecks, restCheck, workOfDays, yearlyCapCheck, type WorkedDay } from './checks'
+import { rulesInForce, weeklyRestWindow, type LimitRule, type PlannedWork } from '../shifts/limits'
+import { averageCheck, blockingChecks, CHECKED_LIMITS, limitChecks, nightCheck, raisedChecks, restCheck, weeklyRestCheck, workOfDays, yearlyCapCheck, type WorkedDay } from './checks'
+import { LAW_LIMITS } from '../shifts/limits'
 import { LAW_VALUES, ruleProblems, type RuleInput } from './rules'
 
 /**
@@ -55,6 +56,11 @@ describe('a limit a company keeps', () => {
     expect(LAW_VALUES.WEEKLY_AVERAGE.limitMinutes).toBe(rules.WEEKLY_AVERAGE.limitMinutes)
     expect(LAW_VALUES.OVERTIME_YEARLY_CAP.limitMinutes).toBe(rules.OVERTIME_YEARLY_CAP.limitMinutes)
     expect(LAW_VALUES.BREAK_AFTER.breakMinutes).toBe(rules.BREAK_AFTER.breakMinutes)
+    // B-W2b-GF2: weekly rest and night work too, now that both are checked.
+    expect(LAW_VALUES.WEEKLY_REST.limitMinutes).toBe(rules.WEEKLY_REST.limitMinutes)
+    expect(LAW_VALUES.NIGHT_AVERAGE.limitMinutes).toBe(rules.NIGHT_AVERAGE.limitMinutes)
+    expect(LAW_VALUES.WEEKLY_REST.legalReference).toBe(LAW_LIMITS.WEEKLY_REST.legalReference)
+    expect(LAW_VALUES.NIGHT_AVERAGE.legalReference).toBe(LAW_LIMITS.NIGHT_AVERAGE.legalReference)
   })
 })
 
@@ -113,12 +119,15 @@ describe('the weekly average (art. 4)', () => {
 describe('what the checks do', () => {
   const input = { date: '2026-11-04', workedDates: new Set<string>(), timeZone: ROME, employedFrom: '2026-01-05', work: [] as PlannedWork[], overtimeMinutes: 0 }
 
-  it('always gives the three the design lists, in its order', () => {
+  it('always gives the three the design lists, in its order, then (B-W2b-GF2) weekly rest and night work', () => {
     expect(limitChecks({ ...input, rules }).map((check) => [check.rule, check.state])).toEqual([
       ['OVERTIME_YEARLY_CAP', 'OK'],
       ['DAILY_REST', 'OK'],
       ['WEEKLY_AVERAGE', 'OK'],
+      ['WEEKLY_REST', 'OK'],
+      ['NIGHT_AVERAGE', 'OK'],
     ])
+    expect(CHECKED_LIMITS).toEqual(['OVERTIME_YEARLY_CAP', 'DAILY_REST', 'WEEKLY_AVERAGE', 'WEEKLY_REST', 'NIGHT_AVERAGE'])
   })
 
   it('holds an approval only when a blocking rule is passed: WARN shows, NEAR never holds', () => {
@@ -129,5 +138,45 @@ describe('what the checks do', () => {
     expect(blockingChecks(warned)).toEqual([])
     const held = limitChecks({ ...input, rules: { ...rules, OVERTIME_YEARLY_CAP: blocking(rules.OVERTIME_YEARLY_CAP) }, overtimeMinutes: 16000 })
     expect(blockingChecks(held).map((check) => check.rule)).toEqual(['OVERTIME_YEARLY_CAP'])
+  })
+})
+
+// ---- B-W2b-GF2: weekly rest (art. 9) and night work (art. 13) against the time worked -------------------------------------
+
+describe('the weekly rest (art. 9) and night work (art. 13) as worked', () => {
+  /** Worked 06:00-14:00 on each day of `dates`. */
+  const mornings = (dates: readonly string[]) => workOfDays(dates.map((date) => day(date, '06:00', '14:00')))
+  const daysOf = (from: string, count: number) => Array.from({ length: count }, (_, index) => new Date(Date.parse(`${from}T12:00:00Z`) + index * 86_400_000).toISOString().slice(0, 10))
+
+  it('is OVER for last week when it was worked every day, NEAR for this week when the plan would leave it short, OK with Sundays off', () => {
+    // Wednesday 11 November: last week (2-8 Nov) and the one before worked every day.
+    const window = weeklyRestWindow('2026-11-11', '2026-11-11')
+    const everyDay = mornings(daysOf(window.from, 18))
+    const over = weeklyRestCheck({ work: everyDay, date: '2026-11-11', timeZone: ROME, window }, rules.WEEKLY_REST, rules.DAILY_REST)
+    expect(over).toMatchObject({ rule: 'WEEKLY_REST', state: 'OVER', date: '2026-11-08', law: 'D.Lgs. 66/2003 art. 9' })
+    expect(over.words).toMatch(/^The longest rest in the week of 2 Nov is 16 h \(from Mon 14:00 to Tue 06:00\)/)
+    // Sundays off last week and the one before; this week planned every day to Sunday the 15th and Monday the 16th: NEAR.
+    const days = daysOf(window.from, 23).filter((date) => !['2026-11-01', '2026-11-08'].includes(date))
+    const near = weeklyRestCheck({ work: mornings(days), date: '2026-11-11', timeZone: ROME, window }, rules.WEEKLY_REST, rules.DAILY_REST)
+    expect(near).toMatchObject({ state: 'NEAR', date: '2026-11-11' })
+    const sundaysOff = daysOf(window.from, 23).filter((date) => !['2026-11-01', '2026-11-08', '2026-11-15', '2026-11-22'].includes(date))
+    expect(weeklyRestCheck({ work: mornings(sundaysOff), date: '2026-11-11', timeZone: ROME, window }, rules.WEEKLY_REST, rules.DAILY_REST)).toMatchObject({ state: 'OK', values: { neededMinutes: 2100 } })
+  })
+
+  it('counts a long rest for every week it covers: two days worked in a quiet month break no weekly rest', () => {
+    const window = { from: '2026-07-01', to: '2026-11-30' }
+    const work = mornings(['2026-11-10', '2026-11-11'])
+    expect(weeklyRestCheck({ work, date: '2026-11-12', timeZone: ROME, window }, rules.WEEKLY_REST, rules.DAILY_REST).state).toBe('OK')
+    expect(weeklyRestCheck({ work: [], date: '2026-11-12', timeZone: ROME, window }, rules.WEEKLY_REST, rules.DAILY_REST).state).toBe('OK')
+  })
+
+  it('is OVER on a night worked over 8 hours, NEAR on one still planned, OK on a day shift', () => {
+    const night = workOfDays([{ date: '2026-11-03', firstInAt: at('2026-11-03', '21:00'), lastOutAt: at('2026-11-04', '07:00'), presentMinutes: 570, breakMinutes: 30 }])
+    const worked = nightCheck({ work: night, date: '2026-11-04', workedDates: new Set(['2026-11-03']), timeZone: ROME }, rules.NIGHT_AVERAGE)
+    expect(worked).toMatchObject({ rule: 'NIGHT_AVERAGE', state: 'OVER', date: '2026-11-03', law: 'D.Lgs. 66/2003 art. 13' })
+    expect(worked.words).toBe('9 h 30 min of work 21:00-07:00, 8 h of it at night — a night worker works at most 8 h in 24 hours (D.Lgs. 66/2003 art. 13)')
+    const ahead: PlannedWork = { date: '2026-11-05', kind: 'SHIFT', start: at('2026-11-05', '22:00'), end: at('2026-11-06', '08:00'), minutes: 570, breakMinutes: 30 }
+    expect(nightCheck({ work: [ahead], date: '2026-11-04', workedDates: new Set(), timeZone: ROME }, rules.NIGHT_AVERAGE).state).toBe('NEAR')
+    expect(nightCheck({ work: mornings(['2026-11-04']), date: '2026-11-04', workedDates: new Set(['2026-11-04']), timeZone: ROME }, rules.NIGHT_AVERAGE)).toMatchObject({ state: 'OK', words: 'A night worker works at most 8 h in 24 hours (D.Lgs. 66/2003 art. 13)' })
   })
 })

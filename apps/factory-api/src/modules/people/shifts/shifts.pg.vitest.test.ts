@@ -83,6 +83,8 @@ const SESSIONS: Record<string, SessionContext> = {
   companyB: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant(MANAGE, [T.companyB])] },
   // The seed member's account: E2's record, the lead of team L1-A (E1, E2, E3).
   lead: { audience: 'office', tenantId: T.tenant, actorId: T.member, grants: [grant(['people.shifts.view', 'people.shifts.team', 'people.overtime.manage'])] },
+  // B-W2b-GF2: HR plans and may see the people's attendance (the worked overtime's hours in the cap's words).
+  hr: { audience: 'office', tenantId: T.tenant, actorId: newId(), grants: [grant([...MANAGE, 'people.attendance.view'])] },
   floorE1: { audience: 'floor', tenantId: T.tenant, actorId: T.workerE1, siteId: T.siteA1, deviceId: T.deviceA1, grants: [{ permissions: ['floor.work'], companies: [T.companyA], sites: [T.siteA1], parties: 'all' }] },
 }
 
@@ -399,5 +401,64 @@ describe('the worker\'s own shifts on the tablet, and absences behind the ATTEND
     // Assign lists the absence as a conflict and leaves the day.
     const preview = await ok('manager', 'POST', '/people/shifts/roster/assign/preview', { employeeIds: [people.employeeIds.e2], from: day(15), to: day(15), set: morning })
     expect(preview).toMatchObject({ changes: [], skipped: [expect.objectContaining({ date: day(15), why: 'ABSENT' })], absences: { shown: true } })
+  })
+})
+
+// ---- B-W2b-GF2: weekly rest (art. 9), night work (art. 13), the yearly cap with the overtime worked ------------------------
+
+describe('the weekly rest, night work and the yearly cap with the overtime worked (D.Lgs. 66/2003 arts. 5, 9, 13)', () => {
+  const e2 = () => people.employeeIds.e2
+  /** Mornings on every day of day(from) … day(to), each cell with the version it has now (earlier tests wrote some). */
+  const everyDay = async (employeeId: string, from: number, to: number) => {
+    const sheet = await roster('manager', day(from), day(to))
+    return Array.from({ length: to - from + 1 }, (_, index) => ({ employeeId, date: day(from + index), version: cellOf(sheet, employeeId, day(from + index))?.entry?.version ?? null, set: morning }))
+  }
+
+  it('warns on a fortnight worked every day: no 35-hour rest in the week, none to make up for it in the weeks around', async () => {
+    const written = await ok('manager', 'POST', '/people/shifts/roster/cells', { cells: await everyDay(e2(), 5, 20) })
+    const sunday = written.cells.find((entry: Json) => entry.cell.date === day(13) && entry.employeeId === e2())?.cell ?? cellOf(await roster('manager', day(7), day(13)), e2(), day(13))
+    const weekly = sunday.warnings.find((warning: Json) => warning.rule === 'WEEKLY_REST')
+    expect(weekly).toMatchObject({ level: 'WARN', law: 'D.Lgs. 66/2003 art. 9', values: { restMinutes: 960, neededMinutes: 2100, week: day(7) } })
+    expect(weekly.words).toBe(`The longest rest in the week of ${dayWords(day(7))} is 16 h (from Mon 14:00 to Tue 06:00) — at least 24 h of consecutive rest every 7 days on top of the 11 h between shifts (35 h), as an average over 14 days (D.Lgs. 66/2003 art. 9)`)
+    // The weeks on either side are made up for by the week around them (the law's 14-day average): no warning there.
+    const sheet = await roster('manager', day(5), day(20))
+    const weeklyDays = rowOf(sheet, e2()).cells.filter((cell: Json) => cell.warnings.some((warning: Json) => warning.rule === 'WEEKLY_REST')).map((cell: Json) => cell.date)
+    expect(weeklyDays).toEqual([day(13)])
+    expect(sheet.sites[0].rules.map((rule: Json) => rule.kind)).toEqual(expect.arrayContaining(['WEEKLY_REST', 'NIGHT_AVERAGE']))
+  })
+
+  it('a blocking weekly rest holds the roster write with the reason; a night shift over 8 hours warns', async () => {
+    const ruleId = newId()
+    await admin(`INSERT INTO "WorkingTimeRule" (id, "tenantId", "companyId", "siteId", kind, "limitMinutes", action, "alertRoles", source, "legalReference") VALUES ($1, $2, $3, $4, 'WEEKLY_REST', 1440, 'BLOCK', '{}', 'CCNL', 'CCNL example art. 9')`, [ruleId, T.tenant, T.companyA, T.siteA1])
+    const e1 = people.employeeIds.e1
+    const held = await no('manager', 'POST', '/people/shifts/roster/cells', { cells: await everyDay(e1, 5, 20) }, 409)
+    expect(pathsOf(held)).toContain('refusal/LIMIT_BLOCKED')
+    expect(pathsOf(held)).toContain(`limits/${e1}/${day(13)}`)
+    expect(held.message).toMatch(/CCNL example art\. 9/)
+    await admin(`UPDATE "WorkingTimeRule" SET status = 'ARCHIVED' WHERE id = $1`, [ruleId])
+    const before = cellOf(await roster('manager', day(9), day(9)), e1, day(9))
+    const night = await ok('manager', 'POST', '/people/shifts/roster/cells', { cells: [{ employeeId: e1, date: day(9), version: before?.entry?.version ?? null, set: { kind: 'WORK', label: 'Night', startMinute: 1260, endMinute: 1860, breakMinutes: 30 } }] })
+    const warning = night.cells[0].cell.warnings.find((entry: Json) => entry.rule === 'NIGHT_AVERAGE')
+    expect(warning).toMatchObject({ level: 'WARN', law: 'D.Lgs. 66/2003 art. 13', values: { workMinutes: 570, nightMinutes: 480, limitMinutes: 480, from: '21:00', to: '07:00' } })
+    expect(warning.words).toBe('9 h 30 min of work 21:00-07:00, 8 h of it at night — a night worker works at most 8 h in 24 hours (D.Lgs. 66/2003 art. 13)')
+  })
+
+  it('counts the overtime worked this year in the yearly cap of a planned overtime, its hours named only to a reader of attendance', async () => {
+    const e1 = people.employeeIds.e1
+    // The ATTENDANCE gate of A1 is open (the test above). E1 worked the approved trade-fair overtime and 5 hours more.
+    const [fair] = await admin<{ id: string }>(`SELECT id FROM "OvertimeRequest" WHERE "tenantId" = $1 AND reason = 'Trade fair order'`, [T.tenant])
+    await admin(`INSERT INTO "OvertimeEntry" (id, "tenantId", "companyId", "siteId", "employeeId", date, kind, minutes, "requestId") VALUES ($1, $2, $3, $4, $5, $6, 'DAY', 120, $7), ($8, $2, $3, $4, $5, $9, 'DAY', 300, NULL)`, [newId(), T.tenant, T.companyA, T.siteA1, e1, day(2), fair!.id, newId(), day(1)])
+    const capId = newId()
+    await admin(`INSERT INTO "WorkingTimeRule" (id, "tenantId", "companyId", "siteId", kind, "limitMinutes", action, "alertRoles", source, "legalReference") VALUES ($1, $2, $3, $4, 'OVERTIME_YEARLY_CAP', 400, 'WARN', '{}', 'CCNL', 'CCNL example art. 5')`, [capId, T.tenant, T.companyA, T.siteA1])
+    const body = { siteId: T.siteA1, date: day(8), startMinute: 1020, minutes: 60, employeeIds: [e1] }
+    const capOf = (answer: Json) => answer.people[0].checks.find((warning: Json) => warning.rule === 'OVERTIME_YEARLY_CAP')
+    // 120 (the request, worked: counted once) + 300 worked + 60 planned = 8 h over 6 h 40 min.
+    const forHr = capOf(await ok('hr', 'POST', '/people/overtime-requests/check', body))
+    expect(forHr.words).toBe(`Overtime in ${W.slice(0, 4)} would be 8 h (7 h worked, 1 h planned) — at most 6 h 40 min a year (CCNL example art. 5)`)
+    expect(forHr.values).toMatchObject({ workedMinutes: 420, plannedMinutes: 60, limitMinutes: 400 })
+    const forManager = capOf(await ok('manager', 'POST', '/people/overtime-requests/check', body))
+    expect(forManager.words).toBe(`Planned overtime in ${W.slice(0, 4)} would pass the yearly cap together with the overtime already worked — at most 6 h 40 min a year (CCNL example art. 5)`)
+    expect(JSON.stringify(forManager)).not.toMatch(/workedMinutes|420|7 h worked/)
+    await admin(`UPDATE "WorkingTimeRule" SET status = 'ARCHIVED' WHERE id = $1`, [capId])
   })
 })

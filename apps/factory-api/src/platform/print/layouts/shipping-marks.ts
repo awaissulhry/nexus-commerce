@@ -3,7 +3,9 @@ import type { Issue } from '@nexus/factory-domain/core/errors'
 import { code128Bars } from '@nexus/factory-domain/labels/code128'
 import { dotsOf, fitText, LABEL_DPIS, MAX_LABEL_COPIES, MAX_LABEL_MM, MIN_LABEL_WIDTH_MM, zplText, type LabelStock } from '@nexus/factory-domain/labels/zpl'
 import type { CartonMarks } from '@nexus/factory-domain/shipping/cartons/marks'
-import { PDF_CREATOR, winAnsi } from '../../documents/pdf'
+import { PDF_CREATOR } from '../../documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../documents/fonts'
 
 /**
  * A carton's shipping marks laid out (B-W2b-384; LOG-013; design floor.pack "Close carton … prints its marks"): the heading
@@ -114,8 +116,9 @@ export async function marksPdf(all: readonly CartonMarks[], copies = 1): Promise
     autoFirstPage: false,
     compress: true,
     lang: first.language,
-    info: { Title: winAnsi(`${first.title} ${first.code}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(0) },
+    info: { Title: printableText(`${first.title} ${first.code}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(0) },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -127,8 +130,8 @@ export async function marksPdf(all: readonly CartonMarks[], copies = 1): Promise
   const margin = pt(L.margin)
   const inner = width - 2 * margin
   const line = (value: string, y: number, size: number, bold = false): void => {
-    pdf.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(pt(size)).fillColor('#000000')
-    pdf.text(winAnsi(fitText(value, Math.round(inner), Math.round(pt(size)))), margin, pt(y), { width: inner, lineBreak: false, height: pt(size) * 1.2 })
+    pdf.font(bold ? FONT.bold : FONT.regular).fontSize(pt(size)).fillColor('#000000')
+    pdf.text(printableText(fitText(value, Math.round(inner), Math.round(pt(size)))), margin, pt(y), { width: inner, lineBreak: false, height: pt(size) * 1.2 })
   }
   for (const marks of all) {
     const size: [number, number] = [width, pt(marksHeight(marks))]

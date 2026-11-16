@@ -126,7 +126,7 @@ export const COUNTS: CountsAnswer = {
 
 // ---- the record -------------------------------------------------------------------------------------------------------------
 
-export const RULE: InailRule = { law: 'D.Lgs. 81/2008 art. 18 c.1 r', statisticalFromDays: 1, insuranceAboveDays: 3, hoursAfterCertificate: 48, words: { en: [...INAIL_RULE_WORDS.en], it: [...INAIL_RULE_WORDS.it] } }
+export const RULE: InailRule = { law: 'D.Lgs. 81/2008 art. 18 c.1 r', statisticalFromDays: 1, insuranceAboveDays: 3, hoursAfterCertificate: 48, hoursAfterFatalAccident: 24, words: { en: [...INAIL_RULE_WORDS.en], it: [...INAIL_RULE_WORDS.it] } }
 
 const action = (over: Partial<IncidentAction> & Pick<IncidentAction, 'id' | 'seq' | 'title'>): IncidentAction => ({
   owner: null,

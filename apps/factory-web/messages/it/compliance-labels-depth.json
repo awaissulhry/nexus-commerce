@@ -84,7 +84,9 @@
     "qrLiveUnknown": "Non ancora noto",
     "glove": "Livello del guanto {level}",
     "gloveGranted": "Come lo concede il certificato.",
-    "gloveNotGranted": "Nessun certificato di copertura indica ancora il livello."
+    "gloveNotGranted": "Nessun certificato di copertura indica ancora il livello.",
+    "originClaim": "Indicazione di origine",
+    "originClaimHint": "Stampata nelle lingue dell’etichetta con le parole approvate della frase; il controllo Made in Italy la verifica sul ciclo (L. 350/2003 art. 4(49))."
   },
   "sender": {
     "BRAND": "Indica il marchio: {name}",
@@ -399,5 +401,10 @@
     "noLabel": "La revisione non indica ancora un'etichetta.",
     "loading": "Calcolo della composizione…",
     "retry": "Riprova"
+  },
+  "originClaim": {
+    "none": "Nessuna",
+    "MADE_IN_ITALY": "Made in Italy",
+    "FULL_MADE_IN_ITALY": "100% Made in Italy"
   }
 }

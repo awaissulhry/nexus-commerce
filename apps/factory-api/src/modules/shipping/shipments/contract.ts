@@ -120,8 +120,8 @@ export const listShipmentsContract = defineContract({
           carrierCode: z.string().nullable(),
           carrierName: z.string().nullable(),
           serviceCode: z.string().nullable(),
-          /** Where it goes, as sent (the ship-to snapshot): city and country. */
-          shipTo: output({ city: z.string().nullable(), country: z.string().nullable() }),
+          /** Where it goes, as sent (the ship-to snapshot): city and country; B-W2b-GF2: and the postal code. */
+          shipTo: output({ city: z.string().nullable(), country: z.string().nullable(), postalCode: z.string().nullable() }),
           lines: z.number().int(),
           garments: z.number().int(),
           parcels: z.number().int(),

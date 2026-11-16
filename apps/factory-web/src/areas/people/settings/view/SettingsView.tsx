@@ -13,7 +13,7 @@ import type { OfficeScope } from '../../../../shell/scope/scope-model'
 import { ScopeSiteChip } from '../../../../shell/scope/view/ScopeSiteChip'
 import { KeysModal, LiveLine, NoPeopleAccess, useWords } from '../../_shared/parts'
 import type { Limits, RuleAction, RuleKind, RuleSource } from '../api'
-import { exampleOf, isChecked, lawHours, LIMIT_ORDER, limitHeld, limitsChanged, ROUNDING_CHOICES, roundingChanges, roundingHeld, SETTINGS_NAMESPACES, type LimitDraft, type SettingsCan } from '../model'
+import { exampleOf, lawHours, LIMIT_ORDER, limitHeld, limitsChanged, ROUNDING_CHOICES, roundingChanges, roundingHeld, SETTINGS_NAMESPACES, type LimitDraft, type SettingsCan } from '../model'
 import { AbsenceCard, CodeDialog, type AbsenceState, type CodesActions } from './AbsenceCard'
 import { ConsultantDialog, PayrollCard, ReviewCard, type PayrollActions, type PayrollState, type ReviewActions, type ReviewState } from './PayrollCard'
 import { GateDialogs, PrivacyCard, type PrivacyActions, type PrivacyState } from './PrivacyCard'
@@ -322,7 +322,6 @@ function LimitsCard({ model, actions }: { model: SettingsModel; actions?: Settin
                           <h3 id={`fw-ps-limit-${kind}`}>{t(`limits.kind.${kind}`)}</h3>
                           <span className="fw-ps-row">
                             <LawRef law={entry.law.legalReference} plain={t('limits.lawValue', { hours: lawHours(kind) })} labels={ds.lawRef} />
-                            {!isChecked(kind) && <span className="fw-ps-hint">{t('limits.notChecked')}</span>}
                           </span>
                         </div>
                         <div className="fw-ps-fields">

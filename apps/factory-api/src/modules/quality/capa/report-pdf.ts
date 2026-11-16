@@ -1,17 +1,19 @@
 import PDFDocument from 'pdfkit'
 import type { EightDReport, EightDTable } from '@nexus/factory-domain/quality/capa/report'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 
 /**
  * The 8D report on A4 (B-W2b-108; QHS-094), painted from factory-domain quality/capa/report's words with pdfkit's standard
- * fonts (the documents platform's WinAnsi rule: a character the fonts lack prints as "?"). The same report gives the same
+ * fonts (the documents platform's embedded fonts, B-W2b-GF2: a character they lack prints as "?"). The same report gives the same
  * bytes (no clock read here: the creation date is the report's date). Our company and its art. 2250 c.c. lines at the top,
  * the facts in two columns, the eight disciplines each with its heading, lines and table, the legal footer and the page on
  * every page.
  */
 
-const REGULAR = 'Helvetica'
-const BOLD = 'Helvetica-Bold'
+const REGULAR = FONT.regular
+const BOLD = FONT.bold
 const TEXT = '#111111'
 const MUTED = '#555555'
 const RULE = '#9a9a9a'
@@ -28,8 +30,9 @@ export async function renderEightD(report: EightDReport): Promise<Buffer> {
     compress: true,
     lang: report.language,
     displayTitle: true,
-    info: { Title: winAnsi(report.meta.title), Subject: winAnsi(report.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(report.meta.createdAt) },
+    info: { Title: printableText(report.meta.title), Subject: printableText(report.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(report.meta.createdAt) },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -49,10 +52,10 @@ function paint(pdf: PDFKit.PDFDocument, report: EightDReport): void {
   const bottom = (): number => pdf.page.height - MARGIN.bottom
   const text = (value: string, x: number, y: number, options: PDFKit.Mixins.TextOptions & { font?: string; size?: number; color?: string } = {}): number => {
     const { font = REGULAR, size = 9, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1, ...rest })
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1, ...rest })
     return pdf.y
   }
-  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => pdf.font(font).fontSize(size).heightOfString(winAnsi(value), { width: w, lineGap: 1 })
+  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => pdf.font(font).fontSize(size).heightOfString(printableText(value), { width: w, lineGap: 1 })
   const newPage = (): number => {
     pdf.addPage()
     return text(`${report.company.name} · ${report.title} · ${report.facts[0]?.value ?? ''}`, left, MARGIN.top, { size: 8, color: MUTED, width }) + 8

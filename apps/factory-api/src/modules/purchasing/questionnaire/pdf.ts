@@ -1,15 +1,17 @@
 import PDFDocument from 'pdfkit'
 import type { AnswerReport, ReportTable } from '@nexus/factory-domain/purchasing/questionnaire/report'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 
 /**
  * The questionnaire's two PDFs on A4 (B-W2b-172), painted from factory-domain purchasing/questionnaire/report's words with
- * pdfkit's standard fonts (the documents platform's WinAnsi rule: a character the fonts lack prints as "?"). The same
+ * the documents platform's embedded fonts (B-W2b-GF2: a character the fonts lack prints as "?"). The same
  * words give the same bytes (the creation date is the answer's time, never the clock). No money anywhere.
  */
 
-const REGULAR = 'Helvetica'
-const BOLD = 'Helvetica-Bold'
+const REGULAR = FONT.regular
+const BOLD = FONT.bold
 const TEXT = '#111111'
 const MUTED = '#555555'
 const RULE = '#9a9a9a'
@@ -25,8 +27,9 @@ async function painted(info: { title: string; language: string; createdAt: Date 
     compress: true,
     lang: info.language,
     displayTitle: true,
-    info: { Title: winAnsi(info.title), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: info.createdAt },
+    info: { Title: printableText(info.title), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: info.createdAt },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -50,12 +53,12 @@ function painter(pdf: PDFKit.PDFDocument, head: string) {
     const { font = REGULAR, size = 9, color = TEXT, ...rest } = options
     let at = y
     for (const line of lines(value)) {
-      pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(line === '' ? ' ' : line), x, at, { lineGap: 1, ...rest })
+      pdf.font(font).fontSize(size).fillColor(color).text(printableText(line === '' ? ' ' : line), x, at, { lineGap: 1, ...rest })
       at = pdf.y
     }
     return at
   }
-  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => lines(value).reduce((sum, line) => sum + pdf.font(font).fontSize(size).heightOfString(winAnsi(line === '' ? ' ' : line), { width: w, lineGap: 1 }), 0)
+  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => lines(value).reduce((sum, line) => sum + pdf.font(font).fontSize(size).heightOfString(printableText(line === '' ? ' ' : line), { width: w, lineGap: 1 }), 0)
   const newPage = (): number => {
     pdf.addPage()
     return text(head, left, MARGIN.top, { size: 8, color: MUTED, width }) + 8

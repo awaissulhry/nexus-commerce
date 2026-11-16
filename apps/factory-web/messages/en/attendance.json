@@ -446,7 +446,9 @@
     "break": "A break once the working day passes six hours.",
     "cap": "Overtime has a yearly cap (250 hours by law unless the contract says otherwise).",
     "evacuation": "The employer organises the evacuation of workers in an emergency.",
-    "rest": "At least 11 hours of consecutive rest every 24 hours."
+    "night": "A night worker works at most 8 hours in 24, on average.",
+    "rest": "At least 11 hours of consecutive rest every 24 hours.",
+    "weeklyRest": "At least 24 consecutive hours of rest every 7 days, on top of the 11 hours of daily rest, averaged over 14 days."
   },
   "limit": {
     "DAILY_REST": {
@@ -455,6 +457,12 @@
       "rest": "Rest of {rest} between {from} and {to}: minimum {limit}.",
       "short": "Rest",
       "span": "A working day of {span} ({from}–{to}) leaves less than {limit} of rest."
+    },
+    "NIGHT_AVERAGE": {
+      "name": "Night work",
+      "ok": "A night worker works at most {limit} in 24 hours.",
+      "short": "Night",
+      "words": "{work} of work {from}–{to}, {night} of it at night: a night worker works at most {limit} in 24 hours."
     },
     "OVERTIME_YEARLY_CAP": {
       "name": "Yearly overtime cap",
@@ -465,6 +473,13 @@
       "name": "48 h weekly average",
       "short": "48 h",
       "words": "{average} a week on average over {weeks} weeks: at most {limit} over {months} months."
+    },
+    "WEEKLY_REST": {
+      "name": "Weekly rest",
+      "none": "No rest of the week was found: at least {needed} ({limit} on top of the {daily} between shifts), averaged over 14 days.",
+      "ok": "At least {limit} of rest every 7 days on top of the {daily} between shifts ({needed}), averaged over 14 days.",
+      "rest": "Longest rest of the week {rest} (from {from} to {to}): at least {needed} ({limit} on top of the {daily} between shifts), averaged over 14 days.",
+      "short": "Weekly rest"
     }
   },
   "limitState": {

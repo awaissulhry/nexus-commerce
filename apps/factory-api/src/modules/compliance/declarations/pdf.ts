@@ -1,11 +1,13 @@
 import PDFDocument from 'pdfkit'
 import { create as createQr } from 'qrcode'
 import type { PackPaper } from '@nexus/factory-domain/compliance/declarations/pack'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 
 /**
- * The DoC generator's two papers (B-W2b-257), painted on A4 portrait with pdfkit's standard fonts (the documents platform's
- * WinAnsi rule: a character the standard fonts lack prints as "?"):
+ * The DoC generator's two papers (B-W2b-257), painted on A4 portrait with the documents platform's embedded fonts
+ * (B-W2b-GF2, G076: every European letter prints; a character the fonts lack prints as "?"):
  *
  *   renderDeclaration  a generated DoC draft as it would print: the title and number in its language, the nine Annex IX
  *                      points, and across every page the draft words of GATE-PPE-TEXTS (never a signature field: a generated
@@ -14,8 +16,8 @@ import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
  *                      documents, the certificate in summary and the batches with the QR of their public DoC address.
  */
 
-const REGULAR = 'Helvetica'
-const BOLD = 'Helvetica-Bold'
+const REGULAR = FONT.regular
+const BOLD = FONT.bold
 const TEXT = '#111111'
 const MUTED = '#555555'
 const RULE = '#9a9a9a'
@@ -33,8 +35,9 @@ function open(meta: { title: string; subject: string; language: string; createdA
     compress: true,
     lang: meta.language,
     displayTitle: true,
-    info: { Title: winAnsi(meta.title), Subject: winAnsi(meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: meta.createdAt },
+    info: { Title: printableText(meta.title), Subject: printableText(meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: meta.createdAt },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -43,10 +46,10 @@ function open(meta: { title: string; subject: string; language: string; createdA
   })
   const text = (value: string, x: number, y: number, options: TextOptions = {}): number => {
     const { font = REGULAR, size = 10, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1.5, ...rest })
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1.5, ...rest })
     return pdf.y
   }
-  const heightOf = (value: string, width: number, font = REGULAR, size = 10): number => pdf.font(font).fontSize(size).heightOfString(winAnsi(value), { width, lineGap: 1.5 })
+  const heightOf = (value: string, width: number, font = REGULAR, size = 10): number => pdf.font(font).fontSize(size).heightOfString(printableText(value), { width, lineGap: 1.5 })
   const finish = async (): Promise<Buffer> => {
     pdf.end()
     await ended
@@ -66,8 +69,8 @@ function footers(pdf: PDFKit.PDFDocument, words: string, pageWords: (page: numbe
     pdf.page.margins.bottom = 0
     const top = pdf.page.height - FOOTER_TOP
     pdf.save().moveTo(left, top).lineTo(right, top).lineWidth(0.4).strokeColor(RULE).stroke().restore()
-    pdf.font(REGULAR).fontSize(7).fillColor(MUTED).text(winAnsi(words), left, top + 5, { width: right - left - 100, lineGap: 1 })
-    pdf.font(REGULAR).fontSize(7.5).fillColor(MUTED).text(winAnsi(pageWords(index - range.start + 1, range.count)), right - 96, top + 5, { width: 96, align: 'right' })
+    pdf.font(REGULAR).fontSize(7).fillColor(MUTED).text(printableText(words), left, top + 5, { width: right - left - 100, lineGap: 1 })
+    pdf.font(REGULAR).fontSize(7.5).fillColor(MUTED).text(printableText(pageWords(index - range.start + 1, range.count)), right - 96, top + 5, { width: 96, align: 'right' })
     pdf.page.margins.bottom = savedBottom
   }
 }
