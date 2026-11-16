@@ -15,6 +15,8 @@ import { invoiceDetail, officeInvoice, readInvoice, readLines, type InvoiceDetai
 import { lockInvoice, readSends } from './store'
 // B-W2b-F47: the correction's new lines take the company's tax rules as every draft does (the stamp duty decided again).
 import { stampDutyAtCorrection, taxedLines } from '../tax-codes/apply'
+// B-W2b-GF2: the new lines rest on the declaration of intent the invoice names, and its use follows them.
+import { intentAtCorrection, intentLinesAtCorrection } from '../tax-codes/apply'
 
 /**
  * Correcting a rejected invoice (FIN-087; Provv. AdE 89757/2018, circolare AdE 13/E/2018: a file SDI rejected counts as
@@ -25,7 +27,10 @@ import { stampDutyAtCorrection, taxedLines } from '../tax-codes/apply'
  *                 VAT decided as for a draft and their order lines and DDTs checked; B-W2b-F47: then the company's tax
  *                 rules as on every draft (tax-codes/apply.ts taxedLines, on the invoice's date): the STAMP_DUTY line is
  *                 decided again from the new lines (added, kept or taken away), and the quarter counted again as the
- *                 issue counts it (stampDutyAtCorrection). Left out, the lines stay as they are, the stamp line too;
+ *                 issue counts it (stampDutyAtCorrection). B-W2b-GF2: on an invoice that names a declaration of intent
+ *                 the new taxable lines rest on it (N3.5) as a draft's do, and the declaration's use moves from the old
+ *                 lines' N3.5 net to the new (the issue's checks again, this invoice's own share given back first; a
+ *                 problem refuses the correction in words). Left out, the lines stay as they are, the stamp line too;
  *   text          causale, the customer's purchase orders, the payment terms (rebuilt for the new total);
  *   totals        recomputed from the lines (factory-domain computeInvoiceTotals); never below what is paid and credited
  *                 on it (the …_money_guards trigger refuses it too);
@@ -134,7 +139,9 @@ export async function correctInCommand(tools: CommandTools, invoiceId: string, i
     }
     await checkSources(tx, current, prepared)
     const deductions = existing.filter((row) => row.kind === 'DEPOSIT_DEDUCTION').map(kept)
-    const untaxed: LineToWrite[] = [...prepared.map((line) => ({ ...line, depositInvoiceId: null })), ...(deductions.filter((line) => line !== null) as LineToWrite[])]
+    // B-W2b-GF2: the new lines rest on the declaration the invoice names (N3.5), as a draft's do.
+    const intended = await intentLinesAtCorrection(tx, current, prepared, dayOf(current.issueDate!))
+    const untaxed: LineToWrite[] = [...intended.map((line) => ({ ...line, depositInvoiceId: null })), ...(deductions.filter((line) => line !== null) as LineToWrite[])]
     // B-W2b-F47: the stamp duty (and the tax codes' law) decided as on every draft, on the invoice's own date.
     const lines: LineToWrite[] = (await taxedLines(tx, current, untaxed, current.priceBasis, dayOf(current.issueDate!))).map((line) => ({ ...line, depositInvoiceId: line.depositInvoiceId ?? null }))
     totals = computeInvoiceTotals(
@@ -143,6 +150,8 @@ export async function correctInCommand(tools: CommandTools, invoiceId: string, i
       current.currency,
     )
     await rewriteLines(tools, current, lines, totals.lines)
+    // B-W2b-GF2: the declaration's use moves from the replaced lines to the new ones.
+    await intentAtCorrection(tools, current, existing, await readLines(tx, invoiceId), dayOf(current.issueDate!))
   } else {
     const cores = existing.map(kept)
     if (cores.every((line) => line !== null)) totals = computeInvoiceTotals((cores as LineToWrite[]).map((line) => line.core), current.priceBasis, current.currency)

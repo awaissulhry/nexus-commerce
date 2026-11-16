@@ -285,7 +285,8 @@
       "care": "Simboli di manutenzione",
       "level": "Livello del guanto",
       "gpsrContact": "Contatto GPSR",
-      "qr": "QR alla dichiarazione pubblica"
+      "qr": "QR alla dichiarazione pubblica",
+      "origin": "Indicazione di origine"
     },
     "languages": "Lingue",
     "languagesHint": "Codici ISO 639-1 (it, en, de…), al massimo 8.",

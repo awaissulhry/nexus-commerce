@@ -161,7 +161,6 @@
       "NIGHT_AVERAGE": "At most, on average"
     },
     "lawValue": "The law says {hours} h.",
-    "notChecked": "Kept here, not checked yet",
     "months": "Reference period",
     "break": "Break of",
     "action": "When it is reached",

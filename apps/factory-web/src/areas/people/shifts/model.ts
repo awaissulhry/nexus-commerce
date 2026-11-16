@@ -540,7 +540,18 @@ export function warningWords(warning: Pick<LimitWarning, 'rule' | 'values'>, loc
         params: { week: hoursWords(number(values, 'weekMinutes')), day: dayShort(text(values, 'week'), locale), average: hoursWords(number(values, 'averageMinutes')), weeks: number(values, 'weeks'), limit, months: number(values, 'referenceMonths') },
       }
     case 'OVERTIME_YEARLY_CAP':
+      // B-W2b-GF2: the cap counts the overtime worked too; its hours only when the API names them (people.attendance.view).
+      if ('workedMinutes' in values) return { key: 'warn.OVERTIME_YEARLY_CAP_WORKED', params: { year: text(values, 'year'), total: hoursWords(number(values, 'plannedMinutes') + number(values, 'workedMinutes')), worked: hoursWords(number(values, 'workedMinutes')), planned: hoursWords(number(values, 'plannedMinutes')), limit } }
+      if ('withWorked' in values) return { key: 'warn.OVERTIME_YEARLY_CAP_WITH_WORKED', params: { year: text(values, 'year'), limit } }
       return { key: 'warn.OVERTIME_YEARLY_CAP', params: { year: text(values, 'year'), planned: hoursWords(number(values, 'plannedMinutes')), limit } }
+    // B-W2b-GF2: weekly rest (art. 9) and night work (art. 13).
+    case 'WEEKLY_REST':
+      return {
+        key: 'from' in values ? 'warn.WEEKLY_REST.rest' : 'warn.WEEKLY_REST.none',
+        params: { rest: hoursWords(number(values, 'restMinutes')), from: text(values, 'from'), to: text(values, 'to'), day: dayShort(text(values, 'week'), locale), limit, daily: hoursWords(number(values, 'dailyRestMinutes')), needed: hoursWords(number(values, 'neededMinutes')) },
+      }
+    case 'NIGHT_AVERAGE':
+      return { key: 'warn.NIGHT_AVERAGE', params: { work: hoursWords(number(values, 'workMinutes')), night: hoursWords(number(values, 'nightMinutes')), from: text(values, 'from'), to: text(values, 'to'), limit } }
   }
 }
 

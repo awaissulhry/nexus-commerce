@@ -176,6 +176,10 @@
     "choosePerson": "Choose the person",
     "daysHint": "Days of absence beyond the day of the event.",
     "dueBy": "Due by {at} (48 hours after it).",
+    "fatal": "Fatal or presumed fatal accident",
+    "fatalHint": "Due by {at}: 24 hours after the accident, by any means that proves it was sent (DPR 1124/1965 art. 53). No absence and no certificate are waited for.",
+    "fatalTitle": "Report within 24 hours of the accident",
+    "fatalTypeHint": "Due 24 hours after the accident; it takes no absence and no certificate.",
     "filedAt": "Filed at",
     "filedHint": "Once sent: when, INAIL’s protocol number and its receipt.",
     "filedLegend": "Sent on the INAIL portal",
@@ -208,6 +212,7 @@
     "WAITING_CERTIFICATE": "Waiting for the certificate"
   },
   "filingType": {
+    "FATAL": "Fatal accident report",
     "INSURANCE": "Insurance report",
     "STATISTICAL": "Statistical communication"
   },
@@ -479,7 +484,9 @@
     "CERTIFICATE_IN_FUTURE": "The certificate was received at the latest now.",
     "CERTIFICATE_MISSING": "Record when the medical certificate was received first: it starts the 48 hours.",
     "COURSE_NOT_ACTIVE": "The course is not an active course of the company.",
+    "FATAL_NO_CERTIFICATE": "A fatal accident is reported within 24 hours of the accident, not of a certificate: it takes no certificate and no absence.",
     "FILED_BEFORE_CERTIFICATE": "A filing is sent after the certificate was received.",
+    "FILED_BEFORE_EVENT": "A filing is sent after the incident happened.",
     "FILED_IN_FUTURE": "It was filed at the latest now.",
     "FILING_EXISTS": "This person has a filing of that type already: change that one.",
     "FILING_FILED": "This filing was recorded as filed; it no longer changes.",

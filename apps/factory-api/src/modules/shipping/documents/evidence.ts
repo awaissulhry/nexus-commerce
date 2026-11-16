@@ -83,8 +83,10 @@ async function evidenceRow(db: CommandTx, shipmentId: string) {
 async function needOf(db: CommandTx, shipment: Pick<ShipmentHeader, 'salesOrderId' | 'companyId' | 'shipTo'>) {
   const order = await db.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { taxMode: true } })
   const company = await db.company.findUnique({ where: { id: shipment.companyId }, select: { country: true } })
-  const shipTo = shipment.shipTo as { country?: unknown } | null
-  return evidenceNeed({ taxMode: order?.taxMode ?? 'IT_B2B', shipToCountry: typeof shipTo?.country === 'string' ? shipTo.country : null, companyCountry: company?.country ?? 'IT' })
+  const shipTo = shipment.shipTo as { country?: unknown; postalCode?: unknown; city?: unknown } | null
+  const text = (value: unknown): string | null => (typeof value === 'string' ? value : null)
+  // B-W2b-GF2: the postal code and town tell a special fiscal territory apart (an export, never art. 41).
+  return evidenceNeed({ taxMode: order?.taxMode ?? 'IT_B2B', shipToCountry: text(shipTo?.country), shipToPostalCode: text(shipTo?.postalCode), shipToCity: text(shipTo?.city), companyCountry: company?.country ?? 'IT' })
 }
 
 /** The record's evidence part (also the answer of every write here). */

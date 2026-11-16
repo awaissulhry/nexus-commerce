@@ -1,19 +1,21 @@
 import PDFDocument from 'pdfkit'
 import { code128Bars } from '@nexus/factory-domain/labels/code128'
 import type { PapersTable, RmaPapers } from '@nexus/factory-domain/sales/returns-depth/papers'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 
 /**
  * The RMA papers on A4 (B-W2b-341; SAL-346), painted from factory-domain sales/returns-depth/papers' words with pdfkit's
- * standard fonts (the documents platform's WinAnsi rule): our company at the top left, the title and number at the top
+ * documents platform's embedded fonts (B-W2b-GF2): our company at the top left, the title and number at the top
  * right with the scan code as a Code 128 barcode (factory-domain labels/code128, a 10-module quiet zone) and as text, the
  * facts in two columns, what comes back, where it goes, the transport, the conditions (and a consumer's withdrawal words),
  * then the box label at the foot behind a dashed cut line, with the barcode again. The same papers give the same bytes
  * (the creation date is the papers' date).
  */
 
-const REGULAR = 'Helvetica'
-const BOLD = 'Helvetica-Bold'
+const REGULAR = FONT.regular
+const BOLD = FONT.bold
 const TEXT = '#111111'
 const MUTED = '#555555'
 const RULE = '#9a9a9a'
@@ -31,8 +33,9 @@ export async function renderRmaPapers(papers: RmaPapers): Promise<Buffer> {
     compress: true,
     lang: papers.language,
     displayTitle: true,
-    info: { Title: winAnsi(papers.meta.title), Subject: winAnsi(papers.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(papers.meta.createdAt) },
+    info: { Title: printableText(papers.meta.title), Subject: printableText(papers.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(papers.meta.createdAt) },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -52,10 +55,10 @@ function paint(pdf: PDFKit.PDFDocument, papers: RmaPapers): void {
   const bottom = (): number => pdf.page.height - MARGIN.bottom
   const text = (value: string, x: number, y: number, options: PDFKit.Mixins.TextOptions & { font?: string; size?: number; color?: string } = {}): number => {
     const { font = REGULAR, size = 9, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1, ...rest })
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1, ...rest })
     return pdf.y
   }
-  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => pdf.font(font).fontSize(size).heightOfString(winAnsi(value), { width: w, lineGap: 1 })
+  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => pdf.font(font).fontSize(size).heightOfString(printableText(value), { width: w, lineGap: 1 })
   /** The scan code as bars (height in points) with the code under it, centred in [x, x + w]; answers the bottom. */
   const barcode = (x: number, y: number, w: number, height: number, codeSize: number): number => {
     const symbol = code128Bars(papers.scanCode)

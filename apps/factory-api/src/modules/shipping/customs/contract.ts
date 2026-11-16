@@ -4,6 +4,7 @@ import { DOCUMENT_LANGUAGES } from '@nexus/factory-domain/documents/model'
 import { COMMERCIAL_INVOICE_NOTES_MAX } from '@nexus/factory-domain/shipping/customs/commercial-invoice'
 import { POSTAL_COMMENTS_MAX } from '@nexus/factory-domain/shipping/customs/postal-forms'
 import { CN23_BECAUSE, CUSTOMS_REFUSALS, DECLARATION_STATUSES, DESTINATION_CLASSES, EXIT_ALERT_DAYS, EXPORT_REASONS, POSTAL_FORMS } from '@nexus/factory-domain/shipping/customs/rules'
+import { SPECIAL_TERRITORIES } from '@nexus/factory-domain/tax/special-territories'
 
 /**
  * Export and customs (B-W2b-409; LOG-086, LOG-087, LOG-088, LOG-089, LOG-095; design warehouse.shipments record › Export,
@@ -53,7 +54,12 @@ export const exportContract = defineContract({
   response: {
     200: output({
       shipment: output({ id: id(), number: z.string(), status: z.string(), shippedAt: instant().nullable(), siteId: id(), companyId: id() }),
-      destination: output({ country: z.string().nullable(), class: z.enum(DESTINATION_CLASSES).nullable() }),
+      // B-W2b-GF2: the EU special fiscal territory of the ship-to (Livigno, the Canary Islands …), or null.
+      destination: output({
+        country: z.string().nullable(),
+        class: z.enum(DESTINATION_CLASSES).nullable(),
+        territory: output({ key: z.enum(SPECIAL_TERRITORIES), vat: z.enum(['INSIDE', 'OUTSIDE']), customs: z.enum(['INSIDE', 'OUTSIDE']), law: z.string(), words: output({ en: z.string(), it: z.string() }) }).nullable(),
+      }),
       needed: z.boolean(),
       eori: z.string().nullable(),
       deliveryTerms: z.string().nullable(),

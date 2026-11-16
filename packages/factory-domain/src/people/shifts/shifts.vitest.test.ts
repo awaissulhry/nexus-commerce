@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { localInstant } from '../../calendars/dates'
 import type { Pattern } from '../../calendars/patterns'
-import { LAW_LIMITS, referenceWeeks, rosterWarnings, rulesInForce, warningKey, weeklyAverageWindowStart, yearlyCapWarnings, type PlannedWork, type RuleRow } from './limits'
+import { LAW_LIMITS, LIMIT_KINDS, nightWarnings, referenceWeeks, rosterWarnings, rulesInForce, warningKey, weeklyAverageWindowStart, weeklyRestWarnings, weeklyRestWindow, yearlyCapWarnings, type PlannedWork, type RuleRow } from './limits'
 import { cellWords, choicesOf, defaultCellOf, mondayOf, overtimeActionRefusal, overtimePlanProblems, overtimeStageOf, sameCell, shiftFromPattern, windowProblems } from './rules'
 
 /**
@@ -180,8 +180,92 @@ describe('working-time warnings in words (D.Lgs. 66/2003 arts. 4, 5, 7, 8)', () 
     expect(warningKey({ rule: 'DAILY_REST', date: '2027-03-09' })).toBe('DAILY_REST|2027-03-09')
   })
 
+  // B-W2b-GF2: the cap counts the overtime worked too, naming its hours only to a reader who may see them.
+  it('counts the overtime worked this year in the yearly cap, its hours named only when shown', () => {
+    expect(yearlyCapWarnings({ date: '2027-03-10', plannedMinutes: 600, workedMinutes: 14400 }, rules.OVERTIME_YEARLY_CAP)).toEqual([])
+    const shown = yearlyCapWarnings({ date: '2027-03-10', plannedMinutes: 720, workedMinutes: 14400, showWorked: true }, rules.OVERTIME_YEARLY_CAP)
+    expect(shown).toEqual([expect.objectContaining({ words: 'Overtime in 2027 would be 252 h (240 h worked, 12 h planned) — at most 250 h a year (D.Lgs. 66/2003 art. 5)', values: { plannedMinutes: 720, workedMinutes: 14400, limitMinutes: 15000, year: '2027' } })])
+    const hidden = yearlyCapWarnings({ date: '2027-03-10', plannedMinutes: 720, workedMinutes: 14400 }, rules.OVERTIME_YEARLY_CAP)
+    expect(hidden[0]!.words).toBe('Planned overtime in 2027 would pass the yearly cap together with the overtime already worked — at most 250 h a year (D.Lgs. 66/2003 art. 5)')
+    expect(JSON.stringify(hidden)).not.toMatch(/14400|240 h/)
+  })
+
   it('uses real minutes across a clock change (a night shift on the last Sunday of October is 9 hours)', () => {
     const night = shift('2026-10-24', 1320, 1800)
     expect(night.minutes).toBe(540)
+  })
+})
+
+// ---- B-W2b-GF2: weekly rest (art. 9) and night work (art. 13) ----------------------------------------------------------
+
+describe('weekly rest and night work (D.Lgs. 66/2003 arts. 9, 13)', () => {
+  const rules = rulesInForce([], { companyId: 'A', siteId: 'A1' })
+  const day = (from: string, offset: number) => new Date(Date.parse(`${from}T12:00:00Z`) + offset * 86_400_000).toISOString().slice(0, 10)
+  /** 06:00-12:00 on each day of `from` … `days` days on, except the weekdays left off (1 Monday … 7 Sunday). */
+  const mornings = (from: string, count: number, off: readonly number[] = []) =>
+    Array.from({ length: count }, (_, index) => day(from, index))
+      .filter((date) => !off.includes(((new Date(`${date}T12:00:00Z`).getUTCDay() + 6) % 7) + 1))
+      .map((date) => shift(date, 360, 720))
+  const week = (monday: string) => new Set(Array.from({ length: 7 }, (_, index) => day(monday, index)))
+
+  it('checks every limit People settings keep: the weekly rest and night work too, with the law\'s values', () => {
+    expect(LIMIT_KINDS).toEqual(['DAILY_REST', 'BREAK_AFTER', 'WEEKLY_AVERAGE', 'OVERTIME_YEARLY_CAP', 'WEEKLY_REST', 'NIGHT_AVERAGE'])
+    expect(rules.WEEKLY_REST).toMatchObject({ limitMinutes: 1440, legalReference: 'D.Lgs. 66/2003 art. 9', source: 'DEFAULT', action: 'WARN' })
+    expect(rules.NIGHT_AVERAGE).toMatchObject({ limitMinutes: 480, legalReference: 'D.Lgs. 66/2003 art. 13', source: 'DEFAULT', action: 'WARN' })
+    expect(weeklyRestWindow('2027-03-10', '2027-03-12')).toEqual({ from: '2027-02-28', to: '2027-03-22' })
+  })
+
+  it('a week off on Sunday has its rest: 24 h on top of the 11 h between shifts (42 h from Saturday noon to Monday 06:00)', () => {
+    const window = weeklyRestWindow('2027-03-08', '2027-03-14')
+    const work = mornings(window.from, 23, [7])
+    expect(weeklyRestWarnings(work, rules.WEEKLY_REST, rules.DAILY_REST, week('2027-03-08'), window, ROME)).toEqual([])
+  })
+
+  it('warns on a week with no 35-hour rest when the 14 days around it do not make up for it, on the week\'s last day', () => {
+    const window = weeklyRestWindow('2027-03-08', '2027-03-14')
+    const work = mornings(window.from, 23)
+    const warnings = rosterWarnings({ work, rules, report: week('2027-03-08'), timeZone: ROME, employedFrom: '2020-01-01', window })
+    expect(warnings).toEqual([
+      expect.objectContaining({
+        rule: 'WEEKLY_REST',
+        level: 'WARN',
+        date: '2027-03-14',
+        words: 'The longest rest in the week of 8 Mar is 18 h (from Mon 12:00 to Tue 06:00) — at least 24 h of consecutive rest every 7 days on top of the 11 h between shifts (35 h), as an average over 14 days (D.Lgs. 66/2003 art. 9)',
+        values: expect.objectContaining({ restMinutes: 1080, neededMinutes: 2100, limitMinutes: 1440, dailyRestMinutes: 660, week: '2027-03-08' }),
+      }),
+    ])
+    // A CCNL's weekly rest that BLOCKs holds the plan.
+    const blocking = rulesInForce([row('WEEKLY_REST', { action: 'BLOCK', source: 'CCNL', legalReference: 'CCNL art. 12' })], { companyId: 'A', siteId: 'A1' })
+    expect(weeklyRestWarnings(work, blocking.WEEKLY_REST, blocking.DAILY_REST, week('2027-03-08'), window, ROME)[0]).toMatchObject({ level: 'BLOCK', law: 'CCNL art. 12' })
+  })
+
+  it('averages over 14 days: a long rest the week before makes up for a week worked every day', () => {
+    const window = weeklyRestWindow('2027-03-08', '2027-03-14')
+    // Week of 1 Mar: Friday to Sunday off (90 h); week of 8 Mar: every day; week of 15 Mar: Sunday off.
+    const work = [...mornings(window.from, 5), ...mornings('2027-03-08', 7), ...mornings('2027-03-15', 8, [7])]
+    expect(weeklyRestWarnings(work, rules.WEEKLY_REST, rules.DAILY_REST, week('2027-03-08'), window, ROME)).toEqual([])
+    // Without that long rest, the week of 8 Mar is short again.
+    const tight = [...mornings(window.from, 15), ...mornings('2027-03-15', 8, [7])]
+    expect(weeklyRestWarnings(tight, rules.WEEKLY_REST, rules.DAILY_REST, week('2027-03-08'), window, ROME).map((warning) => warning.date)).toEqual(['2027-03-14'])
+  })
+
+  it('never judges a week the window does not hold whole (a rest cut by the edge is not known)', () => {
+    const work = mornings('2027-03-08', 7)
+    expect(weeklyRestWarnings(work, rules.WEEKLY_REST, rules.DAILY_REST, week('2027-03-08'), { from: '2027-03-08', to: '2027-03-14' }, ROME)).toEqual([])
+    expect(rosterWarnings({ work, rules, report: week('2027-03-08'), timeZone: ROME, employedFrom: '2020-01-01' }).filter((warning) => warning.rule === 'WEEKLY_REST')).toEqual([])
+  })
+
+  it('a night worker\'s day (3 h or more between 22:00 and 06:00) works at most 8 h; a long day shift is not night work', () => {
+    const long = shift('2027-03-08', 1320, 1920, 30)
+    expect(nightWarnings([long], rules.NIGHT_AVERAGE, new Set(['2027-03-08']), ROME)).toEqual([
+      expect.objectContaining({ rule: 'NIGHT_AVERAGE', level: 'WARN', date: '2027-03-08', words: '9 h 30 min of work 22:00-08:00, 8 h of it at night — a night worker works at most 8 h in 24 hours (D.Lgs. 66/2003 art. 13)', values: { workMinutes: 570, nightMinutes: 480, limitMinutes: 480, from: '22:00', to: '08:00' } }),
+    ])
+    expect(nightWarnings([shift('2027-03-08', 1320, 1800, 30)], rules.NIGHT_AVERAGE, new Set(['2027-03-08']), ROME)).toEqual([])
+    expect(nightWarnings([shift('2027-03-08', 360, 960, 30)], rules.NIGHT_AVERAGE, new Set(['2027-03-08']), ROME)).toEqual([])
+    // Evening into the night: 18:00-03:00 with an hour's break is 8 h, 5 h of it at night: within the limit.
+    expect(nightWarnings([shift('2027-03-08', 1080, 1620, 60)], rules.NIGHT_AVERAGE, new Set(['2027-03-08']), ROME)).toEqual([])
+    // Two hours at night only: not a night worker's day, whatever its length.
+    expect(nightWarnings([shift('2027-03-08', 840, 1440, 30)], rules.NIGHT_AVERAGE, new Set(['2027-03-08']), ROME)).toEqual([])
+    expect(rosterWarnings({ work: [long], rules, report: new Set(['2027-03-08']), timeZone: ROME, employedFrom: '2020-01-01' }).map((warning) => warning.rule)).toEqual(['NIGHT_AVERAGE'])
   })
 })

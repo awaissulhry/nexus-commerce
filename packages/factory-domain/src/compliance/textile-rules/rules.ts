@@ -134,6 +134,8 @@ export interface LabelFacts {
   readonly animalOriginPhrase: boolean
   readonly care: readonly CareEntry[]
   readonly layout: Pick<LabelLayout, 'texts'>
+  /** B-W2b-GF2 (G032): the origin claim the label prints (its phrase's key); null or left out: none. */
+  readonly originClaimKey?: string | null
 }
 
 /** The lines of one colourway (null: a style without colourways), in the size asked. */
@@ -313,7 +315,8 @@ export function textileChecks(facts: TextileFacts, switches: Switches): TextileR
   }
 
   // PRD-344: Made in Italy (switch).
-  const origin = originCheck(facts.steps, facts.plants, facts.style.originCountry)
+  // B-W2b-GF2 (G032): the label's own origin claim is checked too.
+  const origin = originCheck(facts.steps, facts.plants, facts.style.originCountry, facts.label?.originClaimKey ?? null)
   {
     const words =
       origin.madeInItaly === 'ALLOWED'

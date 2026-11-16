@@ -143,7 +143,8 @@ export async function listShipments(caller: CommandCaller, query: ListShipmentsQ
   const at = (value: Date | null) => (value ? toUtcIso(value) : null)
   const place = (shipTo: unknown) => {
     const value = shipTo && typeof shipTo === 'object' ? (shipTo as Record<string, unknown>) : {}
-    return { city: typeof value.city === 'string' && value.city !== '' ? value.city : null, country: typeof value.country === 'string' && value.country !== '' ? value.country : null }
+    // B-W2b-GF2: the postal code too (with the town it tells a special fiscal territory apart: the Export column).
+    return { city: typeof value.city === 'string' && value.city !== '' ? value.city : null, country: typeof value.country === 'string' && value.country !== '' ? value.country : null, postalCode: typeof value.postalCode === 'string' && value.postalCode !== '' ? value.postalCode : null }
   }
   // Decimal arithmetic (factory-db exports Prisma's types, not its runtime Decimal: the first weight starts the sum).
   const weight = (parcels: readonly { grossWeightKg: Prisma.Decimal | null }[]) => {

@@ -196,6 +196,8 @@ const incidentRulesAnswer = z.object({
     statisticalFromDays: z.number(),
     insuranceAboveDays: z.number(),
     hoursAfterCertificate: z.number(),
+    // B-W2b-GF2: a fatal or presumed fatal accident (DPR 1124/1965 art. 53).
+    hoursAfterFatalAccident: z.number().optional().default(24),
     words: z.object({ en: z.array(z.string()), it: z.array(z.string()) }),
   }),
   reminders: z.object({ hoursBefore: z.array(z.number()) }),

@@ -1,7 +1,9 @@
 import PDFDocument from 'pdfkit'
 import { code128Bars } from '@nexus/factory-domain/labels/code128'
 import { fitText, LABEL_LAYOUT, MAX_LABEL_COPIES, type LaidOutLabel } from '@nexus/factory-domain/labels/zpl'
-import { PDF_CREATOR, winAnsi } from './pdf'
+import { PDF_CREATOR } from './pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from './fonts'
 
 /**
  * A label as a PDF, for any printer (plan A1 §3.9 "bundle tickets and hide labels on any printer"; GAP-007's browser
@@ -32,8 +34,9 @@ export async function renderLabelPdf(given: LaidOutLabel | readonly LaidOutLabel
     autoFirstPage: false,
     compress: true,
     lang: first.language,
-    info: { Title: winAnsi(`${first.heading} ${first.scanId}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(0) },
+    info: { Title: printableText(`${first.heading} ${first.scanId}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(0) },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -46,8 +49,8 @@ export async function renderLabelPdf(given: LaidOutLabel | readonly LaidOutLabel
   const inner = size[0] - 2 * margin
   const line = (value: string, x: number, y: number, height: number, width: number, bold = false): void => {
     // A character is about 0.55 of the font height wide, as for the printer's font 0 (fitText).
-    pdf.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(height).fillColor('#000000')
-    pdf.text(winAnsi(fitText(value, Math.round(width), Math.round(height))), x, y, { width, lineBreak: false, height: height * 1.2 })
+    pdf.font(bold ? FONT.bold : FONT.regular).fontSize(height).fillColor('#000000')
+    pdf.text(printableText(fitText(value, Math.round(width), Math.round(height))), x, y, { width, lineBreak: false, height: height * 1.2 })
   }
 
   for (const label of labels) {

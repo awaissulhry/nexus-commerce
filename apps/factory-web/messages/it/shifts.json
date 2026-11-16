@@ -162,8 +162,10 @@
   "law": {
     "BREAK_AFTER": "Una pausa quando la giornata supera le 6 ore.",
     "DAILY_REST": "Almeno 11 ore consecutive di riposo ogni 24 ore.",
+    "NIGHT_AVERAGE": "Un lavoratore notturno lavora al massimo 8 ore nelle 24, in media.",
     "OVERTIME_YEARLY_CAP": "Al massimo 250 ore di straordinario l’anno, salvo diversa previsione del contratto.",
-    "WEEKLY_AVERAGE": "Al massimo 48 ore settimanali in media, straordinario compreso."
+    "WEEKLY_AVERAGE": "Al massimo 48 ore settimanali in media, straordinario compreso.",
+    "WEEKLY_REST": "Almeno 24 ore consecutive di riposo ogni 7 giorni, oltre alle 11 ore di riposo giornaliero, in media su 14 giorni."
   },
   "legend": {
     "default": "Tenue: turno predefinito",
@@ -405,8 +407,15 @@
       "rest": "Riposo di {rest} tra le {from} ({day}) e le {to} — minimo {limit}",
       "span": "Una giornata di {span} ({from}–{to}) lascia meno di {limit} di riposo in 24 ore"
     },
+    "NIGHT_AVERAGE": "{work} di lavoro {from}–{to}, di cui {night} di notte — un lavoratore notturno lavora al massimo {limit} nelle 24 ore",
     "OVERTIME_YEARLY_CAP": "Lo straordinario pianificato nel {year} sarebbe {planned} — al massimo {limit} l’anno",
-    "WEEKLY_AVERAGE": "{week} pianificate nella settimana del {day}; {average} di media su {weeks} settimane — al massimo {limit} di media su {months} mesi"
+    "OVERTIME_YEARLY_CAP_WITH_WORKED": "Lo straordinario pianificato del {year} supererebbe il limite annuo insieme a quello già lavorato — al massimo {limit} l’anno",
+    "OVERTIME_YEARLY_CAP_WORKED": "Lo straordinario del {year} sarebbe {total} ({worked} lavorate, {planned} pianificate) — al massimo {limit} l’anno",
+    "WEEKLY_AVERAGE": "{week} pianificate nella settimana del {day}; {average} di media su {weeks} settimane — al massimo {limit} di media su {months} mesi",
+    "WEEKLY_REST": {
+      "none": "Nessun riposo nella settimana del {day} — almeno {needed} ({limit} oltre alle {daily} tra i turni), in media su 14 giorni",
+      "rest": "Riposo più lungo nella settimana del {day}: {rest} (da {from} a {to}) — almeno {needed} ({limit} oltre alle {daily} tra i turni), in media su 14 giorni"
+    }
   },
   "why": {
     "block": "Le impostazioni Persone lo bloccano: la modifica è rifiutata finché non è risolto.",

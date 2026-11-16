@@ -16,6 +16,8 @@
     "alerts.WORKING_TIME_LIMIT.OVERTIME_YEARLY_CAP": "Sede {label}: qualcuno è vicino al limite annuo di straordinario o lo ha superato.",
     "alerts.WORKING_TIME_LIMIT.DAILY_REST": "Sede {label}: qualcuno è sotto il riposo minimo, o lo sarebbe prima del prossimo turno.",
     "alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE": "Sede {label}: qualcuno è vicino alla media settimanale di ore di lavoro o la ha superata.",
+    "alerts.WORKING_TIME_LIMIT.WEEKLY_REST": "Sede {label}: qualcuno ha avuto meno del riposo settimanale, o lo avrebbe con il piano.",
+    "alerts.WORKING_TIME_LIMIT.NIGHT_AVERAGE": "Sede {label}: un turno di notte supera il limite di ore dei lavoratori notturni, lavorato o in piano.",
     "alerts.LOW_STOCK": "{label} è sotto il minimo: {position} {unit} su {minimum} {unit}.",
     "alerts.PO_CONFIRMED_LATE": "L'ordine di acquisto {label} è confermato per il {confirmedDate}, {days} giorni dopo il giorno in cui serve ({needDate}).",
     "alerts.PO_CONFIRMED_LATE.AT_RISK": "L'ordine di acquisto {label} è confermato per il {confirmedDate}, {days} giorni dopo il giorno in cui serve ({needDate}): mette a rischio l'ordine cliente {salesOrder}.",

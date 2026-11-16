@@ -117,7 +117,7 @@ const actionOut = output({
   version: z.number().int(),
 })
 
-const ruleOut = output({ law: z.string(), statisticalFromDays: z.number().int(), insuranceAboveDays: z.number().int(), hoursAfterCertificate: z.number().int(), words: output({ en: z.array(z.string()), it: z.array(z.string()) }) })
+const ruleOut = output({ law: z.string(), statisticalFromDays: z.number().int(), insuranceAboveDays: z.number().int(), hoursAfterCertificate: z.number().int(), hoursAfterFatalAccident: z.number().int(), words: output({ en: z.array(z.string()), it: z.array(z.string()) }) })
 
 export const rulesContract = defineContract({
   response: {
@@ -332,7 +332,7 @@ export const openFilingsContract = defineContract({
         }),
       ),
       recorded: z.boolean(),
-      rule: output({ law: z.string(), statisticalFromDays: z.number().int(), insuranceAboveDays: z.number().int(), hoursAfterCertificate: z.number().int(), words: output({ en: z.array(z.string()), it: z.array(z.string()) }) }),
+      rule: output({ law: z.string(), statisticalFromDays: z.number().int(), insuranceAboveDays: z.number().int(), hoursAfterCertificate: z.number().int(), hoursAfterFatalAccident: z.number().int(), words: output({ en: z.array(z.string()), it: z.array(z.string()) }) }),
     }),
   },
 })
@@ -345,7 +345,8 @@ const filingStateOut = output({ id: id(), version: z.number().int(), status: z.e
 
 export const addFilingContract = defineContract({
   params: incidentParams,
-  body: input({ incidentPersonId: id(), expectedAbsenceDays: absence(), certificateReference: words(INCIDENT_LIMITS.certificate).optional(), certificateReceivedAt: instant().optional() }),
+  // B-W2b-GF2: `fatal` true: a fatal or presumed fatal accident (type FATAL, due 24 hours after it; no absence, no certificate).
+  body: input({ incidentPersonId: id(), expectedAbsenceDays: absence().optional(), fatal: z.boolean().optional(), certificateReference: words(INCIDENT_LIMITS.certificate).optional(), certificateReceivedAt: instant().optional() }),
   response: { 200: output({ filings: z.array(filingStateOut), replayed: z.boolean() }), 201: output({ filings: z.array(filingStateOut), replayed: z.boolean() }) },
 })
 

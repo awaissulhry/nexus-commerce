@@ -5,7 +5,8 @@ import type { CompanyLegal, DocumentInput } from '@nexus/factory-domain/document
 import { composeLabel } from '@nexus/factory-domain/labels/model'
 import { formatScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { renderLabelPdf } from './label-pdf'
-import { renderDocumentPdf, winAnsi } from './pdf'
+import { printableText } from './fonts'
+import { renderDocumentPdf } from './pdf'
 import { pdfPageCount, pdfStreams, pdfText } from './testing/pdf-text'
 
 // The renderer on its own: what a printed document says, read back from the PDF bytes. Every company, tax number and
@@ -102,8 +103,24 @@ describe('renderDocumentPdf', () => {
     expect(text).toContain('€305.00')
   })
 
-  it('prints only what the standard fonts can: other characters become "?"', () => {
-    expect(winAnsi('Società € “x” — Łódź\n')).toBe('Società € “x” — ?ód? ')
+  // B-W2b-GF2 (G076): the fonts are embedded, so every European letter prints as written.
+  it('prints Polish, Greek, Czech and Cyrillic as written (embedded fonts); only what the fonts lack becomes "?"', async () => {
+    expect(printableText('Società € “x” — Łódź\n')).toBe('Società € “x” — Łódź ')
+    expect(printableText('Ελληνικά · Žluťoučký kůň · Ștefănescu · Москва')).toBe('Ελληνικά · Žluťoučký kůň · Ștefănescu · Москва')
+    expect(printableText('東京 🙂\tok')).toBe('?? ??ok')
+    const foreign: DocumentInput = {
+      ...ddt(1),
+      party: { name: 'Łódzka Odzież Sp. z o.o.', address: { line1: 'ul. Piotrkowska 1', postalCode: '90-001', city: 'Łódź', province: null, country: 'PL' } },
+      lines: [{ code: 'JKT-0', description: 'Μπουφάν δερμάτινο · kožená bunda · Żółta', quantity: '1', uom: 'PCS' }],
+    }
+    const pdf = await renderDocumentPdf(composeDocument(foreign))
+    const text = pdfText(pdf)
+    for (const expected of ['Łódzka Odzież Sp. z o.o.', 'Łódź', 'Μπουφάν δερμάτινο · kožená bunda · Żółta', 'Pelletteria Fittizia S.r.l.']) expect(text, expected).toContain(expected)
+    expect(text).not.toContain('?ód?')
+    // The fonts travel inside the PDF (subsets), and the same document still gives the same bytes.
+    expect(pdf.toString('latin1')).toMatch(/\/FontFile2/)
+    expect(pdf.toString('latin1')).toMatch(/\/BaseFont \/[A-Z]{6}\+LiberationSans/)
+    expect(sha256(await renderDocumentPdf(composeDocument(foreign)))).toBe(sha256(pdf))
   })
 })
 

@@ -657,6 +657,80 @@ describe('a rejected VAT-free invoice corrected with new lines decides its stamp
   })
 })
 
+// ---- B-W2b-GF2: a corrected rejected invoice re-decides its declaration of intent and runs the tax checks again ------------
+
+describe('a rejected invoice resting on a declaration of intent: its correction re-decides the declaration and its use (FIN-087, FIN-100)', () => {
+  const year = businessDate(new Date()).slice(0, 4)
+  let declarationId = ''
+  const declaration = async (): Promise<Json> => (await as(finance, 'GET', `/invoicing/declarations-of-intent/${declarationId}`)).declaration
+  const switchOn = async (on: boolean) => {
+    await stepUp(h, finance, financeSecret)
+    expect((await as(finance, 'PUT', `/invoicing/tax/settings/${c1()}`, { declarationsOfIntentOn: on })).company.switches.declarationsOfIntentOn).toBe(on)
+  }
+  const goods = (unitPrice: string, description = 'Giacca moto in pelle, nero, 50') => ({ description, itemCode: 'JKT-1-BLK-50', quantity: '1', uom: 'PZ', unitPrice })
+  const correct = async (invoiceId: string, body: Json, status = 200): Promise<Json> => {
+    await stepUp(h, finance, financeSecret)
+    return as(finance, 'PUT', `/invoicing/invoices/${invoiceId}/sdi/correction`, body, status)
+  }
+
+  beforeAll(async () => {
+    await switchOn(true)
+    const made = (await as(finance, 'POST', '/invoicing/declarations-of-intent', { companyId: c1(), partyId: ids.customer, protocolNumber: '26123456789012345-000042', protocolDate: businessDate(new Date()), amount: 100000 }, 201)).declaration
+    declarationId = made.id
+    const store = (await admin<{ id: string }>(`SELECT id FROM "IntegrationAccount" WHERE "tenantId" = $1 AND provider = 'R2'`, [tenant.id]))[0]!.id
+    const receipt = newId()
+    await admin(
+      `INSERT INTO "StoredFile" (id, "tenantId", "companyId", "recordType", "recordId", kind, "originalName", "contentType", "sizeBytes", sha256, "storeAccountId", "storageKey", status, "availableAt", visibility)
+       VALUES ($1, $2, $3, 'DeclarationOfIntent', $4, 'DOCUMENT', 'made-up-receipt.pdf', 'application/pdf', 1024, $5, $6, $7, 'AVAILABLE', now(), '{OFFICE}')`,
+      [receipt, tenant.id, c1(), declarationId, 'b'.repeat(64), store, `t/${tenant.id}/c/${c1()}/${year}/${newId()}`],
+    )
+    expect((await as(finance, 'POST', `/invoicing/declarations-of-intent/${declarationId}/check`, { version: made.version, receiptFileId: receipt })).declaration.state).toBe('CHECKED')
+  })
+  afterAll(async () => switchOn(false))
+
+  it('new taxable lines rest on the declaration (N3.5); its use moves to the new lines, up and down; more than is left refuses the correction in words', async () => {
+    let invoice = (await as(finance, 'POST', '/invoicing/invoices', { companyId: c1(), buyerPartyId: ids.customer, docType: 'TD01', causale: 'Campionario', payment: { method: 'MP05', dueDate: `${year}-12-31` }, lines: [goods('100.00')] }, 201)).invoice
+    invoice = (await as(finance, 'PUT', `/invoicing/invoices/${invoice.id}/declaration-of-intent`, { version: invoice.version, declarationOfIntentId: declarationId })).invoice
+    await stepUp(h, finance, financeSecret)
+    invoice = (await as(finance, 'POST', `/invoicing/invoices/${invoice.id}/issue`, {})).invoice
+    expect(invoice).toMatchObject({ status: 'ISSUED', netTotal: 10000, vatTotal: 0 })
+    expect((await declaration()).usedAmount).toBe(10000)
+    fake.scriptNext({ kind: 'NS', code: '00423' })
+    await send(invoice.id)
+    sdiAnswers()
+    await webhooks()
+    let status = await sdiOf(invoice.id)
+    expect(status).toMatchObject({ invoiceStatus: 'REJECTED', resend: { ready: true, problems: [] } })
+
+    // Up: 300.00 typed as an ordinary taxable line rests on the declaration as the issued one did; the use follows.
+    let corrected = await correct(invoice.id, { version: status.version, lines: [goods('300.00', 'Giacca moto in pelle, nero, 50 (corretta)')] })
+    expect(corrected.resend).toEqual({ ready: true, problems: [] })
+    expect(corrected.invoice).toMatchObject({ status: 'REJECTED', number: invoice.number, netTotal: 30000, vatTotal: 0, grossTotal: 30000 })
+    expect(corrected.invoice.lines.map((line: Json) => [line.vatNature, line.vatLegalRef])).toEqual([['N3.5', 'Art. 8 c.1 lett. c) DPR 633/1972']])
+    expect(await declaration()).toMatchObject({ usedAmount: 30000, leftAmount: 70000 })
+    // Down: the declaration gets back what the new lines no longer use.
+    corrected = await correct(invoice.id, { version: corrected.invoice.version, lines: [goods('50.00')] })
+    expect(corrected.invoice).toMatchObject({ netTotal: 5000, vatTotal: 0 })
+    expect((await declaration()).usedAmount).toBe(5000)
+    // More than the declaration has left (this invoice's own share counted back first): refused in words, nothing changed.
+    const refused = await correct(invoice.id, { version: corrected.invoice.version, lines: [goods('2000.00')] }, 409)
+    expect(refused.error.message).toContain('Declaration of intent 26123456789012345-000042 declares')
+    expect(refused.error.issues.map((issue: Json) => issue.path)).toContain('declarationOfIntent')
+    expect((await declaration()).usedAmount).toBe(5000)
+    expect((await admin<{ netTotal: number }>('SELECT "netTotal" FROM "Invoice" WHERE id = $1', [invoice.id]))[0]!.netTotal).toBe(5000)
+    const audit = await admin<{ action: string }>(`SELECT action FROM "AuditLog" WHERE "recordId" = $1 ORDER BY at, id`, [declarationId])
+    expect(audit.map((row) => row.action)).toEqual(['invoices.createDeclarationOfIntent', 'invoices.checkDeclarationOfIntent', 'invoices.useDeclarationOfIntent', 'invoices.useDeclarationOfIntent', 'invoices.returnDeclarationOfIntent'])
+
+    // The tax checks run again before the resend: the declaration revoked since the rejection holds it, in words.
+    const current = await declaration()
+    await as(finance, 'POST', `/invoicing/declarations-of-intent/${declarationId}/revoke`, { version: current.version, reason: 'The customer withdrew it (made up)' })
+    status = await sdiOf(invoice.id)
+    const checked = await correct(invoice.id, { version: status.version, causale: 'Campionario (corretto)' })
+    expect(checked.resend.ready).toBe(false)
+    expect(checked.resend.problems.map((problem: Json) => problem.code)).toContain('INTENT_REVOKED')
+  })
+})
+
 describe('the walls', () => {
   let invoiceId: string
   beforeAll(async () => {

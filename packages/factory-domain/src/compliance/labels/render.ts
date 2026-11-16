@@ -37,6 +37,9 @@ import {
  *   maker, importer, composition, animalOrigin, care   the template
  *   level           W2b: the glove's EN 13594 level in words ("Livello / Level 2KP"), listed only, as the class
  *   gpsrContact     W2b: the GPSR contact typed in the template (Reg. (EU) 2023/988 art. 9(6); B-W2b-253)
+ *   origin          B-W2b-GF2 (G032): the label's origin claim ("Made in Italy"): its phrase's approved words in each of the
+ *                   label's languages (the phrase library, compliance/phrases), once per distinct text; a language with no
+ *                   approved words stops the label (the claim is never printed half)
  *   qr              W2b: the QR to the public DoC page of the batch or the style (B-W2b-166, B-W2b-253): the address is the
  *                   block's `value`, the code printed under it its line; the painters draw the QR from `value` above the
  *                   line (no `graphic` entry: the W1 screens' parsers know four kinds; B-W2b-270 draws it from `value`).
@@ -188,6 +191,12 @@ export interface LabelValues {
   readonly marketLanguages: readonly string[]
   /** W2b: where the QR points, when the template has one (null or left out: no address known). */
   readonly qr?: LabelQr | null | undefined
+  /**
+   * B-W2b-GF2: the words of the template's origin claim per language of the label (the phrase library's approved texts;
+   * text null: no approved words in that language). Left out or null while the template makes a claim: the phrase is not
+   * in the library.
+   */
+  readonly originClaim?: { readonly key: string; readonly texts: readonly { readonly language: string; readonly text: string | null }[] } | null | undefined
 }
 
 export const SAMPLE_BANNER: readonly string[] = Object.freeze(['SAMPLE - NOT FOR GARMENTS', 'CAMPIONE - NON PER CAPI'])
@@ -489,6 +498,29 @@ export function buildBlocks(template: LabelTemplateFacts, values: LabelValues): 
         })
         break
       }
+      case 'origin': {
+        // B-W2b-GF2 (G032): the claim's approved words, once per distinct text, in the label's languages.
+        const key = template.originClaimKey ?? ''
+        const claim = values.originClaim ?? null
+        if (claim === null || claim.key !== key) {
+          problems.push({ path: 'originClaimKey', message: `Label ${template.code} r${template.revision} claims an origin with the phrase ${key}, which the phrase library does not hold (Compliance › Phrases): the claim is not printed without its words.` })
+        }
+        const missing = template.languages.filter((language) => !claim?.texts.some((entry) => entry.language === language && entry.text))
+        if (claim !== null && missing.length > 0) {
+          problems.push({ path: `phrases/${key}`, message: `The origin claim ${key} has no approved words in ${missing.join(', ')}: approve its translation first (Compliance › Phrases).` })
+        }
+        const texts: [string, string][] = []
+        for (const entry of claim?.texts ?? []) if (entry.text && !texts.some(([text]) => text === labelLine(entry.text!))) texts.push([labelLine(entry.text), entry.language])
+        add({
+          value: texts[0]?.[0] ?? null,
+          lines: texts.flatMap(([text, language]) => wrap(text, language)),
+          graphic: null,
+          placeholder: false,
+          source: { kind: 'TEMPLATE', words: `The label's origin claim, the phrase ${key} in its approved words (checked against the routing by the Made in Italy check: D.L. 135/2009 art. 16; L. 350/2003 art. 4(49)).`, recordType: 'LabelTemplate', recordId: template.id },
+          height: 0,
+        })
+        break
+      }
       case 'gpsrContact': {
         const typed = (template.gpsrContact ?? '').split(/\r?\n/).map((line) => labelLine(line)).filter((line) => line !== '')
         add({
@@ -652,7 +684,9 @@ export function probeValues(style: LabelStyle, date: BusinessDate): LabelValues 
  * with values of typical length.
  */
 export function activationProblems(template: LabelTemplateFacts, style: LabelStyle | null, date: BusinessDate): Issue[] {
-  const probe = probeValues(style ?? PROBE_STYLE(template), date)
+  const values = probeValues(style ?? PROBE_STYLE(template), date)
+  // B-W2b-GF2: an origin claim of typical length ("Made in Italy" and a translation) takes its room in the fit check.
+  const probe: LabelValues = template.originClaimKey ? { ...values, originClaim: { key: template.originClaimKey, texts: template.languages.slice(0, 2).map((language, index) => ({ language, text: index === 0 ? 'Xxxx xx Xxxxx' : 'Xxxxxxxxx xx Xxxxxx' })) } } : values
   const built = buildBlocks(template, probe)
   return [...template.storedProblems, ...contentProblems(template), ...(style ? styleProblems(template, style) : []), ...fitOf(template, built.blocks).problems]
 }

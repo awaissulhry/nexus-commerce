@@ -1,6 +1,8 @@
 import type { IntegrationMode } from '../../ports/provider'
 import { carrierNameFor } from '../labels/labels'
 import { EU_COUNTRIES } from '../validate/rules'
+// B-W2b-GF2: the EU's special fiscal territories, told apart by the address.
+import { specialTerritoryOf, type TerritoryAddress } from '../../tax/special-territories'
 
 /**
  * Carrier services beyond the plain label (B-W2b-400; LOG-033 own contracts, LOG-038 the customer's carrier account, LOG-041
@@ -173,13 +175,20 @@ const country = (value: string | null | undefined): string | null => {
   return /^[A-Z]{2}$/.test(code) ? code : null
 }
 
-/** Where the goods go from the sender's country: the same country, the European Union, or out of it (null: a country missing). */
-export function destinationOf(from: string | null | undefined, to: string | null | undefined): Destination | null {
+/**
+ * Where the goods go from the sender's country: the same country, the European Union, or out of it (null: a country
+ * missing). B-W2b-GF2 (G463): with the delivery's postal code and town, an EU special fiscal territory outside the VAT
+ * area (Livigno, the Canary Islands …) is an export (customs papers travel with it); Monaco goes as France.
+ */
+export function destinationOf(from: string | null | undefined, to: string | null | undefined, place: Omit<TerritoryAddress, 'country'> = {}): Destination | null {
   const a = country(from)
   const b = country(to)
   if (!a || !b) return null
-  if (a === b) return 'DOMESTIC'
-  return EU_COUNTRIES.has(a) && EU_COUNTRIES.has(b) ? 'EU' : 'EXPORT'
+  const territory = specialTerritoryOf({ country: b, ...place })
+  if (territory?.vat === 'OUTSIDE') return 'EXPORT'
+  const state = territory?.state ?? b
+  if (a === state) return 'DOMESTIC'
+  return EU_COUNTRIES.has(a) && EU_COUNTRIES.has(state) ? 'EU' : 'EXPORT'
 }
 
 export const DESTINATION_WORDS: Readonly<Record<Destination, string>> = Object.freeze({

@@ -1178,13 +1178,15 @@
       "italy": "Italia",
       "eu": "Un altro Stato UE ({country})",
       "outside": "Fuori dall'UE ({country})",
-      "unknown": "Non nota"
+      "unknown": "Non nota",
+      "special": "{territory} ({country}): territorio fiscale speciale"
     },
     "what": {
       "italy": "Non serve: consegnata in Italia.",
       "eu": "Dentro l'UE non servono documenti doganali; una cessione non imponibile conserva le sue prove del trasporto (sopra).",
       "outside": "La merce che esce dall'UE richiede i documenti di esportazione e la prova dell'uscita (art. 8 DPR 633/72).",
-      "unknown": "L'indirizzo di consegna non ha un paese."
+      "unknown": "L'indirizzo di consegna non ha un paese.",
+      "special": "Fuori dall’area IVA dell’UE: le merci chiedono i documenti di esportazione e la prova dell’uscita (art. 8 DPR 633/72), anche dentro il territorio doganale dell’UE."
     }
   }
 }

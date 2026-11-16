@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { plusDays } from '@nexus/factory-domain/calendars/dates'
+import { localInstant, plusDays } from '@nexus/factory-domain/calendars/dates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate } from '@nexus/factory-domain/core/time'
 // The factory-db seeds are no package export: a test reads them where they live.
@@ -14,7 +14,7 @@ import { grant, keysOf, local, openWorld, pathsOf, ROME, type Json, type World }
 /**
  * Working-time limits (B-W2b-42; MES-232; design people.settings "Working-time limits") through the app's real routes on a
  * throwaway PostgreSQL 17: the limits a company keeps, the warnings before one is broken from the time people worked and
- * the roster ahead, and who is alerted. D.Lgs. 66/2003 arts. 4, 5, 7; Statuto dei Lavoratori art. 4 (the warnings of a
+ * the roster ahead, and who is alerted. D.Lgs. 66/2003 arts. 4, 5, 7 (B-W2b-GF2: 9 and 13 too); Statuto dei Lavoratori art. 4 (the warnings of a
  * person are behind the ATTENDANCE gate; a list shows no name and no figure; an alert names a site and a limit). Run with
  * `node scripts/factory/run-pg-tests.mjs modules/people/limits`.
  */
@@ -120,6 +120,26 @@ describe('warnings before a limit is broken', () => {
     expect(cap.state).toBe('NEAR')
     expect(cap.words).toContain('at most 1 h a year (D.Lgs. 66/2003 art. 5)')
     await w.no('planner', 'GET', `/people/employees/${P.P1}/limits`, undefined, 403)
+  })
+
+  // B-W2b-GF2: night work (art. 13) and the weekly rest (art. 9) are checked on the time worked and the plan ahead too.
+  it('checks night work and the weekly rest too: a night shift planned over 8 hours is NEAR, named in the record, toned in the list', async () => {
+    const { P, T } = w
+    // Tomorrow, or tonight when tomorrow's night has a clock change (its night shift would not be 10 hours long).
+    const tomorrow = [plusDays(today, 1), today].find((date) => localInstant(date, 1860, ROME).getTime() - localInstant(date, 1260, ROME).getTime() === 600 * 60_000)!
+    await w.roster(P.P2!, tomorrow, [1260, 1860])
+    const record = await w.ok('viewer', 'GET', `/people/employees/${P.P2}/limits`)
+    expect((record.checks as Json[]).map((check) => check.rule)).toEqual(['OVERTIME_YEARLY_CAP', 'DAILY_REST', 'WEEKLY_AVERAGE', 'WEEKLY_REST', 'NIGHT_AVERAGE'])
+    const night = (record.checks as Json[]).find((check) => check.rule === 'NIGHT_AVERAGE')!
+    expect(night).toMatchObject({ state: 'NEAR', date: tomorrow, law: 'D.Lgs. 66/2003 art. 13', values: { workMinutes: 570, nightMinutes: 480, limitMinutes: 480 } })
+    expect(night.words).toBe('9 h 30 min of work 21:00-07:00, 8 h of it at night — a night worker works at most 8 h in 24 hours (D.Lgs. 66/2003 art. 13)')
+    expect((record.checks as Json[]).find((check) => check.rule === 'WEEKLY_REST')).toMatchObject({ state: 'OK', law: 'D.Lgs. 66/2003 art. 9', values: { neededMinutes: 2100 } })
+    const list = await w.ok('viewer', 'GET', `/people/limits/warnings?siteId=${T.siteA1}&rule=NIGHT_AVERAGE`)
+    expect(list.rows).toEqual([expect.objectContaining({ checks: expect.arrayContaining([{ rule: 'NIGHT_AVERAGE', state: 'NEAR', level: 'WARN' }]) })])
+    expect(keysOf(list)).not.toContain('workMinutes')
+    await runAlertEvaluation({ database: w.database, log })
+    const alert = (await w.admin(`SELECT state, facts FROM "Alert" WHERE "tenantId" = $1 AND "dedupeKey" = $2`, [T.tenant, `WORKING_TIME_LIMIT:${T.siteA1}:NIGHT_AVERAGE`]))[0]
+    expect(alert).toMatchObject({ state: 'OPEN', facts: { limit: 'NIGHT_AVERAGE' } })
   })
 
   it('raises one alert per site and limit, naming nobody, told to the roles the limit names, and clears it by itself', async () => {

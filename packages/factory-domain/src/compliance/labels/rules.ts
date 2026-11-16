@@ -90,6 +90,8 @@ export const LABEL_FIELDS = [
   'level',
   'gpsrContact',
   'qr',
+  // B-W2b-GF2 (G032): the origin claim ("Made in Italy"), its phrase's words in the label's languages, when the label makes one.
+  'origin',
 ] as const
 export type LabelField = (typeof LABEL_FIELDS)[number]
 
@@ -281,6 +283,8 @@ export interface LabelContent {
   readonly kind?: LabelKind | undefined
   readonly gpsrContact?: string | null | undefined
   readonly qrTarget?: LabelQrTarget | undefined
+  /** B-W2b-GF2: the origin claim it prints, as its phrase's key (textile-rules ORIGIN_CLAIM_KEYS); null or left out: none. */
+  readonly originClaimKey?: string | null | undefined
 }
 
 export const MAX_LANGUAGES = 8
@@ -477,7 +481,7 @@ export function styleWarnings(content: Pick<LabelContent, 'makerPartyId'>, style
 
 /** The fields this label prints, in order: the layout's first, then the others it prints (PPE or not, with or without data). */
 export function printedFields(
-  content: Pick<LabelContent, 'layout' | 'importerName' | 'composition' | 'animalOriginPhrase' | 'care' | 'kind' | 'gpsrContact' | 'qrTarget'>,
+  content: Pick<LabelContent, 'layout' | 'importerName' | 'composition' | 'animalOriginPhrase' | 'care' | 'kind' | 'gpsrContact' | 'qrTarget' | 'originClaimKey'>,
   isPpe: boolean,
 ): LabelField[] {
   const listed = new Set<LabelField>(content.layout.fields)
@@ -495,6 +499,8 @@ export function printedFields(
     if (field === 'composition') return content.composition.length > 0
     if (field === 'animalOrigin') return content.animalOriginPhrase
     if (field === 'care') return content.care.length > 0
+    // B-W2b-GF2: the origin claim prints when the label makes one, PPE or not.
+    if (field === 'origin') return !blank(content.originClaimKey)
     return false
   }
   const ordered = [...new Set<LabelField>([...content.layout.fields, ...DEFAULT_FIELD_ORDER])]

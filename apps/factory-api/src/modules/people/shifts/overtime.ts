@@ -126,7 +126,8 @@ async function recordOf(client: Client, context: OfficeContext, id: string, now:
   const people = await peopleFacts(client, { id: { in: agreements.map((agreement) => agreement.employeeId) } })
   const byId = new Map(people.map((person) => [person.id, person]))
   const open = row.status !== 'DONE' && row.status !== 'CANCELLED'
-  const checks = open ? await overtimeChecks(client, people, planOf(row)) : new Map<string, WarningOut[]>()
+  // B-W2b-GF2: the cap counts the overtime worked too; its hours are named to a reader who may see attendance.
+  const checks = open ? await overtimeChecks(client, people, planOf(row), context) : new Map<string, WarningOut[]>()
   const counts = (await countsOf(client, [id])).get(id)!
   const names = await userNames(client, [row.askedById, row.approvedById, row.createdById, ...agreements.map((agreement) => agreement.answeredById)])
   return {
@@ -259,7 +260,8 @@ export async function checkRequest(caller: CommandCaller, body: { readonly siteI
     const unique = [...new Set(body.employeeIds)]
     const people = await peopleFacts(client, { AND: [scopeOf(context, PEOPLE_SHIFTS_VIEW) as Prisma.EmployeeWhereInput, { id: { in: unique } }] })
     if (people.length !== unique.length) throw new NotFoundError('Employee not found.')
-    const checks = await overtimeChecks(client, people, { date: body.date, startMinute: body.startMinute ?? null, minutes: body.minutes, ...(body.requestId ? { requestId: body.requestId } : {}) })
+    // B-W2b-GF2: the worked overtime's hours named only to a reader who may see attendance.
+    const checks = await overtimeChecks(client, people, { date: body.date, startMinute: body.startMinute ?? null, minutes: body.minutes, ...(body.requestId ? { requestId: body.requestId } : {}) }, context)
     return { people: people.map((person) => ({ employeeId: person.id, name: fullName(person), displayName: person.displayName, checks: (checks.get(person.id) ?? []).map(warningView) })) }
   })
 }
