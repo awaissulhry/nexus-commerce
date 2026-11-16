@@ -21,7 +21,7 @@ import { scrapRepair } from './scrap'
  */
 export default defineRoutes('sales.repairs', manifest, async (app) => {
   app.get('/sales/repairs', { schema: listContract }, async (request) => listRepairs(request, request.query))
-  app.get('/sales/repairs/counts', { schema: countsContract }, async (request) => repairCounts(request))
+  app.get('/sales/repairs/counts', { schema: countsContract }, async (request) => repairCounts(request, request.query))
   app.post('/sales/repairs/preview', { schema: previewContract }, async (request) => previewRepair(request, request.body))
   app.post('/sales/repairs', { schema: createContract }, async (request, reply) => reply.code(201).send(await createRepair(request, request.body, idempotencyKeyFrom(request))))
 

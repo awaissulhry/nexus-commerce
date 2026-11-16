@@ -139,10 +139,12 @@ export async function listRepairs(caller: CommandCaller, query: ListQuery) {
 }
 
 /** GET /sales/repairs/counts */
-export async function repairCounts(caller: CommandCaller) {
+export async function repairCounts(caller: CommandCaller, query: { readonly partyId?: string | undefined } = {}) {
   return caller.withClient(async (client) => {
     const scope = scopeWhere(actorOf(officeOf(caller)), SALES_REPAIRS_VIEW, SCOPE) as Prisma.RepairOrderWhereInput
-    const count = async (view: RepairListView) => client.repairOrder.count({ where: { AND: [scope, viewWhere(client, view)] } })
+    // B-TH-201: one customer's tiles, as the list it sits on (`?partyId=`).
+    const party: Prisma.RepairOrderWhereInput = query.partyId ? { partyId: query.partyId } : {}
+    const count = async (view: RepairListView) => client.repairOrder.count({ where: { AND: [scope, party, viewWhere(client, view)] } })
     return {
       counts: { awaiting: await count('awaiting'), received: await count('received'), inRepair: await count('inRepair'), toCheck: await count('toCheck'), toShip: await count('toShip'), open: await count('open') },
       asOf: toUtcIso(serverClock.now()),

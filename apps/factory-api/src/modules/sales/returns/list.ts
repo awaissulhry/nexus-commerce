@@ -149,11 +149,13 @@ export async function listReturns(caller: CommandCaller, query: ListQuery) {
 }
 
 /** GET /sales/returns/counts */
-export async function returnCounts(caller: CommandCaller) {
+export async function returnCounts(caller: CommandCaller, query: { readonly partyId?: string | undefined } = {}) {
   const scope = scopeWhere(actorOf(officeOf(caller)), SALES_RETURNS_VIEW, SCOPE) as Prisma.ReturnAuthorisationWhereInput
   const today = new Date(`${businessDate(serverClock.now())}T00:00:00.000Z`)
+  // B-TH-201: one customer's tiles, as the list it sits on (`?partyId=`).
+  const party: Prisma.ReturnAuthorisationWhereInput = query.partyId ? { partyId: query.partyId } : {}
   return caller.withClient(async (client) => {
-    const count = (view: ReturnListView) => client.returnAuthorisation.count({ where: { AND: [scope, viewWhere(view, today)] } })
+    const count = (view: ReturnListView) => client.returnAuthorisation.count({ where: { AND: [scope, party, viewWhere(view, today)] } })
     const waiting = await count('waiting')
     const late = await count('late')
     const toInspect = await count('toInspect')

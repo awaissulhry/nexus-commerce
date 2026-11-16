@@ -197,5 +197,16 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'w2b-352-close-reasons', label: 'W2b: Close from the list — the suggested reason picked, the reasons that do not fit held with why', model: { role: 'owner', list: listModel('owner', { close: closeModel({ reason: 'COMPLETED' }) }) } },
     { id: 'w2b-352-close-other', label: 'W2b: Close with Other and no words (held: say why)', model: { role: 'owner', list: listModel('owner', { close: closeModel({ reason: 'OTHER' }) }) } },
     { id: 'w2b-352-close-reading', label: 'W2b: Close from the list while the reasons are read', model: { role: 'owner', list: listModel('owner', { close: closeModel({ options: null, pending: null }) }) } },
+    // ── B-TH-201 (SHEET-G11): Sales › Reports' "Open the list" lands here with ?party=<id> ──
+    (() => {
+      const own = mergedRows(RETURN_ROWS.filter((row) => row.partyId === CUSTOMER.id), REPAIR_ROWS.filter((row) => row.party.id === CUSTOMER.id))
+      return {
+        id: 'th-201-customer',
+        label: 'TH-0 · One customer’s returns and repairs (Sales › Reports › Open the list: ?party=…): the chip “Customer: …” clears it',
+        model: { role: 'owner' as const, list: listModel('owner', { address: { view: 'all', q: '', party: CUSTOMER.id }, customer: { id: CUSTOMER.id, name: CUSTOMER.legalName }, rows: { items: own, problem: null, truncated: false } }) },
+      }
+    })(),
+    { id: 'th-201-customer-hidden', label: 'TH-0 · A link to a customer the person may not open: no row, and the chip names no one (W27)', model: { role: 'sales', list: listModel('sales', { address: { view: 'all', q: '', party: '0190f0e2-7701-7000-8000-00000000ffff' }, customer: { id: '0190f0e2-7701-7000-8000-00000000ffff', name: null }, rows: { items: [], problem: null, truncated: false } }) } },
+    // ── end B-TH-201 ──
   ],
 })

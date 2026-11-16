@@ -173,6 +173,8 @@ export const listContract = defineContract({
 })
 
 export const countsContract = defineContract({
+  // B-TH-201: one customer's tiles (the list's `?party=` on Sales › Returns).
+  querystring: input({ partyId: id().optional() }),
   response: {
     200: output({
       counts: output({ awaiting: z.number().int(), received: z.number().int(), inRepair: z.number().int(), toCheck: z.number().int(), toShip: z.number().int(), open: z.number().int() }),
