@@ -179,9 +179,10 @@ export function postNote(api: ApiClient, record: RecordKey, input: { body: strin
 }
 
 /** POST /threads/<type>/<id>/emails: a mail to the record's party, as the person (COL-024). */
-export function sendEmail(api: ApiClient, record: RecordKey, input: { to: readonly string[]; subject?: string; body: string; attachments: readonly string[] }): Promise<unknown> {
+export function sendEmail(api: ApiClient, record: RecordKey, input: { to: readonly string[]; subject?: string; body: string; attachments: readonly string[]; sendOutside?: boolean }): Promise<unknown> {
   return api.post(`${recordPath(record.type, record.id)}/emails`, {
-    body: { to: [...input.to], ...(input.subject ? { subject: input.subject } : {}), body: input.body, attachments: [...input.attachments] },
+    // B-TH-202: the person's recorded "Send outside this customer" tick (the brand wall, B-TH-004), only when given.
+    body: { to: [...input.to], ...(input.subject ? { subject: input.subject } : {}), body: input.body, attachments: [...input.attachments], ...(input.sendOutside ? { sendOutside: true } : {}) },
     idempotencyKey: newIdempotencyKey(),
   })
 }

@@ -15,6 +15,8 @@ const checkSchema = z.object({
   recipients: z.array(z.object({ address: z.string(), kind: z.enum(RECIPIENT_KINDS), source: z.enum(RECIPIENT_SOURCES).nullable(), organisation: organisation.nullable(), personName: z.string().nullable() })),
   warnings: z.array(z.object({ code: z.enum(MIS_SEND_WARNINGS), items: z.array(z.string()) })),
   attachments: z.array(z.object({ id: z.string(), name: z.string(), sizeBytes: z.number().int(), audience: z.enum(['PARTY', 'OFFICE']) })),
+  // B-TH-202: the addresses the send refuses without "Send outside this customer".
+  outsideCustomer: z.array(z.string()),
 })
 
 const enc = encodeURIComponent

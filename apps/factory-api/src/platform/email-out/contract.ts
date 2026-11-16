@@ -66,6 +66,8 @@ export const sendEmailContract = defineContract({
     identityId: id().optional(),
     /** The language of the mail's fixed text; default the company's. */
     locale: z.enum(LOCALES).optional(),
+    /** B-TH-004: "Send outside this customer" ticked: To and Cc may hold another party's address (recorded). */
+    sendOutside: z.boolean().optional(),
   }),
   response: { 201: output({ thread: threadView, messageId: id(), email: emailView }) },
 })

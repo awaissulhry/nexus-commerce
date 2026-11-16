@@ -4,7 +4,7 @@ import { useMemo, type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, ExternalLink, Mail, XCircle } from 'lucide-react'
 import { Banner, Field, KeyValue } from '@nexus/ui/components'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
-import { Button, Input, Kbd, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Checkbox, Input, Kbd, Spinner, Tag } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
@@ -70,6 +70,8 @@ function DocumentSend({ open, model, actions, extra, parts }: { open: boolean; m
       noEmail: t('held.noEmail'),
       cc: (list) => t('held.cc', { list }),
       sent: t('held.sent'),
+      // B-TH-202: the recorded tick the send waits for.
+      outside: t('outside.held'),
     }) ??
     // B-W2b-432: the host's part says why Send waits (the language on screen is not the document's).
     parts?.held ??
@@ -199,6 +201,19 @@ function DocumentSend({ open, model, actions, extra, parts }: { open: boolean; m
 
               <p className="fw-send-freeze">{model.freezeNote}</p>
               {model.problem && <Banner tone="danger" title={model.problem} />}
+              {model.outside && (
+                // B-TH-202 (the brand wall): an address of another customer is refused by the send itself; the tick is recorded.
+                <div className="fw-send-section">
+                  <Banner tone="danger" title={t('outside.title')}>
+                    <ul className="fw-send-list">
+                      {model.outside.lines.map((line) => (
+                        <li key={line}>{line}</li>
+                      ))}
+                    </ul>
+                  </Banner>
+                  <Checkbox tone="danger" checked={model.outside.checked} onChange={(event) => actions?.onSendOutside?.(event.target.checked)} disabled={model.sending} label={t('outside.tick')} />
+                </div>
+              )}
             </>
           )}
         </div>

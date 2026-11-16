@@ -33,6 +33,8 @@ export interface LinkMailInput {
   readonly storedText: string
   readonly attachments: readonly string[]
   readonly locale: string
+  /** B-TH-004: the person ticked "Send outside this customer". */
+  readonly sendOutside?: boolean | undefined
 }
 
 /** Inside the send (or new-link) command: the thread message and the QUEUED mail, without the link and without its event. */
@@ -50,6 +52,7 @@ export async function queueLinkMail(tools: CommandTools, input: LinkMailInput) {
     sender: input.sender,
     to: [input.to],
     cc: [...input.cc],
+    sendOutside: input.sendOutside, // B-TH-004
     subject: input.subject,
     body: input.storedText,
     attachments: [...input.attachments],

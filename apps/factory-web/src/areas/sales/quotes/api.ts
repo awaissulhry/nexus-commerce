@@ -495,9 +495,10 @@ export async function rejectQuote(api: ApiClient, quote: { id: string; version: 
   return (await api.post(`${quotePath(quote.id)}/approval/reject`, { body: { version: quote.version, reason: reason.trim() }, schema: decisionSchema, idempotencyKey: newIdempotencyKey() })).quote
 }
 
-export function sendQuote(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, body: { cc: string[]; subject: string | null; message: string | null }): Promise<SendAnswer> {
+export function sendQuote(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>, body: { cc: string[]; subject: string | null; message: string | null; sendOutside?: boolean }): Promise<SendAnswer> {
   return api.post(`${quotePath(quote.id)}/send`, {
-    body: { version: quote.version, ...(body.cc.length > 0 ? { cc: body.cc } : {}), subject: body.subject?.trim() || null, message: body.message?.trim() || null },
+    // B-TH-202: the recorded "Send outside this customer" tick, only when ticked.
+    body: { version: quote.version, ...(body.cc.length > 0 ? { cc: body.cc } : {}), subject: body.subject?.trim() || null, message: body.message?.trim() || null, ...(body.sendOutside ? { sendOutside: true } : {}) },
     schema: sendSchema,
     idempotencyKey: newIdempotencyKey(),
   })
