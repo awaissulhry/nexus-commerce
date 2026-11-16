@@ -108,6 +108,7 @@ import { openFactoryDatabase, type FactoryClient, type FactoryDatabase, type Fac
 import { classifiedModels } from './ownership'
 import { PLATFORM_ROLE, POLICY_KEYS, RUNTIME_LOGIN, RUNTIME_ROLES, WALL, type PolicyKeyName, type RuntimeRole } from './roles'
 import { migratedDatabase, type MigratedDatabase } from './testing/database'
+import { SECOND_BRAND_TABLES, seedSecondBrand, type SecondBrand } from './testing/second-brand' // B-TH-001
 import { loadOwnership, loadSchema } from './tools'
 
 /**
@@ -136,6 +137,8 @@ let a: CoreSeed
 let b: CoreSeed
 /** Tenant A's portal party: the audit seed writes its partner rows for it, the parties seed its Party row (P1). */
 let partyId: string
+/** B-TH-001: a second brand of tenant A with partner rows of its own (testing/second-brand.ts). */
+let second: SecondBrand
 
 /** Tenant A's scope for each role; the floor device sits on A's first site. */
 function scopeOf(role: RuntimeRole): FactoryScope {
@@ -513,6 +516,10 @@ beforeAll(async () => {
   // Quality at plant A1), daily and hourly facts (the first a company's orders in): the plain ones a copy may repeat.
   await seedInsightsDepth({ db: factory, namespace: 'iso-a' })
   await seedInsightsDepth({ db: factory, namespace: 'iso-b' })
+  // ---- B-TH-001: a second brand in tenant A (WALL-G17): its thread, messages, order, file and notification, so "rows of
+  // another party" exist inside the same tenant too and every generated partner case is proven against them by data.
+  second = await seedSecondBrand({ db: factory, namespace: 'iso-a' })
+  // ---- end B-TH-001
   // Every seed of both tenants: under a full parallel run this takes more than a minute.
 }, 120_000)
 
@@ -1136,6 +1143,53 @@ it('covers every classified table and every runtime role', () => {
   expect(RUNTIME_ROLES).toHaveLength(4)
   expect(a.tenantId).not.toBe(b.tenantId)
 })
+
+// ---- B-TH-001 (T01, WALL-G17): brand B of the SAME factory. The generated cases below compare a role's rows with its scope's;
+// here, for the five kinds a portal reads most, rows of a second party exist inside tenant A, P1's partner role reads none of
+// them (not by id, not by party, not in a count), and the second brand's own partner session reads exactly its own: the wall
+// is proven between two brands of one tenant by data, not only by the policy text.
+describe('T01 a second brand in the same factory', () => {
+  const partner = (party: string, actor: string) => ({ audience: 'partner' as const, tenantId: a.tenantId, actorId: actor, partyId: party })
+  const asParty = <T>(party: string, actor: string, work: (client: FactoryClient) => Promise<T>): Promise<T> => factory.withScope(partner(party, actor), work)
+  const idsOf = (table: string): string[] =>
+    ({
+      Thread: [second.threadId],
+      Message: [...second.messageIds],
+      SalesOrder: [second.salesOrderId],
+      StoredFile: [second.fileId],
+      Notification: [second.notificationId],
+    })[table]!
+
+  it.each([...SECOND_BRAND_TABLES])('%s: the second brand’s rows sit in tenant A; P1’s portal reads none of them', async (table) => {
+    const ids = idsOf(table)
+    const [{ n }] = (await admin(`SELECT count(*)::int AS n FROM ${q(table)} WHERE "tenantId" = $1::uuid AND "partyId" = $2::uuid AND id = ANY($3::uuid[])`, [a.tenantId, second.partyId, ids])) as [{ n: number }]
+    expect(n).toBe(ids.length)
+    // P1's partner session: not by id, not by the party, not in a count of the tenant's rows.
+    expect(await query('factory_partner_runtime', `SELECT id FROM ${q(table)} WHERE id = ANY($1::uuid[])`, ids)).toEqual([])
+    expect(await query('factory_partner_runtime', `SELECT id FROM ${q(table)} WHERE "partyId" = $1::uuid`, second.partyId)).toEqual([])
+    const seen = await query('factory_partner_runtime', `SELECT DISTINCT "partyId"::text AS party FROM ${q(table)}`)
+    expect(seen.map((row) => row.party)).toEqual([partyId])
+    // Not vacuous: the second brand's own session reads exactly its own rows, and none of P1's.
+    const own = await asParty(second.partyId, second.userId, (client) => client.$queryRawUnsafe<{ id: string; party: string }[]>(`SELECT id::text AS id, "partyId"::text AS party FROM ${q(table)}`))
+    expect(own.map((row) => row.id).sort()).toEqual([...ids].sort())
+    expect(new Set(own.map((row) => row.party))).toEqual(new Set([second.partyId]))
+  })
+
+  it('P1’s portal cannot write into the second brand’s thread, nor move its own message there', async () => {
+    const message = (thread: string, party: string) =>
+      execute(
+        'factory_partner_runtime',
+        `INSERT INTO "Message" (id, "threadId", "partyId", direction, audience, channel, "authorKind", "authorName", "bodyText", at) VALUES ($1::uuid, $2::uuid, $3::uuid, 'INBOUND', 'PARTNER', 'APP', 'PARTY', 'Not mine', 'Not mine.', now())`,
+        randomUUID(),
+        thread,
+        party,
+      )
+    await expect(message(second.threadId, second.partyId)).rejects.toThrow(RLS)
+    await expect(message(second.threadId, partyId)).rejects.toThrow()
+    expect((await admin(`SELECT count(*)::int AS n FROM "Message" WHERE "threadId" = $1::uuid`, [second.threadId]))[0]!.n).toBe(second.messageIds.length)
+  })
+})
+// ---- end B-TH-001
 
 describe.each(classified)('$model.name', ({ model, ownership }) => {
   const table = q(model.table)
