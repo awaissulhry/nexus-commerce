@@ -2,7 +2,7 @@ import { InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { newId, isUuid } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { paysOn, rateFor } from '@nexus/factory-domain/people/earnings/rules'
-import { EXTRA_OPERATION_ACTION, EXTRA_REASONS, extraOperationProblem, extraPayOf, extraReasonText, unplannedSeq, type ExtraPay, type ExtraReasonCode } from '@nexus/factory-domain/production/extraops/rules'
+import { EXTRA_OPERATION_ACTION, EXTRA_REASONS, extraOperationProblem, extraPayOf, extraReasonText, plannedGarmentsOf, unplannedSeq, type ExtraPay, type ExtraReasonCode } from '@nexus/factory-domain/production/extraops/rules'
 import { PRODUCTION_EXTRAOPS_ADD } from '@nexus/factory-domain/production/extraops/permissions'
 import { isOpen } from '@nexus/factory-domain/production/scans/rules'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
@@ -35,17 +35,21 @@ interface ExtraRecord {
   readonly reasonCode: ExtraReasonCode
   readonly reason: string | null
   readonly addedOn: 'FLOOR' | 'OFFICE'
+  /** B-W2b-GB29 (G215): its planned garments; null: none given (off the plan). */
+  readonly plannedQuantity: number | null
 }
 
 const objectOf = (value: unknown): Record<string, unknown> => (value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {})
 
 async function readAdded(db: Reader, workOrderId: string): Promise<ExtraRecord[]> {
   const rows = await db.auditLog.findMany({ where: { recordType: 'WorkOrder', recordId: workOrderId, action: EXTRA_OPERATION_ACTION }, select: { at: true, audience: true, after: true, reason: true }, orderBy: [{ at: 'asc' }, { id: 'asc' }] })
-  const steps = new Map((await db.workOrderOperation.findMany({ where: { workOrderId, routingSeq: null }, select: { id: true, seq: true } })).map((row) => [row.id, row.seq]))
+  const stepRows = await db.workOrderOperation.findMany({ where: { workOrderId, routingSeq: null }, select: { id: true, seq: true, plannedQuantity: true } })
+  const steps = new Map(stepRows.map((row) => [row.id, row.seq]))
+  const plannedOf = new Map(stepRows.map((row) => [row.id, row.plannedQuantity])) // B-W2b-GB29 (G215)
   return rows.map((row) => {
     const after = objectOf(row.after)
     const id = after.recordId as string
-    return { id, workOrderOperationId: steps.has(id) ? id : null, seq: steps.get(id) ?? null, at: toUtcIso(row.at), operation: objectOf(after.operation) as unknown as ExtraRecord['operation'], reasonCode: after.reasonCode as ExtraReasonCode, reason: row.reason, addedOn: row.audience === 'FLOOR' ? 'FLOOR' : 'OFFICE' }
+    return { id, workOrderOperationId: steps.has(id) ? id : null, seq: steps.get(id) ?? null, at: toUtcIso(row.at), operation: objectOf(after.operation) as unknown as ExtraRecord['operation'], reasonCode: after.reasonCode as ExtraReasonCode, reason: row.reason, addedOn: row.audience === 'FLOOR' ? 'FLOOR' : 'OFFICE', plannedQuantity: plannedOf.get(id) ?? null }
   })
 }
 
@@ -112,6 +116,8 @@ export interface ExtraInput {
   readonly operationId: string
   readonly reasonCode: ExtraReasonCode
   readonly note?: string | undefined
+  /** B-W2b-GB29 (G215): the planned garments, 1 up to the work order's; left out: none (it stays off the plan). */
+  readonly plannedQuantity?: number | undefined
 }
 
 /** POST …/work-orders/:workOrderId: the step and its record, with its reason, on a RELEASED or IN_PROGRESS work order. */
@@ -129,6 +135,8 @@ export async function addExtraOperation(caller: CommandCaller, workOrderId: stri
     const operations = await readOperations(tx, workOrder.id)
     const same = row ? operations.find((operation) => operation.code === row.code) : undefined
     const centreId = row ? await centreOf(tx, workOrder, row.workCentreKind, operations) : null
+    // B-W2b-GB29 (G215): the work order's garments (its cells), the most it may be planned for.
+    const garments = (await tx.workOrderSize.aggregate({ where: { workOrderId: workOrder.id }, _sum: { quantity: true } }))._sum.quantity ?? 0
     const problem = extraOperationProblem({
       workOrder: { number: workOrder.number, open: isOpen(workOrder.status) },
       operation: row ? { code: row.code, active: row.status === 'ACTIVE' && (row.companyId === null || row.companyId === workOrder.companyId) } : null,
@@ -137,19 +145,21 @@ export async function addExtraOperation(caller: CommandCaller, workOrderId: stri
       centre: row ? { kind: row.workCentreKind, found: centreId !== null } : null,
       reasonCode: input.reasonCode,
       note,
+      plannedQuantity: { given: input.plannedQuantity ?? null, garments },
     })
     if (problem) throw new InvalidStateError(problem)
+    const plannedQuantity = plannedGarmentsOf(input.plannedQuantity)
     const operation = operationOf(row!)
     const id = newId()
     const seq = unplannedSeq(operations.map((entry) => entry.seq))
     const { styleRevisionId } = await tx.workOrder.findUniqueOrThrow({ where: { id: workOrder.id }, select: { styleRevisionId: true } })
     // The tablet's lead stays out of the row, as a floor record at a station site does; the audit row says who.
     await tx.workOrderOperation.create({
-      data: { id, siteId: workOrder.siteId, workOrderId: workOrder.id, styleRevisionId: styleRevisionId!, seq, routingSeq: null, operationId: row!.id, unplannedReason: input.reasonCode, code: row!.code, name: row!.name, standardMinutes: row!.standardMinutes, scanRequired: false, workCentreId: centreId!, createdById: context.audience === 'office' ? context.actorId : null },
+      data: { id, siteId: workOrder.siteId, workOrderId: workOrder.id, styleRevisionId: styleRevisionId!, seq, routingSeq: null, operationId: row!.id, unplannedReason: input.reasonCode, code: row!.code, name: row!.name, standardMinutes: row!.standardMinutes, scanRequired: false, plannedQuantity, workCentreId: centreId!, createdById: context.audience === 'office' ? context.actorId : null },
       select: { id: true },
     })
     const reason = extraReasonText(input.reasonCode, note)
-    tools.audit({ action: EXTRA_OPERATION_ACTION, recordType: 'WorkOrder', recordId: workOrder.id, companyId: workOrder.companyId, siteId: workOrder.siteId, after: { recordId: id, seq, operation, reasonCode: input.reasonCode }, reason })
+    tools.audit({ action: EXTRA_OPERATION_ACTION, recordType: 'WorkOrder', recordId: workOrder.id, companyId: workOrder.companyId, siteId: workOrder.siteId, after: { recordId: id, seq, operation, reasonCode: input.reasonCode, plannedQuantity }, reason })
     tools.emit({
       type: 'production.extra_operation_added',
       subject: workOrder.id,
@@ -157,7 +167,7 @@ export async function addExtraOperation(caller: CommandCaller, workOrderId: stri
       siteId: workOrder.siteId,
       payload: { workOrderId: workOrder.id, number: workOrder.number, siteId: workOrder.siteId, recordId: id, operationId: operation.id, code: operation.code, reasonCode: input.reasonCode },
     })
-    return { id, workOrderOperationId: id, seq, at: toUtcIso(tools.now), operation, reasonCode: input.reasonCode, reason, addedOn: context.audience === 'floor' ? ('FLOOR' as const) : ('OFFICE' as const) } satisfies ExtraRecord
+    return { id, workOrderOperationId: id, seq, at: toUtcIso(tools.now), operation, reasonCode: input.reasonCode, reason, addedOn: context.audience === 'floor' ? ('FLOOR' as const) : ('OFFICE' as const), plannedQuantity } satisfies ExtraRecord
   })
   const pays = (await paysOf(caller, found, [result.operation.id])).get(result.operation.id)!
   return { record: { ...result, pays }, replayed }

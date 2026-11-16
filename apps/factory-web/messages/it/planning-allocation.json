@@ -110,7 +110,8 @@
     "FORBIDDEN": "Non puoi assegnare ordini di lavoro in questo stabilimento.",
     "NOT_FOUND": "L'ordine di lavoro non è più sul tabellone: il tabellone è stato riletto.",
     "OFFLINE": "Nessuna connessione al server: non è stato salvato nulla.",
-    "FAILED": "Il server non l'ha salvato. Riprova."
+    "FAILED": "Il server non l'ha salvato. Riprova.",
+    "GATE": "Un gate del suo ordine non è superato: segnalo fatto, oppure parti prima del gate con un motivo, nel Calendario T&A."
   },
   "notice": {
     "moved_one": "{pieces} capo spostato.",

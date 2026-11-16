@@ -472,10 +472,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    (a line with its site, exactly one number, the company's currency with an amount, today at the latest on the site's clock, an
    hour a whole hour of that clock with its day, rebuilt only forward; keys `fact:…` / `facth:…`); its own triggers only, no
    earlier function redefined; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`, styles'
-   `factory_styles_distinct` and privacy's `factory_privacy_ops_table_ok`, `factory_privacy_ops_code_ok`,
+   `factory_styles_distinct` and privacy's `factory_privacy_ops_table_ok`, `factory_privacy_ops_code_ok`),
    `…_protected_safety_fatal_w2b_guards` (B-W2b-GF2, Owner G505 A: InailFilingType FATAL, a fatal or presumed fatal accident
    due exactly 24 hours after the incident happened (DPR 1124/1965 art. 53), no certificate, never WAITING_CERTIFICATE; it
-   redefines the protected-safety step's `factory_inail_filing_guard`, every other rule and word kept):
+   redefines the protected-safety step's `factory_inail_filing_guard`, every other rule and word kept),
+   `…_planning_gb29_w2b_guards` (B-W2b-GB29: two CHECKs only — an unplanned operation's planned garments above 0 and never on a
+   routing operation; a style's planning cutting loss of 0 up to below 100 percent; no function):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

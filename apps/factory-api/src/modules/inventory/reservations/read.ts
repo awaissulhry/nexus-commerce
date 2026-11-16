@@ -44,6 +44,8 @@ export async function viewsOf(db: Reader, rows: readonly ReservationRow[], optio
     })),
   )
   const demands = await readDemands(db, rows, options)
+  // B-W2b-GB29 (G226): the sizes a split by garment names, in words.
+  const cells = byId(await db.workOrderSize.findMany({ where: { id: { in: set((row) => row.workOrderSizeId) } }, select: { id: true, size: true, colourway: { select: { code: true } } } }))
   return rows.map((row) => {
     const item = items.get(row.itemId)!
     const workOrder = row.workOrderId ? demands.workOrders.get(row.workOrderId) : undefined
@@ -65,6 +67,9 @@ export async function viewsOf(db: Reader, rows: readonly ReservationRow[], optio
       demand: row.workOrderId
         ? { type: 'WorkOrder' as const, id: row.workOrderId, number: workOrder?.number ?? '', status: workOrder?.status ?? '' }
         : { type: 'SalesOrderLine' as const, id: row.salesOrderLineId!, orderId: line?.orderId ?? '', orderNumber: line?.number ?? '', seq: line?.seq ?? 0, status: line?.status ?? '' },
+      // B-W2b-GB29 (G226): the size it is held for.
+      workOrderSizeId: row.workOrderSizeId,
+      cell: row.workOrderSizeId && cells.get(row.workOrderSizeId) ? { size: cells.get(row.workOrderSizeId)!.size, colourway: cells.get(row.workOrderSizeId)!.colourway.code } : null,
       stale: row.status === 'ACTIVE' && !demandOpen(row, demands),
       needDate: row.needDate ? row.needDate.toISOString().slice(0, 10) : null,
       note: row.note,

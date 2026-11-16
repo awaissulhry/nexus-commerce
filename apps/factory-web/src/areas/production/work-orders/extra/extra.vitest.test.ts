@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { minutesOf } from '../every-shift/model'
-import { extraHeld, type ExtraDialogModel } from './use-extra'
+import { extraHeld, plannedOf, type ExtraDialogModel } from './use-extra'
 
 const dialog = (over: Partial<ExtraDialogModel['draft']> = {}, more: Partial<ExtraDialogModel> = {}): ExtraDialogModel => ({
   choices: {
@@ -10,7 +10,7 @@ const dialog = (over: Partial<ExtraDialogModel['draft']> = {}, more: Partial<Ext
       { code: 'OTHER', label: { it: 'Altro', en: 'Other' }, needsNote: true },
     ],
   },
-  draft: { operationId: null, reasonCode: null, note: '', ...over },
+  draft: { operationId: null, reasonCode: null, note: '', planned: '', ...over },
   busy: false,
   problem: null,
   ...more,
@@ -24,6 +24,14 @@ describe('Add an unplanned operation in the office (B-W2b-82)', () => {
     expect(extraHeld(dialog({ operationId: 'lib', reasonCode: 'OTHER' }))).toBe('extra.held.note')
     expect(extraHeld(dialog({ operationId: 'lib', reasonCode: 'OTHER', note: 'Extra tack' }))).toBeNull()
     expect(extraHeld(dialog({ operationId: 'lib', reasonCode: 'QUALITY_FIX' }, { busy: true }))).toBe('held.busy')
+  })
+
+  // B-W2b-GB29 (G215): the garments that need it are optional; typed, a whole number above 0.
+  it('takes the garments that need it as a whole number above 0, or nothing (off the plan)', () => {
+    expect(extraHeld(dialog({ operationId: 'lib', reasonCode: 'QUALITY_FIX', planned: '12' }))).toBeNull()
+    expect(extraHeld(dialog({ operationId: 'lib', reasonCode: 'QUALITY_FIX', planned: '0' }))).toBe('extra.held.planned')
+    expect(extraHeld(dialog({ operationId: 'lib', reasonCode: 'QUALITY_FIX', planned: '2.5' }))).toBe('extra.held.planned')
+    expect([plannedOf(''), plannedOf(' 7 '), plannedOf('0'), plannedOf('x')]).toEqual([null, 7, null, null])
   })
 })
 

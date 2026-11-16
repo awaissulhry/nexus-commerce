@@ -184,7 +184,7 @@ const writable = {
   note: note().nullable(),
 }
 
-/** B-W2b-318: the planning rules per item a create or a change may name (not the bulk write: its rows stay W2a's). */
+/** B-W2b-318: the planning rules per item a create or a change may name (B-W2b-GB29, G220: the bulk write's rows too). */
 const rules = {
   lotSizing: z.enum(LOT_SIZINGS),
   fixedLotQty: decimalText().nullable(),
@@ -325,6 +325,8 @@ const bulkChange = input({
   itemId: id().optional(),
   itemColourId: id().nullable().optional(),
   ...partial(writable),
+  // B-W2b-GB29 (G220, B-W2b-318's and B-W2b-335's gap): the seven planning rules per item, as a single create or change.
+  ...partial(rules),
 })
 export type BulkItemChange = z.infer<typeof bulkChange>
 

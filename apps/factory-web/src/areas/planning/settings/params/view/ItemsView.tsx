@@ -615,7 +615,7 @@ function BulkDialog({ dialog, rows, busy, onDraft, actions, onClose, onDone }: {
               <div key={field} className="fw-pp-bulk-row">
                 <Checkbox checked={on} onChange={(event) => setField(field, event.target.checked)} label={t(`pp.field.${field}`)} />
                 {on && (
-                  <Field label={t('pp.bulk.newValue')} hint={t(DAY_FIELDS.includes(field as never) ? 'pp.bulk.daysHint' : 'pp.bulk.qtyHint')} error={error}>
+                  <Field label={t('pp.bulk.newValue')} hint={t(DAY_FIELDS.includes(field as never) || field === 'delayDays' ? 'pp.bulk.daysHint' : field === 'scrapPct' || field === 'yieldPct' ? 'pp.bulk.pctHint' : 'pp.bulk.qtyHint')} error={error}>
                     <Input size="sm" inputMode="decimal" value={draft.fields[field] ?? ''} onChange={(event) => setField(field, true, event.target.value)} />
                   </Field>
                 )}

@@ -184,7 +184,7 @@
       "ahead": "avanti"
     },
     "definition": "Utilizzo: i minuti standard dei capi interi buoni registrati sulle postazioni della corsia in quella settimana (mai per persona o postazione), sulle sue persone × il suo orario di lavoro. Carico: i minuti ancora da fare degli ordini di lavoro aperti, collocati dal tabellone, sulla capacità della corsia alla sua efficienza pianificata.",
-    "workshopPast": "Le settimane passate di un terzista non dicono nulla: i suoi lavori sono ciò che resta da oggi.",
+    "workshopPast": "Settimane passate di un terzista: il lavoro che aveva, dalle date dei suoi ordini di conto lavoro (dall'invio al rientro), sulla sua capacità di allora.",
     "csv": {
       "lane": "Corsia",
       "week": "Settimana",

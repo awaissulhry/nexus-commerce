@@ -7,6 +7,9 @@ import { ITEM_SOURCINGS } from '@nexus/factory-domain/product/materials/rules'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import type { EditSettingsBody, ItemDefaults, ItemEntry, ItemParameters, ItemParametersFields, Lane, PlanBucket, PlanningMethod, PlanningSettings, PlanningSite, PlanningSource } from '../api'
 import { PLANNING_SETTINGS_NAMESPACES, writeProblem } from '../model'
+// B-W2b-GB29 (G220): the bulk edit takes the number rules per item too (B-W2b-318's scrap, yield and days before use).
+import { parseRule, RULE_NUMBER_FIELDS, rulesOf, rulesPlan, type RuleNumberField } from '../items/model'
+import type { ItemRulePatch } from '@nexus/factory-domain/planning/lot-sizing/parameters'
 
 /**
  * Planning settings › Item parameters, Reorder rules, Horizon & fences, Line efficiency (SCR-127; design
@@ -245,8 +248,10 @@ export const rowsWithParameters = (rows: readonly ItemRow[]): ItemRow[] => rows.
 
 // ---- the bulk edit -----------------------------------------------------------------------------------------------------
 
-export const BULK_FIELDS = [...DAY_FIELDS, ...ITEM_QTY_FIELDS] as const
+// B-W2b-GB29 (G220, B-W2b-318's and B-W2b-335's gap): + the number rules per item (scrap %, yield %, days before use).
+export const BULK_FIELDS = [...DAY_FIELDS, ...ITEM_QTY_FIELDS, ...RULE_NUMBER_FIELDS] as const
 export type BulkField = (typeof BULK_FIELDS)[number]
+export const isRuleField = (field: string): field is RuleNumberField => (RULE_NUMBER_FIELDS as readonly string[]).includes(field)
 /** The fields to change and their new text ('' clears); a method for all (Orders or Manual only: a reorder rule needs its own values). */
 export interface BulkDraft {
   readonly fields: Readonly<Partial<Record<BulkField, string>>>
@@ -264,7 +269,8 @@ export interface BulkLine {
 export function bulkPatch(draft: BulkDraft): { patch: ItemPlanningPatch } | { field: BulkField; words: Words } {
   const patch: Record<string, unknown> = {}
   for (const [field, text] of Object.entries(draft.fields) as [BulkField, string][]) {
-    const parsed = parseCell(field, text)
+    // B-W2b-GB29 (G220): a rule is read as the rules' cells read it (planning-mrp-depth's words).
+    const parsed = isRuleField(field) ? parseRule(field, text) : parseCell(field, text)
     if ('problem' in parsed) return { field, words: parsed.problem }
     patch[field] = parsed.value
   }
@@ -274,15 +280,28 @@ export function bulkPatch(draft: BulkDraft): { patch: ItemPlanningPatch } | { fi
 
 /** The review: per row old → new and what will be sent, refused or left as it is. */
 export function bulkLines(rows: readonly ItemRow[], patch: ItemPlanningPatch): BulkLine[] {
+  // B-W2b-GB29 (G220): the rules apart (checked with the item's kind by the rules' own plan), then one write of both.
+  const rules = Object.fromEntries(Object.entries(patch).filter(([field]) => isRuleField(field)))
+  const planning = Object.fromEntries(Object.entries(patch).filter(([field]) => !isRuleField(field))) as ItemPlanningPatch
   return rows.map((row) => {
     const before = valuesOf(row.row)
-    const changes = (Object.entries(patch) as [BulkField | 'method', unknown][]).map(([field, value]) => ({
-      field,
-      before: before ? (before[field] === null ? null : String(before[field])) : field === 'method' ? 'ORDERS' : null,
-      after: value === null || value === undefined ? null : String(value),
-    }))
-    return { row, changes, plan: planPatch(row.row, patch) }
+    const ruled = rulesOf(row.row)
+    const changes = (Object.entries(patch) as [BulkField | 'method', unknown][]).map(([field, value]) => {
+      const was = isRuleField(field) ? (ruled ? ruled[field] : null) : before ? before[field] : field === 'method' ? 'ORDERS' : null
+      return { field, before: was === null || was === undefined ? null : String(was), after: value === null || value === undefined ? null : String(value) }
+    })
+    return { row, changes, plan: withRules(row, planPatch(row.row, planning), rules) }
   })
+}
+
+/** B-W2b-GB29 (G220): a row's write with its rules: refused at the first rule the domain refuses, else one patch of both. */
+function withRules(row: ItemRow, plan: WritePlan, rules: Readonly<Record<string, unknown>>): WritePlan {
+  if (Object.keys(rules).length === 0 || plan.kind === 'refused') return plan
+  const ruled = rulesPlan(row.row, row.item.kind, rules as ItemRulePatch)
+  if (ruled.kind === 'refused') return { kind: 'refused', field: ruled.field, words: ruled.words }
+  if (ruled.kind === 'none') return plan
+  if (plan.kind === 'write') return { ...plan, patch: { ...plan.patch, ...ruled.patch } as ItemParametersFields, cleared: [...plan.cleared, ...ruled.cleared] }
+  return { kind: 'write', patch: ruled.patch as ItemParametersFields, values: valuesOf(row.row) ?? mergeItemPlanning(null, {}).values, cleared: ruled.cleared }
 }
 
 export const bulkCounts = (lines: readonly BulkLine[]) => ({

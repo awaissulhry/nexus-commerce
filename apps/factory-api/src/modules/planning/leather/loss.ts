@@ -1,4 +1,5 @@
 import { ValidationError } from '@nexus/factory-domain/core/errors'
+import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { dismissReasonProblem, lossProblem, proposalStands, wastageOfLoss, yieldOfLoss, type LossDecision } from '@nexus/factory-domain/planning/leather/loss'
 import { PLANNING_LEATHER_MANAGE } from '@nexus/factory-domain/planning/leather/permissions'
@@ -88,6 +89,9 @@ export async function acceptLoss(caller: CommandCaller, styleId: string, body: D
       })
       carriedIn = { revisionId: draft.id, revision: draft.revision, plannedHideYieldPct, wastagePct, lines: changed.length }
     }
+    // B-W2b-GB29 (G226): the loss for planning, read by the plan run and new quotes on top of a released revision released before
+    // it (./planning-loss.ts), so it counts at once, without waiting for a new revision.
+    await tx.styleCuttingLoss.create({ data: { id: newId(), styleId, lossPct: toPct, basedOnCuts: body.cuts, decidedAt: tools.now, createdById: context.actorId }, select: { id: true } })
     const fromPct = facts.proposal.fromPct
     tools.audit({
       action: ACCEPT_ACTION,

@@ -110,7 +110,8 @@
     "FORBIDDEN": "You may not allocate work orders at this site.",
     "NOT_FOUND": "The work order is no longer on the board: the board was read again.",
     "OFFLINE": "No connection to the server: nothing was saved.",
-    "FAILED": "The server did not save it. Try again."
+    "FAILED": "The server did not save it. Try again.",
+    "GATE": "A gate of its order has not passed: mark it done, or start before it with a reason, in Time & action."
   },
   "notice": {
     "moved_one": "{pieces} garment moved.",

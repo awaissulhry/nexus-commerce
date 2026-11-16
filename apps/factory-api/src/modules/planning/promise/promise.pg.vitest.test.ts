@@ -22,6 +22,11 @@ import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
+// B-W2b-GB29: the options seed (SEED-JKT-05), the promise's queue and the capacity screens' world.
+import { seed as seedOptions } from '../../../../../../packages/factory-db/seed/options'
+import { capacityWorld } from '../capacity/service'
+import { SITE_COLUMNS } from '../store'
+import { promiseWorld } from './engine'
 
 /**
  * Promise dates (B-W2b-301; PLN-168, PLN-169, PLN-171, PLN-179) on the local stack with the app's real routes: a throwaway
@@ -373,3 +378,90 @@ describe('B-W2b-F44: never today for a garment to make, today only from now, on 
   }
 })
 // B-W2b-F44 (end)
+
+// ---- B-W2b-GB29 (begin): options in the material, the queue's DRAFT and planned work, the board's finish, held garments ----
+
+describe('B-W2b-GB29: the open promise gaps (G223, G224)', { timeout: 300_000 }, () => {
+  const officeScope = () => ({ audience: 'office' as const, tenantId: tenant, actorId: newId() })
+  const siteRow = () => database.withScope(officeScope(), (client) => client.site.findUniqueOrThrow({ where: { id: A.site }, select: SITE_COLUMNS }))
+
+  it("G223: a quote or calculator line's chosen options change its material (the liner's component only with the liner)", async () => {
+    const options = await seedOptions({ db: database, namespace: ns })
+    // SEED-JKT-05 is a made-up PPE jacket with no certificate yet: here it is a plain garment, so its sizes are made.
+    await admin(`UPDATE "Style" SET "ppeCategory" = 'NOT_PPE', "ppeStandard" = NULL, "ppeClass" = NULL WHERE id = $1`, [options.jacketStyleId])
+    const colourway = await one(`SELECT id FROM "Colourway" WHERE "styleId" = $1 AND code = 'BLK'`, [options.jacketStyleId])
+    const ask = { siteId: A.site, styleId: options.jacketStyleId, colourwayId: colourway, revisionId: options.jacketRevisionId, sizes: [{ size: '52', quantity: 2 }] }
+    const materialOf = (answer: Json): string[] => ((sizeOf(answer, '52').material?.arrivals ?? []) as Json[]).map((arrival) => arrival.itemId as string)
+    const plain = (await ok('sales', 'POST', '/planning/promise/calculate', ask)).answer
+    const lined = (await ok('sales', 'POST', '/planning/promise/calculate', { ...ask, optionValueIds: [options.valueIds.linerYes] })).answer
+    expect(sizeOf(plain, '52').state, JSON.stringify(sizeOf(plain, '52'))).not.toBe('NOT_CERTIFIED')
+    // The BOM line only with the liner (the removable liner we make, a sub-assembly) counts with the liner chosen, and only then.
+    expect(materialOf(lined)).toContain(options.itemIds.linerComponent)
+    expect(materialOf(plain)).not.toContain(options.itemIds.linerComponent)
+    // The lines for every garment count in both.
+    const shell = await one(`SELECT "itemId" AS id FROM "BomLine" WHERE id = $1`, [options.bomLineIds.shell])
+    expect(materialOf(plain)).toContain(shell)
+    expect(materialOf(lined)).toContain(shell)
+  })
+
+  it("G224: the promise's queue counts DRAFT work orders and the plan's planned make orders; the capacity screens do not", async () => {
+    const wo2 = await one(`SELECT id FROM "WorkOrder" WHERE number = 'SEED-WO-0002'`)
+    const template = await one(`SELECT id FROM "PlannedWorkOrder" WHERE kind = 'MAKE' AND status = 'PLANNED' ORDER BY id LIMIT 1`)
+    const planned = newId()
+    const due = plusDays(today, 20)
+    await admin(
+      `INSERT INTO "PlannedWorkOrder" SELECT (jsonb_populate_record(NULL::"PlannedWorkOrder", to_jsonb(p) || jsonb_build_object('id', $1::text, 'styleId', $2::text, 'colourwayId', $3::text, 'styleRevisionId', NULL, 'sizes', '[{"size":"50","quantity":3}]'::jsonb, 'quantity', 3, 'demand', '[]'::jsonb, 'dueDate', $4::text, 'startDate', $5::text, 'lineId', NULL, 'sizeGroup', NULL, 'firm', false, 'firmedAt', NULL, 'firmedById', NULL, 'protectedFields', '{}'::text[], 'protectedById', NULL, 'protectedAt', NULL))).* FROM "PlannedWorkOrder" p WHERE p.id = $6`,
+      [planned, A.jkt02, A.blk, due, plusDays(today, 15), template],
+    )
+    const site = await siteRow()
+    const [queue, screen] = await database.withScope(officeScope(), async (client) => [await promiseWorld(client, site, today), await capacityWorld(client, site, { from: today, to: plusDays(today, 90) }, today)])
+    // The DRAFT WO-0002 books its sewing where the board placed it; the planned make order books every routing step on its due date.
+    expect(queue.parts.some((part) => part.workOrderId === wo2)).toBe(true)
+    const plannedParts = queue.parts.filter((part) => part.workOrderId === planned)
+    const steps = await admin<{ n: string }>(`SELECT count(*)::text AS n FROM "RoutingOperation" r JOIN "StyleRevision" v ON v.id = r."revisionId" WHERE v."styleId" = $1 AND v.status = 'RELEASED' AND r."supplierId" IS NULL`, [A.jkt02])
+    expect(plannedParts.length).toBe(Number(steps[0]!.n))
+    expect(plannedParts.every((part) => part.laneKind === 'WORK_CENTRE' && part.pieces === 3 && part.placement.placedBy === 'DUE_DATE' && part.placement.date === due)).toBe(true)
+    // Capacity & load stays the released work's (B-W2a-16).
+    expect(screen.parts.some((part) => part.workOrderId === wo2 || part.workOrderId === planned)).toBe(false)
+  })
+
+  it("G224: available to promise expects a work order's garments at the board's planned finish, not its due date", async () => {
+    const wo1 = await one(`SELECT id FROM "WorkOrder" WHERE number = 'SEED-WO-0001'`)
+    const finish = (await admin<{ day: string; due: string }>(
+      `SELECT to_char((max(s."endAt") - interval '1 millisecond') AT TIME ZONE 'Europe/Rome', 'YYYY-MM-DD') AS day, (SELECT to_char("dueDate", 'YYYY-MM-DD') FROM "WorkOrder" WHERE id = $1) AS due
+         FROM "ScheduleSlot" s JOIN "PlanVersion" v ON v.id = s."planVersionId" AND v.kind = 'WORKING' WHERE s."workOrderId" = $1`,
+      [wo1],
+    ))[0]!
+    expect(finish.day).not.toBe(finish.due) // the premise: the board finishes it before its due date
+    const answer = await ok('planner', 'GET', `/planning/promise/atp?siteId=${A.site}&styleId=${A.jkt02}&weeks=8`)
+    const blk52 = ((answer.colourways as Json[]).find((entry) => entry.colourway.code === 'BLK')!.sizes as Json[]).find((entry) => entry.size === '52')!
+    const source = (blk52.sources as Json[]).find((entry) => entry.kind === 'WORK_ORDER' && entry.id === wo1)
+    expect(source, JSON.stringify(blk52.sources)).toMatchObject({ date: finish.day })
+  })
+
+  it('G224: finished garments under a quality hold are not on hand to promise', async () => {
+    const wo1 = await one(`SELECT id FROM "WorkOrder" WHERE number = 'SEED-WO-0001'`)
+    const company = await one(`SELECT "companyId" AS id FROM "Site" WHERE id = $1`, [A.site])
+    const opening = (await admin<{ createdById: string }>(`SELECT "createdById" FROM "StockMove" WHERE reason = 'OPENING' LIMIT 1`))[0]!
+    const onHand = async (): Promise<number> => {
+      const answer = await ok('planner', 'GET', `/planning/promise/atp?siteId=${A.site}&styleId=${A.jkt02}&weeks=8`)
+      return ((answer.colourways as Json[]).find((entry) => entry.colourway.code === 'BLK')!.sizes as Json[]).find((entry) => entry.size === '52')!.onHand as number
+    }
+    const before = await onHand()
+    // WO-0001 puts 2 finished BLK 52 garments into A1's finished goods: on hand.
+    await admin(
+      `INSERT INTO "StockMove" (id, "tenantId", "companyId", "siteId", reason, "itemId", "toLocationId", "workOrderId", quantity, uom, "baseQuantity", reference, "idempotencyKey", "occurredAt", "createdById")
+       VALUES ($1, $2, $3, $4, 'PRODUCTION_RECEIPT', $5, $6, $7, 2, 'PCS', 2, 'WO-0001 batch', $8, now(), $9)`,
+      [newId(), tenant, company, A.site, A.blk52, A.fg, wo1, `promise-receipt-${run}`, opening.createdById],
+    )
+    expect(await onHand()).toBe(before + 2)
+    // A quality hold of WO-0001 keeps its garments from packing: they are no longer promised from stock.
+    await admin(
+      `INSERT INTO "QualityHold" (id, "tenantId", "companyId", "siteId", number, "subjectType", "subjectIds", "reasonCode", "reasonNote", "placedAt", "createdAt", "updatedAt")
+       VALUES ($1, $2, $3, $4, $5, 'WorkOrder', ARRAY[$6::uuid], 'QUALITY_CHECK', 'A stitching fault seen at final inspection.', now(), now(), now())`,
+      [newId(), tenant, company, A.site, `TEST-HLD-${run}`, wo1],
+    )
+    expect(await onHand()).toBe(before)
+  })
+})
+// B-W2b-GB29 (end)

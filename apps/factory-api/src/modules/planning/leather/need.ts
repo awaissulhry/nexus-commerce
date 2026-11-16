@@ -23,6 +23,8 @@ import { readStock, readWorkOrders, type Reader, type SiteRow } from '../store'
 import { REQUIREMENT_COLUMNS, sourcesOf, type RequirementRow } from '../views'
 import type { NeedRowView, ProtectorRowView } from './contract'
 import { isLeather, isProtector, LEATHER_ITEM_COLUMNS, latestRunOf, runViewOf, siteViewOf, unitsOfItem, type LeatherItemRow } from './facts'
+// B-W2b-GB29 (G226): the accepted cutting loss for planning.
+import { planningLossOf, withPlanningLoss } from './planning-loss'
 
 /**
  * Leather need per order and certified protectors (B-W2b-132; PLN-106, PLN-108, PLN-114; design planning.leather "Leather
@@ -59,23 +61,80 @@ async function readRunFacts(db: Reader, site: SiteRow, runId: string, which: 'le
         select: { id: true, orderId: true, seq: true, styleId: true, styleRevisionId: true, colourwayId: true, promiseDate: true, requestedDate: true, order: { select: { number: true, promiseDate: true, requestedDate: true } } },
       })
     : []
-  const lineById = new Map(lines.map((line) => [line.id, line]))
-  const styleIds = unique(lines.map((line) => line.styleId))
+  // B-W2b-GB29 (G222 × B-W2b-132): a sample work order of no order line is a row of its own: the run's stand-in line (its
+  // source names the work order and its round), its style, revision, colourway and due day the work order's.
+  const samples = await sampleLinesOf(db, [...sources.values()].flat())
+  const allLines: NeedLine[] = [...lines.map((line) => ({ ...line, sample: null })), ...samples.lines]
+  const lineById = new Map(allLines.map((line) => [line.id, line]))
+  const styleIds = unique(allLines.map((line) => line.styleId))
   const styles = new Map((styleIds.length ? await db.style.findMany({ where: { id: { in: styleIds } }, select: { id: true, code: true, name: true } }) : []).map((row) => [row.id, row]))
   const released = styleIds.length ? await db.styleRevision.findMany({ where: { styleId: { in: styleIds }, status: 'RELEASED' }, select: { id: true, styleId: true }, orderBy: { revision: 'desc' } }) : []
   const releasedOf = new Map<string, string>()
   for (const row of released) if (!releasedOf.has(row.styleId)) releasedOf.set(row.styleId, row.id)
-  const revisionOf = (line: (typeof lines)[number]) => line.styleRevisionId ?? releasedOf.get(line.styleId) ?? null
-  const revisionIds = unique(lines.map(revisionOf))
+  const revisionOf = (line: Pick<NeedLine, 'styleRevisionId' | 'styleId'>) => line.styleRevisionId ?? releasedOf.get(line.styleId) ?? null
+  const revisionIds = unique(allLines.map(revisionOf))
   const revisions = new Map((revisionIds.length ? await db.styleRevision.findMany({ where: { id: { in: revisionIds } }, select: { id: true, revision: true, status: true, plannedHideYieldPct: true } }) : []).map((row) => [row.id, row]))
   const bomLines = new Map<string, LineRecord[]>()
   for (const revisionId of revisionIds.sort()) bomLines.set(revisionId, await readLines(db, revisionId))
-  const colourways = new Map((lines.length ? await db.colourway.findMany({ where: { id: { in: unique(lines.map((line) => line.colourwayId)) } }, select: { id: true, code: true, name: true } }) : []).map((row) => [row.id, row]))
+  // B-W2b-GB29 (G226): the loss the plan carries is the accepted one when it overrides a released revision (as the run reads it).
+  const planningLoss = await planningLossOf(db, revisionIds, [...bomLines.values()].flat().map((bomLine) => bomLine.itemId))
+  for (const [revisionId, lines] of bomLines) bomLines.set(revisionId, withPlanningLoss(planningLoss, revisionId, lines))
+  const colourways = new Map((allLines.length ? await db.colourway.findMany({ where: { id: { in: unique(allLines.map((line) => line.colourwayId)) } }, select: { id: true, code: true, name: true } }) : []).map((row) => [row.id, row]))
   const colours = new Map((mine.some((row) => row.itemColourId) ? await db.itemColour.findMany({ where: { id: { in: unique(mine.map((row) => row.itemColourId)) } }, select: { id: true, code: true, name: true } }) : []).map((row) => [row.id, row]))
-  const { cells } = await readWorkOrders(db, site.id, lineIds)
+  const { cells: orderCells } = await readWorkOrders(db, site.id, lineIds)
+  const cells = [...orderCells, ...samples.cells] // B-W2b-GB29: + the sample work orders' cells, on their stand-in lines
   return { requirements: mine, items, sources, lineById, styles, revisionOf, revisions, bomLines, colourways, colours, cells }
 }
 type RunFacts = Awaited<ReturnType<typeof readRunFacts>>
+
+/** B-W2b-GB29: a row's line: an order line, or the stand-in line of a sample work order of no order line (`sample` says which). */
+interface NeedLine {
+  readonly id: string
+  readonly orderId: string
+  readonly seq: number
+  readonly styleId: string
+  readonly styleRevisionId: string | null
+  readonly colourwayId: string
+  readonly promiseDate: Date | null
+  readonly requestedDate: Date | null
+  readonly order: { readonly number: string; readonly promiseDate: Date | null; readonly requestedDate: Date | null }
+  readonly sample: { readonly workOrderId: string; readonly workOrderNumber: string; readonly roundId: string | null; readonly roundNumber: string | null } | null
+}
+
+/**
+ * B-W2b-GB29 (G222 × B-W2b-132): the stand-in lines of the run's sample sources (explode's `sampleOrderLines`: one per sample
+ * work order and colourway, its id the first cell of that colourway) and the work orders' cells on them, as the order lines'.
+ */
+async function sampleLinesOf(db: Reader, sources: readonly RequirementSource[]) {
+  const ofSample = sources.filter((source) => source.sample)
+  const workOrderIds = unique(ofSample.map((source) => source.sample!.workOrderId))
+  if (workOrderIds.length === 0) return { lines: [] as NeedLine[], cells: [] as Awaited<ReturnType<typeof readWorkOrders>>['cells'] }
+  const workOrders = new Map((await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true, status: true, styleId: true, styleRevisionId: true, dueDate: true, sizes: { select: { id: true, colourwayId: true, size: true, quantity: true } } } })).map((row) => [row.id, row]))
+  const lines: NeedLine[] = []
+  const cells: Awaited<ReturnType<typeof readWorkOrders>>['cells'] = []
+  for (const source of ofSample) {
+    if (lines.some((line) => line.id === source.orderLineId)) continue
+    const workOrder = workOrders.get(source.sample!.workOrderId)
+    const standIn = workOrder?.sizes.find((cell) => cell.id === source.orderLineId)
+    if (!workOrder || !standIn) continue
+    lines.push({
+      id: source.orderLineId,
+      orderId: source.sample!.roundId ?? workOrder.id,
+      seq: source.lineSeq,
+      styleId: workOrder.styleId,
+      styleRevisionId: workOrder.styleRevisionId,
+      colourwayId: standIn.colourwayId,
+      promiseDate: workOrder.dueDate,
+      requestedDate: null,
+      order: { number: workOrder.number, promiseDate: workOrder.dueDate, requestedDate: null },
+      sample: { workOrderId: workOrder.id, workOrderNumber: workOrder.number, roundId: source.sample!.roundId, roundNumber: source.sample!.roundNumber },
+    })
+    for (const cell of workOrder.sizes.filter((entry) => entry.colourwayId === standIn.colourwayId)) {
+      cells.push({ workOrderId: workOrder.id, workOrderNumber: workOrder.number, status: workOrder.status, orderLineId: source.orderLineId, size: cell.size, pieces: cell.quantity })
+    }
+  }
+  return { lines, cells }
+}
 
 /** The order line's rows of one run line: sources grouped per order line (the run keeps one per size). */
 function perOrderLine(sources: readonly RequirementSource[]): Map<string, RequirementSource[]> {
@@ -129,7 +188,7 @@ interface NeedInput {
   readonly requirement: RequirementRow
   readonly item: LeatherItemRow & { standardCost?: Prisma.Decimal | null }
   readonly units: ReturnType<typeof unitsOfItem>
-  readonly line: NonNullable<ReturnType<RunFacts['lineById']['get']>>
+  readonly line: NeedLine
   readonly sources: readonly RequirementSource[]
   readonly facts: RunFacts
   readonly hides: readonly FindHide[]
@@ -215,11 +274,27 @@ async function needRowOf(input: NeedInput): Promise<NeedRowView> {
 
   // The split reserves what is left to find, no more: the sizes' areas count what the order's reservations already hold too.
   let left = toFind
+  // B-W2b-GB29 (G226): with one work order, each part's sizes are its cells: the reserve holds each size's share of the part
+  // for its cell (Reservation.workOrderSizeId), so the split by garment is data, not words. Shares by the sizes' area, the
+  // last size taking what rounding left.
+  // B-W2b-GB29 (G222): a sample work order's cells are those of the stand-in line's colourway (they name no order line).
+  const cellOf = answer.split && workOrders.length === 1 ? new Map((await client.workOrderSize.findMany({ where: line.sample ? { workOrderId: workOrders[0]!.id, colourwayId: line.colourwayId } : { workOrderId: workOrders[0]!.id, salesOrderLineId: line.id }, select: { id: true, size: true }, orderBy: { id: 'asc' } })).reverse().map((cell) => [cell.size, cell.id])) : null
+  const cellsOf = (partSizes: readonly string[], take: Decimal) => {
+    if (!cellOf) return null
+    const of = partSizes.map((size) => ({ size, area: sizes.find((entry) => entry.size === size)?.area ?? ZERO }))
+    const whole = of.reduce((sum, entry) => sum.plus(entry.area), ZERO)
+    let given = ZERO
+    return of.map((entry, index) => {
+      const share = index === of.length - 1 ? take.minus(given) : whole.isZero() ? ZERO : take.times(entry.area).div(whole).toDecimalPlaces(4, Dec.ROUND_DOWN)
+      given = given.plus(share)
+      return { size: entry.size, workOrderSizeId: cellOf.get(entry.size) ?? null, area: q4(share) }
+    })
+  }
   const splitParts = answer.split
     ? answer.split.map((part) => {
         const take = Dec.min(left, new Dec(part.area))
         left = left.minus(take)
-        return { lotKey: part.lotKey, lotId: lots.find((lot) => lot.key === part.lotKey)?.lotId ?? part.lotKey, lotCode: part.lotCode, shadeLabel: part.shadeLabel, sizes: [...part.sizes], area: q4(take) }
+        return { lotKey: part.lotKey, lotId: lots.find((lot) => lot.key === part.lotKey)?.lotId ?? part.lotKey, lotCode: part.lotCode, shadeLabel: part.shadeLabel, sizes: [...part.sizes], area: q4(take), cells: cellsOf(part.sizes, take) }
       })
     : null
   const colourway = facts.colourways.get(line.colourwayId) ?? null
@@ -229,6 +304,8 @@ async function needRowOf(input: NeedInput): Promise<NeedRowView> {
     id: `${line.id}:${item.id}:${itemColourId ?? '-'}`,
     order: { id: line.orderId, number: line.order.number },
     orderLine: { id: line.id, seq: line.seq, dueDate: dueOf(line) },
+    // B-W2b-GB29 (G222): the sample work order of no order line this row is (its order is its round), or null.
+    sample: line.sample,
     style: { id: line.styleId, code: style?.code ?? '', name: style?.name ?? '' },
     revision: revision ? { id: revision.id, revision: revision.revision, status: revision.status } : null,
     colourway: colourway ? { id: colourway.id, code: colourway.code, name: colourway.name } : null,

@@ -226,7 +226,7 @@ async function work(tools: CommandTools, site: SiteRow, note: string | null, tri
       carried,
       exceptions,
       // B-W2b-293: the planned work and subcontract orders the run wrote.
-      plannedWorkOrders: { added: planned.added, moved: planned.moved, removed: planned.removed, kept: planned.kept, sizeRunRule: planned.sizeRunRule, followed: planned.followed, unclaimed: planned.unclaimed },
+      plannedWorkOrders: { added: planned.added, moved: planned.moved, removed: planned.removed, kept: planned.kept, sizeRunRule: planned.sizeRunRule, followed: planned.followed, unclaimed: planned.unclaimed, levelled: planned.levelled /* B-W2b-GB29 (G219) */ },
       // B-W2b-306 (PLN-073): the action messages it raised.
       actionMessages: actions,
     },

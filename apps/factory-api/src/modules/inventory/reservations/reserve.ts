@@ -56,6 +56,8 @@ export interface ReserveLineInput {
   readonly quantity?: string | undefined
   readonly uom?: Uom | undefined
   readonly baseQuantity?: string | undefined
+  /** B-W2b-GB29 (G226): the work order's cell (size) a split by garment holds it for; only with a work order demand. */
+  readonly workOrderSizeId?: string | undefined
 }
 
 export interface ReserveInput {
@@ -239,6 +241,15 @@ export async function reserveInCommand(tools: CommandTools, context: OfficeConte
       problems.push({ path: `body/lines/${line.index}/itemId`, message: `${demand.words} does not plan ${line.item.code} in this colour: reserve what it uses.` })
     }
   }
+  // B-W2b-GB29 (G226): a line held for one size of the work order names a cell of that work order (a split by garment).
+  const cellIds = [...new Set(body.lines.flatMap((line) => (line.workOrderSizeId ? [line.workOrderSizeId] : [])))]
+  if (cellIds.length > 0) {
+    const cells = demand.workOrderId ? new Set((await tools.tx.workOrderSize.findMany({ where: { workOrderId: demand.workOrderId, id: { in: cellIds.filter(isUuid) } }, select: { id: true } })).map((row) => row.id)) : new Set<string>()
+    body.lines.forEach((line, index) => {
+      if (!line.workOrderSizeId || cells.has(line.workOrderSizeId)) return
+      problems.push({ path: `body/lines/${index}/workOrderSizeId`, message: demand.workOrderId ? `Not a size of ${demand.words}: a line held for one size names a cell of the work order it is reserved for.` : 'A line held for one size needs the work order: reserve for the work order, not the order line.' })
+    })
+  }
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These lines cannot be reserved as they are.', problems)
 
   const keys = new Map<string, ReserveKey>(resolved.map((line) => {
@@ -313,6 +324,8 @@ export async function reserveInCommand(tools: CommandTools, context: OfficeConte
         hideId: line.hide?.id ?? null,
         quantity: sized.get(line.index)!,
         workOrderId: demand.workOrderId,
+        // B-W2b-GB29 (G226): the size a split by garment holds it for.
+        workOrderSizeId: body.lines[line.index]?.workOrderSizeId ?? null,
         salesOrderLineId: demand.salesOrderLineId,
         partyId: demand.partyId,
         needDate,

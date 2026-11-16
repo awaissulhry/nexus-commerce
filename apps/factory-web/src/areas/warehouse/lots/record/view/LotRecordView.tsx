@@ -16,7 +16,7 @@ import { CrViPill, Dual, QualityPill, Qty } from '../../../../_shared/stock/part
 import type { ReleaseChecklist } from '../../api'
 import { checkKey, checklistHead, holdGroups, LOT_TABS, rejectedWithStock, traceSummary, type LotHolds, type LotRecordActions, type LotRecordModel, type LotTab } from '../../model'
 import { DockButton, LotsMessages, MovesTable, PartState, RecordFrame, useWords, type Words } from '../../shared/parts'
-import { demandLabel, demandRecord, holdsBySubject, reasonLabel } from '../../../stock/daily/model'
+import { demandLabel, demandRecord, holdsBySubject, reasonLabel, reservationCell } from '../../../stock/daily/model' // B-W2b-GB29: + reservationCell
 import { WriteOffDialog } from '../../../stock/daily/WriteOffDialog'
 import { TraceDialog } from '../../trace/TraceDialog'
 import { TraceTree } from '../../trace/TraceTree'
@@ -536,6 +536,8 @@ function Reservations({ figures, model, unit }: { figures: NonNullable<NonNullab
             <Link className="fw-st-link fw-wl-code" href={`${model.prefix}${recordAddress(demandRecord(reservation.demand), OFFICE_PAGES)}`}>
               {demandLabel(reservation.demand)}
             </Link>
+            {/* B-W2b-GB29 (G226): a split by garment says the size it holds for. */}
+            {reservationCell(reservation) && <span className="fw-st-sub">{t('lt.where.cell', reservationCell(reservation)!)}</span>}
             <span className="fw-st-num">{reservation.hide ? t('lt.where.wholeHide', { code: reservation.hide.code }) : `${quantity(reservation.open, locale)} ${unit}`}</span>
             {reservation.needDate && <span className="fw-st-sub">{t('lt.where.needed', { date: formatDate(`${reservation.needDate}T12:00:00Z`, place) })}</span>}
             {reservation.stale && <Pill tone="warning">{t('lt.where.stale')}</Pill>}

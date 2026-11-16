@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { ApiError } from '../../../../lib/api/errors'
 import type { PickerReason } from '../../../_shared/reasons/api'
-import type { HoldRow } from './api'
+import { reservationSchema, type HoldRow } from './api' // B-W2b-GB29: + reservationSchema
 import {
   asOfHeldKey,
   asOfInstant,
@@ -10,6 +10,7 @@ import {
   blankWriteOff,
   demandLabel,
   holdHeldKey,
+  reservationCell,
   holdOfRow,
   holdsBySubject,
   quantityText,
@@ -102,6 +103,13 @@ describe('why a row is held', () => {
   })
   it('names a demand and holds the hold dialog until it may go', () => {
     expect(demandLabel({ type: 'WorkOrder', id: 'w', number: 'WO-DEMO-0031', status: 'RELEASED' })).toBe('WO-DEMO-0031')
+    // B-W2b-GB29 (G226): the size a split by garment holds for, read from the reservation (older answers have none).
+    expect(reservationCell({ cell: { size: '52', colourway: 'BLK' } })).toEqual({ size: '52', colourway: 'BLK' })
+    expect(reservationCell({ cell: null })).toBeNull()
+    expect(reservationCell({})).toBeNull()
+    const sample = { id: 'r1', siteId: 's1', siteCode: 'A1', kind: 'AREA', status: 'ACTIVE', item: { id: 'i1', code: 'LEA-1', name: 'Leather', baseUom: 'FT2', tracking: 'LOT' }, colour: null, lot: null, hide: null, quantity: '5.0000', issuedQuantity: '0.0000', open: '5.0000', demand: { type: 'WorkOrder', id: 'w', number: 'WO-DEMO-0031', status: 'RELEASED' }, stale: false, needDate: null, note: null, createdAt: '2026-11-16T08:00:00.000Z', createdBy: null, version: 1 }
+    expect(reservationSchema.parse({ ...sample, workOrderSizeId: 'cell-1', cell: { size: '52', colourway: 'BLK' } }).cell).toEqual({ size: '52', colourway: 'BLK' })
+    expect(reservationSchema.parse(sample).cell).toBeUndefined()
     expect(demandLabel({ type: 'SalesOrderLine', id: 'l', orderId: 'o', orderNumber: 'SO-DEMO-0004', seq: 10, status: 'CONFIRMED' })).toBe('SO-DEMO-0004 · 10')
     const reasons = [{ ...reason('QUALITY_CHECK'), list: 'HOLD' as const }, { ...reason('OTHER', true), list: 'HOLD' as const }]
     const preview = { siteId: 'S', subjects: [{ id: 'L1', code: 'L1', label: 'L1', state: 'RELEASED', quantity: null, problem: null }], quantity: null, workOrders: [], quarantinePlaces: [] }

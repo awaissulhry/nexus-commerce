@@ -32,6 +32,11 @@ import { latestDoneRun, readPlanInputs, type PlanInputs } from '../inputs'
 import type { Reader, SiteRow } from '../store'
 import { certificatesOn, type SizeCertificate } from './certificates'
 import { readRouting, readSkuFlows, readStyleFacts, revisionFor, skuKey, withPromiseLines, type RevisionFacts, type RoutingStepRow, type SkuFlows, type StyleFacts } from './store'
+// B-W2b-GB29 (G224): the queue counts DRAFT and planned work orders; a buy walks its supplier's closed days.
+import type { Prisma } from '@nexus/factory-db'
+import { arrivalDate, leadTimeWindow } from '@nexus/factory-domain/calendars/suppliers'
+import { supplierCalendarsFor } from '../../../platform/calendars/service'
+import { plannedLoadOf } from './store'
 // B-W2b-365: a step only for some options counts when the garment asked has one of them.
 import { stepsForOptions } from './steps'
 // B-W2b-F44: today counts only the minutes left from now; a garment still to make is never promised for today.
@@ -45,11 +50,13 @@ import { makeDayOf, minutesLeftToday } from '@nexus/factory-domain/planning/prom
  *
  *   1. certificates  a size no valid certificate covers today is not promised (the SHIPMENT gate's certificate check)
  *   2. stock         a SKU set to make to stock at the site promises from available to promise first (PLN-168)
- *   3. material      the rest is added to the site's live plan AFTER every real order line (planning/inputs' hook): the
- *                    plan's netting says per size and material what stock, purchase orders and firm planned orders still
- *                    cover, and what is to buy (the supplier's lead time) or make; the latest arrival is the size's start
+ *   3. material      the rest is added to the site's live plan AFTER every real order line (planning/inputs' hook), with
+ *                    the options the line chose (B-W2b-GB29): the plan's netting says per size and material what stock,
+ *                    purchase orders and firm planned orders still cover, and what is to buy (the supplier's lead time,
+ *                    walked around its closed days: B-W2b-GB29) or make; the latest arrival is the size's start
  *   4. capacity      from that day the routing walks the lanes' free minutes (released work and its backlog first: the
- *                    queue), sizes whose material comes later after the earlier ones (PLN-171: sizes finish apart)
+ *                    queue; B-W2b-GB29: DRAFT work orders and the plan's planned make orders queue too, `promiseWorld`),
+ *                    sizes whose material comes later after the earlier ones (PLN-171: sizes finish apart)
  *   5. certificates  again on each size's day: a certificate that ends before it does not promise the size (PLN-179)
  *
  * Several asks (a quote's lines) share the stock and the capacity in the order given.
@@ -202,7 +209,7 @@ interface PlanLine {
 }
 
 /** Per promise line and size, its material needs as the plan netted them. */
-function needsOf(inputs: PlanInputs, plan: ReturnType<typeof planLevelled>, lines: readonly PlanLine[], extra: { readonly planning: readonly ItemPlanningLead[]; readonly colourCodes: ReadonlyMap<string, string>; readonly companyId: string }): { needs: Map<string, MaterialNeed[]>; warnings: Map<string, PromiseWarning[]> } {
+function needsOf(inputs: PlanInputs, plan: ReturnType<typeof planLevelled>, lines: readonly PlanLine[], extra: { readonly planning: readonly ItemPlanningLead[]; readonly colourCodes: ReadonlyMap<string, string>; readonly companyId: string; /* B-W2b-GB29 (G224) */ readonly arrivalOf?: (supplierId: string, leadTimeDays: number) => BusinessDate | null }): { needs: Map<string, MaterialNeed[]>; warnings: Map<string, PromiseWarning[]> } {
   const mine = new Map(lines.map((line) => [line.orderLineId, line.askKey]))
   const existing = new Set(lines.filter((line) => line.existing).map((line) => line.orderLineId))
   const needs = new Map<string, MaterialNeed[]>()
@@ -236,6 +243,8 @@ function needsOf(inputs: PlanInputs, plan: ReturnType<typeof planLevelled>, line
           uncovered: coverage.uncovered,
           leadTimeDays: lead,
           delayDays: rule?.delayDays ?? null,
+          // B-W2b-GB29 (G224): a buy ordered today arrives after its supplier's closed days.
+          earliestArrival: requirement.action === 'BUY' && requirement.supplierId && lead !== null ? (extra.arrivalOf?.(requirement.supplierId, lead) ?? null) : null,
           purchaseOf: (id) => poOf.get(id),
         },
       ])
@@ -357,19 +366,22 @@ export async function answerPromises(db: Reader, where: PromiseWhere, asks: read
   let planWarnings = new Map<string, PromiseWarning[]>()
   if (toPlan.length > 0) {
     const latest = await latestDoneRun(db, site.id)
-    const inputs = await readPlanInputs(db, site, today, latest?.id ?? null, added.length === 0 ? undefined : withPromiseLines(db, added.map((line) => line.plan)))
+    // B-W2b-GB29 (G223): a quote or calculator line is exploded with its chosen options (an order line's are its own rows).
+    const chosen = new Map(added.map((line) => [line.plan.orderLineId, [...(line.entry.ask.optionValueIds ?? [])]] as const))
+    const inputs = await readPlanInputs(db, site, today, latest?.id ?? null, added.length === 0 ? undefined : withPromiseLines(db, added.map((line) => line.plan), chosen))
     const plan = planLevelled(inputs.input, inputs.garments)
     const itemIds = [...new Set(plan.requirements.map((line) => line.itemId))]
     const planning = itemIds.length === 0 ? [] : await db.itemPlanning.findMany({ where: { siteId: site.id, itemId: { in: itemIds } }, select: { itemId: true, itemColourId: true, buyLeadTimeDays: true, makeLeadTimeDays: true, delayDays: true }, orderBy: { id: 'asc' } })
     const colourIds = [...new Set(plan.requirements.flatMap((line) => (line.itemColourId ? [line.itemColourId] : [])))]
     const colours = colourIds.length === 0 ? [] : await db.itemColour.findMany({ where: { id: { in: colourIds } }, select: { id: true, code: true } })
-    const found = needsOf(inputs, plan, toPlan.map((line) => ({ askKey: line.entry.ask.key, orderLineId: line.plan.orderLineId, existing: Boolean(line.entry.ask.orderLineId) })), { planning, colourCodes: new Map(colours.map((colour) => [colour.id, colour.code])), companyId: site.companyId })
+    const arrivalOf = await supplierArrivals(db, inputs, plan, planning, site.companyId, today) // B-W2b-GB29 (G224)
+    const found = needsOf(inputs, plan, toPlan.map((line) => ({ askKey: line.entry.ask.key, orderLineId: line.plan.orderLineId, existing: Boolean(line.entry.ask.orderLineId) })), { planning, colourCodes: new Map(colours.map((colour) => [colour.id, colour.code])), companyId: site.companyId, arrivalOf })
     needs = found.needs
     planWarnings = found.warnings
   }
 
   // 4. Capacity: the site's lanes, their load and backlog, walked in the asks' order.
-  const world = await capacityWorld(db, site, { from: today, to: plusDays(today, CTP_HORIZON_DAYS) }, today)
+  const world = await promiseWorld(db, site, today) // B-W2b-GB29 (G224): DRAFT and planned work orders queue too
   const lanes = lanesOf(world, today, now) // B-W2b-F44: today from now
   const free: FreeMap = freeAfterLoad(lanes.lanes)
   const empty = freeWhenEmpty(lanes.lanes)
@@ -500,6 +512,43 @@ export async function answerPromises(db: Reader, where: PromiseWhere, asks: read
   }
   return answers
 }
+
+// ---- B-W2b-GB29 (G224, begin) -------------------------------------------------------------------------------------------
+
+/**
+ * The capacity a promise queues behind (B-W2b-GB29, G224; B-W2b-301's gap "the queue counts released load only"): THE
+ * capacity world over the horizon with, on top of the RELEASED and IN_PROGRESS work, the site's DRAFT work orders (made for
+ * confirmed orders, often on the board already: by its slots, else on their due date) and the plan's PLANNED make orders
+ * (./store `plannedLoadOf`: on their due date). Both are work the factory has taken on before the new ask, so a new promise
+ * waits behind them, as it waits behind released work. The capacity screens keep counting released work only (B-W2a-16).
+ */
+export async function promiseWorld(db: Reader, site: SiteRow, today: BusinessDate): Promise<CapacityWorld> {
+  return capacityWorld(db, site, { from: today, to: plusDays(today, CTP_HORIZON_DAYS) }, today, { drafts: true, extra: await plannedLoadOf(db, site) })
+}
+
+/**
+ * When a buy ordered today arrives, per supplier and lead time (B-W2b-GB29, G224; B-W2b-301's gap "supplier calendars are
+ * not walked"): the lead time walked around the supplier's closed days (platform/calendars, the supplier's ACTIVE calendar;
+ * none: calendar days), as the exception list's SUPPLY_LATE check walks it (exceptions/refresh `withSupplierArrivals`).
+ * One read of the calendars of every supplier the plan buys from.
+ */
+async function supplierArrivals(db: Reader, inputs: PlanInputs, plan: ReturnType<typeof planLevelled>, planning: readonly ItemPlanningLead[], companyId: string, today: BusinessDate): Promise<(supplierId: string, leadTimeDays: number) => BusinessDate | null> {
+  const leads: number[] = []
+  const supplierIds = new Set<string>()
+  for (const requirement of plan.requirements) {
+    if (requirement.action !== 'BUY' || !requirement.supplierId) continue
+    const rule = itemPlanningFor(planning.filter((row) => row.itemId === requirement.itemId), requirement.itemColourId)
+    const source = sourceFor(inputs.sources, { companyId, itemId: requirement.itemId, itemColourId: requirement.itemColourId }, requirement.supplierId)
+    const lead = rule?.buyLeadTimeDays ?? (source ? sourceRules(source, inputs.supplierLeadTimes.get(requirement.supplierId) ?? null).leadTimeDays : (inputs.input.supplyRulesOf?.(requirement.itemId, requirement.supplierId).leadTimeDays ?? null))
+    if (lead === null || lead > 400) continue
+    leads.push(lead)
+    supplierIds.add(requirement.supplierId)
+  }
+  if (supplierIds.size === 0) return () => null
+  const calendars = await supplierCalendarsFor(db as Prisma.TransactionClient, [...supplierIds], leadTimeWindow(today, Math.max(0, ...leads), 'forward'))
+  return (supplierId, leadTimeDays) => (leadTimeDays > 400 ? null : arrivalDate(calendars.get(supplierId)?.calendar ?? null, today, leadTimeDays).date)
+}
+// ---- B-W2b-GB29 (G224, end) ---------------------------------------------------------------------------------------------
 
 /** The make lead time of a SKU at the site (ItemPlanning.makeLeadTimeDays of its FINISHED item), for a style without a routing. */
 async function makeLeadTimes(db: Reader, site: SiteRow, prepared: readonly Prepared[]): Promise<(colourwayId: string, size: string) => number | null> {

@@ -157,6 +157,13 @@ function PlannedList({ model, actions, prefix, timeZone, tools }: { model: Depth
               <Truck size={12} aria-hidden /> {data.workshop ? `${data.workshop.code} · ${data.workshop.name}` : t('where.noWorkshop')}
             </span>
             <span className="fw-mrd-sub">{[data.operations.length > 0 ? t('where.steps', { steps: data.operations.map((step) => step.code).join(', ') }) : null, data.kitDueAt ? t('where.kit', { date: formatDateTime(data.kitDueAt, place) }) : null].filter(Boolean).join(' · ')}</span>
+            {/* B-W2b-GB29 (G219): every approved workshop is full on its days: said, never hidden. */}
+            {data.workshopLoad?.over ? (
+              <span className="fw-mrd-tipline fw-mrd-sub">
+                <span className="fw-mrd-warning fw-mrd-ellipsis">{t('where.overCapacity', { pct: data.workshopLoad.loadPct ?? '—' })}</span>
+                <InfoTip tip={t('where.overCapacityTip')} />
+              </span>
+            ) : null}
           </span>
         )
       return (

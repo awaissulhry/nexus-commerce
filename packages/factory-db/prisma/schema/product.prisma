@@ -586,6 +586,8 @@ model Style {
   images              StyleImage[]
   colourways          Colourway[]
   revisions           StyleRevision[]
+  // B-W2b-GB29 (G226): its accepted cutting losses for planning (planning-depth.prisma).
+  cuttingLosses       StyleCuttingLoss[] @relation("StyleCuttingLossStyle")
   // W2b-4 sizes-depth.prisma (wave 27/33): its own prepacks.
   prepacks            Prepack[]
   // compliance.prisma: what covers and documents it.

@@ -47,7 +47,8 @@ export const WORK_ORDER_SELECT = {
   style: { select: { code: true, name: true } },
   sizes: { select: { quantity: true } },
   // B-W2b-82: an unplanned operation has no target quantity, so no card: the day's plan stays the routing's.
-  operations: { where: { routingSeq: { not: null } }, select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, parallelGroup: true }, orderBy: { seq: 'asc' } },
+  // B-W2b-GB29 (G215): one with planned garments (added since GB29) gets its cards for what is left of them.
+  operations: { where: { OR: [{ routingSeq: { not: null } }, { plannedQuantity: { not: null } }] }, select: { id: true, seq: true, code: true, name: true, workCentreId: true, standardMinutes: true, parallelGroup: true, /* B-W2b-GB29 */ routingSeq: true, plannedQuantity: true }, orderBy: { seq: 'asc' } },
 } as const satisfies Prisma.WorkOrderSelect
 export type WorkOrderRow = Prisma.WorkOrderGetPayload<{ select: typeof WORK_ORDER_SELECT }>
 export type OperationOfOrder = WorkOrderRow['operations'][number]
@@ -79,7 +80,8 @@ export function plannedOperations(slots: readonly SlotRow[], workOrders: readonl
     const garments = workOrder.sizes.reduce((sum, size) => sum + size.quantity, 0)
     if (slot.workOrderOperationId) {
       const operation = workOrder.operations.find((candidate) => candidate.id === slot.workOrderOperationId)
-      if (operation) out.push({ slot, workOrder, operation, garments, lineId: slot.lineId, workCentreId: slot.workCentreId })
+      // B-W2b-GB29 (G215): an unplanned operation's garments are its planned ones.
+      if (operation) out.push({ slot, workOrder, operation, garments: operation.plannedQuantity ?? garments, lineId: slot.lineId, workCentreId: slot.workCentreId })
       continue
     }
     if (slot.lineId === null) continue
@@ -87,7 +89,7 @@ export function plannedOperations(slots: readonly SlotRow[], workOrders: readonl
     for (const operation of workOrder.operations) {
       if (does !== null && !does.has(operation.workCentreId)) continue
       if (slots.some((other) => other.workOrderId === workOrder.id && other.workOrderOperationId === operation.id)) continue
-      out.push({ slot, workOrder, operation, garments: slot.pieces ?? garments, lineId: slot.lineId, workCentreId: null })
+      out.push({ slot, workOrder, operation, garments: operation.plannedQuantity !== null ? Math.min(operation.plannedQuantity, slot.pieces ?? garments) : (slot.pieces ?? garments), lineId: slot.lineId, workCentreId: null })
     }
   }
   return out
@@ -182,7 +184,8 @@ function cardsOfOperation(input: {
   readonly sequenceRule: FloorRuleMode
 }): DayCard[] {
   const { workOrder, operation, rows, planned, wip, flows, sequenceRule } = input
-  const total = workOrder.sizes.reduce((sum, size) => sum + size.quantity, 0)
+  // B-W2b-GB29 (G215): an unplanned operation is done on its planned garments only.
+  const total = operation.plannedQuantity ?? workOrder.sizes.reduce((sum, size) => sum + size.quantity, 0)
   const garments = planned.length > 0 ? Math.min(total, planned.reduce((sum, entry) => sum + entry.garments, 0)) : total
   const flow = wip?.operations.find((row) => row.operationId === operation.id)
   let left = Math.max(0, garments - ((flow?.good ?? 0) + (flow?.scrap ?? 0)))
@@ -190,7 +193,8 @@ function cardsOfOperation(input: {
   const open = flows.bundlesOf(workOrder.id).filter((bundle) => !flows.reported(bundle.id, operation.id))
   const placements = placementsOf(rows, open.map((bundle) => bundle.id))
   // B-W2b-88: the step before (of a group before it, the last); a sibling is never before it.
-  const previous = stepBefore(workOrder.operations, operation).at(-1) ?? null
+  // B-W2b-GB29 (G215): an unplanned operation stands outside the routing's flow: no step comes before it.
+  const previous = operation.routingSeq === null ? null : (stepBefore(workOrder.operations, operation).at(-1) ?? null)
   const siblings = siblingsOf(workOrder.operations, operation)
   const parallel = operation.parallelGroup !== null && siblings.length > 0 ? { group: operation.parallelGroup, with: siblings } : null
   const standard = new Dec(operation.standardMinutes.toString())
