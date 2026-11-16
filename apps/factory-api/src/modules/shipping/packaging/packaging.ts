@@ -6,7 +6,7 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { defaultScopeProblems, markTemplateProblems, packagingTypeProblems, type PackagingKind, type PackagingTypeValues, type PalletKind, type ShippingMarkField } from '@nexus/factory-domain/shipping/packaging/rules'
 import { SHIPPING_PACKAGING_MANAGE } from '@nexus/factory-domain/shipping/packaging/permissions'
-import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
+import { SHIPPING_SETTINGS_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { assertMay, officeContextOf } from '../access'
@@ -14,8 +14,9 @@ import { assertMay, officeContextOf } from '../access'
 /**
  * Packaging and carton marks (B-W2b-384; LOG-008, LOG-013; design warehouse.shipping "Packaging"): a company's packaging
  * types, its default packaging per style or size run, and its carton shipping-mark templates (per customer, and the
- * company's default). Office only: read with shipping.view, kept with shipping.packaging.manage (over the company; a
- * customer's template: the company and that customer). The cost per unit is money.cost (the grain wall drops it for a reader
+ * company's default). Office only: read with shipping.settings.view (B-W2b-GF6: the right Carriers & shipping opens with,
+ * as the test mode since B-W2b-F49; was shipping.view, which the administrator who keeps that page does not hold), kept with
+ * shipping.packaging.manage (over the company; a customer's template: the company and that customer). The cost per unit is money.cost (the grain wall drops it for a reader
  * without the grain and refuses it from a writer without it). Nothing is deleted: a type, a default or a template is
  * switched off (the database keeps one live default per company, kind and scope, and one live template per company and
  * customer). The floor reads the types through the packing bench (modules/shipping/cartons), never their cost.
@@ -137,7 +138,7 @@ async function unique<T>(work: () => Promise<T>, message: string): Promise<T> {
 /** The company of a write: one the caller keeps packaging for. */
 function assertCompany(caller: CommandCaller, companyId: string, partyId?: string | null): void {
   const context = officeContextOf(caller)
-  assertMay(context, SHIPPING_VIEW, SHIPPING_PACKAGING_MANAGE, { companyId, ...(partyId ? { partyId } : {}) }, 'Company')
+  assertMay(context, SHIPPING_SETTINGS_VIEW, SHIPPING_PACKAGING_MANAGE, { companyId, ...(partyId ? { partyId } : {}) }, 'Company')
 }
 
 // ---- packaging types ----------------------------------------------------------------------------------------------
@@ -146,7 +147,7 @@ export async function listTypes(caller: CommandCaller, query: { companyId?: stri
   const context = officeContextOf(caller)
   const where: Prisma.PackagingTypeWhereInput = {
     AND: [
-      scopeWhere(actorOf(context), SHIPPING_VIEW, { company: 'companyId' }) as Prisma.PackagingTypeWhereInput,
+      scopeWhere(actorOf(context), SHIPPING_SETTINGS_VIEW, { company: 'companyId' }) as Prisma.PackagingTypeWhereInput,
       query.companyId ? { companyId: query.companyId } : {},
       query.kind ? { kind: query.kind } : {},
       query.active === undefined ? {} : { active: query.active },
@@ -236,7 +237,7 @@ export async function listDefaults(caller: CommandCaller, query: { companyId?: s
   const context = officeContextOf(caller)
   const where: Prisma.PackagingDefaultWhereInput = {
     AND: [
-      scopeWhere(actorOf(context), SHIPPING_VIEW, { company: 'companyId' }) as Prisma.PackagingDefaultWhereInput,
+      scopeWhere(actorOf(context), SHIPPING_SETTINGS_VIEW, { company: 'companyId' }) as Prisma.PackagingDefaultWhereInput,
       query.companyId ? { companyId: query.companyId } : {},
       query.styleId ? { styleId: query.styleId } : {},
       query.active === undefined ? {} : { active: query.active },
@@ -337,7 +338,7 @@ export async function listTemplates(caller: CommandCaller, query: { companyId?: 
   const context = officeContextOf(caller)
   const where: Prisma.ShippingMarkTemplateWhereInput = {
     AND: [
-      scopeWhere(actorOf(context), SHIPPING_VIEW, { company: 'companyId' }) as Prisma.ShippingMarkTemplateWhereInput,
+      scopeWhere(actorOf(context), SHIPPING_SETTINGS_VIEW, { company: 'companyId' }) as Prisma.ShippingMarkTemplateWhereInput,
       query.companyId ? { companyId: query.companyId } : {},
       query.partyId ? { partyId: query.partyId } : {},
       query.active === undefined ? {} : { active: query.active },
@@ -346,7 +347,7 @@ export async function listTemplates(caller: CommandCaller, query: { companyId?: 
   const rows = await caller.withClient((client) => client.shippingMarkTemplate.findMany({ where, select: TEMPLATE_SELECT, orderBy: [{ companyId: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }], take: 500 }))
   // A customer's template is shown to who sees that customer (the company's default to every reader of the company).
   const actor = actorOf(context)
-  return { templates: rows.filter((row) => row.partyId === null || can(actor, SHIPPING_VIEW, { companyId: row.companyId, partyId: row.partyId })).map(templateView) }
+  return { templates: rows.filter((row) => row.partyId === null || can(actor, SHIPPING_SETTINGS_VIEW, { companyId: row.companyId, partyId: row.partyId })).map(templateView) }
 }
 
 /** shipping.packaging.manage: a new template for a customer or brand of the company, or the company's default. */

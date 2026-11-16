@@ -7,6 +7,7 @@ import { openFactoryDatabase, RUNTIME_LOGIN, type FactoryDatabase } from '@nexus
 import { migratedDatabase, type MigratedDatabase } from '@nexus/factory-db/testing'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
+import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedPacking, type PackingSeed } from '../../../../../../packages/factory-db/seed/packing'
@@ -56,10 +57,16 @@ const SHIPPING: Permission[] = ['shipping.view', 'shipping.manage', 'shipping.pa
 const SESSIONS: Record<string, SessionContext> = {
   warehouse: office([grant([...SHIPPING, 'shipping.packaging.manage'])]),
   // The cost grain too (FIN-011: what one carton costs us).
-  costs: office([grant(['shipping.view', 'shipping.packaging.manage', 'money.cost'])]),
+  costs: office([grant(['shipping.settings.view', 'shipping.packaging.manage', 'money.cost'])]),
   viewer: office([grant(['shipping.view'])]),
-  companyB: office([grant(['shipping.view', 'shipping.packaging.manage'], [A.companyB])]),
+  // B-W2b-GF6: the packaging is read with shipping.settings.view (the right Carriers & shipping opens with).
+  settingsViewer: office([grant(['shipping.settings.view'])]),
+  companyB: office([grant(['shipping.settings.view', 'shipping.packaging.manage'], [A.companyB])]),
   packer: floor(['floor.work', 'shipping.pack', 'print.view', 'print.labels']),
+  // The role templates as they are (unchanged by B-W2b-GF6): the administrator keeps Carriers & shipping (shipping.settings.view,
+  // no shipping.view); the planner sees shipments (shipping.view) but not the shipping settings.
+  administrator: office([grant([...templateOf('admin')!.permissions])]),
+  planner: office([grant([...templateOf('planner')!.permissions])]),
 }
 
 type Json = Record<string, any>
@@ -165,7 +172,7 @@ describe('packaging types, defaults and mark templates (LOG-008, LOG-013)', () =
     expect(withCost.statusCode).toBeGreaterThanOrEqual(400)
     const costed = await ok('costs', 'PATCH', `/shipping/packaging/types/${ids.testCarton}`, { version: 1, cost: { perUnit: '1.10', currency: 'EUR' } })
     expect(costed.type.cost).toEqual({ perUnit: '1.100000', currency: 'EUR' })
-    const listed = (await ok('viewer', 'GET', `/shipping/packaging/types?companyId=${A.companyA}&kind=CARTON`)).types as Json[]
+    const listed = (await ok('settingsViewer', 'GET', `/shipping/packaging/types?companyId=${A.companyA}&kind=CARTON`)).types as Json[]
     expect(listed.map((type) => type.name)).toEqual(expect.arrayContaining(['Seed carton 60x40x40', 'Test carton 50x40x30']))
     expect(listed.every((type) => !('cost' in type))).toBe(true)
   })
@@ -174,9 +181,28 @@ describe('packaging types, defaults and mark templates (LOG-008, LOG-013)', () =
     const pallet = await refused('warehouse', 'POST', '/shipping/packaging/types', { companyId: A.companyA, kind: 'PALLET', name: 'Test pallet' }, 400)
     expect(pallet.issues).toEqual([{ path: 'body/palletKind', message: 'A pallet says its kind (EUR or OTHER).' }])
     expect((await refused('warehouse', 'POST', '/shipping/packaging/types', { companyId: A.companyA, kind: 'CARTON', name: 'Test carton 50x40x30' }, 409)).message).toBe('The company has a packaging type named "Test carton 50x40x30" already.')
-    await refused('viewer', 'POST', '/shipping/packaging/types', { companyId: A.companyA, kind: 'CARTON', name: 'Viewer carton' }, 403)
+    await refused('settingsViewer', 'POST', '/shipping/packaging/types', { companyId: A.companyA, kind: 'CARTON', name: 'Viewer carton' }, 403)
     await refused('companyB', 'POST', '/shipping/packaging/types', { companyId: A.companyA, kind: 'CARTON', name: 'Other company carton' }, 404)
     await refused('packer', 'GET', '/shipping/packaging/types', undefined, 403)
+  })
+
+  // B-W2b-GF6 (the Owner on B-W2b-F56): the Owner's test server answered the administrator 403 on the Packaging card's reads.
+  it('lets the administrator (shipping.settings.view, no shipping.view) read the packaging, and holds a shipments-only role in words', async () => {
+    expect(templateOf('admin')!.permissions).toContain('shipping.settings.view')
+    expect(templateOf('admin')!.permissions).not.toContain('shipping.view')
+    const types = (await ok('administrator', 'GET', `/shipping/packaging/types?companyId=${A.companyA}`)).types as Json[]
+    expect(types.map((type) => type.name)).toEqual(expect.arrayContaining(['Seed carton 60x40x40', 'Test carton 50x40x30']))
+    expect(types.every((type) => !('cost' in type))).toBe(true)
+    expect((await ok('administrator', 'GET', `/shipping/packaging/defaults?companyId=${A.companyA}`)).defaults).toEqual(expect.any(Array))
+    expect((await ok('administrator', 'GET', `/shipping/packaging/mark-templates?companyId=${A.companyA}`)).templates).toEqual(expect.any(Array))
+    // It reads, it does not keep: a write is refused (no shipping.packaging.manage).
+    expect((await refused('administrator', 'POST', '/shipping/packaging/types', { companyId: A.companyA, kind: 'CARTON', name: 'Admin carton' }, 403)).message).toBe('You may not do this.')
+    expect(templateOf('planner')!.permissions).toContain('shipping.view')
+    expect(templateOf('planner')!.permissions).not.toContain('shipping.settings.view')
+    for (const url of ['/shipping/packaging/types', '/shipping/packaging/defaults', '/shipping/packaging/mark-templates']) {
+      const held = await refused('planner', 'GET', `${url}?companyId=${A.companyA}`, undefined, 403)
+      expect(held, url).toMatchObject({ code: 'forbidden', message: 'You may not do this.' })
+    }
   })
 
   it("keeps one live default per style run; a switched-off type is never a default's", async () => {
@@ -196,7 +222,7 @@ describe('packaging types, defaults and mark templates (LOG-008, LOG-013)', () =
     expect(changed.template).toMatchObject({ partyId: A.brand, party: { legalName: expect.any(String) }, language: 'en', fields: ['CARTON_NUMBER', 'CUSTOMER_ORDER', 'STYLE', 'SIZES', 'QUANTITY', 'BATCH', 'GROSS_WEIGHT', 'SHIP_TO'] })
     await refused('warehouse', 'PATCH', `/shipping/packaging/mark-templates/${packingA.markTemplateIds.brandP1}`, { language: 'ENG' }, 400)
     await refused('warehouse', 'PATCH', `/shipping/packaging/mark-templates/${packingA.markTemplateIds.brandP1}`, { fields: ['SHIP_TO', 'SHIP_TO'] }, 400)
-    const listed = (await ok('viewer', 'GET', `/shipping/packaging/mark-templates?companyId=${A.companyA}&active=true`)).templates as Json[]
+    const listed = (await ok('settingsViewer', 'GET', `/shipping/packaging/mark-templates?companyId=${A.companyA}&active=true`)).templates as Json[]
     expect(listed.map((template) => template.partyId).sort()).toEqual([A.brand, null].sort())
   })
 })
