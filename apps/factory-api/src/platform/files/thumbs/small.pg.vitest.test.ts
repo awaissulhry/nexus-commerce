@@ -21,6 +21,7 @@ import { systemContext } from '../../outbox/system'
 import { testRedis, type TestRedis } from '../../outbox/testing'
 import { createSecretsService } from '../../secrets/envelope'
 import { localKeyProvider } from '../../secrets/local'
+import { useThreadRecords } from '../../threads/records'
 import { createFilesRuntime, processFiles, useFiles, type FilesRuntime } from '../service'
 import { decodeJpeg } from './codec/jpeg-decode'
 import { encodeJpeg } from './codec/jpeg-encode'
@@ -119,6 +120,9 @@ function phonePhoto(): Uint8Array {
 const hasExif = (jpeg: Uint8Array): boolean => Buffer.from(jpeg).includes(Buffer.from('Exif\0\0', 'latin1'))
 
 beforeAll(async () => {
+  // The made-up quote's customer, as the sales module's thread resolver answers it (B-TH-003: a file shared outside reaches
+  // its record's party only).
+  useThreadRecords({ Quote: async (_client, id) => (id === quote ? { companyId: company, siteId: null, partyId: party } : null) })
   db = await migratedDatabase('files_thumbs_small')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 6 } })
   redis = testRedis()
@@ -142,6 +146,7 @@ beforeAll(async () => {
 }, 600_000)
 
 afterAll(async () => {
+  useThreadRecords(undefined)
   useFiles(undefined)
   useGateway(undefined)
   await app?.close()
