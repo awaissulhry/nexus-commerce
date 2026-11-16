@@ -733,8 +733,10 @@
     "placeHold_one": "Place hold on {count} hide…",
     "placeHold_other": "Place hold on {count} hides…",
     "lotRelease": "Open the lot (its release is the lab's)",
+    "heldBy": "Held at the decision:",
     "held": {
-      "noHides": "No rejected or to-sort hide to hold."
+      "noHides": "No rejected or to-sort hide to hold.",
+      "allHeld": "Every hide it did not accept is on hold or no longer in the lot."
     }
   },
   "new": {

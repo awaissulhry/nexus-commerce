@@ -214,6 +214,8 @@ describe('a leather lot from quarantine to usable stock (PLAN §4.7 09b-cr6)', (
       ['PPE_CERTIFICATE', 'NOT_NEEDED'],
       ['SUPPLIER_DOCUMENTS', 'NOT_NEEDED'],
       ['HOLD', 'NOT_NEEDED'],
+      // B-W2b-GF5 (G369): no incoming inspection is recorded for this lot.
+      ['INCOMING', 'NOT_NEEDED'],
       ['RELEASER', 'OK'],
     ])
     expect(record.checklist.words).toBe('Release · 1 check open')
@@ -255,7 +257,7 @@ describe('a leather lot from quarantine to usable stock (PLAN §4.7 09b-cr6)', (
     expect(await lotRow(lotId)).toMatchObject({ qualityStatus: 'RELEASED', qualityDecidedById: inspectorId })
     const [audit] = await auditOf(lotId, 'quality.lots.release')
     expect(audit).toMatchObject({ before: { qualityStatus: 'QUARANTINE' }, after: { qualityStatus: 'RELEASED' } })
-    expect((audit!.after as Json).checks.map((check: Json) => check.code)).toEqual(['STATE', 'RECEIPT', 'CR_VI', 'PPE_CERTIFICATE', 'SUPPLIER_DOCUMENTS', 'HOLD', 'RELEASER'])
+    expect((audit!.after as Json).checks.map((check: Json) => check.code)).toEqual(['STATE', 'RECEIPT', 'CR_VI', 'PPE_CERTIFICATE', 'SUPPLIER_DOCUMENTS', 'HOLD', 'INCOMING', 'RELEASER'])
     expect(await eventsOf('lot.released', lotId)).toMatchObject([{ payload: { code, from: 'QUARANTINE' } }])
     expect(await unusable(lotId)).toEqual([])
     // Released already; a stale version is a conflict.

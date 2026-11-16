@@ -43,6 +43,8 @@ export const KNOWN_REFUSALS = [
   'PLAN_RESULTS',
   'NOT_FOUND',
   'FLOOR_NOT_READY',
+  // B-W2b-GF5 (G361): the person who made garments of the work order never decides its first piece.
+  'MAKER',
   // The rework loop (B-W2a-13) when garments are sent back.
   'BUNDLE_NOT_ACTIVE',
   'MORE_THAN_BUNDLE',

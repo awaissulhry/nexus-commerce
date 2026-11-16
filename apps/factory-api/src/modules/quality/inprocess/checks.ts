@@ -6,6 +6,7 @@ import { QUALITY_INPROCESS_RECORD, QUALITY_INPROCESS_VIEW } from '@nexus/factory
 import {
   findingProblems,
   firstPieceHold,
+  firstPieceMakerRefusal,
   firstPieceSha256,
   isPassing,
   LIMITS,
@@ -30,6 +31,9 @@ import { lockWorkOrderChecks } from '../triggers/open'
 import { assertOn, checkerOf, postedBy, refuse, signerOf, systemOf, type Checker } from './access'
 import { firstPieceRows, kindOf, lockRun, outcomeOf, readCheck, readLine, readOperationsOf, readResults, readWorkOrder, statusOf, type CheckRow, type LineRow, type Reader, type WorkOrderRow } from './store'
 import { checkViewOf } from './views'
+// B-W2b-GF5 (G361): W1's maker rule (the final inspection's): who made garments of the work order never signs for it.
+import { identityOf, madeAny, type Identity } from '../final/facts'
+import { makersOf } from '../final/store'
 
 /**
  * In-process checks (B-W2b-99; QHS-039 first piece, QHS-040 cutting, QHS-041 roving, QHS-042 end of line, MES-127; design
@@ -408,6 +412,19 @@ async function planBlockers(db: Reader, row: CheckRow): Promise<string | null> {
   return failed ? `Critical check ${failed.code} (${failed.labelEn}) failed: the check cannot pass (QHS-002).` : null
 }
 
+// B-W2b-GF5 (G361): a first piece is decided by someone who made none of its work order's garments (Owner rule: nobody
+// approves their own work). Who the signer is (office: their own reads; floor: through the tenant's system view, which
+// reads Worker.userId), and the refusal when the work order's cut log, bundles or scans name them (409 refusal/MAKER).
+async function signerIdentity(caller: CommandCaller, context: Checker): Promise<Identity> {
+  return (context.audience === 'office' ? caller : systemOf(caller)).withClient((client) => identityOf(client, signerOf(context)))
+}
+
+async function assertNotMaker(db: Reader, identity: Identity, row: Pick<CheckRow, 'workOrderId'>): Promise<void> {
+  if (!row.workOrderId || !madeAny(identity, await makersOf(db, row.workOrderId))) return
+  const order = await readWorkOrder(db, row.workOrderId)
+  refuse(firstPieceMakerRefusal(order?.number ?? 'this work order'))
+}
+
 export async function decideCheck(caller: CommandCaller, checkId: string, body: DecideBody, options: { readonly sign: () => void | Promise<void>; readonly idempotencyKey?: string | undefined }) {
   const context = checkerOf(caller)
   const row = await checkFor(caller, context, checkId)
@@ -420,6 +437,9 @@ export async function decideCheck(caller: CommandCaller, checkId: string, body: 
     if (blocker) refuse({ code: 'PLAN_RESULTS', message: blocker, fix: 'Answer the plan first, or record what failed.' })
   }
   if (context.audience === 'floor') await assertFloorReady(caller, row.siteId)
+  // B-W2b-GF5 (G361): the maker is refused before the PIN is asked.
+  const identity = kind === 'FIRST_PIECE' ? await signerIdentity(caller, context) : null
+  if (identity) await caller.withClient((db) => assertNotMaker(db, identity, row))
   // A first piece is a signing act: the PIN or the fresh code, asked after every other check.
   if (kind === 'FIRST_PIECE') await options.sign()
   const signer = signerOf(context)
@@ -430,6 +450,8 @@ export async function decideCheck(caller: CommandCaller, checkId: string, body: 
       await lockRun(tx, context.tenantId, row.workOrderId!)
     }
     const current = await lockCheck(tx, row.id, body.version)
+    // B-W2b-GF5 (G361): said again inside the command (a scan may have named the signer since).
+    if (identity) await assertNotMaker(tx, identity, current)
     const results = await readResults(tx, current.id)
     const codes = new Map((current.planVersionId ? await readChecks(tx, [current.planVersionId]) : []).map((check) => [check.id, check.code]))
     const signature =

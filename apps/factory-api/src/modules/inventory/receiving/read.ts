@@ -14,6 +14,8 @@ import { asTenantSystem } from '../../production/bundles/codes'
 import { stationPrinterOf } from '../../production/bundles/store'
 import { stockContextOf } from '../ledger/access'
 import { byId, dec, HIDE_COLUMNS, ids, LOT_COLUMNS, readColours, readEarlierLots, readItems, readOrderLines, RECEIPT_COLUMNS, RECEIPT_LINE_COLUMNS, type Reader } from '../receipts/store'
+// B-W2b-GF5 (G140): the tablet shows the tolerance the receipt decides with (the line's own, else the delivery tolerance).
+import { differenceTolerance, lineTolerancesOf, toleranceShown, underShown } from '../../purchasing/receiving'
 
 /**
  * What a goods-in tablet reads (B-W1-33; A2 SCR-092): the orders its site expects goods against, one order with what is
@@ -41,10 +43,10 @@ export async function supplierNames(caller: CommandCaller, context: FloorContext
   return new Map(rows.map((row) => [row.id, row.tradeName ?? row.legalName]))
 }
 
-/** One line still expected: what was ordered, what came, what is open, the most taken without a reason. */
-function openOf(line: { quantity: { toString(): string }; baseQuantity: { toString(): string }; confirmedQuantity: { toString(): string } | null; areaTolerancePct: { toString(): string } | null }, received: Decimal) {
+/** One line still expected: what was ordered, what came, what is open, the most taken without a reason. B-W2b-GF5 (G140): with the tolerance the receipt decides on. */
+function openOf(line: { quantity: { toString(): string }; baseQuantity: { toString(): string }; confirmedQuantity: { toString(): string } | null }, received: Decimal, tolerance: { readonly tolerancePct: string | null; readonly underPct: string | null }) {
   const expected = expectedBaseOf({ quantity: line.quantity.toString(), baseQuantity: line.baseQuantity.toString(), confirmedQuantity: line.confirmedQuantity?.toString() ?? null })
-  const difference = lineDifference({ expected, receivedBefore: received, receiving: '0', tolerancePct: line.areaTolerancePct?.toString() ?? null })
+  const difference = lineDifference({ expected, receivedBefore: received, receiving: '0', ...tolerance })
   return { expected, open: Dec.max(ZERO, expected.minus(received)), upTo: Dec.max(ZERO, new Dec(difference.upTo).minus(received)), complete: difference.complete && received.greaterThan(0) }
 }
 
@@ -62,14 +64,17 @@ export async function listExpected(caller: CommandCaller, query: { readonly code
         ? []
         : await client.purchaseOrder.findMany({
             where: { status: { in: [...RECEIVING] }, ...(found ? { id: found.id } : {}) },
-            select: { id: true, number: true, status: true, partyId: true, requestedDate: true },
+            select: { id: true, companyId: true, number: true, status: true, partyId: true, requestedDate: true },
             orderBy: { number: 'asc' },
             take: 200,
           })
+    // B-W2b-GF5 (G140): every order's lines first, then their tolerances in one read of the rules.
+    const read = []
+    for (const order of orders) read.push({ order, ...(await readOrderLines(client, order.id)) })
+    const tolerances = await lineTolerancesOf(client, read.flatMap(({ order, lines }) => lines.map((line) => ({ ...line, order }))))
     const rows = []
-    for (const order of orders) {
-      const { lines, received } = await readOrderLines(client, order.id)
-      const open = lines.filter((line) => !openOf(line, received.get(line.id) ?? ZERO).complete && !expectedBaseOf({ quantity: line.quantity.toString(), baseQuantity: line.baseQuantity.toString(), confirmedQuantity: line.confirmedQuantity?.toString() ?? null }).isZero())
+    for (const { order, lines, received } of read) {
+      const open = lines.filter((line) => !openOf(line, received.get(line.id) ?? ZERO, differenceTolerance(tolerances.get(line.id), line.areaTolerancePct)).complete && !expectedBaseOf({ quantity: line.quantity.toString(), baseQuantity: line.baseQuantity.toString(), confirmedQuantity: line.confirmedQuantity?.toString() ?? null }).isZero())
       const dates = open.map((line) => day(line.confirmedDate ?? line.needDate)!).sort()
       rows.push({ order, lines: lines.length, openLines: open.length, due: dates[0] ?? day(order.requestedDate), receivedBefore: [...received.values()].some((value) => value.greaterThan(0)) })
     }
@@ -115,7 +120,9 @@ export async function expectedOrder(caller: CommandCaller, orderId: string) {
     const items = await readItems(client, lines.map((line) => line.itemId))
     const colours = await readColours(client, lines.map((line) => line.itemColourId))
     const earlier = await readEarlierLots(client, lines.map((line) => line.id))
-    return { order, lines, received, items, colours, earlier, dock: await onlyPlace(client, order.siteId, 'RECEIVING'), hold: await onlyPlace(client, order.siteId, 'QUARANTINE'), printer: await tagPrinterOf(client, context) }
+    // B-W2b-GF5 (G140): each line's tolerance as the receipt decides it.
+    const tolerances = await lineTolerancesOf(client, lines.map((line) => ({ ...line, order })))
+    return { order, lines, received, items, colours, earlier, tolerances, dock: await onlyPlace(client, order.siteId, 'RECEIVING'), hold: await onlyPlace(client, order.siteId, 'QUARANTINE'), printer: await tagPrinterOf(client, context) }
   })
   if (!read || !can(actorOf(context), INVENTORY_RECEIVE, { companyId: read.order.companyId, siteId: read.order.siteId })) throw new NotFoundError('Purchase order not found.')
   const names = await supplierNames(caller, context, [read.order.partyId])
@@ -128,7 +135,8 @@ export async function expectedOrder(caller: CommandCaller, orderId: string) {
       const item = read.items.get(line.itemId)!
       const colour = line.itemColourId ? read.colours.get(line.itemColourId) : undefined
       const got = read.received.get(line.id) ?? ZERO
-      const open = openOf(line, got)
+      const tolerance = read.tolerances.get(line.id)
+      const open = openOf(line, got, differenceTolerance(tolerance, line.areaTolerancePct))
       const holds: HoldReason[] = [...lotStart({ itemRequiresCrViTest: item.requiresCrViTest, itemCrViLimitMgKg: item.crViLimitMgKg?.toString() ?? null, lineRequiresCrViTest: line.requiresCrViTest, isPpeComponent: item.isPpeComponent }).holds]
       const areaUnits: Uom[] = item.tracking === 'HIDE' ? [...new Set<Uom>([HIDE_AREA_UNITS.includes(line.uom) ? line.uom : item.baseUom, ...HIDE_AREA_UNITS])] : []
       return {
@@ -141,7 +149,8 @@ export async function expectedOrder(caller: CommandCaller, orderId: string) {
         expected: quantityText(open.expected),
         received: quantityText(got),
         open: quantityText(open.open),
-        tolerancePct: line.areaTolerancePct === null ? null : line.areaTolerancePct.toString(),
+        tolerancePct: toleranceShown(tolerance, line.areaTolerancePct),
+        underPct: underShown(tolerance, line.areaTolerancePct),
         upTo: quantityText(open.upTo),
         needDate: day(line.needDate)!,
         confirmedDate: day(line.confirmedDate),
@@ -177,16 +186,18 @@ export async function floorReceipt(
     const items = await readItems(client, lines.map((line) => line.itemId))
     const colours = await readColours(client, lines.map((line) => line.itemColourId))
     const order = receipt.purchaseOrderId
-      ? await client.purchaseOrder.findUnique({ where: { id: receipt.purchaseOrderId }, select: { id: true, number: true, status: true, version: true, partyId: true, requestedDate: true } })
+      ? await client.purchaseOrder.findUnique({ where: { id: receipt.purchaseOrderId }, select: { id: true, companyId: true, number: true, status: true, version: true, partyId: true, requestedDate: true } })
       : null
     const orderLines = order ? await readOrderLines(client, order.id) : null
+    // B-W2b-GF5 (G140): the difference with the tolerance the receipt decided on.
+    const tolerances = order && orderLines ? await lineTolerancesOf(client, orderLines.lines.map((line) => ({ ...line, order }))) : new Map()
     const lots = await client.lot.findMany({ where: { receiptLineId: { in: lines.map((line) => line.id) } }, select: LOT_COLUMNS, orderBy: { code: 'asc' } })
     const hides = await client.hide.findMany({ where: { lotId: { in: lots.map((lot) => lot.id) } }, select: HIDE_COLUMNS, orderBy: { code: 'asc' } })
     const moves = await client.stockMove.findMany({ where: { reason: 'RECEIPT', reversalOfId: null, receiptLineId: { in: lines.map((line) => line.id) } }, select: { lotId: true, toLocationId: true, baseQuantity: true } })
     const places = byId(await client.location.findMany({ where: { id: { in: ids(moves.map((move) => move.toLocationId)) } }, select: { id: true, code: true, name: true } }))
     const jobs = hides.length === 0 ? [] : await client.printJob.findMany({ where: { recordType: 'Hide', recordId: { in: hides.map((hide) => hide.id) } }, select: { id: true, recordId: true, printerId: true, status: true, version: true, lastError: true, createdAt: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
     const printers = byId(await client.printer.findMany({ where: { id: { in: ids(jobs.map((job) => job.printerId)) } }, select: { id: true, code: true, name: true } }))
-    return { receipt, lines, items, colours, order, orderLines, lots, hides, moves, places, jobs, printers }
+    return { receipt, lines, items, colours, order, orderLines, tolerances, lots, hides, moves, places, jobs, printers }
   })
   if (!read) throw new NotFoundError('Goods receipt not found.')
   const names = read.order ? await supplierNames(caller, context, [read.order.partyId]) : new Map<string, string>()
@@ -216,7 +227,7 @@ export async function floorReceipt(
             expected: expectedBaseOf({ quantity: orderLine.quantity.toString(), baseQuantity: orderLine.baseQuantity.toString(), confirmedQuantity: orderLine.confirmedQuantity?.toString() ?? null }),
             receivedBefore: before,
             receiving: line.baseQuantity.toString(),
-            tolerancePct: orderLine.areaTolerancePct?.toString() ?? null,
+            ...differenceTolerance(read.tolerances.get(orderLine.id), orderLine.areaTolerancePct),
           })
         : null
       return {

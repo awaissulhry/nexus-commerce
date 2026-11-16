@@ -381,6 +381,8 @@ export const expectedContract = defineContract({
           received: decimal,
           open: decimal,
           tolerancePct: z.string().nullable(),
+          /** B-W2b-GF5 (G140): the tolerance under, when the delivery tolerance differs under (null: none). */
+          underPct: z.string().nullable(),
           estimatedHides: z.number().int().nullable(),
           oneDyeBatch: z.boolean(),
           requiresCrViTest: z.boolean(),

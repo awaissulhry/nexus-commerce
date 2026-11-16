@@ -269,6 +269,10 @@
       "message": "Checks are held at this site until its floor is ready.",
       "fix": "Ask your team leader."
     },
+    "MAKER": {
+      "message": "You made garments of this work order: another inspector, who made none of them, decides its first piece.",
+      "fix": "Ask another inspector to decide the first piece."
+    },
     "BUNDLE_NOT_ACTIVE": {
       "message": "This bundle is voided or replaced.",
       "fix": "Scan the bundle's current ticket."

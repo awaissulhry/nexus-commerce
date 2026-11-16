@@ -68,7 +68,9 @@ function Record({ model, actions, stepUp }: { model: IncomingRecordModel; action
   const status = inspection.status === 'OPEN' ? { key: 'status.OPEN', tone: 'info' as const } : inspection.status === 'CANCELLED' ? { key: 'status.CANCELLED', tone: 'neutral' as const } : inspection.computedResult === 'FAIL' ? { key: 'status.DECIDED_FAIL', tone: 'danger' as const } : { key: 'status.DECIDED_PASS', tone: 'success' as const }
   const amended = model.amendments.read?.value?.record.amended ?? false
   const holdHides = read.next?.holdPrefill?.subjectIds.length ?? 0
-  const holdHeld = !model.can.holdsPlace ? t('held.noHoldPlace') : holdHides === 0 ? td('incoming.held.noHides') : null
+  // B-W2b-GF5 (G367): what it did not accept is held at the decision; the button holds what is not held yet.
+  const heldAtDecision = read.next?.held.holds ?? []
+  const holdHeld = !model.can.holdsPlace ? t('held.noHoldPlace') : holdHides === 0 ? td(heldAtDecision.length > 0 ? 'incoming.held.allHeld' : 'incoming.held.noHides') : null
   const when = (iso: string | null) => (iso ? formatDateTime(iso, { locale }) : null)
   const inspector = read.inspector.hidden ? td('incoming.inspectorHidden') : read.inspector.name ?? td(read.inspector.kind === 'FLOOR' ? 'who.bench' : read.inspector.kind === 'OFFICE' ? 'who.office' : 'who.nobody')
   return (
@@ -218,6 +220,19 @@ function Record({ model, actions, stepUp }: { model: IncomingRecordModel; action
                   <p>{locale.startsWith('it') ? read.next.words.it : read.next.words.en}</p>
                   {read.next.rejectedHides.length > 0 && <p className="fw-q-hint">{td('incoming.rejectedHides', { hides: read.next.rejectedHides.map((hide) => hide.code).join(', ') })}</p>}
                   {read.next.toSortHides.length > 0 && <p className="fw-q-hint">{td('incoming.toSortHides', { hides: read.next.toSortHides.map((hide) => hide.code).join(', ') })}</p>}
+                  {heldAtDecision.length > 0 && (
+                    <p className="fw-q-hint">
+                      {td('incoming.heldBy')} 
+                      {heldAtDecision.map((hold, index) => (
+                        <span key={hold.id}>
+                          {index > 0 ? ', ' : ''}
+                          <Link className="fw-q-link" href={`${model.prefix}/quality/holds?open=${encodeURIComponent(hold.id)}`}>
+                            {hold.number ?? hold.id.slice(0, 8)}
+                          </Link>
+                        </span>
+                      ))}
+                    </p>
+                  )}
                   <span className="fw-q-actions">
                     <Button size="sm" onClick={() => actions?.onPlaceHold?.()} heldReason={holdHeld}>
                       <Hand size={13} aria-hidden /> {td('incoming.placeHold', { count: holdHides })}

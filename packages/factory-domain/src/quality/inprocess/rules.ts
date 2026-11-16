@@ -391,3 +391,18 @@ export function reasonProblem(reason: string | null | undefined, path = 'reason'
   if (text.length > LIMITS.reason) return { path, message: `At most ${LIMITS.reason} characters.` }
   return null
 }
+
+// ---- B-W2b-GF5 (G361): nobody signs their own first piece ------------------------------------------------------------------
+
+/**
+ * The refusal of a first-piece decision by someone who made garments of its work order (its cut log, bundles or scans name
+ * them, as W1's final inspection reads the makers): the first piece is signed by another inspector (Owner rule: nobody
+ * approves their own work). A 409 `refusal/MAKER` with the one thing to do.
+ */
+export function firstPieceMakerRefusal(workOrderNumber: string): { readonly code: 'MAKER'; readonly message: string; readonly fix: string } {
+  return {
+    code: 'MAKER',
+    message: `You made garments of work order ${workOrderNumber} (its cut log, bundles or scans name you): another inspector, who made none of them, decides its first piece.`,
+    fix: 'Ask another inspector to decide the first piece.',
+  }
+}

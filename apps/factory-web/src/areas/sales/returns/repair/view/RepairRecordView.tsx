@@ -8,7 +8,7 @@ import { Button, Checkbox, Input, SegmentedControl, Select, Spinner } from '@nex
 import { Textarea } from '../../../../../lib/i18n/ds-parts'
 import { Freshness, RecordFrame, Section, StepUpDialog } from '../../../../quality/_shared/parts'
 import { POINT_RESULTS, REPAIR_KINDS, type PointResult, type Repair, type RepairAction, type RepairKind } from '../../api'
-import { CHECK_POINTS, checklistProblems, checklistResult, ownerName, repairHref, repairStep, returnHref, type CheckPoint, type Words } from '../../model'
+import { CHECK_POINTS, checklistProblems, checklistResult, isScrapped, ownerName, repairHref, repairStep, returnHref, type CheckPoint, type Words } from '../../model'
 import type { IntakeDraft, RepairActions, RepairModel, RepairTab } from '../../view-model'
 import { DayText, GateChecklist, InstantText, RepairStagePill, ReturnsMessages, SafetyTag, say, useDayWords, useWords } from '../../view/parts'
 import { workHeldWords } from '../../estimate/model'
@@ -61,6 +61,8 @@ function RepairRecord({ model, actions, panels }: { model: RepairModel; actions?
     else if (action === 'makeWorkOrder') actions?.onDialog?.({ kind: 'workOrder', options: null, problem: null, seqs: [] })
     else if (action === 'ship') actions?.onDialog?.({ kind: 'ship', draft: { transportBy: 'CARRIER', carrier: '', packages: '1', weight: '', appearance: '', freight: '', remarks: '' }, note: '', preview: null, previewing: false, useLive: repair.ddts.some((ddt) => ddt.live) })
     else if (action === 'cancel') actions?.onDialog?.({ kind: 'cancel', reason: '' })
+    // B-W2b-GF5 (G513): a protective garment that failed its check after the repair is scrapped.
+    else if (action === 'scrap') actions?.onDialog?.({ kind: 'scrap', reason: '' })
   }
   const next = NEXT_BY_STAGE[repair.stage] ?? null
   const garment = [repair.garment.style?.code, repair.garment.colourway?.name, repair.garment.size].filter(Boolean).join(' · ')
@@ -70,6 +72,7 @@ function RepairRecord({ model, actions, panels }: { model: RepairModel; actions?
   }
   const moreItems: MenuItemDef[] = [
     menuItem('cancel', t('repair.cancel')),
+    menuItem('scrap', t('repair.scrap')),
     { id: 'sep', separator: true } as MenuItemDef,
     { id: 'number', label: t('row.copy'), onSelect: () => actions?.onCopy?.(repair.number) },
     { id: 'link', label: t('record.copyLink'), onSelect: () => actions?.onCopy?.(typeof window === 'undefined' ? base : `${window.location.origin}${base}`) },
@@ -153,11 +156,15 @@ function RepairRecord({ model, actions, panels }: { model: RepairModel; actions?
               }
             />
           )}
-          {repair.stage === 'CANCELLED' && <Banner tone="info" title={t('repair.cancelled')}>{repair.cancelReason ?? null}</Banner>}
+          {repair.stage === 'CANCELLED' && (
+            <Banner tone={isScrapped(repair) ? 'danger' : 'info'} title={t(isScrapped(repair) ? 'repair.scrapped' : 'repair.cancelled')}>
+              {repair.cancelReason ?? null}
+            </Banner>
+          )}
           {tab === 'intake' && <IntakeTab model={model} actions={actions} held={held} run={run} />}
           {tab === 'estimate' && <EstimateTab model={model} actions={actions} />}
           {tab === 'work' && <WorkTab model={model} held={held} run={run} />}
-          {tab === 'safety' && <SafetyTab model={model} actions={actions} />}
+          {tab === 'safety' && <SafetyTab model={model} actions={actions} held={held} run={run} />}
           {tab === 'return' && <ReturnTab model={model} held={held} run={run} />}
           {tab === 'activity' && panels}
         </div>
@@ -424,7 +431,7 @@ function WorkTab({ model, held, run }: { model: RepairModel; held: (action: Repa
 
 const POINT_HINT: Readonly<Record<CheckPoint, string>> = { seams: 'safety.hint.seams', abrasionZones: 'safety.hint.abrasionZones', closures: 'safety.hint.closures', protectors: 'safety.hint.protectors' }
 
-function SafetyTab({ model, actions }: { model: RepairModel; actions?: RepairActions }) {
+function SafetyTab({ model, actions, held, run }: { model: RepairModel; actions?: RepairActions; held: (action: RepairAction) => string | null; run: (action: RepairAction) => void }) {
   const t = useWords()
   const { repair } = model
   const ids = { lot: useId(), level: useId(), note: useId() }
@@ -459,6 +466,17 @@ function SafetyTab({ model, actions }: { model: RepairModel; actions?: RepairAct
               {last.checkedAt ? <InstantText value={last.checkedAt} /> : null}
               {last.failures.length > 0 ? ` · ${t('safety.failedPoints', { count: last.failures.length })}` : ''}
             </Banner>
+          )}
+          {/* B-W2b-GF5 (G513): a garment that fails is never returned unsafe: back into repair, or scrapped. */}
+          {last.state === 'FAILED' && repair.stage === 'REPAIRED' && (
+            <div className="fw-q-stack">
+              <p className="fw-q-hint">{t('safety.failedWayOut')}</p>
+              <span>
+                <Button size="sm" variant="danger" heldReason={held('scrap')} onClick={() => run('scrap')}>
+                  {t('repair.scrap')}
+                </Button>
+              </span>
+            </div>
           )}
           {signHeld && <p className="fw-q-hint">{say(t, signHeld)}</p>}
           <GateChecklist
