@@ -36,6 +36,12 @@ import type { CommandCaller } from '../../core/command'
  *   idOf        a row's id as the web list frame names the row (its rowId); default the row's `id`. An export of the
  *               SELECTED rows (the selection row's Export N) keeps the view's rows whose id was selected.
  *
+ * B-TH-008 (screen = file), optional:
+ *   title       what the file and its Excel tab are named after when the list knows better than the screen's title (a
+ *               customer's sheet: "Orders - <customer>", or the saved view's name), with the rows it holds; read once the
+ *               rows are written, as the person who asked (a name they may not see is never written). null: the screen's
+ *               title, as before.
+ *
  * A list without a source shows no Export ▾ (its own "Export N" of the selected rows stays). Tests set their own
  * sources with useExportSources([...]).
  */
@@ -64,6 +70,24 @@ export interface ExportReimport<Row> {
   key(row: Row): Readonly<Record<string, CellValue>>
 }
 
+// ── B-TH-008 ──
+/** What a file is named after (source.title): its name, and the rows it holds in words ("42 orders"), kept on the Excel tab. */
+export interface ExportTitle {
+  readonly name: string
+  readonly rows: string
+}
+
+/** What a source's title may use: the file's language, the saved view the person exported (null: none), the rows written. */
+export interface ExportTitleFacts {
+  readonly locale: ExportLocale
+  readonly viewName: string | null
+  readonly rows: number
+}
+
+/** The file's title: the source's name and rows ("Orders - Brand Alpha - 42 orders"), else the screen's. */
+export const titleText = (named: ExportTitle | null, screen: string): string => (named ? `${named.name} - ${named.rows}` : screen)
+// ── end B-TH-008 ──
+
 export interface ExportSource<Query, Row> {
   readonly listKey: string
   readonly permission: Permission
@@ -77,6 +101,8 @@ export interface ExportSource<Query, Row> {
   count?(caller: CommandCaller, query: Query): Promise<number>
   readonly reimport?: ExportReimport<Row>
   idOf?(row: Row): string
+  /** B-TH-008: the file's title from what it holds (see above); null: the screen's title. */
+  title?(caller: CommandCaller, query: Query, facts: ExportTitleFacts): Promise<ExportTitle | null>
 }
 
 /** A source with its types erased, as the registry and the worker hold it. */
