@@ -1,5 +1,5 @@
 import { isUuid } from '../core/ids'
-import { can, grantsFor, type Actor, type Permission, type ScopeSet } from '../core/permissions'
+import { can, grantsFor, reachesEveryParty, type Actor, type Permission, type ScopeSet } from '../core/permissions'
 import type { EventCatalogue } from './catalogue'
 import { isMoneyField, type EventDefinition } from './define'
 import type { EventEnvelope, LiveMessage, LiveView } from './envelope'
@@ -63,8 +63,9 @@ const covers = (set: ScopeSet, id: string | null): boolean => !id || set === 'al
  * received other parties' record ids.
  */
 function reachesParties(viewer: Actor, permission: Permission, record: { readonly companyId: string | null; readonly siteId: string | null }, parties: readonly string[]): boolean {
+  // B-PR-02: the every-party half is core/permissions' reachesEveryParty, the production wall's own question.
+  if (reachesEveryParty(viewer, permission, record)) return true
   const grants = grantsFor(viewer, permission).filter((grant) => covers(grant.companies, record.companyId) && covers(grant.sites, record.siteId))
-  if (grants.some((grant) => grant.parties === 'all')) return true
   return parties.length > 0 && parties.every((party) => grants.some((grant) => grant.parties !== 'all' && grant.parties.includes(party)))
 }
 
