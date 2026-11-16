@@ -270,6 +270,15 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
     G.betaLink = tokenOf('shares.invite', BRAND_BETA.contact.email)
     expect(await viaBrandLink(w, beta, G.betaLink, seen, 'GET', '/link/share?language=en')).toMatchObject({ record: { type: 'Quote' } })
     await viaBrandLink(w, beta, G.betaLink, seen, 'POST', '/link/share/messages', { body: BRAND_BETA.message }, 201)
+    // B-TH-004 (T24): an invite or a request on Beta's quote to Alpha's contact is refused in words without "Send outside this
+    // customer" (the office reads whose the address is); nothing is made, nothing mailed.
+    const mailsBefore = w.h.ses.mails.length
+    const wrongShare = await ok(P.owner, 'POST', '/shares', { recordType: 'Quote', recordId: quote.id, email: BRAND_ALPHA.contact.email, permissions: ['VIEW'], send: true, language: 'en' }, 409)
+    expect(wrongShare.error.issues).toEqual([expect.objectContaining({ path: 'refusal/OTHER_PARTY' }), { path: 'body/email', message: `${BRAND_ALPHA.contact.email} belongs to ${BRAND_ALPHA.tradeName}.` }])
+    const wrongAsk = await ok(P.owner, 'POST', '/approvals-out', { kind: 'ARTWORK', recordType: 'Quote', recordId: quote.id, email: BRAND_ALPHA.contact.email, question: 'Please approve the artwork of BX-200.', fileIds: [G.betaFile], send: true, language: 'en' }, 409)
+    expect(wrongAsk.error.issues[0]).toMatchObject({ path: 'refusal/OTHER_PARTY' })
+    await settle()
+    expect(w.h.ses.mails.slice(mailsBefore).filter((mail) => mail.to.includes(BRAND_ALPHA.contact.email))).toEqual([])
     // The office asks Beta to approve the jacket's artwork on its quote: a task and a notice for Beta's portal.
     await ok(P.owner, 'POST', '/approvals-out', { kind: 'ARTWORK', recordType: 'Quote', recordId: quote.id, email: BRAND_BETA.contact.email, question: 'Please approve the artwork of BX-200.', fileIds: [G.betaFile], send: true, language: 'en' }, 201)
     await settle()

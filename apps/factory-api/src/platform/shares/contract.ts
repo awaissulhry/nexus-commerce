@@ -57,6 +57,8 @@ export const inviteContract = defineContract({
     note: z.string().max(SHARE_NOTE_MAX * 2).nullable().optional(),
     send: z.boolean(),
     language: locale.optional(),
+    /** B-TH-004: "Send outside this customer" ticked: the address may be another party's contact (recorded). */
+    sendOutside: z.boolean().optional(),
   }),
   response: { 201: output({ share: shareView, url: z.string().nullable(), delivery: z.enum(['SENT', 'FAILED', 'QUEUED']).nullable() }) },
 })
