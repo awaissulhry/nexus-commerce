@@ -76,6 +76,11 @@ export interface OrderRowExtras {
 }
 
 const unique = <T>(values: readonly T[]): T[] => [...new Set(values)]
+const push = <T>(map: Map<string, T[]>, key: string, value: T): void => {
+  const list = map.get(key)
+  if (list) list.push(value)
+  else map.set(key, [value])
+}
 /** Documents that bill or credit the goods and that a reader opens from the Invoiced cell. */
 const GOODS_DOCUMENTS = new Set(['TD01', 'TD24', 'TD04'])
 
@@ -102,7 +107,7 @@ export async function orderRowExtras(
   const brandIds = unique(styles.flatMap((style) => (style.brandPartyId ? [style.brandPartyId] : [])))
   const brandNames = new Map(brandIds.length > 0 ? (await client.party.findMany({ where: { id: { in: brandIds } }, select: { id: true, legalName: true } })).map((party) => [party.id, party.legalName]) : [])
   const linesOf = new Map<string, typeof lines>()
-  for (const line of lines) linesOf.set(line.orderId, [...(linesOf.get(line.orderId) ?? []), line])
+  for (const line of lines) push(linesOf, line.orderId, line)
   const firstStyleIds = unique(orders.flatMap((order) => (linesOf.get(order.id)?.[0] ? [linesOf.get(order.id)![0]!.styleId] : [])))
   const thumbnails = await mainPictureThumbnails(client, actor, firstStyleIds)
   const fileIds = unique([...thumbnails.values()].map((thumbnail) => thumbnail.fileId))
@@ -122,11 +127,34 @@ export async function orderRowExtras(
   const invoiceOf = new Map(invoices.map((invoice) => [invoice.id, invoice]))
   const orderOfLine = new Map(lines.map((line) => [line.id, line.orderId]))
   const orderOfDeposit = new Map(deposits.map((deposit) => [deposit.id, deposit.orderId]))
+  // Grouped once for the page: each order's invoice lines, and the issued documents that name it (by its id, its deposit or
+  // one of its lines; a deferred TD24 may bill several orders).
+  const billedOf = new Map<string, typeof billed>()
+  const documentsOf = new Map<string, Set<string>>()
+  const name = (orderId: string | null | undefined, invoiceId: string): void => {
+    if (!orderId) return
+    documentsOf.set(orderId, (documentsOf.get(orderId) ?? new Set<string>()).add(invoiceId))
+  }
+  for (const row of billed) {
+    const orderId = row.salesOrderLineId === null ? undefined : orderOfLine.get(row.salesOrderLineId)
+    if (!orderId) continue
+    push(billedOf, orderId, row)
+    name(orderId, row.invoiceId)
+  }
+  for (const invoice of invoices) {
+    name(invoice.salesOrderId, invoice.id)
+    if (invoice.depositRequestId !== null) name(orderOfDeposit.get(invoice.depositRequestId), invoice.id)
+  }
 
   // ---- delivery notes -----------------------------------------------------------------------------------------------------
   const shipmentIds = shipments.map((shipment) => shipment.id)
   const ddts = shipmentIds.length > 0 ? await client.ddt.findMany({ where: { shipmentId: { in: shipmentIds }, cancellations: { none: {} } }, select: { id: true, number: true, shipmentId: true, companyId: true, siteId: true, partyId: true }, orderBy: [{ documentDate: 'asc' }, { number: 'asc' }] }) : []
   const orderOfShipment = new Map(shipments.map((shipment) => [shipment.id, shipment.salesOrderId]))
+  const ddtsOf = new Map<string, typeof ddts>()
+  for (const ddt of ddts) {
+    const orderId = ddt.shipmentId === null ? null : orderOfShipment.get(ddt.shipmentId)
+    if (orderId) push(ddtsOf, orderId, ddt)
+  }
 
   for (const order of orders) {
     const own = linesOf.get(order.id) ?? []
@@ -148,30 +176,22 @@ export async function orderRowExtras(
       })
       .sort((a, b) => Number(a.own) - Number(b.own) || (a.name ?? '').localeCompare(b.name ?? ''))
 
-    const ownLineIds = new Set(own.map((line) => line.id))
-    const documentLines = billed
-      .filter((row) => row.salesOrderLineId !== null && ownLineIds.has(row.salesOrderLineId))
-      .flatMap((row) => {
-        const invoice = invoiceOf.get(row.invoiceId)
-        return invoice ? [{ docType: invoice.docType, status: invoice.status, kind: row.kind, salesOrderLineId: row.salesOrderLineId, quantity: row.quantity.toString(), netAmount: row.netAmount }] : []
-      })
+    const documentLines = (billedOf.get(order.id) ?? []).flatMap((row) => {
+      const invoice = invoiceOf.get(row.invoiceId)
+      return invoice ? [{ docType: invoice.docType, status: invoice.status, kind: row.kind, salesOrderLineId: row.salesOrderLineId, quantity: row.quantity.toString(), netAmount: row.netAmount }] : []
+    })
     const invoiced = invoicedOf(
       own.map((line) => ({ id: line.id, kind: line.kind, quantity: line.quantity, closedShortQuantity: line.closedShortQuantity, feeCredited: line.kind === 'FEE' && line.feeCreditedAt !== null })),
       documentLines,
     )
 
     const mayInvoices = can(actor, INVOICES_VIEW, scope)
-    const related = invoices.filter(
-      (invoice) =>
-        invoice.status !== 'DRAFT' &&
-        (invoice.salesOrderId === order.id ||
-          (invoice.depositRequestId !== null && orderOfDeposit.get(invoice.depositRequestId) === order.id) ||
-          billed.some((row) => row.invoiceId === invoice.id && row.salesOrderLineId !== null && orderOfLine.get(row.salesOrderLineId) === order.id)),
-    )
+    const named = documentsOf.get(order.id)
+    const related = named ? invoices.filter((invoice) => invoice.status !== 'DRAFT' && named.has(invoice.id)) : []
     const goods = related.filter((invoice) => GOODS_DOCUMENTS.has(invoice.docType))
     const deposit = related.filter((invoice) => invoice.docType === 'TD02' && invoice.depositRequestId !== null && orderOfDeposit.get(invoice.depositRequestId) === order.id).at(-1)
 
-    const notes = ddts.filter((ddt) => ddt.shipmentId !== null && orderOfShipment.get(ddt.shipmentId) === order.id && can(actor, SHIPPING_VIEW, { companyId: ddt.companyId, siteId: ddt.siteId, partyId: ddt.partyId }))
+    const notes = (ddtsOf.get(order.id) ?? []).filter((ddt) => can(actor, SHIPPING_VIEW, { companyId: ddt.companyId, siteId: ddt.siteId, partyId: ddt.partyId }))
     const mayShipping = can(actor, SHIPPING_VIEW, scope) || notes.length > 0
     const noteShipments = unique(notes.map((ddt) => ddt.shipmentId))
 
