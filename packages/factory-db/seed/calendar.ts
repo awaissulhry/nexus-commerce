@@ -1,7 +1,7 @@
 import { CalendarDayKind, CalendarScope, MasterStatus, ShiftSegmentKind } from '../src/generated/prisma/enums'
 import type { Prisma } from '../src/generated/prisma/client'
 import { seed as seedParties } from './parties'
-import { seedUuid, type SeedContext } from '../src/seeding'
+import { seedUuid, takenBy, type SeedContext } from '../src/seeding'
 import { seedYear } from '../src/seed-calendar' // B-W2b-F53: the holiday years follow the run's year
 
 /**
@@ -17,6 +17,9 @@ import { seedYear } from '../src/seed-calendar' // B-W2b-F53: the holiday years 
  * Made-up data, written in the tenant's office scope as the API writes them; idempotent (stable ids, upserts, one
  * transaction: a pattern's breaks must lie inside its shifts at commit). The national holidays are the public list
  * (L. 260/1949 and its amendments, with 4 October again from 2026); check them before relying on them.
+ * B-W2b-GS1: also on a tenant the app has used: an owner (company, plant, line, work centre, supplier) has one ACTIVE calendar,
+ * and the app makes one by itself when a closure names an owner that has none (platform/calendars), with an id of its own.
+ * Such a calendar is the tenant's: the seed writes neither it nor its days, and names it in what it returns.
  */
 
 const AT = new Date('2026-10-30T08:00:00.000Z')
@@ -191,10 +194,19 @@ export async function seed(context: SeedContext): Promise<CalendarSeed> {
           }
         }
       }
+      type Owned = { scope?: CalendarScope; companyId?: string | null; siteId?: string | null; lineId?: string | null; workCentreId?: string | null; partyId?: string | null }
+      const ownerOf = (row: Owned): string => {
+        const owner: Record<CalendarScope, string | null | undefined> = { COMPANY: row.companyId, SITE: row.siteId, LINE: row.lineId, WORK_CENTRE: row.workCentreId, SUPPLIER: row.partyId }
+        return row.scope ? `${row.scope}:${owner[row.scope] ?? ''}` : ''
+      }
+      const active = await tx.workCalendar.findMany({ where: { status: MasterStatus.ACTIVE }, select: { id: true, scope: true, companyId: true, siteId: true, lineId: true, workCentreId: true, partyId: true } })
+      const taken = takenBy(calendars.filter((row) => (row.status ?? MasterStatus.ACTIVE) === MasterStatus.ACTIVE), active, ownerOf)
       for (const { id: calendarId, ...data } of calendars) {
+        if (taken.has(calendarId)) continue
         await tx.workCalendar.upsert({ where: { id: calendarId }, create: { id: calendarId, ...data, ...stamp }, update: { name: data.name, shiftPatternId: data.shiftPatternId ?? null }, select: { id: true } })
       }
-      await tx.calendarDay.createMany({ data: days.map((row) => ({ ...row, ...stamp })), skipDuplicates: true })
+      await tx.calendarDay.createMany({ data: days.filter((row) => !taken.has(row.calendarId)).map((row) => ({ ...row, ...stamp })), skipDuplicates: true })
+      for (const [key, calendarId] of Object.entries(calendarIds)) calendarIds[key as keyof typeof calendarIds] = taken.get(calendarId) ?? calendarId
     }),
   )
   return { patternIds, calendarIds }

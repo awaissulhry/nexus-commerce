@@ -142,6 +142,8 @@ export async function seed(context: SeedContext): Promise<PlantCareSeed> {
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
       for (const code of ['POST_BED', 'WALKING_FOOT']) {
+        // B-W2b-GS1: only the seed's own class (a class the tenant made first is its own: seed/plant.ts leaves it as it is).
+        if (plant.classIds[code] !== id(`plant:class:${code}`)) continue
         await tx.machineClass.update({ where: { id: plant.classIds[code]! }, data: { authorisationRequired: true, version: { increment: 1 }, updatedAt: T.setup }, select })
       }
       await tx.machineCheckType.createMany({

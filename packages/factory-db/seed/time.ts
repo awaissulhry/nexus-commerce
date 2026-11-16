@@ -21,7 +21,7 @@ import {
   WorkingTimeRuleKind,
   WorkingTimeRuleSource,
 } from '../src/generated/prisma/enums'
-import { seedUuid, type SeedContext } from '../src/seeding'
+import { seedUuid, takenBy, type SeedContext } from '../src/seeding'
 import { seed as seedCalendar } from './calendar'
 import { seed as seedFiles } from './files'
 import { seed as seedFloorAuth } from './floor-auth'
@@ -286,8 +286,15 @@ export async function seed(context: SeedContext): Promise<TimeSeed> {
         },
       ]
       await tx.workingTimeRule.createMany({ data: rules, skipDuplicates: true })
+      // B-W2b-GS1: a person adds the standard absence codes with one click ("Start from the standard list", ids of their own),
+      // with the codes written here; a code is unique in the tenant. A code the tenant holds already is its row: the seed
+      // leaves it as it is and names it (the absences below and the seeds that read these ids).
+      const wanted = ABSENCE_CODES.map((entry) => ({ id: absenceCodeIds[entry.code] as string, code: entry.code }))
+      const taken = takenBy(wanted, await tx.absenceCode.findMany({ select: { id: true, code: true } }), (row) => row.code)
+      for (const { id: rowId, code } of wanted) absenceCodeIds[code] = taken.get(rowId) ?? rowId
       for (const entry of ABSENCE_CODES) {
         const codeId = absenceCodeIds[entry.code] as string
+        if (codeId !== id(`time:absence-code:${entry.code}`)) continue
         const data = { category: entry.category, paid: entry.paid, documentRequired: entry.documentRequired, labelI18n: { it: entry.it, en: entry.en } }
         await tx.absenceCode.upsert({ where: { id: codeId }, create: { id: codeId, code: entry.code, ...data, ...stamp(T.rules) }, update: data, select })
       }

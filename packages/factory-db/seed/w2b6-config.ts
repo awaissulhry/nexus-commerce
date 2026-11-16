@@ -225,6 +225,17 @@ export async function seed(context: SeedContext): Promise<ConfigSeed> {
       await tx.picklistValue.updateMany({ where: { id: V.quilted, active: true }, data: { active: false, updatedAt: minutes(4) } })
       await tx.customField.updateMany({ where: { id: F.oldPromo, status: MasterStatus.ACTIVE }, data: { status: MasterStatus.ARCHIVED, updatedAt: minutes(4) } })
 
+      // B-W2b-GS1: a template's versions are keyed by its company, document (or mail event), language and revision, and one
+      // version of each is ACTIVE; a person who began one of these templates first made those keys and that ACTIVE version.
+      // Such a template is the tenant's: the seed adds no version to it and changes none (the others are the seed's own).
+      const seedTemplateIds = new Set<string>([...Object.values(D), ...Object.values(M)])
+      const begun = new Set([
+        ...(await tx.documentTemplate.findMany({ select: { id: true, companyId: true, kind: true, language: true } })).filter((row) => !seedTemplateIds.has(row.id)).map((row) => `doc:${row.kind}:${row.companyId}:${row.language}`),
+        ...(await tx.emailTemplate.findMany({ select: { id: true, companyId: true, event: true, language: true } })).filter((row) => !seedTemplateIds.has(row.id)).map((row) => `mail:${row.event}:${row.companyId ?? 'all'}:${row.language}`),
+      ])
+      const ours = (row: { key: string }) => !begun.has(row.key.split(':').slice(0, 4).join(':'))
+      const quoteOurs = ours(docKey(DocumentTemplateKind.QUOTE, 'it', 1))
+
       // --- document templates (PLT-231): version 1 published, then replaced by version 2; version 3 drafted -------------
       await tx.documentTemplate.createMany({
         data: [
@@ -237,7 +248,7 @@ export async function seed(context: SeedContext): Promise<ConfigSeed> {
             ...stamp(minutes(5)),
           },
           { id: D.ddtEn, ...docKey(DocumentTemplateKind.DDT, 'en', 1), footer: 'Goods travel at the buyer’s risk unless agreed otherwise (seed).', ...stamp(minutes(5)) },
-        ],
+        ].filter(ours),
         skipDuplicates: true,
       })
       await tx.documentTemplate.updateMany({ where: { id: { in: [D.quoteV1, D.ddtEn] }, status: TemplateStatus.DRAFT }, data: { ...published(minutes(6)), updatedAt: minutes(6) } })
@@ -252,11 +263,11 @@ export async function seed(context: SeedContext): Promise<ConfigSeed> {
             fieldsShown: ['discount', 'delivery'],
             ...stamp(minutes(7)),
           },
-        ],
+        ].filter(ours),
         skipDuplicates: true,
       })
-      const second = await tx.documentTemplate.findUniqueOrThrow({ where: { id: D.quoteV2 }, select: { status: true } })
-      if (second.status === TemplateStatus.DRAFT) {
+      const second = quoteOurs ? await tx.documentTemplate.findUniqueOrThrow({ where: { id: D.quoteV2 }, select: { status: true } }) : null
+      if (second?.status === TemplateStatus.DRAFT) {
         // The version in use is retired first: one ACTIVE per company, kind and language.
         await tx.documentTemplate.updateMany({ where: { id: D.quoteV1, status: TemplateStatus.ACTIVE }, data: { status: TemplateStatus.RETIRED, retiredAt: minutes(8), updatedAt: minutes(8) } })
         await tx.documentTemplate.update({ where: { id: D.quoteV2 }, data: { ...published(minutes(8)), updatedAt: minutes(8) }, select })
@@ -271,7 +282,7 @@ export async function seed(context: SeedContext): Promise<ConfigSeed> {
             fieldsShown: ['discount', 'delivery'],
             ...stamp(minutes(9)),
           },
-        ],
+        ].filter(ours),
         skipDuplicates: true,
       })
 
@@ -299,7 +310,7 @@ export async function seed(context: SeedContext): Promise<ConfigSeed> {
             body: 'Gentile {{contact.name}},\nla tua spedizione è partita: {{trackingUrl}}\n(bozza inventata del seed)',
             ...stamp(minutes(11)),
           },
-        ],
+        ].filter(ours),
         skipDuplicates: true,
       })
       await tx.emailTemplate.updateMany({ where: { id: { in: [M.trackingIt, M.trackingEn] }, status: TemplateStatus.DRAFT }, data: { ...published(minutes(12)), updatedAt: minutes(12) } })

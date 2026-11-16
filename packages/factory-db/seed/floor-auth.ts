@@ -1,13 +1,15 @@
 import { hashPin, pinKeyring } from '@nexus/factory-domain/auth/floor/pin'
 import { ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
-import { BadgeStatus, DeviceKind, DeviceStatus, FloorSessionEndReason, RoleAudience, WorkerStatus } from '../src/generated/prisma/enums'
+import { BadgeStatus, DeviceKind, DeviceStatus, FloorSessionEndReason, WorkerStatus } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
+import { systemSeedRole, writeSeedRoles } from './roles'
 
 /**
  * The floor sign-in seed: on each seeded plant, its floor session times, one enrolled tablet at the cutting table (its
  * one-time code used), and two made-up floor workers ("Seed Worker …") with a badge and a floor role each (operator,
  * team leader), and one ended floor session. The floor system roles of factory-domain's templates are written here too
- * (the roles seed runs later, by name, and keeps them), so the workers' roles exist.
+ * (the roles seed runs later, by name, and keeps them), so the workers' roles exist. B-W2b-GS1: by the roles seed's rule
+ * (writeSeedRoles): a floor role the app made first (the worker's template sync) is adopted by its key, never made twice.
  *
  * Nothing seeded opens anything by itself: every token, code and badge hash is a marker that nothing hashes to (a real
  * one is 64 hex characters); the enrolment code is used and expired, the session ended. A local device is enrolled
@@ -50,21 +52,7 @@ export async function seed({ db, namespace }: SeedContext): Promise<FloorAuthSee
 
   await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
     client.$transaction(async (tx) => {
-      for (const template of floorTemplates) {
-        const roleId = id(`role:${template.key}`)
-        const data = {
-          key: template.key,
-          name: template.name,
-          description: template.description,
-          system: true,
-          basedOn: null,
-          audience: RoleAudience.FLOOR,
-          requireMfa: template.requireMfa,
-          permissions: [...template.permissions],
-          grains: [...template.grains],
-        }
-        await tx.role.upsert({ where: { id: roleId }, create: { id: roleId, ...data, createdAt: SEEDED_AT }, update: data })
-      }
+      const roleIds = await writeSeedRoles(tx, id, floorTemplates.map(systemSeedRole), SEEDED_AT)
 
       for (const plant of plants) {
         const at = { siteId: plant.siteId }
@@ -118,7 +106,7 @@ export async function seed({ db, namespace }: SeedContext): Promise<FloorAuthSee
           await tx.badge.upsert({ where: { id: badgeId }, create: { id: badgeId, ...badge, createdAt: SEEDED_AT }, update: badge })
 
           const workerRoleId = id(`worker-role:${plant.code}:${entry.key}`)
-          const workerRole = { ...at, workerId, roleId: id(`role:${entry.role}`), grantedById: actorId }
+          const workerRole = { ...at, workerId, roleId: roleIds[entry.role]!, grantedById: actorId }
           await tx.workerRole.upsert({ where: { id: workerRoleId }, create: { id: workerRoleId, ...workerRole, createdAt: SEEDED_AT }, update: workerRole })
 
         }

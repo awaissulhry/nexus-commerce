@@ -18,7 +18,7 @@ import {
   TransportBy,
   Uom,
 } from '../src/generated/prisma/enums'
-import { seedUuid, type SeedContext } from '../src/seeding'
+import { seedUuid, takenBy, type SeedContext } from '../src/seeding'
 import { seed as seedReturns } from './returns'
 import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
@@ -241,10 +241,21 @@ export async function seed(context: SeedContext): Promise<HoldsSeed> {
   })
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
-      for (const { id: rowId, createdAt, createdById, ...data } of [...defectRows]) {
+      // B-W2b-GS1: a person adds the library's starter set and the standard dispositions with one click (ids of their own),
+      // with the codes written here; a code is unique in the tenant. A code the tenant holds already is its row: the seed
+      // leaves it as it is and names it (a defect's category, every reference below and the seeds that read these ids).
+      const takenDefects = takenBy(defectRows, await tx.defectCode.findMany({ select: { id: true, code: true } }), (row) => row.code)
+      const takenDispositions = takenBy(dispositions, await tx.dispositionCode.findMany({ select: { id: true, code: true } }), (row) => row.code)
+      for (const [ids, taken] of [[defectCodeIds, takenDefects], [dispositionCodeIds, takenDispositions]] as const) {
+        for (const [code, rowId] of Object.entries(ids)) ids[code] = taken.get(rowId) ?? rowId
+      }
+      for (const { id: rowId, createdAt, createdById, parentId, ...rest } of [...defectRows]) {
+        if (takenDefects.has(rowId)) continue
+        const data = { ...rest, parentId: parentId ? (takenDefects.get(parentId) ?? parentId) : parentId }
         await tx.defectCode.upsert({ where: { id: rowId }, create: { id: rowId, createdAt, createdById, ...data }, update: data, select })
       }
       for (const { id: rowId, createdAt, createdById, ...data } of dispositions) {
+        if (takenDispositions.has(rowId)) continue
         await tx.dispositionCode.upsert({ where: { id: rowId }, create: { id: rowId, createdAt, createdById, ...data }, update: data, select })
       }
       // Plant A1 charges freight by its rule (B-W2a-48): 12.00 a shipment, free from 500.00 of goods.
