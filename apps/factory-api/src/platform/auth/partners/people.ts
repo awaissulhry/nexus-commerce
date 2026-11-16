@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { kindFits, type Capability } from '@nexus/factory-domain/auth/partners/kinds'
-import { choiceProblems, PARTNER_PEOPLE, PARTNER_WORDS, roleKeysOf, seatProblem, type AccessChoice } from '@nexus/factory-domain/auth/partners/rules'
+import { choiceProblems, NOT_INVITABLE, PARTNER_PEOPLE, PARTNER_WORDS, roleKeysOf, seatProblem, type AccessChoice } from '@nexus/factory-domain/auth/partners/rules'
 import { ConflictError, DomainError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -76,8 +76,14 @@ export async function inviteInCommand({ tx, now, audit, emit, context }: Command
   const refuse = (message: string): never => {
     throw new DomainError('conflict', message, [{ path: 'email', message }])
   }
-  if (existing?.audience === 'OFFICE') refuse(PARTNER_WORDS.officeAddress)
-  if (existing && existing.partyId !== party.id) refuse(PARTNER_WORDS.otherOrganisation)
+  // B-TH-007 (WALL-G10): from the portal, an address of the office or of another organisation answers ONE neutral sentence
+  // (refusal/NOT_INVITABLE): a brand's admin never learns that anybody else holds it. The office hears the real reason.
+  const notHere = (real: string): never => {
+    if (!by.byPartner) refuse(real)
+    throw new DomainError('conflict', NOT_INVITABLE.en, [{ path: 'email', message: NOT_INVITABLE.en }, { path: `refusal/${NOT_INVITABLE.code}`, message: NOT_INVITABLE.en }])
+  }
+  if (existing?.audience === 'OFFICE') notHere(PARTNER_WORDS.officeAddress)
+  if (existing && existing.partyId !== party.id) notHere(PARTNER_WORDS.otherOrganisation)
   if (existing && (existing.status === 'ACTIVE' || existing.status === 'SUSPENDED')) refuse(PARTNER_WORDS.alreadyIn)
   const seat = seatProblem(settings, await seatsTaken(tx, party.id, now, existing?.id), party.name)
   if (seat) throw new ConflictError(seat)
