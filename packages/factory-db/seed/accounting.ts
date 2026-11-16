@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   AccountingExportStatus,
@@ -19,6 +18,7 @@ import { seed as seedFiles } from './files'
 import { seed as seedMoney, type MoneySeed } from './money'
 import { seed as seedNumbering } from './numbering'
 import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The payables, cost-ledger and accounting seed (W2a schema wave 7/7), per tenant of seed/_core.ts, for company A,
@@ -77,7 +77,6 @@ const DAY = {
 } as const
 const YEAR = '2026'
 const TEN_YEARS = (at: Date): Date => new Date(Date.UTC(at.getUTCFullYear() + 10, at.getUTCMonth(), at.getUTCDate()))
-const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
 /** P2's invoice: 105 ft² of leather at 4.30 (the order's price is 4.20) and 15.00 of freight, VAT 22 %, minor units. */
 const SUPPLIER = { leatherNet: 45_150, freightNet: 1_500, net: 46_650, vat: 10_263 } as const
@@ -132,7 +131,7 @@ export async function seed(context: SeedContext): Promise<AccountingSeed> {
   const office = { audience: 'office' as const, tenantId, actorId }
   const stamp = (at: Date) => ({ createdAt: at, updatedAt: at, createdById: actorId })
   const select = { id: true } as const
-  const archived = (key: string, recordType: string, recordId: string, name: string, contentType: string, at: Date): Prisma.StoredFileCreateManyInput => ({
+  const archived = (key: string, recordType: string, recordId: string, name: string, contentType: string, at: Date): Prisma.StoredFileCreateManyInput => seedFile(tenantId, {
     id: lastId(`accounting:file:${key}`),
     companyId: companyA,
     recordType,
@@ -141,7 +140,6 @@ export async function seed(context: SeedContext): Promise<AccountingSeed> {
     originalName: name,
     contentType,
     sizeBytes: 2048,
-    sha256: sha256(`seed accounting ${namespace} ${key}`),
     storeAccountId: store,
     storageKey: `legal/t/${tenantId}/c/${companyA}/${YEAR}/${id(`accounting:file:key:${key}`)}`,
     status: 'AVAILABLE',

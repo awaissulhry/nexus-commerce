@@ -9,10 +9,13 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
-import { testAuthenticator, type SessionContext } from '../../../core/context'
+import type { CommandCaller } from '../../../core/command'
+import { testAuthenticator, withContextClient, type RequestContext, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { applySystemRoleChanges, systemRoleChanges } from '../../../platform/auth/roles/system-roles'
 import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+// B-W2b-GF5 (G367): a decision on the tablet, signed past the route (the test sign-in has no PIN).
+import { decideIncoming } from './decide'
 
 /**
  * The incoming inspection of a lot, hide by hide (B-W2b-98; QHS-025, QHS-028, QHS-034, MES-054) through the app's real
@@ -127,6 +130,8 @@ beforeAll(async () => {
     nobody: { audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [grant(['sites.view'])] },
     bench: { audience: 'floor', tenantId: A.tenant, actorId: A.worker, siteId: A.site, deviceId: A.device, grants: [grant(['floor.work', ...RECORD], { companies: [A.company], sites: [A.site] })] },
     benchB: { audience: 'floor', tenantId: A.tenant, actorId: newId(), siteId: A.siteB, deviceId: newId(), grants: [grant(['floor.work', ...RECORD], { companies: [A.companyB], sites: [A.siteB] })] },
+    // B-W2b-GF5 (G369): the lab's quality person, who also places holds.
+    lab: { audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [grant(['quality.lots.view', 'quality.lots.release', 'quality.holds.view', 'quality.holds.place'])] },
   } satisfies Record<string, SessionContext>)
   lot12 = await addLot('L12', 12)
   lot3 = await addLot('L3', 3)
@@ -266,7 +271,17 @@ describe('the plan checks and the decision (QHS-034)', () => {
     expect(main.inspection.signatureSha256).toMatch(/^[0-9a-f]{64}$/)
     expect(main.next).toMatchObject({ step: 'SORT', lotStatus: 'QUARANTINE', lotRoute: `/quality/lots/${lot12.lotId}/release`, rejectedHides: [{ code: lot12.hides[1]!.code }] })
     expect(main.next.returnPrefill).toMatchObject({ kind: 'RETURN', foundAt: 'INSPECTION', from: { lotId: lot12.lotId, hideIds: [lot12.hides[1]!.id] } })
-    expect(main.next.holdPrefill).toMatchObject({ subjectType: 'Hide', subjectIds: [lot12.hides[1]!.id] })
+    // B-W2b-GF5 (G367): the rejected hide and the 7 to sort (every hide outside the sample) are held at the decision, by the
+    // system, the hold's source the inspection: nothing is left for the office to hold.
+    expect(main.next.holdPrefill).toBeNull()
+    expect(main.next.held.unheld).toEqual([])
+    expect(main.next.held.holds).toEqual([{ id: expect.any(String), number: expect.stringMatching(/^HLD-/) }])
+    const hold = (await admin(`SELECT "subjectType", "subjectIds"::text[] AS ids, "sourceType", "sourceId"::text AS source, "placedById", "placedByWorkerId", status::text AS status, "reasonCode", "reasonNote" FROM "QualityHold" WHERE id = $1`, [main.next.held.holds[0].id]))[0]!
+    const outside = lot12.hides.filter((_, index) => ![0, 1, 2, 3, 5].includes(index)).map((hide) => hide.id)
+    expect(hold).toMatchObject({ subjectType: 'Hide', sourceType: 'IncomingInspection', source: main.inspection.id, placedById: null, placedByWorkerId: null, status: 'ACTIVE', reasonCode: 'QUALITY_CHECK' })
+    expect([...(hold.ids as string[])].sort()).toEqual([lot12.hides[1]!.id, ...outside].sort())
+    expect(hold.reasonNote).toMatch(new RegExp(`^Incoming inspection ${main.inspection.number}: .*not accepted \\(rejected or to sort\\), held until quality decides\\.$`))
+    expect(await admin(`SELECT action FROM "AuditLog" WHERE "recordType" = 'IncomingInspection' AND "recordId" = $1 AND action = 'quality.incoming.holdNotAccepted'`, [main.inspection.id])).toHaveLength(1)
     expect(main.next.words.en).toMatch(/7 hides to sort/)
     expect(main.may).toEqual({ record: false, decide: false, cancel: false })
     const hide0 = (await admin(`SELECT grade, "gradeId"::text AS "gradeId", shade, "shadeGroupId"::text AS "shadeGroupId" FROM "Hide" WHERE id = $1`, [lot12.hides[0]!.id]))[0]
@@ -330,5 +345,60 @@ describe('a clean lot, the floor, the list', () => {
     const open = await ok('bench', 'GET', '/quality/incoming?status=OPEN')
     expect(open.items.every((row: Json) => row.siteId === A.site)).toBe(true)
     expect((await ok('benchB', 'GET', '/quality/incoming')).items).toEqual([])
+  })
+})
+
+// ---- B-W2b-GF5 (G367, G369): what is not accepted is held at once; the lab's release reads the inspection --------------------
+
+const callerAs = (session: string): CommandCaller => ({
+  factoryContext: { ...SESSIONS[session]!, requestId: newId() } as RequestContext,
+  withClient(work) {
+    return withContextClient(h.database, this.factoryContext!, work)
+  },
+})
+const incomingCheckOf = async (lotId: string): Promise<Json> => ((await ok('lab', 'GET', `/quality/lots/${lotId}/release-check`)).checklist.checks as Json[]).find((check) => check.code === 'INCOMING')!
+
+describe('quality releases only what passed the incoming inspection (B-W2b-GF5, G367, G369)', () => {
+  it('an open inspection holds the release; a decision on the tablet holds the rejected hide, naming the worker', async () => {
+    const open = await ok('bench', 'GET', `/quality/incoming/lots/${lotFloor.lotId}`)
+    expect(await incomingCheckOf(lotFloor.lotId)).toMatchObject({ state: 'OPEN', words: `Incoming inspection ${open.open.inspection.number} is still open: the lot waits for its decision.` })
+    let bench = open.open
+    bench = await ok('bench', 'PUT', `/quality/incoming/${bench.inspection.id}/hides/${lotFloor.hides[1]!.id}`, { version: bench.inspection.version, decision: 'REJECTED' })
+    bench = await ok('bench', 'PUT', `/quality/incoming/${bench.inspection.id}/hides/${lotFloor.hides[2]!.id}`, { version: bench.inspection.version, decision: 'ACCEPTED' })
+    const decided = await decideIncoming(callerAs('bench'), bench.inspection.id, { version: bench.inspection.version, accepted: '2', rejected: '1', toSort: '0' }, { sign: () => undefined, idempotencyKey: freshKey() })
+    expect(decided.next).toMatchObject({ step: 'RELEASE_PART', holdPrefill: null, held: { unheld: [] } })
+    expect(decided.next!.held.holds).toHaveLength(1)
+    const hold = (await admin(`SELECT "subjectIds"::text[] AS ids, "placedById", "placedByWorkerId"::text AS worker, "sourceId"::text AS source FROM "QualityHold" WHERE id = $1`, [decided.next!.held.holds[0]!.id]))[0]!
+    expect(hold).toEqual({ ids: [lotFloor.hides[1]!.id], placedById: null, worker: A.worker, source: bench.inspection.id })
+    expect(await incomingCheckOf(lotFloor.lotId)).toMatchObject({ state: 'OK', words: `Incoming inspection ${bench.inspection.number} accepted 2 hides; what it did not accept is on hold or no longer in the lot.` })
+    // The split held at its decision above: the lot's release no longer waits for its hides.
+    expect((await incomingCheckOf(lot12.lotId)).state).toBe('OK')
+  })
+
+  it('a hold the rules refuse leaves the decision standing: the release waits in words until the office holds the hide', async () => {
+    const lot = await addLot('LH', 3)
+    await admin(`UPDATE "ReasonCode" SET active = false WHERE "tenantId" = $1 AND list = 'HOLD' AND code IN ('QUALITY_CHECK', 'SUPPLIER_CHECK', 'OTHER')`, [A.tenant])
+    try {
+      let view = await ok('keeper', 'POST', '/quality/incoming', { lotId: lot.lotId }, 201)
+      for (const [index, decision] of (['ACCEPTED', 'REJECTED', 'ACCEPTED'] as const).entries()) view = await ok('keeper', 'PUT', `/quality/incoming/${view.inspection.id}/hides/${lot.hides[index]!.id}`, { version: view.inspection.version, decision })
+      await stepUp(h, inspector.browser, inspector.secret)
+      const signed = await inspector.browser.post(`/quality/incoming/${view.inspection.id}/decide`, { version: view.inspection.version, accepted: '2', rejected: '1', toSort: '0' }, { headers: { 'idempotency-key': freshKey() } })
+      expect(signed.status, JSON.stringify(signed.body)).toBe(200)
+      expect(signed.body.inspection.status).toBe('DECIDED')
+      expect(signed.body.next).toMatchObject({ held: { holds: [], unheld: [{ hideId: lot.hides[1]!.id, code: lot.hides[1]!.code }] }, holdPrefill: { subjectType: 'Hide', subjectIds: [lot.hides[1]!.id] } })
+      expect(await incomingCheckOf(lot.lotId)).toMatchObject({ state: 'OPEN', words: `Incoming inspection ${view.inspection.number} did not accept hide ${lot.hides[1]!.code}: it is not on hold.` })
+      const code = (await admin<{ code: string; version: number }>(`SELECT code, version FROM "Lot" WHERE id = $1`, [lot.lotId]))[0]!
+      const refusedRelease = await refused('lab', 'POST', `/quality/lots/${lot.lotId}/release`, { version: code.version, confirmCode: code.code }, 409)
+      expect(paths(refusedRelease)).toContain('checks/INCOMING')
+      expect(refusedRelease.message).toContain(`did not accept hide ${lot.hides[1]!.code}`)
+    } finally {
+      await admin(`UPDATE "ReasonCode" SET active = true WHERE "tenantId" = $1 AND list = 'HOLD' AND code IN ('QUALITY_CHECK', 'SUPPLIER_CHECK', 'OTHER')`, [A.tenant])
+    }
+    const record = await ok('keeper', 'GET', `/quality/incoming/lots/${lot.lotId}`)
+    const decidedId = (await admin<{ id: string }>(`SELECT id::text FROM "IncomingInspection" WHERE "lotId" = $1 AND status = 'DECIDED'`, [lot.lotId]))[0]!.id
+    expect(record.open).toBeNull()
+    await ok('lab', 'POST', '/quality/holds', { subjectType: 'Hide', subjectIds: [lot.hides[1]!.id], reasonCode: 'QUALITY_CHECK', reasonNote: 'Rejected at the incoming inspection (made up).', sourceType: 'IncomingInspection', sourceId: decidedId }, 201)
+    expect((await incomingCheckOf(lot.lotId)).state).toBe('OK')
+    expect((await ok('keeper', 'GET', `/quality/incoming/${decidedId}`)).next).toMatchObject({ holdPrefill: null, held: { holds: [expect.objectContaining({ number: expect.stringMatching(/^HLD-/) })], unheld: [] } })
   })
 })

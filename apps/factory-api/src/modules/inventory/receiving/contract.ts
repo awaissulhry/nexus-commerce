@@ -74,8 +74,10 @@ const lineView = output({
   expected: decimal,
   received: decimal,
   open: decimal,
-  /** The order line's area tolerance (%), null: none. */
+  /** The tolerance over (%) the receipt decides with: the order line's own, else the delivery tolerance (B-W2b-GF5, G140); null: none. */
   tolerancePct: z.string().nullable(),
+  /** B-W2b-GF5 (G140): the tolerance under (%), when a delivery tolerance differs under; null: none. */
+  underPct: z.string().nullable(),
   /** The most that is taken without a reason (expected × (1 + tolerance)), less what came before. */
   upTo: decimal,
   needDate: businessDate(),

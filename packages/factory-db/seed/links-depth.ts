@@ -6,6 +6,7 @@ import { seed as seedFiles } from './files'
 import { seed as seedLinks } from './links'
 import { seed as seedParties } from './parties'
 import { seedAlong, seedAt, seedToday } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The links-in-depth seed (W2b schema wave 19/22, B-W2b-154), per tenant of seed/_core.ts. The office's rows are written in
@@ -132,7 +133,8 @@ export async function seed(context: SeedContext): Promise<LinksDepthSeed> {
     kind: 'DOCUMENT' | 'PHOTO',
     record: { type: string; id: string },
     visibility: ('OFFICE' | 'LINK')[],
-  ): Prisma.StoredFileCreateManyInput => ({
+  ): Prisma.StoredFileCreateManyInput =>
+    seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType: record.type,
@@ -141,7 +143,6 @@ export async function seed(context: SeedContext): Promise<LinksDepthSeed> {
     originalName: name,
     contentType: kind === 'PHOTO' ? 'image/jpeg' : 'application/pdf',
     sizeBytes: 4096,
-    sha256: hex(`file ${name}`),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`links-depth:key:${name}`)}`,
     visibility,
     partyId: visibility.includes('LINK') ? partyP1 : null,

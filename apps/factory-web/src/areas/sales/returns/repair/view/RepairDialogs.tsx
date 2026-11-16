@@ -30,6 +30,8 @@ export function RepairDialogs({ model, actions }: { model: RepairModel; actions?
       return <ShipDialog model={model} dialog={dialog} actions={actions} />
     case 'cancel':
       return <CancelDialog model={model} dialog={dialog} actions={actions} />
+    case 'scrap':
+      return <ScrapDialog model={model} dialog={dialog} actions={actions} />
   }
 }
 
@@ -194,6 +196,30 @@ function CancelDialog({ model, dialog, actions }: { model: RepairModel; dialog: 
         {model.dialogProblem && <Banner tone="danger" title={say(t, model.dialogProblem)} />}
         <p className="fw-q-hint">{t(model.repair.receivedAt ? 'repairCancel.bodyHere' : 'repairCancel.body')}</p>
         <Field label={t('cancel.reason')} required htmlFor={id}>
+          <Textarea id={id} rows={3} value={dialog.reason} onChange={(event) => actions?.onDialog?.({ ...dialog, reason: event.target.value })} />
+        </Field>
+      </div>
+    </Modal>
+  )
+}
+
+/**
+ * B-W2b-GF5 (G513; Owner 11-15: A): a protective garment whose safety check after the repair failed is scrapped, never
+ * returned unsafe. The repair ends here with what failed and the reason; the customer is told in writing.
+ */
+function ScrapDialog({ model, dialog, actions }: { model: RepairModel; dialog: Extract<RepairDialog, { kind: 'scrap' }>; actions?: RepairActions }) {
+  const t = useWords()
+  const id = useId()
+  const held = model.dialogBusy ? t('quality:common.working') : !dialog.reason.trim() ? t('repairScrap.reasonNeeded') : null
+  return (
+    <Modal open onClose={() => actions?.onDialog?.(null)} title={t('repairScrap.title', { number: model.repair.number })} size="md" footer={<Footer held={held} busy={model.dialogBusy} label={t('repairScrap.submit')} actions={actions} />}>
+      <div className="fw-q-stack">
+        {model.dialogProblem && <Banner tone="danger" title={say(t, model.dialogProblem)} />}
+        <Banner tone="warning" title={t('repairScrap.never')}>
+          {model.repair.safety.failures.length > 0 ? t('repairScrap.failed', { points: model.repair.safety.failures.join(', ') }) : null}
+        </Banner>
+        <p className="fw-q-hint">{t('repairScrap.body')}</p>
+        <Field label={t('repairScrap.reason')} required htmlFor={id}>
           <Textarea id={id} rows={3} value={dialog.reason} onChange={(event) => actions?.onDialog?.({ ...dialog, reason: event.target.value })} />
         </Field>
       </div>

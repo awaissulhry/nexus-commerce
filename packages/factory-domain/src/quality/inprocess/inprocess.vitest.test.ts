@@ -12,6 +12,7 @@ import {
   dhuOf,
   findingProblems,
   firstPieceHold,
+  firstPieceMakerRefusal,
   firstPieceRefusal,
   firstPieceSha256,
   heldOperations,
@@ -237,5 +238,16 @@ describe('the catalogues', () => {
     expect(isFloorSyncKind('quality.inprocess.record')).toBe(true)
     expect(QUEUED_ACTIONS['quality.inprocess.record'].permission).toBe('quality.inprocess.record')
     expect(summaryOf('quality.inprocess.record', { kind: 'END_OF_LINE', decision: { outcome: 'FAIL', pieces: 1 }, note: 'words' })).toEqual({ code: 'END_OF_LINE', target: 'FAIL', quantity: 1 })
+  })
+})
+
+// B-W2b-GF5 (G361): nobody signs their own first piece.
+describe('the first piece is decided by someone who made none of its work order (G361)', () => {
+  it('refuses the maker in words, with the one thing to do', () => {
+    const refusal = firstPieceMakerRefusal('WO-2026-0007')
+    expect(refusal.code).toBe('MAKER')
+    expect(refusal.message).toContain('WO-2026-0007')
+    expect(refusal.message).toMatch(/another inspector, who made none of them/)
+    expect(refusal.fix).toMatch(/another inspector/)
   })
 })

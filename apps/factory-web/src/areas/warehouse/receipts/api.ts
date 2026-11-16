@@ -97,6 +97,8 @@ const expectedSchema = z.object({
   received: z.string(),
   open: z.string(),
   tolerancePct: z.string().nullable(),
+  // B-W2b-GF5 (G140): the tolerance under (a delivery tolerance may differ under); absent from an older answer.
+  underPct: z.string().nullable().default(null),
   estimatedHides: z.number().nullable(),
   oneDyeBatch: z.boolean(),
   requiresCrViTest: z.boolean(),

@@ -13,6 +13,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedReturns } from './returns'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The delivery, returns and customs seed (W2b-6, schema wave 51/57, B-W2b-372), per tenant of seed/_core.ts, written in the
@@ -115,7 +116,7 @@ export async function seed(context: SeedContext): Promise<CustomsSeed> {
 
   if (await db.withScope(office, (client) => client.trackingException.findUnique({ where: { id: X.resolved }, select }))) return result
 
-  const file = (fileId: string, recordType: string, recordId: string, name: string, at: Date, key: string): Prisma.StoredFileCreateManyInput => ({
+  const file = (fileId: string, recordType: string, recordId: string, name: string, at: Date, key: string): Prisma.StoredFileCreateManyInput => seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType,
@@ -124,7 +125,6 @@ export async function seed(context: SeedContext): Promise<CustomsSeed> {
     originalName: name,
     contentType: 'application/pdf',
     sizeBytes: 2048,
-    sha256: sha(key),
     storeAccountId: id('files:account:r2'),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`${key}:key`)}`,
     status: 'AVAILABLE',

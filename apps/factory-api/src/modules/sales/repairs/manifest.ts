@@ -21,4 +21,6 @@ export const manifest = defineManifest({
   'POST /sales/repairs/:repairId/safety-check': { audiences: ['office'], permission: 'sales.repairs.check', scope: 'record' },
   'POST /sales/repairs/:repairId/ship': { audiences: ['office'], permission: 'sales.repairs.ship', scope: 'record' },
   'POST /sales/repairs/:repairId/cancel': manage,
+  // B-W2b-GF5 (G513): as a cancel, the repairs manager's.
+  'POST /sales/repairs/:repairId/scrap': manage,
 })

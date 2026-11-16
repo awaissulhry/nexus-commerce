@@ -367,3 +367,17 @@ describe('the tags after the post', () => {
     expect(hideOfCode(receipt as never, 'XX')).toBeNull()
   })
 })
+
+// B-W2b-GF5 (G140): the running total reads the tolerance the receipt decides with, under as well as over.
+describe('the delivery tolerance under (G140)', () => {
+  it('a +10 % / −5 % tolerance: 92 of 100 is short, 96 is within, 110 is within, 111 is over', () => {
+    const protectors: OrderLine = { ...plain, id: 'l40', expected: '100.0000', open: '100.0000', upTo: '110.0000', tolerancePct: '10', underPct: '5' }
+    const entry = (quantity: number) => ({ lineId: protectors.id, lots: [], quantity, over: null })
+    expect(differenceOf(protectors, entry(92)).kind).toBe('SHORT')
+    expect(differenceOf(protectors, entry(96)).kind).toBe('WITHIN_TOLERANCE')
+    expect(differenceOf(protectors, entry(110)).kind).toBe('WITHIN_TOLERANCE')
+    expect(differenceOf(protectors, entry(111)).kind).toBe('OVER')
+    // An answer without the tolerance under: the one over serves both ways (W1's line tolerance).
+    expect(differenceOf({ ...protectors, underPct: undefined }, entry(92)).kind).toBe('WITHIN_TOLERANCE')
+  })
+})

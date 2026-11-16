@@ -262,7 +262,8 @@ export const safeToShip = (facts: SafetyFacts): boolean =>
 const SAFETY_HELD: Readonly<Record<Exclude<SafetyState, 'NOT_REQUIRED' | 'PASSED'>, string>> = Object.freeze({
   NOT_CHECKED: 'it is not checked yet',
   OUTDATED: 'its last check was made before the last repair: check it again',
-  FAILED: 'its last check failed: repair it again (back into repair), then check it again',
+  // B-W2b-GF5 (G513, Owner 11-15 A): a garment that fails is never returned unsafe: repaired again, or scrapped.
+  FAILED: 'its last check failed: repair it again (back into repair) and check it again, or scrap it',
 })
 
 /** Why a repaired protective garment may not go back yet, or null. */
@@ -358,6 +359,44 @@ export function cancelWarning(receivedAt: Date | null, siteCode: string): string
   return receivedAt ? `The garment arrived on ${toUtcIso(receivedAt).slice(0, 10)}: it stays at ${siteCode} until the customer collects it (a cancelled repair takes no DDT).` : null
 }
 
+// ---- B-W2b-GF5 (G513): a protective garment that fails its check after the repair is scrapped ----------------------------
+
+/**
+ * Owner 11-15 (G513, A): a protective garment whose safety check after the repair FAILED is never returned unsafe: it goes
+ * back into repair, or it is scrapped at the site (the repair ends CANCELLED with why, the customer told in writing). The
+ * database moves a repaired garment only back into repair or out to the customer, so the scrap passes through IN_REPAIR in
+ * the same command; the record keeps the repair's time and the failed check (`isScrappedRepair`).
+ */
+export interface ScrapFacts extends SafetyFacts {
+  readonly number: string
+  readonly stage: RepairStage
+  readonly liveDdt: { readonly number: string } | null
+}
+
+/** What stops the scrap (409, in words); empty: it may be scrapped. */
+export function scrapProblems(facts: ScrapFacts): string[] {
+  if (isFinalRepair(facts.stage)) return [`Repair ${facts.number} is ${stageWords(facts.stage)}.`]
+  if (facts.stage !== 'REPAIRED') return [`Only a repaired protective garment whose safety check failed is scrapped: repair ${facts.number} is ${stageWords(facts.stage)}.`]
+  const state = safetyStateOf(facts)
+  if (state === 'NOT_REQUIRED') return [`Repair ${facts.number} is not a protective garment: it goes back to the customer.`]
+  if (state === 'PASSED') return [`Repair ${facts.number} passed its safety check after the repair: it goes back to the customer.`]
+  if (state !== 'FAILED') return [`Repair ${facts.number} has no safety check after its repair yet: check it first; it is scrapped only when the check fails.`]
+  if (facts.liveDdt) return [`DDT ${facts.liveDdt.number} is live for this repair: cancel it first (a scrapped garment does not travel).`]
+  return []
+}
+
+/** The reason a scrap keeps (the repair's cancel reason): what failed and the person's words. */
+export function scrapReasonOf(failures: readonly string[], reason: string): string {
+  const failed = failures.length > 0 ? ` (${failures.join(', ')})` : ''
+  return `Scrapped: the safety check after the repair failed${failed}. ${reason.trim()}`.slice(0, REPAIR_LIMITS.reason)
+}
+
+/** The scrap's warning: the customer is told in writing; the garment stays at the site and is destroyed. */
+export const SCRAP_WARNING = 'Tell the customer in writing that the garment was scrapped: after the repair it no longer protects (its safety check failed), so it is not returned.'
+
+/** A repair that ended in a scrap: cancelled after its repair, its last check failed. */
+export const isScrappedRepair = (facts: { readonly stage: RepairStage } & SafetyFacts): boolean => facts.stage === 'CANCELLED' && facts.repairedAt !== null && safetyStateOf(facts) === 'FAILED'
+
 // ---- the arrival (AWAITING_GOODS → RECEIVED) --------------------------------------------------------------------------
 
 export function receiveHeld(number: string, stage: RepairStage): string | null {
@@ -388,7 +427,9 @@ export interface StageEventFact {
 }
 
 /** Each step of the stepper: done (when last reached), current, waiting, or skipped (passed over, or cancelled). */
-export function stepsOf(stage: RepairStage, events: readonly StageEventFact[]): { stage: RepairStep; state: StepState; at: string | null }[] {
+export function stepsOf(stage: RepairStage, all: readonly StageEventFact[]): { stage: RepairStep; state: StepState; at: string | null }[] {
+  // B-W2b-GF5 (G513): a scrap passes through IN_REPAIR to CANCELLED in one command (the same instant): no step reached.
+  const events = all.filter((event, index) => !(event.stage === 'IN_REPAIR' && all[index + 1]?.stage === 'CANCELLED' && all[index + 1]!.at.getTime() === event.at.getTime()))
   const order: readonly RepairStage[] = REPAIR_STEPS
   const current = order.indexOf(stage)
   // The events in the order they were written (oldest first): the last one into a step is when it was last reached.
@@ -403,7 +444,8 @@ export function stepsOf(stage: RepairStage, events: readonly StageEventFact[]): 
   })
 }
 
-export const REPAIR_ACTIONS = ['edit', 'receive', 'estimate', 'approve', 'makeWorkOrder', 'startRepair', 'finishRepair', 'reopenRepair', 'safetyCheck', 'ship', 'cancel'] as const
+// B-W2b-GF5 (G513): scrap, a protective garment that failed its check after the repair.
+export const REPAIR_ACTIONS = ['edit', 'receive', 'estimate', 'approve', 'makeWorkOrder', 'startRepair', 'finishRepair', 'reopenRepair', 'safetyCheck', 'ship', 'cancel', 'scrap'] as const
 export type RepairAction = (typeof REPAIR_ACTIONS)[number]
 
 export interface ActionFacts extends SafetyFacts {
@@ -440,6 +482,8 @@ export function repairActions(facts: ActionFacts): ActionState[] {
     held('safetyCheck', safetyCheckHeld(facts.number, facts.stage, facts.required)),
     held('ship', ship),
     held('cancel', cancel),
+    // B-W2b-GF5 (G513): never returned unsafe.
+    held('scrap', scrapProblems(facts)[0] ?? null),
   ]
 }
 
@@ -456,6 +500,8 @@ export function statusWords(facts: { readonly stage: RepairStage } & SafetyFacts
     return state === 'FAILED' ? 'Repaired: the safety check failed' : 'Repaired: waiting for its safety check'
   }
   if (facts.stage === 'SHIPPED') return facts.repairedAt ? 'Repaired and shipped back' : 'Shipped back unrepaired'
+  // B-W2b-GF5 (G513): a scrap is a cancel after the repair, its check failed.
+  if (isScrappedRepair(facts)) return 'Scrapped: its safety check after the repair failed'
   const words = stageWords(facts.stage)
   return `${words.charAt(0).toUpperCase()}${words.slice(1)}`
 }

@@ -167,6 +167,8 @@ export const CHECKLIST_OPEN: ReleaseChecklist = {
     { code: 'PPE_CERTIFICATE', state: 'NOT_NEEDED', fix: null },
     { code: 'SUPPLIER_DOCUMENTS', state: 'NOT_NEEDED', fix: null },
     { code: 'HOLD', state: 'NOT_NEEDED', fix: null },
+    // B-W2b-GF5 (G369): the lot's incoming inspection.
+    { code: 'INCOMING', state: 'NOT_NEEDED', fix: null },
     { code: 'RELEASER', state: 'OK', fix: null },
   ],
 }

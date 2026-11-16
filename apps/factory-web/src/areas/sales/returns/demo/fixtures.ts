@@ -446,6 +446,7 @@ export const REPAIR_REPAIRED: Repair = {
     { action: 'safetyCheck', allowed: true },
     { action: 'ship', allowed: false },
     { action: 'cancel', allowed: false },
+    { action: 'scrap', allowed: false },
   ],
   version: 8,
 }
@@ -486,6 +487,30 @@ export const REPAIR_REWORK: Repair = {
   steps: REPAIR_REPAIRED.steps.map((step) => (step.stage === 'IN_REPAIR' ? { ...step, state: 'CURRENT' as const, at: at(31, 10) } : step.stage === 'REPAIRED' ? { ...step, state: 'WAITING' as const } : step)),
   actions: REPAIR_REPAIRED.actions.map((entry) => (entry.action === 'makeWorkOrder' || entry.action === 'finishRepair' ? { ...entry, allowed: true } : entry.action === 'reopenRepair' || entry.action === 'safetyCheck' ? { ...entry, allowed: false } : entry)),
   version: 10,
+}
+
+/** B-W2b-GF5 (G513): the safety check after the repair failed: back into repair, or scrapped (never returned unsafe). */
+export const REPAIR_FAILED: Repair = {
+  ...REPAIR_REPAIRED,
+  safety: { required: true, state: 'FAILED', result: 'FAIL', checklist: { seams: 'FAIL', abrasionZones: 'PASS', closures: 'NOT_APPLICABLE', protectors: { result: 'FAIL', replaced: false, lot: null, level: null }, certificateCovers: true, note: 'The elbow seam split again (made-up).' }, failures: ['the seams', 'the protectors'], checkedAt: at(31, 9), checkedById: PEOPLE[1]!.id },
+  actions: REPAIR_REPAIRED.actions.map((entry) => (entry.action === 'scrap' ? { ...entry, allowed: true } : entry.action === 'safetyCheck' ? { ...entry, allowed: true } : entry)),
+  version: 9,
+}
+
+/** B-W2b-GF5 (G513): scrapped after the failed check: the repair ends, the record keeps the repair and what failed. */
+export const REPAIR_SCRAPPED: Repair = {
+  ...REPAIR_FAILED,
+  stage: 'CANCELLED',
+  cancelledAt: at(31, 11),
+  cancelReason: 'Scrapped: the safety check after the repair failed (the seams, the protectors). Not safe to repair a third time (made-up).',
+  stages: [
+    ...REPAIR_REPAIRED.stages,
+    { id: uid('7780', 8), from: 'REPAIRED', to: 'IN_REPAIR', at: at(31, 11), note: 'Scrapped: the safety check after the repair failed (the seams, the protectors). Not safe to repair a third time (made-up).', byId: ME },
+    { id: uid('7780', 9), from: 'IN_REPAIR', to: 'CANCELLED', at: at(31, 11), note: 'Scrapped: the safety check after the repair failed (the seams, the protectors). Not safe to repair a third time (made-up).', byId: ME },
+  ],
+  steps: REPAIR_REPAIRED.steps.map((step) => (step.stage === 'REPAIRED' ? { ...step, state: 'DONE' as const } : step.stage === 'SHIPPED' ? { ...step, state: 'SKIPPED' as const } : step)),
+  actions: REPAIR_REPAIRED.actions.map((entry) => ({ ...entry, allowed: false })),
+  version: 11,
 }
 
 /** B-W2b-16: the rework's own work order made: the first one is listed among the earlier ones. */
