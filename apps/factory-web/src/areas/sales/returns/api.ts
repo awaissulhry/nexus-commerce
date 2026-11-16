@@ -685,6 +685,10 @@ export const shipRepair = (api: ApiClient, repair: RepairVersioned, body: { note
 export const cancelRepair = (api: ApiClient, repair: RepairVersioned, reason: string) =>
   api.post(`/sales/repairs/${seg(repair.id)}/cancel`, { body: { version: repair.version, reason }, schema: repairWithWarnings, idempotencyKey: newIdempotencyKey() })
 
+/** B-W2b-GF5 (G513): a protective garment that failed its check after the repair is scrapped, never returned unsafe. */
+export const scrapRepair = (api: ApiClient, repair: RepairVersioned, reason: string) =>
+  api.post(`/sales/repairs/${seg(repair.id)}/scrap`, { body: { version: repair.version, reason }, schema: repairWithWarnings, idempotencyKey: newIdempotencyKey() })
+
 // ---- a source's DDT (Shipping, B-W2a-17): the repair's way back, a return of unchanged goods ------------------------------
 
 export type DdtSource = 'RepairOrder' | 'ReturnAuthorisation'

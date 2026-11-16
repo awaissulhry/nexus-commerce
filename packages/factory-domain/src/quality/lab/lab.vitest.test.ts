@@ -14,6 +14,7 @@ import {
   resultProblems,
   ruleInForce,
   type LotFacts,
+  type IncomingReleaseFacts,
   type ReleaseFacts,
 } from './rules'
 import { workOrderUses } from './trace'
@@ -42,6 +43,7 @@ const facts = (overrides: Partial<ReleaseFacts> = {}, lotOverrides: Partial<LotF
   documents: [],
   today: '2026-10-29',
   releaserId: 'inspector',
+  incoming: null,
   ...overrides,
 })
 const statesOf = (list: ReturnType<typeof releaseChecklist>) => Object.fromEntries(list.checks.map((check) => [check.code, check.state]))
@@ -127,7 +129,7 @@ describe('what a result does to the lot', () => {
 describe('the release checklist (QHS-030; design W3: the quality role, not the receiver)', () => {
   it('a leather lot waiting for its Cr VI result: one check open, with how to clear it', () => {
     const list = releaseChecklist(facts())
-    expect(statesOf(list)).toEqual({ STATE: 'OK', RECEIPT: 'OK', CR_VI: 'OPEN', PPE_CERTIFICATE: 'NOT_NEEDED', SUPPLIER_DOCUMENTS: 'NOT_NEEDED', HOLD: 'NOT_NEEDED', RELEASER: 'OK' })
+    expect(statesOf(list)).toEqual({ STATE: 'OK', RECEIPT: 'OK', CR_VI: 'OPEN', PPE_CERTIFICATE: 'NOT_NEEDED', SUPPLIER_DOCUMENTS: 'NOT_NEEDED', HOLD: 'NOT_NEEDED', INCOMING: 'NOT_NEEDED', RELEASER: 'OK' })
     expect(list).toMatchObject({ ready: false, words: 'Release · 1 check open' })
     expect(list.open[0]!.fix).toContain("supplier's report covering the article and the period")
   })
@@ -167,6 +169,33 @@ describe('the release checklist (QHS-030; design W3: the quality role, not the r
     expect(releaseChecklist(facts({}, { ...passed, qualityStatus: 'BLOCKED' }), 'UNBLOCK')).toMatchObject({ ready: true, words: 'Ready to unblock' })
     expect(releaseChecklist(facts({}, { ...passed, qualityStatus: 'BLOCKED' })).open.map((check) => check.code)).toEqual(['STATE'])
     expect(releaseChecklist(facts({}, { ...passed, qualityStatus: 'BLOCKED', crViStatus: 'FAIL' }), 'UNBLOCK').open.map((check) => check.code)).toEqual(['CR_VI'])
+  })
+
+  // B-W2b-GF5 (G369): quality releases only what passed its incoming inspection.
+  it('the incoming inspection: open waits; rejected whole is never released; what it did not accept is on hold or gone first', () => {
+    const passed = { crViStatus: 'PASS' as const, crViMgKg: '1.200', crViEvidence: 'LOT_REPORT' as const }
+    const decided = (over: Partial<IncomingReleaseFacts>): IncomingReleaseFacts => ({ number: 'IIN-2026-0002', status: 'DECIDED', step: 'RELEASE', accepted: '12', rejected: '0', toSort: '0', uom: 'HIDE', overrideReason: null, unheldHides: [], notAcceptedLeft: null, ...over })
+    const incoming = (over: Partial<IncomingReleaseFacts>, mode: 'RELEASE' | 'UNBLOCK' = 'RELEASE') => releaseChecklist(facts({ incoming: decided(over) }, passed), mode).checks.find((check) => check.code === 'INCOMING')!
+    expect(releaseChecklist(facts({}, passed)).checks.find((check) => check.code === 'INCOMING')).toMatchObject({ state: 'NOT_NEEDED', words: 'No incoming inspection is recorded for this lot.' })
+    expect(incoming({ status: 'OPEN', step: null, accepted: null, rejected: null, toSort: null })).toMatchObject({ state: 'OPEN', words: 'Incoming inspection IIN-2026-0002 is still open: the lot waits for its decision.', fix: expect.stringContaining('Finish and sign') })
+    expect(incoming({})).toMatchObject({ state: 'OK', words: 'Incoming inspection IIN-2026-0002 accepted the whole lot.' })
+    expect(incoming({ overrideReason: 'Marks only on the belly, cut around.' }).words).toBe('Incoming inspection IIN-2026-0002 accepted the whole lot over its sample, with the reason: Marks only on the belly, cut around.')
+    expect(incoming({ step: 'REJECT', accepted: '0', rejected: '12' })).toMatchObject({ state: 'OPEN', words: 'Incoming inspection IIN-2026-0002 rejected the whole lot: it is never released.', fix: 'Reject the lot: it goes back to the supplier.' })
+    // Hides it did not accept and nobody holds: the release waits; once they are held (or gone) it is ready.
+    const split = { step: 'SORT' as const, accepted: '4', rejected: '1', toSort: '7' }
+    expect(incoming({ ...split, unheldHides: ['H02'] })).toMatchObject({ state: 'OPEN', words: 'Incoming inspection IIN-2026-0002 did not accept hide H02: it is not on hold.' })
+    const many = Array.from({ length: 12 }, (_, index) => `H${String(index + 1).padStart(2, '0')}`)
+    expect(incoming({ ...split, unheldHides: many }).words).toBe('Incoming inspection IIN-2026-0002 did not accept hides H01, H02, H03, H04, H05, H06, H07, H08, H09, H10 and 2 more: they are not on hold.')
+    expect(incoming(split)).toMatchObject({ state: 'OK', words: 'Incoming inspection IIN-2026-0002 accepted 4 hides; what it did not accept is on hold or no longer in the lot.' })
+    expect(releaseChecklist(facts({ incoming: decided(split) }, passed)).ready).toBe(true)
+    // A lot counted in units: what it did not accept must have left the lot.
+    const counted = { step: 'RELEASE_PART' as const, accepted: '95', rejected: '5', toSort: '0', uom: 'PCS' }
+    expect(incoming({ ...counted, notAcceptedLeft: '5' })).toMatchObject({ state: 'OPEN', words: 'Incoming inspection IIN-2026-0002 did not accept 5 pcs of the lot: 5 pcs of it are still in the lot.', fix: expect.stringContaining('Purchasing › Claims') })
+    expect(incoming({ ...counted, notAcceptedLeft: null }).state).toBe('OK')
+    // Unblocking a lot asks the same; the refusal lists it with the others.
+    expect(incoming({ step: 'REJECT', accepted: '0', rejected: '12' }, 'UNBLOCK').fix).toBe('Reject the lot.')
+    const refused = releaseChecklist(facts({ incoming: decided({ ...split, unheldHides: ['H02'] }) }, passed))
+    expect(checklistRefusal(refused, 'LA-000101').issues).toEqual([{ path: 'checks/INCOMING', message: expect.stringContaining('H02') }])
   })
 
   it('the typed code: trimmed, any letter case; another code does not match', () => {

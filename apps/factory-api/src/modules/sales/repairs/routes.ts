@@ -3,13 +3,15 @@ import { defineRoutes } from '../../../core/manifest'
 import { requireStepUp } from '../../../platform/auth/office/account'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { processFiles } from '../../../platform/files/service'
-import { cancelContract, countsContract, createContract, getContract, headerContract, listContract, previewContract, receiveContract, safetyContract, shipContract, stageContract } from './contract'
+import { cancelContract, countsContract, createContract, getContract, headerContract, listContract, previewContract, receiveContract, safetyContract, scrapContract, shipContract, stageContract } from './contract'
 import { createRepair, previewRepair } from './create'
 import { listRepairs, repairCounts } from './list'
 import { manifest } from './manifest'
 import { signSafetyCheck } from './safety'
 import { shipRepair } from './ship'
 import { cancelRepair, changeRepair, getRepair, moveRepair, receiveRepair } from './stages'
+// B-W2b-GF5 (G513): a protective garment that failed its check after the repair is scrapped.
+import { scrapRepair } from './scrap'
 
 /**
  * Repairs and alterations of B-W2a-57: the list and its tiles (./list.ts), making one from an RMA line, a complaint or by
@@ -34,4 +36,5 @@ export default defineRoutes('sales.repairs', manifest, async (app) => {
     shipRepair(processFiles(), request, request.params.repairId, request.body, idempotencyKeyFrom(request), (error) => request.log.error({ err: error }, 'the repair DDT is issued; its PDF was not stored')),
   )
   app.post('/sales/repairs/:repairId/cancel', { schema: cancelContract }, async (request) => cancelRepair(request, request.params.repairId, request.body, idempotencyKeyFrom(request)))
+  app.post('/sales/repairs/:repairId/scrap', { schema: scrapContract }, async (request) => scrapRepair(request, request.params.repairId, request.body, idempotencyKeyFrom(request)))
 })

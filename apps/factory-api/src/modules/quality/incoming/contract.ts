@@ -289,6 +289,8 @@ export const incomingView = output({
     rejectedRolls: z.array(output({ id: id(), rollRef: z.string() })),
     rejectedLines: z.array(output({ id: id(), seq: z.number().int(), bundleCode: z.string().nullable(), operationCode: z.string(), pieces: z.number().int() })),
     holdPrefill: output({ subjectType: z.literal('Hide'), subjectIds: z.array(id()), reasonNote: z.string() }).nullable(),
+    /** B-W2b-GF5 (G367): the ACTIVE holds that hold the hides it did not accept (placed at the decision), and those still to hold. */
+    held: output({ holds: z.array(output({ id: id(), number: z.string().nullable() })), unheld: z.array(output({ hideId: id(), code: z.string() })) }),
     returnPrefill: output({ kind: z.literal('RETURN'), foundAt: z.literal('INSPECTION'), reasonNote: z.string(), from: output({ lotId: id(), hideIds: z.array(id()) }) }).nullable(),
   }).nullable(),
   inspector: output({ kind: z.enum(['FLOOR', 'OFFICE']).nullable(), name: z.string().nullable(), hidden: z.boolean() }),

@@ -227,7 +227,8 @@
     "saved": "Salvato.",
     "shipped": "Rispedito con DDT {number}.",
     "shippedWarning": "Rispedito con DDT {number}: comunica per iscritto al cliente che il DPI è tornato non riparato e non controllato.",
-    "workOrder": "Ordine di lavoro di riparazione {number} creato: rilascialo in Produzione."
+    "workOrder": "Ordine di lavoro di riparazione {number} creato: rilascialo in Produzione.",
+    "repairScrapped": "{number}: il capo è rottamato. Avvisa il cliente per iscritto: dopo la riparazione non protegge più, quindi non viene restituito."
   },
   "effect": {
     "credit": "Un accredito",
@@ -355,12 +356,15 @@
       "workOrdersView": "Il tuo ruolo non vede gli ordini di lavoro."
     },
     "sendBackInstead": "Il capo è qui: rispediscilo non riparato invece di annullare.",
-    "shipFailed": "L’ultimo controllo di sicurezza non è passato: riparalo di nuovo, poi ricontrollalo.",
+    "shipFailed": "L’ultimo controllo di sicurezza non è passato: riparalo di nuovo e ricontrollalo, oppure rottamalo.",
     "shipFinishFirst": "Prima finisci la riparazione (riparata), oppure annullala.",
     "shipNotArrived": "Il capo non è ancora arrivato.",
     "shipNotChecked": "Un DPI torna solo dopo un controllo di sicurezza superato fatto dopo la riparazione.",
     "workOrderDone": "L’ordine di lavoro {number} è finito: porta la riparazione a riparata e rispedisci il capo.",
-    "workOrderOnHold": "L’ordine di lavoro {number} è sospeso: prima togli la sospensione."
+    "workOrderOnHold": "L’ordine di lavoro {number} è sospeso: prima togli la sospensione.",
+    "scrapOnlyFailed": "Si rottama solo un DPI riparato il cui controllo di sicurezza non è passato.",
+    "scrapPassed": "Il controllo di sicurezza dopo la riparazione è passato: torna al cliente.",
+    "scrapNotChecked": "Prima controllalo: si rottama solo se il controllo di sicurezza dopo la riparazione non passa."
   },
   "inspect": {
     "allGraded": "Ogni riga ricevuta è valutata.",
@@ -715,10 +719,13 @@
       "reopenRepair": "Di nuovo in riparazione…",
       "safetyCheck": "Controllo di sicurezza",
       "ship": "Rispedisci",
-      "startRepair": "In riparazione"
+      "startRepair": "In riparazione",
+      "scrap": "Rottama il capo…"
     },
     "cancel": "Annulla la riparazione…",
-    "cancelled": "Questa riparazione è annullata."
+    "cancelled": "Questa riparazione è annullata.",
+    "scrap": "Rottama il capo…",
+    "scrapped": "Questo capo è stato rottamato: il controllo di sicurezza dopo la riparazione non è passato."
   },
   "repairCancel": {
     "body": "La riparazione si ferma qui. Una riparazione annullata non prende DDT.",
@@ -836,9 +843,10 @@
     },
     "sub": "Un DPI torna solo dopo un controllo che protegga ancora.",
     "title": "Controllo di sicurezza",
-    "willFail": "Firmato ora, il controllo non è superato: il capo torna in riparazione.",
+    "willFail": "Firmato ora, il controllo non è superato: il capo torna in riparazione, oppure si rottama (mai restituito non sicuro).",
     "willPass": "Firmato ora, il controllo è superato: il capo può tornare.",
-    "yes": "Sì"
+    "yes": "Sì",
+    "failedWayOut": "Un DPI che non passa il controllo non viene mai restituito non sicuro: rimettilo in riparazione, oppure rottamalo."
   },
   "sdi": {
     "DELIVERED": "Consegnata",
@@ -1054,5 +1062,14 @@
     "taken": "È già la riga {seq} di questo reso: cambia i pezzi nella scheda Righe.",
     "done_one": "{count} riga aggiunta.",
     "done_other": "{count} righe aggiunte."
+  },
+  "repairScrap": {
+    "title": "Rottama il capo della riparazione {number}",
+    "never": "Un DPI che non passa il controllo di sicurezza non viene mai restituito non sicuro.",
+    "failed": "Cosa non è passato: {points}.",
+    "body": "La riparazione finisce qui: il capo resta allo stabilimento e viene distrutto, e il cliente è avvisato per iscritto. Non si può annullare.",
+    "reason": "Perché viene rottamato",
+    "reasonNeeded": "Scrivi perché il capo viene rottamato.",
+    "submit": "Rottama il capo"
   }
 }

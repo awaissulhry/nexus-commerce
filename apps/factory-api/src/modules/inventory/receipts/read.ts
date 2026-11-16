@@ -20,6 +20,8 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext, type RequestContext } from '../../../core/context'
 import { workerGateFor, workerGatesFor, workersAmong } from '../../people/privacy/worker-gate'
 import { mayAt, officeContextOf, seesCost, type StockContext } from '../ledger/access'
+// B-W2b-GF5 (G140): the record and what is expected show the tolerance the receipt decides with.
+import { differenceTolerance, lineTolerancesOf, toleranceShown, underShown } from '../../purchasing/receiving'
 import {
   byId,
   ddtPhotosOf,
@@ -182,8 +184,10 @@ export async function receiptDetail(db: Reader, context: RequestContext, receipt
   const colours = await readColours(db, lines.map((line) => line.itemColourId))
   const site = await db.site.findUniqueOrThrow({ where: { id: receipt.siteId }, select: { code: true, name: true } })
   const supplier = await db.party.findUnique({ where: { id: receipt.supplierId }, select: { id: true, legalName: true } })
-  const order = receipt.purchaseOrderId ? await db.purchaseOrder.findUnique({ where: { id: receipt.purchaseOrderId }, select: { id: true, number: true, status: true, version: true } }) : null
+  const order = receipt.purchaseOrderId ? await db.purchaseOrder.findUnique({ where: { id: receipt.purchaseOrderId }, select: { id: true, number: true, status: true, version: true, companyId: true, partyId: true } }) : null
   const orderLines = order ? await readOrderLines(db, order.id) : null
+  // B-W2b-GF5 (G140): each order line's tolerance as the receipt decides it (the line's own, else the delivery tolerance).
+  const tolerances = order && orderLines ? await lineTolerancesOf(db, orderLines.lines.map((line) => ({ ...line, order }))) : new Map()
   const lots = await db.lot.findMany({ where: { receiptLineId: { in: lines.map((line) => line.id) } }, select: LOT_COLUMNS, orderBy: { code: 'asc' } })
   const hideCounts = new Map(
     (await db.hide.groupBy({ by: ['lotId'], where: { lotId: { in: lots.map((lot) => lot.id) } }, _count: { _all: true } })).map((row) => [row.lotId, row._count._all]),
@@ -237,7 +241,7 @@ export async function receiptDetail(db: Reader, context: RequestContext, receipt
             expected: quantityText(expected),
             received: quantityText(received),
             open: quantityText(Dec.max(ZERO, expected.minus(received))),
-            tolerancePct: orderLine.areaTolerancePct === null ? null : orderLine.areaTolerancePct.toString(),
+            tolerancePct: toleranceShown(tolerances.get(orderLine.id), orderLine.areaTolerancePct),
             estimatedHides: orderLine.estimatedHides,
             oneDyeBatch: orderLine.oneDyeBatch,
             requiresCrViTest: orderLine.requiresCrViTest,
@@ -245,7 +249,7 @@ export async function receiptDetail(db: Reader, context: RequestContext, receipt
         : null,
       difference: orderLine
         ? (({ kind, expected: e, receivedBefore, after, open, difference, tolerancePct, upTo }) => ({ kind, expected: e, receivedBefore, after, open, difference, tolerancePct, upTo }))(
-            lineDifference({ expected, receivedBefore: others, receiving: line.baseQuantity.toString(), tolerancePct: orderLine.areaTolerancePct?.toString() ?? null }),
+            lineDifference({ expected, receivedBefore: others, receiving: line.baseQuantity.toString(), ...differenceTolerance(tolerances.get(orderLine.id), orderLine.areaTolerancePct) }),
           )
         : null,
       lots: lineLots.map((lot) => lotView(lot, { isPpeComponent: item.isPpeComponent, baseQuantity: lotBase(lot.id), hideCount: hideCounts.get(lot.id) ?? 0 })),
@@ -501,14 +505,17 @@ export async function expectedLines(caller: CommandCaller, query: { readonly sit
           query.purchaseOrderId ? { id: query.purchaseOrderId } : {},
         ],
       },
-      select: { id: true, number: true, status: true, version: true, siteId: true, partyId: true },
+      select: { id: true, number: true, status: true, version: true, siteId: true, companyId: true, partyId: true },
       orderBy: { number: 'asc' },
       take: query.limit,
     })
     const parties = byId(await client.party.findMany({ where: { id: { in: ids(orders.map((order) => order.partyId)) } }, select: { id: true, legalName: true } }))
+    // B-W2b-GF5 (G140): every order's lines first, then their tolerances in one read of the rules.
+    const read = []
+    for (const order of orders) read.push({ order, ...(await readOrderLines(client, order.id)) })
+    const tolerances = await lineTolerancesOf(client, read.flatMap(({ order, lines }) => lines.map((line) => ({ ...line, order }))))
     const result = []
-    for (const order of orders) {
-      const { lines, received } = await readOrderLines(client, order.id)
+    for (const { order, lines, received } of read) {
       const items = await readItems(client, lines.map((line) => line.itemId))
       const colours = await readColours(client, lines.map((line) => line.itemColourId))
       for (const line of lines) {
@@ -516,7 +523,7 @@ export async function expectedLines(caller: CommandCaller, query: { readonly sit
         if (line.cancelledAt || line.closedShortAt) continue
         const expected = expectedBaseOf({ quantity: line.quantity.toString(), baseQuantity: line.baseQuantity.toString(), confirmedQuantity: line.confirmedQuantity?.toString() ?? null })
         const got = received.get(line.id) ?? ZERO
-        if (lineDifference({ expected, receivedBefore: got, receiving: '0', tolerancePct: line.areaTolerancePct?.toString() ?? null }).complete && got.greaterThan(0)) continue
+        if (lineDifference({ expected, receivedBefore: got, receiving: '0', ...differenceTolerance(tolerances.get(line.id), line.areaTolerancePct) }).complete && got.greaterThan(0)) continue
         if (expected.isZero()) continue
         const item = items.get(line.itemId)!
         const colour = line.itemColourId ? colours.get(line.itemColourId) : undefined
@@ -537,7 +544,9 @@ export async function expectedLines(caller: CommandCaller, query: { readonly sit
           expected: quantityText(expected),
           received: quantityText(got),
           open: quantityText(Dec.max(ZERO, expected.minus(got))),
-          tolerancePct: line.areaTolerancePct === null ? null : line.areaTolerancePct.toString(),
+          tolerancePct: toleranceShown(tolerances.get(line.id), line.areaTolerancePct),
+          // B-W2b-GF5 (G140): a delivery tolerance may differ under (+10 % / −5 %): the receive form's running total reads both.
+          underPct: underShown(tolerances.get(line.id), line.areaTolerancePct),
           estimatedHides: line.estimatedHides,
           oneDyeBatch: line.oneDyeBatch,
           requiresCrViTest: line.requiresCrViTest,

@@ -303,6 +303,16 @@ export const REJECTED_REQUEST: RequestView = {
 
 export const ACCEPTED_REQUEST: RequestView = { ...REQUEST, ...REQUESTS[2]!, changeOrder: null, photosList: [], made: null, moves: REJECTED_REQUEST.moves }
 
+/** B-W2b-GF5 (G282): a request the reader raised: Accept is held (never self-approve); review and reject stay theirs. */
+export const OWN_REQUEST: RequestView = {
+  ...REQUEST,
+  moves: [
+    { to: 'IN_REVIEW', allowed: true, refusal: null },
+    { to: 'ACCEPTED', allowed: false, refusal: { code: 'ACCEPT_OWN_REQUEST', message: 'x' } },
+    { to: 'REJECTED', allowed: true, refusal: null },
+  ],
+}
+
 // ---- the redline, the drift, the minutes ------------------------------------------------------------------------------------------
 
 const head = (revision: typeof J2, label: string, note: string) => ({ id: revision.id, revision: revision.revision, status: revision.status as 'DRAFT' | 'RELEASED' | 'OBSOLETE', label, note, changeNote: null, releasedAt: null, effectiveFrom: null, effectiveTo: null })

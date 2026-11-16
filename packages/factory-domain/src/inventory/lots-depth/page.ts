@@ -59,8 +59,8 @@ export interface IncomingCheck {
 
 /**
  * Did the lot pass its incoming inspection? An open one is not passed yet; the newest decided one says PASSED (its sample
- * passed, or the whole lot was accepted over a soft FAIL with the reason) or FAILED; a lot never inspected says so (the
- * release checklist of the lab does not ask for one yet: B-W2b-98's gap 1, the lab's step).
+ * passed, or the whole lot was accepted over a soft FAIL with the reason) or FAILED; a lot never inspected says so. The lab's
+ * release checklist reads the same inspection (B-W2b-GF5, G369: quality/lab releaseChecklist's INCOMING check).
  */
 export function incomingCheck(inspections: readonly IncomingFacts[]): IncomingCheck {
   const newest = [...inspections].sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0))

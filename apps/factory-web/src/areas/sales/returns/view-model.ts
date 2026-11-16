@@ -258,6 +258,8 @@ export type RepairDialog =
   | { readonly kind: 'workOrder'; readonly options: RepairOptions | null; readonly problem: string | null; readonly seqs: readonly number[] }
   | { readonly kind: 'ship'; readonly draft: DdtDraft; readonly note: string; readonly preview: DdtPreview | null; readonly previewing: boolean; readonly useLive: boolean }
   | { readonly kind: 'cancel'; readonly reason: string }
+  // B-W2b-GF5 (G513): a protective garment that failed its check after the repair is scrapped.
+  | { readonly kind: 'scrap'; readonly reason: string }
 
 export interface PhotoView {
   readonly id: string

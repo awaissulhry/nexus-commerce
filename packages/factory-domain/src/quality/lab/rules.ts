@@ -346,7 +346,8 @@ export function documentProblems(input: DocumentInput, today: BusinessDate): Iss
 
 // ---- the release checklist ------------------------------------------------------------------------------------------------
 
-export const CHECK_CODES = ['STATE', 'RECEIPT', 'CR_VI', 'PPE_CERTIFICATE', 'SUPPLIER_DOCUMENTS', 'HOLD', 'RELEASER'] as const
+// B-W2b-GF5 (G369): INCOMING, the lot's incoming inspection, before who releases it.
+export const CHECK_CODES = ['STATE', 'RECEIPT', 'CR_VI', 'PPE_CERTIFICATE', 'SUPPLIER_DOCUMENTS', 'HOLD', 'INCOMING', 'RELEASER'] as const
 export type CheckCode = (typeof CHECK_CODES)[number]
 export type CheckState = 'OK' | 'OPEN' | 'NOT_NEEDED'
 
@@ -371,6 +372,73 @@ export interface ReleaseFacts {
   readonly today: BusinessDate
   /** The person who would release it (the viewer; null: no one in particular). */
   readonly releaserId: string | null
+  /** B-W2b-GF5 (G369): the lot's incoming inspection in force (its open one, else its newest decided); null: none recorded. */
+  readonly incoming: IncomingReleaseFacts | null
+}
+
+// ---- B-W2b-GF5 (G369): the incoming inspection in the release checklist ----------------------------------------------------
+
+/**
+ * What the lab reads of the lot's incoming inspection (B-W2b-98, -111; its own, or its parent's for a lot made by a split):
+ * the open one, else the newest decided one. Quality releases only what passed: an open inspection waits for its decision,
+ * a lot rejected whole is never released, and what an inspection did not accept (rejected, to sort) is on hold or gone
+ * before the rest of the lot is released (hides one by one; a lot counted in units by what is still in it).
+ */
+export interface IncomingReleaseFacts {
+  readonly number: string
+  readonly status: 'OPEN' | 'DECIDED'
+  /** DECIDED: what it said for the lot (factory-domain quality/incoming nextStepOf); null while OPEN. */
+  readonly step: 'RELEASE' | 'REJECT' | 'SORT' | 'RELEASE_PART' | null
+  readonly accepted: string | null
+  readonly rejected: string | null
+  readonly toSort: string | null
+  /** The unit it counted the lot in (HIDE, PCS, M …). */
+  readonly uom: string
+  /** The whole lot accepted over a failed sample: the inspector's reason. */
+  readonly overrideReason: string | null
+  /** Hides it did not accept still in the lot, neither on hold nor decided by quality since (their codes). */
+  readonly unheldHides: readonly string[]
+  /** A lot not counted by hide: how much of what it did not accept is still in the lot, in its unit (null: none left). */
+  readonly notAcceptedLeft: string | null
+}
+
+const SHOWN_HIDES = 10
+const hideList = (codes: readonly string[]): string => (codes.length <= SHOWN_HIDES ? codes.join(', ') : `${codes.slice(0, SHOWN_HIDES).join(', ')} and ${codes.length - SHOWN_HIDES} more`)
+const amountOf = (value: string | null): string => new Dec(value ?? '0').toFixed()
+const unitOf = (amount: string, uom: string): string => (uom === 'HIDE' ? (amount === '1' ? 'hide' : 'hides') : uom.toLowerCase())
+
+function incomingCheck(incoming: IncomingReleaseFacts | null, mode: ChecklistMode): Check {
+  if (incoming === null) return notNeeded('INCOMING', 'No incoming inspection is recorded for this lot.')
+  const n = incoming.number
+  if (incoming.status === 'OPEN') return open('INCOMING', `Incoming inspection ${n} is still open: the lot waits for its decision.`, 'Finish and sign the incoming inspection first (Quality › Inspections).')
+  switch (incoming.step) {
+    case 'REJECT':
+      return open('INCOMING', `Incoming inspection ${n} rejected the whole lot: it is never released.`, mode === 'RELEASE' ? 'Reject the lot: it goes back to the supplier.' : 'Reject the lot.')
+    case 'SORT':
+    case 'RELEASE_PART': {
+      const notAccepted = new Dec(incoming.rejected ?? '0').plus(incoming.toSort ?? '0').toFixed()
+      if (incoming.unheldHides.length > 0) {
+        const count = incoming.unheldHides.length
+        return open(
+          'INCOMING',
+          `Incoming inspection ${n} did not accept ${count === 1 ? 'hide' : 'hides'} ${hideList(incoming.unheldHides)}: ${count === 1 ? 'it is' : 'they are'} not on hold.`,
+          'Hold them (Quality › Holds) or return them to the tannery first: the rest of the lot is released with them held.',
+        )
+      }
+      if (incoming.notAcceptedLeft !== null && new Dec(incoming.notAcceptedLeft).greaterThan(0)) {
+        const left = amountOf(incoming.notAcceptedLeft)
+        return open(
+          'INCOMING',
+          `Incoming inspection ${n} did not accept ${notAccepted} ${unitOf(notAccepted, incoming.uom)} of the lot: ${left} ${unitOf(left, incoming.uom)} of it ${left === '1' ? 'is' : 'are'} still in the lot.`,
+          'Return what was not accepted to the supplier (Purchasing › Claims), or reject the lot; a new inspection that accepts it clears this.',
+        )
+      }
+      const accepted = amountOf(incoming.accepted)
+      return ok('INCOMING', `Incoming inspection ${n} accepted ${accepted} ${unitOf(accepted, incoming.uom)}; what it did not accept is on hold or no longer in the lot.`)
+    }
+    default:
+      return ok('INCOMING', incoming.overrideReason ? `Incoming inspection ${n} accepted the whole lot over its sample, with the reason: ${incoming.overrideReason}` : `Incoming inspection ${n} accepted the whole lot.`)
+  }
 }
 
 export type ChecklistMode = 'RELEASE' | 'UNBLOCK'
@@ -484,6 +552,8 @@ export function releaseChecklist(facts: ReleaseFacts, mode: ChecklistMode = 'REL
     certificateCheck(facts.lot, facts.ppeCertificate),
     documentsCheck(facts.lot, facts.documents, facts.today),
     holdCheck(facts.lot, mode),
+    // B-W2b-GF5 (G369): quality releases only what passed its incoming inspection.
+    incomingCheck(facts.incoming, mode),
     releaserCheck(facts.lot, facts.releaserId),
   ]
   const opened = checks.filter((check) => check.state === 'OPEN')
