@@ -372,8 +372,10 @@ describe('the edit-conflict guard (COL-078)', () => {
     expect(await auditRows('"recordId" = $1', [siteId])).toHaveLength(1)
   })
 
-  // ---- B-W2b-GB02 (G153): the worker's invoices.attachFiles failed its first try when "Issue and send" wrote the invoice at once.
-  it('a write that claims no version waits for another write of the record and is then written too, never a stale-version refusal', async () => {
+  // ---- B-W2b-GB02 (G153): the version guard is unchanged for every command — one that claims no version and read the
+  // record before a racing write committed fails on the compare-and-set (no lost update); invoicing's attachFiles, which
+  // edits no field of the invoice, takes the row's lock instead (modules/invoicing/invoice-files.ts).
+  it('a write that claims no version, racing another write of the record, is refused on the version (no lost update)', async () => {
     const siteId = await newSite()
     let reached!: () => void
     const inside = new Promise<void>((resolve) => (reached = resolve))
@@ -383,6 +385,7 @@ describe('the edit-conflict guard (COL-078)', () => {
     const first = rename(as(officeA()), { siteId, name: 'First' }, SETTINGS, async () => (reached(), held))
     await inside
     const second = rename(as(officeA()), { siteId, name: 'Second' })
+    second.catch(() => undefined)
     for (let tries = 0; tries < 100; tries++) {
       const [waiting] = await admin<{ n: number }>(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`)
       if (waiting!.n > 0) break
@@ -390,9 +393,9 @@ describe('the edit-conflict guard (COL-078)', () => {
     }
     release()
     await expect(first).resolves.toMatchObject({ result: { name: 'First', version: 2 } })
-    await expect(second).resolves.toMatchObject({ result: { name: 'Second', version: 3 } })
-    expect(await siteRow(siteId)).toMatchObject({ name: 'Second', version: 3 })
-    expect(await auditRows('"recordId" = $1', [siteId])).toHaveLength(2)
+    await expect(second).rejects.toBeInstanceOf(StaleVersionError)
+    expect(await siteRow(siteId)).toMatchObject({ name: 'First', version: 2 })
+    expect(await auditRows('"recordId" = $1', [siteId])).toHaveLength(1)
   })
   // ---- end B-W2b-GB02
 

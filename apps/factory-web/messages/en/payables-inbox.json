@@ -1,0 +1,71 @@
+{
+  "col": {
+    "actions": "Actions",
+    "file": "File",
+    "received": "Arrived",
+    "state": "State",
+    "tried": "Tried",
+    "why": "Why it waits"
+  },
+  "count": "{open} waiting · {dismissed} dismissed",
+  "dismiss": {
+    "confirm": "Dismiss the delivery",
+    "explain": "A dismissed delivery is not tried again by the pickups. You can reopen it later if it was dismissed by mistake.",
+    "go": "Dismiss…",
+    "hint": "Why it is not ours to record: not our supplier, a test delivery, sent again under another SDI number…",
+    "reason": "Reason",
+    "reasonEmpty": "Say why it is dismissed.",
+    "reasonLong": "At most {max} characters.",
+    "title": "Dismiss {file}"
+  },
+  "empty": {
+    "all": "No delivery ever waited in the inbox.",
+    "dismissed": "No delivery is dismissed.",
+    "open": "Nothing waits: every delivery SDI handed over is recorded.",
+    "recorded": "No delivery of the inbox was recorded yet."
+  },
+  "explain": "Invoices SDI handed over that the pickup could not record: why each waits, how often it was tried, and the file SDI sent.",
+  "failed": "Couldn't read the SDI inbox ({why}).",
+  "fileFailed": "Couldn't open the file ({why}).",
+  "held": {
+    "busy": "Working…",
+    "dismissed": "Dismissed already: reopen it first.",
+    "noFile": "SDI did not hand the file over (the next pickup asks again).",
+    "noFiles": "Opening files needs the right to read files.",
+    "noManage": "Dismissing and reopening need the right to manage supplier invoices.",
+    "recorded": "Recorded: it waits no more."
+  },
+  "lastTried": "last on {date}",
+  "notice": {
+    "dismissed": "{file} is dismissed: it is not tried again.",
+    "reopened": "{file} waits again: the next pickup tries it."
+  },
+  "openFile": "Open the file",
+  "openInvoice": "Open the invoice",
+  "problem": {
+    "DUPLICATE_NUMBER": "The supplier's number and date are registered already.",
+    "FILE_UNAVAILABLE": "The intermediary listed it but did not hand the file over.",
+    "OTHER": "It could not be recorded (see the file).",
+    "OTHER_ADDRESSEE": "It is addressed to another company.",
+    "PERIOD_LOCKED": "Its day is inside a closed month.",
+    "SUPPLIER_UNKNOWN": "The sender is not one of our suppliers.",
+    "UNREADABLE": "The file is not a FatturaPA the reader understands."
+  },
+  "reopen": "Reopen",
+  "rows": {
+    "all": "Every delivery",
+    "dismissed": "Dismissed",
+    "open": "Waiting",
+    "recorded": "Recorded"
+  },
+  "rowsLabel": "Which deliveries",
+  "sdiNumber": "SDI no. {number}",
+  "status": {
+    "DISMISSED": "Dismissed",
+    "OPEN": "Waiting",
+    "RECORDED": "Recorded"
+  },
+  "title": "SDI inbox",
+  "tried_one": "{count} pickup",
+  "tried_other": "{count} pickups"
+}

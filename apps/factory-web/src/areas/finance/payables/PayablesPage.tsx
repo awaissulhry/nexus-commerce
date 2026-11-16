@@ -38,6 +38,8 @@ import {
 import { PayablesListView, type BulkAnswer, type ForeignModel, type PayablesListModel, type Part } from './view/PayablesListView'
 // B-W2b-417: Self-invoices TD17/18/19 (design sec:selfinv).
 import { SelfInvoices } from './self-invoices/SelfInvoices'
+// B-W2b-GB02: the SDI inbox (the deliveries the pickup could not record).
+import { SdiInbox } from './inbox/SdiInbox'
 // B-W2b-425: the band's Payment proposal and its pop-up.
 import { PaymentProposal } from './proposal/PaymentProposal'
 
@@ -255,6 +257,7 @@ export function PayablesPage() {
     <PayablesListView
       model={model}
       selfInvoices={<SelfInvoices />}
+      inbox={<SdiInbox />}
       proposal={<PaymentProposal prefix={prefix} />}
       actions={{
         onAddress: go,

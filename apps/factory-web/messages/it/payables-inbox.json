@@ -1,0 +1,71 @@
+{
+  "col": {
+    "actions": "Azioni",
+    "file": "File",
+    "received": "Arrivata",
+    "state": "Stato",
+    "tried": "Tentativi",
+    "why": "Perché aspetta"
+  },
+  "count": "{open} in attesa · {dismissed} scartate",
+  "dismiss": {
+    "confirm": "Scarta la consegna",
+    "explain": "Una consegna scartata non viene più ritentata dai prelievi. Puoi riaprirla più tardi se è stata scartata per errore.",
+    "go": "Scarta…",
+    "hint": "Perché non tocca a noi registrarla: non è un nostro fornitore, è una consegna di prova, è stata reinviata con un altro numero SDI…",
+    "reason": "Motivo",
+    "reasonEmpty": "Di' perché la scarti.",
+    "reasonLong": "Al massimo {max} caratteri.",
+    "title": "Scarta {file}"
+  },
+  "empty": {
+    "all": "Nessuna consegna è mai rimasta in attesa.",
+    "dismissed": "Nessuna consegna è scartata.",
+    "open": "Niente in attesa: ogni consegna dello SDI è registrata.",
+    "recorded": "Nessuna consegna della casella è ancora registrata."
+  },
+  "explain": "Fatture consegnate dallo SDI che il prelievo non ha potuto registrare: perché aspettano, quante volte sono state ritentate e il file inviato dallo SDI.",
+  "failed": "Impossibile leggere la casella SDI ({why}).",
+  "fileFailed": "Impossibile aprire il file ({why}).",
+  "held": {
+    "busy": "In corso…",
+    "dismissed": "Già scartata: prima riaprila.",
+    "noFile": "Lo SDI non ha consegnato il file (il prossimo prelievo lo richiede).",
+    "noFiles": "Aprire i file richiede il diritto di leggere i file.",
+    "noManage": "Scartare e riaprire richiedono il diritto di gestire le fatture fornitore.",
+    "recorded": "Registrata: non aspetta più."
+  },
+  "lastTried": "l'ultimo il {date}",
+  "notice": {
+    "dismissed": "{file} è scartata: non viene più ritentata.",
+    "reopened": "{file} è di nuovo in attesa: il prossimo prelievo la ritenta."
+  },
+  "openFile": "Apri il file",
+  "openInvoice": "Apri la fattura",
+  "problem": {
+    "DUPLICATE_NUMBER": "Il numero e la data del fornitore sono già registrati.",
+    "FILE_UNAVAILABLE": "L'intermediario l'ha elencata ma non ha consegnato il file.",
+    "OTHER": "Non è stato possibile registrarla (vedi il file).",
+    "OTHER_ADDRESSEE": "È indirizzata a un'altra società.",
+    "PERIOD_LOCKED": "Il suo giorno cade in un mese chiuso.",
+    "SUPPLIER_UNKNOWN": "Il mittente non è uno dei nostri fornitori.",
+    "UNREADABLE": "Il file non è una FatturaPA leggibile."
+  },
+  "reopen": "Riapri",
+  "rows": {
+    "all": "Tutte le consegne",
+    "dismissed": "Scartate",
+    "open": "In attesa",
+    "recorded": "Registrate"
+  },
+  "rowsLabel": "Quali consegne",
+  "sdiNumber": "SDI n. {number}",
+  "status": {
+    "DISMISSED": "Scartata",
+    "OPEN": "In attesa",
+    "RECORDED": "Registrata"
+  },
+  "title": "Casella SDI",
+  "tried_one": "{count} prelievo",
+  "tried_other": "{count} prelievi"
+}
