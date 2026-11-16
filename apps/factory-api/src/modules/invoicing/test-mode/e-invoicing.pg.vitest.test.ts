@@ -168,7 +168,7 @@ beforeAll(async () => {
   await addParty(ids.supplierDe, 'S-DE', '{SUPPLIER}', 'DE', 'EU_B2B', 'DE999999999')
   await addParty(ids.supplierUs, 'S-US', '{SUPPLIER}', 'US', 'EXTRA_EU', '99-9999999', 'USD')
   // B-W2b-GB02 (G150): an Italian subcontractor that invoices under the reverse charge (made up).
-  await addParty(ids.supplierIt, 'S-IT', '{SUPPLIER}', 'IT', 'IT_B2B', 'IT11111110009')
+  await addParty(ids.supplierIt, 'S-IT', '{SUPPLIER}', 'IT', 'IT_B2B', 'IT11111110000')
   await addSdiAccount(c1(), 'FAKE')
   liveAccount = await addSdiAccount(c2(), 'LIVE')
 
@@ -512,7 +512,7 @@ describe('self-invoice TD16 (G150): an Italian supplier under the reverse charge
     await admin('SET session_replication_role = replica')
     try {
       await admin(
-        `INSERT INTO "SupplierInvoice" (id, "tenantId", "companyId", "partyId", source, kind, number, "issueDate", "receivedOn", "sdiIdentifier", "sdiFileName", currency, "netTotal", "vatTotal", "grossTotal", "vatSummary") VALUES ($1, $2, $3, $4, 'SDI', 'INVOICE', 'TF-2026-31', $5::date, $5::date, '9990031', 'IT11111110009_00031.xml', 'EUR', 65000, 1100, 66100, $6::jsonb)`,
+        `INSERT INTO "SupplierInvoice" (id, "tenantId", "companyId", "partyId", source, kind, number, "issueDate", "receivedOn", "sdiIdentifier", "sdiFileName", currency, "netTotal", "vatTotal", "grossTotal", "vatSummary") VALUES ($1, $2, $3, $4, 'SDI', 'INVOICE', 'TF-2026-31', $5::date, $5::date, '9990031', 'IT11111110000_00031.xml', 'EUR', 65000, 1100, 66100, $6::jsonb)`,
         [supplier.id, tenant.id, c1(), ids.supplierIt, today, JSON.stringify([{ rate: null, nature: 'N6.3', taxable: 60000, vat: 0 }, { rate: '22.00', nature: null, taxable: 5000, vat: 1100 }])],
       )
       await admin(`INSERT INTO "SupplierInvoiceLine" (id, "tenantId", "partyId", "invoiceId", seq, kind, description, "netAmount", "vatRatePct", "vatNature") VALUES ($1, $2, $3, $4, 1, 'SUBCONTRACT', 'Cucitura conto terzi (fittizia)', 60000, 0, 'N6.3'), ($5, $2, $3, $4, 2, 'GOODS', 'Filo (fittizio)', 5000, 22, NULL)`, [newId(), tenant.id, ids.supplierIt, supplier.id, newId()])
@@ -535,7 +535,7 @@ describe('self-invoice TD16 (G150): an Italian supplier under the reverse charge
     expect(issued).toMatchObject({ invoice: { docType: 'TD16', status: 'ISSUED', number: expect.stringMatching(/^AF-\d{4}-\d{4}$/) }, filesPending: false })
     const xml = await downloaded(issued.invoice.xmlFileId)
     expect(xml).toContain('<TipoDocumento>TD16</TipoDocumento>')
-    expect(xml).toMatch(/<CedentePrestatore>[\s\S]*<IdPaese>IT<\/IdPaese>[\s\S]*<IdCodice>11111110009<\/IdCodice>[\s\S]*<RegimeFiscale>RF01<\/RegimeFiscale>[\s\S]*<\/CedentePrestatore>/)
+    expect(xml).toMatch(/<CedentePrestatore>[\s\S]*<IdPaese>IT<\/IdPaese>[\s\S]*<IdCodice>11111110000<\/IdCodice>[\s\S]*<RegimeFiscale>RF01<\/RegimeFiscale>[\s\S]*<\/CedentePrestatore>/)
     expect(xml).toMatch(/<DatiFattureCollegate>\s*<IdDocumento>TF-2026-31<\/IdDocumento>/)
     expect(await xsdErrors(xml)).toEqual([])
   })
