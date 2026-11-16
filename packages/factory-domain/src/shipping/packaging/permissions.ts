@@ -6,7 +6,8 @@ import type { Permission } from '../../core/permissions'
  * types, the default packaging per style or size run, and the shipping-mark templates per customer. Checked with can()
  * against the company (a template for a customer: the company and that customer). Office only; the floor reads the types
  * (without their cost) through the packing bench's carton view. The cost per unit is a cost: the API marks it money.cost,
- * so a person without the cost grain neither reads nor sends it. Reading needs shipping.view. Declared in
+ * so a person without the cost grain neither reads nor sends it. Reading needs shipping.settings.view (B-W2b-GF6: the right
+ * Carriers & shipping opens with, where the Packaging card is; was shipping.view). Declared in
  * `auth/permissions/catalogue.ts`.
  */
 export const SHIPPING_PACKAGING_DEFINITIONS = definePermissions('shipping', {
