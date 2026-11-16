@@ -16,6 +16,9 @@ export const PARTNER_MESSAGE_TEMPLATES = {
   'portal.message.posted': { topic: 'MESSAGES', category: 'FOLLOWING', en: 'New message from {company} on {label}', it: 'Nuovo messaggio da {company} su {label}' },
   'portal.order.sent': { topic: 'ORDERS', category: 'FOLLOWING', en: 'New purchase order {label}', it: "Nuovo ordine d'acquisto {label}" },
   'portal.order.confirmed': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your order {label} is confirmed', it: 'Il tuo ordine {label} è confermato' },
+  // B-TH-006 (L2-G06): an order that waits for our yes (credit, an approval rule, measures to check) is received, not
+  // confirmed; "confirmed" follows the yes.
+  'portal.order.received': { topic: 'ORDERS', category: 'FOLLOWING', en: 'We received your order {label}: it is waiting for our approval', it: 'Abbiamo ricevuto il tuo ordine {label}: è in attesa della nostra approvazione' },
   'portal.order.dates_changed': { topic: 'DATES', category: 'FOLLOWING', en: 'The delivery date of {label} changed{due}', it: 'La data di consegna di {label} è cambiata{due}' },
   'portal.shipment.shipped': { topic: 'SHIPPED', category: 'FOLLOWING', en: '{label} has shipped', it: '{label} è stata spedita' },
   'portal.invoice.issued': { topic: 'INVOICES', category: 'FOLLOWING', en: 'Invoice {label} was issued', it: 'È stata emessa la fattura {label}' },

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -333,6 +333,10 @@ describe('status, cancel, close and the list (SAL-362)', () => {
     const counts = await ok('viewer', 'GET', '/sales/returns/counts')
     expect(counts.counts).toMatchObject({ waiting: 0, toInspect: 1, toDecide: 1, replacement: 0 })
     expect(counts.counts.open).toBeGreaterThanOrEqual(3)
+    // B-TH-201: one customer's tiles (Sales › Returns with `?party=`): another customer's are none of these.
+    expect((await ok('viewer', 'GET', `/sales/returns/counts?partyId=${randomUUID()}`)).counts).toEqual({ waiting: 0, late: 0, toInspect: 0, toDecide: 0, replacement: 0, open: 0 })
+    const own = await admin<{ partyId: string }>(`SELECT DISTINCT "partyId" FROM "ReturnAuthorisation" WHERE number = $1`, [rma2.number])
+    expect((await ok('viewer', 'GET', `/sales/returns/counts?partyId=${own[0]!.partyId}`)).counts.open).toBeGreaterThanOrEqual(1)
     expect((await ok('viewer', 'GET', `/sales/returns?q=${encodeURIComponent('P1-RET-9')}&view=all`)).returns.map((row: Json) => row.number)).toEqual([rma1.number])
   })
 })

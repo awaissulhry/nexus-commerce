@@ -261,7 +261,9 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
   const milestones = milestonesOf({
     status,
     requestedOn: read.sent ? businessDate(read.sent) : dayOf(order.orderDate),
-    confirmedOn: dayOf(order.orderDate),
+    // B-TH-006 (L2-G06): an order that waited for our yes was confirmed on the day of the yes (none while it waits, none
+    // when it was cancelled waiting), never on its order date.
+    confirmedOn: tenant.history.reached.has('PENDING_APPROVAL') ? reachedOn('CONFIRMED') : dayOf(order.orderDate),
     productionOn: reachedOn('IN_PRODUCTION') ?? (tenant.released ? businessDate(tenant.released) : null),
     readyOn: reachedOn('READY'),
     firstShippedOn: firstShipped ? businessDate(firstShipped) : null,

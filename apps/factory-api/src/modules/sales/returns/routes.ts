@@ -45,7 +45,7 @@ import { addLines, cancelReturn, changeHeader, changeLine, closeReturn, createRe
  */
 export default defineRoutes('sales.returns', manifest, async (app) => {
   app.get('/sales/returns', { schema: listContract }, async (request) => listReturns(request, request.query))
-  app.get('/sales/returns/counts', { schema: countsContract }, async (request) => returnCounts(request))
+  app.get('/sales/returns/counts', { schema: countsContract }, async (request) => returnCounts(request, request.query))
   app.get('/sales/returns/policy', { schema: getPolicyContract }, async (request) => getPolicy(request, request.query))
   app.put('/sales/returns/policy', { schema: savePolicyContract }, async (request) => savePolicy(request, request.body, idempotencyKeyFrom(request)))
   app.get('/sales/returns/returnable', { schema: returnableContract }, async (request) => listReturnable(request, request.query))

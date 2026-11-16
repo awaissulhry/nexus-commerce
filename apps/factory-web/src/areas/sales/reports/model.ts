@@ -309,14 +309,15 @@ export const styleHref = (prefix: string, id: string, code?: string): string => 
 
 /**
  * The list a drill opens ("Open the list", the closest the list's address can say): Orders (every order, or the open ones for
- * the backlog), Returns (the open returns), each searched by the customer's code when the bar is one customer's. The lists take
- * no period, style, season, week or reason in their address: the dialog says so.
+ * the backlog), Returns (every return), each narrowed to the customer (`?party=<id>`) when the bar is one customer's. The lists
+ * take no period, style, season, week or reason in their address: the dialog says so. B-TH-201 (SHEET-G11): the customer's id,
+ * never its code — the lists' search reads numbers and PO numbers only, so a code found nothing.
  */
-export function listHref(prefix: string, target: DrillTarget, customerCode: string | null): string {
-  const q = customerCode ? `q=${encodeURIComponent(customerCode)}` : ''
-  if (target.section === 'returns') return `${prefix}/sales/returns?view=all${q ? `&${q}` : ''}`
-  if (target.section === 'backlog') return `${prefix}/sales/orders${q ? `?${q}` : ''}`
-  return `${prefix}/sales/orders?rows=all${q ? `&${q}` : ''}`
+export function listHref(prefix: string, target: DrillTarget, customerId: string | null): string {
+  const party = customerId && customerId !== NO_KEY ? `party=${encodeURIComponent(customerId)}` : ''
+  if (target.section === 'returns') return `${prefix}/sales/returns?view=all${party ? `&${party}` : ''}`
+  if (target.section === 'backlog') return `${prefix}/sales/orders${party ? `?${party}` : ''}`
+  return `${prefix}/sales/orders?rows=all${party ? `&${party}` : ''}`
 }
 
 /** Sales › Quotes for the headline's quote tiles (the accepted ones; the ones sent). */

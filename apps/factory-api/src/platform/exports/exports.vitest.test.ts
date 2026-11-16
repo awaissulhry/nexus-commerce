@@ -7,9 +7,11 @@ import type { ReportColumn } from '@nexus/factory-domain/insights/reports/defini
 import { loadReports } from '../../modules/insights/reports/registry'
 import { processImporters } from '../imports/registry'
 import { exportFormatsFor, exportSourceOf, processExportSources } from './registry'
-import { formatsOf, pageOf } from './source'
+import { formatsOf, pageOf, titleText } from './source'
 import { EXPORT_SOURCES } from './sources'
 import { REPORT_CODE_WORDS, reportCell, reportListKey } from './sources/reports'
+import { salesOrders } from './sources/sales-orders' // B-TH-008
+import { sheetName } from './writer' // B-TH-008
 
 /**
  * The export sources (B-W2a-23, B-W2b-11): every list source names a real Office list page, its words in both
@@ -97,3 +99,46 @@ describe('every report is a source (XLSX of a report)', () => {
     expect(reportCell(column('g', 'text'), row, words)).toBeNull()
   })
 })
+
+// ── B-TH-008 (WALL-G01, SHEET-G14): screen = file on Sales › Orders ────────────────────────────────────────────────────
+describe('the orders file reads every term the screen reads (B-TH-008)', () => {
+  const A = '0190a1b2-0000-7000-8000-00000000000a'
+  const C = '0190a1b2-0000-7000-8000-0000000000c1'
+  const query = (address: string) => salesOrders.query(new URLSearchParams(address)) as Record<string, unknown>
+
+  it('keeps the customer, the company and the promise range with every rows view; Waiting for the customer is its own', () => {
+    expect(query(`party=${A}`)).toEqual({ partyId: A, open: 'true', q: undefined })
+    expect(query(`partyId=${A}&rows=all`)).toEqual({ partyId: A, q: undefined })
+    expect(query(`party=${A}&late=true&q=SO-1`)).toEqual({ partyId: A, late: 'true', q: 'SO-1' })
+    expect(query(`party=${A}&company=${C}&status=READY`)).toEqual({ partyId: A, companyId: C, status: 'READY', q: undefined })
+    expect(query(`companyId=${C}&promiseFrom=2026-11-16&promiseTo=2026-11-22&rows=all`)).toEqual({ companyId: C, promiseFrom: '2026-11-16', promiseTo: '2026-11-22', q: undefined })
+    expect(query(`reaccept=true&party=${A}`)).toEqual({ partyId: A, reaccept: 'true', q: undefined })
+    expect(query('')).toEqual({ open: 'true', q: undefined })
+  })
+
+  it('refuses a malformed customer, company or day: never a file of every customer for one customer’s sheet', () => {
+    expect(() => query('party=DEMO-C1')).toThrow(/Not a customer/)
+    expect(() => query('company=nope')).toThrow(/Not a company/)
+    expect(() => query('promiseFrom=2026-13-40')).toThrow(/Not a day/)
+    expect(() => query('promiseFrom=2026-11-22&promiseTo=2026-11-16')).toThrow(/ends before it starts/)
+  })
+
+  it('says every status in both languages (a waiting or delivered order is never a raw code)', () => {
+    for (const locale of ['it', 'en'] as const) {
+      expect(salesOrders.words?.[locale]['status.PENDING_APPROVAL']).toMatch(/approv/)
+      expect(salesOrders.words?.[locale]['status.DELIVERED']).toBeTruthy()
+    }
+  })
+
+  it('names the file after what it holds; the Excel tab keeps the rows it holds whole', () => {
+    expect(titleText({ name: 'Orders - Brand Alpha S.r.l.', rows: '42 orders' }, 'Sales orders')).toBe('Orders - Brand Alpha S.r.l. - 42 orders')
+    expect(titleText(null, 'Sales orders')).toBe('Sales orders')
+    expect(sheetName('Orders - Brand Alpha - 3 orders', '3 orders')).toBe('Orders - Brand Alpha - 3 orders')
+    const long = sheetName('Ordini - Brand Alpha Abbigliamento Tecnico S.r.l. - 1250 ordini', '1250 ordini')
+    expect(long.length).toBeLessThanOrEqual(31)
+    expect(long.endsWith(' - 1250 ordini')).toBe(true)
+    expect(long.startsWith('Ordini - Brand')).toBe(true)
+    expect(sheetName('Ordini di vendita: tutte le righe / [archivio] della stagione')).toBe('Ordini di vendita  tutte le rig')
+  })
+})
+// ── end B-TH-008 ──

@@ -58,6 +58,11 @@ export interface OrdersListModel {
   week?: WeekModel | null
   /** Import orders (band ⋯): why it is held, and the wizard while open. */
   importer?: (OrdersImportModel & { held: string | null }) | null
+  /**
+   * B-TH-201: the customer the address narrows the list to (`?party=`): its name once known (undefined while it is looked
+   * up; null when the person may not open that customer: the chip names no one); null/absent: every customer.
+   */
+  customer?: { id: string; name: string | null | undefined } | null
   /** Design cases: the starting selection, the focused row, the keys panel. */
   selected?: string[]
   focusRow?: number
@@ -68,6 +73,8 @@ export interface OrdersListActions {
   onRows?: (rows: RowView) => void
   onLayout?: (layout: Layout) => void
   onSearch?: (q: string) => void
+  /** B-TH-201: the customer chip's ✕ (every customer again). */
+  onClearCustomer?: () => void
   onMore?: () => void
   onRetry?: () => void
   onShowUpdates?: () => void

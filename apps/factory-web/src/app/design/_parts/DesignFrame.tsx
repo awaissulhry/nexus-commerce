@@ -8,14 +8,15 @@ import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { LOCALES } from '../../../lib/i18n/locales'
 import { I18nProvider, LocaleSwitchProvider } from '../../../lib/i18n/provider'
 import { findCase, findScreen } from '../_registry'
-import type { FrameOptions } from './frame-options'
+import { DESIGN_WIDTHS, type FrameOptions } from './frame-options'
 import '../design.css'
 
 /**
  * One fixture of one screen, alone on the page (`/design/SCR-003/owner?theme=dark&lang=it`): the gallery shows it in an
  * iframe at the chosen width, so the screen's own media queries apply; opened alone it is the screen at full size, for
  * the keyboard. The theme is set on `<html>` (DS `.dark`), the language from the address. Links do not navigate: the
- * frame shows one screen, never the app behind it.
+ * frame shows one screen, never the app behind it. B-TH-297: the frame names the width it was asked for
+ * (`data-design-width="1920"`), so review_walk measures the dead space on the right of the width it meant.
  */
 export function DesignFrame({ screenId, caseId, options }: { screenId: string; caseId: string; options: FrameOptions }) {
   const router = useRouter()
@@ -49,7 +50,7 @@ export function DesignFrame({ screenId, caseId, options }: { screenId: string; c
       <LocaleSwitchProvider
         onChange={(locale) => router.replace(`${pathname}?theme=${options.theme}&width=${options.width}&lang=${LOCALES.includes(locale) ? locale : 'en'}`)}
       >
-        <div onClickCapture={stayHere} data-design-frame={`${screen.screen}/${item.id}`}>
+        <div onClickCapture={stayHere} data-design-frame={`${screen.screen}/${item.id}`} data-design-width={DESIGN_WIDTHS[options.width].width}>
           {screen.part ? (
             <div className="fw-design-part">
               <View model={item.model} />

@@ -8,7 +8,7 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { findCustomers, getParty } from '../../quotes/api'
 import { getBoard, listOrders, nextOrderNumber, type OrderBoard } from '../api'
 import { downloadText, useCoalesced, useLive } from '../hooks'
-import { abilitiesOf, boardLanes, laneQuery, layoutFromAddress, listAddress, listTouches, ordersCsv, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type RowView } from '../model'
+import { abilitiesOf, boardLanes, laneQuery, layoutFromAddress, listAddress, listTouches, ordersCsv, partyFromAddress, readProblem, romeToday, rowsFromAddress, rowsQuery, type Lane, type Layout, type RowView } from '../model'
 import { newOrderAddress } from '../new/new-model'
 import type { NewOrderDialogModel, OrdersListModel } from './list-model'
 import { OrdersListView } from './view/OrdersListView'
@@ -50,6 +50,7 @@ function OrdersContainer() {
   const rows = rowsFromAddress(params)
   const layout = layoutFromAddress(params)
   const q = params?.get('q') ?? ''
+  const party = partyFromAddress(params) // B-TH-201: one customer's orders (Sales › Reports' drill)
 
   const [list, setList] = useState<OrdersListModel['list']>({ items: null, more: false, problem: null })
   const [cursor, setCursor] = useState<string | null>(null)
@@ -64,15 +65,18 @@ function OrdersContainer() {
   const [newOrder, setNewOrder] = useState<NewOrderDialogModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId) : null)
   const searchSeq = useRef(0)
 
-  const go = useCallback((next: { rows?: RowView; q?: string; layout?: Layout }) => router.replace(listAddress(pathname, { rows: next.rows ?? rows, q: next.q ?? q, layout: next.layout ?? layout })), [router, pathname, rows, q, layout])
+  const go = useCallback(
+    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null }) => router.replace(listAddress(pathname, { rows: next.rows ?? rows, q: next.q ?? q, layout: next.layout ?? layout, party: next.party === undefined ? party : next.party })),
+    [router, pathname, rows, q, layout, party],
+  )
 
   const readBoard = useCallback(
     (id: number) => {
-      getBoard(api, q)
+      getBoard(api, q, undefined, party)
         .then((answer) => id === readId.current && setBoard(answer))
         .catch(() => id === readId.current && setBoard(null))
     },
-    [api, q],
+    [api, q, party],
   )
 
   const load = useCallback(async (silent = false) => {
@@ -92,7 +96,7 @@ function OrdersContainer() {
       await Promise.all(
         shown.map(async (status) => {
           try {
-            const page = await listOrders(api, laneQuery(status, rows, q))
+            const page = await listOrders(api, laneQuery(status, rows, q, party))
             if (id !== readId.current) return
             setLanes((current) => current.map((lane) => (lane.status === status ? { status, items: page.orders, more: page.nextCursor !== null, problem: null } : lane)))
           } catch (error) {
@@ -109,7 +113,7 @@ function OrdersContainer() {
     }
     setList((current) => ({ ...current, problem: null }))
     try {
-      const page = await listOrders(api, rowsQuery(rows, q))
+      const page = await listOrders(api, rowsQuery(rows, q, null, party))
       if (id !== readId.current) return
       setList({ items: page.orders, more: page.nextCursor !== null, problem: null })
       setCursor(page.nextCursor)
@@ -119,7 +123,7 @@ function OrdersContainer() {
       if (id !== readId.current) return
       setList({ items: null, more: false, problem: readProblem(error) })
     }
-  }, [api, rows, q, layout, readBoard])
+  }, [api, rows, q, party, layout, readBoard])
 
   useEffect(() => {
     setList({ items: null, more: false, problem: null })
@@ -129,13 +133,34 @@ function OrdersContainer() {
   const more = useCallback(async () => {
     if (!cursor) return
     try {
-      const page = await listOrders(api, rowsQuery(rows, q, cursor))
+      const page = await listOrders(api, rowsQuery(rows, q, cursor, party))
       setList((current) => ({ items: [...(current.items ?? []), ...page.orders.filter((row) => !current.items?.some((seen) => seen.id === row.id))], more: page.nextCursor !== null, problem: null }))
       setCursor(page.nextCursor)
     } catch (error) {
       setNotice({ tone: 'danger', words: { key: readProblem(error) } })
     }
-  }, [api, cursor, rows, q])
+  }, [api, cursor, rows, q, party])
+
+  // ── B-TH-201: the customer's name for the chip — from the rows read, else the customer's record (404 when the person may
+  // not open it: then the chip names no one). ──
+  const nameInRows = useMemo(() => {
+    if (!party) return null
+    const read = [...(list.items ?? []), ...lanes.flatMap((lane) => lane.items ?? [])]
+    return read.find((row) => row.partyId === party)?.partyName || null
+  }, [party, list.items, lanes])
+  const [looked, setLooked] = useState<{ id: string; name: string | null } | null>(null)
+  useEffect(() => {
+    if (!party || nameInRows || looked?.id === party) return
+    let gone = false
+    getParty(api, party)
+      .then((found) => !gone && setLooked({ id: party, name: found.legalName }))
+      .catch(() => !gone && setLooked({ id: party, name: null }))
+    return () => {
+      gone = true
+    }
+  }, [api, party, nameInRows, looked?.id])
+  const customer = party ? { id: party, name: nameInRows ?? (looked?.id === party ? looked.name : undefined) } : null
+  // ── end B-TH-201 ──
 
   // Live: an order event (a new order, a move, a deposit paid…) → "N updates · Show"; the tiles follow at once. The
   // board reads its lanes again by itself (B-W2a-50: a board left open on a second screen).
@@ -200,11 +225,12 @@ function OrdersContainer() {
   const listDepth = useListDepth(api, layout === 'list' ? list.items : null, session.permissions, (changes) =>
     setList((current) => ({ ...current, items: current.items?.map((row) => { const change = changes.find((entry) => entry.id === row.id); return change?.version ? { ...row, version: change.version } : row }) ?? null })),
   )
-  const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick })
+  const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick, partyId: party /* B-TH-201 */ })
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load())
 
   const model: OrdersListModel = {
     prefix, can, today: romeToday(), layout, rows, q, list, lanes, board, asOf, live, updates, notice, newOrder, margins,
+    customer, // B-TH-201
     depth: listDepth.model,
     week: { state: week.state, sites: week.sites, siteId: week.siteId },
     importer: { held: importer.held, sheet: importer.model },
@@ -217,6 +243,7 @@ function OrdersContainer() {
         onRows: (next) => go({ rows: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) /* B-W2b-323: a tile opens the list */ }),
         onLayout: (next) => go({ layout: next }),
         onSearch: (next) => go({ q: next }),
+        onClearCustomer: () => go({ party: null }), // B-TH-201
         onMore: () => void more(),
         onRetry: () => void load(),
         onShowUpdates: () => void load(),

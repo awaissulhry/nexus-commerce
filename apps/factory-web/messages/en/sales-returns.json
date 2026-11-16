@@ -469,6 +469,8 @@
     "countMore_other": "First {count} — narrow the search",
     "count_one": "{count} return or repair",
     "count_other": "{count} returns and repairs",
+    "customerChip": "Customer: {name}",
+    "customerHidden": "A customer you cannot open",
     "empty": "No returns and repairs yet",
     "emptyBody": "No returns. A return starts from the customer’s invoiced order; a repair from a garment’s serial.",
     "exportNothing": "Nothing to export in this view",

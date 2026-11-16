@@ -18,6 +18,8 @@ export interface ExportSheet {
   readonly headings: readonly string[]
   readonly rows: readonly (readonly ExportCell[])[]
   readonly timeZone?: string
+  /** B-TH-008: the end of the title the Excel tab always keeps (the rows it holds, "42 orders"), or null. */
+  readonly tail?: string | null
 }
 
 const isAmount = (cell: ExportCell): cell is { minor: number; currency: string | null } => cell !== null && typeof cell === 'object' && 'minor' in cell
@@ -50,14 +52,26 @@ function csvOf(sheet: ExportSheet): Uint8Array {
   return Buffer.from(csvText({ locale: sheet.locale, header: headingsOf(sheet, money), rows, note: sheet.note }), 'utf8')
 }
 
-/** An Excel sheet's name: at most 31 characters, none of : \ / ? * [ ]. */
-const sheetName = (title: string): string => title.replace(/[:\\/?*[\]]/g, ' ').trim().slice(0, 31) || 'Export'
+/**
+ * An Excel sheet's name: at most 31 characters, none of : \ / ? * [ ]. B-TH-008: a title that ends with its tail (the rows
+ * it holds) keeps the tail whole and shortens the name before it ("Orders - Brand Alpha S… - 42 orders").
+ */
+export function sheetName(title: string, tail: string | null = null): string {
+  const clean = (text: string): string => text.replace(/[:\\/?*[\]]/g, ' ').trim()
+  const whole = clean(title)
+  if (whole.length <= 31 || !tail) return whole.slice(0, 31) || 'Export'
+  const end = ` - ${clean(tail)}`
+  if (!whole.endsWith(end) || end.length > 29) return whole.slice(0, 31)
+  const room = 31 - end.length
+  const name = whole.slice(0, whole.length - end.length)
+  return `${name.slice(0, room - 1).trimEnd()}…${end}`
+}
 
 async function xlsxOf(sheet: ExportSheet): Promise<Uint8Array> {
   const money = currencies(sheet)
   const workbook = new ExcelJS.Workbook()
   workbook.creator = 'Nexus Factory'
-  const worksheet = workbook.addWorksheet(sheetName(sheet.title))
+  const worksheet = workbook.addWorksheet(sheetName(sheet.title, sheet.tail ?? null))
   const dayFormat = sheet.locale === 'it' ? 'dd/mm/yyyy' : 'yyyy-mm-dd'
   if (sheet.note) {
     worksheet.addRow([sheet.note]).font = { italic: true }
