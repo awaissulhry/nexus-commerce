@@ -152,14 +152,18 @@ export interface MarkingDraft {
   kind: LabelKind
   gpsrContact: string
   qrTarget: LabelQrTarget
+  /** B-W2b-GF2 (G032): the origin claim's phrase key, '' for none; left out: as the label has it. */
+  originClaimKey?: string
 }
 
 export const GPSR_MAX = 500
 
-export const markingDraftOf = (template: Pick<LabelTemplate, 'kind' | 'gpsrContact' | 'qrTarget'>): MarkingDraft => ({ kind: kindOf(template), gpsrContact: template.gpsrContact ?? '', qrTarget: template.qrTarget ?? 'NONE' })
+type MarkedTemplate = Pick<LabelTemplate, 'kind' | 'gpsrContact' | 'qrTarget'> & { readonly originClaimKey?: string | null }
 
-/** What the marking's save sends: only what changed (an empty contact is none). */
-export function markingPatch(template: Pick<LabelTemplate, 'kind' | 'gpsrContact' | 'qrTarget'>, draft: MarkingDraft | null): MarkingBody {
+export const markingDraftOf = (template: MarkedTemplate): MarkingDraft => ({ kind: kindOf(template), gpsrContact: template.gpsrContact ?? '', qrTarget: template.qrTarget ?? 'NONE', originClaimKey: template.originClaimKey ?? '' })
+
+/** What the marking's save sends: only what changed (an empty contact or claim is none). */
+export function markingPatch(template: MarkedTemplate, draft: MarkingDraft | null): MarkingBody {
   if (!draft) return {}
   const now = markingDraftOf(template)
   const patch: MarkingBody = {}
@@ -167,10 +171,12 @@ export function markingPatch(template: Pick<LabelTemplate, 'kind' | 'gpsrContact
   if (draft.qrTarget !== now.qrTarget) patch.qrTarget = draft.qrTarget
   const contact = draft.gpsrContact.trim()
   if (contact !== now.gpsrContact.trim()) patch.gpsrContact = contact === '' ? null : contact
+  // B-W2b-GF2 (G032): the origin claim.
+  if (draft.originClaimKey !== undefined && draft.originClaimKey !== now.originClaimKey) patch.originClaimKey = draft.originClaimKey === '' ? null : draft.originClaimKey
   return patch
 }
 
-export const markingDirty = (template: Pick<LabelTemplate, 'kind' | 'gpsrContact' | 'qrTarget'>, draft: MarkingDraft | null): boolean => Object.keys(markingPatch(template, draft)).length > 0
+export const markingDirty = (template: MarkedTemplate, draft: MarkingDraft | null): boolean => Object.keys(markingPatch(template, draft)).length > 0
 
 /** Why the marking cannot be saved as typed (a message key of compliance-labels-depth), or null. */
 export const markingProblem = (draft: MarkingDraft | null): string | null => (draft && draft.gpsrContact.trim().length > GPSR_MAX ? 'marking.problem.long' : null)

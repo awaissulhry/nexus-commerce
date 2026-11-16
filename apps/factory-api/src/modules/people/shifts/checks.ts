@@ -7,20 +7,29 @@ import {
   rulesInForce,
   warningKey,
   weeklyAverageWindowStart,
+  weeklyRestWindow,
   yearlyCapWarnings,
   type LimitRules,
   type LimitWarning,
   type RuleRow,
 } from '@nexus/factory-domain/people/shifts/limits'
+import { PEOPLE_ATTENDANCE_VIEW } from '@nexus/factory-domain/people/clock/permissions'
 import type { CommandTx } from '../../../core/command'
-import { dateOf } from '../employees/access'
+import type { OfficeContext } from '../../../core/context'
+import { dateOf, may } from '../employees/access'
+import { legalGateFor } from '../privacy/gate'
 import { planningFor, workOf, type CellOverrides, type PlannedPerson, type Planning } from './planner'
 
 /**
- * The working-time checks of People › Shifts (B-W2b-32; D.Lgs. 66/2003 arts. 4, 5, 7, 8): the rules in force per site
- * (People settings' WorkingTimeRule, else the law's value as a warning) and the warnings of a planned roster or of a
- * planned overtime, each with the rule in words. A write compares the warnings before and after it: a NEW warning whose
- * rule BLOCKs holds the write with the reason; a WARN shows.
+ * The working-time checks of People › Shifts (B-W2b-32; D.Lgs. 66/2003 arts. 4, 5, 7, 8; B-W2b-GF2: arts. 9 and 13): the
+ * rules in force per site (People settings' WorkingTimeRule, else the law's value as a warning) and the warnings of a
+ * planned roster or of a planned overtime, each with the rule in words. A write compares the warnings before and after it:
+ * a NEW warning whose rule BLOCKs holds the write with the reason; a WARN shows.
+ *
+ * B-W2b-GF2: the weekly rest reads the weeks around the days asked (the plan up to the Monday two weeks after the last), so
+ * the window grows by those weeks; the yearly cap of a planned overtime counts the overtime already worked this year too
+ * (B-W2b-42's entries, approved or waiting, at a site whose ATTENDANCE gate is open), and names its figure only to a reader
+ * who may see the person's attendance (people.attendance.view): a planner sees the warning without the worked hours.
  */
 
 type Client = FactoryClient | CommandTx
@@ -51,9 +60,11 @@ export async function rulesFor(client: Client): Promise<(place: Place) => LimitR
   }
 }
 
-/** The first day the checks of `from` … `to` need planned work from (rest the day before; the weekly average's weeks). */
+/** The first day the checks of `from` … `to` need planned work from (rest the day before; the weekly average's and the weekly rest's weeks). */
 export function checksWindowStart(people: readonly PlannedPerson[], rules: (place: Place) => LimitRules, from: BusinessDate): BusinessDate {
   let start = plusDays(from, -1)
+  const weekly = weeklyRestWindow(from, from).from
+  if (weekly < start) start = weekly
   for (const person of people) {
     const first = weeklyAverageWindowStart(from, rules(person).WEEKLY_AVERAGE)
     if (first < start) start = first
@@ -75,13 +86,13 @@ export interface RosterCheck {
  */
 export async function rosterCheck(client: Client, people: readonly PlannedPerson[], report: { readonly from: BusinessDate; readonly to: BusinessDate }, options: { readonly overrides?: CellOverrides; readonly compare?: boolean } = {}): Promise<RosterCheck> {
   const rules = await rulesFor(client)
-  const window = { from: checksWindowStart(people, rules, report.from), to: plusDays(report.to, 1) }
+  const window = { from: checksWindowStart(people, rules, report.from), to: weeklyRestWindow(report.from, report.to).to }
   const planning = await planningFor(client, people, window, options.overrides ? { overrides: options.overrides } : {})
   const before = options.overrides && options.compare ? await planningFor(client, people, window) : null
   const days = new Set(eachDay(report.from, report.to))
   const warnings = new Map<string, WarningOut[]>()
   for (const person of people) {
-    const input = { rules: rules(person), report: days, timeZone: planning.timeZones.get(person.siteId) ?? BUSINESS_TIME_ZONE, employedFrom: person.startDate }
+    const input = { rules: rules(person), report: days, timeZone: planning.timeZones.get(person.siteId) ?? BUSINESS_TIME_ZONE, employedFrom: person.startDate, window }
     const now = rosterWarnings({ ...input, work: workOf(planning, person) })
     const was = before ? new Set(rosterWarnings({ ...input, work: workOf(before, person) }).map(warningKey)) : null
     warnings.set(person.id, now.map((warning) => ({ ...warning, isNew: was ? !was.has(warningKey(warning)) : false })))
@@ -89,15 +100,38 @@ export async function rosterCheck(client: Client, people: readonly PlannedPerson
   return { planning, warnings, rules }
 }
 
-/** The planned overtime minutes each person agreed to in a year (requests asked, approved or done; `without` left out). */
-export async function plannedOvertimeOfYear(client: Client, employeeIds: readonly string[], year: string, without?: string): Promise<Map<string, number>> {
+/**
+ * The planned overtime minutes each person agreed to in a year (requests asked, approved or done; `without` left out).
+ * B-W2b-GF2: with `notWorked`, a request whose overtime the person has worked (an overtime entry of the request) is left
+ * out: the entry counts it (workedOvertimeOfYear), never twice.
+ */
+export async function plannedOvertimeOfYear(client: Client, employeeIds: readonly string[], year: string, without?: string, options: { readonly notWorked?: boolean } = {}): Promise<Map<string, number>> {
   if (employeeIds.length === 0) return new Map()
   const rows = await client.overtimeAgreement.findMany({
     where: { employeeId: { in: [...employeeIds] }, answer: 'AGREED', request: { status: { in: ['ASKED', 'AGREED', 'APPROVED', 'DONE'] }, date: { gte: dateOf(`${year}-01-01`), lte: dateOf(`${year}-12-31`) }, ...(without ? { id: { not: without } } : {}) } },
-    select: { employeeId: true, request: { select: { minutes: true } } },
+    select: { employeeId: true, requestId: true, request: { select: { minutes: true } } },
   })
+  const worked = options.notWorked && rows.length > 0 ? await client.overtimeEntry.findMany({ where: { employeeId: { in: [...employeeIds] }, requestId: { in: [...new Set(rows.map((row) => row.requestId))] }, status: { in: ['APPROVED', 'PENDING'] } }, select: { employeeId: true, requestId: true } }) : []
+  const done = new Set(worked.map((row) => `${row.employeeId}|${row.requestId}`))
   const out = new Map<string, number>()
-  for (const row of rows) out.set(row.employeeId, (out.get(row.employeeId) ?? 0) + row.request.minutes)
+  for (const row of rows) if (!done.has(`${row.employeeId}|${row.requestId}`)) out.set(row.employeeId, (out.get(row.employeeId) ?? 0) + row.request.minutes)
+  return out
+}
+
+/**
+ * B-W2b-GF2: the overtime each person worked in a year (B-W2b-42's entries, approved or waiting: rejected overtime is not
+ * paid and counts for neither), only for people of a site whose ATTENDANCE gate is open (attendance data: nothing is read
+ * at a site where it may not be processed).
+ */
+export async function workedOvertimeOfYear(client: Client, people: readonly PlannedPerson[], year: string): Promise<Map<string, number>> {
+  const out = new Map<string, number>()
+  if (people.length === 0) return out
+  const openSites = new Set<string>()
+  for (const siteId of new Set(people.map((person) => person.siteId))) if ((await legalGateFor(client, siteId, 'ATTENDANCE')).open) openSites.add(siteId)
+  const open = people.filter((person) => openSites.has(person.siteId))
+  if (open.length === 0) return out
+  const rows = await client.overtimeEntry.findMany({ where: { employeeId: { in: open.map((person) => person.id) }, status: { in: ['APPROVED', 'PENDING'] }, date: { gte: dateOf(`${year}-01-01`), lte: dateOf(`${year}-12-31`) } }, select: { employeeId: true, minutes: true } })
+  for (const row of rows) out.set(row.employeeId, (out.get(row.employeeId) ?? 0) + row.minutes)
   return out
 }
 
@@ -111,21 +145,25 @@ export interface OvertimePlan {
 
 /**
  * The checks of each person for a planned overtime (design "Request overtime": each with the annual cap and the rest
- * check): the rest before and after it, the break, the week's average and the year's cap, as if the person agreed.
+ * check): the rest before and after it, the break, the week's average, the weekly rest, night work and the year's cap, as
+ * if the person agreed. B-W2b-GF2: the cap counts the overtime worked this year too; `viewer` is the reader of the words:
+ * the worked hours are named only to one who holds people.attendance.view over the person (none: never named).
  */
-export async function overtimeChecks(client: Client, people: readonly PlannedPerson[], plan: OvertimePlan): Promise<Map<string, WarningOut[]>> {
+export async function overtimeChecks(client: Client, people: readonly PlannedPerson[], plan: OvertimePlan, viewer?: OfficeContext): Promise<Map<string, WarningOut[]>> {
   const rules = await rulesFor(client)
-  const window = { from: checksWindowStart(people, rules, plan.date), to: plusDays(plan.date, 1) }
+  const window = { from: checksWindowStart(people, rules, plan.date), to: weeklyRestWindow(plan.date, plusDays(plan.date, 1)).to }
   const planning = await planningFor(client, people, window, plan.requestId ? { withoutRequest: plan.requestId } : {})
   const year = plan.date.slice(0, 4)
-  const planned = await plannedOvertimeOfYear(client, people.map((person) => person.id), year, plan.requestId)
+  const planned = await plannedOvertimeOfYear(client, people.map((person) => person.id), year, plan.requestId, { notWorked: true })
+  const worked = await workedOvertimeOfYear(client, people, year)
   const days = new Set([plan.date, plusDays(plan.date, 1)])
   const out = new Map<string, WarningOut[]>()
   for (const person of people) {
-    const input = { rules: rules(person), report: days, timeZone: planning.timeZones.get(person.siteId) ?? BUSINESS_TIME_ZONE, employedFrom: person.startDate }
+    const input = { rules: rules(person), report: days, timeZone: planning.timeZones.get(person.siteId) ?? BUSINESS_TIME_ZONE, employedFrom: person.startDate, window }
     const was = new Set(rosterWarnings({ ...input, work: workOf(planning, person) }).map(warningKey))
     const now = rosterWarnings({ ...input, work: workOf(planning, person, [plan]) })
-    const cap = yearlyCapWarnings({ date: plan.date, plannedMinutes: (planned.get(person.id) ?? 0) + plan.minutes }, rules(person).OVERTIME_YEARLY_CAP)
+    const showWorked = viewer !== undefined && may(viewer, PEOPLE_ATTENDANCE_VIEW, { companyId: person.companyId, siteId: person.siteId })
+    const cap = yearlyCapWarnings({ date: plan.date, plannedMinutes: (planned.get(person.id) ?? 0) + plan.minutes, workedMinutes: worked.get(person.id) ?? 0, showWorked }, rules(person).OVERTIME_YEARLY_CAP)
     out.set(person.id, [...now.map((warning) => ({ ...warning, isNew: !was.has(warningKey(warning)) })), ...cap.map((warning) => ({ ...warning, isNew: true }))])
   }
   return out

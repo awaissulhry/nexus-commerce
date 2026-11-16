@@ -1,6 +1,6 @@
 import { plusDays } from '../../calendars/dates'
 import type { BusinessDate } from '../../core/time'
-import { hours, restWarnings, weekAverageOf, type LimitKind, type LimitLevel, type LimitRule, type LimitRules, type PlannedWork } from '../shifts/limits'
+import { hours, nightWarnings, restWarnings, weekAverageOf, weeklyRestWarnings, type LimitKind, type LimitLevel, type LimitRule, type LimitRules, type PlannedWork } from '../shifts/limits'
 import { mondayOf } from '../shifts/rules'
 
 /**
@@ -13,6 +13,11 @@ import { mondayOf } from '../shifts/rules'
  *   OVERTIME_YEARLY_CAP  the overtime of the year against the cap (art. 5 c.3)
  *   DAILY_REST           the rest around a day, as worked, or before the next planned shift (art. 7)
  *   WEEKLY_AVERAGE       the hours worked over the reference period's weeks (art. 4)
+ *   WEEKLY_REST          B-W2b-GF2: the longest rest of last week (OVER when short) and of this week as worked and planned
+ *                        (NEAR when the plan would leave it short): 24 hours on top of the 11 of daily rest, over 14 days
+ *                        on average (art. 9)
+ *   NIGHT_AVERAGE        B-W2b-GF2: a night worker's day (3 hours or more at night) at most 8 hours, yesterday, today and
+ *                        tomorrow (art. 13): OVER on a day worked, NEAR on a day still planned
  *
  * A check is OK, NEAR (at NEAR_PERCENT of the limit, or a rest that would break it if the plan is kept) or OVER, and its
  * level is the rule's: WARN shows; BLOCK holds an approval until a person says why it stands. Each check is about ONE
@@ -23,7 +28,7 @@ export const LIMIT_STATES = ['OK', 'NEAR', 'OVER'] as const
 export type LimitState = (typeof LIMIT_STATES)[number]
 
 /** The limits checked against worked time, in the order the design lists them. */
-export const CHECKED_LIMITS = ['OVERTIME_YEARLY_CAP', 'DAILY_REST', 'WEEKLY_AVERAGE'] as const satisfies readonly LimitKind[]
+export const CHECKED_LIMITS = ['OVERTIME_YEARLY_CAP', 'DAILY_REST', 'WEEKLY_AVERAGE', 'WEEKLY_REST', 'NIGHT_AVERAGE'] as const satisfies readonly LimitKind[]
 export type CheckedLimit = (typeof CHECKED_LIMITS)[number]
 
 /** A check turns NEAR at this share of the limit. */
@@ -97,6 +102,32 @@ export function averageCheck(input: { readonly work: readonly PlannedWork[]; rea
   }
 }
 
+/**
+ * B-W2b-GF2: the weekly rest (art. 9) of last week, all worked (OVER when short), and of this week, worked so far and
+ * planned ahead (NEAR when the plan would leave it short). `window`: the days `work` covers (shifts/limits weeklyRestWindow).
+ */
+export function weeklyRestCheck(input: { readonly work: readonly PlannedWork[]; readonly date: BusinessDate; readonly timeZone: string; readonly window: { readonly from: BusinessDate; readonly to: BusinessDate } }, rule: LimitRule, dailyRest: LimitRule): LimitCheck {
+  const week = mondayOf(input.date)
+  const lastWeek = plusDays(week, -1)
+  const found = weeklyRestWarnings(input.work, rule, dailyRest, new Set([lastWeek, input.date]), input.window, input.timeZone)
+  const worst = found.find((warning) => warning.date === lastWeek) ?? found[0]
+  const needed = rule.limitMinutes + dailyRest.limitMinutes
+  if (!worst) {
+    return { rule: 'WEEKLY_REST', state: 'OK', level: rule.action, date: input.date, law: rule.legalReference, words: `At least ${hours(rule.limitMinutes)} of consecutive rest every 7 days on top of the ${hours(dailyRest.limitMinutes)} between shifts (${hours(needed)}), as an average over 14 days (${rule.legalReference})`, values: { neededMinutes: needed, limitMinutes: rule.limitMinutes, dailyRestMinutes: dailyRest.limitMinutes } }
+  }
+  return { rule: 'WEEKLY_REST', state: worst.date === lastWeek ? 'OVER' : 'NEAR', level: rule.action, date: worst.date, law: rule.legalReference, words: worst.words, values: worst.values }
+}
+
+/** B-W2b-GF2: a night worker's day (art. 13) yesterday, today and tomorrow: OVER on a day worked, NEAR on one still planned. */
+export function nightCheck(input: { readonly work: readonly PlannedWork[]; readonly date: BusinessDate; readonly workedDates: ReadonlySet<BusinessDate>; readonly timeZone: string }, rule: LimitRule): LimitCheck {
+  const found = nightWarnings(input.work, rule, new Set([plusDays(input.date, -1), input.date, plusDays(input.date, 1)]), input.timeZone)
+  const worst = found.find((warning) => input.workedDates.has(warning.date)) ?? found[0]
+  if (!worst) {
+    return { rule: 'NIGHT_AVERAGE', state: 'OK', level: rule.action, date: input.date, law: rule.legalReference, words: `A night worker works at most ${hours(rule.limitMinutes)} in 24 hours (${rule.legalReference})`, values: { limitMinutes: rule.limitMinutes } }
+  }
+  return { rule: 'NIGHT_AVERAGE', state: input.workedDates.has(worst.date) ? 'OVER' : 'NEAR', level: rule.action, date: worst.date, law: rule.legalReference, words: worst.words, values: worst.values }
+}
+
 export interface ChecksInput {
   readonly date: BusinessDate
   /** The days of `work` already worked (the others are the plan). */
@@ -108,11 +139,19 @@ export interface ChecksInput {
   readonly work: readonly PlannedWork[]
   /** The year's overtime the cap is checked on. */
   readonly overtimeMinutes: number
+  /** B-W2b-GF2: the days `work` covers (the weekly rest reads whole weeks only); left out: no weekly rest check is decided. */
+  readonly window?: { readonly from: BusinessDate; readonly to: BusinessDate }
 }
 
-/** One person's checks on a day, always all three (a tone each), in the design's order. */
+/** One person's checks on a day, always all five (a tone each), in the design's order, then (B-W2b-GF2) weekly rest and night work. */
 export function limitChecks(input: ChecksInput): LimitCheck[] {
-  return [yearlyCapCheck({ date: input.date, minutes: input.overtimeMinutes }, input.rules.OVERTIME_YEARLY_CAP), restCheck(input, input.rules.DAILY_REST), averageCheck(input, input.rules.WEEKLY_AVERAGE)]
+  return [
+    yearlyCapCheck({ date: input.date, minutes: input.overtimeMinutes }, input.rules.OVERTIME_YEARLY_CAP),
+    restCheck(input, input.rules.DAILY_REST),
+    averageCheck(input, input.rules.WEEKLY_AVERAGE),
+    weeklyRestCheck({ ...input, window: input.window ?? { from: input.date, to: input.date } }, input.rules.WEEKLY_REST, input.rules.DAILY_REST),
+    nightCheck(input, input.rules.NIGHT_AVERAGE),
+  ]
 }
 
 /** The checks that hold an approval: over the limit, and the rule blocks. */

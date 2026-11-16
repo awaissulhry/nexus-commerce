@@ -1178,13 +1178,15 @@
       "italy": "Italy",
       "eu": "Another EU state ({country})",
       "outside": "Outside the EU ({country})",
-      "unknown": "Not known"
+      "unknown": "Not known",
+      "special": "{territory} ({country}): a special fiscal territory"
     },
     "what": {
       "italy": "Not needed: delivered in Italy.",
       "eu": "Inside the EU no customs papers are needed; a zero-rated sale keeps its transport evidence (above).",
       "outside": "Goods leaving the EU need export papers and the proof of exit (art. 8 DPR 633/72).",
-      "unknown": "The ship-to has no country."
+      "unknown": "The ship-to has no country.",
+      "special": "Outside the EU's VAT area: the goods need export papers and the proof of exit (art. 8 DPR 633/72), even inside the EU's customs territory."
     }
   }
 }

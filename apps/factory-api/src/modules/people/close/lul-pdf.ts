@@ -1,13 +1,15 @@
 import PDFDocument from 'pdfkit'
 import { pageLabel } from '@nexus/factory-domain/documents/compose'
 import type { LulCalendar, LulRow } from '@nexus/factory-domain/people/close/lul'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 
 /**
  * The LUL attendance calendar's PDF (B-W2b-48; design people.attendance new tab "LUL calendar (PDF)"): A4 landscape, one block
  * per person, a column per day of the month and the sum. What it says is decided by factory-domain people/close/lul; the
  * metadata comes from the calendar only (the creation date is the close), so the same calendar gives the same bytes and
- * the seal can be checked. The standard fonts only (as every document here).
+ * the seal can be checked. The documents platform's embedded fonts (as every document here; B-W2b-GF2).
  */
 
 const MARGIN = { top: 30, bottom: 44, left: 24, right: 24 } as const
@@ -29,8 +31,9 @@ export async function renderLulPdf(calendar: LulCalendar): Promise<Buffer> {
     compress: true,
     lang: 'it',
     displayTitle: true,
-    info: { Title: winAnsi(`${calendar.title} ${calendar.heading}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: calendar.createdAt },
+    info: { Title: printableText(`${calendar.title} ${calendar.heading}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: calendar.createdAt },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -42,8 +45,8 @@ export async function renderLulPdf(calendar: LulCalendar): Promise<Buffer> {
   const bottom = pdf.page.height - MARGIN.bottom
   const dayWidth = (width - LABEL_WIDTH - SUM_WIDTH) / Math.max(calendar.days.length, 1)
   const text = (value: string, x: number, y: number, options: PDFKit.Mixins.TextOptions & { font?: string; size?: number; color?: string } = {}): number => {
-    const { font = 'Helvetica', size = 6.5, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineBreak: rest.width !== undefined, ...rest })
+    const { font = FONT.regular, size = 6.5, color = TEXT, ...rest } = options
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineBreak: rest.width !== undefined, ...rest })
     return pdf.y
   }
   const cell = (x: number, y: number, cellWidth: number, height: number): void => {
@@ -53,11 +56,11 @@ export async function renderLulPdf(calendar: LulCalendar): Promise<Buffer> {
     pdf.save().rect(left, y, width, HEAD_HEIGHT).fillColor(SHADE).fill().restore()
     let x = left + LABEL_WIDTH
     for (const day of calendar.days) {
-      text(day.day, x, y + 2, { font: 'Helvetica-Bold', width: dayWidth, align: 'center' })
+      text(day.day, x, y + 2, { font: FONT.bold, width: dayWidth, align: 'center' })
       text(day.weekday, x, y + 10, { size: 5.5, color: MUTED, width: dayWidth, align: 'center' })
       x += dayWidth
     }
-    text('Tot.', x, y + 6, { font: 'Helvetica-Bold', width: SUM_WIDTH, align: 'center' })
+    text('Tot.', x, y + 6, { font: FONT.bold, width: SUM_WIDTH, align: 'center' })
     return y + HEAD_HEIGHT
   }
   const line = (row: LulRow, y: number): number => {
@@ -70,12 +73,12 @@ export async function renderLulPdf(calendar: LulCalendar): Promise<Buffer> {
       x += dayWidth
     }
     cell(x, y, SUM_WIDTH, ROW_HEIGHT)
-    if (row.sum) text(row.sum, x, y + 3, { font: 'Helvetica-Bold', width: SUM_WIDTH, align: 'center' })
+    if (row.sum) text(row.sum, x, y + 3, { font: FONT.bold, width: SUM_WIDTH, align: 'center' })
     return y + ROW_HEIGHT
   }
 
   let y = text(calendar.title, left, MARGIN.top, { size: 10, color: MUTED, width })
-  y = text(calendar.heading, left, y + 1, { font: 'Helvetica-Bold', size: 14, width })
+  y = text(calendar.heading, left, y + 1, { font: FONT.bold, size: 14, width })
   y = text(calendar.facts.join('   ·   '), left, y + 3, { size: 8, color: MUTED, width })
   y = text(calendar.legend, left, y + 2, { size: 7, color: MUTED, width }) + 6
   if (calendar.blocks.length === 0) text('Nessuna persona in questo mese.', left, y + 12, { size: 12, width })
@@ -85,7 +88,7 @@ export async function renderLulPdf(calendar: LulCalendar): Promise<Buffer> {
       pdf.addPage()
       y = MARGIN.top
     }
-    text(`${block.title}${block.note ? ` - ${block.note}` : ''}`, left, y + 2, { font: 'Helvetica-Bold', size: 8.5, width })
+    text(`${block.title}${block.note ? ` - ${block.note}` : ''}`, left, y + 2, { font: FONT.bold, size: 8.5, width })
     y = dayHead(y + 14)
     for (const row of block.rows) y = line(row, y)
     y += 6

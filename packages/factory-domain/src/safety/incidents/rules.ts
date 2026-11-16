@@ -6,7 +6,9 @@
  * art. 18 c.1 r (the INAIL communication: an absence of at least one day beyond the day of the event, a statistical
  * communication; over three days, the insurance report; both within 48 hours of receiving the medical certificate; filed on
  * the INAIL portal by hand) and GDPR art. 9 (the people involved and their injuries). No deadline here that the plan does
- * not give: the reminders before the 48 hours are this module's own, not the law's.
+ * not give: the reminders before the 48 hours are this module's own, not the law's. B-W2b-GF2 (Owner G505 A): a fatal or
+ * presumed fatal accident is a filing of its own (FATAL), due 24 hours after the accident by any means (DPR 1124/1965
+ * art. 53), with no certificate.
  */
 
 export const INCIDENT_KINDS = ['INJURY', 'NEAR_MISS', 'HAZARD'] as const
@@ -41,7 +43,8 @@ export type ActionStatus = (typeof ACTION_STATUSES)[number]
 export const ACTION_LINKS = ['MAINTENANCE_JOB', 'RISK_MEASURE', 'TRAINING_SESSION'] as const
 export type ActionLink = (typeof ACTION_LINKS)[number]
 
-export const FILING_TYPES = ['STATISTICAL', 'INSURANCE'] as const
+// B-W2b-GF2 (Owner G505 A): FATAL, a fatal or presumed fatal accident, reported within 24 hours of it (DPR 1124/1965 art. 53).
+export const FILING_TYPES = ['STATISTICAL', 'INSURANCE', 'FATAL'] as const
 export type FilingType = (typeof FILING_TYPES)[number]
 export const FILING_STATUSES = ['WAITING_CERTIFICATE', 'DUE', 'FILED', 'NOT_NEEDED'] as const
 export type FilingStatus = (typeof FILING_STATUSES)[number]
@@ -62,8 +65,12 @@ export const INAIL_RULE = Object.freeze({
   insuranceAboveDays: 3,
   /** Both within this many hours of receiving the medical certificate. */
   hoursAfterCertificate: 48,
+  /** B-W2b-GF2: a fatal or presumed fatal accident, within this many hours of the accident, by any means (DPR 1124/1965 art. 53). */
+  hoursAfterFatalAccident: 24,
 })
 export const FILING_WINDOW_MS = INAIL_RULE.hoursAfterCertificate * 3_600_000
+/** B-W2b-GF2: the law of the fatal accident's report. */
+export const FATAL_LAW = 'DPR 1124/1965 art. 53'
 
 /** The rule in plain words, as the Authority notice tab shows it (it, en). */
 export const INAIL_RULE_WORDS = Object.freeze({
@@ -71,11 +78,13 @@ export const INAIL_RULE_WORDS = Object.freeze({
     'An absence of at least one day beyond the day of the event: a statistical communication to INAIL.',
     'An absence of more than three days: the insurance report to INAIL.',
     'Both within 48 hours of receiving the medical certificate, filed by hand on the INAIL portal; Nexus records the filing.',
+    'A fatal or presumed fatal accident: reported to INAIL within 24 hours of the accident, by any means that proves it was sent (DPR 1124/1965 art. 53); no certificate is waited for.',
   ],
   it: [
     'Assenza di almeno un giorno oltre quello dell’evento: comunicazione a fini statistici all’INAIL.',
     'Assenza di oltre tre giorni: denuncia a fini assicurativi all’INAIL.',
     'Entrambe entro 48 ore dalla ricezione del certificato medico, inviate a mano sul portale INAIL; Nexus registra l’invio.',
+    'Infortunio mortale o con pericolo di morte: denuncia all’INAIL entro 24 ore dall’infortunio, con qualsiasi mezzo che ne provi l’invio (DPR 1124/1965 art. 53); non si attende il certificato.',
   ],
 })
 
@@ -180,6 +189,9 @@ export const INCIDENT_REFUSALS = [
   'FILED_BEFORE_CERTIFICATE',
   'FILED_IN_FUTURE',
   'PERSON_HAS_FILING',
+  // B-W2b-GF2: the fatal accident's report.
+  'FATAL_NO_CERTIFICATE',
+  'FILED_BEFORE_EVENT',
   'PHOTOS_FULL',
   'PHOTO_WINDOW',
 ] as const
@@ -225,6 +237,8 @@ export const REFUSAL_WORDS: Readonly<Record<IncidentRefusalCode, string>> = Obje
   FILED_BEFORE_CERTIFICATE: 'A filing is sent after the certificate was received.',
   FILED_IN_FUTURE: 'It was filed at the latest now.',
   PERSON_HAS_FILING: 'This person has an INAIL filing: they stay in the incident (mark the filing not needed if it was a mistake).',
+  FATAL_NO_CERTIFICATE: 'A fatal accident is reported within 24 hours of the accident, not of a certificate: it takes no certificate and no absence.',
+  FILED_BEFORE_EVENT: 'A filing is sent after the incident happened.',
   PHOTOS_FULL: 'A report from a tablet takes up to 4 photos; the office adds more.',
   PHOTO_WINDOW: 'A tablet adds photos within 30 minutes of its report; later the office adds them.',
 })
@@ -316,6 +330,9 @@ export function filingsToAdd(absenceDays: number, existing: readonly FilingType[
 /** The deadline: 48 hours after the certificate was received, to the millisecond (the guard's rule). */
 export const dueAtOf = (certificateReceivedAt: Date): Date => new Date(certificateReceivedAt.getTime() + FILING_WINDOW_MS)
 
+/** B-W2b-GF2: a fatal accident's deadline, 24 hours after the incident happened, to the millisecond (the guard's rule). */
+export const fatalDueAtOf = (occurredAt: Date): Date => new Date(occurredAt.getTime() + INAIL_RULE.hoursAfterFatalAccident * 3_600_000)
+
 /** The state the screen shows: a DUE filing past its deadline is OVERDUE (shown, never refused). */
 export function filingStateOf(filing: { readonly status: FilingStatus; readonly dueAt: Date | null }, now: Date): FilingState {
   if (filing.status === 'DUE' && filing.dueAt !== null && filing.dueAt.getTime() < now.getTime()) return 'OVERDUE'
@@ -374,9 +391,17 @@ export function certificateRefusal(receivedAt: Date, facts: { readonly occurredA
   return null
 }
 
-/** Recording the filing (null: fine): after the certificate, at the latest now, with INAIL's protocol number. */
-export function fileRefusal(filing: { readonly status: FilingStatus; readonly certificateReceivedAt: Date | null }, filedAt: Date, now: Date): IncidentRefusal | null {
+/**
+ * Recording the filing (null: fine): after the certificate, at the latest now, with INAIL's protocol number. B-W2b-GF2: a
+ * fatal accident's report has no certificate; it is sent after the incident happened.
+ */
+export function fileRefusal(filing: { readonly status: FilingStatus; readonly certificateReceivedAt: Date | null; readonly type?: FilingType; readonly occurredAt?: Date }, filedAt: Date, now: Date): IncidentRefusal | null {
   if (filing.status === 'FILED') return refusalOf('FILING_FILED')
+  if (filing.type === 'FATAL') {
+    if (filedAt.getTime() > now.getTime()) return refusalOf('FILED_IN_FUTURE', 'filedAt')
+    if (filing.occurredAt && filedAt.getTime() < filing.occurredAt.getTime()) return refusalOf('FILED_BEFORE_EVENT', 'filedAt')
+    return null
+  }
   if (filing.certificateReceivedAt === null) return refusalOf('CERTIFICATE_MISSING', 'certificateReceivedAt')
   if (filedAt.getTime() > now.getTime()) return refusalOf('FILED_IN_FUTURE', 'filedAt')
   if (filedAt.getTime() < filing.certificateReceivedAt.getTime()) return refusalOf('FILED_BEFORE_CERTIFICATE', 'filedAt')

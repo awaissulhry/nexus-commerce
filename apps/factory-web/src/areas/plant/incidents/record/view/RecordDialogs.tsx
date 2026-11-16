@@ -362,9 +362,11 @@ function FilingDialog({ model, dialog, incident, actions }: { model: IncidentRec
   const set = (change: Partial<typeof draft>) => actions?.onFilingDraft?.({ ...draft, ...change })
   const now = new Date()
   const held = filingDraftHeld(draft, filing, { occurredAt: incident.occurredAt, now }) ?? (planEmpty(filingPlan(draft, filing)) ? 'held.noChange' : null)
-  const type = filing ? filing.type : filingTypeFor(draft.expectedAbsenceDays)
+  const type = filing ? filing.type : draft.fatal ? 'FATAL' : filingTypeFor(draft.expectedAbsenceDays)
   const certificateAt = draft.certificateReceivedAt ? new Date(draft.certificateReceivedAt) : null
   const dueBy = certificateAt ? new Date(certificateAt.getTime() + incident.inail.rule.hoursAfterCertificate * 3_600_000).toISOString() : null
+  // B-W2b-GF2: a fatal accident's report is due 24 hours after the accident (no absence, no certificate).
+  const fatalDueBy = new Date(new Date(incident.occurredAt).getTime() + incident.inail.rule.hoursAfterFatalAccident * 3_600_000).toISOString()
   const at = (field: string) => (dialog.problem?.field === field ? t(dialog.problem.key) : undefined)
   const filed = filing?.status === 'FILED'
 
@@ -402,6 +404,10 @@ function FilingDialog({ model, dialog, incident, actions }: { model: IncidentRec
             <option value="new">{t('filingDialog.new')}</option>
           </Select>
         </Field>
+        {draft.filingId === 'new' && (
+          <Checkbox label={t('filingDialog.fatal')} checked={draft.fatal} onChange={(event) => set({ fatal: event.target.checked, ...(event.target.checked ? { expectedAbsenceDays: '', certificateReceivedAt: '', certificateReference: '' } : {}) })} />
+        )}
+        {draft.fatal && <Banner tone="warning" title={t('filingDialog.fatalTitle')}>{t('filingDialog.fatalHint', { at: when.at(fatalDueBy) })}</Banner>}
         {draft.filingId === 'new' ? (
           <div className="fw-inc-form-row">
             <Field label={t('filingDialog.person')} required error={at('incidentPersonId')} hint={people.length === 0 ? t('filingDialog.noPerson') : undefined}>
@@ -414,8 +420,16 @@ function FilingDialog({ model, dialog, incident, actions }: { model: IncidentRec
                 ))}
               </Select>
             </Field>
-            <Field label={t('filing.expected')} required error={at('expectedAbsenceDays')} hint={type ? t('filingDialog.calls', { type: t(`filingType.${type}`) }) : draft.expectedAbsenceDays.trim() ? t('refusal.NO_FILING_NEEDED') : t('filingDialog.daysHint')}>
-              <Input inputMode="numeric" value={draft.expectedAbsenceDays} onChange={(event) => set({ expectedAbsenceDays: event.target.value })} />
+            {!draft.fatal && (
+              <Field label={t('filing.expected')} required error={at('expectedAbsenceDays')} hint={type ? t('filingDialog.calls', { type: t(`filingType.${type}`) }) : draft.expectedAbsenceDays.trim() ? t('refusal.NO_FILING_NEEDED') : t('filingDialog.daysHint')}>
+                <Input inputMode="numeric" value={draft.expectedAbsenceDays} onChange={(event) => set({ expectedAbsenceDays: event.target.value })} />
+              </Field>
+            )}
+          </div>
+        ) : filing?.type === 'FATAL' ? (
+          <div className="fw-inc-form-row">
+            <Field label={t('filingDialog.type')} hint={t('filingDialog.fatalTypeHint')}>
+              <Input value={t('filingType.FATAL')} readOnly />
             </Field>
           </div>
         ) : filing ? (
@@ -431,14 +445,16 @@ function FilingDialog({ model, dialog, incident, actions }: { model: IncidentRec
             </Field>
           </div>
         ) : null}
-        <div className="fw-inc-form-row">
-          <Field label={t('filingDialog.certificateAt')} error={at('certificateReceivedAt')} hint={dueBy ? t('filingDialog.dueBy', { at: when.at(dueBy) }) : t('filingDialog.certificateHint')}>
-            <DateTimeField value={draft.certificateReceivedAt} onChange={(value) => set({ certificateReceivedAt: value })} min={incident.occurredAt} max={now.toISOString()} stepMinutes={5} ariaLabel={t('filingDialog.certificateAt')} disabled={filed} />
-          </Field>
-          <Field label={t('filingDialog.certificateRef')} error={at('certificateReference')}>
-            <Input value={draft.certificateReference} disabled={filed} onChange={(event) => set({ certificateReference: event.target.value })} maxLength={100} />
-          </Field>
-        </div>
+        {!draft.fatal && (
+          <div className="fw-inc-form-row">
+            <Field label={t('filingDialog.certificateAt')} error={at('certificateReceivedAt')} hint={dueBy ? t('filingDialog.dueBy', { at: when.at(dueBy) }) : t('filingDialog.certificateHint')}>
+              <DateTimeField value={draft.certificateReceivedAt} onChange={(value) => set({ certificateReceivedAt: value })} min={incident.occurredAt} max={now.toISOString()} stepMinutes={5} ariaLabel={t('filingDialog.certificateAt')} disabled={filed} />
+            </Field>
+            <Field label={t('filingDialog.certificateRef')} error={at('certificateReference')}>
+              <Input value={draft.certificateReference} disabled={filed} onChange={(event) => set({ certificateReference: event.target.value })} maxLength={100} />
+            </Field>
+          </div>
+        )}
         <fieldset className="fw-inc-fieldset">
           <legend>{t('filingDialog.filedLegend')}</legend>
           <p className="fw-inc-muted">{t('filingDialog.filedHint')}</p>

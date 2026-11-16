@@ -310,6 +310,46 @@ describe('the INAIL deadline (QHS-268; D.Lgs. 81/2008 art. 18 c.1 r)', () => {
     const after = await systemCaller.withClient((client) => client.$transaction((tx) => INCIDENT_RULES[1]!.drafts(ruleContext(tx, T.tenant, new Date()), { timerId: timers[0]!.id, timerKey: 'INAIL_FILING_DUE:-4h', ruleId: null, recordType: 'InailFiling', recordId: filing.id })))
     expect(after).toEqual([])
   })
+
+  // B-W2b-GF2 (Owner G505 A): a fatal or presumed fatal accident (DPR 1124/1965 art. 53).
+  it('reports a fatal accident within 24 hours of it: due at once from the accident, no absence, no certificate; the deadline follows the corrected time', async () => {
+    const occurredAt = hoursAgo(6)
+    const injury = (await ok('officer', 'POST', '/safety/incidents', { companyId: T.companyA, siteId: T.siteA1, kind: 'INJURY', occurredAt, what: 'Made-up fall from the mezzanine.', place: 'Made-up mezzanine', people: [{ involvement: 'INJURED', employeeId: E2, bodyParts: ['HEAD'], nature: 'OTHER' }] }, 201)).incident
+    const person = (await ok('officer', 'POST', `/safety/incidents/${injury.id}/people/open`)).people[0]
+    expect(await no('hr', 'POST', `/safety/incidents/${injury.id}/filings`, { incidentPersonId: person.id, fatal: true, certificateReceivedAt: hoursAgo(1) }, 409)).toContain('refusal/FATAL_NO_CERTIFICATE')
+    expect(await no('hr', 'POST', `/safety/incidents/${injury.id}/filings`, { incidentPersonId: person.id, fatal: true, expectedAbsenceDays: 30 }, 409)).toContain('refusal/FATAL_NO_CERTIFICATE')
+    expect(await no('hr', 'POST', `/safety/incidents/${injury.id}/filings`, { incidentPersonId: person.id }, 400)).toContain('body/expectedAbsenceDays')
+    const added = await ok('hr', 'POST', `/safety/incidents/${injury.id}/filings`, { incidentPersonId: person.id, fatal: true }, 201)
+    const fatal = added.filings[0]
+    expect(fatal).toMatchObject({ status: 'DUE', dueAt: new Date(new Date(occurredAt).getTime() + 24 * 3_600_000).toISOString() })
+    expect(JSON.stringify(added)).not.toMatch(/FATAL/)
+    expect(await no('hr', 'POST', `/safety/incidents/${injury.id}/filings`, { incidentPersonId: person.id, fatal: true }, 409)).toContain('refusal/FILING_EXISTS')
+    // The 24-hour stage passed with the accident: it fires at once; then 4 hours before and at the deadline.
+    const timers = await admin(`SELECT "timerKey" FROM "DueTimer" WHERE "recordType" = 'InailFiling' AND "recordId" = $1 ORDER BY "fireAt"`, [fatal.id])
+    expect(timers.map((timer) => timer.timerKey)).toEqual(['INAIL_FILING_DUE:-24h', 'INAIL_FILING_DUE:-4h', 'INAIL_FILING_DUE'])
+    // The critical banner: under 24 hours from the start.
+    const record = (await ok('viewer', 'GET', `/safety/incidents/${injury.id}`)).incident
+    expect(record.inail.deadlines.find((deadline: Json) => deadline.id === fatal.id)).toMatchObject({ state: 'DUE', countdown: { under24h: true, late: false } })
+    expect(record.inail.rule).toMatchObject({ hoursAfterFatalAccident: 24 })
+    const opened = (await ok('hr', 'POST', `/safety/incidents/${injury.id}/filings/open`)).filings.find((filing: Json) => filing.id === fatal.id)
+    expect(opened).toMatchObject({ type: 'FATAL', certificateReceivedAt: null, expectedAbsenceDays: null })
+    // No certificate or absence on it later.
+    expect(await no('hr', 'PATCH', `/safety/incidents/${injury.id}/filings/${fatal.id}`, { version: 1, certificateReceivedAt: hoursAgo(1) }, 409)).toContain('refusal/FATAL_NO_CERTIFICATE')
+    // The incident's time corrected: the deadline follows (24 hours after the new time), the reminders too.
+    const corrected = hoursAgo(8)
+    await ok('officer', 'PATCH', `/safety/incidents/${injury.id}`, { version: record.version, occurredAt: corrected })
+    const [moved] = await admin(`SELECT "dueAt", version FROM "InailFiling" WHERE id = $1`, [fatal.id])
+    expect(new Date(moved!.dueAt).toISOString()).toBe(new Date(new Date(corrected).getTime() + 24 * 3_600_000).toISOString())
+    expect((await admin(`SELECT DISTINCT "dueAt" FROM "DueTimer" WHERE "recordId" = $1 AND status = 'PENDING'`, [fatal.id])).map((row) => new Date(row.dueAt).toISOString())).toEqual([new Date(moved!.dueAt).toISOString()])
+    // The database holds the 24 hours too, for every login.
+    await expect(admin(`UPDATE "InailFiling" SET "dueAt" = "dueAt" + interval '1 hour' WHERE id = $1`, [fatal.id])).rejects.toThrow(/24 hours after the incident happened/)
+    await expect(admin(`UPDATE "InailFiling" SET "certificateReceivedAt" = now() WHERE id = $1`, [fatal.id])).rejects.toThrow(/fatal accident/)
+    // Filed: not before the accident, not in the future.
+    expect(await no('hr', 'POST', `/safety/incidents/${injury.id}/filings/${fatal.id}/file`, { version: moved!.version, filedAt: hoursAgo(9), protocolNumber: 'MADE-UP-FATAL-1' }, 409)).toContain('refusal/FILED_BEFORE_EVENT')
+    const filed = await ok('hr', 'POST', `/safety/incidents/${injury.id}/filings/${fatal.id}/file`, { version: moved!.version, filedAt: hoursAgo(5), protocolNumber: 'MADE-UP-FATAL-1' })
+    expect(filed.filing).toMatchObject({ status: 'FILED' })
+    expect((await admin(`SELECT status::text AS status FROM "DueTimer" WHERE "recordId" = $1`, [fatal.id])).every((row) => row.status === 'CANCELLED')).toBe(true)
+  })
 })
 
 describe('actions become a job, a measure or a training session in one step; close and reopen', () => {

@@ -115,6 +115,13 @@ export const designScreen = defineDesignScreen<RecordCase>({
       note: '2 days: "calls for the statistical communication"; 0 days needs no filing (said, held).',
     },
     {
+      // B-W2b-GF2 (Owner G505 A): a fatal or presumed fatal accident.
+      id: 'filing-fatal',
+      label: 'Record INAIL filing: a fatal or presumed fatal accident (24 hours)',
+      model: base('hr', 'authority', { filings: filingsOpen([]), people: open(PEOPLE), dialog: { kind: 'filing', draft: { ...filingDraftOf(null, PEOPLE), fatal: true }, busy: false, problem: null, done: [] } }, { inail: { deadlines: [], canOpen: false, law: RULE.law, rule: RULE } }),
+      note: 'Fatal ticked: no absence, no certificate; due 24 hours after the accident (DPR 1124/1965 art. 53), by any means.',
+    },
+    {
       id: 'filing-refused',
       label: 'Record INAIL filing: refused (filed before the certificate)',
       model: base('hr', 'authority', { filings: filingsOpen(), people: open(PEOPLE), dialog: { kind: 'filing', draft: { ...filingDraftOf(FILINGS[0]!, PEOPLE), filedAt: DEMO_DAYS.hours(-40), protocolNumber: 'DEMO-PROT-7781' }, busy: false, problem: { key: 'refusal.FILED_BEFORE_CERTIFICATE', field: 'filedAt' }, done: [] } }),

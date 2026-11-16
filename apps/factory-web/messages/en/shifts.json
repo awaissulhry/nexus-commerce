@@ -162,8 +162,10 @@
   "law": {
     "BREAK_AFTER": "A break once the working day passes 6 hours.",
     "DAILY_REST": "At least 11 consecutive hours of rest every 24 hours.",
+    "NIGHT_AVERAGE": "A night worker works at most 8 hours in 24, on average.",
     "OVERTIME_YEARLY_CAP": "At most 250 hours of overtime a year, unless the contract says otherwise.",
-    "WEEKLY_AVERAGE": "At most 48 hours a week on average, overtime included."
+    "WEEKLY_AVERAGE": "At most 48 hours a week on average, overtime included.",
+    "WEEKLY_REST": "At least 24 consecutive hours of rest every 7 days, on top of the 11 hours of daily rest, averaged over 14 days."
   },
   "legend": {
     "default": "Faint: default shift",
@@ -405,8 +407,15 @@
       "rest": "Rest {rest} between {from} ({day}) and {to} — minimum {limit}",
       "span": "A working day of {span} ({from}–{to}) leaves less than {limit} of rest in 24 hours"
     },
+    "NIGHT_AVERAGE": "{work} of work {from}–{to}, {night} of it at night — a night worker works at most {limit} in 24 hours",
     "OVERTIME_YEARLY_CAP": "Planned overtime in {year} would be {planned} — at most {limit} a year",
-    "WEEKLY_AVERAGE": "{week} planned in the week of {day}; {average} a week on average over {weeks} weeks — at most {limit} on average over {months} months"
+    "OVERTIME_YEARLY_CAP_WITH_WORKED": "Planned overtime in {year} would pass the yearly cap together with the overtime already worked — at most {limit} a year",
+    "OVERTIME_YEARLY_CAP_WORKED": "Overtime in {year} would be {total} ({worked} worked, {planned} planned) — at most {limit} a year",
+    "WEEKLY_AVERAGE": "{week} planned in the week of {day}; {average} a week on average over {weeks} weeks — at most {limit} on average over {months} months",
+    "WEEKLY_REST": {
+      "none": "No rest in the week of {day} — at least {needed} ({limit} on top of the {daily} between shifts), averaged over 14 days",
+      "rest": "Longest rest in the week of {day}: {rest} (from {from} to {to}) — at least {needed} ({limit} on top of the {daily} between shifts), averaged over 14 days"
+    }
   },
   "why": {
     "block": "People settings hold this: the change is refused until it is solved.",

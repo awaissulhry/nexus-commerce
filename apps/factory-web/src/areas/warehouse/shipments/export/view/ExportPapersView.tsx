@@ -128,6 +128,10 @@ function Facts({ read, model }: { read: ExportRead; model: ExportPapersModel }) 
       labelCase="sentence"
       items={[
         { label: t('export.destination'), value: country ? t(`export.class.${read.destination.class ?? 'unknown'}`, { country: regionName(country, locale) }) : t('export.noCountry') },
+        // B-W2b-GF2: a special fiscal territory says so, with what it means for the goods and the law.
+        ...(read.destination.territory
+          ? [{ label: t('export.territory'), value: <span className="fw-sh-hint">{locale.startsWith('it') ? read.destination.territory.words.it : read.destination.territory.words.en}</span> }]
+          : []),
         ...(read.needed ? [{ label: t('export.terms'), value: read.deliveryTerms ?? t('export.noTerms') }] : []),
         ...(read.needed
           ? [

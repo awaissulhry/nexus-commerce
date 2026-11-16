@@ -13,7 +13,9 @@ import { supplierLanguageOf } from '@nexus/factory-domain/purchasing/orders'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { companyLegalOf } from '../../../platform/documents/documents'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 import { sendEmail } from '../../../platform/email-out/outbound'
 import { putGeneratedFile, recordGeneratedFile, type PreparedGeneratedFile } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
@@ -27,7 +29,7 @@ import { byId, ids, type Reader, type ReceiptRow } from './store'
  * The discrepancy report to the supplier (B-W2a-31; SCM-118; design warehouse.receipts pop rc-disc-send "the PDF preview
  * · recipients from the supplier's contacts · message", tab rc-tab-disc): the receipt's discrepancies as a PDF without
  * prices (Owner answer C2), composed in the supplier's language by factory-domain inventory/receipts/report and painted
- * here on A4 with pdfkit (the documents platform's standard fonts and WinAnsi rule), sent by e-mail on the receipt's
+ * here on A4 with pdfkit (the documents platform's embedded fonts, B-W2b-GF2), sent by e-mail on the receipt's
  * thread (GoodsReceipt: the supplier's party, so its reply comes back to the receipt). E-mail leaves through email out
  * (the worker delivers a QUEUED mail; FAKE SES locally and in tests): this step adds no real provider.
  *
@@ -47,8 +49,8 @@ import { byId, ids, type Reader, type ReceiptRow } from './store'
  * `inventory.receipt_discrepancies_reported`. A repeated Idempotency-Key answers the first send (no second mail).
  */
 
-const REGULAR = 'Helvetica'
-const BOLD = 'Helvetica-Bold'
+const REGULAR = FONT.regular
+const BOLD = FONT.bold
 const TEXT = '#111111'
 const MUTED = '#555555'
 const RULE = '#9a9a9a'
@@ -65,8 +67,9 @@ export async function renderDiscrepancyReport(report: DiscrepancyReport): Promis
     compress: true,
     lang: report.language,
     displayTitle: true,
-    info: { Title: winAnsi(report.meta.title), Subject: winAnsi(report.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(report.meta.createdAt) },
+    info: { Title: printableText(report.meta.title), Subject: printableText(report.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(report.meta.createdAt) },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -86,10 +89,10 @@ function paint(pdf: PDFKit.PDFDocument, report: DiscrepancyReport): void {
   const bottom = (): number => pdf.page.height - MARGIN.bottom
   const text = (value: string, x: number, y: number, options: PDFKit.Mixins.TextOptions & { font?: string; size?: number; color?: string } = {}): number => {
     const { font = REGULAR, size = 9, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1, ...rest })
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1, ...rest })
     return pdf.y
   }
-  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => pdf.font(font).fontSize(size).heightOfString(winAnsi(value), { width: w, lineGap: 1 })
+  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => pdf.font(font).fontSize(size).heightOfString(printableText(value), { width: w, lineGap: 1 })
 
   // Our company and its art. 2250 lines; the title on the right.
   const companyWidth = Math.round(width * 0.55)

@@ -20,7 +20,9 @@ import { TRACE_NODE_KINDS, type TraceDirection, type TraceStartKind } from '@nex
 import { command, type CommandCaller } from '../../../core/command'
 import { serverClock, type Clock } from '../../../core/time'
 import { companyLegalOf } from '../../../platform/documents/documents'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 import { putGeneratedFile, recordGeneratedFile } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
 import { mayAt, officeContextOf } from '../ledger/access'
@@ -146,8 +148,8 @@ export function mergeTraces(main: Trace, others: readonly { readonly include: In
 
 // ---- the PDF -------------------------------------------------------------------------------------------------------------
 
-const REGULAR = 'Helvetica'
-const BOLD = 'Helvetica-Bold'
+const REGULAR = FONT.regular
+const BOLD = FONT.bold
 const TEXT = '#111111'
 const MUTED = '#555555'
 const RULE = '#9a9a9a'
@@ -164,8 +166,9 @@ export async function renderTraceReport(report: TraceReport, madeAt: Date): Prom
     compress: true,
     lang: report.language,
     displayTitle: true,
-    info: { Title: winAnsi(report.title), Subject: winAnsi(report.title), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: madeAt },
+    info: { Title: printableText(report.title), Subject: printableText(report.title), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: madeAt },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -185,10 +188,10 @@ function paint(pdf: PDFKit.PDFDocument, report: TraceReport): void {
   const bottom = (): number => pdf.page.height - MARGIN.bottom
   const text = (value: string, x: number, y: number, options: PDFKit.Mixins.TextOptions & { font?: string; size?: number; color?: string } = {}): number => {
     const { font = REGULAR, size = 9, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1, ...rest })
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1, ...rest })
     return pdf.y
   }
-  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => pdf.font(font).fontSize(size).heightOfString(winAnsi(value), { width: w, lineGap: 1 })
+  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => pdf.font(font).fontSize(size).heightOfString(printableText(value), { width: w, lineGap: 1 })
   const newPage = (): number => {
     pdf.addPage()
     return text(`${report.company.name} · ${report.title}`, left, MARGIN.top, { size: 8, color: MUTED, width }) + 8

@@ -546,7 +546,8 @@ model InailFiling {
   /// The medical certificate's identifier (never the certificate, which carries the diagnosis), and when it was received.
   certificateReference  String?
   certificateReceivedAt DateTime?         @db.Timestamptz(3)
-  /// The deadline: 48 hours after the certificate was received; set with it.
+  /// The deadline: 48 hours after the certificate was received; set with it. B-W2b-GF2: a FATAL filing's is 24 hours
+  /// after the incident happened (it has no certificate).
   dueAt                 DateTime?         @db.Timestamptz(3)
   status                InailFilingStatus @default(WAITING_CERTIFICATE)
   filedAt               DateTime?         @db.Timestamptz(3)
@@ -574,6 +575,9 @@ enum InailFilingType {
   STATISTICAL
   /// Denuncia a fini assicurativi: an absence of more than three days.
   INSURANCE
+  /// B-W2b-GF2 (Owner G505 A): a fatal or presumed fatal accident (DPR 1124/1965 art. 53: within 24 hours of the
+  /// accident, by any means that proves it was sent): due 24 hours after the incident happened, no certificate.
+  FATAL
 }
 
 enum InailFilingStatus {

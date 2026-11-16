@@ -2,17 +2,19 @@ import PDFDocument from 'pdfkit'
 import { create as createQr } from 'qrcode'
 import { pageLabel } from '@nexus/factory-domain/documents/compose'
 import type { PaperBlock, PaperFact, PaperPicture, PaperTable, TechPackPaper } from '@nexus/factory-domain/product/techpack/paper'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 
 /**
  * The tech pack PDF's painter (B-W2b-230; PRD-131, PRD-138): the paper composed by factory-domain product/techpack paper.ts,
- * painted on A4 portrait with pdfkit's standard fonts (the documents platform's WinAnsi rule), as the work order traveller
+ * painted on A4 portrait with the documents platform's embedded fonts (B-W2b-GF2), as the work order traveller
  * is. Every page carries the header with the QR to the current version and its code (PRD-138); pictures are drawn from the
  * bytes the caller read (JPEG and PNG), their numbered callouts on top; a picture without bytes prints its caption and why.
  */
 
-const REGULAR = 'Helvetica'
-const BOLD = 'Helvetica-Bold'
+const REGULAR = FONT.regular
+const BOLD = FONT.bold
 const TEXT = '#111111'
 const MUTED = '#555555'
 const RULE = '#9a9a9a'
@@ -33,10 +35,10 @@ type TextOptions = PDFKit.Mixins.TextOptions & { font?: string; size?: number; c
 function writer(pdf: PDFKit.PDFDocument) {
   const text = (value: string, x: number, y: number, options: TextOptions = {}): number => {
     const { font = REGULAR, size = 8.5, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1, ...rest })
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1, ...rest })
     return pdf.y
   }
-  const heightOf = (value: string, width: number, font = REGULAR, size = 8.5): number => pdf.font(font).fontSize(size).heightOfString(winAnsi(value), { width, lineGap: 1 })
+  const heightOf = (value: string, width: number, font = REGULAR, size = 8.5): number => pdf.font(font).fontSize(size).heightOfString(printableText(value), { width, lineGap: 1 })
   return { text, heightOf }
 }
 
@@ -70,8 +72,9 @@ export async function renderTechPack(paper: TechPackPaper, pictures: ReadonlyMap
     compress: true,
     lang: paper.language,
     displayTitle: true,
-    info: { Title: winAnsi(paper.meta.title), Subject: winAnsi(paper.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(paper.meta.createdAt) },
+    info: { Title: printableText(paper.meta.title), Subject: printableText(paper.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(paper.meta.createdAt) },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {

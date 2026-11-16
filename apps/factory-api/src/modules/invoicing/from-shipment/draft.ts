@@ -25,6 +25,8 @@ import { feeLinesFor } from '../../sales/price-waterfall/fee-invoicing'
 // B-W2b-396: the orders' currency (FIN-063); priced changes' fees invoiced once, fees on a DDT (VI1:01, VI1:02).
 import { invoiceCurrencyOf } from '@nexus/factory-domain/invoicing/language-currency/language-currency'
 import { changeFeeLinesFor, onFirstDdt } from './fees'
+// B-W2b-GF2: goods sent to a special fiscal territory outside the EU's VAT area are an export.
+import { outsideVatArea, type TerritoryAddress } from '@nexus/factory-domain/tax/special-territories'
 
 /**
  * The draft invoice of shipped goods (B-W1-51; FIN-054, FIN-055, FIN-059, FIN-078, FIN-098; A2 SCR-080 "Invoice shipped
@@ -78,13 +80,17 @@ export interface FromDdtsAnswer {
 
 const blankToNull = (value: string | null | undefined): string | null => (value === undefined || value === null || value.trim() === '' ? null : value.trim())
 
-/** The VAT of an order line for this customer today: the rules, on the order line's own rate when it is taxed. */
-export function vatFor(profile: CustomerTaxProfile | null): (line: OrderLinePrice) => VatTreatment | Issue {
+/**
+ * The VAT of an order line for this customer today: the rules, on the order line's own rate when it is taxed. B-W2b-GF2:
+ * `leavesVatArea` — the goods were sent by us to a special fiscal territory outside the EU's VAT area (Livigno, Campione
+ * d'Italia, the Canary Islands …): an export (N3.1, art. 8 c.1 a DPR 633/1972) whatever the customer's own tax mode.
+ */
+export function vatFor(profile: CustomerTaxProfile | null, leavesVatArea = false): (line: OrderLinePrice) => VatTreatment | Issue {
   return (line) => {
     if (profile === null) return { path: 'party/taxIdentity', message: "The customer has no tax identity in force: add it before invoicing." }
     const rate = line.vatRatePct === null ? STANDARD_VAT_RATE : Number.parseInt(line.vatRatePct, 10)
     try {
-      return decideVatTreatment({ customer: profile, supply: 'GOODS', rate: isItalianVatRate(rate) ? rate : STANDARD_VAT_RATE, goodsLeaveEu: true }).treatment
+      return decideVatTreatment({ customer: leavesVatArea ? { ...profile, taxMode: 'EXTRA_EU' } : profile, supply: 'GOODS', rate: isItalianVatRate(rate) ? rate : STANDARD_VAT_RATE, goodsLeaveEu: true }).treatment
     } catch (error) {
       if (error instanceof TaxRuleError) return { path: 'party/taxIdentity', message: error.message }
       throw error
@@ -93,6 +99,13 @@ export function vatFor(profile: CustomerTaxProfile | null): (line: OrderLinePric
 }
 
 const words = (issues: readonly Issue[], fallback: string): string => (issues.length === 1 ? issues[0]!.message : fallback)
+
+/** B-W2b-GF2: a ship-to snapshot as the special territories read it (country, postal code, town). */
+function shipToAddress(shipTo: unknown): TerritoryAddress {
+  const row = shipTo && typeof shipTo === 'object' && !Array.isArray(shipTo) ? (shipTo as Record<string, unknown>) : {}
+  const text = (value: unknown): string | null => (typeof value === 'string' ? value : null)
+  return { country: text(row.country), postalCode: text(row.postalCode), city: text(row.city) }
+}
 
 /** The customer and company of DDTs read before the command: the caller may see them and make invoices of them. */
 export interface DraftScope {
@@ -163,13 +176,19 @@ export async function draftFromDdtsInCommand(tools: CommandTools, scope: DraftSc
   const choice = chooseInvoiceType(billed.map((ddt) => ({ number: ddt.number, date: ddt.date })), businessDate(tools.now), body.docType, 'body/docType', preset)
   if (choice.docType === null) throw new ConflictError(words(choice.problems, choice.words))
 
-  // 4. The goods lines.
+  // 4. The goods lines. B-W2b-GF2: goods sent to a special fiscal territory outside the EU's VAT area are an export; one
+  // invoice is for goods that all went there, or none did (else two invoices, said in words).
+  const outside = billed.filter((ddt) => outsideVatArea(shipToAddress(ddt.shipTo)))
+  if (outside.length > 0 && outside.length < billed.length) {
+    throw new ConflictError(`DDT ${outside.map((ddt) => ddt.number).join(', ')} went to a special fiscal territory outside the EU's VAT area (an export) and the others did not: invoice them apart.`)
+  }
+  const leavesVatArea = outside.length > 0
   const prices = await orderPrices(tx, left.map((row) => row.salesOrderLineId))
   const sources: DraftSource[] = left.map((row) => {
     const ddt = billed.find((entry) => entry.id === row.ddtId)!
     return { ddtId: row.ddtId, ddtNumber: ddt.number, ddtDate: ddt.date, salesOrderLineId: row.salesOrderLineId, size: row.size, quantity: row.toInvoice }
   })
-  const goods = draftGoodsLines(sources, prices, vatFor(plan.profile))
+  const goods = draftGoodsLines(sources, prices, vatFor(plan.profile, leavesVatArea))
   if (goods.problems.length > 0) throw new ConflictError(words(goods.problems, 'The shipped goods cannot be priced from their orders.'))
   // B-W2b-396 (FIN-063): the invoice bills in its orders' one currency (else the company's); several are refused in words.
   const billing = invoiceCurrencyOf([...prices.values()].map((price) => price.currency), plan.currency)
@@ -201,7 +220,7 @@ export async function draftFromDdtsInCommand(tools: CommandTools, scope: DraftSc
   // 6. The deposits of the orders, each deducted once.
   const orderIds = [...new Set([...prices.values()].map((price) => price.orderId))]
   // B-W2b-330 (SAL-181): the orders' fees, once each, with their first invoice of shipped goods (taxed as the goods).
-  const fees = await feeLinesFor(tx, tools.context, orderIds, vatFor(plan.profile))
+  const fees = await feeLinesFor(tx, tools.context, orderIds, vatFor(plan.profile, leavesVatArea))
   if (fees.problems.length > 0) throw new ConflictError(words(fees.problems, "The orders' fees cannot be invoiced now."))
   // B-W2b-396 (VI1:01): the orders' priced changes whose fee the customer accepted, once each, taxed as the goods.
   const changeFees = await changeFeeLinesFor(tx, tools.context, orderIds, chargeVat(goods.lines.map((line) => line.core.vat), decidedVat(plan.profile, 'GOODS', 'party/taxIdentity')), currency)

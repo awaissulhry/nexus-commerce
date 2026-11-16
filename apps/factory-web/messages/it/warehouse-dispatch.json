@@ -616,7 +616,8 @@
       "GIFT": "Regalo",
       "DOCUMENTS": "Documenti",
       "OTHER": "Altro"
-    }
+    },
+    "territory": "Territorio fiscale speciale"
   },
   "test": {
     "title": "Modalità test",
