@@ -1,0 +1,212 @@
+/*
+ * The files of the message (B-TH-206, T6; picture 4): the tray inside the box, the lines under it and the "From this record"
+ * picker. An office-only file in a reply takes the warning edge; a refused one the danger tone. DS tokens only.
+ */
+.fw-rt-tray {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 190px;
+  overflow: auto;
+}
+
+.fw-rt-file {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border-subtle);
+}
+
+.fw-rt-file.is-refused {
+  border-color: var(--nds-danger);
+  background: var(--nds-danger-soft);
+}
+
+.fw-rt-file.is-office {
+  border-color: var(--nds-warning);
+}
+
+.fw-rt-file-icon {
+  grid-row: span 2;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nds-text-2);
+}
+
+.fw-rt-file-name {
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text);
+}
+
+.fw-rt-file-meta {
+  grid-column: 2;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+
+.fw-rt-file-act {
+  grid-row: 1 / span 2;
+  grid-column: 3;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.fw-rt-file-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fw-rt-bar {
+  width: 70px;
+}
+
+.fw-rt-file-problem {
+  color: var(--nds-danger-text);
+  font-weight: 600;
+}
+
+.fw-rt-file-aud {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-weight: 600;
+}
+
+.fw-rt-file-aud.is-office {
+  color: var(--nds-warning-text);
+}
+
+.fw-rt-file-aud.is-shared {
+  color: var(--nds-info-text);
+}
+
+.fw-rt-clip {
+  display: inline-flex;
+}
+
+.fw-rt-attach-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.fw-rt-attach-warn {
+  margin: 0;
+  padding: 6px 9px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-inline-start: 3px solid var(--nds-warning);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.fw-rt-attach-muted {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-rt-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.fw-rt-pickgrp {
+  margin: 4px 0 0;
+  font-size: var(--nds-font-size-xs);
+  font-weight: 700;
+  color: var(--nds-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fw-rt-pick {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.fw-rt-pickcard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.fw-rt-pickcard[aria-pressed='true'] {
+  border-color: var(--nds-primary);
+  box-shadow: 0 0 0 2px var(--nds-primary-soft);
+}
+
+.fw-rt-pickcard:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+}
+
+.fw-rt-pickcard-thumb {
+  height: 70px;
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--nds-text-2);
+}
+
+.fw-rt-pickcard b {
+  font-size: var(--nds-font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-rt-pickcard small {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+
+.fw-rt-pickcard small.is-office {
+  color: var(--nds-warning-text);
+  font-weight: 700;
+}
+
+.fw-rt-pickcard small.is-shared {
+  color: var(--nds-info-text);
+  font-weight: 700;
+}

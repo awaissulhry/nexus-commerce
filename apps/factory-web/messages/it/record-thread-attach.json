@@ -1,0 +1,82 @@
+{
+  "tray": {
+    "label": "File di questo messaggio",
+    "refused": "Non aggiunto: {reason}",
+    "uploading": "Caricamento…",
+    "uploadingShare": "Caricamento {share} %",
+    "uploadingOf": "Caricamento di {name}",
+    "failed": "Caricamento non riuscito: {reason}",
+    "retry": "Riprova",
+    "remove": "Togli {name}"
+  },
+  "audience": {
+    "office": "Solo ufficio",
+    "shared": "Condiviso con {party}"
+  },
+  "kind": {
+    "photo": "Foto",
+    "pdf": "PDF",
+    "file": "File"
+  },
+  "refused": {
+    "type": "questo tipo non è accettato (PDF, foto, documenti Office, CSV o testo)",
+    "design": "i file di grafica (AI, EPS, PSD) non sono ancora accettati: invia un PDF",
+    "empty": "il file è vuoto",
+    "photoSize": "troppo grande: una foto può essere al massimo di {limit} MB",
+    "fileSize": "troppo grande: un file può essere al massimo di {limit} MB"
+  },
+  "failed": {
+    "failed": "riprova",
+    "store": "l'archivio dei file non l'ha preso",
+    "refused": "la fabbrica lo ha rifiutato così com'è",
+    "forbidden": "non puoi caricare o condividere file su questo record",
+    "otherParty": "un file si condivide solo con il cliente del suo record",
+    "quarantined": "trattenuto per il controllo antivirus"
+  },
+  "held": {
+    "waiting_one": "In attesa di {count} file",
+    "waiting_other": "In attesa di {count} file",
+    "failed_one": "{count} file non caricato · Riprova o toglilo",
+    "failed_other": "{count} file non caricati · Riprova o toglili",
+    "tooMany": "Al massimo {max} file in un messaggio",
+    "officeFile": "Prima condividi o togli il file solo ufficio",
+    "mailLimit": "Oltre 10 MB di file insieme non partono per email — inviane meno"
+  },
+  "clip": {
+    "label": "Aggiungi file",
+    "device": "Carica da questo dispositivo",
+    "photo": "Scatta una foto",
+    "photoHint": "la fotocamera del telefono; altrove la scelta del file",
+    "record": "Da questo record…",
+    "noRight": "Per aggiungere file serve il permesso di caricare o leggere file",
+    "noUpload": "serve il permesso di caricare file",
+    "noRead": "serve il permesso di leggere file"
+  },
+  "office": {
+    "line": "{name} è solo ufficio.",
+    "share": "Condividi con {party}",
+    "noShare": "Per condividerlo serve il permesso di gestire i file.",
+    "remove": "Toglilo"
+  },
+  "mailLimit": "Oltre 10 MB di file insieme non partono per email. Inviane meno, o condividi i più grandi con un link (più avanti). Una nota d'ufficio non ha limite di posta.",
+  "picker": {
+    "title": "Da questo record",
+    "bodyReply": "Prima i file che {party} può già vedere. Per inviare un file solo ufficio ti chiede prima di condividerlo.",
+    "bodyNote": "Tutti i file di {record}. In una nota d'ufficio restano come sono.",
+    "search": "Cerca un file per nome",
+    "shared": "Condivisi con {party} ({count})",
+    "office": "Solo ufficio ({count})",
+    "none": "Questo record non ha ancora file.",
+    "noMatch": "Nessun file con quel nome.",
+    "cancel": "Annulla",
+    "pick": "Scegli i file da aggiungere",
+    "add_one": "Aggiungi {count} file",
+    "add_other": "Aggiungi {count} file"
+  },
+  "notice": {
+    "leftOut_one": "{count} file è rimasto fuori: al massimo 20 in un messaggio.",
+    "leftOut_other": "{count} file sono rimasti fuori: al massimo 20 in un messaggio.",
+    "shared": "{name} ora è condiviso con {party} (registrato).",
+    "shareFailed": "Non è stato possibile condividere {name}: {reason}."
+  }
+}

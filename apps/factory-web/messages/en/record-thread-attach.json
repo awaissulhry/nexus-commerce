@@ -1,0 +1,82 @@
+{
+  "tray": {
+    "label": "Files of this message",
+    "refused": "Not added: {reason}",
+    "uploading": "Uploading…",
+    "uploadingShare": "Uploading {share} %",
+    "uploadingOf": "Uploading {name}",
+    "failed": "Upload failed: {reason}",
+    "retry": "Retry",
+    "remove": "Take {name} off"
+  },
+  "audience": {
+    "office": "Office only",
+    "shared": "Shared with {party}"
+  },
+  "kind": {
+    "photo": "Photo",
+    "pdf": "PDF",
+    "file": "File"
+  },
+  "refused": {
+    "type": "this type is not accepted (PDF, photos, Office documents, CSV or text)",
+    "design": "design files (AI, EPS, PSD) are not taken yet: send a PDF",
+    "empty": "the file is empty",
+    "photoSize": "too large: a photo may be at most {limit} MB",
+    "fileSize": "too large: a file may be at most {limit} MB"
+  },
+  "failed": {
+    "failed": "try again",
+    "store": "the file store did not take it",
+    "refused": "the factory refused it as it is",
+    "forbidden": "you may not upload or share files on this record",
+    "otherParty": "a file is shared only with its own record's customer",
+    "quarantined": "held for the virus scan"
+  },
+  "held": {
+    "waiting_one": "Waiting for {count} file",
+    "waiting_other": "Waiting for {count} files",
+    "failed_one": "{count} file failed · Retry or take it off",
+    "failed_other": "{count} files failed · Retry or take them off",
+    "tooMany": "At most {max} files in one message",
+    "officeFile": "Share or take off the office-only file first",
+    "mailLimit": "Files over 10 MB together cannot go by e-mail — send fewer"
+  },
+  "clip": {
+    "label": "Add files",
+    "device": "Upload from this device",
+    "photo": "Take a photo",
+    "photoHint": "the phone's camera; elsewhere the file picker",
+    "record": "From this record…",
+    "noRight": "Adding files needs the right to upload or read files",
+    "noUpload": "needs the right to upload files",
+    "noRead": "needs the right to read files"
+  },
+  "office": {
+    "line": "{name} is office only.",
+    "share": "Share with {party}",
+    "noShare": "Sharing it needs the right to manage files.",
+    "remove": "Remove it"
+  },
+  "mailLimit": "Files over 10 MB together cannot go by e-mail. Send fewer, or share the larger ones by link (later). An office note has no mail limit.",
+  "picker": {
+    "title": "From this record",
+    "bodyReply": "Files {party} may already see come first. Sending an office-only file asks you to share it first.",
+    "bodyNote": "Every file of {record}. In an office note they stay as they are.",
+    "search": "Find a file by name",
+    "shared": "Shared with {party} ({count})",
+    "office": "Office only ({count})",
+    "none": "This record has no file yet.",
+    "noMatch": "No file has that name.",
+    "cancel": "Cancel",
+    "pick": "Pick files to add",
+    "add_one": "Add {count} file",
+    "add_other": "Add {count} files"
+  },
+  "notice": {
+    "leftOut_one": "{count} file was left out: at most 20 in one message.",
+    "leftOut_other": "{count} files were left out: at most 20 in one message.",
+    "shared": "{name} is now shared with {party} (recorded).",
+    "shareFailed": "{name} could not be shared: {reason}."
+  }
+}
