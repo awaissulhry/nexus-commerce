@@ -346,7 +346,7 @@ function ReadyOrder({ order, model, actions, panels, invoices }: { order: Purcha
         <DocumentSendView
           open
           model={model.send}
-          actions={{ onField: actions?.onSend?.onField, onSend: actions?.onSend?.onSend, onClose: () => actions?.onDialog?.(null), onRetryChecks: actions?.onSend?.onRetryChecks, onNewLink: actions?.onSend?.onNewLink }}
+          actions={{ onField: actions?.onSend?.onField, onSend: actions?.onSend?.onSend, onClose: () => actions?.onDialog?.(null), onRetryChecks: actions?.onSend?.onRetryChecks, onNewLink: actions?.onSend?.onNewLink, /* B-TH-202 */ onSendOutside: actions?.onSend?.onSendOutside }}
           extra={
             model.send.result ? null : (
               <>

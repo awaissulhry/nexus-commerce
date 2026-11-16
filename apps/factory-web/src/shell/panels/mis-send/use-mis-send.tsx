@@ -21,7 +21,12 @@ interface Pending<D> {
 export function useMisSend<D>(
   api: ApiClient,
   record: { readonly type: string; readonly id: string },
-  options: { readonly partyName: string | null; readonly guardOf: (draft: D) => MisSendDraft; readonly send: (draft: D) => Promise<boolean> },
+  options: {
+    readonly partyName: string | null
+    readonly guardOf: (draft: D) => MisSendDraft
+    /** B-TH-202: `sendOutside` is the person's recorded "Send outside this customer" tick (the API refuses another customer's address without it). */
+    readonly send: (draft: D, choice: { readonly sendOutside: boolean }) => Promise<boolean>
+  },
 ): { ask: (draft: D) => Promise<boolean>; element: ReactNode } {
   const [pending, setPending] = useState<Pending<D> | null>(null)
   const [state, setState] = useState<MisSendModel['state']>({ status: 'checking' })
@@ -83,10 +88,10 @@ export function useMisSend<D>(
       actions={{
         onBack: () => settle(false),
         onRetry: () => run(pending.guard),
-        onSend: () => {
+        onSend: (choice = { sendOutside: false }) => {
           setSending(true)
           void optionsRef.current
-            .send(pending.draft)
+            .send(pending.draft, choice)
             .then((sent) => settle(sent))
             .catch(() => settle(false))
         },

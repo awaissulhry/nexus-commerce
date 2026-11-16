@@ -37,7 +37,9 @@
     "badRecipient": "Nothing was sent: an address was refused (not valid, or it bounced or complained before).",
     "noSubject": "Nothing was sent: write a subject for the first mail of this thread.",
     "attachmentsRefused": "Nothing was sent: a file can no longer go with it (not shared with the party, or too large together).",
-    "mentionsRefused": "Nothing was saved: a person you mentioned cannot read this record."
+    "mentionsRefused": "Nothing was saved: a person you mentioned cannot read this record.",
+    "outsideCustomer": "An address belongs to another customer or supplier: the message did not go. Take it off, or send from the check with “Send outside this customer” ticked.",
+    "hiddenOutside": "A blind copy (Bcc) goes only to our own colleagues or to this customer’s contacts: the message did not go."
   },
   "thread": {
     "loading": "Reading the thread…",
@@ -174,7 +176,8 @@
       "store": "The file store did not take the file. Try again.",
       "refused": "The factory refused the file as it is (its type, size or sharing).",
       "forbidden": "You may not upload or share files on this record.",
-      "moduleOwned": "This kind of file of this record is added on the record's own page, not here."
+      "moduleOwned": "This kind of file of this record is added on the record's own page, not here.",
+      "otherParty": "A file is shared only with its own record’s customer or supplier: this sharing was refused."
     },
     "notice": {
       "uploaded": "File uploaded. It shows in the list and the history.",

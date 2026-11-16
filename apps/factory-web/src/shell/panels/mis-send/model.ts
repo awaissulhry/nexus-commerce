@@ -28,6 +28,11 @@ export interface MisSendCheck {
   readonly recipients: readonly MisSendRecipient[]
   readonly warnings: readonly { readonly code: MisSendWarning; readonly items: readonly string[] }[]
   readonly attachments: readonly { readonly id: string; readonly name: string; readonly sizeBytes: number; readonly audience: 'PARTY' | 'OFFICE' }[]
+  /**
+   * B-TH-202 (the brand wall, B-TH-004): the addresses the send refuses unless the person ticks "Send outside this customer"
+   * (another customer's contact or portal person). Empty: nothing to tick.
+   */
+  readonly outsideCustomer: readonly string[]
 }
 
 /** What the person is about to send, as the composer has it (the To line already split into addresses). */
@@ -50,6 +55,8 @@ export interface MisSendModel {
   readonly sending: boolean
   /** Design cases: the warnings already ticked as read. */
   readonly acknowledged?: boolean
+  /** B-TH-202 design cases: "Send outside this customer" already ticked. */
+  readonly sentOutside?: boolean
 }
 
 export type Tone = 'success' | 'warning' | 'danger' | 'neutral' | 'info'
@@ -77,13 +84,18 @@ export function recipientWords(recipient: MisSendRecipient): { key: string; para
 /** The check found something the person must say they read before Send. */
 export const needsAcknowledge = (check: MisSendCheck): boolean => check.warnings.some((warning) => warning.code !== 'OFFICE_FILE')
 
+/** B-TH-202: the send itself refuses an address of another customer until the person ticks "Send outside this customer". */
+export const needsSendOutside = (check: MisSendCheck): boolean => check.outsideCustomer.length > 0
+
 /** Why Send message waits (a key of `mail-depth`), or null when it may go. */
-export function sendHeld(model: Pick<MisSendModel, 'state' | 'sending'>, acknowledged: boolean): string | null {
+export function sendHeld(model: Pick<MisSendModel, 'state' | 'sending'>, acknowledged: boolean, sendOutside = false): string | null {
   if (model.sending) return 'misSend.held.sending'
   if (model.state.status === 'checking') return 'misSend.held.checking'
   if (model.state.status === 'error') return model.state.retry ? 'misSend.held.failed' : 'misSend.held.refused'
   const { check } = model.state
   if (check.warnings.some((warning) => warning.code === 'OFFICE_FILE')) return 'misSend.held.officeFile'
+  // B-TH-202: the recorded tick first (the send refuses without it), then the warnings read.
+  if (needsSendOutside(check) && !sendOutside) return 'misSend.held.outside'
   if (needsAcknowledge(check) && !acknowledged) return 'misSend.held.acknowledge'
   return null
 }

@@ -65,7 +65,8 @@
       "failed": "Il controllo non è riuscito: riprova",
       "refused": "Questo messaggio non si può controllare: torna indietro",
       "officeFile": "Prima togli l'allegato solo ufficio",
-      "acknowledge": "Prima spunta che hai controllato gli avvisi"
+      "acknowledge": "Prima spunta che hai controllato gli avvisi",
+      "outside": "Spunta «Invia fuori da questo cliente» prima: un indirizzo è di un altro cliente"
     },
     "problem": {
       "forbidden": "Non puoi inviare mail per questo record.",
@@ -76,6 +77,11 @@
       "unavailable": "Nexus non è raggiungibile ora.",
       "failed": "Il controllo non è riuscito.",
       "body": "Non è stato inviato nulla. Torna a modificare, oppure riprova."
+    },
+    "outside": {
+      "title": "Un indirizzo non è di {party}",
+      "body": "{addresses}: di un altro cliente o fornitore. L’invio lo rifiuta, a meno che tu non lo confermi qui (la scelta resta registrata).",
+      "tick": "Invia fuori da questo cliente"
     }
   },
   "tiles": {
