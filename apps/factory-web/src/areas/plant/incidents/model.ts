@@ -454,10 +454,12 @@ export interface FilingDraft {
   readonly filedAt: string
   readonly protocolNumber: string
   readonly receipt: File | null
+  /** B-W2b-GF2: a new filing for a fatal or presumed fatal accident (type FATAL: 24 hours from the accident, no absence, no certificate). */
+  readonly fatal: boolean
 }
 
 export function filingDraftOf(filing: InailFiling | null, injured: readonly IncidentPerson[]): FilingDraft {
-  if (!filing) return { filingId: 'new', personId: injured.length === 1 ? injured[0]!.id : null, expectedAbsenceDays: '', actualAbsenceDays: '', certificateReference: '', certificateReceivedAt: '', filedAt: '', protocolNumber: '', receipt: null }
+  if (!filing) return { filingId: 'new', personId: injured.length === 1 ? injured[0]!.id : null, expectedAbsenceDays: '', actualAbsenceDays: '', certificateReference: '', certificateReceivedAt: '', filedAt: '', protocolNumber: '', receipt: null, fatal: false }
   return {
     filingId: filing.id,
     personId: filing.personId,
@@ -468,6 +470,7 @@ export function filingDraftOf(filing: InailFiling | null, injured: readonly Inci
     filedAt: filing.filedAt ?? '',
     protocolNumber: filing.protocolNumber ?? '',
     receipt: null,
+    fatal: filing.type === 'FATAL',
   }
 }
 
@@ -489,6 +492,19 @@ export const filingPeople = (people: readonly IncidentPerson[]): IncidentPerson[
 export function filingDraftHeld(draft: FilingDraft, filing: InailFiling | null, facts: { occurredAt: string; now: Date }): string | null {
   // A filing recorded as filed takes only INAIL's receipt now.
   if (filing?.status === 'FILED') return draft.receipt ? null : 'refusal.FILING_FILED'
+  // B-W2b-GF2: a fatal accident's report runs from the accident: no absence, no certificate; sent after the accident.
+  if (draft.fatal) {
+    if (draft.filingId === 'new' && !draft.personId) return 'held.filing.person'
+    if (draft.expectedAbsenceDays.trim() || draft.actualAbsenceDays.trim() || draft.certificateReceivedAt || draft.certificateReference.trim()) return 'refusal.FATAL_NO_CERTIFICATE'
+    if (draft.filedAt || draft.protocolNumber.trim()) {
+      if (!draft.filedAt) return 'held.filing.filedAt'
+      if (!draft.protocolNumber.trim()) return 'held.filing.protocol'
+      const filed = new Date(draft.filedAt).getTime()
+      if (filed > facts.now.getTime() + 60_000) return 'refusal.FILED_IN_FUTURE'
+      if (filed < new Date(facts.occurredAt).getTime()) return 'refusal.FILED_BEFORE_EVENT'
+    } else if (draft.receipt) return 'held.filing.receiptAfter'
+    return null
+  }
   if (draft.filingId === 'new') {
     if (!draft.personId) return 'held.filing.person'
     const absence = days(draft.expectedAbsenceDays)
@@ -518,7 +534,7 @@ export function filingDraftHeld(draft: FilingDraft, filing: InailFiling | null, 
 
 /** The calls a recorded filing makes, in order: the absence and the certificate, then the filing, then the receipt. */
 export interface FilingPlan {
-  readonly add: { incidentPersonId: string; expectedAbsenceDays: number; certificateReference?: string; certificateReceivedAt?: string } | null
+  readonly add: { incidentPersonId: string; expectedAbsenceDays: number; certificateReference?: string; certificateReceivedAt?: string } | { incidentPersonId: string; fatal: true } | null
   readonly edit: { expectedAbsenceDays?: number | null; actualAbsenceDays?: number | null; certificateReference?: string | null; certificateReceivedAt?: string } | null
   readonly file: { filedAt: string; protocolNumber: string } | null
   readonly receipt: File | null
@@ -527,6 +543,8 @@ export interface FilingPlan {
 export function filingPlan(draft: FilingDraft, filing: InailFiling | null): FilingPlan {
   const file = draft.filedAt && draft.protocolNumber.trim() && filing?.status !== 'FILED' ? { filedAt: new Date(draft.filedAt).toISOString(), protocolNumber: draft.protocolNumber.trim() } : null
   if (draft.filingId === 'new' || !filing) {
+    // B-W2b-GF2: a fatal accident's report: the person only (the API makes it due 24 hours after the accident).
+    if (draft.fatal) return { add: { incidentPersonId: draft.personId ?? '', fatal: true }, edit: null, file, receipt: draft.receipt }
     return {
       add: {
         incidentPersonId: draft.personId ?? '',

@@ -408,3 +408,35 @@ describe('the walls: inventory.receive at the tablet\'s own site, its tenant; th
     expect((await call('floor', 'POST', '/inventory/receipts', { purchaseOrderId: order.id, lines: body().lines }, freshKey())).statusCode).toBe(403)
   })
 })
+
+// B-W2b-GF5 (G140): the tablet, the receipt and what is still expected show the tolerance the receipt decides with.
+describe('the screens show the tolerance the receipt decides on (B-W2b-GF5, G140)', () => {
+  it('a delivery tolerance of +10 % / −5 % on the protectors: the expected line, the receipt and what is still expected follow it', async () => {
+    const rule = newId()
+    await admin(`INSERT INTO "DeliveryTolerance" (id, "tenantId", "companyId", "supplierId", "itemId", "overPct", "underPct", "whenBeyond", "createdById") VALUES ($1, $2, $3, $4, $5, 10, 5, 'BLOCK', $6)`, [rule, A.tenant, A.companyA, A.supplier, A.protector, A.actor])
+    try {
+      // The protectors follow the rule (the line carries no tolerance of its own); the lining has none (exactly as ordered).
+      const order = await makeOrder('SENT', [protectorLine('100'), { itemId: A.lining, colourId: A.liningGRY, quantity: '50', uom: 'M', unitPrice: '4.000000' }])
+      const view = await ok('floor', 'GET', `/inventory/receiving/orders/${order.id}`)
+      expect(view.lines[0]).toMatchObject({ expected: '100.0000', open: '100.0000', tolerancePct: '10', upTo: '110.0000' })
+      expect(view.lines[1]).toMatchObject({ expected: '50.0000', tolerancePct: null, upTo: '50.0000' })
+      expect((await ok('manager', 'GET', `/inventory/receipts/expected?purchaseOrderId=${order.id}`)).lines.map((line: Json) => [line.seq, line.tolerancePct, line.underPct])).toEqual([
+        [10, '10', '5'],
+        [20, null, null],
+      ])
+      // 96 of 100 is within the 5 % under: the protectors' line is complete, only the lining is still expected.
+      const response = await floorReceive(order.id, { version: 2, supplierDdtNumber: `DDT-${run}-GF5`, supplierDdtDate: '2026-10-29', language: 'en', lines: [{ purchaseOrderLineId: order.lines[0], lots: [{ supplierLotRef: 'PRT-GF5', quantity: '96' }] }] })
+      expect(response.statusCode, response.body).toBe(201)
+      const receipt = response.json().receipt
+      expect(receipt.order.status).toBe('PARTLY_RECEIVED')
+      expect(receipt.lines[0].difference).toMatchObject({ kind: 'WITHIN_TOLERANCE', open: '0.0000', upTo: '110.0000' })
+      expect((await ok('manager', 'GET', `/inventory/receipts/expected?purchaseOrderId=${order.id}`)).lines.map((line: Json) => line.seq)).toEqual([20])
+      const listed = (await ok('floor', 'GET', `/inventory/receiving/orders?code=${order.number}`)).orders
+      expect(listed).toEqual([expect.objectContaining({ id: order.id, openLines: 1 })])
+      const record = (await ok('manager', 'GET', `/inventory/receipts/${receipt.id}`)).receipt
+      expect(record.lines[0]).toMatchObject({ orderLine: { tolerancePct: '10' }, difference: { kind: 'WITHIN_TOLERANCE', open: '0.0000', tolerancePct: '10' } })
+    } finally {
+      await admin(`UPDATE "DeliveryTolerance" SET status = 'ARCHIVED' WHERE id = $1`, [rule])
+    }
+  })
+})

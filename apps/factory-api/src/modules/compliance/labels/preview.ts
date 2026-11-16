@@ -15,6 +15,8 @@ import { bodyMeasuresOf, certificateGateFor } from '../certificates/gate'
 import { classLabelHoldFor } from '../type-changes/reviews'
 import { renderGarmentLabelPdf } from './pdf'
 import { factsOf, findStyle, labelStyleOf, officeOf, readTemplate, readVisibleStyle, TEMPLATE_SELECT, todayOf, type Reader, type StyleRow, type TemplateRow } from './store'
+// B-W2b-GF2 (G032): the origin claim's words come from the phrase library.
+import { approvedTexts } from '../phrases/store'
 
 /**
  * The garment label of one cell (B-W1-19; PRD-331; design 02 `lb-builder`, `lb-test`): a template rendered for a style
@@ -172,6 +174,8 @@ async function render(caller: CommandCaller, templateId: string, query: CellQuer
       sample: true,
       marketLanguages: languagesOf(query.languages),
       qr: qrFor(row, style, null),
+      // B-W2b-GF2 (G032): the origin claim's approved words in the label's languages.
+      originClaim: await originClaimOf(client, row),
     }
     const label = renderLabel(factsOf(row), values)
     return {
@@ -301,5 +305,20 @@ export async function garmentLabelFor(client: Reader, question: GarmentLabelQues
     marketLanguages: question.marketLanguages,
     // The batch's public DoC page: the work order the batch was released by (B-W1-44 passes it as `manufactured`).
     qr: qrFor(row, style, question.manufactured?.recordType === 'WorkOrder' ? { id: question.manufactured.recordId, reference: question.manufactured.reference } : null),
+    // B-W2b-GF2 (G032): the origin claim's approved words in the label's languages.
+    originClaim: await originClaimOf(client, row),
   })
+}
+
+/**
+ * B-W2b-GF2 (G032): the words of a template's origin claim in each of its languages, as the phrase library approves them
+ * (compliance/phrases approvedTexts: the source words, or the approved translation of the current words; null when
+ * missing). Null when the template makes no claim, or the phrase is not in the library (the renderer says so).
+ */
+async function originClaimOf(client: Reader, row: Pick<TemplateRow, 'originClaimKey' | 'languages'>): Promise<LabelValues['originClaim']> {
+  const key = row.originClaimKey
+  if (!key) return null
+  const texts = await approvedTexts(client, [key], row.languages)
+  const known = await client.phrase.findFirst({ where: { key, status: 'ACTIVE' }, select: { id: true } })
+  return known ? { key, texts: texts.map((entry) => ({ language: entry.language, text: entry.text })) } : null
 }

@@ -128,6 +128,8 @@ beforeAll(async () => {
     viewer: { audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [grant(['quality.incoming.view'])] },
     buyer: { audience: 'office', tenantId: A.tenant, actorId: buyerId, grants: [grant(BUYER)] },
     bench: { audience: 'floor', tenantId: A.tenant, actorId: A.worker, siteId: A.site, deviceId: A.device, grants: [grant(['floor.work', ...RECORD], { companies: [A.company], sites: [A.site] })] },
+    // B-W2b-GF5 (G369): the lab's quality person reads a lot's release checklist.
+    lab: { audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [grant(['quality.lots.view'])] },
   } satisfies Record<string, SessionContext>)
 
   fabric = await addPlan(`T-FAB-${run}`, 2)
@@ -220,6 +222,12 @@ describe('fabric rolls by the 4-point system (QHS-032)', () => {
     expect(signed.body.inspection).toMatchObject({ status: 'DECIDED', computedResult: 'PASS', decision: { accepted: '80.0000', rejected: '40.0000', toSort: '0.0000' } })
     expect(signed.body.next).toMatchObject({ step: 'RELEASE_PART', rejectedRolls: [{ rollRef: 'SUP-77' }], rejectedLines: [] })
     expect((await events('incoming_inspection.recorded')).filter((event) => event.incomingInspectionId === rolls.inspection.id).map((event) => event.what)).toEqual(['ROLL', 'ROLL', 'ROLL'])
+  })
+
+  // B-W2b-GF5 (G369): what a counted lot's inspection did not accept leaves the lot before the lab releases the rest.
+  it("the lab's checklist says the rejected 40 m are still in the lot (its 120 m of opening stock against 80 m accepted)", async () => {
+    const checks = (await ok('lab', 'GET', `/quality/lots/${lining.lotId}/release-check`)).checklist.checks as Json[]
+    expect(checks.find((check) => check.code === 'INCOMING')).toMatchObject({ state: 'OPEN', words: `Incoming inspection ${rolls.inspection.number} did not accept 40 m of the lot: 40 m of it are still in the lot.`, fix: expect.stringContaining('Purchasing › Claims') })
   })
 })
 

@@ -240,6 +240,11 @@ describe('the words of the API', () => {
     expect(checkWords({ rule: 'DAILY_REST', state: 'OK', values: { limitMinutes: 660 } }, 'it')).toEqual({ key: 'limit.DAILY_REST.ok', params: { limit: '11 h' } })
     expect(checkWords({ rule: 'DAILY_REST', state: 'OVER', values: { spanMinutes: 800, limitMinutes: 660, from: '06:00', to: '20:00' } }, 'en').key).toBe('limit.DAILY_REST.span')
     expect(checkWords(average!, 'en').params).toMatchObject({ weeks: 17, months: 4 })
+    // B-W2b-GF2 (G205): weekly rest and night work, said from their own figures (never as the daily rest).
+    expect(checkWords({ rule: 'WEEKLY_REST', state: 'OK', values: { neededMinutes: 2100, limitMinutes: 1440, dailyRestMinutes: 660 } }, 'en')).toEqual({ key: 'limit.WEEKLY_REST.ok', params: { limit: '24 h', daily: '11 h', needed: '35 h' } })
+    expect(checkWords({ rule: 'WEEKLY_REST', state: 'OVER', values: { restMinutes: 960, neededMinutes: 2100, limitMinutes: 1440, dailyRestMinutes: 660, week: '2026-11-02', from: 'Mon 14:00', to: 'Tue 06:00' } }, 'en')).toMatchObject({ key: 'limit.WEEKLY_REST.rest', params: { rest: '16 h', from: 'Mon 14:00', to: 'Tue 06:00' } })
+    expect(checkWords({ rule: 'NIGHT_AVERAGE', state: 'NEAR', values: { workMinutes: 570, nightMinutes: 480, limitMinutes: 480, from: '22:00', to: '08:00' } }, 'en')).toMatchObject({ key: 'limit.NIGHT_AVERAGE.words', params: { night: '8 h', from: '22:00', to: '08:00' } })
+    expect(checkWords({ rule: 'NIGHT_AVERAGE', state: 'OK', values: { limitMinutes: 480 } }, 'it').key).toBe('limit.NIGHT_AVERAGE.ok')
     expect(toneOf({ state: 'OK', level: 'BLOCK' })).toBe('success')
     expect(toneOf({ state: 'OVER', level: 'WARN' })).toBe('warning')
     expect(toneOf({ state: 'OVER', level: 'BLOCK' })).toBe('danger')

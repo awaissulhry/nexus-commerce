@@ -84,7 +84,9 @@
     "qrLiveUnknown": "Not known yet",
     "glove": "Glove level {level}",
     "gloveGranted": "As the certificate grants it.",
-    "gloveNotGranted": "No covering certificate names the level yet."
+    "gloveNotGranted": "No covering certificate names the level yet.",
+    "originClaim": "Origin claim",
+    "originClaimHint": "Printed in the label’s languages with the phrase’s approved words; the Made in Italy check holds it against the routing (L. 350/2003 art. 4(49))."
   },
   "sender": {
     "BRAND": "Names the brand: {name}",
@@ -399,5 +401,10 @@
     "noLabel": "The revision names no label yet.",
     "loading": "Computing the composition…",
     "retry": "Try again"
+  },
+  "originClaim": {
+    "none": "None",
+    "MADE_IN_ITALY": "Made in Italy",
+    "FULL_MADE_IN_ITALY": "100% Made in Italy"
   }
 }

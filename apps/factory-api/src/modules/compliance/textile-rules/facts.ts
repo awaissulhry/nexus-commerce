@@ -101,7 +101,8 @@ export async function revisionLines(db: Reader, input: { readonly styleId: strin
   return { colourways: sets, materials: items.sort((a, b) => a.code.localeCompare(b.code)).map(leatherOf) }
 }
 
-const LABEL_SELECT = { id: true, code: true, revision: true, status: true, languages: true, composition: true, animalOriginPhrase: true, care: true, layout: true } as const satisfies Prisma.LabelTemplateSelect
+// B-W2b-GF2 (G032): the origin claim too (the Made in Italy check reads it).
+const LABEL_SELECT = { id: true, code: true, revision: true, status: true, languages: true, composition: true, animalOriginPhrase: true, care: true, layout: true, originClaimKey: true } as const satisfies Prisma.LabelTemplateSelect
 
 export interface LabelOf {
   readonly id: string
@@ -124,6 +125,7 @@ export async function labelOf(db: Reader, labelTemplateId: string | null): Promi
       animalOriginPhrase: row.animalOriginPhrase,
       care: careOf(row.care).care,
       layout: layoutOf(row.layout).layout,
+      originClaimKey: row.originClaimKey,
     },
   }
 }

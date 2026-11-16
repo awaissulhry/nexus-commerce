@@ -130,6 +130,8 @@ export const CHANGE_REFUSALS = [
   'OWN_APPROVAL',
   'SELF_NAMED',
   'OWN_REQUEST',
+  // B-W2b-GF5 (G282): the raiser never accepts their own change request at triage.
+  'ACCEPT_OWN_REQUEST',
   'APPROVER_CANNOT',
   'NOT_APPROVER',
   'ALREADY_DECIDED',
@@ -181,8 +183,18 @@ export function requestEditRefusal(request: RequestFacts, fields: readonly strin
   return null
 }
 
+/**
+ * B-W2b-GF5 (G282): who moves the request, and who raised it (an office request's author; a floor request names no one).
+ * Owner rule "never self-approve": the raiser does not accept their own request (another person triages it); moving it
+ * into review, or rejecting it (it withdraws the ask, nobody's work is approved), stays theirs too.
+ */
+export interface TriageFacts {
+  readonly raisedById: string | null
+  readonly personId: string | null
+}
+
 /** A triage move of the office (review, accept, reject); DONE is the change order's release, never a person's move. */
-export function requestMoveRefusal(request: RequestFacts, to: ChangeRequestStatus, note: string | null): ChangeRefusal | null {
+export function requestMoveRefusal(request: RequestFacts, to: ChangeRequestStatus, note: string | null, who: TriageFacts): ChangeRefusal | null {
   if (to === 'DONE' || !REQUEST_MOVES[request.status].includes(to)) {
     return refusal(
       'REQUEST_MOVE',
@@ -190,6 +202,10 @@ export function requestMoveRefusal(request: RequestFacts, to: ChangeRequestStatu
         ? `${requestName(request.number)} is done when the change order that carries it is released, not by hand.`
         : `${requestName(request.number)} is ${REQUEST_STATUS_WORDS[request.status]}: it cannot be marked ${REQUEST_STATUS_WORDS[to]}.`,
     )
+  }
+  // B-W2b-GF5 (G282): never self-approve.
+  if (to === 'ACCEPTED' && who.raisedById !== null && who.raisedById === who.personId) {
+    return refusal('ACCEPT_OWN_REQUEST', `You raised ${request.number ? `change request ${request.number}` : 'this change request'}: a person who did not ask for the change accepts it (four eyes).`)
   }
   if (to === 'REJECTED' && (note === null || note.trim() === '')) {
     return refusal('REASON_NEEDED', `Say why ${request.number ?? 'this request'} is rejected: whoever raised it reads the reason.`)

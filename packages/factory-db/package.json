@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./testing": "./src/testing/database.ts",
-    "./test-database": "./src/test-database.ts"
+    "./test-database": "./src/test-database.ts",
+    "./seed-files": "./src/seed-files.ts"
   },
   "scripts": {
     "generate": "prisma generate",

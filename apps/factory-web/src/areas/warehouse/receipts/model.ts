@@ -188,7 +188,8 @@ export function lineBase(draft: ReceiveLineDraft): Decimal {
 
 /** The line against what it expects, with its tolerance (the API's own rule: factory-domain lineDifference). */
 export function lineDiff(draft: ReceiveLineDraft): LineDifference {
-  return lineDifference({ expected: draft.line.expected, receivedBefore: draft.line.received, receiving: lineBase(draft).toFixed(4), tolerancePct: draft.line.tolerancePct })
+  // B-W2b-GF5 (G140): the tolerance under too, as the receipt decides (a delivery tolerance of +10 % / −5 %).
+  return lineDifference({ expected: draft.line.expected, receivedBefore: draft.line.received, receiving: lineBase(draft).toFixed(4), tolerancePct: draft.line.tolerancePct, underPct: draft.line.underPct })
 }
 
 /** Hides of a line (all its lots), the ones with an area, and the line's hide estimate still open. */

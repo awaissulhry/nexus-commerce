@@ -2,7 +2,7 @@ import { createElement, useEffect, useState } from 'react'
 import { STEP_UP_CLOSED } from '../../../quality/_shared/hooks'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { BLANK_CHECKLIST, BLANK_DDT, BLANK_REPAIR, receiptDraftOf, type DecisionDraft } from '../model'
-import { canFor, CREDIT_NOTES, inShell, ME, NOW, PEOPLE, PREFIX, REASONS, REPAIR_PASSED, REPAIR_RECEIVED, REPAIR_REPAIRED, REPAIR_REWORK, REPAIR_REWORK_ORDERED, REPAIR_ROWS, REPAIR_SHIPPED, RETURNABLE, RMA_AUTHORISED, RMA_INSPECTED, RMA_RECEIVED, TODAY, type RoleCase } from '../demo/fixtures'
+import { canFor, CREDIT_NOTES, inShell, ME, NOW, PEOPLE, PREFIX, REASONS, REPAIR_FAILED, REPAIR_PASSED, REPAIR_RECEIVED, REPAIR_REPAIRED, REPAIR_REWORK, REPAIR_SCRAPPED, REPAIR_REWORK_ORDERED, REPAIR_ROWS, REPAIR_SHIPPED, RETURNABLE, RMA_AUTHORISED, RMA_INSPECTED, RMA_RECEIVED, TODAY, type RoleCase } from '../demo/fixtures'
 import type { RepairModel, RmaModel } from '../view-model'
 import { RepairRecordView } from '../repair/view/RepairRecordView'
 import { RmaRecordView } from './view/RmaRecordView'
@@ -249,6 +249,10 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'repair-step-up', label: 'Sign off: the fresh code (step-up)', model: { kind: 'repair', role: 'inspector', model: repairModel('inspector', { repair: REPAIR_REPAIRED, tab: 'safety', checklist: filledChecklist, checkBusy: true, stepUp: { open: true, busy: false, sentence: 'stepUp.sentence.sign', problem: null } }) } },
     { id: 'repair-safety-held', label: 'Safety check for sales: held (only the inspector signs)', model: { kind: 'repair', role: 'sales', model: repairModel('sales', { repair: REPAIR_REPAIRED, tab: 'safety' }) } },
     { id: 'repair-safety-passed', label: 'Safety check passed, signed', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: REPAIR_PASSED, tab: 'safety', checklist: filledChecklist }) } },
+    // ---- B-W2b-GF5 (G513; Owner 11-15 A): a protective garment that fails its check after the repair is scrapped ----------
+    { id: 'repair-safety-failed', label: 'Safety check failed: back into repair, or Scrap the garment… (never returned unsafe)', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: REPAIR_FAILED, tab: 'safety' }) } },
+    { id: 'repair-scrap', label: 'Scrap the garment: what failed, why (held until written), the customer told in writing', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: REPAIR_FAILED, tab: 'safety', dialog: { kind: 'scrap', reason: '' } }) } },
+    { id: 'repair-scrapped', label: 'Scrapped: the repair ended with what failed and why; nothing changes any more', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: REPAIR_SCRAPPED, tab: 'work' }) } },
     { id: 'repair-send', label: 'Send back: the DDT (reason repair) with its preview', model: { kind: 'repair', role: 'warehouse', model: repairModel('warehouse', { repair: REPAIR_PASSED, tab: 'return', dialog: { kind: 'ship', draft: { ...BLANK_DDT, carrier: 'Demo courier', weight: '1.4' }, note: '', preview: { draft: { lines: [{ seq: 1, description: 'Demo touring jacket, Red, size 52 (repaired)', quantity: '1', uom: 'PCS' }] }, problems: [], expectedNumber: '146/2026', reasons: ['REPAIR'] }, previewing: false, useLive: false } }) } },
     { id: 'repair-shipped', label: 'Shipped back: the DDT and date; nothing changes any more', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { repair: REPAIR_SHIPPED, tab: 'return' }) } },
     { id: 'repair-offline', label: 'Repair offline: writes held', model: { kind: 'repair', role: 'owner', model: repairModel('owner', { offline: true, live: 'offline' }) } },

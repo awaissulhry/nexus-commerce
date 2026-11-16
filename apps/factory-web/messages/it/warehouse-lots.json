@@ -671,6 +671,7 @@
       "PPE_CERTIFICATE": "Certificato DPI",
       "SUPPLIER_DOCUMENTS": "Documenti del fornitore",
       "HOLD": "Blocco di chi ha ricevuto",
+      "INCOMING": "Ispezione in arrivo",
       "RELEASER": "Chi rilascia"
     },
     "check": {
@@ -707,6 +708,11 @@
         "OK": "il blocco di chi ha ricevuto è tolto",
         "OPEN": "chi l’ha ricevuto l’ha bloccato per un controllo",
         "NOT_NEEDED": "nessun blocco"
+      },
+      "INCOMING": {
+        "OK": "quello che l’ispezione in arrivo non ha accettato è in blocco o non c’è più",
+        "OPEN": "l’ispezione in arrivo è aperta, ha respinto il lotto, o quello che non ha accettato non è bloccato",
+        "NOT_NEEDED": "nessuna ispezione in arrivo registrata"
       },
       "RELEASER": {
         "OK": "una persona con il ruolo qualità può rilasciarlo",

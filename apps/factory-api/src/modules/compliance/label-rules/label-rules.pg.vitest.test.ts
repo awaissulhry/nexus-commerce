@@ -290,6 +290,34 @@ describe("the QR to the batch's public DoC page (PRD-349)", () => {
   })
 })
 
+// B-W2b-GF2 (G032): the origin claim is set by a route and printed by the renderer, with the phrase library's words.
+describe('an origin claim on a draft label ("Made in Italy"; D.L. 135/2009 art. 16)', () => {
+  it('takes only an origin claim the library holds, prints its approved words in each language, and says a missing one', async () => {
+    let template = await draftLabel({ styleId: casual, languages: ['it'], layout: { fields: ['model', 'size', 'batchOrSerial', 'maker', 'origin'] } })
+    expect(template.originClaimKey).toBeNull()
+    expect((await refused('manager', 'PUT', `/compliance/label-rules/templates/${template.id}/marking`, { version: template.version, originClaimKey: 'claim.best-in-town' }, 409)).issues.map((issue: Json) => issue.path)).toContain('refusal/ORIGIN_CLAIM')
+    const absent = await refused('manager', 'PUT', `/compliance/label-rules/templates/${template.id}/marking`, { version: template.version, originClaimKey: 'claim.100-made-in-italy' }, 409)
+    expect(absent.message).toContain('The phrase library holds no active claim claim.100-made-in-italy')
+    template = await setMarking(template, { originClaimKey: 'claim.made-in-italy' })
+    expect(template).toMatchObject({ originClaimKey: 'claim.made-in-italy', status: 'DRAFT' })
+    const audits = await admin<{ before: Json; after: Json }>(`SELECT before, after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'compliance.labels.marking' ORDER BY at, id`, [template.id])
+    expect(audits.map((row) => [row.before.originClaimKey, row.after.originClaimKey])).toEqual([[null, 'claim.made-in-italy']])
+    // The layout's "origin" field is a field the builder knows: no stored problem; the preview prints the claim.
+    const { label } = await ok('manager', 'GET', `/compliance/labels/${template.id}/preview`)
+    expect(blockOf(label, 'origin')).toMatchObject({ value: 'Made in Italy', lines: [{ text: 'Made in Italy', language: 'it' }], source: { kind: 'TEMPLATE' } })
+    expect((label.problems as Json[]).filter((problem) => /origin|claim/.test(String(problem.path)))).toEqual([])
+    // In English too: no approved English words yet, so the claim is said, never printed half.
+    const both = await ok('manager', 'PATCH', `/compliance/labels/${template.id}`, { version: template.version, languages: ['it', 'en'] })
+    const { label: english } = await ok('manager', 'GET', `/compliance/labels/${both.template.id}/preview`)
+    expect((english.problems as Json[]).find((problem) => problem.path === 'phrases/claim.made-in-italy')?.message).toContain('has no approved words in en')
+    expect(english.printable).toBe(false)
+    // Taken off again: the block goes.
+    const cleared = await setMarking(both.template, { originClaimKey: null })
+    expect(cleared.originClaimKey).toBeNull()
+    expect(blockOf((await ok('manager', 'GET', `/compliance/labels/${cleared.id}/preview`)).label, 'origin')).toBeUndefined()
+  })
+})
+
 describe('glove marking and the notified body after the CE mark (PRD-336, PRD-333)', () => {
   it('asks a glove for a glove marking with its level, and a new revision keeps the kind', async () => {
     let template = await draftLabel({ styleId: gloves })

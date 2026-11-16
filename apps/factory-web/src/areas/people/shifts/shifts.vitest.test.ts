@@ -266,6 +266,18 @@ describe('warnings in our words', () => {
     expect(words({ ...REST_WARNING, rule: 'BREAK_AFTER', values: { workMinutes: 420, breakMinutes: 0, neededMinutes: 10, limitMinutes: 360, from: '06:00', to: '13:00' } }, 'en')).toContain('7 h of work')
   })
 
+  // B-W2b-GF2 (G205): weekly rest, night work, and the yearly cap with the overtime worked.
+  it('says the weekly rest, night work and the cap with the overtime worked, in both languages', () => {
+    const weekly: LimitWarning = { ...REST_WARNING, rule: 'WEEKLY_REST', law: 'D.Lgs. 66/2003 art. 9', values: { restMinutes: 960, neededMinutes: 2100, limitMinutes: 1440, dailyRestMinutes: 660, week: '2026-11-02', from: 'Mon 14:00', to: 'Tue 06:00' } }
+    expect(words(weekly, 'en')).toBe('Longest rest in the week of 2 Nov: 16 h (from Mon 14:00 to Tue 06:00) — at least 35 h (24 h on top of the 11 h between shifts), averaged over 14 days')
+    expect(words(weekly, 'it')).toContain('Riposo più lungo nella settimana del 2 nov: 16 h')
+    const night: LimitWarning = { ...REST_WARNING, rule: 'NIGHT_AVERAGE', law: 'D.Lgs. 66/2003 art. 13', values: { workMinutes: 570, nightMinutes: 480, limitMinutes: 480, from: '22:00', to: '08:00' } }
+    expect(words(night, 'en')).toBe('9 h 30 min of work 22:00–08:00, 8 h of it at night — a night worker works at most 8 h in 24 hours')
+    expect(words(night, 'it')).toContain('di cui 8 h di notte')
+    expect(words({ ...CAP_WARNING, values: { plannedMinutes: 720, workedMinutes: 14400, limitMinutes: 15000, year: '2026' } }, 'en')).toBe('Overtime in 2026 would be 252 h (240 h worked, 12 h planned) — at most 250 h a year')
+    expect(words({ ...CAP_WARNING, values: { plannedMinutes: 720, withWorked: 'yes', limitMinutes: 15000, year: '2026' } }, 'en')).toBe('Planned overtime in 2026 would pass the yearly cap together with the overtime already worked — at most 250 h a year')
+  })
+
   it('the tone is the worst one', () => {
     expect(toneOf([])).toBe('none')
     expect(toneOf([{ level: 'WARN' }])).toBe('warn')

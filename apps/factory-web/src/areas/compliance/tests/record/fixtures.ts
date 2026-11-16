@@ -115,6 +115,12 @@ export const designScreen = defineDesignScreen<LotCase>({
     { id: 'ready', label: 'Pass on a lab report: ready to release', model: lotCase(ready232, { detail: ready(readyDetail) }) },
     { id: 'release-tab', label: 'Release tab: every check passes', model: lotCase(ready232, { tab: 'release', detail: ready(readyDetail) }) },
     { id: 'release-open', label: 'Release tab: two checks open (Cr VI, the receiver’s hold)', model: lotCase(held, { tab: 'release', detail: ready(heldDetail) }) },
+    // B-W2b-GF5 (G369): quality releases only what passed its incoming inspection.
+    {
+      id: 'release-incoming',
+      label: 'Release tab: a hide the incoming inspection did not accept is not on hold',
+      model: lotCase(ready232, { tab: 'release', detail: ready({ ...readyDetail, checklist: demoChecklist(ready232, ['INCOMING']) }) }),
+    },
     {
       id: 'receiver',
       label: 'The person who received it: release held, said why',

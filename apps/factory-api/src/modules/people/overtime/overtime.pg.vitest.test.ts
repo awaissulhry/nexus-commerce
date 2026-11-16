@@ -119,6 +119,9 @@ describe('Overtime to approve: a list with no name and no minutes (Owner answer 
       { rule: 'OVERTIME_YEARLY_CAP', state: 'OK', level: 'WARN' },
       { rule: 'DAILY_REST', state: 'OVER', level: 'WARN' },
       { rule: 'WEEKLY_AVERAGE', state: 'OK', level: 'WARN' },
+      // B-W2b-GF2 (G205): the weekly rest and night work are checked too (90 minutes at night is no night worker's day).
+      { rule: 'WEEKLY_REST', state: 'OK', level: 'WARN' },
+      { rule: 'NIGHT_AVERAGE', state: 'OK', level: 'WARN' },
     ])
   })
 

@@ -28,6 +28,7 @@ import { seed as seedComplianceRules } from './compliance-rules'
 import { seed as seedFiles } from './files'
 import { seed as seedShipping } from './shipping'
 import { seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The declarations, technical files and labels seed (W2b-4, schema wave 32/33, B-W2b-218), per tenant of seed/_core.ts,
@@ -156,8 +157,9 @@ export async function seed(context: SeedContext): Promise<TechfilesSeed> {
   const tf = result.technicalFileIds
   const pack = result.packIds
 
-  /** A made-up PDF (or ZIP) of a record. */
-  const fileRow = (fileId: string, recordType: string, recordId: string, originalName: string, key: string, at: Date, contentType = 'application/pdf') => ({
+  /** A made-up PDF (or ZIP) of a record (its bytes: B-W2b-F59, seed-files.ts). */
+  const fileRow = (fileId: string, recordType: string, recordId: string, originalName: string, key: string, at: Date, contentType = 'application/pdf') =>
+    seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType,
@@ -166,7 +168,6 @@ export async function seed(context: SeedContext): Promise<TechfilesSeed> {
     originalName,
     contentType,
     sizeBytes: 4096,
-    sha256: sha(`file:${key}`),
     storeAccountId: id('files:account:r2'),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`techfiles:file:${key}:key`)}`,
     status: 'AVAILABLE' as const,

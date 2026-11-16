@@ -4,6 +4,7 @@ import { CN23_BECAUSE, CUSTOMS_REFUSALS, DECLARATION_STATUSES, DESTINATION_CLASS
 import type { ApiClient } from '../../../../lib/api/client'
 import { completeUpload, requestUpload } from '../../../../record-panels/api'
 import { putToStore, sha256Hex } from '../../../../record-panels/store'
+import { SPECIAL_TERRITORIES } from '@nexus/factory-domain/tax/special-territories'
 
 /**
  * A shipment's export papers (B-W2b-412 on B-W2b-409's API; apps/factory-api modules/shipping/customs and broker-pack): the
@@ -50,7 +51,12 @@ export type Declaration = z.infer<typeof declarationSchema>
 
 export const exportSchema = z.object({
   shipment: z.object({ id: z.string(), number: z.string(), status: z.string(), shippedAt: z.string().nullable(), siteId: z.string(), companyId: z.string() }),
-  destination: z.object({ country: z.string().nullable(), class: z.enum(DESTINATION_CLASSES).nullable() }),
+  // B-W2b-GF2: the EU special fiscal territory of the ship-to (Livigno, the Canary Islands …), in words (it, en), or null.
+  destination: z.object({
+    country: z.string().nullable(),
+    class: z.enum(DESTINATION_CLASSES).nullable(),
+    territory: z.object({ key: z.enum(SPECIAL_TERRITORIES), vat: z.enum(['INSIDE', 'OUTSIDE']), customs: z.enum(['INSIDE', 'OUTSIDE']), law: z.string(), words: z.object({ en: z.string(), it: z.string() }) }).nullable().optional(),
+  }),
   needed: z.boolean(),
   eori: z.string().nullable(),
   /** The Incoterm and its place as the order says them (its own words). */

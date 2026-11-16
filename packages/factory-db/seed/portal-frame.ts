@@ -1,9 +1,9 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedPortalAuth } from './portal-auth'
 import { seed as seedThreads } from './threads'
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The portal frame seed (W2b schema wave 20/22, B-W2b-156), per tenant of seed/_core.ts, written as the app does: the
@@ -61,7 +61,6 @@ export async function seed(context: SeedContext): Promise<PortalFrameSeed> {
   const id = (key: string): string => seedUuid(namespace, key)
   const firstId = (key: string): string => `00000000${id(key).slice(8)}`
   const lateId = (key: string): string => `ffffffff${id(key).slice(8)}`
-  const hex = (text: string): string => createHash('sha256').update(`seed portal-frame ${namespace} ${text}`).digest('hex')
   const tenantId = id('tenant')
   const ownerId = id('actor')
   const companyA = id('company:A')
@@ -114,8 +113,8 @@ export async function seed(context: SeedContext): Promise<PortalFrameSeed> {
     { id: tasks.uploadCertificate, companyId: companyA, partyId: partyP2, kind: 'UPLOAD_DOCUMENT', recordType: 'Party', recordId: partyP2, recordLabel: 'Seed tannery: REACH declaration 2026', sourceKey: `RequiredDocumentRule:${id('portal-frame:rule:reach')}`, ...askedByOwner, createdAt: AT, updatedAt: AT },
   ]
 
-  // The quote's sketch, shared with P1's portal (a row only, no object in any store).
-  const fileRow: Prisma.StoredFileCreateManyInput = {
+  // The quote's sketch, shared with P1's portal (a row; its bytes: B-W2b-F59, seed-files.ts).
+  const fileRow: Prisma.StoredFileCreateManyInput = seedFile(tenantId, {
     id: postFileId,
     companyId: companyA,
     recordType: quote.type,
@@ -124,7 +123,6 @@ export async function seed(context: SeedContext): Promise<PortalFrameSeed> {
     originalName: 'Seed sketch of the team jacket, front.jpg',
     contentType: 'image/jpeg',
     sizeBytes: 4096,
-    sha256: hex('file sketch'),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id('portal-frame:key:sketch')}`,
     visibility: ['OFFICE', 'PARTNER'],
     partyId: partyP1,
@@ -134,7 +132,7 @@ export async function seed(context: SeedContext): Promise<PortalFrameSeed> {
     createdAt: AT,
     updatedAt: AT,
     createdById: ownerId,
-  }
+  })
 
   const onRecord = (record: { type: string; id: string; label: string }) => ({ recordType: record.type, recordId: record.id, recordLabel: record.label })
   const notificationRows: Prisma.NotificationCreateManyInput[] = [

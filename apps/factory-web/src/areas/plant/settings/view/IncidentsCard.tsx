@@ -52,6 +52,7 @@ export function IncidentsCard({ depth, actions }: { depth: DepthModel; actions?:
                       { label: t('incidents.statistical'), value: t('incidents.statisticalValue', { count: value.rule.statisticalFromDays }) },
                       { label: t('incidents.insurance'), value: t('incidents.insuranceValue', { count: value.rule.insuranceAboveDays }) },
                       { label: t('incidents.window'), value: t('incidents.windowValue', { count: value.rule.hoursAfterCertificate }) },
+                      { label: t('incidents.fatal'), value: t('incidents.fatalValue', { count: value.rule.hoursAfterFatalAccident }) },
                     ]}
                   />
                   <p className="fw-pls-hint">{t('incidents.fixed')}</p>

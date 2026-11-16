@@ -375,3 +375,26 @@ describe('nobody decides a change order they named themselves to, or one carryin
     expect(eco.requestsList).toEqual([expect.objectContaining({ id: raised.id, status: 'ACCEPTED', decidedById: PEOPLE.quality })])
   })
 })
+
+// B-W2b-GF5 (G282): the raiser never accepts their own change request at triage (Owner rule: never self-approve).
+describe('nobody accepts a change request they raised (B-W2b-GF5, G282)', () => {
+  it('the raiser with every right is refused ACCEPT_OWN_REQUEST, the record holds Accept in words; review stays theirs; another person accepts', async () => {
+    const raised = (await ok('comanager', 'POST', '/product/change-requests', { styleId: jacket2, companyId: companyA, source: 'OFFICE', title: 'Shorter zip pull (made-up)', reason: 'Made-up.' }, 201)).changeRequest
+    const held = (await ok('comanager', 'GET', `/product/change-requests/${raised.id}`)).changeRequest
+    expect(held.moves).toEqual([
+      { to: 'IN_REVIEW', allowed: true, refusal: null },
+      { to: 'ACCEPTED', allowed: false, refusal: { code: 'ACCEPT_OWN_REQUEST', message: `You raised change request ${raised.number}: a person who did not ask for the change accepts it (four eyes).` } },
+      { to: 'REJECTED', allowed: true, refusal: null },
+    ])
+    const own = await no('comanager', 'POST', `/product/change-requests/${raised.id}/move`, { version: held.version, to: 'ACCEPTED' }, 409)
+    expect(refusal(own)).toBe('refusal/ACCEPT_OWN_REQUEST')
+    expect(own.message).toBe(`You raised change request ${raised.number}: a person who did not ask for the change accepts it (four eyes).`)
+    // Into review is not a decision: it stays the raiser's; accepting it from review is still another person's.
+    const reviewed = (await ok('comanager', 'POST', `/product/change-requests/${raised.id}/move`, { version: held.version, to: 'IN_REVIEW' })).changeRequest
+    expect(reviewed.status).toBe('IN_REVIEW')
+    expect(refusal(await no('comanager', 'POST', `/product/change-requests/${raised.id}/move`, { version: reviewed.version, to: 'ACCEPTED' }, 409))).toBe('refusal/ACCEPT_OWN_REQUEST')
+    expect((await ok('manager', 'GET', `/product/change-requests/${raised.id}`)).changeRequest.moves.find((move: Json) => move.to === 'ACCEPTED')).toMatchObject({ allowed: true })
+    const accepted = (await ok('manager', 'POST', `/product/change-requests/${raised.id}/move`, { version: reviewed.version, to: 'ACCEPTED' })).changeRequest
+    expect(accepted).toMatchObject({ status: 'ACCEPTED', decidedById: PEOPLE.manager })
+  })
+})

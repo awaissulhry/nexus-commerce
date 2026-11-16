@@ -51,6 +51,7 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
     node scripts/factory/check-migrations-replay.mjs  # = npm run check:drift -w @nexus/factory-db; needs the stack
     FACTORY_MIGRATION_DATABASE_URL=postgresql://postgres@127.0.0.1:5442/factory_<step> npm run migrate -w @nexus/factory-db
     FACTORY_DATABASE_URL=postgresql://factory_app@127.0.0.1:5442/factory_<step> npm run seed -w @nexus/factory-db
+    npm run seed:files -w @nexus/factory-api          # then the seeded files' bytes in the stack's store (B-W2b-F59)
 
 ## A schema change
 1. Edit your module's `prisma/schema/<module>.prisma` (conventions at the top of `_core.prisma`) and classify every new
@@ -471,7 +472,10 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    (a line with its site, exactly one number, the company's currency with an amount, today at the latest on the site's clock, an
    hour a whole hour of that clock with its day, rebuilt only forward; keys `fact:…` / `facth:…`); its own triggers only, no
    earlier function redefined; it calls recall's `factory_recall_words_ok`, `factory_recall_not_future`, styles'
-   `factory_styles_distinct` and privacy's `factory_privacy_ops_table_ok`, `factory_privacy_ops_code_ok`):
+   `factory_styles_distinct` and privacy's `factory_privacy_ops_table_ok`, `factory_privacy_ops_code_ok`,
+   `…_protected_safety_fatal_w2b_guards` (B-W2b-GF2, Owner G505 A: InailFilingType FATAL, a fatal or presumed fatal accident
+   due exactly 24 hours after the incident happened (DPR 1124/1965 art. 53), no certificate, never WAITING_CERTIFICATE; it
+   redefines the protected-safety step's `factory_inail_filing_guard`, every other rule and word kept):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
@@ -498,6 +502,13 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
 - The roles are cluster-wide and shared by every worktree on the local server: tests never drop or alter them; a test
   role gets a random name and is dropped. Migrations take the advisory lock in `src/testing/database.ts`.
 - Seeds (`seed/<module>.ts`, run in name order) hold made-up data only and write through the scoped client.
+- A seeded file (B-W2b-F59, `src/seed-files.ts`): build its StoredFile row with `seedFile(tenantId, row)`, never with a
+  made-up sha256: the row gets the SHA-256 of the small valid file of its type that `seedFileBytes` makes (exactly its
+  `sizeBytes`), and its key is checked against the files platform's rule (`factory-domain/files/keys.ts`; a new key:
+  `seedFileKey`, in the year of its createdAt; `legal/` exactly for FISCAL_ARCHIVE). A copy passes its source's row
+  (`{ bytesOf }`). `npm run seed:files -w @nexus/factory-api` then puts those bytes in a local stack's store; a test that reads
+  a seeded file's bytes calls apps/factory-api's `putSeedFileBytes` (platform/files/seed-bytes). Seed companies have a
+  made-up fiscal identity (`_core.ts`): never a real company's Partita IVA.
 - Seed dates follow the calendar (B-W2b-F53, `src/seed-calendar.ts`): a seed date on or before `SEED_DAY` (2026-11-15) is
   history and never moves; a later one is the seeds' future and goes through `seedDay` / `seedAt`, which move it on by
   whole weeks so it is still to come on the day the seed runs (same weekday, never nearer than written). Holidays,

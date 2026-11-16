@@ -1,7 +1,6 @@
 import { absenceCodeProblems, ABSENCE_CATEGORIES, SENSITIVE_CATEGORIES } from '@nexus/factory-domain/people/attendance/absences'
 import { DEFAULT_ATTENDANCE_SETTINGS, ROUNDING_CHOICES, roundMinute, settingsProblems, type AttendanceSettings } from '@nexus/factory-domain/people/attendance/rules'
 import { LAW_VALUES, RULE_KINDS, ruleProblems } from '@nexus/factory-domain/people/limits/rules'
-import { CHECKED_LIMITS } from '@nexus/factory-domain/people/limits/checks'
 import { GATE_REASON_MIN, LEADS_BASES } from '@nexus/factory-domain/people/privacy/gate'
 import { REVIEW_RULE_LIMITS, reviewRuleProblems } from '@nexus/factory-domain/people/efficiency/rules'
 import { LAYOUT_LIMITS } from '@nexus/factory-domain/people/payroll/layouts'
@@ -163,8 +162,6 @@ export interface LimitDraft {
 
 export const LIMIT_ORDER: readonly RuleKind[] = ['DAILY_REST', 'WEEKLY_AVERAGE', 'OVERTIME_YEARLY_CAP', 'NIGHT_AVERAGE', 'WEEKLY_REST', 'BREAK_AFTER']
 
-/** The limits something checks today; the rest are kept, and said so on the screen. */
-export const isChecked = (kind: RuleKind): boolean => kind === 'BREAK_AFTER' || (CHECKED_LIMITS as readonly string[]).includes(kind)
 
 export function limitDraftOf(entry: LimitEntry): LimitDraft {
   const rule: LimitRule | null = entry.inForce

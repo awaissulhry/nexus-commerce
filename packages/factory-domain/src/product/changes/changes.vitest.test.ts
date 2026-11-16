@@ -22,16 +22,32 @@ import {
 } from './rules'
 
 const order = { number: 'ECO-2026-0001', status: 'DRAFT' as const, authorId: 'author' }
+/** B-W2b-GF5 (G282): a triage by someone who did not raise the request. */
+const NOBODY = { raisedById: null, personId: 'triager' } as const
 
 describe('change requests (PRD-169, PRD-259, MES-006)', () => {
   it('triage moves: review, accept, reject with why; done only by the release', () => {
     const open = { number: 'CR-2026-0001', status: 'OPEN' as const }
-    expect(requestMoveRefusal(open, 'IN_REVIEW', null)).toBeNull()
-    expect(requestMoveRefusal(open, 'ACCEPTED', null)).toBeNull()
-    expect(requestMoveRefusal(open, 'REJECTED', null)).toMatchObject({ code: 'REASON_NEEDED' })
-    expect(requestMoveRefusal(open, 'REJECTED', 'Already in revision 3')).toBeNull()
-    expect(requestMoveRefusal(open, 'DONE', null)).toMatchObject({ code: 'REQUEST_MOVE', message: expect.stringContaining('released') })
-    expect(requestMoveRefusal({ number: null, status: 'REJECTED' }, 'ACCEPTED', null)).toMatchObject({ code: 'REQUEST_MOVE', message: expect.stringContaining('from the floor') })
+    expect(requestMoveRefusal(open, 'IN_REVIEW', null, NOBODY)).toBeNull()
+    expect(requestMoveRefusal(open, 'ACCEPTED', null, NOBODY)).toBeNull()
+    expect(requestMoveRefusal(open, 'REJECTED', null, NOBODY)).toMatchObject({ code: 'REASON_NEEDED' })
+    expect(requestMoveRefusal(open, 'REJECTED', 'Already in revision 3', NOBODY)).toBeNull()
+    expect(requestMoveRefusal(open, 'DONE', null, NOBODY)).toMatchObject({ code: 'REQUEST_MOVE', message: expect.stringContaining('released') })
+    expect(requestMoveRefusal({ number: null, status: 'REJECTED' }, 'ACCEPTED', null, NOBODY)).toMatchObject({ code: 'REQUEST_MOVE', message: expect.stringContaining('from the floor') })
+  })
+
+  // B-W2b-GF5 (G282): never self-approve.
+  it('the raiser never accepts their own request; review and reject stay theirs; a floor request names no raiser', () => {
+    const open = { number: 'CR-2026-0002', status: 'OPEN' as const }
+    const own = { raisedById: 'raiser', personId: 'raiser' }
+    expect(requestMoveRefusal(open, 'ACCEPTED', null, own)).toMatchObject({ code: 'ACCEPT_OWN_REQUEST', message: expect.stringContaining('CR-2026-0002') })
+    expect(requestMoveRefusal({ ...open, status: 'IN_REVIEW' }, 'ACCEPTED', null, own)).toMatchObject({ code: 'ACCEPT_OWN_REQUEST' })
+    expect(requestMoveRefusal(open, 'IN_REVIEW', null, own)).toBeNull()
+    expect(requestMoveRefusal(open, 'REJECTED', 'Asked by mistake', own)).toBeNull()
+    expect(requestMoveRefusal(open, 'ACCEPTED', null, { raisedById: 'raiser', personId: 'someone else' })).toBeNull()
+    expect(requestMoveRefusal({ number: null, status: 'OPEN' }, 'ACCEPTED', null, { raisedById: null, personId: 'triager' })).toBeNull()
+    // A move that is not possible says so first.
+    expect(requestMoveRefusal({ ...open, status: 'REJECTED' }, 'ACCEPTED', null, own)).toMatchObject({ code: 'REQUEST_MOVE' })
   })
 
   it('what and why are fixed once accepted; only the priority still moves; nothing once done', () => {

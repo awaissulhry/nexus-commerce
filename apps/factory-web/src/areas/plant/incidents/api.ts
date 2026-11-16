@@ -124,7 +124,7 @@ export const readCounts = (api: ApiClient, siteId: string | null, signal?: Abort
 
 // ---- the record ------------------------------------------------------------------------------------------------------------
 
-const ruleSchema = z.object({ law: z.string(), statisticalFromDays: z.number().int(), insuranceAboveDays: z.number().int(), hoursAfterCertificate: z.number().int(), words: z.object({ en: z.array(z.string()), it: z.array(z.string()) }) })
+const ruleSchema = z.object({ law: z.string(), statisticalFromDays: z.number().int(), insuranceAboveDays: z.number().int(), hoursAfterCertificate: z.number().int(), hoursAfterFatalAccident: z.number().int().optional().default(24), words: z.object({ en: z.array(z.string()), it: z.array(z.string()) }) })
 export type InailRule = z.infer<typeof ruleSchema>
 
 export const deadlineSchema = z.object({ id: z.string(), state: z.enum(FILING_STATES), status: z.enum(FILING_STATUSES), countdown: countdownSchema.nullable(), version: z.number().int() })
@@ -339,8 +339,11 @@ const filingStateOut = z.object({ id: z.string(), version: z.number().int(), sta
 export type FilingStateOut = z.infer<typeof filingStateOut>
 const filingPath = (incidentId: string, filingId: string) => `/safety/incidents/${seg(incidentId)}/filings/${seg(filingId)}`
 
-/** POST …/:id/filings: the absence decides the filing (≥ 1 day statistical, > 3 insurance); a certificate starts the 48 h clock. */
-export const addFiling = async (api: ApiClient, incidentId: string, body: { incidentPersonId: string; expectedAbsenceDays: number; certificateReference?: string; certificateReceivedAt?: string }, idempotencyKey: string) =>
+/**
+ * POST …/:id/filings: the absence decides the filing (≥ 1 day statistical, > 3 insurance); a certificate starts the 48 h clock.
+ * B-W2b-GF2: `fatal` true: a fatal or presumed fatal accident (due 24 hours after it; no absence, no certificate).
+ */
+export const addFiling = async (api: ApiClient, incidentId: string, body: { incidentPersonId: string; expectedAbsenceDays: number; certificateReference?: string; certificateReceivedAt?: string } | { incidentPersonId: string; fatal: true }, idempotencyKey: string) =>
   (await api.post(`/safety/incidents/${seg(incidentId)}/filings`, { body, schema: z.object({ filings: z.array(filingStateOut), replayed: z.boolean() }), idempotencyKey })).filings
 
 /** PATCH …/filings/:filingId: the absence, the certificate (→ DUE, due 48 h after it); a statistical one past 3 days adds the insurance one. */

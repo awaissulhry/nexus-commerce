@@ -1,5 +1,6 @@
-import { daysFrom, plusDays } from '../../calendars/dates'
+import { daysFrom, localInstant, plusDays } from '../../calendars/dates'
 import type { BusinessDate } from '../../core/time'
+import { ATTENDANCE_RULES } from '../attendance/rules'
 import { mondayOf } from './rules'
 
 /**
@@ -14,12 +15,17 @@ import { mondayOf } from './rules'
  *   WEEKLY_AVERAGE       at most 48 hours a week on average, overtime included, over the reference period (art. 4: 4
  *                        months; a CCNL may say up to 12)
  *   OVERTIME_YEARLY_CAP  at most 250 hours of overtime a year (art. 5 c.3; a CCNL may say otherwise)
+ *   WEEKLY_REST          B-W2b-GF2: at least 24 consecutive hours of rest every 7 days, on top of the 11 hours of daily
+ *                        rest (35 hours), as an average over 14 days (art. 9 c.1)
+ *   NIGHT_AVERAGE        B-W2b-GF2: a night worker's working time at most 8 hours in 24 (art. 13 c.1): a working day
+ *                        with at least 3 hours in the night period (22:00-06:00, art. 1 c.2 d-e) over the limit
  *
  * Everything here is PLANNED time: the roster's shifts (or the default shift) and the overtime people agreed to. What a
  * person actually worked is attendance (B-W2b-37, B-W2b-42: their own checks on approval), never read here.
  */
 
-export const LIMIT_KINDS = ['DAILY_REST', 'BREAK_AFTER', 'WEEKLY_AVERAGE', 'OVERTIME_YEARLY_CAP'] as const
+// B-W2b-GF2: WEEKLY_REST (art. 9) and NIGHT_AVERAGE (art. 13), kept by People settings since B-W2b-42, checked now.
+export const LIMIT_KINDS = ['DAILY_REST', 'BREAK_AFTER', 'WEEKLY_AVERAGE', 'OVERTIME_YEARLY_CAP', 'WEEKLY_REST', 'NIGHT_AVERAGE'] as const
 export type LimitKind = (typeof LIMIT_KINDS)[number]
 export const LIMIT_LEVELS = ['WARN', 'BLOCK'] as const
 export type LimitLevel = (typeof LIMIT_LEVELS)[number]
@@ -30,6 +36,8 @@ export const LAW_LIMITS: Readonly<Record<LimitKind, { readonly limitMinutes: num
   BREAK_AFTER: { limitMinutes: 360, breakMinutes: 10, referenceMonths: null, legalReference: 'D.Lgs. 66/2003 art. 8' },
   WEEKLY_AVERAGE: { limitMinutes: 2880, breakMinutes: null, referenceMonths: 4, legalReference: 'D.Lgs. 66/2003 art. 4' },
   OVERTIME_YEARLY_CAP: { limitMinutes: 15000, breakMinutes: null, referenceMonths: null, legalReference: 'D.Lgs. 66/2003 art. 5' },
+  WEEKLY_REST: { limitMinutes: 1440, breakMinutes: null, referenceMonths: null, legalReference: 'D.Lgs. 66/2003 art. 9' },
+  NIGHT_AVERAGE: { limitMinutes: 480, breakMinutes: null, referenceMonths: null, legalReference: 'D.Lgs. 66/2003 art. 13' },
 })
 
 /** A WorkingTimeRule row as the checks read it. */
@@ -280,28 +288,187 @@ export function weeklyAverageWarnings(work: readonly PlannedWork[], rule: LimitR
   return out
 }
 
-/** The yearly overtime cap (art. 5 c.3): the planned overtime of the year, with the request being checked, over the limit. */
-export function yearlyCapWarnings(input: { readonly date: BusinessDate; readonly plannedMinutes: number }, rule: LimitRule): LimitWarning[] {
-  if (input.plannedMinutes <= rule.limitMinutes) return []
+/**
+ * The yearly overtime cap (art. 5 c.3): the overtime of the year, with the request being checked, over the limit.
+ * B-W2b-GF2: `workedMinutes` is the overtime already worked this year (approved or waiting; B-W2b-42's entries), which the
+ * cap counts too; its figure is attendance data, so the words name it only when `showWorked` (the reader may see the
+ * person's attendance): otherwise they say the cap is passed with the overtime worked, without the figure.
+ */
+export function yearlyCapWarnings(input: { readonly date: BusinessDate; readonly plannedMinutes: number; readonly workedMinutes?: number; readonly showWorked?: boolean }, rule: LimitRule): LimitWarning[] {
+  const worked = input.workedMinutes ?? 0
+  if (input.plannedMinutes + worked <= rule.limitMinutes) return []
   const year = input.date.slice(0, 4)
+  const words =
+    worked === 0
+      ? `Planned overtime in ${year} would be ${hours(input.plannedMinutes)} — at most ${hours(rule.limitMinutes)} a year (${rule.legalReference})`
+      : input.showWorked
+        ? `Overtime in ${year} would be ${hours(input.plannedMinutes + worked)} (${hours(worked)} worked, ${hours(input.plannedMinutes)} planned) — at most ${hours(rule.limitMinutes)} a year (${rule.legalReference})`
+        : `Planned overtime in ${year} would pass the yearly cap together with the overtime already worked — at most ${hours(rule.limitMinutes)} a year (${rule.legalReference})`
   return [
     {
       rule: 'OVERTIME_YEARLY_CAP',
       level: rule.action,
       date: input.date,
       law: rule.legalReference,
-      words: `Planned overtime in ${year} would be ${hours(input.plannedMinutes)} — at most ${hours(rule.limitMinutes)} a year (${rule.legalReference})`,
-      values: { plannedMinutes: input.plannedMinutes, limitMinutes: rule.limitMinutes, year },
+      words,
+      values: { plannedMinutes: input.plannedMinutes, limitMinutes: rule.limitMinutes, year, ...(worked > 0 ? (input.showWorked ? { workedMinutes: worked } : { withWorked: 'yes' }) : {}) },
     },
   ]
 }
 
-/** Every roster warning of one person on the days in `report`: rest, break and the weekly average. */
-export function rosterWarnings(input: { readonly work: readonly PlannedWork[]; readonly rules: LimitRules; readonly report: ReadonlySet<BusinessDate>; readonly timeZone: string; readonly employedFrom: BusinessDate }): LimitWarning[] {
+// ---- B-W2b-GF2: weekly rest (art. 9) and night work (art. 13) ----------------------------------------------------------
+
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const weekdayOf = (date: BusinessDate): string => WEEKDAYS[(daysFrom(mondayOf(date), date) + 7) % 7]!
+const dayFormats = new Map<string, Intl.DateTimeFormat>()
+/** The calendar day of an instant in a time zone. */
+function dateIn(instant: Date, timeZone: string): BusinessDate {
+  let format = dayFormats.get(timeZone)
+  if (!format) {
+    format = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' })
+    dayFormats.set(timeZone, format)
+  }
+  return format.format(instant) as BusinessDate
+}
+/** "Sat 14:00": a weekday and a time of an instant in a time zone. */
+const momentWords = (instant: Date, timeZone: string): string => `${weekdayOf(dateIn(instant, timeZone))} ${clockAt(instant, timeZone)}`
+
+/** A stretch of rest between two working days (or before the first / after the last one known). */
+export interface RestStretch {
+  readonly from: Date
+  readonly to: Date
+  readonly minutes: number
+  /** The week (its Monday) the rest belongs to: the week of its middle, so one rest never counts for two weeks. */
+  readonly week: BusinessDate
+}
+
+/**
+ * The rests between the working days of `work`, inside a window of whole days (`from` 00:00 … the day after `to`): before
+ * the first duty, between duties and after the last. Rest at the window's edges is as long as the window shows: work
+ * outside it is not read, so an edge rest is the least it can be.
+ */
+export function restStretches(work: readonly PlannedWork[], window: { readonly from: BusinessDate; readonly to: BusinessDate }, timeZone: string): RestStretch[] {
+  const start = localInstant(window.from, 0, timeZone)
+  const end = localInstant(plusDays(window.to, 1), 0, timeZone)
+  const duties = dutiesOf(work).filter((duty) => duty.end.getTime() > start.getTime() && duty.start.getTime() < end.getTime())
+  const stretches: RestStretch[] = []
+  const add = (from: Date, to: Date) => {
+    const minutes = (to.getTime() - from.getTime()) / 60_000
+    if (minutes > 0) stretches.push({ from, to, minutes, week: mondayOf(dateIn(new Date((from.getTime() + to.getTime()) / 2), timeZone)) })
+  }
+  let reach = start
+  for (const duty of duties) {
+    if (duty.start.getTime() > reach.getTime()) add(reach, duty.start)
+    if (duty.end.getTime() > reach.getTime()) reach = duty.end
+  }
+  if (end.getTime() > reach.getTime()) add(reach, end)
+  return stretches
+}
+
+/**
+ * The weekly rest (art. 9 c.1) of each week that has a day in `report`: its longest rest against the rule's 24 hours on top
+ * of the daily rest's 11 (35 hours). A rest counts for the week of its middle, whole (one rest never counts twice), and
+ * for any week it covers for at least the 35 hours (a holiday, a long weekend: each week it covers had its rest). A shorter
+ * week stands when the 14 days with the week before or after it still give twice that (the law's average over 14 days: a
+ * week of 59 hours of rest covers a week of 11). Shown on the week's last day in `report`. `window`: the days `work`
+ * covers; a week is read only when the window holds it whole with the day before it and the Monday after it (a rest cut
+ * by the window's edge is never judged).
+ */
+export const weekReadable = (week: BusinessDate, window: { readonly from: BusinessDate; readonly to: BusinessDate }): boolean => plusDays(week, -1) >= window.from && plusDays(week, 7) <= window.to
+
+/** The days a weekly-rest check of `from` … `to` needs `work` for: the week before the first, and the week after the last. */
+export function weeklyRestWindow(from: BusinessDate, to: BusinessDate): { readonly from: BusinessDate; readonly to: BusinessDate } {
+  return { from: plusDays(mondayOf(from), -8), to: plusDays(mondayOf(to), 14) }
+}
+export function weeklyRestWarnings(work: readonly PlannedWork[], rule: LimitRule, dailyRest: LimitRule, report: ReadonlySet<BusinessDate>, window: { readonly from: BusinessDate; readonly to: BusinessDate }, timeZone: string): LimitWarning[] {
+  const needed = rule.limitMinutes + dailyRest.limitMinutes
+  const stretches = restStretches(work, window, timeZone)
+  /** The rest a week counts: a stretch of its own (its middle in the week), or one that covers the week for the 35 hours. */
+  const longest = (week: BusinessDate): { readonly minutes: number; readonly stretch: RestStretch } | null => {
+    const start = localInstant(week, 0, timeZone).getTime()
+    const end = localInstant(plusDays(week, 7), 0, timeZone).getTime()
+    let best: { minutes: number; stretch: RestStretch } | null = null
+    for (const stretch of stretches) {
+      const own = stretch.week === week ? stretch.minutes : 0
+      const covered = (Math.min(stretch.to.getTime(), end) - Math.max(stretch.from.getTime(), start)) / 60_000
+      const minutes = Math.max(own, covered >= needed ? covered : 0)
+      if (minutes > 0 && (best === null || minutes > best.minutes)) best = { minutes, stretch }
+    }
+    return best
+  }
+  const out: LimitWarning[] = []
+  for (const week of [...new Set([...report].map(mondayOf))].sort()) {
+    if (!weekReadable(week, window)) continue
+    const found = longest(week)
+    const best = found?.stretch ?? null
+    const rest = found?.minutes ?? 0
+    if (rest >= needed) continue
+    const pairs = [plusDays(week, -7), plusDays(week, 7)].filter((other) => weekReadable(other, window)).map((other) => rest + (longest(other)?.minutes ?? 0))
+    if (pairs.some((sum) => sum >= 2 * needed)) continue
+    const date = [...report].filter((day) => mondayOf(day) === week).sort().at(-1)!
+    const from = best ? momentWords(best.from, timeZone) : null
+    const to = best ? momentWords(best.to, timeZone) : null
+    out.push({
+      rule: 'WEEKLY_REST',
+      level: rule.action,
+      date,
+      law: rule.legalReference,
+      words: `The longest rest in the week of ${dayWords(week)} is ${hours(rest)}${from ? ` (from ${from} to ${to})` : ''} — at least ${hours(rule.limitMinutes)} of consecutive rest every 7 days on top of the ${hours(dailyRest.limitMinutes)} between shifts (${hours(needed)}), as an average over 14 days (${rule.legalReference})`,
+      values: { restMinutes: Math.round(rest), neededMinutes: needed, limitMinutes: rule.limitMinutes, dailyRestMinutes: dailyRest.limitMinutes, week, ...(from && to ? { from, to } : {}) },
+    })
+  }
+  return out
+}
+
+/** The night period of art. 1 c.2 d (22:00-06:00, People's attendance rule): the minutes of a stretch inside it. */
+function nightMinutesOf(item: PlannedWork, timeZone: string): number {
+  if (item.start === null || item.end === null) return 0
+  let total = 0
+  for (const day of [plusDays(item.date, -1), item.date, plusDays(item.date, 1)]) {
+    const from = Math.max(item.start.getTime(), localInstant(day, ATTENDANCE_RULES.nightStartMinute, timeZone).getTime())
+    const to = Math.min(item.end.getTime(), localInstant(day, 1440 + ATTENDANCE_RULES.nightEndMinute, timeZone).getTime())
+    if (to > from) total += (to - from) / 60_000
+  }
+  return Math.min(total, item.minutes)
+}
+
+/** A working day with at least this much of its working time in the night period is a night worker's day (art. 1 c.2 e). */
+export const NIGHT_WORKER_MINUTES = 180
+
+/**
+ * A night worker's day (art. 13 c.1): a working day with at least 3 hours in the night period works at most the rule's
+ * 8 hours in its 24 (the law's reference; a CCNL's longer one has no column yet), on the days in `report`.
+ */
+export function nightWarnings(work: readonly PlannedWork[], rule: LimitRule, report: ReadonlySet<BusinessDate>, timeZone: string): LimitWarning[] {
+  const nightOf = new Map<BusinessDate, number>()
+  for (const item of work) nightOf.set(item.date, (nightOf.get(item.date) ?? 0) + nightMinutesOf(item, timeZone))
+  return dutiesOf(work)
+    .filter((duty) => report.has(duty.date) && (nightOf.get(duty.date) ?? 0) >= NIGHT_WORKER_MINUTES && duty.minutes > rule.limitMinutes)
+    .map((duty) => ({
+      rule: 'NIGHT_AVERAGE' as const,
+      level: rule.action,
+      date: duty.date,
+      law: rule.legalReference,
+      words: `${hours(duty.minutes)} of work ${clockAt(duty.start, timeZone)}-${clockAt(duty.end, timeZone)}, ${hours(Math.round(nightOf.get(duty.date) ?? 0))} of it at night — a night worker works at most ${hours(rule.limitMinutes)} in 24 hours (${rule.legalReference})`,
+      values: { workMinutes: Math.round(duty.minutes), nightMinutes: Math.round(nightOf.get(duty.date) ?? 0), limitMinutes: rule.limitMinutes, from: clockAt(duty.start, timeZone), to: clockAt(duty.end, timeZone) },
+    }))
+}
+
+/**
+ * Every roster warning of one person on the days in `report`: rest, break, the weekly average, and (B-W2b-GF2) the weekly
+ * rest and night work. `window`: the days `work` covers (the weekly rest reads the weeks around the report); left out, the
+ * report's own days.
+ */
+export function rosterWarnings(input: { readonly work: readonly PlannedWork[]; readonly rules: LimitRules; readonly report: ReadonlySet<BusinessDate>; readonly timeZone: string; readonly employedFrom: BusinessDate; readonly window?: { readonly from: BusinessDate; readonly to: BusinessDate } }): LimitWarning[] {
+  const days = [...input.report].sort()
+  if (days.length === 0) return []
+  const window = input.window ?? { from: days[0]!, to: days.at(-1)! }
   return [
     ...restWarnings(input.work, input.rules.DAILY_REST, input.report, input.timeZone),
     ...breakWarnings(input.work, input.rules.BREAK_AFTER, input.report, input.timeZone),
     ...weeklyAverageWarnings(input.work, input.rules.WEEKLY_AVERAGE, input.report, input.employedFrom),
+    ...weeklyRestWarnings(input.work, input.rules.WEEKLY_REST, input.rules.DAILY_REST, input.report, window, input.timeZone),
+    ...nightWarnings(input.work, input.rules.NIGHT_AVERAGE, input.report, input.timeZone),
   ].sort((a, b) => a.date.localeCompare(b.date) || LIMIT_KINDS.indexOf(a.rule) - LIMIT_KINDS.indexOf(b.rule))
 }
 

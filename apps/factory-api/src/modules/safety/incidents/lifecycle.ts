@@ -5,6 +5,8 @@ import { closeRefusal, hasWhere, INCIDENT_LIMITS, refusalOf, type IncidentKind, 
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { assertVersion } from '../../people/employees/access'
 import { actorIdOf, assertMay, assertMayWrite, officeOf, refuse } from './access'
+// B-W2b-GF2: a fatal accident's deadline follows the incident's time.
+import { moveFatalDeadlines } from './filings'
 
 /**
  * An incident's own writes (B-W2b-125; design plant.incidents record "EditModeBar for safety roles", pop-up "Close incident"
@@ -111,6 +113,8 @@ export function editIncident(caller: CommandCaller, incidentId: string, body: Ed
     }
     if (Object.keys(data).length === 0) throw new ValidationError('Change at least one thing.', [{ path: 'body', message: 'Nothing to change.' }])
     await tx.incident.update({ where: { id: row.id }, data: { ...data, version: row.version + 1, updatedAt: now }, select: { id: true } })
+    // B-W2b-GF2: a fatal accident's report is due 24 hours after the corrected time.
+    if (occurredAt && occurredAt.getTime() !== row.occurredAt.getTime()) await moveFatalDeadlines(tools, row, occurredAt)
     tools.audit({ action: 'safety.editIncident', recordType: 'Incident', recordId: row.id, companyId: row.companyId, siteId: row.siteId, after: { ...data, ...(occurredAt ? { occurredAt: occurredAt.toISOString() } : {}) } })
     changed(tools, row, 'EDITED', 'OPEN')
     return { incident: { id: row.id, version: row.version + 1 } }

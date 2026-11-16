@@ -32,6 +32,7 @@ import { seed as seedOptions } from './options'
 import { seed as seedRoles } from './roles'
 import { seed as seedSales } from './sales'
 import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The orders, credit and changes seed (W2b-5, schema wave 39/44, B-W2b-281), per tenant of seed/_core.ts, written in the
@@ -410,7 +411,7 @@ export async function seed(context: SeedContext): Promise<SalesOrdersDepthSeed> 
       const confirmationSha = sha256(`seed order confirmation SEED-SO-W39-02 version 1 (${namespace})`)
       const confirmationFile = lastId('orders-depth:SO-W39-02:confirmation:1:file')
       await tx.storedFile.create({
-        data: {
+        data: seedFile(tenantId, {
           id: confirmationFile,
           companyId: companyA,
           recordType: 'SalesOrder',
@@ -419,7 +420,6 @@ export async function seed(context: SeedContext): Promise<SalesOrdersDepthSeed> 
           originalName: 'SEED-SO-W39-02 confirmation v1.pdf',
           contentType: 'application/pdf',
           sizeBytes: 3072,
-          sha256: confirmationSha,
           storeAccountId: id('files:account:r2'),
           storageKey: `t/${tenantId}/c/${companyA}/2026/${id('orders-depth:SO-W39-02:confirmation:1:key')}`,
           status: 'AVAILABLE',
@@ -428,7 +428,7 @@ export async function seed(context: SeedContext): Promise<SalesOrdersDepthSeed> 
           createdAt: T.confirmed,
           updatedAt: T.confirmed,
           createdById: memberId,
-        },
+        }),
         select,
       })
       await tx.generatedDocument.create({

@@ -21,9 +21,9 @@ import { assertEveryHandler, everyHandler, searchIndexers, settler } from '../da
  * HTTP ROUTES, each act by the role that does it, on the seeded factory; the flow proves they agree:
  *
  *   L  a lot from the dock to a cut piece: six black hides received against the open rest of SEED-PO-0001 (quarantine, Cr VI
- *      pending); the worker's rule opens the incoming inspection; the lab's result and release; hide by hide (area against the
- *      tannery, shade group, grade, a scar) and the split decision signed (3 accepted, 1 rejected, 2 to sort) with the hold of
- *      the rest from the record's prefill; at the cutting table the same-shade refusal for SEED-WO-0001 and the team leader's
+ *      pending); the worker's rule opens the incoming inspection; the lab's result (the release waits for the open inspection,
+ *      B-W2b-GF5); hide by hide (area against the tannery, shade group, grade, a scar) and the split decision signed (3 accepted,
+ *      1 rejected, 2 to sort): what was not accepted held at the decision by the system, then the lot released; at the cutting table the same-shade refusal for SEED-WO-0001 and the team leader's
  *      "Cut anyway" with the PIN; the cut log; a hold by genealogy of the lot (the work order ON_HOLD), released by another
  *      inspector.
  *   Q  the line and the end: a first piece on INL-FIRST that holds the run, approved with the PIN; end-of-line checks through the
@@ -319,7 +319,7 @@ describe('the W2b-2 golden flow: a lot from the dock to a cut piece, a shipment 
     expect(twice.error.message).toContain('open incoming inspection already')
   })
 
-  it('L02 the inspector (not the receiver) records the Cr VI result with the lab report and releases the lot (a wrong confirmation code refused)', async () => {
+  it('L02 the inspector (not the receiver) records the Cr VI result with the lab report; the release waits for the open incoming inspection (B-W2b-GF5)', async () => {
     const base = `/quality/lots/${G.lot.id}`
     let lot = (await ok(P.inspector, 'GET', base)).lot
     expect(lot.receivedById).toBe(P.warehouse.id)
@@ -327,10 +327,12 @@ describe('the W2b-2 golden flow: a lot from the dock to a cut piece, a shipment 
     const announced = await ok(P.inspector, 'POST', `${base}/results/report`, announce('cr6-q.pdf', report), 201)
     await putBytes(w, announced, report)
     const recorded = await ok(P.inspector, 'POST', `${base}/results`, { version: lot.version, test: 'CR_VI', method: 'EN ISO 17075-1', valueMgKg: '1.1', lab: 'Test Lab One (made up)', reportNumber: 'TL-Q-1', testedOn: today(), evidence: 'LOT_REPORT', fileId: announced.file.id }, 201)
-    expect(recorded).toMatchObject({ result: { verdict: 'PASS' }, checklist: { ready: true } })
+    // B-W2b-GF5 (G369): quality releases only what passed: the rule's incoming inspection is still open.
+    expect(recorded).toMatchObject({ result: { verdict: 'PASS' }, checklist: { ready: false, open: [expect.objectContaining({ code: 'INCOMING', state: 'OPEN' })] } })
     lot = recorded.lot
     expect(pathsOf((await ok(P.inspector, 'POST', `${base}/release`, { version: lot.version, confirmCode: 'NOT-THE-LOT' }, 400)).error)).toContain('body/confirmCode')
-    expect((await ok(P.inspector, 'POST', `${base}/release`, { version: lot.version, confirmCode: lot.code })).lot.qualityStatus).toBe('RELEASED')
+    expect(pathsOf((await ok(P.inspector, 'POST', `${base}/release`, { version: lot.version, confirmCode: lot.code }, 409)).error)).toEqual(['checks/INCOMING'])
+    expect((await ok(P.inspector, 'GET', base)).lot.qualityStatus).toBe('QUARANTINE')
     await settle()
   })
 
@@ -360,7 +362,7 @@ describe('the W2b-2 golden flow: a lot from the dock to a cut piece, a shipment 
     expect(other.status).toBe(403)
   })
 
-  it('L04 the plan’s checks (a shade outside the plan refused); the split decision signed with a fresh code: 3 accepted, 1 rejected, 2 to sort; the hold of what was not accepted placed from the record’s prefill', async () => {
+  it('L04 the plan’s checks (a shade outside the plan refused); the split decision signed with a fresh code: 3 accepted, 1 rejected, 2 to sort; what was not accepted held at the decision (B-W2b-GF5); the lot then released by the inspector', async () => {
     const base = `/quality/incoming/${G.iin}`
     let record = await ok(P.inspector, 'GET', base)
     const checkOf = (code: string) => (record.checks as Json[]).find((check) => check.code === code)!
@@ -382,12 +384,22 @@ describe('the W2b-2 golden flow: a lot from the dock to a cut piece, a shipment 
     const [h0] = G.hides as Json[]
     const graded = await admin<{ grade: string; shade: string }>(w, 'SELECT g.code AS grade, s.label AS shade FROM "Hide" h JOIN "LeatherGrade" g ON g.id = h."gradeId" JOIN "ShadeGroup" s ON s.id = h."shadeGroupId" WHERE h.id = $1', [h0!.id])
     expect(graded).toEqual([{ grade: 'A', shade: '1' }])
-    const prefill = record.next.holdPrefill as Json
-    expect(prefill).toMatchObject({ subjectType: 'Hide' })
-    const held = await ok(P.inspector, 'POST', '/quality/holds', { subjectType: 'Hide', subjectIds: prefill.subjectIds, reasonCode: 'QUALITY_CHECK', reasonNote: prefill.reasonNote, sourceType: 'IncomingInspection', sourceId: G.iin }, 201)
+    // B-W2b-GF5 (G367): the rejected hide, the sample's to-sort hide and the hide outside the sample (to sort too) are held by the
+    // system at the decision, the hold's source the inspection: nothing is left for the office to hold.
+    expect(record.next.holdPrefill).toBeNull()
+    expect(record.next.held.unheld).toEqual([])
+    expect(record.next.held.holds).toHaveLength(1)
+    const held = await ok(P.inspector, 'GET', `/quality/holds/${record.next.held.holds[0].id}`)
+    const [, , , h3, h4, h5] = G.hides as Json[]
     expect(held.hold).toMatchObject({ status: 'ACTIVE', subjectType: 'Hide', number: expect.stringMatching(/^HLD-/) })
+    expect((held.hold.subjects as Json[]).map((subject) => subject.id).sort()).toEqual([h3!.id, h4!.id, h5!.id].sort())
     G.sortHold = held.hold
     keep(held.hold.id)
+    // B-W2b-GF5 (G369): decided, and what it did not accept held: the inspector (not the receiver) releases the lot.
+    const lotBase = `/quality/lots/${G.lot.id}`
+    const lotNow = (await ok(P.inspector, 'GET', lotBase)).lot
+    expect((await ok(P.inspector, 'GET', `${lotBase}/release-check`)).checklist).toMatchObject({ ready: true })
+    expect((await ok(P.inspector, 'POST', `${lotBase}/release`, { version: lotNow.version, confirmCode: lotNow.code })).lot.qualityStatus).toBe('RELEASED')
     await settle()
   })
 

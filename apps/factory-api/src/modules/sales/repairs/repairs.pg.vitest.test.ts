@@ -426,3 +426,48 @@ describe('the garment found by its serial was made on its Rome day (B-W2b-F35)',
     }
   })
 })
+
+// B-W2b-GF5 (G513; Owner 11-15: A): a protective garment that fails its check after the repair is scrapped, never returned unsafe.
+describe('a protective garment that fails its safety check after the repair is scrapped (B-W2b-GF5, G513)', () => {
+  it('only a failed check opens the scrap; it ends the repair with what failed and why, the customer told in writing', async () => {
+    let repair = await recordOf(fromRma.repair.id)
+    expect(repair).toMatchObject({ stage: 'RECEIVED', safety: { required: true } })
+    const { workOrder } = await ok('production', 'POST', '/production/work-orders/repairs', { repairOrderId: repair.id, version: repair.version, routingSeqs: [20] }, 201)
+    await ok('production', 'POST', `/production/work-orders/${workOrder.id}/release`, {})
+    repair = await recordOf(repair.id)
+    repair = (await ok('production', 'POST', `/sales/repairs/${repair.id}/stage`, { version: repair.version, to: 'IN_REPAIR' })).repair
+    await ok('production', 'POST', `/production/work-orders/${workOrder.id}/start`, {})
+    await ok('production', 'POST', `/production/work-orders/${workOrder.id}/complete`, {})
+    repair = (await ok('production', 'POST', `/sales/repairs/${repair.id}/stage`, { version: repair.version, to: 'REPAIRED' })).repair
+    const repairedAt = repair.repairedAt
+    // Not checked yet: the scrap is held, said why; the route refuses it in the same words.
+    expect(held(repair, 'scrap')).toBe(`Repair ${repair.number} has no safety check after its repair yet: check it first; it is scrapped only when the check fails.`)
+    expect((await refused('sales', 'POST', `/sales/repairs/${repair.id}/scrap`, { version: repair.version, reason: 'Made up.' }, 409)).message).toBe(held(repair, 'scrap'))
+    const failed = await inspectorCheck(repair, { ...PASSED, seams: 'FAIL', protectors: { result: 'FAIL', replaced: false }, note: 'The shoulder seam split again (made up).' })
+    repair = failed.repair
+    expect(held(repair, 'scrap')).toBeNull()
+    expect(held(repair, 'ship')).toContain('or scrap it')
+    expect(held(repair, 'cancel')).toContain('goes back to the customer')
+    // A reason is said; the right is the repairs manager's.
+    expect((await refused('sales', 'POST', `/sales/repairs/${repair.id}/scrap`, { version: repair.version, reason: '  ' }, 400)).issues).toEqual([{ path: 'body/reason', message: 'Say why the garment is scrapped (at most 500 characters).' }])
+    await refused('viewer', 'POST', `/sales/repairs/${repair.id}/scrap`, { version: repair.version, reason: 'Made up.' }, 403)
+    const scrapped = await ok('sales', 'POST', `/sales/repairs/${repair.id}/scrap`, { version: repair.version, reason: 'Not safe to repair a third time (made up).' })
+    const words = 'Scrapped: the safety check after the repair failed (the seams, the protectors). Not safe to repair a third time (made up).'
+    expect(scrapped.warnings).toEqual([{ path: 'garment', message: 'Tell the customer in writing that the garment was scrapped: after the repair it no longer protects (its safety check failed), so it is not returned.' }])
+    expect(scrapped.repair).toMatchObject({ stage: 'CANCELLED', status: 'Scrapped: its safety check after the repair failed', cancelReason: words, repairedAt, shippedAt: null, safety: { state: 'FAILED', result: 'FAIL' }, ddts: [] })
+    expect(steps(scrapped.repair)).toEqual([['RECEIVED', 'DONE'], ['ESTIMATED', 'SKIPPED'], ['APPROVED', 'SKIPPED'], ['IN_REPAIR', 'DONE'], ['REPAIRED', 'DONE'], ['SHIPPED', 'SKIPPED']])
+    expect((scrapped.repair.stages as Json[]).slice(-2).map((row) => [row.from, row.to, row.note])).toEqual([
+      ['REPAIRED', 'IN_REPAIR', words],
+      ['IN_REPAIR', 'CANCELLED', words],
+    ])
+    expect((await events('repair.stage_changed', repair.id)).slice(-2).map((payload) => [payload.from, payload.to])).toEqual([
+      ['REPAIRED', 'IN_REPAIR'],
+      ['IN_REPAIR', 'CANCELLED'],
+    ])
+    const [audit] = await admin<Json>(`SELECT after FROM "AuditLog" WHERE "recordType" = 'RepairOrder' AND "recordId" = $1 AND action = 'repairs.scrap' AND after->>'stage' = 'CANCELLED'`, [repair.id])
+    expect(audit!.after).toMatchObject({ stage: 'CANCELLED', scrapped: true, failures: ['the seams', 'the protectors'] })
+    // It never goes back: a scrapped repair changes no more, and the database refuses the way back too.
+    expect((await refused('warehouse', 'POST', `/sales/repairs/${repair.id}/ship`, { version: scrapped.repair.version, ddt: DDT }, 409)).message).toBe(`Repair ${repair.number} is cancelled: it changes no more.`)
+    await expect(admin(`UPDATE "RepairOrder" SET stage = 'SHIPPED', "shippedAt" = now() WHERE id = $1`, [repair.id])).rejects.toThrow(/never changes/)
+  })
+})

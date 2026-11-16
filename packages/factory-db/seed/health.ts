@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import {
   ChemicalQuantityUnit,
   ChemicalSignalWord,
@@ -27,6 +26,7 @@ import { seed as seedPeople } from './people'
 import { seed as seedPlant } from './plant'
 import { seed as seedSafety } from './safety'
 import { seedToday } from '../src/seed-calendar' // B-W2b-F53: the seeds' calendar
+import { seedFile, seedFileKey } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The protected safety data seed (W2b schema wave 16/16, B-W2b-91), per tenant of seed/_core.ts, written as the app does: the
@@ -117,7 +117,6 @@ export async function seed(context: SeedContext): Promise<HealthSeed> {
   const office = { audience: 'office' as const, tenantId, actorId }
   const floorAs = (workerId: string) => ({ audience: 'floor' as const, tenantId, actorId: workerId, siteId: site.A1 })
   const select = { id: true } as const
-  const sha = (key: string): string => createHash('sha256').update(`seed health ${key} (${namespace})`).digest('hex')
 
   const today = romeToday()
   const daysAgo = (days: number): Date => new Date(today.getTime() - days * DAY_MS)
@@ -163,7 +162,8 @@ export async function seed(context: SeedContext): Promise<HealthSeed> {
 
   const doctor = safety.appointmentIds.doctor
   /** A data sheet's PDF: a file of its chemical, shared with the chemical's site floor (the cabinet QR opens it offline). */
-  const sheetFile = (key: string, companyId: string, siteId: string, chemicalId: string, name: string, when: Date) => ({
+  const sheetFile = (key: string, companyId: string, siteId: string, chemicalId: string, name: string, when: Date) =>
+    seedFile(tenantId, {
     id: id(`health:file:${key}`),
     companyId,
     recordType: 'Chemical',
@@ -172,9 +172,9 @@ export async function seed(context: SeedContext): Promise<HealthSeed> {
     originalName: name,
     contentType: 'application/pdf',
     sizeBytes: 4096,
-    sha256: sha(`file ${key}`),
     storeAccountId: store,
-    storageKey: `t/${tenantId}/c/${companyId}/health/${id(`health:file:key:${key}`)}`,
+    // B-W2b-F59: a key an upload makes (it was …/health/…, a key no upload could make: the floor's sheets answered 404).
+    storageKey: seedFileKey({ tenantId, companyId, kind: 'DOCUMENT', at: when, random: id(`health:file:key:${key}`) }),
     status: 'AVAILABLE' as const,
     availableAt: when,
     visibility: ['OFFICE' as const, 'FLOOR' as const],

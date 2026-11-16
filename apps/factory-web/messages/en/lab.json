@@ -370,6 +370,7 @@
     "PPE_CERTIFICATE": "PPE certificate",
     "SUPPLIER_DOCUMENTS": "Supplier's documents",
     "HOLD": "Receiver's hold",
+    "INCOMING": "Incoming inspection",
     "RELEASER": "Who releases"
   },
   "decide": {

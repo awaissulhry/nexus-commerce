@@ -69,6 +69,8 @@ const SESSIONS: Record<string, SessionContext> = {
   viewer: office(newId(), ['quality.inprocess.view']),
   bench: floor(A.lead, ['floor.work', ...RECORD, 'production.scan']),
   operator: floor(A.operator, ['floor.work', 'production.scan']),
+  // B-W2b-GF5 (G361): the seeded operator (SEED-WO-0001's scans and cut log name them) at a bench with the inspector's rights.
+  makerBench: floor(A.operator, ['floor.work', ...RECORD, 'production.scan']),
 }
 /** A caller as a request is one: its client follows `factoryContext`, so the tenant's system view (Object.create) reads as the system. */
 const callerAs = (session: string): CommandCaller => ({
@@ -282,5 +284,27 @@ describe("the floor's queue", () => {
     expect(applied).toMatchObject({ status: 'accepted', result: { type: 'InProcessCheck' } })
     const first = await applyQueued(caller, { clientEventId: `q-${newId()}`, kind: 'quality.inprocess.record', payload: { kind: 'FIRST_PIECE', workOrderId: A.wo1, bundleId: A.bn1 } }, { key: `${A.device}.q-${newId()}` })
     expect(first.status).toBe('refused')
+  })
+})
+
+// B-W2b-GF5 (G361): nobody decides their own first piece (Owner rule: never self-approve).
+describe('nobody decides a first piece of a work order they made (G361)', () => {
+  it('refuses the operator who made garments of it and an office user linked to them, before the PIN; another inspector decides', async () => {
+    const opened = (await ok('quality', 'POST', '/quality/inprocess/checks', { kind: 'FIRST_PIECE', workOrderId: A.wo1, bundleId: A.bn1, workOrderOperationId: ops.pack, planVersionId: null }, 201)).check
+    const pinNeverAsked = () => {
+      throw new Error('the PIN is never asked of a maker')
+    }
+    const maker = { issues: [expect.objectContaining({ path: 'refusal/MAKER', message: expect.stringContaining('another inspector, who made none of them') }), expect.objectContaining({ path: 'fix' })] }
+    await expect(decideCheck(callerAs('makerBench'), opened.id, { version: opened.version, outcome: 'APPROVED', pieces: 1 }, { sign: pinNeverAsked, idempotencyKey: idem() })).rejects.toMatchObject(maker)
+    // An office user linked to that worker is the same person.
+    await admin(`UPDATE "Worker" SET "userId" = $1 WHERE id = $2`, [A.member, A.operator])
+    try {
+      await expect(decideCheck(callerAs('quality'), opened.id, { version: opened.version, outcome: 'REJECTED', pieces: 1, defectivePieces: 1, defects: 1, defectCodeId: stitchSkip }, { sign: pinNeverAsked, idempotencyKey: idem() })).rejects.toMatchObject(maker)
+    } finally {
+      await admin(`UPDATE "Worker" SET "userId" = NULL WHERE id = $1`, [A.operator])
+    }
+    expect((await admin<{ status: string }>(`SELECT status::text FROM "InProcessCheck" WHERE id = $1`, [opened.id]))[0]!.status).toBe('OPEN')
+    const decided = (await decideCheck(callerAs('bench'), opened.id, { version: opened.version, outcome: 'APPROVED', pieces: 1 }, { sign: () => undefined, idempotencyKey: idem() })).check
+    expect(decided).toMatchObject({ status: 'DECIDED', outcome: 'APPROVED' })
   })
 })

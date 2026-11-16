@@ -4,6 +4,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedInspectionPlans } from './inspection-plans'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The routings, standard minutes and work instructions seed (W2b-4 schema wave 25/33, B-W2b-205), per tenant of
@@ -193,8 +194,8 @@ export async function seed(context: SeedContext): Promise<InstructionsSeed> {
         ],
       })
 
-      // --- the files of the media (rows only: the objects are not in the store) -----------------------------------------
-      const file = (rowId: string, name: string, contentType: string): Prisma.StoredFileCreateManyInput => ({
+      // --- the files of the media (rows; their bytes: B-W2b-F59, seed-files.ts) -----------------------------------------
+      const file = (rowId: string, name: string, contentType: string): Prisma.StoredFileCreateManyInput => seedFile(tenantId, {
         id: rowId,
         companyId: companyA,
         recordType: 'WorkInstruction',
@@ -203,7 +204,6 @@ export async function seed(context: SeedContext): Promise<InstructionsSeed> {
         originalName: name,
         contentType,
         sizeBytes: 4096,
-        sha256: seedUuid(namespace, `instructions:sha:${name}`).replace(/-/g, '').padEnd(64, '0'),
         storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`instructions:key:${name}`)}`,
         storeAccountId: store,
         status: 'AVAILABLE',

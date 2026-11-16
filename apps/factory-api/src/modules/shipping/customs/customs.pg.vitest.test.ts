@@ -179,6 +179,27 @@ describe('the Export tab (design warehouse.shipments › Export)', () => {
     expect(refused.status).toBe(409)
     expect(refused.body.error.issues[0].path).toBe('refusal/NOT_EXPORT')
   }, SLOW_TEST_TIMEOUT_MS)
+
+  // B-W2b-GF2 (G463): the EU's special fiscal territories are told apart by the postal code and town, not the country.
+  it('tells a special fiscal territory apart: Livigno is an export with papers, Monaco an EU destination', async () => {
+    const [before] = await admin<{ shipTo: Json }>(`SELECT "shipTo" FROM "Shipment" WHERE id = $1`, [SH2])
+    try {
+      await admin(`UPDATE "Shipment" SET "shipTo" = jsonb_build_object('name', 'Demo Moto Livigno', 'line1', 'Via Esempio 1', 'postalCode', '23041', 'city', 'Livigno', 'province', 'SO', 'country', 'IT') WHERE id = $1`, [SH2])
+      const livigno = await desk.get(`/shipping/shipments/${SH2}/export`)
+      expect(livigno.status, JSON.stringify(livigno.body)).toBe(200)
+      expect(livigno.body).toMatchObject({ needed: true, destination: { country: 'IT', class: 'EXPORT', territory: { key: 'LIVIGNO', vat: 'OUTSIDE', customs: 'OUTSIDE' } } })
+      expect(livigno.body.destination.territory.words.en).toContain('outside the EU\'s VAT area and customs territory')
+      expect(livigno.body.destination.territory.words.it).toContain('Livigno')
+      expect(livigno.body.papers.held).not.toBe('NOT_EXPORT')
+      // The same street in another Italian town: an ordinary domestic delivery.
+      await admin(`UPDATE "Shipment" SET "shipTo" = "shipTo" || jsonb_build_object('postalCode', '23032', 'city', 'Bormio') WHERE id = $1`, [SH2])
+      expect((await desk.get(`/shipping/shipments/${SH2}/export`)).body).toMatchObject({ needed: false, destination: { class: 'DOMESTIC', territory: null } })
+      await admin(`UPDATE "Shipment" SET "shipTo" = jsonb_build_object('name', 'Demo Moto Monaco', 'line1', 'Rue Exemple 1', 'postalCode', '98000', 'city', 'Monaco', 'country', 'MC') WHERE id = $1`, [SH2])
+      expect((await desk.get(`/shipping/shipments/${SH2}/export`)).body).toMatchObject({ needed: false, destination: { country: 'MC', class: 'EU', territory: { key: 'MONACO', vat: 'INSIDE' } } })
+    } finally {
+      await admin(`UPDATE "Shipment" SET "shipTo" = $2::jsonb WHERE id = $1`, [SH2, JSON.stringify(before!.shipTo)])
+    }
+  }, SLOW_TEST_TIMEOUT_MS)
 })
 
 describe('EORI per company (LOG-095)', () => {

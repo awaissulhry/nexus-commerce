@@ -101,6 +101,10 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
     npm run dev -w @nexus/factory-api           # :8190 unless FACTORY_PORT
     npm run dev:worker -w @nexus/factory-api    # outbox relay + event handlers; ONLY on this worktree's own database
     npm run dev:scheduler -w @nexus/factory-api # clustered crons; same refusals (start:worker / start:scheduler on dist/)
+    npm run seed:files -w @nexus/factory-api    # B-W2b-F59: after `npm run seed -w @nexus/factory-db`, the seeded files'
+                                                # bytes into this stack's store (FACTORY_LOCAL_FILES_DIR), through files.put
+                                                # (platform/files/seed-bytes); FACTORY_ENV local|test only; waits out the
+                                                # store account's rate limit (about 2 minutes on a fresh seed)
     npm run typecheck -w @nexus/factory-api     # B-W2b-F52: typecheck.mjs = `tsc --noEmit -p tsconfig.json`, the same
                                                 # program and options, parsed once and checked in batches (a fresh checker
                                                 # each), heap capped at 7 GB; `-- --listFiles` = the files it checked

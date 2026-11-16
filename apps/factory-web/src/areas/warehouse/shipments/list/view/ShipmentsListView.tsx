@@ -216,7 +216,8 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
     // B-W2b-412 (design sh-grid "Export (W2b)"): outside the EU the goods need export papers (the Export tab).
     const ExportCell = ({ data }: ICellRendererParams<ShipmentRow>) => {
       if (!data) return null
-      const where = destinationClassOf(data.shipTo.country)
+      // B-W2b-GF2: the postal code and town tell a special fiscal territory apart (Livigno, the Canary Islands: an export).
+      const where = destinationClassOf(data.shipTo.country, undefined, { postalCode: data.shipTo.postalCode, city: data.shipTo.city })
       if (where === 'EXPORT')
         return (
           <Link className="fw-sh-link" href={`${href(data)}?tab=export`}>

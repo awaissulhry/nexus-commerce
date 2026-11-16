@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   CronRunStatus,
@@ -17,6 +16,7 @@ import {
 } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedAuth } from './auth'
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The privacy and integration seed (W2b schema wave 53/57, B-W2b-375), per tenant of seed/_core.ts, written as the API and
@@ -88,7 +88,6 @@ export async function seed(context: SeedContext): Promise<PrivacyOpsSeed> {
   const { ownerId, memberId } = await seedAuth(context)
   const id = (key: string): string => seedUuid(namespace, key)
   const firstId = (key: string): string => `00000000${id(key).slice(8)}`
-  const sha = (text: string): string => createHash('sha256').update(`seed privacy-ops ${namespace} ${text}`).digest('hex')
   const tenantId = id('tenant')
   const companyA = id('company:A')
   const companyB = id('company:B')
@@ -185,7 +184,7 @@ export async function seed(context: SeedContext): Promise<PrivacyOpsSeed> {
       ...stamp(minutes(-15 * DAY)),
     },
   ]
-  const packageFile: Prisma.StoredFileCreateManyInput = {
+  const packageFile: Prisma.StoredFileCreateManyInput = seedFile(tenantId, {
     id: result.packageFileId,
     companyId: companyA,
     recordType: 'DataRequest',
@@ -194,14 +193,13 @@ export async function seed(context: SeedContext): Promise<PrivacyOpsSeed> {
     originalName: 'Seed access copy.pdf',
     contentType: 'application/pdf',
     sizeBytes: 20480,
-    sha256: sha('access copy'),
     storeAccountId: id('files:account:r2'),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id('privacy-ops:request:member-access:package:key')}`,
     status: 'AVAILABLE',
     availableAt: minutes(-6 * DAY),
     visibility: ['OFFICE'],
     ...stamp(minutes(-6 * DAY)),
-  }
+  })
 
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {

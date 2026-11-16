@@ -86,7 +86,8 @@ function Container({ inspectionId }: { inspectionId: string }) {
           onPlaceHold: () => {
             const prefill = value.next?.holdPrefill
             if (!prefill) return
-            const codes = [...(value.next?.rejectedHides ?? []), ...(value.next?.toSortHides ?? [])].filter((hide) => prefill.subjectIds.includes(hide.hideId)).map((hide) => hide.code)
+            // B-W2b-GF5 (G367): the hides still to hold (a hide outside the sample included).
+            const codes = (value.next?.held.unheld ?? []).filter((hide) => prefill.subjectIds.includes(hide.hideId)).map((hide) => hide.code)
             setHold({ subjectType: 'Hide', subjectIds: prefill.subjectIds, codes, fromLabel: value.inspection.number })
           },
           onDismissNotice: () => setNotice(null),

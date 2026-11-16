@@ -1,9 +1,9 @@
-import { createHash } from 'node:crypto'
 import { CrViEvidence, CrViEvidenceRule, LabTest, LabVerdict, LotDocumentKind } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedInventory } from './inventory'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The lab step's seed (B-W1-34), per tenant of seed/_core.ts, written in the tenant's office scope as the app does:
@@ -37,8 +37,8 @@ export async function seed(context: SeedContext): Promise<void> {
   const reportFileId = lastId('quality:file:lab-report:LEA-01')
   const lwgFileId = lastId('quality:file:lwg:LEA-01')
   const stamp = { createdAt: AT, updatedAt: AT, createdById: actorId }
-  const sha = (name: string): string => createHash('sha256').update(`seed lab file ${namespace} ${name}`).digest('hex')
-  const file = (fileId: string, name: string, originalName: string) => ({
+  const file = (fileId: string, name: string, originalName: string) =>
+    seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType: 'Lot',
@@ -47,7 +47,6 @@ export async function seed(context: SeedContext): Promise<void> {
     originalName,
     contentType: 'application/pdf',
     sizeBytes: 3072,
-    sha256: sha(name),
     storeAccountId: id('files:account:r2'),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`quality:file-key:${name}`)}`,
     status: 'AVAILABLE' as const,

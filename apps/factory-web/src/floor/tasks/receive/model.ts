@@ -350,6 +350,8 @@ export function differenceOf(line: OrderLine, entry: LineEntry): LineDifference 
     receivedBefore: line.received,
     receiving: receivingBase(line, entry).toFixed(4),
     tolerancePct: line.tolerancePct,
+    // B-W2b-GF5 (G140): the tolerance under too, as the receipt decides it.
+    underPct: line.underPct ?? null,
   })
 }
 

@@ -19,6 +19,10 @@ import {
   safetyRequiredFor,
   safetyResultOf,
   safetyStateOf,
+  SCRAP_WARNING,
+  scrapProblems,
+  scrapReasonOf,
+  isScrappedRepair,
   shipProblems,
   stageMoveProblems,
   statusWords,
@@ -101,7 +105,7 @@ describe('the safety check of a protective garment (design repair.safety)', () =
     expect(safetyStateOf({ required: false, result: null, checkedAt: null, repairedAt })).toBe('NOT_REQUIRED')
     // Unrepaired (no repair made): nothing to check after.
     expect(safeToShip({ required: true, result: null, checkedAt: null, repairedAt: null })).toBe(true)
-    expect(unsafeWords('REP-1', { ...facts, result: 'FAIL' })).toBe('Repair REP-1 is a protective garment: it goes back only after a passed safety check made after the repair (its last check failed: repair it again (back into repair), then check it again).')
+    expect(unsafeWords('REP-1', { ...facts, result: 'FAIL' })).toBe('Repair REP-1 is a protective garment: it goes back only after a passed safety check made after the repair (its last check failed: repair it again (back into repair) and check it again, or scrap it).')
   })
 
   it('is signed only for a repaired protective garment', () => {
@@ -182,6 +186,8 @@ describe('the record: stepper, actions, words', () => {
     expect(byName.ship).toContain('it is not checked yet')
     expect(byName.cancel).toContain('goes back to the customer')
     expect(byName.makeWorkOrder).toContain('one live work order per repair')
+    // B-W2b-GF5 (G513): only a failed check opens the scrap.
+    expect(byName.scrap).toBe('Repair REP-1 has no safety check after its repair yet: check it first; it is scrapped only when the check fails.')
     expect(statusWords({ stage: 'REPAIRED', required: true, result: 'PASS', checkedAt: after, repairedAt })).toBe('Repaired: ready to go back')
     expect(statusWords({ stage: 'SHIPPED', required: false, result: null, checkedAt: null, repairedAt: null })).toBe('Shipped back unrepaired')
     expect(statusWords({ stage: 'AWAITING_GOODS', required: false, result: null, checkedAt: null, repairedAt: null })).toBe('Waiting for the garment')
@@ -202,5 +208,55 @@ describe('a rework round (B-W2b-16: a second repair work order after the first i
     expect(reworkAllowed('IN_REPAIR', { number: 'WO-1', status: 'COMPLETED' }, false)).toBe(false)
     expect(makeWorkOrderHeld('REP-1', 'IN_REPAIR', { number: 'WO-1', status: 'COMPLETED' }, true)).toBeNull()
     expect(makeWorkOrderHeld('REP-1', 'IN_REPAIR', { number: 'WO-1', status: 'COMPLETED' })).toBe('Repair work order WO-1 is completed: one live work order per repair.')
+  })
+})
+
+// B-W2b-GF5 (G513, Owner 11-15 A): a protective garment that fails its check after the repair is scrapped, never returned unsafe.
+describe('a protective garment that fails its check after the repair is scrapped (G513)', () => {
+  const failed = { number: 'REP-7', stage: 'REPAIRED' as const, required: true, result: 'FAIL' as const, checkedAt: after, repairedAt, liveDdt: null }
+
+  it('is scrapped only when repaired, protective and its last check after the repair failed, with no live DDT', () => {
+    expect(scrapProblems(failed)).toEqual([])
+    expect(scrapProblems({ ...failed, result: 'PASS' })).toEqual(['Repair REP-7 passed its safety check after the repair: it goes back to the customer.'])
+    expect(scrapProblems({ ...failed, checkedAt: before })[0]).toContain('no safety check after its repair yet')
+    expect(scrapProblems({ ...failed, result: null, checkedAt: null })[0]).toContain('no safety check after its repair yet')
+    expect(scrapProblems({ ...failed, required: false })).toEqual(['Repair REP-7 is not a protective garment: it goes back to the customer.'])
+    expect(scrapProblems({ ...failed, stage: 'IN_REPAIR', repairedAt: null })).toEqual(['Only a repaired protective garment whose safety check failed is scrapped: repair REP-7 is in repair.'])
+    expect(scrapProblems({ ...failed, stage: 'CANCELLED' })).toEqual(['Repair REP-7 is cancelled.'])
+    expect(scrapProblems({ ...failed, liveDdt: { number: '146/2026' } })).toEqual(['DDT 146/2026 is live for this repair: cancel it first (a scrapped garment does not travel).'])
+    // The ship step says the way out too.
+    expect(unsafeWords('REP-7', failed)).toContain('or scrap it')
+  })
+
+  it('keeps what failed and why; the record and the list say it was scrapped', () => {
+    expect(scrapReasonOf(['the seams', 'the protectors'], ' Seam split again at the shoulder (made up). ')).toBe('Scrapped: the safety check after the repair failed (the seams, the protectors). Seam split again at the shoulder (made up).')
+    expect(scrapReasonOf([], 'x'.repeat(600)).length).toBe(500)
+    expect(SCRAP_WARNING).toMatch(/in writing/)
+    const scrapped = { ...failed, stage: 'CANCELLED' as const }
+    expect(isScrappedRepair(scrapped)).toBe(true)
+    expect(isScrappedRepair({ ...scrapped, repairedAt: null })).toBe(false)
+    expect(isScrappedRepair({ ...scrapped, result: 'PASS' })).toBe(false)
+    expect(statusWords(scrapped)).toBe('Scrapped: its safety check after the repair failed')
+    expect(statusWords({ ...scrapped, repairedAt: null })).toBe('Cancelled')
+    // The stepper: repaired was reached; the scrap's pass through IN_REPAIR (same instant as the cancel) is no step.
+    const scrapAt = at('2026-12-03T09:00:00.000Z')
+    const events = [
+      { stage: 'RECEIVED' as const, at: at('2026-12-01T08:15:00.000Z') },
+      { stage: 'IN_REPAIR' as const, at: at('2026-12-02T08:00:00.000Z') },
+      { stage: 'REPAIRED' as const, at: repairedAt },
+      { stage: 'IN_REPAIR' as const, at: scrapAt },
+      { stage: 'CANCELLED' as const, at: scrapAt },
+    ]
+    expect(stepsOf('CANCELLED', events).map((step) => [step.stage, step.state, step.at])).toEqual([
+      ['RECEIVED', 'DONE', '2026-12-01T08:15:00.000Z'],
+      ['ESTIMATED', 'SKIPPED', null],
+      ['APPROVED', 'SKIPPED', null],
+      ['IN_REPAIR', 'DONE', '2026-12-02T08:00:00.000Z'],
+      ['REPAIRED', 'DONE', '2026-12-02T10:00:00.000Z'],
+      ['SHIPPED', 'SKIPPED', null],
+    ])
+    const actions = Object.fromEntries(repairActions({ ...failed, workOrder: { number: 'WO-00009', status: 'COMPLETED' } }).map((entry) => [entry.action, entry.held]))
+    expect(actions.scrap).toBeNull()
+    expect(actions.ship).toContain('or scrap it')
   })
 })

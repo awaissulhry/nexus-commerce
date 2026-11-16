@@ -437,6 +437,8 @@ export const incomingSchema = z.object({
       rejectedHides: z.array(z.object({ hideId: z.string(), code: z.string() })),
       toSortHides: z.array(z.object({ hideId: z.string(), code: z.string() })),
       holdPrefill: z.object({ subjectType: z.literal('Hide'), subjectIds: z.array(z.string()), reasonNote: z.string() }).nullable(),
+      // B-W2b-GF5 (G367): the holds placed at the decision on what it did not accept, and what of it is not held yet.
+      held: z.object({ holds: z.array(z.object({ id: z.string(), number: z.string().nullable() })), unheld: z.array(z.object({ hideId: z.string(), code: z.string() })) }).default({ holds: [], unheld: [] }),
     })
     .nullable(),
   inspector: z.object({ kind: z.enum(['FLOOR', 'OFFICE']).nullable(), name: z.string().nullable(), hidden: z.boolean() }),

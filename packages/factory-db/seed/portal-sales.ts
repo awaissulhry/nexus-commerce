@@ -7,6 +7,7 @@ import { seed as seedPortalAuth } from './portal-auth'
 import { seed as seedPricing } from './pricing'
 import { seed as seedPrivacy } from './privacy'
 import { seedAt, seedToday } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The customer portal seed (W2b schema wave 21/22, B-W2b-157), per tenant of seed/_core.ts. The customer's own acts (a
@@ -292,7 +293,7 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
 
   // --- Measurements by link: the office's MEASUREMENTS link and the photos the rider uploaded through it ----------------
   const linkExpires = new Date(Math.max(today.getTime() + 21 * DAY_MS, T.submitted.getTime() + 7 * DAY_MS))
-  const photo = (fileId: string, view: string): Prisma.StoredFileCreateManyInput => ({
+  const photo = (fileId: string, view: string): Prisma.StoredFileCreateManyInput => seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType: 'MeasurementProfile',
@@ -302,7 +303,6 @@ export async function seed(context: SeedContext): Promise<PortalSalesSeed> {
     originalName: `Seed team rider ${view}.jpg`,
     contentType: 'image/jpeg',
     sizeBytes: 4096,
-    sha256: hex(`photo ${view}`),
     storeAccountId: store,
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`portal-sales:key:${view}`)}`,
     status: 'AVAILABLE',

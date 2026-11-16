@@ -159,6 +159,8 @@ export function demoChecklist(lot: Lot, open: readonly LotCheck['code'][] = [], 
         : check('SUPPLIER_DOCUMENTS', 'OK', "The supplier's PPE certificate is attached and valid.")
       : check('SUPPLIER_DOCUMENTS', 'NOT_NEEDED', 'No supplier document is required for this material.'),
     mode === 'UNBLOCK' ? check('HOLD', 'NOT_NEEDED', 'A blocked lot has no receiver hold.') : open.includes('HOLD') ? check('HOLD', 'OPEN', `Hold by the receiver: ${lot.hold ?? ''}`, 'Another quality person checks it and clears the hold.') : check('HOLD', 'OK', 'No hold from the receiver.'),
+    // B-W2b-GF5 (G369): the lot's incoming inspection.
+    open.includes('INCOMING') ? check('INCOMING', 'OPEN', 'Incoming inspection DEMO-IIN-0002 did not accept hide DEMO-H02: it is not on hold.', 'Hold them (Quality › Holds) or return them to the tannery first: the rest of the lot is released with them held.') : check('INCOMING', 'NOT_NEEDED', 'No incoming inspection is recorded for this lot.'),
     open.includes('RELEASER') ? check('RELEASER', 'OPEN', 'You received this lot.', 'Another person with the quality role releases it.') : check('RELEASER', 'OK', 'You did not receive this lot.'),
   ]
   const opened = checks.filter((entry) => entry.state === 'OPEN')

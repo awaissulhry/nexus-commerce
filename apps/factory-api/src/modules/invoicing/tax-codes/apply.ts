@@ -1,6 +1,6 @@
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import type { IssueProblem } from '@nexus/factory-domain/invoicing/checks'
-import { declarationStateOf, intentAmountOf, intentIssueProblems } from '@nexus/factory-domain/invoicing/intent/intent'
+import { declarationStateOf, intentAmountOf, intentIssueProblems, intentTreatment, INTENT_LEGAL_REF, takesIntent } from '@nexus/factory-domain/invoicing/intent/intent'
 import { treatmentOf, type CoreLine } from '@nexus/factory-domain/invoicing/invoices'
 import { decideStampDuty, quarterStartOf, STAMP_DUTY_LEGAL_REF, STAMP_DUTY_NATURA, stampDutyIssueProblems, stampDutyLine, stampDutyWords, type StampDutyDecision } from '@nexus/factory-domain/invoicing/stamp-duty/stamp-duty'
 import { SWITCH_WORDS, TAX_SWITCHES } from '@nexus/factory-domain/invoicing/tax-codes/switches'
@@ -13,7 +13,7 @@ import { serverClock } from '../../../core/time'
 import type { PreparedLine } from '../drafts'
 import { officeInvoice, readLines, type InvoiceRow, type LineRow, type Reader } from '../store'
 import { declarationFactsOf, readDeclaration } from '../intent/declarations'
-import { useDeclarationAtIssue } from '../intent/use'
+import { useDeclarationAtCorrection, useDeclarationAtIssue } from '../intent/use'
 import { recountInCommand } from '../stamp-duty/quarters'
 import { codeFactsOf, dayOf, issueRefusal, lockSwitches, readCodes, readSwitches, type SwitchesRow } from './store'
 
@@ -31,6 +31,11 @@ import { codeFactsOf, dayOf, issueRefusal, lockSwitches, readCodes, readSwitches
  *
  * B-W2b-F47: a REJECTED invoice corrected with new lines (sdi/correct.ts) takes them through `taxedLines` too (on the
  * invoice's own date), and `stampDutyAtCorrection` counts its quarter again as the issue does.
+ *
+ * B-W2b-GF2: such a correction also re-decides the declaration of intent the invoice names (`intentLinesAtCorrection`: the
+ * new taxable lines rest on it, N3.5, as a draft's do when it is named) and moves the declaration's use to the new lines
+ * (`intentAtCorrection`); and the checks of a REJECTED invoice (the resend's) run the tax rules again (`taxRuleProblems`:
+ * TAX_CODE, STAMP_DUTY, INTENT_*, the declaration counted without this invoice's own share).
  */
 
 const isStampLine = (line: { readonly chargeKind?: string | null }): boolean => line.chargeKind === 'STAMP_DUTY'
@@ -100,15 +105,21 @@ async function codeAndStampProblems(db: Reader, invoice: InvoiceRow, lines: read
 
 const intentLines = (lines: readonly LineRow[]) => lines.map((line) => ({ kind: line.kind, vatNature: line.vatNature, netAmount: line.netAmount }))
 
-/** The checks before issue of a DRAFT (TAX_CODE, STAMP_DUTY, INTENT_*); none for an issued invoice (an SDI correction). */
+/**
+ * The checks before issue of a DRAFT (TAX_CODE, STAMP_DUTY, INTENT_*). B-W2b-GF2: also of a REJECTED invoice (the
+ * resend's checks after an SDI rejection: its file counts as never issued, so the tax rules hold again), its declaration
+ * counted without this invoice's own share (the issue added it). None for any other issued invoice.
+ */
 export async function taxRuleProblems(db: Reader, invoice: InvoiceRow, lines: readonly LineRow[], date: BusinessDate): Promise<IssueProblem[]> {
-  if (invoice.status !== 'DRAFT') return []
+  if (invoice.status !== 'DRAFT' && invoice.status !== 'REJECTED') return []
   const switches = await readSwitches(db, invoice.companyId)
   const named = (await db.invoice.findUnique({ where: { id: invoice.id }, select: { declarationOfIntentId: true } }))?.declarationOfIntentId ?? null
   const declaration = named ? await readDeclaration(db, named) : null
+  const own = invoice.status === 'REJECTED' ? intentAmountOf(intentLines(lines)) : 0
+  const facts = declaration ? { ...declarationFactsOf(declaration), usedAmount: Math.max(0, declaration.usedAmount - own) } : null
   return [
     ...(await codeAndStampProblems(db, invoice, lines, date, switches)),
-    ...intentIssueProblems({ switchOn: switches.declarationsOfIntentOn, docType: invoice.docType, declaration: declaration ? declarationFactsOf(declaration) : null, lines: intentLines(lines), issueDate: date }),
+    ...intentIssueProblems({ switchOn: switches.declarationsOfIntentOn, docType: invoice.docType, declaration: facts, lines: intentLines(lines), issueDate: date }),
   ]
 }
 
@@ -135,6 +146,30 @@ export async function stampDutyAtCorrection(tools: CommandTools, before: Pick<In
   const switches = await lockSwitches(tools.tx, after.companyId)
   if (!switches.stampDutyOn) return
   await recountInCommand(tools, after.companyId, quarterStartOf(date), after.stampDutyAmount === null ? null : { invoiceId: after.id, amount: after.stampDutyAmount })
+}
+
+/**
+ * B-W2b-GF2: the new lines of a correction, before `taxedLines`: on an invoice that names a declaration of intent, its
+ * taxable goods, services and charges rest on it (N3.5 with the law of the company's N3.5 code when the tax-codes switch
+ * is on, else art. 8 c.1 lett. c), as a draft's lines do when the declaration is named (intent/on-invoice.ts). Others as
+ * they are.
+ */
+export async function intentLinesAtCorrection<Line extends PreparedLine>(tx: CommandTx, invoice: Pick<InvoiceRow, 'id' | 'companyId'>, lines: readonly Line[], day: BusinessDate): Promise<Line[]> {
+  const named = (await tx.invoice.findUnique({ where: { id: invoice.id }, select: { declarationOfIntentId: true } }))?.declarationOfIntentId ?? null
+  if (named === null) return [...lines]
+  const switches = await lockSwitches(tx, invoice.companyId)
+  const law = switches.taxCodesOn ? (codeForTreatment(await inForceOf(tx, invoice.companyId, day), intentTreatment(null))?.legalRef ?? INTENT_LEGAL_REF) : INTENT_LEGAL_REF
+  return lines.map((line) => (takesIntent({ kind: line.core.kind, chargeKind: line.chargeKind ?? null, vat: line.core.vat }) ? { ...line, core: { ...line.core, vat: intentTreatment(law) } } : line))
+}
+
+/**
+ * B-W2b-GF2: inside the correction's command, after its new lines are written (`before`: the lines it replaced): the
+ * declaration the invoice names takes the new lines' N3.5 net instead of the old (intent/use.ts useDeclarationAtCorrection),
+ * the switches held FOR SHARE.
+ */
+export async function intentAtCorrection(tools: CommandTools, invoice: Pick<InvoiceRow, 'id' | 'companyId' | 'docType'>, before: readonly LineRow[], after: readonly LineRow[], date: BusinessDate): Promise<void> {
+  const switches = await lockSwitches(tools.tx, invoice.companyId)
+  await useDeclarationAtCorrection(tools, invoice, intentLines(before), intentLines(after), date, switches)
 }
 
 /** invoices.view: what the company's tax rules say of an invoice (its stamp duty, its declaration, the checks). */

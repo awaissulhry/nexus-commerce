@@ -1,7 +1,7 @@
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { SAFETY_INCIDENTS_PEOPLE, SAFETY_INCIDENTS_VIEW } from '@nexus/factory-domain/safety/incidents/permissions'
-import { certificateRefusal, dueAtOf, fileRefusal, filingsToAdd, filingTypeFor, INAIL_REMINDER_HOURS, INAIL_TIMER_KIND, INCIDENT_LIMITS, refusalOf, reminderPlan, type FilingStatus, type FilingType } from '@nexus/factory-domain/safety/incidents/rules'
+import { certificateRefusal, dueAtOf, fatalDueAtOf, fileRefusal, filingsToAdd, filingTypeFor, INAIL_REMINDER_HOURS, INAIL_TIMER_KIND, INCIDENT_LIMITS, refusalOf, reminderPlan, type FilingStatus, type FilingType } from '@nexus/factory-domain/safety/incidents/rules'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { cancelTimerInCommand, cancelTimersOfRecord, setTimerInCommand } from '../../../platform/timers/service'
 import { assertVersion } from '../../people/employees/access'
@@ -28,6 +28,12 @@ import { actorIdOf, assertMay, assertMayWrite, officeOf, refuse } from './access
  * the scheduler's `timers.fire` within a minute; ./notices.ts tells the people who keep the filings (bell + digest). A filing
  * filed, not needed or moved cancels or moves its timers in the same command. Answers carry ids, states and deadlines only:
  * never a type, an absence or a certificate (a command's answer is kept in its receipt).
+ *
+ * B-W2b-GF2 (Owner G505 A): a fatal or presumed fatal accident is its own filing, type FATAL (POST …/filings with `fatal`
+ * true): DUE at once, due 24 hours after the incident happened (DPR 1124/1965 art. 53, by any means that proves it was sent),
+ * with no absence and no certificate (FATAL_NO_CERTIFICATE); its reminders as any DUE filing's (the 24-hour stage has passed
+ * when it is added: it fires at once). The incident's time corrected moves the deadline of a FATAL filing still open
+ * (lifecycle.ts editIncident → `moveFatalDeadlines`).
  */
 
 const PEOPLE_WORDS = 'The INAIL filings are kept by the safety roles and HR.'
@@ -90,8 +96,10 @@ async function insertFilings(tools: CommandTools, incident: Incident, personId: 
   const made = []
   for (const type of types) {
     const id = newId()
-    const dueAt = fields.certificateReceivedAt ? dueAtOf(fields.certificateReceivedAt) : null
-    const status: FilingStatus = fields.certificateReceivedAt ? 'DUE' : 'WAITING_CERTIFICATE'
+    // B-W2b-GF2: a fatal accident's report is due 24 hours after the accident, at once (no certificate).
+    const fatal = type === 'FATAL'
+    const dueAt = fatal ? fatalDueAtOf(incident.occurredAt) : fields.certificateReceivedAt ? dueAtOf(fields.certificateReceivedAt) : null
+    const status: FilingStatus = fatal || fields.certificateReceivedAt ? 'DUE' : 'WAITING_CERTIFICATE'
     await tools.tx.inailFiling.create({
       data: {
         id,
@@ -100,9 +108,9 @@ async function insertFilings(tools: CommandTools, incident: Incident, personId: 
         incidentPersonId: personId,
         type,
         key: `inail:${personId}:${type}`,
-        expectedAbsenceDays: fields.expectedAbsenceDays,
-        certificateReference: fields.certificateReference,
-        certificateReceivedAt: fields.certificateReceivedAt,
+        expectedAbsenceDays: fatal ? null : fields.expectedAbsenceDays,
+        certificateReference: fatal ? null : fields.certificateReference,
+        certificateReceivedAt: fatal ? null : fields.certificateReceivedAt,
         dueAt,
         status,
         createdAt: tools.now,
@@ -123,7 +131,10 @@ async function insertFilings(tools: CommandTools, incident: Incident, personId: 
 
 export interface AddFilingBody {
   readonly incidentPersonId: string
-  readonly expectedAbsenceDays: number
+  /** Required unless `fatal` (the absence decides the filing). */
+  readonly expectedAbsenceDays?: number | undefined
+  /** B-W2b-GF2: a fatal or presumed fatal accident (type FATAL). */
+  readonly fatal?: boolean | undefined
   readonly certificateReference?: string | undefined
   readonly certificateReceivedAt?: string | undefined
 }
@@ -137,12 +148,20 @@ export async function addFiling(caller: CommandCaller, incidentId: string, body:
     const person = isUuid(body.incidentPersonId) ? await tools.tx.incidentPerson.findFirst({ where: { id: body.incidentPersonId, incidentId }, select: { id: true, involvement: true, employeeId: true } }) : null
     if (!person) throw new NotFoundError('Person not found.')
     if (incident.kind !== 'INJURY' || person.involvement !== 'INJURED' || person.employeeId === null) refuse(refusalOf('FILING_NOT_EMPLOYEE', 'incidentPersonId'))
-    if (receivedAt) refuse(certificateRefusal(receivedAt, { occurredAt: incident.occurredAt, now: tools.now }))
     const existing = (await tools.tx.inailFiling.findMany({ where: { incidentPersonId: person!.id }, select: { type: true } })).map((row) => row.type as FilingType)
-    if (filingTypeFor(body.expectedAbsenceDays) === null) refuse(refusalOf('NO_FILING_NEEDED', 'expectedAbsenceDays'))
-    const types = filingsToAdd(body.expectedAbsenceDays, existing)
+    // B-W2b-GF2: a fatal accident's report takes neither an absence nor a certificate; one per person.
+    if (body.fatal === true) {
+      if (body.expectedAbsenceDays !== undefined || body.certificateReference !== undefined || receivedAt) refuse(refusalOf('FATAL_NO_CERTIFICATE', body.expectedAbsenceDays !== undefined ? 'expectedAbsenceDays' : 'certificateReceivedAt'))
+      if (existing.includes('FATAL')) refuse(refusalOf('FILING_EXISTS', 'fatal'))
+      return { filings: await insertFilings(tools, incident, person!.id, ['FATAL'], { expectedAbsenceDays: null, certificateReference: null, certificateReceivedAt: null }) }
+    }
+    if (body.expectedAbsenceDays === undefined) throw new ValidationError('Say how many days of absence the certificate gives, or that the accident was fatal.', [{ path: 'body/expectedAbsenceDays', message: 'Expected the days of absence.' }])
+    const absenceDays = body.expectedAbsenceDays
+    if (receivedAt) refuse(certificateRefusal(receivedAt, { occurredAt: incident.occurredAt, now: tools.now }))
+    if (filingTypeFor(absenceDays) === null) refuse(refusalOf('NO_FILING_NEEDED', 'expectedAbsenceDays'))
+    const types = filingsToAdd(absenceDays, existing)
     if (types.length === 0) refuse(refusalOf('FILING_EXISTS', 'expectedAbsenceDays'))
-    const filings = await insertFilings(tools, incident, person!.id, types, { expectedAbsenceDays: body.expectedAbsenceDays, certificateReference: body.certificateReference?.trim().slice(0, INCIDENT_LIMITS.certificate) || null, certificateReceivedAt: receivedAt })
+    const filings = await insertFilings(tools, incident, person!.id, types, { expectedAbsenceDays: absenceDays, certificateReference: body.certificateReference?.trim().slice(0, INCIDENT_LIMITS.certificate) || null, certificateReceivedAt: receivedAt })
     return { filings }
   })
   return { ...result, replayed }
@@ -175,6 +194,8 @@ export async function editFiling(caller: CommandCaller, incidentId: string, fili
   const { result, replayed } = await command(caller, { name: 'safety.editInailFiling', idempotencyKey, input: { incidentId, filingId, ...body } }, async (tools) => {
     const incident = await lockedIncident(tools.tx, incidentId)
     const row = await lockedFiling(tools.tx, incidentId, filingId, body.version)
+    // B-W2b-GF2: a fatal accident's report runs from the accident: no absence, no certificate.
+    if (row.type === 'FATAL') refuse(refusalOf('FATAL_NO_CERTIFICATE'))
     if (receivedAt) refuse(certificateRefusal(receivedAt, { occurredAt: incident.occurredAt, now: tools.now }))
     const certificateMoved = receivedAt !== null && receivedAt.getTime() !== row.certificateReceivedAt?.getTime()
     const status: FilingStatus = certificateMoved && row.status === 'WAITING_CERTIFICATE' ? 'DUE' : (row.status as FilingStatus)
@@ -214,7 +235,7 @@ export async function fileFiling(caller: CommandCaller, incidentId: string, fili
     const incident = await lockedIncident(tools.tx, incidentId)
     const row = await lockedFiling(tools.tx, incidentId, filingId, body.version)
     if (row.status === 'NOT_NEEDED') refuse(refusalOf('FILING_NOT_NEEDED_NOW'))
-    refuse(fileRefusal({ status: row.status as FilingStatus, certificateReceivedAt: row.certificateReceivedAt }, filedAt, tools.now))
+    refuse(fileRefusal({ status: row.status as FilingStatus, certificateReceivedAt: row.certificateReceivedAt, type: row.type as FilingType, occurredAt: incident.occurredAt }, filedAt, tools.now))
     await tools.tx.inailFiling.update({ where: { id: row.id }, data: { status: 'FILED', filedAt, filedById: actorIdOf(tools.context), protocolNumber: body.protocolNumber.trim().slice(0, INCIDENT_LIMITS.protocol), version: row.version + 1, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ action: 'safety.fileInailFiling', recordType: 'InailFiling', recordId: row.id, companyId: incident.companyId, siteId: incident.siteId, before: { status: row.status }, after: { status: 'FILED', filedAt: filedAt.toISOString(), late: row.dueAt !== null && filedAt.getTime() > row.dueAt.getTime() } })
     const filing = { id: row.id, status: 'FILED' as const, dueAt: row.dueAt }
@@ -232,7 +253,8 @@ export async function setNeeded(caller: CommandCaller, incidentId: string, filin
     const incident = await lockedIncident(tools.tx, incidentId)
     const row = await lockedFiling(tools.tx, incidentId, filingId, body.version)
     if (needed && row.status !== 'NOT_NEEDED') refuse(refusalOf('FILING_NOT_NEEDED_NOW'))
-    const status: FilingStatus = needed ? (row.certificateReceivedAt ? 'DUE' : 'WAITING_CERTIFICATE') : 'NOT_NEEDED'
+    // B-W2b-GF2: a fatal accident's report is DUE again at once (its deadline runs from the accident).
+    const status: FilingStatus = needed ? (row.certificateReceivedAt || row.type === 'FATAL' ? 'DUE' : 'WAITING_CERTIFICATE') : 'NOT_NEEDED'
     const data = needed ? { status, notNeededAt: null, notNeededById: null } : { status, notNeededAt: tools.now, notNeededById: actorIdOf(tools.context) }
     if (!needed && row.status === 'NOT_NEEDED') {
       // Marked not needed already: nothing changes (the audit row says it was asked again).
@@ -247,4 +269,24 @@ export async function setNeeded(caller: CommandCaller, incidentId: string, filin
     return { filing: { id: row.id, version: row.version + 1, status, dueAt: row.dueAt?.toISOString() ?? null } }
   })
   return { ...result, replayed }
+}
+
+// ---- B-W2b-GF2: the incident's time corrected moves a fatal accident's deadline -------------------------------------
+
+/**
+ * Inside the incident's edit (lifecycle.ts), after its time moved: each FATAL filing of it still open (DUE, or marked not
+ * needed) takes the new deadline, 24 hours after the corrected time (the guard's rule), and its reminders follow. A FILED
+ * one keeps the deadline it was filed against.
+ */
+export async function moveFatalDeadlines(tools: CommandTools, incident: Pick<Incident, 'id' | 'number' | 'companyId' | 'siteId'>, occurredAt: Date): Promise<void> {
+  const rows = await tools.tx.inailFiling.findMany({ where: { incidentId: incident.id, type: 'FATAL', status: { in: ['DUE', 'NOT_NEEDED'] } }, select: { id: true, status: true, dueAt: true, version: true } })
+  const dueAt = fatalDueAtOf(occurredAt)
+  for (const row of rows) {
+    if (row.dueAt?.getTime() === dueAt.getTime()) continue
+    await tools.tx.inailFiling.update({ where: { id: row.id }, data: { dueAt, version: row.version + 1, updatedAt: tools.now }, select: { id: true } })
+    tools.audit({ action: 'safety.editInailFiling', recordType: 'InailFiling', recordId: row.id, companyId: incident.companyId, siteId: incident.siteId, before: { status: row.status, dueAt: row.dueAt?.toISOString() ?? null }, after: { status: row.status, dueAt: dueAt.toISOString(), changed: ['dueAt'] } })
+    const filing = { id: row.id, status: row.status as FilingStatus, dueAt }
+    await syncReminders(tools, incident, filing, 'The incident\'s time was corrected.')
+    tools.emit({ type: 'inail_filing.changed', subject: incident.id, companyId: incident.companyId, siteId: incident.siteId, payload: { incidentId: incident.id, filingId: row.id, change: 'EDITED', status: filing.status, dueAt: dueAt.toISOString() } })
+  }
 }

@@ -671,6 +671,7 @@
       "PPE_CERTIFICATE": "PPE certificate",
       "SUPPLIER_DOCUMENTS": "Supplier's documents",
       "HOLD": "Receiver's hold",
+      "INCOMING": "Incoming inspection",
       "RELEASER": "Who releases"
     },
     "check": {
@@ -707,6 +708,11 @@
         "OK": "the receiver's hold is cleared",
         "OPEN": "the receiver held it for a check",
         "NOT_NEEDED": "no hold"
+      },
+      "INCOMING": {
+        "OK": "what the incoming inspection did not accept is on hold or gone",
+        "OPEN": "its incoming inspection is open, rejected the lot, or what it did not accept is not held",
+        "NOT_NEEDED": "no incoming inspection recorded"
       },
       "RELEASER": {
         "OK": "a person with the quality role may release it",

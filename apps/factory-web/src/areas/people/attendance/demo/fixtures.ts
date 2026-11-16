@@ -126,6 +126,9 @@ const entry = (n: number, over: Partial<EntryRow> = {}): EntryRow => ({
     { rule: 'OVERTIME_YEARLY_CAP', state: 'OK', level: 'WARN' },
     { rule: 'DAILY_REST', state: 'OK', level: 'WARN' },
     { rule: 'WEEKLY_AVERAGE', state: 'OK', level: 'WARN' },
+    // B-W2b-GF2 (G205): weekly rest and night work are checked too.
+    { rule: 'WEEKLY_REST', state: 'OK', level: 'WARN' },
+    { rule: 'NIGHT_AVERAGE', state: 'OK', level: 'WARN' },
   ],
   version: 1,
   ...over,
@@ -133,8 +136,8 @@ const entry = (n: number, over: Partial<EntryRow> = {}): EntryRow => ({
 
 export const ENTRY_ROWS: EntryRow[] = [
   entry(1, { requestId: uid('6901', 1) }),
-  entry(2, { date: '2026-10-27', class: 'NIGHT', checks: [{ rule: 'OVERTIME_YEARLY_CAP', state: 'NEAR', level: 'WARN' }, { rule: 'DAILY_REST', state: 'OVER', level: 'WARN' }, { rule: 'WEEKLY_AVERAGE', state: 'OK', level: 'WARN' }] }),
-  entry(3, { date: '2026-10-26', class: 'HOLIDAY', checks: [{ rule: 'OVERTIME_YEARLY_CAP', state: 'OVER', level: 'BLOCK' }, { rule: 'DAILY_REST', state: 'OK', level: 'WARN' }, { rule: 'WEEKLY_AVERAGE', state: 'NEAR', level: 'WARN' }] }),
+  entry(2, { date: '2026-10-27', class: 'NIGHT', checks: [{ rule: 'OVERTIME_YEARLY_CAP', state: 'NEAR', level: 'WARN' }, { rule: 'DAILY_REST', state: 'OVER', level: 'WARN' }, { rule: 'WEEKLY_AVERAGE', state: 'OK', level: 'WARN' }, { rule: 'WEEKLY_REST', state: 'OK', level: 'WARN' }, { rule: 'NIGHT_AVERAGE', state: 'OVER', level: 'WARN' }] }),
+  entry(3, { date: '2026-10-26', class: 'HOLIDAY', checks: [{ rule: 'OVERTIME_YEARLY_CAP', state: 'OVER', level: 'BLOCK' }, { rule: 'DAILY_REST', state: 'OK', level: 'WARN' }, { rule: 'WEEKLY_AVERAGE', state: 'NEAR', level: 'WARN' }, { rule: 'WEEKLY_REST', state: 'NEAR', level: 'WARN' }, { rule: 'NIGHT_AVERAGE', state: 'OK', level: 'WARN' }] }),
 ]
 
 export const ENTRY_RECORD: EntryRecord = {
@@ -155,6 +158,9 @@ export const ENTRY_RECORD: EntryRecord = {
     { rule: 'OVERTIME_YEARLY_CAP', state: 'NEAR', level: 'WARN', date: '2026-10-27', law: 'D.Lgs. 66/2003 art. 5', values: { year: '2026', usedMinutes: 13800, limitMinutes: 15000 } },
     { rule: 'DAILY_REST', state: 'OVER', level: 'WARN', date: '2026-10-27', law: 'D.Lgs. 66/2003 art. 7', values: { restMinutes: 600, limitMinutes: 660, from: '22:00', fromDate: '2026-10-26', to: '08:00' } },
     { rule: 'WEEKLY_AVERAGE', state: 'OK', level: 'WARN', date: '2026-10-27', law: 'D.Lgs. 66/2003 art. 4', values: { averageMinutes: 2460, weekMinutes: 2500, weeks: 17, limitMinutes: 2880, referenceMonths: 4, periodFrom: '2026-07-06' } },
+    // B-W2b-GF2 (G205): the weekly rest (art. 9) and night work (art. 13).
+    { rule: 'WEEKLY_REST', state: 'OK', level: 'WARN', date: '2026-10-27', law: 'D.Lgs. 66/2003 art. 9', values: { neededMinutes: 2100, limitMinutes: 1440, dailyRestMinutes: 660 } },
+    { rule: 'NIGHT_AVERAGE', state: 'OVER', level: 'WARN', date: '2026-10-26', law: 'D.Lgs. 66/2003 art. 13', values: { workMinutes: 570, nightMinutes: 480, limitMinutes: 480, from: '22:00', to: '08:00' } },
   ],
   holds: [],
   actions: { approve: true, reject: true, reopen: false },

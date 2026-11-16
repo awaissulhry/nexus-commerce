@@ -1,7 +1,7 @@
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import { BUSINESS_TIME_ZONE, businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { limitChecks, workOfDays, type LimitCheck, type WorkedDay } from '@nexus/factory-domain/people/limits/checks'
-import { weeklyAverageWindowStart, type LimitRules, type PlannedWork } from '@nexus/factory-domain/people/shifts/limits'
+import { weeklyAverageWindowStart, weeklyRestWindow, type LimitRules, type PlannedWork } from '@nexus/factory-domain/people/shifts/limits'
 import { dateOf, dayOf } from '../employees/access'
 import type { Client } from '../attendance/store'
 import { rulesFor, type Place } from '../shifts/checks'
@@ -13,6 +13,8 @@ import { planningFor, workOf, type PlannedPerson } from '../shifts/planner'
  * reads a plan); the published roster counts from tomorrow, so a rest that the next shift would break shows before it
  * happens. Attendance data: the callers hold the site's ATTENDANCE gate open (`legalGateFor`) and the person's reach, and
  * a list shows the tone only. Every read goes by the person's record, so an event entered by hand (no worker) counts.
+ * B-W2b-GF2: the weekly rest reads whole weeks, so the days read reach back to the week before last and the published
+ * plan ahead to the Monday two weeks on (shifts/limits weeklyRestWindow).
  */
 
 export interface YearOvertime {
@@ -40,6 +42,8 @@ export async function limitFacts(client: Client, people: readonly PlannedPerson[
   const today = businessDate(now)
   const ids = people.map((person) => person.id)
   let start = plusDays(range.from, -1)
+  const weekly = weeklyRestWindow(range.from, range.to)
+  if (weekly.from < start) start = weekly.from
   for (const person of people) {
     const first = weeklyAverageWindowStart(range.from, rulesOf(person).WEEKLY_AVERAGE)
     if (first < start) start = first
@@ -53,7 +57,8 @@ export async function limitFacts(client: Client, people: readonly PlannedPerson[
     latest.set(row.employeeId, row.id)
   }
   // What is planned from today on: only the plan the workers were told.
-  const planning = ids.length === 0 ? null : await planningFor(client, people, { from: today, to: plusDays(today, 1) }, { publishedOnly: true })
+  const planEnd = weekly.to > plusDays(today, 1) ? weekly.to : plusDays(today, 1)
+  const planning = ids.length === 0 ? null : await planningFor(client, people, { from: today, to: planEnd }, { publishedOnly: true })
   const firstYear = range.from.slice(0, 4)
   const lastYear = end.slice(0, 4)
   const entries = ids.length === 0 ? [] : await client.overtimeEntry.findMany({ where: { employeeId: { in: ids }, date: { gte: dateOf(`${firstYear}-01-01`), lte: dateOf(`${lastYear}-12-31`) }, status: { in: ['APPROVED', 'PENDING'] } }, select: { employeeId: true, date: true, minutes: true, status: true } })
@@ -76,6 +81,6 @@ export async function limitFacts(client: Client, people: readonly PlannedPerson[
     rules: rulesOf,
     latestDayOf: (employeeId) => latest.get(employeeId) ?? null,
     overtimeOf: (employeeId, year) => overtime.get(`${employeeId}|${year}`) ?? { approvedMinutes: 0, pendingMinutes: 0 },
-    checksOf: (person, date, overtimeMinutes) => limitChecks({ date, timeZone: planning?.timeZones.get(person.siteId) ?? BUSINESS_TIME_ZONE, employedFrom: person.startDate, rules: rulesOf(person), ...workOfPerson(person), overtimeMinutes }),
+    checksOf: (person, date, overtimeMinutes) => limitChecks({ date, timeZone: planning?.timeZones.get(person.siteId) ?? BUSINESS_TIME_ZONE, employedFrom: person.startDate, rules: rulesOf(person), ...workOfPerson(person), overtimeMinutes, window: { from: start, to: planEnd } }),
   }
 }

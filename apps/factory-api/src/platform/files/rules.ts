@@ -172,24 +172,8 @@ export const fileMachine = defineMachine<FileStatus, DeleteFacts>({
   guards: { DELETED: (facts) => deleteBlockers(facts, facts.now) },
 })
 
-/**
- * The storage key of a new file (A1 §3.6): `t/<tenantId>/c/<companyId>/<yyyy>/<random>` (`t/<tenantId>/tenant/…`
- * without a company), under `legal/` for the fiscal archive (the locked bucket). `random` is a UUIDv4 (122 random bits),
- * never the file's id: nothing about a key can be guessed from what a caller knows.
- */
-export function storageKeyFor(input: { tenantId: string; companyId: string | null; kind: FileKind; now: Date; random: string }): string {
-  const owner = input.companyId ? `c/${input.companyId}` : 'tenant'
-  const key = `t/${input.tenantId}/${owner}/${input.now.getUTCFullYear()}/${input.random}`
-  return input.kind === 'FISCAL_ARCHIVE' ? `legal/${key}` : key
-}
-
-const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-const KEY = new RegExp(`^(?:legal/)?t/${UUID}/(?:c/${UUID}|tenant)/\\d{4}/${UUID}$`)
-
-/** A key storageKeyFor could have made (the stores refuse any other: no `..`, no stray prefix). */
-export const isStorageKey = (key: string): boolean => KEY.test(key)
-/** The key belongs to the locked legal store. */
-export const isLegalKey = (key: string): boolean => key.startsWith('legal/')
+// B-W2b-F59: the storage key rule lives in factory-domain (files/keys.ts), so the seeds make their keys with it too.
+export { isLegalKey, isStorageKey, storageKeyFor } from '@nexus/factory-domain/files/keys'
 
 /** A file as the audience check needs it. Absent columns (hidden from a role) count as not shared. */
 export interface SeenFile {
