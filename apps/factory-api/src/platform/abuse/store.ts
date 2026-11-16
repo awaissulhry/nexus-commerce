@@ -97,22 +97,28 @@ export function memoryAbuseStore(now: () => number = Date.now): AbuseStore {
 
 /**
  * Redis first; while it fails, this process's memory (each replica then counts on its own, which still limits). The
- * first failure is logged once, and again when Redis answers.
+ * first failure is logged once, and again when Redis answers. B-W2b-GF6: `counters` names whose counters in those two
+ * lines (the API's request limits, core/rate-limit.ts, count with these stores too).
  */
-export function failoverStore(primary: AbuseStore, fallback: AbuseStore, log: { warn(object: object, message: string): void; info(message: string): void } = console): AbuseStore {
+export function failoverStore(
+  primary: AbuseStore,
+  fallback: AbuseStore,
+  log: { warn(object: object, message: string): void; info(message: string): void } = console,
+  counters = 'the abuse counters',
+): AbuseStore {
   let down = false
   const run = async <T>(work: (store: AbuseStore) => Promise<T>): Promise<T> => {
     try {
       const result = await work(primary)
       if (down) {
         down = false
-        log.info('the abuse counters are back in Redis')
+        log.info(`${counters} are back in Redis`)
       }
       return result
     } catch (error) {
       if (!down) {
         down = true
-        log.warn({ err: error }, 'Redis does not answer: the abuse counters count in this process until it does')
+        log.warn({ err: error }, `Redis does not answer: ${counters} count in this process until it does`)
       }
       return work(fallback)
     }

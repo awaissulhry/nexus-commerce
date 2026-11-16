@@ -40,9 +40,9 @@ function useWords() {
 function Body({ model, actions }: { model: PackagingModel; actions?: PackagingActions }) {
   const { t, say } = useWords()
   const held = say(manageHeld(model.can, model.busy))
-  // B-W2b-F56: a role without shipping.view (an administrator opens Carriers & shipping by shipping.settings.view): the card
-  // says so in words and the page asks nothing of what the role may not read.
-  if (!model.can.view) {
+  // B-W2b-GF6 (on B-W2b-F56): the card is read with shipping.settings.view, as the page; a role without it is told so in words
+  // and nothing is asked of what it may not read.
+  if (!model.can.settingsView) {
     return (
       <SettingsCard id="packaging" wide icon={<Boxes size={16} aria-hidden />} title={t('packaging.title')} intro={t('packaging.intro')}>
         <EmptyState title={t('packaging.held.noView')} description={t('packaging.held.noViewBody')} />
