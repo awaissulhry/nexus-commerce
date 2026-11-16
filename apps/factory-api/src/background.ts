@@ -197,6 +197,8 @@ import { paymentNoticeHandler } from './modules/receivables/notices/customer'
 // B-W2b-405: a person's data package collected (privacy.request_collect_asked); the nightly retention sweep (reports until switched on).
 import { collectPackageHandlers } from './platform/privacy/requests/package'
 import { retentionSweepCron } from './platform/privacy/retention/sweep'
+// B-W2b-GF1 (G274): a person's data package deleted on its date (hourly).
+import { purgePackagesCron } from './platform/privacy/requests/purge'
 // B-W2b-395: pickups and the day's close (the customer's collection delivered when it leaves; the day closed by the system).
 import { collectionDeliveredHandler } from './modules/shipping/collection/delivered'
 import { closeDaysCron } from './modules/shipping/manifest/close-days'
@@ -482,6 +484,8 @@ if (mode === 'worker') {
   // B-W2b-405: nightly at 02:50, every retention rule that is on is swept: it reports what is due, and applies only where a person
   // switched the rule on (GATE-PRIVACY: OFF by default); the append-only ledgers are never swept.
   crons.push(retentionSweepCron({ database, log }))
+  // B-W2b-GF1 (G274): hourly at minute 41, a person's data package whose delete date came is deleted.
+  crons.push(purgePackagesCron({ database, log }))
   // B-W2b-395: hourly at minute 50, the day sheets nobody closed are closed by the system once the site's day ended (the dock closes every day).
   crons.push(closeDaysCron({ database, log }))
   // B-W2b-435: every 15 minutes, the morning e-mails due (only while the person's AND the company's switches are on: both OFF by

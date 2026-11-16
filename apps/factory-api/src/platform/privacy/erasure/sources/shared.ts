@@ -1,6 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { events as emailEvents } from '@nexus/factory-domain/email/events'
 import { eventFor } from '@nexus/factory-domain/events/define'
+import type { KeptWhy } from '@nexus/factory-domain/privacy/retention/erasure'
 import { ownHold, PERSONAL_COLUMNS } from './own'
 import { kept, ROWS, section, type ApplyTools, type PersonFacts, type PersonSource, type PlannedRecord, type Reader } from './type'
 
@@ -11,12 +12,18 @@ import { kept, ROWS, section, type ApplyTools, type PersonFacts, type PersonSour
  * with the row's ErasureRecord written in the same command (erase.ts writes every record before any change):
  *
  *   messages   a message they wrote (as a contact, an office account or a floor account): the author's name, the text, the HTML
- *   mails      a mail received from them: the sender's address and name, the subject, the text, the HTML (the envelope sender
- *              the mail server recorded stays: kept, IMMUTABLE); a mail sent to them: their address among the recipients (each
+ *   mails      a mail received from them: the sender's address and name, the subject, the text, the HTML and the envelope sender
+ *              (B-W2b-GF1: the Owner's decision of 15 Nov 2026; it stayed as IMMUTABLE before); a mail sent to them: their address among the recipients (each
  *              other address stays) and the subject. A mail still waiting to go (QUEUED, or SENDING whose sender stopped) is
  *              stopped first (FAILED: nothing goes to an erased person); one being sent right now blocks the erasure for two
  *              minutes (MAIL_SENDING, erase.ts)
  *   history    an audit row of their own record: the values of the record's personal columns inside before and after
+ *   attachments  B-W2b-GF1 (the Owner's decision of 15 Nov 2026): the files attached to the mails they sent and the messages they
+ *              wrote are DELETED (the row stays DELETED, its object removed from the store after the commit) — unless another
+ *              person's message or mail holds the same file (a shared file is not theirs alone: untouched), or the file is on
+ *              legal hold (KEPT, LEGAL_HOLD), retained until a date still to come (KEPT, RETAINED) or a fiscal archive file (KEPT,
+ *              FISCAL). Audit rows of OTHER records are not searched for the person's values (said in each ErasureRecord of the
+ *              history: only the person's own records' history is blanked).
  *
  * A legal hold on their own record (a dispute, a safety report being assessed, employment or health records: own.ts `ownHold`)
  * keeps these as they are too, with the same why. Rows an earlier erasure of the person kept (B-W2b-405 kept them all) are
@@ -133,7 +140,8 @@ export async function mailSendingNow(db: Reader, person: PersonFacts, now: Date)
   return (await db.emailOutbound.count({ where: { AND: [to, { status: 'SENDING', claimedUntil: { gt: now } }] } })) > 0
 }
 
-const RECEIVED_COLUMNS = ['fromAddress', 'fromName', 'subject', 'bodyText', 'bodyHtml'] as const
+// B-W2b-GF1 (F54): the envelope sender goes blank too (the Owner's decision of 15 Nov 2026).
+const RECEIVED_COLUMNS = ['fromAddress', 'fromName', 'subject', 'bodyText', 'bodyHtml', 'envelopeFrom'] as const
 const STOPPED = 'stopped: the person it was going to asked to be erased (GDPR art. 17)'
 
 export const mails: PersonSource = {
@@ -165,8 +173,7 @@ export const mails: PersonSource = {
     for (const row of received) {
       const erasedFields = RECEIVED_COLUMNS.filter((column) => row[column] !== null)
       if (erasedFields.length === 0) continue
-      const envelope = row.envelopeFrom !== null
-      planned.push({ recordType: 'InboundEmail', recordId: row.id, method: 'ANONYMISED', erasedFields, keptFields: envelope ? ['envelopeFrom'] : [], why: envelope ? 'IMMUTABLE' : null, apply: (tools) => blank(tools) })
+      planned.push({ recordType: 'InboundEmail', recordId: row.id, method: 'ANONYMISED', erasedFields, keptFields: [], why: null, apply: (tools) => blank(tools) })
     }
     for (const row of sent) {
       // The person's address when it is still known; otherwise (an earlier erasure took it) every address of the mail.
@@ -230,6 +237,85 @@ export const history: PersonSource = {
       const erasedFields = [...(holdsKey(row.before, keys) ? ['before'] : []), ...(holdsKey(row.after, keys) ? ['after'] : [])]
       if (erasedFields.length === 0) return []
       return [{ recordType: 'AuditLog', recordId: row.id, method: 'ANONYMISED', erasedFields, keptFields: [], why: null, apply: (tools) => blank(tools, [], keys) }]
+    })
+  },
+}
+
+// ---- B-W2b-GF1 (F54): the files attached to what the person sent and wrote -----------------------------------------------
+
+const FILE_COLUMNS = { id: true, companyId: true, recordType: true, originalName: true, sizeBytes: true, sha256: true, status: true, kind: true, legalHold: true, retainUntil: true, storeAccountId: true, storageKey: true, thumbnailKey: true } as const satisfies Prisma.StoredFileSelect
+type AttachmentFile = Prisma.StoredFileGetPayload<{ select: typeof FILE_COLUMNS }>
+
+/** The file ids a mail's attachments name once it was sorted (InboundEmail.attachments: `{kept: true, fileId}`). */
+function attachmentIdsOf(value: Prisma.JsonValue): string[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((entry) => (entry !== null && typeof entry === 'object' && !Array.isArray(entry) && typeof entry.fileId === 'string' ? [entry.fileId] : []))
+}
+
+/**
+ * The person's own attachments: the files on the messages they wrote and in the mails they sent (and the files of a mail still
+ * waiting to be sorted), less every file another message or mail holds too (the dedup of email-in reuses a record's file of the
+ * same content: then it is not theirs alone).
+ */
+async function ownAttachments(db: Reader, person: PersonFacts): Promise<AttachmentFile[]> {
+  const authored = await authoredBy(db, person)
+  const messageRows = authored ? await db.message.findMany({ where: authored, select: { id: true, attachmentFileIds: true } }) : []
+  const from = await mailsFrom(db, person)
+  const mailRows = from ? await db.inboundEmail.findMany({ where: from, select: { id: true, attachments: true } }) : []
+  const ids = new Set<string>([...messageRows.flatMap((row) => row.attachmentFileIds), ...mailRows.flatMap((row) => attachmentIdsOf(row.attachments))])
+  if (mailRows.length > 0) for (const file of await db.storedFile.findMany({ where: { recordType: 'InboundEmail', recordId: { in: mailRows.map((row) => row.id) } }, select: { id: true } })) ids.add(file.id)
+  if (ids.size === 0) return []
+  const wanted = [...ids]
+  const theirMessages = messageRows.map((row) => row.id)
+  const theirMails = mailRows.map((row) => row.id)
+  const sharedByMessage = await db.message.findMany({ where: { attachmentFileIds: { hasSome: wanted }, ...(theirMessages.length > 0 ? { id: { notIn: theirMessages } } : {}) }, select: { attachmentFileIds: true } })
+  const sharedByMail = await db.$queryRaw<{ fileId: string }[]>`SELECT DISTINCT a.value ->> 'fileId' AS "fileId" FROM "InboundEmail" m, jsonb_array_elements(CASE WHEN jsonb_typeof(m.attachments) = 'array' THEN m.attachments ELSE '[]'::jsonb END) a(value) WHERE a.value ->> 'fileId' = ANY(${wanted}::text[]) AND NOT (m.id = ANY(${theirMails}::uuid[]))`
+  const shared = new Set<string>([...sharedByMessage.flatMap((row) => row.attachmentFileIds), ...sharedByMail.map((row) => row.fileId)])
+  const own = wanted.filter((fileId) => !shared.has(fileId))
+  if (own.length === 0) return []
+  return db.storedFile.findMany({ where: { id: { in: own }, status: { not: 'DELETED' } }, select: FILE_COLUMNS, orderBy: { id: 'asc' } })
+}
+
+/** Why the law keeps one of the person's attachments, or null when it is deleted. */
+function attachmentKept(file: AttachmentFile, hold: KeptWhy | null, now: Date): KeptWhy | null {
+  if (hold) return hold
+  if (file.legalHold) return 'LEGAL_HOLD'
+  if (file.retainUntil !== null && file.retainUntil.getTime() > now.getTime()) return 'RETAINED'
+  if (file.kind === 'FISCAL_ARCHIVE') return 'FISCAL'
+  return null
+}
+
+export const attachments: PersonSource = {
+  key: 'attachments',
+  kinds: ['CONTACT', 'PROSPECT', 'REPORTER', 'USER', 'WORKER'],
+  async collect(db, person) {
+    const files = await ownAttachments(db, person)
+    return { sections: files.length === 0 ? [] : [section('attachments', 'Files attached to the mails and messages the person sent', files.map((file) => ({ id: file.id, name: file.originalName, sizeBytes: file.sizeBytes, sha256: file.sha256, status: file.status })))], fileRecords: [] }
+  },
+  async plan(db, person, now) {
+    const files = await ownAttachments(db, person)
+    const hold = files.length === 0 ? null : await ownHold(db, person, now)
+    return files.map((file): PlannedRecord => {
+      const why = attachmentKept(file, hold, now)
+      if (why) return kept('StoredFile', file.id, why)
+      return {
+        recordType: 'StoredFile',
+        recordId: file.id,
+        method: 'DELETED',
+        erasedFields: [],
+        keptFields: [],
+        why: null,
+        async apply({ tx, now: at }) {
+          // The row stays DELETED (StoredFile is never removed); the database refuses a file on hold or retained.
+          await tx.storedFile.updateMany({ where: { id: file.id, status: { not: 'DELETED' } }, data: { status: 'DELETED', deletedAt: at } })
+        },
+        async after(store, caller, at) {
+          // After the commit, best effort: the row is DELETED, an object left behind is invisible and swept again later.
+          for (const key of [file.storageKey, file.thumbnailKey].filter((value): value is string => value !== null)) {
+            await store.storage.remove(caller, file.storeAccountId, { key, legalHold: false, retainUntil: file.retainUntil }, at).catch(() => undefined)
+          }
+        },
+      }
     })
   },
 }

@@ -190,6 +190,8 @@ function PackageCard({ request, model, actions }: { request: DataRequest; model:
               { label: t('dp.pkg.file'), value: <span className="fw-dprq-line"><FileArchive size={14} aria-hidden /> {request.package.name}</span> },
               { label: t('dp.pkg.size'), value: sizeWords(request.package.sizeBytes, locale) },
               { label: t('dp.pkg.made'), value: request.package.madeAt ? formatDateTime(request.package.madeAt, place) : '—' },
+              // B-W2b-GF1 (G274): the package goes on its date.
+              ...(request.package.deleteAfter ? [{ label: t('dp.pkg.deleteAfter'), value: formatDateTime(request.package.deleteAfter, place) }] : []),
               { label: t('dp.pkg.sha'), value: <code className="fw-dprq-code">{request.package.sha256.slice(0, 16)}…</code> },
             ]}
           />

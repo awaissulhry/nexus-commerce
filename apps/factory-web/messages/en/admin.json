@@ -991,7 +991,13 @@
       }
     },
     "assignmentsCount_one": "{count} role",
-    "assignmentsCount_other": "{count} roles"
+    "assignmentsCount_other": "{count} roles",
+    "partnerAccess": {
+      "title": "Portal access",
+      "body": "This person signs in to their organisation's portal with a code sent by e-mail: no password and no authenticator. Their access — the end date, suspend or reactivate, remove from the organisation — is changed on the Partner organisation tab, where the portal's seats and admins are kept.",
+      "open": "Open Partner organisation",
+      "signIn": "E-mail code (portal)"
+    }
   },
   "worker": {
     "tab": {

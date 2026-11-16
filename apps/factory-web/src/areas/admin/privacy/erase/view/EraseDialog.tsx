@@ -94,6 +94,8 @@ export function EraseDialog({ model, canErase, actions }: { model: EraseModel | 
               </section>
             ))}
             {preview.anonymised.length === 0 && preview.deleted.length === 0 && <Banner tone="info" title={t('dp.erase.held.nothing')} />}
+            {/* B-W2b-GF1 (F54, the Owner's decision of 15 Nov 2026): what the history covers, said before the erasure runs. */}
+            <p className="fw-dper-muted">{t('dp.erase.historyScope')}</p>
             <Field label={t('dp.erase.reason')} hint={t('dp.erase.reasonHint')} required>
               <Textarea rows={3} value={model.reason} maxLength={1000} disabled={model.busy} onChange={(event) => actions?.onReason?.(event.target.value)} />
             </Field>

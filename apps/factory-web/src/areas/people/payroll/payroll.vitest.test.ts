@@ -416,6 +416,11 @@ describe('payroll: a file', () => {
     expect(sendHeld(draft, { ...HR, manage: false }, false)).toEqual({ key: 'held.noManage' })
     expect(sendBody({ ...draft, email: ' a@b.it ', message: '  ' })).toEqual({ email: 'a@b.it', expiresInDays: 7, maxUses: 10, language: 'en' })
     expect(sendBody({ ...draft, message: ' Ciao ' }).message).toBe('Ciao')
+    // B-W2b-GF1 (G212): an optional password, held with why when it is too short; sent only when typed (as typed).
+    expect(sendHeld({ ...draft, password: 'abc' }, HR, false)).toEqual({ key: 'send.held.password', params: { min: 8, max: 128 } })
+    expect(sendHeld({ ...draft, password: 'made-up-Paghe-2026' }, HR, false)).toBeNull()
+    expect(sendBody({ ...draft, password: 'made-up-Paghe-2026' }).password).toBe('made-up-Paghe-2026')
+    expect(sendBody(draft)).not.toHaveProperty('password')
   })
 })
 
@@ -550,8 +555,15 @@ describe('every design case draws in both languages with no key left on screen',
     for (const id of ['period-unconfirmed', 'send-unconfirmed', 'checks-unconfirmed']) expect(it_(id), id).toContain('not confirmed by the labour consultant')
     expect(it_('unconfirmed', recordScreen as unknown as DesignScreen<unknown>)).toContain('not confirmed by the labour consultant')
     expect(it_('summary-unconfirmed', fileScreen as unknown as DesignScreen<unknown>)).toContain('not confirmed by the labour consultant')
-    expect(it_('send-done')).toContain('cannot fetch the file in a browser')
-    expect(it_('file', recordScreen as unknown as DesignScreen<unknown>)).toContain('cannot fetch the file in a browser')
+    // B-W2b-GF1 (G212): the consultant's page exists (B-W2b-169): no "cannot fetch the file in a browser" any more; the Send says
+    // whether the link has a password, and the record shows the receipt.
+    // (The dialogs draw in the browser sweep, not here: the Send's password field is held by the Send unit test above.)
+    expect(it_('send-done')).not.toContain('cannot fetch the file in a browser')
+    const record = it_('file', recordScreen as unknown as DesignScreen<unknown>)
+    expect(record).not.toContain('cannot fetch the file in a browser')
+    expect(record).toContain('Receipt')
+    expect(record).toContain('Received')
+    expect(record).toContain('Studio Demo')
   })
 
   it('Nexus says it does not run payroll, where a file is made', () => {

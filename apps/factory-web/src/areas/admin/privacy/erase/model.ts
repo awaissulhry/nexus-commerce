@@ -25,6 +25,8 @@ export const ERASURE_TYPES = [
   'InboundEmail',
   'EmailOutbound',
   'AuditLog',
+  // B-W2b-GF1 (F54): the files attached to what the person sent.
+  'StoredFile',
 ] as const
 
 /** The columns the sources name, each worded `dp.erase.field.<name>`; any other: "other details". */

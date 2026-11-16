@@ -51,7 +51,7 @@ export const REQUEST_SELECT = {
   version: true,
   createdAt: true,
   company: { select: { id: true, code: true, legalName: true, tradeName: true } },
-  packageFile: { select: { id: true, originalName: true, sizeBytes: true, sha256: true, availableAt: true, status: true } },
+  packageFile: { select: { id: true, originalName: true, sizeBytes: true, sha256: true, availableAt: true, status: true, deleteAfter: true } },
 } as const satisfies Prisma.DataRequestSelect
 export type RequestRow = Prisma.DataRequestGetPayload<{ select: typeof REQUEST_SELECT }>
 
@@ -61,9 +61,25 @@ export const COLLECT_ACTIONS = { asked: 'privacy.requestCollect', ready: 'privac
 const coded = (held: RequestHeld | null) => (held === null ? null : { code: held, words: REQUEST_HELD_WORDS[held] })
 const actionView = (action: RequestAction) => ({ allowed: action.allowed, held: coded(action.held) })
 
+/** Why there is no package to download: never collected, or deleted on its date (B-W2b-GF1, G274). */
+export const packageHeld = (file: { readonly status: string } | null | undefined): 'NO_PACKAGE' | 'PACKAGE_DELETED' => (file?.status === 'DELETED' ? 'PACKAGE_DELETED' : 'NO_PACKAGE')
+
 /** What may be done on the request now (each held with a code and its words). */
-export function actionsOf(request: Pick<RequestRow, 'kind' | 'status' | 'dueAt' | 'extendedDueAt' | 'identityCheckedAt' | 'packageFileId'>, erasures: number, now: Date) {
-  const actions = requestActions({ kind: request.kind as DataRequestKind, status: request.status as DataRequestStatus, dueAt: request.dueAt, extendedDueAt: request.extendedDueAt, identityCheckedAt: request.identityCheckedAt, packageFileId: request.packageFileId, erasures }, now)
+export function actionsOf(request: Pick<RequestRow, 'kind' | 'status' | 'dueAt' | 'extendedDueAt' | 'identityCheckedAt' | 'packageFileId'> & { readonly packageFile?: { readonly status: string } | null }, erasures: number, now: Date) {
+  const actions = requestActions(
+    {
+      kind: request.kind as DataRequestKind,
+      status: request.status as DataRequestStatus,
+      dueAt: request.dueAt,
+      extendedDueAt: request.extendedDueAt,
+      identityCheckedAt: request.identityCheckedAt,
+      packageFileId: request.packageFileId,
+      // B-W2b-GF1 (G274): a package deleted on its date is no package to hand over (the database refuses DONE without one).
+      packageDeleted: request.packageFile?.status === 'DELETED',
+      erasures,
+    },
+    now,
+  )
   return Object.fromEntries(Object.entries(actions).map(([key, action]) => [key, actionView(action)])) as { [Key in keyof typeof actions]: ReturnType<typeof actionView> }
 }
 
@@ -115,7 +131,15 @@ export async function requestViewOf(db: Reader, request: RequestRow, now: Date, 
     refusalReason: request.refusalReason,
     package:
       request.packageFile && request.packageFile.status === 'AVAILABLE'
-        ? { fileId: request.packageFile.id, name: request.packageFile.originalName, sizeBytes: request.packageFile.sizeBytes, sha256: request.packageFile.sha256, madeAt: request.packageFile.availableAt ? toUtcIso(request.packageFile.availableAt) : null }
+        ? {
+            fileId: request.packageFile.id,
+            name: request.packageFile.originalName,
+            sizeBytes: request.packageFile.sizeBytes,
+            sha256: request.packageFile.sha256,
+            madeAt: request.packageFile.availableAt ? toUtcIso(request.packageFile.availableAt) : null,
+            // B-W2b-GF1 (G274): when the package goes (privacy.purgePackages).
+            deleteAfter: request.packageFile.deleteAfter ? toUtcIso(request.packageFile.deleteAfter) : null,
+          }
         : null,
     collect: await collectStateOf(db, request),
     erasure: request.kind === 'ERASURE' ? { records: erasureCount, anonymised: countOf('ANONYMISED'), deleted: countOf('DELETED'), kept: countOf('KEPT') } : null,

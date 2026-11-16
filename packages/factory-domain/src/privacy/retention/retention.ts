@@ -89,11 +89,10 @@ export const ACTION_WORDS: Readonly<Record<RetentionAction, string>> = Object.fr
  * Why a sweep left a due record as it was: a code each, with its words. HELD records count in `heldCount`; nothing about them
  * changed.
  */
-export const SWEEP_HELD = ['IMMUTABLE', 'NEVER_DELETED', 'ARCHIVE_STAYS', 'NOT_YET'] as const
+export const SWEEP_HELD = ['NEVER_DELETED', 'ARCHIVE_STAYS', 'NOT_YET'] as const
 export type SweepHeld = (typeof SWEEP_HELD)[number]
 
 export const SWEEP_HELD_WORDS: Readonly<Record<SweepHeld, string>> = Object.freeze({
-  IMMUTABLE: "The database blanks a received mail only for a person's erasure request (GDPR art. 17), never by a sweep: the rule can only report it.",
   NEVER_DELETED: 'The database never deletes this record (an export expires, its file goes): the rule can only report it.',
   ARCHIVE_STAYS: 'Archived where it is: nothing is erased (the fiscal archive keeps the document and its file for the law).',
   NOT_YET: 'Not yet: the database keeps it a little longer (a closed error item 30 days, a job run 7 days).',
@@ -130,6 +129,8 @@ export const DATED_PURGES = Object.freeze([
   { key: 'linkDrafts', job: 'links.purgeDrafts', recordType: 'LinkDraft', what: 'Drafts of link forms (measurements, claims, questionnaires)', when: '7 days after their link expired, hourly', why: 'GDPR art. 5(1)(e)' },
   { key: 'largeUploads', job: 'files.expireLargeUploads', recordType: 'FileUploadSession', what: 'Uploads in parts never finished', when: 'when their upload window ends, hourly', why: 'GDPR art. 5(1)(e)' },
   { key: 'exportFiles', job: 'exports.expire', recordType: 'ExportJob', what: 'The files of exports', when: 'when the export expires, hourly (the export row stays)', why: 'GDPR art. 5(1)(e)' },
+  // B-W2b-GF1 (G274): the access request's package (requests.ts PACKAGE_KEEP_DAYS).
+  { key: 'accessPackages', job: 'privacy.purgePackages', recordType: 'StoredFile', what: "A person's data package (the copy an access request collected)", when: '30 days after it was made, hourly (the request and its record of what was sent stay)', why: 'GDPR art. 5(1)(e): never kept as a second copy of the person\'s data' },
 ] as const)
 
 /** Why a sweep failed: a code each (RetentionSweep.failures), with its words. */

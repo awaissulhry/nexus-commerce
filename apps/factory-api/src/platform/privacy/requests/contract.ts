@@ -17,7 +17,8 @@ const companyRef = output({ id: id(), code: z.string(), name: z.string() })
 const personRef = output({ id: id(), name: z.string() })
 const may = output({ allowed: z.boolean(), held: output({ code: z.enum(REQUEST_HELD), words: z.string() }).nullable() })
 
-const packageView = output({ fileId: id(), name: z.string(), sizeBytes: z.number().int(), sha256: z.string(), madeAt: instant().nullable() })
+// B-W2b-GF1 (G274): `deleteAfter`, the day the package is deleted (30 days after it was made).
+const packageView = output({ fileId: id(), name: z.string(), sizeBytes: z.number().int(), sha256: z.string(), madeAt: instant().nullable(), deleteAfter: instant().nullable() })
 const collectView = output({
   /** NONE: never asked; RUNNING: being collected (JobProgress); READY: the package is there; FAILED: why in `failure`. */
   state: z.enum(['NONE', 'RUNNING', 'READY', 'FAILED']),

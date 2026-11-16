@@ -13,8 +13,8 @@ import { LINK_PURPOSES, PURPOSE_RULES, type LinkPurpose } from '@nexus/factory-d
  *   PO_CONFIRM      PurchaseOrder    po-confirm              links/po-confirm (SCR-100)
  *   DOCUMENT_VIEW   Shipment         shipment-documents      links/document (SCR-101)
  *   DOCUMENT_VIEW   StoredFile       files                   links/file (links.document's set; B-W2b-169)
- *   DOCUMENT_VIEW   PayrollExport    payroll-file            links/file (SCR-272; B-W2b-54's routes; B-W2b-169)
  *   SECURE_FILE     StoredFile       files                   links/file (SCR-272; B-W2b-169)
+ *   SECURE_FILE     PayrollExport    payroll-file            links/file (SCR-272; B-W2b-54's routes; B-W2b-169; B-W2b-GF1: was DOCUMENT_VIEW)
  *   APPROVAL        ApprovalRequest  approve                 links/approve (SCR-198; B-W2b-188)
  *   JOB_ACCEPT      SubcontractOrder job                     links/job (SCR-196; B-W2b-181)
  *   CLAIM           Shipment         report-problem          links/claim (SCR-197; B-W2b-198)
@@ -97,7 +97,8 @@ export const LINK_TASK_RULES: readonly LinkTaskRule[] = Object.freeze([
   // B-W2b-169: files by link (one page, GET /link/files says which), and the payroll file.
   { purpose: 'DOCUMENT_VIEW', recordType: 'StoredFile', task: 'files' },
   { purpose: 'SECURE_FILE', recordType: 'StoredFile', task: 'files' },
-  { purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport', task: 'payroll-file' },
+  // B-W2b-GF1 (G212): the payroll file is a secure file (password apart, the receipt).
+  { purpose: 'SECURE_FILE', recordType: 'PayrollExport', task: 'payroll-file' },
   // B-W2b-200: a partner invited to one record (SCR-270): every record type a RECORD_INVITE link opens.
   ...PURPOSE_RULES.RECORD_INVITE.recordTypes.map((recordType) => ({ purpose: 'RECORD_INVITE' as const, recordType, task: 'invite' as const })),
   // B-W2b-398: the customer books its return label (SCR-436).

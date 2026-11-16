@@ -25,6 +25,8 @@ import { createEmailRuntime, useEmail } from '../../../platform/email-out/servic
 import { createFilesRuntime, useFiles } from '../../../platform/files/service'
 import { createGateway } from '../../../platform/gateway/gateway'
 import { carriesLink, LINK_HEADER, LINK_UNAVAILABLE, linkAuthenticator } from '../../../platform/links/authenticator'
+import { createAbuseGuard, useAbuseGuard } from '../../../platform/abuse/guard'
+import { memoryAbuseStore } from '../../../platform/abuse/store'
 import { testRedis, type TestRedis } from '../../../platform/outbox/testing'
 import { createSecretsService } from '../../../platform/secrets/envelope'
 import { localKeyProvider } from '../../../platform/secrets/local'
@@ -62,6 +64,8 @@ let linkApp: FastifyInstance
 let redis: TestRedis
 let connection: Redis
 let filesRoot: string
+// B-W2b-GF1: the office auth, to wait for the work after an answer ("Ask for a new link").
+let officeAuth: ReturnType<typeof createOfficeAuth>
 let M: string
 let D: string
 /** B-W2b-163: the month of hours only whose file the link tests send (a file with amounts never goes by link). */
@@ -182,6 +186,7 @@ beforeAll(async () => {
   const clock = { now: () => new Date() }
   const limits = { max: 10_000, timeWindowMs: 60_000 }
   const auth = createOfficeAuth({ database: w.database, environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, pinPepper: LOCAL_PIN_PEPPER, webOrigin: WEB_ORIGIN, clock, mailer: { deliver: async () => {} }, rateLimits: { signIn: limits, resetRequest: limits, tokenUse: limits, codes: limits, linkUse: limits, floorSignIn: limits } })
+  officeAuth = auth
   const links = linkAuthenticator({ database: w.database, clock })
   linkApp = await buildApp({ environment: 'test', cookieSecret: LOCAL_COOKIE_SECRET, webOrigin: WEB_ORIGIN, rateLimit: limits }, { database: w.database, officeAuth: auth, clock, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => (carriesLink(request) ? links(request) : (w.sessions[String(request.headers['x-test-session'])] ?? null))), logger: false })
 
@@ -541,12 +546,15 @@ describe('the export (MES-267)', () => {
     const text = JSON.stringify(answer) + JSON.stringify(await w.admin(`SELECT * FROM "OneOffLink" WHERE id = $1`, [linkId])) + JSON.stringify(await w.admin(`SELECT after FROM "AuditLog" WHERE "recordId" IN ($1, $2)`, [linkId, sentId])) + JSON.stringify(await w.admin(`SELECT payload FROM "OutboxEvent" WHERE type LIKE 'payroll_export.%'`)) + JSON.stringify(await w.admin(`SELECT * FROM "EmailOutbound" WHERE "recordType" = 'PayrollExport'`))
     expect(text).not.toContain(token)
     const link = (await w.admin(`SELECT * FROM "OneOffLink" WHERE id = $1`, [linkId]))[0]!
-    expect(link).toMatchObject({ purpose: 'DOCUMENT_VIEW', recordType: 'PayrollExport', recordId: sentId, partyId: sentId, email: CONSULTANT, maxUses: 10 })
+    // B-W2b-GF1 (G212): a secure file (it was a DOCUMENT_VIEW link): no password asked here, the receipt possible.
+    expect(link).toMatchObject({ purpose: 'SECURE_FILE', recordType: 'PayrollExport', recordId: sentId, partyId: sentId, email: CONSULTANT, maxUses: 10, passwordHash: null, receivedAt: null })
+    expect(textOf(mail.raw)).toContain('confermare di aver ricevuto il file')
+    expect(textOf(mail.raw)).not.toContain('password')
     const days = Math.round((new Date(link.expiresAt).getTime() - Date.now()) / 86_400_000)
     expect(days).toBe(7)
     const record = await w.ok('reader', 'GET', `/people/payroll/exports/${sentId}`)
     expect(record.sentTo).toEqual([CONSULTANT])
-    expect(record.links[0]).toMatchObject({ id: linkId, state: 'LIVE', uses: 0, downloads: [] })
+    expect(record.links[0]).toMatchObject({ id: linkId, state: 'LIVE', uses: 0, downloads: [], password: false, receipt: null })
   })
 
   it('refuses terms past its limits and an address that bounced', async () => {
@@ -559,7 +567,7 @@ describe('the export (MES-267)', () => {
   it('lets the consultant read the list and download: each download a counted use, logged, on the record', async () => {
     const page = await asLink(token, 'GET', '/people/payroll/link/files')
     expect(page.statusCode, page.body).toBe(200)
-    expect(page.json()).toMatchObject({ month: hoursMonth, revision: 1, link: { usesLeft: 10 } })
+    expect(page.json()).toMatchObject({ month: hoursMonth, revision: 1, count: 2, link: { usesLeft: 10, password: { asked: false, unlocked: false, heldUntil: null }, receipt: { asked: true, at: null, name: null } } })
     expect(page.json().files.map((file: Json) => file.kind)).toEqual(['DATA', 'SUMMARY'])
     const got = await asLink(token, 'POST', `/people/payroll/link/files/${sentData.id}/download`, {})
     expect(got.statusCode, got.body).toBe(200)
@@ -567,7 +575,9 @@ describe('the export (MES-267)', () => {
     expect(got.json().download.url).toBeTruthy()
     const link = (await w.admin(`SELECT uses FROM "OneOffLink" WHERE id = $1`, [linkId]))[0]!
     expect(link.uses).toBe(1)
-    expect(await count(`FROM "LinkEvidence" WHERE "linkId" = $1 AND action = 'OPENED' AND "useNumber" = 1`, [linkId])).toBe(1)
+    // B-W2b-GF1 (G212): a download of the secure file is the counted use (opening the page counts nothing).
+    expect(await count(`FROM "LinkEvidence" WHERE "linkId" = $1 AND action = 'DOWNLOADED' AND "useNumber" = 1`, [linkId])).toBe(1)
+    expect(await count(`FROM "LinkEvidence" WHERE "linkId" = $1 AND action = 'OPENED' AND "useNumber" IS NOT NULL`, [linkId])).toBe(0)
     const record = await w.ok('reader', 'GET', `/people/payroll/exports/${sentId}`)
     expect(record.downloadedAt).not.toBeNull()
     expect(record.links[0]).toMatchObject({ uses: 1, downloads: [{ fileId: sentData.id }] })
@@ -577,8 +587,66 @@ describe('the export (MES-267)', () => {
   it('opens nothing else for that link: not another file, not the generic routes, not an office read', async () => {
     const other = newId()
     expect((await asLink(token, 'POST', `/people/payroll/link/files/${other}/download`, {})).statusCode).toBe(404)
-    expect((await asLink(token, 'GET', `/files/${sentData.id}`)).statusCode).toBe(404)
+    // B-W2b-GF1: a secure file's session holds no files.read: the generic routes refuse it outright (it was a 404 of DOCUMENT_VIEW).
+    expect([403, 404]).toContain((await asLink(token, 'GET', `/files/${sentData.id}`)).statusCode)
     expect((await asLink(token, 'GET', `/people/payroll/exports/${sentId}`)).statusCode).toBe(403)
+  })
+
+  it('B-W2b-GF1 (G212): with a password given apart, lists no file until it is typed; a wrong one in words, the right one opens them; the receipt once', async () => {
+    const PASSWORD = 'made-up-Paghe-2026'
+    await w.no('payroll', 'POST', `/people/payroll/exports/${sentId}/send`, { email: 'locked.studio@example.com', password: 'abc' }, 400)
+    const sent = await sendAs(sentId, 'locked.studio@example.com', { password: PASSWORD })
+    const mail = mailsTo('locked.studio@example.com').at(-1)!
+    expect(textOf(mail.raw)).toContain('serve la password che le diamo a parte')
+    expect(mail.raw).not.toContain(PASSWORD)
+    const row = (await w.admin(`SELECT "passwordHash" FROM "OneOffLink" WHERE id = $1`, [sent.link.id]))[0]!
+    expect(String(row.passwordHash)).toMatch(/^\$scrypt\$/)
+    expect(JSON.stringify(await w.admin(`SELECT after FROM "AuditLog" WHERE "recordId" = $1`, [sent.link.id]))).not.toContain(PASSWORD)
+    const locked = tokenOf(mail)
+    const page = await asLink(locked, 'GET', '/people/payroll/link/files')
+    expect(page.statusCode, page.body).toBe(200)
+    expect(page.json()).toMatchObject({ count: 2, files: [], link: { password: { asked: true, unlocked: false }, receipt: { asked: true, at: null } } })
+    const blocked = await asLink(locked, 'POST', `/people/payroll/link/files/${sentData.id}/download`, {})
+    expect(blocked.statusCode).toBe(403)
+    expect(blocked.json().error.message).toBe('Type the password the sender gave you first.')
+    const wrong = await asLink(locked, 'POST', '/link/password', { password: 'not-the-password' })
+    expect(wrong.statusCode).toBe(400)
+    expect(wrong.json().error.message).toContain('That password does not match')
+    const right = await asLink(locked, 'POST', '/link/password', { password: PASSWORD })
+    expect(right.statusCode, right.body).toBe(200)
+    const unlock = right.json().unlock as string
+    const open = await linkApp.inject({ method: 'GET', url: '/people/payroll/link/files', headers: { [LINK_HEADER]: locked, 'x-factory-link-unlock': unlock } })
+    expect(open.json()).toMatchObject({ link: { password: { asked: true, unlocked: true } } })
+    expect(open.json().files.map((file: Json) => file.kind)).toEqual(['DATA', 'SUMMARY'])
+    const got = await linkApp.inject({ method: 'POST', url: `/people/payroll/link/files/${sentData.id}/download`, headers: { [LINK_HEADER]: locked, 'x-factory-link-unlock': unlock, 'idempotency-key': `link-${run}-${++keys}` }, payload: {} })
+    expect(got.statusCode, got.body).toBe(200)
+    // The receipt: once, behind the password, never a use.
+    expect((await asLink(locked, 'POST', '/link/files/received', { typedName: 'Studio Esempio' })).statusCode).toBe(403)
+    const received = await linkApp.inject({ method: 'POST', url: '/link/files/received', headers: { [LINK_HEADER]: locked, 'x-factory-link-unlock': unlock, 'idempotency-key': `link-${run}-${++keys}` }, payload: { typedName: 'Studio Esempio' } })
+    expect(received.statusCode, received.body).toBe(200)
+    expect(received.json()).toMatchObject({ receipt: { name: 'Studio Esempio' } })
+    const again = await linkApp.inject({ method: 'POST', url: '/link/files/received', headers: { [LINK_HEADER]: locked, 'x-factory-link-unlock': unlock, 'idempotency-key': `link-${run}-${++keys}` }, payload: {} })
+    expect(again.statusCode).toBe(409)
+    expect(pathsOf(again.json().error)).toContain('refusal/RECEIVED')
+    expect((await w.admin(`SELECT uses FROM "OneOffLink" WHERE id = $1`, [sent.link.id]))[0]!.uses).toBe(1)
+    expect(await count(`FROM "LinkEvidence" WHERE "linkId" = $1 AND action = 'RECEIVED' AND "useNumber" IS NULL`, [sent.link.id])).toBe(1)
+    const record = await w.ok('reader', 'GET', `/people/payroll/exports/${sentId}`)
+    expect(record.links.find((link: Json) => link.id === sent.link.id)).toMatchObject({ password: true, receipt: { name: 'Studio Esempio' } })
+  })
+
+  it('B-W2b-GF1 (G212): Ask for a new link on a dead payroll link mails nothing by itself: no new link, no mail (the sender decides)', async () => {
+    const sent = await sendAs(sentId, 'dead.studio@example.com')
+    const dead = tokenOf(mailsTo('dead.studio@example.com').at(-1)!)
+    await w.ok('payroll', 'POST', `/people/payroll/exports/${sentId}/links/${sent.link.id}/withdraw`, { reason: 'Made-up: sent too early' })
+    const before = mailsTo('dead.studio@example.com').length
+    // The public route's abuse guard, in memory for this test.
+    useAbuseGuard(createAbuseGuard({ store: memoryAbuseStore(), key: Buffer.alloc(32, 7), prefix: 'test', clock: { now: () => new Date() } }))
+    const asked = await linkApp.inject({ method: 'POST', url: '/link/renew', headers: { [LINK_HEADER]: dead }, payload: {} })
+    expect(asked.statusCode).toBe(202)
+    await officeAuth.settled()
+    expect(await count(`FROM "OneOffLink" WHERE "renewalOfId" = $1`, [sent.link.id])).toBe(0)
+    expect(mailsTo('dead.studio@example.com')).toHaveLength(before)
+    useAbuseGuard(undefined)
   })
 
   it('withdraws a link: it opens nothing from then on, with the one answer of every dead link', async () => {
@@ -846,8 +914,8 @@ const readStored = async (fileId: string): Promise<Buffer> => {
   return readFileSync(join(filesRoot, storageKey))
 }
 
-async function sendAs(exportId: string, email = CONSULTANT): Promise<Json> {
-  const answer = await linkApp.inject({ method: 'POST', url: `/people/payroll/exports/${exportId}/send`, headers: { 'x-test-session': 'payroll', 'idempotency-key': `send-${run}-${++keys}` }, payload: { email } })
+async function sendAs(exportId: string, email = CONSULTANT, extra: Json = {}): Promise<Json> {
+  const answer = await linkApp.inject({ method: 'POST', url: `/people/payroll/exports/${exportId}/send`, headers: { 'x-test-session': 'payroll', 'idempotency-key': `send-${run}-${++keys}` }, payload: { email, ...extra } })
   expect(answer.statusCode, answer.body).toBe(201)
   return answer.json()
 }

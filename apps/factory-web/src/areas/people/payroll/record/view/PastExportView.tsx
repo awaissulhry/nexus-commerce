@@ -226,17 +226,22 @@ function Links({ model, record, actions }: { model: PastExportModel; record: Exp
           label={t('record.links')}
           density="roomy"
           stackOnPhone
-          columns={[t('col.to'), t('col.linkState'), t('col.expires'), t('col.uses'), t('col.downloads'), t('col.more')]}
+          columns={[t('col.to'), t('col.linkState'), t('col.expires'), t('col.uses'), t('col.downloads'), t('col.receipt'), t('col.more')]}
           rows={record.links.map((link) => ({
             id: link.id,
             cells: [
-              link.email ?? '—',
+              // B-W2b-GF1 (G212): whether the link has a password (never the password itself).
+              <span key="to">
+                {link.email ?? '—'} {link.password && <Tag tone="neutral">{t('record.password')}</Tag>}
+              </span>,
               <Tag key="s" tone={LINK_TONE[link.state]}>
                 {t(`link.${link.state}`)}
               </Tag>,
               formatDateTime(link.expiresAt, place),
               t('record.uses', { used: link.uses, max: link.maxUses }),
               link.downloads.length > 0 ? link.downloads.map((entry) => formatDateTime(entry.at, place)).join(', ') : t('list.notDownloaded'),
+              // B-W2b-GF1 (G212): the consultant's "I received these files".
+              link.receipt ? (link.receipt.name ? t('record.receivedBy', { at: formatDateTime(link.receipt.at, place), name: link.receipt.name }) : t('record.received', { at: formatDateTime(link.receipt.at, place) })) : t('record.notReceived'),
               link.state === 'LIVE' ? (
                 <Button key="w" size="sm" heldReason={!model.can.manage ? t('held.noManage') : model.withdrawing === link.id ? t('held.busy') : null} onClick={() => actions?.onWithdraw?.(link)}>
                   {t('sendDialog.withdraw')}

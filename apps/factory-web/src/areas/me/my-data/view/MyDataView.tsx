@@ -111,6 +111,8 @@ function MyDataDialog({ model, actions }: { model: MyDataModel; actions?: MyData
                     <span key="c" className="fw-dpmy-copy">
                       <span className="fw-dpmy-muted">
                         <FileArchive size={14} aria-hidden /> {request.package.name}
+                        {/* B-W2b-GF1 (G274): the copy goes on its date. */}
+                        {request.package.deleteAfter ? ` · ${t('dp.my.deletes', { date: formatDate(request.package.deleteAfter, place) })}` : null}
                       </span>
                       <Button size="sm" variant={state === 'ready' ? 'primary' : 'secondary'} onClick={() => actions?.onDownload?.(request.id)} heldReason={model.downloading === request.id ? t('dp.common.working') : null}>
                         <Download size={14} aria-hidden /> {t('dp.my.download')}

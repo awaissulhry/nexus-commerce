@@ -486,6 +486,13 @@ describe('office paths answer a partner address in words (no 500)', { timeout: S
     const required = await office.post(`/auth/users/${activeId}/require-password-reset`, { version })
     expect(required.status).toBe(409)
     expect(required.body.error.message).toBe('A partner person has no password: they sign in to the portal with a code sent by e-mail.')
+    // B-W2b-GF1 (G011): the office lifecycle routes never change a partner person (their organisation's routes do), in words.
+    for (const change of ['suspend', 'deactivate'] as const) {
+      const refused = await office.post(`/auth/users/${activeId}/${change}`, { version, reason: 'Made-up reason' })
+      expect(refused.status, change).toBe(409)
+      expect(refused.body.error.message).toMatch(/A partner person is suspended, reactivated or removed through their organisation/)
+    }
+    expect((await h.db.admin.query(`SELECT status::text FROM "User" WHERE id = $1`, [activeId])).rows[0]).toEqual({ status: 'ACTIVE' })
 
     const guest = await portalBrowser(h)
     expect((await guest.post('/auth/office/password/reset-request', { tenant: 'portal-a', email: 'active.partner@brand-alpha.example' })).status).toBe(200)

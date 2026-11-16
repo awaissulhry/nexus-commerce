@@ -237,7 +237,6 @@ export function FileCard({ prefix, can, record, actions, withRecordLink = true }
           </Button>
         )}
       </div>
-      <p className="fw-pp-hint">{t('send.noPage')}</p>
     </div>
   )
 }

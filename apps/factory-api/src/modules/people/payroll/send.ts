@@ -1,12 +1,14 @@
 import type { FastifyRequest } from 'fastify'
 import { monthLabel } from '@nexus/factory-domain/accounting/periods'
-import { NotFoundError } from '@nexus/factory-domain/core/errors'
+import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { compose } from '@nexus/factory-domain/email/compose'
 import { privacyNoticeUrl } from '@nexus/factory-domain/email/footer'
 import { fromLine, messageIdFor } from '@nexus/factory-domain/email/headers'
 import { buildMime } from '@nexus/factory-domain/email/mime'
+import { hashPassword } from '@nexus/factory-domain/auth/password/password'
+import { linkPasswordProblem } from '@nexus/factory-domain/links/password'
 import { linkState, linkTerms } from '@nexus/factory-domain/links/purposes'
 import { linkTokenHash, mintLinkToken } from '@nexus/factory-domain/links/token'
 import { payrollLinkMail } from '@nexus/factory-domain/people/payroll/mail'
@@ -23,6 +25,7 @@ import { processEmail, type EmailRuntime } from '../../../platform/email-out/ser
 import { downloadFile, systemCallerOf } from '../../../platform/files/files'
 import { processFiles } from '../../../platform/files/service'
 import { linkSessionOf, linkUnavailable, type LinkSession } from '../../../platform/links/authenticator'
+import { linkLock, requireLinkUnlocked } from '../../../platform/links/files'
 import { assertNoPayByLink } from '../../../platform/links/pay'
 import { linkCommand, useLink } from '../../../platform/links/use'
 import { placeOf } from '../close/store'
@@ -33,7 +36,9 @@ import { DOWNLOAD_ACTION, exportById } from './views'
 
 /**
  * The file travels by a secure link (B-W2b-54; MES-274; GDPR art. 32; design people.payroll pop-up "Send to the labour consultant"):
- * an expiring link, never an attachment; each download logged.
+ * an expiring link, never an attachment; each download logged. B-W2b-GF1 (G212): a SECURE_FILE link (it was a DOCUMENT_VIEW one):
+ * an optional password the office gives the consultant apart (hashed outside the command, never stored as typed, never
+ * answered; the mail says it comes apart), each download a counted use, the receipt "I received these files" once.
  *
  *   send       people.payroll.manage, the month's latest exported file only. The token is minted OUTSIDE the command (only its
  *              hash goes in); ONE command withdraws the address's older live link of the export, makes the new one and the
@@ -42,18 +47,25 @@ import { DOWNLOAD_ACTION, exportById } from './views'
  *              is in the sent mail only: never in an answer, a command's result, an audit row, an event or a log. Mail goes
  *              through the tenant's mail account: FAKE locally and in tests.
  *   withdraw   people.payroll.manage: the link opens nothing from then on; its evidence stays.
- *   the page   GET /people/payroll/link/files (the link's session): what was sent, with name, size and checksum. Reading uses
- *              nothing.
- *   download   POST /people/payroll/link/files/:fileId/download: one of the export's files, one counted use of the link, its
- *              evidence row and audit row in one command, then a 60-second link.
+ *   the page   GET /people/payroll/link/files (the link's session): what was sent, the password's state (asked, given in
+ *              this visit, held) and the receipt; the files, with name, size and checksum, only once the password was given
+ *              (header x-factory-link-unlock) or when there is none. Reading uses nothing.
+ *   download   POST /people/payroll/link/files/:fileId/download: one of the export's files, behind the password, one counted
+ *              use of the link (DOWNLOADED), its evidence row and audit row in one command, then a 60-second link.
+ *   password   POST /link/password and the receipt POST /link/files/received are platform/links' (they are the link's, whatever
+ *              it opens).
+ *   a new link "Ask for a new link" on a dead one tells the person who sent it (platform/links renew: no renewer of its own,
+ *              B-W2b-F17): whether everyone's hours go out again is a person's call, never automatic.
  *
- * The link is a DOCUMENT_VIEW link of the PayrollExport (a SECURE_FILE purpose is a schema need). The consultant is no Party
+ * The link is a SECURE_FILE link of the PayrollExport. The consultant is no Party
  * (PartyRole has no such value), so the link's party is the export's own id: a wall nothing else stands behind. The partner
  * role is granted nothing on payroll, so the link's two routes read one export's files in the tenant's system scope, after
  * the session named exactly that export.
  */
 
 const RECORD = 'PayrollExport'
+/** B-W2b-GF1 (G212): the secure file (password apart, receipt, each download a use). */
+const PURPOSE = 'SECURE_FILE' as const
 const TEMPLATE_KEY = 'people.payroll_file'
 
 const linkUrl = (email: EmailRuntime, token: string): string => `${email.webOrigin}/l#token=${encodeURIComponent(token)}`
@@ -72,6 +84,12 @@ export async function sendExport(request: FastifyRequest, exportId: string, body
   const month = monthOfRow(row)
   await request.withClient((db) => requireMonthGates(db, place, month))
   const address = emailOrThrow(body.email)
+  // B-W2b-GF1 (G212): the password, checked and hashed outside the command (the slow hash never holds a transaction).
+  if (body.password !== undefined) {
+    const problem = linkPasswordProblem(body.password)
+    if (problem) throw new ValidationError(problem, [{ path: 'body/password', message: problem }])
+  }
+  const passwordHash = body.password === undefined ? null : await hashPassword(body.password)
   const locale = body.language ?? 'it'
   const user = await request.withClient((db) => db.user.findUnique({ where: { id: context.actorId }, select: { displayName: true, email: true } }))
   const used = layoutUsedOf(row.layoutSnapshot)
@@ -81,9 +99,9 @@ export async function sendExport(request: FastifyRequest, exportId: string, body
   const linkId = newId()
   const outboundId = newId()
   const token = mintLinkToken({ tenantId: context.tenantId, partyId: exportId, linkId }).value
-  const mailFor = (expiresAt: Date, url: string) => payrollLinkMail({ locale, companyName: row.company.legalName, month, number: row.number ?? '', revision: row.revision, expiresAt, uses: asked.maxUses, message: body.message ?? null, notConfirmed: !layoutConfirmed({ provider, definition: used.definition }) }, url)
+  const mailFor = (expiresAt: Date, url: string) => payrollLinkMail({ locale, companyName: row.company.legalName, month, number: row.number ?? '', revision: row.revision, expiresAt, uses: asked.maxUses, message: body.message ?? null, notConfirmed: !layoutConfirmed({ provider, definition: used.definition }), password: passwordHash !== null }, url)
 
-  const { result, replayed } = await command(request, { name: 'people.sendPayrollExport', idempotencyKey: key, input: { exportId, ...body } }, async (tools) => {
+  const { result, replayed } = await command(request, { name: 'people.sendPayrollExport', idempotencyKey: key, input: { exportId, ...body, password: body.password === undefined ? null : 'set' } }, async (tools) => {
     const { tx, now } = tools
     const current = await exportById(tx, exportId)
     if (!current) throw new NotFoundError('Payroll export not found.')
@@ -98,9 +116,9 @@ export async function sendExport(request: FastifyRequest, exportId: string, body
       tools.audit({ action: 'links.revoke', recordType: 'OneOffLink', recordId: link.id, companyId: row.companyId, after: { revokedAt: toUtcIso(now) }, reason: 'Replaced by a new link to the same address.' })
       withdrawn.push(link.id)
     }
-    const terms = linkTerms('DOCUMENT_VIEW', asked, now)
-    await tx.oneOffLink.createMany({ data: [{ id: linkId, companyId: row.companyId, partyId: exportId, purpose: 'DOCUMENT_VIEW', recordType: RECORD, recordId: exportId, tokenHash: linkTokenHash(token), email: address, note: 'The payroll file for the labour consultant.', expiresAt: terms.expiresAt, maxUses: terms.maxUses, createdAt: now, updatedAt: now, createdById: context.actorId }] })
-    tools.audit({ action: 'links.create', recordType: 'OneOffLink', recordId: linkId, companyId: row.companyId, after: { purpose: 'DOCUMENT_VIEW', recordType: RECORD, recordId: exportId, partyId: exportId, email: address, expiresAt: toUtcIso(terms.expiresAt), maxUses: terms.maxUses } })
+    const terms = linkTerms(PURPOSE, asked, now)
+    await tx.oneOffLink.createMany({ data: [{ id: linkId, companyId: row.companyId, partyId: exportId, purpose: PURPOSE, recordType: RECORD, recordId: exportId, tokenHash: linkTokenHash(token), email: address, note: 'The payroll file for the labour consultant.', expiresAt: terms.expiresAt, maxUses: terms.maxUses, passwordHash, createdAt: now, updatedAt: now, createdById: context.actorId }] })
+    tools.audit({ action: 'links.create', recordType: 'OneOffLink', recordId: linkId, companyId: row.companyId, after: { purpose: PURPOSE, recordType: RECORD, recordId: exportId, partyId: exportId, email: address, password: passwordHash !== null, expiresAt: toUtcIso(terms.expiresAt), maxUses: terms.maxUses } })
     const identity = await sendingIdentity(tx, row.companyId, null, 'CONVERSATION')
     const from = fromLine(identity, user ? { name: user.displayName, email: user.email } : null)
     await tx.emailOutbound.create({
@@ -171,7 +189,7 @@ export async function withdrawLink(caller: CommandCaller, exportId: string, link
 
 function payrollLinkOf(request: FastifyRequest): LinkSession {
   const link = linkSessionOf(request)
-  if (link.purpose !== 'DOCUMENT_VIEW' || link.record.type !== RECORD) throw linkUnavailable()
+  if (link.purpose !== PURPOSE || link.record.type !== RECORD) throw linkUnavailable()
   return link
 }
 
@@ -189,10 +207,11 @@ async function exportOfLink(request: FastifyRequest, link: LinkSession) {
   return row
 }
 
-/** GET /people/payroll/link/files: what was sent. Reading uses nothing. */
+/** GET /people/payroll/link/files: what was sent; the files once the password was given (or with none). Reading uses nothing. */
 export async function linkFiles(request: FastifyRequest) {
   const link = payrollLinkOf(request)
   const row = await exportOfLink(request, link)
+  const lock = await linkLock(request, link)
   const month = monthOfRow(row)
   return {
     sender: row.company.legalName,
@@ -200,8 +219,9 @@ export async function linkFiles(request: FastifyRequest) {
     label: monthLabel(month, 'it'),
     number: row.number,
     revision: row.revision,
-    link: { expiresAt: toUtcIso(link.expiresAt), usesLeft: Math.max(0, link.maxUses - link.uses) },
-    files: row.files.map((file) => ({ id: file.fileId, kind: file.kind, name: file.file.originalName, sizeBytes: file.file.sizeBytes, sha256: file.file.sha256 })),
+    link: { expiresAt: toUtcIso(link.expiresAt), usesLeft: Math.max(0, link.maxUses - link.uses), password: lock.password, receipt: lock.receipt },
+    count: row.files.length,
+    files: lock.open ? row.files.map((file) => ({ id: file.fileId, kind: file.kind, name: file.file.originalName, sizeBytes: file.file.sizeBytes, sha256: file.file.sha256 })) : [],
   }
 }
 
@@ -209,10 +229,12 @@ export async function linkFiles(request: FastifyRequest) {
 export async function downloadLinkFile(request: FastifyRequest, fileId: string, key?: string) {
   const link = payrollLinkOf(request)
   const row = await exportOfLink(request, link)
+  await requireLinkUnlocked(request, link)
   const file = row.files.find((entry) => entry.fileId === fileId)
   if (!file) throw new NotFoundError('File not found.')
   const { result } = await linkCommand(request, { name: 'people.downloadPayrollFile', idempotencyKey: key, input: { fileId } }, async (tools) => {
-    const use = await useLink(tools, request, { action: 'open' })
+    // B-W2b-GF1 (G212): a download of a secure file — evidence DOWNLOADED, one counted use.
+    const use = await useLink(tools, request, { action: 'download' })
     tools.audit({ action: DOWNLOAD_ACTION, recordType: RECORD, recordId: row.id, companyId: row.companyId, after: { linkId: link.id, fileId, kind: file.kind, evidenceId: use.evidenceId } })
     tools.emit({ type: 'payroll_export.downloaded', subject: row.id, companyId: row.companyId, payload: { exportId: row.id, companyId: row.companyId, linkId: link.id, fileId } })
     return { usesLeft: use.usesLeft }

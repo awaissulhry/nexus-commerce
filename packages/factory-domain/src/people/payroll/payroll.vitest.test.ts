@@ -316,14 +316,25 @@ describe('the summary', () => {
 })
 
 describe('the mail (GDPR art. 32)', () => {
-  const mail = { locale: 'it' as const, companyName: 'Made-up Spa', month: '2026-09', number: 'PAY-2026-0002', revision: 1, expiresAt: new Date('2026-11-10T10:00:00.000Z'), uses: 10, message: null, notConfirmed: false }
+  const mail = { locale: 'it' as const, companyName: 'Made-up Spa', month: '2026-09', number: 'PAY-2026-0002', revision: 1, expiresAt: new Date('2026-11-10T10:00:00.000Z'), uses: 10, message: null, notConfirmed: false, password: false }
 
   it('carries the link and the terms, no figure and no attachment', () => {
     const { subject, body } = payrollLinkMail(mail, 'https://example.test/l#token=abc')
     expect(subject).toBe('Paghe settembre 2026: file per il consulente del lavoro (PAY-2026-0002)')
     expect(body).toContain('https://example.test/l#token=abc')
-    expect(body).toContain('10 aperture')
+    expect(body).toContain('10 scaricamenti')
     expect(body).toContain('Ogni scaricamento viene registrato')
+    // B-W2b-GF1 (G212): a secure file — the receipt on the page; no password here, so none is mentioned.
+    expect(body).toContain('confermare di aver ricevuto il file')
+    expect(body).not.toContain('password')
+  })
+
+  it('says the password comes apart when the link has one, never the password itself (B-W2b-GF1, G212)', () => {
+    const it = payrollLinkMail({ ...mail, password: true }, 'https://example.test/l#token=abc').body
+    expect(it).toContain('serve la password che le diamo a parte')
+    const en = payrollLinkMail({ ...mail, locale: 'en', password: true }, 'https://example.test/l#token=abc').body
+    expect(en).toContain('password we give you separately')
+    expect(en).toContain('confirm that you received the file')
   })
 
   it('names the version of a correction, the note of the sender and an unconfirmed layout, in either language', () => {

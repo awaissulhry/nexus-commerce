@@ -126,7 +126,7 @@ function UserRecord({ model, actions, panels, partner, sessions }: { model: User
         onDock={actions?.onDock}
       >
         <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-        {tab === 'profile' && <ProfileTab model={model} open={open} />}
+        {tab === 'profile' && <ProfileTab model={model} open={open} partnerHref={isPartner && partner ? `${href(`/users/${user.id}`)}?tab=partner` : null} />}
         {tab === 'roles' && <RolesTab model={model} open={open} selected={selected} onSelect={setSelected} actions={actions} />}
         {tab === 'partner' && partner}
         {tab === 'sessions' && sessions}
@@ -140,11 +140,14 @@ function UserRecord({ model, actions, panels, partner, sessions }: { model: User
   )
 }
 
-function ProfileTab({ model, open }: { model: UserRecordModel; open: (dialog: UserDialog) => void }) {
+function ProfileTab({ model, open, partnerHref }: { model: UserRecordModel; open: (dialog: UserDialog) => void; partnerHref?: string | null }) {
   const t = useT('admin')
   const locale = useLocale()
   const user = model.user!
   const held = lifecycleHeld(model)
+  // B-W2b-GF1 (G011): a partner person signs in to their organisation's portal with an e-mail code: no password, no authenticator,
+  // and their access is changed only through the organisation (the office Suspend / Deactivate / Password rows are not theirs).
+  const isPartner = user.audience === 'PARTNER'
   const row = (action: 'suspend' | 'reactivate' | 'deactivate' | 'password', tone: 'danger-outline' | 'secondary') => (
     <div className="fw-adm-danger-row">
       <div>
@@ -167,21 +170,32 @@ function ProfileTab({ model, open }: { model: UserRecordModel; open: (dialog: Us
             { label: t('users.invite.email'), value: user.email },
             { label: t('users.col.language'), value: t(`common.language.${user.locale}`) },
             { label: t('users.col.status'), value: t(`users.status.${user.status}`) },
-            { label: t('users.col.twoFactor'), value: user.status === 'INVITED' ? '—' : t(user.mfaEnabled ? 'users.mfa.on' : 'users.mfa.off') },
+            { label: t('users.col.twoFactor'), value: isPartner ? t('user.partnerAccess.signIn') : user.status === 'INVITED' ? '—' : t(user.mfaEnabled ? 'users.mfa.on' : 'users.mfa.off') },
             { label: t('users.col.lastSignIn'), value: user.lastSignInAt ? formatDateTime(user.lastSignInAt, { locale }) : '—' },
             ...(user.invitationExpiresAt ? [{ label: t('user.invitedUntil'), value: formatDateTime(user.invitationExpiresAt, { locale }) }] : []),
           ]}
         />
         <p className="fw-adm-hint">{t('user.editLater')}</p>
       </Card>
-      {model.lastAdmin && <Banner tone="info" title={t('user.lastAdmin')} />}
-      <Card header={t('record.dangerZone')} headingLevel={2} padded>
-        <div className="fw-adm-danger">
-          {row('password', 'secondary')}
-          {user.status === 'SUSPENDED' ? row('reactivate', 'secondary') : row('suspend', 'danger-outline')}
-          {row('deactivate', 'danger-outline')}
-        </div>
-      </Card>
+      {model.lastAdmin && !isPartner && <Banner tone="info" title={t('user.lastAdmin')} />}
+      {isPartner ? (
+        <Card header={t('user.partnerAccess.title')} headingLevel={2} padded>
+          <p className="fw-adm-hint">{t('user.partnerAccess.body')}</p>
+          {partnerHref && (
+            <Button size="sm" asChild>
+              <Link href={partnerHref}>{t('user.partnerAccess.open')}</Link>
+            </Button>
+          )}
+        </Card>
+      ) : (
+        <Card header={t('record.dangerZone')} headingLevel={2} padded>
+          <div className="fw-adm-danger">
+            {row('password', 'secondary')}
+            {user.status === 'SUSPENDED' ? row('reactivate', 'secondary') : row('suspend', 'danger-outline')}
+            {row('deactivate', 'danger-outline')}
+          </div>
+        </Card>
+      )}
     </div>
   )
 }

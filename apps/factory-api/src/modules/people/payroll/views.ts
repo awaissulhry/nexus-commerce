@@ -24,7 +24,8 @@ import { consultantOf } from './settings'
 
 export const DOWNLOAD_ACTION = 'people.downloadPayrollFile'
 
-const LINK_SELECT = { id: true, recordId: true, email: true, expiresAt: true, maxUses: true, uses: true, revokedAt: true, createdAt: true } as const satisfies Prisma.OneOffLinkSelect
+// B-W2b-GF1 (G212): the hash is read only to say whether the link has a password; it is never answered.
+const LINK_SELECT = { id: true, recordId: true, email: true, expiresAt: true, maxUses: true, uses: true, revokedAt: true, createdAt: true, passwordHash: true, receivedAt: true, receivedName: true } as const satisfies Prisma.OneOffLinkSelect
 type LinkRow = Prisma.OneOffLinkGetPayload<{ select: typeof LINK_SELECT }>
 
 const iso = (value: Date | null): string | null => (value ? toUtcIso(value) : null)
@@ -121,6 +122,8 @@ export async function exportRecordOf(db: Client, context: OfficeContext, place: 
       revokedAt: iso(link.revokedAt),
       createdAt: toUtcIso(link.createdAt),
       downloads: extras.downloads.filter((entry) => entry.linkId === link.id).map((entry) => ({ at: toUtcIso(entry.at), fileId: entry.fileId })),
+      password: link.passwordHash !== null,
+      receipt: link.receivedAt ? { at: toUtcIso(link.receivedAt), name: link.receivedName } : null,
     })),
     cancelledAt: iso(row.cancelledAt),
     cancelReason: row.cancelReason,
