@@ -62,7 +62,8 @@ export function MoneyApprovals({ companyId }: { companyId: string }) {
     setSwitchProblem(null)
     setNotice(null)
     const key = newIdempotencyKey()
-    const sentence = scoped(name === 'remittance' ? 'stepUp.remittance' : 'stepUp.notice')
+    // B-W2b-GB02 (G088): + the automatic carry's own sentence.
+    const sentence = scoped(name === 'remittance' ? 'stepUp.remittance' : name === 'autoCarry' ? 'stepUp.autoCarry' : 'stepUp.notice')
     void (async () => {
       try {
         if (on) await ensureFresh(sentence)
@@ -70,7 +71,8 @@ export function MoneyApprovals({ companyId }: { companyId: string }) {
           const next = await guard(sentence, () => setRemittance(api, { companyId, remittanceMailOn: on, ...(remittance?.source === 'COMPANY' && remittance.version !== null ? { version: remittance.version } : {}) }, key))
           setRemittanceState(next)
         } else {
-          const next = await guard(sentence, () => setCollections(api, { companyId, paymentNoticeToCustomerOn: on, ...(collections?.source === 'COMPANY' && collections.version !== null ? { version: collections.version } : {}) }, key))
+          // B-W2b-GB02 (G088): the collections row holds the notice and the automatic carry.
+          const next = await guard(sentence, () => setCollections(api, { companyId, ...(name === 'autoCarry' ? { depositAutoCarryOn: on } : { paymentNoticeToCustomerOn: on }), ...(collections?.source === 'COMPANY' && collections.version !== null ? { version: collections.version } : {}) }, key))
           setCollectionsState(next)
         }
         setNotice({ key: scoped(`approvals.notice.${name}.${on ? 'on' : 'off'}`) })

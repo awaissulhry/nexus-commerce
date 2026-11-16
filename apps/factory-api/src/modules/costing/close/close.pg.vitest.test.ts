@@ -19,6 +19,8 @@ import { callerFor } from '../../../core/command'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { saveActualSettings } from '../ppv/settings'
+// B-W2b-GB02 (G053): "Closed in <month>" by the close's day.
+import { businessDate } from '@nexus/factory-domain/core/time'
 
 /**
  * The work order close on the local stack (B-W2b-411; MES-012, MES-013, FIN-029, FIN-030, FIN-034) with the app's real
@@ -87,6 +89,13 @@ const statusOf = async (workOrderId: string) => (await admin<{ status: string; c
 
 let wo: string
 let url: string
+// ---- B-W2b-GB02 (G053): the days around today (Europe/Rome) the close falls in, and a range that ends before it.
+const shiftDay = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00.000Z`) + days * 86_400_000).toISOString().slice(0, 10)
+const closedDays = (() => {
+  const today = businessDate(new Date())
+  return { from: shiftDay(today, -1), to: shiftDay(today, 1), before: shiftDay(today, -2) }
+})()
+// ---- end B-W2b-GB02
 
 beforeAll(async () => {
   db = await migratedDatabase('costing_close')
@@ -203,6 +212,12 @@ describe('the Undo for a few seconds and the reopen with a reason (MES-013)', ()
     expect((await ok('finance', 'GET', `/costing/work-orders/${wo}`)).detail.actual.onWorkOrder).toBe(0)
     // A catch-up on the closed work order posts nothing.
     expect((await ok('finance', 'POST', `/costing/work-orders/${wo}/post`, {})).posted).toEqual([])
+    // ---- B-W2b-GB02 (G053; B-W2b-424's gap 3): the list says when it was closed and finds it by the close's day.
+    const row = (await ok('finance', 'GET', `/costing/work-orders?companyId=${companyA}&closedFrom=${closedDays.from}&closedTo=${closedDays.to}`)).rows.find((entry: Json) => entry.workOrder.id === wo)
+    expect(row.workOrder).toMatchObject({ status: 'CLOSED', closedAt: closed.close.closedAt })
+    expect((await ok('finance', 'GET', `/costing/work-orders?companyId=${companyA}&closedTo=${closedDays.before}`)).rows.map((entry: Json) => entry.workOrder.id)).not.toContain(wo)
+    expect((await call('finance', 'GET', `/costing/work-orders?closedFrom=2026-13-01`)).statusCode).toBe(400)
+    // ---- end B-W2b-GB02
   })
 
   it('reopening later needs workorders.reopen and a reason; the entries are reversed and the ledger is as before', async () => {
@@ -222,6 +237,11 @@ describe('the Undo for a few seconds and the reopen with a reason (MES-013)', ()
     expect(reversals.every((row) => row.reason === 'Reopened: Two jackets were found finished in the store.')).toBe(true)
     expect(await ledgerSum(wo)).toBe(31_994)
     await refusal('manager', 'POST', `${url}/reopen`, { reason: 'Again, by mistake' }, 'NOT_CLOSED')
+    // ---- B-W2b-GB02 (G053): reopened, it is closed in no month any more (and says no close day).
+    expect((await ok('finance', 'GET', `/costing/work-orders?companyId=${companyA}&closedFrom=${closedDays.from}&closedTo=${closedDays.to}`)).rows.map((entry: Json) => entry.workOrder.id)).not.toContain(wo)
+    const open = (await ok('finance', 'GET', `/costing/work-orders?companyId=${companyA}&status=COMPLETED`)).rows.find((entry: Json) => entry.workOrder.id === wo)
+    expect(open.workOrder).toMatchObject({ status: 'COMPLETED', closedAt: null })
+    // ---- end B-W2b-GB02
   })
 })
 

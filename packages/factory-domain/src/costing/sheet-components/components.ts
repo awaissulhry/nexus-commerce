@@ -8,6 +8,8 @@ import type { ItemKind } from '../../product/materials/rules'
 import type { WorkCentreKind } from '../../product/routing/operations'
 import { baseFactor, decimalOf, decimalText, type Uom } from '../../product/units/units'
 import { rateFor, type RateCandidate } from '../../people/earnings/rules'
+// B-W2b-GB02 (G056): a step's own minutes in a size (RoutingOperationSizeTime), as planning reads them.
+import { stepMinutesIn, type SizeTime } from '../../product/minutes/rules'
 import { bestDefault, type LiveDefault, type PackagingKind } from '../../shipping/packaging/rules'
 import { absorb, MISSING_WORDS, rulesInForce, type AbsorptionFigures, type OverheadRuleFacts } from '../overhead-rules/rules'
 import { OVERHEAD_TWICE } from '../cost-per-minute/rules'
@@ -38,7 +40,8 @@ import {
  *   LEATHER      a BOM line of a leather article: with its cost basis, the bought area (net ÷ yield × usable share by the
  *                grade mix) in the basis' unit at the price per that unit; without one, the BOM's area with its wastage
  *   MATERIAL     the other BOM lines at their standard price per base unit (W1); a packaging article of the BOM is PACKAGING
- *   LABOUR       each in-house step: its standard minutes × the cost per minute ÷ planned efficiency (W1, ROUTING); with
+ *   LABOUR       each in-house step: its minutes in the size (its standard minutes + the size's extra minutes, B-W2b-GB02;
+ *                a step only for some sizes or colourways counts only in them) × the cost per minute ÷ planned efficiency (W1, ROUTING); with
  *                piece-rate labour on and a published rate per piece for the step in every size, that rate (PIECE_RATE;
  *                per operation, never per worker: GATE-PIECE-PAY)
  *   SUBCONTRACT  each step a workshop does: its fee per piece (the routing's, in euros), and per visit to the workshop (its
@@ -47,7 +50,8 @@ import {
  *                freight) and duty percents; from landed cost when the uplift was read from one
  *   PACKAGING    the packaging master's defaults of the style or size run: polybag, hanger and box per garment, the export
  *                carton's cost ÷ the garments it holds
- *   OVERHEAD     the overhead rules in force (B-W2b-419) per kind of work centre on its labour and minutes, and per garment;
+ *   OVERHEAD     the overhead rules in force (B-W2b-419) per kind of work centre on its labour, minutes and machine hours (the
+ *                minutes of its steps worked at a machine ÷ 60, B-W2b-GB02), and per garment;
  *                none in force: the costing settings' percent on material + labour (W1)
  *
  * Each size is costed whole, then a line that is the same in every size is written once for every size (size null); the
@@ -71,6 +75,19 @@ export interface ComponentStep {
   readonly name: string
   readonly workCentreKind: WorkCentreKind
   readonly standardMinutes: string
+  // ---- B-W2b-GB02 (G056; B-W2b-418 gap 3, B-W2b-419 gap 3)
+  /** Its extra minutes in a size (PRD-114: the step in that size takes standardMinutes + extraMinutes); none: every size alike. */
+  readonly sizeTimes?: readonly SizeTime[] | undefined
+  /** PRD-128: the step only for these sizes / colourways of the style (empty or left out: every one). */
+  readonly appliesToSizes?: readonly string[] | undefined
+  readonly appliesToColourwayIds?: readonly string[] | undefined
+  /**
+   * The step is worked at a machine (its routing step, else its library operation, names a machine setting, or the library
+   * operation a machine type): its minutes in a size are machine minutes, the machine hours a PER_MACHINE_HOUR overhead rule
+   * absorbs on. Left out: no machine.
+   */
+  readonly machine?: boolean | undefined
+  // ---- end B-W2b-GB02
 }
 
 /** A step a workshop does: the workshop and its fee per piece (euros; null: agreed per order). */
@@ -246,6 +263,13 @@ export function componentsOf(facts: ComponentFacts): Components {
   }
 
   const inHouse = facts.steps.filter((step) => !facts.subcontracts.has(step.id))
+  // ---- B-W2b-GB02 (G056): a step counts in the sizes and the colourway it is for, at its own minutes in the size.
+  const stepIn = (step: ComponentStep, size: string): boolean =>
+    (!step.appliesToSizes || step.appliesToSizes.length === 0 || step.appliesToSizes.includes(size)) &&
+    (!step.appliesToColourwayIds || step.appliesToColourwayIds.length === 0 || step.appliesToColourwayIds.includes(facts.colourwayId))
+  const minutesIn = (step: ComponentStep, size: string): string =>
+    decimalText(stepMinutesIn({ standardMinutes: step.standardMinutes, setupMinutes: null, waitMinutes: null, moveMinutes: null, sizeTimes: step.sizeTimes ?? [] }, size))
+  // ---- end B-W2b-GB02
   if (facts.steps.length === 0) miss({ key: 'NO_ROUTING', code: 'NO_ROUTING', message: 'The revision has no routing: add its operations to cost the labour.' })
   const pieceRates = facts.pieceRate.on && facts.pieceRate.siteId !== null
   if (facts.pieceRate.on && facts.pieceRate.problem !== null) warn('PIECE_RATE_SITE', null, PIECE_RATE_SITE_WORDS[facts.pieceRate.problem])
@@ -348,18 +372,24 @@ export function componentsOf(facts: ComponentFacts): Components {
     }
 
     // ---- labour: piece rate where it holds in every size, else minutes ----
-    const labourByKind = new Map<WorkCentreKind, { cost: Decimal; minutes: Decimal; rateIds: Set<string> }>()
-    const addLabour = (kind: WorkCentreKind, cost: string, minutes: string, rateId: string | null): void => {
-      const entry = labourByKind.get(kind) ?? { cost: ZERO, minutes: ZERO, rateIds: new Set<string>() }
+    // B-W2b-GB02 (G056): + the machine minutes of the kind's steps worked at a machine.
+    const labourByKind = new Map<WorkCentreKind, { cost: Decimal; minutes: Decimal; machineMinutes: Decimal; rateIds: Set<string> }>()
+    const addLabour = (step: ComponentStep, cost: string, minutes: string, rateId: string | null): void => {
+      const kind = step.workCentreKind
+      const entry = labourByKind.get(kind) ?? { cost: ZERO, minutes: ZERO, machineMinutes: ZERO, rateIds: new Set<string>() }
       entry.cost = entry.cost.plus(cost)
       entry.minutes = entry.minutes.plus(minutes)
+      if (step.machine) entry.machineMinutes = entry.machineMinutes.plus(minutes)
       if (rateId) entry.rateIds.add(rateId)
       labourByKind.set(kind, entry)
     }
     for (const step of inHouse) {
+      if (!stepIn(step, size)) continue // B-W2b-GB02 (G056)
       const label = `${step.code} ${step.name}`.slice(0, 200)
+      const stepMinutes = minutesIn(step, size) // B-W2b-GB02 (G056)
       if (pieceRates) {
-        const everySize = facts.sizes.map((other) => rateFor(facts.pieceRate.candidates, { day: facts.on, operationId: step.operationId, styleId: facts.styleId, lineId: null, size: other }))
+        // B-W2b-GB02 (G056): every size the step is for.
+        const everySize = facts.sizes.filter((other) => stepIn(step, other)).map((other) => rateFor(facts.pieceRate.candidates, { day: facts.on, operationId: step.operationId, styleId: facts.styleId, lineId: null, size: other }))
         const rate = everySize.every((found) => found !== null) ? rateFor(facts.pieceRate.candidates, { day: facts.on, operationId: step.operationId, styleId: facts.styleId, lineId: null, size }) : null
         if (rate !== null) {
           if (rate.currency !== facts.currency) {
@@ -368,7 +398,7 @@ export function componentsOf(facts: ComponentFacts): Components {
           }
           const unitCost = six(new Decimal(rate.ratePerPiece))
           drafts.push({ key: `step:${step.id}`, rank: RANK.LABOUR, category: 'LABOUR', source: 'PIECE_RATE', sourceRecordType: 'PieceRateEntry', sourceRecordId: rate.entryId, itemId: null, workCentreKind: step.workCentreKind, label, quantity: '1', uom: null, unitCost, pct: null, note: 'One piece at the published piece rate of the operation.' })
-          addLabour(step.workCentreKind, unitCost, step.standardMinutes, null)
+          addLabour(step, unitCost, stepMinutes, null)
           continue
         }
         warn('NO_PIECE_RATE', step.id, `${step.code} has no published piece rate for every size of the style: it is costed by its minutes.`)
@@ -387,16 +417,17 @@ export function componentsOf(facts: ComponentFacts): Components {
         miss({ key: `LABOUR_RATE:${step.workCentreKind}`, code: 'LABOUR_RATE', workCentreKind: step.workCentreKind, message: `The ${step.workCentreKind} rate's planned efficiency is not above 0.` })
         continue
       }
-      const quantity = four(decimalOf(step.standardMinutes))
+      const quantity = four(decimalOf(stepMinutes)) // B-W2b-GB02 (G056): its minutes in the size
       const unitCost = six(decimalOf(rate.costPerMinute).div(efficiency.div(100)))
       drafts.push({ key: `step:${step.id}`, rank: RANK.LABOUR, category: 'LABOUR', source: 'ROUTING', sourceRecordType: 'RoutingOperation', sourceRecordId: step.id, itemId: null, workCentreKind: step.workCentreKind, label, quantity, uom: null, unitCost, pct: null, note: null })
-      addLabour(step.workCentreKind, lineCost(quantity, unitCost), step.standardMinutes, rate.id)
+      addLabour(step, lineCost(quantity, unitCost), stepMinutes, rate.id)
     }
 
     // ---- outside operations: the fee per step, the transport per visit ----
     let visit: { readonly supplierId: string; readonly firstStepId: string } | null = null
     const visits: { readonly supplierId: string; readonly firstStepId: string }[] = []
     for (const step of [...facts.steps].sort((a, b) => a.seq - b.seq)) {
+      if (!stepIn(step, size)) continue // B-W2b-GB02 (G056): a step not for this size or colourway is not done on it
       const outside = facts.subcontracts.get(step.id)
       if (!outside) {
         visit = null
@@ -530,7 +561,8 @@ export function componentsOf(facts: ComponentFacts): Components {
       if (chosen.length === 0) continue
       ruled = true
       if (chosen.some((rule) => rule.basis === 'PER_MINUTE') && [...labour.rateIds].some((id) => facts.ratesWithOverhead.has(id))) warn('OVERHEAD_TWICE', null, OVERHEAD_TWICE)
-      overheadDrafts(chosen, { labourCost: six(labour.cost), minutes: decimalText(labour.minutes), units: '1' }, kind)
+      // B-W2b-GB02 (G056): + the machine hours from the routing (its machine minutes ÷ 60, to 4 places as a line keeps them).
+      overheadDrafts(chosen, { labourCost: six(labour.cost), minutes: decimalText(labour.minutes), units: '1', machineHours: four(labour.machineMinutes.div(60)) }, kind)
     }
     const perGarment = rulesInForce(facts.overheadRules, facts.companyId, null, facts.on).filter((rule) => rule.basis === 'PER_UNIT')
     if (perGarment.length > 0) {

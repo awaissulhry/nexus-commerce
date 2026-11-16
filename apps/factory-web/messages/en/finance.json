@@ -1162,6 +1162,25 @@
     "inDraft_other": "{count} pieces in a draft",
     "lines_one": "{count} line",
     "lines_other": "{count} lines",
+    "noDdt": {
+      "count_one": "{count} shipment",
+      "count_other": "{count} shipments",
+      "customer": "Customer",
+      "deadline": "Deadline",
+      "emptyDdts": {
+        "body": "Shipments that left without a DDT wait for their invoice below.",
+        "title": "No DDT waits for an invoice"
+      },
+      "explain": "These shipments left without a DDT: their immediate invoice (TD01) goes with the goods and is due within 12 days of the day they left.",
+      "go": "Make the invoice",
+      "invoice": "Invoice",
+      "leftOn": "Left on",
+      "pieces": "To invoice",
+      "shipment": "Shipment",
+      "tag": "No DDT",
+      "title": "Shipped without a DDT, not invoiced",
+      "value": "Value"
+    },
     "noDeposit": "No deposit",
     "openDraft": "Open the draft",
     "pieces_one": "{count} piece",

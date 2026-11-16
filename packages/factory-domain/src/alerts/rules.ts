@@ -322,6 +322,9 @@ function whenWords(kind: RuleKind, threshold: Record<string, number | boolean>, 
     // B-W2b-416 (FIN-050)
     case 'MARGIN_BELOW_FLOOR':
       return it ? "Quando il margine di un ordine, stimato ora o finale, scende sotto il suo margine minimo" : "When an order's margin, as estimated now or final, falls below its margin floor"
+    // B-W2b-GB02 (G146)
+    case 'STAMP_DUTY_DUE':
+      return it ? `${days(n('daysBefore'))} prima della scadenza dell'imposta di bollo di un trimestre non ancora pagata` : `${days(n('daysBefore'))} before a quarter's stamp duty is due and not paid yet`
   }
 }
 
@@ -391,6 +394,9 @@ export const ALERT_TEMPLATES = {
   'alerts.MARGIN_BELOW_FLOOR': { en: 'The margin of order {label}, as estimated now, is below its margin floor.', it: "Il margine dell'ordine {label}, stimato ora, è sotto il suo margine minimo." },
   'alerts.MARGIN_BELOW_FLOOR.FINAL': { en: 'The final margin of order {label} is below its margin floor.', it: "Il margine finale dell'ordine {label} è sotto il suo margine minimo." },
   'alerts.MARGIN_BELOW_FLOOR.QUOTED': { en: 'The margin of order {label} is below its margin floor: its quote was approved below it.', it: "Il margine dell'ordine {label} è sotto il suo margine minimo: il suo preventivo era stato approvato sotto." },
+  // B-W2b-GB02 (G146): {label} the quarter ("Q3 2026"), {dueOn} its F24 due day, {days} left (or late), {f24Code} its tax code.
+  'alerts.STAMP_DUTY_DUE': { en: 'The stamp duty of {label} is due by {dueOn} ({days} days left): pay it by F24 (tax code {f24Code}) and record the payment.', it: "L'imposta di bollo del {label} scade il {dueOn} (mancano {days} giorni): pagala con F24 (codice tributo {f24Code}) e registra il pagamento." },
+  'alerts.STAMP_DUTY_DUE.LATE': { en: 'The stamp duty of {label} was due by {dueOn}: {days} days late. Pay it by F24 (tax code {f24Code}) and record the payment.', it: "L'imposta di bollo del {label} scadeva il {dueOn}: {days} giorni di ritardo. Pagala con F24 (codice tributo {f24Code}) e registra il pagamento." },
 } as const satisfies Record<string, Words>
 export type AlertTemplateKey = keyof typeof ALERT_TEMPLATES
 
@@ -449,6 +455,11 @@ export function alertPhrase(kind: string, label: string, facts: unknown): AlertP
     // B-W2b-416 (FIN-050)
     case 'MARGIN_BELOW_FLOOR':
       return { key: text('basis') === 'FINAL' ? 'alerts.MARGIN_BELOW_FLOOR.FINAL' : f.quotedBelow === true ? 'alerts.MARGIN_BELOW_FLOOR.QUOTED' : 'alerts.MARGIN_BELOW_FLOOR', params: { label } }
+    // B-W2b-GB02 (G146)
+    case 'STAMP_DUTY_DUE':
+      return num('daysLeft') < 0
+        ? { key: 'alerts.STAMP_DUTY_DUE.LATE', params: { label, dueOn: text('dueOn'), days: Math.abs(num('daysLeft')), f24Code: text('f24Code') } }
+        : { key: 'alerts.STAMP_DUTY_DUE', params: { label, dueOn: text('dueOn'), days: num('daysLeft'), f24Code: text('f24Code') } }
     case 'WORKING_TIME_LIMIT':
       return { key: text('limit') === 'OVERTIME_YEARLY_CAP' || text('limit') === 'DAILY_REST' || text('limit') === 'WEEKLY_AVERAGE' ? `alerts.WORKING_TIME_LIMIT.${text('limit') as 'DAILY_REST'}` : 'alerts.WORKING_TIME_LIMIT', params: { label } }
     default:

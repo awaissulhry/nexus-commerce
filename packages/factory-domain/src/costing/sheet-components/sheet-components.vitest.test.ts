@@ -209,7 +209,8 @@ describe('the components of a cost sheet', () => {
         rates: [rate(80, 'CUTTING', '0.5')],
         subcontracts: new Map([[STEP.EMB, { supplierId: WORKSHOP, pricePerPiece: null }]]),
         piecesPerCarton: null,
-        overheadRules: [rule({ id: ID(92), companyId: CO, basis: 'PER_MACHINE_HOUR', value: '3', currency: 'EUR', workCentreKind: 'CUTTING' })],
+        // B-W2b-GB02 (G056): a machine-hour rule now reads the routing's machine hours; a rule in another currency is what is missing.
+        overheadRules: [rule({ id: ID(92), companyId: CO, basis: 'PER_MINUTE', value: '0.03', currency: 'USD', workCentreKind: 'CUTTING' })],
       }),
     )
     expect(missing.map((entry) => entry.code)).toEqual(['LABOUR_RATE', 'SUBCONTRACT_FEE', 'CARTON_PIECES', 'OVERHEAD_FIGURE'])
@@ -218,6 +219,58 @@ describe('the components of a cost sheet', () => {
     expect(splitBySize(lines, ['50', '52'], missing).every((size) => size.total === null && !size.complete)).toBe(true)
   })
 })
+
+// ---- B-W2b-GB02 (G056; B-W2b-418 gap 3, B-W2b-419 gap 3)
+describe('the routing as the components read it (G056)', () => {
+  const steps = (over: Record<string, Partial<ComponentFacts['steps'][number]>> = {}): ComponentFacts['steps'] => [
+    { id: STEP.CUT, seq: 10, operationId: OP.CUT, code: 'CUT', name: 'Cut panels', workCentreKind: 'CUTTING', standardMinutes: '10', ...over.CUT },
+    { id: STEP.SEW, seq: 20, operationId: OP.SEW, code: 'SEW', name: 'Sew body', workCentreKind: 'SEWING', standardMinutes: '50', ...over.SEW },
+    { id: STEP.EMB, seq: 30, operationId: OP.EMB, code: 'EMB', name: 'Embroider logo', workCentreKind: 'SEWING', standardMinutes: '5', ...over.EMB },
+  ]
+
+  it("costs a step at its own minutes in a size (the size's extra minutes) and its overhead per minute on them", () => {
+    const { lines, missing } = componentsOf(facts({ steps: steps({ SEW: { sizeTimes: [{ size: '52', extraMinutes: '6' }] } }), overheadRules: [rule({ id: ID(93), companyId: CO, basis: 'PER_MINUTE', value: '0.1', currency: 'EUR', workCentreKind: 'SEWING' })] }))
+    expect(missing).toEqual([])
+    // Sewing: 50 minutes in size 50, 56 in size 52, at 0.50 a minute; 0.10 a minute of overhead on them.
+    expect(brief(lines.filter((line) => line.workCentreKind === 'SEWING' && (line.category === 'LABOUR' || line.category === 'OVERHEAD')))).toEqual([
+      ['LABOUR', 'ROUTING', '50', '50', '0.5', '25', null],
+      ['LABOUR', 'ROUTING', '52', '56', '0.5', '28', null],
+      ['OVERHEAD', 'OVERHEAD_RULE', '50', '50', '0.1', '5', null],
+      ['OVERHEAD', 'OVERHEAD_RULE', '52', '56', '0.1', '5.6', null],
+    ])
+    // Cutting has no size of its own: one line for every size.
+    expect(brief(lines.filter((line) => line.workCentreKind === 'CUTTING'))).toEqual([['LABOUR', 'ROUTING', null, '10', '0.5', '5', null]])
+  })
+
+  it('counts a step only in the sizes and the colourway it is for (its workshop visit too)', () => {
+    const { lines } = componentsOf(facts({ steps: steps({ EMB: { appliesToSizes: ['52'] }, CUT: { appliesToColourwayIds: [ID(4)] } }) }))
+    // The embroidery is only for size 52: its fee and its trip there and back only there.
+    expect(brief(lines.filter((line) => line.category === 'SUBCONTRACT'))).toEqual([
+      ['SUBCONTRACT', 'ROUTING', '52', '1', '2.5', '2.5', null],
+      ['SUBCONTRACT', 'UPLIFT', '52', '1', '0.8', '0.8', null],
+      ['SUBCONTRACT', 'UPLIFT', '52', '1', '0.7', '0.7', null],
+    ])
+    // The cutting step is for another colourway: no cutting labour in this one.
+    expect(lines.some((line) => line.workCentreKind === 'CUTTING')).toBe(false)
+  })
+
+  it('absorbs a machine-hour rule on the minutes of the steps worked at a machine (never "give the machine hours")', () => {
+    const machineRule = rule({ id: ID(94), companyId: CO, basis: 'PER_MACHINE_HOUR', value: '12', currency: 'EUR', workCentreKind: 'SEWING' })
+    const { lines, missing } = componentsOf(facts({ steps: steps({ SEW: { machine: true, sizeTimes: [{ size: '52', extraMinutes: '10' }] } }), overheadRules: [machineRule] }))
+    expect(missing).toEqual([])
+    // 50 machine minutes = 0.8333 h × 12.00 = 9.9996 in size 50; 60 minutes = 1 h in size 52.
+    expect(brief(lines.filter((line) => line.category === 'OVERHEAD'))).toEqual([
+      ['OVERHEAD', 'OVERHEAD_RULE', '50', '0.8333', '12', '9.9996', null],
+      ['OVERHEAD', 'OVERHEAD_RULE', '52', '1', '12', '12', null],
+    ])
+    expect(lines.find((line) => line.category === 'OVERHEAD')!.label).toBe('Overhead per machine hour (sewing)')
+    // No step worked at a machine: nothing to absorb, and nothing missing either.
+    const none = componentsOf(facts({ overheadRules: [machineRule] }))
+    expect(none.missing).toEqual([])
+    expect(none.lines.filter((line) => line.category === 'OVERHEAD')).toEqual([])
+  })
+})
+// ---- end B-W2b-GB02
 
 describe('the inputs the components read', () => {
   it('choose the most specific basis and uplift in force, and work the usable share of a grade mix', () => {

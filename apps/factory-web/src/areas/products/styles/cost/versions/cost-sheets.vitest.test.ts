@@ -29,6 +29,11 @@ import { DEMO_CAN, DEMO_GRAINS, demoBySize, demoComponents, demoRecord, demoRows
 import { designScreen as versionsScreen } from './fixtures'
 import { approveHeld, compareDefaults, CS_NS, KNOWN_REFUSALS, removeHeld, sendHeld, takeBackHeld, typedAmount, typedMargin, typedPieces, versionInView, versionState, writeProblem } from './model'
 import { newVersionBody, newVersionDraft, newVersionProblems, reasonProblem } from './screen'
+// B-W2b-GB02 (G054): lines typed on a draft (a commission), the style's size mix.
+import { TYPED_CATEGORIES as DOMAIN_TYPED_CATEGORIES } from '@nexus/factory-domain/costing/sheet-versions/rules'
+import { modeOf, percentHeld, removeTypedHeld, TYPED_CATEGORIES, typedBody, typedDraft, typedHeld, typedHow, typedLinesOf, typedPreview, typedProblems } from '../typed/model'
+import { mixBody, mixDraft, mixHeld, mixProblems, mixShares, refreshHeld, seasonChoices, typedWeight } from '../sizemix/model'
+import { demoSizeWeights } from './demo/fixtures'
 
 const conflict = (code: string) => new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: `refusal/${code}`, message: 'x' }])
 
@@ -140,11 +145,79 @@ describe('target price and cost by size', () => {
   })
 })
 
+// ---- B-W2b-GB02 (G054; B-W2b-430 gaps 1 and 4) ---------------------------------------------------------------------------------------
+
+describe('lines typed on a draft: a commission of the target price, a figure the components do not know (G054)', () => {
+  const rows = demoRows({ v3: 'draft', withV4: true })
+  it('types the same categories as the API, in percent only for a commission, and sends what the API takes', () => {
+    expect([...TYPED_CATEGORIES].sort()).toEqual([...DOMAIN_TYPED_CATEGORIES].sort())
+    const percent = typedDraft({ label: ' Agente Esempio ', pct: '5,5' })
+    expect(typedProblems(percent)).toEqual({})
+    expect(typedBody(percent, 3)).toEqual({ version: 3, category: 'COMMISSION', label: 'Agente Esempio', pct: '5.5' })
+    expect(typedPreview(percent, '260.000000')).toBe('14.300000')
+    // Another category is always an amount (its percent mode is ignored).
+    const packaging = typedDraft({ category: 'PACKAGING', mode: 'percent', label: 'Scatola regalo', size: '58', quantity: '2', unitCost: '1,25' })
+    expect(modeOf(packaging)).toBe('amount')
+    expect(typedBody(packaging, 3)).toEqual({ version: 3, category: 'PACKAGING', label: 'Scatola regalo', size: '58', quantity: '2', unitCost: '1.25' })
+    expect(typedPreview(packaging, null)).toBe('2.500000')
+    expect(typedProblems(typedDraft({ label: '', pct: '120' }))).toEqual({ label: 'typed.problem.label', pct: 'typed.problem.pct' })
+    expect(typedProblems(typedDraft({ mode: 'amount', label: 'x', quantity: '0', unitCost: 'abc' }))).toEqual({ quantity: 'typed.problem.quantity', unitCost: 'typed.problem.unitCost' })
+  })
+  it('holds typing and removing with why: a draft, the right, the cost grain; a percent needs the target price', () => {
+    const draft = rows[2]!
+    expect(typedHeld(DEMO_CAN.engineer, DEMO_GRAINS.cost, draft, false)).toBeNull()
+    expect(typedHeld(DEMO_CAN.reader, DEMO_GRAINS.all, draft, false)?.key).toBe('verHeld.noManage')
+    expect(typedHeld(DEMO_CAN.owner, DEMO_GRAINS.none, draft, false)?.key).toBe('typed.held.noCostGrain')
+    expect(typedHeld(DEMO_CAN.owner, DEMO_GRAINS.all, rows[1]!, false)?.key).toBe('verHeld.locked')
+    expect(percentHeld(draft, DEMO_GRAINS.all)).toBeNull()
+    expect(percentHeld(rows[3]!, DEMO_GRAINS.all)?.key).toBe('typed.held.noTarget')
+    expect(percentHeld(draft, DEMO_GRAINS.cost)?.key).toBe('typed.held.noPriceGrain')
+    expect(removeTypedHeld(DEMO_CAN.owner, rows[1]!, false)?.key).toBe('verHeld.locked')
+  })
+  it('lists the typed lines of a version and says how each is made, figures only with the grain', () => {
+    const record = demoRecord(rows[2]!, { typed: true })
+    const typed = typedLinesOf(record)
+    expect(typed.map((line) => [line.label, line.size, line.pct])).toEqual([
+      ['Agente Esempio Nord', null, '5'],
+      ['Commissione di pagamento', '58', null],
+    ])
+    const money = (value: string | null | undefined) => (value ? `€${Number(value).toFixed(2)}` : null)
+    expect(typedHow(typed[0]!, money, String)).toEqual({ key: 'typed.how.percent', params: { pct: '5', amount: '€13.00' } })
+    expect(typedHow(typed[0]!, () => null, String).key).toBe('typed.how.percentNoGrain')
+    expect(typedHow(typed[1]!, money, String)).toEqual({ key: 'typed.how.amount', params: { quantity: '1', unit: '€1.50', amount: '€1.50' } })
+    expect(typedLinesOf(demoRecord(rows[2]!))).toEqual([])
+  })
+})
+
+describe("the style's size mix on screen (G054)", () => {
+  const view = demoSizeWeights()
+  it('starts the dialog from the kept weights, checks each weight, shows the shares and sends the mix', () => {
+    const every = mixDraft(view, '')
+    expect(every.weights).toEqual({ '46': '', '48': '1', '50': '2', '52': '3', '54': '2.5', '56': '1.5', '58': '' })
+    expect(mixProblems(every)).toEqual({ sizes: {}, empty: false })
+    expect(mixShares(every).map((entry) => `${entry.size}:${entry.sharePct}`)).toEqual(['48:10.0', '50:20.0', '52:30.0', '54:25.0', '56:15.0'])
+    expect(mixBody('st', { seasonId: '', weights: { ...every.weights, '58': '0,5' } })).toEqual({ styleId: 'st', seasonId: null, weights: { '48': '1', '50': '2', '52': '3', '54': '2.5', '56': '1.5', '58': '0.5' } })
+    expect(mixProblems({ seasonId: '', weights: { '50': 'tre', '52': '0' } }).sizes).toEqual({ '50': 'mix.problem.weight', '52': 'mix.problem.weight' })
+    expect(mixProblems({ seasonId: '', weights: { '50': '', '52': ' ' } }).empty).toBe(true)
+    expect(mixBody('st', { seasonId: 'ai27', weights: { '50': '' } })).toEqual({ styleId: 'st', seasonId: 'ai27', weights: {} })
+    expect([typedWeight('2,5'), typedWeight('0'), typedWeight('123456')]).toEqual(['2.5', null, null])
+  })
+  it('offers the seasons kept and the version in view, and holds an edit or a re-read with why', () => {
+    const rows = demoRows({ v3: 'draft' })
+    expect(seasonChoices(view, rows[2]!).map((choice) => choice.code)).toEqual(['AI27'])
+    expect(mixHeld(DEMO_CAN.reader, false)?.key).toBe('verHeld.noManage')
+    expect(mixHeld(DEMO_CAN.engineer, false)).toBeNull()
+    expect(refreshHeld(DEMO_CAN.engineer, rows[2]!, false)).toBeNull()
+    expect(refreshHeld(DEMO_CAN.engineer, rows[1]!, false)?.key).toBe('mix.held.notDraft')
+  })
+})
+// ---- end B-W2b-GB02
+
 // ---- every word in it and en; every design case draws with no key left -------------------------------------------------------------
 
 const SRC = fileURLToPath(new URL('../../../../..', import.meta.url))
-const ROOTS = ['csCommon', 'steps', 'stepSource', 'stepLine', 'stepHow', 'stepMissing', 'stepWarn', 'stepCat', 'ver', 'verState', 'verWords', 'verView', 'weightSource', 'verAct', 'verHeld', 'verProblem', 'verRefusal', 'verStepUp', 'verNew', 'verSend', 'verApprove', 'verBack', 'verRemove', 'verNotice', 'verCmp', 'goal', 'goalBasis', 'goalState', 'bysize', 'mass', 'massRefusal', 'massSeries', 'cpm', 'cpmRefusal', 'dept', 'ohr', 'ohrBasis', 'ohrPer']
-const FOLDERS = ['areas/products/styles/cost/versions', 'areas/products/styles/cost/components', 'areas/products/styles/cost/goalseek', 'areas/products/styles/cost/bysize', 'areas/finance/costing/mass-update', 'areas/finance/settings/costing/calculator']
+const ROOTS = ['csCommon', 'steps', 'stepSource', 'stepLine', 'stepHow', 'stepMissing', 'stepWarn', 'stepCat', 'ver', 'verState', 'verWords', 'verView', 'weightSource', 'verAct', 'verHeld', 'verProblem', 'verRefusal', 'verStepUp', 'verNew', 'verSend', 'verApprove', 'verBack', 'verRemove', 'verNotice', 'verCmp', 'goal', 'goalBasis', 'goalState', 'bysize', 'mass', 'massRefusal', 'massSeries', 'cpm', 'cpmRefusal', 'dept', 'ohr', 'ohrBasis', 'ohrPer', 'typed', 'mix', 'ohrEdit', 'ohrRefusal'] // B-W2b-GB02: + typed, mix, ohrEdit, ohrRefusal
+const FOLDERS = ['areas/products/styles/cost/versions', 'areas/products/styles/cost/components', 'areas/products/styles/cost/goalseek', 'areas/products/styles/cost/bysize', 'areas/finance/costing/mass-update', 'areas/finance/settings/costing/calculator', 'areas/products/styles/cost/typed', 'areas/products/styles/cost/sizemix'] // B-W2b-GB02: + typed, sizemix
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name)
@@ -186,6 +259,9 @@ describe('cost-sheets: every key the screens name exists in it and en', () => {
       ...OVERHEAD_BASES.map((basis) => `ohrBasis.${basis}`),
       ...['PER_MINUTE', 'PER_UNIT', 'PER_MACHINE_HOUR'].map((basis) => `ohrPer.${basis}`),
       ...['CAPACITY', 'STATIONS'].map((from) => `cpm.seatsFrom.${from}`),
+      // B-W2b-GB02 (G054)
+      ...['PER_MINUTE', 'PER_UNIT', 'PER_MACHINE_HOUR'].map((basis) => `ohrEdit.amount.${basis}`),
+      ...['OVERLAPS', 'START_TAKEN', 'ARCHIVED', 'NOTHING_CHANGES', 'DATABASE'].map((code) => `ohrRefusal.${code}`),
     ]
     expect(keys.size).toBeGreaterThan(300)
     expect([...keys, ...built].filter((key) => !has(key))).toEqual([])

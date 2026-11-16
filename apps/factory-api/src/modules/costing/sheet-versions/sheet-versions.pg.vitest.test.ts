@@ -256,6 +256,62 @@ describe('approval and lock (FIN-015)', () => {
   })
 })
 
+// ---- B-W2b-GB02 (G054; B-W2b-430 gap 1, B-W2b-418 gap 6): a commission typed on a draft (FIN-012)
+describe('lines typed on a draft: a commission of the target price, a payment fee (FIN-012)', () => {
+  it('types a commission in percent that follows the target price, an amount, removes a typed line; refusals in words', async () => {
+    const copy = (await ok('maker', 'POST', '/costing/cost-sheets', { styleId: jacket, from: 'COPY', basedOnId: seeded.sheetIds.draftA }, 201)).sheet
+    const lines = `/costing/cost-sheets/${copy.id}/typed-lines`
+    const cleared = copy.targetPrice === null ? copy : (await ok('maker', 'PATCH', `/costing/cost-sheets/${copy.id}`, { version: copy.version, targetPrice: null })).sheet
+    // No target price: a commission in percent has nothing to be a share of.
+    await refusal('maker', 'POST', lines, { version: cleared.version, category: 'COMMISSION', label: 'Agente Esempio', pct: '5' }, 'NEEDS_TARGET')
+    const priced = (await ok('maker', 'PATCH', `/costing/cost-sheets/${copy.id}`, { version: cleared.version, targetPrice: '500' })).sheet
+    const withAgent = (await ok('maker', 'POST', lines, { version: priced.version, category: 'COMMISSION', label: 'Agente Esempio', pct: '5' }, 201)).sheet
+    const agentOf = async () => ((await ok('maker', 'GET', `/costing/cost-sheets/${copy.id}`)).lines as Json[]).find((line) => line.category === 'COMMISSION' && line.pct !== null)!
+    // 5 % of 500.00 = 25.00 a garment, one line for every size, typed by a person.
+    expect(await agentOf()).toMatchObject({ source: 'TYPED', label: 'Agente Esempio', size: null, quantity: '1', unitCost: '25', cost: '25', pct: '5' })
+    // A new target price counts it again; clearing the target price while it stays is refused.
+    const repriced = (await ok('maker', 'PATCH', `/costing/cost-sheets/${copy.id}`, { version: withAgent.version, targetPrice: '600' })).sheet
+    expect(await agentOf()).toMatchObject({ unitCost: '30', cost: '30' })
+    await refusal('maker', 'PATCH', `/costing/cost-sheets/${copy.id}`, { version: repriced.version, targetPrice: null }, 'NEEDS_TARGET')
+    // An amount: a payment fee of 1.50 for two parts of size 54.
+    const withFee = (await ok('maker', 'POST', lines, { version: repriced.version, category: 'COMMISSION', label: 'Payment fee', size: '54', quantity: '2', unitCost: '1.5' }, 201)).sheet
+    const record = await ok('maker', 'GET', `/costing/cost-sheets/${copy.id}`)
+    const fee = (record.lines as Json[]).find((line) => line.label === 'Payment fee')!
+    expect(fee).toMatchObject({ category: 'COMMISSION', source: 'TYPED', size: '54', quantity: '2', unitCost: '1.5', cost: '3', pct: null })
+    // The base size's split now has a COMMISSION part (the agent's 30.00).
+    expect((record.split as Json[]).find((cell) => cell.size === '52')!.categories).toContainEqual({ category: 'COMMISSION', amount: '30' })
+    // Figures that mix or lack, a category a person does not type, a percent on another category: refused in words (400).
+    const both = await call('maker', 'POST', lines, { version: withFee.version, category: 'COMMISSION', label: 'Mixed', pct: '2', unitCost: '1' })
+    expect([both.statusCode, both.json().error.issues[0].path]).toEqual([400, 'body/pct'])
+    expect((await call('maker', 'POST', lines, { version: withFee.version, category: 'LEATHER', label: 'Hide', unitCost: '1' })).statusCode).toBe(400)
+    const pctPack = await call('maker', 'POST', lines, { version: withFee.version, category: 'PACKAGING', label: 'Box', pct: '2' })
+    expect([pctPack.statusCode, pctPack.json().error.issues[0].message]).toEqual([400, 'Only a commission is typed in percent (of the target price).'])
+    // A line the components wrote is not removed here; a typed one is.
+    const written = (record.lines as Json[]).find((line) => line.source !== 'TYPED')!
+    await refusal('maker', 'DELETE', `${lines}/${written.id}?version=${withFee.version}`, undefined, 'NOT_TYPED')
+    const removed = (await ok('maker', 'DELETE', `${lines}/${fee.id}?version=${withFee.version}`)).sheet
+    expect(((await ok('maker', 'GET', `/costing/cost-sheets/${copy.id}`)).lines as Json[]).some((line) => line.label === 'Payment fee')).toBe(false)
+    // A reader without the right to keep sheets, another company's keeper; an approved version is locked.
+    expect((await call('costOnly', 'POST', lines, { version: removed.version, category: 'COMMISSION', label: 'X', unitCost: '1' })).statusCode).toBe(403)
+    expect((await call('viewerB', 'POST', lines, { version: removed.version, category: 'COMMISSION', label: 'X', unitCost: '1' })).statusCode).toBe(404)
+    const approved = (await admin<{ id: string; version: number }>(`SELECT id, version FROM "CostSheet" WHERE key LIKE $1 AND state = 'APPROVED' LIMIT 1`, [`costsheet:${jacket}:${companyA}:%`]))[0]!
+    await refusal('maker', 'POST', `/costing/cost-sheets/${approved.id}/typed-lines`, { version: approved.version, category: 'COMMISSION', label: 'X', unitCost: '1' }, 'LOCKED')
+    // A request waiting for its yes is sent back when a line is typed.
+    const waiting = (await ok('maker', 'POST', `/costing/cost-sheets/${copy.id}/submit`, { version: removed.version })).sheet
+    const typedAfter = (await ok('maker', 'POST', lines, { version: waiting.version, category: 'OVERHEAD', label: 'Showroom share', unitCost: '2' }, 201)).sheet
+    expect(typedAfter.approval).toBeNull()
+    expect((await admin<{ status: string }>('SELECT status::text AS status FROM "ApprovalTask" WHERE id = $1', [waiting.approval.taskId]))[0]!.status).toBe('WITHDRAWN')
+    await ok('maker', 'DELETE', `/costing/cost-sheets/${copy.id}?version=${typedAfter.version}`)
+  })
+
+  it("a version's request for its yes opens the style's Cost tab (its parent)", async () => {
+    const task = (await admin<{ id: string }>(`SELECT t.id FROM "ApprovalTask" t JOIN "CostSheet" c ON c.id = t."recordId" WHERE t.kind = 'COST_SHEET' AND t."tenantId" = $1 ORDER BY t."requestedAt" DESC LIMIT 1`, [tenant]))[0]!
+    const answer = await ok('owner', 'GET', `/approvals/tasks/${task.id}`)
+    expect(answer.task.record.parent).toEqual({ type: 'StyleCost', id: jacket })
+  })
+})
+// ---- end B-W2b-GB02
+
 describe('size weights and the season (FIN-016, FIN-014)', () => {
   it("keeps the jacket's mix for every season; a repeat changes nothing; a size outside the range is refused", async () => {
     const before = await ok('maker', 'GET', `/costing/size-weights?styleId=${jacket}&seasonId=${fw27}`)

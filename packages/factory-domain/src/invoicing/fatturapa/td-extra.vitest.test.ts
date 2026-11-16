@@ -34,7 +34,7 @@ const debitNote: FatturaPaInvoiceInput = {
   causale: 'Nota di debito - integrazione della fattura n. 2026/0101 del 05/10/2026 (art. 26 c.1 DPR 633/1972)',
 }
 
-const selfInvoice = (documentType: 'TD17' | 'TD18' | 'TD19', buyer = FAKE_EU_BUSINESS): FatturaPaInvoiceInput => ({
+const selfInvoice = (documentType: 'TD16' | 'TD17' | 'TD18' | 'TD19', buyer: FatturaPaInvoiceInput['buyer'] = FAKE_EU_BUSINESS): FatturaPaInvoiceInput => ({
   documentType,
   number: 'AF-2026-0001',
   date: '2026-11-12',
@@ -88,6 +88,23 @@ describe('the self-invoices TD17, TD18, TD19 (FIN-095)', () => {
     expect(checkFatturaPaInput({ ...selfInvoice('TD17'), relatedInvoices: [] }).map((issue) => issue.code)).toContain('SELF_INVOICE_NEEDS_INVOICE')
     expect(checkFatturaPaInput({ ...selfInvoice('TD19'), ddts: [{ number: '1', date: '2026-11-01' }] }).map((issue) => issue.code)).toContain('DDT_NOT_ALLOWED')
   })
+
+  // ---- B-W2b-GB02 (G150): TD16, an Italian supplier's reverse-charge invoice integrated.
+  it('builds a TD16 from an Italian supplier under the reverse charge: the supplier as cedente (RF01), valid against the schema', async () => {
+    const doc = buildFatturaPa({ ...selfInvoice('TD16', FAKE_IT_BUSINESS), causale: 'Integrazione fattura reverse charge interno (art. 17 c.6 DPR 633/1972)' })
+    const header = doc.xml.slice(doc.xml.indexOf('<FatturaElettronicaHeader>'), doc.xml.indexOf('</FatturaElettronicaHeader>'))
+    const cedente = header.slice(header.indexOf('<CedentePrestatore>'), header.indexOf('</CedentePrestatore>'))
+    const cessionario = header.slice(header.indexOf('<CessionarioCommittente>'), header.indexOf('</CessionarioCommittente>'))
+    expect(cedente).toContain('<IdPaese>IT</IdPaese>')
+    expect(cedente).toContain('<RegimeFiscale>RF01</RegimeFiscale>')
+    expect(cessionario).toContain(`<IdCodice>${FAKE_SELLER.vatNumber}</IdCodice>`)
+    expect(doc.xml).toContain('<TipoDocumento>TD16</TipoDocumento>')
+    expect(doc.xml).toContain('<AliquotaIVA>22.00</AliquotaIVA>')
+    expect(await xsdErrors(doc.xml)).toEqual([])
+    expect(checkFatturaPaInput(selfInvoice('TD16', FAKE_EU_BUSINESS)).map((issue) => issue.code)).toContain('TD16_SUPPLIER')
+    expect(checkFatturaPaInput({ ...selfInvoice('TD16', FAKE_IT_BUSINESS), relatedInvoices: [] }).map((issue) => issue.code)).toContain('SELF_INVOICE_NEEDS_INVOICE')
+  })
+  // ---- end B-W2b-GB02
 
   it('leaves the other types as they were: a TD01 to a foreign buyer keeps XXXXXXX and the company as cedente', () => {
     const doc = buildFatturaPa({ ...selfInvoice('TD17'), documentType: 'TD01', relatedInvoices: [], lines: [{ description: 'Giacca', quantity: '1', unitPrice: '100.00', vat: taxable(22) }] })

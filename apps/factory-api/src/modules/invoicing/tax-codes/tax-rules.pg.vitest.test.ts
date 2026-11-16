@@ -9,6 +9,9 @@ import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { addTenant, addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+// B-W2b-GB02 (G146): the reminder before a quarter's due day.
+import { asSystem } from '../../../platform/outbox/system'
+import { stampDutyDueFindings } from '../stamp-duty/quarters'
 
 /**
  * Tax rules as data (B-W2b-392; FIN-100, FIN-101, FIN-107) on the local stack: a throwaway PostgreSQL 17 database from the
@@ -245,6 +248,33 @@ describe('stamp duty on VAT-free invoices charged to the customer, and the quart
     expect(paid.status).toBe(409)
     expect(refusal(paid.body as Json)).toEqual(['refusal/QUARTER_OPEN'])
   })
+
+  // ---- B-W2b-GB02 (G146; B-W2b-392's gap): the exception rules' STAMP_DUTY_DUE, read on chosen days (the quarter is today's).
+  it('reminds of an ended quarter not paid from N days before its due day, and after it; never while it runs or off', async () => {
+    const quarters = await as('GET', `/invoicing/stamp-duty/quarters?companyId=${c1()}`)
+    const quarter = quarters.quarters.find((entry: Json) => entry.quarterStart === quarterStartOf(TODAY))
+    const dueOn: string = quarter.dueOn
+    const at = (day: string) => new Date(`${day}T09:00:00.000Z`)
+    const shift = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00.000Z`) + days * 86_400_000).toISOString().slice(0, 10)
+    const find = (day: string, daysBefore = 10, companyId: string | null = null) =>
+      asSystem(h.database, tenant.id, `gb02-${newId()}`, (client) => stampDutyDueFindings(client as never, { companyId, siteId: null, threshold: { daysBefore } }, at(day)))
+    // While the quarter runs (today): nothing to pay yet.
+    expect(await find(TODAY)).toEqual([])
+    // Five days before its due day: one finding, its facts carry no amount.
+    const near = await find(shift(dueOn, -5))
+    expect(near).toEqual([{ recordType: 'StampDutyQuarter', recordId: quarter.id, label: quarter.label, scope: { companyId: c1(), siteId: null, partyId: null }, facts: { quarterStart: quarter.quarterStart, dueOn, daysLeft: 5, f24Code: quarter.f24Code, daysBefore: 10 } }])
+    // Further than the rule's days (and the quarter has ended by then: its due day is at least two months after its end).
+    expect(await find(shift(dueOn, -11))).toEqual([])
+    expect(await find(shift(dueOn, -11), 15)).toHaveLength(1)
+    // After the due day: late, still reminded.
+    expect((await find(shift(dueOn, 2)))[0]!.facts).toMatchObject({ daysLeft: -2 })
+    // Another company's rule does not see it; a switch turned off reminds of nothing (no payment can be recorded then).
+    expect(await find(shift(dueOn, -5), 10, c2())).toEqual([])
+    await switchOn({ stampDutyOn: false })
+    expect(await find(shift(dueOn, -5))).toEqual([])
+    await switchOn({ stampDutyOn: true })
+  })
+  // ---- end B-W2b-GB02
 
   it('an ended quarter is paid once (then frozen); the amounts need the price grain', async () => {
     const start = quarterStartOf(`${YEAR}-01-15`) === quarterStartOf(TODAY) ? null : `${YEAR}-01-01`

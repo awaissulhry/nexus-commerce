@@ -37,6 +37,8 @@ export const collectionsBody = input({
   version: z.number().int().min(1).optional(),
   ribaOn: z.boolean().optional(),
   paymentNoticeToCustomerOn: z.boolean().optional(),
+  /** B-W2b-GB02 (G088): a NONE deposit carried onto its order's invoice by the system when the invoice is issued. */
+  depositAutoCarryOn: z.boolean().optional(),
 })
 export type CollectionsBody = z.infer<typeof collectionsBody>
 
@@ -48,6 +50,7 @@ export const collectionsAnswer = output({
   version: z.number().int().nullable(),
   ribaOn: z.boolean(),
   paymentNoticeToCustomerOn: z.boolean(),
-  words: output({ riba: z.string(), notice: z.string(), wording: z.string() }),
+  depositAutoCarryOn: z.boolean(), // B-W2b-GB02 (G088)
+  words: output({ riba: z.string(), notice: z.string(), wording: z.string(), autoCarry: z.string() }),
   mayChange: z.boolean(),
 })

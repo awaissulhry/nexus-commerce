@@ -161,6 +161,9 @@ export const KNOWN_REFUSALS = [
   'NO_COMPANY',
   'INCOMPLETE',
   'NOT_DRAFT',
+  // B-W2b-GB02 (G054): a typed line (a commission of the target price).
+  'NEEDS_TARGET',
+  'NOT_TYPED',
   'DATABASE',
 ] as const
 

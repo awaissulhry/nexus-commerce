@@ -67,7 +67,8 @@ export async function portalOpenItems(request: FastifyRequest, now: Date) {
   const pays = mayPay(request, session)
   const runtime = processPayments()
   const read = await system.withClient(async (db) => {
-    const invoices = await openInvoices(db, { ...scope, asOf: today })
+    // B-W2b-GB02 (G150): a debit note (TD05) is no online payment (the payment intent's guard: TD01 and TD24).
+    const invoices = (await openInvoices(db, { ...scope, asOf: today })).filter((row) => row.docType !== 'TD05')
     const files = invoices.length === 0 ? [] : await db.invoice.findMany({ where: { id: { in: invoices.map((row) => row.id) } }, select: { id: true, status: true, pdfFileId: true, xmlFileId: true } })
     const requests = await db.depositRequest.findMany({ where: { ...scope, status: 'OPEN' }, select: { id: true, amount: true, currency: true, dueDate: true, orderId: true, quoteVersionId: true }, orderBy: [{ dueDate: 'asc' }, { id: 'asc' }] })
     const deposits = []
@@ -153,7 +154,7 @@ export async function openInvoiceCounts(request: FastifyRequest, now: Date): Pro
   const actor = actorOf(requireContext(request))
   if (!can(actor, PORTAL_PAYMENTS_VIEW, { companyId: session.company.id, partyId: session.partyId }) || !heldGrains(actor).has('price')) return null
   const today = businessDate(now)
-  const invoices = await systemCallerOf(request)(session.tenantId).withClient((db) => openInvoices(db, { companyId: session.company.id, partyId: session.partyId, asOf: today }))
+  const invoices = (await systemCallerOf(request)(session.tenantId).withClient((db) => openInvoices(db, { companyId: session.company.id, partyId: session.partyId, asOf: today }))).filter((row) => row.docType !== 'TD05') // B-W2b-GB02 (G150)
   return { toPay: invoices.length, overdue: invoices.filter((row) => (firstOpenDueDate(row.instalments) ?? row.issueDate) < today).length }
 }
 

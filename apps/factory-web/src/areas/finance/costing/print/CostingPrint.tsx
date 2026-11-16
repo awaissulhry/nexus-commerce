@@ -37,7 +37,8 @@ export function CostingPrint() {
       let tiles: CostTiles | null = null
       let pages = 0
       do {
-        const page = await getWorkOrderCosts(api, rowsQuery(address, companyId, cursor))
+        // B-W2b-GB02 (G053): "Closed in <month>" asks the API for the period's closes.
+        const page = await getWorkOrderCosts(api, rowsQuery(address, companyId, cursor, period))
         tiles ??= page.tiles
         rows.push(...(address.rows === 'closed' ? page.rows.filter((row) => closedIn(row, period)) : page.rows))
         cursor = page.nextCursor

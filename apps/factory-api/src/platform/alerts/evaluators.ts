@@ -23,6 +23,8 @@ import { exitProofFindings } from '../../modules/shipping/customs/alerts'
 // B-W2b-416 (FIN-050): an order whose margin is below its margin floor.
 import { floorFindingsWith } from '../../modules/costing/margins/floor'
 import { floorFiguresOf } from '../../modules/costing/margins/margins'
+// B-W2b-GB02 (G146): a stamp duty quarter not paid near (or past) its due day.
+import { stampDutyDueFindings } from '../../modules/invoicing/stamp-duty/quarters'
 // B-W2b-377: the approval engine's requests overdue (their record in words, read by their kind).
 import { kindOf } from '../approvals/kinds'
 import { kindLabelOf } from '../approvals/views'
@@ -302,6 +304,8 @@ export const FINDERS: Readonly<Partial<Record<RuleKind, Find>>> = Object.freeze(
   EXIT_PROOF_MISSING: exitProofFindings,
   // B-W2b-416: one per watched sales order below its margin floor, until it is above it again.
   MARGIN_BELOW_FLOOR: floorFindingsWith(floorFiguresOf),
+  // B-W2b-GB02 (G146): one per stamp duty quarter not paid N days before its due day (or after it), until it is paid.
+  STAMP_DUTY_DUE: stampDutyDueFindings,
 })
 
 export const DATED: Readonly<Partial<Record<RuleKind, Dated>>> = Object.freeze({

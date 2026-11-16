@@ -1,5 +1,5 @@
 import type { Grains } from '../../../model'
-import type { ApprovalTask, BySizeView, CompareView, ComponentsView, GoalSeekView, VersionRecord, VersionRow, VersionsView } from '../api'
+import type { ApprovalTask, BySizeView, CompareView, ComponentsView, GoalSeekView, SizeWeightsView, VersionRecord, VersionRow, VersionsView } from '../api'
 import type { CostSheetAbilities, Read } from '../model'
 import type { VersionsModel } from '../screen'
 
@@ -129,11 +129,20 @@ export function demoSplit(): ComponentsView['split'] {
   })
 }
 
-export function demoRecord(sheet: VersionRow, options: { leftOut?: boolean; note?: string | null } = {}): VersionRecord {
+/** B-W2b-GB02 (G054): two typed lines of a draft — an invented agent's 5 % of the target price, a payment fee of 1.50 for size 58. */
+export function demoTypedLines(targetPrice = '260.000000'): Line[] {
+  return [
+    line(160, 'COMMISSION', 'TYPED', 'Agente Esempio Nord', '1', null, (Number(targetPrice) * 0.05).toFixed(6), (Number(targetPrice) * 0.05).toFixed(6), { pct: '5' }),
+    line(170, 'COMMISSION', 'TYPED', 'Commissione di pagamento', '1', null, '1.500000', '1.500000', { size: '58' }),
+  ]
+}
+
+export function demoRecord(sheet: VersionRow, options: { leftOut?: boolean; note?: string | null; typed?: boolean } = {}): VersionRecord {
   return as<VersionRecord>({
     sheet: { ...sheet, note: options.note ?? 'Prezzi della pelle aggiornati a novembre.' },
     sizes: DEMO_SIZES,
-    lines: demoLines().map((entry, index) => ({ ...entry, id: uid('8810', index + 1) })),
+    // B-W2b-GB02 (G054): + the typed lines (a commission) when asked.
+    lines: [...demoLines(), ...(options.typed ? demoTypedLines(sheet.targetPrice ?? '260.000000') : [])].map((entry, index) => ({ ...entry, id: uid('8810', index + 1) })),
     split: demoSplit(),
     leftOut: options.leftOut ? [{ key: 'CARTON_PIECES', code: 'CARTON_PIECES', itemId: null, recordType: null, recordId: null, size: null, workCentreKind: null, message: 'x' }] : [],
     weights: {
@@ -279,4 +288,24 @@ export function versionsModel(overrides: Partial<VersionsModel> = {}, role: keyo
     stepUp: { open: false, busy: false, problem: null },
     ...overrides,
   }
+}
+
+// ---- B-W2b-GB02 (G054): the style's size mixes (every season's and AI27's own), made up.
+export function demoSizeWeights(options: { none?: boolean } = {}): SizeWeightsView {
+  const share = (weights: Record<string, string>) => {
+    const total = Object.values(weights).reduce((sum, weight) => sum + Number(weight), 0)
+    return Object.entries(weights).map(([size, weight]) => ({ size, weight, sharePct: ((Number(weight) * 100) / total).toFixed(2) }))
+  }
+  const every = { '48': '1.0000', '50': '2.0000', '52': '3.0000', '54': '2.5000', '56': '1.5000' }
+  const ai27 = { '46': '0.5000', '48': '1.0000', '50': '2.0000', '52': '3.0000', '54': '2.0000', '56': '1.0000', '58': '0.5000' }
+  return as<SizeWeightsView>({
+    style: { id: DEMO_STYLE_ID, code: 'DEMO-JKT-01', name: 'Giacca Esempio Touring', companyId: DEMO_COMPANY_ID, sizes: DEMO_SIZES },
+    sets: options.none
+      ? []
+      : [
+          { seasonId: null, season: null, weights: every, shares: share(every) },
+          { seasonId: uid('5500', 1), season: { code: 'AI27', status: 'OPEN' }, weights: ai27, shares: share(ai27) },
+        ],
+    inForce: options.none ? null : { seasonId: uid('5500', 1), source: 'SEASON', weights: ai27 },
+  })
 }

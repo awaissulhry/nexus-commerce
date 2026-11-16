@@ -142,17 +142,21 @@ export function recentMonths(today: string, count = 12): string[] {
   })
 }
 
-/** The list's API query for its rows view (the API's own filters; "closed" is narrowed to the period on the page). */
-export function rowsQuery(address: CostingAddress, companyId: string | null, cursor: string | null = null): WorkOrderCostsQuery {
-  const status: CostedStatus[] | null = address.rows === 'closed' ? ['COMPLETED', 'CLOSED'] : null
-  return { companyId, siteId: address.site, status, over: address.rows === 'over' ? true : null, q: address.q, cursor, limit: 50 }
+// ---- B-W2b-GB02 (G053; B-W2b-424's gap 3): "Closed in <month>" is the work orders CLOSED in the period, by the day of the
+// close that stands (the API's closedFrom / closedTo), no longer the ones completed in it.
+/** The list's API query for its rows view (the API's own filters; "closed" asks the period's closes). */
+export function rowsQuery(address: CostingAddress, companyId: string | null, cursor: string | null = null, period: { readonly from: string; readonly to: string } | null = null): WorkOrderCostsQuery {
+  const status: CostedStatus[] | null = address.rows === 'closed' ? ['CLOSED'] : null
+  const closed = address.rows === 'closed' && period ? { closedFrom: period.from, closedTo: period.to } : {}
+  return { companyId, siteId: address.site, status, over: address.rows === 'over' ? true : null, q: address.q, ...closed, cursor, limit: 50 }
 }
 
-/** "Closed this month": a work order completed (or closed) in the period. */
+/** "Closed in <month>": a work order whose close that stands was made in the period (Europe/Rome). */
 export function closedIn(row: Pick<WorkOrderCostRow, 'workOrder'>, period: { from: string; to: string }): boolean {
-  const day = row.workOrder.completedAt ? romeDay(row.workOrder.completedAt) : null
+  const day = row.workOrder.status === 'CLOSED' && row.workOrder.closedAt ? romeDay(row.workOrder.closedAt) : null
   return day !== null && day >= period.from && day <= period.to
 }
+// ---- end B-W2b-GB02
 
 export const romeDay = (instant: string): string => romeToday(new Date(instant))
 
@@ -180,8 +184,16 @@ export function varianceTone(row: Pick<WorkOrderCostRow, 'over' | 'variance'>): 
   return 'neutral'
 }
 
-/** The work order's state for cost: open (the actual grows as work is reported) or final. */
-export const statePhrase = (row: Pick<WorkOrderCostRow, 'final'>): Phrase => ({ key: row.final ? 'state.final' : 'state.open' })
+// ---- B-W2b-GB02 (G053; B-W2b-424's gap 2): the cost DetailModal and the Labour & cost tab say closed too.
+/** The work order's state for cost: open (the actual grows as work is reported), final (completed) or closed (its close stands). */
+export const statePhrase = (row: Pick<WorkOrderCostRow, 'final'> & { readonly workOrder: Pick<WorkOrderCostRow['workOrder'], 'status'> }): Phrase => ({
+  key: row.workOrder.status === 'CLOSED' ? 'state.closed' : row.final ? 'state.final' : 'state.open',
+})
+
+/** The state's tone: open info, final success, closed neutral (nothing changes on it any more but a reversal). */
+export const stateTone = (row: Pick<WorkOrderCostRow, 'final'> & { readonly workOrder: Pick<WorkOrderCostRow['workOrder'], 'status'> }): 'info' | 'success' | 'neutral' =>
+  row.workOrder.status === 'CLOSED' ? 'neutral' : row.final ? 'success' : 'info'
+// ---- end B-W2b-GB02
 
 /** The bridge from the basis to the actual (design "Bridge"): the basis, each reason with an amount, the actual. */
 export function bridgeSteps(detail: Pick<WorkOrderCost, 'bridge' | 'basis' | 'standardTotal' | 'estimateTotal' | 'actualTotal'>): Array<{ id: string; reason: BridgeReason | 'BASIS' | 'ACTUAL'; amount: number | null }> | null {

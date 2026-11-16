@@ -397,11 +397,13 @@
     "supplierInvoice": "Fattura {number}",
     "received": "ricevuta il {date}",
     "kind": {
+      "TD16": "Reverse charge interno",
       "TD17": "Servizi dall’estero",
       "TD18": "Beni intra-UE",
       "TD19": "Beni già in Italia"
     },
     "kindWhen": {
+      "TD16": "Fattura di un fornitore italiano in reverse charge (Natura N6): integri tu l’IVA.",
       "TD17": "Un servizio acquistato da un fornitore estero (UE o no).",
       "TD18": "Beni acquistati da un fornitore di un altro Paese UE.",
       "TD19": "Beni già in Italia acquistati da un fornitore estero."

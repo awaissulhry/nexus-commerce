@@ -1,0 +1,27 @@
+{
+  "amount": "To carry",
+  "cannot": "It cannot be carried onto this invoice now: open Payments to place it on another invoice of the order, or credit what is wrong first.",
+  "carried": "The deposit is carried onto invoice {invoice}.",
+  "confirmAmount": "{amount} placed on this invoice; the deposit request stays paid, at 0.",
+  "confirmExplain": "Each payment's part on the deposit request is taken back and placed on this invoice, with a note saying why. A carry made by mistake is taken back like any placement.",
+  "confirmGo": "Carry the deposit",
+  "confirmTitle": "Carry the deposit onto invoice {invoice}",
+  "deposit": "Deposit of order {order}",
+  "depositNoOrder": "Deposit",
+  "explain": "A deposit paid without a deposit invoice (an EU business with a VIES proof) stays on its request until it is carried onto the order's invoice: until then the invoice looks unpaid for that amount.",
+  "failed": "Couldn't read the deposits to carry ({why}).",
+  "go": "Carry onto this invoice…",
+  "held": {
+    "busy": "Working…",
+    "cannot": "It cannot be carried onto this invoice now.",
+    "noRecord": "Carrying a deposit needs the right to record payments.",
+    "reading": "Reading what the carry would do…"
+  },
+  "noPrice": "Amount hidden (no price rights)",
+  "openAfter": "Invoice open after",
+  "openBefore": "Invoice open now",
+  "payments": "Payments",
+  "previewing": "Reading what the carry would do…",
+  "reading": "Reading the deposits to carry…",
+  "title": "Deposit to carry"
+}

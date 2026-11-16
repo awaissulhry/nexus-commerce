@@ -18,7 +18,7 @@ import { assertMay, lockCustomer, mayOn, officeContextOf, peopleOf, receivablesC
  * command under the customer's advisory lock (the reminders' own), the stop FOR UPDATE at the version read:
  *
  *   GET  /receivables/stops                  receivables.view: the stops (in force by default), with the reminders they hold
- *   POST /receivables/stops                  reminders.manage: a stop on an issued TD01/TD24 (one in force per reason)
+ *   POST /receivables/stops                  reminders.manage: a stop on an issued TD01/TD24/TD05 (one in force per reason)
  *   PATCH /receivables/stops/:stopId         reminders.manage: its last day or note while in force
  *   POST /receivables/stops/:stopId/lift     reminders.manage: lifted early (why, when given); the reminders may go again
  */
@@ -98,7 +98,8 @@ export async function addStop(caller: CommandCaller, body: AddStopBody, idempote
   const invoice = isUuid(body.invoiceId) ? await caller.withClient((db) => db.invoice.findUnique({ where: { id: body.invoiceId }, select: { id: true, companyId: true, buyerPartyId: true, docType: true, status: true } })) : null
   const scope = invoice ? { companyId: invoice.companyId, partyId: invoice.buyerPartyId } : null
   assertMay(context, RECEIVABLES_VIEW, RECEIVABLES_REMINDERS_MANAGE, scope, 'Invoice')
-  if (invoice!.status === 'DRAFT' || (invoice!.docType !== 'TD01' && invoice!.docType !== 'TD24')) throw refusedStop('NOT_AN_INVOICE', 'body/invoiceId')
+  // B-W2b-GB02 (G150): a debit note (TD05) asks money too.
+  if (invoice!.status === 'DRAFT' || (invoice!.docType !== 'TD01' && invoice!.docType !== 'TD24' && invoice!.docType !== 'TD05')) throw refusedStop('NOT_AN_INVOICE', 'body/invoiceId')
   const onDay = today()
   const problems = stopProblems({ reason: body.reason, until: body.until ?? null, note: body.note ?? null }, onDay)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)

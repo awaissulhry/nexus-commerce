@@ -210,7 +210,8 @@ const lastPickup = output({
   byPerson: z.boolean(),
   listed: z.number().int(),
   recorded: z.number().int(),
-  waiting: z.array(output({ sdiIdentifier: z.string(), fileName: z.string(), receivedAt: instant(), problem: z.string() })),
+  // B-W2b-GB02 (G088): + the XML kept of each waiting delivery (null: SDI did not hand it over).
+  waiting: z.array(output({ sdiIdentifier: z.string(), fileName: z.string(), receivedAt: instant(), problem: z.string(), xmlFileId: id().nullable() })),
 })
 export const sdiStatusContract = defineContract({
   querystring: input({ companyId: id().optional() }),

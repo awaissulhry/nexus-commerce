@@ -117,7 +117,8 @@ async function termsOf(db: Reader, invoiceIds: readonly string[]): Promise<Map<s
 
 /** Every open MP12 instalment of the company's issued invoices due in the window, with the live batch that holds it. */
 export async function candidatesOf(db: Reader, companyId: string, window: { readonly dueFrom: BusinessDate; readonly dueTo: BusinessDate }, asOf: BusinessDate): Promise<Candidate[]> {
-  const open = await openInvoices(db, { companyId, asOf })
+  // B-W2b-GB02 (G150): a debit note (TD05) is open too, but Ri.Ba. collects TD01 and TD24 only (its guard).
+  const open = (await openInvoices(db, { companyId, asOf })).filter((invoice) => invoice.docType !== 'TD05')
   const terms = await termsOf(db, open.map((invoice) => invoice.id))
   const found: { invoice: OpenInvoiceRow; term: TermInstalment }[] = []
   for (const invoice of open) for (const term of ribaInstalmentsDue(termInstalmentsOf(terms.get(invoice.id), invoice.settled), window)) found.push({ invoice, term })
@@ -130,7 +131,7 @@ export async function candidatesOf(db: Reader, companyId: string, window: { read
 
 /** One instalment of one invoice as a candidate now, or why it is not one. */
 export async function candidateFor(db: Reader, companyId: string, pick: { readonly invoiceId: string; readonly instalment: number }, window: { readonly dueFrom: BusinessDate; readonly dueTo: BusinessDate }, asOf: BusinessDate, ownBatchId: string | null): Promise<Candidate | RibaRefusal> {
-  const [invoice] = await openInvoices(db, { companyId, invoiceIds: [pick.invoiceId], asOf })
+  const [invoice] = (await openInvoices(db, { companyId, invoiceIds: [pick.invoiceId], asOf })).filter((row) => row.docType !== 'TD05') // B-W2b-GB02 (G150)
   if (!invoice) return 'NOT_RIBA'
   const terms = await termsOf(db, [invoice.id])
   const term = termInstalmentsOf(terms.get(invoice.id), invoice.settled).find((entry) => entry.instalment === pick.instalment)

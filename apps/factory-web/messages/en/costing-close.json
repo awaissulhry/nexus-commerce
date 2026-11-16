@@ -268,6 +268,137 @@
     "keys": {
       "title": "Keys",
       "open": "Open the receipt or invoice"
+    },
+    "colActions": "Actions",
+    "reverse": {
+      "open": "Reverse…",
+      "label": "Reverse the variance of {material} on {document}",
+      "title": "Reverse the variance of {material} on {document}",
+      "paid": "Paid against standard",
+      "against": "{paid} against {standard} per unit",
+      "becomes": "The reversal books {amount}",
+      "what": "A reversal row dated {day} takes this variance back: nothing is edited or deleted, and the variance is reversed once.",
+      "reason": "Reason",
+      "reasonHint": "Why it is taken back (3 to {max} characters): kept on the reversal.",
+      "reasonShort": "Say the reason in at least {min} characters.",
+      "reasonLong": "The reason is longer than {max} characters.",
+      "go": "Reverse"
+    },
+    "post": {
+      "open": "Post a document…",
+      "title": "Post a document's purchase price variance",
+      "what": "The variances of a goods receipt or a supplier invoice are taken after the document is posted or approved. Post them by hand when that did not happen: lines already taken are not taken twice.",
+      "kind": "Document",
+      "INVOICE": "Supplier invoice",
+      "RECEIPT": "Goods receipt",
+      "invoiceNumber": "Supplier invoice number",
+      "receiptNumber": "Goods receipt number",
+      "numberHint": "The number exactly as it is on the document.",
+      "numberNeeded": "Type the document's number first.",
+      "go": "Post",
+      "done": "Done",
+      "noReceipt": "No goods receipt numbered {number} was found (or it is another company's).",
+      "noInvoice": "No supplier invoice numbered {number} was found (or it is another company's).",
+      "noLookup": "Finding the document by its number needs the right “{right}”: open the document and post from there, or ask an administrator.",
+      "posted_one": "{number}: {count} variance posted.",
+      "posted_other": "{number}: {count} variances posted.",
+      "nothing": "{number}: no variance to post.",
+      "skippedTitle_one": "{count} line took no variance:",
+      "skippedTitle_other": "{count} lines took no variance:",
+      "skippedLine": "Line {seq}: {why}"
+    },
+    "skip": {
+      "CUSTOMER_OWNED": "the customer's own goods: never valued, so never compared with a standard.",
+      "NOT_GOODS": "not a goods line (a service, a subcontract fee or a charge): no purchase price variance.",
+      "NO_ORDER_LINE": "not on a purchase order line: there is no material to compare.",
+      "NO_STANDARD": "the material has no frozen standard on that day: nothing to compare with.",
+      "NO_RATE": "the price is in another currency and no exchange rate of that day is kept.",
+      "NO_QUANTITY": "no quantity to compare.",
+      "TAKEN": "its variance is taken already."
+    },
+    "held": {
+      "noManage": "Needs the right “{right}”.",
+      "isReversal": "This row takes back another variance: it is not reversed in turn.",
+      "reversed": "This variance was taken back already: a variance is reversed once.",
+      "busy": "Working on it…"
+    },
+    "refusal": {
+      "WAITS_FOR_ACCOUNTANT": "Refused: the company's figures for the accountant are off, so no variance is posted yet.",
+      "OTHER_PLACE": "Refused: the company takes its purchase price variance at the other document (the receipt or the invoice), not at this one.",
+      "NOT_READY": "Refused: the document is not posted or approved yet (or it is a credit note), so it takes no variance.",
+      "LOCKED": "Refused: today is in a locked period, so nothing is posted today.",
+      "IS_REVERSAL": "Refused: this row takes back another variance; post the document again instead.",
+      "REVERSED_ALREADY": "Refused: this variance was taken back already.",
+      "other": "Refused: the variance's state does not allow it."
+    },
+    "problem": {
+      "changed": "Refused: the variance changed meanwhile. It was read again: check and try again."
+    },
+    "notice": {
+      "reversed": "The variance of {material} on {document} was taken back."
+    }
+  },
+  "scrapRework": {
+    "title": "Scrap and rework cost",
+    "hint": "Per reason: the garments scrapped at an operation or in a rework and their value, the material scrapped from stock for this work order, and the garments reworked at their standard minutes.",
+    "loading": "Reading the scrap and rework cost…",
+    "failed": "Couldn't load the scrap and rework cost",
+    "none": "Nothing was scrapped or reworked on this work order.",
+    "noReason": "No reason given",
+    "reworked_one": "{count} garment · {minutes} min",
+    "reworked_other": "{count} garments · {minutes} min",
+    "noRate": "No cost per minute in force",
+    "totalUnknown": "Not known: a rework has no cost per minute",
+    "total": "Total",
+    "never": "Per work order and reason: never per person.",
+    "col": {
+      "reason": "Reason",
+      "scrapped": "Garments scrapped",
+      "stock": "Material scrapped from stock",
+      "rework": "Reworked",
+      "total": "Cost"
+    }
+  },
+  "variancesList": {
+    "title": "Variances by work order",
+    "hint": "The variance lines of the closes made {from} – {to} that still stand.",
+    "total_one": "Total {amount} ({count} line)",
+    "total_other": "Total {amount} ({count} lines)",
+    "byCategory": "{category} {amount}",
+    "count_one": "{count} line",
+    "count_other": "{count} lines",
+    "slow": "Still loading…",
+    "failed": "Couldn't load the variances by work order",
+    "empty": {
+      "title": "No close in this period",
+      "body": "No work order closed in {month} has a variance line that still stands: the lines appear when a completed work order is closed while the company's figures for the accountant are on."
+    },
+    "more": "Show more",
+    "noCost": "Unit costs and amounts are shown only to roles with the cost grain.",
+    "waits": "A close is a status while the company's figures for the accountant are off: nothing is split into variance lines until they are on.",
+    "closedOn": "Closed on {day}",
+    "export_one": "Export {count} (CSV)",
+    "export_other": "Export {count} (CSV)",
+    "col": {
+      "workOrder": "Work order"
+    },
+    "csv": {
+      "file": "variances-by-work-order-{month}",
+      "workOrder": "Work order",
+      "category": "Category",
+      "material": "Material",
+      "closed": "Closed on",
+      "standard": "Standard quantity",
+      "actual": "Actual quantity",
+      "unit": "Unit",
+      "standardCost": "Standard per unit",
+      "actualCost": "Actual per unit",
+      "amount": "Variance",
+      "currency": "Currency"
+    },
+    "keys": {
+      "title": "Keys",
+      "open": "Open the work order's Labour & cost"
     }
   }
 }

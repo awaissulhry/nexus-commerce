@@ -501,7 +501,7 @@ export function validateFatturaPaInput(input: FatturaPaInvoiceInput): {
 
   // Document.
   const documentType = DOCUMENT_TYPES.includes(input.documentType) ? input.documentType : null
-  if (documentType === null) issues.add('documentType', 'DOCUMENT_TYPE_INVALID', 'must be TD01, TD02, TD04, TD24, TD05, TD17, TD18 or TD19')
+  if (documentType === null) issues.add('documentType', 'DOCUMENT_TYPE_INVALID', 'must be TD01, TD02, TD04, TD24, TD05, TD16, TD17, TD18 or TD19')
   const number = documentNumber(issues, 'number', input.number)
   const invoiceDate = date(issues, 'date', input.date)
   // B-W2b-396 (FIN-063): any ISO 4217 currency with at most two decimals (FatturaPA amounts carry two).

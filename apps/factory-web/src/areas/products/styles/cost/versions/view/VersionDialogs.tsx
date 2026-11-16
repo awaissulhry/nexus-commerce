@@ -8,6 +8,8 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { moneyText } from '../../../model'
 import { approveHeld, CS_NS, removeHeld, sendHeld, takeBackHeld, type Phrase } from '../model'
 import { newVersionDraft, newVersionProblems, reasonProblem, type NewVersionDraft, type VersionsActions, type VersionsModel } from '../screen'
+// B-W2b-GB02 (G054): type a line on a draft (a commission), remove a typed line.
+import { RemoveTypedDialog, TypedLineDialog } from '../../typed/view/TypedLines'
 
 /**
  * The dialogs of the Cost tab's versions (B-W2b-430): New version (from the components of the revision in view, or a copy of
@@ -25,6 +27,8 @@ export function VersionDialogs({ model, actions }: { model: VersionsModel; actio
       {dialog?.kind === 'approve' && <ApproveDialog model={model} actions={actions} />}
       {dialog?.kind === 'takeBack' && <TakeBackDialog model={model} actions={actions} />}
       {dialog?.kind === 'remove' && <RemoveDialog model={model} actions={actions} />}
+      {dialog?.kind === 'typed' && <TypedLineDialog model={model} actions={actions} />}
+      {dialog?.kind === 'removeTyped' && <RemoveTypedDialog lineId={dialog.lineId} model={model} actions={actions} />}
       <StepUpModal
         open={model.stepUp.open}
         title={t('verStepUp.title')}

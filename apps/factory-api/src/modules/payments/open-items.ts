@@ -48,7 +48,8 @@ export async function openItems(caller: CommandCaller, query: { companyId: strin
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
     })
     const invoices = await client.invoice.findMany({
-      where: { companyId: query.companyId, buyerPartyId: query.partyId, docType: { in: ['TD01', 'TD24'] }, status: { not: 'DRAFT' } },
+      // B-W2b-GB02 (G150): + TD05, a debit note the customer pays.
+      where: { companyId: query.companyId, buyerPartyId: query.partyId, docType: { in: ['TD01', 'TD24', 'TD05'] }, status: { not: 'DRAFT' } },
       select: { id: true, number: true, docType: true, issueDate: true, currency: true, grossTotal: true, paymentTerms: true, salesOrderId: true, salesOrder: { select: { number: true } } },
       orderBy: [{ issueDate: 'asc' }, { number: 'asc' }],
     })

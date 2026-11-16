@@ -14,7 +14,8 @@ import { STOP_REASONS } from '../receivables/stops/stops'
  *   riba_item.settled             an instalment of an issued batch was paid (its payment recorded) or came back unpaid
  *   reminder_stop.changed         a stop on an invoice's reminders was recorded, changed or lifted
  *   reminder_trust.changed        a customer's trusted reminder level changed (the reminders that go without a person)
- *   collections_settings.changed  a company's (or the tenant's) Ri.Ba. switch or payment received notice switch changed
+ *   collections_settings.changed  a company's (or the tenant's) Ri.Ba. switch, payment received notice switch or (B-W2b-GB02)
+ *                                 the automatic carry of a NONE deposit changed
  *   payment.receipt_sent          the payment received notice of a bank transfer was e-mailed to the customer (its switch on)
  */
 const live = { permission: 'receivables.view' } as const
@@ -52,7 +53,7 @@ export const events = [
     type: 'collections_settings.changed',
     context: 'receivables-collections',
     description: "A company's (or every company's) Ri.Ba. switch or payment received notice switch was turned on or off.",
-    payload: z.strictObject({ settingsId: z.uuid(), companyId: z.uuid().nullable(), ribaOn: z.boolean(), paymentNoticeToCustomerOn: z.boolean() }),
+    payload: z.strictObject({ settingsId: z.uuid(), companyId: z.uuid().nullable(), ribaOn: z.boolean(), paymentNoticeToCustomerOn: z.boolean(), /* B-W2b-GB02 (G088) */ depositAutoCarryOn: z.boolean().optional() }),
     live: { ...live, fields: ['settingsId', 'companyId', 'ribaOn', 'paymentNoticeToCustomerOn'] },
   }),
   defineEvent({

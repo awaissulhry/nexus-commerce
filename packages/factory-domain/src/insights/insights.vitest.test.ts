@@ -29,7 +29,7 @@ import {
 import { FLOW_LENSES, LENS_RULES, lensesFor, orderStageOf, stagesOf, invoiceStageOf } from './flow'
 import { complianceActs, deadlineSeverity, heldWorkOrderSeverity, hoursUnconfirmed, mailSeverity, openDuties, orderPromiseState, privacySeverity, registerSeverity } from './states'
 import { WAITING_RULES, waitingFor, type WaitingCandidate } from './waiting'
-import { CODE_WORDS, EN_TEMPLATES, invoiceToIssueWords, mailToSortWords, orderPromiseWords, phrase, render, styleComplianceWords, whyKey, workOrderHeldWords, type Phrase } from './words'
+import { CODE_WORDS, EN_TEMPLATES, invoiceToIssueShipmentWords, invoiceToIssueWords, mailToSortWords, orderPromiseWords, phrase, render, styleComplianceWords, whyKey, workOrderHeldWords, type Phrase } from './words'
 
 const TENANT = '01900000-0000-7000-8000-000000000001'
 const A = '01900000-0000-7000-8000-00000000000a'
@@ -279,6 +279,11 @@ describe('the states that put a record on Today', () => {
       blocks: { key: 'ORDER_PROMISE.waitsPieces', text: 'Shop waits for 1 piece.' },
     })
     expect(invoiceToIssueWords({ customer: 'Shop', month: '2026-10', ddts: ['1/2026', '2/2026'], docType: 'TD24', dueBy: '2026-11-15', daysLeft: -2 }).blocks).toMatchObject({ key: 'INVOICE_TO_ISSUE.dueLate', params: { count: 2, dueDate: '2026-11-15' } })
+    // B-W2b-GB02 (G148): a shipment that left without a DDT.
+    expect(invoiceToIssueShipmentWords({ customer: 'Shop', shipment: 'SH-0009', shippedDate: '2026-11-02', dueBy: '2026-11-14', daysLeft: 3 })).toMatchObject({
+      sentence: { key: 'INVOICE_TO_ISSUE.SHIPMENT', text: 'Shop: shipment SH-0009 left on 2026-11-02 without a DDT and is not invoiced yet.' },
+      blocks: { key: 'INVOICE_TO_ISSUE.dueLeft', params: { docType: 'TD01', count: 3, dueDate: '2026-11-14' } },
+    })
     expect(render('listMore', { shown: 'a', count: 3 })).toBe('a and 3 more')
     expect(() => render('NO_SUCH_KEY', {})).toThrow(/no template/)
   })

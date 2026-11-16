@@ -2,6 +2,9 @@ import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { PPV_AT as DOMAIN_AT } from '@nexus/factory-domain/costing/ppv/rules'
+// B-W2b-GB02 (G053): the writes' refusals and skips mirror factory-domain.
+import { PPV_REFUSALS as DOMAIN_REFUSALS, PPV_SKIPS as DOMAIN_SKIPS } from '@nexus/factory-domain/costing/ppv/rules'
+import { ApiError } from '../../../../lib/api/errors'
 import { createApiClient } from '../../../../lib/api/client'
 import type { DesignScreen } from '../../../../lib/design/design-screen'
 import { LOCALES } from '../../../../lib/i18n/locales'
@@ -11,9 +14,9 @@ import { CLOSE_NS } from '../../../production/work-orders/close/model'
 import { designScreen as closedScreen } from '../closed/fixtures'
 import { closedTouches, costStateOf } from '../closed/model'
 import { ROWS } from '../demo/fixtures'
-import { getPpv, PPV_AT } from './api'
+import { findDocuments, getPpv, postPpv, PPV_AT, PPV_REFUSALS, PPV_SKIPS, reversePpv } from './api'
 import { designScreen as ppvScreen, PPV_ROWS } from './fixtures'
-import { differenceTone, documentRef, ppvCsv, ppvStateOf, ppvTouches, type PpvCsvWords } from './model'
+import { differenceTone, documentByNumber, documentRef, postResultOf, ppvCsv, ppvFindProblem, ppvPostHeld, ppvReasonHeld, ppvReverseHeld, ppvStateOf, ppvTouches, ppvWriteProblem, type PpvCsvWords } from './model'
 
 /**
  * B-W2b-424 — Finance › Costing › Purchase price variance (SCR-462) and the Status with the close (SCR-463) on B-W2b-407's
@@ -67,6 +70,83 @@ describe('purchase price variance', () => {
   })
 })
 
+// ---- B-W2b-GB02 (G053; B-W2b-424's gap 1): Reverse… and Post a document… on screen.
+describe('reversing a variance and posting a document by hand', () => {
+  const MANAGE = { manage: true }
+
+  it('the refusals and skips mirror factory-domain', () => {
+    expect(PPV_REFUSALS).toEqual(DOMAIN_REFUSALS)
+    expect(PPV_SKIPS).toEqual(DOMAIN_SKIPS)
+  })
+
+  it('Reverse… is held with why: without costing.ledger.manage, on a reversal, on a variance reversed already, while a write runs', () => {
+    expect(ppvReverseHeld(PPV_ROWS[0]!, MANAGE)).toBeNull()
+    expect(ppvReverseHeld(PPV_ROWS[0]!, { manage: false })).toMatchObject({ key: 'ppv.held.noManage', params: { right: expect.stringContaining('costing.ledger.manage') } })
+    expect(ppvReverseHeld(PPV_ROWS[0]!, undefined)?.key).toBe('ppv.held.noManage')
+    expect(ppvReverseHeld(PPV_ROWS[3]!, MANAGE)).toEqual({ key: 'ppv.held.isReversal' })
+    expect(ppvReverseHeld(PPV_ROWS[4]!, MANAGE)).toEqual({ key: 'ppv.held.reversed' })
+    expect(ppvReverseHeld(PPV_ROWS[0]!, MANAGE, true)).toEqual({ key: 'ppv.held.busy' })
+    expect(ppvReasonHeld('  ab ')).toEqual({ key: 'ppv.reverse.reasonShort', params: { min: 3 } })
+    expect(ppvReasonHeld('x'.repeat(1001))).toEqual({ key: 'ppv.reverse.reasonLong', params: { max: 1000 } })
+    expect(ppvReasonHeld('Price agreed again')).toBeNull()
+    expect(ppvReasonHeld('Price agreed again', true)).toEqual({ key: 'ppv.held.busy' })
+  })
+
+  it('Post a document… is held without the right, before a number is typed and while a write runs; the number is matched exactly', () => {
+    expect(ppvPostHeld({ manage: false }, null)?.key).toBe('ppv.held.noManage')
+    expect(ppvPostHeld(MANAGE, null)).toBeNull()
+    expect(ppvPostHeld(MANAGE, '  ')).toEqual({ key: 'ppv.post.numberNeeded' })
+    expect(ppvPostHeld(MANAGE, 'FA-1', true)).toEqual({ key: 'ppv.held.busy' })
+    const found = [{ id: 'a', number: 'FA-DEMO-00461' }, { id: 'b', number: 'fa-demo-0046' }]
+    expect(documentByNumber(found, ' FA-DEMO-0046 ')).toEqual({ id: 'b', number: 'fa-demo-0046' })
+    expect(documentByNumber(found, 'FA-DEMO-004')).toBeNull()
+    expect(postResultOf('FA-DEMO-0046', { posted: PPV_ROWS.slice(0, 2), skipped: [{ lineId: 'l3', seq: 3, code: 'NO_STANDARD' }] })).toEqual({ number: 'FA-DEMO-0046', posted: 2, skipped: [{ seq: 3, code: 'NO_STANDARD' }] })
+  })
+
+  it('a refusal in words by its code, never the code; a lookup without its right says which', () => {
+    const refused = (code: string) => new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: `refusal/${code}`, message: 'x' }])
+    for (const code of PPV_REFUSALS) expect(ppvWriteProblem(refused(code))).toEqual({ key: `ppv.refusal.${code}` })
+    expect(ppvWriteProblem(refused('SOMETHING_NEW'))).toEqual({ key: 'ppv.refusal.other' })
+    expect(ppvWriteProblem(new ApiError('conflict', 409, 'conflict', 'x'))).toEqual({ key: 'ppv.problem.changed' })
+    expect(ppvWriteProblem(new ApiError('not_found', 404, 'not_found', 'x'))).toEqual({ key: 'problem.not_found' })
+    expect(ppvWriteProblem(new Error('x'))).toEqual({ key: 'problem.internal' })
+    expect(ppvFindProblem(new ApiError('forbidden', 403, 'forbidden', 'x'), 'INVOICE')).toMatchObject({ key: 'ppv.post.noLookup', params: { right: expect.stringContaining('payables.view') } })
+    expect(ppvFindProblem(new ApiError('forbidden', 403, 'forbidden', 'x'), 'RECEIPT').params?.right).toContain('inventory.stock.view')
+  })
+
+  it('the calls as the API takes them: a reason, one key per attempt; the document by its id; the search by number', async () => {
+    const calls: Array<{ url: string; method: string; body: unknown; key: string | null }> = []
+    const answers = [
+      { variance: PPV_ROWS[4]!, reversal: PPV_ROWS[3]!, replayed: false },
+      { posted: [PPV_ROWS[0]!], skipped: [{ lineId: 'l2', seq: 2, code: 'TAKEN', words: 'x' }], replayed: false },
+      { posted: [], skipped: [], replayed: false },
+      { receipts: [{ id: 'r1', number: 'GR-1', status: 'POSTED' }] },
+      { items: [{ id: 'i1', number: 'FA-1', status: 'APPROVED' }], nextCursor: null, count: 1 },
+    ]
+    const api = createApiClient({
+      baseUrl: 'http://api.test',
+      fetch: (async (url: string, init?: RequestInit) => {
+        calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : null, key: new Headers(init?.headers).get('idempotency-key') })
+        return new Response(JSON.stringify(answers.shift()), { status: 200, headers: { 'content-type': 'application/json' } })
+      }) as typeof fetch,
+      csrfToken: () => 'csrf',
+    })
+    await reversePpv(api, 'v1', 'Price agreed again', 'key-0001-attempt')
+    await postPpv(api, { at: 'INVOICE', id: 'i1' }, 'key-0002-attempt')
+    await postPpv(api, { at: 'RECEIPT', id: 'r1' }, 'key-0003-attempt')
+    expect(await findDocuments(api, 'RECEIPT', 'GR-1', 'c1')).toEqual([{ id: 'r1', number: 'GR-1' }])
+    expect(await findDocuments(api, 'INVOICE', 'FA-1', 'c1')).toEqual([{ id: 'i1', number: 'FA-1' }])
+    expect(calls.map((call) => [call.method, call.url, call.body, call.key])).toEqual([
+      ['POST', 'http://api.test/costing/ppv/v1/reverse', { reason: 'Price agreed again' }, 'key-0001-attempt'],
+      ['POST', 'http://api.test/costing/ppv/post', { supplierInvoiceId: 'i1' }, 'key-0002-attempt'],
+      ['POST', 'http://api.test/costing/ppv/post', { receiptId: 'r1' }, 'key-0003-attempt'],
+      ['GET', 'http://api.test/inventory/receipts?q=GR-1&limit=20', null, null],
+      ['GET', 'http://api.test/payables/invoices?q=FA-1&limit=20&companyId=c1', null, null],
+    ])
+  })
+})
+// ---- end B-W2b-GB02
+
 describe('the Status with the close', () => {
   it('open, final (completed), closed; a close or a status change reads the list again', () => {
     expect(costStateOf(ROWS[0]!)).toBe('open')
@@ -90,6 +170,7 @@ function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof L
 
 describe('every design case draws in both languages with no key or placeholder left on screen', () => {
   for (const screen of [ppvScreen, closedScreen] as unknown as DesignScreen<unknown>[]) {
+    // B-W2b-GB02 (G053): + the Reverse… and Post a document… cases of SCR-462.
     it(`${screen.screen}: ${screen.cases.length} cases × it, en`, () => {
       for (const item of screen.cases) {
         for (const locale of LOCALES) {
@@ -124,6 +205,14 @@ describe('every design case draws in both languages with no key or placeholder l
       for (const state of ['standing', 'reversal', 'reversed']) has(`ppv.state.${state}`, { day: '1' })
       for (const column of ['material', 'supplier', 'document', 'at', 'day', 'quantity', 'unit', 'standard', 'paid', 'difference', 'currency', 'state']) has(`ppv.csv.${column}`)
       has('costState.closed')
+      // B-W2b-GB02 (G053): every refusal, skip and held reason in both languages.
+      for (const code of PPV_REFUSALS) has(`ppv.refusal.${code}`)
+      has('ppv.refusal.other')
+      for (const code of PPV_SKIPS) has(`ppv.skip.${code}`)
+      for (const key of ['noManage', 'isReversal', 'reversed', 'busy']) has(`ppv.held.${key}`, { right: 'x' })
+      for (const key of ['noReceipt', 'noInvoice', 'noLookup', 'numberNeeded', 'nothing', 'skippedLine']) has(`ppv.post.${key}`, { number: 'x', right: 'x', seq: 1, why: 'x' })
+      has('ppv.post.posted', { count: 2, number: 'x' })
+      has('ppv.problem.changed')
     }
   })
 })

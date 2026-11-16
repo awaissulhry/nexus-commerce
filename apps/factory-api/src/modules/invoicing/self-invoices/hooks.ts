@@ -35,8 +35,8 @@ export async function depthIssueProblems(db: Reader, invoice: Pick<InvoiceRow, '
   }
   const waits = waitsWords(on, 'SELF_INVOICES')
   if (waits) problems.push({ code: 'SELF_INVOICE_OFF', path: SWITCH_PATH, message: waits })
-  if (invoice.docType === 'TD16') problems.push({ code: 'SELF_INVOICE_KIND', path: 'docType', message: 'An internal reverse charge (TD16) stays with the accountant: it is not issued here.' })
-  else if (!(await db.selfInvoice.findFirst({ where: { invoiceId: invoice.id, status: 'PENDING' }, select: { id: true } }))) {
+  // B-W2b-GB02 (G150): a TD16 (the internal reverse charge) is issued from its supplier invoice too, as TD17-TD19 are.
+  if (!(await db.selfInvoice.findFirst({ where: { invoiceId: invoice.id, status: 'PENDING' }, select: { id: true } }))) {
     problems.push({ code: 'SELF_INVOICE_MISSING', path: 'selfInvoice', message: 'A self-invoice is issued from its supplier invoice (Finance › Payables › Self-invoices), which names this draft.' })
   }
   return problems

@@ -4,6 +4,9 @@ import { splitBySize } from '../sheet-components/split'
 import { pickWeights, sizeSurcharges, sizeWeightKey, weightedCost, weightsProblems } from '../size-weights/rules'
 import { compareLines, compareSplits } from './compare'
 import { changePctOf, costSheetKey, databaseVersionRefusal, marginPctOf } from './rules'
+// B-W2b-GB02 (G054): lines typed on a draft (a commission).
+import { commissionCost, TYPED_CATEGORIES, typedLineProblems, VERSION_REFUSAL_WORDS } from './rules'
+import { typedLineBody } from './contracts'
 import { whatIf, whatIfNote, whatIfPctProblem, type WhatIfLine } from './what-if'
 
 /**
@@ -177,3 +180,28 @@ describe('target price and goal-seek (FIN-013)', () => {
     expect(goalSeek({ cost: '1', targetPrice: null, targetMarginPct: null, lines, currency: 'EUR' }).state).toBe('NO_TARGET')
   })
 })
+
+// ---- B-W2b-GB02 (G054; B-W2b-430 gap 1, B-W2b-418 gap 6; FIN-012)
+describe('a line typed on a draft: a commission of the target price, or an amount (G054)', () => {
+  it('a commission in percent is that share of the target price, to 6 places', () => {
+    expect(commissionCost('500', '5')).toBe('25')
+    expect(commissionCost('259.99', '3.5')).toBe('9.09965')
+    expect(commissionCost('100', '0.3333')).toBe('0.3333')
+  })
+  it('types a commission or a figure, never leather or labour; a percent only on a commission, never with a quantity', () => {
+    expect(TYPED_CATEGORIES).toContain('COMMISSION')
+    expect(TYPED_CATEGORIES).not.toContain('LEATHER')
+    expect(TYPED_CATEGORIES).not.toContain('LABOUR')
+    expect(typedLineProblems({ category: 'COMMISSION', pct: '5' })).toEqual([])
+    expect(typedLineProblems({ category: 'PACKAGING', quantity: '2', unitCost: '1.25' })).toEqual([])
+    expect(typedLineProblems({ category: 'COMMISSION', pct: '5', unitCost: '1' }).map((issue) => issue.path)).toEqual(['body/pct'])
+    expect(typedLineProblems({ category: 'COMMISSION' })).toEqual([{ path: 'body/unitCost', message: 'Type the commission as a percent of the target price or as an amount per garment.' }])
+    expect(typedLineProblems({ category: 'FREIGHT', pct: '3' })).toEqual([{ path: 'body/pct', message: 'Only a commission is typed in percent (of the target price).' }])
+    expect(typedLineProblems({ category: 'COMMISSION', pct: '5', quantity: '2' }).map((issue) => issue.path)).toEqual(['body/quantity'])
+    expect(typedLineProblems({ category: 'COMMISSION', pct: '150' }).map((issue) => issue.path)).toEqual(['body/pct'])
+    expect(typedLineBody.safeParse({ version: 1, category: 'LEATHER', label: 'x', unitCost: '1' }).success).toBe(false)
+    expect(typedLineBody.safeParse({ version: 1, category: 'COMMISSION', label: 'two\nlines', pct: '5' }).success).toBe(false)
+    expect(VERSION_REFUSAL_WORDS.NEEDS_TARGET).toMatch(/target price/)
+  })
+})
+// ---- end B-W2b-GB02

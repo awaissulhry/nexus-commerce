@@ -397,11 +397,13 @@
     "supplierInvoice": "Invoice {number}",
     "received": "received {date}",
     "kind": {
+      "TD16": "Reverse charge in Italy",
       "TD17": "Services from abroad",
       "TD18": "Goods from the EU",
       "TD19": "Goods already in Italy"
     },
     "kindWhen": {
+      "TD16": "An Italian supplier’s invoice under the reverse charge (Natura N6): you add the VAT.",
       "TD17": "A service bought from a supplier abroad (EU or not).",
       "TD18": "Goods bought from a supplier in another EU country.",
       "TD19": "Goods already in Italy bought from a supplier abroad."

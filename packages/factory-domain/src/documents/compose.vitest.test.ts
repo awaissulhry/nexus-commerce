@@ -295,6 +295,22 @@ describe('the invoice copy', () => {
   })
 })
 
+// ---- B-W2b-GB02 (G150): a self-invoice's copy prints the company as the buyer and the supplier as the seller.
+describe('the self-invoice copy (TD16-TD19)', () => {
+  it('prints the company under the buyer and the supplier under the seller, as its XML says; an invoice keeps its own', () => {
+    for (const kind of ['TD16', 'TD17', 'TD18', 'TD19'] as const) {
+      const self = composeDocument(invoice({ invoice: { kind, sdiId: null, dueDate: null } }))
+      expect(self.issuer.heading, kind).toBe('Cessionario / committente')
+      expect(self.blocks[0]!.heading, kind).toBe('Cedente / prestatore')
+    }
+    const english = composeDocument(invoice({ language: 'en', invoice: { kind: 'TD17', sdiId: null, dueDate: null } }))
+    expect([english.issuer.heading, english.blocks[0]!.heading]).toEqual(['Buyer', 'Seller'])
+    const sale = composeDocument(invoice())
+    expect([sale.issuer.heading, sale.blocks[0]!.heading]).toEqual(['Cedente / prestatore', 'Cessionario / committente'])
+  })
+})
+// ---- end B-W2b-GB02
+
 describe('quote and purchase order', () => {
   it('prints a quote with its validity and totals, and a PO with its supplier, delivery and the order-number notice', () => {
     const quote = composeDocument({ ...invoice(), type: 'QUOTE', number: 'Q-2026-0007', validUntil: '2026-11-30', invoice: null, references: [{ kind: 'CUSTOMER_ORDER', number: 'RFQ-1' }] })

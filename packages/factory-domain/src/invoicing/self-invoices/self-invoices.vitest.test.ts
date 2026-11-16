@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { debitNoteCausale, debitProblem, vatDecreaseVerdict } from '../debit-notes/debit-notes'
-import { deadlineStateOf, depthRuleWords, integrationLines, isSelfInvoiceDocType, selfInvoiceCausale, selfInvoiceDeadline, selfInvoiceProblems, suggestedKind, waitsWords } from './self-invoices'
+import { deadlineStateOf, depthRuleWords, integrationLines, isReverseChargeNature, isSelfInvoiceDocType, refusalWords, selfInvoiceCausale, selfInvoiceDeadline, selfInvoiceProblems, suggestedKind, waitsWords } from './self-invoices'
 
 // B-W2b-401 (FIN-095, FIN-071, FIN-073): self-invoices, the debit note and the VAT time limit. Every rule here is UNVERIFIED.
 
@@ -44,6 +44,25 @@ describe('self-invoices for foreign purchases (FIN-095)', () => {
     expect(isSelfInvoiceDocType('TD17')).toBe(true)
     expect(isSelfInvoiceDocType('TD05')).toBe(false)
   })
+
+  // ---- B-W2b-GB02 (G150): TD16, the integration of an Italian supplier's reverse-charge invoice.
+  it('TD16: an Italian supplier invoicing under the reverse charge (N6.x) is integrated with a TD16, never one that charged VAT', () => {
+    expect(isReverseChargeNature('N6.3')).toBe(true)
+    expect(isReverseChargeNature('N6')).toBe(true)
+    expect(isReverseChargeNature('N3.2')).toBe(false)
+    expect(isReverseChargeNature(null)).toBe(false)
+    expect(suggestedKind({ country: 'IT', lineKinds: ['SUBCONTRACT'], lineNatures: ['N6.3'] })).toMatchObject({ kind: 'TD16', why: expect.stringContaining('reverse charge') })
+    expect(suggestedKind({ country: 'IT', lineKinds: ['GOODS'], lineNatures: [null] })).toMatchObject({ kind: null, why: expect.stringContaining('charged VAT') })
+    const td16 = { status: 'RECEIVED', kind: 'INVOICE', country: 'IT', netTotal: 100_00, live: false, selfKind: 'TD16' as const, lineNatures: ['N6.3'] }
+    expect(selfInvoiceProblems(td16)).toEqual([])
+    expect(selfInvoiceProblems({ ...td16, lineNatures: [null] })).toEqual(['TD16_NO_REVERSE_CHARGE'])
+    expect(selfInvoiceProblems({ ...td16, country: 'DE' })).toEqual(['TD16_FOREIGN'])
+    expect(selfInvoiceProblems({ ...td16, selfKind: 'TD17' })).toEqual(['ITALIAN_SUPPLIER'])
+    expect(refusalWords('TD16_NO_REVERSE_CHARGE')).toMatch(/Natura N6/)
+    expect(selfInvoiceCausale('TD16', 'A-9', '2026-11-03', 'Terzista Fittizio S.r.l.')).toBe('Integrazione fattura reverse charge interno (art. 17 c.6 DPR 633/1972) - fattura n. A-9 del 03/11/2026 di Terzista Fittizio S.r.l.')
+    expect(isSelfInvoiceDocType('TD16')).toBe(true)
+  })
+  // ---- end B-W2b-GB02
 
   it('waits for the accountant while the switch is off: three rules, one switch', () => {
     expect(waitsWords(false, 'SELF_INVOICES')).toMatch(/^Waits for the accountant/)

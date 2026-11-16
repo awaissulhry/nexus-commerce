@@ -71,6 +71,10 @@
       "remittance": {
         "off": "L'avviso di pagamento ai fornitori è spento.",
         "on": "L'avviso di pagamento ai fornitori è acceso."
+      },
+      "autoCarry": {
+        "off": "Gli acconti aspettano che una persona li riporti sulla fattura.",
+        "on": "Gli acconti vengono riportati sulla fattura da soli."
       }
     },
     "notification": {
@@ -98,7 +102,11 @@
         "title": "Avviso di pagamento ai fornitori"
       },
       "turnOff": "Spegni",
-      "turnOn": "Accendi…"
+      "turnOn": "Accendi…",
+      "autoCarry": {
+        "body": "Un acconto pagato senza fattura di acconto (un’impresa UE con prova VIES) viene posto sulla fattura del suo ordine appena questa è emessa; spento, lo riporta una persona in Pagamenti.",
+        "title": "Riporta gli acconti sulla fattura da soli"
+      }
     },
     "title": "Approvazioni e notifiche",
     "yes": {
@@ -108,7 +116,9 @@
       "RULES_one": "{count} regola attiva",
       "RULES_other": "{count} regole attive",
       "SEPARATION": "Mai chi l'ha preparata; oltre l'importo, anche una seconda persona"
-    }
+    },
+    "autoTitle": "Cosa avviene da solo",
+    "autoIntro": "Ognuna resta spenta finché il titolare non la accende; accenderla chiede un nuovo codice."
   },
   "area": {
     "claim": "Apri reclamo d'area",
@@ -780,7 +790,8 @@
     "proposal": "Approvare una proposta di pagamento chiede un nuovo codice.",
     "remittance": "Accendere l'avviso di pagamento ai fornitori chiede un nuovo codice.",
     "riba": "Accendere le Ri.Ba. chiede un nuovo codice.",
-    "trust": "Impostare il livello di fiducia di un cliente chiede un nuovo codice."
+    "trust": "Impostare il livello di fiducia di un cliente chiede un nuovo codice.",
+    "autoCarry": "Accendere il riporto automatico degli acconti chiede un codice nuovo."
   },
   "stops": {
     "add": {

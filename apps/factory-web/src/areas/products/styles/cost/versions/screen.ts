@@ -1,6 +1,8 @@
 import type { Grains } from '../../model'
 import type { ApprovalTask, CompareView, SeasonOption, VersionRecord, VersionRow, VersionsView } from './api'
 import { typedAmount, typedMargin, typedPieces, type CostSheetAbilities, type Phrase, type Read } from './model'
+// B-W2b-GB02 (G054): a line typed on a draft (a commission).
+import type { TypedDraft } from '../typed/model'
 
 /**
  * The view model of the Cost tab's "Cost sheet versions and approval" (B-W2b-430, SCR-500 and SCR-501) and the pure rules of
@@ -15,6 +17,9 @@ export type VersionDialog =
   | { readonly kind: 'approve' }
   | { readonly kind: 'takeBack' }
   | { readonly kind: 'remove' }
+  // B-W2b-GB02 (G054): type a line (a commission), remove a typed line.
+  | { readonly kind: 'typed' }
+  | { readonly kind: 'removeTyped'; readonly lineId: string }
 
 export interface CompareModel {
   readonly a: string
@@ -53,7 +58,7 @@ export interface VersionsModel {
   readonly notice: { readonly tone: 'success' | 'info' | 'danger'; readonly words: Phrase } | null
   readonly stepUp: CostStepUp
   /** Design cases: what a dialog starts with. */
-  readonly draft?: Partial<NewVersionDraft> & { readonly note?: string; readonly reason?: string }
+  readonly draft?: Partial<NewVersionDraft> & { readonly note?: string; readonly reason?: string; readonly typed?: Partial<TypedDraft> }
 }
 
 export interface VersionsActions {
@@ -71,6 +76,10 @@ export interface VersionsActions {
   onDismissNotice?: () => void
   onStepUpSubmit?: (code: string) => void
   onStepUpCancel?: () => void
+  // B-W2b-GB02 (G054): a typed line added or removed; the draft reads the style's size mix again.
+  onAddTyped?: (draft: TypedDraft) => void
+  onRemoveTyped?: (lineId: string) => void
+  onRefreshMix?: () => void
 }
 
 /** What the New version dialog holds while the person types. */

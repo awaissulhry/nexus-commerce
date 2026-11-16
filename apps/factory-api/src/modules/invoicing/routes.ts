@@ -32,6 +32,9 @@ import { createDeferred, deferredDue } from './from-shipment/deferred'
 import { createFromMilestone } from './milestones'
 import { removeDeduction } from './from-shipment/deductions'
 import { createFromDdts } from './from-shipment/draft'
+// B-W2b-GB02 (G148): the immediate invoice of a shipment that leaves without a DDT.
+import { fromShipmentContract } from './from-shipment/contract'
+import { createFromShipment } from './from-shipment/without-ddt'
 import { shippedNotInvoiced } from './from-shipment/queue'
 import { getSettlement } from './from-shipment/settlement'
 import { correctSdiContract, getSdiContract, sendSdiContract } from './sdi/contract'
@@ -118,6 +121,8 @@ export default defineRoutes('invoicing', manifest, async (app) => {
   app.get('/invoicing/shipped-not-invoiced', { schema: shippedNotInvoicedContract }, async (request) => shippedNotInvoiced(request, request.query))
 
   app.post('/invoicing/invoices/from-ddts', { schema: fromDdtsContract }, async (request, reply) => reply.code(201).send(await createFromDdts(request, request.body, idempotencyKeyFrom(request))))
+  // B-W2b-GB02 (G148)
+  app.post('/invoicing/invoices/from-shipment', { schema: fromShipmentContract }, async (request, reply) => reply.code(201).send(await createFromShipment(request, request.body, idempotencyKeyFrom(request))))
 
   app.delete('/invoicing/invoices/:invoiceId/deductions/:lineId', { schema: removeDeductionContract }, async (request) => removeDeduction(request, request.params.invoiceId, request.params.lineId, request.query, idempotencyKeyFrom(request)))
 

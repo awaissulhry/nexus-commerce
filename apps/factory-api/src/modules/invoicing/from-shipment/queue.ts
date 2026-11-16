@@ -14,6 +14,8 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { officeContextOf } from '../store'
 import { freightBilledOf, invoicedOf, orderPrices, presetsOf, readDdts, shippedOf } from './store'
+// B-W2b-GB02 (G148): goods shipped without a DDT (their immediate invoice) are in the list too.
+import { queueWithoutDdt } from './without-ddt'
 
 /**
  * Shipped, not invoiced (B-W1-51; FIN-054, FIN-116; A2 SCR-080 "Shipped, not invoiced"): every live DDT of a SHIPPED or
@@ -98,30 +100,45 @@ export async function shippedNotInvoiced(caller: CommandCaller, query: QueueQuer
       }
     })
 
+    // ---- B-W2b-GB02 (G148): the shipments without a DDT, in the same scope, grouped with the customer's DDTs.
+    const shipmentWhere = { AND: [scopeWhere(actorOf(context), INVOICES_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.ShipmentWhereInput, query.companyId ? { companyId: query.companyId } : {}, query.partyId ? { partyId: query.partyId } : {}] }
+    const withoutDdt = await queueWithoutDdt(client, shipmentWhere, today)
+    const keyOf = (view: { partyId: string; companyId: string }) => `${view.partyId}|${view.companyId}`
+    const missing = [...new Set(withoutDdt.map((view) => view.partyId))].filter((id) => !parties.some((entry) => entry.id === id))
+    if (missing.length > 0) parties.push(...(await client.party.findMany({ where: { id: { in: missing } }, select: { id: true, code: true, legalName: true } })))
+    for (const [id, preset] of await presetsOf(client, missing)) presets.set(id, preset)
+    // ---- end B-W2b-GB02
     const groups = new Map<string, typeof ddtViews>()
     for (const view of ddtViews) {
       const key = `${view.partyId}|${view.companyId}`
       groups.set(key, [...(groups.get(key) ?? []), view])
     }
-    const customers = [...groups.values()].map((views) => {
-      const party = parties.find((entry) => entry.id === views[0]!.partyId)
-      const preset = presets.get(views[0]!.partyId) ?? { timing: 'PER_SHIPMENT' as const, preset: 'TD01' as const }
+    // B-W2b-GB02 (G148): a customer with shipments without a DDT only.
+    for (const view of withoutDdt) if (!groups.has(keyOf(view))) groups.set(keyOf(view), [])
+    const customers = [...groups.entries()].map(([groupKey, views]) => {
+      // B-W2b-GB02 (G148): the group's own key (it may hold no DDT).
+      const [groupParty, groupCompany] = groupKey.split('|') as [string, string]
+      const shipments = withoutDdt.filter((view) => keyOf(view) === groupKey)
+      const party = parties.find((entry) => entry.id === groupParty)
+      const preset = presets.get(groupParty) ?? { timing: 'PER_SHIPMENT' as const, preset: 'TD01' as const }
       const months = [...new Set(views.map((view) => monthOf(view.date)))].sort().map((month) => {
         const inMonth = views.filter((view) => monthOf(view.date) === month)
         const choice = chooseInvoiceType(inMonth.map((view) => ({ number: view.number, date: view.date })), today, undefined, 'body/docType', preset.preset)
         return { month, ddtIds: inMonth.map((view) => view.ddtId), suggested: choice.suggested, allowed: [...choice.allowed], deadline: choice.deadline ?? choice.deferred, words: choice.words }
       })
       return {
-        partyId: views[0]!.partyId,
-        companyId: views[0]!.companyId,
+        partyId: groupParty,
+        companyId: groupCompany,
         code: party?.code ?? '',
         legalName: party?.legalName ?? '',
         invoiceTiming: preset.timing,
         preset: preset.preset,
-        valueAmount: asMoney('price', views.reduce((sum, view) => sum + view.valueAmount, 0)),
-        oldestDate: views[0]!.date,
+        // B-W2b-GB02 (G148): with the shipments without a DDT.
+        valueAmount: asMoney('price', views.reduce((sum, view) => sum + view.valueAmount, 0) + shipments.reduce((sum, view) => sum + view.valueAmount, 0)),
+        oldestDate: [...views.map((view) => view.date), ...shipments.map((view) => view.shippedOn)].sort()[0]!,
         months,
         ddts: views,
+        shipments,
       }
     })
     customers.sort((a, b) => a.oldestDate.localeCompare(b.oldestDate) || a.legalName.localeCompare(b.legalName))

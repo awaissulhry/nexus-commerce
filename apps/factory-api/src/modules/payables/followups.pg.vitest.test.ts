@@ -217,6 +217,13 @@ describe('the SDI inbox (Z8:06)', () => {
     itemId = inbox.items[0].id
     const status = await ok('finance', 'GET', `/payables/sdi?companyId=${A.company}`)
     expect(status.companies[0]).toMatchObject({ inboxOpen: 1, lastPickup: { waiting: [expect.objectContaining({ problem: expect.stringContaining('not a supplier') })] } })
+    // ---- B-W2b-GB02 (G088): the file SDI handed over is kept with the item (once, not again at the second pickup), and opens.
+    expect(inbox.items[0].xmlFileId).toEqual(expect.any(String))
+    expect(status.companies[0].lastPickup.waiting[0].xmlFileId).toBe(inbox.items[0].xmlFileId)
+    expect(await admin(`SELECT "recordType", kind::text AS kind, "contentType" FROM "StoredFile" WHERE "recordType" = 'SdiInboxItem' AND "recordId" = $1`, [itemId])).toEqual([{ recordType: 'SdiInboxItem', kind: 'FISCAL_ARCHIVE', contentType: 'application/xml' }])
+    const download = await ok('finance', 'GET', `/files/${inbox.items[0].xmlFileId}/download`)
+    expect(download.download.url).toEqual(expect.any(String))
+    // ---- end B-W2b-GB02
   })
 
   it('dismissed with a reason, it is not tried again; reopened, it is', async () => {

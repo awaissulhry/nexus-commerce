@@ -334,7 +334,8 @@
       "SUPPLIER_STATUS_CHANGED": "A supplier’s status changed",
       "RETURN_ARRIVED_LATE": "Returns arrived late",
       "EXIT_PROOF_MISSING": "Exports without proof of exit",
-      "MARGIN_BELOW_FLOOR": "Orders below their margin floor"
+      "MARGIN_BELOW_FLOOR": "Orders below their margin floor",
+      "STAMP_DUTY_DUE": "Stamp duty due soon"
     }
   },
   "history": {

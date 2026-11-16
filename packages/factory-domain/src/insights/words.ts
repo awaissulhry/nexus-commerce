@@ -126,6 +126,8 @@ export const EN_TEMPLATES: Readonly<Record<string, string>> = Object.freeze({
   'INVOICE_TO_ISSUE.dueToday': 'The goods left: invoice them ({docType}) today, {dueDate}.',
   'INVOICE_TO_ISSUE.dueLate_one': 'The goods left: the invoice ({docType}) was due by {dueDate}, {count} day ago.',
   'INVOICE_TO_ISSUE.dueLate_other': 'The goods left: the invoice ({docType}) was due by {dueDate}, {count} days ago.',
+  // B-W2b-GB02 (G148): a shipment that left without a DDT (its immediate invoice travels with it).
+  'INVOICE_TO_ISSUE.SHIPMENT': '{customer}: shipment {shipment} left on {shippedDate} without a DDT and is not invoiced yet.',
 
   'REGISTER_DUTY.OPEN': 'PPE register {entryKind} {reference} ({style}): {duties}.',
   'REGISTER_DUTY.blocks': 'The entry cannot close until these duties are done (Reg. (EU) 2016/425 art. 8).',
@@ -335,6 +337,21 @@ export function invoiceToIssueWords(facts: { readonly customer: string; readonly
           : phrase('INVOICE_TO_ISSUE.dueLate', { ...due, count: -facts.daysLeft }),
   }
 }
+
+// ---- B-W2b-GB02 (G148): goods that left without a DDT, invoiced by an immediate invoice within 12 days.
+export function invoiceToIssueShipmentWords(facts: { readonly customer: string; readonly shipment: string; readonly shippedDate: BusinessDate; readonly dueBy: BusinessDate; readonly daysLeft: number }): RowWords {
+  const due = { docType: 'TD01', dueDate: facts.dueBy }
+  return {
+    sentence: phrase('INVOICE_TO_ISSUE.SHIPMENT', { customer: facts.customer, shipment: facts.shipment, shippedDate: facts.shippedDate }),
+    blocks:
+      facts.daysLeft > 0
+        ? phrase('INVOICE_TO_ISSUE.dueLeft', { ...due, count: facts.daysLeft })
+        : facts.daysLeft === 0
+          ? phrase('INVOICE_TO_ISSUE.dueToday', due)
+          : phrase('INVOICE_TO_ISSUE.dueLate', { ...due, count: -facts.daysLeft }),
+  }
+}
+// ---- end B-W2b-GB02
 
 export function registerDutyWords(facts: { readonly reference: string; readonly kind: string; readonly style: string; readonly duties: readonly string[] }): RowWords {
   return { sentence: phrase('REGISTER_DUTY.OPEN', { entryKind: [facts.kind], reference: facts.reference, style: facts.style, duties: facts.duties }), blocks: phrase('REGISTER_DUTY.blocks') }

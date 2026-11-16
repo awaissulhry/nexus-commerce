@@ -1,4 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
+// B-W2b-GB02 (G146): the reminder before a quarter's due day (the exception rules' STAMP_DUTY_DUE).
+import { thresholdOf } from '@nexus/factory-domain/alerts/kinds'
+import { daysBetween, type Finding, type RulePlace } from '@nexus/factory-domain/alerts/rules'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, businessDayStart, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -187,3 +190,44 @@ export async function payQuarter(caller: CommandCaller, quarterId: string, body:
     return result
   })
 }
+
+// ---- B-W2b-GB02 (G146; B-W2b-392's gap "no reminder before a quarter's due day") -------------------------------------------
+
+/**
+ * The exception rules' kind STAMP_DUTY_DUE (factory-domain alerts/kinds; platform/alerts/evaluators FINDERS): in the
+ * tenant's system scope, the stamp duty quarters of the rule's company (every company without one) whose stamp duty switch
+ * is on, that ended, carry stamp duty and are not paid, and whose due day (the quarter's view: paymentDueOf with the year's
+ * first half) is at most `daysBefore` days away or has passed. One alert per quarter; it clears when the payment is
+ * recorded (stamp_duty_quarter.changed rechecks it at once). `only`: the quarters of a recheck. The facts carry no amount.
+ */
+export async function stampDutyDueFindings(tx: Reader, rule: RulePlace & { readonly threshold: unknown }, now: Date, only?: readonly string[]): Promise<Finding[]> {
+  const { daysBefore } = thresholdOf('STAMP_DUTY_DUE', rule.threshold) as { daysBefore: number }
+  const today = businessDate(now)
+  const rows = await tx.stampDutyQuarter.findMany({
+    where: { ...(only ? { id: { in: [...only] } } : {}), ...(rule.companyId ? { companyId: rule.companyId } : {}), paidAt: null, quarterStart: { lte: dayValue(quarterStartOf(today)) } },
+    orderBy: [{ quarterStart: 'asc' }, { id: 'asc' }],
+    take: 500,
+    select: QUARTER_COLUMNS,
+  })
+  const switchesOn = new Map<string, boolean>()
+  const findings: Finding[] = []
+  for (const row of rows) {
+    if (!switchesOn.has(row.companyId)) switchesOn.set(row.companyId, (await readSwitches(tx, row.companyId)).stampDutyOn)
+    if (!switchesOn.get(row.companyId)) continue
+    const start = dayOf(row.quarterStart)
+    const view = await viewOf(tx, row.companyId, start, today)
+    if (view.state !== 'TO_PAY' && view.state !== 'LATE') continue
+    if (view.liveCount === 0) continue
+    const daysLeft = daysBetween(today, view.dueOn)
+    if (daysLeft > daysBefore) continue
+    findings.push({
+      recordType: 'StampDutyQuarter',
+      recordId: row.id,
+      label: view.label,
+      scope: { companyId: row.companyId, siteId: null, partyId: null },
+      facts: { quarterStart: start, dueOn: view.dueOn, daysLeft, f24Code: view.f24Code, daysBefore },
+    })
+  }
+  return findings
+}
+// ---- end B-W2b-GB02

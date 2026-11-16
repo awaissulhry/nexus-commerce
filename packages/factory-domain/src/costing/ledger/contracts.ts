@@ -117,6 +117,10 @@ export const workOrderCostRowView = output({
     pieces: z.number().int(),
     releasedAt: instant().nullable(),
     completedAt: instant().nullable(),
+    // ---- B-W2b-GB02 (G053): when its close that stands was made (WorkOrder.closedAt, cleared by an undo or a reopen); null
+    // while not CLOSED.
+    closedAt: instant().nullable(),
+    // ---- end B-W2b-GB02
   }),
   currency: z.string(),
   method: z.enum(COSTING_METHODS),
@@ -158,6 +162,11 @@ export const workOrderCostsQuery = input({
   /** B-W2b-22 (Z9:05): completed on these Europe/Rome days, both included ("Closed in <month>"); a work order not completed is left out. */
   completedFrom: businessDate().optional(),
   completedTo: businessDate().optional(),
+  // ---- B-W2b-GB02 (G053; B-W2b-424's gap 3): closed on these Europe/Rome days, both included ("Closed in <month>"): a CLOSED
+  // work order whose close stands; one not closed is left out.
+  closedFrom: businessDate().optional(),
+  closedTo: businessDate().optional(),
+  // ---- end B-W2b-GB02
   cursor: id().optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
 })

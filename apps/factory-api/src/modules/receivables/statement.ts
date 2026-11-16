@@ -77,7 +77,8 @@ export async function statementData(db: Reader, scope: CustomerScope, query: { f
   const address = await db.partyAddress.findFirst({ where: { partyId: scope.partyId, status: 'ACTIVE' }, orderBy: [{ isDefaultBillTo: 'desc' }, { createdAt: 'asc' }, { id: 'asc' }], select: { line1: true, line2: true, postalCode: true, city: true, province: true, country: true } })
   const identity = await db.partyTaxIdentity.findFirst({ where: { partyId: scope.partyId }, orderBy: [{ validFrom: 'desc' }, { createdAt: 'desc' }], select: { vatNumber: true, country: true } })
   const invoices = await db.invoice.findMany({
-    where: { companyId: scope.companyId, buyerPartyId: scope.partyId, status: { not: 'DRAFT' }, docType: { in: ['TD01', 'TD02', 'TD04', 'TD24'] }, issueDate: { lte: end } },
+    // B-W2b-GB02 (G150): + TD05, a debit note (the customer owes it).
+    where: { companyId: scope.companyId, buyerPartyId: scope.partyId, status: { not: 'DRAFT' }, docType: { in: ['TD01', 'TD02', 'TD04', 'TD24', 'TD05'] }, issueDate: { lte: end } },
     select: { id: true, number: true, docType: true, issueDate: true, currency: true, grossTotal: true, paymentTerms: true },
   })
   const payments = await db.payment.findMany({ where: { companyId: scope.companyId, partyId: scope.partyId, status: 'RECEIVED', receivedOn: { lte: end } }, select: { id: true, receivedOn: true, currency: true, amount: true, externalRef: true } })
@@ -96,7 +97,7 @@ export async function statementData(db: Reader, scope: CustomerScope, query: { f
           recordId: row.id,
           reference: row.number,
           docType: row.docType,
-          dueDate: row.docType === 'TD01' || row.docType === 'TD24' ? (instalmentsOf(row.paymentTerms, row.grossTotal, issued).instalments[0]?.dueDate ?? null) : null,
+          dueDate: row.docType === 'TD01' || row.docType === 'TD24' || row.docType === 'TD05' ? (instalmentsOf(row.paymentTerms, row.grossTotal, issued).instalments[0]?.dueDate ?? null) : null,
           amount: row.grossTotal,
         }
       }),

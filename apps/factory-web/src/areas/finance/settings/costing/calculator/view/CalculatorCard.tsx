@@ -10,12 +10,22 @@ import { useLocale, useT } from '../../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../../record-panels/i18n'
 import type { CalcView, OverheadRuleView, PrefillView } from '../api'
 import { applyProblems, calcDraftOf, calcProblems, costPerMinute, CPM_KINDS, CPM_NS, monthName, monthOptions, newHeld, overheadTwice, rowHeld, type CalcDraft, type CpmAbilities } from '../model'
+// B-W2b-GB02 (G054): the overhead rules kept on screen.
+import { ruleNewHeld, ruleRowHeld, type RuleDraft, type RuleEdit } from '../model'
+import { ArchiveRuleDialog, EditRuleDialog, NewRuleDialog } from './OverheadRuleDialogs'
 import '../../../../_shared/finance.css'
 import '../calculator.css'
 
 type Read<T> = { readonly status: 'loading' } | { readonly status: 'ready'; readonly value: T } | { readonly status: 'error'; readonly problem: string }
 
-export type CalcDialog = { readonly kind: 'new' } | { readonly kind: 'apply'; readonly calc: CalcView } | { readonly kind: 'remove'; readonly calc: CalcView }
+export type CalcDialog =
+  | { readonly kind: 'new' }
+  | { readonly kind: 'apply'; readonly calc: CalcView }
+  | { readonly kind: 'remove'; readonly calc: CalcView }
+  // B-W2b-GB02 (G054): a new overhead rule, an active one corrected or archived.
+  | { readonly kind: 'ruleNew' }
+  | { readonly kind: 'ruleEdit'; readonly rule: OverheadRuleView }
+  | { readonly kind: 'ruleArchive'; readonly rule: OverheadRuleView }
 
 export interface CalculatorModel {
   readonly can: CpmAbilities
@@ -31,6 +41,8 @@ export interface CalculatorModel {
   readonly notice: { readonly key: string; readonly params?: Record<string, string | number> } | null
   /** Design cases: what the New calculation dialog starts with. */
   readonly draft?: Partial<CalcDraft>
+  /** B-W2b-GB02 (G054) design cases: what the New rule dialog starts with. */
+  readonly ruleDraft?: Partial<RuleDraft>
 }
 
 export interface CalculatorActions {
@@ -41,6 +53,10 @@ export interface CalculatorActions {
   onRemove?: (calc: CalcView) => void
   onRetry?: () => void
   onDismissNotice?: () => void
+  // B-W2b-GB02 (G054): the overhead rules kept on screen.
+  onCreateRule?: (draft: RuleDraft) => void
+  onUpdateRule?: (rule: OverheadRuleView, edit: RuleEdit) => void
+  onArchiveRule?: (rule: OverheadRuleView, reason: string) => void
 }
 
 /**
@@ -143,21 +159,33 @@ function Calc({ model, actions }: { model: CalculatorModel; actions?: Calculator
           })}
         />
       )}
-      <OverheadRules model={model} money={money} />
+      <OverheadRules model={model} actions={actions} money={money} />
       {model.dialog?.kind === 'new' && <NewCalcDialog model={model} actions={actions} money={money} minutes={minutes} />}
+      {model.dialog?.kind === 'ruleNew' && <NewRuleDialog model={model} actions={actions} />}
+      {model.dialog?.kind === 'ruleEdit' && <EditRuleDialog key={model.dialog.rule.id} rule={model.dialog.rule} model={model} actions={actions} />}
+      {model.dialog?.kind === 'ruleArchive' && <ArchiveRuleDialog key={model.dialog.rule.id} rule={model.dialog.rule} model={model} actions={actions} />}
       {model.dialog?.kind === 'apply' && <ApplyDialog calc={model.dialog.calc} model={model} actions={actions} money={money} />}
       {model.dialog?.kind === 'remove' && <RemoveDialog calc={model.dialog.calc} model={model} actions={actions} />}
     </Card>
   )
 }
 
-function OverheadRules({ model, money }: { model: CalculatorModel; money: (value: string | null | undefined, currency: string | null) => string | null }) {
+function OverheadRules({ model, actions, money }: { model: CalculatorModel; actions?: CalculatorActions; money: (value: string | null | undefined, currency: string | null) => string | null }) {
   const t = useT(CPM_NS)
   const locale = useLocale()
   const rules = model.rules
+  // B-W2b-GB02 (G054): a new rule; each active rule corrected or archived (held with why).
+  const newRule = ruleNewHeld(model.can, model.busy)
   return (
     <div className="fw-fin-stack-tight">
-      <h3 className="fw-cpm-h3">{t('ohr.title')}</h3>
+      <div className="fw-fin-card-head">
+        <h3 className="fw-cpm-h3">{t('ohr.title')}</h3>
+        {model.can.manage && (
+          <Button size="sm" variant="secondary" heldReason={newRule ? t(newRule) : null} onClick={() => actions?.onDialog?.({ kind: 'ruleNew' })}>
+            {t('ohrEdit.new')}
+          </Button>
+        )}
+      </div>
       <p className="fw-fin-hint">{t('ohr.explain')}</p>
       {rules.status === 'loading' ? (
         <p className="fw-fin-hint" role="status">
@@ -173,8 +201,8 @@ function OverheadRules({ model, money }: { model: CalculatorModel; money: (value
         <SummaryTable
           label={t('ohr.title')}
           stackOnPhone
-          columns={[t('ohr.col.basis'), t('ohr.col.department'), ...(model.can.cost ? [t('ohr.col.value')] : []), t('ohr.col.period'), t('ohr.col.company')]}
-          align={[undefined, undefined, ...(model.can.cost ? (['right'] as const) : []), undefined, undefined]}
+          columns={[t('ohr.col.basis'), t('ohr.col.department'), ...(model.can.cost ? [t('ohr.col.value')] : []), t('ohr.col.period'), t('ohr.col.company'), ...(model.can.manage ? [t('cpm.col.actions')] : [])]}
+          align={[undefined, undefined, ...(model.can.cost ? (['right'] as const) : []), undefined, undefined, ...(model.can.manage ? (['right'] as const) : [])]}
           rows={rules.value.map((rule) => ({
             id: rule.id,
             cells: [
@@ -186,6 +214,18 @@ function OverheadRules({ model, money }: { model: CalculatorModel; money: (value
               ...(model.can.cost ? [rule.basis === 'PERCENT_OF_LABOUR' ? `${formatNumber(Number(rule.value ?? 0), locale, { maximumFractionDigits: 4 })} %` : t(`ohrPer.${rule.basis}`, { amount: money(rule.value, rule.currency) ?? '·' })] : []),
               rule.periodEnd ? t('cpm.periodValue', { from: formatDate(`${rule.periodStart}T12:00:00Z`, { locale }), to: formatDate(`${rule.periodEnd}T12:00:00Z`, { locale }) }) : t('ohr.from', { from: formatDate(`${rule.periodStart}T12:00:00Z`, { locale }) }),
               rule.companyId ? t('ohr.thisCompany') : t('ohr.everyCompany'),
+              ...(model.can.manage
+                ? [
+                    <span key="x" className="fw-fin-actions fw-cpm-actions">
+                      <Button size="sm" heldReason={ruleRowHeld(rule, model.can, model.busy) ? t(ruleRowHeld(rule, model.can, model.busy)!) : null} onClick={() => actions?.onDialog?.({ kind: 'ruleEdit', rule })}>
+                        {t('ohrEdit.correct')}
+                      </Button>
+                      <Button size="sm" variant="quiet" heldReason={ruleRowHeld(rule, model.can, model.busy) ? t(ruleRowHeld(rule, model.can, model.busy)!) : null} onClick={() => actions?.onDialog?.({ kind: 'ruleArchive', rule })}>
+                        {t('ohrEdit.archive')}
+                      </Button>
+                    </span>,
+                  ]
+                : []),
             ],
           }))}
         />

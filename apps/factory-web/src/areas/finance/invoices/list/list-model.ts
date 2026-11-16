@@ -57,6 +57,8 @@ export interface InvoicesListActions {
   onExport?: (ids: string[]) => void
   onDialog?: (dialog: InvoicesListModel['dialog']) => void
   onCreateFromDdts?: (input: { ddtIds: string[]; docType: 'TD01' | 'TD24' }) => void
+  /** B-W2b-GB02 (G148): the immediate invoice of a shipment that left without a DDT. */
+  onCreateFromShipment?: (shipmentId: string) => void
   /** B-W2a-80: the shipped list's saved filter, a month's deferred invoice, a return's credit notes. */
   onShippedView?: (view: ShippedView) => void
   onCreateDeferred?: (group: DeferredGroup) => void

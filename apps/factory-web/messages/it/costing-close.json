@@ -268,6 +268,137 @@
     "keys": {
       "title": "Tasti",
       "open": "Apri il ricevimento o la fattura"
+    },
+    "colActions": "Azioni",
+    "reverse": {
+      "open": "Storna…",
+      "label": "Storna lo scostamento di {material} su {document}",
+      "title": "Storna lo scostamento di {material} su {document}",
+      "paid": "Pagato rispetto allo standard",
+      "against": "{paid} rispetto a {standard} per unità",
+      "becomes": "Lo storno registra {amount}",
+      "what": "Una riga di storno datata {day} annulla questo scostamento: nulla viene modificato o cancellato, e uno scostamento si storna una volta sola.",
+      "reason": "Motivo",
+      "reasonHint": "Perché viene annullato (da 3 a {max} caratteri): resta sullo storno.",
+      "reasonShort": "Scrivi il motivo in almeno {min} caratteri.",
+      "reasonLong": "Il motivo supera i {max} caratteri.",
+      "go": "Storna"
+    },
+    "post": {
+      "open": "Registra un documento…",
+      "title": "Registra lo scostamento prezzo d'acquisto di un documento",
+      "what": "Gli scostamenti di un ricevimento merci o di una fattura fornitore si registrano dopo che il documento è registrato o approvato. Registrali a mano quando non è successo: le righe già registrate non si registrano due volte.",
+      "kind": "Documento",
+      "INVOICE": "Fattura fornitore",
+      "RECEIPT": "Ricevimento merci",
+      "invoiceNumber": "Numero della fattura fornitore",
+      "receiptNumber": "Numero del ricevimento merci",
+      "numberHint": "Il numero esattamente come è sul documento.",
+      "numberNeeded": "Scrivi prima il numero del documento.",
+      "go": "Registra",
+      "done": "Fatto",
+      "noReceipt": "Nessun ricevimento merci con il numero {number} (o è di un'altra società).",
+      "noInvoice": "Nessuna fattura fornitore con il numero {number} (o è di un'altra società).",
+      "noLookup": "Per trovare il documento dal numero serve il permesso «{right}»: apri il documento e registra da lì, o chiedi a un amministratore.",
+      "posted_one": "{number}: {count} scostamento registrato.",
+      "posted_other": "{number}: {count} scostamenti registrati.",
+      "nothing": "{number}: nessuno scostamento da registrare.",
+      "skippedTitle_one": "{count} riga senza scostamento:",
+      "skippedTitle_other": "{count} righe senza scostamento:",
+      "skippedLine": "Riga {seq}: {why}"
+    },
+    "skip": {
+      "CUSTOMER_OWNED": "merce del cliente: mai valorizzata, quindi mai confrontata con uno standard.",
+      "NOT_GOODS": "non è una riga di merce (un servizio, una lavorazione esterna o un addebito): nessuno scostamento prezzo d'acquisto.",
+      "NO_ORDER_LINE": "non è su una riga d'ordine d'acquisto: non c'è un materiale da confrontare.",
+      "NO_STANDARD": "il materiale non ha uno standard congelato in quel giorno: niente con cui confrontare.",
+      "NO_RATE": "il prezzo è in un'altra valuta e non c'è un cambio di quel giorno.",
+      "NO_QUANTITY": "nessuna quantità da confrontare.",
+      "TAKEN": "il suo scostamento è già registrato."
+    },
+    "held": {
+      "noManage": "Serve il permesso «{right}».",
+      "isReversal": "Questa riga storna un altro scostamento: non si storna a sua volta.",
+      "reversed": "Questo scostamento è già stato stornato: uno scostamento si storna una volta sola.",
+      "busy": "Operazione in corso…"
+    },
+    "refusal": {
+      "WAITS_FOR_ACCOUNTANT": "Rifiutato: i dati della società per il commercialista sono spenti, quindi non si registra ancora nessuno scostamento.",
+      "OTHER_PLACE": "Rifiutato: la società registra lo scostamento prezzo d'acquisto sull'altro documento (il ricevimento o la fattura), non su questo.",
+      "NOT_READY": "Rifiutato: il documento non è ancora registrato o approvato (o è una nota di credito), quindi non dà scostamento.",
+      "LOCKED": "Rifiutato: oggi è in un periodo bloccato, quindi oggi non si registra nulla.",
+      "IS_REVERSAL": "Rifiutato: questa riga storna un altro scostamento; registra di nuovo il documento.",
+      "REVERSED_ALREADY": "Rifiutato: questo scostamento è già stato stornato.",
+      "other": "Rifiutato: lo stato dello scostamento non lo permette."
+    },
+    "problem": {
+      "changed": "Rifiutato: lo scostamento è cambiato nel frattempo. È stato riletto: controlla e riprova."
+    },
+    "notice": {
+      "reversed": "Lo scostamento di {material} su {document} è stato stornato."
+    }
+  },
+  "scrapRework": {
+    "title": "Costo di scarti e rilavorazioni",
+    "hint": "Per motivo: i capi scartati a un'operazione o in una rilavorazione e il loro valore, il materiale scartato dal magazzino per questo ordine di lavoro e i capi rilavorati ai loro minuti standard.",
+    "loading": "Lettura del costo di scarti e rilavorazioni…",
+    "failed": "Impossibile caricare il costo di scarti e rilavorazioni",
+    "none": "Su questo ordine di lavoro non è stato scartato né rilavorato nulla.",
+    "noReason": "Nessun motivo indicato",
+    "reworked_one": "{count} capo · {minutes} min",
+    "reworked_other": "{count} capi · {minutes} min",
+    "noRate": "Nessun costo al minuto in vigore",
+    "totalUnknown": "Non noto: una rilavorazione non ha un costo al minuto",
+    "total": "Totale",
+    "never": "Per ordine di lavoro e motivo: mai per persona.",
+    "col": {
+      "reason": "Motivo",
+      "scrapped": "Capi scartati",
+      "stock": "Materiale scartato dal magazzino",
+      "rework": "Rilavorati",
+      "total": "Costo"
+    }
+  },
+  "variancesList": {
+    "title": "Scostamenti per ordine di lavoro",
+    "hint": "Le righe di scostamento delle chiusure fatte dal {from} al {to} ancora valide.",
+    "total_one": "Totale {amount} ({count} riga)",
+    "total_other": "Totale {amount} ({count} righe)",
+    "byCategory": "{category} {amount}",
+    "count_one": "{count} riga",
+    "count_other": "{count} righe",
+    "slow": "Ancora in caricamento…",
+    "failed": "Impossibile caricare gli scostamenti per ordine di lavoro",
+    "empty": {
+      "title": "Nessuna chiusura in questo periodo",
+      "body": "Nessun ordine di lavoro chiuso in {month} ha una riga di scostamento ancora valida: le righe compaiono quando un ordine di lavoro completato viene chiuso con i dati della società per il commercialista accesi."
+    },
+    "more": "Mostra altri",
+    "noCost": "Costi unitari e importi sono visibili solo ai ruoli con la visibilità dei costi.",
+    "waits": "Con i dati della società per il commercialista spenti una chiusura è solo uno stato: nulla viene diviso in righe di scostamento finché non sono accesi.",
+    "closedOn": "Chiuso il {day}",
+    "export_one": "Esporta {count} (CSV)",
+    "export_other": "Esporta {count} (CSV)",
+    "col": {
+      "workOrder": "Ordine di lavoro"
+    },
+    "csv": {
+      "file": "scostamenti-per-ordine-di-lavoro-{month}",
+      "workOrder": "Ordine di lavoro",
+      "category": "Categoria",
+      "material": "Materiale",
+      "closed": "Chiuso il",
+      "standard": "Quantità standard",
+      "actual": "Quantità effettiva",
+      "unit": "Unità",
+      "standardCost": "Standard per unità",
+      "actualCost": "Effettivo per unità",
+      "amount": "Scostamento",
+      "currency": "Valuta"
+    },
+    "keys": {
+      "title": "Tasti",
+      "open": "Apri Manodopera e costi dell'ordine di lavoro"
     }
   }
 }

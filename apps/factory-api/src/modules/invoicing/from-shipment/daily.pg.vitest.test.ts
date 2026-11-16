@@ -23,6 +23,8 @@ import { addUser, Browser, enrolTotp, startHarness, stepUp, type Harness } from 
 import { systemContext } from '../../../platform/outbox/system'
 import { fileTravelDocuments, TRAVEL_DOCUMENT_PERMISSIONS } from '../../shipping/documents/testing/compliance'
 import { ddtDeadlines } from './deadlines'
+// B-W2b-GB02 (G148): an order's settlement after a change outside the money module.
+import { settleAfterChangesHandler } from './settle-handler'
 import { readDdts } from './store'
 
 /**
@@ -334,6 +336,25 @@ describe('partial invoicing per shipment (FIN-058) with charge lines (FIN-060)',
 })
 
 describe('one invoice for many shipments (FIN-059): the month of the customer in one TD24', () => {
+  // ---- B-W2b-GB02 (G147; B-W2a-54's gap): a GROSS invoice's freight is the shipment's too, with the line's VAT.
+  it("a GROSS invoice's freight line is checked against the shipment's freight with its VAT", async () => {
+    const typed = async (unitPrice: string) =>
+      (await as('POST', '/invoicing/invoices', { companyId: A.companyA, buyerPartyId: A.brand, docType: 'TD01', priceBasis: 'GROSS', lines: [{ kind: 'CHARGE', chargeKind: 'FREIGHT', description: 'Trasporto', quantity: '1', unitPrice, ddtId: S.ddtB.id }] }, 201)).invoice
+    // DDT B's freight is 9.00 EUR without VAT: a line of 9.00 EUR with VAT bills less than it.
+    const short = await typed('9')
+    expect(short).toMatchObject({ priceBasis: 'GROSS' })
+    const refusedChecks = await as('GET', `/invoicing/invoices/${short.id}/checks`)
+    expect(refusedChecks.problems).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'CHARGE_FREIGHT_CHANGED', path: 'lines/0/unitPrice', message: expect.stringContaining('is now 9.00 EUR without VAT (10.98 EUR with 22% VAT); line 1 bills 9.00 EUR with VAT') })]),
+    )
+    await as('DELETE', `/invoicing/invoices/${short.id}`, {})
+    // 10.98 EUR with 22 % VAT is the shipment's freight: no freight problem.
+    const right = await typed('10.98')
+    expect((await as('GET', `/invoicing/invoices/${right.id}/checks`)).problems.filter((problem: Json) => String(problem.code).startsWith('CHARGE_FREIGHT'))).toEqual([])
+    await as('DELETE', `/invoicing/invoices/${right.id}`, {})
+  })
+  // ---- end B-W2b-GB02
+
   it('the deferred draft takes every DDT of the month still to invoice: the jacket left, BLK 52, the freight not billed yet', async () => {
     const answer = await as('POST', '/invoicing/invoices/deferred', { companyId: A.companyA, partyId: A.brand, month: MONTH() }, 201)
     expect(answer.choice).toMatchObject({ docType: 'TD24' })
@@ -373,6 +394,81 @@ describe('one invoice for many shipments (FIN-059): the month of the customer in
     await as('DELETE', `/invoicing/invoices/${typed.id}`, {})
   })
 })
+
+// ---- B-W2b-GB02 (G148; B-W1-51's gaps): goods that left WITHOUT a DDT are in the list and get their immediate invoice;
+// a change made outside the money module announces the order's settlement.
+describe('goods shipped without a DDT, and the settlement after a shipment or an order change', () => {
+  const force = async (sql: string, values: unknown[] = []) => {
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(sql, values)
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+  }
+  const noDdt = newId()
+  const noDdtLine = newId()
+
+  it('a shipment that left without a DDT is in shipped-not-invoiced with its 12 days, and gets its TD01 draft once', async () => {
+    // A copy of SO-0002's BLK 52 shipment that left yesterday without a DDT (made-up; written past the shipping guards).
+    const yesterday = addDays(TODAY(), -1)
+    await force(
+      `INSERT INTO "Shipment" (id, "tenantId", "companyId", "siteId", "partyId", "salesOrderId", number, status, "shipTo", "ddtRequired", "packedAt", "shippedAt")
+       SELECT $1, "tenantId", "companyId", "siteId", "partyId", "salesOrderId", 'SH-GB02', 'SHIPPED', "shipTo", false, $2::timestamptz, $2::timestamptz FROM "Shipment" WHERE id = $3`,
+      [noDdt, `${yesterday}T10:00:00.000Z`, S.shipmentB],
+    )
+    await force(
+      `INSERT INTO "ShipmentLine" (id, "tenantId", "siteId", "partyId", "shipmentId", "workOrderId", "workOrderSizeId", "salesOrderLineId", size, quantity)
+       SELECT $1, "tenantId", "siteId", "partyId", $2, "workOrderId", "workOrderSizeId", "salesOrderLineId", size, 1 FROM "ShipmentLine" WHERE "shipmentId" = $3 LIMIT 1`,
+      [noDdtLine, noDdt, S.shipmentB],
+    )
+    const queue = await as('GET', `/invoicing/shipped-not-invoiced?partyId=${A.brand}`)
+    const shipment = queue.customers.flatMap((customer: Json) => customer.shipments).find((entry: Json) => entry.shipmentId === noDdt)
+    expect(shipment).toMatchObject({ number: 'SH-GB02', shippedOn: yesterday, drafts: [], deadline: { docType: 'TD01', dueBy: addDays(yesterday, 12), daysLeft: 11, state: 'OPEN' } })
+    expect(shipment.lines).toEqual([expect.objectContaining({ shipped: '1', invoiced: '0', inDraft: '0', notInvoiced: '1' })])
+    expect(shipment.valueAmount).toBeGreaterThan(0)
+    // A shipment with a DDT is refused in words.
+    expect((await refused('POST', '/invoicing/invoices/from-shipment', { shipmentId: S.shipmentB }, 409)).message).toMatch(/travels with a DDT: invoice its DDT/)
+    const draft = await as('POST', '/invoicing/invoices/from-shipment', { shipmentId: noDdt }, 201)
+    expect(draft.invoice).toMatchObject({ docType: 'TD01', status: 'DRAFT', causale: 'Fattura immediata: merce spedita senza DDT (spedizione SH-GB02)' })
+    const goods = draft.invoice.lines.filter((line: Json) => line.kind === 'GOODS')
+    expect(goods).toEqual([expect.objectContaining({ ddtId: null, salesOrderLineId: shipment.lines[0].salesOrderLineId, size: shipment.lines[0].size, quantity: '1.0000' })])
+    // Its goods are in a draft now: the list says so, and a second draft is refused in words.
+    const again = (await as('GET', `/invoicing/shipped-not-invoiced?partyId=${A.brand}`)).customers.flatMap((customer: Json) => customer.shipments).find((entry: Json) => entry.shipmentId === noDdt)
+    expect(again).toMatchObject({ drafts: [draft.invoice.id], lines: [expect.objectContaining({ inDraft: '1', notInvoiced: '1' })] })
+    expect((await refused('POST', '/invoicing/invoices/from-shipment', { shipmentId: noDdt }, 409)).message).toBe('The goods of shipment SH-GB02 are in a draft invoice already: issue or delete it.')
+    // Another company's reader does not find it.
+    expect((await wall('companyB', 'POST', '/invoicing/invoices/from-shipment', { shipmentId: noDdt })).status).toBe(404)
+    await as('DELETE', `/invoicing/invoices/${draft.invoice.id}`, {})
+  })
+
+  it("a change outside the money module announces the order's settlement once (order.unsettled), and a repeat nothing", async () => {
+    const order = moneyA.shipping.quality.production.salesOrderId
+    // Its history last said "settled" (as if an earlier allocation settled it); the shipment that left made it owe again.
+    await admin(
+      `INSERT INTO "AuditLog" (id, "tenantId", "companyId", audience, "actorId", action, "recordType", "recordId", after, "requestId") VALUES ($1, $2, $3, 'SYSTEM', $4, 'invoices.orderSettled', 'SalesOrder', $5, '{"settled":true}'::jsonb, 'gb02-test')`,
+      [newId(), A.tenant, A.companyA, newId(), order],
+    )
+    const events = async () => (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'order.unsettled' AND subject = $2`, [A.tenant, order]))[0]!.n
+    const before = await events()
+    const caller = callerFor(h.database, systemContext(A.tenant, `gb02-${newId()}`))
+    const handler = settleAfterChangesHandler()
+    await handler.handle({ eventId: newId(), type: 'shipment.status_changed', version: 1, tenantId: A.tenant, payload: { shipmentId: noDdt, number: 'SH-GB02', to: 'SHIPPED' } } as never, { caller, attempt: 1 })
+    expect(await events()).toBe(before + 1)
+    expect(await admin(`SELECT action FROM "AuditLog" WHERE "recordId" = $1 AND action IN ('invoices.orderSettled', 'invoices.orderUnsettled') ORDER BY id DESC LIMIT 1`, [order])).toEqual([{ action: 'invoices.orderUnsettled' }])
+    // The same event again, and an amendment with nothing new: nothing more is announced.
+    await handler.handle({ eventId: newId(), type: 'shipment.status_changed', version: 1, tenantId: A.tenant, payload: { shipmentId: noDdt, number: 'SH-GB02', to: 'SHIPPED' } } as never, { caller, attempt: 1 })
+    await handler.handle({ eventId: newId(), type: 'sales_order.amended', version: 1, tenantId: A.tenant, payload: { orderId: order } } as never, { caller, attempt: 1 })
+    expect(await events()).toBe(before + 1)
+    // A move that does not touch the money (PACKED) reads nothing.
+    await handler.handle({ eventId: newId(), type: 'shipment.status_changed', version: 1, tenantId: A.tenant, payload: { shipmentId: noDdt, number: 'SH-GB02', to: 'PACKED' } } as never, { caller, attempt: 1 })
+    expect(await events()).toBe(before + 1)
+    // The made-up shipment goes again (the next tests count SO-0002's shipped goods).
+    await force(`DELETE FROM "ShipmentLine" WHERE id = $1`, [noDdtLine])
+    await force(`DELETE FROM "Shipment" WHERE id = $1`, [noDdt])
+  })
+})
+// ---- end B-W2b-GB02
 
 describe('the order settled with a line closed short (B-W2a-30)', () => {
   it('SO-0002 closes its BLK line short: its pieces never shipped are done', async () => {

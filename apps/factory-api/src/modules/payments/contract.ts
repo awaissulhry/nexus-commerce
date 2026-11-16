@@ -459,6 +459,25 @@ export const releaseOverpaymentContract = defineContract({
  * its order's issued TD01 / TD24 in ONE command (a reversal of each live allocation + an allocation of the same payment to
  * the invoice naming it). `invoiceId` absent: the order's oldest invoices that take each allocation whole.
  */
+// ---- B-W2b-GB02 (G088): what a carry would do now, written nowhere (the problem in words when it cannot).
+export const carryPreviewContract = defineContract({
+  params: input({ depositRequestId: id() }),
+  querystring: input({ invoiceId: id().optional() }),
+  response: {
+    200: output({
+      depositRequestId: id(),
+      orderId: id().nullable(),
+      orderNumber: z.string().nullable(),
+      currency: z.string(),
+      problem: z.string().nullable(),
+      amount: money.price(z.number().int()),
+      steps: z.array(output({ allocationId: id(), paymentId: id(), invoiceId: id(), invoiceNumber: z.string().nullable(), amount: money.price(z.number().int()) })),
+      invoices: z.array(output({ id: id(), number: z.string().nullable(), openAmount: money.price(z.number().int()), openAfter: money.price(z.number().int()) })),
+    }),
+  },
+})
+// ---- end B-W2b-GB02
+
 export const carryDepositContract = defineContract({
   params: input({ depositRequestId: id() }),
   body: input({ invoiceId: id().optional(), note: z.string().trim().max(500).nullish() }),

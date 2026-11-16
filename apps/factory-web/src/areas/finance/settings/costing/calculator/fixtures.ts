@@ -94,5 +94,13 @@ export const designScreen = defineDesignScreen<CalculatorModel>({
     { id: 'empty', label: 'Nothing yet', model: model({ calcs: { status: 'ready', value: [] }, rules: { status: 'ready', value: [] } }) },
     { id: 'loading', label: 'Loading', model: model({ calcs: { status: 'loading' }, rules: { status: 'loading' } }) },
     { id: 'error', label: 'Could not read', model: model({ calcs: { status: 'error', problem: 'cpm.problem.read' }, rules: { status: 'error', problem: 'cpm.problem.read' } }) },
+    // ---- B-W2b-GB02 (G054): the overhead rules kept on screen
+    { id: 'gb02-rule-new', label: 'GB02 — New rule: an amount a machine hour for sewing', model: model({ dialog: { kind: 'ruleNew' }, ruleDraft: { basis: 'PER_MACHINE_HOUR', workCentreKind: 'SEWING', value: '6', fromMonth: '2026-12' } }), note: 'Machine hours are the minutes of the routing steps worked at a machine; the rule before it ends the day before.' },
+    { id: 'gb02-rule-new-bad', label: 'GB02 — New rule: a percent above 1,000 and the last month before the first', model: model({ dialog: { kind: 'ruleNew' }, ruleDraft: { basis: 'PERCENT_OF_LABOUR', value: '1200', fromMonth: '2026-12', toMonth: '2026-10' } }) },
+    { id: 'gb02-rule-edit', label: 'GB02 — Correct the sewing rule a minute', model: model({ dialog: { kind: 'ruleEdit', rule: RULES[1]! } }), note: 'Company, basis, department and first month stay; a new figure from a later month is a new rule.' },
+    { id: 'gb02-rule-archive', label: 'GB02 — Archive the every-company rule', model: model({ dialog: { kind: 'ruleArchive', rule: RULES[0]! } }) },
+    { id: 'gb02-rule-refused', label: 'GB02 — New rule refused: another rule covers the period', model: model({ dialog: { kind: 'ruleNew' }, ruleDraft: { basis: 'PER_MINUTE', workCentreKind: 'SEWING', value: '0,06', fromMonth: '2026-11', endPrevious: false }, problem: 'ohrRefusal.OVERLAPS' }) },
+    { id: 'gb02-rule-kept', label: 'GB02 — Done: rule kept', model: model({ notice: { key: 'ohrEdit.notice.kept' } }) },
+    // ---- end B-W2b-GB02
   ],
 })

@@ -124,15 +124,15 @@ const LinkTile: MetricLinkComponent = ({ href, className, children }) => (
  * Reverse entry with a reason — a mistake is reversed, never edited). Amounts only with the cost grain: without it the
  * columns and tiles are not drawn (never a '—'). Labour per work order and operation only: never a person.
  */
-export function CostingView({ model, actions, ppv = null, mass = null }: { model: CostingModel; actions?: CostingActions; ppv?: ReactNode; /** B-W2b-430: the band's Mass cost update (its button and pop-up). */ mass?: ReactNode }) {
+export function CostingView({ model, actions, ppv = null, mass = null, variances = null }: { model: CostingModel; actions?: CostingActions; ppv?: ReactNode; /** B-W2b-430: the band's Mass cost update (its button and pop-up). */ mass?: ReactNode; /** B-W2b-GB02 (G053): Variances by work order (after the purchase price variance). */ variances?: ReactNode }) {
   return (
     <WithMessages namespaces={[COSTING_NAMESPACE, 'lists', /* B-W2b-424 */ CLOSE_NS]}>
-      <Costing model={model} actions={actions} ppv={ppv} mass={mass} />
+      <Costing model={model} actions={actions} ppv={ppv} mass={mass} variances={variances} />
     </WithMessages>
   )
 }
 
-function Costing({ model, actions, ppv, mass }: { model: CostingModel; actions?: CostingActions; ppv: ReactNode; mass: ReactNode }) {
+function Costing({ model, actions, ppv, mass, variances }: { model: CostingModel; actions?: CostingActions; ppv: ReactNode; mass: ReactNode; variances: ReactNode }) {
   const t = useT(COSTING_NAMESPACE)
   const stateWords = useCostStateWords()
   const lists = useT('lists')
@@ -607,6 +607,8 @@ function Costing({ model, actions, ppv, mass }: { model: CostingModel; actions?:
 
       {/* B-W2b-424 (sec:ppv) */}
       {ppv}
+      {/* B-W2b-GB02 (G053; B-W2b-424's gap 5): the variance lines of the period's closes, across work orders. */}
+      {variances}
 
       {model.detail && <WorkOrderCostDialog state={model.detail} ids={detailIds} can={can} prefix={model.prefix} onGo={(id) => actions?.onOpen?.(id)} onClose={() => actions?.onOpen?.(null)} onRetry={() => actions?.onRetry?.('detail')} />}
       {model.reverse && <ReverseDialog state={model.reverse} can={can} draft={model.draft?.reason} onSubmit={(reason) => actions?.onReverseSubmit?.(reason)} onClose={() => actions?.onReverse?.(null)} />}

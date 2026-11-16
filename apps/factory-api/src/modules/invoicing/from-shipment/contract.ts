@@ -70,11 +70,65 @@ export const shippedNotInvoicedContract = defineContract({
               freight: output({ amount: money.price(z.number().int().nullable()), currency: z.string(), billed: z.boolean() }),
             }),
           ),
+          // ---- B-W2b-GB02 (G148): the shipments that left WITHOUT a DDT (their immediate invoice) with goods to invoice.
+          shipments: z.array(
+            output({
+              shipmentId: id(),
+              number: z.string(),
+              shippedOn: businessDate(),
+              companyId: id(),
+              partyId: id(),
+              orders: z.array(output({ id: id(), number: z.string() })),
+              lines: z.array(
+                output({
+                  salesOrderLineId: id(),
+                  orderId: id().nullable(),
+                  orderNumber: z.string().nullable(),
+                  description: z.string().nullable(),
+                  size: z.string(),
+                  shipped: z.string(),
+                  invoiced: z.string(),
+                  inDraft: z.string(),
+                  notInvoiced: z.string(),
+                  unitPrice: money.price(z.string().nullable()),
+                  netAmount: money.price(z.number().int().nullable()),
+                  drafts: z.array(id()),
+                }),
+              ),
+              valueAmount: money.price(z.number().int()),
+              depositPaidAmount: money.price(z.number().int()),
+              drafts: z.array(id()),
+              /** Its immediate invoice's limit: 12 days after it left. */
+              deadline,
+              freight: output({ amount: money.price(z.number().int().nullable()), currency: z.string() }),
+            }),
+          ),
+          // ---- end B-W2b-GB02
         }),
       ),
     }),
   },
 })
+
+// ---- B-W2b-GB02 (G148): the immediate invoice of a shipment that leaves without a DDT.
+export const fromShipmentContract = defineContract({
+  body: input({
+    shipmentId: id(),
+    causale: z.string().trim().max(MAX_CAUSALE).nullish(),
+    payment: paymentInput.nullish(),
+    internalNote: z.string().trim().max(4000).nullish(),
+  }),
+  response: {
+    201: output({
+      invoice: invoiceView,
+      /** The deposit invoices of the order not deducted here, and why. */
+      deductions: z.array(output({ depositInvoiceId: id(), number: z.string().nullable(), reason: z.string() })),
+      /** The shipment's freight when it is not billed here, and why. */
+      freight: z.array(output({ reason: z.string() })),
+    }),
+  },
+})
+// ---- end B-W2b-GB02
 
 const choice = output({
   docType: shipType.nullable(),

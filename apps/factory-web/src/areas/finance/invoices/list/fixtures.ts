@@ -47,6 +47,26 @@ const base = (role: Role, over: Partial<InvoicesListModel> = {}): ListCase => {
 
 const latePair = QUEUE.customers[1]!.ddts.map((ddt) => ddt.ddtId)
 
+// ---- B-W2b-GB02 (G148): shipments that left without a DDT (made-up numbers): one in its 12 days, one late, one in a draft.
+const NO_DDT_LINE = { salesOrderLineId: '00000000-0000-7000-8000-000000000a31', orderNumber: 'SO-0042', description: 'Giacca moto in pelle, nero', size: '52', shipped: '2', invoiced: '0', inDraft: '0', notInvoiced: '2', unitPrice: '310.000000', netAmount: 62000, drafts: [] as string[] }
+const QUEUE_NO_DDT: typeof QUEUE = {
+  ...QUEUE,
+  customers: QUEUE.customers.map((customer, index) =>
+    index === 0
+      ? {
+          ...customer,
+          shipments: [
+            { shipmentId: '00000000-0000-7000-8000-000000000a01', number: 'SH-0091', shippedOn: '2026-10-24', companyId: customer.companyId, partyId: customer.partyId, orders: [{ id: '00000000-0000-7000-8000-000000000a11', number: 'SO-0042' }], lines: [NO_DDT_LINE], valueAmount: 62000, depositPaidAmount: 0, drafts: [], deadline: { docType: 'TD01' as const, dueBy: '2026-11-05', daysLeft: 7, state: 'OPEN' as const } },
+            { shipmentId: '00000000-0000-7000-8000-000000000a02', number: 'SH-0087', shippedOn: '2026-10-12', companyId: customer.companyId, partyId: customer.partyId, orders: [{ id: '00000000-0000-7000-8000-000000000a12', number: 'SO-0040' }], lines: [{ ...NO_DDT_LINE, orderNumber: 'SO-0040', shipped: '1', notInvoiced: '1', netAmount: 31000 }], valueAmount: 31000, depositPaidAmount: 0, drafts: [], deadline: { docType: 'TD01' as const, dueBy: '2026-10-24', daysLeft: -5, state: 'LATE' as const } },
+            { shipmentId: '00000000-0000-7000-8000-000000000a03', number: 'SH-0093', shippedOn: '2026-10-27', companyId: customer.companyId, partyId: customer.partyId, orders: [{ id: '00000000-0000-7000-8000-000000000a13', number: 'SO-0044' }], lines: [{ ...NO_DDT_LINE, orderNumber: 'SO-0044', inDraft: '2', drafts: ['00000000-0000-7000-8000-000000000a21'] }], valueAmount: 62000, depositPaidAmount: 0, drafts: ['00000000-0000-7000-8000-000000000a21'], deadline: { docType: 'TD01' as const, dueBy: '2026-11-08', daysLeft: 10, state: 'OPEN' as const } },
+          ],
+        }
+      : customer,
+  ),
+}
+const QUEUE_ONLY_NO_DDT: typeof QUEUE = { ...QUEUE_NO_DDT, customers: [{ ...QUEUE_NO_DDT.customers[0]!, ddts: [], months: [] }] }
+// ---- end B-W2b-GB02
+
 function InvoicesDesign({ model }: { model: ListCase }) {
   return inShell('/finance/invoices', createElement(InvoicesListView, { model: model.list }), model.role)
 }
@@ -93,6 +113,11 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'w2a-return-loading', label: 'W2a · Finance · Credit notes of a return: reading', model: base('finance', { dialog: { kind: 'returnCredit', returnId: RETURN_ID }, returnCredit: { value: null, problem: null } }) },
     { id: 'w2a-return-error', label: 'W2a · Finance · Credit notes of a return: the read failed', model: base('finance', { dialog: { kind: 'returnCredit', returnId: RETURN_ID }, returnCredit: { value: null, problem: 'problem.read.unavailable' } }) },
     { id: 'w2a-return-sales', label: 'W2a · Sales · Credit notes of a return: read-only, held', model: base('sales', { dialog: { kind: 'returnCredit', returnId: RETURN_ID }, returnCredit: { value: RETURN_CREDIT, problem: null } }) },
+    // B-W2b-GB02 (G148)
+    { id: 'gb02-no-ddt', label: 'GB02 · Finance · Shipped without a DDT, not invoiced: one in its 12 days, one late, one in a draft (Invoice makes its TD01)', model: base('finance', { queue: { value: QUEUE_NO_DDT, problem: null } }), note: 'A shipment that leaves without a DDT carries its immediate invoice: due within 12 days of the day it left. The list shows only when one waits.' },
+    { id: 'gb02-no-ddt-only', label: 'GB02 · Finance · No DDT waits, a shipment without a DDT does', model: base('finance', { queue: { value: QUEUE_ONLY_NO_DDT, problem: null } }) },
+    { id: 'gb02-no-ddt-sales', label: 'GB02 · Sales · Shipped without a DDT: Invoice held (no right to make invoices)', model: base('sales', { queue: { value: QUEUE_NO_DDT, problem: null } }) },
+    { id: 'gb02-no-ddt-refused', label: 'GB02 · Finance · Invoice refused: invoiced meanwhile (the notice says so)', model: base('finance', { queue: { value: QUEUE_NO_DDT, problem: null }, notice: { tone: 'danger', words: { key: 'problem.write.state' } } }) },
     { id: 'no-permission', label: 'No permission (invoices.view over this company)', model: base('sales', { list: { items: null, more: false, problem: 'problem.read.forbidden' }, queue: { value: null, problem: 'problem.read.forbidden' }, tiles: null, rejected: [] }) },
   ],
 })

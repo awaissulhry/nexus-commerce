@@ -1,0 +1,27 @@
+{
+  "amount": "Da riportare",
+  "cannot": "Ora non si può riportare su questa fattura: apri Pagamenti per porlo su un'altra fattura dell'ordine, o prima storna ciò che è sbagliato.",
+  "carried": "L'acconto è riportato sulla fattura {invoice}.",
+  "confirmAmount": "{amount} posti su questa fattura; la richiesta di acconto resta pagata, a 0.",
+  "confirmExplain": "La parte di ogni pagamento sulla richiesta di acconto viene ripresa e posta su questa fattura, con una nota che dice perché. Un riporto fatto per errore si riprende come ogni imputazione.",
+  "confirmGo": "Riporta l'acconto",
+  "confirmTitle": "Riporta l'acconto sulla fattura {invoice}",
+  "deposit": "Acconto dell'ordine {order}",
+  "depositNoOrder": "Acconto",
+  "explain": "Un acconto pagato senza fattura di acconto (un'impresa UE con prova VIES) resta sulla sua richiesta finché non viene riportato sulla fattura dell'ordine: fino ad allora la fattura risulta non pagata per quell'importo.",
+  "failed": "Impossibile leggere gli acconti da riportare ({why}).",
+  "go": "Riporta su questa fattura…",
+  "held": {
+    "busy": "In corso…",
+    "cannot": "Ora non si può riportare su questa fattura.",
+    "noRecord": "Riportare un acconto richiede il diritto di registrare i pagamenti.",
+    "reading": "Lettura di cosa farebbe il riporto…"
+  },
+  "noPrice": "Importo nascosto (nessun diritto sui prezzi)",
+  "openAfter": "Fattura aperta dopo",
+  "openBefore": "Fattura aperta ora",
+  "payments": "Pagamenti",
+  "previewing": "Lettura di cosa farebbe il riporto…",
+  "reading": "Lettura degli acconti da riportare…",
+  "title": "Acconto da riportare"
+}

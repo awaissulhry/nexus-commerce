@@ -12,6 +12,8 @@ import type { LabourModel } from '../model'
 import type { Minutes } from '../../every-shift/model'
 import { MinutesCard } from '../../every-shift/view/MinutesCard'
 import { OffStandardCard } from './OffStandardCard'
+// B-W2b-GB02 (G053): the scrap and rework cost per reason.
+import { ScrapReworkCard } from '../scrap-rework/view/ScrapReworkCard'
 import '../../../../finance/costing/costing.css'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
 import { rightRef } from '../../../../../lib/i18n/rights'
@@ -116,6 +118,8 @@ function Labour({ labour, prefix, workOrderId, draft, onRetry, variance }: { lab
         <p className="fw-fco-muted">{t('labourTab.wagesNever')}</p>
       </Card>
       <CostScrapAndWaiting detail={detail} can={can} />
+      {/* B-W2b-GB02 (G053; B-W2b-424's gap 5): the scrap and rework cost per reason, inside the cost section. */}
+      {labour?.scrapRework && <ScrapReworkCard model={labour.scrapRework} onRetry={onRetry} />}
       {/* B-W2b-424 (wo-cost "W2b variance at close"): inside the cost section, with its grain. */}
       {variance}
     </div>

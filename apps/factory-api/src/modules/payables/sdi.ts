@@ -382,19 +382,21 @@ export async function recordDelivery(system: CommandCaller, companyId: string, i
  * A delivery that waits, in the inbox (factory-db SdiInboxItem): made OPEN the first time, then each pickup adds an attempt
  * and writes the latest words; a lock per delivery keeps two pickups (the cron and a person) from making it twice.
  */
-async function upsertInboxItem(tools: CommandTools, where: { readonly companyId: string; readonly accountId: string; readonly at: Date }, entry: Waiting): Promise<void> {
+async function upsertInboxItem(tools: CommandTools, where: { readonly companyId: string; readonly accountId: string; readonly at: Date }, entry: Waiting, kept?: KeptXml): Promise<void> {
   const { tx } = tools
   const tenantId = 'tenantId' in tools.context ? tools.context.tenantId : null
   if (!tenantId) return
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.payables.sdi-inbox', ${tenantId}::text, ${entry.sdiIdentifier}::text), 0))`
-  const existing = await tx.sdiInboxItem.findFirst({ where: { sdiIdentifier: entry.sdiIdentifier }, select: { id: true, status: true, attempts: true, lastTriedAt: true } })
+  const existing = await tx.sdiInboxItem.findFirst({ where: { sdiIdentifier: entry.sdiIdentifier }, select: { id: true, status: true, attempts: true, lastTriedAt: true, xmlFileId: true } })
   if (!existing) {
-    const id = newId()
+    // B-W2b-GB02 (G088): the id the file kept for it was prepared under.
+    const id = kept?.itemId ?? newId()
     await tx.sdiInboxItem.create({
       data: { id, companyId: where.companyId, accountId: where.accountId, providerRef: entry.providerRef, sdiIdentifier: entry.sdiIdentifier, fileName: entry.fileName, receivedAt: new Date(entry.receivedAt), problem: entry.code, problemText: entry.problem.slice(0, 2000), attempts: 1, firstSeenAt: where.at, lastTriedAt: where.at, createdAt: where.at, updatedAt: where.at, createdById: null },
       select: { id: true },
     })
     tools.audit({ action: 'payables.sdiInboxWaiting', recordType: 'SdiInboxItem', recordId: id, companyId: where.companyId, after: { sdiIdentifier: entry.sdiIdentifier, fileName: entry.fileName, problem: entry.code, attempts: 1 } })
+    await keepXml(tools, id, null, entry, kept)
     return
   }
   if (existing.status !== 'OPEN') return
@@ -403,7 +405,39 @@ async function upsertInboxItem(tools: CommandTools, where: { readonly companyId:
     data: { attempts: existing.attempts + 1, lastTriedAt: where.at > existing.lastTriedAt ? where.at : existing.lastTriedAt, problem: entry.code, problemText: entry.problem.slice(0, 2000), version: { increment: 1 }, updatedAt: where.at },
     select: { id: true },
   })
+  await keepXml(tools, existing.id, existing.xmlFileId, entry, kept)
 }
+
+// ---- B-W2b-GB02 (G088; B-W2b-21's gap "the inbox does not keep the waiting file's XML"): the file SDI handed over, kept with
+// the inbox item that waits (a StoredFile of the item, FISCAL_ARCHIVE, named once on SdiInboxItem.xmlFileId), so a person
+// opens what SDI sent. The bytes go to the store before the pickup's command (putGeneratedFile, outside any transaction),
+// under the item's id (an item that does not exist yet gets its id then); the command records it once.
+interface KeptXml {
+  readonly itemId: string
+  readonly prepared: PreparedGeneratedFile
+}
+
+async function keepXml(tools: CommandTools, itemId: string, current: string | null, entry: Waiting, kept: KeptXml | undefined): Promise<void> {
+  // Kept already, nothing fetched, or prepared under another id (another pickup made the item meanwhile: the next keeps it).
+  if (current !== null || !kept || kept.itemId !== itemId) return
+  const stored = await recordGeneratedFile(tools, kept.prepared, { details: { file: 'FatturaPA XML as received (waiting in the SDI inbox)', sdiIdentifier: entry.sdiIdentifier } })
+  await tools.tx.sdiInboxItem.update({ where: { id: itemId }, data: { xmlFileId: stored.id }, select: { id: true } })
+}
+
+/** Before the pickup's command: the fetched files of the deliveries that wait, put in the store under their item's id. */
+async function prepareKeptXml(system: CommandCaller, companyId: string, fetched: ReadonlyMap<string, SdiReceivedFile>): Promise<Map<string, KeptXml>> {
+  const kept = new Map<string, KeptXml>()
+  if (fetched.size === 0) return kept
+  const items = await system.withClient((client) => client.sdiInboxItem.findMany({ where: { sdiIdentifier: { in: [...fetched.keys()] } }, select: { id: true, sdiIdentifier: true, status: true, xmlFileId: true } }))
+  for (const [sdiIdentifier, file] of fetched) {
+    const item = items.find((row) => row.sdiIdentifier === sdiIdentifier)
+    if (item && (item.status !== 'OPEN' || item.xmlFileId !== null)) continue
+    const itemId = item?.id ?? newId()
+    kept.set(sdiIdentifier, { itemId, prepared: await prepareXml(system, companyId, { type: 'SdiInboxItem', id: itemId }, file) })
+  }
+  return kept
+}
+// ---- end B-W2b-GB02
 
 // ---- a pickup -----------------------------------------------------------------------------------------------------------
 
@@ -452,6 +486,8 @@ export async function pickUp(caller: CommandCaller, companyId: string, options: 
   })
   const recorded: Recorded[] = []
   const waiting: Waiting[] = []
+  // B-W2b-GB02 (G088): the files fetched of the deliveries that wait.
+  const fetched = new Map<string, SdiReceivedFile>()
   for (const item of items.filter((entry) => !known.has(entry.sdiIdentifier))) {
     let file: SdiReceivedFile
     try {
@@ -465,12 +501,16 @@ export async function pickUp(caller: CommandCaller, companyId: string, options: 
     }
     const outcome = await recordDelivery(system, companyId, file)
     if (Array.isArray(outcome)) recorded.push(...outcome)
-    else waiting.push(outcome)
+    else {
+      waiting.push(outcome)
+      fetched.set(file.sdiIdentifier, file)
+    }
   }
+  const kept = await prepareKeptXml(system, companyId, fetched)
   const result: PickupResult = { companyId, accountId: account.id, listed: items.length, known: known.size, recorded, waiting, at: at.toISOString() }
   await command(caller, { name: PICKUP_ACTION, input: { companyId, accountId: account.id, listed: items.length, recorded: recorded.map((row) => row.sdiIdentifier), waiting: waiting.map((row) => row.sdiIdentifier), at: result.at }, ...(options.causationId ? { causationId: options.causationId } : {}) }, async (tools) => {
     // B-W2b-21 (Z8:06): what waits lands in the SDI inbox, one item per delivery (tried again: attempts + 1, the latest words).
-    for (const entry of waiting) await upsertInboxItem(tools, { companyId, accountId: account.id, at }, entry)
+    for (const entry of waiting) await upsertInboxItem(tools, { companyId, accountId: account.id, at }, entry, kept.get(entry.sdiIdentifier))
     tools.audit({
       action: PICKUP_ACTION,
       recordType: 'IntegrationAccount',
@@ -513,13 +553,14 @@ export async function sdiStatus(caller: CommandCaller, query: { readonly company
         : null
       const after = (last?.after ?? null) as { listed?: number; recorded?: unknown[] } | null
       // B-W2b-21 (Z8:06): what waits is the inbox's OPEN items (no longer the pickup's audit row), oldest first.
-      const open = await client.sdiInboxItem.findMany({ where: { companyId: company.id, status: 'OPEN' }, select: { sdiIdentifier: true, fileName: true, receivedAt: true, problemText: true }, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }], take: 50 })
+      // B-W2b-GB02 (G088): + the file kept of each (null: SDI did not hand it over).
+      const open = await client.sdiInboxItem.findMany({ where: { companyId: company.id, status: 'OPEN' }, select: { sdiIdentifier: true, fileName: true, receivedAt: true, problemText: true, xmlFileId: true }, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }], take: 50 })
       const inboxOpen = await client.sdiInboxItem.count({ where: { companyId: company.id, status: 'OPEN' } })
       out.push({
         company: { id: company.id, code: company.code, name: company.legalName },
         account: account ? { id: account.id, mode: account.mode, status: account.status } : null,
         picksUp: account ? account.status === 'ACTIVE' && runtime.picksUp(account.mode as IntegrationMode) : false,
-        lastPickup: last ? { at: last.at.toISOString(), byPerson: last.audience === 'OFFICE', listed: after?.listed ?? 0, recorded: Array.isArray(after?.recorded) ? after!.recorded!.length : 0, waiting: open.map((row) => ({ sdiIdentifier: row.sdiIdentifier, fileName: row.fileName, receivedAt: row.receivedAt.toISOString(), problem: row.problemText })) } : null,
+        lastPickup: last ? { at: last.at.toISOString(), byPerson: last.audience === 'OFFICE', listed: after?.listed ?? 0, recorded: Array.isArray(after?.recorded) ? after!.recorded!.length : 0, waiting: open.map((row) => ({ sdiIdentifier: row.sdiIdentifier, fileName: row.fileName, receivedAt: row.receivedAt.toISOString(), problem: row.problemText, xmlFileId: row.xmlFileId })) } : null,
         inboxOpen,
       })
     }

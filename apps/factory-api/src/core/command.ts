@@ -403,6 +403,11 @@ async function guardRecord(tx: CommandTx, record: CommandRecord<string, unknown>
   if (count !== 1) {
     const current = await delegate.findUnique({ where: { id: record.id }, select: { version: true } })
     if (!current) throw new NotFoundError(`${record.type} not found.`)
+    // ---- B-W2b-GB02 (G153): a command that claims no version and makes no move (the worker's invoices.attachFiles while
+    // "Issue and send" sends the invoice to SDI) is no edit conflict when another write bumped the version between its
+    // read and its compare-and-set: it bumps the version that write left (the row is free once that write committed).
+    if (record.expectedVersion === undefined && !record.transition) return bumpUnclaimed(delegate, record, current.version as number)
+    // ---- end B-W2b-GB02
     throw new StaleVersionError(record.type, record.id, current.version as number, version)
   }
   return {
@@ -413,6 +418,23 @@ async function guardRecord(tx: CommandTx, record: CommandRecord<string, unknown>
     ...(record.transition ? { from, to: record.transition.to } : {}),
   }
 }
+
+// ---- B-W2b-GB02 (G153): the compare-and-set again on the version another write left, a few times (each try waits for the
+// write holding the row); still taken after that, the caller hears the edit-conflict words as before.
+const UNCLAIMED_TRIES = 5
+async function bumpUnclaimed(delegate: RecordDelegate, record: CommandRecord<string, unknown>, seen: number): Promise<GuardedRecord> {
+  let version = seen
+  for (let attempt = 1; attempt <= UNCLAIMED_TRIES; attempt++) {
+    const { count } = await delegate.updateMany({ where: { id: record.id, version }, data: { version: version + 1 } })
+    if (count === 1) return { type: record.type, id: record.id, version: version + 1, previousVersion: version }
+    const current = await delegate.findUnique({ where: { id: record.id }, select: { version: true } })
+    if (!current) throw new NotFoundError(`${record.type} not found.`)
+    if (attempt === UNCLAIMED_TRIES) throw new StaleVersionError(record.type, record.id, current.version as number, version)
+    version = current.version as number
+  }
+  throw new StaleVersionError(record.type, record.id, version, seen)
+}
+// ---- end B-W2b-GB02
 
 type StoredReceipt = { readonly requestHash: string; readonly response: unknown }
 

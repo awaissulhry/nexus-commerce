@@ -13,6 +13,8 @@ import { el, optional, type XmlElement } from './xml'
  *   TD17  integration / self-invoice for services bought abroad (art. 17 c.2)
  *   TD18  integration for goods bought from another EU state (art. 46 DL 331/1993)
  *   TD19  integration / self-invoice for goods already in Italy bought from a non-resident (art. 17 c.2)
+ *   TD16  B-W2b-GB02 (G150): integration of an Italian supplier's invoice under the internal reverse charge (art. 17 c.5-6,
+ *         Natura N6.x on the supplier's invoice): the supplier has an Italian VAT number; its RegimeFiscale RF01 (UNVERIFIED)
  *
  * A self-invoice is issued by the company about a purchase: the input keeps the company as `seller` (it transmits the file and
  * its series numbers it) and the foreign supplier as `buyer` (the Invoice's buyer party), and the header swaps them as the
@@ -21,16 +23,18 @@ import { el, optional, type XmlElement } from './xml'
  * supplier's invoice in DatiFattureCollegate.
  */
 
-export const EXTRA_DOCUMENT_TYPES = ['TD05', 'TD17', 'TD18', 'TD19'] as const
+export const EXTRA_DOCUMENT_TYPES = ['TD05', 'TD16', 'TD17', 'TD18', 'TD19'] as const
 export type ExtraDocumentType = (typeof EXTRA_DOCUMENT_TYPES)[number]
 
-const SELF_INVOICE_TYPES: readonly string[] = ['TD17', 'TD18', 'TD19']
+const SELF_INVOICE_TYPES: readonly string[] = ['TD16', 'TD17', 'TD18', 'TD19']
 
 /** A self-invoice type: its header names the supplier as cedente and the company as cessionario. */
 export const isSelfInvoiceDocument = (documentType: string): boolean => SELF_INVOICE_TYPES.includes(documentType)
 
 /** The supplier's RegimeFiscale on a self-invoice (UNVERIFIED: RF18, "other", for a supplier abroad). */
 export const SELF_INVOICE_SUPPLIER_REGIME = 'RF18'
+/** B-W2b-GB02 (G150): an Italian supplier's on a TD16 (UNVERIFIED: RF01, the ordinary regime). */
+export const TD16_SUPPLIER_REGIME = 'RF01'
 /** CodiceDestinatario of a self-invoice (UNVERIFIED: the company's own tax drawer). */
 export const SELF_INVOICE_DESTINATION = '0000000'
 
@@ -46,6 +50,11 @@ export function extraTypeIssues(input: FatturaPaInvoiceInput, add: (path: string
   }
   if (related.length === 0) add('relatedInvoices', 'SELF_INVOICE_NEEDS_INVOICE', "a self-invoice names the supplier's invoice it integrates")
   if ((input.ddts ?? []).length > 0) add('ddts', 'DDT_NOT_ALLOWED', `a ${type} does not invoice DDTs`)
+  // B-W2b-GB02 (G150): a TD16's supplier is Italian (the internal reverse charge).
+  if (type === 'TD16') {
+    if (input.buyer?.kind === 'FOREIGN') add('buyer.kind', 'TD16_SUPPLIER', 'a TD16 integrates the invoice of an Italian supplier under the reverse charge (a supplier abroad: TD17, TD18 or TD19)')
+    return
+  }
   if (input.buyer?.kind !== 'FOREIGN') add('buyer.kind', 'SELF_INVOICE_SUPPLIER', `a ${type} integrates the invoice of a supplier without an Italian VAT number (FOREIGN)`)
   else if (type === 'TD18' && !isEuMemberState(String(input.buyer.country ?? '').trim().toUpperCase())) {
     add('buyer.country', 'TD18_NOT_EU', 'a TD18 integrates goods bought from another EU state')
@@ -75,7 +84,8 @@ export function selfInvoiceHeader(invoice: NormalizedInvoice): XmlElement {
       el('FormatoTrasmissione', 'FPR12'),
       el('CodiceDestinatario', SELF_INVOICE_DESTINATION),
     ]),
-    el('CedentePrestatore', [el('DatiAnagrafici', [idFiscale(buyer.idFiscaleIva), anagrafica(buyer), el('RegimeFiscale', SELF_INVOICE_SUPPLIER_REGIME)]), sede(buyer.address)]),
+    // B-W2b-GB02 (G150): a TD16's Italian supplier in the ordinary regime (UNVERIFIED).
+    el('CedentePrestatore', [el('DatiAnagrafici', [idFiscale(buyer.idFiscaleIva), anagrafica(buyer), el('RegimeFiscale', invoice.documentType === 'TD16' ? TD16_SUPPLIER_REGIME : SELF_INVOICE_SUPPLIER_REGIME)]), sede(buyer.address)]),
     el('CessionarioCommittente', [el('DatiAnagrafici', [idFiscale(seller.idFiscaleIva), optional('CodiceFiscale', seller.fiscalCode), anagrafica(seller)]), sede(seller.address)]),
   ])
 }

@@ -410,10 +410,19 @@ function facts(input: DocumentInput, words: DocumentWords): ComposedFact[] {
   }
 }
 
+// ---- B-W2b-GB02 (G150; B-W2b-401's gap "the self-invoice's PDF copy prints the supplier as the party"): a self-invoice
+// (TD16-TD19) is issued by the company as the BUYER (cessionario / committente) of the supplier's goods or services; its
+// XML names the supplier as the seller (CedentePrestatore). The copy prints them so: the company under the buyer's
+// heading, the supplier under the seller's.
+const SELF_INVOICE_KINDS: readonly string[] = ['TD16', 'TD17', 'TD18', 'TD19']
+const isSelfInvoiceCopy = (input: Pick<DocumentInput, 'type' | 'invoice'>): boolean => input.type === 'INVOICE_COPY' && SELF_INVOICE_KINDS.includes(input.invoice?.kind ?? '')
+// ---- end B-W2b-GB02
+
 function blocks(input: DocumentInput, words: DocumentWords): ComposedBlock[] {
   const language = input.language
   // W2b (B-W2b-19): a DDT's party is the "cessionario" only when the goods are sold to it (i18n ddtPartyHeading).
-  const heading = input.type === 'DDT' ? ddtPartyHeading(words, input.transport!.reason) : words.headings.party[input.type]
+  // B-W2b-GB02 (G150): a self-invoice's party is its supplier, the seller.
+  const heading = input.type === 'DDT' ? ddtPartyHeading(words, input.transport!.reason) : isSelfInvoiceCopy(input) ? words.headings.issuer.INVOICE_COPY : words.headings.party[input.type]
   const result: ComposedBlock[] = [{ heading, lines: partyLines(input.party, input.type, words, language) }]
   if ((input.type === 'PURCHASE_ORDER' || input.type === 'ORDER_CONFIRMATION' /* B-W2b-303 */ || input.type === 'PROFORMA' /* B-W2b-391 */ || input.type === 'COMMERCIAL_INVOICE' /* B-W2b-409 */) && input.deliverTo) result.push({ heading: words.headings.deliverTo, lines: namedAddress(input.deliverTo, language) })
   if (input.type === 'DDT') {
@@ -475,7 +484,8 @@ export function composeDocument(input: DocumentInput): ComposedDocument {
     layout: layout.id,
     title,
     // B-W2b-161: the company's logo above its name, when its branding has one (model.ts attachDocumentLogo: not data).
-    issuer: attachDocumentLogo({ heading: words.headings.issuer[input.type], name, lines: legalLines(input.company, language) }, input.company.logo),
+    // B-W2b-GB02 (G150): the company issues a self-invoice as the buyer.
+    issuer: attachDocumentLogo({ heading: isSelfInvoiceCopy(input) ? words.headings.party.INVOICE_COPY : words.headings.issuer[input.type], name, lines: legalLines(input.company, language) }, input.company.logo),
     identity: [
       { label: words.number, value: input.number.trim() },
       { label: words.date, value: formatDate(input.date, language) },

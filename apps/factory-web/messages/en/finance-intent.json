@@ -1,0 +1,181 @@
+{
+  "menu": "Declarations of intent",
+  "title": "Declarations of intent",
+  "close": "Close",
+  "explain": "A customer who exports regularly buys without VAT up to the amount it declared to the tax agency for a year. Record its declaration with the agency's protocol, check it on the agency's site and keep the receipt; an invoice that names it bills its lines without VAT (N3.5) and uses the amount up.",
+  "switchOff": {
+    "title": "Invoices do not name a declaration yet",
+    "body": "The accountant has not confirmed declarations of intent for this company: you can record and check them now; a draft names one once the switch is on in Finance settings › Tax set-up."
+  },
+  "filter": {
+    "year": "Year covered",
+    "allYears": "Every year",
+    "state": "State",
+    "ALL": "Every state",
+    "UNCHECKED": "Not checked yet",
+    "CHECKED": "Checked",
+    "USED_UP": "Used up",
+    "REVOKED": "Revoked"
+  },
+  "add": {
+    "open": "Add declaration",
+    "title": "Add a declaration of intent",
+    "explain": "Type what the customer's declaration says: the protocol the tax agency gave it, its date, the year it covers and the amount it declares for our supplies. It is recorded not checked yet.",
+    "customer": "Customer",
+    "customersFailed": "The customers could not be read: close this and open it again.",
+    "customersReading": "Reading the customers…",
+    "noCustomers": "This company has no customer yet.",
+    "customerSearch": "Search by name or code",
+    "protocol": "Protocol number",
+    "protocolHint": "17 digits, a hyphen and 6 digits, as on the agency's receipt",
+    "date": "Protocol date",
+    "year": "Year it covers",
+    "yearHint": "The protocol's year, or the next one",
+    "amount": "Amount declared for our supplies (EUR)",
+    "amountHint": "Without VAT, as on the declaration",
+    "go": "Add declaration",
+    "held": {
+      "fields": "Fill in every field first."
+    },
+    "problem": {
+      "party": "Choose the customer.",
+      "protocol": "The protocol is 17 digits, a hyphen and 6 digits, as on the agency's receipt.",
+      "date": "Type the protocol date.",
+      "future": "The protocol date is not in the future.",
+      "year": "A declaration covers its protocol's year or the next one.",
+      "amount": "Type an amount above 0.",
+      "dateRefused": "The protocol date was refused: it is not in the future."
+    }
+  },
+  "failed": "The declarations could not be read",
+  "reading": "Reading the declarations…",
+  "empty": {
+    "title": "No declaration of intent covers {year}",
+    "titleAll": "No declaration of intent yet",
+    "body": "When a customer sends its declaration, add it here with the agency's protocol."
+  },
+  "tableLabel": "Declarations of intent",
+  "col": {
+    "customer": "Customer",
+    "protocol": "Protocol",
+    "year": "Year",
+    "declared": "Declared",
+    "used": "Used",
+    "left": "Left",
+    "state": "State",
+    "actions": "Actions"
+  },
+  "protocolOn": "of {date}",
+  "notThisYear": "not this year",
+  "usedPercent": "{percent}% used",
+  "state": {
+    "UNCHECKED": "Not checked yet",
+    "CHECKED": "Checked",
+    "USED_UP": "Used up",
+    "REVOKED": "Revoked"
+  },
+  "open": "Open",
+  "hide": "Close the declaration",
+  "rule": "DPR 633/1972 art. 8 c.1 lett. c: an invoice issued without VAT on a declaration that is not checked, revoked, of another year or used up is refused before its number is taken (a used-up declaration is a fine). Which checks the accountant wants stays theirs to confirm.",
+  "record": {
+    "title": "Declaration {protocol} · {customer}",
+    "protocolDate": "Protocol date",
+    "stateWords": {
+      "UNCHECKED": "Not checked on the tax agency's site yet: no invoice can be issued on it until it is checked and the receipt is kept.",
+      "CHECKED": "Checked on the tax agency's site: invoices of its year may rest on it up to what is left.",
+      "USED_UP": "What it declared is used up: the next invoice to this customer carries VAT, unless it sends a new declaration.",
+      "REVOKED": "Revoked: no invoice rests on it any more, and it changes no more."
+    },
+    "checkedOn": "Checked on {date}.",
+    "receipt": "Open the receipt",
+    "revokedOn": "Revoked on {date}: {reason}",
+    "invoices": "Invoices that rest on it",
+    "noInvoices": "No issued invoice rests on it yet.",
+    "col": {
+      "number": "Number",
+      "type": "Document",
+      "date": "Issued on",
+      "used": "Uses"
+    }
+  },
+  "check": {
+    "open": "Check…",
+    "title": "Record the check",
+    "explain": "Look the protocol up on the tax agency's site, save the page it prints and add it here: the check is recorded once, with its receipt.",
+    "chosen": "Receipt chosen: {name}",
+    "change": "Choose another",
+    "dropHint": "The receipt the agency's site printed (PDF or picture, up to 10 MB)",
+    "go": "Record the check",
+    "problem": {
+      "noFile": "Add the receipt first."
+    },
+    "heldByScan": "The receipt is held by the virus check: the check is not recorded. Try again with another copy of the receipt."
+  },
+  "revoke": {
+    "open": "Revoke…",
+    "title": "Revoke declaration {protocol}",
+    "explain": "Revoke it when the customer withdraws it or it proves not valid: no invoice rests on it after that, drafts that name it must let it go, and it changes no more.",
+    "reason": "Why",
+    "go": "Revoke",
+    "problem": {
+      "short": "Say why in at least 3 characters.",
+      "long": "At most {max} characters."
+    }
+  },
+  "held": {
+    "noManage": "Declarations are recorded, checked and revoked by whoever keeps the tax set-up.",
+    "noPrice": "The amount declared is typed by whoever sees amounts.",
+    "noParties": "Choosing the customer needs the right to see customers.",
+    "busy": "Wait for the change under way.",
+    "noUpload": "Adding the receipt needs the right to upload files.",
+    "revoked": "This declaration is revoked: it changes no more.",
+    "checked": "The check is recorded already.",
+    "noManageInvoices": "Drafts are changed by whoever makes invoices."
+  },
+  "notice": {
+    "added": "Declaration {protocol} recorded: check it on the tax agency's site next.",
+    "checked": "Declaration {protocol} checked: its receipt is kept with it.",
+    "revoked": "Declaration {protocol} revoked."
+  },
+  "refusal": {
+    "NOT_CUSTOMER": "A declaration of intent is a customer's: this party is not one of our customers.",
+    "REVOKED": "This declaration was revoked meanwhile: it changes no more.",
+    "CHECKED": "This declaration was checked meanwhile: the check is recorded once.",
+    "RECEIPT": "The receipt must be a file added on this declaration and ready in the store: add it again.",
+    "SWITCH_OFF": "Declarations of intent wait for the accountant: a draft names one once the switch is on in Finance settings › Tax set-up.",
+    "DECLARATION": "This document rests on no declaration: a credit note gives back what the invoice it credits used.",
+    "DATABASE": "The database refused the change: nothing was saved. Try again.",
+    "NOT_FOUND": "This declaration is no longer there, or not this customer's: the list is read again."
+  },
+  "receiptFailed": "The receipt could not be opened now: try again.",
+  "receiptForbidden": "Opening the receipt needs the right to read files.",
+  "pick": {
+    "failed": "The declaration of intent could not be read ({why})",
+    "reading": "Reading the declaration of intent…",
+    "label": "Declaration of intent",
+    "none": "No declaration of intent named: the lines carry the customer's VAT.",
+    "letGo": "Let it go",
+    "switchOff": "Declarations wait for the accountant: a draft names one once the switch is on in Finance settings › Tax set-up.",
+    "other": "Name another declaration",
+    "choose": "Name a declaration of this customer",
+    "option": "{protocol} · {year} · {state}",
+    "name": "Name it",
+    "held": {
+      "none": "Choose a declaration first.",
+      "same": "This declaration is the one named.",
+      "switchOff": "Declarations wait for the accountant's switch."
+    },
+    "named": {
+      "UNCHECKED": "Rests on declaration {protocol}, not checked yet: this invoice uses {amount} of it.",
+      "CHECKED": "Rests on declaration {protocol}, checked: this invoice uses {amount} of it.",
+      "USED_UP": "Rests on declaration {protocol}, used up: this invoice uses {amount} of it.",
+      "REVOKED": "Rests on declaration {protocol}, revoked: let it go."
+    },
+    "namedNoPrice": {
+      "UNCHECKED": "Rests on declaration {protocol}, not checked yet.",
+      "CHECKED": "Rests on declaration {protocol}, checked.",
+      "USED_UP": "Rests on declaration {protocol}, used up.",
+      "REVOKED": "Rests on declaration {protocol}, revoked: let it go."
+    }
+  }
+}

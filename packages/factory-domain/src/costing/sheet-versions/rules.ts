@@ -51,6 +51,9 @@ export const VERSION_REFUSALS = [
   'OTHER_CURRENCY',
   'NO_COMPANY',
   'INCOMPLETE',
+  // B-W2b-GB02 (G054): a typed line (a commission of the target price, a typed figure).
+  'NEEDS_TARGET',
+  'NOT_TYPED',
   'DATABASE',
 ] as const
 export type VersionRefusal = (typeof VERSION_REFUSALS)[number]
@@ -74,6 +77,8 @@ export const VERSION_REFUSAL_WORDS: Readonly<Record<VersionRefusal, string>> = O
   OTHER_CURRENCY: 'The two versions are in different currencies: their figures are not compared, only their lines.',
   NO_COMPANY: 'This style is every company’s: say which company the cost sheet is for.',
   INCOMPLETE: 'Some inputs of the components are missing: give them, or write the version leaving them out.',
+  NEEDS_TARGET: 'A commission in percent is a share of the target price: give the version a target price first (or type the commission as an amount). While a commission in percent stays, the target price is not cleared.',
+  NOT_TYPED: 'Only a line typed by a person is removed here: the other lines come from the components (write them again).',
   DATABASE: 'The database refused the cost sheet.',
 })
 
@@ -156,3 +161,37 @@ export interface SnapshotLine {
 
 /** Σ of costs, 6 places. */
 export const sumCost = (values: readonly string[]): string => six(values.reduce((sum, value) => sum.plus(value), new Decimal(0)))
+
+// ---- B-W2b-GB02 (G054; B-W2b-430 gap 1, B-W2b-418 gap 6): lines typed on a draft version, a commission among them ------------
+
+/**
+ * The categories a person may type a line in (FIN-012: an agent's commission, a royalty or a payment fee is COMMISSION; a
+ * figure the components do not know — a packaging part, a workshop's extra, freight or duty, overhead — the others). Not
+ * LEATHER (a leather line names its article) and not LABOUR (a labour line names its kind of work centre and counts minutes):
+ * those come from the BOM and the routing.
+ */
+export const TYPED_CATEGORIES = ['MATERIAL', 'PACKAGING', 'SUBCONTRACT', 'FREIGHT', 'DUTY', 'OVERHEAD', 'COMMISSION'] as const satisfies readonly SheetCategory[]
+export type TypedCategory = (typeof TYPED_CATEGORIES)[number]
+
+/** A commission typed in percent: that share of the version's target price (one garment), to 6 places; the line's unit cost. */
+export const commissionCost = (targetPrice: string, pct: string): string => six(new Decimal(targetPrice).times(pct).div(100))
+
+/** A typed line's figures: an amount (quantity × unit cost) or, for a commission, a percent of the target price. */
+export interface TypedLineInput {
+  readonly category: TypedCategory
+  readonly quantity?: string | undefined
+  readonly unitCost?: string | undefined
+  readonly pct?: string | undefined
+}
+
+/** What a typed line's figures lack or mix, as issues (paths `body/<field>`); empty when they are right. */
+export function typedLineProblems(line: TypedLineInput): { readonly path: string; readonly message: string }[] {
+  const issues: { path: string; message: string }[] = []
+  if (line.pct !== undefined && line.unitCost !== undefined) issues.push({ path: 'body/pct', message: 'Type the commission as a percent of the target price or as an amount, not both.' })
+  if (line.pct === undefined && line.unitCost === undefined) issues.push({ path: 'body/unitCost', message: line.category === 'COMMISSION' ? 'Type the commission as a percent of the target price or as an amount per garment.' : 'Type the cost of one.' })
+  if (line.pct !== undefined && line.category !== 'COMMISSION') issues.push({ path: 'body/pct', message: 'Only a commission is typed in percent (of the target price).' })
+  if (line.pct !== undefined && line.quantity !== undefined) issues.push({ path: 'body/quantity', message: 'A commission in percent counts one garment: no quantity.' })
+  if (line.pct !== undefined && !(new Decimal(line.pct).gt(0) && new Decimal(line.pct).lte(100))) issues.push({ path: 'body/pct', message: 'A commission is above 0 and at most 100 percent of the target price.' })
+  return issues
+}
+// ---- end B-W2b-GB02

@@ -7,10 +7,10 @@ import { creditable, creditCausale, creditNoteDraft, creditProblems, refundDueAf
 import { fatturaPaInputOf, type IssuedInvoice } from '../document'
 import { buildFatturaPa } from '../fatturapa/build'
 import { computeInvoiceTotals, storedVatOf } from '../invoices'
-import { addDays, chooseInvoiceType, daysBetween, deferredDeadline, immediateDeadline } from './deadlines'
+import { addDays, chooseInvoiceType, daysBetween, deferredDeadline, immediateDeadline, withoutDdtDeadline } from './deadlines'
 import { deductionProblems, planDeductions, type DepositInvoiceFacts } from './deductions'
 import { orderSettlement, type SettlementFacts } from './settlement'
-import { ddtInvoiceProblems, draftGoodsLines, notInvoiced, type InvoicedQuantity, type OrderLinePrice, type ShippedQuantity } from './shipped'
+import { ddtInvoiceProblems, draftGoodsLines, notInvoiced, placeWithoutDdt, type InvoicedQuantity, type OrderLinePrice, type ShippedQuantity } from './shipped'
 
 // Every company, party, VAT number, order and amount here is made up (the FatturaPA samples' fake numbers: office 000).
 
@@ -144,6 +144,32 @@ describe('the deposit deducted on the final invoice (FIN-078)', () => {
     expect(planDeductions([td02({ status: 'REJECTED' })], goods, 'EUR').skipped[0]!.reason).toContain('rejected by SDI')
     expect(planDeductions([td02()], new Map([[treatmentKey(N32), 84000]]), 'EUR').skipped[0]!.reason).toContain('taxed otherwise')
   })
+
+  // ---- B-W2b-GB02 (G149)
+  it('a TD02 of several VAT treatments: one line per treatment from the goods of each, never above what is left of it', () => {
+    const mixed = td02({ netTotal: 30000, grossTotal: 34400, entries: [{ treatment: IT22, taxable: 20000, vat: 4400 }, { treatment: N32, taxable: 10000, vat: 0 }] })
+    const both = new Map([[treatmentKey(IT22), 84000], [treatmentKey(N32), 50000]])
+    const whole = planDeductions([mixed], both, 'EUR')
+    expect(whole.skipped).toEqual([])
+    expect(whole.lines.map((line) => [line.depositInvoiceId, line.core.vat, line.core.deduction])).toEqual([
+      ['td02-1', IT22, { netAmount: -20000, grossAmount: -24400 }],
+      ['td02-1', N32, { netAmount: -10000, grossAmount: -10000 }],
+    ])
+    // Goods of one treatment only: that part now, the rest on the next invoice.
+    expect(planDeductions([mixed], goods, 'EUR').lines.map((line) => line.core.deduction)).toEqual([{ netAmount: -20000, grossAmount: -24400 }])
+    // What another invoice deducted of a treatment is left out (per treatment, or split by taxable when not known).
+    const after = planDeductions([{ ...mixed, deductedNet: 20000, deductedBy: ['FT-2026-00007'], deductedByTreatment: new Map([[treatmentKey(IT22), 20000]]) }], both, 'EUR')
+    expect(after.lines.map((line) => [line.core.vat, line.core.deduction])).toEqual([[N32, { netAmount: -10000, grossAmount: -10000 }]])
+    expect(planDeductions([{ ...mixed, creditedNet: 3000, creditedGross: 3440 }], both, 'EUR').lines.map((line) => line.core.deduction)).toEqual([
+      { netAmount: -18000, grossAmount: -21960 },
+      { netAmount: -9000, grossAmount: -9000 },
+    ])
+    // No goods of its treatments: said in words.
+    expect(planDeductions([mixed], new Map([['other', 1000]]), 'EUR').skipped[0]!.reason).toContain('taxed otherwise')
+    // At issue the two lines count together against the TD02's net.
+    expect(deductionProblems('c1', [{ index: 1, depositInvoiceId: 'td02-1', netAmount: -20000 }, { index: 2, depositInvoiceId: 'td02-1', netAmount: -10001 }], new Map([['td02-1', mixed]]), 'EUR').map((problem) => problem.code)).toEqual(['DEDUCTION_OVER'])
+  })
+  // ---- end B-W2b-GB02
 
   it('at issue: above the TD02 net (less credits, less other issued invoices) is refused in words', () => {
     const deposits = new Map([['td02-1', td02({ deductedNet: 20000, deductedBy: ['FT-2026-00005'] })]])
@@ -296,3 +322,36 @@ describe('the order settled: shipped, invoiced, delivered by SDI, paid (PLAN §4
     expect(orderSettlement(none)).toMatchObject({ settled: true, money: { balanceDue: 0, depositsPaidWithoutInvoice: 30000 } })
   })
 })
+
+// ---- B-W2b-GB02 (G148): goods that left without a DDT
+describe('goods shipped without a DDT', () => {
+  it('places the invoices without a DDT on the shipments in the order they left: issued first, then drafts', () => {
+    const shipments = [
+      { shipmentId: 's2', order: '2026-11-12|SH-2', lines: [{ salesOrderLineId: 'L1', size: '52', quantity: 3 }] },
+      { shipmentId: 's1', order: '2026-11-10|SH-1', lines: [{ salesOrderLineId: 'L1', size: '52', quantity: 2 }, { salesOrderLineId: 'L1', size: '54', quantity: 1 }] },
+    ]
+    const invoiced = [
+      { invoiceId: 'd1', number: null, draft: true, salesOrderLineId: 'L1', size: '52', quantity: '1.0000' },
+      { invoiceId: 'i1', number: 'FT-1', draft: false, salesOrderLineId: 'L1', size: '52', quantity: '3.0000' },
+      // Beyond what left: no shipment holds it.
+      { invoiceId: 'i2', number: 'FT-2', draft: false, salesOrderLineId: 'L1', size: '54', quantity: '2.0000' },
+    ]
+    const placed = placeWithoutDdt(shipments, invoiced)
+    expect(placed.shipped.map((line) => [line.ddtId, line.size, line.quantity])).toEqual([['s1', '52', 2], ['s1', '54', 1], ['s2', '52', 3]])
+    expect(placed.invoiced.map((line) => [line.invoiceId, line.ddtId, line.size, line.quantity])).toEqual([
+      ['i1', 's1', '52', '2.0000'],
+      ['i1', 's2', '52', '1.0000'],
+      ['i2', 's1', '54', '1.0000'],
+      ['d1', 's2', '52', '1.0000'],
+    ])
+    const rows = notInvoiced(placed.shipped, placed.invoiced)
+    expect(rows.map((row) => [row.ddtId, row.size, row.notInvoiced.toString(), row.toInvoice.toString()])).toEqual([['s1', '52', '0', '0'], ['s1', '54', '0', '0'], ['s2', '52', '2', '1']])
+    expect(placeWithoutDdt([], invoiced)).toEqual({ shipped: [], invoiced: [] })
+  })
+
+  it('its immediate invoice is due 12 days after the goods left', () => {
+    expect(withoutDdtDeadline({ number: 'SH-0091', date: '2026-10-24' }, '2026-10-29')).toEqual({ docType: 'TD01', dueBy: '2026-11-05', daysLeft: 7, state: 'OPEN', words: 'Immediate invoice (TD01) by 05/11/2026, 12 days after shipment SH-0091 left without a DDT on 24/10/2026 (DPR 633/1972 art. 21 c.4): 7 days left.' })
+    expect(withoutDdtDeadline({ number: 'SH-0087', date: '2026-10-12' }, '2026-10-29')).toMatchObject({ dueBy: '2026-10-24', daysLeft: -5, state: 'LATE' })
+  })
+})
+// ---- end B-W2b-GB02

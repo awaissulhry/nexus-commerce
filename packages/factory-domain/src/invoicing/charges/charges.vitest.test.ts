@@ -73,7 +73,17 @@ describe('charge lines (FIN-060): what they bill, their VAT, the freight of a sh
     expect(freightProblems([{ index: 4, ddtId: D2, netAmount: 700 }], freights, [], 'NET', 'EUR')).toEqual([
       { code: 'CHARGE_FREIGHT_CHANGED', path: 'lines/4/unitPrice', message: "The freight of shipment SH-00008 (DDT 145/2026) is now 9.00 EUR; line 5 bills 7.00 EUR. Change the line, or the shipment's freight." },
     ])
+    // B-W2b-GB02 (G147): a GROSS invoice's freight line is compared with the shipment's freight with the line's VAT.
     expect(freightProblems([{ index: 4, ddtId: D2, netAmount: 700 }], freights, [], 'GROSS', 'EUR')).toEqual([])
+    expect(freightProblems([{ index: 4, ddtId: D2, netAmount: 738, grossAmount: 900, vatRatePct: '22.00' }], freights, [], 'GROSS', 'EUR')).toEqual([
+      { code: 'CHARGE_FREIGHT_CHANGED', path: 'lines/4/unitPrice', message: "The freight of shipment SH-00008 (DDT 145/2026) is now 9.00 EUR without VAT (10.98 EUR with 22% VAT); line 5 bills 9.00 EUR with VAT. Change the line, or the shipment's freight." },
+    ])
+    expect(freightProblems([{ index: 4, ddtId: D2, netAmount: 900, grossAmount: 1098, vatRatePct: '22.00' }], freights, [], 'GROSS', 'EUR')).toEqual([])
+    // Its amount without VAT is the shipment's freight (a gross typed one cent away by the rounding): it bills it.
+    expect(freightProblems([{ index: 4, ddtId: D2, netAmount: 900, grossAmount: 1099, vatRatePct: '22.00' }], freights, [], 'GROSS', 'EUR')).toEqual([])
+    expect(freightProblems([{ index: 2, ddtId: D1, netAmount: 1000, grossAmount: 1000, vatRatePct: '0.00' }], new Map([[D1, freight({ amount: null })]]), [], 'GROSS', 'EUR').map((problem) => problem.message)).toEqual([
+      "The freight of shipment SH-00007 (DDT 144/2026) is now not decided; line 3 bills 10.00 EUR with VAT. Change the line, or the shipment's freight.",
+    ])
   })
 
   it('a TD24 of two DDTs with a freight line per DDT and a packaging charge naming its DDT is XSD-valid', async () => {

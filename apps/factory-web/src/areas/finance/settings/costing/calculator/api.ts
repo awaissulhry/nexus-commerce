@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { applyCalcAnswer, calcRecordView, calcView, prefillView, type CalcRecordView, type CalcView, type PrefillView } from '@nexus/factory-domain/costing/cost-per-minute/contracts'
-import { overheadRulesAnswer, type OverheadRuleView } from '@nexus/factory-domain/costing/overhead-rules/contracts'
+import { overheadRuleAnswer, overheadRulesAnswer, type OverheadRuleView } from '@nexus/factory-domain/costing/overhead-rules/contracts'
 import { newIdempotencyKey, type ApiClient } from '../../../../../lib/api/client'
 
 /**
@@ -52,4 +52,18 @@ export async function removeCalc(api: ApiClient, calc: Pick<CalcView, 'id' | 've
 /** The company's own rules and every company's, active (in force today or later). */
 export async function listOverheadRules(api: ApiClient, companyId: string, signal?: AbortSignal): Promise<OverheadRuleView[]> {
   return (await api.get('/costing/overhead-rules', { query: { companyId, status: 'ACTIVE' }, schema: overheadRulesAnswer, signal })).rules
+}
+
+// ---- B-W2b-GB02 (G054): the overhead rules kept on screen (costing.rates.manage, the cost grain) -------------------------
+
+export async function createOverheadRule(api: ApiClient, body: Record<string, unknown>, idempotencyKey: string): Promise<OverheadRuleView> {
+  return (await api.post('/costing/overhead-rules', { body, schema: overheadRuleAnswer, idempotencyKey })).rule
+}
+
+export async function updateOverheadRule(api: ApiClient, ruleId: string, body: Record<string, unknown>, idempotencyKey: string): Promise<OverheadRuleView> {
+  return (await api.request('PATCH', `/costing/overhead-rules/${enc(ruleId)}`, { body, schema: overheadRuleAnswer, idempotencyKey })).rule
+}
+
+export async function archiveOverheadRule(api: ApiClient, rule: Pick<OverheadRuleView, 'id' | 'version'>, reason: string | null, idempotencyKey: string): Promise<OverheadRuleView> {
+  return (await api.post(`/costing/overhead-rules/${enc(rule.id)}/archive`, { body: { version: rule.version, ...(reason ? { reason } : {}) }, schema: overheadRuleAnswer, idempotencyKey })).rule
 }

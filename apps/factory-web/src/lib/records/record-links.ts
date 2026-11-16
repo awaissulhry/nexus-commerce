@@ -24,6 +24,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   Quote: '/sales/quotes/[id]',
   SalesOrder: '/sales/orders/[id]',
   Style: '/products/styles/[id]',
+  // B-W2b-GB02 (G054): a cost sheet version's request for its yes (its parent StyleCost) opens the style's Cost tab.
+  StyleCost: '/products/styles/[id]?tab=cost',
   // Products › Materials & trims (SCR-048; the API's model is Item) and the libraries (SCR-049).
   Item: '/products/materials/[id]',
   Operation: '/products/operations/[id]',
@@ -90,6 +92,10 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   ProductSafetyReport: '/compliance/register/accidents/reports/[id]',
   // Finance › Invoices (SCR-081: invoices, deposit invoices, credit notes) and Payments (SCR-082: a payment's placements).
   Invoice: '/finance/invoices/[id]',
+  // B-W2b-GB02 (G146): a stamp duty quarter (its alert) opens the invoices with the quarters' dialog.
+  StampDutyQuarter: '/finance/invoices?stamp=[id]',
+  // B-W2b-GB02 (G152): a declaration of intent (its audit rows, a search) opens the invoices with the declarations' dialog on it.
+  DeclarationOfIntent: '/finance/invoices?intent=[id]',
   Payment: '/finance/payments/[id]',
   // B-W2a-81: Finance › Supplier invoices (SCR-153): a supplier invoice's record; a payment reminder opens on Receivables (SCR-151).
   SupplierInvoice: '/finance/payables/[id]',

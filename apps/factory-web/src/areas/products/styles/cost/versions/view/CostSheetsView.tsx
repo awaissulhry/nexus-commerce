@@ -7,6 +7,8 @@ import { TargetPriceCard, type TargetPriceActions, type TargetPriceModel } from 
 import { CS_NS } from '../model'
 import type { VersionsActions, VersionsModel } from '../screen'
 import { VersionsCard } from './VersionsCard'
+// B-W2b-GB02 (G054): the style's size mix, edited on screen.
+import { SizeMixCard, type SizeMixActions, type SizeMixModel } from '../../sizemix/view/SizeMixCard'
 import '../../../styles.css'
 import '../cost-sheets.css'
 
@@ -16,6 +18,7 @@ export interface CostSheetsModel {
   readonly versions?: VersionsModel
   readonly goal?: TargetPriceModel
   readonly bySize?: BySizeModel
+  readonly sizeMix?: SizeMixModel
 }
 
 export interface CostSheetsActions {
@@ -23,6 +26,7 @@ export interface CostSheetsActions {
   readonly versions?: VersionsActions
   readonly goal?: TargetPriceActions
   readonly bySize?: BySizeActions
+  readonly sizeMix?: SizeMixActions
 }
 
 /** The catalogues these parts read (WithMessages replaces the page's: the products words come along for units and kinds). */
@@ -46,6 +50,7 @@ export function CostSheetsView({ model, actions }: { model: CostSheetsModel; act
             {model.bySize && <BySizeCard model={model.bySize} actions={actions?.bySize} />}
           </div>
         )}
+        {model.sizeMix && <SizeMixCard model={model.sizeMix} actions={actions?.sizeMix} />}
       </div>
     </WithMessages>
   )

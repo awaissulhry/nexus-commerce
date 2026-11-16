@@ -4,7 +4,7 @@ import { templateOf } from '../../auth/roles/templates'
 import { EVENT_CATALOGUE } from '../../events/catalogue'
 import { convertMinor, convertUnit, sumPerCurrency, totalIn } from './convert'
 import { addCurrencyProblem, isDocumentCurrency, minorUnitsOf, switchOffProblem } from './currencies'
-import { ecbFileOf, parseEcbFile } from './ecb'
+import { ecbFileOf, missedEcbDays, parseEcbFile } from './ecb'
 import { CURRENCIES_MANAGE, CURRENCIES_VIEW } from './permissions'
 import { addDays, dayRateFrom, dayRowsOf, farFromEcb, inverseRate, manualRateProblem, normalRate, pairsFor, rateKey, rateWords, type RateRow } from './rates'
 
@@ -129,6 +129,22 @@ describe('the ECB file', () => {
     expect(parseEcbFile(ecbFileOf([{ day: '2026-11-13', rates: [] }]))).toMatchObject({ ok: false })
   })
 })
+
+// ---- B-W2b-GB02 (G058)
+describe('a missed ECB day', () => {
+  it('is a working day after the newest day kept and before the file read; none before the first read', () => {
+    // Kept up to Wednesday 11 November; Monday 16's file: Thursday 12 and Friday 13 were missed (the weekend never is).
+    expect(missedEcbDays('2026-11-11', ['2026-11-16'])).toEqual(['2026-11-12', '2026-11-13'])
+    expect(missedEcbDays('2026-11-13', ['2026-11-16'])).toEqual([])
+    expect(missedEcbDays('2026-11-16', ['2026-11-16'])).toEqual([])
+    expect(missedEcbDays('2026-11-16', ['2026-11-13'])).toEqual([])
+    // The file's oldest day counts (a file of two days).
+    expect(missedEcbDays('2026-11-10', ['2026-11-13', '2026-11-12'])).toEqual(['2026-11-11'])
+    expect(missedEcbDays(null, ['2026-11-16'])).toEqual([])
+    expect(missedEcbDays('2026-11-10', [])).toEqual([])
+  })
+})
+// ---- end B-W2b-GB02
 
 describe('catalogues', () => {
   it('declares the permissions, gives them to the templates and declares the events', () => {
