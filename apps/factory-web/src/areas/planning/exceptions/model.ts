@@ -160,9 +160,14 @@ const qty = (row: PlanningException, name: string, words: Words) => `${quantity(
 const minutes = (value: string | null, words: Words) => (value === null ? '—' : formatNumber(Number(value), words.locale, { maximumFractionDigits: 0 }))
 
 /** The material in words ("DEMO-LEA-01 Nappa · Nero"), else the record's label, else the type. */
+/** B-W2b-GB29 (G222): a past due of a sample work order of no order line (its facts name the work order, no order). */
+const isSamplePastDue = (row: PlanningException): boolean => row.record?.type === 'WorkOrder' && fact(row, 'workOrderNumber') !== null && fact(row, 'orderNumber') === null
+
 export function whatOf(row: PlanningException, words: Words): string {
   if (row.item) return `${row.item.code} ${row.item.name}${row.colour ? ` · ${row.colour.name}` : ''}`
   if (row.kind === 'LANE_OVERLOADED' || row.kind === 'LANE_UNDERUSED') return fact(row, 'laneCode') ?? row.record?.label ?? words.t(`kind.${row.kind}`)
+  if (row.kind === 'WORKSHOP_OVERLOADED') return fact(row, 'workshopCode') ?? row.record?.label ?? words.t(`kind.${row.kind}`) // B-W2b-GB29 (G219)
+  if (row.kind === 'PAST_DUE' && isSamplePastDue(row)) return words.t('what.sampleWorkOrder', { number: fact(row, 'workOrderNumber') ?? '—' }) // B-W2b-GB29 (G222)
   if (row.kind === 'PAST_DUE') return words.t('what.orderLine', { order: fact(row, 'orderNumber') ?? '—', seq: fact(row, 'lineSeq') ?? '—' })
   return row.record?.label ?? words.t(`kind.${row.kind}`)
 }
@@ -183,6 +188,8 @@ export function sentenceOf(row: PlanningException, words: Words): string {
         ? t('s.SUPPLY_LATE.overdue', { material, po: fact(row, 'purchaseOrderNumber') ?? '—', date: dayText(fact(row, 'supplyDate'), words), quantity: qty(row, 'quantity', words) })
         : t('s.SUPPLY_LATE.late', { material, po: fact(row, 'purchaseOrderNumber') ?? '—', date: dayText(fact(row, 'supplyDate'), words), need: dayText(fact(row, 'needDate'), words), count: days })
     case 'PAST_DUE':
+      // B-W2b-GB29 (G222): a sample work order of no order line is named as itself.
+      if (isSamplePastDue(row)) return t('s.PAST_DUE_SAMPLE', { number: fact(row, 'workOrderNumber') ?? '—', date: dayText(fact(row, 'dueDate'), words), count: days })
       return t('s.PAST_DUE', { order: fact(row, 'orderNumber') ?? '—', seq: fact(row, 'lineSeq') ?? '—', date: dayText(fact(row, 'dueDate'), words), count: days })
     case 'EXCESS':
       return fact(row, 'firm') === 'true'
@@ -200,6 +207,9 @@ export function sentenceOf(row: PlanningException, words: Words): string {
       return t('s.NEGATIVE_STOCK', { material, quantity: qty(row, 'quantity', words) })
     case 'LANE_OVERLOADED':
       return t('s.LANE_OVERLOADED', { lane: fact(row, 'laneCode') ?? whatOf(row, words), from: dayText(fact(row, 'from'), words), to: dayText(fact(row, 'to'), words), pct: minutes(fact(row, 'loadPct'), words), booked: minutes(fact(row, 'bookedMinutes'), words), available: minutes(fact(row, 'availableMinutes'), words) })
+    // B-W2b-GB29 (G219): a workshop above its weekly capacity, in minutes or garments, for one kind of work or any.
+    case 'WORKSHOP_OVERLOADED':
+      return t(fact(row, 'unit') === 'PIECES' ? 's.WORKSHOP_OVERLOADED.pieces' : 's.WORKSHOP_OVERLOADED.minutes', { workshop: whatOf(row, words), from: dayText(fact(row, 'from'), words), to: dayText(fact(row, 'to'), words), pct: minutes(fact(row, 'loadPct'), words), booked: minutes(fact(row, 'booked'), words), available: minutes(fact(row, 'available'), words) })
     default:
       return t(`s.${row.kind}`, { what: whatOf(row, words) })
   }
@@ -245,7 +255,7 @@ export const statusTone = (row: PlanningException): 'info' | 'neutral' | 'succes
 }
 
 export const kindTone = (kind: ExceptionKind): 'danger' | 'warning' | 'info' | 'neutral' =>
-  kind === 'SHORT' || kind === 'NEGATIVE_STOCK' || kind === 'PAST_DUE' ? 'danger' : kind === 'SUPPLY_LATE' || kind === 'LANE_OVERLOADED' || kind === 'MOVE_EARLIER' || kind === 'BELOW_SAFETY_STOCK' ? 'warning' : kind === 'EXCESS' || kind === 'CANCEL' ? 'info' : 'neutral'
+  kind === 'SHORT' || kind === 'NEGATIVE_STOCK' || kind === 'PAST_DUE' ? 'danger' : kind === 'SUPPLY_LATE' || kind === 'LANE_OVERLOADED' || kind === 'WORKSHOP_OVERLOADED' || kind === 'MOVE_EARLIER' || kind === 'BELOW_SAFETY_STOCK' ? 'warning' : kind === 'EXCESS' || kind === 'CANCEL' ? 'info' : 'neutral'
 
 /** The owner in a list cell: "You", the office person's name, or nobody yet (routing is W3). */
 export function ownerWords(row: PlanningException, words: Words): string {
@@ -297,6 +307,11 @@ export function fixesOf(row: PlanningException, place: { prefix: string; siteId:
       if (plan) fixes.push({ id: 'move', label: 'fix.moveFirm', href: plan })
       break
     case 'PAST_DUE':
+      // B-W2b-GB29 (G222): a sample work order's past due opens the work order.
+      if (isSamplePastDue(row) && record?.type === 'WorkOrder') {
+        fixes.push({ id: 'wo', label: 'fix.workOrder', params: { number: number('workOrderNumber') }, href: `${place.prefix}/production/work-orders/${encodeURIComponent(record.id)}` })
+        break
+      }
       fixes.push({ id: 'order', label: 'fix.order', params: { number: number('orderNumber') }, href: `${place.prefix}/sales/orders?q=${encodeURIComponent(number('orderNumber'))}` })
       break
     case 'LANE_OVERLOADED': {
@@ -304,6 +319,12 @@ export function fixesOf(row: PlanningException, place: { prefix: string; siteId:
       const laneId = record?.id
       const from = number('from')
       if (laneId) fixes.push({ id: 'board', label: 'fix.boardLane', params: { lane: number('laneCode') }, href: `${place.prefix}/planning/board?${site}lane=${encodeURIComponent(`${kind}:${laneId}`)}${from ? `&from=${from}` : ''}` })
+      fixes.push({ id: 'capacity', label: 'fix.capacity', href: `${place.prefix}/planning/capacity?${site}${from ? `from=${from}&` : ''}bucket=WEEK`.replace(/[?&]$/, '') })
+      break
+    }
+    // B-W2b-GB29 (G219): the workshop's week on Capacity & load (its subcontractor rows).
+    case 'WORKSHOP_OVERLOADED': {
+      const from = number('from')
       fixes.push({ id: 'capacity', label: 'fix.capacity', href: `${place.prefix}/planning/capacity?${site}${from ? `from=${from}&` : ''}bucket=WEEK`.replace(/[?&]$/, '') })
       break
     }

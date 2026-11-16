@@ -48,6 +48,14 @@
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update", "delete"] }
       }
+    },
+    "StyleCuttingLoss": {
+      "about": "B-W2b-GB29 (G226): the office (planning.leather.manage) records a style's cutting loss accepted for planning; the plan run (the worker and scheduler in the tenant's system context) and quotes read it. Office only; nobody changes or removes a row.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert"] }
+      }
     }
   }
 }

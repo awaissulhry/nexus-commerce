@@ -25,6 +25,7 @@ import {
   reasonHeld,
   refusalOf,
   shadeOptions,
+  splitLines,
   splitWords,
   tileCounts,
   visibleNeed,
@@ -87,6 +88,8 @@ describe('leather plan: options and decisions, held with the reason', () => {
       { option: 'ask', held: 'held.noNote' },
     ])
     expect(shadeOptions(FIXTURES.COVERED, PLANNER)).toEqual([])
+    // B-W2b-GB29 (G222): a sample work order has no customer to ask.
+    expect(shadeOptions(FIXTURES.SAMPLE_ROW, PLANNER).find((entry) => entry.option === 'ask')).toEqual({ option: 'ask', held: 'held.sampleNoCustomer' })
     expect(draftPoHeld({ ...FIXTURES.MUST_BUY, requirement: { ...FIXTURES.MUST_BUY.requirement, decision: 'ORDERED' } }, leatherCan(['purchasing.manage']))).toBe('held.requirement.ORDERED')
     expect(draftPoHeld(FIXTURES.FITS, leatherCan(['purchasing.manage']))).toBe('held.notMustBuy')
   })
@@ -107,6 +110,11 @@ describe('leather plan: options and decisions, held with the reason', () => {
     expect(proposalWords(FIXTURES.TOO_FEW, words(), 5)).toBe('3 cuts of 5 needed')
     expect(proposalWords(FIXTURES.DRIFT, words('it'), 5)).toBe('Imposta perdita 12 % → 14 %')
     expect(splitWords(FIXTURES.SPLIT, words())).toBe('sizes 46–50 from LOT-DEMO-221, sizes 52 from LOT-DEMO-230')
+    // B-W2b-GB29 (G226): with one work order each size's share is held for its cell; without cells, one line per lot.
+    const part = FIXTURES.SPLIT.split![0]!
+    expect(splitLines([{ ...part, cells: null }])).toEqual([{ lotId: part.lotId, quantity: part.area }])
+    expect(splitLines([{ ...part, cells: [{ size: '46', workOrderSizeId: 'c46', area: '10.0000' }, { size: '48', workOrderSizeId: 'c48', area: '0.0000' }] }])).toEqual([{ lotId: part.lotId, quantity: '10.0000', workOrderSizeId: 'c46' }])
+    expect(splitLines([{ ...part, cells: [{ size: '46', workOrderSizeId: null, area: '10.0000' }] }])).toEqual([{ lotId: part.lotId, quantity: part.area }])
     const note = askNote(FIXTURES.ASK, words())
     expect(note).toContain(FIXTURES.ASK.order.number)
     expect(note).not.toMatch(/\{[a-z]+\}/)

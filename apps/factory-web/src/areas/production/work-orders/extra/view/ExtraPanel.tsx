@@ -2,7 +2,7 @@
 
 import { Plus } from 'lucide-react'
 import { Banner, Card, Field, SummaryTable } from '@nexus/ui/components'
-import { Button, Select, Spinner } from '@nexus/ui/primitives'
+import { Button, Input, Select, Spinner } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
@@ -48,10 +48,10 @@ export function ExtraPanel({ workOrder, model, actions }: { workOrder: WorkOrder
         <SummaryTable
           label={t('extra.title')}
           stackOnPhone
-          columns={[t('extra.col.operation'), t('extra.col.reason'), t('extra.col.addedOn'), t('extra.col.at')]}
+          columns={[t('extra.col.operation'), t('extra.col.reason'), /* B-W2b-GB29 (G215) */ t('extra.col.planned'), t('extra.col.addedOn'), t('extra.col.at')]}
           rows={rows.map((row) => ({
             id: row.id,
-            cells: [`${row.seq ?? '—'} ${row.operation.code} · ${row.operation.name}`, reasonWords(row, t(`extra.reason.${row.reasonCode}`)), t(`extra.on.${row.addedOn}`), formatDateTime(row.at, { locale })],
+            cells: [`${row.seq ?? '—'} ${row.operation.code} · ${row.operation.name}`, reasonWords(row, t(`extra.reason.${row.reasonCode}`)), typeof row.plannedQuantity === 'number' ? t('extra.plannedCell', { count: row.plannedQuantity }) : t('extra.offPlan'), t(`extra.on.${row.addedOn}`), formatDateTime(row.at, { locale })],
           }))}
         />
       )}
@@ -135,6 +135,10 @@ function ExtraDialog({ workOrder, dialog, actions }: { workOrder: WorkOrder; dia
                 <Textarea id="fw-pr-extra-note" value={draft.note} limit={EXTRA_NOTE.max} maxLength={EXTRA_NOTE.max} rows={2} onChange={(event) => actions?.onDraft?.({ note: event.target.value })} />
               </Field>
             ) : null}
+            {/* B-W2b-GB29 (G215): how many garments need it (optional): planning, the board and WIP then count it. */}
+            <Field label={t('extra.planned')} htmlFor="fw-pr-extra-planned" hint={t('extra.plannedHelp')}>
+              <Input id="fw-pr-extra-planned" inputMode="numeric" value={draft.planned} maxLength={6} onChange={(event) => actions?.onDraft?.({ planned: event.target.value })} />
+            </Field>
             {picked?.pays === 'OFF_STANDARD' ? <Banner tone="warning" title={t('extra.noRate')} /> : null}
             <ul className="fw-pr-list">
               <li>{t('extra.dialog.scans')}</li>

@@ -55,6 +55,12 @@ export interface MaterialNeed {
   readonly leadTimeDays: number | null
   /** Days between arrival and use (incoming inspection, put-away; ItemPlanning.delayDays). */
   readonly delayDays: number | null
+  /**
+   * B-W2b-GB29 (G224): BUY with a supplier: the earliest day a buy ordered today arrives, its lead time walked around the
+   * supplier's closed days (calendars/suppliers `arrivalDate` over its calendar); left out or null: today + the lead time in
+   * calendar days (a supplier without a calendar).
+   */
+  readonly earliestArrival?: BusinessDate | null
   /** The purchase order line's number words ("PO-00012 line 10"), when a supply names one. */
   readonly purchaseOf?: (purchaseOrderLineId: string) => string | undefined
 }
@@ -108,7 +114,11 @@ export function arrivalsOf(need: MaterialNeed, today: BusinessDate): { arrivals:
   if (new Dec(need.uncovered).gt(0)) {
     const lead = need.leadTimeDays
     if (lead === null) warnings.push(need.action === 'BUY' ? { code: 'NO_LEAD_TIME', words: `${need.label} has no lead time on record: the date counts it as there today.` } : { code: 'NO_MAKE_LEAD_TIME', words: `${need.label} is made here and has no make lead time on record: the date counts it as ready today.` })
-    const date = plusDays(today, Math.max(0, lead ?? 0) + delay)
+    // B-W2b-GB29 (G224): a buy arrives after its supplier's closed days (the walked arrival), never before today + lead.
+    const plain = plusDays(today, Math.max(0, lead ?? 0))
+    const walked = need.action === 'BUY' && lead !== null && need.earliestArrival ? later(need.earliestArrival, plain) : plain
+    const date = plusDays(walked, delay)
+    const closed = walked > plain ? " (the supplier's closed days not counted)" : ''
     arrivals.push({
       itemId: need.itemId,
       itemColourId: need.itemColourId,
@@ -117,7 +127,7 @@ export function arrivalsOf(need: MaterialNeed, today: BusinessDate): { arrivals:
       date,
       leadTimeDays: lead,
       purchaseOrderLineId: null,
-      words: need.action === 'MAKE' ? `${need.label} is to make: ready by ${shortDay(date)}.` : `${need.label} is to buy: ${lead ?? 0} day(s) to arrive, by ${shortDay(date)}.`,
+      words: need.action === 'MAKE' ? `${need.label} is to make: ready by ${shortDay(date)}.` : `${need.label} is to buy: ${lead ?? 0} day(s) to arrive${closed}, by ${shortDay(date)}.`,
     })
   }
   return { arrivals, warnings }

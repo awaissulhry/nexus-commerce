@@ -557,7 +557,12 @@
       "operation": "Scegli prima l'operazione.",
       "reason": "Scrivi perché serve.",
       "words": "Scrivi perché in poche parole."
-    }
+    },
+    "planned": "Capi che la richiedono (facoltativo)",
+    "plannedUnit": "capi",
+    "plannedEmpty": "Lasciato vuoto: resta fuori dal piano",
+    "plannedRange": "Un numero intero da 1",
+    "plannedHint": "Piano, tabellone e WIP la contano per questi capi."
   },
   "firstPiece": {
     "held": "In attesa dell'approvazione del primo capo.",

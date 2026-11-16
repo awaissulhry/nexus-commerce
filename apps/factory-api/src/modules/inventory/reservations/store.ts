@@ -49,6 +49,8 @@ export const RESERVATION_COLUMNS = {
   workOrderId: true,
   salesOrderLineId: true,
   partyId: true,
+  // B-W2b-GB29 (G226): the size of the work order a split by garment holds it for.
+  workOrderSizeId: true,
   needDate: true,
   status: true,
   issuedAt: true,

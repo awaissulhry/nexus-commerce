@@ -38,9 +38,11 @@ export interface ExtraDraft {
   readonly operationId: string | null
   readonly reason: ExtraReasonCode | null
   readonly words: string
+  /** B-W2b-GB29 (G215): the garments that need it; null: none typed (it stays off the plan). Left out on a kept older draft. */
+  readonly planned?: number | null
 }
 
-export const NEW_EXTRA: ExtraDraft = Object.freeze({ operationId: null, reason: null, words: '' })
+export const NEW_EXTRA: ExtraDraft = Object.freeze({ operationId: null, reason: null, words: '', planned: null })
 
 /** The note's limits (the API's: a few words, required with Other). */
 export const EXTRA_NOTE = { min: 3, max: 200 } as const
@@ -56,7 +58,8 @@ export function extraHeld(draft: ExtraDraft, choices: ExtraChoices | null): 'ope
 
 export function extraBody(draft: ExtraDraft): Record<string, unknown> {
   const note = draft.words.trim()
-  return { operationId: draft.operationId, reasonCode: draft.reason, ...(note.length >= EXTRA_NOTE.min ? { note } : {}) }
+  // B-W2b-GB29 (G215): the planned garments only when typed (the API checks them against the work order's).
+  return { operationId: draft.operationId, reasonCode: draft.reason, ...(note.length >= EXTRA_NOTE.min ? { note } : {}), ...(typeof draft.planned === 'number' && draft.planned >= 1 ? { plannedQuantity: draft.planned } : {}) }
 }
 
 /** The card's unplanned operations this station may report, not reported on this bundle yet (`current` left out). */

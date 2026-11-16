@@ -45,6 +45,8 @@ const SESSIONS: Record<string, SessionContext> = {
   viewer: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['planning.view'])] },
   maker: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['product.bom.view', 'product.bom.manage', 'product.styles.view'])] },
   outsider: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['inventory.stock.view'])] },
+  // B-W2b-GB29 (G226): a planner who reserves (the split by garment).
+  reserver: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['planning.view', 'inventory.reserve', 'inventory.stock.view'])] },
 }
 
 type Json = Record<string, any>
@@ -196,6 +198,29 @@ describe('planned against actual yield and the cutting loss (PLN-109)', () => {
     expect((await outbox('planning.cutting_loss_decided', jacket.id)).map((event) => event.payload)).toEqual([expect.objectContaining({ decision: 'ACCEPTED', revisionId: null, siteId: siteA1 })])
   })
 
+  // B-W2b-GB29 (G226): the accepted loss is kept for planning and reaches the next plan run on the released revision.
+  it('keeps the accepted loss for planning: the next plan run cuts the released revision with it, without a new revision', async () => {
+    const [kept] = await admin<{ pct: string; cuts: number }>(`SELECT "lossPct"::text AS pct, "basedOnCuts" AS cuts FROM "StyleCuttingLoss" WHERE "tenantId" = $1 AND "styleId" = $2 ORDER BY "decidedAt" DESC LIMIT 1`, [T, jacket.id])
+    const decided = (await yieldOf()).lastDecision
+    expect(kept).toEqual({ pct: Number(decided.toPct).toFixed(2), cuts: expect.any(Number) })
+    const before = ((await need()).rows as Json[]).filter((row) => row.style.code === 'SEED-JKT-02')
+    // The run before the decision cut with the BOM's 12 %: its area is the pattern's × 1.12.
+    expect(before.length).toBeGreaterThan(0)
+    await ok('planner', 'POST', '/planning/runs', { siteId: siteA1 }, 201)
+    const after = ((await need()).rows as Json[]).filter((row) => row.style.code === 'SEED-JKT-02')
+    expect(after.length).toBe(before.length)
+    const wastage = Number(decided.toPct) / (100 - Number(decided.toPct))
+    for (const row of after) {
+      expect(Number(row.lossPct)).toBeCloseTo(Number(decided.toPct), 1)
+      expect(Number(row.netArea)).toBeCloseTo(Number(row.area) / (1 + wastage), 2)
+    }
+    const total = (rows: Json[]) => rows.reduce((sum, row) => sum + Number(row.area), 0)
+    expect(total(after)).toBeGreaterThan(total(before))
+    // The released revision itself never changed.
+    const [released] = await admin<{ w: string }>(`SELECT b."wastagePct"::text AS w FROM "BomLine" b JOIN "Item" i ON i.id = b."itemId" WHERE b."revisionId" = $1 AND i.tracking = 'HIDE'`, [jacket.released])
+    expect(released!.w).toBe('12.0000')
+  })
+
   it('carries the accepted loss into a draft revision: its planned yield and its leather wastage, under its version', async () => {
     await ok('maker', 'POST', `/product/styles/${jacket.id}/revisions/${jacket.released}/copy`, { changeNote: 'Made-up: the learned cutting loss.' }, 201)
     const row = await yieldOf()
@@ -225,5 +250,32 @@ describe('planned against actual yield and the cutting loss (PLN-109)', () => {
     expect(after.proposal.state).toBe('DISMISSED')
     expect(after.lastDecision).toMatchObject({ decision: 'DISMISSED', reason: 'Made-up: a new knife since last week.' })
     expect(pathsOf(await no('planner', 'POST', dismissUrl(), { siteId: siteA1, toPct: row.proposal.toPct, cuts: row.cuts, reason: 'Again (made up).' }, 409))).toContain('refusal/ALREADY_DISMISSED')
+  })
+})
+
+// B-W2b-GB29 (G226): a split by garment holds each size's share for its cell of the work order (data, not words).
+describe('the split by garment as data (B-W2b-GB29)', () => {
+  it('reserves a lot for one size of the work order (its cell); a cell of another work order or an order-line demand is refused in words', async () => {
+    const [cell] = await admin<{ id: string; workOrderId: string; lotId: string }>(
+      `SELECT s.id, s."workOrderId", l.id AS "lotId" FROM "WorkOrder" w JOIN "WorkOrderSize" s ON s."workOrderId" = w.id JOIN "Lot" l ON l.code = 'SEED-LOT-LEA-01' AND l."tenantId" = w."tenantId"
+        WHERE w."tenantId" = $1 AND w.number = 'SEED-WO-0001' ORDER BY s.size LIMIT 1`,
+      [T],
+    )
+    const [other] = await admin<{ id: string }>(`SELECT s.id FROM "WorkOrder" w JOIN "WorkOrderSize" s ON s."workOrderId" = w.id WHERE w."tenantId" = $1 AND w.number = 'SEED-WO-0002' LIMIT 1`, [T])
+    const refused = await no('reserver', 'POST', '/inventory/reservations', { siteId: siteA1, workOrderId: cell!.workOrderId, lines: [{ lotId: cell!.lotId, quantity: '1', workOrderSizeId: other!.id }] }, 400)
+    expect(pathsOf(refused)).toContain('body/lines/0/workOrderSizeId')
+    expect(refused.message).toMatch(/^Not a size of work order SEED-WO-0001/)
+    const [line] = await admin<{ id: string }>(`SELECT l.id FROM "SalesOrderLine" l JOIN "SalesOrder" o ON o.id = l."orderId" WHERE o."tenantId" = $1 AND o.number = 'SEED-SO-0002' LIMIT 1`, [T])
+    const lineDemand = await no('reserver', 'POST', '/inventory/reservations', { siteId: siteA1, salesOrderLineId: line!.id, lines: [{ lotId: cell!.lotId, quantity: '1', workOrderSizeId: cell!.id }] }, 400)
+    expect(lineDemand.message).toMatch(/needs the work order/)
+    const made = await call('reserver', 'POST', '/inventory/reservations', { siteId: siteA1, workOrderId: cell!.workOrderId, note: 'Made-up split', lines: [{ lotId: cell!.lotId, quantity: '1', workOrderSizeId: cell!.id }] })
+    // The lot may hold nothing free in this set-up (a refusal in words then); when it reserves, the row names its cell.
+    if (made.statusCode === 201) {
+      const [row] = await admin<{ cell: string | null }>(`SELECT "workOrderSizeId" AS cell FROM "Reservation" WHERE id = $1`, [made.json().reservations[0].id])
+      expect(row!.cell).toBe(cell!.id)
+    } else {
+      expect(made.statusCode, made.body).toBe(409)
+      expect(made.json().error.message).not.toMatch(/size/)
+    }
   })
 })

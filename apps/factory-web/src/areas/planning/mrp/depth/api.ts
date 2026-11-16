@@ -66,6 +66,8 @@ export const plannedOrderSchema = z.object({
     .nullable()
     .transform((value) => value !== null),
   late: z.object({ needDate: z.string(), daysLate: z.number() }).nullable(),
+  // B-W2b-GB29 (G219): a planned subcontract order's workshop load on its days (the words are the screen's).
+  workshopLoad: z.object({ loadPct: z.string().nullable(), over: z.boolean() }).nullable().optional(),
   plan: z.object({
     sizes: sizeRun.optional(),
     startDate: z.string().optional(),

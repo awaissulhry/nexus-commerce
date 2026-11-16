@@ -14,6 +14,8 @@ import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_co
 import { seed as seedCalendar } from '../../../../../../packages/factory-db/seed/calendar'
 import { seed as seedPlanning } from '../../../../../../packages/factory-db/seed/planning'
 import { seed as seedSchedule } from '../../../../../../packages/factory-db/seed/schedule'
+// B-W2b-GB29 (G225): a workshop's past load (SEED-SC-0001 to P2, made CLOSED below).
+import { seed as seedSubcontract } from '../../../../../../packages/factory-db/seed/subcontract'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 // ---- B-W2b-F53: this file fixes its clock on a day of the seeds' story, so it runs the seeds as written (seed-calendar)
 await vi.hoisted(async () => (await import('@nexus/factory-db/testing')).seedsAsWritten())
@@ -226,6 +228,29 @@ describe('the utilisation trend (PLN-204)', { timeout: 60_000 }, () => {
     await refused('planner', `/planning/reports/utilisation/work-orders?${PERIOD}&laneKind=LINE&laneId=${lineL1}&week=2027-W05`, 400)
     await refused('planner', `/planning/reports/utilisation/work-orders?${PERIOD}&laneKind=LINE&laneId=${newId()}&week=2026-W47`, 404)
     await refused('planner', `/planning/reports/utilisation?${PERIOD}&ahead=13`, 400)
+  })
+})
+
+// ---- B-W2b-GB29 (G225, B-W2b-349's gap): a workshop's past weeks from its subcontract orders' own dates ----------------------
+describe('a workshop’s past load (G225)', { timeout: 120_000 }, () => {
+  it('shows the work a workshop had in a past week (issued → closed) against its capacity then; nothing is stored for it', async () => {
+    const seeded = await seedSubcontract({ db: database, namespace: NS })
+    const workshop = idOf('party:P2')
+    // SEED-SC-0001 went out on Monday 16 Nov and was closed on Friday 20 Nov (its goods back); P2 sews 2,400 minutes a week.
+    await force(`UPDATE "SubcontractOrder" SET status = 'CLOSED', "issuedAt" = '2026-11-16T08:00:00Z', "closedAt" = '2026-11-20T16:00:00Z' WHERE id = $1`, [seeded.orderId])
+    await force(`INSERT INTO "SubcontractorCapacity" (id, "tenantId", "partyId", "workCentreKind", unit, "perWeek", "validFrom") VALUES ($1, $2, $3, 'SEWING', 'MINUTES', 2400, '2026-11-01')`, [newId(), T, workshop])
+    const [sent] = await admin<{ minutes: string }>(
+      `SELECT to_char(SUM(o.pieces * w."standardMinutes"), 'FM999990.0') AS minutes FROM "SubcontractOperation" o JOIN "WorkOrderOperation" w ON w.id = o."workOrderOperationId" WHERE o."subcontractOrderId" = $1`,
+      [seeded.orderId],
+    )
+    const answer = await ok('planner', `/planning/reports/utilisation?${PERIOD}&ahead=2`)
+    const line = answer.lanes.find((lane: Json) => lane.kind === 'WORKSHOP' && lane.id === workshop && lane.workCentreKind === 'SEWING')
+    expect(line, 'P2 has a sewing line').toBeDefined()
+    const week = (key: string) => line.cells.find((cell: Json) => cell.key === key)
+    expect(week('2026-W47')).toMatchObject({ booked: sent!.minutes, capacity: '2400.0', loadPct: ((Number(sent!.minutes) / 2400) * 100).toFixed(1) })
+    // A week it was not out: nothing booked, the capacity known; the period's first week (Sunday 1 Nov only) has no weekday: unknown.
+    expect(week('2026-W46')).toMatchObject({ booked: '0.0', capacity: '2400.0', loadPct: '0.0' })
+    expect(week('2026-W44')).toMatchObject({ capacity: null, loadPct: null })
   })
 })
 

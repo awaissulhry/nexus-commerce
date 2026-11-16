@@ -2,7 +2,7 @@
 
 import { Hammer, Shirt, TriangleAlert, Users, Workflow, MessageSquareText } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { FloorTile, FloorTileGrid } from '@nexus/ui/floor'
+import { FloorTile, FloorTileGrid, QuantityPad } from '@nexus/ui/floor'
 import { Field } from '@nexus/ui/components'
 import { ReasonGrid, type ReasonTile } from '@nexus/ui/floor/ReasonGrid/index'
 import { useReasonWords } from '../../../../lib/ds-words/reason-grid'
@@ -20,7 +20,7 @@ import type { BundleCard } from '../model'
  * says why. Online only (held with the reason): the list is the office's. Standard minutes are no money; `pays` is a word.
  */
 
-export type ExtraAction = { type: 'extraOperation'; id: string } | { type: 'extraReason'; code: ExtraReasonCode } | { type: 'extraWords'; words: string }
+export type ExtraAction = { type: 'extraOperation'; id: string } | { type: 'extraReason'; code: ExtraReasonCode } | { type: 'extraWords'; words: string } | /* B-W2b-GB29 (G215) */ { type: 'extraPlanned'; value: number | null }
 
 const TILE_LOOK: Readonly<Record<ExtraReasonCode, { icon: ReactNode; tone: 'danger' | 'warning' | 'info' | 'neutral' }>> = {
   QUALITY_FIX: { icon: <Hammer />, tone: 'warning' },
@@ -70,6 +70,24 @@ export function ExtraBody({ card, choices, draft, problem, busy, online, t, send
           <Field label={t('extra.words')} htmlFor="fw-scans-extra-words">
             <Textarea id="fw-scans-extra-words" value={draft.words} limit={EXTRA_NOTE.max} maxLength={EXTRA_NOTE.max} rows={2} onChange={(event) => send({ type: 'extraWords', words: event.target.value })} />
           </Field>
+        ) : null}
+        {/* B-W2b-GB29 (G215): how many garments need it (optional): the plan, the board and WIP then count it. */}
+        {picked ? (
+          <QuantityPad
+            label={t('extra.planned')}
+            value={draft.planned ?? null}
+            onChange={(value) => send({ type: 'extraPlanned', value })}
+            unit={t('extra.plannedUnit')}
+            min={1}
+            max={99_999}
+            decrementLabel={t('pad.less')}
+            incrementLabel={t('pad.more')}
+            clearLabel={t('pad.clear')}
+            backLabel={t('pad.back')}
+            emptyLabel={t('extra.plannedEmpty')}
+            rangeLabel={() => t('extra.plannedRange')}
+            message={typeof draft.planned === 'number' ? t('extra.plannedHint') : t('extra.plannedEmpty')}
+          />
         ) : null}
         {picked?.pays === 'OFF_STANDARD' ? (
           <TaskLine tone="warning" icon={<TriangleAlert />}>

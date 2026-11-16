@@ -24,7 +24,8 @@ export type BoardDialog =
   | { kind: 'bar'; workOrderId: string; slotId: string | null; detail: Loaded<BarDetail>; busy?: boolean; error?: string | null }
   /** The drop warning: the lane would go over capacity ("Line 2 would be at 112% on Tue"). */
   | { kind: 'drop'; cardLabel: string; laneName: string; days: readonly OverDay[]; source: 'board' | 'api'; next: boolean; busy?: boolean; error?: string | null }
-  | { kind: 'publish'; range: PublishRangeKind; from: string | null; to: string | null; preview: Loaded<PublishPreview>; busy?: boolean; error?: string | null; done?: VersionHeader | null }
+  // B-W2b-GB29 (G217): notifyLeaders — the dialog's "Notify line leaders" (left out: on).
+  | { kind: 'publish'; range: PublishRangeKind; from: string | null; to: string | null; preview: Loaded<PublishPreview>; busy?: boolean; error?: string | null; done?: VersionHeader | null; notifyLeaders?: boolean }
   | { kind: 'place'; preview: Loaded<PlaceByDueDate>; busy?: boolean; error?: string | null }
   | { kind: 'legend' }
   | { kind: 'versions'; versions: Loaded<PublishedVersion[]> }
@@ -108,6 +109,8 @@ export interface BoardActions {
   onDropChoice?: (choice: DropChoice) => void
   onPublishRange?: (range: PublishRangeKind, from?: string | null, to?: string | null) => void
   onPublish?: () => void
+  /** B-W2b-GB29 (G217): "Notify line leaders" on or off. */
+  onPublishNotify?: (notify: boolean) => void
   onPlaceApply?: (reason: string | null) => void
   onSendToTray?: (slotId: string) => void
   onShowProblem?: (row: ProblemRow) => void

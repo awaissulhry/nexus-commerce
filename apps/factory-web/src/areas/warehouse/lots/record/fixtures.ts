@@ -97,7 +97,8 @@ const reservation = (n: number, over: Partial<Reservation>): Reservation => ({
 const FIGURES: LotFigures = {
   lot: { onHand: '319.8000', held: '0.0000', reserved: '148.4000', available: '171.4000', overReserved: false },
   reservations: [
-    reservation(1, {}),
+    // B-W2b-GB29 (G226): a split by garment held for one size.
+    reservation(1, { workOrderSizeId: uid('8283', 1), cell: { size: '52', colourway: 'BLK' } }),
     reservation(2, { kind: 'HIDE', hide: { id: uid('8282', 1), code: 'HD-DEMO-0001' }, quantity: '52.4000', open: '52.4000', demand: { type: 'WorkOrder', id: WORK_ORDERS.a.id, number: WORK_ORDERS.a.number, status: 'COMPLETED' }, stale: true, needDate: null }),
   ],
 }

@@ -70,6 +70,8 @@ describe('allocation: what a card move asks', () => {
     expect(refusalOf(new ApiError('conflict', 409, 'conflict', 'This WorkOrder changed since it was read (version 3); it is now at version 4. Reload it and apply the change again.', null, [{ path: 'version', message: '' }]))).toBe('CHANGED')
     expect(refusalOf(new ApiError('conflict', 409, 'conflict', 'WO-0101 is completed: its allocation is kept as it was.'))).toBe('LOCKED')
     expect(refusalOf(new ApiError('forbidden', 403, 'forbidden', 'x'))).toBe('FORBIDDEN')
+    // B-W2b-GB29 (G221): a gate of its order has not passed.
+    expect(refusalOf(new ApiError('conflict', 409, 'conflict', 'WO-0101 waits for a gate of SO-1: Leather approved.', null, [{ path: 'gate/g1', message: 'LEATHER_APPROVED' }, { path: 'refusal/GATE_NOT_PASSED', message: '' }]))).toBe('GATE')
     for (const locale of LOCALES) {
       const t = words(locale).t
       for (const code of ['STALE', 'WHOLE', 'TOO_MANY', 'SAME', 'UNALLOCATED_PART', 'CHANGED', 'LOCKED', 'NOT_OPEN', 'LANE_INACTIVE', 'INVALID', 'FORBIDDEN', 'NOT_FOUND', 'OFFLINE', 'FAILED']) expect(t(`refusal.${code}`), `${locale}: ${code}`).not.toBe(`refusal.${code}`)

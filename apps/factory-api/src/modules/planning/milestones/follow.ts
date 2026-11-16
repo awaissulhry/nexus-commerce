@@ -2,7 +2,7 @@ import { passesGate, SAMPLE_GATE_KINDS, OPEN_ORDER_STATUSES } from '@nexus/facto
 import { command, type CommandCaller } from '../../../core/command'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
 import { passBySystemInCommand } from './gates'
-import { orderFactsOf } from './world'
+import { boughtLeatherLotsOf, orderFactsOf } from './world' // B-W2b-GB29 (G221): + the leather bought for an order
 
 /**
  * Gates passed by their events (B-W2b-263; design planning.milestones live: "sample approved, lot released → gate milestones
@@ -54,7 +54,9 @@ async function ordersOfLot(caller: CommandCaller, lotId: string): Promise<string
     const workOrderIds = [...new Set(reservations.flatMap((row) => (row.workOrderId ? [row.workOrderId] : [])))]
     const sizes = workOrderIds.length ? await db.workOrderSize.findMany({ where: { workOrderId: { in: workOrderIds } }, select: { salesOrderLine: { select: { orderId: true } } } }) : []
     // B-W2b-275: a SAMPLE cell may name no order line.
-    const ids = [...new Set([...reservations.flatMap((row) => (row.salesOrderLine ? [row.salesOrderLine.orderId] : [])), ...sizes.flatMap((row) => (row.salesOrderLine ? [row.salesOrderLine.orderId] : []))])]
+    // B-W2b-GB29 (G221): and the orders the lot was bought for (an order-specific buy received as this lot), reserved or not.
+    const bought = (await boughtLeatherLotsOf(db, { lotId })).flatMap((lot) => lot.orderIds)
+    const ids = [...new Set([...reservations.flatMap((row) => (row.salesOrderLine ? [row.salesOrderLine.orderId] : [])), ...sizes.flatMap((row) => (row.salesOrderLine ? [row.salesOrderLine.orderId] : [])), ...bought])]
     if (ids.length === 0) return []
     const open = await db.salesOrder.findMany({ where: { id: { in: ids }, status: { in: [...OPEN_ORDER_STATUSES] } }, select: { id: true }, orderBy: { id: 'asc' } })
     return open.map((row) => row.id)

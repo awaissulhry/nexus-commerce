@@ -38,6 +38,10 @@ export const reservationView = output({
     output({ type: z.literal('WorkOrder'), id: id(), number: z.string(), status: z.string() }),
     output({ type: z.literal('SalesOrderLine'), id: id(), orderId: z.string(), orderNumber: z.string(), seq: z.number().int(), status: z.string() }),
   ]),
+  /** B-W2b-GB29 (G226): the work order's size it is held for (a split by garment, B-W2b-132); null: the whole demand. */
+  workOrderSizeId: id().nullable(),
+  /** The same size in words: its size code and colourway code (null with workOrderSizeId null). */
+  cell: output({ size: z.string(), colourway: z.string() }).nullable(),
   /** ACTIVE while its demand is done: it holds nothing any more; release it. */
   stale: z.boolean(),
   needDate: businessDate().nullable(),
@@ -92,6 +96,8 @@ export const reserveContract = defineContract({
           quantity: quantity().optional(),
           uom: uom.optional(),
           baseQuantity: quantity().optional(),
+          /** B-W2b-GB29 (G226): held for this size (a cell) of the work order: a split by garment; only with workOrderId. */
+          workOrderSizeId: id().optional(),
         }),
       )
       .min(1)

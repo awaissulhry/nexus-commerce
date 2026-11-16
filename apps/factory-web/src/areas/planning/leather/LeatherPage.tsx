@@ -10,7 +10,7 @@ import { downloadText, useCoalesced, useLive } from '../../_shared/buying/hooks'
 import { listPlanningSites, type PlanningSite } from '../board/api'
 import { draftFromPlan, runPlan } from '../mrp/api'
 import { acceptLoss, dismissLoss, getNeed, getProtectors, getYield, reserveLeather, type LeatherNeed, type LeatherProtectors, type LeatherYield, type NeedRow } from './api'
-import { askNote, controlsOf, csvOfNeed, leatherCan, NAMESPACE, queryOf, readProblemOf, reasonHeld, refusalOf, splitWords, visibleNeed, type LeatherControls, type ShadeOption, type Words } from './model'
+import { askNote, controlsOf, csvOfNeed, leatherCan, NAMESPACE, queryOf, readProblemOf, reasonHeld, refusalOf, splitLines, splitWords, visibleNeed, type LeatherControls, type ShadeOption, type Words } from './model'
 import type { LeatherDialog, LeatherModel, LeatherNotice, Loaded } from './view-model'
 import { LeatherView } from './view/LeatherView'
 
@@ -173,7 +173,7 @@ function LeatherContainer() {
           await reserveLeather(api, { siteId, ...demand, note: t('note.reserve', { lot: row.best?.lotCode ?? '—' }), lines: row.proposal.hideIds.map((hideId) => ({ hideId })) })
           setDrawerNotice({ tone: 'success', key: 'notice.reserved', params: { count: row.proposal.count, lot: row.best?.lotCode ?? '—' } })
         } else if (option === 'split' && row.split) {
-          await reserveLeather(api, { siteId, ...demand, note: t('note.split', { split: splitWords(row, words) }), lines: row.split.map((part) => ({ lotId: part.lotId, quantity: part.area })) })
+          await reserveLeather(api, { siteId, ...demand, note: t('note.split', { split: splitWords(row, words) }), lines: splitLines(row.split) })
           setDrawerNotice({ tone: 'success', key: 'notice.split', params: { count: row.split.length } })
         } else if (option === 'buy') {
           const drafted = await draftFromPlan(api, { lines: [{ id: row.requirement.id, version: row.requirement.version }] })

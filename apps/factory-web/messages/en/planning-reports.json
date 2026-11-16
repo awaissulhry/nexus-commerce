@@ -184,7 +184,7 @@
       "ahead": "ahead"
     },
     "definition": "Utilisation: the standard minutes of the good whole garments reported on the lane's stations that week (never per person or station), over its people × its working time. Load: the open work orders' minutes still to do, placed by the board, over the lane's capacity at its planned efficiency.",
-    "workshopPast": "A workshop's past weeks say nothing: its jobs are what is left from today.",
+    "workshopPast": "A workshop's past weeks: the work it had, from its subcontract orders' own dates (sent to back), against its capacity then.",
     "csv": {
       "lane": "Lane",
       "week": "Week",

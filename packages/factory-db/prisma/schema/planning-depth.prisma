@@ -449,3 +449,26 @@ model SubcontractorCapacity {
 
   @@index([tenantId, partyId, validFrom])
 }
+
+/// B-W2b-GB29 (G226; PLN-109; design planning.leather "Change cutting loss for style X"): a style's cutting loss accepted for
+/// planning, written by the accept (B-W2b-132) in the same command as its draft revision's change. The plan run and new quotes
+/// read the latest one on top of a RELEASED revision released before it was decided (its leather lines' wastage =
+/// loss ÷ (100 − loss) × 100), until a revision released after it carries it. A new decision is a new row; nothing changes or
+/// removes one (the decisions' history).
+model StyleCuttingLoss {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  styleId     String   @db.Uuid
+  /// The loss accepted, percent, 0 up to below 100.
+  lossPct     Decimal  @db.Decimal(5, 2)
+  /// How many cuts the proposal rested on.
+  basedOnCuts Int
+  /// When it was decided: the plan reads it from then on.
+  decidedAt   DateTime @db.Timestamptz(3)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  style Style @relation("StyleCuttingLossStyle", fields: [tenantId, styleId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@index([tenantId, styleId, decidedAt])
+}

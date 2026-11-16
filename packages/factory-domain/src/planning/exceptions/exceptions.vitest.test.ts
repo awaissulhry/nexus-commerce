@@ -118,6 +118,29 @@ describe('the exception list of a run (PLN-193)', () => {
     expect(found[0]!.record).toEqual({ type: 'Line', id: 'line-1' })
   })
 
+  // B-W2b-GB29 (G219): a workshop booked above its weekly capacity is a WORKSHOP_OVERLOADED of its own, per kind and week.
+  it('WORKSHOP_OVERLOADED per workshop, kind of work and week, after the lanes; the run evaluates (and clears) it', () => {
+    const found = detectExceptions({
+      runDate,
+      materials: [],
+      purchaseOf: purchases,
+      overloads: [{ laneKind: 'LINE', laneId: 'line-1', laneCode: 'L1', bucketKey: '2026-W49', from: '2026-11-30', to: '2026-12-06', loadPct: '120.5', availableMinutes: '1000.0', bookedMinutes: '1205.0' }],
+      workshops: [
+        { partyId: 'shop-1', workshopCode: 'SUB-1', workCentreKind: 'SEWING', unit: 'MINUTES', bucketKey: '2026-W49', from: '2026-11-30', to: '2026-12-06', loadPct: '125', available: '2400', booked: '3000' },
+        { partyId: 'shop-1', workshopCode: 'SUB-1', workCentreKind: null, unit: 'PIECES', bucketKey: '2026-W50', from: '2026-12-07', to: '2026-12-13', loadPct: '110', available: '100', booked: '110' },
+      ],
+    })
+    expect(found.map((condition) => [condition.kind, condition.key])).toEqual([
+      ['LANE_OVERLOADED', 'LANE_OVERLOADED:line-1:2026-W49'],
+      ['WORKSHOP_OVERLOADED', 'WORKSHOP_OVERLOADED:shop-1:ANY:2026-W50'],
+      ['WORKSHOP_OVERLOADED', 'WORKSHOP_OVERLOADED:shop-1:SEWING:2026-W49'],
+    ])
+    expect(found[2]!.record).toEqual({ type: 'Party', id: 'shop-1' })
+    expect(found[2]!.facts).toMatchObject({ workshopCode: 'SUB-1', unit: 'MINUTES', loadPct: '125', booked: '3000', available: '2400' })
+    expect(found[2]!.sentence).toBe('Workshop SUB-1 is booked 125 % in 2026-W49 (3000 of 2400 minutes, sewing).')
+    expect(EVALUATED_KINDS).toContain('WORKSHOP_OVERLOADED')
+  })
+
   it("a run's refresh: found again keeps its row (a snooze until the next run ends), found first is raised, gone is cleared (its kinds only)", () => {
     const at = new Date('2026-11-20T08:00:00Z')
     const open = [

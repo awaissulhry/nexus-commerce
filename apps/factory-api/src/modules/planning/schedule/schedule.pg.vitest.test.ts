@@ -302,3 +302,38 @@ describe('allocation to lines and workshops (PLN-160)', () => {
     expect((await audits('planning.schedule.allocate'))[0]).toMatchObject({ recordType: 'WorkOrder', after: { lineId: lineL1 } })
   })
 })
+
+// ---- B-W2b-GB29 (G217; B-W2a-34's and B-W2a-45's gap): "Notify line leaders" on a publish ------------------------------------
+describe('a publish tells the leaders of the lines it covers in their bell (B-W2b-GB29, G217)', () => {
+  it('the lead of line L1 (an office account who reads the dispatch list) is told once; never with the switch off, nor someone without the right', async () => {
+    const { seed: seedPeople } = await import('../../../../../../packages/factory-db/seed/people')
+    const { fanOut } = await import('../../../platform/notifications/fan-out')
+    const { callerFor } = await import('../../../core/command')
+    const { systemContext } = await import('../../../platform/outbox/system')
+    // Line L1's team L1-A: E2 is its lead, with the office account user:member (seed/people).
+    await seedPeople({ db: database, namespace: NS })
+    const member = idOf('user:member')
+    const roleId = newId()
+    await admin(`INSERT INTO "Role" (id, "tenantId", key, name, audience, permissions) VALUES ($1, $2, 'gb29_line_lead', 'Line lead (test)', 'OFFICE', $3)`, [roleId, T, ['home.view', 'production.dispatch.view']])
+    const rows = await admin<Json>(`SELECT * FROM "OutboxEvent" WHERE "tenantId" = $1 AND type = 'planning.schedule_published' ORDER BY "occurredAt", id`, [T])
+    expect(rows.length).toBeGreaterThanOrEqual(1)
+    const row = rows.at(-1)!
+    expect(row.payload).toMatchObject({ notifyLeaders: true })
+    const envelope = (eventId: string, payload: Json) => ({ eventId, type: row.type, version: row.version, context: row.context, tenantId: row.tenantId, companyId: row.companyId, siteId: row.siteId, subject: row.subject, correlationId: row.correlationId, causationId: row.causationId, source: row.source, occurredAt: new Date(row.occurredAt).toISOString(), payload })
+    const fan = (eventId: string, payload: Json) => fanOut(callerFor(database, systemContext(T, `test-${eventId}`)), envelope(eventId, payload) as never)
+    const told = () => admin<Json>(`SELECT "userId", category::text AS category, "messageKey", "recordType", "recordId", "recordLabel", params FROM "Notification" WHERE "tenantId" = $1 AND "recordType" = 'PlanVersion' ORDER BY "createdAt", id`, [T])
+    // Without the right to read the dispatch list (no role yet), nobody is told.
+    expect(await fan(newId(), row.payload)).toBe(0)
+    await admin(`INSERT INTO "RoleAssignment" (id, "tenantId", "userId", "roleId", "allCompanies", "validFrom") VALUES ($1, $2, $3, $4, true, now() - interval '1 day')`, [newId(), T, member, roleId])
+    // The switch off: nobody.
+    expect(await fan(newId(), { ...row.payload, notifyLeaders: false })).toBe(0)
+    expect(await told()).toEqual([])
+    // On (the event as published): the lead of L1, a SYSTEM notification on the version, the line in its words.
+    expect(await fan(row.id, row.payload)).toBe(1)
+    expect(await told()).toEqual([expect.objectContaining({ userId: member, category: 'SYSTEM', messageKey: 'notifications.planning.schedulePublished', recordType: 'PlanVersion', recordId: row.payload.planVersionId, recordLabel: `v${row.payload.number}`, params: expect.objectContaining({ title: 'L1', lineId: lineL1 }) })])
+    // A replayed event tells nobody twice.
+    await fan(row.id, row.payload)
+    expect(await told()).toHaveLength(1)
+  })
+})
+// ---- end B-W2b-GB29

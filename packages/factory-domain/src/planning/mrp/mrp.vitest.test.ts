@@ -197,6 +197,30 @@ describe("the run's explosion into work-order parts (../explode)", () => {
     expect(alone.requirements).toEqual([expect.objectContaining({ itemId: 'leather', grossQuantity: '0.0000', netQuantity: '0.0000', suggestedQuantity: '0.0000', suggestedUom: 'HIDE', needDate: '2026-11-25', supplierId: 'tannery', sources: [] })])
     expect(alone.netting[0]!.pegging.firm).toMatchObject({ unused: '105.0000' })
   })
+
+  // B-W2b-GB29 (G222, B-W2b-284's gap): an internal sample work order (no order line) is demand of its own.
+  it('plans a sample work order of no order line: its cells in its revision, less what was issued, on its start, pegged to the work order alone', () => {
+    const sample = { workOrderId: 'wo-s', workOrderNumber: 'WO-S1', status: 'RELEASED' as const, roundId: 'sr-1', roundNumber: 'SR-1', styleId: 'style-1', revisionId: 'rev-1', dueDate: '2026-11-20', cells: [{ id: 'cell-1', colourwayId: 'cw-blk', size: '52', pieces: 2 }] }
+    const result = planRequirements(
+      input({
+        orderLines: [],
+        sampleWorkOrders: [sample],
+        workOrderIssues: [{ workOrderId: 'wo-s', itemId: 'leather', itemColourId: 'blk', quantity: '20' }],
+        workOrderStarts: new Map([['wo-s', '2026-11-12']]),
+      }),
+    )
+    // Order lines exploded stays 0: the run counts order lines; the sample's need is still there.
+    expect(result.orderLines).toBe(0)
+    expect(result.requirements).toEqual([expect.objectContaining({ itemId: 'leather', itemColourId: 'blk', grossQuantity: '80.0000', netQuantity: '80.0000', needDate: '2026-11-12' })])
+    expect(result.requirements[0]!.sources).toEqual([expect.objectContaining({ orderId: 'sr-1', orderNumber: 'WO-S1', orderLineId: 'cell-1', pieces: 2, quantity: '100.0000', issued: '20.0000', workOrders: ['WO-S1'], sample: { workOrderId: 'wo-s', workOrderNumber: 'WO-S1', roundId: 'sr-1', roundNumber: 'SR-1' } })])
+    const coverage = result.netting[0]!.pegging.coverage
+    expect(coverage.map((entry) => [entry.part.workOrderId, entry.part.partyId, entry.part.dueDate, entry.part.sample?.workOrderNumber])).toEqual([['wo-s', null, '2026-11-12', 'WO-S1']])
+    // Pegged to the work order only (WORK_ORDER, no order line, no party, no size: the DB's shape rule).
+    expect(peggingRowsOf(result.netting[0]!.pegging, result.requirements[0]!.needDate)).toEqual([expect.objectContaining({ demandKind: 'WORK_ORDER', salesOrderLineId: null, partyId: null, size: null, workOrderId: 'wo-s', supplyKind: 'PLANNED', quantity: '80.0000' })])
+    // Without a start on the board: its due day; a made (COMPLETED) sample work order needs nothing more.
+    expect(planRequirements(input({ orderLines: [], sampleWorkOrders: [sample] })).requirements[0]!.needDate).toBe('2026-11-20')
+    expect(planRequirements(input({ orderLines: [], sampleWorkOrders: [{ ...sample, status: 'COMPLETED' }] })).requirements).toEqual([])
+  })
 })
 
 describe('declared', () => {

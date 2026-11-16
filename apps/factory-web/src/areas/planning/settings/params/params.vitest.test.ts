@@ -113,6 +113,29 @@ describe('Planning settings › item parameters, reorder rules, horizon, line ef
     expect(bulkPatch({ fields: { buyLeadTimeDays: 'x' }, method: null })).toMatchObject({ field: 'buyLeadTimeDays' })
   })
 
+  // B-W2b-GB29 (G220): the bulk edit takes the number rules per item (scrap %, yield %, days before use) beside W2a's fields.
+  it('reviews the planning rules of a bulk edit with the rules’ own checks and sends them in the same write', () => {
+    const rows = itemRowsOf(ENTRIES).slice(0, 4)
+    const typed = bulkPatch({ fields: { scrapPct: '2,5', delayDays: '3' }, method: null })
+    expect(typed).toEqual({ patch: { scrapPct: '2.5', delayDays: 3 } })
+    if (!('patch' in typed)) return
+    const lines = bulkLines(rows, typed.patch)
+    expect(lines[0]!.changes).toEqual([
+      { field: 'scrapPct', before: null, after: '2.5' },
+      { field: 'delayDays', before: null, after: '3' },
+    ])
+    expect(lines[0]!.plan).toMatchObject({ kind: 'write', patch: { scrapPct: '2.5', delayDays: 3 } })
+    // A yield of 0 is refused before anything is sent, in the rules' words; a typed word is refused at its field.
+    const zero = bulkPatch({ fields: { yieldPct: '0' }, method: null })
+    if (!('patch' in zero)) throw new Error('typed')
+    expect(bulkLines(rows, zero.patch)[0]!.plan).toMatchObject({ kind: 'refused', field: 'yieldPct', words: { key: 'items.problem.yield' } })
+    expect(bulkPatch({ fields: { scrapPct: 'tanto' }, method: null })).toEqual({ field: 'scrapPct', words: { key: 'items.problem.scrap' } })
+    // With W2a's fields: one write of both.
+    const both = bulkPatch({ fields: { safetyLeadTimeDays: '5', delayDays: '1' }, method: null })
+    if (!('patch' in both)) throw new Error('typed')
+    expect(bulkLines(rows, both.patch)[1]!.plan).toMatchObject({ kind: 'write', patch: { safetyLeadTimeDays: 5, delayDays: 1 } })
+  })
+
   it("checks the horizon with factory-domain's rules, previews the buckets and sends only the changed fields", () => {
     const draft = horizonDraftOf(SETTINGS.settings)
     expect(draft).toEqual({ horizonWeeks: 26, dayBucketWeeks: 2, weekBucketWeeks: 13, defaultEfficiencyPct: '85', scheduledRunTime: '02:00' })
