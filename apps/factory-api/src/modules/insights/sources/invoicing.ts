@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import type { AttentionCandidate } from '@nexus/factory-domain/insights/attention'
 import { deadlineSeverity } from '@nexus/factory-domain/insights/states'
-import { invoiceSdiWords, invoiceToIssueWords, type SdiAttentionState } from '@nexus/factory-domain/insights/words'
+import { invoiceSdiWords, invoiceToIssueShipmentWords, invoiceToIssueWords, type SdiAttentionState } from '@nexus/factory-domain/insights/words' // B-W2b-GB02 (G148): + the shipments without a DDT
 import { INVOICES_VIEW } from '@nexus/factory-domain/invoicing/permissions'
 import { deadlineState } from '@nexus/factory-domain/invoicing/sdi/deadline'
 import { shippedNotInvoiced } from '../../invoicing/from-shipment/queue'
@@ -96,6 +96,24 @@ export const invoiceToIssue: Source = async ({ caller }) => {
       })
     }
   }
+  // ---- B-W2b-GB02 (G148): each shipment that left without a DDT and is not invoiced (its immediate invoice: 12 days).
+  for (const customer of queue.customers) {
+    for (const shipment of customer.shipments) {
+      candidates.push({
+        kind: 'INVOICE_TO_ISSUE',
+        state: shipment.deadline.state,
+        severity: deadlineSeverity(shipment.deadline.state),
+        record: { type: 'Party', id: customer.partyId, label: customer.legalName },
+        scope: { companyId: customer.companyId, siteId: null, partyId: customer.partyId },
+        ...invoiceToIssueShipmentWords({ customer: customer.legalName, shipment: shipment.number, shippedDate: shipment.shippedOn, dueBy: shipment.deadline.dueBy, daysLeft: shipment.deadline.daysLeft }),
+        due: shipment.deadline.dueBy,
+        since: asDay(shipment.shippedOn),
+        subKey: `${customer.companyId}:shipment:${shipment.shipmentId}`,
+        condition: [shipment.shipmentId],
+      })
+    }
+  }
+  // ---- end B-W2b-GB02
   // The queue reads the 500 oldest DDTs at most.
-  return { kind: 'INVOICE_TO_ISSUE', candidates, complete: queue.customers.reduce((sum, customer) => sum + customer.ddts.length, 0) < 500 }
+  return { kind: 'INVOICE_TO_ISSUE', candidates, complete: queue.customers.reduce((sum, customer) => sum + customer.ddts.length + customer.shipments.length, 0) < 500 }
 }

@@ -51,6 +51,8 @@ const LIST: SelfInvoices = { companyId: DEMO.id, selfInvoices: ROWS, selfInvoice
 const CANDIDATES: SelfInvoiceCandidate[] = [
   { supplierInvoiceId: uid('5858', 9), partyId: uid('6767', 9), supplier: { code: 'SUP-9', legalName: 'Lederwerk Demo GmbH', country: 'DE' }, number: 'R-2026-0977', issueDate: '2026-11-10', receivedOn: '2026-11-11', currency: 'EUR', suggestion: { kind: 'TD18' }, deadline: '2026-12-15', deadlineState: { state: 'OPEN', daysLeft: 31 } },
   { supplierInvoiceId: uid('5858', 10), partyId: uid('6767', 10), supplier: { code: 'SUP-10', legalName: 'Demo Hides UK Ltd', country: 'GB' }, number: 'INV-55120', issueDate: '2026-11-09', receivedOn: '2026-11-12', currency: 'GBP', suggestion: { kind: null }, deadline: '2026-12-15', deadlineState: { state: 'OPEN', daysLeft: 31 } },
+  // B-W2b-GB02 (G150): an Italian subcontractor invoicing under the reverse charge (N6.3): TD16.
+  { supplierInvoiceId: uid('5858', 11), partyId: uid('6767', 11), supplier: { code: 'SUP-11', legalName: 'Terzista Fittizio S.r.l.', country: 'IT' }, number: 'TF-2026-31', issueDate: '2026-11-10', receivedOn: '2026-11-10', currency: 'EUR', suggestion: { kind: 'TD16' }, deadline: '2026-12-15', deadlineState: { state: 'OPEN', daysLeft: 31 } },
 ]
 
 interface SelfCase {
@@ -76,7 +78,7 @@ function SelfDesign({ model }: { model: SelfCase }) {
 
 export const designScreen = defineDesignScreen<SelfCase>({
   screen: 'SCR-445',
-  title: 'Payables › Self-invoices TD17/18/19: purchases from abroad, the deadline counted down, create from the supplier invoice',
+  title: 'Payables › Self-invoices TD16/17/18/19: purchases from abroad and Italian reverse charge, the deadline counted down, create from the supplier invoice',
   view: SelfDesign,
   cases: [
     { id: 'finance', label: 'Finance · Four self-invoices: late, due in 3 days, a draft waiting, issued; the issue waits for the accountant', model: base('finance') },
@@ -87,6 +89,8 @@ export const designScreen = defineDesignScreen<SelfCase>({
     { id: 'create', label: 'Finance · Create: a German supplier’s invoice, TD18 suggested, 22 %', model: base('finance', { dialog: { kind: 'create' }, draft: { supplierInvoiceId: CANDIDATES[0]!.supplierInvoiceId, kind: 'TD18', rate: '22' } }) },
     { id: 'create-mixed', label: 'Finance · Create: mixed lines in GBP — pick the kind (held until picked)', model: base('finance', { dialog: { kind: 'create' }, draft: { supplierInvoiceId: CANDIDATES[1]!.supplierInvoiceId, kind: null, rate: '22' } }) },
     { id: 'create-refused', label: 'Finance · Refused: no exchange rate of the invoice’s day (said in the dialog)', model: base('finance', { dialog: { kind: 'create' }, draft: { supplierInvoiceId: CANDIDATES[1]!.supplierInvoiceId, kind: 'TD17', rate: '22' }, problem: { key: 'finance-invoices-depth:refusal.NO_RATE', reload: false } }) },
+    // B-W2b-GB02 (G150)
+    { id: 'gb02-create-td16', label: 'GB02 · Finance · Create: an Italian supplier under the reverse charge (N6), TD16 suggested, 22 %', model: base('finance', { dialog: { kind: 'create' }, draft: { supplierInvoiceId: CANDIDATES[2]!.supplierInvoiceId, kind: 'TD16', rate: '22' } }) },
     { id: 'create-none', label: 'Finance · Create: every foreign purchase has its self-invoice', model: base('finance', { dialog: { kind: 'create' }, candidates: { value: [], problem: null } }) },
     { id: 'cancel', label: 'Finance · Cancel the TD18 with its draft: the reason', model: base('finance', { dialog: { kind: 'cancel', row: ROWS[2]! }, reason: 'Fattura del fornitore sostituita da una nuova' }) },
     { id: 'sales', label: 'Sales · Read only: Create, Make draft and Cancel held with why', model: base('sales') },

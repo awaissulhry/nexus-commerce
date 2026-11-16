@@ -32,6 +32,8 @@ export const manifest = defineManifest({
   'POST /payments/release-overpayment': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
   // B-W2b-21 (Z8:01; deposit-carry.ts): a PAID deposit that issues no deposit invoice (NONE) carried onto its order's invoice.
   'POST /payments/deposit-requests/:depositRequestId/carry': { audiences: ['office'], permission: 'payments.record', scope: 'record' },
+  // B-W2b-GB02 (G088): what a carry would do now, written nowhere.
+  'GET /payments/deposit-requests/:depositRequestId/carry': { audiences: ['office'], permission: 'payments.view', scope: 'record' },
   // B-W2b-185 (./online; FIN-118, FIN-123): paying online by card or SEPA through the payment provider. The office sends the
   // page to pay an invoice and reads a record's online payments; a PAYMENT or DEPOSIT_INFO link pays its own record (the
   // handler checks the purpose); the customer's Finance and Admin see what is open and pay in the portal; the FAKE

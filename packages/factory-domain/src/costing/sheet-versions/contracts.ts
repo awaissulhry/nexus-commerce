@@ -5,7 +5,7 @@ import { SHEET_CATEGORIES } from '../sheet-components/components'
 import { componentLineView, missingComponentView, sizeSplitView } from '../sheet-components/contracts'
 import { WEIGHT_SOURCES } from '../size-weights/rules'
 import { LINE_CHANGES } from './compare'
-import { COST_SHEET_STATES, FREEZE_REASONS, VERSION_SOURCES } from './rules'
+import { COST_SHEET_STATES, FREEZE_REASONS, TYPED_CATEGORIES, VERSION_SOURCES } from './rules'
 import { WHAT_IF_TARGETS } from './what-if'
 
 /**
@@ -132,6 +132,28 @@ export const updateVersionBody = input({
 export type UpdateVersionBody = z.output<typeof updateVersionBody>
 
 export const removeVersionQuery = input({ version: z.coerce.number().int().min(1) })
+
+// ---- B-W2b-GB02 (G054): a line typed on a draft (a commission of the target price, or a figure the components do not know)
+/** A percent of the target price above 0, at most 100, with at most 4 decimals. */
+const pctText = () => z.string().regex(/^\d{1,3}(\.\d{1,4})?$/, 'Expected a percent with at most 4 decimals.')
+export const typedLineBody = input({
+  version: z.number().int().min(1),
+  category: z.enum(TYPED_CATEGORIES),
+  /** What it is, one line (an agent's name, "Royalty", "Payment fee"). */
+  label: z.string().trim().min(1).max(200).regex(/^[^\r\n]*$/, 'One line.'),
+  /** A size of the style's range; left out or null: every size. */
+  size: z.string().trim().min(1).max(40).nullable().optional(),
+  /** How many (default 1; never with a percent). */
+  quantity: z.string().regex(/^\d{1,14}(\.\d{1,4})?$/, 'Expected a quantity with at most 4 decimals.').optional(),
+  /** The cost of one, in the version's currency. */
+  unitCost: money.cost(costText().optional()),
+  /** COMMISSION only: its percent of the version's target price (the line's cost follows the target price). */
+  pct: money.cost(pctText().optional()),
+  note: z.string().trim().min(1).max(1000).optional(),
+})
+export type TypedLineBody = z.output<typeof typedLineBody>
+export const removeTypedLineQuery = input({ version: z.coerce.number().int().min(1) })
+// ---- end B-W2b-GB02
 
 export const submitVersionBody = input({
   version: z.number().int().min(1),

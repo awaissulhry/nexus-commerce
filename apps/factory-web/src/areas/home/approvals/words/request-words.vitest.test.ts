@@ -78,6 +78,8 @@ describe('three approval subjects open their parent’s page', () => {
     expect(at({ type: 'SupplierBankAccount', id: 'b1', parent: { type: 'SupplierBank', id: 'p1' } })).toBe('/w/DEMO/purchasing/suppliers/p1?tab=bank')
     expect(at({ type: 'ReturnLine', id: 'rl1', parent: { type: 'ReturnAuthorisation', id: 'ra1' } })).toBe('/w/DEMO/sales/returns/ra1')
     expect(at({ type: 'GoodsReceiptLine', id: 'gl1', parent: { type: 'GoodsReceipt', id: 'gr1' } })).toBe('/w/DEMO/warehouse/receipts/gr1')
+    // B-W2b-GB02 (G054; B-W2b-430 gap 6): a cost sheet version's request opens its style's Cost tab, not the Overview.
+    expect(at({ type: 'CostSheet', id: 'cs1', parent: { type: 'StyleCost', id: 'st1' } })).toBe('/w/DEMO/products/styles/st1?tab=cost')
   })
   it('a subject with a page of its own opens it; one with neither opens its panels', () => {
     expect(at({ type: 'PurchaseOrder', id: 'po1' })).toBe('/w/DEMO/purchasing/orders/po1')

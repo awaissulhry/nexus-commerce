@@ -35,7 +35,18 @@ import {
   type SeasonOption,
   type VersionRecord,
   type VersionsView,
+  // B-W2b-GB02 (G054)
+  addTypedLine,
+  putSizeWeights,
+  readSizeWeights,
+  refreshWeights,
+  removeTypedLine,
+  type SizeWeightsView,
 } from './api'
+// B-W2b-GB02 (G054): a line typed on a draft (a commission); the style's size mix.
+import { typedBody, type TypedDraft } from '../typed/model'
+import { mixBody, mixProblems, type MixDraft } from '../sizemix/model'
+import type { SizeMixModel } from '../sizemix/view/SizeMixCard'
 import { compareDefaults, costSheetAbilitiesOf, costSheetsTouched, readProblem, versionInView, writeProblem, type Phrase, type Read } from './model'
 import { newVersionBody, type CompareModel, type NewVersionDraft, type VersionDialog, type VersionsModel } from './screen'
 import type { CostSheetsActions, CostSheetsModel } from './view/CostSheetsView'
@@ -78,6 +89,13 @@ export function useCostSheets({ style, revisionId, cell }: { style: StyleView; r
   const [stepsSize, setStepsSize] = useState<string | null>(null)
   const [cartonPieces, setCartonPieces] = useState<number | null>(null)
   const attempt = useRef<string | null>(null)
+  // ---- B-W2b-GB02 (G054): the style's size mix (its sets), the mix being edited, its notice and refusal.
+  const [mixes, setMixes] = useState<Read<SizeWeightsView>>({ status: 'idle' })
+  const [editing, setEditing] = useState<string | null>(null)
+  const [mixNotice, setMixNotice] = useState<Phrase | null>(null)
+  const [mixProblem, setMixProblem] = useState<Phrase | null>(null)
+  const mixAttempt = useRef<string | null>(null)
+  // ---- end B-W2b-GB02
 
   const rows = list.status === 'ready' ? list.value.versions : []
   const inView = versionInView(rows, picked)
@@ -142,6 +160,21 @@ export function useCostSheets({ style, revisionId, cell }: { style: StyleView; r
     }
   }, [api, can.view, cartonPieces, colourwayId, companyId, revisionId, style.id])
 
+  // B-W2b-GB02 (G054): the style's size mixes (the season of the version in view asked: its mix in force).
+  const mixSeason = inView?.season?.id ?? null
+  const readMixes = useCallback(async () => {
+    if (!can.view) return
+    setMixes((current) => (current.status === 'ready' ? current : { status: 'loading' }))
+    try {
+      setMixes(ready(await readSizeWeights(api, style.id, mixSeason)))
+    } catch (error) {
+      setMixes({ status: 'error', problem: readProblem(error) })
+    }
+  }, [api, can.view, mixSeason, style.id])
+  useEffect(() => {
+    void readMixes()
+  }, [readMixes])
+
   useEffect(() => {
     setList({ status: 'loading' })
     void readList()
@@ -172,6 +205,7 @@ export function useCostSheets({ style, revisionId, cell }: { style: StyleView; r
   const reread = useCoalesced(() => {
     void readList()
     void readSteps()
+    void readMixes() // B-W2b-GB02 (G054)
   }, 800)
   useLive(
     (change) => {
@@ -248,9 +282,31 @@ export function useCostSheets({ style, revisionId, cell }: { style: StyleView; r
   const goalModel: TargetPriceModel = { sheet: inView, sizes: list.status === 'ready' ? list.value.style.sizes : style.sizes, can, grains, ask: goalAskOf(inView, locale), result: goal, busy, problem: goalProblem }
   const bySizeModel: BySizeModel = { sheet: inView, result: bySize, can, grains, busy, problem: bySizeProblem, notice: bySizeNotice }
   const stepsModel: CostStepsModel = { components, size: stepsSize ?? cell?.size ?? null, cartonPieces, grains }
+  // B-W2b-GB02 (G054)
+  const sizeMixModel: SizeMixModel = { sizes: style.sizes, baseSize: style.baseSize, inView, can, mixes, editing, busy, problem: mixProblem, notice: mixNotice }
+  const saveMix = (draft: MixDraft) => {
+    if (busy) return
+    mixAttempt.current ??= newIdempotencyKey()
+    const key = mixAttempt.current
+    setBusy(true)
+    setMixProblem(null)
+    putSizeWeights(api, mixBody(style.id, draft), key)
+      .then(async () => {
+        mixAttempt.current = null
+        setEditing(null)
+        setMixNotice({ key: mixProblems(draft).empty ? 'mix.cleared' : 'mix.saved' })
+        await readMixes()
+      })
+      .catch((error: unknown) => {
+        if (isStepUpCancelled(error)) return
+        const words = writeProblem(error)
+        setMixProblem({ key: words.key })
+      })
+      .finally(() => setBusy(false))
+  }
 
   return {
-    model: { steps: stepsModel, versions, goal: goalModel, bySize: bySizeModel },
+    model: { steps: stepsModel, versions, goal: goalModel, bySize: bySizeModel, sizeMix: sizeMixModel },
     actions: {
       steps: {
         onSize: setStepsSize,
@@ -298,6 +354,20 @@ export function useCostSheets({ style, revisionId, cell }: { style: StyleView; r
         onDismissNotice: () => setNotice(null),
         onStepUpSubmit: (code) => void submitStepUp(code),
         onStepUpCancel: cancelStepUp,
+        // ---- B-W2b-GB02 (G054): a line typed on the draft in view, a typed line removed, the size mix read again.
+        onAddTyped: (draft: TypedDraft) => inView && void write((key) => addTypedLine(api, inView.id, typedBody(draft, inView.version), key), { key: 'typed.added', params: { version: inView.sheetVersion } }),
+        onRemoveTyped: (lineId: string) => inView && void write((key) => removeTypedLine(api, inView, lineId, key), { key: 'typed.removed', params: { version: inView.sheetVersion } }),
+        onRefreshMix: () => inView && void write((key) => refreshWeights(api, inView, key), { key: 'mix.refreshed', params: { version: inView.sheetVersion } }),
+      },
+      sizeMix: {
+        onEdit: (seasonId) => {
+          mixAttempt.current = null
+          setMixProblem(null)
+          setEditing(seasonId)
+        },
+        onSave: saveMix,
+        onRetry: () => void readMixes(),
+        onDismissNotice: () => setMixNotice(null),
       },
       goal: {
         onSeek: (ask: GoalAsk) => {

@@ -16,7 +16,9 @@ import { tenantOf } from '../../payments/locks'
  * The order: invoice row → 'ddt' → money locks (payment → deposit requests → invoices) → the number series → 'order'.
  */
 
-export type InvoicingLock = 'ddt' | 'order'
+// B-W2b-GB02 (G148): 'shipment', one per sales order: a draft of goods shipped WITHOUT a DDT places what is invoiced of
+// the order's such shipments in the order they left (without-ddt.ts), one command at a time; taken where 'ddt' would be.
+export type InvoicingLock = 'ddt' | 'order' | 'shipment'
 
 export async function lockInvoicing(tx: CommandTx, context: RequestContext, what: InvoicingLock, ids: Iterable<string>): Promise<void> {
   for (const id of [...new Set(ids)].sort()) {

@@ -110,7 +110,8 @@
   },
   "state": {
     "open": "Open",
-    "final": "Final"
+    "final": "Final",
+    "closed": "Closed"
   },
   "reason": {
     "MATERIAL_PRICE": "Material price",

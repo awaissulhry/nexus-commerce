@@ -9,7 +9,7 @@ import { DetailModal, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import type { LedgerEntry, WorkOrderCost } from '../api'
-import { COSTING_NAMESPACE, costSheetHref, decimalText, labourHref, moneyText, quantityText, reasonHeld, signedMoney, type CostingCan, type Phrase } from '../model'
+import { COSTING_NAMESPACE, costSheetHref, decimalText, labourHref, moneyText, quantityText, reasonHeld, signedMoney, statePhrase, stateTone, type CostingCan, type Phrase } from '../model'
 import { CostBridge, CostFacts, CostLabour, CostMaterials, CostScrapAndWaiting, CostSummary } from './CostParts'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
 import { rightRef } from '../../../../lib/i18n/rights'
@@ -43,7 +43,7 @@ export function WorkOrderCostDialog({ state, ids, can, prefix, onGo, onClose, on
       onClose={() => onClose?.()}
       title={t('detail.title', { number })}
       subtitle={detail ? `${detail.workOrder.style.code} · ${detail.workOrder.style.name}` : undefined}
-      meta={detail ? <Pill tone={detail.final ? 'success' : 'info'}>{t(detail.final ? 'state.final' : 'state.open')}</Pill> : undefined}
+      meta={detail ? <Pill tone={stateTone(detail) /* B-W2b-GB02 (G053): open · final · closed */}>{t(statePhrase(detail).key)}</Pill> : undefined}
       nav={ids.length > 1 && ids.includes(state.id) ? { ids, current: state.id, onGo: (id) => onGo?.(id), noun: t('detail.noun') } : undefined}
       loading={!detail && !state.problem}
       error={state.problem ? t(state.problem) : undefined}

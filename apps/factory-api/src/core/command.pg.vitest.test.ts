@@ -372,6 +372,33 @@ describe('the edit-conflict guard (COL-078)', () => {
     expect(await auditRows('"recordId" = $1', [siteId])).toHaveLength(1)
   })
 
+  // ---- B-W2b-GB02 (G153): the version guard is unchanged for every command — one that claims no version and read the
+  // record before a racing write committed fails on the compare-and-set (no lost update); invoicing's attachFiles, which
+  // edits no field of the invoice, takes the row's lock instead (modules/invoicing/invoice-files.ts).
+  it('a write that claims no version, racing another write of the record, is refused on the version (no lost update)', async () => {
+    const siteId = await newSite()
+    let reached!: () => void
+    const inside = new Promise<void>((resolve) => (reached = resolve))
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    // The first write bumps the version and holds the row; the second reads version 1, then waits on the row.
+    const first = rename(as(officeA()), { siteId, name: 'First' }, SETTINGS, async () => (reached(), held))
+    await inside
+    const second = rename(as(officeA()), { siteId, name: 'Second' })
+    second.catch(() => undefined)
+    for (let tries = 0; tries < 100; tries++) {
+      const [waiting] = await admin<{ n: number }>(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`)
+      if (waiting!.n > 0) break
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    release()
+    await expect(first).resolves.toMatchObject({ result: { name: 'First', version: 2 } })
+    await expect(second).rejects.toBeInstanceOf(StaleVersionError)
+    expect(await siteRow(siteId)).toMatchObject({ name: 'First', version: 2 })
+    expect(await auditRows('"recordId" = $1', [siteId])).toHaveLength(1)
+  })
+  // ---- end B-W2b-GB02
+
   it('a missing record is a 404, also another tenant\'s (row-level security hides it)', async () => {
     await expect(rename(as(officeA()), { siteId: newId(), name: 'Nobody', version: 1 })).rejects.toThrow(NotFoundError)
     await expect(rename(as(officeB()), { siteId: plantA, name: 'Theirs', version: 1 })).rejects.toThrow(NotFoundError)

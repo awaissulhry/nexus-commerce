@@ -4,6 +4,9 @@ import {
   compareView,
   createVersionBody,
   removeVersionQuery,
+  // B-W2b-GB02 (G054)
+  removeTypedLineQuery,
+  typedLineBody,
   saveWhatIfBody,
   submitVersionBody,
   takeBackBody,
@@ -31,3 +34,8 @@ export const takeBackContract = defineContract({ params: sheet, body: takeBackBo
 export const compareContract = defineContract({ querystring: compareQuery, response: { 200: compareView } })
 export const whatIfContract = defineContract({ params: sheet, body: whatIfBody, response: { 200: whatIfView } })
 export const saveWhatIfContract = defineContract({ params: sheet, body: saveWhatIfBody, response: { 201: versionAnswer } })
+
+// ---- B-W2b-GB02 (G054): a line typed on a draft, and removed
+export const addTypedLineContract = defineContract({ params: sheet, body: typedLineBody, response: { 201: versionAnswer } })
+export const removeTypedLineContract = defineContract({ params: input({ sheetId: id(), lineId: id() }), querystring: removeTypedLineQuery, response: { 200: versionAnswer } })
+// ---- end B-W2b-GB02

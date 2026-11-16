@@ -3,8 +3,8 @@ import type { IntegrationMode } from '@nexus/factory-domain/ports/provider'
 import { ecbFileOf } from '@nexus/factory-domain/money/currency/ecb'
 import { fixedClock } from '@nexus/factory-domain/core/time'
 import { ProviderError, type GatewayCall } from '../../platform/gateway/gateway'
-import { FakeEcb, fakeDay, lastWeekday } from './fake'
-import { ECB_DAILY_URL, ecbHttpAdapter } from './http'
+import { FakeEcb, fakeDay, fakeLast90, lastWeekday } from './fake'
+import { ECB_DAILY_URL, ECB_LAST90_URL, ecbHttpAdapter } from './http'
 
 /**
  * The ECB adapters (B-W2b-389) without the network: the HTTP one over a scripted transport (the ECB's file shape, made-up
@@ -38,6 +38,16 @@ describe('the HTTP adapter', () => {
     expect(call.answers).toEqual([{ httpStatus: 200, response: { days: [{ day: '2026-11-13', rates: 2 }] } }])
   })
 
+  // ---- B-W2b-GB02 (G058)
+  it('reads the 90-day file when asked (a missed day caught up)', async () => {
+    const asked: string[] = []
+    const adapter = ecbHttpAdapter({ fetch: async (input) => (asked.push(String(input)), new Response(file, { status: 200 })) })
+    await adapter.daily(callFor('LIVE'), 'last90')
+    await adapter.daily(callFor('LIVE'))
+    expect(asked).toEqual([ECB_LAST90_URL, ECB_DAILY_URL])
+  })
+  // ---- end B-W2b-GB02
+
   it('fails in words: a 5xx may pass later, an unreadable file does not, a FAKE account never calls out', async () => {
     const busy = ecbHttpAdapter({ fetch: async () => new Response('busy', { status: 503 }) })
     await expect(busy.daily(callFor('LIVE'))).rejects.toMatchObject({ name: 'ProviderError', retryable: true, httpStatus: 503 })
@@ -67,6 +77,13 @@ describe('the FAKE file', () => {
     fake.failNext(1)
     await expect(fake.daily(callFor('FAKE'))).rejects.toMatchObject({ httpStatus: 503, retryable: true })
     expect(fake.reads).toBe(3)
+    // B-W2b-GB02 (G058): the fake's 90-day file: every weekday of the last 90 days, newest first.
+    const last90 = await fake.daily(callFor('FAKE'), 'last90')
+    expect(last90.days[0]!.day).toBe('2026-11-13')
+    expect(last90.days.map((entry) => entry.day)).toEqual(fakeLast90('2026-11-15').map((entry) => entry.day))
+    expect(last90.days.every((entry) => ![0, 6].includes(new Date(`${entry.day}T00:00:00.000Z`).getUTCDay()))).toBe(true)
+    expect(last90.days.length).toBeGreaterThan(60)
+    expect(fake.files).toEqual(['daily', 'daily', 'daily', 'last90'])
     await expect(fake.daily(callFor('LIVE'))).rejects.toMatchObject({ retryable: false })
   })
 })

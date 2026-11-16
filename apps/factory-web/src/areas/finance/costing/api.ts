@@ -56,6 +56,8 @@ export const workOrderCostRowSchema = z.object({
     pieces: z.number(),
     releasedAt: z.string().nullable(),
     completedAt: z.string().nullable(),
+    // B-W2b-GB02 (G053): when its close that stands was made (null: not closed; absent: an older API).
+    closedAt: z.string().nullable().optional(),
   }),
   currency: z.string(),
   method: z.enum(COSTING_METHODS),
@@ -217,6 +219,9 @@ export interface WorkOrderCostsQuery {
   readonly status?: readonly CostedStatus[] | null
   readonly over?: boolean | null
   readonly q?: string | null
+  // B-W2b-GB02 (G053): closed on these Europe/Rome days, both included ("Closed in <month>").
+  readonly closedFrom?: string | null
+  readonly closedTo?: string | null
   readonly cursor?: string | null
   readonly limit?: number
 }
@@ -224,7 +229,7 @@ export interface WorkOrderCostsQuery {
 /** GET /costing/work-orders: a page of work orders with standard, estimate at release, actual so far and variance, and the tiles. */
 export function getWorkOrderCosts(api: ApiClient, query: WorkOrderCostsQuery, signal?: AbortSignal): Promise<WorkOrderCosts> {
   return api.get('/costing/work-orders', {
-    query: clean({ companyId: query.companyId, siteId: query.siteId, status: query.status?.length ? query.status.join(',') : null, over: query.over ? 'true' : null, q: query.q, cursor: query.cursor, limit: query.limit ?? 50 }),
+    query: clean({ companyId: query.companyId, siteId: query.siteId, status: query.status?.length ? query.status.join(',') : null, over: query.over ? 'true' : null, q: query.q, closedFrom: query.closedFrom, closedTo: query.closedTo, cursor: query.cursor, limit: query.limit ?? 50 }),
     schema: workOrderCostsSchema,
     signal,
   })

@@ -1,0 +1,181 @@
+{
+  "menu": "Dichiarazioni d'intento",
+  "title": "Dichiarazioni d'intento",
+  "close": "Chiudi",
+  "explain": "Un cliente esportatore abituale acquista senza IVA fino all'importo dichiarato all'Agenzia delle Entrate per un anno. Registra la sua dichiarazione con il protocollo dell'Agenzia, verificala sul sito dell'Agenzia e conserva la ricevuta; una fattura che la indica fattura le righe senza IVA (N3.5) e ne consuma l'importo.",
+  "switchOff": {
+    "title": "Le fatture non indicano ancora una dichiarazione",
+    "body": "Il commercialista non ha ancora confermato le dichiarazioni d'intento per questa società: puoi già registrarle e verificarle; una bozza ne indica una quando l'interruttore è attivo in Impostazioni amministrazione › Impostazione fiscale."
+  },
+  "filter": {
+    "year": "Anno coperto",
+    "allYears": "Tutti gli anni",
+    "state": "Stato",
+    "ALL": "Tutti gli stati",
+    "UNCHECKED": "Da verificare",
+    "CHECKED": "Verificata",
+    "USED_UP": "Esaurita",
+    "REVOKED": "Revocata"
+  },
+  "add": {
+    "open": "Aggiungi dichiarazione",
+    "title": "Aggiungi una dichiarazione d'intento",
+    "explain": "Riporta quanto dice la dichiarazione del cliente: il protocollo dato dall'Agenzia, la sua data, l'anno che copre e l'importo dichiarato per le nostre forniture. Viene registrata come da verificare.",
+    "customer": "Cliente",
+    "customersFailed": "Non è stato possibile leggere i clienti: chiudi e riapri.",
+    "customersReading": "Lettura dei clienti…",
+    "noCustomers": "Questa società non ha ancora clienti.",
+    "customerSearch": "Cerca per nome o codice",
+    "protocol": "Numero di protocollo",
+    "protocolHint": "17 cifre, un trattino e 6 cifre, come sulla ricevuta dell'Agenzia",
+    "date": "Data del protocollo",
+    "year": "Anno coperto",
+    "yearHint": "L'anno del protocollo, o il successivo",
+    "amount": "Importo dichiarato per le nostre forniture (EUR)",
+    "amountHint": "Senza IVA, come sulla dichiarazione",
+    "go": "Aggiungi dichiarazione",
+    "held": {
+      "fields": "Compila prima tutti i campi."
+    },
+    "problem": {
+      "party": "Scegli il cliente.",
+      "protocol": "Il protocollo è di 17 cifre, un trattino e 6 cifre, come sulla ricevuta dell'Agenzia.",
+      "date": "Inserisci la data del protocollo.",
+      "future": "La data del protocollo non può essere nel futuro.",
+      "year": "Una dichiarazione copre l'anno del suo protocollo o il successivo.",
+      "amount": "Inserisci un importo maggiore di 0.",
+      "dateRefused": "La data del protocollo è stata rifiutata: non può essere nel futuro."
+    }
+  },
+  "failed": "Non è stato possibile leggere le dichiarazioni",
+  "reading": "Lettura delle dichiarazioni…",
+  "empty": {
+    "title": "Nessuna dichiarazione d'intento copre il {year}",
+    "titleAll": "Ancora nessuna dichiarazione d'intento",
+    "body": "Quando un cliente invia la sua dichiarazione, aggiungila qui con il protocollo dell'Agenzia."
+  },
+  "tableLabel": "Dichiarazioni d'intento",
+  "col": {
+    "customer": "Cliente",
+    "protocol": "Protocollo",
+    "year": "Anno",
+    "declared": "Dichiarato",
+    "used": "Utilizzato",
+    "left": "Residuo",
+    "state": "Stato",
+    "actions": "Azioni"
+  },
+  "protocolOn": "del {date}",
+  "notThisYear": "non di quest'anno",
+  "usedPercent": "utilizzato al {percent}%",
+  "state": {
+    "UNCHECKED": "Da verificare",
+    "CHECKED": "Verificata",
+    "USED_UP": "Esaurita",
+    "REVOKED": "Revocata"
+  },
+  "open": "Apri",
+  "hide": "Chiudi la dichiarazione",
+  "rule": "Art. 8 c.1 lett. c DPR 633/1972: una fattura senza IVA su una dichiarazione non verificata, revocata, di un altro anno o esaurita viene rifiutata prima di prendere il numero (superare il plafond è sanzionato). Quali verifiche vuole il commercialista resta da confermare con lui.",
+  "record": {
+    "title": "Dichiarazione {protocol} · {customer}",
+    "protocolDate": "Data del protocollo",
+    "stateWords": {
+      "UNCHECKED": "Non ancora verificata sul sito dell'Agenzia: nessuna fattura può essere emessa su di essa finché non è verificata e la ricevuta conservata.",
+      "CHECKED": "Verificata sul sito dell'Agenzia: le fatture del suo anno possono basarsi su di essa fino al residuo.",
+      "USED_UP": "L'importo dichiarato è esaurito: la prossima fattura a questo cliente ha l'IVA, a meno che non invii una nuova dichiarazione.",
+      "REVOKED": "Revocata: nessuna fattura si basa più su di essa e non cambia più."
+    },
+    "checkedOn": "Verificata il {date}.",
+    "receipt": "Apri la ricevuta",
+    "revokedOn": "Revocata il {date}: {reason}",
+    "invoices": "Fatture che si basano su di essa",
+    "noInvoices": "Ancora nessuna fattura emessa si basa su di essa.",
+    "col": {
+      "number": "Numero",
+      "type": "Documento",
+      "date": "Emessa il",
+      "used": "Utilizza"
+    }
+  },
+  "check": {
+    "open": "Verifica…",
+    "title": "Registra la verifica",
+    "explain": "Cerca il protocollo sul sito dell'Agenzia delle Entrate, salva la pagina che stampa e aggiungila qui: la verifica si registra una volta, con la sua ricevuta.",
+    "chosen": "Ricevuta scelta: {name}",
+    "change": "Scegline un'altra",
+    "dropHint": "La ricevuta stampata dal sito dell'Agenzia (PDF o immagine, fino a 10 MB)",
+    "go": "Registra la verifica",
+    "problem": {
+      "noFile": "Aggiungi prima la ricevuta."
+    },
+    "heldByScan": "La ricevuta è trattenuta dal controllo antivirus: la verifica non è registrata. Riprova con un'altra copia della ricevuta."
+  },
+  "revoke": {
+    "open": "Revoca…",
+    "title": "Revoca la dichiarazione {protocol}",
+    "explain": "Revocala quando il cliente la ritira o risulta non valida: dopo nessuna fattura si basa su di essa, le bozze che la indicano devono lasciarla e non cambia più.",
+    "reason": "Motivo",
+    "go": "Revoca",
+    "problem": {
+      "short": "Indica il motivo in almeno 3 caratteri.",
+      "long": "Al massimo {max} caratteri."
+    }
+  },
+  "held": {
+    "noManage": "Le dichiarazioni si registrano, verificano e revocano da chi gestisce l'impostazione fiscale.",
+    "noPrice": "L'importo dichiarato lo inserisce chi vede gli importi.",
+    "noParties": "Per scegliere il cliente serve il permesso di vedere i clienti.",
+    "busy": "Attendi la modifica in corso.",
+    "noUpload": "Per aggiungere la ricevuta serve il permesso di caricare file.",
+    "revoked": "Questa dichiarazione è revocata: non cambia più.",
+    "checked": "La verifica è già registrata.",
+    "noManageInvoices": "Le bozze le modifica chi prepara le fatture."
+  },
+  "notice": {
+    "added": "Dichiarazione {protocol} registrata: ora verificala sul sito dell'Agenzia.",
+    "checked": "Dichiarazione {protocol} verificata: la ricevuta è conservata con essa.",
+    "revoked": "Dichiarazione {protocol} revocata."
+  },
+  "refusal": {
+    "NOT_CUSTOMER": "Una dichiarazione d'intento è di un cliente: questo soggetto non è un nostro cliente.",
+    "REVOKED": "Questa dichiarazione è stata revocata nel frattempo: non cambia più.",
+    "CHECKED": "Questa dichiarazione è stata verificata nel frattempo: la verifica si registra una volta.",
+    "RECEIPT": "La ricevuta deve essere un file aggiunto su questa dichiarazione e pronto nell'archivio: aggiungila di nuovo.",
+    "SWITCH_OFF": "Le dichiarazioni d'intento aspettano il commercialista: una bozza ne indica una quando l'interruttore è attivo in Impostazioni amministrazione › Impostazione fiscale.",
+    "DECLARATION": "Questo documento non si basa su una dichiarazione: una nota di credito restituisce quanto usato dalla fattura che storna.",
+    "DATABASE": "Il database ha rifiutato la modifica: non è stato salvato nulla. Riprova.",
+    "NOT_FOUND": "Questa dichiarazione non c'è più, o non è di questo cliente: l'elenco viene riletto."
+  },
+  "receiptFailed": "Non è stato possibile aprire la ricevuta ora: riprova.",
+  "receiptForbidden": "Per aprire la ricevuta serve il permesso di leggere i file.",
+  "pick": {
+    "failed": "Non è stato possibile leggere la dichiarazione d'intento ({why})",
+    "reading": "Lettura della dichiarazione d'intento…",
+    "label": "Dichiarazione d'intento",
+    "none": "Nessuna dichiarazione d'intento indicata: le righe hanno l'IVA del cliente.",
+    "letGo": "Lasciala",
+    "switchOff": "Le dichiarazioni aspettano il commercialista: una bozza ne indica una quando l'interruttore è attivo in Impostazioni amministrazione › Impostazione fiscale.",
+    "other": "Indica un'altra dichiarazione",
+    "choose": "Indica una dichiarazione di questo cliente",
+    "option": "{protocol} · {year} · {state}",
+    "name": "Indicala",
+    "held": {
+      "none": "Scegli prima una dichiarazione.",
+      "same": "Questa è la dichiarazione già indicata.",
+      "switchOff": "Le dichiarazioni aspettano l'interruttore del commercialista."
+    },
+    "named": {
+      "UNCHECKED": "Si basa sulla dichiarazione {protocol}, da verificare: questa fattura ne utilizza {amount}.",
+      "CHECKED": "Si basa sulla dichiarazione {protocol}, verificata: questa fattura ne utilizza {amount}.",
+      "USED_UP": "Si basa sulla dichiarazione {protocol}, esaurita: questa fattura ne utilizza {amount}.",
+      "REVOKED": "Si basa sulla dichiarazione {protocol}, revocata: lasciala."
+    },
+    "namedNoPrice": {
+      "UNCHECKED": "Si basa sulla dichiarazione {protocol}, da verificare.",
+      "CHECKED": "Si basa sulla dichiarazione {protocol}, verificata.",
+      "USED_UP": "Si basa sulla dichiarazione {protocol}, esaurita.",
+      "REVOKED": "Si basa sulla dichiarazione {protocol}, revocata: lasciala."
+    }
+  }
+}

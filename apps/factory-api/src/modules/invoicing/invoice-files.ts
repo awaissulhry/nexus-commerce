@@ -31,8 +31,9 @@ import { depthRelatedOf } from './self-invoices/hooks'
  * billTo snapshots, lines, number and date), so a retry makes the same XML. The bytes go to the store first
  * (platform/files putGeneratedFile, outside any transaction), then ONE attach command records the StoredFile rows and
  * names them on the invoice (xmlFileId, pdfFileId: each named once, the …_money_guards trigger). Idempotent: an invoice
- * that names both does nothing; two runs at once queue on the invoice's row and the second names nothing new (its
- * objects stay unnamed in the store, as for any failed generated file).
+ * that names both does nothing; two runs at once queue on the invoice's row (B-W2b-GB02: its lock, not its version, so a
+ * racing send is waited for, never refused) and the second names nothing new (its objects stay unnamed in the store, as
+ * for any failed generated file).
  */
 
 /** The issued invoice as both documents print it, read from its rows. */
@@ -109,10 +110,17 @@ export async function makeInvoiceFiles(runtime: FilesRuntime, caller: CommandCal
   const base = { companyId, recordType: 'Invoice', recordId: issued.id, kind: 'FISCAL_ARCHIVE' as const }
   const xmlFile: PreparedGeneratedFile | null = found.xmlFileId ? null : await putGeneratedFile(runtime, caller, { ...base, originalName: doc.fileName, contentType: 'application/xml', body: Buffer.from(doc.xml, 'utf8') })
   const pdfFile: PreparedGeneratedFile | null = found.pdfFileId ? null : await putGeneratedFile(runtime, caller, { ...base, originalName: documentFileName(composed), contentType: 'application/pdf', body: pdf })
+  // ---- B-W2b-GB02 (G153; B-W1-06's race: the worker's first try failed with StaleVersionError beside "Issue and send"):
+  // naming the files edits none of the invoice's own fields, so this command does not compare-and-set the invoice's version
+  // (a record guard would bump it and refuse when a send bumped it first). It takes the invoice row's lock instead: a
+  // racing write is waited for, then the files are named once on the row as it is then (two runs at once: the second
+  // finds them named).
   const { result } = await command(
     caller,
-    { name: 'invoices.attachFiles', input: { invoiceId, xml: xmlFile?.sha256 ?? null, pdf: pdfFile?.sha256 ?? null }, record: { type: 'Invoice', id: invoiceId }, ...(causationId ? { causationId } : {}) },
+    { name: 'invoices.attachFiles', input: { invoiceId, xml: xmlFile?.sha256 ?? null, pdf: pdfFile?.sha256 ?? null }, ...(causationId ? { causationId } : {}) },
     async (tools) => {
+      await tools.tx.$queryRaw`SELECT id FROM "Invoice" WHERE id = ${invoiceId}::uuid FOR UPDATE`
+      // ---- end B-W2b-GB02
       const current = (await readInvoice(tools.tx, invoiceId))!
       const details = { documentType: issued.docType, number: issued.number }
       const xmlFileId = current.xmlFileId ?? (xmlFile ? (await recordGeneratedFile(tools, xmlFile, { details: { ...details, file: 'FatturaPA XML' } })).id : null)

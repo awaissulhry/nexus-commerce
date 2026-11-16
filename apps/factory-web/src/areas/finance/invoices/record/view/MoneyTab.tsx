@@ -168,6 +168,8 @@ export function MoneyTab({ invoice, model, actions, depth }: { invoice: Invoice;
       </div>
       {/* B-W2b-417: Balance before shipping (design deposits/payments, W2b). */}
       {depth?.balance}
+      {/* B-W2b-GB02 (G088): a deposit paid without a deposit invoice, carried onto this invoice. */}
+      {depth?.carry}
     </div>
   )
 }

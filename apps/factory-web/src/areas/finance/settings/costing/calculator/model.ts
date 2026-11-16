@@ -1,5 +1,5 @@
 import { isApiError, issuePath } from '../../../../../lib/api/errors'
-import type { CalcView, PrefillView } from './api'
+import type { CalcView, OverheadRuleView, PrefillView } from './api'
 
 /**
  * Finance › Settings › Costing › the cost-per-minute calculator (B-W2b-430; design finance.settings sec:costing "Cost per
@@ -205,3 +205,134 @@ export function cpmReadProblem(error: unknown): string {
 
 /** A live change that moves the calculator's lists. */
 export const cpmTouched = (change: { type: string }): boolean => change.type === 'cost_per_minute.changed' || change.type === 'overhead_rule.changed' || change.type === 'labour_rate.created'
+
+// ---- B-W2b-GB02 (G054; B-W2b-430 gap 3 "overhead rules are read only on screen"): the overhead rules kept on screen -------
+
+/** What an overhead rule absorbs on (factory-domain costing/overhead-rules OVERHEAD_BASES). */
+export const OHR_BASES = ['PERCENT_OF_LABOUR', 'PER_MINUTE', 'PER_UNIT', 'PER_MACHINE_HOUR'] as const
+export type OhrBasis = (typeof OHR_BASES)[number]
+/** The kinds of work centre a rule may be for (the API's WORK_CENTRE_KINDS); '' = every department. */
+export const OHR_KINDS = ['CUTTING', 'SEWING', 'ASSEMBLY', 'FINISHING', 'INSPECTION', 'PACKING', 'SUBCONTRACT'] as const
+
+/** What the New rule dialog holds. A rule is per whole months: from the first of a month, open-ended or to the end of one. */
+export interface RuleDraft {
+  /** This company's own rule, or every company's (a role over every company). */
+  readonly scope: 'company' | 'every'
+  readonly basis: OhrBasis
+  /** '' = every department. */
+  readonly workCentreKind: string
+  /** A percent of labour, or an amount a minute, a garment or a machine hour. */
+  readonly value: string
+  readonly currency: string
+  /** YYYY-MM. */
+  readonly fromMonth: string
+  /** YYYY-MM, '' = open-ended. */
+  readonly toMonth: string
+  readonly note: string
+  /** End the active rule of the same company, basis and department that runs into this one, the day before it starts. */
+  readonly endPrevious: boolean
+}
+
+/** This month (YYYY-MM) of `today`. */
+const thisMonth = (today: string): string => today.slice(0, 7)
+
+export function ruleDraftOf(today: string, currency: string | null, given?: Partial<RuleDraft>): RuleDraft {
+  return { scope: 'company', basis: 'PERCENT_OF_LABOUR', workCentreKind: '', value: '', currency: currency ?? 'EUR', fromMonth: thisMonth(today), toMonth: '', note: '', endPrevious: true, ...given }
+}
+
+/** An amount basis has a currency; a percent of labour none. */
+export const isAmountBasis = (basis: OhrBasis): boolean => basis !== 'PERCENT_OF_LABOUR'
+
+export type RuleField = 'value' | 'currency' | 'period' | 'note'
+
+/** A typed rule value: a figure above 0 (12 digits, 6 decimals), a percent at most 1000. */
+function ruleValue(text: string, basis: OhrBasis): string | null {
+  const value = typedFigure(text)
+  if (value === null || !(Number(value) > 0)) return null
+  if (!isAmountBasis(basis) && Number(value) > 1000) return null
+  return value
+}
+
+/** The New rule dialog's problems by field (message keys). */
+export function ruleProblems(draft: RuleDraft): Partial<Record<RuleField, string>> {
+  const problems: Partial<Record<RuleField, string>> = {}
+  if (draft.value.trim() === '') problems.value = 'ohrEdit.problem.valueEmpty'
+  else if (ruleValue(draft.value, draft.basis) === null) problems.value = isAmountBasis(draft.basis) ? 'ohrEdit.problem.amount' : 'ohrEdit.problem.percent'
+  if (isAmountBasis(draft.basis) && !/^[A-Z]{3}$/.test(draft.currency.trim().toUpperCase())) problems.currency = 'ohrEdit.problem.currency'
+  if (!MONTH.test(draft.fromMonth) || (draft.toMonth !== '' && monthsBetween(draft.fromMonth, draft.toMonth) === null)) problems.period = 'ohrEdit.problem.period'
+  if (draft.note.trim().length > 1000) problems.note = 'cpm.problem.note'
+  return problems
+}
+
+/** The body of POST /costing/overhead-rules. */
+export function ruleBody(draft: RuleDraft, companyId: string) {
+  return {
+    companyId: draft.scope === 'company' ? companyId : null,
+    basis: draft.basis,
+    workCentreKind: draft.workCentreKind === '' ? null : draft.workCentreKind,
+    value: ruleValue(draft.value, draft.basis) ?? draft.value,
+    currency: isAmountBasis(draft.basis) ? draft.currency.trim().toUpperCase() : null,
+    periodStart: monthStart(draft.fromMonth),
+    periodEnd: draft.toMonth === '' ? null : monthLast(draft.toMonth),
+    ...(draft.note.trim() ? { note: draft.note.trim() } : {}),
+    ...(draft.endPrevious ? { endPrevious: true } : {}),
+  }
+}
+
+/** What the Correct dialog holds for an active rule (company, basis, department and first month never change). */
+export interface RuleEdit {
+  readonly value: string
+  readonly currency: string
+  readonly toMonth: string
+  readonly note: string
+}
+
+export const ruleEditOf = (rule: Pick<OverheadRuleView, 'value' | 'currency' | 'periodEnd' | 'note'>): RuleEdit => ({
+  value: rule.value === undefined || rule.value === null ? '' : String(Number(rule.value)),
+  currency: rule.currency ?? '',
+  toMonth: rule.periodEnd ? rule.periodEnd.slice(0, 7) : '',
+  note: rule.note ?? '',
+})
+
+export function ruleEditProblems(edit: RuleEdit, rule: Pick<OverheadRuleView, 'basis' | 'periodStart'>): Partial<Record<RuleField, string>> {
+  const problems = ruleProblems({ scope: 'company', basis: rule.basis, workCentreKind: '', value: edit.value, currency: edit.currency, fromMonth: rule.periodStart.slice(0, 7), toMonth: edit.toMonth, note: edit.note, endPrevious: false })
+  return problems
+}
+
+/** The body of PATCH /costing/overhead-rules/:id: only what changed, with the row's version; null when nothing changes. */
+export function ruleEditBody(edit: RuleEdit, rule: Pick<OverheadRuleView, 'basis' | 'value' | 'currency' | 'periodEnd' | 'note' | 'version'>) {
+  const before = ruleEditOf(rule)
+  const body: Record<string, unknown> = { version: rule.version }
+  const value = ruleValue(edit.value, rule.basis)
+  if (value !== null && (rule.value === undefined || rule.value === null || Number(value) !== Number(rule.value))) body.value = value
+  if (isAmountBasis(rule.basis) && edit.currency.trim().toUpperCase() !== before.currency) body.currency = edit.currency.trim().toUpperCase()
+  if (edit.toMonth !== before.toMonth) body.periodEnd = edit.toMonth === '' ? null : monthLast(edit.toMonth)
+  if (edit.note.trim() !== before.note) body.note = edit.note.trim() === '' ? null : edit.note.trim()
+  return Object.keys(body).length === 1 ? null : body
+}
+
+/** Why "New rule" waits, or null (a value is a cost: the grain). */
+export const ruleNewHeld = (can: CpmAbilities, busy: boolean): string | null => newHeld(can, busy)
+
+/** Why Correct or Archive of a rule waits, or null: an active rule, by a person who keeps the rates (every company's: said by the API). */
+export function ruleRowHeld(rule: Pick<OverheadRuleView, 'status'>, can: CpmAbilities, busy: boolean): string | null {
+  if (!can.manage) return 'cpm.held.noManage'
+  if (rule.status !== 'ACTIVE') return 'ohrEdit.held.archived'
+  if (!can.cost) return 'cpm.held.noGrain'
+  if (busy) return 'cpm.held.busy'
+  return null
+}
+
+export const OHR_REFUSALS = ['OVERLAPS', 'START_TAKEN', 'ARCHIVED', 'NOTHING_CHANGES', 'DATABASE'] as const
+
+/** A refused rule write in words: its refusal (`ohrRefusal.<CODE>`), else the kind (the calculator's words). */
+export function ohrProblem(error: unknown): string {
+  if (isApiError(error)) {
+    for (const issue of error.issues) {
+      const match = /^refusal\/([A-Z_]+)$/.exec(issuePath(issue))
+      if (match && (OHR_REFUSALS as readonly string[]).includes(match[1]!)) return `ohrRefusal.${match[1]}`
+    }
+  }
+  return cpmProblem(error)
+}
+// ---- end B-W2b-GB02

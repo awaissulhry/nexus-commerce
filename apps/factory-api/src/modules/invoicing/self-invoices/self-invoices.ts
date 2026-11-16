@@ -17,6 +17,7 @@ import {
   suggestedKind,
   waitsWords,
   DEFAULT_INTEGRATION_RATE,
+  isReverseChargeNature,
   type SelfInvoiceKind,
   type SelfInvoiceStatus,
 } from '@nexus/factory-domain/invoicing/self-invoices/self-invoices'
@@ -104,7 +105,8 @@ async function readSupplierInvoice(caller: CommandCaller, context: OfficeContext
     ? await caller.withClient((client) =>
         client.supplierInvoice.findUnique({
           where: { id: supplierInvoiceId },
-          select: { id: true, companyId: true, partyId: true, status: true, kind: true, number: true, issueDate: true, receivedOn: true, currency: true, netTotal: true, party: { select: { legalName: true, country: true } }, lines: { select: { kind: true, description: true, netAmount: true }, orderBy: { seq: 'asc' } } },
+          // B-W2b-GB02 (G150): + each line's Natura (a TD16 integrates the reverse-charge lines).
+          select: { id: true, companyId: true, partyId: true, status: true, kind: true, number: true, issueDate: true, receivedOn: true, currency: true, netTotal: true, party: { select: { legalName: true, country: true } }, lines: { select: { kind: true, description: true, netAmount: true, vatNature: true }, orderBy: { seq: 'asc' } } },
         }),
       )
     : null
@@ -147,13 +149,14 @@ export async function selfInvoiceCandidates(caller: CommandCaller, query: { comp
   return caller.withClient(async (client) => {
     const where: Prisma.SupplierInvoiceWhereInput = {
       AND: [
-        { companyId: query.companyId, status: { not: 'VOIDED' }, kind: 'INVOICE', party: { country: { not: 'IT' } }, selfInvoices: { none: { status: { not: 'CANCELLED' } } } },
+        // B-W2b-GB02 (G150): + an Italian supplier's invoice under the reverse charge (a line with Natura N6.x: TD16).
+        { companyId: query.companyId, status: { not: 'VOIDED' }, kind: 'INVOICE', OR: [{ party: { country: { not: 'IT' } } }, { lines: { some: { vatNature: { startsWith: 'N6' } } } }], selfInvoices: { none: { status: { not: 'CANCELLED' } } } },
         scopeWhere(actor, 'payables.view', { company: 'companyId', party: 'partyId' }) as Prisma.SupplierInvoiceWhereInput,
       ],
     }
     const rows = await client.supplierInvoice.findMany({
       where,
-      select: { id: true, partyId: true, number: true, issueDate: true, receivedOn: true, source: true, currency: true, party: { select: { code: true, legalName: true, country: true } }, lines: { select: { kind: true } } },
+      select: { id: true, partyId: true, number: true, issueDate: true, receivedOn: true, source: true, currency: true, party: { select: { code: true, legalName: true, country: true } }, lines: { select: { kind: true, vatNature: true } } },
       orderBy: [{ receivedOn: 'desc' }, { id: 'desc' }],
       take: LIST_MAX,
     })
@@ -171,7 +174,7 @@ export async function selfInvoiceCandidates(caller: CommandCaller, query: { comp
           receivedOn: day(row.receivedOn),
           source: row.source,
           currency: row.currency,
-          suggestion: suggestedKind({ country: row.party.country, lineKinds: row.lines.map((line) => line.kind) }),
+          suggestion: suggestedKind({ country: row.party.country, lineKinds: row.lines.map((line) => line.kind), lineNatures: row.lines.map((line) => line.vatNature) }),
           deadline,
           deadlineState: deadlineStateOf(deadline, today, 'PENDING'),
         }
@@ -204,7 +207,10 @@ export async function createSelfInvoice(caller: CommandCaller, body: CreateSelfI
   // A pending self-invoice recorded without its draft (an import, the seed) gets its draft here, of its own kind.
   const waiting = live && live.status === 'PENDING' && live.invoiceId === null ? live : null
   if (waiting && waiting.kind !== body.kind) throw refusedDepth('SELF_INVOICE', `This supplier invoice's self-invoice is a ${waiting.kind}: make its draft as ${waiting.kind}, or cancel it first.`)
-  const problems = selfInvoiceProblems({ status: supplier.status, kind: supplier.kind, country: supplier.party.country, netTotal: supplier.netTotal, live: live !== null && waiting === null, selfKind: body.kind })
+  // B-W2b-GB02 (G150): a TD16 integrates only the lines under the reverse charge.
+  const integrated = body.kind === 'TD16' ? supplier.lines.filter((line) => isReverseChargeNature(line.vatNature)) : supplier.lines
+  const integratedNet = body.kind === 'TD16' ? integrated.reduce((sum, line) => sum + line.netAmount, 0) : supplier.netTotal
+  const problems = selfInvoiceProblems({ status: supplier.status, kind: supplier.kind, country: supplier.party.country, netTotal: integratedNet, live: live !== null && waiting === null, selfKind: body.kind, lineNatures: supplier.lines.map((line) => line.vatNature) })
   if (problems.length > 0) throw refusedDepth('SELF_INVOICE', problems.map(refusalWords).join(' '))
   const issueDate = day(supplier.issueDate)
   let toEuro = (minor: number): number => minor
@@ -214,9 +220,9 @@ export async function createSelfInvoice(caller: CommandCaller, body: CreateSelfI
     toEuro = (minor: number): number => convertMinor(minor, supplier.currency, EURO, rate)
   }
   const reference = `fattura n. ${supplier.number} del ${issueDate.slice(8, 10)}/${issueDate.slice(5, 7)}/${issueDate.slice(0, 4)}`
-  const kinds = new Set(supplier.lines.map((line) => LINE_KIND[line.kind] ?? 'GOODS'))
+  const kinds = new Set(integrated.map((line) => LINE_KIND[line.kind] ?? 'GOODS'))
   const lineKind: 'GOODS' | 'SERVICE' = body.kind === 'TD17' ? 'SERVICE' : kinds.size === 1 ? [...kinds][0]! : 'GOODS'
-  const lines: LineInput[] = integrationLines(supplier.lines, supplier.netTotal, reference, toEuro).map((line) => ({
+  const lines: LineInput[] = integrationLines(integrated, integratedNet, reference, toEuro).map((line) => ({
     kind: lineKind,
     description: line.description,
     quantity: '1',

@@ -17,8 +17,9 @@ import { lockInvoicing } from './locks'
  * Called by: a payment allocated or taken back (payments.ts, deposits.ts), an invoice issued (issue.ts: a TD04 or a new
  * invoice unsettles), an SDI outcome (sdi/record.ts syncInvoice notes the orders, `noteOrders`; the poll, the webhook and
  * the send result settle them at their end, `settleNoted`, after every invoice row they lock: settled only when every
- * document is DELIVERED or NOT_DELIVERABLE). Shipping and order amendments do not call it (their modules); the next call
- * announces their effect, and the close command asks the port anyway.
+ * document is DELIVERED or NOT_DELIVERABLE). Shipping and order amendments do not call it (their modules): B-W2b-GB02
+ * (G148) the worker's `invoicing.settleAfterChanges` (settle-handler.ts) announces their effect after a shipment moved
+ * (shipped, delivered, returned, cancelled) or an order was amended, split or had lines closed or reopened.
  */
 
 const SHIPPED = ['SHIPPED', 'DELIVERED'] as const
@@ -248,3 +249,13 @@ export async function getSettlement(caller: CommandCaller, orderId: string) {
     },
   }
 }
+
+// ---- B-W2b-GB02 (G148; B-W1-51's gap "order.unsettled only from watched commands") -----------------------------------------
+
+/** Whether the order's settled state now differs from what its history last announced (a change nobody announced yet). */
+export async function settledStateChanged(db: Reader, orderId: string): Promise<boolean> {
+  const now = await settlementOf(db, orderId)
+  if (!now) return false
+  return now.settlement.settled !== (await lastAnnounced(db, orderId))
+}
+// ---- end B-W2b-GB02

@@ -110,7 +110,8 @@
   },
   "state": {
     "open": "Aperto",
-    "final": "Definitivo"
+    "final": "Definitivo",
+    "closed": "Chiuso"
   },
   "reason": {
     "MATERIAL_PRICE": "Prezzo materiale",

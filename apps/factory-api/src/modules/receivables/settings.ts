@@ -109,7 +109,7 @@ export async function rowToChange(tools: CommandTools, companyId: string | null,
   // A company's first own row starts from the tenant's (the switch as it was, when it may stay on).
   const tenant = companyId !== null ? await tx.receivablesSettings.findUnique({ where: { id: tenantId }, select: SETTINGS_COLUMNS }) : null
   // B-W2b-402: and the tenant's collections switches (Ri.Ba., the payment notice to customers), so a company keeps them.
-  const switches = companyId !== null ? await tx.receivablesSettings.findUnique({ where: { id: tenantId }, select: { ribaOn: true, paymentNoticeToCustomerOn: true } }) : null
+  const switches = companyId !== null ? await tx.receivablesSettings.findUnique({ where: { id: tenantId }, select: { ribaOn: true, paymentNoticeToCustomerOn: true, depositAutoCarryOn: true } }) : null
   const created = await tx.receivablesSettings.create({
     data: {
       id,
@@ -122,6 +122,7 @@ export async function rowToChange(tools: CommandTools, companyId: string | null,
       minimumAmount: tenant?.minimumAmount ?? null,
       ribaOn: switches?.ribaOn ?? false,
       paymentNoticeToCustomerOn: switches?.paymentNoticeToCustomerOn ?? false,
+      depositAutoCarryOn: switches?.depositAutoCarryOn ?? false, // B-W2b-GB02 (G088): a company's own row starts from the tenant's switches
       createdAt: now,
       updatedAt: now,
       createdById: tools.context.audience === 'office' ? tools.context.actorId : null,

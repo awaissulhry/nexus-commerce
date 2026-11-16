@@ -388,6 +388,30 @@ export const queueDdtSchema = z.object({
 })
 export type QueueDdt = z.infer<typeof queueDdtSchema>
 
+// ---- B-W2b-GB02 (G148): a shipment that left without a DDT (its immediate invoice travels with it).
+export const queueShipmentSchema = z.object({
+  shipmentId: z.string(),
+  number: z.string(),
+  shippedOn: z.string(),
+  companyId: z.string(),
+  partyId: z.string(),
+  orders: z.array(z.object({ id: z.string(), number: z.string() })),
+  lines: z.array(z.object({ salesOrderLineId: z.string(), orderNumber: z.string().nullable(), description: z.string().nullable(), size: z.string(), shipped: z.string(), invoiced: z.string(), inDraft: z.string(), notInvoiced: z.string(), unitPrice: z.string().nullable().optional(), netAmount: z.number().nullable().optional(), drafts: z.array(z.string()) })),
+  valueAmount: z.number().optional(),
+  depositPaidAmount: z.number().optional(),
+  drafts: z.array(z.string()),
+  deadline: deadlineSchema,
+})
+export type QueueShipment = z.infer<typeof queueShipmentSchema>
+
+const fromShipmentSchema = z.object({ invoice: invoiceSchema })
+
+/** The immediate invoice (TD01 draft) of what is left of a shipment that leaves without a DDT (invoices.manage). */
+export function invoiceFromShipment(api: ApiClient, shipmentId: string, idempotencyKey: string): Promise<z.infer<typeof fromShipmentSchema>> {
+  return api.post('/invoicing/invoices/from-shipment', { body: { shipmentId }, schema: fromShipmentSchema, idempotencyKey })
+}
+// ---- end B-W2b-GB02
+
 export const queueSchema = z.object({
   asOf: z.string(),
   customers: z.array(
@@ -403,6 +427,8 @@ export const queueSchema = z.object({
       oldestDate: z.string(),
       months: z.array(z.object({ month: z.string(), ddtIds: z.array(z.string()), suggested: shipType.nullable(), allowed: z.array(shipType), deadline: deadlineSchema.nullable() })),
       ddts: z.array(queueDdtSchema),
+      // B-W2b-GB02 (G148): the shipments that left without a DDT, not invoiced (an older API answers none).
+      shipments: z.array(queueShipmentSchema).optional(),
     }),
   ),
 })
@@ -598,6 +624,8 @@ export const openItemSchema = z.object({
   suggestedAmount: z.number().optional(),
   /** B-W2a-61: an invoice of an order whose deposit was paid on a request that issues no TD02: what that deposit holds. */
   noInvoiceDepositAmount: z.number().nullable().optional(),
+  /** B-W2b-GB02 (G088): the deposits paid without a deposit invoice that wait to be carried onto this invoice (B-W2b-21). */
+  depositToCarry: z.array(z.object({ depositRequestId: z.string(), amount: z.number().optional() })).optional(),
 })
 export type OpenItem = z.infer<typeof openItemSchema>
 

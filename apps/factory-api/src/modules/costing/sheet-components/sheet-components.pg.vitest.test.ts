@@ -12,6 +12,8 @@ import { businessDate } from '@nexus/factory-domain/core/time'
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
 import { seed as seedCostSheets, type CostSheetsSeed } from '../../../../../../packages/factory-db/seed/cost-sheets'
 import { seed as seedPacking } from '../../../../../../packages/factory-db/seed/packing'
+// B-W2b-GB02 (G054): piece pay ON at A1 with its rates of SEED-JKT-02 (the opt-in), for the piece-rate costing's positive path.
+import { seed as seedPay } from '../../../../../../packages/factory-db/seed/pay'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
@@ -257,3 +259,65 @@ describe('the inputs: leather bases, uplifts, piece-rate labour', () => {
     expect(await admin('SELECT id FROM "CostingSettings" WHERE id = $1', [companyA])).toEqual([])
   })
 })
+
+// ---- B-W2b-GB02 (G056; B-W2b-418 gap 3, B-W2b-419 gap 3): the routing's minutes per size and its machine hours
+describe('the routing as the components read it (G056)', () => {
+  it("costs a size at its own minutes and absorbs a machine-hour rule on the minutes of the steps worked at a machine", async () => {
+    const sewStep = id('product:routing:JKT-01:1:SEED-SEW-ASM')
+    const sizeTime = newId()
+    const setting = newId()
+    // Size 54 takes 4 minutes longer to sew (the revision is a DRAFT: its routing still changes); the sewing step has its machine.
+    await admin(`INSERT INTO "RoutingOperationSizeTime" (id, "tenantId", "revisionId", "routingOperationId", size, "extraMinutes") VALUES ($1, $2, $3, $4, '54', 4)`, [sizeTime, tenant, revision1, sewStep])
+    await admin(`INSERT INTO "OperationMachineSetting" (id, "tenantId", "revisionId", "routingOperationId", seq, "stitchType") VALUES ($1, $2, $3, $4, 1, '301')`, [setting, tenant, revision1, sewStep])
+    const { rule } = await ok('finance', 'POST', '/costing/overhead-rules', { companyId: companyA, basis: 'PER_MACHINE_HOUR', workCentreKind: 'SEWING', value: '6', currency: 'EUR', periodStart: `${today.slice(0, 7)}-01` }, 201)
+    try {
+      const view = await ok('finance', 'GET', componentsUrl(`companyId=${companyA}&piecesPerCarton=12`))
+      expect(view).toMatchObject({ complete: true, missing: [] })
+      const sewing = (view.lines as Json[]).filter((line) => line.workCentreKind === 'SEWING')
+      // Sewing: 96.5 minutes in sizes 50 and 52, 100.5 in size 54, at 0.50 a minute.
+      expect(brief(sewing.filter((line) => line.category === 'LABOUR'))).toEqual([
+        ['LABOUR', 'ROUTING', '50', '96.5', null, '0.5', '48.25', null],
+        ['LABOUR', 'ROUTING', '52', '96.5', null, '0.5', '48.25', null],
+        ['LABOUR', 'ROUTING', '54', '100.5', null, '0.5', '50.25', null],
+      ])
+      // 96.5 machine minutes = 1.6083 h × 6.00; 100.5 = 1.675 h × 6.00 (no longer "give the machine hours").
+      expect(brief(sewing.filter((line) => line.label === 'Overhead per machine hour (sewing)'))).toEqual([
+        ['OVERHEAD', 'OVERHEAD_RULE', '50', '1.6083', null, '6', '9.6498', null],
+        ['OVERHEAD', 'OVERHEAD_RULE', '52', '1.6083', null, '6', '9.6498', null],
+        ['OVERHEAD', 'OVERHEAD_RULE', '54', '1.675', null, '6', '10.05', null],
+      ])
+      // The per-minute overhead reads the size's minutes too: 100.5 × 0.05 in size 54.
+      expect(brief(sewing.filter((line) => line.label === 'Overhead per minute (sewing)' && line.size === '54'))).toEqual([['OVERHEAD', 'OVERHEAD_RULE', '54', '100.5', null, '0.05', '5.025', null]])
+    } finally {
+      await ok('finance', 'POST', `/costing/overhead-rules/${rule.id}/archive`, { version: rule.version })
+      await admin('DELETE FROM "OperationMachineSetting" WHERE id = $1', [setting])
+      await admin('DELETE FROM "RoutingOperationSizeTime" WHERE id = $1', [sizeTime])
+    }
+  })
+})
+
+// ---- B-W2b-GB02 (G054; B-W2b-418 gap 4): piece-rate costing, the positive path (no seed put piece pay ON with a style's table)
+describe('piece-rate labour on (GATE-PIECE-PAY), the positive path', () => {
+  it("costs an operation at A1's published piece rate once piece-rate labour is on, the others by their minutes", async () => {
+    await seedPay({ db: database, namespace: NS }, { piecePay: true })
+    const before = await ok('finance', 'GET', `/costing/piece-rate-labour?companyId=${companyA}`)
+    expect(before).toMatchObject({ on: false, can: { switchOn: true } })
+    expect(before.payingSites.map((site: Json) => site.id)).toEqual([siteA1])
+    const on = await ok('finance', 'PUT', '/costing/piece-rate-labour', { companyId: companyA, on: true })
+    expect(on).toMatchObject({ on: true })
+    const jacket2 = id('production:style:JKT-02')
+    const revision = `ffffffff${id('production:revision:JKT-02:1').slice(8)}`
+    const view = await ok('finance', 'GET', `/costing/styles/${jacket2}/revisions/${revision}/components?companyId=${companyA}&piecesPerCarton=12`)
+    expect(view.pieceRate).toMatchObject({ on: true, siteId: siteA1 })
+    // SEED-JKT-02's version 1 at A1: sewing 96.5 SMV × 0.12 = 11.58 a piece, packing 0.30 a piece (made up); one piece each.
+    expect(brief((view.lines as Json[]).filter((line) => line.source === 'PIECE_RATE'))).toEqual([
+      ['LABOUR', 'PIECE_RATE', null, '1', null, '11.58', '11.58', null],
+      ['LABOUR', 'PIECE_RATE', null, '1', null, '0.3', '0.3', null],
+    ])
+    expect((view.lines as Json[]).filter((line) => line.source === 'PIECE_RATE').map((line) => line.sourceRecordType)).toEqual(['PieceRateEntry', 'PieceRateEntry'])
+    // Cutting has no piece rate: by its minutes (14 × 0.50), and said so.
+    expect(brief((view.lines as Json[]).filter((line) => line.category === 'LABOUR' && line.workCentreKind === 'CUTTING'))).toEqual([['LABOUR', 'ROUTING', null, '14', null, '0.5', '7', null]])
+    expect((view.warnings as Json[]).map((warning) => warning.code)).toContain('NO_PIECE_RATE')
+  })
+})
+// ---- end B-W2b-GB02

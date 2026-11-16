@@ -19,6 +19,8 @@ import { systemContext } from '../../platform/outbox/system'
 import { openInvoices } from '../receivables/store'
 // B-W2b-F55: the worker's step for money placed on a deposit request by any other command.
 import { afterDepositAllocation, allocatedDepositInvoiceHandler } from './deposit-invoice'
+// B-W2b-GB02 (G088): the automatic carry.
+import { autoCarryHandler } from './auto-carry'
 
 /**
  * B-W2b-21 — payments follow-ups on the local stack, through the app's real routes: a throwaway PostgreSQL 17 database from
@@ -130,6 +132,9 @@ describe('a deposit paid without a deposit invoice, carried onto its order’s i
     expect(await admin(`SELECT id FROM "Invoice" WHERE "depositRequestId" = $1`, [request])).toEqual([])
     const early = await refused('finance', 'POST', `/payments/deposit-requests/${request}/carry`, {}, 409)
     expect(early.message).toContain('has no issued invoice (TD01 or TD24) open yet')
+    // B-W2b-GB02 (G088): the preview says the same, as a normal state of a read (200), and writes nothing.
+    const preview = await ok('finance', 'GET', `/payments/deposit-requests/${request}/carry`)
+    expect(preview).toMatchObject({ depositRequestId: request, orderId: A.SO2, problem: expect.stringContaining('has no issued invoice (TD01 or TD24) open yet'), amount: 0, steps: [], invoices: [] })
     const reversal = await refused('finance', 'POST', `/payments/${paymentId}/allocations/${payment.allocations[0].id}/reverse`, { note: 'Try' }, 409)
     expect(reversal.message).toContain('carry it onto the order')
   })
@@ -150,6 +155,10 @@ describe('a deposit paid without a deposit invoice, carried onto its order’s i
   })
 
   it('carried in ONE command: the reversal and the carry, the invoice open for less, the request still PAID at 0', async () => {
+    // B-W2b-GB02 (G088): first the preview: the same plan, nothing written.
+    const preview = await ok('finance', 'GET', `/payments/deposit-requests/${request}/carry?invoiceId=${invoiceId}`)
+    expect(preview).toMatchObject({ problem: null, amount: 30_000, steps: [{ paymentId, invoiceId, amount: 30_000 }], invoices: [{ id: invoiceId, openAmount: 122_000, openAfter: 92_000 }] })
+    expect(await admin(`SELECT id FROM "PaymentAllocation" WHERE "paymentId" = $1`, [paymentId])).toHaveLength(1)
     const carried = await ok('finance', 'POST', `/payments/deposit-requests/${request}/carry`, { invoiceId })
     expect(carried).toMatchObject({ depositRequestId: request, orderId: A.SO2, amount: 30_000, carried: [{ paymentId, invoiceId, amount: 30_000 }], invoices: [{ id: invoiceId, openAmount: 92_000 }] })
     const rows = await admin<{ amount: number; depositRequestId: string | null; invoiceId: string | null; reversalOfId: string | null; carriedFromId: string | null }>(`SELECT amount, "depositRequestId", "invoiceId", "reversalOfId", "carriedFromId" FROM "PaymentAllocation" WHERE "paymentId" = $1 ORDER BY "createdAt", amount`, [paymentId])
@@ -173,6 +182,32 @@ describe('a deposit paid without a deposit invoice, carried onto its order’s i
     const again = await refused('finance', 'POST', `/payments/deposit-requests/${request}/carry`, { invoiceId }, 409)
     expect(again.message).toContain('carried onto the invoice already')
   })
+
+  // ---- B-W2b-GB02 (G088; B-W2b-21's gap "no auto-carry"): the system carries it when the order's invoice is issued, only
+  // while the company's switch is on.
+  it('carried by the system when the order’s invoice is issued, only while the switch is on', async () => {
+    const second = randomUUID()
+    await admin(`INSERT INTO "DepositRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, currency, amount, "dueDate", "fiscalDocument", "fiscalRule") VALUES ($1, $2, $3, $4, $5, 'ACCONTO', 'EUR', 20000, $6, 'NONE', 'test.deposit.EU_B2B_VIES')`, [second, A.tenant, A.company, A.P1, A.SO2, TODAY])
+    const { payment } = await ok('finance', 'POST', '/payments', { companyId: A.company, partyId: A.P1, amount: 20000, receivedOn: TODAY, externalRef: 'TRN-GB02-AUTOCARRY', allocations: [{ depositRequestId: second }] }, 201)
+    const issued = await issuedInvoiceOfOrder(50_000)
+    const system = () => callerFor(h.database, systemContext(A.tenant, newId()))
+    const event = { eventId: newId(), type: 'invoice.issued', version: 1, tenantId: A.tenant, companyId: A.company, payload: { invoiceId: issued } } as never
+    const onInvoice = async () => (await admin<{ n: number }>(`SELECT count(*)::int AS n FROM "PaymentAllocation" WHERE "paymentId" = $1 AND "invoiceId" IS NOT NULL`, [payment.id]))[0]!.n
+    // Off (the default): nothing moves.
+    await autoCarryHandler().handle(event, { caller: system(), attempt: 1 } as never)
+    expect(await onInvoice()).toBe(0)
+    // On: carried onto the oldest invoice of the order that takes it whole, as a person's carry.
+    const switched = await admin(`UPDATE "ReceivablesSettings" SET "depositAutoCarryOn" = true WHERE "tenantId" = $1 AND ("companyId" = $2 OR "companyId" IS NULL) RETURNING id`, [A.tenant, A.company])
+    if (switched.length === 0) await admin(`INSERT INTO "ReceivablesSettings" (id, "tenantId", "companyId", "depositAutoCarryOn") VALUES ($1, $2, $1, true)`, [A.company, A.tenant])
+    await autoCarryHandler().handle(event, { caller: system(), attempt: 1 } as never)
+    expect(await onInvoice()).toBe(1)
+    expect(await admin(`SELECT action FROM "AuditLog" WHERE action = 'payments.carryDeposit' AND after->>'depositRequestId' = $1`, [second])).toHaveLength(1)
+    // A repeat finds nothing left to carry.
+    await autoCarryHandler().handle(event, { caller: system(), attempt: 1 } as never)
+    expect(await onInvoice()).toBe(1)
+    await admin(`UPDATE "ReceivablesSettings" SET "depositAutoCarryOn" = false WHERE "tenantId" = $1`, [A.tenant])
+  })
+  // ---- end B-W2b-GB02
 })
 
 describe('refunds carry a reason (Z8:02)', () => {

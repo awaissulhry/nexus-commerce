@@ -35,7 +35,7 @@
       "subcontract": "Nessuna fase del ciclo è svolta da un laboratorio esterno.",
       "packaging": "Nessun imballo costato: nessun sacchetto, gruccia, scatola o cartone predefinito per questo modello e nessun imballo in distinta base.",
       "freight": "Nessun trasporto, assicurazione o dazio impostato sui suoi materiali.",
-      "commission": "Nessuna: le provvigioni non si calcolano dai componenti. Una versione tiene una provvigione solo come riga scritta a mano."
+      "commission": "Nessuna: le provvigioni non si calcolano dai componenti. Digitane una su una versione in bozza, in \"Provvigioni e righe digitate\" qui sotto: una percentuale del suo prezzo obiettivo o un importo."
     },
     "col": {
       "what": "Voce",
@@ -291,7 +291,9 @@
     "NO_COMPANY": "Una scheda costo si calcola per una società: apri il modello nella sua società.",
     "INCOMPLETE": "Mancano dei dati: spunta \"Lascia fuori i dati mancanti\" per scriverla comunque, oppure completali prima.",
     "NOT_DRAFT": "Solo una bozza prende righe nuove.",
-    "DATABASE": "Un'altra modifica è stata fatta nello stesso momento: è stata riletta. Guarda e riprova."
+    "DATABASE": "Un'altra modifica è stata fatta nello stesso momento: è stata riletta. Guarda e riprova.",
+    "NEEDS_TARGET": "Una provvigione in percentuale è una quota del prezzo obiettivo: dai prima un prezzo obiettivo alla versione, oppure digita la provvigione come importo. Finché ne resta una, il prezzo obiettivo non si cancella.",
+    "NOT_TYPED": "Qui si toglie solo una riga digitata da una persona: le altre righe vengono dai componenti (riscrivili)."
   },
   "verStepUp": {
     "title": "Conferma che sei tu",
@@ -778,5 +780,150 @@
     "PER_MINUTE": "{amount} al minuto",
     "PER_UNIT": "{amount} a capo",
     "PER_MACHINE_HOUR": "{amount} all'ora macchina"
+  },
+  "typed": {
+    "title": "Provvigioni e righe digitate",
+    "add": "Digita una riga…",
+    "intro": "La provvigione di un agente (una percentuale del prezzo obiettivo, che lo segue), una royalty, una commissione di pagamento, o un importo che i componenti non conoscono. Le righe digitate restano quando i componenti vengono riscritti.",
+    "none": "Nessuna riga digitata su questa versione.",
+    "col": {
+      "what": "Riga",
+      "size": "Taglia",
+      "how": "Come si calcola",
+      "cost": "Costo",
+      "actions": "Azioni"
+    },
+    "remove": "Togli",
+    "removeLabel": "Togli la riga digitata {label}",
+    "dialogTitle": "Digita una riga sulla versione {version}",
+    "dialogIntro": "Una provvigione è una percentuale del prezzo obiettivo (segue il prezzo) o un importo a capo; ogni altra riga è una quantità per un costo unitario.",
+    "category": "Categoria",
+    "label": "Che cosa è",
+    "labelHint": "Una riga: il nome di un agente, Royalty, Commissione di pagamento…",
+    "size": "Taglia",
+    "mode": "Digitata come",
+    "modePercent": "Una percentuale del prezzo obiettivo",
+    "modeAmount": "Un importo a capo",
+    "pct": "Percentuale",
+    "pctHint": "Del prezzo obiettivo {price}.",
+    "quantity": "Quantità",
+    "unitCost": "Costo unitario",
+    "unitCostHint": "In {currency}, IVA esclusa.",
+    "preview": "La riga costa {amount}",
+    "note": "Nota",
+    "sendsBack": "La versione aspetta l'approvazione: digitare una riga rimanda indietro la richiesta.",
+    "save": "Aggiungi la riga",
+    "removeTitle": "Togliere {label}?",
+    "removeConfirm": "Togli la riga",
+    "removeIntro": "La riga esce da questa bozza; le altre righe restano.",
+    "removeIntroWaiting": "La riga esce da questa bozza e la sua richiesta di approvazione viene rimandata indietro.",
+    "added": "Riga aggiunta alla versione {version}.",
+    "removed": "Riga tolta dalla versione {version}.",
+    "held": {
+      "noCostGrain": "I costi non sono nel tuo ruolo: una riga digitata è un costo.",
+      "noPriceGrain": "I prezzi non sono nel tuo ruolo: digita la provvigione come importo.",
+      "noTarget": "La versione non ha un prezzo obiettivo: daglielo prima, oppure digita la provvigione come importo."
+    },
+    "problem": {
+      "label": "Di che cosa è la riga.",
+      "labelLong": "Una riga di al massimo 200 caratteri.",
+      "pct": "Digita una percentuale sopra 0 e al massimo 100, con al massimo 4 decimali.",
+      "quantity": "Digita una quantità sopra 0, con al massimo 4 decimali.",
+      "unitCost": "Digita un importo sopra 0, con al massimo 6 decimali.",
+      "note": "Al massimo 1.000 caratteri."
+    },
+    "how": {
+      "percent": "{pct} % del prezzo obiettivo: {amount}",
+      "percentNoGrain": "{pct} % del prezzo obiettivo",
+      "amount": "{quantity} × {unit} = {amount}",
+      "quantityOnly": "Quantità {quantity}"
+    }
+  },
+  "mix": {
+    "title": "Mix taglie",
+    "loading": "Lettura del mix taglie…",
+    "failed": "Impossibile leggere il mix taglie",
+    "intro": "Quanto pesa ogni taglia nel costo ponderato: per tutte le stagioni, o per una stagione sua.",
+    "edit": "Cambia il mix taglie…",
+    "none": "Nessun mix taglie: una versione si pondera con la sua curva taglie, o per niente.",
+    "col": {
+      "for": "Per",
+      "actions": "Azioni"
+    },
+    "everySeason": "Tutte le stagioni",
+    "change": "Cambia",
+    "editLabel": "Cambia il mix taglie di {for}",
+    "versionsKeep": "Una versione tiene il mix con cui è stata fatta: su una bozza, \"Rileggi il mix taglie\" prende quello nuovo.",
+    "dialogTitle": "Mix taglie",
+    "dialogIntro": "Un peso per taglia (vuoto lascia fuori la taglia). Le quote sono ogni peso sul totale.",
+    "for": "Per",
+    "size": "Taglia {size}",
+    "shares": "Quote: {shares}",
+    "clearWarning": "Tutte le taglie sono vuote: salvando si cancella questo mix.",
+    "clear": "Cancella il mix",
+    "save": "Tieni il mix",
+    "saved": "Mix taglie salvato. Una bozza lo prende con \"Rileggi il mix taglie\".",
+    "cleared": "Mix taglie cancellato.",
+    "refresh": "Rileggi il mix taglie",
+    "refreshed": "La versione {version} rilegge il mix taglie.",
+    "held": {
+      "notDraft": "Solo una bozza rilegge il mix taglie.",
+      "nothing": "Digita un peso per almeno una taglia."
+    },
+    "problem": {
+      "weight": "Digita un peso sopra 0, con al massimo 4 decimali."
+    }
+  },
+  "ohrEdit": {
+    "new": "Nuova regola…",
+    "newTitle": "Nuova regola delle spese generali",
+    "newIntro": "Una regola aggiunge spese generali sulle schede costo da un mese in poi: una percentuale della manodopera, o un importo al minuto, a capo o all'ora macchina (le ore macchina sono i minuti delle fasi del ciclo lavorate a macchina).",
+    "keep": "Tieni la regola",
+    "scope": "Per",
+    "scopeHint": "La regola di tutte le società richiede un ruolo su tutte le società.",
+    "amount": {
+      "PER_MINUTE": "Importo al minuto",
+      "PER_UNIT": "Importo a capo",
+      "PER_MACHINE_HOUR": "Importo all'ora macchina"
+    },
+    "percent": "Percentuale della manodopera",
+    "currency": "Valuta",
+    "currencyHint": "La valuta della società (tre lettere, come EUR).",
+    "toMonth": "Ultimo mese",
+    "openEnded": "Fino a una regola successiva",
+    "endPrevious": "Chiudi la regola precedente (stessa società, base e reparto) il giorno prima che inizi questa",
+    "editTitle": "Correggi la regola: {basis}, {department}",
+    "editIntro": "In vigore da {from}. Società, base, reparto e primo mese restano: un nuovo importo da un mese successivo è una nuova regola.",
+    "save": "Salva",
+    "archiveTitle": "Archivia la regola: {basis}, {department}",
+    "archiveIntro": "Una regola archiviata non calcola più nessuna scheda costo; le versioni già scritte tengono le loro righe.",
+    "archiveConfirm": "Archivia la regola",
+    "reason": "Perché (facoltativo)",
+    "correct": "Correggi",
+    "archive": "Archivia",
+    "held": {
+      "archived": "La regola è archiviata: aggiungi invece una nuova regola.",
+      "nothing": "Ancora non cambia nulla."
+    },
+    "problem": {
+      "valueEmpty": "Digita l'importo.",
+      "amount": "Digita un importo sopra 0, con al massimo 6 decimali.",
+      "percent": "Digita una percentuale sopra 0 e al massimo 1.000, con al massimo 6 decimali.",
+      "currency": "Digita una valuta di tre lettere, come EUR.",
+      "period": "L'ultimo mese non può essere prima del primo.",
+      "reason": "Almeno 3 caratteri, oppure nessuno."
+    },
+    "notice": {
+      "kept": "Regola delle spese generali salvata.",
+      "corrected": "Regola delle spese generali corretta.",
+      "archived": "Regola delle spese generali archiviata."
+    }
+  },
+  "ohrRefusal": {
+    "OVERLAPS": "Un'altra regola attiva della stessa società, base e reparto copre parte di questo periodo: chiudi prima quella (o spunta \"Chiudi la regola precedente\" quando inizia prima).",
+    "START_TAKEN": "Una regola della stessa società, base e reparto inizia già quel mese: correggi quella, o fai iniziare la nuova in un altro mese.",
+    "ARCHIVED": "Questa regola è archiviata: aggiungi invece una nuova regola.",
+    "NOTHING_CHANGES": "Non cambia nulla: la regola è già così.",
+    "DATABASE": "Un'altra modifica è stata fatta nello stesso momento: guarda di nuovo."
   }
 }

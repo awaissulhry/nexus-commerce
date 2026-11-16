@@ -7,7 +7,8 @@ import { isBusinessDate, type BusinessDate } from '../core/time'
  * payments − credits = running balance"), pure. Amounts are minor units of the document's currency (the price grain).
  *
  * The ledger of a customer in one company (partitario cliente) is its money movements in date order:
- *   INVOICE       an issued TD01, TD24 or TD02 (the deposit invoice), on its issue date: what the customer owes (debit)
+ *   INVOICE       an issued TD01, TD24, TD02 (the deposit invoice) or TD05 (a debit note: B-W2b-GB02, G150), on its issue
+ *                 date: what the customer owes (debit)
  *   CREDIT_NOTE   an issued TD04, on its issue date: what it no longer owes (credit)
  *   PAYMENT       a payment received (RECEIVED; a VOIDED one was typed by mistake and is not money), on the day it
  *                 arrived: credit, whatever it was allocated to
@@ -16,6 +17,7 @@ import { isBusinessDate, type BusinessDate } from '../core/time'
  * (a credit on account). A draft invoice is no money yet.
  *
  * What is open is counted per invoice and per instalment of its payment terms (FatturaPA DatiPagamento): a TD01/TD24's
+ * (B-W2b-GB02: and a TD05's)
  * gross total less its issued credit notes and the payments allocated to it, spread over its instalments oldest first.
  * Each open instalment is aged by its due date (days late as of the day asked): not due yet, 1–30, 31–60, 61–90, over 90.
  * An invoice without a due date is due on its date (said so: `dueDateKnown` false).
@@ -154,7 +156,7 @@ export interface Movement {
   readonly recordId: string
   /** The document's number as printed (an invoice or credit note), or the bank reference of a payment or refund. */
   readonly reference: string | null
-  /** TD01 | TD02 | TD04 | TD24 for an invoice or credit note. */
+  /** TD01 | TD02 | TD04 | TD24 | TD05 (B-W2b-GB02) for an invoice, credit note or debit note. */
   readonly docType: string | null
   readonly dueDate: BusinessDate | null
   /** Above 0: debit or credit by its kind. */

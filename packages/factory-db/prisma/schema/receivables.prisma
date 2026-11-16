@@ -231,6 +231,10 @@ model ReceivablesSettings {
   /// none is written off (the company's row wins, a null follows the tenant-wide row).
   /// @grain price
   writeOffToleranceAmount   Int?
+  /// B-W2b-GB02 (G088; B-W2b-21's gap "no auto-carry"): a PAID deposit that issues no deposit invoice (NONE) is carried
+  /// onto its order's invoice by the system when that invoice is issued, only while true (OFF by default: a person carries
+  /// it; the Owner's rule of 11-13, nothing runs by itself unless switched on).
+  depositAutoCarryOn        Boolean          @default(false)
   version               Int              @default(1)
   createdAt             DateTime         @default(now()) @db.Timestamptz(3)
   updatedAt             DateTime         @default(now()) @updatedAt @db.Timestamptz(3)

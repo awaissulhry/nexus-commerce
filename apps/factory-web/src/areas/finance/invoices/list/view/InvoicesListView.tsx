@@ -38,6 +38,8 @@ import { bulkWords, ddtDeadline, deferredDdtIds, deferredHeld, deferredTile, fre
 import { DeferredDialog, ReturnCreditDialog } from '../../daily/view/DailyDialogs'
 import type { InvoicesDepthSlots, InvoicesListActions, InvoicesListModel } from '../list-model'
 import { DEPTH } from '../../test-mode/depth'
+// B-W2b-GB02 (G148): the shipments that left without a DDT, not invoiced.
+import { ShippedWithoutDdt, shipmentRowsOf } from './ShippedWithoutDdt'
 import '../../../_shared/finance.css'
 
 export type { InvoicesDepthSlots, InvoicesListActions, InvoicesListModel } from '../list-model'
@@ -269,6 +271,9 @@ function InvoicesList({ model, actions, depth }: { model: InvoicesListModel; act
   ) : shipped && shipped.length === 0 ? (
     model.shippedView === 'deferred' ? (
       <EmptyState title={d('deferred.empty.title')} description={d('deferred.empty.body')} action={<Button size="sm" onClick={() => actions?.onShippedView?.('all')}>{d('deferred.showAll')}</Button>} />
+    ) : shipmentRowsOf(model).length > 0 ? (
+      // B-W2b-GB02 (G148): no DDT waits, but a shipment without a DDT does (its list follows).
+      <EmptyState title={t('shipped.noDdt.emptyDdts.title')} description={t('shipped.noDdt.emptyDdts.body')} />
     ) : (
       <EmptyState title={t('shipped.empty.title')} description={t('shipped.empty.body')} />
     )
@@ -382,9 +387,11 @@ function InvoicesList({ model, actions, depth }: { model: InvoicesListModel; act
     </Select>
   )
 
-  const oldest = shipped && shipped.length > 0 ? shipped.map((row) => row.date).sort()[0]! : null
+  // B-W2b-GB02 (G148): the tile counts the shipments that left without a DDT too (the "Shipped, not invoiced" view's rows).
+  const noDdt = shipmentRowsOf(model)
+  const oldest = (shipped && shipped.length > 0) || noDdt.length > 0 ? [...(shipped ?? []).map((row) => row.date), ...noDdt.map((row) => row.shippedOn)].sort()[0]! : null
   const tileValue = (key: (typeof TILES)[number]['key']): string => {
-    if (key === 'shipped') return shipped ? String(shipped.length) : '—'
+    if (key === 'shipped') return shipped ? String(shipped.length + noDdt.length) : '—'
     return model.tiles ? countText(model.tiles[key]) : '—'
   }
   const pressed = TILES.find((tile) => tile.rows !== null && tile.rows === model.rows)?.key ?? null
@@ -508,6 +515,9 @@ function InvoicesList({ model, actions, depth }: { model: InvoicesListModel; act
           state={shippedState}
         />
       </section>
+
+      {/* B-W2b-GB02 (G148) */}
+      <ShippedWithoutDdt model={model} actions={actions} />
 
       <section className="fw-fin-section" aria-labelledby="fw-fin-all-title">
         <div className="fw-fin-section-head">

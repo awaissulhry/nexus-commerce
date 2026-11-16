@@ -4,7 +4,7 @@ import { defineManifest } from '../../../core/manifest'
  * Cost sheet versions (B-W2b-420; FIN-014, FIN-015; design products.styles › Cost "Cost sheet versions and approval"). Office
  * only: the floor, partner and link sessions never see a cost (A1 §2.6). Each handler checks the sheet's (or style's)
  * company with can() and filters the list with scopeWhere() (`record`). Reads, the comparison and a what-if: costing.view;
- * a draft made, edited, deleted or sent for its yes, a what-if saved: costing.sheets.manage; an approved version taken back:
+ * a draft made, edited, deleted or sent for its yes, a what-if saved, a line typed on a draft or removed: costing.sheets.manage; an approved version taken back:
  * costing.sheets.approve. The yes itself is the approval engine's (POST /approvals/tasks/:id/approve). A figure sent needs
  * its grain.
  */
@@ -23,4 +23,7 @@ export const manifest = defineManifest({
   'POST /costing/cost-sheets/:sheetId/take-back': approve,
   'POST /costing/cost-sheets/:sheetId/what-if': view,
   'POST /costing/cost-sheets/:sheetId/what-if/save': sheets,
+  // B-W2b-GB02 (G054): a line typed on a draft (a commission), and removed.
+  'POST /costing/cost-sheets/:sheetId/typed-lines': sheets,
+  'DELETE /costing/cost-sheets/:sheetId/typed-lines/:lineId': sheets,
 })

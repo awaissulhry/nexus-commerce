@@ -5,7 +5,7 @@ import type { WorkOrderStatus } from '../../../_shared/api'
 import { CLOSE_ROLES, closeRecord, FIGURES_WITHIN, SPLIT, withoutCost } from '../../close/fixtures'
 import { recordCase, RecordDesign, type RecordCase } from '../../record/fixtures'
 import type { Split } from '../../close/api'
-import { LABOUR, labourAs } from '../fixtures'
+import { LABOUR, LABOUR_CLOSED, labourAs } from '../fixtures'
 import type { StoredClose, WorkOrderCloses } from './api'
 import type { VarianceModel } from './model'
 
@@ -54,7 +54,8 @@ const variance = (status: WorkOrderStatus, over: Partial<VarianceModel> = {}): V
 })
 
 const tab = (role: Role, status: WorkOrderStatus, model: VarianceModel | null, cost = true): RecordCase =>
-  recordCase(role, status, { tab: 'labour', labour: labourAs(cost ? 'finance' : 'manager', LABOUR), variance: model, close: { can: cost ? CLOSE_ROLES.owner : CLOSE_ROLES.managerNoCost, check: null, dialog: null, busy: false, problem: null, undo: null } })
+  // B-W2b-GB02 (G053): a closed work order's cost says Closed.
+  recordCase(role, status, { tab: 'labour', labour: labourAs(cost ? 'finance' : 'manager', status === 'CLOSED' ? LABOUR_CLOSED : LABOUR), variance: model, close: { can: cost ? CLOSE_ROLES.owner : CLOSE_ROLES.managerNoCost, check: null, dialog: null, busy: false, problem: null, undo: null } })
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-461',

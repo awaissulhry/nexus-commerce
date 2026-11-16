@@ -1,4 +1,4 @@
-import type { EcbDay } from '@nexus/factory-domain/money/currency/ecb'
+import type { EcbDay, EcbFileKind } from '@nexus/factory-domain/money/currency/ecb'
 import type { GatewayCall } from '../../platform/gateway/gateway'
 
 /**
@@ -12,7 +12,8 @@ import type { GatewayCall } from '../../platform/gateway/gateway'
  *   ./fake.ts   FAKE accounts (local and test only; the gateway refuses FAKE in production): made-up rates, no network
  */
 export interface EcbAdapter {
-  daily(call: GatewayCall): Promise<EcbAnswer>
+  /** B-W2b-GB02 (G058): `file` 'last90' reads the ECB's 90-day file (a missed day caught up); default today's file. */
+  daily(call: GatewayCall, file?: EcbFileKind): Promise<EcbAnswer>
 }
 
 export interface EcbAnswer {

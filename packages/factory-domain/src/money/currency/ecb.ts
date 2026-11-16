@@ -1,7 +1,7 @@
 import { isCurrencyCode } from '../../core/money'
 import type { BusinessDate } from '../../core/time'
 import { EURO } from './currencies'
-import { normalRate } from './rates'
+import { addDays, normalRate } from './rates'
 
 /**
  * The ECB's euro foreign exchange reference rates (B-W2b-389; PLT-133): the free public file the ECB publishes on each
@@ -49,6 +49,31 @@ export function parseEcbFile(xml: string): EcbFile {
   if (days.length === 0) return { ok: false, problem: 'The ECB file has no day of rates.' }
   return { ok: true, days: days.sort((a, b) => b.day.localeCompare(a.day)) }
 }
+
+// ---- B-W2b-GB02 (G058): a missed day is caught up from the ECB's 90-day file.
+/** The two files of the ECB the adapters read: today's, and the last 90 days' (a missed day is caught up from it). */
+export type EcbFileKind = 'daily' | 'last90'
+
+/** How many days back the 90-day file reaches (a day older than that cannot be caught up from it). */
+export const ECB_LAST90_DAYS = 90
+
+/**
+ * The working days (Monday to Friday) after the newest ECB day kept and before the oldest day of the file just read: the
+ * days the feed missed (the server was down, the ECB late). Empty when nothing was kept yet (no history to fill: switching
+ * the feed on reads only today's file) or when the file follows on. A TARGET holiday counts too: the 90-day file then has
+ * nothing for it, and nothing is added.
+ */
+export function missedEcbDays(newestKept: BusinessDate | null, fileDays: readonly BusinessDate[]): BusinessDate[] {
+  if (newestKept === null || fileDays.length === 0) return []
+  const oldest = [...fileDays].sort()[0]!
+  const missed: BusinessDate[] = []
+  for (let day = addDays(newestKept, 1); day < oldest && missed.length <= ECB_LAST90_DAYS; day = addDays(day, 1)) {
+    const weekday = new Date(`${day}T00:00:00.000Z`).getUTCDay()
+    if (weekday !== 0 && weekday !== 6) missed.push(day)
+  }
+  return missed
+}
+// ---- end B-W2b-GB02
 
 /** The ECB file of one day, as the ECB writes it (the fake adapter and the tests). */
 export function ecbFileOf(days: readonly EcbDay[]): string {

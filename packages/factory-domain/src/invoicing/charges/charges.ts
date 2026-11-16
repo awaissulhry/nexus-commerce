@@ -1,6 +1,7 @@
 import type { Issue } from '../../core/errors'
-import { fromMinorUnits, type MinorUnits } from '../../core/money'
+import { fromMinorUnits, toMinorUnits, type MinorUnits } from '../../core/money'
 import type { BusinessDate } from '../../core/time'
+import { Dec } from '../../tax/decimal'
 import type { DocumentLanguage } from '../../documents/model'
 import { treatmentKey, type VatTreatment } from '../../tax/vat-treatment'
 import { formatDateIt } from '../fatturapa/format'
@@ -143,7 +144,16 @@ export interface FreightLine {
   readonly index: number
   readonly ddtId: string
   readonly netAmount: MinorUnits
+  /** B-W2b-GB02 (G147): a GROSS invoice's line with VAT (InvoiceLine.grossAmount) and its VAT rate. */
+  readonly grossAmount?: MinorUnits | null
+  readonly vatRatePct?: string
 }
+
+// ---- B-W2b-GB02 (G147): the shipment's freight (without VAT) with the line's VAT, to the cent.
+export function freightWithVat(amount: MinorUnits, vatRatePct: string, currency: string): MinorUnits {
+  return toMinorUnits(fromMinorUnits(amount, currency).times(new Dec(100).plus(vatRatePct).dividedBy(100)), currency)
+}
+// ---- end B-W2b-GB02
 
 /** A FREIGHT line of ANOTHER issued invoice on the same DDT. */
 export interface FreightBilled {
@@ -153,8 +163,9 @@ export interface FreightBilled {
 
 /**
  * The problems of an invoice's FREIGHT lines at issue (paths `lines/<i>`): a DDT's freight billed twice on this invoice
- * or already by another issued invoice, and a line whose figure is not the shipment's now (NET basis; a GROSS invoice's
- * freight is the office's own figure).
+ * or already by another issued invoice, and a line whose figure is not the shipment's now. B-W2b-GB02 (G147): a GROSS
+ * invoice's line is compared too: the shipment's freight is without VAT, so the line bills it when its amount with VAT is
+ * that freight with the line's VAT (to the cent), or its amount without VAT is that freight.
  */
 export function freightProblems(lines: readonly FreightLine[], freights: ReadonlyMap<string, ShipmentFreight>, others: readonly FreightBilled[], basis: 'NET' | 'GROSS', currency: string): IssueProblem[] {
   const problems: IssueProblem[] = []
@@ -176,7 +187,22 @@ export function freightProblems(lines: readonly FreightLine[], freights: Readonl
       })
       continue
     }
-    if (!freight || basis !== 'NET') continue
+    if (!freight) continue
+    // ---- B-W2b-GB02 (G147): a GROSS invoice's freight line against the shipment's freight with the line's VAT.
+    if (basis === 'GROSS') {
+      const gross = line.grossAmount ?? null
+      if (gross === null || line.vatRatePct === undefined) continue
+      const expected = freight.amount !== null && freight.currency === currency ? freightWithVat(freight.amount, line.vatRatePct, currency) : null
+      if (expected !== null && (expected === gross || freight.amount === line.netAmount)) continue
+      const now = freight.amount === null ? 'not decided' : freight.currency !== currency ? `in ${freight.currency}` : `${amountText(freight.amount, currency)} without VAT (${amountText(expected!, currency)} with ${new Dec(line.vatRatePct).toString()}% VAT)`
+      problems.push({
+        code: 'CHARGE_FREIGHT_CHANGED',
+        path: `lines/${line.index}/unitPrice`,
+        message: `The freight of shipment ${freight.shipmentNumber} (${label}) is now ${now}; line ${line.index + 1} bills ${amountText(gross, currency)} with VAT. Change the line, or the shipment's freight.`,
+      })
+      continue
+    }
+    // ---- end B-W2b-GB02
     if (freight.amount === null || freight.currency !== currency || freight.amount !== line.netAmount) {
       const now = freight.amount === null ? 'not decided' : freight.currency !== currency ? `in ${freight.currency}` : amountText(freight.amount, currency)
       problems.push({

@@ -71,6 +71,10 @@
       "remittance": {
         "off": "Remittance mail to suppliers is off.",
         "on": "Remittance mail to suppliers is on."
+      },
+      "autoCarry": {
+        "off": "Deposits wait for a person to carry them onto the invoice.",
+        "on": "Deposits are carried onto the invoice by themselves."
       }
     },
     "notification": {
@@ -98,7 +102,11 @@
         "title": "Remittance mail to suppliers"
       },
       "turnOff": "Turn off",
-      "turnOn": "Turn on…"
+      "turnOn": "Turn on…",
+      "autoCarry": {
+        "body": "A deposit paid without a deposit invoice (an EU business with a VIES proof) is placed on its order’s invoice as soon as that invoice is issued; off, a person carries it in Payments.",
+        "title": "Carry deposits onto the invoice by themselves"
+      }
     },
     "title": "Approvals & notifications",
     "yes": {
@@ -108,7 +116,9 @@
       "RULES_one": "{count} rule on",
       "RULES_other": "{count} rules on",
       "SEPARATION": "Never the person who made it; above the amount, a second person too"
-    }
+    },
+    "autoTitle": "What runs by itself",
+    "autoIntro": "Each stays off until the Owner turns it on; turning one on asks a fresh code."
   },
   "area": {
     "claim": "Open area claim",
@@ -780,7 +790,8 @@
     "proposal": "Approving a payment proposal asks a fresh code.",
     "remittance": "Turning on the remittance mail to suppliers asks a fresh code.",
     "riba": "Turning Ri.Ba. on asks a fresh code.",
-    "trust": "Setting a customer's trusted level asks a fresh code."
+    "trust": "Setting a customer's trusted level asks a fresh code.",
+    "autoCarry": "Turning on the automatic carry of deposits asks a fresh code."
   },
   "stops": {
     "add": {

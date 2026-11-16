@@ -29,7 +29,8 @@ export function yesStateOf(control: MoneyControl): YesState {
   return control.kind.active > 0 ? 'RULES' : 'NO_RULE'
 }
 
-export type SwitchName = 'remittance' | 'notice'
+// B-W2b-GB02 (G088): + autoCarry, a deposit without a deposit invoice carried onto its order's invoice by the system.
+export type SwitchName = 'remittance' | 'notice' | 'autoCarry'
 
 /** Why a mail switch waits (null: it may move): not read, not the person's (the Owner's alone), a write running. */
 export function switchHeld(input: { read: boolean; mayChange: boolean; busy: boolean }): Phrase | null {

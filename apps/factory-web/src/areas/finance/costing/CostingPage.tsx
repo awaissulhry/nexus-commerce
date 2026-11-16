@@ -15,6 +15,9 @@ import type { DetailState, ReverseState } from './view/CostDialogs'
 import { closedTouches } from './closed/model'
 import { usePpv } from './ppv/use-ppv'
 import { PpvSection } from './ppv/view/PpvSection'
+// B-W2b-GB02 (G053): Variances by work order (GET /costing/variances).
+import { useVariances } from './variances/use-variances'
+import { VariancesSection } from './variances/view/VariancesSection'
 // B-W2b-430: the band's Mass cost update.
 import { MassCostUpdate } from './mass-update/MassCostUpdate'
 
@@ -69,7 +72,8 @@ export function CostingPage() {
     const target = asked.current
     const slow = setTimeout(() => setWorkOrders((current) => (current.rows || current.problem ? current : { ...current, slow: true })), SLOW_MS)
     try {
-      const page = await getWorkOrderCosts(api, rowsQuery(target, companyId))
+      // B-W2b-GB02 (G053): "Closed in <month>" asks the API for the period's closes.
+      const page = await getWorkOrderCosts(api, rowsQuery(target, companyId, null, period))
       if (asked.current !== target) return
       setWorkOrders({ rows: keep(page.rows, target), more: page.nextCursor !== null, problem: null, slow: false, cursor: page.nextCursor, tiles: page.tiles })
       setReadAt(Date.now())
@@ -182,7 +186,7 @@ export function CostingPage() {
   const more = async (part: 'workOrders' | 'standards' | 'ledger') => {
     try {
       if (part === 'workOrders' && workOrders.cursor) {
-        const page = await getWorkOrderCosts(api, rowsQuery(address, companyId, workOrders.cursor))
+        const page = await getWorkOrderCosts(api, rowsQuery(address, companyId, workOrders.cursor, period))
         setWorkOrders((current) => ({ ...current, rows: [...(current.rows ?? []), ...keep(page.rows, address).filter((row) => !current.rows?.some((seen) => seen.workOrder.id === row.workOrder.id))], more: page.nextCursor !== null, cursor: page.nextCursor }))
       }
       if (part === 'standards' && standards.cursor) {
@@ -225,7 +229,11 @@ export function CostingPage() {
   }
 
   // B-W2b-424
-  const ppv = usePpv(api, can.view, can.cost, companyId, period, locale, prefix, (href) => router.push(href))
+  // B-W2b-GB02 (G053): Reverse… and Post a document… with costing.ledger.manage (the API's right for both).
+  const ppv = usePpv(api, can.view, can.cost, companyId, period, locale, prefix, (href) => router.push(href), can.reverse)
+
+  // B-W2b-GB02 (G053)
+  const variances = useVariances(api, can.view, can.cost, companyId, period, locale, prefix, (href) => router.push(href))
 
   const model: CostingModel = {
     prefix,
@@ -252,6 +260,7 @@ export function CostingPage() {
       model={model}
       ppv={can.view ? <PpvSection model={ppv.model} prefix={prefix} actions={ppv.actions} /> : null}
       mass={can.view ? <MassCostUpdate prefix={prefix} /> : null /* B-W2b-430 */}
+      variances={can.view ? <VariancesSection model={variances.model} prefix={prefix} actions={variances.actions} /> : null /* B-W2b-GB02 (G053) */}
       actions={{
         onSite: (site) => go({ site }),
         onRows: (rows) => go({ rows }),

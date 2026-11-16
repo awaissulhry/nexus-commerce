@@ -11,6 +11,8 @@ import type { LabourModel } from './model'
  */
 
 export const LABOUR = { value: DETAIL_221, problem: null }
+// B-W2b-GB02 (G053): the same work order closed (its facts say Closed, B-W2b-424's gap 2).
+export const LABOUR_CLOSED = { value: { ...DETAIL_221, workOrder: { ...DETAIL_221.workOrder, status: 'CLOSED', completedAt: '2026-10-28T15:00:00.000Z', closedAt: '2026-10-28T17:20:00.000Z' }, final: true }, problem: null }
 
 const code = (id: string, labelIt: string, labelEn: string) => ({ code: id, labelIt, labelEn, labelI18n: {} })
 

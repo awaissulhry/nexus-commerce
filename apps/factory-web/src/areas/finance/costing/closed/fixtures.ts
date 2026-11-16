@@ -15,7 +15,8 @@ import { CostingView, type CostingModel } from '../view/CostingView'
  * production manager (no cost grain) and the variance report for paper with the same Status.
  */
 
-const closedRows = (rows: readonly WorkOrderCostRow[]): WorkOrderCostRow[] => rows.map((row) => (row.workOrder.number === 'WO-2026-0198' ? { ...row, workOrder: { ...row.workOrder, status: 'CLOSED' } } : row))
+// B-W2b-GB02 (G053): closed with the day of its close (the API's closedAt).
+const closedRows = (rows: readonly WorkOrderCostRow[]): WorkOrderCostRow[] => rows.map((row) => (row.workOrder.number === 'WO-2026-0198' ? { ...row, workOrder: { ...row.workOrder, status: 'CLOSED', closedAt: '2026-10-27T16:05:00.000Z' } } : row))
 
 interface Case {
   role: Role
@@ -42,7 +43,8 @@ export const designScreen = defineDesignScreen<Case>({
   view: ClosedDesign,
   cases: [
     { id: 'finance', label: 'Finance · WO-2026-0198 closed: its Status reads Closed beside the open ones', model: { role: 'finance', page: page('finance') } },
-    { id: 'closed-rows', label: 'Rows ▾ Closed in October: completed and closed work orders', model: { role: 'finance', page: page('closed', () => ({ workOrders: { rows: closedRows(ROWS.filter((row) => row.final)), more: false, problem: null, slow: false, tiles: TILES } })) } },
+    // B-W2b-GB02 (G053): by the day of the close, no longer the completions.
+    { id: 'closed-rows', label: 'Rows ▾ Closed in October: the work orders closed in October (by the day of the close that stands)', model: { role: 'finance', page: page('closed', () => ({ workOrders: { rows: closedRows(ROWS.filter((row) => row.workOrder.number === 'WO-2026-0198')), more: false, problem: null, slow: false, tiles: TILES } })) } },
     { id: 'live-closed', label: 'Live · a work order closed elsewhere: the list read again, its Status changed in place (no Show needed)', model: { role: 'finance', page: page('finance', () => ({ readAt: Date.parse('2026-10-30T08:41:00.000Z') })) }, note: 'work_order_close.changed (and workorder.status_changed) read the list again; other cost events still count behind "N updates · Show".' },
     { id: 'manager', label: 'Production manager · no cost grain: the Status without any amount', model: { role: 'manager', page: page('manager') } },
     { id: 'print', label: 'The variance report for paper: the same Status', model: { role: 'finance', print: { ...print, read: { ...print.read, rows: print.read.rows ? closedRows(print.read.rows) : null } } } },

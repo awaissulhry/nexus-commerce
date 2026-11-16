@@ -190,6 +190,39 @@ async function ratesWithOverheadOf(db: Reader, companyId: string): Promise<Set<s
   return new Set(rows.flatMap((row) => (row.labourRateId ? [row.labourRateId] : [])))
 }
 
+// ---- B-W2b-GB02 (G056; B-W2b-418 gap 3, B-W2b-419 gap 3) ------------------------------------------------------------------
+
+/**
+ * What the components read of a revision's routing beyond W1's steps: each step's extra minutes per size (PRD-114,
+ * RoutingOperationSizeTime), the sizes and colourways it is only for (PRD-128), and whether it is worked at a machine — its
+ * own machine settings (PRD-118, frozen with the revision), else its library operation's, else the operation's machine type.
+ */
+export async function routingFactsOf(db: Reader, revisionId: string, steps: readonly { readonly id: string; readonly operationId: string }[]): Promise<Map<string, Pick<ComponentStep, 'sizeTimes' | 'appliesToSizes' | 'appliesToColourwayIds' | 'machine'>>> {
+  if (steps.length === 0) return new Map()
+  const stepIds = steps.map((step) => step.id)
+  const operationIds = [...new Set(steps.map((step) => step.operationId))]
+  const cells = await db.routingOperation.findMany({ where: { id: { in: stepIds } }, select: { id: true, appliesToSizes: true, appliesToColourwayIds: true } })
+  const times = await db.routingOperationSizeTime.findMany({ where: { revisionId, routingOperationId: { in: stepIds } }, select: { routingOperationId: true, size: true, extraMinutes: true } })
+  const ownSettings = new Set((await db.operationMachineSetting.findMany({ where: { routingOperationId: { in: stepIds } }, select: { routingOperationId: true } })).flatMap((row) => (row.routingOperationId ? [row.routingOperationId] : [])))
+  const librarySettings = new Set((await db.operationMachineSetting.findMany({ where: { operationId: { in: operationIds } }, select: { operationId: true } })).flatMap((row) => (row.operationId ? [row.operationId] : [])))
+  const machineTypes = new Set((await db.operation.findMany({ where: { id: { in: operationIds }, machineType: { not: null } }, select: { id: true } })).map((row) => row.id))
+  return new Map(
+    steps.map((step) => {
+      const cell = cells.find((row) => row.id === step.id)
+      return [
+        step.id,
+        {
+          sizeTimes: times.filter((row) => row.routingOperationId === step.id).map((row) => ({ size: row.size, extraMinutes: text(row.extraMinutes) })),
+          appliesToSizes: cell?.appliesToSizes ?? [],
+          appliesToColourwayIds: cell?.appliesToColourwayIds ?? [],
+          machine: ownSettings.has(step.id) || librarySettings.has(step.operationId) || machineTypes.has(step.operationId),
+        },
+      ]
+    }),
+  )
+}
+// ---- end B-W2b-GB02
+
 /** Everything a revision's components are computed from, for one company, colourway and day. */
 export async function loadComponentFacts(db: Reader, style: CostingStyleRow, revision: RevisionRow, company: ComponentCompany, on: BusinessDate, options: ComponentOptions): Promise<LoadedComponents> {
   const all = await readColourways(db, style.id)
@@ -229,7 +262,9 @@ export async function loadComponentFacts(db: Reader, style: CostingStyleRow, rev
   const defaults = await liveDefaults(db, company.id)
   const types = await packagingTypesOf(db, company.id)
 
-  const componentSteps: ComponentStep[] = steps.map((step) => ({ id: step.id, seq: step.seq, operationId: step.operationId, code: step.code, name: step.name, workCentreKind: step.workCentreKind, standardMinutes: step.standardMinutes }))
+  // B-W2b-GB02 (G056): each step's minutes per size, the cells it is for, and whether it is worked at a machine.
+  const routing = await routingFactsOf(db, revision.id, steps)
+  const componentSteps: ComponentStep[] = steps.map((step) => ({ id: step.id, seq: step.seq, operationId: step.operationId, code: step.code, name: step.name, workCentreKind: step.workCentreKind, standardMinutes: step.standardMinutes, ...routing.get(step.id) }))
   // B-W2b-423 (FIN-019, KS4:02): each sub-assembly line at its own cost, every level down.
   const rolledUp = await rolledUpFor(db, { revisionId: revision.id, lines, materials, sizes: style.sizes, colourwayCode: colourway.code, company, on, level: options.rollup?.level ?? 1, path: options.rollup?.path ?? [revision.id], priceOverrides: options.priceOverrides }, loadComponentFacts)
   return {

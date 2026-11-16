@@ -1162,6 +1162,25 @@
     "inDraft_other": "{count} capi in bozza",
     "lines_one": "{count} riga",
     "lines_other": "{count} righe",
+    "noDdt": {
+      "count_one": "{count} spedizione",
+      "count_other": "{count} spedizioni",
+      "customer": "Cliente",
+      "deadline": "Scadenza",
+      "emptyDdts": {
+        "body": "Le spedizioni partite senza DDT aspettano la loro fattura qui sotto.",
+        "title": "Nessun DDT da fatturare"
+      },
+      "explain": "Queste spedizioni sono partite senza DDT: la loro fattura immediata (TD01) accompagna la merce e va emessa entro 12 giorni dalla partenza.",
+      "go": "Crea la fattura",
+      "invoice": "Fattura",
+      "leftOn": "Partita il",
+      "pieces": "Da fatturare",
+      "shipment": "Spedizione",
+      "tag": "Senza DDT",
+      "title": "Spedito senza DDT, da fatturare",
+      "value": "Valore"
+    },
     "noDeposit": "Nessun acconto",
     "openDraft": "Apri la bozza",
     "pieces_one": "{count} capo",

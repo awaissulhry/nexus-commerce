@@ -57,7 +57,8 @@ const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
 // B-W2b-385 (NT1:04, B-W2b-341's gap): RETURN_ARRIVED_LATE, a return whose goods reached the dock after their deadline.
 // B-W2b-409 (LOG-089): EXIT_PROOF_MISSING, an export whose proof of exit is still missing after its declaration's days.
 // B-W2b-416 (FIN-050): MARGIN_BELOW_FLOOR, an order whose margin (estimated now, or final) is below its margin floor.
-export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED', 'RETURN_ARRIVED_LATE', 'EXIT_PROOF_MISSING', 'MARGIN_BELOW_FLOOR'] as const
+// B-W2b-GB02 (G146, B-W2b-392's gap): STAMP_DUTY_DUE, a stamp duty quarter not paid N days before its F24 due day.
+export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED', 'RETURN_ARRIVED_LATE', 'EXIT_PROOF_MISSING', 'MARGIN_BELOW_FLOOR', 'STAMP_DUTY_DUE'] as const
 export type RuleKind = (typeof RULE_KINDS)[number]
 export const isRuleKind = (value: unknown): value is RuleKind => typeof value === 'string' && (RULE_KINDS as readonly string[]).includes(value)
 
@@ -334,6 +335,22 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     // Evaluated with every pass: a cost is posted on a work order (several orders), never on the order itself.
     recheck: [],
   }),
+  // ---- B-W2b-GB02 (G146; B-W2b-392's gap "no reminder before a quarter's due day"; DM 17.6.2014 art. 6: the virtual stamp
+  // duty of a quarter is paid by F24 by its due day).
+  STAMP_DUTY_DUE: spec({
+    kind: 'STAMP_DUTY_DUE',
+    trigger: 'CONDITION',
+    // One alert per stamp duty quarter of a company whose stamp duty switch is on: the quarter ended, it carries stamp duty
+    // and its payment is not recorded, and its due day (invoicing/stamp-duty paymentDueOf) is at most this many days away or
+    // has passed. It clears when the payment is recorded. Its facts carry no amount (the quarters' list shows it).
+    recordType: 'StampDutyQuarter',
+    view: INVOICES_VIEW,
+    threshold: z.strictObject({ daysBefore: whole(0, 60).default(10) }),
+    builtIn: { name: { en: 'Stamp duty due soon', it: 'Imposta di bollo in scadenza' }, threshold: { daysBefore: 10 }, severity: 'WARNING', cooldownMinutes: 1440, recipientRole: 'finance' },
+    label: { en: 'Stamp duty quarters near their due day', it: 'Trimestri del bollo vicini alla scadenza' },
+    recheck: [{ event: 'stamp_duty_quarter.changed', key: 'quarterId' }],
+  }),
+  // ---- end B-W2b-GB02
 })
 
 /** The kinds of a trigger. */

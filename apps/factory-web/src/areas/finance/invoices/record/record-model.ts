@@ -109,6 +109,8 @@ export interface InvoiceDepthSlots {
   banner?: ReactNode
   precheck?: ReactNode
   balance?: ReactNode
+  /** B-W2b-GB02 (G088): a deposit paid without a deposit invoice, carried onto this invoice. */
+  carry?: ReactNode
   creditWarning?: (reason: CreditReason | null) => ReactNode
   more?: MenuItemDef[]
   dialogs?: ReactNode

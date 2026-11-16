@@ -80,7 +80,8 @@ const row = (over: Partial<WorkOrderCostRow> & { workOrder: WorkOrderCostRow['wo
   entries: 0,
   ...over,
 })
-const wo = (id: string, number: string, status: string, style: typeof STYLE_JKT, pieces: number, completedAt: string | null = null) => ({ id, number, status, companyId: COMPANY, siteId: SITE.id, style, pieces, releasedAt: '2026-10-08T07:00:00.000Z', completedAt })
+// B-W2b-GB02 (G053): + closedAt (the close that stands; null while not closed).
+const wo = (id: string, number: string, status: string, style: typeof STYLE_JKT, pieces: number, completedAt: string | null = null, closedAt: string | null = null) => ({ id, number, status, companyId: COMPANY, siteId: SITE.id, style, pieces, releasedAt: '2026-10-08T07:00:00.000Z', completedAt, closedAt })
 
 /**
  * WO-2026-0221 (40 jackets, in progress): standard 4,600.00 (material 3,600.00 = 900 ft² × 3.90 + 30 m × 3.00; labour
@@ -93,6 +94,10 @@ export const ROWS: WorkOrderCostRow[] = [
   row({ workOrder: wo(WO_198, 'WO-2026-0198', 'COMPLETED', STYLE_JKT, 20, '2026-10-24T15:10:00.000Z'), standardTotal: 240000, estimateTotal: 238000, actualTotal: 235200, movedToStock: 230000, variance: -4800, variancePct: '-2.0000', biggestReason: 'MATERIAL_USAGE', final: true, entries: 12 }),
   row({ workOrder: wo(WO_230, 'WO-2026-0230', 'RELEASED', STYLE_PNT, 12), basis: null, estimateTotal: 90000, estimateComplete: false }),
 ]
+
+// ---- B-W2b-GB02 (G053): WO-2026-0198 closed on 27 October (its close stands): the Rows ▾ "Closed in October" view.
+export const CLOSED_198: WorkOrderCostRow = { ...ROWS[2]!, workOrder: { ...ROWS[2]!.workOrder, status: 'CLOSED', closedAt: '2026-10-27T16:05:00.000Z' } }
+// ---- end B-W2b-GB02
 
 /** Over standard: WO-0221 only; variance this month: WO-0198 completed in October, −48.00; stock 18,450.30 with 2 moves unvalued. */
 export const TILES: CostTiles = { overStandard: 1, varianceThisMonth: -4800, stockValue: 1845030, unvaluedMoves: 2, wipValue: null, currency: 'EUR', month: '2026-10', words: null }

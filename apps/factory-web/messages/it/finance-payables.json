@@ -186,8 +186,8 @@
   },
   "pickup": {
     "done": "Ritiro SDI: {listed} elencate, {recorded} nuove registrate.",
-    "waiting_one": "{count} consegna attende presso l'intermediario: non si può registrare (vedi la cronologia del ritiro).",
-    "waiting_other": "{count} consegne attendono presso l'intermediario: non si possono registrare (vedi la cronologia del ritiro)."
+    "waiting_one": "{count} consegna attende nella casella SDI: non si può registrare (vedi il perché qui sotto).",
+    "waiting_other": "{count} consegne attendono nella casella SDI: non si possono registrare (vedi il perché qui sotto)."
   },
   "keys": {
     "title": "Scorciatoie da tastiera",

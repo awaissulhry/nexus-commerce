@@ -31,7 +31,9 @@
     "alerts.EXIT_PROOF_MISSING": "Shipment {label} left on {shippedDate}: its proof of exit is still missing after {days} days (the export stays VAT-free only with it).",
     "alerts.MARGIN_BELOW_FLOOR": "The margin of order {label}, as estimated now, is below its margin floor.",
     "alerts.MARGIN_BELOW_FLOOR.FINAL": "The final margin of order {label} is below its margin floor.",
-    "alerts.MARGIN_BELOW_FLOOR.QUOTED": "The margin of order {label} is below its margin floor: its quote was approved below it."
+    "alerts.MARGIN_BELOW_FLOOR.QUOTED": "The margin of order {label} is below its margin floor: its quote was approved below it.",
+    "alerts.STAMP_DUTY_DUE": "The stamp duty of {label} is due by {dueOn} ({days} days left): pay it by F24 (tax code {f24Code}) and record the payment.",
+    "alerts.STAMP_DUTY_DUE.LATE": "The stamp duty of {label} was due by {dueOn}: {days} days late. Pay it by F24 (tax code {f24Code}) and record the payment."
   },
   "refused": {
     "title": "Not yours to open",
@@ -183,7 +185,8 @@
       "SUPPLIER_STATUS_CHANGED": "{record}: supplier status changed",
       "RETURN_ARRIVED_LATE": "{record} arrived after its deadline",
       "EXIT_PROOF_MISSING": "{record}: proof of exit missing",
-      "MARGIN_BELOW_FLOOR": "{record} below its margin floor"
+      "MARGIN_BELOW_FLOOR": "{record} below its margin floor",
+      "STAMP_DUTY_DUE": "{record}: stamp duty due"
     },
     "snooze": "Snooze",
     "assign": "Assign",

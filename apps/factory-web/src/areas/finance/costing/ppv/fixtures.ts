@@ -59,6 +59,8 @@ const withoutCost = <T extends object>(value: T): T => Object.fromEntries(Object
 const section = (role: Role, over: Partial<PpvSectionModel> = {}): PpvSectionModel => {
   const cost = canAs(role).cost
   return {
+    // B-W2b-GB02 (G053): Reverse… and Post a document… with costing.ledger.manage.
+    can: { manage: canAs(role).reverse },
     cost,
     period: periodOf(null, TODAY),
     rows: cost ? PPV_ROWS : PPV_ROWS.map((entry) => withoutCost(entry)),
@@ -101,5 +103,16 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'empty', label: 'No receipts in this period', model: { role: 'finance', section: section('finance', { rows: [], totals: [] }) } },
     { id: 'loading', label: 'Loading · "Still loading…" after a second', model: { role: 'finance', section: section('finance', { rows: null, totals: null, slow: true }) } },
     { id: 'error', label: "Error · couldn't load, Try again (never drawn as empty)", model: { role: 'finance', section: section('finance', { rows: null, totals: null, problem: 'problem.unavailable' }) } },
+    // ---- B-W2b-GB02 (G053; B-W2b-424's gap 1): Reverse… and Post a document… on screen.
+    { id: 'reverse', label: 'Reverse… a standing variance: what it is, what the reversal books, the reason', model: { role: 'finance', section: section('finance', { dialog: { kind: 'reverse', row: PPV_ROWS[0]!, busy: false, problem: null }, draft: { reason: 'Price agreed again with the supplier' } }) }, note: 'Leather +60.00: the reversal books −60.00, dated today.' },
+    { id: 'reverse-held', label: 'Reverse held until the reason is typed', model: { role: 'finance', section: section('finance', { dialog: { kind: 'reverse', row: PPV_ROWS[1]!, busy: false, problem: null } }) } },
+    { id: 'reverse-refused', label: 'Reverse refused (reversed already elsewhere): said in the dialog in words, the reason kept', model: { role: 'finance', section: section('finance', { dialog: { kind: 'reverse', row: PPV_ROWS[0]!, busy: false, problem: { key: 'ppv.refusal.REVERSED_ALREADY' } }, draft: { reason: 'Price agreed again with the supplier' } }) } },
+    { id: 'reversed', label: 'After a reversal: the notice', model: { role: 'finance', section: section('finance', { notice: { tone: 'success', words: { key: 'ppv.notice.reversed', params: { material: LEATHER.code, document: 'FA-DEMO-0041' } } } }) } },
+    { id: 'post', label: 'Post a document…: a supplier invoice by its number', model: { role: 'finance', section: section('finance', { dialog: { kind: 'post', busy: false, problem: null, result: null }, draft: { at: 'INVOICE', number: 'FA-DEMO-0046' } }) } },
+    { id: 'post-not-found', label: 'Post a document…: no receipt with that number (said in words)', model: { role: 'finance', section: section('finance', { dialog: { kind: 'post', busy: false, problem: { key: 'ppv.post.noReceipt', params: { number: 'GR-DEMO-0099' } }, result: null }, draft: { at: 'RECEIPT', number: 'GR-DEMO-0099' } }) } },
+    { id: 'post-result', label: 'Posted: two variances, one line took none (why)', model: { role: 'finance', section: section('finance', { dialog: { kind: 'post', busy: false, problem: null, result: { number: 'FA-DEMO-0046', posted: 2, skipped: [{ seq: 3, code: 'NO_STANDARD' }] } } }) } },
+    { id: 'post-refused', label: 'Post refused while the accountant’s switch is off (in words)', model: { role: 'finance', section: section('finance', { dialog: { kind: 'post', busy: false, problem: { key: 'ppv.refusal.WAITS_FOR_ACCOUNTANT' }, result: null }, draft: { at: 'INVOICE', number: 'FA-DEMO-0046' } }) } },
+    { id: 'no-manage', label: 'Production manager · Reverse… and Post a document… held with the right they need', model: { role: 'manager', section: section('manager') } },
+    // ---- end B-W2b-GB02
   ],
 })

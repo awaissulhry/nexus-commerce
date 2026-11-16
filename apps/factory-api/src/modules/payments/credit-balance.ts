@@ -101,7 +101,8 @@ export async function releaseOverpayment(caller: CommandCaller, body: { invoiceI
   assertMay(context, PAYMENTS_VIEW, PAYMENTS_RECORD, invoice ? { companyId: invoice.companyId, partyId: invoice.buyerPartyId } : null, 'Invoice')
   const current = invoice!
   if (current.docType === 'TD02') throw new InvalidStateError(`Deposit invoice ${current.number} is paid through its deposit request, whose payments stay: refund what its credit note credits (Payments › Refunds).`)
-  if (current.docType !== 'TD01' && current.docType !== 'TD24') throw new InvalidStateError('A credit note is not paid: carry the overpayment of the invoice it credits.')
+  // B-W2b-GB02 (G150): + a debit note (TD05).
+  if (current.docType !== 'TD01' && current.docType !== 'TD24' && current.docType !== 'TD05') throw new InvalidStateError('A credit note is not paid: carry the overpayment of the invoice it credits.')
   if (current.status === 'DRAFT') throw new InvalidStateError('The invoice is a draft: nothing is paid on it.')
   const { result } = await command(caller, { name: 'payments.releaseOverpayment', idempotencyKey, input: { invoiceId: current.id, note } }, async (tools) => {
     const { tx } = tools

@@ -20,7 +20,8 @@ import { depthRelatedOf } from '../self-invoices/hooks'
  *   CREDIT_*         a TD04: its reason, the invoice it credits (issued, not rejected, not a credit note) and what is still
  *                    creditable (credit-note).
  *   CHARGE_FREIGHT_* B-W2a-54: a FREIGHT charge naming a DDT — billed once per shipment (no other issued invoice bills
- *                    it), at the figure the shipment holds now (charges/freightProblems).
+ *                    it), at the figure the shipment holds now (charges/freightProblems; B-W2b-GB02: a GROSS invoice's
+ *                    line too, with the line's VAT).
  * And the references the FatturaPA pre-check needs to build the file as it will be issued: the DDTs (number and date,
  * each line's DDT when there are several) and the credited invoice.
  */
@@ -70,7 +71,8 @@ export async function shippedAndMoneyProblems(db: Reader, invoice: InvoiceRow, l
         ),
       )
     }
-    const freight = lines.flatMap((line, index) => (line.kind === 'CHARGE' && line.chargeKind === 'FREIGHT' && line.ddtId ? [{ index, ddtId: line.ddtId, netAmount: line.netAmount }] : []))
+    // B-W2b-GB02 (G147): with the line's amount with VAT and its rate (a GROSS invoice's freight is compared too).
+    const freight = lines.flatMap((line, index) => (line.kind === 'CHARGE' && line.chargeKind === 'FREIGHT' && line.ddtId ? [{ index, ddtId: line.ddtId, netAmount: line.netAmount, grossAmount: line.grossAmount, vatRatePct: line.vatRatePct.toFixed(2) }] : []))
     if (freight.length > 0) {
       const freightDdts = [...new Set(freight.map((line) => line.ddtId))]
       const rows = await readDdts(db, { id: { in: freightDdts } })

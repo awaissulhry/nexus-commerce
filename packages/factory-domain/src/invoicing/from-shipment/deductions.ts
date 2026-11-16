@@ -9,8 +9,8 @@ import { amountText, type CoreLine } from '../invoices'
 /**
  * The deposit deducted on the final invoice (B-W1-51; FIN-078; SAL-246; FatturaPA "storno acconto", DatiFattureCollegate
  * to the TD02), pure. Every issued TD02 of the orders an invoice bills is deducted once, automatically, on the first
- * invoice of their goods: a DEPOSIT_DEDUCTION line per TD02, with the TD02's VAT treatment and its net and gross taken
- * off (negative). What one TD02 gives is never more than its net less its credit notes less what other invoices deduct
+ * invoice of their goods: a DEPOSIT_DEDUCTION line per TD02 (B-W2b-GB02: per VAT treatment of a TD02 of several), with
+ * the TD02's VAT treatment and its net and gross taken off (negative). What one TD02 gives is never more than its net less its credit notes less what other invoices deduct
  * (issued ones, and drafts, so two drafts never deduct it twice), nor more than the goods of the same treatment on this
  * invoice (the total never goes below 0); the rest is deducted on the next invoice of the order. A TD02 SDI rejected
  * counts as never issued (circolare AdE 13/E/2018): it is not deducted until it is sent again. The issue checks the
@@ -41,7 +41,41 @@ export interface DepositInvoiceFacts {
   readonly deductedNet: MinorUnits
   /** The invoices that deduct it (numbers; "draft" for a draft). */
   readonly deductedBy: readonly string[]
+  /**
+   * B-W2b-GB02 (G149): per VAT treatment (treatmentKey), what its credit notes credit and what other invoices deduct (net,
+   * positive). Left out: the totals above are split over its treatments by their taxable.
+   */
+  readonly creditedByTreatment?: ReadonlyMap<string, MinorUnits>
+  readonly deductedByTreatment?: ReadonlyMap<string, MinorUnits>
 }
+
+// ---- B-W2b-GB02 (G149; B-W1-51's gap "a TD02 with several VAT treatments is not deducted automatically") ------------------
+
+/** Per treatment of a TD02: its taxable, what is credited and deducted of it, and what is left (net, minor units). */
+export function leftPerTreatment(deposit: Pick<DepositInvoiceFacts, 'entries' | 'creditedNet' | 'deductedNet' | 'creditedByTreatment' | 'deductedByTreatment'>): { readonly entry: DepositEntry; readonly key: string; readonly used: MinorUnits; readonly left: MinorUnits }[] {
+  const keys = deposit.entries.map((entry) => treatmentKey(entry.treatment))
+  const split = (total: MinorUnits): MinorUnits[] => {
+    // The total over the treatments by their taxable, largest remainder (no cent lost).
+    const base = deposit.entries.reduce((sum, entry) => sum + entry.taxable, 0)
+    if (base <= 0) return deposit.entries.map(() => 0)
+    const exact = deposit.entries.map((entry) => (total * entry.taxable) / base)
+    const shares = exact.map((value) => Math.floor(value))
+    let rest = total - shares.reduce((sum, value) => sum + value, 0)
+    for (const index of exact.map((value, at) => ({ at, frac: value - Math.floor(value) })).sort((a, b) => b.frac - a.frac || a.at - b.at).map((entry) => entry.at)) {
+      if (rest <= 0) break
+      shares[index]! += 1
+      rest -= 1
+    }
+    return shares
+  }
+  const credited = deposit.creditedByTreatment ? keys.map((key) => deposit.creditedByTreatment!.get(key) ?? 0) : split(deposit.creditedNet)
+  const deducted = deposit.deductedByTreatment ? keys.map((key) => deposit.deductedByTreatment!.get(key) ?? 0) : split(deposit.deductedNet)
+  return deposit.entries.map((entry, index) => {
+    const used = credited[index]! + deducted[index]!
+    return { entry, key: keys[index]!, used, left: Math.max(0, entry.taxable - used) }
+  })
+}
+// ---- end B-W2b-GB02
 
 /** A deduction line to write: the core line and the TD02 it deducts. */
 export interface DeductionLine {
@@ -84,10 +118,44 @@ export function planDeductions(deposits: readonly DepositInvoiceFacts[], goodsNe
       skip(deposit.deductedBy.length > 0 ? `Deposit invoice ${deposit.number} is deducted already (${deposit.deductedBy.join(', ')}).` : `Deposit invoice ${deposit.number} is credited in full: nothing to deduct.`)
       continue
     }
-    if (deposit.entries.length !== 1) {
-      skip(`Deposit invoice ${deposit.number} has ${deposit.entries.length} VAT treatments: deduct it by hand (not built in W1).`)
+    // ---- B-W2b-GB02 (G149): a TD02 of several VAT treatments: one line per treatment, each from the goods of its treatment
+    // and never above what is left of it (its taxable less its credits and deductions); the whole of a treatment at once
+    // takes its own VAT (no cent lost), a part the VAT of that part.
+    if (deposit.entries.length > 1) {
+      let made = 0
+      let anyRoom = false
+      for (const part of leftPerTreatment(deposit)) {
+        const available = room.get(part.key) ?? 0
+        if (goodsNet.has(part.key)) anyRoom = true
+        const net = Math.min(part.left, available)
+        if (net <= 0) continue
+        const vat = net === part.entry.taxable && part.used === 0 ? part.entry.vat : toMinorUnits(vatOn(fromMinorUnits(net, currency), part.entry.treatment), currency)
+        room.set(part.key, available - net)
+        made += 1
+        lines.push({
+          depositInvoiceId: deposit.id,
+          core: {
+            kind: 'DEPOSIT_DEDUCTION',
+            description: deductionDescription({ number: deposit.number, issueDate: deposit.issueDate }),
+            itemCode: null,
+            quantity: '1',
+            uom: null,
+            unitPrice: fromMinorUnits(-net, currency).toFixed(6),
+            discountPct: null,
+            vat: part.entry.treatment,
+            deduction: { netAmount: -net, grossAmount: -(net + vat) },
+          },
+        })
+      }
+      if (made === 0)
+        skip(
+          anyRoom
+            ? `Nothing is left on this invoice to deduct deposit invoice ${deposit.number} from: it is deducted on the next invoice of the order.`
+            : `Deposit invoice ${deposit.number} was taxed otherwise than the goods of this invoice: deduct it on an invoice with goods of its VAT treatments.`,
+        )
       continue
     }
+    // ---- end B-W2b-GB02
     const entry = deposit.entries[0]!
     const key = treatmentKey(entry.treatment)
     const available = room.get(key) ?? 0

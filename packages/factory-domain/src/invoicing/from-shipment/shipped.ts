@@ -275,3 +275,53 @@ export function ddtInvoiceProblems(lines: readonly BilledLine[], ddts: ReadonlyM
   }
   return problems
 }
+
+// ---- B-W2b-GB02 (G148; B-W1-51's gap): goods shipped WITHOUT a DDT (an immediate invoice travels with them) -------------
+
+/** A shipment that leaves without a DDT (Shipment.ddtRequired false), with its garments per order line and size. */
+export interface ShipmentWithoutDdt {
+  readonly shipmentId: string
+  /** Its order: the day it left (or, before that, when it was made), then its number. */
+  readonly order: string
+  readonly lines: readonly { readonly salesOrderLineId: string; readonly size: string; readonly quantity: number }[]
+}
+
+/** A GOODS line of a TD01/TD24 that names an order line and a size and NO DDT (it bills goods that left without one). */
+export interface InvoicedWithoutDdt {
+  readonly invoiceId: string
+  readonly number: string | null
+  readonly draft: boolean
+  readonly salesOrderLineId: string
+  readonly size: string
+  readonly quantity: string
+}
+
+/**
+ * What the invoices without a DDT bill, placed on the shipments that left without one, in the order they left (an
+ * invoice line names no shipment): per order line and size the issued invoices fill the oldest shipments first, then the
+ * drafts what is left. The answer is in the shape of the DDTs' rows (`ddtId` = the shipment's id), so `notInvoiced` reads
+ * it as it reads DDTs. A quantity billed beyond what the shipments carried is left out (no shipment holds it).
+ */
+export function placeWithoutDdt(shipments: readonly ShipmentWithoutDdt[], invoiced: readonly InvoicedWithoutDdt[]): { readonly shipped: ShippedQuantity[]; readonly invoiced: InvoicedQuantity[] } {
+  const ordered = [...shipments].sort((a, b) => a.order.localeCompare(b.order) || a.shipmentId.localeCompare(b.shipmentId))
+  const shipped: ShippedQuantity[] = ordered.flatMap((shipment) => shipment.lines.map((line) => ({ ddtId: shipment.shipmentId, salesOrderLineId: line.salesOrderLineId, size: line.size, quantity: line.quantity })))
+  const room = new Map<string, Decimal>()
+  for (const line of shipped) room.set(shippedKey(line.ddtId, line.salesOrderLineId, line.size), (room.get(shippedKey(line.ddtId, line.salesOrderLineId, line.size)) ?? ZERO).plus(line.quantity))
+  const placed: InvoicedQuantity[] = []
+  const lines = [...invoiced].sort((a, b) => Number(a.draft) - Number(b.draft) || a.invoiceId.localeCompare(b.invoiceId))
+  for (const line of lines) {
+    let left = parseDecimal(line.quantity) ?? ZERO
+    for (const shipment of ordered) {
+      if (left.lte(ZERO)) break
+      const key = shippedKey(shipment.shipmentId, line.salesOrderLineId, line.size)
+      const free = room.get(key) ?? ZERO
+      if (free.lte(ZERO)) continue
+      const take = Dec.min(free, left)
+      room.set(key, free.minus(take))
+      left = left.minus(take)
+      placed.push({ invoiceId: line.invoiceId, number: line.number, draft: line.draft, ddtId: shipment.shipmentId, salesOrderLineId: line.salesOrderLineId, size: line.size, quantity: take.toFixed(4) })
+    }
+  }
+  return { shipped, invoiced: placed }
+}
+// ---- end B-W2b-GB02

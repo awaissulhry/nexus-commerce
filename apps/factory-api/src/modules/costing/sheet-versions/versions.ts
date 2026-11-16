@@ -8,10 +8,10 @@ import { costingCurrency } from '@nexus/factory-domain/costing/inputs'
 import { COSTING_VIEW } from '@nexus/factory-domain/costing/permissions'
 import { componentsOf, numbered, type ComponentLine } from '@nexus/factory-domain/costing/sheet-components/components'
 import { COSTING_SHEETS_MANAGE } from '@nexus/factory-domain/costing/sheet-components/permissions'
-import { incompleteWords } from '@nexus/factory-domain/costing/sheet-components/rules'
+import { incompleteWords, lineCost } from '@nexus/factory-domain/costing/sheet-components/rules'
 import type { CreateVersionBody, UpdateVersionBody, VersionRecordView, VersionsQuery } from '@nexus/factory-domain/costing/sheet-versions/contracts'
 import { COSTING_SHEETS_APPROVE } from '@nexus/factory-domain/costing/sheet-versions/permissions'
-import { COST_SHEET_KIND, costSheetKey, VERSION_REFUSAL_WORDS } from '@nexus/factory-domain/costing/sheet-versions/rules'
+import { commissionCost, COST_SHEET_KIND, costSheetKey, VERSION_REFUSAL_WORDS } from '@nexus/factory-domain/costing/sheet-versions/rules'
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
@@ -49,7 +49,8 @@ import {
 const tenantOf = (tools: CommandTools): string => ('tenantId' in tools.context ? tools.context.tenantId : '') ?? ''
 const actorIdOf = (tools: CommandTools): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
 
-function assertManage(caller: CommandCaller, companyId: string): void {
+// B-W2b-GB02 (G054): exported for the typed lines (./typed-lines.ts).
+export function assertManage(caller: CommandCaller, companyId: string): void {
   if (!can(actorOf(contextOf(caller)), COSTING_SHEETS_MANAGE, { companyId })) throw new ForbiddenError()
 }
 
@@ -306,8 +307,8 @@ export async function createVersion(caller: CommandCaller, body: CreateVersionBo
 
 // ---- a draft edited, a draft deleted ------------------------------------------------------------------------------------------
 
-/** A waiting request for the draft's yes, sent back (the draft changed or went away). */
-async function sendBack(tools: CommandTools, sheetId: string, words: string): Promise<number> {
+/** A waiting request for the draft's yes, sent back (the draft changed or went away). B-W2b-GB02 (G054): exported. */
+export async function sendBack(tools: CommandTools, sheetId: string, words: string): Promise<number> {
   return withdrawPending(tools, { kind: COST_SHEET_KIND, recordId: sheetId, byId: actorIdOf(tools), words })
 }
 
@@ -335,6 +336,8 @@ export async function updateVersion(caller: CommandCaller, sheetId: string, body
     const sameNumber = (a: string | null, b: string | null) => (a === null || b === null ? a === b : new Decimal(a).equals(b))
     const weightsChanged = weights !== null && JSON.stringify(weights.weights) !== JSON.stringify(before.sizeWeights ?? null)
     if (sameNumber(after.targetPrice, before.targetPrice) && sameNumber(after.targetMarginPct, before.targetMarginPct) && after.sizeCurveId === before.sizeCurveId && after.note === before.note && !weightsChanged) throw refused('NOTHING_CHANGES')
+    // B-W2b-GB02 (G054): the commissions typed in percent follow the target price (none cleared while one stays).
+    const commissions = sameNumber(after.targetPrice, before.targetPrice) ? 0 : await recountCommissions(tools, sheetId, after.targetPrice)
     await sendBack(tools, sheetId, 'The draft changed: send it for its yes again.')
     const inputs = weights ? ({ ...inputsObject(sheet.inputs), weights: { source: weights.source } } as Prisma.InputJsonObject) : undefined
     await tx.costSheet.update({
@@ -349,7 +352,7 @@ export async function updateVersion(caller: CommandCaller, sheetId: string, body
       recordId: sheetId,
       companyId: sheet.companyId,
       before: { targetPrice: markMoney('price', before.targetPrice), targetMarginPct: markMoney('margin', before.targetMarginPct), sizeCurveId: before.sizeCurveId, note: before.note, sizeWeights: before.sizeWeights },
-      after: { targetPrice: markMoney('price', after.targetPrice), targetMarginPct: markMoney('margin', after.targetMarginPct), sizeCurveId: after.sizeCurveId, note: after.note, sizeWeights: weights ? weights.weights : before.sizeWeights },
+      after: { targetPrice: markMoney('price', after.targetPrice), targetMarginPct: markMoney('margin', after.targetMarginPct), sizeCurveId: after.sizeCurveId, note: after.note, sizeWeights: weights ? weights.weights : before.sizeWeights, ...(commissions > 0 ? { commissionsCounted: commissions } : {}) },
     })
     emitChanged(tools, sheet, 'DRAFT', 'updated')
     return { sheet: await versionRowOf(tx, sheetId) }
@@ -358,6 +361,27 @@ export async function updateVersion(caller: CommandCaller, sheetId: string, body
   })
   return result
 }
+
+// ---- B-W2b-GB02 (G054): the commissions typed in percent of the target price ------------------------------------------------
+
+/**
+ * Inside updateVersion's command: the commissions typed in percent counted again on a new target price (their unit cost and
+ * cost follow it); a target price cleared while one stays is refused (NEEDS_TARGET). Returns how many lines changed.
+ */
+async function recountCommissions(tools: CommandTools, sheetId: string, targetPrice: string | null): Promise<number> {
+  const lines = await tools.tx.costSheetLine.findMany({ where: { costSheetId: sheetId, source: 'TYPED', category: 'COMMISSION', pct: { not: null } }, select: { id: true, pct: true, unitCost: true } })
+  if (lines.length === 0) return 0
+  if (targetPrice === null) throw refused('NEEDS_TARGET')
+  let changed = 0
+  for (const line of lines) {
+    const unitCost = commissionCost(targetPrice, textOrNull(line.pct)!)
+    if (new Decimal(unitCost).equals(line.unitCost.toString())) continue
+    await tools.tx.costSheetLine.update({ where: { id: line.id }, data: { unitCost, cost: lineCost('1', unitCost), version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
+    changed++
+  }
+  return changed
+}
+// ---- end B-W2b-GB02
 
 /** costing.removeCostSheetVersion — DELETE /costing/cost-sheets/:sheetId?version: a draft and its lines (a waiting request sent back). */
 export async function removeVersion(caller: CommandCaller, sheetId: string, version: number, idempotencyKey?: string) {

@@ -11,6 +11,9 @@ import { approveHeld, compareDefaults, CS_NS, newVersionHeld, removeHeld, sendHe
 import type { VersionsActions, VersionsModel } from '../screen'
 import { CompareDialog } from './CompareDialog'
 import { VersionDialogs } from './VersionDialogs'
+// B-W2b-GB02 (G054): the lines typed on the version (a commission); the draft reads the style's size mix again.
+import { TypedLines } from '../../typed/view/TypedLines'
+import { refreshHeld } from '../../sizemix/model'
 
 /**
  * SCR-500 — Style › Cost › Cost sheet versions and approval (design products.styles style.cost.versions; FIN-014, FIN-015,
@@ -78,6 +81,8 @@ export function VersionsCard({ model, actions }: { model: VersionsModel; actions
               }
             />
           )}
+          {/* B-W2b-GB02 (G054): a refused write made outside a dialog (a typed line removed, the size mix read again). */}
+          {model.problem && !model.dialog && <Banner tone="danger" title={t(model.problem.key, model.problem.params)} />}
           {!model.grains.cost && <Banner tone="info" icon={<Lock size={16} aria-hidden />} title={t('ver.noGrain')} />}
           {rows.length === 0 ? (
             <EmptyState title={t('ver.empty')} description={model.revision ? t('ver.emptyBody', { revision: model.revision.revision }) : t('ver.emptyNoRevision')} action={newButton} />
@@ -228,7 +233,10 @@ function VersionInView({ row, model, actions }: { row: VersionRow; model: Versio
             {t(model.record.problem)}
           </Banner>
         ) : record ? (
-          <RecordParts record={record} money={money} />
+          <>
+            <RecordParts record={record} money={money} refresh={state === 'draft' || state === 'waiting' ? { held: say(refreshHeld(model.can, row, model.busy)), onRefresh: () => actions?.onRefreshMix?.() } : null} />
+            <TypedLines row={row} record={record} model={model} actions={actions} />
+          </>
         ) : null}
         {state === 'waiting' && model.task?.status === 'error' && (
           <Banner tone="warning" title={t('verView.taskFailed')} action={<Button size="sm" onClick={() => actions?.onRetry?.('task')}>{t('csCommon.retry')}</Button>} />
@@ -250,7 +258,7 @@ function weightsHint(record: VersionRecord | null, t: (key: string, params?: Rec
 const weightSourceKey = (weights: VersionRecord['weights']): string => `weightSource.${weights.source ?? (weights.shares.length > 0 ? 'KEPT' : 'NONE')}`
 
 /** The size mix, the cost by category at the base size and what was left out when the version was written. */
-function RecordParts({ record, money }: { record: VersionRecord; money: (value: string | null | undefined) => string | null }) {
+function RecordParts({ record, money, refresh }: { record: VersionRecord; money: (value: string | null | undefined) => string | null; refresh?: { readonly held: string | null; readonly onRefresh: () => void } | null }) {
   const t = useT(CS_NS)
   const locale = useLocale()
   const sheet = record.sheet
@@ -271,6 +279,14 @@ function RecordParts({ record, money }: { record: VersionRecord; money: (value: 
           />
         )}
         <p className="fw-st-hint">{t(weightSourceKey(record.weights))}</p>
+        {/* B-W2b-GB02 (G054): a draft keeps the mix it was made with until it reads the style's mix again. */}
+        {refresh && (
+          <span>
+            <Button size="sm" variant="quiet" heldReason={refresh.held} onClick={refresh.onRefresh}>
+              {t('mix.refresh')}
+            </Button>
+          </span>
+        )}
       </div>
       <div className="fw-st-stack">
         <h3 className="fw-cs-h3">{t('verView.byCategory', { size: sheet.baseSize })}</h3>

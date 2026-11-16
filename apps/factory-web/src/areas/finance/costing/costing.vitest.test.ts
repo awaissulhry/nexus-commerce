@@ -36,11 +36,15 @@ import {
   reverseHeld,
   rowsQuery,
   signedMoney,
+  // B-W2b-GB02 (G053)
+  statePhrase,
+  stateTone,
   varianceTone,
   workOrdersCsv,
 } from './model'
+import { CLOSED_198 } from './demo/fixtures'
 import { designScreen as printScreen } from './print/fixtures'
-import { CostBridge, CostLabour, CostMaterials, CostSummary } from './view/CostParts'
+import { CostBridge, CostFacts, CostLabour, CostMaterials, CostSummary } from './view/CostParts'
 import { rightRef } from '../../../lib/i18n/rights'
 
 /**
@@ -102,12 +106,27 @@ describe('the address and the period', () => {
     expect(recentMonths('2026-01-15')[1]).toBe('2025-12')
   })
 
-  it('rows views are the API\'s own filters; "closed this month" is the period\'s completions', () => {
+  // ---- B-W2b-GB02 (G053; B-W2b-424's gap 3): "Closed in <month>" is the period's closes (the API's closedFrom / closedTo).
+  it('rows views are the API\'s own filters; "closed in <month>" asks the API for the work orders closed in the period', () => {
     expect(rowsQuery(addressOf(new URLSearchParams('rows=over&q=22')), 'c1')).toEqual({ companyId: 'c1', siteId: null, status: null, over: true, q: '22', cursor: null, limit: 50 })
-    expect(rowsQuery(addressOf(new URLSearchParams('rows=closed')), null, 'cur').status).toEqual(['COMPLETED', 'CLOSED'])
     const period = periodOf(null, '2026-10-30')
-    expect(ROWS.filter((row) => closedIn(row, period)).map((row) => row.workOrder.number)).toEqual(['WO-2026-0198'])
+    expect(rowsQuery(addressOf(new URLSearchParams('rows=closed')), null, 'cur', period)).toEqual({ companyId: null, siteId: null, status: ['CLOSED'], over: null, q: null, closedFrom: '2026-10-01', closedTo: '2026-10-30', cursor: 'cur', limit: 50 })
+    expect(rowsQuery(addressOf(new URLSearchParams('rows=over')), null, null, period)).not.toHaveProperty('closedFrom')
+    // Completed is not closed: only the work order whose close stands, by the day of that close.
+    expect(ROWS.filter((row) => closedIn(row, period))).toEqual([])
+    expect(closedIn(CLOSED_198, period)).toBe(true)
+    expect(closedIn(CLOSED_198, periodOf('2026-09', '2026-10-30'))).toBe(false)
+    expect(closedIn({ workOrder: { ...CLOSED_198.workOrder, status: 'COMPLETED' } }, period)).toBe(false)
   })
+
+  // ---- B-W2b-GB02 (G053; B-W2b-424's gap 2): the cost DetailModal and the Labour & cost tab say closed.
+  it('a work order\'s cost state: open, final (completed), closed (its close stands), with its tone', () => {
+    expect(statePhrase(ROWS[0]!)).toEqual({ key: 'state.open' })
+    expect(statePhrase(ROWS[2]!)).toEqual({ key: 'state.final' })
+    expect(statePhrase(CLOSED_198)).toEqual({ key: 'state.closed' })
+    expect([stateTone(ROWS[0]!), stateTone(ROWS[2]!), stateTone(CLOSED_198)]).toEqual(['info', 'success', 'neutral'])
+  })
+  // ---- end B-W2b-GB02
 
   it('a material line opens its issues and returns at the site', () => {
     expect(movesHref('/w/DEMO', 's1', 'i1')).toBe('/w/DEMO/warehouse/moves?site=s1&item=i1&reasons=ISSUE%2CRETURN')
@@ -184,6 +203,9 @@ describe('the calls', () => {
     const list = recording({ rows: ROWS, nextCursor: null, tiles: TILES })
     await getWorkOrderCosts(list.api, { companyId: 'c1', status: ['COMPLETED', 'CLOSED'], over: true, q: 'WO' })
     expect(list.calls[0]!.url).toBe('http://api.test/costing/work-orders?companyId=c1&status=COMPLETED%2CCLOSED&over=true&q=WO&limit=50')
+    // B-W2b-GB02 (G053): the days of the closes.
+    await getWorkOrderCosts(list.api, { companyId: 'c1', status: ['CLOSED'], closedFrom: '2026-10-01', closedTo: '2026-10-31' })
+    expect(list.calls[1]!.url).toBe('http://api.test/costing/work-orders?companyId=c1&status=CLOSED&closedFrom=2026-10-01&closedTo=2026-10-31&limit=50')
     const one = recording({ detail: DETAIL_221 })
     const detail = await getWorkOrderCost(one.api, DETAIL_221.workOrder.id)
     expect(one.calls[0]!.url).toBe(`http://api.test/costing/work-orders/${DETAIL_221.workOrder.id}`)
@@ -277,6 +299,17 @@ describe('every design case draws in both languages with no key or placeholder l
     expect(html).not.toMatch(/\b(?:operator|worker)\s*:/i)
   })
 
+  // ---- B-W2b-GB02 (G053; B-W2b-424's gap 2): the facts of a closed work order (the DetailModal and the Labour & cost tab).
+  it('the cost facts say Closed for a closed work order, Final for a completed one', () => {
+    const facts = (detail: typeof DETAIL_221) => renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['finance-costing']) }, createElement(CostFacts, { detail, can: { cost: true } })))
+    const closed = facts({ ...DETAIL_221, workOrder: { ...DETAIL_221.workOrder, status: 'CLOSED', closedAt: '2026-10-28T17:20:00.000Z' }, final: true })
+    expect(closed).toContain('>Closed<')
+    expect(closed).not.toContain('>Final<')
+    expect(facts({ ...DETAIL_221, workOrder: { ...DETAIL_221.workOrder, status: 'COMPLETED' }, final: true })).toContain('>Final<')
+    expect(facts(DETAIL_221)).toContain('>Open<')
+  })
+  // ---- end B-W2b-GB02
+
   it('the cost parts without the cost grain: minutes and quantities, no amount', () => {
     const parts = (can: { cost: boolean; moves: boolean }, detail: typeof DETAIL_221) =>
       renderToString(
@@ -308,6 +341,8 @@ describe('every design case draws in both languages with no key or placeholder l
       for (const column of ['workOrder', 'style', 'pieces', 'basis', 'standard', 'estimate', 'actual', 'variance', 'variancePct', 'currency', 'reason', 'state']) has(`csv.${column}`)
       for (const state of ['connecting', 'live', 'offline']) has(`live.${state}`)
       has('tiles.unvalued', { count: 1 })
+      // B-W2b-GB02 (G053): closed beside open and final.
+      for (const state of ['open', 'final', 'closed']) has(`state.${state}`)
     }
   })
 })

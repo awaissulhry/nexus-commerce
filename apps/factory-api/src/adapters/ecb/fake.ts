@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { businessDate, type Clock } from '@nexus/factory-domain/core/time'
 import { ECB_CURRENCIES } from '@nexus/factory-domain/money/currency/currencies'
-import { ecbFileOf, parseEcbFile, type EcbDay } from '@nexus/factory-domain/money/currency/ecb'
+import { ECB_LAST90_DAYS, ecbFileOf, parseEcbFile, type EcbDay, type EcbFileKind } from '@nexus/factory-domain/money/currency/ecb'
 import { addDays } from '@nexus/factory-domain/money/currency/rates'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { ProviderError, type GatewayCall } from '../../platform/gateway/gateway'
@@ -37,6 +37,14 @@ export function fakeDay(day: string): EcbDay {
   return { day, rates: ECB_CURRENCIES.map((currency) => ({ currency, rate: new Dec(MADE_UP[currency]!).times(step).toDecimalPlaces(4, Dec.ROUND_HALF_UP).toFixed(4) })) }
 }
 
+// ---- B-W2b-GB02 (G058): the fake's 90-day file: the made-up rates of every weekday of the last 90 days, newest first.
+export function fakeLast90(today: string): EcbDay[] {
+  const days: EcbDay[] = []
+  for (let day = lastWeekday(today), earliest = addDays(today, -ECB_LAST90_DAYS); day > earliest; day = lastWeekday(addDays(day, -1))) days.push(fakeDay(day))
+  return days
+}
+// ---- end B-W2b-GB02
+
 export class FakeEcb implements EcbAdapter {
   reads = 0
   private readonly scripted: (readonly EcbDay[] | number)[] = []
@@ -53,15 +61,20 @@ export class FakeEcb implements EcbAdapter {
     for (let index = 0; index < count; index++) this.scripted.push(httpStatus)
   }
 
-  async daily(call: GatewayCall): Promise<EcbAnswer> {
+  /** B-W2b-GB02 (G058): the files asked, in order ('daily' or 'last90'). */
+  readonly files: EcbFileKind[] = []
+
+  async daily(call: GatewayCall, file: EcbFileKind = 'daily'): Promise<EcbAnswer> {
     if (call.account.mode !== 'FAKE') throw new ProviderError('Only a FAKE account uses the fake ECB file.', { retryable: false })
     this.reads += 1
+    this.files.push(file)
     const next = this.scripted.shift()
     if (typeof next === 'number') {
       call.answer({ httpStatus: next })
       throw new ProviderError(`The fake ECB answered HTTP ${next}.`, { httpStatus: next })
     }
-    const body = ecbFileOf(next ?? [fakeDay(lastWeekday(businessDate(this.clock.now())))])
+    const today = businessDate(this.clock.now())
+    const body = ecbFileOf(next ?? (file === 'last90' ? fakeLast90(today) : [fakeDay(lastWeekday(today))]))
     const parsed = parseEcbFile(body)
     if (!parsed.ok) throw new ProviderError(parsed.problem, { retryable: false })
     call.answer({ httpStatus: 200, response: { fake: true, days: parsed.days.map((day) => ({ day: day.day, rates: day.rates.length })) } })

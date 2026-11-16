@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { componentsView, type ComponentsView } from '@nexus/factory-domain/costing/sheet-components/contracts'
 import { goalSeekView } from '@nexus/factory-domain/costing/goal-seek/contracts'
-import { bySizeView } from '@nexus/factory-domain/costing/size-weights/contracts'
+import { bySizeView, sizeWeightsView } from '@nexus/factory-domain/costing/size-weights/contracts'
 import { compareView, versionAnswer, versionRecordView, versionsView } from '@nexus/factory-domain/costing/sheet-versions/contracts'
 import { newIdempotencyKey, type ApiClient } from '../../../../../lib/api/client'
 
@@ -128,4 +128,40 @@ export type SeasonOption = z.infer<typeof seasonSchema>
 /** The company's open seasons (a new version's season). */
 export async function openSeasons(api: ApiClient, companyId: string, signal?: AbortSignal): Promise<SeasonOption[]> {
   return (await api.get('/sales/seasons', { query: { companyId, status: 'OPEN' }, schema: z.object({ seasons: z.array(seasonSchema) }), signal })).seasons
+}
+
+// ---- B-W2b-GB02 (G054): lines typed on a draft (a commission), the style's size mix, a draft reading it again -------------
+
+export interface TypedLineInput {
+  version: number
+  category: string
+  label: string
+  size?: string
+  quantity?: string
+  unitCost?: string
+  pct?: string
+  note?: string
+}
+
+export async function addTypedLine(api: ApiClient, sheetId: string, body: TypedLineInput, idempotencyKey: string): Promise<VersionRow> {
+  return (await api.post(`/costing/cost-sheets/${enc(sheetId)}/typed-lines`, { body, schema: versionAnswer, idempotencyKey })).sheet
+}
+
+export async function removeTypedLine(api: ApiClient, sheet: Pick<VersionRow, 'id' | 'version'>, lineId: string, idempotencyKey: string): Promise<VersionRow> {
+  return (await api.request('DELETE', `/costing/cost-sheets/${enc(sheet.id)}/typed-lines/${enc(lineId)}`, { query: { version: sheet.version }, schema: versionAnswer, idempotencyKey })).sheet
+}
+
+export type SizeWeightsView = z.infer<typeof sizeWeightsView>
+
+export function readSizeWeights(api: ApiClient, styleId: string, seasonId: string | null, signal?: AbortSignal): Promise<SizeWeightsView> {
+  return api.get('/costing/size-weights', { query: { styleId, seasonId: seasonId ?? undefined }, schema: sizeWeightsView, signal })
+}
+
+export async function putSizeWeights(api: ApiClient, body: { styleId: string; seasonId: string | null; weights: Record<string, string> }, idempotencyKey: string): Promise<void> {
+  await api.request('PUT', '/costing/size-weights', { body, schema: z.object({ styleId: z.string() }), idempotencyKey })
+}
+
+/** A draft reads the style's size mix (else its size curve) again (PATCH refreshWeights). */
+export async function refreshWeights(api: ApiClient, sheet: Pick<VersionRow, 'id' | 'version'>, idempotencyKey: string): Promise<VersionRow> {
+  return (await api.request('PATCH', `/costing/cost-sheets/${enc(sheet.id)}`, { body: { version: sheet.version, refreshWeights: true }, schema: versionAnswer, idempotencyKey })).sheet
 }

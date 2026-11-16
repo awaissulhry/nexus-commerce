@@ -13,9 +13,13 @@ import {
   updateVersionContract,
   versionRecordContract,
   whatIfContract,
+  addTypedLineContract,
+  removeTypedLineContract,
 } from './contract'
 import { manifest } from './manifest'
 import { createVersion, listVersions, removeVersion, updateVersion, versionRecord } from './versions'
+// B-W2b-GB02 (G054): lines typed on a draft (a commission).
+import { addTypedLine, removeTypedLine } from './typed-lines'
 
 /**
  * Cost sheet versions (B-W2b-420; FIN-014, FIN-015): a style's versions per company and season, one version, a new draft
@@ -38,4 +42,7 @@ export default defineRoutes('costing.sheet-versions', manifest, async (app) => {
   app.post('/costing/cost-sheets/:sheetId/take-back', { schema: takeBackContract }, async (request) => takeBackVersion(request, request.params.sheetId, request.body, idempotencyKeyFrom(request)))
   app.post('/costing/cost-sheets/:sheetId/what-if', { schema: whatIfContract }, async (request) => whatIfPreview(request, request.params.sheetId, request.body))
   app.post('/costing/cost-sheets/:sheetId/what-if/save', { schema: saveWhatIfContract }, async (request, reply) => reply.code(201).send(await saveWhatIf(request, request.params.sheetId, request.body, idempotencyKeyFrom(request))))
+  // ---- B-W2b-GB02 (G054): a line typed on a draft (a commission of the target price, a figure the components do not know), and removed
+  app.post('/costing/cost-sheets/:sheetId/typed-lines', { schema: addTypedLineContract }, async (request, reply) => reply.code(201).send(await addTypedLine(request, request.params.sheetId, request.body, idempotencyKeyFrom(request))))
+  app.delete('/costing/cost-sheets/:sheetId/typed-lines/:lineId', { schema: removeTypedLineContract }, async (request) => removeTypedLine(request, request.params.sheetId, request.params.lineId, request.query.version, idempotencyKeyFrom(request)))
 })

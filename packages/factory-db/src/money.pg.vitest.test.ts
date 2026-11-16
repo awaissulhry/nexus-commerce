@@ -619,8 +619,8 @@ describe('payments and allocations', () => {
     await issue(note)
     await insert(office(), 'PaymentAllocation', allocationRow(big, { invoiceId: partly.id }, 6100))
     await expect(insert(office(), 'PaymentAllocation', allocationRow(big, { invoiceId: partly.id }, 1))).rejects.toThrow(/gross 12200, credited 6100, paid 6100/)
-    // Only issued TD01 and TD24 are paid.
-    const target = /payments go to issued TD01 and TD24 invoices/
+    // Only issued TD01, TD24 and (B-W2b-GB02, G150: a debit note) TD05 are paid.
+    const target = /payments go to issued TD01, TD24 and TD05 invoices/
     await expect(insert(office(), 'PaymentAllocation', allocationRow(big, { invoiceId: seeded.draftInvoiceId }, 100))).rejects.toThrow(target)
     await expect(insert(office(), 'PaymentAllocation', allocationRow(big, { invoiceId: seeded.depositInvoiceId }, 100))).rejects.toThrow(target)
     await expect(insert(office(), 'PaymentAllocation', allocationRow(big, { invoiceId: note }, 100))).rejects.toThrow(target)

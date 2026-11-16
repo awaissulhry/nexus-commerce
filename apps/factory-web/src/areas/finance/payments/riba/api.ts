@@ -155,6 +155,8 @@ export const collectionsSchema = z.object({
   version: z.number().nullable(),
   ribaOn: z.boolean(),
   paymentNoticeToCustomerOn: z.boolean(),
+  // B-W2b-GB02 (G088): the automatic carry of a deposit without a deposit invoice (an older API answers none: off).
+  depositAutoCarryOn: z.boolean().optional(),
   mayChange: z.boolean(),
 })
 export type CollectionsSettings = z.infer<typeof collectionsSchema>
@@ -231,6 +233,6 @@ export function collectionsSettings(api: ApiClient, companyId: string, signal?: 
 }
 
 /** PUT /receivables/collections/settings (receivables.collections.switch; a fresh code to turn one ON): the company's row. */
-export function setCollections(api: ApiClient, body: { companyId: string; version?: number; ribaOn?: boolean; paymentNoticeToCustomerOn?: boolean }, idempotencyKey: string): Promise<CollectionsSettings> {
+export function setCollections(api: ApiClient, body: { companyId: string; version?: number; ribaOn?: boolean; paymentNoticeToCustomerOn?: boolean; /* B-W2b-GB02 (G088) */ depositAutoCarryOn?: boolean }, idempotencyKey: string): Promise<CollectionsSettings> {
   return api.request('PUT', '/receivables/collections/settings', { body, schema: collectionsSchema, idempotencyKey })
 }

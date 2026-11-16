@@ -23,6 +23,8 @@ export type FatturaPaDocumentType =
   | 'TD24'
   /** B-W2b-401 (td-extra.ts): the debit note TD05 and the self-invoices TD17, TD18, TD19. */
   | 'TD05'
+  // B-W2b-GB02 (G150): the internal reverse charge's integration.
+  | 'TD16'
   | 'TD17'
   | 'TD18'
   | 'TD19'

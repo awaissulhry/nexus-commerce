@@ -12,6 +12,7 @@ import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { convertMinor } from '@nexus/factory-domain/money/currency/convert'
 import { addDays } from '@nexus/factory-domain/money/currency/rates'
+import { missedEcbDays } from '@nexus/factory-domain/money/currency/ecb' // B-W2b-GB02 (G058)
 import { seedUuid } from '../../../../../packages/factory-db/src/seeding'
 import { seedDay } from '@nexus/factory-db/testing' // B-W2b-F53: the seeds' calendar
 import { fakeDay, FakeEcb, lastWeekday } from '../../adapters/ecb/fake' // B-W2b-F53: + the fake's weekday file
@@ -187,19 +188,37 @@ describe('the daily ECB rates (PLT-133)', () => {
       { day: today(), rates: [{ currency: 'JPY', rate: '160.00' }, { currency: 'SEK', rate: '11.50' }] },
       { day: yesterday, rates: [{ currency: 'JPY', rate: '159.00' }, { currency: 'SEK', rate: '11.40' }] },
     ])
+    // ---- B-W2b-GB02 (G058): the seeded ECB days are some days old, so the working days since were missed: the 90-day
+    // file is read too and its missed days are kept (each once; today's and yesterday's are in both files).
+    const seededNewest = (await one<{ day: string }>(`SELECT max("rateDate")::text AS day FROM "ExchangeRate" WHERE "tenantId" = $1 AND source = 'ECB'`, [A.tenant])).day
+    const missed = missedEcbDays(seededNewest, [today(), yesterday])
+    expect(missed.length).toBeGreaterThan(0)
+    fake.answerNext([
+      { day: today(), rates: [{ currency: 'JPY', rate: '160.00' }, { currency: 'SEK', rate: '11.50' }] },
+      { day: yesterday, rates: [{ currency: 'JPY', rate: '159.00' }, { currency: 'SEK', rate: '11.40' }] },
+      // The missed days in a currency no other test reads (the rates table and the follow-ups read JPY, SEK, NOK, CHF).
+      ...missed.map((day) => ({ day, rates: [{ currency: 'HUF', rate: '390.00' }, { currency: 'PLN', rate: '4.30' }] })),
+    ])
+    const filesBefore = fake.files.length
     const first = await ok('finance', 'POST', '/exchange-rates/fetch', {})
-    expect(first).toMatchObject({ fileDays: [today(), yesterday], addedDays: [yesterday, today()], rows: 4 })
+    expect(fake.files.slice(filesBefore)).toEqual(['daily', 'last90'])
+    expect(first).toMatchObject({ addedDays: [...missed, yesterday, today()], rows: 4 + 2 * missed.length })
+    expect(first.fileDays).toEqual([today(), yesterday, ...[...missed].reverse()])
+    // ---- end B-W2b-GB02
     expect(first.feed.lastEcbDay).toBe(today())
     fake.answerNext([{ day: today(), rates: [{ currency: 'JPY', rate: '160.00' }, { currency: 'SEK', rate: '11.50' }] }])
     expect(await ok('finance', 'POST', '/exchange-rates/fetch', {})).toMatchObject({ addedDays: [], rows: 0 })
+    expect(fake.files.at(-1)).toBe('daily') // B-W2b-GB02 (G058): nothing missed now, no 90-day file
     // The fake fails three times (the gateway's attempts): nothing kept, said in words.
     fake.failNext(3)
     expect((await no('finance', 'POST', '/exchange-rates/fetch', {}, 409)).message).toMatch(/^The ECB file could not be read now .*try again later\.$/)
     expect((await outbox('currency.rates_changed')).map((event) => [event.action, event.rows])).toEqual([
       ['FEED_ON', 0],
-      ['ECB_READ', 4],
+      ['ECB_READ', 4 + 2 * missed.length], // B-W2b-GB02 (G058)
     ])
     expect(await admin(`SELECT key FROM "ExchangeRate" WHERE "tenantId" = $1 AND quote = 'JPY' AND source = 'ECB' ORDER BY key`, [A.tenant])).toEqual([{ key: `EUR:JPY:${yesterday}:ECB` }, { key: `EUR:JPY:${today()}:ECB` }])
+    // B-W2b-GB02 (G058): the missed days, from the 90-day file.
+    expect(await admin(`SELECT key FROM "ExchangeRate" WHERE "tenantId" = $1 AND quote = 'HUF' AND source = 'ECB' ORDER BY key`, [A.tenant])).toEqual(missed.map((day) => ({ key: `EUR:HUF:${day}:ECB` })))
 
     // The job: the tenant is on, so it reads (the fake's own made-up file: the last weekday).
     const said: unknown[] = []

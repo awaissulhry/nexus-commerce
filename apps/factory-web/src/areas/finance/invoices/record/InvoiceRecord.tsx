@@ -37,12 +37,16 @@ import { InvoiceRecordView } from './view/InvoiceRecordView'
 // B-W2b-417: invoices in depth — the test-mode banner, stamp duty decided, the balance before shipping, the VAT time limit, the debit note.
 import { useT } from '../../../../lib/i18n/provider'
 import { BalanceBeforeShipping } from '../balance/BalanceBeforeShipping'
+// B-W2b-GB02 (G088): a deposit paid without a deposit invoice, carried onto this invoice.
+import { DepositCarry } from '../carry/DepositCarry'
 import { DebitNote } from '../debit-note/DebitNote'
 import { VatTimeLimit } from '../debit-note/VatTimeLimit'
 import { StampDutyCheck } from '../stamp-duty/StampDutyCheck'
 import { DEPTH } from '../test-mode/depth'
 import { TestModeBanner } from '../test-mode/TestModeBanner'
 import { DepthWord } from '../test-mode/view/DepthWord'
+// B-W2b-GB02 (G152): the declaration of intent a draft rests on.
+import { DeclarationPick } from '../intent/DeclarationPick'
 
 /**
  * `/w/<company>/finance/invoices/<id>` (SCR-081): loads the invoice (invoices.view; the API checks its company and
@@ -212,15 +216,26 @@ function RecordContainer({ invoiceId }: { invoiceId: string }) {
         banner: <TestModeBanner companyId={value.companyId} />,
         precheck:
           value.status === 'DRAFT' ? (
-            <StampDutyCheck
-              invoice={value}
-              onChanged={(next) => {
-                setValue(next)
-                loadParts(next)
-              }}
-            />
+            <>
+              <StampDutyCheck
+                invoice={value}
+                onChanged={(next) => {
+                  setValue(next)
+                  loadParts(next)
+                }}
+              />
+              {/* B-W2b-GB02 (G152): the declaration of intent the draft rests on (name one, or let it go). */}
+              <DeclarationPick
+                invoice={value}
+                onChanged={(next) => {
+                  setValue(next)
+                  loadParts(next)
+                }}
+              />
+            </>
           ) : null,
         balance: <BalanceBeforeShipping invoice={value} related={related.value} prefix={prefix} />,
+        carry: <DepositCarry invoice={value} />,
         creditWarning: (reason) => <VatTimeLimit invoiceId={value.id} reason={reason} />,
         more: (value.docType === 'TD01' || value.docType === 'TD24') && value.status !== 'DRAFT' ? [{ id: 'debit', label: <DepthWord k="debit.menu" />, disabled: !!debitWait, description: debitWait ?? undefined, onSelect: () => setDebitOpen(true) }] : [],
         dialogs: debitOpen ? <DebitNote kind="debit" fixed={{ id: value.id, number: value.number, partyName: value.party.legalName }} onClose={() => setDebitOpen(false)} /> : null,

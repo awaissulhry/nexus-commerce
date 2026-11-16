@@ -225,6 +225,8 @@ function rowOf(computed: Computed): WorkOrderCostRowView {
       pieces: facts.pieces,
       releasedAt: facts.workOrder.releasedAt ? toUtcIso(facts.workOrder.releasedAt) : null,
       completedAt: facts.workOrder.completedAt ? toUtcIso(facts.workOrder.completedAt) : null,
+      // B-W2b-GB02 (G053): the close that stands.
+      closedAt: facts.workOrder.status === 'CLOSED' && facts.workOrder.closedAt ? toUtcIso(facts.workOrder.closedAt) : null,
     },
     currency: facts.workOrder.currency,
     method: facts.method,
@@ -244,7 +246,7 @@ function rowOf(computed: Computed): WorkOrderCostRowView {
   }
 }
 
-const orderWhere = (caller: CommandCaller, query: Pick<WorkOrderCostsQuery, 'companyId' | 'siteId' | 'status' | 'q' | 'completedFrom' | 'completedTo'>): Prisma.WorkOrderWhereInput => {
+const orderWhere = (caller: CommandCaller, query: Pick<WorkOrderCostsQuery, 'companyId' | 'siteId' | 'status' | 'q' | 'completedFrom' | 'completedTo' | 'closedFrom' | 'closedTo'>): Prisma.WorkOrderWhereInput => {
   const actor = actorOf(contextOf(caller))
   return {
     AND: [
@@ -256,6 +258,11 @@ const orderWhere = (caller: CommandCaller, query: Pick<WorkOrderCostsQuery, 'com
       // B-W2b-22 (Z9:05): completed on these Europe/Rome days ("Closed in <month>"); the tiles then count the same work orders.
       query.completedFrom ? { completedAt: { gte: businessDayStart(query.completedFrom) } } : {},
       query.completedTo ? { completedAt: { lt: businessDayRange(query.completedTo).end } } : {},
+      // ---- B-W2b-GB02 (G053; B-W2b-424's gap 3): closed on these days ("Closed in <month>"): CLOSED, by its close that stands.
+      query.closedFrom || query.closedTo ? { status: 'CLOSED' as const } : {},
+      query.closedFrom ? { closedAt: { gte: businessDayStart(query.closedFrom) } } : {},
+      query.closedTo ? { closedAt: { lt: businessDayRange(query.closedTo).end } } : {},
+      // ---- end B-W2b-GB02
     ],
   }
 }

@@ -102,6 +102,7 @@ export const COST_SHEET_APPROVAL_KIND: ApprovalKindDefinition = Object.freeze({
   onStale: (tools: CommandTools, task: TaskRef) => returnedInCommand(tools, task),
   async parent(client: Reader, recordId: string) {
     const sheet = await client.costSheet.findUnique({ where: { id: recordId }, select: { styleId: true } })
-    return sheet ? { type: 'Style', id: sheet.styleId } : null
+    // B-W2b-GB02 (G054; B-W2b-430 gap 6): the style's Cost tab opens (the web's RECORD_PAGES StyleCost), not its Overview.
+    return sheet ? { type: 'StyleCost', id: sheet.styleId } : null
   },
 })

@@ -9,6 +9,13 @@ import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
 import { addTenant, addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../../platform/auth/sessions/testing/harness'
+// B-W2b-GB02 (G146): the reminder before a quarter's due day.
+import { asSystem, systemContext } from '../../../platform/outbox/system'
+import { stampDutyDueFindings } from '../stamp-duty/quarters'
+// B-W2b-GB02 (G153): the worker's files beside a write that bumps the invoice.
+import { callerFor, command } from '../../../core/command'
+import { processFiles } from '../../../platform/files/service'
+import { makeInvoiceFiles } from '../invoice-files'
 
 /**
  * Tax rules as data (B-W2b-392; FIN-100, FIN-101, FIN-107) on the local stack: a throwaway PostgreSQL 17 database from the
@@ -245,6 +252,77 @@ describe('stamp duty on VAT-free invoices charged to the customer, and the quart
     expect(paid.status).toBe(409)
     expect(refusal(paid.body as Json)).toEqual(['refusal/QUARTER_OPEN'])
   })
+
+  // ---- B-W2b-GB02 (G146; B-W2b-392's gap): the exception rules' STAMP_DUTY_DUE, read on chosen days (the quarter is today's).
+  it('reminds of an ended quarter not paid from N days before its due day, and after it; never while it runs or off', async () => {
+    const quarters = await as('GET', `/invoicing/stamp-duty/quarters?companyId=${c1()}`)
+    const quarter = quarters.quarters.find((entry: Json) => entry.quarterStart === quarterStartOf(TODAY))
+    const dueOn: string = quarter.dueOn
+    const at = (day: string) => new Date(`${day}T09:00:00.000Z`)
+    const shift = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00.000Z`) + days * 86_400_000).toISOString().slice(0, 10)
+    const find = (day: string, daysBefore = 10, companyId: string | null = null) =>
+      asSystem(h.database, tenant.id, `gb02-${newId()}`, (client) => stampDutyDueFindings(client as never, { companyId, siteId: null, threshold: { daysBefore } }, at(day)))
+    // While the quarter runs (today): nothing to pay yet.
+    expect(await find(TODAY)).toEqual([])
+    // Five days before its due day: one finding, its facts carry no amount.
+    const near = await find(shift(dueOn, -5))
+    expect(near).toEqual([{ recordType: 'StampDutyQuarter', recordId: quarter.id, label: quarter.label, scope: { companyId: c1(), siteId: null, partyId: null }, facts: { quarterStart: quarter.quarterStart, dueOn, daysLeft: 5, f24Code: quarter.f24Code, daysBefore: 10 } }])
+    // Further than the rule's days (and the quarter has ended by then: its due day is at least two months after its end).
+    expect(await find(shift(dueOn, -11))).toEqual([])
+    expect(await find(shift(dueOn, -11), 15)).toHaveLength(1)
+    // After the due day: late, still reminded.
+    expect((await find(shift(dueOn, 2)))[0]!.facts).toMatchObject({ daysLeft: -2 })
+    // Another company's rule does not see it; a switch turned off reminds of nothing (no payment can be recorded then).
+    expect(await find(shift(dueOn, -5), 10, c2())).toEqual([])
+    await switchOn({ stampDutyOn: false })
+    expect(await find(shift(dueOn, -5))).toEqual([])
+    await switchOn({ stampDutyOn: true })
+  })
+  // ---- end B-W2b-GB02
+
+  // ---- B-W2b-GB02 (G153; B-W1-06's race): "Issue and send" wrote the invoice while the worker named its files, and the
+  // worker's first try failed on the invoice's version. Naming the files takes the row's lock, not its version.
+  it("the worker names an issued invoice's files while a send writes the invoice: both succeed", async () => {
+    const issued = (await issue(await draft([goods('90.00')]))).invoice
+    // As if the store had not answered at the issue: its files not named yet (cleared past the guards).
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(`UPDATE "Invoice" SET "xmlFileId" = NULL, "pdfFileId" = NULL WHERE id = $1`, [issued.id])
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+    const [before] = await admin<{ version: number }>(`SELECT version FROM "Invoice" WHERE id = $1`, [issued.id])
+    const system = () => callerFor(h.database, systemContext(tenant.id, `gb02-${newId()}`))
+    let reached!: () => void
+    const inside = new Promise<void>((resolve) => (reached = resolve))
+    let release!: () => void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    // A write that bumps the invoice's version (as the send does) holds the row …
+    const send = command(system(), { name: 'invoices.sdiSend', input: { invoiceId: issued.id, test: 'gb02' }, record: { type: 'Invoice', id: issued.id } }, async (tools) => {
+      reached()
+      await held
+      tools.audit({ recordType: 'Invoice', recordId: issued.id, after: { test: 'a send writing the invoice' } })
+      return null
+    })
+    await inside
+    // … while the worker names its files: it waits for the row, then names them.
+    const attach = makeInvoiceFiles(processFiles(), system(), issued.id)
+    attach.catch(() => undefined)
+    for (let tries = 0; tries < 300; tries++) {
+      const [waiting] = await admin<{ n: number }>(`SELECT count(*)::int AS n FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'`)
+      if (waiting!.n > 0) break
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    release()
+    await expect(send).resolves.toMatchObject({ result: null })
+    const files = await attach
+    expect(files).toEqual({ xmlFileId: expect.any(String), pdfFileId: expect.any(String) })
+    const [after] = await admin<{ version: number; xmlFileId: string; pdfFileId: string }>(`SELECT version, "xmlFileId", "pdfFileId" FROM "Invoice" WHERE id = $1`, [issued.id])
+    // Only the send moved the version; the files are named once.
+    expect(after).toEqual({ version: before!.version + 1, xmlFileId: files.xmlFileId, pdfFileId: files.pdfFileId })
+    expect(await makeInvoiceFiles(processFiles(), system(), issued.id)).toEqual(files)
+  })
+  // ---- end B-W2b-GB02
 
   it('an ended quarter is paid once (then frozen); the amounts need the price grain', async () => {
     const start = quarterStartOf(`${YEAR}-01-15`) === quarterStartOf(TODAY) ? null : `${YEAR}-01-01`

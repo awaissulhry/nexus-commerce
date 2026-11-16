@@ -27,7 +27,7 @@ export async function ourBooks(db: Reader, scope: CustomerScope, asOf: BusinessD
            coalesce(i."salesOrderId", (SELECT o."orderId" FROM "InvoiceLine" l JOIN "SalesOrderLine" o ON o."tenantId" = l."tenantId" AND o.id = l."salesOrderLineId"
                                          WHERE l."invoiceId" = i.id ORDER BY l.seq LIMIT 1)) AS "orderId"
       FROM "Invoice" i
-     WHERE i."companyId" = ${scope.companyId}::uuid AND i."buyerPartyId" = ${scope.partyId}::uuid AND i."docType" IN ('TD01', 'TD24')
+     WHERE i."companyId" = ${scope.companyId}::uuid AND i."buyerPartyId" = ${scope.partyId}::uuid AND i."docType" IN ('TD01', 'TD24', 'TD05')
        AND i.status <> 'DRAFT' AND i."issueDate" <= ${asOf}::date AND i.currency = ${currency}
      ORDER BY i."issueDate", i.number, i.id
      LIMIT ${MAX_DOCUMENTS}`
@@ -50,7 +50,7 @@ export async function ourBooks(db: Reader, scope: CustomerScope, asOf: BusinessD
   })
   const [sums] = await db.$queryRaw<{ invoiced: bigint | null; paid: bigint | null; refunded: bigint | null; under: bigint | null; over: bigint | null }[]>`
     SELECT (SELECT sum(CASE WHEN i."docType" = 'TD04' THEN -i."grossTotal" ELSE i."grossTotal" END) FROM "Invoice" i
-             WHERE i."companyId" = ${scope.companyId}::uuid AND i."buyerPartyId" = ${scope.partyId}::uuid AND i."docType" IN ('TD01', 'TD02', 'TD04', 'TD24')
+             WHERE i."companyId" = ${scope.companyId}::uuid AND i."buyerPartyId" = ${scope.partyId}::uuid AND i."docType" IN ('TD01', 'TD02', 'TD04', 'TD24', 'TD05')
                AND i.status <> 'DRAFT' AND i."issueDate" <= ${asOf}::date AND i.currency = ${currency}) AS invoiced,
            (SELECT sum(p.amount) FROM "Payment" p
              WHERE p."companyId" = ${scope.companyId}::uuid AND p."partyId" = ${scope.partyId}::uuid AND p.status = 'RECEIVED' AND p."receivedOn" <= ${asOf}::date AND p.currency = ${currency}) AS paid,

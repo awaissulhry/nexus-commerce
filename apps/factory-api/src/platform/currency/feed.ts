@@ -2,7 +2,7 @@ import type { FactoryDatabase } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { CURRENCIES_MANAGE } from '@nexus/factory-domain/money/currency/permissions'
-import { ECB_DAILY_OPERATION, type EcbDay } from '@nexus/factory-domain/money/currency/ecb'
+import { ECB_DAILY_OPERATION, missedEcbDays, type EcbDay, type EcbFileKind } from '@nexus/factory-domain/money/currency/ecb'
 import { rateKey } from '@nexus/factory-domain/money/currency/rates'
 import { FakeEcb } from '../../adapters/ecb/fake'
 import { ecbHttpAdapter } from '../../adapters/ecb/http'
@@ -31,7 +31,9 @@ import { assertOnEveryCompany, dayValue, officeOf, refused, refusingInWords, typ
  *                are not kept yet (ECB rows never change: a day read twice adds nothing), its audit row and
  *                currency.rates_changed when anything was added. A file that cannot be read keeps nothing (the rates
  *                kept stay) and says why.
- *   the job      the scheduler's cron `currency.ecbDaily` (16:30 and 18:30 Europe/Rome, Monday to Friday: the ECB publishes
+ *   catch-up     (B-W2b-GB02, G058) when working days are missing since the newest ECB day kept (the server was down, a
+ *                read failed), a second call reads the ECB's 90-day file and its days are kept too (readWithCatchUp).
+ *   the job     the scheduler's cron `currency.ecbDaily` (16:30 and 18:30 Europe/Rome, Monday to Friday: the ECB publishes
  *                at about 16:00 CET) reads the file for every tenant whose switch is on, in its system context. A day
  *                with no new rate adds nothing. "Read today's rates" in the screen does the same at once.
  */
@@ -44,7 +46,7 @@ export type EcbOutcome = { readonly ok: true; readonly days: readonly EcbDay[] }
 
 export interface EcbRuntime {
   /** One read through the gateway for the account; the ECB's or the gateway's failures are an outcome, never a throw. */
-  read(caller: CommandCaller, accountId: string): Promise<EcbOutcome>
+  read(caller: CommandCaller, accountId: string, file?: EcbFileKind): Promise<EcbOutcome>
   /** The FAKE adapter of this process (local and test), or null: a new account is then LIVE. */
   readonly fake: FakeEcb | null
 }
@@ -53,13 +55,13 @@ export function createEcbRuntime(options: { readonly gateway: Gateway; readonly 
   const remote = options.remote ?? ecbHttpAdapter()
   return Object.freeze({
     fake: options.fake,
-    async read(caller: CommandCaller, accountId: string): Promise<EcbOutcome> {
+    async read(caller: CommandCaller, accountId: string, file: EcbFileKind = 'daily'): Promise<EcbOutcome> {
       try {
-        const answer = await options.gateway.call(gatewayAccount(caller, accountId), { ...ECB_DAILY_OPERATION, request: { file: 'daily' } }, async (call) => {
+        const answer = await options.gateway.call(gatewayAccount(caller, accountId), { ...ECB_DAILY_OPERATION, request: { file } }, async (call) => {
           if (call.account.provider !== 'ECB') throw new ProviderError('This account is not an ECB account.', { retryable: false })
-          if (call.account.mode !== 'FAKE') return remote.daily(call)
+          if (call.account.mode !== 'FAKE') return remote.daily(call, file)
           if (!options.fake) throw new ProviderError('A FAKE ECB account needs the fake ECB file, which this environment does not have.', { retryable: false })
-          return options.fake.daily(call)
+          return options.fake.daily(call, file)
         })
         return { ok: true, days: answer.days }
       } catch (thrown) {
@@ -88,6 +90,31 @@ export function processEcb(): EcbRuntime {
   }
   return fromEnv
 }
+
+// ---- B-W2b-GB02 (G058): a missed day caught up ---------------------------------------------------------------------------
+
+/** The newest day of an ECB rate kept (any currency), or null. */
+async function newestEcbDay(caller: CommandCaller): Promise<BusinessDate | null> {
+  const newest = await caller.withClient((client) => client.exchangeRate.findFirst({ where: { source: 'ECB' }, select: { rateDate: true }, orderBy: { rateDate: 'desc' } }))
+  return newest ? newest.rateDate.toISOString().slice(0, 10) : null
+}
+
+/**
+ * Today's file, and, when the feed missed working days since the newest day kept (`missedEcbDays`), the ECB's 90-day file
+ * as well: its days join today's (each day kept once by keepEcbDays). The 90-day file failing keeps today's file and says
+ * so (`catchUpProblem`); the missed days are tried again at the next read.
+ */
+export async function readWithCatchUp(runtime: EcbRuntime, caller: CommandCaller, accountId: string): Promise<EcbOutcome & { readonly missed?: readonly BusinessDate[]; readonly catchUpProblem?: string }> {
+  const outcome = await runtime.read(caller, accountId)
+  if (!outcome.ok) return outcome
+  const missed = missedEcbDays(await newestEcbDay(caller), outcome.days.map((entry) => entry.day))
+  if (missed.length === 0) return outcome
+  const last90 = await runtime.read(caller, accountId, 'last90')
+  if (!last90.ok) return { ...outcome, missed, catchUpProblem: last90.problem }
+  const seen = new Set(outcome.days.map((entry) => entry.day))
+  return { ok: true, days: [...outcome.days, ...last90.days.filter((entry) => !seen.has(entry.day))].sort((a, b) => b.day.localeCompare(a.day)), missed }
+}
+// ---- end B-W2b-GB02
 
 // ---- the switch ----------------------------------------------------------------------------------------------------------
 
@@ -202,7 +229,8 @@ export async function readEcbNow(caller: CommandCaller, idempotencyKey?: string)
   assertOnEveryCompany(context, CURRENCIES_MANAGE)
   const account = await caller.withClient((client) => ecbAccountOf(client))
   if (!account || account.status !== 'ACTIVE') throw refused('FEED_OFF', 'The daily ECB rates are off: switch them on first.')
-  const outcome = await processEcb().read(caller, account.id)
+  // B-W2b-GB02 (G058): a missed day is caught up from the 90-day file.
+  const outcome = await readWithCatchUp(processEcb(), caller, account.id)
   if (!outcome.ok) throw refused('ECB_UNREADABLE', `The ECB file could not be read now (${outcome.problem}) The rates kept stay as they are; try again later.`)
   const { result } = await refusingInWords(() => command(caller, { name: 'currency.readEcb', idempotencyKey, input: { accountId: account.id } }, (tools) => keepEcbDays(tools, account.id, outcome.days)))
   return { fileDays: outcome.days.map((entry) => entry.day), addedDays: result.days, rows: result.rows, feed: await caller.withClient((client) => feedOf(client)) }
@@ -235,12 +263,14 @@ export async function runEcbDaily(options: EcbDailyOptions): Promise<{ tenants: 
         continue
       }
       const caller = callerFor(options.database, systemContext(tenantId, requestId))
-      const outcome = await runtime.read(caller, account.id)
+      // B-W2b-GB02 (G058): a missed day is caught up from the 90-day file.
+      const outcome = await readWithCatchUp(runtime, caller, account.id)
       if (!outcome.ok) {
         failed++
         options.log.warn({ tenantId, problem: outcome.problem }, 'the ECB file could not be read')
         continue
       }
+      if (outcome.catchUpProblem) options.log.warn({ tenantId, missed: outcome.missed, problem: outcome.catchUpProblem }, 'the missed ECB days could not be caught up now')
       const { result } = await runCommand(caller, { name: 'currency.readEcb', input: { accountId: account.id, job: true } }, (tools) => keepEcbDays(tools, account.id, outcome.days), settings)
       read++
       rows += result.rows

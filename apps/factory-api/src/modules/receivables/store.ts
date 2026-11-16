@@ -159,7 +159,7 @@ const ibanOf = (terms: unknown): string | null => {
 }
 
 /**
- * The issued TD01/TD24 invoices that still ask money as of a day (gross − issued credit notes − allocations − B-W2b-393's
+ * The issued TD01/TD24 invoices (B-W2b-GB02, G150: and TD05 debit notes) that still ask money as of a day (gross − issued credit notes − allocations − B-W2b-393's
  * UNDERPAYMENT write-offs, the same sums as payments' open items), oldest first, each with its instalments and what is open on them. Row-level security
  * keeps them the tenant's; the caller filters by its grants (can()).
  *
@@ -186,7 +186,7 @@ export async function openInvoices(db: Reader, filter: OpenFilter): Promise<Open
       -- B-W2b-393: a small difference written off on the invoice's allocations (UNDERPAYMENT) is settled too.
       LEFT JOIN LATERAL (SELECT sum(wo.amount) AS written FROM "PaymentWriteOff" wo JOIN "PaymentAllocation" wa ON wa."tenantId" = wo."tenantId" AND wa.id = wo."allocationId"
                           WHERE wa."invoiceId" = i.id AND wo.kind = 'UNDERPAYMENT' AND wo."createdAt" < ${end}) w ON true
-     WHERE i."docType" IN ('TD01', 'TD24') AND i.status <> 'DRAFT' AND i."issueDate" <= ${asOf}::date
+     WHERE i."docType" IN ('TD01', 'TD24', 'TD05') AND i.status <> 'DRAFT' AND i."issueDate" <= ${asOf}::date
        AND (${filter.companyId ?? null}::uuid IS NULL OR i."companyId" = ${filter.companyId ?? null}::uuid)
        AND (${filter.partyId ?? null}::uuid IS NULL OR i."buyerPartyId" = ${filter.partyId ?? null}::uuid)
        AND (${filter.salesOrderId ?? null}::uuid IS NULL OR i."salesOrderId" = ${filter.salesOrderId ?? null}::uuid)

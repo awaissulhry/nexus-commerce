@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Download } from 'lucide-react'
+import { Download, FilePlus2, Undo2 } from 'lucide-react'
 import { Banner, EmptyState } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Pill, Tag } from '@nexus/ui/primitives'
@@ -15,9 +15,12 @@ import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../../list-frame/model'
 import { CLOSE_NS } from '../../../../production/work-orders/close/model'
+import { rightRef } from '../../../../../lib/i18n/rights'
 import type { PpvRow } from '../api'
 import { COSTING_NAMESPACE, quantityText, signedMoney, unitCostText } from '../../model'
-import { differenceTone, documentRef, ppvStateOf, type PpvCsvWords, type PpvSectionActions, type PpvSectionModel } from '../model'
+import { differenceTone, documentRef, ppvReverseHeld, ppvStateOf, type PpvCsvWords, type PpvSectionActions, type PpvSectionModel } from '../model'
+// B-W2b-GB02 (G053): Reverse… a variance with its reason, Post a document… by hand.
+import { PpvPostDialog, PpvReverseDialog } from './PpvDialogs'
 
 const BUILT = new Set(OFFICE_PAGES)
 
@@ -95,6 +98,16 @@ function Ppv({ model, prefix, actions }: { model: PpvSectionModel; prefix: strin
         )
       return <Tag tone="success">{t('ppv.state.standing')}</Tag>
     }
+    // B-W2b-GB02 (G053): Reverse… on a standing variance, held with why on any other row (and without the right).
+    const ReverseCell = ({ data }: ICellRendererParams<PpvRow>) => {
+      if (!data) return null
+      const held = ppvReverseHeld(data, model.can)
+      return (
+        <Button size="sm" variant="quiet" heldReason={held ? t(held.key, held.params) : null} onClick={() => actions?.onReverse?.(data)} aria-label={t('ppv.reverse.label', { material: data.item.code, document: data.source.number })}>
+          <Undo2 size={13} aria-hidden /> {t('ppv.reverse.open')}
+        </Button>
+      )
+    }
     return [
       { colId: 'material', headerName: t('ppv.col.material'), minWidth: 190, flex: 1.3, cellRenderer: MaterialCell },
       { colId: 'supplier', headerName: t('ppv.col.supplier'), minWidth: 170, flex: 1.1, valueGetter: (params) => params.data?.supplier.name },
@@ -108,8 +121,9 @@ function Ppv({ model, prefix, actions }: { model: PpvSectionModel; prefix: strin
           ]
         : []),
       { colId: 'state', headerName: t('ppv.col.state'), minWidth: 150, flex: 0.8, cellRenderer: StateCell },
+      { colId: 'reverse', headerName: t('ppv.colActions'), minWidth: 130, flex: 0.6, sortable: false, cellRenderer: ReverseCell },
     ]
-  }, [t, locale, prefix, model.cost])
+  }, [t, locale, prefix, model.cost, model.can, actions])
 
   const picked = (rows ?? []).filter((row) => selected.includes(row.id))
   const csvWords: PpvCsvWords = {
@@ -147,8 +161,15 @@ function Ppv({ model, prefix, actions }: { model: PpvSectionModel; prefix: strin
         <span className="fw-fco-inline">
           <span className="fw-fco-muted">{t('ppv.hint', { from: dayText(model.period.from), to: dayText(model.period.to) })}</span>
           {totals && <span className="fw-fco-num">{totals}</span>}
+          {/* B-W2b-GB02 (G053): what the worker does after a receipt or an invoice, by hand. */}
+          <Button size="sm" heldReason={model.can?.manage ? null : t('ppv.held.noManage', { right: rightRef('costing.ledger.manage') })} onClick={() => actions?.onPost?.(true)}>
+            <FilePlus2 size={13} aria-hidden /> {t('ppv.post.open')}
+          </Button>
         </span>
       </div>
+      {model.notice && (
+        <Banner tone={model.notice.tone} title={t(model.notice.words.key, model.notice.words.params)} onDismiss={() => actions?.onDismissNotice?.()} />
+      )}
       {model.waits && (
         <Banner tone="warning" title={t('waits.title')}>
           {t('waits.ppv')}
@@ -185,6 +206,8 @@ function Ppv({ model, prefix, actions }: { model: PpvSectionModel; prefix: strin
         keysOpen={model.keysOpen}
       />
       {!model.cost && <p className="fw-fco-muted">{t('ppv.noCost')}</p>}
+      {model.dialog?.kind === 'reverse' && <PpvReverseDialog dialog={model.dialog} cost={model.cost} draft={model.draft?.reason} onSubmit={(reason) => actions?.onReverseSubmit?.(reason)} onClose={() => actions?.onReverse?.(null)} />}
+      {model.dialog?.kind === 'post' && <PpvPostDialog dialog={model.dialog} can={model.can} draft={model.draft} onSubmit={(document) => actions?.onPostSubmit?.(document)} onClose={() => actions?.onPost?.(false)} />}
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('ppv.keys.title')} size="sm">
           <ul className="fw-fco-notes">

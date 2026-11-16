@@ -98,15 +98,15 @@ export interface PayablesListActions {
  * answer says which were approved and why the others were not). A row's number is a real link to the record (⌘-click: a
  * new tab). No person is counted or totalled.
  */
-export function PayablesListView({ model, actions, selfInvoices, proposal }: { model: PayablesListModel; actions?: PayablesListActions; /** B-W2b-417: the Self-invoices section (its container, or a design case's view). */ selfInvoices?: ReactNode; /** B-W2b-425: the band's "Payment proposal" and its pop-up (its container, or a design case's view). */ proposal?: ReactNode }) {
+export function PayablesListView({ model, actions, selfInvoices, proposal, inbox }: { model: PayablesListModel; actions?: PayablesListActions; /** B-W2b-417: the Self-invoices section (its container, or a design case's view). */ selfInvoices?: ReactNode; /** B-W2b-425: the band's "Payment proposal" and its pop-up (its container, or a design case's view). */ proposal?: ReactNode; /** B-W2b-GB02: the SDI inbox section (its container, or a design case's view). */ inbox?: ReactNode }) {
   return (
     <WithMessages namespaces={[PAYABLES_NAMESPACE, 'lists']}>
-      <ListPage model={model} actions={actions} selfInvoices={selfInvoices} proposal={proposal} />
+      <ListPage model={model} actions={actions} selfInvoices={selfInvoices} proposal={proposal} inbox={inbox} />
     </WithMessages>
   )
 }
 
-function ListPage({ model, actions, selfInvoices, proposal }: { model: PayablesListModel; actions?: PayablesListActions; selfInvoices?: ReactNode; proposal?: ReactNode }) {
+function ListPage({ model, actions, selfInvoices, proposal, inbox }: { model: PayablesListModel; actions?: PayablesListActions; selfInvoices?: ReactNode; proposal?: ReactNode; inbox?: ReactNode }) {
   const t = useT(PAYABLES_NAMESPACE)
   const lists = useT('lists')
   const locale = useLocale()
@@ -425,6 +425,8 @@ function ListPage({ model, actions, selfInvoices, proposal }: { model: PayablesL
       </section>
 
       {/* B-W2b-417: Self-invoices (design sec:selfinv). */}
+      {/* B-W2b-GB02: the SDI inbox, before the self-invoices. */}
+      {inbox}
       {selfInvoices}
 
       {model.foreign && <ForeignDialog model={model.foreign} today={model.today} actions={actions?.foreign} />}

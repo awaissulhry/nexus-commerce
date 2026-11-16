@@ -6,7 +6,7 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { getSdi, invoiceFromDdts, listInvoices, shippedNotInvoiced, type InvoiceRow } from '../../_shared/api'
+import { getSdi, invoiceFromDdts, invoiceFromShipment, listInvoices, shippedNotInvoiced, type InvoiceRow } from '../../_shared/api' // B-W2b-GB02 (G148): + invoiceFromShipment
 import { downloadText, useCoalesced, useLive } from '../../_shared/hooks'
 import { abilitiesOf, invoicesAddress, invoicesCsv, invoicesTouched, queryFromAddress, readProblem, romeToday, writeProblem, type RowView } from '../../_shared/model'
 import { createDeferred, deferredDue, draftReturnCredit, returnCredit as readReturnCredit, type Deferred } from '../daily/api'
@@ -22,6 +22,9 @@ import { StampDutyQuarters } from '../stamp-duty/StampDutyQuarters'
 import { DEPTH } from '../test-mode/depth'
 import { TestModeBanner } from '../test-mode/TestModeBanner'
 import { DepthWord } from '../test-mode/view/DepthWord'
+// B-W2b-GB02 (G152): the declarations of intent (Invoices' ⋯, a declaration's link).
+import { Declarations } from '../intent/Declarations'
+import { IntentWord } from '../intent/view/IntentWord'
 
 /**
  * `/w/<company>/finance/invoices` (SCR-080): reads the invoices of the saved view or the filter the address names (the
@@ -71,7 +74,9 @@ function InvoicesContainer() {
   const [dialogProblem, setDialogProblem] = useState<InvoicesListModel['dialogProblem']>(null)
   const [busy, setBusy] = useState(false)
   // B-W2b-417: the in-depth dialog open (the monthly run, the stamp duty quarters, New ▾'s credit or debit note).
-  const [depthDialog, setDepthDialog] = useState<'run' | 'stamp' | NewKind | null>(null)
+  // B-W2b-GB02 (G146): `?stamp=<quarter>` (a stamp duty alert's record) opens the quarters at once.
+  // B-W2b-GB02 (G152): `?intent=<declaration>` (a declaration's link) opens the declarations of intent on it.
+  const [depthDialog, setDepthDialog] = useState<'run' | 'stamp' | 'intent' | NewKind | null>(params?.get('stamp') ? 'stamp' : params?.get('intent') ? 'intent' : null)
   const readId = useRef(0)
 
   const readTiles = useCallback(async () => {
@@ -201,6 +206,27 @@ function InvoicesContainer() {
     [api, busy, prefix, router, readQueue],
   )
 
+  // ---- B-W2b-GB02 (G148): the immediate invoice of a shipment that left without a DDT; a refusal shows as the notice.
+  const createFromShipment = useCallback(
+    async (shipmentId: string) => {
+      if (busy) return
+      setBusy(true)
+      setNotice(null)
+      try {
+        const answer = await invoiceFromShipment(api, shipmentId, newIdempotencyKey())
+        router.push(`${prefix}/finance/invoices/${answer.invoice.id}?tab=lines`)
+      } catch (error) {
+        const words = writeProblem(error)
+        setNotice({ tone: 'danger', words: words.params ? { key: words.key, params: words.params } : { key: words.key } })
+        if (words.reload) void readQueue()
+      } finally {
+        setBusy(false)
+      }
+    },
+    [api, busy, prefix, router, readQueue],
+  )
+  // ---- end B-W2b-GB02
+
   const createMonth = useCallback(
     async (group: { companyId: string; partyId: string; month: string }) => {
       if (busy) return
@@ -255,9 +281,20 @@ function InvoicesContainer() {
         more: [
           { id: 'run', label: <DepthWord k="more.run" />, onSelect: () => setDepthDialog('run') },
           { id: 'stamp', label: <DepthWord k="more.stamp" />, onSelect: () => setDepthDialog('stamp') },
+          // B-W2b-GB02 (G152): the customers' declarations of intent.
+          { id: 'intent', label: <IntentWord k="menu" />, onSelect: () => setDepthDialog('intent') },
         ],
         dialogs:
-          depthDialog === 'run' ? <MonthlyRun onClose={closeDepth} /> : depthDialog === 'stamp' ? <StampDutyQuarters onClose={closeDepth} /> : depthDialog ? <DebitNote kind={depthDialog} onClose={closeDepth} /> : null,
+          depthDialog === 'run' ? (
+            <MonthlyRun onClose={closeDepth} />
+          ) : depthDialog === 'stamp' ? (
+            <StampDutyQuarters onClose={closeDepth} />
+          ) : depthDialog === 'intent' ? (
+            // B-W2b-GB02 (G152)
+            <Declarations openId={params?.get('intent') ?? null} onClose={closeDepth} />
+          ) : depthDialog ? (
+            <DebitNote kind={depthDialog} onClose={closeDepth} />
+          ) : null,
       }}
       actions={{
         onRows: (next: RowView) => router.replace(invoicesAddress(pathname, next)),
@@ -278,6 +315,7 @@ function InvoicesContainer() {
           setDialogProblem(null)
         },
         onCreateFromDdts: (input) => void create(input),
+        onCreateFromShipment: (shipmentId) => void createFromShipment(shipmentId), // B-W2b-GB02 (G148)
         onShippedView: (next: ShippedView) => {
           const search = new URLSearchParams(params?.toString() ?? '')
           if (next === 'deferred') search.set('shipped', 'deferred')

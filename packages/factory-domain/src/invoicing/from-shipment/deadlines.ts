@@ -176,3 +176,19 @@ export function draftDeadline(docType: ShipInvoiceType, ddts: readonly { readonl
   if (!first) return null
   return docType === 'TD01' ? immediateDeadline(first, today) : deferredDeadline(monthOf(first.date), today)
 }
+
+// ---- B-W2b-GB02 (G148; B-W1-51's gap): goods that left WITHOUT a DDT (Shipment.ddtRequired false): the immediate invoice
+// that travels with them is due within 12 days of the day they left (art. 21 c.4 DPR 633/1972; UNVERIFIED, GATE-ACCOUNTANT:
+// whether the office wants the day itself).
+export function withoutDdtDeadline(shipment: { readonly number: string; readonly date: BusinessDate }, today: BusinessDate): InvoiceDeadline {
+  const dueBy = addDays(shipment.date, IMMEDIATE_INVOICE_DAYS)
+  const daysLeft = daysBetween(today, dueBy)
+  return {
+    docType: 'TD01',
+    dueBy,
+    daysLeft,
+    state: stateOf(daysLeft),
+    words: `Immediate invoice (TD01) by ${formatDateIt(dueBy)}, 12 days after shipment ${shipment.number} left without a DDT on ${formatDateIt(shipment.date)} (DPR 633/1972 art. 21 c.4): ${leftWords(daysLeft)}.`,
+  }
+}
+// ---- end B-W2b-GB02

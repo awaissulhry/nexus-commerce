@@ -28,16 +28,18 @@ export interface Collections {
   readonly version: number | null
   readonly ribaOn: boolean
   readonly paymentNoticeToCustomerOn: boolean
+  /** B-W2b-GB02 (G088): a NONE deposit carried onto its order's invoice by the system when the invoice is issued. */
+  readonly depositAutoCarryOn: boolean
 }
 
 /** The switches in force for a company (its row, else the tenant's, else both off); companyId null: the tenant's row. */
 export async function collectionsOf(db: Reader, companyId: string | null): Promise<Collections> {
-  const rows = await db.receivablesSettings.findMany({ where: { OR: [{ companyId: null }, ...(companyId ? [{ companyId }] : [])] }, select: { id: true, companyId: true, version: true, ribaOn: true, paymentNoticeToCustomerOn: true } })
+  const rows = await db.receivablesSettings.findMany({ where: { OR: [{ companyId: null }, ...(companyId ? [{ companyId }] : [])] }, select: { id: true, companyId: true, version: true, ribaOn: true, paymentNoticeToCustomerOn: true, depositAutoCarryOn: true } })
   const own = companyId ? rows.find((row) => row.companyId === companyId) : undefined
   const tenant = rows.find((row) => row.companyId === null)
   const row = own ?? tenant
-  if (!row) return { source: 'NONE', settingsId: null, version: null, ribaOn: false, paymentNoticeToCustomerOn: false }
-  return { source: own ? 'COMPANY' : 'TENANT', settingsId: row.id, version: row.version, ribaOn: row.ribaOn, paymentNoticeToCustomerOn: row.paymentNoticeToCustomerOn }
+  if (!row) return { source: 'NONE', settingsId: null, version: null, ribaOn: false, paymentNoticeToCustomerOn: false, depositAutoCarryOn: false }
+  return { source: own ? 'COMPANY' : 'TENANT', settingsId: row.id, version: row.version, ribaOn: row.ribaOn, paymentNoticeToCustomerOn: row.paymentNoticeToCustomerOn, depositAutoCarryOn: row.depositAutoCarryOn }
 }
 
 const mayAt = (context: OfficeContext, permission: typeof RECEIVABLES_VIEW | typeof RECEIVABLES_COLLECTIONS_SWITCH, companyId: string | null): boolean =>
@@ -52,6 +54,10 @@ async function answerFor(db: Reader, context: OfficeContext, companyId: string |
       riba: holds.ribaOn ? 'Ri.Ba. is on: a batch’s CBI file can be made for the bank’s site.' : `Ri.Ba. is off: batches can be prepared, their file is made once the Owner switches it on. ${CBI_RIBA_RULE}`,
       notice: holds.paymentNoticeToCustomerOn ? 'Each bank transfer recorded is e-mailed to the customer’s invoice contacts.' : NOTICE_HELD.SWITCHED_OFF,
       wording: NOTICE_WORDING_TO_CONFIRM,
+      // B-W2b-GB02 (G088)
+      autoCarry: holds.depositAutoCarryOn
+        ? 'A deposit paid without a deposit invoice is carried onto its order’s invoice when that invoice is issued.'
+        : 'Off: a deposit paid without a deposit invoice waits for a person to carry it onto its order’s invoice (Payments).',
     },
     mayChange: mayAt(context, RECEIVABLES_COLLECTIONS_SWITCH, companyId),
   }
@@ -73,19 +79,20 @@ export async function putCollections(caller: CommandCaller, body: CollectionsBod
   const context = officeContextOf(caller)
   if (!mayAt(context, RECEIVABLES_COLLECTIONS_SWITCH, body.companyId)) throw new ForbiddenError(body.companyId === null ? 'The switches of every company are changed only by a role over every company.' : undefined)
   const before = await caller.withClient((db) => collectionsOf(db, body.companyId))
-  if ((body.ribaOn === true && !before.ribaOn) || (body.paymentNoticeToCustomerOn === true && !before.paymentNoticeToCustomerOn)) stepUp()
+  // B-W2b-GB02 (G088): + the automatic carry (turned on with a step-up too: it places money by itself).
+  if ((body.ribaOn === true && !before.ribaOn) || (body.paymentNoticeToCustomerOn === true && !before.paymentNoticeToCustomerOn) || (body.depositAutoCarryOn === true && !before.depositAutoCarryOn)) stepUp()
   await receivablesCommand(caller, { name: 'receivables.collectionsSwitch', idempotencyKey, input: body }, async (tools) => {
     const holding = await collectionsOf(tools.tx, body.companyId)
     const { row } = await rowToChange(tools, body.companyId, body.version)
-    const current = await tools.tx.receivablesSettings.findUniqueOrThrow({ where: { id: row.id }, select: { version: true, ribaOn: true, paymentNoticeToCustomerOn: true } })
+    const current = await tools.tx.receivablesSettings.findUniqueOrThrow({ where: { id: row.id }, select: { version: true, ribaOn: true, paymentNoticeToCustomerOn: true, depositAutoCarryOn: true } })
     // A row made just now starts from what held before it (the tenant's switches).
-    const next = { ribaOn: body.ribaOn ?? holding.ribaOn, paymentNoticeToCustomerOn: body.paymentNoticeToCustomerOn ?? holding.paymentNoticeToCustomerOn }
-    if (next.ribaOn === current.ribaOn && next.paymentNoticeToCustomerOn === current.paymentNoticeToCustomerOn) {
+    const next = { ribaOn: body.ribaOn ?? holding.ribaOn, paymentNoticeToCustomerOn: body.paymentNoticeToCustomerOn ?? holding.paymentNoticeToCustomerOn, depositAutoCarryOn: body.depositAutoCarryOn ?? holding.depositAutoCarryOn }
+    if (next.ribaOn === current.ribaOn && next.paymentNoticeToCustomerOn === current.paymentNoticeToCustomerOn && next.depositAutoCarryOn === current.depositAutoCarryOn) {
       tools.audit({ action: 'receivables.collectionsSwitch', recordType: 'ReceivablesSettings', recordId: row.id, companyId: row.companyId, after: { ...next, unchanged: true } })
       return { id: row.id }
     }
     await tools.tx.receivablesSettings.update({ where: { id: row.id }, data: { ...next, version: current.version + 1, updatedAt: tools.now }, select: { id: true } })
-    tools.audit({ action: 'receivables.collectionsSwitch', recordType: 'ReceivablesSettings', recordId: row.id, companyId: row.companyId, before: { ribaOn: current.ribaOn, paymentNoticeToCustomerOn: current.paymentNoticeToCustomerOn }, after: next })
+    tools.audit({ action: 'receivables.collectionsSwitch', recordType: 'ReceivablesSettings', recordId: row.id, companyId: row.companyId, before: { ribaOn: current.ribaOn, paymentNoticeToCustomerOn: current.paymentNoticeToCustomerOn, depositAutoCarryOn: current.depositAutoCarryOn }, after: next })
     tools.emit({ type: 'collections_settings.changed', subject: row.id, companyId: row.companyId, payload: { settingsId: row.id, companyId: row.companyId, ...next } })
     return { id: row.id }
   })

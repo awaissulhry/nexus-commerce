@@ -18,6 +18,8 @@ import {
   quantityText,
   signedMoney,
   statePhrase,
+  // B-W2b-GB02 (G053): closed's tone beside open and final.
+  stateTone,
   unitCostText,
   varianceTone,
   type CostingCan,
@@ -67,7 +69,7 @@ export function CostFacts({ detail, can }: { detail: WorkOrderCost; can: Pick<Co
             : []),
           { label: t('col.pieces'), value: String(detail.workOrder.pieces) },
           { label: t('col.reason'), value: detail.biggestReason ? t(`reason.${detail.biggestReason}`) : t('reason.none') },
-          { label: t('col.state'), value: <Tag tone={detail.final ? 'success' : 'info'}>{t(state.key)}</Tag> },
+          { label: t('col.state'), value: <Tag tone={stateTone(detail) /* B-W2b-GB02 (G053) */}>{t(state.key)}</Tag> },
           { label: t('detail.method'), value: t(method.key, { method: method.params?.method ? t(`method.name.${method.params.method}`) : '' }), hint: detail.provisional ? t('detail.provisional') : undefined },
         ]}
       />

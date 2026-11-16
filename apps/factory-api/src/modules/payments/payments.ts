@@ -21,7 +21,8 @@ import { allocatedOf, assertMay, officeContextOf, officePayment, paymentDetail, 
 
 /**
  * Payments received (B-W1-28; FIN-121, FIN-122; Q12: bank transfers; A2 SCR-082): record a transfer (its bank reference
- * unique in the company: a transfer counts once), allocate it to deposit requests and issued TD01/TD24 invoices (never
+ * unique in the company: a transfer counts once), allocate it to deposit requests and issued TD01/TD24 invoices (B-W2b-GB02:
+ * and TD05 debit notes) (never
  * past what it has left, nor past what a target is open for: the rest stays unallocated, on account), take an
  * allocation back (a reversal row: the ledger is append-only), void a payment typed by mistake once nothing is
  * allocated. A deposit request whose allocations cover it becomes PAID in the same command (markDepositPaid, sales/deposits).
@@ -98,8 +99,9 @@ export async function allocateInCommand(tools: CommandTools, payment: Pick<Payme
     }
     const label = `invoice ${invoice.number ?? '(draft)'}`
     if (invoice.status === 'DRAFT') issues.push({ path: `${at}/invoiceId`, message: `The ${label} is a draft: a payment goes to an issued invoice.` })
-    else if (invoice.docType !== 'TD01' && invoice.docType !== 'TD24') {
-      issues.push({ path: `${at}/invoiceId`, message: invoice.docType === 'TD02' ? `The ${label} is a deposit invoice: it is paid through its deposit request.` : `The ${label} is a credit note: it is not paid.` })
+    // B-W2b-GB02 (G150): a debit note (TD05) is paid like an invoice; a self-invoice (TD16-TD20) is never the customer's.
+    else if (invoice.docType !== 'TD01' && invoice.docType !== 'TD24' && invoice.docType !== 'TD05') {
+      issues.push({ path: `${at}/invoiceId`, message: invoice.docType === 'TD02' ? `The ${label} is a deposit invoice: it is paid through its deposit request.` : invoice.docType === 'TD04' ? `The ${label} is a credit note: it is not paid.` : `The ${label} is a self-invoice of a purchase: it is not paid by a customer.` })
     } else if (invoice.currency !== payment.currency) issues.push({ path: `${at}/invoiceId`, message: `The ${label} is in ${invoice.currency}, the payment in ${payment.currency}.` })
     else {
       const credited = (await tx.invoice.aggregate({ where: { creditOfId: invoice.id, docType: 'TD04', status: { not: 'DRAFT' } }, _sum: { grossTotal: true } }))._sum.grossTotal ?? 0

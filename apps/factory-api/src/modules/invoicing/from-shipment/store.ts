@@ -6,7 +6,7 @@ import type { InvoicedQuantity, OrderLinePrice, ShippedQuantity } from '@nexus/f
 import type { ShipInvoiceType } from '@nexus/factory-domain/invoicing/from-shipment/deadlines'
 import { treatmentOf } from '@nexus/factory-domain/invoicing/invoices'
 import { invoiceTypePreset, type InvoiceTiming } from '@nexus/factory-domain/sales/terms/terms'
-import type { VatTreatment } from '@nexus/factory-domain/tax/vat-treatment'
+import { treatmentKey, type VatTreatment } from '@nexus/factory-domain/tax/vat-treatment'
 import { readInvoice, readLines, type Reader } from '../store'
 
 /**
@@ -171,11 +171,13 @@ export async function depositInvoicesOf(db: Reader, which: { readonly orderIds?:
   })
   if (rows.length === 0) return []
   const ids = rows.map((row) => row.id)
-  const credits = await db.invoice.findMany({ where: { creditOfId: { in: ids }, docType: 'TD04', status: { not: 'DRAFT' }, ...(options.except ? { id: { not: options.except } } : {}) }, select: { creditOfId: true, netTotal: true, grossTotal: true } })
+  // B-W2b-GB02 (G149): + the credit notes' VAT summary and the deduction lines' VAT: what is used per treatment.
+  const credits = await db.invoice.findMany({ where: { creditOfId: { in: ids }, docType: 'TD04', status: { not: 'DRAFT' }, ...(options.except ? { id: { not: options.except } } : {}) }, select: { creditOfId: true, netTotal: true, grossTotal: true, vatSummary: true } })
   const deductions = await db.invoiceLine.findMany({
     where: { depositInvoiceId: { in: ids }, invoice: { ...(options.deductions === 'issued' ? { status: { not: 'DRAFT' } } : {}), ...(options.except ? { id: { not: options.except } } : {}) } },
-    select: { depositInvoiceId: true, netAmount: true, invoice: { select: { number: true } } },
+    select: { depositInvoiceId: true, netAmount: true, vatRatePct: true, vatNature: true, vatLegalRef: true, invoice: { select: { number: true } } },
   })
+  const add = (map: Map<string, number>, key: string, amount: number) => map.set(key, (map.get(key) ?? 0) + amount)
   return rows.map((row) => {
     const mine = deductions.filter((line) => line.depositInvoiceId === row.id)
     const credited = credits.filter((credit) => credit.creditOfId === row.id)
@@ -193,6 +195,17 @@ export async function depositInvoicesOf(db: Reader, which: { readonly orderIds?:
       creditedGross: credited.reduce((sum, credit) => sum + credit.grossTotal, 0),
       deductedNet: mine.reduce((sum, line) => sum - line.netAmount, 0),
       deductedBy: [...new Set(mine.map((line) => line.invoice.number ?? 'a draft'))],
+      // ---- B-W2b-GB02 (G149): per VAT treatment.
+      creditedByTreatment: credited.reduce((map, credit) => {
+        for (const entry of summaryEntries(credit.vatSummary)) add(map, treatmentKey(entry.treatment), entry.taxable)
+        return map
+      }, new Map<string, number>()),
+      deductedByTreatment: mine.reduce((map, line) => {
+        const vat = treatmentOf({ vatRatePct: line.vatRatePct.toFixed(2), vatNature: line.vatNature, vatLegalRef: line.vatLegalRef })
+        if (vat) add(map, treatmentKey(vat), -line.netAmount)
+        return map
+      }, new Map<string, number>()),
+      // ---- end B-W2b-GB02
     }
   })
 }

@@ -294,7 +294,7 @@ export async function prepareReminder(caller: CommandCaller, body: PrepareBody, 
     if (settings.ladder.length === 0) throw refused('NO_LADDER')
     const open = await openInvoices(tx, { companyId: scope.companyId, partyId: scope.partyId, invoiceIds: body.invoiceIds ?? null, salesOrderId: body.salesOrderId ?? null, asOf: day })
     if (body.invoiceIds) {
-      const problems: Issue[] = body.invoiceIds.flatMap((id, index) => (open.some((invoice) => invoice.id === id) ? [] : [{ path: `body/invoiceIds/${index}`, message: 'Not an open invoice (TD01 or TD24) of this customer in this company.' }]))
+      const problems: Issue[] = body.invoiceIds.flatMap((id, index) => (open.some((invoice) => invoice.id === id) ? [] : [{ path: `body/invoiceIds/${index}`, message: 'Not an open invoice (TD01, TD24 or TD05) of this customer in this company.' }]))
       if (problems.length > 0) throw new ValidationError('These invoices cannot be reminded.', problems)
     }
     if (open.length === 0) throw refused('NOTHING_OPEN')

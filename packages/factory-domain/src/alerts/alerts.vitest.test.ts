@@ -51,7 +51,8 @@ describe('the kinds of rule', () => {
     // B-W2b-350: + PO_CONFIRMED_LATE, SUPPLIER_STATUS_CHANGED (the supply alerts). B-W2b-385: + RETURN_ARRIVED_LATE.
     // B-W2b-409: + EXIT_PROOF_MISSING.
     // B-W2b-416: + MARGIN_BELOW_FLOOR (the low-margin alert).
-    expect(RULE_KINDS).toHaveLength(15)
+    // B-W2b-GB02 (G146): + STAMP_DUTY_DUE (a stamp duty quarter near its due day).
+    expect(RULE_KINDS).toHaveLength(16)
     expect(kindsOf('DATE')).toEqual(['CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE'])
     for (const kind of RULE_KINDS) {
       const read = readThreshold(kind, KINDS[kind].builtIn.threshold)
@@ -200,6 +201,9 @@ describe('words', () => {
     expect(phraseText(alertPhrase('INVOICE_DEADLINE', '12/2026', { dueDate: '2026-11-15', daysLeft: -1 }), '12/2026')).toBe('The goods of DDT 12/2026 were due to be invoiced by 2026-11-15: 1 days late.')
     // B-W2b-24: a connection failing, and one that never worked.
     expect(phraseText(alertPhrase('INTEGRATION_FAILING', 'SES main', { hours: 3 }), 'SES main')).toBe('Connection SES main has not worked for 3 hours: its last call failed.')
+    // B-W2b-GB02 (G146): a stamp duty quarter near its due day, and past it.
+    expect(phraseText(alertPhrase('STAMP_DUTY_DUE', 'Q3 2026', { dueOn: '2026-11-30', daysLeft: 6, f24Code: '2523' }), 'Q3 2026')).toBe('The stamp duty of Q3 2026 is due by 2026-11-30 (6 days left): pay it by F24 (tax code 2523) and record the payment.')
+    expect(phraseText(alertPhrase('STAMP_DUTY_DUE', 'Q3 2026', { dueOn: '2026-11-30', daysLeft: -2, f24Code: '2523' }), 'Q3 2026', 'it')).toBe("L'imposta di bollo del Q3 2026 scadeva il 30/11/2026: 2 giorni di ritardo. Pagala con F24 (codice tributo 2523) e registra il pagamento.")
     expect(phraseText(alertPhrase('INTEGRATION_FAILING', 'SES main', { hours: 5, never: true }), 'SES main', 'it')).toBe('Il collegamento SES main non ha mai funzionato: nessuna chiamata è riuscita nelle 5 ore da quando è stato impostato.')
     expect(ruleSentence({ ruleKind: 'INTEGRATION_FAILING', threshold: { hours: 1 }, channels: ['IN_APP'], cooldownMinutes: 1440 }, { place: null, recipient: 'Administrator' })).toBe('When a connection has not worked for more than 1 h, tell Administrator by the bell at most once a day.')
     expect(readThreshold('INTEGRATION_FAILING', { hours: 0 }).ok).toBe(false)

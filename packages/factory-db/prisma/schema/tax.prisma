@@ -218,6 +218,9 @@ enum SelfInvoiceKind {
   TD18
   /// Integrazione/autofattura per acquisto di beni ex art. 17 c.2 DPR 633/1972 (goods already in Italy).
   TD19
+  /// B-W2b-GB02 (G150): integrazione fattura reverse charge interno (art. 17 c.5-6 DPR 633/1972: an Italian supplier's
+  /// invoice under the reverse charge, Natura N6.x).
+  TD16
 }
 
 /// PENDING → ISSUED | CANCELLED; both final.

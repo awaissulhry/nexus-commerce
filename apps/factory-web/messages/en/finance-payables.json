@@ -186,8 +186,8 @@
   },
   "pickup": {
     "done": "SDI pickup: {listed} listed, {recorded} new recorded.",
-    "waiting_one": "{count} delivery waits at the intermediary: it cannot be recorded (see the pickup's history).",
-    "waiting_other": "{count} deliveries wait at the intermediary: they cannot be recorded (see the pickup's history)."
+    "waiting_one": "{count} delivery waits in the SDI inbox: it cannot be recorded (see why below).",
+    "waiting_other": "{count} deliveries wait in the SDI inbox: they cannot be recorded (see why below)."
   },
   "keys": {
     "title": "Keyboard shortcuts",

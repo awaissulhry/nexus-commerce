@@ -129,6 +129,10 @@ function Body({ model, actions }: { model: ApprovalsModel; actions?: ApprovalsAc
       {model.switchProblem && <Banner tone="danger" title={s(model.switchProblem.key, model.switchProblem.params)} />}
       <SwitchRow name="remittance" on={model.remittance?.on ?? null} source={model.remittance?.source ?? null} mayChange={model.remittance?.mayChange ?? false} busy={model.busy} onSwitch={actions?.onSwitch} />
       <SwitchRow name="notice" on={model.collections?.paymentNoticeToCustomerOn ?? null} source={model.collections?.source ?? null} mayChange={model.collections?.mayChange ?? false} busy={model.busy} onSwitch={actions?.onSwitch} />
+      {/* B-W2b-GB02 (G088): an automatic action of the money, under its own heading (no mail to outside). */}
+      <h3 className="fw-fin-h3">{p('approvals.autoTitle')}</h3>
+      <p className="fw-fin-hint">{p('approvals.autoIntro')}</p>
+      <SwitchRow name="autoCarry" on={model.collections ? (model.collections.depositAutoCarryOn ?? false) : null} source={model.collections?.source ?? null} mayChange={model.collections?.mayChange ?? false} busy={model.busy} onSwitch={actions?.onSwitch} />
     </Card>
   )
 }

@@ -30,6 +30,8 @@ export const WORK_ORDER_COLUMNS = {
   styleId: true,
   releasedAt: true,
   completedAt: true,
+  // B-W2b-GB02 (G053): the close that stands (set by the close, cleared by an undo or a reopen).
+  closedAt: true,
   createdAt: true,
 } as const satisfies Prisma.WorkOrderSelect
 export type WorkOrderRow = Prisma.WorkOrderGetPayload<{ select: typeof WORK_ORDER_COLUMNS }>

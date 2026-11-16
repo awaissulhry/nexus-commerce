@@ -77,60 +77,9 @@ export async function carryDeposit(caller: CommandCaller, depositRequestId: stri
   assertMay(context, PAYMENTS_VIEW, PAYMENTS_RECORD, seen, 'Deposit request')
   try {
     const { result } = await command(caller, { name: 'payments.carryDeposit', idempotencyKey, input: { depositRequestId, ...body } }, async (tools) => {
-      const { tx } = tools
-      // The locks first, in the triggers' order: the payments, the request, the invoices.
-      const paymentIds = (await tx.paymentAllocation.findMany({ where: { depositRequestId }, select: { paymentId: true }, distinct: ['paymentId'] })).map((row) => row.paymentId)
-      await lockAll(tx, tools.context, 'payment', paymentIds)
-      await lockMoney(tx, tools.context, 'deposit', depositRequestId)
-      const request = (await tx.depositRequest.findUnique({ where: { id: depositRequestId }, select: { id: true, companyId: true, partyId: true, status: true, fiscalDocument: true, orderId: true, currency: true, order: { select: { number: true } } } }))!
-      const candidates = request.orderId ? await orderInvoicesOpen(tx, { companyId: request.companyId, partyId: request.partyId, orderId: request.orderId }) : []
-      await lockAll(tx, tools.context, 'invoice', candidates.map((invoice) => invoice.id))
-      // Read again under the invoices' locks: what they are open for now.
-      const invoices = request.orderId ? await orderInvoicesOpen(tx, { companyId: request.companyId, partyId: request.partyId, orderId: request.orderId }) : []
-      const allocations = await liveRequestAllocations(tx, depositRequestId)
-      const orderNumber = request.order?.number ?? null
-      const plan = depositCarryPlan({ status: request.status, fiscalDocument: request.fiscalDocument, orderId: request.orderId, orderNumber, currency: request.currency }, allocations, invoices, body.invoiceId)
-      if (plan.problem) throw new DomainError('conflict', plan.problem, [{ path: body.invoiceId ? 'body/invoiceId' : 'depositRequestId', message: plan.problem }])
-
-      const carried: { paymentId: string; reversalId: string; allocationId: string; invoiceId: string; invoiceNumber: string | null; amount: number }[] = []
-      for (const step of plan.steps) {
-        const invoice = invoices.find((entry) => entry.id === step.invoiceId)!
-        const note = carryNote(orderNumber, invoice.number, body.note)
-        const reversalId = newId()
-        const allocationId = newId()
-        await tx.paymentAllocation.create({
-          data: { id: reversalId, companyId: request.companyId, partyId: request.partyId, paymentId: step.paymentId, depositRequestId, amount: -step.amount, reversalOfId: step.allocationId, note, createdAt: tools.now, createdById: actorIdOf(tools) },
-          select: { id: true },
-        })
-        await tx.paymentAllocation.create({
-          data: { id: allocationId, companyId: request.companyId, partyId: request.partyId, paymentId: step.paymentId, invoiceId: step.invoiceId, amount: step.amount, carriedFromId: reversalId, note, createdAt: tools.now, createdById: actorIdOf(tools) },
-          select: { id: true },
-        })
-        tools.audit({
-          action: 'payments.carryDeposit',
-          recordType: 'PaymentAllocation',
-          recordId: allocationId,
-          companyId: request.companyId,
-          after: { paymentId: step.paymentId, depositRequestId, reversalOfId: step.allocationId, reversalId, invoiceId: step.invoiceId, invoiceNumber: invoice.number, orderId: request.orderId, amount: markMoney('price', step.amount) },
-          reason: note,
-        })
-        tools.emit({ type: 'payment.allocation_reversed', subject: step.paymentId, companyId: request.companyId, payload: { paymentId: step.paymentId, allocationId: reversalId, reversalOfId: step.allocationId, target: 'DEPOSIT_REQUEST', targetId: depositRequestId } })
-        tools.emit({ type: 'payment.allocated', subject: step.paymentId, companyId: request.companyId, payload: { paymentId: step.paymentId, allocationId, target: 'INVOICE', targetId: step.invoiceId } })
-        carried.push({ paymentId: step.paymentId, reversalId, allocationId, invoiceId: step.invoiceId, invoiceNumber: invoice.number, amount: step.amount })
-      }
-      const invoiceIds = [...new Set(carried.map((row) => row.invoiceId))].sort()
-      tools.emit({ type: 'payment.deposit_carried', subject: depositRequestId, companyId: request.companyId, payload: { depositRequestId, partyId: request.partyId, orderId: request.orderId!, invoiceIds, allocations: carried.length } })
-      // The order's settlement: the deposit's money now counts on its invoice (BALANCE_DUE is unchanged in sum).
-      await settleOrders(tools, [...(await ordersOfRequests(tx, [depositRequestId])), ...(await ordersOfInvoices(tx, invoiceIds))])
-      const after = await orderInvoicesOpen(tx, { companyId: request.companyId, partyId: request.partyId, orderId: request.orderId! })
-      return {
-        depositRequestId,
-        orderId: request.orderId!,
-        orderNumber,
-        amount: asMoney('price', plan.amount),
-        carried: carried.map((row) => ({ ...row, amount: asMoney('price', row.amount) })),
-        invoices: after.map((invoice) => ({ id: invoice.id, number: invoice.number, openAmount: asMoney('price', invoice.open) })),
-      }
+      const outcome = await carryInCommand(tools, depositRequestId, body)
+      if (carryRefused(outcome)) throw new DomainError('conflict', outcome.problem, [{ path: body.invoiceId ? 'body/invoiceId' : 'depositRequestId', message: outcome.problem }])
+      return outcome
     })
     return result
   } catch (error) {
@@ -138,6 +87,101 @@ export async function carryDeposit(caller: CommandCaller, depositRequestId: stri
     throw error
   }
 }
+
+// ---- B-W2b-GB02 (G088): the carry's work, inside a command (a person's carry, or the automatic one), and its preview ------
+
+/** The carry's refusal (its plan's problem in words), as carryInCommand answers it. */
+export const carryRefused = (outcome: object): outcome is { readonly problem: string } => typeof (outcome as { problem?: unknown }).problem === 'string'
+
+/** Inside a command: the carry under the money locks (above), or the plan's problem in words (nothing written). */
+export async function carryInCommand(tools: CommandTools, depositRequestId: string, body: CarryInput) {
+  const { tx } = tools
+  // The locks first, in the triggers' order: the payments, the request, the invoices.
+  const paymentIds = (await tx.paymentAllocation.findMany({ where: { depositRequestId }, select: { paymentId: true }, distinct: ['paymentId'] })).map((row) => row.paymentId)
+  await lockAll(tx, tools.context, 'payment', paymentIds)
+  await lockMoney(tx, tools.context, 'deposit', depositRequestId)
+  const request = (await tx.depositRequest.findUnique({ where: { id: depositRequestId }, select: { id: true, companyId: true, partyId: true, status: true, fiscalDocument: true, orderId: true, currency: true, order: { select: { number: true } } } }))!
+  const candidates = request.orderId ? await orderInvoicesOpen(tx, { companyId: request.companyId, partyId: request.partyId, orderId: request.orderId }) : []
+  await lockAll(tx, tools.context, 'invoice', candidates.map((invoice) => invoice.id))
+  // Read again under the invoices' locks: what they are open for now.
+  const invoices = request.orderId ? await orderInvoicesOpen(tx, { companyId: request.companyId, partyId: request.partyId, orderId: request.orderId }) : []
+  const allocations = await liveRequestAllocations(tx, depositRequestId)
+  const orderNumber = request.order?.number ?? null
+  const plan = depositCarryPlan({ status: request.status, fiscalDocument: request.fiscalDocument, orderId: request.orderId, orderNumber, currency: request.currency }, allocations, invoices, body.invoiceId)
+  if (plan.problem) return { problem: plan.problem } as const
+
+  const carried: { paymentId: string; reversalId: string; allocationId: string; invoiceId: string; invoiceNumber: string | null; amount: number }[] = []
+  for (const step of plan.steps) {
+    const invoice = invoices.find((entry) => entry.id === step.invoiceId)!
+    const note = carryNote(orderNumber, invoice.number, body.note)
+    const reversalId = newId()
+    const allocationId = newId()
+    await tx.paymentAllocation.create({
+      data: { id: reversalId, companyId: request.companyId, partyId: request.partyId, paymentId: step.paymentId, depositRequestId, amount: -step.amount, reversalOfId: step.allocationId, note, createdAt: tools.now, createdById: actorIdOf(tools) },
+      select: { id: true },
+    })
+    await tx.paymentAllocation.create({
+      data: { id: allocationId, companyId: request.companyId, partyId: request.partyId, paymentId: step.paymentId, invoiceId: step.invoiceId, amount: step.amount, carriedFromId: reversalId, note, createdAt: tools.now, createdById: actorIdOf(tools) },
+      select: { id: true },
+    })
+    tools.audit({
+      action: 'payments.carryDeposit',
+      recordType: 'PaymentAllocation',
+      recordId: allocationId,
+      companyId: request.companyId,
+      after: { paymentId: step.paymentId, depositRequestId, reversalOfId: step.allocationId, reversalId, invoiceId: step.invoiceId, invoiceNumber: invoice.number, orderId: request.orderId, amount: markMoney('price', step.amount) },
+      reason: note,
+    })
+    tools.emit({ type: 'payment.allocation_reversed', subject: step.paymentId, companyId: request.companyId, payload: { paymentId: step.paymentId, allocationId: reversalId, reversalOfId: step.allocationId, target: 'DEPOSIT_REQUEST', targetId: depositRequestId } })
+    tools.emit({ type: 'payment.allocated', subject: step.paymentId, companyId: request.companyId, payload: { paymentId: step.paymentId, allocationId, target: 'INVOICE', targetId: step.invoiceId } })
+    carried.push({ paymentId: step.paymentId, reversalId, allocationId, invoiceId: step.invoiceId, invoiceNumber: invoice.number, amount: step.amount })
+  }
+  const invoiceIds = [...new Set(carried.map((row) => row.invoiceId))].sort()
+  tools.emit({ type: 'payment.deposit_carried', subject: depositRequestId, companyId: request.companyId, payload: { depositRequestId, partyId: request.partyId, orderId: request.orderId!, invoiceIds, allocations: carried.length } })
+  // The order's settlement: the deposit's money now counts on its invoice (BALANCE_DUE is unchanged in sum).
+  await settleOrders(tools, [...(await ordersOfRequests(tx, [depositRequestId])), ...(await ordersOfInvoices(tx, invoiceIds))])
+  const after = await orderInvoicesOpen(tx, { companyId: request.companyId, partyId: request.partyId, orderId: request.orderId! })
+  return {
+    depositRequestId,
+    orderId: request.orderId!,
+    orderNumber,
+    amount: asMoney('price', plan.amount),
+    carried: carried.map((row) => ({ ...row, amount: asMoney('price', row.amount) })),
+    invoices: after.map((invoice) => ({ id: invoice.id, number: invoice.number, openAmount: asMoney('price', invoice.open) })),
+  }
+}
+
+/**
+ * GET /payments/deposit-requests/:depositRequestId/carry?invoiceId (payments.view): what a carry would do now, written
+ * nowhere — each live allocation and the invoice it would go onto, the amount, the invoices' open amounts after it; or why
+ * it cannot be carried (in words, 200: a normal state, never an error on a read). Read without the locks: the carry reads
+ * again under them.
+ */
+export async function carryPreview(caller: CommandCaller, depositRequestId: string, query: { readonly invoiceId?: string | undefined }) {
+  const context = officeContextOf(caller)
+  const seen = isUuid(depositRequestId) ? await caller.withClient((client) => client.depositRequest.findUnique({ where: { id: depositRequestId }, select: { id: true, companyId: true, partyId: true } })) : null
+  assertMay(context, PAYMENTS_VIEW, PAYMENTS_VIEW, seen, 'Deposit request')
+  return caller.withClient(async (db) => {
+    const request = (await db.depositRequest.findUnique({ where: { id: depositRequestId }, select: { id: true, companyId: true, partyId: true, status: true, fiscalDocument: true, orderId: true, currency: true, order: { select: { number: true } } } }))!
+    const invoices = request.orderId ? await orderInvoicesOpen(db, { companyId: request.companyId, partyId: request.partyId, orderId: request.orderId }) : []
+    const allocations = await liveRequestAllocations(db, depositRequestId)
+    const orderNumber = request.order?.number ?? null
+    const plan = depositCarryPlan({ status: request.status, fiscalDocument: request.fiscalDocument, orderId: request.orderId, orderNumber, currency: request.currency }, allocations, invoices, query.invoiceId)
+    const onto = new Map<string, number>()
+    for (const step of plan.steps) onto.set(step.invoiceId, (onto.get(step.invoiceId) ?? 0) + step.amount)
+    return {
+      depositRequestId,
+      orderId: request.orderId,
+      orderNumber,
+      currency: request.currency,
+      problem: plan.problem,
+      amount: asMoney('price', plan.amount),
+      steps: plan.steps.map((step) => ({ allocationId: step.allocationId, paymentId: step.paymentId, invoiceId: step.invoiceId, invoiceNumber: invoices.find((invoice) => invoice.id === step.invoiceId)?.number ?? null, amount: asMoney('price', step.amount) })),
+      invoices: invoices.map((invoice) => ({ id: invoice.id, number: invoice.number, openAmount: asMoney('price', invoice.open), openAfter: asMoney('price', invoice.open - (onto.get(invoice.id) ?? 0)) })),
+    }
+  })
+}
+// ---- end B-W2b-GB02
 
 /** For the open items and the ladder: per order, the money PAID NONE deposits still hold (not carried yet), per request. */
 export async function depositsToCarry(db: Reader, orderIds: readonly string[]): Promise<Map<string, { depositRequestId: string; amount: number }[]>> {

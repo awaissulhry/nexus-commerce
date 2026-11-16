@@ -47,7 +47,7 @@ const YEAR = businessDate(new Date()).slice(0, 4)
 const TODAY = () => businessDate(new Date())
 const c1 = () => tenant.companies[0]!.id
 const c2 = () => tenant.companies[1]!.id
-const ids = { customer: newId(), supplierDe: newId(), supplierUs: newId() }
+const ids = { customer: newId(), supplierDe: newId(), supplierUs: newId(), /* B-W2b-GB02 (G150) */ supplierIt: newId() }
 
 type Json = Record<string, any>
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await h.db.admin.query(sql, values)).rows as T[]
@@ -167,6 +167,8 @@ beforeAll(async () => {
   await addParty(ids.customer, 'C-IT', '{CUSTOMER}', 'IT', 'IT_B2B', 'IT76543210009')
   await addParty(ids.supplierDe, 'S-DE', '{SUPPLIER}', 'DE', 'EU_B2B', 'DE999999999')
   await addParty(ids.supplierUs, 'S-US', '{SUPPLIER}', 'US', 'EXTRA_EU', '99-9999999', 'USD')
+  // B-W2b-GB02 (G150): an Italian subcontractor that invoices under the reverse charge (made up).
+  await addParty(ids.supplierIt, 'S-IT', '{SUPPLIER}', 'IT', 'IT_B2B', 'IT11111110000')
   await addSdiAccount(c1(), 'FAKE')
   liveAccount = await addSdiAccount(c2(), 'LIVE')
 
@@ -501,6 +503,45 @@ describe('self-invoices TD17-TD19 (FIN-095): listed with their deadline, issued 
   })
 })
 
+// ---- B-W2b-GB02 (G150; B-W2b-401's gaps): TD16, the integration of an Italian supplier's reverse-charge invoice.
+describe('self-invoice TD16 (G150): an Italian supplier under the reverse charge', () => {
+  it('lists it as a TD16 candidate, integrates only its N6 lines at 22 %, and issues a valid TD16 with the supplier as cedente', async () => {
+    const today = TODAY()
+    // An Italian supplier's invoice arrives through SDI (typing one is refused): written as the pickup records it, made up.
+    const supplier = { id: newId() }
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(
+        `INSERT INTO "SupplierInvoice" (id, "tenantId", "companyId", "partyId", source, kind, number, "issueDate", "receivedOn", "sdiIdentifier", "sdiFileName", currency, "netTotal", "vatTotal", "grossTotal", "vatSummary") VALUES ($1, $2, $3, $4, 'SDI', 'INVOICE', 'TF-2026-31', $5::date, $5::date, '9990031', 'IT11111110000_00031.xml', 'EUR', 65000, 1100, 66100, $6::jsonb)`,
+        [supplier.id, tenant.id, c1(), ids.supplierIt, today, JSON.stringify([{ rate: null, nature: 'N6.3', taxable: 60000, vat: 0 }, { rate: '22.00', nature: null, taxable: 5000, vat: 1100 }])],
+      )
+      await admin(`INSERT INTO "SupplierInvoiceLine" (id, "tenantId", "partyId", "invoiceId", seq, kind, description, "netAmount", "vatRatePct", "vatNature") VALUES ($1, $2, $3, $4, 1, 'SUBCONTRACT', 'Cucitura conto terzi (fittizia)', 60000, 0, 'N6.3'), ($5, $2, $3, $4, 2, 'GOODS', 'Filo (fittizio)', 5000, 22, NULL)`, [newId(), tenant.id, ids.supplierIt, supplier.id, newId()])
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+    const { candidates } = await as('GET', `/invoicing/self-invoices/candidates?companyId=${c1()}`)
+    expect(candidates.find((row: Json) => row.supplierInvoiceId === supplier.id)).toMatchObject({ supplier: { country: 'IT' }, suggestion: { kind: 'TD16' } })
+    // A TD17 of an Italian supplier is refused in words.
+    const wrongKind = await finance.post('/invoicing/self-invoices', { supplierInvoiceId: supplier.id, kind: 'TD17' })
+    expect(wrongKind.status).toBe(409)
+    expect(wrongKind.body.error.message).toContain('integrated with a TD16')
+    const made = (await as('POST', '/invoicing/self-invoices', { supplierInvoiceId: supplier.id, kind: 'TD16' }, 201)).selfInvoice
+    expect(made).toMatchObject({ kind: 'TD16', status: 'PENDING', invoice: { docType: 'TD16', status: 'DRAFT' } })
+    const draft = await invoiceOf(made.invoice.id)
+    expect(draft.lines.map((line: Json) => [line.description, line.netAmount, line.vatRatePct])).toEqual([['Cucitura conto terzi (fittizia)', 60000, '22.00']])
+    expect(draft.causale).toContain('Integrazione fattura reverse charge interno')
+    await stepped()
+    const issued = await as('POST', `/invoicing/invoices/${made.invoice.id}/issue`, {})
+    expect(issued).toMatchObject({ invoice: { docType: 'TD16', status: 'ISSUED', number: expect.stringMatching(/^AF-\d{4}-\d{4}$/) }, filesPending: false })
+    const xml = await downloaded(issued.invoice.xmlFileId)
+    expect(xml).toContain('<TipoDocumento>TD16</TipoDocumento>')
+    expect(xml).toMatch(/<CedentePrestatore>[\s\S]*<IdPaese>IT<\/IdPaese>[\s\S]*<IdCodice>11111110000<\/IdCodice>[\s\S]*<RegimeFiscale>RF01<\/RegimeFiscale>[\s\S]*<\/CedentePrestatore>/)
+    expect(xml).toMatch(/<DatiFattureCollegate>\s*<IdDocumento>TF-2026-31<\/IdDocumento>/)
+    expect(await xsdErrors(xml)).toEqual([])
+  })
+})
+// ---- end B-W2b-GB02
+
 describe('the debit note TD05 (FIN-071) and the VAT time limit on decreases (FIN-073)', () => {
   const D: Json = {}
 
@@ -538,6 +579,21 @@ describe('the debit note TD05 (FIN-071) and the VAT time limit on decreases (FIN
     await drain()
     expect((await invoiceOf(issued.invoice.id)).status).toBe('DELIVERED')
   })
+
+  // ---- B-W2b-GB02 (G150; B-W2b-401's gap "receivables ignore TD05"): the issued debit note is money the customer owes.
+  it('the issued debit note is in the statement and the open items, and a payment is placed on it', async () => {
+    const note = await invoiceOf(D.note.id)
+    const statement = await as('GET', `/receivables/customers/${ids.customer}/statement?companyId=${c2()}`)
+    expect(statement.lines.find((line: Json) => line.recordId === note.id)).toMatchObject({ kind: 'INVOICE', docType: 'TD05', debit: note.grossTotal })
+    expect(statement.openItems.find((item: Json) => item.invoiceId === note.id)).toMatchObject({ docType: 'TD05', open: note.grossTotal })
+    const open = await as('GET', `/payments/open-items?companyId=${c2()}&partyId=${ids.customer}`)
+    expect(open.items.find((item: Json) => item.id === note.id)).toMatchObject({ target: 'INVOICE', docType: 'TD05' })
+    const paid = await as('POST', '/payments', { companyId: c2(), partyId: ids.customer, amount: note.grossTotal, receivedOn: TODAY(), externalRef: `GB02-TD05-${note.id.slice(-6)}`, allocations: [{ invoiceId: note.id, amount: note.grossTotal }] }, 201)
+    expect(paid.payment).toBeDefined()
+    const after = await as('GET', `/receivables/customers/${ids.customer}/statement?companyId=${c2()}`)
+    expect(after.openItems.find((item: Json) => item.invoiceId === note.id)).toBeUndefined()
+  })
+  // ---- end B-W2b-GB02
 
   it('judges the VAT time limit of a decrease: within the year for an agreed one, none for a return, waits while the switch is off', async () => {
     const within = await as('GET', `/invoicing/invoices/${D.invoice.id}/vat-time-limit?reason=PRICE_REDUCTION`)

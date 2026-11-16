@@ -14,7 +14,8 @@
     "SUPPLIER_STATUS_CHANGED": "Cambi di stato dei fornitori",
     "RETURN_ARRIVED_LATE": "Resi arrivati dopo la scadenza",
     "EXIT_PROOF_MISSING": "Esportazioni senza la prova dell'uscita",
-    "MARGIN_BELOW_FLOOR": "Ordini sotto il margine minimo"
+    "MARGIN_BELOW_FLOOR": "Ordini sotto il margine minimo",
+    "STAMP_DUTY_DUE": "Trimestri del bollo vicini alla scadenza"
   },
   "when": {
     "ORDER_LATE_RISK": "Quando un ordine è promesso entro {daysBeforePromise} e non è pronto, o è in ritardo",
@@ -31,7 +32,8 @@
     "SUPPLIER_STATUS_CHANGED": "Quando un fornitore viene approvato con condizioni, sospeso, bloccato o reso inattivo (avviso per {days})",
     "RETURN_ARRIVED_LATE": "Quando la merce di un reso arriva dopo la sua scadenza",
     "EXIT_PROOF_MISSING": "Quando la prova dell'uscita di un'esportazione manca ancora dopo i giorni della sua dichiarazione",
-    "MARGIN_BELOW_FLOOR": "Quando il margine di un ordine, stimato ora o finale, scende sotto il suo margine minimo"
+    "MARGIN_BELOW_FLOOR": "Quando il margine di un ordine, stimato ora o finale, scende sotto il suo margine minimo",
+    "STAMP_DUTY_DUE": "{daysBefore} prima della scadenza dell'imposta di bollo di un trimestre non ancora pagata"
   },
   "sentence": {
     "full": "{when} {place}, avvisa {recipient} con {channels} {cooldown}.",

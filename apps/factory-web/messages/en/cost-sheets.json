@@ -35,7 +35,7 @@
       "subcontract": "No step of the routing is done by a workshop.",
       "packaging": "No packaging is costed: no default polybag, hanger, box or carton for this style, and no packaging on its bill of materials.",
       "freight": "No freight, insurance or duty is set on its materials.",
-      "commission": "None: commissions are not costed from the components. A version keeps a commission only as a typed line."
+      "commission": "None: commissions are not costed from the components. Type one on a draft version, under \"Commissions and typed lines\" below: a percent of its target price or an amount."
     },
     "col": {
       "what": "What",
@@ -291,7 +291,9 @@
     "NO_COMPANY": "A cost sheet is costed for one company: open the style in its company.",
     "INCOMPLETE": "Inputs are missing: tick \"Leave the missing inputs out\" to write it anyway, or fill them in first.",
     "NOT_DRAFT": "Only a draft takes new lines.",
-    "DATABASE": "Another change was made at the same time: it was read again. Look and try again."
+    "DATABASE": "Another change was made at the same time: it was read again. Look and try again.",
+    "NEEDS_TARGET": "A commission in percent is a share of the target price: give the version a target price first, or type the commission as an amount. While one stays, the target price is not cleared.",
+    "NOT_TYPED": "Only a line typed by a person is removed here: the other lines come from the components (write them again)."
   },
   "verStepUp": {
     "title": "Confirm it's you",
@@ -778,5 +780,150 @@
     "PER_MINUTE": "{amount} a minute",
     "PER_UNIT": "{amount} a garment",
     "PER_MACHINE_HOUR": "{amount} a machine hour"
+  },
+  "typed": {
+    "title": "Commissions and typed lines",
+    "add": "Type a line…",
+    "intro": "An agent's commission (a percent of the target price, which it follows), a royalty, a payment fee, or a figure the components do not know. Typed lines stay when the components are written again.",
+    "none": "No typed line on this version.",
+    "col": {
+      "what": "Line",
+      "size": "Size",
+      "how": "How it is made",
+      "cost": "Cost",
+      "actions": "Actions"
+    },
+    "remove": "Remove",
+    "removeLabel": "Remove the typed line {label}",
+    "dialogTitle": "Type a line on version {version}",
+    "dialogIntro": "A commission is a percent of the target price (it follows the price) or an amount per garment; any other line is a quantity at a cost of one.",
+    "category": "Category",
+    "label": "What it is",
+    "labelHint": "One line: an agent's name, Royalty, Payment fee…",
+    "size": "Size",
+    "mode": "Typed as",
+    "modePercent": "A percent of the target price",
+    "modeAmount": "An amount per garment",
+    "pct": "Percent",
+    "pctHint": "Of the target price {price}.",
+    "quantity": "Quantity",
+    "unitCost": "Cost of one",
+    "unitCostHint": "In {currency}, without VAT.",
+    "preview": "The line costs {amount}",
+    "note": "Note",
+    "sendsBack": "The version waits for its yes: typing a line sends the request back.",
+    "save": "Add the line",
+    "removeTitle": "Remove {label}?",
+    "removeConfirm": "Remove the line",
+    "removeIntro": "The line goes from this draft; its other lines stay.",
+    "removeIntroWaiting": "The line goes from this draft and its request for approval is sent back.",
+    "added": "Line added to version {version}.",
+    "removed": "Line removed from version {version}.",
+    "held": {
+      "noCostGrain": "Costs are not in your role: a typed line is a cost.",
+      "noPriceGrain": "Prices are not in your role: type the commission as an amount.",
+      "noTarget": "The version has no target price: give it one first, or type the commission as an amount."
+    },
+    "problem": {
+      "label": "Say what the line is.",
+      "labelLong": "One line of at most 200 characters.",
+      "pct": "Type a percent above 0 and at most 100, with at most 4 decimals.",
+      "quantity": "Type a quantity above 0, with at most 4 decimals.",
+      "unitCost": "Type a figure above 0, with at most 6 decimals.",
+      "note": "At most 1,000 characters."
+    },
+    "how": {
+      "percent": "{pct} % of the target price: {amount}",
+      "percentNoGrain": "{pct} % of the target price",
+      "amount": "{quantity} × {unit} = {amount}",
+      "quantityOnly": "Quantity {quantity}"
+    }
+  },
+  "mix": {
+    "title": "Size mix",
+    "loading": "Reading the size mix…",
+    "failed": "Couldn't read the size mix",
+    "intro": "How much each size weighs in the weighted cost: every season, or a season of its own.",
+    "edit": "Change the size mix…",
+    "none": "No size mix: a version is weighted by its size curve, or not at all.",
+    "col": {
+      "for": "For",
+      "actions": "Actions"
+    },
+    "everySeason": "Every season",
+    "change": "Change",
+    "editLabel": "Change the size mix of {for}",
+    "versionsKeep": "A version keeps the mix it was made with: on a draft, \"Read the size mix again\" takes the new one.",
+    "dialogTitle": "Size mix",
+    "dialogIntro": "A weight per size (blank leaves the size out). The shares are each weight over the total.",
+    "for": "For",
+    "size": "Size {size}",
+    "shares": "Shares: {shares}",
+    "clearWarning": "Every size is blank: saving clears this mix.",
+    "clear": "Clear the mix",
+    "save": "Keep the mix",
+    "saved": "Size mix kept. A draft takes it with \"Read the size mix again\".",
+    "cleared": "Size mix cleared.",
+    "refresh": "Read the size mix again",
+    "refreshed": "Version {version} reads the size mix again.",
+    "held": {
+      "notDraft": "Only a draft reads the size mix again.",
+      "nothing": "Type a weight for at least one size."
+    },
+    "problem": {
+      "weight": "Type a weight above 0, with at most 4 decimals."
+    }
+  },
+  "ohrEdit": {
+    "new": "New rule…",
+    "newTitle": "New overhead rule",
+    "newIntro": "A rule adds overhead on cost sheets from a month on: a percent of labour, or an amount a minute, a garment or a machine hour (machine hours are the minutes of the routing steps worked at a machine).",
+    "keep": "Keep the rule",
+    "scope": "For",
+    "scopeHint": "Every company's rule needs a role over every company.",
+    "amount": {
+      "PER_MINUTE": "Amount a minute",
+      "PER_UNIT": "Amount a garment",
+      "PER_MACHINE_HOUR": "Amount a machine hour"
+    },
+    "percent": "Percent of labour",
+    "currency": "Currency",
+    "currencyHint": "The company's currency (three letters, such as EUR).",
+    "toMonth": "Last month",
+    "openEnded": "Until a later rule",
+    "endPrevious": "End the rule before it (same company, basis and department) the day before this one starts",
+    "editTitle": "Correct the rule: {basis}, {department}",
+    "editIntro": "In force from {from}. Its company, basis, department and first month stay: a new figure from a later month is a new rule.",
+    "save": "Save",
+    "archiveTitle": "Archive the rule: {basis}, {department}",
+    "archiveIntro": "An archived rule prices no cost sheet any more; the versions already written keep their lines.",
+    "archiveConfirm": "Archive the rule",
+    "reason": "Why (optional)",
+    "correct": "Correct",
+    "archive": "Archive",
+    "held": {
+      "archived": "The rule is archived: add a new rule instead.",
+      "nothing": "Nothing changes yet."
+    },
+    "problem": {
+      "valueEmpty": "Type the figure.",
+      "amount": "Type an amount above 0, with at most 6 decimals.",
+      "percent": "Type a percent above 0 and at most 1,000, with at most 6 decimals.",
+      "currency": "Type a currency of three letters, such as EUR.",
+      "period": "The last month may not be before the first.",
+      "reason": "At least 3 characters, or none."
+    },
+    "notice": {
+      "kept": "Overhead rule kept.",
+      "corrected": "Overhead rule corrected.",
+      "archived": "Overhead rule archived."
+    }
+  },
+  "ohrRefusal": {
+    "OVERLAPS": "Another active rule of the same company, basis and department covers part of this period: end that one first (or tick \"End the rule before it\" when it starts earlier).",
+    "START_TAKEN": "A rule of the same company, basis and department starts that month already: correct that one, or start the new one in another month.",
+    "ARCHIVED": "This rule is archived: add a new rule instead.",
+    "NOTHING_CHANGES": "Nothing changes: the rule is already so.",
+    "DATABASE": "Another change was made at the same time: look again."
   }
 }

@@ -8,6 +8,9 @@ import { useOfficeApi, useOfficeSession } from '../../../../../lib/session/conte
 import { useCoalesced, useLive } from '../../../_shared/hooks'
 import { applyCalc, createCalc, listCalcs, listOverheadRules, prefill, removeCalc, type CalcView, type OverheadRuleView, type PrefillView } from './api'
 import { calcBody, cpmAbilitiesOf, cpmProblem, cpmReadProblem, cpmTouched, monthLast, monthStart, type CalcDraft } from './model'
+// B-W2b-GB02 (G054): the overhead rules kept on screen.
+import { archiveOverheadRule, createOverheadRule, updateOverheadRule } from './api'
+import { ohrProblem, ruleBody, ruleEditBody } from './model'
 import { CalculatorCard, type CalcDialog, type CalculatorModel } from './view/CalculatorCard'
 
 type Read<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string }
@@ -62,7 +65,7 @@ export function CostPerMinute({ companyId }: { companyId: string }) {
     can.view,
   )
 
-  const write = async (work: (key: string) => Promise<unknown>, done: CalculatorModel['notice']) => {
+  const write = async (work: (key: string) => Promise<unknown>, done: CalculatorModel['notice'], words: (error: unknown) => string = cpmProblem) => {
     if (busy) return
     attempt.current ??= newIdempotencyKey()
     const key = attempt.current
@@ -76,7 +79,7 @@ export function CostPerMinute({ companyId }: { companyId: string }) {
       setNotice(done)
       await read()
     } catch (error) {
-      setProblem(cpmProblem(error))
+      setProblem(words(error))
     } finally {
       setBusy(false)
     }
@@ -119,6 +122,13 @@ export function CostPerMinute({ companyId }: { companyId: string }) {
           void read()
         },
         onDismissNotice: () => setNotice(null),
+        // ---- B-W2b-GB02 (G054): a new overhead rule, an active one corrected or archived.
+        onCreateRule: (draft) => void write((key) => createOverheadRule(api, ruleBody(draft, companyId), key), { key: 'ohrEdit.notice.kept' }, ohrProblem),
+        onUpdateRule: (rule, edit) => {
+          const body = ruleEditBody(edit, rule)
+          if (body) void write((key) => updateOverheadRule(api, rule.id, body, key), { key: 'ohrEdit.notice.corrected' }, ohrProblem)
+        },
+        onArchiveRule: (rule, reason) => void write((key) => archiveOverheadRule(api, rule, reason || null, key), { key: 'ohrEdit.notice.archived' }, ohrProblem),
       }}
     />
   )

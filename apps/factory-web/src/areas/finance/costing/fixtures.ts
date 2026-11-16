@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { canAs, DETAIL_221, inShell, LEDGER, METHOD_STANDARD, METHOD_UNDECIDED, NOW, PREFIX, ROWS, SITES, STANDARDS, TILES, TODAY, withoutCost, WO_221, type Role } from './demo/fixtures'
+import { canAs, CLOSED_198, DETAIL_221, inShell, LEDGER, METHOD_STANDARD, METHOD_UNDECIDED, NOW, PREFIX, ROWS, SITES, STANDARDS, TILES, TODAY, withoutCost, WO_221, type Role } from './demo/fixtures'
 import { addressOf, periodOf, recentMonths } from './model'
 import { CostingView, type CostingModel } from './view/CostingView'
 
@@ -66,11 +66,14 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'owner', label: 'Owner · the same page', model: base('owner') },
     { id: 'method-locked', label: 'Method chosen by the accountant and locked (standard cost)', model: base('finance', { method: METHOD_STANDARD }) },
     { id: 'detail', label: 'WO-2026-0221 — cost: the bridge from the standard to the actual, J / K', model: base('finance', { address: { ...ADDRESS, open: WO_221 }, detail: { id: WO_221, value: DETAIL_221, problem: null } }), note: 'Standard 4,600.00 → material price +196.00 (4.10 vs 3.90 per ft² × 980) → material usage +312.00 (980 ft² used vs 900 planned × 3.90) → labour −80.00 (3,680 of 4,000 minutes earned so far) → actual 5,028.00.' },
+    // B-W2b-GB02 (G053; B-W2b-424's gap 2): a closed work order's cost says Closed (the pill and the facts).
+    { id: 'detail-closed', label: 'WO-2026-0221 — cost of a closed work order: its state reads Closed (not Final)', model: base('finance', { address: { ...ADDRESS, open: WO_221 }, detail: { id: WO_221, value: { ...DETAIL_221, workOrder: { ...DETAIL_221.workOrder, status: 'CLOSED', completedAt: '2026-10-28T15:00:00.000Z', closedAt: '2026-10-28T17:20:00.000Z' }, final: true }, problem: null } }) },
     { id: 'detail-loading', label: 'The cost DetailModal reading', model: base('finance', { address: { ...ADDRESS, open: WO_221 }, detail: { id: WO_221, value: null, problem: null } }) },
     { id: 'detail-error', label: "The cost DetailModal couldn't load: Try again", model: base('finance', { address: { ...ADDRESS, open: WO_221 }, detail: { id: WO_221, value: null, problem: 'problem.unavailable' } }) },
     { id: 'detail-manager', label: 'Production manager · the cost DetailModal: minutes and quantities, no amount', model: base('manager', { address: { ...ADDRESS, open: WO_221 }, detail: { id: WO_221, value: withoutCost(DETAIL_221), problem: null } }) },
     { id: 'over', label: 'Rows ▾ Over standard (the tile is active)', model: base('finance', { address: { ...ADDRESS, rows: 'over' }, workOrders: { ...ready(ROWS.filter((row) => row.over)), tiles: TILES } }) },
-    { id: 'closed', label: 'Rows ▾ Closed this month', model: base('finance', { address: { ...ADDRESS, rows: 'closed' }, workOrders: { ...ready(ROWS.filter((row) => row.final)), tiles: TILES } }) },
+    // B-W2b-GB02 (G053): the work orders closed in the month, by the day of their close.
+    { id: 'closed', label: 'Rows ▾ Closed in October: the work orders whose close (that stands) was made in October', model: base('finance', { address: { ...ADDRESS, rows: 'closed' }, workOrders: { ...ready([CLOSED_198]), tiles: TILES } }) },
     { id: 'selected', label: 'Two work orders chosen · Export 2 (CSV)', model: base('finance', { selected: [ROWS[0]!.workOrder.id, ROWS[2]!.workOrder.id] }) },
     { id: 'reverse', label: 'Reverse entry: what it does and the reason', model: base('finance', { reverse: { entry: LEDGER[3]!, busy: false, problem: null }, draft: { reason: 'Leather counted twice on the issue' } }) },
     { id: 'reverse-held', label: 'Reverse entry held until the reason is typed', model: base('finance', { reverse: { entry: LEDGER[6]!, busy: false, problem: null } }) },
