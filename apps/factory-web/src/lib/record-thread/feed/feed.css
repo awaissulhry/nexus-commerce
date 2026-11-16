@@ -1,0 +1,269 @@
+/*
+ * The record thread's feed (B-TH-204, T4; picture 1's RecordThread draft): one scrolling column, oldest at the top. Day lines,
+ * the fold line, folded one-line messages, quiet record steps, the "N new messages" bar and the states. DS tokens only.
+ */
+.fw-rt-feedwrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-rt-feed {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-anchor: auto;
+  padding: 12px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  outline: none;
+}
+
+.fw-rt-feed:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: -3px;
+}
+
+.fw-rt-feed > * {
+  flex: none;
+}
+
+.fw-rt-feed-item {
+  min-width: 0;
+}
+
+.fw-rt-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.fw-rt-older {
+  display: flex;
+  justify-content: center;
+}
+
+.fw-rt-older-failed {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-danger-text);
+}
+
+.fw-rt-day {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 0;
+  font-size: var(--nds-font-size-xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--nds-text-2);
+}
+
+.fw-rt-day::before,
+.fw-rt-day::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--nds-border-subtle);
+}
+
+.fw-rt-fold {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 10px;
+  border: 1px dashed var(--nds-border-strong);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-raised);
+  color: var(--nds-text-2);
+  font: inherit;
+  font-size: var(--nds-font-size-sm-plus);
+  font-weight: 600;
+  text-align: start;
+  cursor: pointer;
+}
+
+.fw-rt-fold:hover {
+  background: var(--nds-surface-hover);
+  color: var(--nds-text);
+}
+
+.fw-rt-fold-range {
+  font-weight: 500;
+  color: var(--nds-text-muted);
+}
+
+.fw-rt-fold-act {
+  margin-inline-start: auto;
+  color: var(--nds-text-link);
+}
+
+.fw-rt-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--nds-border-subtle);
+  border-inline-start-width: 3px;
+  border-inline-start-color: var(--nds-info);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  font: inherit;
+  font-size: var(--nds-font-size-sm-plus);
+  text-align: start;
+  cursor: pointer;
+}
+
+.fw-rt-line:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-rt-line.is-note,
+.fw-rt-line.is-floor {
+  border-inline-start-color: var(--nds-warning);
+  background: var(--nds-warning-soft);
+}
+
+.fw-rt-line-who {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fw-rt-line-gist {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text-muted);
+}
+
+.fw-rt-line time,
+.fw-rt-event time {
+  flex: none;
+  margin-inline-start: auto;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-rt-fold:focus-visible,
+.fw-rt-line:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 2px;
+}
+
+.fw-rt-event {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0 4px;
+  min-width: 0;
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.4;
+  color: var(--nds-text-muted);
+}
+
+.fw-rt-event > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-rt-event .nds-btn.link {
+  padding: 0 2px;
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rt-changes {
+  margin: -4px 0 0 26px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+
+.fw-rt-changes[hidden] {
+  display: none;
+}
+
+.fw-rt-newbar {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  z-index: 2;
+  box-shadow: var(--nds-shadow-menu);
+}
+
+.fw-rt-state {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fw-rt-state.is-center {
+  justify-content: center;
+}
+
+.fw-rt-skel-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-lg);
+}
+
+.fw-rt-skel-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fw-rt-offline {
+  flex: none;
+  margin: 10px 12px 0;
+}
+
+/* SCR-006-feed / -composer (design review): a column as tall as the docked thread's feed at 1440 × 900. */
+.fw-rt-case {
+  display: flex;
+  flex-direction: column;
+  height: 640px;
+  min-width: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  overflow: hidden;
+}
