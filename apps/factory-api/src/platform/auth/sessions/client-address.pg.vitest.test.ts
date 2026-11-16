@@ -108,9 +108,12 @@ describe('the rate limit behind the web proxy', () => {
     const limited = await a.get('/health')
     expect(limited.status).toBe(429)
     expect(limited.body.error.code).toBe('rate_limited')
-    // The counts are the browsers' own keys in Redis, never the proxy's address.
+    // The counts are the browsers' own keys in Redis, never the proxy's address (B-W2b-GF6: each address's ceiling and,
+    // without a session, its budget; core/rate-limit.ts).
     const keys = await h.redis.keys(`${h.redisPrefix}:test:rate-limit:*`)
-    expect(keys.map((key) => key.slice(`${h.redisPrefix}:test:rate-limit:`.length)).sort()).toEqual([BROWSER_B, BROWSER_A].sort())
+    expect(keys.map((key) => key.slice(`${h.redisPrefix}:test:rate-limit:`.length)).sort()).toEqual(
+      [`address:${BROWSER_A}`, `address:${BROWSER_B}`, `anonymous:${BROWSER_A}`, `anonymous:${BROWSER_B}`].sort(),
+    )
   })
 
   it('counts a forged X-Forwarded-For from a non-proxy address as that address, whatever it names', async () => {
@@ -121,8 +124,9 @@ describe('the rate limit behind the web proxy', () => {
       statuses.push((await stranger.get('/health')).status)
     }
     expect(statuses).toEqual([...Array<number>(LIMIT).fill(200), 429])
-    expect(await h.redis.exists(`${h.redisPrefix}:test:rate-limit:${STRANGER}`)).toBe(1)
-    for (const forged of FORGED) expect(await h.redis.exists(`${h.redisPrefix}:test:rate-limit:${forged}`), forged).toBe(0)
+    expect(await h.redis.exists(`${h.redisPrefix}:test:rate-limit:anonymous:${STRANGER}`)).toBe(1)
+    expect(await h.redis.exists(`${h.redisPrefix}:test:rate-limit:address:${STRANGER}`)).toBe(1)
+    for (const forged of FORGED) expect(await h.redis.keys(`${h.redisPrefix}:test:rate-limit:*${forged}`), forged).toEqual([])
   })
 })
 
