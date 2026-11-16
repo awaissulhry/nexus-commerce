@@ -30,6 +30,9 @@ export function failedWords(error: unknown, t: Translate): string {
 }
 
 export function inviteFailed(error: unknown, t: Translate): string {
+  // B-TH-202 (the brand wall, B-TH-007): an address the factory cannot give this organisation answers ONE neutral sentence —
+  // never whether an office person or another organisation holds it.
+  if (isApiError(error) && error.kind === 'conflict' && error.issues.some((issue) => issuePath(issue) === 'refusal/NOT_INVITABLE' || issuePath(issue) === 'refusal.NOT_INVITABLE')) return t('invite.failed.notInvitable')
   if (isApiError(error) && error.kind === 'conflict') return error.issues.some((issue) => issuePath(issue) === 'email') ? t('invite.failed.address') : t('invite.failed.seats')
   if (isApiError(error) && error.kind === 'invalid') return t('invite.failed.invalid')
   return failedWords(error, t)

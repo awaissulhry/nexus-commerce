@@ -12,7 +12,7 @@ import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { findMaterials, getMaterial } from '../../../_shared/buying/api'
 import { useCoalesced, useLive, useThreadDock } from '../../../_shared/buying/hooks'
 import { buyingCan, part, PART_LOADING, phrase, readProblem, todayIn, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
-import { parseCc } from '../../../_shared/document-send/model'
+import { outsideRefusalOf, parseCc, type SendOutside } from '../../../_shared/document-send/model'
 import type { DocumentSendModel } from '../../../_shared/document-send/model'
 import {
   acceptProposal,
@@ -131,6 +131,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const [fields, setFields] = useState({ cc: '', subject: '', message: '' })
   const [sending, setSending] = useState(false)
   const [sendProblem, setSendProblem] = useState<string | null>(null)
+  // B-TH-202 (the brand wall): the recipient rule held an address back; the person's recorded "Send outside this customer".
+  const [sendOutside, setSendOutside] = useState<SendOutside | null>(null)
   const [sendResult, setSendResult] = useState<DocumentSendModel['result']>(null)
   const [preview, setPreview] = useState<{ src: Uint8Array | null; problem: string | null }>({ src: null, problem: null })
   const sendKey = useRef<string | null>(null)
@@ -272,7 +274,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
       const answer = await sendOrder(
         api,
         orderId,
-        { version: loaded.version, ...(cc.length ? { cc } : {}), subject: fields.subject.trim() || null, message: fields.message.trim() || null, ...(confirmBy ? { confirmBy } : {}), ...(changeNote ? { changeNote } : {}) },
+        { version: loaded.version, ...(cc.length ? { cc } : {}), subject: fields.subject.trim() || null, message: fields.message.trim() || null, ...(confirmBy ? { confirmBy } : {}), ...(changeNote ? { changeNote } : {}), ...(sendOutside?.checked ? { sendOutside: true as const } : {}) },
         sendKey.current ?? newIdempotencyKey(),
       )
       setValue(answer.order)
@@ -287,6 +289,13 @@ function RecordContainer({ orderId }: { orderId: string }) {
       setSendResult({ delivery: answer.delivery, to: answer.sent.to, at: answer.sent.sentAt, linkUntil: answer.sent.link.expiresAt })
       loadParts()
     } catch (error) {
+      // B-TH-202: an address of another customer or supplier: the dialog asks "Send outside this customer" (a new key: a new try).
+      const outside = outsideRefusalOf(error)
+      if (outside && !outside.hidden) {
+        setSendOutside({ lines: outside.lines, checked: false })
+        sendKey.current = newIdempotencyKey()
+        return
+      }
       const words = writeProblem(error, (paths, info) => (paths.some((path) => path.includes('confirmBy')) ? phrase('purchasing-orders:send.confirmByRefused') : info.kind === 'conflict' ? phrase('po.send.refused') : null))
       setSendProblem(words.key.startsWith('purchasing-orders:') ? td(words.key.slice('purchasing-orders:'.length), words.params) : t(words.key, words.params))
       sendKey.current = newIdempotencyKey()
@@ -311,6 +320,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
             fields,
             sending,
             problem: sendProblem,
+            outside: sendOutside,
             result: sendResult,
             canSend: can.poSend,
             recordHref,
@@ -658,7 +668,12 @@ function RecordContainer({ orderId }: { orderId: string }) {
         },
         onDismissNotice: () => setNotice(null),
         onSend: {
-          onField: (field, value) => setFields((current) => ({ ...current, [field]: value })),
+          onField: (field, value) => {
+            setFields((current) => ({ ...current, [field]: value }))
+            // B-TH-202: a changed copy line asks the recipient rule again.
+            if (field === 'cc') setSendOutside(null)
+          },
+          onSendOutside: (checked) => setSendOutside((current) => (current ? { ...current, checked } : current)),
           onSend: () => void send(),
           onRetryChecks: openSend,
           onNewLink: () => setDialog({ kind: 'newLink', message: '' }),

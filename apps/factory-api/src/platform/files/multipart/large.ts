@@ -8,7 +8,7 @@ import { assertTransition } from '@nexus/factory-domain/state/machine'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { GatewayCallFailed, GatewayRefusal } from '../../gateway/gateway'
 import type { FileView } from '../contract'
-import { audited, checkSite, contextOf, mayWrite, presignedView, readOffice, SELECT_FOR, storeAccountOf, storeCall, tenantOf, viewOf, type OfficeRow } from '../files'
+import { audited, checkSite, contextOf, mayWrite, presignedView, readOffice, SELECT_FOR, storeAccountOf, storeCall, tenantOf, viewOf, withRecordParty, type OfficeRow } from '../files'
 import { assertGenericPath, type UploadPath } from '../owned'
 import { cleanFileName, fileMachine, normaliseContentType, normaliseVisibility, sharingProblems, storageKeyFor, type FileAudience, type FileKind, type QuarantineReason, type Sharing } from '../rules'
 import { heldForScan } from '../scan/rules'
@@ -122,7 +122,9 @@ export async function startLargeUpload(runtime: FilesRuntime, caller: CommandCal
   assertGenericPath(input.recordType, input.kind, path)
   const contentType = normaliseContentType(input.contentType)
   const originalName = cleanFileName(input.originalName)
-  const sharing: Sharing = { visibility: normaliseVisibility(input.visibility), companyId: input.companyId ?? null, floorSiteId: input.floorSiteId ?? null, partyId: input.partyId ?? null }
+  const asked: Sharing = { visibility: normaliseVisibility(input.visibility), companyId: input.companyId ?? null, floorSiteId: input.floorSiteId ?? null, partyId: input.partyId ?? null }
+  // B-TH-003 (WALL-G02): the generic route shares outside with the record's own party only (a module's own upload names it).
+  const sharing: Sharing = path.viaModule ? asked : await withRecordParty(caller, input, asked)
   const problems: Issue[] = [
     ...largeUploadProblems({ kind: input.kind, contentType, sizeBytes: input.sizeBytes, sha256: input.sha256, partSizeBytes: partSizeOfRequest(input.partSizeBytes) }),
     ...(originalName === null ? [{ path: 'body/originalName', message: 'The file needs a name.' }] : []),

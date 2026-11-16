@@ -209,6 +209,8 @@ export interface SendPriceListBody {
   readonly subject?: string | null | undefined
   readonly message?: string | null | undefined
   readonly language?: DocumentLanguage | undefined
+  /** B-TH-004: the person ticked "Send outside this customer". */
+  readonly sendOutside?: boolean | undefined
 }
 
 /** POST /sales/price-lists/:listId/versions/:versionId/pdf/send */
@@ -247,6 +249,7 @@ export async function sendPriceListPdf(caller: CommandCaller, listId: string, ve
       identityId: facts.identity?.id ?? null,
       to,
       cc: body.cc,
+      sendOutside: body.sendOutside, // B-TH-004
       subject: body.subject?.trim() ? body.subject.trim() : mail.subject,
       body: mail.body,
       attachments: [file.id],

@@ -7,14 +7,15 @@ import { Button, Checkbox, Spinner, Tag } from '@nexus/ui/primitives'
 import { Modal } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { needsAcknowledge, RECIPIENT_TONE, recipientWords, sendHeld, sizeWords, titleOf, WARNING_TONE, type MisSendCheck, type MisSendModel, type MisSendWarning } from '../model'
+import { needsAcknowledge, needsSendOutside, RECIPIENT_TONE, recipientWords, sendHeld, sizeWords, titleOf, WARNING_TONE, type MisSendCheck, type MisSendModel, type MisSendWarning } from '../model'
 import '../mis-send.css'
 
 export type { MisSendModel } from '../model'
 
 /** What the dialog asks of its host (use-mis-send.tsx). Absent in the design index: the dialog still opens. */
 export interface MisSendActions {
-  onSend?: () => void
+  /** B-TH-202: with the person's recorded "Send outside this customer" tick. */
+  onSend?: (choice: { readonly sendOutside: boolean }) => void
   onBack?: () => void
   onRetry?: () => void
 }
@@ -46,10 +47,14 @@ export function MisSendDialog({ model, actions }: { model: MisSendModel; actions
 function Dialog({ model, actions }: { model: MisSendModel; actions?: MisSendActions }) {
   const t = useT('mail-depth')
   const [acknowledged, setAcknowledged] = useState(model.acknowledged ?? false)
+  // B-TH-202: the recorded "Send outside this customer" tick (the send refuses another customer's address without it).
+  const [sendOutside, setSendOutside] = useState(model.sentOutside ?? false)
   const check = model.state.status === 'ready' ? model.state.check : null
-  // A new answer (a retry) asks the tick again.
+  // A new answer (a retry) asks the ticks again.
   useEffect(() => setAcknowledged(model.acknowledged ?? false), [check, model.acknowledged])
-  const held = sendHeld(model, acknowledged)
+  useEffect(() => setSendOutside(model.sentOutside ?? false), [check, model.sentOutside])
+  const held = sendHeld(model, acknowledged, sendOutside)
+  const send = () => actions?.onSend?.({ sendOutside: check !== null && needsSendOutside(check) && sendOutside })
   const heldText = held ? t(held) : null
   const title = titleOf(model)
   const danger = check?.warnings.some((warning) => warning.code === 'OTHER_ORGANISATION') ?? false
@@ -61,11 +66,11 @@ function Dialog({ model, actions }: { model: MisSendModel; actions?: MisSendActi
       const target = event.target as HTMLElement | null
       if (target?.closest('button, a, input, textarea, select, [role="checkbox"]')) return
       event.preventDefault()
-      actions?.onSend?.()
+      send()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [held, actions])
+  })
 
   return (
     <Modal
@@ -78,7 +83,7 @@ function Dialog({ model, actions }: { model: MisSendModel; actions?: MisSendActi
           <Button onClick={() => actions?.onBack?.()} aria-keyshortcuts="Escape">
             {t('misSend.back')}
           </Button>
-          <Button variant={danger ? 'danger' : 'primary'} heldReason={heldText} onClick={() => actions?.onSend?.()} aria-keyshortcuts="Enter">
+          <Button variant={danger ? 'danger' : 'primary'} heldReason={heldText} onClick={send} aria-keyshortcuts="Enter">
             <Send size={14} aria-hidden /> {t('misSend.send')}
           </Button>
         </>
@@ -104,7 +109,7 @@ function Dialog({ model, actions }: { model: MisSendModel; actions?: MisSendActi
             {t('misSend.problem.body')}
           </Banner>
         ) : (
-          <Found check={model.state.check} acknowledged={acknowledged} onAcknowledge={setAcknowledged} />
+          <Found check={model.state.check} acknowledged={acknowledged} onAcknowledge={setAcknowledged} sendOutside={sendOutside} onSendOutside={setSendOutside} />
         )}
         <p className="fw-mis-muted fw-mis-small">
           <Mail size={13} aria-hidden /> {model.draft.subject.trim() ? t('misSend.subject', { subject: model.draft.subject.trim() }) : t('misSend.subjectNone')}
@@ -115,7 +120,19 @@ function Dialog({ model, actions }: { model: MisSendModel; actions?: MisSendActi
   )
 }
 
-function Found({ check, acknowledged, onAcknowledge }: { check: MisSendCheck; acknowledged: boolean; onAcknowledge: (value: boolean) => void }) {
+function Found({
+  check,
+  acknowledged,
+  onAcknowledge,
+  sendOutside,
+  onSendOutside,
+}: {
+  check: MisSendCheck
+  acknowledged: boolean
+  onAcknowledge: (value: boolean) => void
+  sendOutside: boolean
+  onSendOutside: (value: boolean) => void
+}) {
   const t = useT('mail-depth')
   const locale = useLocale()
   const partyName = check.party?.name ?? t('misSend.theParty')
@@ -183,6 +200,16 @@ function Found({ check, acknowledged, onAcknowledge }: { check: MisSendCheck; ac
             ))}
           </ul>
         </section>
+      )}
+
+      {needsSendOutside(check) && (
+        // B-TH-202 (the brand wall): another customer's address is refused by the send itself; the tick is recorded.
+        <div className="fw-mis-ack">
+          <Banner tone="danger" title={t('misSend.outside.title', { party: partyName })}>
+            {t('misSend.outside.body', { addresses: check.outsideCustomer.join(', ') })}
+          </Banner>
+          <Checkbox tone="danger" checked={sendOutside} onChange={(event) => onSendOutside(event.target.checked)} label={t('misSend.outside.tick')} />
+        </div>
       )}
 
       {needsAcknowledge(check) && (

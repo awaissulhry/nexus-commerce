@@ -24,6 +24,7 @@ import {
   tenantOf,
   viewerOf,
   viewOf,
+  withRecordParty,
   type OfficeRow,
   type Row,
 } from '../files'
@@ -126,10 +127,14 @@ export async function planNewVersion(
   conflict(newVersionRefusal(named, series))
   const current = series.find(isCurrentVersion) ?? named
   const inherited = await inheritedOf(caller, current.id)
-  const sharing: Sharing =
+  // B-TH-003 (WALL-G02): a version shared outside reaches the series' record's own party only.
+  const sharing: Sharing = await withRecordParty(
+    caller,
+    named,
     input.visibility === undefined
       ? { visibility: normaliseVisibility(inherited.visibility as FileAudience[]), companyId: named.companyId, floorSiteId: inherited.floorSiteId, partyId: inherited.partyId }
-      : { visibility: normaliseVisibility(input.visibility), companyId: named.companyId, floorSiteId: input.floorSiteId ?? null, partyId: input.partyId ?? null }
+      : { visibility: normaliseVisibility(input.visibility), companyId: named.companyId, floorSiteId: input.floorSiteId ?? null, partyId: input.partyId ?? null },
+  )
   const contentType = normaliseContentType(input.contentType)
   const originalName = cleanFileName(input.originalName)
   const problems: Issue[] = [

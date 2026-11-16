@@ -35,4 +35,8 @@ export const manifest = defineManifest({
   'POST /sales/orders/:orderId/copy-as-quote': { audiences: ['office'], permission: 'quotes.manage', scope: 'record' },
   // B-W2b-398 (LOG-067): the order's deliveries (each shipment's arrival and proof, the terms from delivery).
   'GET /sales/orders/:orderId/deliveries': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-TH-019: the Customer switcher's numbers (the customers with orders the reader may see; scopeWhere like the list).
+  'GET /sales/orders/customers': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-TH-017 / B-TH-063: the Picture cell's small preview (the order checked with can(), the file with files.read).
+  'GET /sales/orders/:orderId/picture': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
 })
