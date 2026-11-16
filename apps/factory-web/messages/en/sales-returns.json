@@ -227,7 +227,8 @@
     "saved": "Saved.",
     "shipped": "Sent back with DDT {number}.",
     "shippedWarning": "Sent back with DDT {number}: tell the customer in writing that the protective garment went back unrepaired and unchecked.",
-    "workOrder": "Repair work order {number} made: release it in Production."
+    "workOrder": "Repair work order {number} made: release it in Production.",
+    "repairScrapped": "{number}: the garment is scrapped. Tell the customer in writing: after the repair it no longer protects, so it is not returned."
   },
   "effect": {
     "credit": "A credit",
@@ -355,12 +356,15 @@
       "workOrdersView": "Your role doesn’t see work orders."
     },
     "sendBackInstead": "The garment is here: send it back unrepaired instead of cancelling.",
-    "shipFailed": "Its last safety check failed: repair it again, then check it again.",
+    "shipFailed": "Its last safety check failed: repair it again and check it again, or scrap it.",
     "shipFinishFirst": "Finish the repair first (repaired), or cancel the repair.",
     "shipNotArrived": "The garment has not arrived yet.",
     "shipNotChecked": "A protective garment goes back only after a passed safety check made after the repair.",
     "workOrderDone": "Repair work order {number} is done: move the repair to repaired and send the garment back.",
-    "workOrderOnHold": "Repair work order {number} is on hold: lift its hold first."
+    "workOrderOnHold": "Repair work order {number} is on hold: lift its hold first.",
+    "scrapOnlyFailed": "Only a repaired protective garment whose safety check failed is scrapped.",
+    "scrapPassed": "Its safety check after the repair passed: it goes back to the customer.",
+    "scrapNotChecked": "Check it first: it is scrapped only when its safety check after the repair fails."
   },
   "inspect": {
     "allGraded": "Every received line is graded.",
@@ -715,10 +719,13 @@
       "reopenRepair": "Back into repair…",
       "safetyCheck": "Safety check",
       "ship": "Send back",
-      "startRepair": "In repair"
+      "startRepair": "In repair",
+      "scrap": "Scrap the garment…"
     },
     "cancel": "Cancel the repair…",
-    "cancelled": "This repair is cancelled."
+    "cancelled": "This repair is cancelled.",
+    "scrap": "Scrap the garment…",
+    "scrapped": "This garment was scrapped: its safety check after the repair failed."
   },
   "repairCancel": {
     "body": "The repair stops here. A cancelled repair takes no DDT.",
@@ -836,9 +843,10 @@
     },
     "sub": "A protective garment goes back only after a check that it still protects.",
     "title": "Safety check",
-    "willFail": "Signed now, the check fails: the garment goes back into repair.",
+    "willFail": "Signed now, the check fails: the garment goes back into repair, or it is scrapped (never returned unsafe).",
     "willPass": "Signed now, the check passes: the garment may go back.",
-    "yes": "Yes"
+    "yes": "Yes",
+    "failedWayOut": "A protective garment that fails is never returned unsafe: put it back into repair, or scrap it."
   },
   "sdi": {
     "DELIVERED": "Delivered",
@@ -1054,5 +1062,14 @@
     "taken": "Already line {seq} of this return: change its pieces on the Lines tab.",
     "done_one": "{count} line added.",
     "done_other": "{count} lines added."
+  },
+  "repairScrap": {
+    "title": "Scrap the garment of repair {number}",
+    "never": "A protective garment that fails its safety check is never returned unsafe.",
+    "failed": "What failed: {points}.",
+    "body": "The repair ends here: the garment stays at the site and is destroyed, and the customer is told in writing. It cannot be undone.",
+    "reason": "Why it is scrapped",
+    "reasonNeeded": "Say why the garment is scrapped.",
+    "submit": "Scrap the garment"
   }
 }

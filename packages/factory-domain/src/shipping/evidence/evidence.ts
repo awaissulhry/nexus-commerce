@@ -19,6 +19,9 @@
  *   reopened   COMPLETE goes back (PARTIAL, or AWAITED without papers) with a reason (a paper found wrong).
  */
 
+// B-W2b-GF2: the EU's special fiscal territories, told apart by the address.
+import { specialTerritoryOf } from '../../tax/special-territories'
+
 /** The 27 EU member states (ISO 3166-1 alpha-2; Greece is GR here, EL only in VAT numbers). */
 export const EU_COUNTRIES: readonly string[] = Object.freeze([
   'AT', 'BE', 'BG', 'CY', 'CZ', 'DE', 'DK', 'EE', 'ES', 'FI', 'FR', 'GR', 'HR', 'HU', 'IE', 'IT', 'LT', 'LU', 'LV', 'MT', 'NL', 'PL', 'PT', 'RO', 'SE', 'SI', 'SK',
@@ -42,6 +45,9 @@ export interface NeedFacts {
   readonly taxMode: string
   /** Where the goods go (the shipment's ship-to snapshot's country). */
   readonly shipToCountry: string | null
+  /** B-W2b-GF2: the ship-to's postal code and town (a special fiscal territory is told apart by them). */
+  readonly shipToPostalCode?: string | null
+  readonly shipToCity?: string | null
   /** The seller's country (Company.country). */
   readonly companyCountry: string
 }
@@ -51,7 +57,10 @@ export function evidenceNeed(facts: NeedFacts): { readonly needed: boolean; read
   const to = facts.shipToCountry?.trim().toUpperCase() ?? ''
   const from = facts.companyCountry.trim().toUpperCase()
   if (facts.taxMode !== 'EU_B2B') return { needed: false, words: 'Not a zero-rated intra-EU sale: no transport evidence is needed.' }
-  if (!isEuCountry(to)) return { needed: false, words: `The goods go to ${to || 'an unknown country'}, not to an EU state: art. 41 does not apply (an export has its own proof of exit).` }
+  // B-W2b-GF2: a special fiscal territory outside the EU's VAT area is an export, never an intra-EU supply.
+  const territory = specialTerritoryOf({ country: to, postalCode: facts.shipToPostalCode, city: facts.shipToCity })
+  if (territory?.vat === 'OUTSIDE') return { needed: false, words: `The goods go to ${territory.words.en}, outside the EU's VAT area: art. 41 does not apply (an export has its own proof of exit; ${territory.law}).` }
+  if (!isEuCountry(to) && territory?.vat !== 'INSIDE') return { needed: false, words: `The goods go to ${to || 'an unknown country'}, not to an EU state: art. 41 does not apply (an export has its own proof of exit).` }
   if (to === from) return { needed: false, words: `The goods stay in ${to}: the sale is not an intra-EU supply.` }
   return { needed: true, words: `A zero-rated intra-EU sale to ${to} (art. 41 DL 331/1993): keep the proof that the goods arrived there.` }
 }

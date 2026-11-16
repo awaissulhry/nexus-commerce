@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   CertificateRenewalStatus,
@@ -15,6 +14,7 @@ import { seed as seedAccounting } from './accounting'
 import { seed as seedCompliance } from './compliance'
 import { seed as seedIntegration } from './integration'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The W2b follow-ups seed for quality, planning and money (W2b schema wave 2/7, B-W2b-02), per tenant of seed/_core.ts,
@@ -63,7 +63,6 @@ const DAY = {
 } as const
 const YEAR = '2026'
 const TEN_YEARS = (at: Date): Date => new Date(Date.UTC(at.getUTCFullYear() + 10, at.getUTCMonth(), at.getUTCDate()))
-const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 /** The two invoices of the lotto: freight and a small accessory order, net and VAT at 22 %, minor units. */
 const LOTTO = [
   { number: '2026/0415', net: 4500, vat: 990 },
@@ -116,7 +115,7 @@ export async function seed(context: SeedContext): Promise<FollowupsQualityMoneyS
     openInboxItemId: firstId('followups:sdi-inbox:stranger'),
     recordedInboxItemId: id('followups:sdi-inbox:lotto'),
   }
-  const lottoXml: Prisma.StoredFileCreateManyInput = {
+  const lottoXml: Prisma.StoredFileCreateManyInput = seedFile(tenantId, {
     id: lastId('followups:file:sdi-file:P2:00415:xml'),
     companyId: companyA,
     recordType: 'SupplierInvoiceFile',
@@ -125,7 +124,6 @@ export async function seed(context: SeedContext): Promise<FollowupsQualityMoneyS
     originalName: 'IT00000002022_00415.xml',
     contentType: 'application/xml',
     sizeBytes: 4096,
-    sha256: sha256(`seed followups ${namespace} lotto xml`),
     storeAccountId: store,
     storageKey: `legal/t/${tenantId}/c/${companyA}/${YEAR}/${id('followups:file:key:lotto-xml')}`,
     status: 'AVAILABLE',
@@ -133,7 +131,7 @@ export async function seed(context: SeedContext): Promise<FollowupsQualityMoneyS
     visibility: ['OFFICE'],
     retainUntil: TEN_YEARS(T.lottoRecorded),
     ...stamp(T.lottoRecorded),
-  }
+  })
 
   // --- the half-year's reference rate (a placeholder), the purchasing and payables settings -------------------------
   await db.withScope(office, (client) =>

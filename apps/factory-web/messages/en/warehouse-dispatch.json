@@ -616,7 +616,8 @@
       "GIFT": "Gift",
       "DOCUMENTS": "Documents",
       "OTHER": "Other"
-    }
+    },
+    "territory": "Special fiscal territory"
   },
   "test": {
     "title": "Test mode",

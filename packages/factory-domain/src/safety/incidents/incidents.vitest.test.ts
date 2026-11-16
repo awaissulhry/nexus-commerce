@@ -9,7 +9,11 @@ import {
   closeRefusal,
   countdownOf,
   dueAtOf,
+  FATAL_LAW,
+  fatalDueAtOf,
   fileRefusal,
+  FILING_TYPES,
+  INAIL_RULE_WORDS,
   filingsToAdd,
   filingStateOf,
   filingTypeFor,
@@ -29,7 +33,7 @@ const H = 3_600_000
 
 describe('the INAIL rule (D.Lgs. 81/2008 art. 18 c.1 r)', () => {
   it('asks a statistical communication from one day beyond the event, the insurance report over three days, none before', () => {
-    expect(INAIL_RULE).toEqual({ statisticalFromDays: 1, insuranceAboveDays: 3, hoursAfterCertificate: 48 })
+    expect(INAIL_RULE).toEqual({ statisticalFromDays: 1, insuranceAboveDays: 3, hoursAfterCertificate: 48, hoursAfterFatalAccident: 24 })
     expect(filingTypeFor(0)).toBeNull()
     expect(filingTypeFor(1)).toBe('STATISTICAL')
     expect(filingTypeFor(3)).toBe('STATISTICAL')
@@ -42,6 +46,24 @@ describe('the INAIL rule (D.Lgs. 81/2008 art. 18 c.1 r)', () => {
     expect(filingsToAdd(5, ['STATISTICAL'])).toEqual(['INSURANCE'])
     expect(filingsToAdd(5, ['STATISTICAL', 'INSURANCE'])).toEqual([])
     expect(filingsToAdd(0, [])).toEqual([])
+  })
+
+  // B-W2b-GF2 (Owner G505 A): a fatal or presumed fatal accident.
+  it('reports a fatal accident within 24 hours of it, by any means, with no certificate; filed after the accident', () => {
+    expect(FILING_TYPES).toContain('FATAL')
+    expect(FATAL_LAW).toBe('DPR 1124/1965 art. 53')
+    const happened = at('2026-11-03T22:40:00.000Z')
+    expect(fatalDueAtOf(happened).toISOString()).toBe('2026-11-04T22:40:00.000Z')
+    const fatal = { status: 'DUE' as const, certificateReceivedAt: null, type: 'FATAL' as const, occurredAt: happened }
+    expect(fileRefusal(fatal, at('2026-11-04T08:00:00.000Z'), at('2026-11-04T09:00:00.000Z'))).toBeNull()
+    expect(fileRefusal(fatal, at('2026-11-03T22:00:00.000Z'), at('2026-11-04T09:00:00.000Z'))?.code).toBe('FILED_BEFORE_EVENT')
+    expect(fileRefusal(fatal, at('2026-11-04T10:00:00.000Z'), at('2026-11-04T09:00:00.000Z'))?.code).toBe('FILED_IN_FUTURE')
+    // The others still need their certificate.
+    expect(fileRefusal({ status: 'DUE', certificateReceivedAt: null, type: 'INSURANCE' }, at('2026-11-04T08:00:00.000Z'), at('2026-11-04T09:00:00.000Z'))?.code).toBe('CERTIFICATE_MISSING')
+    // The 24-hour reminder has passed with the accident: one at once, then 4 hours before and at the deadline.
+    expect(reminderPlan(fatalDueAtOf(happened), at('2026-11-04T06:00:00.000Z')).map((stage) => stage.hoursBefore)).toEqual([24, 4, 0])
+    expect(INAIL_RULE_WORDS.en.at(-1)).toContain('24 hours')
+    expect(INAIL_RULE_WORDS.it.at(-1)).toContain('24 ore')
   })
 
   it('is due 48 hours after the certificate exactly, OVERDUE once past (shown, never refused)', () => {

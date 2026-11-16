@@ -2,6 +2,7 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import type { BrokerPack, CustomsDocument, Declaration, ExportRead } from './api'
 import type { ExportPapersModel } from './model'
 import { ExportPapersView } from './view/ExportPapersView'
+import { specialTerritoryOf, territoryWords } from '@nexus/factory-domain/tax/special-territories'
 
 /**
  * SCR-653 — a shipment's Export papers (B-W2b-412 on B-W2b-409; design warehouse.shipments record › Export, sec sh-export): the
@@ -113,6 +114,12 @@ export const designScreen = defineDesignScreen<ExportPapersModel>({
     { id: 'no-eori', label: 'The company has no EORI: papers held with why, the link to Shipping settings', model: model(read({ eori: null, papers: { ...WITH_PAPERS, held: 'NO_EORI', commercialInvoice: [], postalForm: { ...WITH_PAPERS.postalForm, held: 'NO_EORI', versions: [] } } })) },
     { id: 'no-price', label: 'Without the price grain: the papers held (they show values)', model: model(read({ seesValues: false, papers: WITH_PAPERS }), { can: { ...CAN, price: false } }) },
     { id: 'cn22', label: 'Light parcels within the CN 22 limits: CN 22 offered', model: model(read({ papers: { held: null, commercialInvoice: [paper('COMMERCIAL_INVOICE', 1, true)], postalForm: { suggested: 'CN22', because: [], held: null, versions: [] } } })) },
+    // B-W2b-GF2 (G463): a special fiscal territory told apart from its country.
+    {
+      id: 'territory',
+      label: 'Livigno (IT, outside the EU VAT area): an export, papers needed, the territory said in words',
+      model: model(read({ destination: { country: 'IT', class: 'EXPORT', territory: { key: 'LIVIGNO', vat: 'OUTSIDE', customs: 'OUTSIDE', law: 'DPR 633/1972 art. 7 c.1 a; Reg. (EU) 952/2013 art. 4', words: territoryWords(specialTerritoryOf({ country: 'IT', postalCode: '23041' })!) } }, deliveryTerms: 'DAP Livigno' })),
+    },
     { id: 'domestic', label: 'Delivered in Italy: not needed', model: model(read({ destination: { country: 'IT', class: 'DOMESTIC' }, needed: false })) },
     { id: 'eu', label: 'Delivered in another EU state: not needed (the transport proof is above)', model: model(read({ destination: { country: 'DE', class: 'EU' }, needed: false })) },
     { id: 'invoice-dialog', label: 'Create commercial invoice: language, the reason, notes', model: model(read(), { dialog: { kind: 'invoice', language: '', reason: 'SALE_OF_GOODS', reasonText: '', notes: '' } }) },

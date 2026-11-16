@@ -3,7 +3,7 @@ import { travellerPaper, type TravellerFacts } from '@nexus/factory-domain/produ
 import { inlineDisposition, renderTravellers } from './traveller'
 
 /**
- * The traveller's painter (B-W2b-51; MES-014): pdfkit's standard fonts, the QR code drawn from its modules, a new page per
+ * The traveller's painter (B-W2b-51; MES-014): the embedded fonts (B-W2b-GF2), the QR code drawn from its modules, a new page per
  * traveller with its own page count, the same bytes for the same paper. Every code, number and name is made up.
  */
 

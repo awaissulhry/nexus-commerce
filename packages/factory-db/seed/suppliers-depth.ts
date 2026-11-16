@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   ItemKind,
@@ -16,6 +15,7 @@ import { seed as seedAuth } from './auth'
 import { seed as seedPortalFollowups } from './portal-followups'
 import { seed as seedProduct } from './product'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The suppliers in depth seed (W2b-5, schema wave 42/44, B-W2b-287), per tenant of seed/_core.ts, written as the API will write
@@ -171,8 +171,9 @@ export async function seed(context: SeedContext, options: SuppliersDepthSeedOpti
   }
   const { bankAccountIds: bank, qualificationIds: qualification, agreementIds: agreement, fileIds: files } = result
 
-  /** A PDF the office keeps for a record of this wave (rows only: no object in any store). */
-  const officeFile = (fileId: string, recordType: string, recordId: string, name: string, at: Date): Prisma.StoredFileCreateManyInput => ({
+  /** A PDF the office keeps for a record of this wave (a row; its bytes: B-W2b-F59, seed-files.ts). */
+  const officeFile = (fileId: string, recordType: string, recordId: string, name: string, at: Date): Prisma.StoredFileCreateManyInput =>
+    seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType,
@@ -182,7 +183,6 @@ export async function seed(context: SeedContext, options: SuppliersDepthSeedOpti
     originalName: name,
     contentType: 'application/pdf',
     sizeBytes: 4096,
-    sha256: createHash('sha256').update(`seed file ${namespace} suppliers-depth ${fileId}`).digest('hex'),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`suppliers:key:${fileId}`)}`,
     status: 'AVAILABLE',
     availableAt: at,

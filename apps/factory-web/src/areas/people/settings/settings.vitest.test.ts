@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_ATTENDANCE_SETTINGS, workedExample } from '@nexus/factory-domain/people/attendance/rules'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { LAW_VALUES } from '@nexus/factory-domain/people/limits/rules'
+import { CHECKED_LIMITS } from '@nexus/factory-domain/people/limits/checks'
+import { LIMIT_KINDS } from '@nexus/factory-domain/people/shifts/limits'
 import { gateDriftNotes, gateReadiness } from '@nexus/factory-domain/people/privacy/gate'
 import { ApiError } from '../../../lib/api/errors'
 import type { DesignScreen } from '../../../lib/design/design-screen'
@@ -14,7 +16,7 @@ import { createConsultant, getPayrollSettings, getReviewRule, savePayrollSetting
 import { designScreen as settingsScreen } from './fixtures'
 import { designScreen as historyScreen } from './history/fixtures'
 import { HISTORY_ACTIONS, historyWords } from './history/view/HistoryView'
-import { ABSENCE_CATEGORIES, basisCanCoverLeads, blankCode, codeFromName, codeHeld, consultantHeld, exampleOf, gateReasonHeld, isChecked, limitBodyOf, limitDraftOf, limitHeld, limitsChanged, noteWords, payrollBodyOf, payrollChanges, payrollDraftOf, payrollHeld, privacyDirty, privacyHeld, privacyWidens, reviewChanges, reviewHeld, ROUNDING_CHOICES, roundingChanges, roundingHeld, RULE_KINDS, settingsCan, settingsProblem } from './model'
+import { ABSENCE_CATEGORIES, basisCanCoverLeads, blankCode, codeFromName, codeHeld, consultantHeld, exampleOf, gateReasonHeld, limitBodyOf, limitDraftOf, limitHeld, limitsChanged, noteWords, payrollBodyOf, payrollChanges, payrollDraftOf, payrollHeld, privacyDirty, privacyHeld, privacyWidens, reviewChanges, reviewHeld, ROUNDING_CHOICES, roundingChanges, roundingHeld, RULE_KINDS, settingsCan, settingsProblem } from './model'
 import { CONSULTANT_PROBLEMS, PRINTER_PROBLEMS } from './api'
 import type { ApiClient } from '../../../lib/api/client'
 
@@ -90,8 +92,11 @@ describe('settings: working-time limits', () => {
     expect(limitHeld({ ...draft, source: 'CCNL', legalReference: ' ' })).toBe('limits.problem.legalReference')
   })
 
-  it('says which limits nothing checks yet', () => {
-    expect(RULE_KINDS.filter((kind) => !isChecked(kind))).toEqual(['WEEKLY_REST', 'NIGHT_AVERAGE'])
+  // B-W2b-GF2: weekly rest and night work are checked now, so no limit carries "not checked yet" any more.
+  it('every limit People settings keep is checked: on the roster, and (all but the break) on the time worked', () => {
+    expect(RULE_KINDS.filter((kind) => !(LIMIT_KINDS as readonly string[]).includes(kind))).toEqual([])
+    expect(RULE_KINDS.filter((kind) => kind !== 'BREAK_AFTER' && !(CHECKED_LIMITS as readonly string[]).includes(kind))).toEqual([])
+    for (const locale of LOCALES) expect(JSON.stringify(messagesFor(locale, ['people-settings']))).not.toContain('notChecked')
   })
 })
 

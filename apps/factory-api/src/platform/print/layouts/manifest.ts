@@ -1,7 +1,9 @@
 import PDFDocument from 'pdfkit'
 import { inSheetOrder, sheetTotals, type ManifestSheet } from '@nexus/factory-domain/shipping/manifest/rules'
 import { parseDecimal, ZERO } from '@nexus/factory-domain/tax/decimal'
-import { PDF_CREATOR, winAnsi } from '../../documents/pdf'
+import { PDF_CREATOR } from '../../documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../documents/fonts'
 
 /**
  * The day's sheet for a carrier laid out (B-W2b-395; LOG-049; design warehouse.shipments "End-of-day manifest PDF": the driver
@@ -31,7 +33,7 @@ const COLUMNS = [
 
 /** Fits a text to a width in points at the font set now (an ellipsis when it runs over). */
 function fit(pdf: PDFKit.PDFDocument, text: string, width: number): string {
-  const clean = winAnsi(text)
+  const clean = printableText(text)
   if (pdf.widthOfString(clean) <= width) return clean
   let cut = clean
   while (cut.length > 1 && pdf.widthOfString(`${cut}...`) > width) cut = cut.slice(0, -1)
@@ -46,8 +48,9 @@ export async function manifestPdf(sheet: ManifestSheet): Promise<Buffer> {
     autoFirstPage: false,
     compress: true,
     lang: 'it',
-    info: { Title: winAnsi(`Distinta ${sheet.carrier.name} ${sheet.day}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(0) },
+    info: { Title: printableText(`Distinta ${sheet.carrier.name} ${sheet.day}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(0) },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -57,7 +60,7 @@ export async function manifestPdf(sheet: ManifestSheet): Promise<Buffer> {
   const inner = PAGE.width - 2 * PAGE.margin
   const left = PAGE.margin
   const text = (value: string, x: number, y: number, width: number, size: number, bold = false, colour = '#111111') => {
-    pdf.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(size).fillColor(colour)
+    pdf.font(bold ? FONT.bold : FONT.regular).fontSize(size).fillColor(colour)
     pdf.text(fit(pdf, value, width), x, y, { width, lineBreak: false, height: size * 1.3 })
   }
   let page = 0

@@ -33,6 +33,8 @@ export interface DdtRow {
   /** B-W2a-54: the shipment's freight charged (B-W2a-48 Shipment.freightCharge: minor units, null = not decided) in the order's currency. */
   readonly freightCharge: number | null
   readonly orderCurrency: string
+  /** B-W2b-GF2: the shipment's ship-to snapshot (its country, postal code and town tell a special fiscal territory apart). */
+  readonly shipTo: unknown
 }
 
 export async function readDdts(db: Reader, where: Prisma.DdtWhereInput, take = 500): Promise<DdtRow[]> {
@@ -49,7 +51,8 @@ export async function readDdts(db: Reader, where: Prisma.DdtWhereInput, take = 5
       partyId: true,
       shipmentId: true,
       cancellations: { select: { id: true }, take: 1 },
-      shipment: { select: { number: true, status: true, salesOrderId: true, freightCharge: true, salesOrder: { select: { currency: true } } } },
+      // B-W2b-GF2: the ship-to (a special fiscal territory outside the EU's VAT area makes the goods an export).
+      shipment: { select: { number: true, status: true, salesOrderId: true, freightCharge: true, shipTo: true, salesOrder: { select: { currency: true } } } },
     },
   })
   return rows.map((row) => ({
@@ -65,6 +68,7 @@ export async function readDdts(db: Reader, where: Prisma.DdtWhereInput, take = 5
     cancelled: row.cancellations.length > 0,
     freightCharge: row.shipment!.freightCharge,
     orderCurrency: row.shipment!.salesOrder.currency,
+    shipTo: row.shipment!.shipTo,
   }))
 }
 

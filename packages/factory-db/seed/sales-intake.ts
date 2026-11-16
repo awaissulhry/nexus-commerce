@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   ContactLawfulBasis,
@@ -24,6 +23,7 @@ import { seed as seedPricing } from './pricing'
 import { seed as seedProduct } from './product'
 import { seed as seedSales } from './sales'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The sales intake and customers seed (W2b-5, schema wave 37/44, B-W2b-279), per tenant of seed/_core.ts, written in the
@@ -122,8 +122,8 @@ export async function seed(context: SeedContext): Promise<SalesIntakeSeed> {
   const stamp = (at: Date) => ({ createdAt: at, updatedAt: at, createdById: actorId })
   const [colourBLK] = product.colourwayIds as [string]
   const store = id('files:account:r2')
-  /** A made-up PDF kept in the seed's file store (no object behind it). */
-  const file = (fileId: string, recordType: string, recordId: string, name: string, at: Date): Prisma.StoredFileCreateManyInput => ({
+  /** A made-up PDF kept in the seed's file store (its bytes: B-W2b-F59, seed-files.ts). */
+  const file = (fileId: string, recordType: string, recordId: string, name: string, at: Date): Prisma.StoredFileCreateManyInput => seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType,
@@ -133,7 +133,6 @@ export async function seed(context: SeedContext): Promise<SalesIntakeSeed> {
     originalName: name,
     contentType: 'application/pdf',
     sizeBytes: 4096,
-    sha256: createHash('sha256').update(`seed file ${namespace} sales-intake ${fileId}`).digest('hex'),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`intake:key:${fileId}`)}`,
     status: 'AVAILABLE',
     availableAt: at,

@@ -90,6 +90,8 @@ export interface MarkingBody {
   kind?: (typeof LABEL_KINDS)[number]
   gpsrContact?: string | null
   qrTarget?: (typeof LABEL_QR_TARGETS)[number]
+  /** B-W2b-GF2 (G032): the origin claim's phrase key; null: none. */
+  originClaimKey?: string | null
 }
 
 /** A draft label's kind, GPSR contact and QR target (409 out of DRAFT or on a stale version). */

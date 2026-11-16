@@ -1,5 +1,6 @@
 import { isLabelEditable, type LabelKind, type LabelQrTarget, type LabelTemplateStatus } from '@nexus/factory-domain/compliance/labels/rules'
-import { InvalidStateError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { isOriginClaimKey, ORIGIN_CLAIM_KEYS } from '@nexus/factory-domain/compliance/textile-rules/origin'
+import { DomainError, InvalidStateError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import type { CommandCaller } from '../../../core/command'
 import type { TemplateDetail } from '../labels/contract'
@@ -13,6 +14,11 @@ import { rulesGuarded } from '../register-of-rules/common'
  * new revision copies it (compliance/labels templates.ts). compliance.labels.manage over the label's company (a
  * tenant-wide label: over every company). One command: the audit row with before and after, W1's event
  * compliance.label_template_saved (UPDATED). A database refusal answers 409 in words.
+ *
+ * B-W2b-GF2 (G032): and the origin claim it prints (`originClaimKey`, null for none): one of the origin claims the Made in
+ * Italy check knows (textile-rules ORIGIN_CLAIM_KEYS), whose phrase the library holds (an ACTIVE CLAIM phrase: its words
+ * print in the label's languages). The claim is checked against the routing by the textile rules (madeInItaly), and the
+ * label prints it only with approved words in every language it prints.
  */
 
 export interface MarkingBody {
@@ -21,12 +27,17 @@ export interface MarkingBody {
   /** The name, postal and electronic address, lines allowed; null: none. */
   readonly gpsrContact?: string | null | undefined
   readonly qrTarget?: LabelQrTarget | undefined
+  /** B-W2b-GF2: the origin claim's phrase key ("claim.made-in-italy"); null: none. */
+  readonly originClaimKey?: string | null | undefined
 }
 
-const marking = (row: Pick<TemplateRow, 'kind' | 'gpsrContact' | 'qrTarget'>) => ({ kind: row.kind, gpsrContact: row.gpsrContact, qrTarget: row.qrTarget })
+const marking = (row: Pick<TemplateRow, 'kind' | 'gpsrContact' | 'qrTarget' | 'originClaimKey'>) => ({ kind: row.kind, gpsrContact: row.gpsrContact, qrTarget: row.qrTarget, originClaimKey: row.originClaimKey })
 
 const frozen = (code: string, revision: number, status: string) =>
-  new InvalidStateError(`Label ${code} r${revision} is ${status}: its kind, GPSR contact and QR change only while it is a draft. Start a new revision of it instead.`)
+  new InvalidStateError(`Label ${code} r${revision} is ${status}: its kind, GPSR contact, QR and origin claim change only while it is a draft. Start a new revision of it instead.`)
+
+/** B-W2b-GF2: an origin claim refused, 409 `refusal/ORIGIN_CLAIM` in words. */
+const claimRefused = (message: string) => new DomainError('conflict', message, [{ path: 'refusal/ORIGIN_CLAIM', message }, { path: 'body/originClaimKey', message }])
 
 /** PUT /compliance/label-rules/templates/:templateId/marking */
 export async function setMarking(caller: CommandCaller, templateId: string, body: MarkingBody, idempotencyKey?: string): Promise<TemplateDetail> {
@@ -34,11 +45,21 @@ export async function setMarking(caller: CommandCaller, templateId: string, body
   const before = await readTemplate(caller, templateId)
   assertMayManage(context, before.companyId)
   if (!isLabelEditable(before.status as LabelTemplateStatus)) throw frozen(before.code, before.revision, before.status)
-  const data: { kind?: LabelKind; gpsrContact?: string | null; qrTarget?: LabelQrTarget } = {}
+  const data: { kind?: LabelKind; gpsrContact?: string | null; qrTarget?: LabelQrTarget; originClaimKey?: string | null } = {}
   if (body.kind !== undefined) data.kind = body.kind
   if (body.gpsrContact !== undefined) data.gpsrContact = body.gpsrContact === null || body.gpsrContact.trim() === '' ? null : body.gpsrContact.trim()
   if (body.qrTarget !== undefined) data.qrTarget = body.qrTarget
-  if (Object.keys(data).length === 0) throw new ValidationError('Nothing to change.', [{ path: 'body', message: 'Give the kind, the GPSR contact or the QR target.' }])
+  // B-W2b-GF2 (G032): an origin claim the check knows, whose phrase the library holds.
+  if (body.originClaimKey !== undefined) {
+    const key = body.originClaimKey === null || body.originClaimKey.trim() === '' ? null : body.originClaimKey.trim()
+    if (key !== null) {
+      if (!isOriginClaimKey(key)) throw claimRefused(`"${key}" is no origin claim a label may print: ${ORIGIN_CLAIM_KEYS.join(' or ')}.`)
+      const phrase = await caller.withClient((db) => db.phrase.findFirst({ where: { key, status: 'ACTIVE' }, select: { kind: true } }))
+      if (!phrase || phrase.kind !== 'CLAIM') throw claimRefused(`The phrase library holds no active claim ${key}: add it (Compliance › Phrases) so the label has its words.`)
+    }
+    data.originClaimKey = key
+  }
+  if (Object.keys(data).length === 0) throw new ValidationError('Nothing to change.', [{ path: 'body', message: 'Give the kind, the GPSR contact, the QR target or the origin claim.' }])
 
   return rulesGuarded(async () => {
     const { result } = await labelCommand(

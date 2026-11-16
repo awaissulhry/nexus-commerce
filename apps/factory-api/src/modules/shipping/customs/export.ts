@@ -6,6 +6,7 @@ import { mayOn } from '../access'
 import { declarationOf, type DeclarationRow } from './declarations'
 import { customsFactsOf, exportInvoicesOf, type CustomsFacts } from './facts'
 import { customsDocumentsOf, customsShipment, documentView, heldWords, papersHeld, postalChoiceOf, seesValuesOf } from './papers'
+import { territoryWords } from '@nexus/factory-domain/tax/special-territories'
 
 /**
  * The shipment's Export tab, read (B-W2b-409; design warehouse.shipments record › Export "Export papers": destination class,
@@ -73,7 +74,8 @@ export async function getExport(caller: CommandCaller, shipmentId: string, now: 
     const declarationHeld: CustomsRefusal | null = shipment.status === 'CANCELLED' ? 'CANCELLED' : facts.destination === null ? 'NO_DESTINATION' : facts.destination !== 'EXPORT' ? 'NOT_EXPORT' : facts.eori === null ? 'NO_EORI' : row ? 'DECLARED' : null
     return {
       shipment: { id: shipment.id, number: shipment.number, status: shipment.status, shippedAt: iso(shipment.shippedAt), siteId: shipment.siteId, companyId: shipment.companyId },
-      destination: { country: facts.country, class: facts.destination },
+      // B-W2b-GF2: the special fiscal territory, in words (it, en), with the law.
+      destination: { country: facts.country, class: facts.destination, territory: facts.territory ? { key: facts.territory.key, vat: facts.territory.vat, customs: facts.territory.customs, law: facts.territory.law, words: territoryWords(facts.territory) } : null },
       /** Only an export (outside the EU) has export papers: "Not needed: delivered in Italy / in the EU" otherwise. */
       needed: facts.destination === 'EXPORT',
       eori: facts.eori,

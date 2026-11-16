@@ -22,6 +22,8 @@ import type { CommandTools, CommandTx } from '../../../core/command'
 import type { CheckRow, ImportAdapter } from '../../../platform/imports/registry'
 import { recordReceiptInCommand } from './record'
 import { readItems, readOrderLines, type ItemRow, type OrderLineRow, type Reader } from './store'
+// B-W2b-GF5 (G140): the list asks a reason beyond the tolerance the receipt decides with (the line's own, else the delivery tolerance).
+import { lineTolerancesOf, toleranceShown } from '../../purchasing/receiving'
 
 /**
  * The tannery's hide list import's adapter (factory-domain inventory/receipts/hide-list; platform/imports; B-W2a-31,
@@ -59,6 +61,7 @@ export async function orderOf(client: Reader, companyId: string, number: string)
   const items = await readItems(client, lines.map((line) => line.itemId))
   const extra = new Map((await client.purchaseOrderLine.findMany({ where: { purchaseOrderId: order.id }, select: { id: true, supplierArticleCode: true, cancelledAt: true, closedShortAt: true } })).map((row) => [row.id, row]))
   const codes = new Map([...extra.values()].map((row) => [row.id, row.supplierArticleCode]))
+  const tolerances = await lineTolerancesOf(client, lines.map((line) => ({ ...line, order })))
   // A cancelled or closed-short line receives nothing more (the …_supply_w2a_guards trigger refuses it too).
   const view: HideListOrderLine[] = lines
     .filter((line) => !extra.get(line.id)?.cancelledAt && !extra.get(line.id)?.closedShortAt)
@@ -73,7 +76,7 @@ export async function orderOf(client: Reader, companyId: string, number: string)
         leather: item.tracking === 'HIDE',
         expected: quantityText(expectedBaseOf({ quantity: line.quantity.toString(), baseQuantity: line.baseQuantity.toString(), confirmedQuantity: line.confirmedQuantity?.toString() ?? null })),
         received: quantityText(received.get(line.id) ?? ZERO),
-        tolerancePct: line.areaTolerancePct === null ? null : line.areaTolerancePct.toString(),
+        tolerancePct: toleranceShown(tolerances.get(line.id), line.areaTolerancePct),
         baseUom: item.baseUom,
       }
     })

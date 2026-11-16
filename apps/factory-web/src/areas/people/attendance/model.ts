@@ -359,12 +359,23 @@ export function checkWords(check: Pick<LimitCheck, 'rule' | 'state' | 'values'>,
   const limit = hoursWords(number(values, 'limitMinutes'), locale)
   if (check.rule === 'OVERTIME_YEARLY_CAP') return { key: 'limit.OVERTIME_YEARLY_CAP.words', params: { year: text(values, 'year'), used: hoursWords(number(values, 'usedMinutes'), locale), limit } }
   if (check.rule === 'WEEKLY_AVERAGE') return { key: 'limit.WEEKLY_AVERAGE.words', params: { average: hoursWords(number(values, 'averageMinutes'), locale), weeks: number(values, 'weeks'), limit, months: number(values, 'referenceMonths') } }
+  // B-W2b-GF2: weekly rest (art. 9) and night work (art. 13).
+  if (check.rule === 'WEEKLY_REST') {
+    const needed = hoursWords(number(values, 'neededMinutes'), locale)
+    const daily = hoursWords(number(values, 'dailyRestMinutes'), locale)
+    if (!('restMinutes' in values)) return { key: 'limit.WEEKLY_REST.ok', params: { limit, daily, needed } }
+    return { key: 'from' in values ? 'limit.WEEKLY_REST.rest' : 'limit.WEEKLY_REST.none', params: { rest: hoursWords(number(values, 'restMinutes'), locale), from: text(values, 'from'), to: text(values, 'to'), limit, daily, needed } }
+  }
+  if (check.rule === 'NIGHT_AVERAGE') {
+    if (!('workMinutes' in values)) return { key: 'limit.NIGHT_AVERAGE.ok', params: { limit } }
+    return { key: 'limit.NIGHT_AVERAGE.words', params: { work: hoursWords(number(values, 'workMinutes'), locale), night: hoursWords(number(values, 'nightMinutes'), locale), from: text(values, 'from'), to: text(values, 'to'), limit } }
+  }
   if ('restMinutes' in values) return { key: 'limit.DAILY_REST.rest', params: { rest: hoursWords(number(values, 'restMinutes'), locale), from: text(values, 'from'), to: text(values, 'to'), limit } }
   if ('spanMinutes' in values) return { key: 'limit.DAILY_REST.span', params: { span: hoursWords(number(values, 'spanMinutes'), locale), from: text(values, 'from'), to: text(values, 'to'), limit } }
   return { key: 'limit.DAILY_REST.ok', params: { limit } }
 }
 
-export const LIMIT_LAW: Readonly<Record<CheckedLimit, string>> = { OVERTIME_YEARLY_CAP: 'law.cap', DAILY_REST: 'law.rest', WEEKLY_AVERAGE: 'law.average' }
+export const LIMIT_LAW: Readonly<Record<CheckedLimit, string>> = { OVERTIME_YEARLY_CAP: 'law.cap', DAILY_REST: 'law.rest', WEEKLY_AVERAGE: 'law.average', WEEKLY_REST: 'law.weeklyRest', NIGHT_AVERAGE: 'law.night' }
 
 /** A limit's tone: never by colour alone, the pill says its state. */
 export function toneOf(check: Pick<LimitTone, 'state' | 'level'>): 'success' | 'warning' | 'danger' {

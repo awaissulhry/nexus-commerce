@@ -22,6 +22,7 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedProduct } from './product'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The sizes, measurements and made-to-measure rules seed (W2b-4 schema wave 27/33, B-W2b-210), per tenant of
@@ -250,9 +251,9 @@ export async function seed(context: SeedContext): Promise<SizesDepthSeed> {
           garment(result.pointIds.inseamG, 'INSEAM_G', words('Interno gamba capo', 'Garment inseam'), BodyZone.LEGS, '1.00', { bodyPointId: result.pointIds.inseam }),
         ],
       })
-      // The back length's how-to picture: a photo of the point (a row only: the object is not in the store).
+      // The back length's how-to picture: a photo of the point (a row; its bytes: B-W2b-F59, seed-files.ts).
       await tx.storedFile.create({
-        data: {
+        data: seedFile(tenantId, {
           id: result.pictureFileId,
           recordType: 'PointOfMeasure',
           recordId: result.pointIds.backLen,
@@ -260,13 +261,12 @@ export async function seed(context: SeedContext): Promise<SizesDepthSeed> {
           originalName: 'Seed back length.jpg',
           contentType: 'image/jpeg',
           sizeBytes: 4096,
-          sha256: seedUuid(namespace, 'sizes:sha:back-length').replace(/-/g, '').padEnd(64, '0'),
           storageKey: `t/${tenantId}/tenant/2026/${id('sizes:key:back-length')}`,
           storeAccountId: store,
           status: 'AVAILABLE',
           availableAt: T.library,
           ...stamp(T.library),
-        },
+        }),
         select: { id: true },
       })
       await tx.pointOfMeasure.update({ where: { id: result.pointIds.backLen }, data: { pictureFileId: result.pictureFileId }, select: { id: true } })

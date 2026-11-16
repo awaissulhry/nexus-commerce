@@ -1,4 +1,6 @@
 import PDFDocument from 'pdfkit'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from './fonts'
 import { imageSizeOf } from '@nexus/factory-domain/branding/rules'
 import { pageLabel, type ComposedBlock, type ComposedDocument, type ComposedFact } from '@nexus/factory-domain/documents/compose'
 
@@ -19,34 +21,22 @@ import { pageLabel, type ComposedBlock, type ComposedDocument, type ComposedFact
  *   │ legal line (art. 2250) · footer text           Pagina 1 di 2│  every page
  *   └───────────────────────────────────────────────────────────┘
  *
- * Fonts: the PDF standard fonts Helvetica and Helvetica-Bold (WinAnsi text; nothing embedded, nothing read at run time
- * but pdfkit's own metrics files, which stay in node_modules/pdfkit beside the external package in dist). A character
- * WinAnsi lacks is printed as "?". Metadata comes from the composition only (the creation date is the document's date),
- * so the same document gives the same bytes.
+ * Fonts (B-W2b-GF2, G076): Liberation Sans regular and bold, embedded as subsets (./fonts.ts: Helvetica's metrics, so the
+ * geometry is unchanged), so Polish, Greek, Czech and every other European letter prints as written; a character the
+ * fonts lack (CJK, emoji) prints "?". Until G076 the PDF standard fonts (WinAnsi) printed "?" for any of them.
+ * Metadata comes from the composition only (the creation date is the document's date), so the same document gives the
+ * same bytes.
  */
 
 export const PDF_CREATOR = 'Nexus Factory'
-const REGULAR = 'Helvetica'
-const BOLD = 'Helvetica-Bold'
+const REGULAR = FONT.regular
+const BOLD = FONT.bold
 const TEXT = '#111111'
 const MUTED = '#555555'
 const RULE = '#9a9a9a'
 const SHADE = '#ececec'
 const MARGIN = { top: 40, bottom: 60, left: 42, right: 42 } as const
 const FOOTER_TOP = 50
-
-// The characters 0x80-0x9F of WinAnsi, the encoding of the standard fonts; with Latin-1 they are what can be printed.
-const WIN_ANSI_EXTRA = new Set('€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ')
-
-/** Text the standard fonts can print: printable Latin-1 and WinAnsi's extra characters; anything else becomes "?". */
-export function winAnsi(text: string): string {
-  let out = ''
-  for (const char of text) {
-    const code = char.codePointAt(0)!
-    out += (code >= 0x20 && code <= 0x7e) || (code >= 0xa0 && code <= 0xff) || WIN_ANSI_EXTRA.has(char) ? char : char === '\n' ? ' ' : '?'
-  }
-  return out
-}
 
 /** The PDF of a composed document. */
 export async function renderDocumentPdf(document: ComposedDocument): Promise<Buffer> {
@@ -58,15 +48,16 @@ export async function renderDocumentPdf(document: ComposedDocument): Promise<Buf
     lang: document.language,
     displayTitle: true,
     info: {
-      Title: winAnsi(document.meta.title),
-      Author: winAnsi(document.meta.author),
-      Subject: winAnsi(document.meta.subject),
-      Keywords: winAnsi(document.meta.keywords),
+      Title: printableText(document.meta.title),
+      Author: printableText(document.meta.author),
+      Subject: printableText(document.meta.subject),
+      Keywords: printableText(document.meta.keywords),
       Creator: PDF_CREATOR,
       Producer: PDF_CREATOR,
       CreationDate: new Date(document.meta.createdAt),
     },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -122,10 +113,10 @@ function paint(pdf: Pdf, document: ComposedDocument, logo: Buffer | null = null)
   const bottom = (): number => pdf.page.height - MARGIN.bottom
   const text = (value: string, x: number, y: number, options: PDFKit.Mixins.TextOptions & { font?: string; size?: number; color?: string } = {}): number => {
     const { font = REGULAR, size = 9, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1, ...rest })
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1, ...rest })
     return pdf.y
   }
-  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => pdf.font(font).fontSize(size).heightOfString(winAnsi(value), { width: w, lineGap: 1 })
+  const heightOf = (value: string, w: number, font = REGULAR, size = 9): number => pdf.font(font).fontSize(size).heightOfString(printableText(value), { width: w, lineGap: 1 })
 
   // Header: the company on the left, the title and identity on the right.
   const companyWidth = Math.round(width * 0.58)

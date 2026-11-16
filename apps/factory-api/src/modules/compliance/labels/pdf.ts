@@ -4,14 +4,16 @@ import type { RenderedLabel } from '@nexus/factory-domain/compliance/labels/rend
 import { hundredthsOf, LAYOUT_PRESETS } from '@nexus/factory-domain/compliance/labels/rules'
 import { barHeight, blockPositions, graphicHeight } from '@nexus/factory-domain/compliance/labels/zpl'
 import { code128Bars } from '@nexus/factory-domain/labels/code128'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 
 /**
  * The garment label as a PDF page of the label's size (B-W1-19; the browser's fallback and the proof on paper, design 02
  * `lb-sheet`), in the geometry of factory-domain compliance/labels/zpl.ts (hundredths of a millimetre): the CE mark, the
  * pictogram's box with the standard and the class, the care symbols' boxes (stand-ins until the licensed artwork, W2b),
  * the batch number or serial as Code 128 bars (a preview's empty bar row as a box), the QR to the public DoC page (W2b,
- * B-W2b-253), the text lines, and a sample's black SAMPLE band across the middle. pdfkit's standard fonts, a fixed creation date:
+ * B-W2b-253), the text lines, and a sample's black SAMPLE band across the middle. the documents platform's embedded fonts (B-W2b-GF2), a fixed creation date:
  * the same label gives the same bytes. Stored nowhere.
  */
 
@@ -43,8 +45,9 @@ export async function renderGarmentLabelPdf(label: RenderedLabel): Promise<Buffe
     autoFirstPage: false,
     compress: true,
     lang: label.languages[0] ?? 'it',
-    info: { Title: winAnsi(`${label.template.code} r${label.template.revision}${label.sample ? ' SAMPLE' : ''}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(0) },
+    info: { Title: printableText(`${label.template.code} r${label.template.revision}${label.sample ? ' SAMPLE' : ''}`), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(0) },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -55,8 +58,8 @@ export async function renderGarmentLabelPdf(label: RenderedLabel): Promise<Buffe
   const preset = LAYOUT_PRESETS[label.preset]
   const inner = pt(width - 2 * preset.margin)
   const write = (value: string, x: number, y: number, hundredths: number, options: { bold?: boolean; colour?: string; width?: number } = {}): void => {
-    pdf.font(options.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(pt(hundredths)).fillColor(options.colour ?? '#000000')
-    pdf.text(winAnsi(value), pt(x), pt(y), { width: options.width ?? inner, lineBreak: false, height: pt(hundredths) * 1.2 })
+    pdf.font(options.bold ? FONT.bold : FONT.regular).fontSize(pt(hundredths)).fillColor(options.colour ?? '#000000')
+    pdf.text(printableText(value), pt(x), pt(y), { width: options.width ?? inner, lineBreak: false, height: pt(hundredths) * 1.2 })
   }
 
   pdf.addPage({ size, margin: 0 })

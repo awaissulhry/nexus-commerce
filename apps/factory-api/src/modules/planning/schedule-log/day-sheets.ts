@@ -11,7 +11,9 @@ import { uniformBuckets } from '@nexus/factory-domain/planning/settings/buckets'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 import { siteFor } from '../access'
 import { capacityAnswer } from '../capacity/service'
 import { dayOf, type Reader, type SiteRow } from '../store'
@@ -161,7 +163,8 @@ export async function daySheetsPdf(caller: CommandCaller, query: SheetQuery): Pr
 }
 
 export async function render(paper: DaySheetPaper): Promise<Buffer> {
-  const pdf = new PDFDocument({ size: 'A4', layout: 'landscape', margins: MARGIN, bufferPages: true, compress: true, lang: paper.language, displayTitle: true, autoFirstPage: false, info: { Title: winAnsi(paper.title), Creator: PDF_CREATOR, Producer: PDF_CREATOR } })
+  const pdf = new PDFDocument({ size: 'A4', layout: 'landscape', margins: MARGIN, bufferPages: true, compress: true, lang: paper.language, displayTitle: true, autoFirstPage: false, info: { Title: printableText(paper.title), Creator: PDF_CREATOR, Producer: PDF_CREATOR } })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -174,16 +177,16 @@ export async function render(paper: DaySheetPaper): Promise<Buffer> {
   const bottom = pdf.page.height - MARGIN.bottom
   const widths = SHARES.map((share) => share * width)
   const text = (value: string, x: number, y: number, options: PDFKit.Mixins.TextOptions & { font?: string; size?: number; color?: string } = {}): number => {
-    const { font = 'Helvetica', size = 8, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1, ...rest })
+    const { font = FONT.regular, size = 8, color = TEXT, ...rest } = options
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1, ...rest })
     return pdf.y
   }
-  const heightOf = (cells: readonly string[]): number => Math.max(...cells.map((cell, index) => pdf.font('Helvetica').fontSize(8).heightOfString(winAnsi(cell || ' '), { width: widths[index]! - 6, lineGap: 1 }))) + 6
+  const heightOf = (cells: readonly string[]): number => Math.max(...cells.map((cell, index) => pdf.font(FONT.regular).fontSize(8).heightOfString(printableText(cell || ' '), { width: widths[index]! - 6, lineGap: 1 }))) + 6
   const tableHead = (y: number): number => {
     pdf.save().rect(left, y, width, 15).fillColor(SHADE).fill().restore()
     let x = left
     paper.columns.forEach((column, index) => {
-      text(column, x + 3, y + 4, { font: 'Helvetica-Bold', size: 7, width: widths[index]! - 6 })
+      text(column, x + 3, y + 4, { font: FONT.bold, size: 7, width: widths[index]! - 6 })
       x += widths[index]!
     })
     return y + 15
@@ -191,9 +194,9 @@ export async function render(paper: DaySheetPaper): Promise<Buffer> {
   paper.sheets.forEach((sheet, sheetIndex) => {
     if (sheetIndex > 0) pdf.addPage()
     let y = text(paper.title, left, MARGIN.top, { size: 10, color: MUTED, width })
-    y = text(sheet.heading, left, y + 1, { font: 'Helvetica-Bold', size: 16, width })
+    y = text(sheet.heading, left, y + 1, { font: FONT.bold, size: 16, width })
     y = text(sheet.facts.map((fact) => `${fact.label}: ${fact.value}`).join('   ·   '), left, y + 3, { size: 8.5, color: MUTED, width }) + 4
-    if (sheet.banner) y = text(sheet.banner, left, y + 2, { font: 'Helvetica-Bold', size: 9, color: RUSH, width }) + 4
+    if (sheet.banner) y = text(sheet.banner, left, y + 2, { font: FONT.bold, size: 9, color: RUSH, width }) + 4
     if (sheet.empty) {
       text(sheet.empty, left, y + 12, { size: 12, width })
       return
@@ -213,7 +216,7 @@ export async function render(paper: DaySheetPaper): Promise<Buffer> {
       })
       y += height
     }
-    text(sheet.footer, left, y + 3, { font: 'Helvetica-Bold', size: 8.5, width, align: 'right' })
+    text(sheet.footer, left, y + 3, { font: FONT.bold, size: 8.5, width, align: 'right' })
   })
   const range = pdf.bufferedPageRange()
   for (let index = range.start; index < range.start + range.count; index++) {

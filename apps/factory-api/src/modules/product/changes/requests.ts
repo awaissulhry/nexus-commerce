@@ -144,12 +144,14 @@ export async function updateRequest(caller: CommandCaller, changeRequestId: stri
 
 /** POST /product/change-requests/:id/move: the office's triage. */
 export async function moveRequest(caller: CommandCaller, changeRequestId: string, body: MoveRequestBody, idempotencyKey?: string): Promise<RequestView> {
-  const { row: seen } = await readRequestFor(caller, changeRequestId, PRODUCT_CHANGES_MANAGE)
-  refuse(requestMoveRefusal(seen, body.to, body.note ?? null))
+  const { context, row: seen } = await readRequestFor(caller, changeRequestId, PRODUCT_CHANGES_MANAGE)
+  // B-W2b-GF5 (G282): the raiser never accepts their own request (Owner rule: never self-approve).
+  const triager = (row: Pick<RequestData, 'createdById'>) => ({ raisedById: row.createdById, personId: context.actorId })
+  refuse(requestMoveRefusal(seen, body.to, body.note ?? null, triager(seen)))
   await command(caller, { name: 'product.changes.moveRequest', idempotencyKey, input: { changeRequestId, ...body }, record: { type: 'ChangeRequest', id: changeRequestId, expectedVersion: body.version } }, async (tools) => {
     const { tx, now } = tools
     const row = await tx.changeRequest.findUniqueOrThrow({ where: { id: changeRequestId }, select: REQUEST_COLUMNS })
-    refuse(requestMoveRefusal(row, body.to, body.note ?? null))
+    refuse(requestMoveRefusal(row, body.to, body.note ?? null, triager(row)))
     const number = await numberIfNeeded(tools, row)
     const decided = body.to === 'IN_REVIEW' ? {} : { decidedAt: now, decidedById: authorOf(tools), decisionNote: body.note ?? null }
     await tx.changeRequest.update({ where: { id: changeRequestId }, data: { number, status: body.to, ...decided }, select: { id: true } })
@@ -220,7 +222,8 @@ export async function readRequest(caller: CommandCaller, changeRequestId: string
     })
     const manage = may(context, PRODUCT_CHANGES_MANAGE, row.companyId)
     const moves = TRIAGE.map((to) => {
-      const refusal = manage ? requestMoveRefusal(row, to, 'given') : { code: 'REQUEST_MOVE' as const, message: 'Your role does not triage change requests.' }
+      // B-W2b-GF5 (G282): the move held for the raiser with the same words the move answers.
+      const refusal = manage ? requestMoveRefusal(row, to, 'given', { raisedById: row.createdById, personId: context.actorId }) : { code: 'REQUEST_MOVE' as const, message: 'Your role does not triage change requests.' }
       return { to, allowed: refusal === null, refusal }
     })
     const workOrderSite = row.workOrderId ? await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { companyId: true, siteId: true } }) : null

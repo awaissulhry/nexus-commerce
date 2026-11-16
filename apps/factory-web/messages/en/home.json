@@ -583,6 +583,8 @@
       "alerts.WORKING_TIME_LIMIT.OVERTIME_YEARLY_CAP": "Site {label}: someone is close to or over the yearly overtime cap.",
       "alerts.WORKING_TIME_LIMIT.DAILY_REST": "Site {label}: someone is under the minimum rest, or would be before their next shift.",
       "alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE": "Site {label}: someone is close to or over the weekly average of working hours.",
+      "alerts.WORKING_TIME_LIMIT.WEEKLY_REST": "Site {label}: someone had less than the weekly rest, or would have it with the plan.",
+      "alerts.WORKING_TIME_LIMIT.NIGHT_AVERAGE": "Site {label}: a night shift is over the night workers' limit of hours, worked or planned.",
       "alerts.LOW_STOCK": "{label} is below its minimum: {position} {unit} against {minimum} {unit}.",
       "alerts.PO_CONFIRMED_LATE": "Purchase order {label} is confirmed for {confirmedDate}, {days} days after it is needed ({needDate}).",
       "alerts.PO_CONFIRMED_LATE.AT_RISK": "Purchase order {label} is confirmed for {confirmedDate}, {days} days after it is needed ({needDate}): it puts customer order {salesOrder} at risk.",

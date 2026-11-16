@@ -481,8 +481,19 @@ export function repairHeld(action: RepairAction, repair: Pick<Repair, 'stage' | 
       if (wo) return DONE_WO.includes(wo.status) ? { key: 'held.workOrderDone', params: { number: wo.number } } : { key: 'held.cancelWorkOrderFirst', params: { number: wo.number } }
       if (repair.ddts.some((ddt) => ddt.live)) return { key: 'held.liveDdt' }
       return { key: 'held.notNow' }
+    // B-W2b-GF5 (G513): only a repaired protective garment whose check after the repair failed is scrapped.
+    case 'scrap':
+      if (stage !== 'REPAIRED') return { key: 'held.scrapOnlyFailed' }
+      if (!repair.safety.required) return { key: 'held.noCheckNeeded' }
+      if (repair.safety.state === 'PASSED') return { key: 'held.scrapPassed' }
+      if (repair.safety.state !== 'FAILED') return { key: 'held.scrapNotChecked' }
+      if (repair.ddts.some((ddt) => ddt.live)) return { key: 'held.liveDdt' }
+      return { key: 'held.notNow' }
   }
 }
+
+/** B-W2b-GF5 (G513): the repair ended in a scrap (cancelled after the repair, its last check failed). */
+export const isScrapped = (repair: Pick<Repair, 'stage' | 'repairedAt' | 'safety'>): boolean => repair.stage === 'CANCELLED' && repair.repairedAt !== null && repair.safety.state === 'FAILED'
 
 export function repairStep(action: RepairAction, repair: Repair, can: ReturnsCan, offline: boolean): Words | null {
   const right: Partial<Record<RepairAction, ReturnsAbility[]>> = {
@@ -497,6 +508,7 @@ export function repairStep(action: RepairAction, repair: Repair, can: ReturnsCan
     safetyCheck: ['repairsCheck'],
     ship: ['repairsShip'],
     cancel: ['repairsManage'],
+    scrap: ['repairsManage'],
   }
   const missing = (right[action] ?? []).find((ability) => !can[ability])
   if (missing) return { key: `held.right.${missing}` }

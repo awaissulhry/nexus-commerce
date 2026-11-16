@@ -1,3 +1,5 @@
+// B-W2b-GF2: the EU's special fiscal territories, told apart by the address.
+import { specialTerritoryOf, type TerritoryAddress } from '../../tax/special-territories'
 import type { CurrencyCode } from '../../core/money'
 import { Dec, type Decimal } from '../../tax/decimal'
 
@@ -36,12 +38,20 @@ export type DestinationClass = (typeof DESTINATION_CLASSES)[number]
 /** The company's own country: every factory company is Italian (VAT, SDI, DDT). */
 export const HOME_COUNTRY = 'IT'
 
-/** Where goods for this country go (null: no country known). The EU's special fiscal territories are not told apart. */
-export function destinationClassOf(country: string | null | undefined, home: string = HOME_COUNTRY): DestinationClass | null {
+/**
+ * Where goods for this country go (null: no country known). B-W2b-GF2 (G463): with the address's postal code and town,
+ * the EU's special fiscal territories are told apart (tax/special-territories.ts): a place outside the EU's VAT area —
+ * Livigno or Campione d'Italia at home, the Canary Islands, Ceuta, Melilla, Mount Athos, Heligoland, Büsingen, Åland,
+ * France's overseas departments — is an EXPORT (export papers); Monaco is in the EU (France's VAT area).
+ */
+export function destinationClassOf(country: string | null | undefined, home: string = HOME_COUNTRY, address: Omit<TerritoryAddress, 'country'> = {}): DestinationClass | null {
   const code = typeof country === 'string' ? country.trim().toUpperCase() : ''
   if (!/^[A-Z]{2}$/.test(code)) return null
-  if (code === home) return 'DOMESTIC'
-  return (EU_COUNTRIES as readonly string[]).includes(code) ? 'EU' : 'EXPORT'
+  const territory = specialTerritoryOf({ country: code, ...address })
+  if (territory?.vat === 'OUTSIDE') return 'EXPORT'
+  const state = territory?.state ?? code
+  if (state === home) return 'DOMESTIC'
+  return (EU_COUNTRIES as readonly string[]).includes(state) ? 'EU' : 'EXPORT'
 }
 
 /** An EORI as Company.eori keeps it (the database's own pattern). */

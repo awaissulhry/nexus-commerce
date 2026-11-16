@@ -44,6 +44,9 @@ export const REST_WARNING: LimitWarning = { rule: 'DAILY_REST', level: 'WARN', d
 export const REST_BLOCK: LimitWarning = { ...REST_WARNING, level: 'BLOCK', date: '2026-11-05' }
 export const WEEK_WARNING: LimitWarning = { rule: 'WEEKLY_AVERAGE', level: 'WARN', date: '2026-11-06', law: 'D.Lgs. 66/2003 art. 4', values: { weekMinutes: 3180, averageMinutes: 2940, weeks: 4, limitMinutes: 2880, referenceMonths: 4, week: '2026-11-02', periodFrom: '2026-10-12' }, isNew: false }
 export const CAP_WARNING: LimitWarning = { rule: 'OVERTIME_YEARLY_CAP', level: 'WARN', date: '2026-11-06', law: 'D.Lgs. 66/2003 art. 5', values: { plannedMinutes: 15120, limitMinutes: 15000, year: '2026' }, isNew: true }
+// B-W2b-GF2 (G205): the weekly rest (art. 9) and night work (art. 13) warn on the roster too.
+export const WEEKLY_REST_WARNING: LimitWarning = { rule: 'WEEKLY_REST', level: 'WARN', date: '2026-11-08', law: 'D.Lgs. 66/2003 art. 9', values: { restMinutes: 960, neededMinutes: 2100, limitMinutes: 1440, dailyRestMinutes: 660, week: '2026-11-02', from: 'Mon 14:00', to: 'Tue 06:00' }, isNew: false }
+export const NIGHT_WARNING: LimitWarning = { rule: 'NIGHT_AVERAGE', level: 'WARN', date: '2026-11-04', law: 'D.Lgs. 66/2003 art. 13', values: { workMinutes: 570, nightMinutes: 480, limitMinutes: 480, from: '22:00', to: '08:00' }, isNew: false }
 
 function row(person: { id: string; name: string; displayName: string }, line: Ref | null, team: Ref | null, choice: ShiftChoice, over: Partial<RosterRow> = {}, site: Ref = SITE_N, dates = eachDay(RANGE.from, RANGE.to), patch: Record<string, Partial<RosterCell>> = {}): RosterRow {
   return {
@@ -84,7 +87,7 @@ export function rosterRows(dates = eachDay(RANGE.from, RANGE.to)): RosterRow[] {
       ...patch('2026-11-05', { source: 'ROSTER', value: work(MORNING), entry: entry('DRAFT', 3), warnings: [REST_BLOCK] }),
       ...patch('2026-11-06', { source: 'ROSTER', value: OFF, entry: entry('PUBLISHED', 4) }),
     }),
-    row(PEOPLE.elena, LINE_B_REF, TEAM_B, AFTERNOON, {}, SITE_N, dates, { ...patch('2026-11-06', { warnings: [WEEK_WARNING] }) }),
+    row(PEOPLE.elena, LINE_B_REF, TEAM_B, AFTERNOON, {}, SITE_N, dates, { ...patch('2026-11-04', { warnings: [NIGHT_WARNING] }), ...patch('2026-11-06', { warnings: [WEEK_WARNING] }), ...patch('2026-11-08', { warnings: [WEEKLY_REST_WARNING] }) }),
     row(PEOPLE.marta, LINE_B_REF, TEAM_B, DAY, { lastWorkingDay: '2026-11-05', canEdit: true }, SITE_N, dates, {
       ...patch('2026-11-06', { source: 'NONE', value: null, issue: 'AFTER_LAST_DAY', fallback: null }),
     }),

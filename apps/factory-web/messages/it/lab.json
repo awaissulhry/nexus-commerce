@@ -370,6 +370,7 @@
     "PPE_CERTIFICATE": "Certificato DPI",
     "SUPPLIER_DOCUMENTS": "Documenti del fornitore",
     "HOLD": "Blocco di chi ha ricevuto",
+    "INCOMING": "Ispezione in arrivo",
     "RELEASER": "Chi rilascia"
   },
   "decide": {

@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react'
 import { Download, FilePlus2, Globe2, MoreHorizontal, ShieldCheck } from 'lucide-react'
-import { isEuCountry } from '@nexus/factory-domain/shipping/evidence/evidence'
+import { destinationClassOf } from '@nexus/factory-domain/shipping/customs/rules'
+import { specialTerritoryOf } from '@nexus/factory-domain/tax/special-territories'
 import { Card, EmptyState, KeyValue, Menu } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { FileRow } from '../../../../../lib/i18n/ds-parts'
@@ -28,7 +29,11 @@ export function ExportTab({ shipment, model, actions, papers }: { shipment: Ship
   const t = useT('shipments')
   const locale = useLocale()
   const country = typeof shipment.shipTo.country === 'string' && shipment.shipTo.country ? shipment.shipTo.country.toUpperCase() : null
-  const destination = !country ? 'unknown' : country === 'IT' ? 'italy' : isEuCountry(country) ? 'eu' : 'outside'
+  // B-W2b-GF2: the postal code and town tell a special fiscal territory apart (outside the EU's VAT area: export papers).
+  const place = { postalCode: typeof shipment.shipTo.postalCode === 'string' ? shipment.shipTo.postalCode : null, city: typeof shipment.shipTo.city === 'string' ? shipment.shipTo.city : null }
+  const territory = country ? specialTerritoryOf({ country, ...place }) : null
+  const where = destinationClassOf(country, undefined, place)
+  const destination = !country || where === null ? 'unknown' : territory?.vat === 'OUTSIDE' ? 'special' : where === 'DOMESTIC' ? 'italy' : where === 'EU' ? 'eu' : 'outside'
   const evidence = model.evidence.value
   return (
     <div className="fw-sh-cards fw-sh-cards--wide">
@@ -50,7 +55,7 @@ export function ExportTab({ shipment, model, actions, papers }: { shipment: Ship
           <KeyValue
             labelCase="sentence"
             items={[
-              { label: t('export.destination'), value: t(`export.class.${destination}`, { country: country ? regionName(country, locale) : '—' }) },
+              { label: t('export.destination'), value: t(`export.class.${destination}`, { country: country ? regionName(country, locale) : '—', territory: territory ? (locale.startsWith('it') ? territory.words.it : territory.words.en) : '' }) },
               { label: t('export.shipTo'), value: [typeof shipment.shipTo.city === 'string' ? shipment.shipTo.city : null, country].filter(Boolean).join(' · ') || '—' },
             ]}
           />

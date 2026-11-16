@@ -269,6 +269,10 @@
       "message": "I controlli sono fermi in questo stabilimento finché il reparto non è pronto.",
       "fix": "Chiedi al tuo capo squadra."
     },
+    "MAKER": {
+      "message": "Hai fatto capi di questo ordine di lavoro: decide il primo capo un altro ispettore, che non ne ha fatto nessuno.",
+      "fix": "Chiedi a un altro ispettore di decidere il primo capo."
+    },
     "BUNDLE_NOT_ACTIVE": {
       "message": "Questo fascio è annullato o sostituito.",
       "fix": "Scansiona il cartellino attuale del fascio."

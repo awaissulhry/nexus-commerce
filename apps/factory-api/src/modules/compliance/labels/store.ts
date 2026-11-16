@@ -130,6 +130,8 @@ export function factsOf(row: TemplateRow): LabelTemplateFacts {
     kind: row.kind as LabelKind,
     gpsrContact: row.gpsrContact,
     qrTarget: row.qrTarget as LabelQrTarget,
+    // B-W2b-GF2 (G032): the origin claim it prints.
+    originClaimKey: row.originClaimKey,
   }
 }
 

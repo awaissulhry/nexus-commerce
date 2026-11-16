@@ -70,6 +70,8 @@ export const checksView = output({
     madeInItaly: verdict,
     fullMadeInItaly: verdict,
     styleOrigin: z.string().nullable(),
+    /** B-W2b-GF2 (G032): the origin claim the label prints and the verdict it needs; null: none. */
+    claim: output({ key: z.string(), verdict }).nullable(),
     steps: z.array(
       output({
         seq: z.number().int(),

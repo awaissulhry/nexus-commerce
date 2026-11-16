@@ -45,6 +45,8 @@ export const LOT_SELECT = {
   version: true,
   createdAt: true,
   createdById: true,
+  // B-W2b-GF5 (G369): a lot made by a split answers to its parent's incoming inspection too.
+  parentLotId: true,
   item: { select: { id: true, code: true, name: true, kind: true, isPpeComponent: true } },
 } as const satisfies Prisma.LotSelect
 export type LotRow = Prisma.LotGetPayload<{ select: typeof LOT_SELECT }>

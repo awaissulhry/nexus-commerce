@@ -2,7 +2,9 @@ import PDFDocument from 'pdfkit'
 import { fitText, zplText } from '@nexus/factory-domain/labels/zpl'
 import type { CarrierLabel, CarrierLabelRequest, LabelDocument, LabelFormat } from '@nexus/factory-domain/ports/carrier'
 import { testLabelOf, testLabelText, type TestLabelText } from '@nexus/factory-domain/shipping/test-mode/rules'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 
 /**
  * The TEST carrier of test mode (B-W2b-390; LOG-035): makes a parcel's label in the process — no gateway call, no Sendcloud
@@ -53,7 +55,8 @@ export async function testLabelPdf(text: TestLabelText): Promise<Buffer> {
   const height = pt(TEST_LABEL_STOCK.heightMm)
   const margin = pt(5)
   const inner = width - 2 * margin
-  const pdf = new PDFDocument({ size: [width, height], margin: 0, compress: true, info: { Title: winAnsi(text.title), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(0) } })
+  const pdf = new PDFDocument({ size: [width, height], margin: 0, compress: true, info: { Title: printableText(text.title), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(0) } })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -61,10 +64,10 @@ export async function testLabelPdf(text: TestLabelText): Promise<Buffer> {
     pdf.on('error', reject)
   })
   pdf.rect(margin, pt(5), inner, pt(28)).fill('#000000')
-  pdf.font('Helvetica-Bold').fontSize(pt(22)).fillColor('#ffffff').text(text.banner, margin, pt(8), { width: inner, align: 'center', lineBreak: false })
+  pdf.font(FONT.bold).fontSize(pt(22)).fillColor('#ffffff').text(text.banner, margin, pt(8), { width: inner, align: 'center', lineBreak: false })
   const line = (value: string, y: number, sizeMm: number, bold = false): void => {
-    pdf.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(pt(sizeMm)).fillColor('#000000')
-    pdf.text(winAnsi(value), margin, pt(y), { width: inner, lineBreak: false, ellipsis: true, height: pt(sizeMm) * 1.3 })
+    pdf.font(bold ? FONT.bold : FONT.regular).fontSize(pt(sizeMm)).fillColor('#000000')
+    pdf.text(printableText(value), margin, pt(y), { width: inner, lineBreak: false, ellipsis: true, height: pt(sizeMm) * 1.3 })
   }
   line(text.title, 37, 5, true)
   line(text.notice, 44, 3.2)

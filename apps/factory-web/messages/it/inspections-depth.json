@@ -733,8 +733,10 @@
     "placeHold_one": "Metti in blocco {count} pelle…",
     "placeHold_other": "Metti in blocco {count} pelli…",
     "lotRelease": "Apri il lotto (il rilascio è del laboratorio)",
+    "heldBy": "Bloccate alla decisione:",
     "held": {
-      "noHides": "Nessuna pelle respinta o da selezionare da bloccare."
+      "noHides": "Nessuna pelle respinta o da selezionare da bloccare.",
+      "allHeld": "Ogni pelle non accettata è in blocco o non è più nel lotto."
     }
   },
   "new": {

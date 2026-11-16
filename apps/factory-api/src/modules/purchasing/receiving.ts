@@ -133,3 +133,50 @@ export async function receiptTolerancesOf(tx: Pick<CommandTx, 'item' | 'delivery
 /** A line's tolerance as factory-domain inventory/receipts lineDifference and orderStatusAfter take it. */
 export const differenceTolerance = (tolerance: ReceiptTolerance | undefined, areaTolerancePct: { toString(): string } | null): { tolerancePct: string | null; underPct: string | null } =>
   tolerance ? { tolerancePct: tolerance.overPct, underPct: tolerance.underPct } : { tolerancePct: areaTolerancePct?.toString() ?? null, underPct: null }
+
+// ---- B-W2b-GF5 (G140): what the screens show is the tolerance the receipt decides with ---------------------------------------
+
+/** An order line as the reads know it, with the order it belongs to (its company and supplier choose the delivery tolerance). */
+export interface ToleranceLine {
+  readonly id: string
+  readonly itemId: string
+  readonly areaTolerancePct: { toString(): string } | null
+  readonly order: { readonly companyId: string; readonly partyId: string }
+}
+
+/**
+ * The tolerance each order line of one or several orders is received with, read in one pass of the rules: the same answer as
+ * receiptTolerancesOf (the line's own, else the most specific ACTIVE delivery tolerance, else none), for the reads — the
+ * goods-in tablet's expected orders and receipts, a receipt's record, what is still expected — so they say what the receipt
+ * command decides on (SCM-061).
+ */
+export async function lineTolerancesOf(tx: Pick<CommandTx, 'item' | 'deliveryTolerance'>, lines: readonly ToleranceLine[]): Promise<Map<string, ReceiptTolerance>> {
+  if (lines.length === 0) return new Map()
+  const itemIds = [...new Set(lines.map((line) => line.itemId))]
+  const items = await tx.item.findMany({ where: { id: { in: itemIds } }, select: { id: true, kind: true } })
+  const kinds = new Map(items.map((item) => [item.id, item.kind as string]))
+  const companies = [...new Set(lines.map((line) => line.order.companyId))]
+  const suppliers = [...new Set(lines.map((line) => line.order.partyId))]
+  const rows = await tx.deliveryTolerance.findMany({
+    where: { status: 'ACTIVE', OR: [{ companyId: null }, { companyId: { in: companies } }], AND: [{ OR: [{ supplierId: null }, { supplierId: { in: suppliers } }] }] },
+    select: { id: true, companyId: true, supplierId: true, itemId: true, itemKind: true, overPct: true, underPct: true, whenBeyond: true, status: true },
+  })
+  const rules: ToleranceRule[] = rows.map((row) => ({ ...row, itemKind: row.itemKind as string | null, overPct: row.overPct.toString(), underPct: row.underPct.toString() }))
+  return new Map(
+    lines.map((line) => [
+      line.id,
+      receiptToleranceOf(
+        { areaTolerancePct: line.areaTolerancePct === null ? null : line.areaTolerancePct.toString() },
+        toleranceFor(rules, { companyId: line.order.companyId, supplierId: line.order.partyId, itemId: line.itemId, itemKind: kinds.get(line.itemId) ?? '' }),
+      ),
+    ]),
+  )
+}
+
+/** The tolerance over a screen shows, in percent (null: none, the line is received exactly as ordered). */
+export const toleranceShown = (tolerance: ReceiptTolerance | undefined, areaTolerancePct: { toString(): string } | null): string | null =>
+  tolerance ? (tolerance.source === 'NONE' ? null : tolerance.overPct) : (areaTolerancePct?.toString() ?? null)
+
+/** The tolerance under a screen shows, in percent (null: none). */
+export const underShown = (tolerance: ReceiptTolerance | undefined, areaTolerancePct: { toString(): string } | null): string | null =>
+  tolerance ? (tolerance.source === 'NONE' ? null : tolerance.underPct) : (areaTolerancePct?.toString() ?? null)

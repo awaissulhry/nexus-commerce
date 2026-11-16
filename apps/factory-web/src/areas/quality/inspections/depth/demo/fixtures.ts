@@ -351,9 +351,13 @@ export const INCOMING: Incoming = {
     rejectedHides: [{ hideId: uid('9351', 2), code: 'DEMO-H02' }],
     toSortHides: [],
     holdPrefill: { subjectType: 'Hide', subjectIds: [uid('9351', 2)], reasonNote: 'x' },
+    held: { holds: [], unheld: [{ hideId: uid('9351', 2), code: 'DEMO-H02' }] },
   },
   inspector: { kind: 'FLOOR', name: null, hidden: true },
 }
+
+/** B-W2b-GF5 (G367): the rejected hide held at the decision (the system's hold): nothing left to hold by hand. */
+export const INCOMING_HELD: Incoming = { ...INCOMING, next: { ...INCOMING.next!, holdPrefill: null, held: { holds: [{ id: uid('9399', 1), number: 'DEMO-HLD-0091' }], unheld: [] } } }
 
 export const INCOMING_OPEN: Incoming = { ...INCOMING, inspection: { ...INCOMING.inspection, id: INCOMING_ROWS[0]!.id, number: 'DEMO-IIN-0007', status: 'OPEN', computedResult: null, decision: null, decidedAt: null, signatureSha256: null }, progress: { ...INCOMING.progress, done: 2, decided: 2, accepted: 1, rejected: 1, remaining: 3 }, hides: INCOMING.hides.slice(0, 2), next: null }
 

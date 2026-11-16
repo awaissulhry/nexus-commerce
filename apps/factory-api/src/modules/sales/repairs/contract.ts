@@ -303,3 +303,10 @@ export const cancelContract = defineContract({
   body: input({ version, reason: text(1000) }),
   response: { 200: withWarnings },
 })
+
+/** B-W2b-GF5 (G513): a protective garment that failed its check after the repair is scrapped, never returned unsafe. */
+export const scrapContract = defineContract({
+  params: repairParams,
+  body: input({ version, reason: text(1000) }),
+  response: { 200: withWarnings },
+})

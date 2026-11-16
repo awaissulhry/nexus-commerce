@@ -21,7 +21,9 @@ import { finalCount } from '@nexus/factory-domain/inventory/counts/rules'
 import type { ValuationMethod } from '@nexus/factory-domain/inventory/ledger/valuation'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { companyLegalOf } from '../../../platform/documents/documents'
-import { PDF_CREATOR, winAnsi } from '../../../platform/documents/pdf'
+import { PDF_CREATOR } from '../../../platform/documents/pdf'
+// B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
+import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
 import { siteLocations, unitCostOf, unitCostsOf } from './ledger-at'
 import { readLines, type CountRow } from './store'
 import { factsOf } from './views'
@@ -29,15 +31,15 @@ import { factsOf } from './views'
 /**
  * The counts' papers (B-W2a-15; design warehouse.counts cn-tab-sheets, cn-tab-valued): the count sheets (PDF, with or
  * without the expected quantities) and the year-end valued list (PDF and XLSX), composed by factory-domain
- * inventory/counts/documents and painted here on A4 landscape with pdfkit's standard fonts (the documents platform's
- * WinAnsi rule), the company's art. 2250 lines at the top and on every page. The sheets and a valued list before the
+ * inventory/counts/documents and painted here on A4 landscape with the documents platform's embedded fonts
+ * (B-W2b-GF2), the company's art. 2250 lines at the top and on every page. The sheets and a valued list before the
  * sign-off are made on request and stored nowhere; the sign-off stores its list as files of the count.
  */
 
 type Client = FactoryClient | CommandTx
 
-const REGULAR = 'Helvetica'
-const BOLD = 'Helvetica-Bold'
+const REGULAR = FONT.regular
+const BOLD = FONT.bold
 const TEXT = '#111111'
 const MUTED = '#555555'
 const RULE = '#9a9a9a'
@@ -54,8 +56,9 @@ export async function renderCountPaper(paper: CountPaper): Promise<Buffer> {
     compress: true,
     lang: paper.language,
     displayTitle: true,
-    info: { Title: winAnsi(paper.meta.title), Subject: winAnsi(paper.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(paper.meta.createdAt) },
+    info: { Title: printableText(paper.meta.title), Subject: printableText(paper.meta.subject), Creator: PDF_CREATOR, Producer: PDF_CREATOR, CreationDate: new Date(paper.meta.createdAt) },
   })
+  useFonts(pdf)
   const chunks: Buffer[] = []
   pdf.on('data', (chunk: Buffer) => chunks.push(chunk))
   const ended = new Promise<void>((resolve, reject) => {
@@ -75,10 +78,10 @@ function paint(pdf: PDFKit.PDFDocument, paper: CountPaper): void {
   const bottom = (): number => pdf.page.height - MARGIN.bottom
   const text = (value: string, x: number, y: number, options: PDFKit.Mixins.TextOptions & { font?: string; size?: number; color?: string } = {}): number => {
     const { font = REGULAR, size = 8.5, color = TEXT, ...rest } = options
-    pdf.font(font).fontSize(size).fillColor(color).text(winAnsi(value), x, y, { lineGap: 1, ...rest })
+    pdf.font(font).fontSize(size).fillColor(color).text(printableText(value), x, y, { lineGap: 1, ...rest })
     return pdf.y
   }
-  const heightOf = (value: string, w: number, font = REGULAR, size = 8.5): number => pdf.font(font).fontSize(size).heightOfString(winAnsi(value), { width: w, lineGap: 1 })
+  const heightOf = (value: string, w: number, font = REGULAR, size = 8.5): number => pdf.font(font).fontSize(size).heightOfString(printableText(value), { width: w, lineGap: 1 })
 
   const companyWidth = Math.round(width * 0.55)
   let y: number = MARGIN.top

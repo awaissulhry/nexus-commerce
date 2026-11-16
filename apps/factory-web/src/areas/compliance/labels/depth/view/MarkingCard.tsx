@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { Banner, Card, Field, KeyValue, SourceIndicator } from '@nexus/ui/components'
 import { Button, Select, Tag } from '@nexus/ui/primitives'
 import { LABEL_KINDS, LABEL_QR_TARGETS } from '@nexus/factory-domain/compliance/labels/rules'
+import { ORIGIN_CLAIMS, ORIGIN_CLAIM_KEYS, type OriginClaimKey } from '@nexus/factory-domain/compliance/textile-rules/origin'
 import { Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import type { LabelDetail } from '../../api'
@@ -27,6 +28,9 @@ export function MarkingCard({ detail, depth, editable, prefix, onMarking, onRetr
   const problem = markingProblem(draft)
   const kind = draft?.kind ?? kindOf(detail)
   const qrTarget = draft?.qrTarget ?? detail.qrTarget
+  // B-W2b-GF2 (G032): the origin claim the label prints, in words ('' for none).
+  const claim = draft?.originClaimKey ?? detail.originClaimKey ?? ''
+  const claimWords = (key: string) => (key === '' ? d('originClaim.none') : key in ORIGIN_CLAIMS ? d(`originClaim.${ORIGIN_CLAIMS[key as OriginClaimKey]}`) : key)
   return (
     <Card padded>
       <section className="fw-q-section" id="lb-sec-marking" aria-labelledby="lb-h-marking">
@@ -56,6 +60,15 @@ export function MarkingCard({ detail, depth, editable, prefix, onMarking, onRetr
                 ))}
               </Select>
             </Field>
+            <Field label={d('marking.originClaim')} hint={d('marking.originClaimHint')}>
+              <Select size="sm" value={claim} onChange={(event) => set({ originClaimKey: event.target.value })}>
+                {['', ...ORIGIN_CLAIM_KEYS].map((entry) => (
+                  <option key={entry || 'none'} value={entry}>
+                    {claimWords(entry)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           </div>
         ) : (
           <KeyValue
@@ -65,6 +78,7 @@ export function MarkingCard({ detail, depth, editable, prefix, onMarking, onRetr
               { label: d('marking.kind'), value: d(`kind.${kind}`), hint: d(`kindHint.${kind}`) },
               { label: d('marking.qr'), value: d(`qr.${qrTarget}`), hint: d(`qrHint.${qrTarget}`) },
               { label: d('marking.gpsr'), value: detail.gpsrContact?.trim() ? <span className="fw-lbd-lines">{detail.gpsrContact}</span> : d('marking.gpsrNone') },
+              { label: d('marking.originClaim'), value: claimWords(claim), hint: d('marking.originClaimHint') },
             ]}
           />
         )}

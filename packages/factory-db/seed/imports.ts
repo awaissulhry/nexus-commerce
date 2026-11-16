@@ -1,12 +1,12 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import { seedUuid, type SeedContext } from '../src/seeding'
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The imports module's synthetic seed, per tenant of seed/_core.ts: one import job of company A, already planned (a dry
  * run of a made-up "widgets" sheet: one row to create, one to update with a marked price, one unchanged, one with an
- * error), and its sheet as a stored file owned by the job (the files seed's FAKE store; the object itself is in no
- * store). Written in the tenant's office scope. Made up and harmless; a second run adds nothing (ON CONFLICT DO NOTHING).
+ * error), and its sheet as a stored file owned by the job (the files seed's FAKE store; its bytes: B-W2b-F59,
+ * seed-files.ts). Written in the tenant's office scope. Made up and harmless; a second run adds nothing (ON CONFLICT DO NOTHING).
  */
 
 /** A fixed instant, so the seed never depends on the clock. */
@@ -20,7 +20,7 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
   const jobId = id('imports:job')
   const fileId = id('imports:file')
 
-  const file: Prisma.StoredFileCreateManyInput = {
+  const file: Prisma.StoredFileCreateManyInput = seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType: 'ImportJob',
@@ -29,7 +29,6 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
     originalName: 'Seed widgets.csv',
     contentType: 'text/csv',
     sizeBytes: 256,
-    sha256: createHash('sha256').update(`seed import ${namespace}`).digest('hex'),
     storeAccountId: id('files:account:r2'),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id('imports:key')}`,
     status: 'AVAILABLE',
@@ -38,7 +37,7 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
     createdAt: AT,
     updatedAt: AT,
     createdById: actorId,
-  }
+  })
   const job: Prisma.ImportJobCreateManyInput = {
     id: jobId,
     companyId: companyA,

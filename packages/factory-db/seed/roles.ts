@@ -1,9 +1,11 @@
-import { ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
+import { SYSTEM_ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
 import { RoleAudience } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 
 /**
- * The roles seed: every system role template of factory-domain (auth/roles/templates) as the tenant's system roles,
+ * The roles seed: every system role template of factory-domain (auth/roles/templates) as the tenant's system roles (the
+ * office, floor and, B-W2b-F59, partner templates: without the partner ones a fresh seed could invite no portal person until
+ * a worker's template sync ran: "the portal roles are not set up in this tenant yet"),
  * one custom role copied from a template, and assignments for the synthetic people of seed/auth.ts:
  *   - the owner holds `owner` over every company (two-factor required: nothing until proved on a session);
  *   - the member holds `sales` limited to company A and its site A1, and the custom role over every company;
@@ -29,13 +31,13 @@ export async function seed({ db, namespace }: SeedContext): Promise<RolesSeed> {
 
   const roleIds: Record<string, string> = {}
   const roles = [
-    ...ROLE_TEMPLATES.map((template) => ({
+    ...SYSTEM_ROLE_TEMPLATES.map((template) => ({
       key: template.key,
       name: template.name,
       description: template.description,
       system: true,
       basedOn: null,
-      audience: template.audience === 'floor' ? RoleAudience.FLOOR : RoleAudience.OFFICE,
+      audience: template.audience === 'floor' ? RoleAudience.FLOOR : template.audience === 'partner' ? RoleAudience.PARTNER : RoleAudience.OFFICE,
       requireMfa: template.requireMfa,
       permissions: [...template.permissions],
       grains: [...template.grains],

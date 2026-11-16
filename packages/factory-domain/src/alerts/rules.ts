@@ -372,6 +372,9 @@ export const ALERT_TEMPLATES = {
   'alerts.WORKING_TIME_LIMIT.OVERTIME_YEARLY_CAP': { en: 'Site {label}: someone is close to or over the yearly overtime cap.', it: 'Sede {label}: qualcuno è vicino al limite annuo di straordinario o lo ha superato.' },
   'alerts.WORKING_TIME_LIMIT.DAILY_REST': { en: 'Site {label}: someone is under the minimum rest, or would be before their next shift.', it: 'Sede {label}: qualcuno è sotto il riposo minimo, o lo sarebbe prima del prossimo turno.' },
   'alerts.WORKING_TIME_LIMIT.WEEKLY_AVERAGE': { en: 'Site {label}: someone is close to or over the weekly average of working hours.', it: 'Sede {label}: qualcuno è vicino alla media settimanale di ore di lavoro o la ha superata.' },
+  // B-W2b-GF2: weekly rest (art. 9) and night work (art. 13), checked now.
+  'alerts.WORKING_TIME_LIMIT.WEEKLY_REST': { en: 'Site {label}: someone had less than the weekly rest, or would have it with the plan.', it: 'Sede {label}: qualcuno ha avuto meno del riposo settimanale, o lo avrebbe con il piano.' },
+  'alerts.WORKING_TIME_LIMIT.NIGHT_AVERAGE': { en: 'Site {label}: a night shift is over the night workers\' limit of hours, worked or planned.', it: 'Sede {label}: un turno di notte supera il limite di ore dei lavoratori notturni, lavorato o in piano.' },
   // B-W2b-314: a material below its minimum at a site ({label} "LEA-BLK at A1"; {position} what the site has and expects, {minimum}, {unit}).
   'alerts.LOW_STOCK': { en: '{label} is below its minimum: {position} {unit} against {minimum} {unit}.', it: '{label} è sotto il minimo: {position} {unit} su {minimum} {unit}.' },
   // B-W2b-350: a line confirmed later than needed ({label} the order's number; the worst line's {confirmedDate}, {needDate} and
@@ -461,7 +464,8 @@ export function alertPhrase(kind: string, label: string, facts: unknown): AlertP
         ? { key: 'alerts.STAMP_DUTY_DUE.LATE', params: { label, dueOn: text('dueOn'), days: Math.abs(num('daysLeft')), f24Code: text('f24Code') } }
         : { key: 'alerts.STAMP_DUTY_DUE', params: { label, dueOn: text('dueOn'), days: num('daysLeft'), f24Code: text('f24Code') } }
     case 'WORKING_TIME_LIMIT':
-      return { key: text('limit') === 'OVERTIME_YEARLY_CAP' || text('limit') === 'DAILY_REST' || text('limit') === 'WEEKLY_AVERAGE' ? `alerts.WORKING_TIME_LIMIT.${text('limit') as 'DAILY_REST'}` : 'alerts.WORKING_TIME_LIMIT', params: { label } }
+      // B-W2b-GF2: WEEKLY_REST and NIGHT_AVERAGE have their own words too.
+      return { key: (['OVERTIME_YEARLY_CAP', 'DAILY_REST', 'WEEKLY_AVERAGE', 'WEEKLY_REST', 'NIGHT_AVERAGE'] as const).includes(text('limit') as 'DAILY_REST') ? `alerts.WORKING_TIME_LIMIT.${text('limit') as 'DAILY_REST'}` : 'alerts.WORKING_TIME_LIMIT', params: { label } }
     default:
       return null
   }

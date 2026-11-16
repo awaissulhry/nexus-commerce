@@ -446,7 +446,9 @@
     "break": "Una pausa quando la giornata supera le sei ore.",
     "cap": "Lo straordinario ha un tetto annuo (250 ore per legge, salvo diverso contratto).",
     "evacuation": "Il datore di lavoro organizza l'evacuazione dei lavoratori in caso di emergenza.",
-    "rest": "Almeno 11 ore di riposo consecutivo ogni 24 ore."
+    "night": "Un lavoratore notturno lavora al massimo 8 ore nelle 24, in media.",
+    "rest": "Almeno 11 ore di riposo consecutivo ogni 24 ore.",
+    "weeklyRest": "Almeno 24 ore consecutive di riposo ogni 7 giorni, oltre alle 11 ore di riposo giornaliero, in media su 14 giorni."
   },
   "limit": {
     "DAILY_REST": {
@@ -455,6 +457,12 @@
       "rest": "Riposo di {rest} tra le {from} e le {to}: minimo {limit}.",
       "short": "Riposo",
       "span": "Una giornata di {span} ({from}–{to}) lascia meno di {limit} di riposo."
+    },
+    "NIGHT_AVERAGE": {
+      "name": "Lavoro notturno",
+      "ok": "Un lavoratore notturno lavora al massimo {limit} nelle 24 ore.",
+      "short": "Notte",
+      "words": "{work} di lavoro {from}–{to}, di cui {night} di notte: un lavoratore notturno lavora al massimo {limit} nelle 24 ore."
     },
     "OVERTIME_YEARLY_CAP": {
       "name": "Tetto annuo di straordinario",
@@ -465,6 +473,13 @@
       "name": "Media settimanale di 48 h",
       "short": "48 h",
       "words": "{average} a settimana in media su {weeks} settimane: al massimo {limit} su {months} mesi."
+    },
+    "WEEKLY_REST": {
+      "name": "Riposo settimanale",
+      "none": "Nessun riposo trovato nella settimana: almeno {needed} ({limit} oltre alle {daily} tra i turni), in media su 14 giorni.",
+      "ok": "Almeno {limit} di riposo ogni 7 giorni oltre alle {daily} tra i turni ({needed}), in media su 14 giorni.",
+      "rest": "Riposo più lungo della settimana {rest} (da {from} a {to}): almeno {needed} ({limit} oltre alle {daily} tra i turni), in media su 14 giorni.",
+      "short": "Riposo sett."
     }
   },
   "limitState": {

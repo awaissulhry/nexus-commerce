@@ -16,6 +16,7 @@ import { serverClock } from '../../../core/time'
 import { dayRate } from '../../../platform/currency/service'
 import { carrierAccountIdOf } from '../labels/store'
 import type { ShipmentHeader } from '../store'
+import { shipToPlace } from '../customs/facts'
 
 /**
  * A shipment's booking with its carrier (B-W2b-400; LOG-033, LOG-038, LOG-041, LOG-042; rules factory-domain
@@ -90,7 +91,8 @@ export async function readBooking(db: CommandTx, shipment: ShipmentHeader, optio
   const shipToCountry = countryOf(shipment.shipTo)
   const facts: BookingFacts = {
     shipment: { number: shipment.number, status: shipment.status, transportBy: shipment.transportBy, carrierCode: shipment.carrierCode, serviceCode: shipment.serviceCode, express: own.express, dutyPayer: own.dutyPayer, paperless: own.paperless },
-    destination: destinationOf(senderCountry, shipToCountry),
+    // B-W2b-GF2: the delivery's postal code and town tell a special fiscal territory apart (an export).
+    destination: destinationOf(senderCountry, shipToCountry, shipToPlace(shipment.shipTo)),
     testMode: settings?.testMode ?? true,
     account: account && account.provider === 'SENDCLOUD' ? { mode: account.mode, settings: account.settings } : null,
     contract: contract ? { id: contract.id, siteId: contract.siteId, ownRatesOnly: contract.ownRatesOnly } : null,
