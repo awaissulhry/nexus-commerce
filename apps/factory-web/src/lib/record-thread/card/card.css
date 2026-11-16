@@ -1,0 +1,285 @@
+/*
+ * The message card (B-TH-298, T3; picture 2 and the design kit §3). Each audience has its card and its 3 px edge, always with
+ * words beside the colour: the customer's message (info tint, info edge), ours to the customer (raised, info edge: the customer
+ * reads it), an Office note and the floor's (warning tint, warning edge: one yellow means "not sent to the customer"). DS
+ * semantic tokens only, so light and dark follow the theme.
+ */
+.fw-rt-msg {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--nds-border-subtle);
+  border-inline-start-width: 3px;
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-raised);
+  color: var(--nds-text);
+  font-size: var(--nds-font-size-base);
+  outline: none;
+}
+
+.fw-rt-msg.is-theirs {
+  background: var(--nds-info-soft);
+  border-color: transparent;
+  border-inline-start-color: var(--nds-info);
+}
+
+.fw-rt-msg.is-ours {
+  border-inline-start-color: var(--nds-info);
+}
+
+.fw-rt-msg.is-note,
+.fw-rt-msg.is-floor {
+  background: var(--nds-warning-soft);
+  border-inline-start-color: var(--nds-warning);
+}
+
+.fw-rt-msg.is-pending {
+  opacity: 0.75;
+}
+
+.fw-rt-msg.is-failed {
+  border-inline-start-color: var(--nds-danger);
+}
+
+.fw-rt-msg.is-anchor {
+  box-shadow: 0 0 0 2px var(--nds-tonal-border);
+}
+
+.fw-rt-msg:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 2px;
+}
+
+.fw-rt-msg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.fw-rt-who {
+  font-weight: 600;
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+
+.fw-rt-side {
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-muted);
+  white-space: nowrap;
+}
+
+.fw-rt-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  color: var(--nds-text-2);
+  white-space: nowrap;
+}
+
+.fw-rt-msg.is-note .fw-rt-mark,
+.fw-rt-msg.is-floor .fw-rt-mark {
+  color: var(--nds-warning-text);
+}
+
+.fw-rt-msg-end {
+  margin-inline-start: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.fw-rt-msg-end time {
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  margin-inline-end: 4px;
+}
+
+.fw-rt-msg-more {
+  min-width: 26px;
+  padding-inline: 4px;
+}
+
+.fw-rt-body {
+  margin: 0;
+  max-width: 72ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.55;
+  color: var(--nds-text);
+}
+
+.fw-rt-body.is-folded {
+  max-height: calc(1.55em * 12);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(180deg, var(--nds-text) 80%, transparent);
+  mask-image: linear-gradient(180deg, var(--nds-text) 80%, transparent);
+}
+
+.fw-rt-showall {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  color: var(--nds-text-link);
+  font: inherit;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.fw-rt-showall:hover {
+  text-decoration: underline;
+}
+
+.fw-rt-showall:focus-visible,
+.fw-rt-quoted:focus-visible,
+.fw-rt-photo button:focus-visible,
+.fw-rt-bounce-link:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+}
+
+.fw-rt-quoted {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 9px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-xs);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fw-rt-quoted-text {
+  margin: 0;
+  padding: 2px 0 2px 10px;
+  border-inline-start: 2px solid var(--nds-border-strong);
+  max-width: 72ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.5;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm-plus);
+}
+
+.fw-rt-details {
+  margin: 0;
+  font-size: var(--nds-font-size-xs-plus);
+  color: var(--nds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.fw-rt-attach {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.fw-rt-attach .nds-filerow {
+  max-width: 360px;
+}
+
+.fw-rt-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rt-photo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 96px;
+  font-size: var(--nds-font-size-xs);
+  color: var(--nds-text-muted);
+}
+
+.fw-rt-photo button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96px;
+  height: 72px;
+  padding: 0;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  cursor: pointer;
+}
+
+.fw-rt-photo-more {
+  font-weight: 700;
+  font-size: var(--nds-font-size-sm-plus);
+}
+
+.fw-rt-photo span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-rt-held-file {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-rt-bounce {
+  margin: 0;
+  padding: 7px 10px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-danger-soft);
+  color: var(--nds-danger-text);
+  font-size: var(--nds-font-size-sm);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.fw-rt-bounce-link {
+  color: var(--nds-danger-text);
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+.fw-rt-failline {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-danger-text);
+  font-weight: 600;
+}
+
+/* SCR-006-card (design review): the cards in one column, as the thread draws them. */
+.fw-rt-card-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 16px;
+  min-width: 0;
+  background: var(--nds-surface);
+}
