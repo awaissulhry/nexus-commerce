@@ -657,6 +657,11 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     const leather = lines.find((line) => line.item.leather)!
     const protector = lines.find((line) => !line.item.leather)!
     expect(leather).toMatchObject({ uom: 'FT2', open: '105.0000', grade: 'A', oneDyeBatch: true, tolerancePct: '5' })
+    // B-W2b-F59: the notice's days count from the day the portal's routes read (the harness clock: every two-factor act moves it
+    // 30 s ahead of the real one), not from today(): in the last minutes before midnight that clock is already in tomorrow, so a
+    // ship day of today()+1 read as today and the notice as IN_TRANSIT (seen once at 23:5x).
+    const routeDay = businessDate(w.h.clock.now())
+    // ---- end B-W2b-F59
     const draft = await as(
       R.tannery,
       'POST',
@@ -667,13 +672,13 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
           { purchaseOrderLineId: leather.purchaseOrderLineId, quantity: '105', dyeBatch: '2231', supplierLot: 'L-GOLD-77' },
           { purchaseOrderLineId: protector.purchaseOrderLineId, quantity: '24', supplierLot: 'PR-GOLD-12' },
         ],
-        shipDate: addDays(today(), 1),
-        expectedDate: addDays(today(), 3),
+        shipDate: addDays(routeDay, 1),
+        expectedDate: addDays(routeDay, 3),
         carrier: 'Made-up Freight',
         trackingNumber: 'MF-GOLD-1',
         parcels: 2,
         ddtNumber: 'DDT-GOLD-45',
-        ddtDate: addDays(today(), 1),
+        ddtDate: addDays(routeDay, 1),
       },
       201,
     )

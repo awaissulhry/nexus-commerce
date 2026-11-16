@@ -18,9 +18,10 @@ import type { Prisma } from './generated/prisma/client'
  *                     audio/webm         0.2 s of silence (Opus), a Void element at the end of its Segment
  *                     application/zip    one stored README.txt; application/xml an XML document; text/csv a header and
  *                                        one row; application/dxf an empty drawing; anything else plain text
- *   seedFile        the row with the SHA-256 of those bytes, after checking its key is one the files platform's key rule
- *                   (factory-domain files/keys.ts) makes for that row: its company (or the tenant), `legal/` exactly for the
- *                   fiscal archive, the year it was uploaded (createdAt). A seed that breaks the rule fails at once.
+ *   seedFile        the row with the SHA-256 of those bytes and the key the files platform's key rule (factory-domain
+ *                   files/keys.ts) makes for that row: its company (or the tenant), `legal/` exactly for the fiscal archive, the
+ *                   year of its createdAt (taken from the row, so a row in the seeds' moving future keeps a true key). A seed
+ *                   whose key breaks the rule otherwise fails at once.
  *   seedFileKey     a key made by that rule, for a seed that builds a new one.
  *
  * Every name and text is made up. Nothing here touches a store or the database.
@@ -344,11 +345,22 @@ export function seedFileKeyProblem(tenantId: string, row: { readonly id: string;
 }
 
 /**
- * The seeded row with the SHA-256 of its bytes, its key checked against the files platform's rule first (throws). A copy
- * of another seeded file (sourceFileId: the database checks the two hashes match) holds that file's bytes: pass its row.
+ * The seeded row with the SHA-256 of its bytes and its key as an upload at its createdAt makes it. A seed writes the key's
+ * owner, kind and random part; its YEAR is the year of the row's createdAt (B-W2b-F59, round 2: a row dated in the seeds'
+ * future through seedAt crosses into the next year as the days pass, so a written year would rot). Any other difference from
+ * the files platform's rule throws. A copy of another seeded file (sourceFileId: the database checks the two hashes match)
+ * holds that file's bytes: pass its row.
  */
 export function seedFile(tenantId: string, row: Omit<Prisma.StoredFileCreateManyInput, 'sha256'>, options: { readonly bytesOf?: SeedFileFacts } = {}): Prisma.StoredFileCreateManyInput {
-  const problem = seedFileKeyProblem(tenantId, row)
+  const at = row.createdAt === undefined || row.createdAt === null ? null : new Date(row.createdAt)
+  const yearless = (key: string): string => key.replace(/\/\d{4}\/(?=[^/]+$)/, '/yyyy/')
+  let storageKey = row.storageKey
+  if (at !== null && isStorageKey(storageKey)) {
+    const made = storageKeyFor({ tenantId, companyId: row.companyId ?? null, kind: row.kind, now: at, random: storageKey.slice(storageKey.lastIndexOf('/') + 1) })
+    if (yearless(made) === yearless(storageKey)) storageKey = made
+  }
+  const keyed = { ...row, storageKey }
+  const problem = seedFileKeyProblem(tenantId, keyed)
   if (problem) throw new Error(problem)
-  return { ...row, sha256: seedFileSha256(options.bytesOf ?? row) }
+  return { ...keyed, sha256: seedFileSha256(options.bytesOf ?? keyed) }
 }

@@ -100,6 +100,14 @@ describe('the seed companies (B-W2b-F59)', () => {
       expect(address).toMatchObject({ province: 'MI', postalCode: '00000', country: 'IT' })
     }
   })
+
+  it('hold a draft that issues on any day: an immediate TD01 of company A with no date until its issue and no DDT', async () => {
+    const drafts = await admin(
+      `SELECT i."docType"::text AS "docType", i.status::text AS status, i.number, i."issuedAt", (SELECT count(*)::int FROM "InvoiceLine" l WHERE l."invoiceId" = i.id AND l."ddtId" IS NOT NULL) AS "ddtLines" FROM "Invoice" i WHERE i.id = $1`,
+      [`ffffffff${key('invoice-draft:TD01:P1:embroidery').slice(8)}`],
+    )
+    expect(drafts).toEqual([{ docType: 'TD01', status: 'DRAFT', number: null, issuedAt: null, ddtLines: 0 }])
+  })
 })
 
 describe('the export to Switzerland (B-W2b-F59)', () => {

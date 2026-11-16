@@ -127,10 +127,14 @@ describe('the seeded files’ keys follow the files platform’s rule', () => {
     expect(seedFileKeyProblem(TENANT, row(`legal/t/${TENANT}/c/${COMPANY}/2026/${random}`))).toMatch(/is not the key an upload makes for it/)
     expect(seedFileKeyProblem(TENANT, row(`t/${TENANT}/c/${COMPANY}/2026/${random}`, 'FISCAL_ARCHIVE'))).toMatch(/is not the key an upload makes for it/)
   })
-  it('seedFile adds the hash of the bytes and refuses a row whose key breaks the rule', () => {
+  it('seedFile adds the hash of the bytes, takes the key year from createdAt, and refuses a row whose key breaks the rule otherwise', () => {
     const base = { id: random, companyId: COMPANY, recordType: 'Company', recordId: COMPANY, kind: 'DOCUMENT' as const, originalName: 'Seed cost sheet.pdf', contentType: 'application/pdf', sizeBytes: 2048, storeAccountId: random, createdAt: at }
     expect(seedFile(TENANT, { ...base, storageKey: `t/${TENANT}/c/${COMPANY}/2026/${random}` }).sha256).toBe(seedFileSha256(base))
     expect(() => seedFile(TENANT, { ...base, storageKey: `t/${TENANT}/c/${COMPANY}/safety/${random}` })).toThrow(/is not a key the files platform makes/)
+    // A row dated in the seeds' moving future (seedAt) may fall in the next year: the key takes the year of its createdAt.
+    const later = seedFile(TENANT, { ...base, createdAt: new Date('2027-01-12T09:00:00.000Z'), storageKey: `t/${TENANT}/c/${COMPANY}/2026/${random}` })
+    expect(later.storageKey).toBe(`t/${TENANT}/c/${COMPANY}/2027/${random}`)
+    expect(() => seedFile(TENANT, { ...base, storageKey: `t/${TENANT}/tenant/2026/${random}` })).toThrow(/is not the key an upload makes for it/)
     const source = { ...base, id: randomUUID(), originalName: 'Seed certificate.pdf' }
     expect(seedFile(TENANT, { ...base, storageKey: `t/${TENANT}/c/${COMPANY}/2026/${random}` }, { bytesOf: source }).sha256).toBe(seedFileSha256(source))
   })
