@@ -15,7 +15,8 @@ const mine = z.object({
   status: z.enum(DATA_REQUEST_STATUSES),
   receivedAt: z.string(),
   dueAt: z.string(),
-  package: z.object({ fileId: z.string(), name: z.string(), sizeBytes: z.number(), madeAt: z.string().nullable() }).nullable(),
+  // B-W2b-GF1 (G274): `deleteAfter`, when the copy is deleted (30 days after it was made).
+  package: z.object({ fileId: z.string(), name: z.string(), sizeBytes: z.number(), madeAt: z.string().nullable(), deleteAfter: z.string().nullable().optional() }).nullable(),
   collect: z.object({ state: z.enum(['NONE', 'RUNNING', 'READY', 'FAILED']), at: z.string().nullable() }).nullable(),
 })
 export type MyRequest = z.infer<typeof mine>

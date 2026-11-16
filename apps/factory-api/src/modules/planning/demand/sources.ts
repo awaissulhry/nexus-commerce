@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { can, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
-import { PLANNED_ORDER_STATUSES } from '@nexus/factory-domain/planning/explode'
+import { OPEN_WORK_ORDER_STATUSES, PLANNED_ORDER_STATUSES } from '@nexus/factory-domain/planning/explode' // B-W2b-GB29 (G222): + open work orders
 import { OPEN_ORDER_STATUSES } from '@nexus/factory-domain/planning/milestones/rules'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { mergedCells, openParts, type DemandKind, type DemandPiece } from '@nexus/factory-domain/planning/demand/rules'
@@ -233,7 +233,8 @@ async function sampleSources(db: Reader, site: SiteRow, onlyPlant: boolean): Pro
       cells: true,
       dueDate: true,
       stage: true,
-      workOrders: { where: { status: { not: 'CANCELLED' } }, select: { id: true, number: true, siteId: true }, orderBy: { number: 'asc' } },
+      // B-W2b-GB29 (G222): + whether MRP plans it (an open sample work order of no order line).
+      workOrders: { where: { status: { not: 'CANCELLED' } }, select: { id: true, number: true, siteId: true, status: true, sizes: { where: { salesOrderLineId: { not: null } }, select: { id: true }, take: 1 } }, orderBy: { number: 'asc' } },
     },
     orderBy: { number: 'asc' },
   })
@@ -256,8 +257,9 @@ async function sampleSources(db: Reader, site: SiteRow, onlyPlant: boolean): Pro
         size: cell.size,
         date,
         pieces: cell.pieces,
-        // B-W2b-284's gap: MRP reads order lines only, so a sample's materials are not planned.
-        planned: false,
+        // B-W2b-GB29 (G222, B-W2b-284's gap closed): MRP plans the materials of an open sample work order of no order line here
+        // (planning/sample-demand); a round with no work order yet is not planned (nothing to make it on).
+        planned: here.some((workOrder) => (OPEN_WORK_ORDER_STATUSES as readonly string[]).includes(workOrder.status) && workOrder.sizes.length === 0),
         status: round.stage,
         source: { recordType: 'SampleRound', recordId: round.id, number: round.number, line: null },
         origin: null,

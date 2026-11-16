@@ -69,6 +69,8 @@ export function extraOperationProblem(facts: {
   readonly centre: { readonly kind: string; readonly found: boolean } | null
   readonly reasonCode: ExtraReasonCode
   readonly note: string | null
+  /** B-W2b-GB29 (G215): the planned garments asked (null: left out) and the work order's garments. */
+  readonly plannedQuantity?: { readonly given: number | null; readonly garments: number }
 }): string | null {
   if (!facts.workOrder.open) return `Work order ${facts.workOrder.number} is not released or in progress: it takes no unplanned operation.`
   if (!facts.operation?.active) return 'This is not an active operation of the library.'
@@ -76,8 +78,22 @@ export function extraOperationProblem(facts: {
   if (facts.added) return `${facts.operation.code} was added to this work order already: scan the bundles at it.`
   if (facts.centre && !facts.centre.found) return `This site has no active ${facts.centre.kind.toLowerCase()} work centre for ${facts.operation.code}.`
   const tile = EXTRA_REASONS.find((reason) => reason.code === facts.reasonCode)
-  return tile?.needsNote && !facts.note ? 'With "Other" say why in a few words.' : null
+  if (tile?.needsNote && !facts.note) return 'With "Other" say why in a few words.'
+  const planned = facts.plannedQuantity
+  if (planned && planned.given !== null && (!Number.isInteger(planned.given) || planned.given < 1 || planned.given > planned.garments)) {
+    return `Plan 1 to ${planned.garments} garments for it: work order ${facts.workOrder.number} makes ${planned.garments}.`
+  }
+  return null
 }
+
+/**
+ * B-W2b-GB29 (G215): an unplanned operation's planned garments: the number given (1 up to the work order's), else none — left
+ * out, it stays off the plan as B-W2b-82 decided (a one-off fix is often for a few garments: "all of them" would load a lane
+ * with work nobody asked for and show garments waiting there forever). Planning, the board, dispatch and WIP load a planned one
+ * with what is still to report there: planned − good reported, never below 0.
+ */
+export const plannedGarmentsOf = (given: number | null | undefined): number | null => given ?? null
+export const unplannedLeftOf = (planned: number, reportedGood: number): number => Math.max(0, planned - reportedGood)
 
 /** What a report at it pays, as the person adding it is told (a word, never a figure). */
 export const EXTRA_PAYS = ['PIECE_RATE', 'OFF_STANDARD', 'NO_PIECE_PAY'] as const

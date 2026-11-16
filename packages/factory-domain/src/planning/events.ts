@@ -186,6 +186,8 @@ export const events = [
       moved: z.number().int().min(0),
       added: z.number().int().min(0),
       removed: z.number().int().min(0),
+      /** B-W2b-GB29 (G217): the publisher's "Notify line leaders" (their bell, modules/planning/schedule/notices); left out: yes. */
+      notifyLeaders: z.boolean().optional(),
     }),
     live: { permission: 'planning.view', floor: 'floor.work', fields: ['siteId', 'planVersionId', 'number', 'effectiveFrom'] },
   }),

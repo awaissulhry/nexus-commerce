@@ -195,6 +195,9 @@ const linkRow = z.object({
   revokedAt: z.string().nullable(),
   createdAt: z.string(),
   downloads: z.array(z.object({ at: z.string(), fileId: z.string() })),
+  /** B-W2b-GF1 (G212): it has a password (never shown), and the consultant's receipt once given. */
+  password: z.boolean(),
+  receipt: z.object({ at: z.string(), name: z.string().nullable() }).nullable(),
 })
 export type ExportLink = z.infer<typeof linkRow>
 const exportRecord = exportRow.extend({
@@ -236,6 +239,8 @@ export interface SendBody {
   maxUses: number
   message?: string
   language: 'it' | 'en'
+  /** B-W2b-GF1 (G212): a password given to the consultant apart; never in the mail, never shown again. */
+  password?: string
 }
 const sendSchema = z.object({ link: z.object({ id: z.string(), email: z.string(), expiresAt: z.string(), maxUses: z.number() }), withdrawn: z.array(z.string()), delivery: z.string() })
 export type SendAnswer = z.infer<typeof sendSchema>

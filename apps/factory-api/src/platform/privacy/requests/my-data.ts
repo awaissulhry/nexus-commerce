@@ -7,7 +7,7 @@ import { command, type CommandCaller } from '../../../core/command'
 import { downloadFile, systemCallerOf } from '../../files/files'
 import { processFiles } from '../../files/service'
 import { officeOf } from '../access'
-import { COLLECT_ACTIONS, REQUEST_SELECT, requestViewOf } from './read'
+import { COLLECT_ACTIONS, packageHeld, REQUEST_SELECT, requestViewOf } from './read'
 import { emitChange } from './requests'
 
 /**
@@ -66,7 +66,7 @@ export async function myPackage(request: FastifyRequest, requestId: string) {
   const context = officeOf(request)
   const row = isUuid(requestId) ? await request.withClient((client) => client.dataRequest.findFirst({ where: { id: requestId, ...MINE(context.actorId) }, select: REQUEST_SELECT })) : null
   if (!row) throw new NotFoundError('Request not found.')
-  if (!row.packageFileId || row.packageFile?.status !== 'AVAILABLE') throw new InvalidStateError(REQUEST_HELD_WORDS.NO_PACKAGE)
+  if (!row.packageFileId || row.packageFile?.status !== 'AVAILABLE') throw new InvalidStateError(REQUEST_HELD_WORDS[packageHeld(row.packageFile)])
   const download = await downloadFile(processFiles(), { caller: request, system: systemCallerOf(request) }, row.packageFileId, { viaModule: true })
   if (row.status === 'IN_PROGRESS') {
     // Handed over: the first download closes the request, decided by the person.

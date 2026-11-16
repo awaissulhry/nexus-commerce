@@ -151,6 +151,17 @@ const ASK = needRow(4, {
   demand: { workOrderId: uid('9301', 2), salesOrderLineId: null },
 })
 const COVERED = needRow(5, { style: STYLE2, feasibility: 'COVERED', area: '98.0000', issued: '50.0000', reserved: '48.0000', toFind: '0.0000', hides: 0, buy: null, heldLots: [{ lotCode: 'LOT-DEMO-244', shadeLabel: '2' }], lots: [{ ...L244, ordersOwn: true }], best: { ...L244, ordersOwn: true } })
+// B-W2b-GB29 (G222): an internal sample work order's leather (no order line): its round as the order, its work order named.
+const SAMPLE_BASE = needRow(6, {})
+const SAMPLE_ROW: NeedRow = {
+  ...ASK,
+  id: SAMPLE_BASE.id,
+  orderLine: SAMPLE_BASE.orderLine,
+  order: { id: uid('7272', 1), number: 'WO-DEMO-0090' },
+  sample: { workOrderId: uid('7171', 9), workOrderNumber: 'WO-DEMO-0090', roundId: uid('7272', 1), roundNumber: 'SR-DEMO-0003' },
+  demand: { workOrderId: uid('7171', 9), salesOrderLineId: null },
+  workOrders: [{ id: uid('7171', 9), number: 'WO-DEMO-0090' }],
+}
 const NEED_ROWS = [FITS, SPLIT, MUST_BUY, ASK, COVERED]
 const NEED: LeatherNeed = { site: SITE_VIEW, run: RUN, rule: 'ORDER', rows: NEED_ROWS }
 const withValue = (rows: readonly NeedRow[]): NeedRow[] => rows.map((row, index) => ({ ...row, value: [86_184, 226_800, 307_944, 21_000, 0][index] ?? null }))
@@ -279,6 +290,9 @@ export const designScreen = defineDesignScreen<LeatherCase>({
     { id: 'search-empty', label: 'A search that matches nothing', model: make({ controls: { site: SITE.id, tile: null, feas: 'all', q: 'zzz', open: null } }) },
     { id: 'drawer-fits', label: 'Drawer: fits one shade — reserve 4 hides of LOT-DEMO-221', model: make(open(FITS)) },
     { id: 'drawer-split', label: 'Drawer: split by garment (46–50 from LOT-DEMO-221, 52 from LOT-DEMO-230)', model: make(open(SPLIT)) },
+    // B-W2b-GB29 (G222): a sample work order's leather is planned and shown as its own row.
+    { id: 'w2b-gb29-sample', label: 'A sample work order’s leather: its own row, named by its round and work order', model: make({ need: { status: 'ready', value: { ...NEED, rows: [...NEED_ROWS, SAMPLE_ROW] } } }), note: 'MRP plans an internal sample work order’s materials: its leather shows here like an order’s.' },
+    { id: 'w2b-gb29-sample-drawer', label: 'Drawer: a sample work order (no customer to ask)', model: make({ ...open(SAMPLE_ROW), need: { status: 'ready', value: { ...NEED, rows: [...NEED_ROWS, SAMPLE_ROW] } } }), note: 'Its link opens the work order; asking a customer is held with the reason.' },
     { id: 'drawer-buy', label: 'Drawer: must buy 321 ft² of shade 2', model: make(open(MUST_BUY)) },
     { id: 'drawer-ask', label: 'Drawer: the order holds two shade lots — ask the customer', model: make(open(ASK)) },
     { id: 'drawer-covered', label: 'Drawer: covered, nothing to choose', model: make(open(COVERED)) },
@@ -307,4 +321,4 @@ export const designScreen = defineDesignScreen<LeatherCase>({
   ],
 })
 
-export const FIXTURES = { NEED, PROTECTORS, YIELD, FITS, SPLIT, MUST_BUY, ASK, COVERED, DRIFT, DRIFT_DRAFT, IN_LINE, TOO_FEW }
+export const FIXTURES = { NEED, PROTECTORS, YIELD, FITS, SPLIT, MUST_BUY, ASK, COVERED, DRIFT, DRIFT_DRAFT, IN_LINE, TOO_FEW, SAMPLE_ROW /* B-W2b-GB29 */ }

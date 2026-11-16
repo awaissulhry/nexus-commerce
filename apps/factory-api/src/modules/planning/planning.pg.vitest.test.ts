@@ -445,3 +445,23 @@ describe('walls (A1 §2.2, §2.6): tenant, company, site, audience, money', () =
     expect(buyer).toMatchObject({ unitCost: '220.500000', expectedAmount: 110_250, currency: 'EUR' })
   })
 })
+
+// ---- B-W2b-GB29 (G218, B-W2b-20's gap): an order-by day is over when it is over AT THE SUPPLIER ----------------------------
+describe("the order-by day passes in the supplier's time zone (B-W2b-GB29, G218)", () => {
+  it('a buy whose order-by day is our today has passed already where the supplier is a day ahead; not in our own zone', async () => {
+    const calendarId = newId()
+    await admin(`INSERT INTO "WorkCalendar" (id, "tenantId", scope, "companyId", "partyId", name, "timeZone") SELECT $1, $2, 'SUPPLIER', "companyId", id, 'GB29 supplier calendar', 'Pacific/Kiritimati' FROM "Party" WHERE id = $3`, [calendarId, A.tenant, A.supplier])
+    try {
+      const day = lineOf(await latest(), A.leather, A.leatherBLK).orderBy.date as string
+      // 11:00 UTC: 12:00 on that day at the plant (Rome), 01:00 the next day at the supplier (UTC+14).
+      vi.setSystemTime(new Date(`${day}T11:00:00.000Z`))
+      expect(lineOf(await latest(), A.leather, A.leatherBLK).orderBy).toMatchObject({ date: day, passed: true })
+      await admin(`UPDATE "WorkCalendar" SET "timeZone" = 'Europe/Rome' WHERE id = $1`, [calendarId])
+      expect(lineOf(await latest(), A.leather, A.leatherBLK).orderBy).toMatchObject({ date: day, passed: false })
+    } finally {
+      vi.setSystemTime(new Date('2026-11-13T09:00:00.000Z'))
+      await admin(`UPDATE "WorkCalendar" SET status = 'ARCHIVED' WHERE id = $1`, [calendarId])
+    }
+  })
+})
+// ---- end B-W2b-GB29

@@ -50,6 +50,9 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'invited', label: 'Paolo Campione, invited: the end applies to the invitation; Remove revokes it', model: caseOf(3) },
     { id: 'change-until', label: 'A new end date typed', model: caseOf(1, { until: '2026-12-31' }) },
     { id: 'remove', label: 'Remove from organisation (with a reason)', model: caseOf(1, { confirm: true }) },
+    // B-W2b-GF1 (G011): the partner controls live here — suspend an active person, reactivate a suspended one.
+    { id: 'suspend', label: 'Suspend (with a reason): through the partner route', model: caseOf(1, { statusConfirm: 'suspend' }) },
+    { id: 'profile', label: 'Profile tab of a partner: no office Suspend / Deactivate / Password, the way to the organisation', model: { ...caseOf(1), record: { ...caseOf(1).record, tab: 'profile' } } },
     { id: 'saved', label: 'Receipt: the end of access is saved', model: caseOf(2, { notice: { key: 'done.until', tone: 'success', params: { name: 'Sara Demo' } } }) },
     { id: 'left', label: 'Luca Passato left (deactivated): nothing to change', model: caseOf(5) },
     { id: 'read-only', label: 'partners.view only: the changes held with the right they need', model: caseOf(1, { can: READ_ONLY }) },

@@ -51,8 +51,14 @@ export const liveMessage = z.strictObject({
   siteId: uuid().nullable(),
   occurredAt: instant(),
   fields: z.record(z.string(), z.unknown()),
+  /**
+   * B-W2b-GF1 (G165): the parties the event's payload names (partyId, customerId, supplierId, brandPartyId, partyIds), so a
+   * viewer limited to some parties receives only theirs. Never sent to a viewer. Optional: a message of an older worker has
+   * none, and a party-limited viewer then receives nothing of it (fail closed).
+   */
+  partyIds: z.array(uuid()).optional(),
 })
 export type LiveMessage = z.infer<typeof liveMessage>
 
-/** What one viewer's screen receives: the live message without the tenant (it is the viewer's own). */
-export type LiveView = Omit<LiveMessage, 'tenantId'>
+/** What one viewer's screen receives: the live message without the tenant (it is the viewer's own) and without its parties. */
+export type LiveView = Omit<LiveMessage, 'tenantId' | 'partyIds'>

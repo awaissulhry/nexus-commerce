@@ -61,6 +61,32 @@ describe('need dates from the scheduled start (B-W2b-20)', () => {
   })
 })
 
+// B-W2b-GB29 (G218): the need date is the start of the operation that uses the material, not the work order's start.
+describe('need dates per operation that uses the material (B-W2b-GB29, G218)', () => {
+  const lining: BomLineData = { ...bomLine, id: 'bl-20', seq: 20, itemId: 'lining', qty: '1', uom: 'M', colourDependent: false, itemColourId: 'lin', colours: [], routingSeq: 30 }
+  const tied: BomLineData = { ...bomLine, routingSeq: 20 }
+  const both = [...items, { id: 'lining', code: 'LIN-1', sourcing: 'BUY' as const, units: { baseUom: 'M', purchaseUom: 'M', purchaseFactor: '1', consumptionUom: 'M', consumptionFactor: '1' } as const, defaultSupplierId: null }]
+  const starts = new Map([['wo-2', '2026-11-16']])
+  const operations = new Map([['wo-2|20', '2026-11-16'], ['wo-2|30', '2026-11-20']])
+  const dayOf = (result: ReturnType<typeof planRequirements>, itemId: string, workOrderId: string) =>
+    result.netting[result.requirements.findIndex((row) => row.itemId === itemId)]!.pegging.coverage.find((entry) => entry.part.workOrderId === workOrderId)!.day
+
+  it("a material used at a later operation on the board is needed when that operation starts; one tied to no step on the work order's start", () => {
+    const plan = planRequirements(input({ items: both, revisions: [{ id: 'rev-1', lines: [bomLine, lining] }], workOrderStarts: starts, operationStarts: operations }))
+    expect(dayOf(plan, 'leather', 'wo-2')).toBe('2026-11-16')
+    expect(dayOf(plan, 'lining', 'wo-2')).toBe('2026-11-20')
+    // A work order not on the board keeps its order line's date for every material.
+    expect(dayOf(plan, 'lining', 'wo-1')).toBe('2026-12-01')
+  })
+
+  it('a step not on the board, or no operation starts given, falls back to the work order start', () => {
+    const notPlaced = planRequirements(input({ items: both, revisions: [{ id: 'rev-1', lines: [tied, lining] }], workOrderStarts: starts, operationStarts: new Map([['wo-2|20', '2026-11-16']]) }))
+    expect(dayOf(notPlaced, 'lining', 'wo-2')).toBe('2026-11-16')
+    const without = planRequirements(input({ items: both, revisions: [{ id: 'rev-1', lines: [tied, lining] }], workOrderStarts: starts }))
+    expect(dayOf(without, 'lining', 'wo-2')).toBe('2026-11-16')
+  })
+})
+
 describe('readiness per component with arrival dates (B-W2b-20)', () => {
   const purchaseOf = (id: string) =>
     ({

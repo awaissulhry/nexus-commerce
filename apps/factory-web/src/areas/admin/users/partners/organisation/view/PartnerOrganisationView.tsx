@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { UserMinus } from 'lucide-react'
+import { PauseCircle, PlayCircle, UserMinus } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, KeyValue } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { DateField } from '../../../../../../lib/i18n/ds-parts'
@@ -29,6 +29,8 @@ export interface PartnerOrganisationModel {
   /** The end-date form's day ('' = none) as it starts (design cases). */
   until?: string
   confirm?: boolean
+  /** B-W2b-GF1 (G011): the suspend / reactivate confirmation open (the partner route: seats and admins kept there). */
+  statusConfirm?: 'suspend' | 'reactivate' | null
   busy: boolean
   dialogProblem: string | null
   notice: PortalNotice | null
@@ -42,6 +44,9 @@ export interface PartnerOrganisationActions {
   onConfirm?: (open: boolean) => void
   /** "Remove from organisation": deactivate through the partner route. */
   onRemove?: (reason: string) => Promise<boolean>
+  /** B-W2b-GF1 (G011): Suspend / Reactivate through the partner route (null closes the confirmation). */
+  onStatusConfirm?: (change: 'suspend' | 'reactivate' | null) => void
+  onStatus?: (change: 'suspend' | 'reactivate', reason: string) => Promise<boolean>
   onStepUp?: (code: string) => void
   onStepUpClose?: () => void
   onDismissNotice?: () => void
@@ -51,7 +56,8 @@ export interface PartnerOrganisationActions {
  * SCR-011 User › Partner organisation › Organisation (B-W2b-180; design admin.users rec:User/partner/org, PLT-006): which
  * customer or supplier the person belongs to (→ its Portal access tab), its admin, the person's user type (a fixed,
  * limited role template: partners see prices at most, never costs or margins), the end of access; change the end date,
- * remove them from the organisation (deactivate: sessions end, the invitation stops, the roles end). Fetches nothing.
+ * suspend or reactivate them (B-W2b-GF1: the partner controls live here, not on the Profile tab), remove them from the
+ * organisation (deactivate: sessions end, the invitation stops, the roles end). Fetches nothing.
  */
 export function PartnerOrganisationView({ model, actions }: { model: PartnerOrganisationModel; actions?: PartnerOrganisationActions }) {
   return (
@@ -99,6 +105,9 @@ function Organisation({ model, actions }: { model: PartnerOrganisationModel; act
   const untilProblem = until !== '' && until <= model.today && changed ? t('invite.untilFuture') : person.kind === 'GUEST' && until === '' ? t('invite.guestNeedsEnd') : null
   // An invited person is removed by revoking the invitation (partners.invite); anyone else by deactivating (partners.manage).
   const removeHeld = left ? t('held.left') : person.status === 'INVITED' ? heldWords(t, model.can.invite ? null : 'right.invite') : manageHeld
+  // B-W2b-GF1 (G011): Suspend an active person, Reactivate a suspended one (partners.manage), through the partner route.
+  const statusChange: 'suspend' | 'reactivate' = person.status === 'SUSPENDED' ? 'reactivate' : 'suspend'
+  const statusHeld = manageHeld ?? (statusChange === 'suspend' ? (person.status === 'ACTIVE' ? null : t('held.suspendNone')) : null)
   return (
     <div className="fw-pa">
       <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
@@ -153,6 +162,9 @@ function Organisation({ model, actions }: { model: PartnerOrganisationModel; act
           <Button size="sm" variant="primary" heldReason={manageHeld ?? (model.busy ? t('common.saving') : !changed ? t('person.nothing') : untilProblem)} onClick={() => void actions?.onUntil?.(until)}>
             {t('org.saveUntil')}
           </Button>
+          <Button size="sm" variant={statusChange === 'suspend' ? 'danger-outline' : 'secondary'} heldReason={statusHeld} onClick={() => actions?.onStatusConfirm?.(statusChange)}>
+            {statusChange === 'suspend' ? <PauseCircle size={14} aria-hidden /> : <PlayCircle size={14} aria-hidden />} {t(`row.${statusChange}`)}
+          </Button>
           <Button size="sm" variant="danger-outline" heldReason={removeHeld} onClick={() => actions?.onConfirm?.(true)}>
             <UserMinus size={14} aria-hidden /> {t('org.remove')}
           </Button>
@@ -168,6 +180,17 @@ function Organisation({ model, actions }: { model: PartnerOrganisationModel; act
         problem={model.dialogProblem}
         onClose={() => actions?.onConfirm?.(false)}
         onConfirm={(reason) => void actions?.onRemove?.(reason)}
+      />
+      <ConfirmBox
+        open={!!model.statusConfirm}
+        title={t(`confirm.${model.statusConfirm ?? 'suspend'}.title`, { count: 1, name: person.displayName })}
+        lines={[t(`confirm.${model.statusConfirm ?? 'suspend'}.body`), person.displayName]}
+        confirmLabel={t(`row.${model.statusConfirm ?? 'suspend'}`)}
+        reason
+        busy={model.busy}
+        problem={model.dialogProblem}
+        onClose={() => actions?.onStatusConfirm?.(null)}
+        onConfirm={(reason) => (model.statusConfirm ? void actions?.onStatus?.(model.statusConfirm, reason) : undefined)}
       />
       <PortalStepUp model={model.stepUp} onSubmit={actions?.onStepUp} onClose={actions?.onStepUpClose} />
     </div>

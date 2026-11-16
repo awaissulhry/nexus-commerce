@@ -811,7 +811,7 @@
     "add": "Add an unplanned operation",
     "loading": "Reading the operations…",
     "none": "Nothing was added: this work order runs on its routing.",
-    "hint": "An unplanned operation can be scanned, paid and costed. Nothing waits for it, and the routing's order stays as it was frozen.",
+    "hint": "An unplanned operation can be scanned, paid and costed. Given the garments that need it, the plan, the board and WIP count it for them; else nothing waits for it. The routing's order stays as it was frozen.",
     "listFailed": "Couldn't read the unplanned operations.",
     "empty": "Every operation of the library is on this work order already.",
     "operation": "Operation",
@@ -829,13 +829,15 @@
       "operation": "Choose the operation first.",
       "reason": "Say why it is needed.",
       "note": "Say why in a few words.",
-      "status": "Only a released or in-progress work order takes an unplanned operation."
+      "status": "Only a released or in-progress work order takes an unplanned operation.",
+      "planned": "Type the garments as a whole number above 0, or leave it empty."
     },
     "col": {
       "operation": "Operation",
       "reason": "Why",
       "addedOn": "Added",
-      "at": "When"
+      "at": "When",
+      "planned": "Planned"
     },
     "on": {
       "FLOOR": "On the floor",
@@ -854,6 +856,11 @@
       "scans": "The floor picks it by hand on any bundle of this work order; good pieces only.",
       "pay": "It pays at its piece rate and costs at its standard minutes, like any operation.",
       "frozen": "It stays on the work order: it cannot be taken off, and unused it changes no figure."
-    }
+    },
+    "planned": "Garments that need it",
+    "plannedHelp": "Planning, the board and WIP count it for these garments. Left empty: it stays off the plan.",
+    "plannedCell_one": "{count} garment",
+    "plannedCell_other": "{count} garments",
+    "offPlan": "Off the plan"
   }
 }

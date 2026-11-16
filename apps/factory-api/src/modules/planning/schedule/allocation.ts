@@ -25,6 +25,8 @@ import { laneFacts, lockedWorkingPlan } from './store'
 import { pinnedRefusal } from '../schedule-depth/pins'
 // B-W2b-329 (PLN-149): a part added or taken off and a bar that follows the new line join the board's change log.
 import { logChanges, type LoggedChange } from '../schedule-depth/log'
+// B-W2b-GB29 (G221, B-W2b-263's gap): the allocation board holds a gate as the planning board does.
+import { assertNoGateHold } from './gates'
 
 /**
  * Allocation to lines and workshops (B-W2a-34; PLN-160; design planning.allocation "Lanes", "Allocation board"; factory-
@@ -144,6 +146,16 @@ export async function allocate(caller: CommandCaller, workOrderId: string, body:
     if (!workOrder) throw new ScheduleRefusal('NOT_OPEN', `${row.number} is not open: it is not allocated.`)
     const problems = allocationProblems({ lineId: body.lineId, parts: body.parts }, workOrder.garments)
     if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
+    // B-W2b-GB29 (G221, B-W2b-263's gap): a line given or changed, or a part placed or resized, is held while a gate of its
+    // order waits (409 refusal/GATE_NOT_PASSED, issues gate/<id>), as a place on the planning board; taking it off a lane
+    // (back to waiting) never is.
+    const placing =
+      (body.lineId !== null && body.lineId !== row.lineId) ||
+      body.parts.some((part) => {
+        const there = world.slots.find((slot) => slot.workOrderId === workOrder.id && slot.workOrderOperationId === null && laneKey(laneOfSlot(slot)) === laneKey(part.lane))
+        return !there || there.pieces !== part.pieces
+      })
+    if (placing) await assertNoGateHold(tx, { id: workOrder.id, number: row.number })
     if (body.lineId) await laneFacts(tx, target.site, { kind: 'LINE', id: body.lineId })
     for (const part of body.parts) await laneFacts(tx, target.site, part.lane)
     const schedule = world.schedules.get(workOrder.id)!

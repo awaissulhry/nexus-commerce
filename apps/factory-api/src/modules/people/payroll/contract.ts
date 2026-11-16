@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { amountMinor, businessDate, currency, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
+import { LINK_PASSWORD } from '@nexus/factory-domain/links/password'
 import { LINK_STATES } from '@nexus/factory-domain/links/purposes'
 import { money } from '@nexus/factory-domain/money/marked'
 import { CHECK_PLACES, PAYROLL_CHECKS } from '@nexus/factory-domain/people/payroll/checks'
@@ -286,6 +287,9 @@ const linkRow = output({
   revokedAt: instant().nullable(),
   createdAt: instant(),
   downloads: z.array(output({ at: instant(), fileId: id() })),
+  /** B-W2b-GF1 (G212): it has a password (never shown), and the consultant's receipt "I received these files" once given. */
+  password: z.boolean(),
+  receipt: output({ at: instant(), name: z.string().nullable() }).nullable(),
 })
 const exportRecord = exportRow.extend({
   payPeriodId: id().nullable(),
@@ -328,6 +332,8 @@ export const sendBody = input({
   maxUses: z.number().int().min(1).max(PAYROLL_LINK_TERMS.uses.max).optional(),
   message: z.string().trim().max(PAYROLL_LIMITS.message).optional(),
   language: z.enum(['it', 'en']).optional(),
+  /** B-W2b-GF1 (G212): a password the office gives the consultant another way; never in the mail, never shown again. */
+  password: z.string().min(1).max(LINK_PASSWORD.maxLength * 4).optional(),
 })
 export type SendBody = z.infer<typeof sendBody>
 export const sendContract = defineContract({
@@ -349,7 +355,16 @@ export const linkFilesContract = defineContract({
       label: z.string(),
       number: z.string().nullable(),
       revision: z.number().int(),
-      link: output({ expiresAt: instant(), usesLeft: count }),
+      link: output({
+        expiresAt: instant(),
+        usesLeft: count,
+        // B-W2b-GF1 (G212): the password sent apart (`unlocked` once the page sent a right one) and the receipt.
+        password: output({ asked: z.boolean(), unlocked: z.boolean(), heldUntil: instant().nullable() }),
+        receipt: output({ asked: z.boolean(), at: instant().nullable(), name: z.string().nullable() }),
+      }),
+      /** How many files were sent (known before the password). */
+      count,
+      /** Listed once the password was given (or when there is none). */
       files: z.array(output({ id: id(), kind: z.enum(['DATA', 'SUMMARY']), name: z.string(), sizeBytes: z.number().int(), sha256: z.string() })),
     }),
   },

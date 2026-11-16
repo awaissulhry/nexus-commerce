@@ -38,6 +38,9 @@ export const reservationSchema = z.object({
   issuedQuantity: z.string(),
   open: z.string(),
   demand: demandSchema,
+  // B-W2b-GB29 (G226): the work order's size a split by garment holds it for (null: the whole demand).
+  workOrderSizeId: z.string().nullable().optional(),
+  cell: z.object({ size: z.string(), colourway: z.string() }).nullable().optional(),
   stale: z.boolean(),
   needDate: z.string().nullable(),
   note: z.string().nullable(),

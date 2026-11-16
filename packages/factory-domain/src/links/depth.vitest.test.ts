@@ -216,8 +216,9 @@ describe('ask for a new link (a set of files)', () => {
     expect(renewalRoute('SHIPMENT_TRACK', 'Shipment', true)).toBe('module')
     expect(renewalRoute('SECURE_FILE', 'StoredFile', false)).toBe('files')
     expect(renewalRoute('DOCUMENT_VIEW', 'StoredFile', false)).toBe('files')
-    // The payroll file is a DOCUMENT_VIEW of a PayrollExport: no set of files, no renewer → its maker.
-    expect(renewalRoute('DOCUMENT_VIEW', 'PayrollExport', false)).toBe('maker')
+    // The payroll file is a SECURE_FILE of a PayrollExport (B-W2b-GF1): no set of files, no renewer → the person who sent it
+    // decides whether to send again (an automatic renewal would mail everyone's hours without a person checking the address).
+    expect(renewalRoute('SECURE_FILE', 'PayrollExport', false)).toBe('maker')
     for (const purpose of ['QUOTE_ACCEPT', 'DEPOSIT_INFO', 'PAYMENT', 'JOB_ACCEPT', 'APPROVAL', 'RECORD_INVITE'] as const) {
       for (const recordType of PURPOSE_RULES[purpose].recordTypes) expect(renewalRoute(purpose, recordType, false), `${purpose} ${recordType}`).toBe('maker')
     }

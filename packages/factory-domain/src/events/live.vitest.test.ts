@@ -43,7 +43,22 @@ const quoteSent = defineEvent({
   live: { permission: 'quotes.read', fields: ['number'] },
 })
 const silent = defineEvent({ type: 'ledger.reconciled', context: 'inventory', description: 'x', payload: z.strictObject({}) })
-const catalogue = createCatalogue([scanAccepted, planPublished, holdPlaced, quoteSent, silent])
+// B-W2b-GF1 (G165): an order of one customer whose live rule does not copy the party (the message carries it anyway).
+const orderConfirmed = defineEvent({
+  type: 'order.confirmed',
+  context: 'sales',
+  description: 'An order was confirmed.',
+  payload: z.strictObject({ orderId: z.string(), partyId: z.string() }),
+  live: { permission: 'quotes.read', fields: ['orderId'] },
+})
+const termsChanged = defineEvent({
+  type: 'terms.changed',
+  context: 'sales',
+  description: 'Payment terms shared by several customers changed.',
+  payload: z.strictObject({ termsId: z.string(), partyIds: z.array(z.string()) }),
+  live: { permission: 'quotes.read', fields: ['termsId'] },
+})
+const catalogue = createCatalogue([scanAccepted, planPublished, holdPlaced, quoteSent, silent, orderConfirmed, termsChanged])
 
 const envelope = (definition: { type: string; version: number }, payload: unknown, scope: Partial<EventEnvelope> = {}): EventEnvelope => ({
   eventId: '0190a000-0000-7000-8000-0000000000e1',
@@ -81,6 +96,7 @@ describe('liveMessageFor', () => {
       siteId: SITE,
       occurredAt: '2026-10-28T09:00:00.000Z',
       fields: { number: 'Q-1' },
+      partyIds: [],
     })
   })
 
@@ -95,7 +111,7 @@ describe('liveViewFor', () => {
   const scan = liveMessageFor(envelope(scanAccepted, { bundleId: 'B1', operation: 'SEW', pieceRate: '0.120000' }), scanAccepted)!
 
   it('sends an office viewer the event without the tenant', () => {
-    const { tenantId: _tenant, ...rest } = quote
+    const { tenantId: _tenant, partyIds: _parties, ...rest } = quote
     expect(liveViewFor(quote, office(), catalogue)).toEqual(rest)
   })
 
@@ -123,8 +139,8 @@ describe('liveViewFor', () => {
     const hold = liveMessageFor(envelope(holdPlaced, { holdId: 'H1' }), holdPlaced)!
 
     it('sends a floor viewer holding the floor permission the floor events of its own site', () => {
-      const { tenantId: _plan, ...planView } = plan
-      const { tenantId: _hold, ...holdView } = hold
+      const { tenantId: _plan, partyIds: _planParties, ...planView } = plan
+      const { tenantId: _hold, partyIds: _holdParties, ...holdView } = hold
       expect(liveViewFor(plan, floor(), catalogue)).toEqual(planView)
       expect(liveViewFor(hold, floor(), catalogue)).toEqual(holdView)
       expect(liveViewFor(scan, floor(), catalogue)?.fields).toEqual({ bundleId: 'B1', operation: 'SEW' })
@@ -160,6 +176,37 @@ describe('liveViewFor', () => {
       expect(liveViewFor(plan, office(), catalogue)).not.toBeNull()
       expect(liveViewFor(plan, office([floorRole]), catalogue)).toBeNull()
       expect(liveViewFor(hold, office([{ ...all, sites: [OTHER_SITE] }]), catalogue)).toBeNull()
+    })
+  })
+
+  describe('a viewer limited to some parties (B-W2b-GF1, G165)', () => {
+    const P1 = '0190a000-0000-7000-8000-0000000000b1'
+    const P2 = '0190a000-0000-7000-8000-0000000000b2'
+    const rep = (parties: Grant['parties']): Actor => office([{ ...all, parties }])
+    const order = (partyId: string) => liveMessageFor(envelope(orderConfirmed, { orderId: 'SO-1', partyId }), orderConfirmed)!
+
+    it('carries the parties the payload names, even when the live rule copies none, and never sends them to the viewer', () => {
+      expect(order(P2).partyIds).toEqual([P2])
+      expect(order(P2).fields).toEqual({ orderId: 'SO-1' })
+      expect(liveMessageFor(envelope(termsChanged, { termsId: 'T-1', partyIds: [P2, P1, 'not-a-uuid'] }), termsChanged)!.partyIds).toEqual([P1, P2])
+      expect(liveViewFor(order(P1), rep([P1]), catalogue)).not.toHaveProperty('partyIds')
+    })
+
+    it("sends a rep their own parties' records only, never another party's record id", () => {
+      expect(liveViewFor(order(P1), rep([P1]), catalogue)?.subject).toBe('subject-1')
+      expect(liveViewFor(order(P2), rep([P1]), catalogue)).toBeNull()
+      const list = liveMessageFor(envelope(termsChanged, { termsId: 'T-1', partyIds: [P1, P2] }), termsChanged)!
+      expect(liveViewFor(list, rep([P1]), catalogue)).toBeNull()
+      expect(liveViewFor(list, rep([P1, P2]), catalogue)).not.toBeNull()
+    })
+
+    it('sends a rep nothing that names no party (or comes from an older worker), and every party a viewer whose grant reaches all', () => {
+      expect(liveViewFor(quote, rep([P1]), catalogue)).toBeNull()
+      expect(liveViewFor({ ...order(P1), partyIds: undefined }, rep([P1]), catalogue)).toBeNull()
+      expect(liveViewFor(quote, rep('all'), catalogue)).not.toBeNull()
+      expect(liveViewFor(order(P2), rep('all'), catalogue)).not.toBeNull()
+      // A grant over every party of ANOTHER company does not open this company's record to a party-limited one.
+      expect(liveViewFor(order(P2), office([{ ...all, parties: [P1] }, { ...all, companies: [OTHER_COMPANY] }]), catalogue)).toBeNull()
     })
   })
 

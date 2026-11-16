@@ -9,6 +9,9 @@ import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { capacityAnswer, capacityWorld, cellAnswer, type CapacityWorld, type LaneState } from '../capacity/service'
 import { subcontractorWorld } from '../capacity/subcontractors'
+// B-W2b-GB29 (G225): a workshop's past load, from its subcontract orders' own dates.
+import { pastWorkshopLines } from '../subcontract-capacity/past'
+import type { WorkshopLine } from '../subcontract-capacity/store'
 import type { Reader } from '../store'
 import { headOf, placeOf, type Place } from './access'
 import type { UtilisationQuery, UtilisationWorkOrdersQuery } from './contract'
@@ -25,7 +28,8 @@ import type { UtilisationQuery, UtilisationWorkOrdersQuery } from './contract'
  *   the load ahead  this week and the next weeks: B-W2a-16's capacity (booked ÷ capacity, the same numbers as Capacity & load
  *                   and the heatmap) and B-W2b-321's workshop lines (booked ÷ capacity in the line's unit)
  *
- * A workshop's past load is not kept (its jobs are what is left from today): its past weeks say nothing. No money, no person.
+ * B-W2b-GB29 (G225): a workshop's past weeks show the load it had, from the subcontract orders' own dates (issued → its goods
+ * back; ../subcontract-capacity/past), against the capacity line in force then; nothing is stored for it. No money, no person.
  */
 
 const ZERO = new Dec(0)
@@ -135,6 +139,13 @@ export async function utilisationAnswer(caller: CommandCaller, query: Utilisatio
       return cellView(week.key, { earned: total((cell) => cell.earned), available: total((cell) => cell.available), booked: total((cell) => cell.booked), capacity: total((cell) => cell.capacity) })
     })
     const workshops = coming.length > 0 ? await subcontractorWorld(db, place.site, coming, place.today) : null
+    // B-W2b-GB29 (G225): the weeks before this one, from the orders' own dates; a workshop with past work only gets its lines too.
+    const pastBuckets = read.weeks.filter((week) => !week.ahead).map((week) => ({ key: week.key, kind: 'WEEK' as const, from: week.actualDays?.from ?? week.from, to: week.actualDays?.to ?? week.to }))
+    const past = await pastWorkshopLines(db, place.site, pastBuckets, place.today)
+    const lineKeyOf = (line: WorkshopLine) => `${line.workshop.id}|${line.key?.workCentreKind ?? '-'}|${line.key?.unit ?? '-'}`
+    const pastOf = new Map(past.map((line) => [lineKeyOf(line), new Map(line.cells.map((cell) => [cell.key, cell]))]))
+    const aheadKeys = new Set((workshops?.lines ?? []).map(lineKeyOf))
+    const workshopLines = [...(workshops?.lines ?? []), ...past.filter((line) => !aheadKeys.has(lineKeyOf(line)))].sort((a, b) => a.workshop.code.localeCompare(b.workshop.code) || lineKeyOf(a).localeCompare(lineKeyOf(b)))
     return {
       ...headOf(place),
       weeks: read.weeks.map((week) => ({ key: week.key, from: week.from, to: week.to, actual: week.actual, ahead: week.ahead, actualDays: week.actualDays })),
@@ -150,8 +161,9 @@ export async function utilisationAnswer(caller: CommandCaller, query: Utilisatio
           plannedEfficiencyPct: state.efficiencyPct,
           cells: read.weeks.map((week) => cellView(week.key, facts.get(laneKey(state.lane.kind, state.lane.id))!.get(week.key)!)),
         })),
-        ...(workshops?.lines ?? []).map((line) => {
+        ...workshopLines.map((line) => {
           const byKey = new Map(line.cells.map((cell) => [cell.key, cell]))
+          const before = pastOf.get(lineKeyOf(line)) // B-W2b-GB29 (G225)
           return {
             kind: 'WORKSHOP' as const,
             id: line.workshop.id,
@@ -161,7 +173,7 @@ export async function utilisationAnswer(caller: CommandCaller, query: Utilisatio
             unit: line.key?.unit ?? null,
             plannedEfficiencyPct: null,
             cells: read.weeks.map((week) => {
-              const cell = week.ahead ? byKey.get(week.key) : undefined
+              const cell = week.ahead ? byKey.get(week.key) : before?.get(week.key) // B-W2b-GB29 (G225): a past week from the orders' dates
               return cellView(week.key, { earned: null, available: null, booked: cell ? cell.booked : null, capacity: cell && cell.known ? cell.available : null }, amountText)
             }),
           }

@@ -157,6 +157,8 @@ export const holdOfRow = (holds: ReadonlyMap<string, HoldFact>, row: { lotId: st
 
 /** What a demand reads as ("WO-00031", "SO-2026-0004 · 10"). */
 export const demandLabel = (demand: Demand): string => (demand.type === 'WorkOrder' ? demand.number : `${demand.orderNumber} · ${demand.seq}`)
+/** B-W2b-GB29 (G226): the size a reservation holds for, as the words' values ({size, colourway}); null: the whole demand. */
+export const reservationCell = (reservation: { readonly cell?: { readonly size: string; readonly colourway: string } | null }): { size: string; colourway: string } | null => reservation.cell ?? null
 /** Where a demand opens (a record type of record-links). */
 export const demandRecord = (demand: Demand): { type: 'WorkOrder' | 'SalesOrder'; id: string } => (demand.type === 'WorkOrder' ? { type: 'WorkOrder', id: demand.id } : { type: 'SalesOrder', id: demand.orderId })
 

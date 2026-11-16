@@ -173,6 +173,8 @@ export interface ScanOperation {
   readonly workCentreKind: WorkCentreKind
   /** B-W2b-82: added to the released work order, no routing step (see the file's head). Left out: a routing step. */
   readonly unplanned?: boolean | undefined
+  /** B-W2b-GB29 (G215): an unplanned operation's planned garments (null or left out: none planned, or a routing step). */
+  readonly plannedQuantity?: number | null | undefined
   /** B-W2b-88: its routing step's parallel group (side by side with the others of the number). Left out or null: in sequence. */
   readonly parallelGroup?: number | null | undefined
 }

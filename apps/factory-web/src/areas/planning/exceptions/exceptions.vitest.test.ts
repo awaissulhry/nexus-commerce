@@ -62,6 +62,12 @@ describe('exceptions: in our words, never the API’s sentence', () => {
     expect(titleOf(byKind('SHORT'), en)).toBe('SO-DEMO-1043 will be 6 days late')
     expect(sentenceOf(byKind('SUPPLY_LATE'), en)).toContain('PO-DEMO-0091 arrives 20/11/2026; it is needed 12/11/2026 (8 days late).')
     expect(sentenceOf(byKind('LANE_OVERLOADED'), en)).toBe('L2 is booked 112% from 23/11/2026 to 29/11/2026 (17,200 of 15,300 min).')
+    // B-W2b-GB29 (G219): a workshop over its weekly capacity, in minutes or garments, in both languages.
+    const shop = { ...byKind('LANE_OVERLOADED'), kind: 'WORKSHOP_OVERLOADED' as const, record: { type: 'Party', id: byKind('LANE_OVERLOADED').record!.id, label: 'SUB-1' }, facts: { workshopCode: 'SUB-1', workCentreKind: 'SEWING', unit: 'PIECES', bucket: '2026-W48', from: '2026-11-23', to: '2026-11-29', loadPct: '125', available: '100', booked: '125' } }
+    expect(sentenceOf(shop, en)).toBe('Workshop SUB-1 is booked 125% from 23/11/2026 to 29/11/2026 (125 of 100 garments a week).')
+    expect(sentenceOf(shop, words('it'))).toMatch(/^Il laboratorio SUB-1 è prenotato al 125% dal /)
+    expect(whatOf(shop, en)).toBe('SUB-1')
+    expect(fixesOf(shop, { prefix: '', siteId: 's1' }).map((fix) => fix.id)).toEqual(['capacity'])
     expect(whatOf(byKind('PAST_DUE'), en)).toBe('SO-DEMO-1038 line 20')
     expect(impactOf(byKind('SUPPLY_LATE'), en)).toBe('2 orders · 8 days late')
     expect(impactOf(byKind('EXCESS'), en)).toBe('—')
@@ -193,5 +199,19 @@ describe('every design case draws in both languages with no key left on screen',
         expect(html.match(LEFT_PLACEHOLDER)?.[0] ?? null, `${screen.screen}/${item.id} (${locale}) placeholder`).toBeNull()
       }
     }
+  })
+})
+
+// B-W2b-GB29 (G222): a sample work order of no order line past its day is named as itself and opens the work order.
+describe('a sample work order past its day (G222)', () => {
+  it('says the work order, never an order line, in it and en; the fix opens the work order', () => {
+    const workOrderId = '00000000-0000-7000-8000-00000000a222'
+    const sample = { ...byKind('PAST_DUE'), record: { type: 'WorkOrder', id: workOrderId, label: 'WO-DEMO-0222' }, facts: { workOrderNumber: 'WO-DEMO-0222', dueDate: '2026-11-13' } } as (typeof ROWS)[number]
+    expect(whatOf(sample, words('en'))).toBe('Sample work order WO-DEMO-0222')
+    expect(sentenceOf(sample, words('en'))).toMatch(/^Sample work order WO-DEMO-0222 was due 13\/11\/2026 \(\d+ days? ago\) and still needs material\.$/)
+    expect(sentenceOf(sample, words('it'))).toMatch(/^L'ordine di lavoro campione WO-DEMO-0222 scadeva il 13\/11\/2026/)
+    expect(fixesOf(sample, { prefix: '/w/DEMO', siteId: 's1' })[0]).toMatchObject({ id: 'wo', href: `/w/DEMO/production/work-orders/${workOrderId}` })
+    // An order line's past due stays as it was.
+    expect(whatOf(byKind('PAST_DUE'), words('en'))).toBe('SO-DEMO-1038 line 20')
   })
 })

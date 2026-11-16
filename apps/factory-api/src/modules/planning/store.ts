@@ -22,6 +22,8 @@ import type { CommandTx } from '../../core/command'
 import { readLines } from '../product/bom/store'
 // B-W2b-228 (PRD-084): a material the customer sends is not bought.
 import { withoutCustomerSupplied } from '../product/bom-lines/store'
+// B-W2b-GB29 (G226): the accepted cutting loss for planning.
+import { planningLossOf, withPlanningLoss } from './leather/planning-loss'
 
 /**
  * What a planning run reads (B-W1-29), in one client: the run's command transaction for a run, a read-only client for
@@ -92,6 +94,12 @@ export interface DemandRead {
   readonly revisions: PlanRevision[]
   /** Order lines of the company that have no making site while it has several plants: not planned. */
   readonly unplaced: PlanWarning[]
+  /**
+   * B-W2b-GB29 (G223): the option values chosen on lines that are no order lines yet (a promise's quote or calculator line,
+   * promise/store `withPromiseLines`), by the line's id: the explosion configures them as an order line's
+   * SalesOrderLineOption rows configure it (planned-orders/store `readGarments`). Left out: none.
+   */
+  readonly chosenOptions?: ReadonlyMap<string, readonly string[]>
 }
 
 /**
@@ -162,6 +170,9 @@ export async function readDemand(db: Reader, site: SiteRow): Promise<DemandRead>
   for (const revisionId of [...new Set(orderLines.flatMap((line) => (line.revisionId ? [line.revisionId] : [])))].sort()) {
     revisions.push({ id: revisionId, lines: await withoutCustomerSupplied(db, revisionId, await readLines(db, revisionId)) })
   }
+  // B-W2b-GB29 (G226): an accepted cutting loss decided after a released revision's release reaches its leather lines.
+  const loss = await planningLossOf(db, revisions.map((revision) => revision.id), revisions.flatMap((revision) => revision.lines.map((line) => line.itemId)))
+  for (const [index, revision] of revisions.entries()) revisions[index] = { ...revision, lines: withPlanningLoss(loss, revision.id, revision.lines) }
   return { orderLines, revisions, unplaced }
 }
 
@@ -181,12 +192,17 @@ export async function readWorkOrders(db: Reader, siteId: string, orderLineIds: r
     row.salesOrderLineId === null ? [] : [{ workOrderId: row.workOrderId, workOrderNumber: row.workOrder.number, status: row.workOrder.status, orderLineId: row.salesOrderLineId, size: row.size, pieces: row.quantity }],
   )
   const open = [...new Set(cells.filter((cell) => OPEN_WORK_ORDER_STATUSES.includes(cell.status)).map((cell) => cell.workOrderId))]
-  if (open.length === 0) return { cells, issues: [] }
+  return { cells, issues: await issuedTo(db, siteId, open) }
+}
+
+/** B-W2b-GB29 (G222): what was issued to these open work orders, net of returns, per material and colour (also a sample's). */
+export async function issuedTo(db: Reader, siteId: string, open: readonly string[]): Promise<WorkOrderIssue[]> {
+  if (open.length === 0) return []
   // Net issued per work order, material and colour: moves that leave a location for the work order, less moves that
   // come back from it (returns, and reversals of issues).
   const by = ['workOrderId', 'itemId', 'itemColourId'] as const
-  const out = await db.stockMove.groupBy({ by: [...by], where: { siteId, workOrderId: { in: open }, fromLocationId: { not: null }, toLocationId: null }, _sum: { baseQuantity: true } })
-  const back = await db.stockMove.groupBy({ by: [...by], where: { siteId, workOrderId: { in: open }, fromLocationId: null, toLocationId: { not: null } }, _sum: { baseQuantity: true } })
+  const out = await db.stockMove.groupBy({ by: [...by], where: { siteId, workOrderId: { in: [...open] }, fromLocationId: { not: null }, toLocationId: null }, _sum: { baseQuantity: true } })
+  const back = await db.stockMove.groupBy({ by: [...by], where: { siteId, workOrderId: { in: [...open] }, fromLocationId: null, toLocationId: { not: null } }, _sum: { baseQuantity: true } })
   const net = new Map<string, { workOrderId: string; itemId: string; itemColourId: string | null; quantity: Decimal }>()
   const add = (row: (typeof out)[number], sign: 1 | -1) => {
     const key = `${row.workOrderId}|${row.itemId}|${row.itemColourId ?? '-'}`
@@ -196,8 +212,7 @@ export async function readWorkOrders(db: Reader, siteId: string, orderLineIds: r
   }
   for (const row of out) add(row, 1)
   for (const row of back) add(row, -1)
-  const issues = [...net.values()].filter((entry) => entry.quantity.gt(0)).map((entry) => ({ ...entry, quantity: q4(entry.quantity) }))
-  return { cells, issues }
+  return [...net.values()].filter((entry) => entry.quantity.gt(0)).map((entry) => ({ ...entry, quantity: q4(entry.quantity) }))
 }
 
 // ---- stock and lots ---------------------------------------------------------------------------------------------------

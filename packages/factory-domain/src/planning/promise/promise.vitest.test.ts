@@ -126,6 +126,22 @@ describe('material arrivals', () => {
     expect(day).toMatchObject({ date: TODAY, setBy: null })
     expect(day.warnings[0]!.code).toBe('NO_LEAD_TIME')
   })
+
+  // B-W2b-GB29 (G224): a buy walks its supplier's closed days (the API passes the walked arrival).
+  it('a buy arrives on the day its lead time reaches around the supplier’s closed days, then the delay; never before today + lead', () => {
+    // 14 days from Thu 12 Nov is 26 Nov; the supplier closes for a week, so the walk reaches 3 Dec.
+    const walked = arrivalsOf(need({ uncovered: '2.0000', delayDays: 1, earliestArrival: '2026-12-03' }), TODAY)
+    expect(walked.arrivals.map((arrival) => [arrival.source, arrival.date])).toEqual([['BUY', '2026-12-04']])
+    expect(walked.arrivals[0]!.words).toBe("LTH is to buy: 14 day(s) to arrive (the supplier's closed days not counted), by 2026-12-04.")
+    // No closed day in the way: the plain lead time, the words as before.
+    const open = arrivalsOf(need({ uncovered: '2.0000', earliestArrival: '2026-11-26' }), TODAY)
+    expect(open.arrivals.map((arrival) => [arrival.date, arrival.words])).toEqual([['2026-11-26', 'LTH is to buy: 14 day(s) to arrive, by 2026-11-26.']])
+    // A walked day before today + lead is never trusted; a MAKE line keeps its make lead time.
+    expect(arrivalsOf(need({ uncovered: '1.0000', earliestArrival: '2026-11-20' }), TODAY).arrivals[0]!.date).toBe('2026-11-26')
+    expect(arrivalsOf(need({ uncovered: '1.0000', action: 'MAKE', leadTimeDays: 3, earliestArrival: '2026-12-03' }), TODAY).arrivals[0]!.date).toBe('2026-11-15')
+    // The latest arrival sets the size's material day.
+    expect(materialDateOf([need({ uncovered: '1.0000', earliestArrival: '2026-12-03' })], TODAY).date).toBe('2026-12-03')
+  })
 })
 
 describe('promise per size (PLN-171)', () => {

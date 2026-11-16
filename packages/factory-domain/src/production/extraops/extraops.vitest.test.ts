@@ -5,7 +5,7 @@ import { DEFAULT_GUARD_SETTINGS, guardFindings, passedTo } from '../guards/rules
 import { lastOperationOf } from '../reports/daily'
 import { capAt, correctionAskRefusal, finalOperationOf, nextScanned, operationFor, previousScanned, reportDecision, sewnOperationOf, standingKey, undoRefusal, UNDO_WINDOW_MS, type ReportFacts, type ScanFact, type ScanOperation } from '../scans/rules'
 import { wipOf } from '../scans/wip'
-import { extraOperationProblem, extraPayOf, extraReasonText, unplannedSeq } from './rules'
+import { extraOperationProblem, extraPayOf, extraReasonText, plannedGarmentsOf, unplannedLeftOf, unplannedSeq } from './rules'
 
 const facts = { workOrder: { number: 'WO-1', open: true }, operation: { code: 'OP-EXTRA', active: true }, planned: false, added: false, centre: { kind: 'FINISHING', found: true }, reasonCode: 'QUALITY_FIX', note: null } as const
 
@@ -20,6 +20,18 @@ describe('an unplanned operation (MES-086)', () => {
     expect(extraOperationProblem({ ...facts, centre: { kind: 'FINISHING', found: false } })).toBe('This site has no active finishing work centre for OP-EXTRA.')
     expect(extraOperationProblem({ ...facts, reasonCode: 'OTHER' })).toMatch(/few words/)
     expect(extraOperationProblem({ ...facts, reasonCode: 'OTHER', note: 'Extra bar tack' })).toBeNull()
+  })
+
+  // B-W2b-GB29 (G215): its planned garments, 1 up to the work order's; left out: none (off the plan, as B-W2b-82).
+  it('is planned for 1 up to the work order\'s garments (left out: off the plan); what is left never goes below 0', () => {
+    expect(extraOperationProblem({ ...facts, plannedQuantity: { given: null, garments: 40 } })).toBeNull()
+    expect(extraOperationProblem({ ...facts, plannedQuantity: { given: 12, garments: 40 } })).toBeNull()
+    expect(extraOperationProblem({ ...facts, plannedQuantity: { given: 41, garments: 40 } })).toBe('Plan 1 to 40 garments for it: work order WO-1 makes 40.')
+    expect(extraOperationProblem({ ...facts, plannedQuantity: { given: 0, garments: 40 } })).toMatch(/^Plan 1 to 40 garments/)
+    expect(plannedGarmentsOf(undefined)).toBeNull()
+    expect(plannedGarmentsOf(12)).toBe(12)
+    expect(unplannedLeftOf(12, 5)).toBe(7)
+    expect(unplannedLeftOf(12, 15)).toBe(0)
   })
 
   it('sits after every operation of the work order', () => {
@@ -152,6 +164,21 @@ describe('a real step: it can be scanned, and nothing waits for it (B-W2b-82)', 
     const none = wipOf({ operations, cells: [{ id: 'c1', quantity: 40 }], bundles, scans, lineOf: () => null })
     expect(none.operations.find((entry) => entry.operationId === 'extra')).toMatchObject({ arrived: 0, waiting: 0, bundles: { done: 0, waiting: 0, notReached: 2 } })
     expect(none.allFinished).toBe(true)
+  })
+
+  // B-W2b-GB29 (G215): with a planned quantity, what of it is not reported there yet waits for it.
+  it('in WIP an unplanned operation with planned garments has the rest of them waiting', () => {
+    const bundles = [
+      { id: 'b1', workOrderSizeId: 'c1', part: null, quantity: 20 },
+      { id: 'b2', workOrderSizeId: 'c1', part: null, quantity: 20 },
+    ]
+    const done = (bundleId: string, operation: ScanOperation, good: number) => scan(operation, good, { id: `${bundleId}-${operation.id}`, bundleId })
+    const planned = { ...extra, plannedQuantity: 12 }
+    const scans = ['b1', 'b2'].flatMap((id) => [done(id, cut, 20), done(id, sew, 20), done(id, pack, 20)])
+    const wip = wipOf({ operations: [cut, sew, pack, planned], cells: [{ id: 'c1', quantity: 40 }], bundles, scans: [...scans, done('b1', planned, 5)], lineOf: () => null })
+    expect(wip.operations.find((entry) => entry.operationId === 'extra')).toMatchObject({ unplanned: true, planned: 12, arrived: 5, good: 5, waiting: 7 })
+    expect(wip.operations.find((entry) => entry.operationId === 'pack')).toMatchObject({ planned: null })
+    expect(wip.allFinished).toBe(true)
   })
 
   it('is no line\'s last operation: a garment leaves the line once', () => {

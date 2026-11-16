@@ -18,6 +18,8 @@ import { decimal, moneyLineOf, quotePartyOf, readLineRecords, storedVat, treatme
 import { unitFingerprint } from '../mtm/fingerprint'
 // B-W2b-423 (KS4:01): an option's own cost joins the line's cost and margin.
 import { lineOptionsCost, quoteLineValues } from '../../costing/option-cost/line'
+// B-W2b-GB29 (G226): the accepted cutting loss for planning reaches a quote's cost.
+import { planningLossOf, withPlanningLoss } from '../../planning/leather/planning-loss'
 
 /**
  * A quote version's money, written (B-W1-21): the cost of a line from its style's cost sheet (costing, B-W1-16: the
@@ -55,7 +57,10 @@ async function sheetOf(tx: CommandTx | Reader, cache: SheetCache, target: CostTa
       const style = await tx.style.findUnique({ where: { id: target.styleId }, select: COSTING_STYLE_COLUMNS })
       if (!style) throw new NotFoundError('Style not found.')
       const revision = await findRevision(tx, style.id, target.styleRevisionId!)
-      const { facts } = await loadCostFacts(tx, style, revision, company, now)
+      const loaded = await loadCostFacts(tx, style, revision, company, now)
+      // B-W2b-GB29 (G226): an accepted cutting loss decided after the released revision's release prices its leather lines.
+      const loss = await planningLossOf(tx, [revision.id], loaded.facts.lines.map((line) => line.itemId))
+      const facts = { ...loaded.facts, lines: withPlanningLoss(loss, revision.id, loaded.facts.lines) }
       return { sheet: prepareSheet(facts), revision }
     })()
     cache.set(key, entry)

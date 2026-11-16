@@ -4,7 +4,7 @@ import { ForbiddenError, InvalidStateError } from '@nexus/factory-domain/core/er
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { requireContext, type OfficeContext } from '../../../core/context'
 import { requireStepUp } from '../office/account'
-import { PARTNER_NO_PASSWORD } from '../office/password-reset'
+import { PARTNER_NO_PASSWORD, PARTNER_STATUS_ELSEWHERE } from '../office/password-reset'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { endAllAssignments, liveAssignmentsOf } from '../roles/assignments'
 import { endSessions } from '../sessions/session-store'
@@ -25,7 +25,9 @@ import { adminFacts, userStatus } from './status'
  *                           person (PLT-016)
  *   require-password-reset  every session ends; the next sign-in answers with a reset token (PLT-070)
  *
- * User changes need a step-up (A1 §3.10), and nobody suspends, deactivates or resets their own account here.
+ * User changes need a step-up (A1 §3.10), and nobody suspends, deactivates or resets their own account here. B-W2b-GF1 (G011): a
+ * partner person is changed only through the partner routes (platform/auth/partners: seats counted once, the portal's admin rule):
+ * these routes answer 409 in words for one.
  */
 
 export type UserChange = 'suspend' | 'reactivate' | 'deactivate' | 'require-password-reset'
@@ -117,6 +119,8 @@ export async function changeUser(auth: OfficeAuth, request: FastifyRequest, user
     },
     async (tools) => {
       const { tx, now, audit, record } = tools
+      const { audience } = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { audience: true } })
+      if (audience !== 'OFFICE') throw new InvalidStateError(PARTNER_STATUS_ELSEWHERE)
       let sessionsEnded = 0
       let assignmentsEnded = 0
       let tasksHandedBack = 0

@@ -51,7 +51,8 @@ export function NeedSection({ model, actions, words }: { model: LeatherModel; ac
     data ? (
       <span className="fw-lp-cell">
         <span className="fw-lp-ellipsis">
-          {data.order.number} · {t('row.line', { seq: data.orderLine.seq })}
+          {/* B-W2b-GB29 (G222): a sample work order of no order line says so (its round when it has one). */}
+          {data.sample ? t(data.sample.roundNumber ? 'row.sampleOfRound' : 'row.sample', { workOrder: data.sample.workOrderNumber, round: data.sample.roundNumber ?? '' }) : `${data.order.number} · ${t('row.line', { seq: data.orderLine.seq })}`}
         </span>
         <span className="fw-lp-sub">{data.orderLine.dueDate ? t('row.due', { date: formatDate(data.orderLine.dueDate, { locale, timeZone: model.timeZone }) }) : t('row.noDue')}</span>
       </span>

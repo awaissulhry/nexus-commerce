@@ -104,6 +104,19 @@ export const designScreen = defineDesignScreen<ParamsCase>({
       model: { role: 'planner', tab: 'items', items: { selected: [cowhide, kangaroo, mesh], dialog: { kind: 'bulk', step: 'review', draft: { fields: { safetyLeadTimeDays: '5', maxOrderQty: '30' }, method: null } } } },
       note: 'Old → new per row, and what happens: the cowhide refuses an order maximum below its order minimum (50), so it is held with the reason; the others will be saved. Apply saves one after the other and names every refused row.',
     },
+    // B-W2b-GB29 (G220): the bulk edit takes the number rules per item (scrap %, yield %, days before use).
+    {
+      id: 'items-bulk-rules',
+      label: 'Edit 3: the planning rules',
+      model: { role: 'planner', tab: 'items', items: { selected: [cowhide, kangaroo, mesh], dialog: { kind: 'bulk', step: 'fields', draft: { fields: { scrapPct: '2,5', delayDays: '1' }, method: null } } } },
+      note: 'Scrap %, yield % and the days before use sit beside the lead times and quantities; each is read as the rules read it.',
+    },
+    {
+      id: 'items-bulk-rules-review',
+      label: 'Edit 3: the planning rules, the review',
+      model: { role: 'planner', tab: 'items', items: { selected: [cowhide, kangaroo, mesh], dialog: { kind: 'bulk', step: 'review', draft: { fields: { yieldPct: '0', delayDays: '1' }, method: null } } } },
+      note: 'A yield of 0 is refused before anything is sent, in the rules’ words; nothing of that row is saved.',
+    },
     {
       id: 'items-method-dialog',
       label: 'Method: reorder point',

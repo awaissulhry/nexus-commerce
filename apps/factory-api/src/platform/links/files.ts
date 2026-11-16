@@ -64,7 +64,11 @@ import { linkCommand, useLink } from './use'
  *   POST /link/files/received           SECURE_FILE: "I received these files", once (receivedAt, the typed name, evidence
  *                                       RECEIVED; never a use).
  * The files are read in the tenant's system scope after the session named the link: they may be office files (a tech
- * pack, a payroll file of hours); the set is the only list the session ever sees, and the unlock key opens it.
+ * pack); the set is the only list the session ever sees, and the unlock key opens it.
+ *
+ * B-W2b-GF1 (G212): the password and the receipt belong to the LINK, whatever it opens: POST /link/password takes any link
+ * whose purpose takes a password, POST /link/files/received any SECURE_FILE link — the payroll module's SECURE_FILE link of
+ * a PayrollExport too, whose own routes list and serve the export's files behind the same unlock key (`linkLock`).
  */
 
 const SET_FILE = {
@@ -236,6 +240,20 @@ function fileLinkOf(request: FastifyRequest): LinkSession {
   return link
 }
 
+/** B-W2b-GF1 (G212): the request's link, when its purpose takes a password (a set of files, the payroll file); else the one 404. */
+function passwordLinkOf(request: FastifyRequest): LinkSession {
+  const link = linkSessionOf(request)
+  if (!PURPOSE_RULES[link.purpose].password) throw linkUnavailable()
+  return link
+}
+
+/** B-W2b-GF1 (G212): the request's link, when its purpose takes the receipt (SECURE_FILE, whatever it opens); else the one 404. */
+function receiptLinkOf(request: FastifyRequest): LinkSession {
+  const link = linkSessionOf(request)
+  if (!PURPOSE_RULES[link.purpose].receipt) throw linkUnavailable()
+  return link
+}
+
 const unlockKey = (request: FastifyRequest): Buffer => abuseKey(officeAuthOf(request.server).secrets, 'link-unlock')
 
 interface ReadSet {
@@ -279,12 +297,45 @@ async function readSet(request: FastifyRequest, link: LinkSession): Promise<Read
   })
 }
 
-const unlocked = (request: FastifyRequest, link: LinkSession, set: ReadSet, now: Date): boolean =>
+const unlocked = (request: FastifyRequest, link: LinkSession, set: Pick<ReadSet, 'password'>, now: Date): boolean =>
   !set.password.set || unlockOpens(unlockKey(request), request.headers[UNLOCK_HEADER], link.id, now)
 
 /** The password must have been given (its unlock key), else 403 in words (issue `password`). */
-function requireUnlocked(request: FastifyRequest, link: LinkSession, set: ReadSet, now: Date): void {
+function requireUnlocked(request: FastifyRequest, link: LinkSession, set: Pick<ReadSet, 'password'>, now: Date): void {
   if (!unlocked(request, link, set, now)) throw new DomainError('forbidden', 'Type the password the sender gave you first.', [{ path: 'password', message: 'Required.' }])
+}
+
+/** B-W2b-GF1 (G212): a link's password and receipt as its page reads them (any record), and whether this request is unlocked. */
+export interface LinkLock {
+  readonly password: { readonly asked: boolean; readonly unlocked: boolean; readonly heldUntil: string | null }
+  readonly receipt: { readonly asked: boolean; readonly at: string | null; readonly name: string | null }
+  /** The files may be listed and downloaded now: no password, or its unlock key came with the request. */
+  readonly open: boolean
+}
+
+async function readLock(request: FastifyRequest, link: LinkSession): Promise<Pick<ReadSet, 'password' | 'receipt'>> {
+  const row = await systemCallerOf(request)(link.tenantId).withClient((client) =>
+    client.oneOffLink.findUnique({ where: { id: link.id }, select: { partyId: true, passwordHash: true, passwordTries: true, passwordHeldUntil: true, receivedAt: true, receivedName: true } }),
+  )
+  if (!row || row.partyId !== link.partyId) throw linkUnavailable()
+  return { password: { set: row.passwordHash !== null, tries: row.passwordTries, heldUntil: row.passwordHeldUntil }, receipt: row.receivedAt ? { at: row.receivedAt, name: row.receivedName } : null }
+}
+
+/** The lock of a link a module serves itself (the payroll file), read in the tenant's system scope. */
+export async function linkLock(request: FastifyRequest, link: LinkSession): Promise<LinkLock> {
+  const now = officeAuthOf(request.server).clock.now()
+  const lock = await readLock(request, link)
+  const open = unlocked(request, link, lock, now)
+  return {
+    password: { asked: lock.password.set, unlocked: lock.password.set && open, heldUntil: lock.password.heldUntil && passwordHeld(lock.password, now) ? toUtcIso(lock.password.heldUntil) : null },
+    receipt: { asked: PURPOSE_RULES[link.purpose].receipt, at: iso(lock.receipt?.at ?? null), name: lock.receipt?.name ?? null },
+    open,
+  }
+}
+
+/** A module's download behind the link's password: 403 in words until it was given (the same answer as a set of files). */
+export async function requireLinkUnlocked(request: FastifyRequest, link: LinkSession): Promise<void> {
+  requireUnlocked(request, link, await readLock(request, link), officeAuthOf(request.server).clock.now())
 }
 
 const iso = (date: Date | null): string | null => (date === null ? null : toUtcIso(date))
@@ -327,7 +378,7 @@ export async function linkFilesView(request: FastifyRequest) {
 
 /** POST /link/password (see the file's comment). Wrong: 400 at `body/password` in words; held: 429 with Retry-After. */
 export async function checkLinkPassword(request: FastifyRequest, reply: FastifyReply, password: string, idempotencyKey?: string) {
-  const link = fileLinkOf(request)
+  const link = passwordLinkOf(request)
   const clock = officeAuthOf(request.server).clock
   const system = systemCallerOf(request)(link.tenantId)
   const stored = await system.withClient((client) => client.oneOffLink.findUnique({ where: { id: link.id }, select: { passwordHash: true, passwordTries: true, passwordHeldUntil: true } }))
@@ -412,10 +463,9 @@ export async function previewSetFile(request: FastifyRequest, fileId: string) {
 
 /** POST /link/files/received: "I received these files" (SECURE_FILE), once. */
 export async function confirmReceipt(request: FastifyRequest, body: { readonly typedName?: string | undefined }, idempotencyKey?: string) {
-  const link = fileLinkOf(request)
-  if (!PURPOSE_RULES[link.purpose].receipt) throw new ForbiddenError('This link takes no receipt.')
+  const link = receiptLinkOf(request)
   const now = officeAuthOf(request.server).clock.now()
-  const set = await readSet(request, link)
+  const set = await readLock(request, link)
   requireUnlocked(request, link, set, now)
   if (set.receipt) throw new LinkRefusedError('RECEIVED', `You confirmed it already, on ${toUtcIso(set.receipt.at)}.`)
   const { result } = await linkCommand(request, { name: 'links.receive', idempotencyKey, input: { typedName: body.typedName ?? null } }, async (tools) => {

@@ -754,6 +754,7 @@
       "reservedFor_one": "Reserved for {count} demand",
       "reservedFor_other": "Reserved for {count} demands",
       "wholeHide": "hide {code}, whole",
+      "cell": "for size {size} · {colourway}",
       "needed": "needed {date}",
       "stale": "done: release it"
     },

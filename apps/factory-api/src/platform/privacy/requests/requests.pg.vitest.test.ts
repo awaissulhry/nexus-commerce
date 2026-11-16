@@ -23,6 +23,7 @@ import { applySystemRoleChanges, systemRoleChanges } from '../../auth/roles/syst
 import { putGeneratedFile, recordGeneratedFile } from '../../files/files'
 import { systemContext } from '../../outbox/system'
 import { collectPackage } from './package'
+import { purgePackagesOf } from './purge'
 
 /**
  * Data protection in depth (B-W2b-405; PLT-202, PLT-203; PV1:01, PV1:02, PV1:03, PV1:04; GDPR arts. 12, 15, 17, 20) on the local
@@ -43,6 +44,14 @@ type Json = Record<string, any>
 const admin = async <R = Json>(sql: string, values: unknown[] = []): Promise<R[]> => (await h.db.admin.query(sql, values)).rows as R[]
 const one = async <R = Json>(sql: string, values: unknown[] = []): Promise<R> => (await admin<R>(sql, values))[0]!
 const system = () => callerFor(h.database, systemContext(T, newId()))
+/** B-W2b-GF1: a made-up file of a record, in the store (a mail's attachment). */
+async function attachment(name: string, recordType: string, recordId: string): Promise<string> {
+  const caller = system()
+  const prepared = await putGeneratedFile(h.files, caller, { companyId: companyA, recordType, recordId, kind: 'ATTACHMENT', originalName: name, contentType: 'application/pdf', body: Buffer.from(`%PDF-1.4\n% made-up ${name}\n%%EOF\n`), visibility: ['OFFICE'] })
+  const { result } = await command(caller, { name: 'test.attachment', input: { name } }, async (tools) => (await recordGeneratedFile(tools, prepared)).id)
+  return result
+}
+
 /** A made-up row written as the owner login: every column given, the database's guards on. */
 async function insertRow(table: string, row: Record<string, unknown>): Promise<void> {
   const full = { tenantId: T, ...row }
@@ -98,6 +107,8 @@ beforeAll(async () => {
     { database: h.database, clock: h.clock, routesRoot: fileURLToPath(new URL('../../..', import.meta.url)), authenticate: testAuthenticator((request) => SESSIONS[String(request.headers['x-test-session'])] ?? null) },
   )
   useReadLog(true)
+  // B-W2b-GF1: the made-up files of these tests (attachments, packages, their removal) stay inside the FAKE store's rate.
+  await admin(`UPDATE "IntegrationAccount" SET "rateLimitPerMinute" = 6000, "rateLimitBurst" = 1000 WHERE "tenantId" = $1 AND provider IN ('R2', 'SES')`, [T])
 }, 300_000)
 
 afterAll(async () => {
@@ -165,6 +176,31 @@ describe("a prospect's access request: the 30-day clock, identity first, the pac
     const download = await ok('GET', `/privacy/requests/${request.id}/package`)
     expect(download.download.url).toEqual(expect.any(String))
     expect(await admin(`SELECT action FROM "ReadLog" WHERE "tenantId" = $1 AND "recordType" = 'DataRequest' AND "recordId" = $2`, [T, request.id])).toEqual([{ action: 'DOWNLOAD' }])
+    // B-W2b-GF1 (G274): the package has its delete date, 30 days after it was made, and the purge deletes it then (not before).
+    const dated = await one<{ deleteAfter: Date }>(`SELECT "deleteAfter" FROM "StoredFile" WHERE id = $1`, [request.package.fileId])
+    const days = (new Date(dated.deleteAfter).getTime() - Date.now()) / 86_400_000
+    expect(days).toBeGreaterThan(29.9)
+    expect(days).toBeLessThan(30.1)
+    expect(request.package.deleteAfter).toBe(new Date(dated.deleteAfter).toISOString())
+    expect(await purgePackagesOf(system(), h.files, new Date())).toBe(0)
+    expect(await purgePackagesOf(system(), h.files, new Date(Date.now() + 31 * 86_400_000))).toBe(1)
+    expect(await one(`SELECT status::text, "deletedAt" IS NOT NULL AS gone FROM "StoredFile" WHERE id = $1`, [request.package.fileId])).toEqual({ status: 'DELETED', gone: true })
+    expect(await h.files.storage.read(system(), file.storeAccountId, file.storageKey, file.sizeBytes)).toBeNull()
+    expect(await admin(`SELECT action, reason FROM "AuditLog" WHERE "recordType" = 'StoredFile' AND "recordId" = $1 AND action = 'files.delete'`, [request.package.fileId])).toEqual([{ action: 'files.delete', reason: "A person's data package: its delete date came (GDPR art. 5(1)(e))." }])
+    const gone = await send('GET', `/privacy/requests/${request.id}/package`)
+    expect(gone.status).toBe(409)
+    expect(gone.body.error.message).toBe(REQUEST_HELD_WORDS.PACKAGE_DELETED)
+    request = (await ok('GET', `/privacy/requests/${request.id}`)).request
+    expect(request.package).toBeNull()
+    // Not handed over: the request is not done with a deleted package (in words, never a 500); collected again, it is.
+    expect(request.actions.close.held.code).toBe('PACKAGE_DELETED')
+    const notDone = await send('POST', `/privacy/requests/${request.id}/done`, { version: request.version })
+    expect(notDone.status).toBe(409)
+    expect(notDone.body.error.message).toBe(REQUEST_HELD_WORDS.PACKAGE_DELETED)
+    request = (await ok('POST', `/privacy/requests/${request.id}/collect`, undefined, 202)).request
+    expect(await collectPackage(system(), request.id, { files: h.files })).toBe('built')
+    request = (await ok('GET', `/privacy/requests/${request.id}`)).request
+    expect(request.actions.close.allowed).toBe(true)
     request = (await ok('POST', `/privacy/requests/${request.id}/done`, { version: request.version })).request
     expect(request).toMatchObject({ status: 'DONE', decidedBy: { id: desk.userId } })
     expect(request.actions.refuse.held.code).toBe('CLOSED')
@@ -252,9 +288,15 @@ describe('an erasure: previewed with the law’s exceptions, a fresh code and th
     const posted = newId()
     const note = newId()
     const at = new Date(Date.now() - 3_600_000).toISOString()
-    await insertRow('Message', { id: fromMail, threadId, partyId, direction: 'INBOUND', audience: 'PARTNER', channel: 'EMAIL', authorKind: 'PARTY', authorName: 'Erika Prova', bodyText: 'Made-up mail: please call me on my mobile.', bodyHtml: '<p>Made-up mail</p>', emailMessageId: '<f54-in@mail.example.com>', at })
+    // B-W2b-GF1 (F54): the files of her mail on the thread's record — hers alone, one an office note attaches too (the dedup
+    // reuses a file: not hers alone), one retained until a date still to come.
+    const hersOnly = await attachment('erika-passport-copy.pdf', 'Party', partyId)
+    const shared = await attachment('price-list.pdf', 'Party', partyId)
+    const retained = await attachment('signed-order.pdf', 'Party', partyId)
+    await admin(`UPDATE "StoredFile" SET "retainUntil" = now() + interval '2 years' WHERE id = $1`, [retained])
+    await insertRow('Message', { id: fromMail, threadId, partyId, direction: 'INBOUND', audience: 'PARTNER', channel: 'EMAIL', authorKind: 'PARTY', authorName: 'Erika Prova', bodyText: 'Made-up mail: please call me on my mobile.', bodyHtml: '<p>Made-up mail</p>', emailMessageId: '<f54-in@mail.example.com>', at, attachmentFileIds: [hersOnly, shared, retained] })
     await insertRow('Message', { id: posted, threadId, partyId, direction: 'INBOUND', audience: 'PARTNER', channel: 'PORTAL', authorKind: 'PARTY', authorName: 'Erika Prova', bodyText: 'Made-up portal post.', at })
-    await insertRow('Message', { id: note, threadId, direction: 'INTERNAL_NOTE', audience: 'OFFICE', channel: 'APP', authorKind: 'USER', authorId: desk.userId, authorName: 'Privacy desk', bodyText: 'Made-up note: Erika asked for a call.', at })
+    await insertRow('Message', { id: note, threadId, direction: 'INTERNAL_NOTE', audience: 'OFFICE', channel: 'APP', authorKind: 'USER', authorId: desk.userId, authorName: 'Privacy desk', bodyText: 'Made-up note: Erika asked for a call.', at, attachmentFileIds: [shared] })
     const portalPerson = newId()
     await insertFixture('User', { id: portalPerson, email: address, displayName: 'Erika Prova', audience: 'PARTNER', partyId, status: 'DEACTIVATED' })
     await insertRow('AuditLog', { id: newId(), companyId: companyA, partyId, audience: 'PARTNER', actorId: portalPerson, action: 'threads.post', recordType: 'Message', recordId: posted, after: { channel: 'PORTAL' }, requestId: `f54-${posted}` })
@@ -263,8 +305,11 @@ describe('an erasure: previewed with the law’s exceptions, a fresh code and th
     const mail = (id: string, extra: Record<string, unknown>) => ({ id, companyId: companyA, accountId: account, receiptId: newId(), sesMessageId: `f54-${id}`, s3Bucket: 'factory-inbound-f54', s3Key: `inbound/${id}`, receivedAt: at, envelopeFrom: address, envelopeTo: ['orders@example.com'], fromAddress: address, fromName: 'Erika Prova', to: ['orders@example.com'], subject: 'Made-up order question', bodyText: 'Made-up text with her number.', spfVerdict: 'PASS', dkimVerdict: 'PASS', dmarcVerdict: 'PASS', spamVerdict: 'PASS', virusVerdict: 'PASS', fetchedAt: at, ...extra })
     const matched = newId()
     const waiting = newId()
-    await insertRow('InboundEmail', mail(matched, { status: 'MATCHED', threadId, messageId: fromMail, matchedBy: 'HEADERS', emailMessageId: '<f54-in@mail.example.com>', bodyHtml: '<p>Made-up</p>' }))
+    const kept = (fileId: string, name: string) => ({ kept: true, name, contentType: 'application/pdf', sizeBytes: 10, sha256: 'a'.repeat(64), storeAccountId: newId(), storageKey: `inbound/${fileId}`, fileId })
+    await insertRow('InboundEmail', mail(matched, { status: 'MATCHED', threadId, messageId: fromMail, matchedBy: 'HEADERS', emailMessageId: '<f54-in@mail.example.com>', bodyHtml: '<p>Made-up</p>', attachments: [kept(hersOnly, 'erika-passport-copy.pdf'), kept(shared, 'price-list.pdf'), kept(retained, 'signed-order.pdf')] }))
     await insertRow('InboundEmail', mail(waiting, { status: 'TRIAGE', emailMessageId: '<f54-waiting@mail.example.com>' }))
+    // A file of the mail still waiting to be sorted (a file of the InboundEmail itself).
+    const waitingFile = await attachment('erika-measurements.pdf', 'InboundEmail', waiting)
     const identity = seedUuid(NS, 'email:identity:A:conversation')
     const outbound = (id: string, extra: Record<string, unknown>) => ({ id, companyId: companyA, identityId: identity, templateKey: 'sales.order_confirmed', locale: 'it', fromAddress: 'orders@mail.example.com', fromName: 'Seed A', to: [address.toUpperCase(), 'colleague.f54@example.com'], subject: 'Made-up order confirmation for Erika', emailMessageId: `<${id}@mail.example.com>`, queuedAt: at, ...extra })
     const delivered = newId()
@@ -294,7 +339,11 @@ describe('an erasure: previewed with the law’s exceptions, a fresh code and th
     const group = (type: string) => preview.anonymised.find((entry: Json) => entry.recordType === type)
     expect(group('PartyContact')).toMatchObject({ count: 1, erasedFields: ['name', 'email', 'phone'] })
     expect(group('Message')).toMatchObject({ count: 2, erasedFields: expect.arrayContaining(['authorName', 'bodyText', 'bodyHtml']) })
-    expect(group('InboundEmail')).toMatchObject({ count: 2, keptFields: ['envelopeFrom'], why: { code: 'IMMUTABLE', words: KEPT_WHY_WORDS.IMMUTABLE } })
+    // B-W2b-GF1 (F54): the envelope sender goes blank too: nothing of her stays in the mail.
+    expect(group('InboundEmail')).toMatchObject({ count: 2, erasedFields: expect.arrayContaining(['fromAddress', 'envelopeFrom']), keptFields: [], why: null })
+    // B-W2b-GF1 (F54): her own attachments deleted; the retained one kept with why; the shared one is not hers alone.
+    expect(preview.deleted.find((entry: Json) => entry.recordType === 'StoredFile')).toMatchObject({ count: 2 })
+    expect(preview.kept.find((entry: Json) => entry.recordType === 'StoredFile')).toMatchObject({ count: 1, why: { code: 'RETAINED', words: KEPT_WHY_WORDS.RETAINED } })
     // Her address is only among the To recipients: Cc (a colleague) stays as it is.
     expect(group('EmailOutbound')).toMatchObject({ count: 3, erasedFields: ['to', 'subject'] })
     expect(group('AuditLog')).toMatchObject({ count: 1, erasedFields: ['before', 'after'] })
@@ -302,16 +351,18 @@ describe('an erasure: previewed with the law’s exceptions, a fresh code and th
 
     await stepUp(h, desk.browser, desk.secret)
     const erased = await ok('POST', `/privacy/requests/${request.id}/erase`, { version: request.version, reason: 'Asked by mail (made up).', confirmName: 'Erika Prova' })
-    expect(erased.erased).toMatchObject({ anonymised: 9, deleted: 0 })
+    expect(erased.erased).toMatchObject({ anonymised: 9, deleted: 2 })
+    const status = async (id: string) => (await one<{ status: string }>(`SELECT status::text FROM "StoredFile" WHERE id = $1`, [id])).status
+    expect([await status(hersOnly), await status(waitingFile), await status(retained), await status(shared)]).toEqual(['DELETED', 'DELETED', 'AVAILABLE', 'AVAILABLE'])
 
     // The messages she wrote: no name, no text; the office note as it was.
     const message = (id: string) => one(`SELECT "authorName", "bodyText", "bodyHtml", "threadId" FROM "Message" WHERE id = $1`, [id])
     expect(await message(fromMail)).toEqual({ authorName: null, bodyText: '', bodyHtml: null, threadId })
     expect(await message(posted)).toEqual({ authorName: null, bodyText: '', bodyHtml: null, threadId })
     expect(await message(note)).toEqual({ authorName: 'Privacy desk', bodyText: 'Made-up note: Erika asked for a call.', bodyHtml: null, threadId })
-    // Her mails: sender, name, subject, text and HTML blank; where they went and the envelope stay.
+    // Her mails: sender, name, subject, text, HTML and (B-W2b-GF1) the envelope sender blank; where they went stays.
     for (const id of [matched, waiting]) {
-      expect(await one(`SELECT "fromAddress", "fromName", subject, "bodyText", "bodyHtml", "envelopeFrom", status::text FROM "InboundEmail" WHERE id = $1`, [id])).toEqual({ fromAddress: null, fromName: null, subject: null, bodyText: null, bodyHtml: null, envelopeFrom: address, status: id === matched ? 'MATCHED' : 'TRIAGE' })
+      expect(await one(`SELECT "fromAddress", "fromName", subject, "bodyText", "bodyHtml", "envelopeFrom", status::text FROM "InboundEmail" WHERE id = $1`, [id])).toEqual({ fromAddress: null, fromName: null, subject: null, bodyText: null, bodyHtml: null, envelopeFrom: null, status: id === matched ? 'MATCHED' : 'TRIAGE' })
     }
     // The mails to her: her address and the subject blank, every other address stays; the queued one was stopped first.
     expect(await one(`SELECT "to", cc, subject, status::text FROM "EmailOutbound" WHERE id = $1`, [delivered])).toEqual({ to: ['', 'colleague.f54@example.com'], cc: [], subject: '', status: 'DELIVERED' })
@@ -322,10 +373,11 @@ describe('an erasure: previewed with the law’s exceptions, a fresh code and th
     expect(await one(`SELECT before, after FROM "AuditLog" WHERE id = $1`, [plain])).toEqual({ before: { roles: [] }, after: { roles: ['ORDERS'] } })
     expect((await one<{ n: number }>(`SELECT count(*)::int AS n FROM "AuditLog" WHERE "recordType" = 'PartyContact' AND "recordId" = $1`, [contactId])).n).toBe(2)
     // What was done is recorded (columns, never values), and the erasure's own audit row is kept with its reason.
-    const records = await admin(`SELECT "recordType", method::text, "erasedFields", "keptFields" FROM "ErasureRecord" WHERE "dataRequestId" = $1 AND "recordType" <> 'PartyContact' ORDER BY "recordType", "recordId"`, [request.id])
+    const records = await admin(`SELECT "recordType", method::text, "erasedFields", "keptFields" FROM "ErasureRecord" WHERE "dataRequestId" = $1 AND "recordType" NOT IN ('PartyContact', 'StoredFile') ORDER BY "recordType", "recordId"`, [request.id])
     expect(records.length).toBe(8)
     expect(records.every((row) => row.method === 'ANONYMISED')).toBe(true)
-    expect(records.filter((row) => row.recordType === 'InboundEmail').map((row) => row.keptFields)).toEqual([['envelopeFrom'], ['envelopeFrom']])
+    expect(records.filter((row) => row.recordType === 'InboundEmail').map((row) => row.keptFields)).toEqual([[], []])
+    expect((await admin(`SELECT method::text, count(*)::int AS n FROM "ErasureRecord" WHERE "dataRequestId" = $1 AND "recordType" = 'StoredFile' GROUP BY 1 ORDER BY 1`, [request.id]))).toEqual([{ method: 'DELETED', n: 2 }, { method: 'KEPT', n: 1 }])
     const logged = await one(`SELECT reason, after::text AS after FROM "AuditLog" WHERE "recordType" = 'DataRequest' AND "recordId" = $1 AND action = 'privacy.erase'`, [request.id])
     expect(logged.reason).toBe('Asked by mail (made up).')
     expect(logged.after).not.toContain('Erika')

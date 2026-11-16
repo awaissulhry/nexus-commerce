@@ -179,14 +179,15 @@ export const SHOW_CODES: ShowAnswer = {
 const fileOf = (n: number, over: Partial<ExportFile> & Pick<ExportFile, 'kind' | 'name'>): ExportFile => ({ id: uid('6009', n), seq: n, format: over.kind === 'DATA' ? 'CSV' : 'PDF', rowCount: 96, contentType: over.kind === 'DATA' ? 'text/csv' : 'application/pdf', sizeBytes: over.kind === 'DATA' ? 4812 : 18244, sha256: SEAL_2, ...over })
 export const FILES: ExportFile[] = [fileOf(1, { kind: 'DATA', name: 'PAGHE_DEMO_2026-09_v2.csv' }), fileOf(2, { kind: 'SUMMARY', name: 'PAGHE_DEMO_2026-09_v2_riepilogo.pdf', rowCount: 3 })]
 
-const link = (n: number, over: Partial<ExportLink> = {}): ExportLink => ({ id: uid('6010', n), email: 'studio@example.com', state: 'LIVE', expiresAt: '2026-11-09T09:00:00.000Z', maxUses: 10, uses: 0, revokedAt: null, createdAt: '2026-11-02T09:00:00.000Z', downloads: [], ...over })
+const link = (n: number, over: Partial<ExportLink> = {}): ExportLink => ({ id: uid('6010', n), email: 'studio@example.com', state: 'LIVE', expiresAt: '2026-11-09T09:00:00.000Z', maxUses: 10, uses: 0, revokedAt: null, createdAt: '2026-11-02T09:00:00.000Z', downloads: [], password: false, receipt: null, ...over })
 
 export const recordOf = (over: Partial<ExportRecord> = {}): ExportRecord => ({
   ...EXPORTS[0]!,
   payPeriodId: uid('6005', 1),
   checks: checksOf({ AGENCY_LEFT_OUT: 2, LEAVERS: 1 }).map(({ code: checkCode, blocking, passed, count }) => ({ code: checkCode, blocking, passed, count })),
   files: FILES,
-  links: [link(1, { uses: 1, downloads: [{ at: '2026-11-02T14:12:00.000Z', fileId: FILES[0]!.id }] }), link(2, { state: 'REVOKED', revokedAt: '2026-11-01T09:00:00.000Z', email: 'vecchio@example.com' })],
+  // B-W2b-GF1 (G212): the live link has a password and the consultant confirmed the receipt.
+  links: [link(1, { uses: 1, downloads: [{ at: '2026-11-02T14:12:00.000Z', fileId: FILES[0]!.id }], password: true, receipt: { at: '2026-11-02T14:13:00.000Z', name: 'Studio Demo' } }), link(2, { state: 'REVOKED', revokedAt: '2026-11-01T09:00:00.000Z', email: 'vecchio@example.com' })],
   cancelledAt: null,
   cancelReason: null,
   note: null,

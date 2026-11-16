@@ -30,6 +30,9 @@ import { dayOf, type SiteRow } from '../store'
 import { readOpenPlanned, type PlannedRow } from './store'
 // B-W2b-321: only approved workshops get planned work.
 import { unqualifiedWorkshops } from '../subcontract-capacity/planned'
+// B-W2b-GB29 (G219): planned subcontract orders level by the workshops' weekly capacity.
+import { workshopLeveller } from '../subcontract-capacity/level'
+import type { LevelChoice } from '@nexus/factory-domain/planning/subcontract-capacity/rules'
 // B-W2b-365: only the steps a planned order's cells are for.
 import { STEP_VARIANT_COLUMNS } from '../capacity/steps'
 import { cellsOfDemand, cellsOfOpen, lineOptionsOf, stepsForCells } from './steps'
@@ -83,6 +86,8 @@ export interface PassResult {
   readonly firm: number
   readonly guarded: number
   readonly plain: number
+  /** B-W2b-GB29 (G219): the planned subcontract orders sent to another workshop for capacity, or left over it, in words. */
+  readonly levelled: readonly { readonly partyId: string; readonly routingPartyId: string; readonly moved: boolean; readonly over: boolean; readonly words: string; readonly styleId: string; readonly colourwayId: string }[]
 }
 
 const day = (value: BusinessDate): Date => new Date(`${value}T00:00:00.000Z`)
@@ -220,8 +225,20 @@ export async function planWork(tools: CommandTools, site: SiteRow, runId: string
   const used = new Set<string>()
   const colourways = guarded.length === 0 ? [] : await tx.colourway.findMany({ where: { id: { in: [...new Set(guarded.map((row) => row.colourwayId))] } }, select: { id: true, code: true } })
   const labelOf = (row: PlannedRow) => [styles.find((style) => style.id === row.styleId)?.code ?? 'A style', colourways.find((colourway) => colourway.id === row.colourwayId)?.code].filter(Boolean).join(' ')
+  // B-W2b-GB29 (G219): read once, only when the plan sends work out.
+  const leveller = proposals.some((proposal) => proposal.kind === 'SUBCONTRACT' && proposal.partyId) ? await workshopLeveller(tx, site, runDate, kept.map((row) => row.id)) : null
+  const levelled: (LevelChoice & { readonly routingPartyId: string; readonly styleId: string; readonly colourwayId: string })[] = []
   for (const [index, proposal] of proposals.entries()) {
-    const { startDate, dueDate, kitDueAt } = await datesOf(tools, site, proposal, routings.stepsFor(proposal.planRevisionId, cellsOfDemand(proposal.colourwayId, proposal.demand, options)), runDate, cache)
+    const proposalSteps = routings.stepsFor(proposal.planRevisionId, cellsOfDemand(proposal.colourwayId, proposal.demand, options))
+    const { startDate, dueDate, kitDueAt } = await datesOf(tools, site, proposal, proposalSteps, runDate, cache)
+    // B-W2b-GB29 (G219): the routing's workshop while it has room on the job's days, else another approved one with room.
+    let partyId = proposal.partyId
+    if (leveller && proposal.kind === 'SUBCONTRACT' && proposal.partyId) {
+      const sent = proposalSteps.filter((step) => proposal.operationSeqs.includes(step.seq))
+      const choice = await leveller.place({ id: `${proposal.key}|${index}`, routingPartyId: proposal.partyId, from: startDate, to: dueDate, garments: proposal.quantity, steps: sent })
+      partyId = choice.partyId
+      if (choice.moved || choice.over) levelled.push({ ...choice, routingPartyId: proposal.partyId, styleId: proposal.styleId, colourwayId: proposal.colourwayId })
+    }
     // B-W2b-306 (PLN-083): late planned work: the run's LATE warning names its order lines.
     if (dueDate > proposal.dueDate) for (const entry of proposal.demand) late.push({ orderLineId: entry.orderLineId, readyDate: dueDate })
     const fields = {
@@ -231,14 +248,14 @@ export async function planWork(tools: CommandTools, site: SiteRow, runId: string
       startDate: day(startDate),
       dueDate: day(dueDate),
       demand: json(proposal.demand),
-      partyId: proposal.partyId,
+      partyId, // B-W2b-GB29 (G219): levelled
       operationSeqs: [...proposal.operationSeqs],
       kitDueAt,
     }
     // B-W2b-306 (PLN-076): a protected row gets the plan's values of the fields it does not protect.
     const guard = claimedBy.get(index)
     if (guard) {
-      const plan: PlanFields = { sizes: proposal.sizes, startDate, dueDate, lineId: null, partyId: proposal.partyId, operationSeqs: proposal.operationSeqs, kitDueAt: kitDueAt ? kitDueAt.toISOString() : null, styleRevisionId: proposal.styleRevisionId }
+      const plan: PlanFields = { sizes: proposal.sizes, startDate, dueDate, lineId: null, partyId /* B-W2b-GB29 (G219) */, operationSeqs: proposal.operationSeqs, kitDueAt: kitDueAt ? kitDueAt.toISOString() : null, styleRevisionId: proposal.styleRevisionId }
       const merged = mergeWithPlan(fieldsOfRow(guard), plan, guard.protectedFields, guard.kind, kitAt, runDate)
       const { count } = await tx.plannedWorkOrder.updateMany({
         where: { id: guard.id, status: 'PLANNED', firm: false, version: guard.version, protectedFields: { equals: guard.protectedFields } },
@@ -304,5 +321,5 @@ export async function planWork(tools: CommandTools, site: SiteRow, runId: string
     siteId: site.id,
     payload: { runId, siteId: site.id, added: added.length, moved: moved.length + followed.length, removed: removed.length, kept: keptIds.length, subcontract },
   })
-  return { added, moved, removed, kept: keptIds, sizeRunRule: rule, subcontract, followed, unclaimed: unclaimed.map((row) => row.id), protectedPlan, protectedRows, late, firm: kept.length, guarded: guarded.length, plain: plain.length }
+  return { added, moved, removed, kept: keptIds, sizeRunRule: rule, subcontract, followed, unclaimed: unclaimed.map((row) => row.id), protectedPlan, protectedRows, late, firm: kept.length, guarded: guarded.length, plain: plain.length, levelled }
 }

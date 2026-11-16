@@ -354,7 +354,8 @@ export function getPublishPreview(api: ApiClient, siteId: string, range: Publish
 }
 
 /** Publish the working plan's version the dialog reviewed (409 when it changed since). */
-export function publishPlan(api: ApiClient, body: { siteId: string; version: number; coversFrom: string; coversTo: string }): Promise<{ version: VersionHeader; slots: number }> {
+// B-W2b-GB29 (G217): + notifyLeaders (the leaders of the lines it covers get it in their bell).
+export function publishPlan(api: ApiClient, body: { siteId: string; version: number; coversFrom: string; coversTo: string; notifyLeaders?: boolean }): Promise<{ version: VersionHeader; slots: number }> {
   return api.post('/planning/schedule/publish', {
     body,
     schema: z.object({ version: versionHeader, slots: z.number(), diff: diffView, replayed: z.boolean() }),

@@ -71,7 +71,9 @@
     "inHouse_one": "{count} outside step made in-house",
     "inHouse_other": "{count} outside steps made in-house",
     "inHouseTip": "The workshop of these steps may not get work now, so they are made in-house: {steps}.",
-    "inHouseAll": "Made in-house"
+    "inHouseAll": "Made in-house",
+    "overCapacity": "Over its capacity on these days ({pct} % with it)",
+    "overCapacityTip": "The workshop is full on these days with it: the plan sends work to another approved workshop only when one has room. Capacity & load shows the weeks."
   },
   "orders": {
     "more_one": "+{count} more",

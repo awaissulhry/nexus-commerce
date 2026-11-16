@@ -1,6 +1,9 @@
 import { ConflictError, InvalidStateError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { itemPlanningProblems, mergeItemPlanning, type ItemPlanningValues } from '@nexus/factory-domain/planning/settings/items'
+// B-W2b-GB29 (G220): the seven planning rules per item (B-W2b-318) in the bulk write too.
+import { changedRules, itemRuleProblems, mergeItemRules, type ItemRuleValues } from '@nexus/factory-domain/planning/lot-sizing/parameters'
+import { assertMayPlanLevel, rulePatchOf } from '../lot-sizing/parameters'
 import { PLANNING_ITEMS_MANAGE, PLANNING_SETTINGS_MANAGE } from '@nexus/factory-domain/planning/settings/permissions'
 import { efficiencyPctOf } from '@nexus/factory-domain/planning/settings/settings'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
@@ -9,7 +12,7 @@ import { officeContextOf, siteFor } from '../access'
 import type { BulkItemParametersBody, BulkLanesBody, LaneView } from './contract'
 import { emitChange, factProblems, ITEM_FIELDS, lockKey, patchOf, readItem } from './items'
 import { laneViewOf, readLanes, type CapacityRow, type LaneFacts } from './lanes'
-import { auditValuesOf, defaultEfficiencyOf, itemParametersViewOf, itemPlanningValuesOf, readItemPlanning, readSettings, siteViewOf } from './store'
+import { auditValuesOf, defaultEfficiencyOf, itemParametersViewOf, itemPlanningValuesOf, itemRulesOf, readItemPlanning, readSettings, siteViewOf } from './store'
 
 /**
  * Bulk writes of a site's planning settings (B-W2b-20; B-W2a-59's gap: the grids' "Edit N", "Plan N by defaults" and
@@ -59,7 +62,8 @@ export async function bulkItemParameters(caller: CommandCaller, body: BulkItemPa
   const { result, replayed } = await command(caller, { name: 'planning.bulkItemParameters', idempotencyKey, input: body }, async (tools) => {
     const { tx } = tools
     const problems: Issue[] = []
-    const plans: ({ kind: 'EDIT'; index: number; id: string; version: number; from: ItemPlanningValues; values: ItemPlanningValues; cleared: string[] } | { kind: 'CREATE'; index: number; itemId: string; itemColourId: string | null; values: ItemPlanningValues; cleared: string[] })[] = []
+    // B-W2b-GB29 (G220): + the rules (fromRules / rules) of each row.
+    const plans: ({ kind: 'EDIT'; index: number; id: string; version: number; from: ItemPlanningValues; values: ItemPlanningValues; fromRules: ItemRuleValues; rules: ItemRuleValues; cleared: string[] } | { kind: 'CREATE'; index: number; itemId: string; itemColourId: string | null; values: ItemPlanningValues; rules: ItemRuleValues; cleared: string[] })[] = []
     for (const [index, change] of changes.entries()) {
       const prefix = `body/changes/${index}`
       const patch = patchOf(change)
@@ -75,8 +79,12 @@ export async function bulkItemParameters(caller: CommandCaller, body: BulkItemPa
         const valueProblems = itemPlanningProblems(next.values)
         const item = await readItem(tx, row.itemId)
         const facts = valueProblems.length === 0 && item ? await factProblems(tx, site, item, row.itemColourId, next.values, from) : []
-        problems.push(...at(prefix, [...valueProblems, ...facts]))
-        plans.push({ kind: 'EDIT', index, id: row.id, version: row.version, from, values: next.values, cleared: next.cleared as string[] })
+        // B-W2b-GB29 (G220): the rules named with it, checked as a single change checks them (a plan level asks planning.strategy.manage too).
+        const fromRules = itemRulesOf(row)
+        const ruled = mergeItemRules(fromRules, rulePatchOf(change))
+        assertMayPlanLevel(context, site, fromRules, ruled.values)
+        problems.push(...at(prefix, [...valueProblems, ...facts, ...itemRuleProblems(ruled.values, item?.kind ?? '')]))
+        plans.push({ kind: 'EDIT', index, id: row.id, version: row.version, from, values: next.values, fromRules, rules: ruled.values, cleared: [...next.cleared, ...ruled.cleared] as string[] })
         continue
       }
       const itemColourId = change.itemColourId ?? null
@@ -99,8 +107,11 @@ export async function bulkItemParameters(caller: CommandCaller, body: BulkItemPa
       const next = mergeItemPlanning(null, patch)
       const valueProblems = itemPlanningProblems(next.values)
       const facts = valueProblems.length === 0 ? await factProblems(tx, site, item, itemColourId, next.values, null) : []
-      problems.push(...at(prefix, [...valueProblems, ...facts]))
-      plans.push({ kind: 'CREATE', index, itemId: item.id, itemColourId, values: next.values, cleared: next.cleared as string[] })
+      // B-W2b-GB29 (G220): the rules named with the new row.
+      const ruled = mergeItemRules(null, rulePatchOf(change))
+      assertMayPlanLevel(context, site, null, ruled.values)
+      problems.push(...at(prefix, [...valueProblems, ...facts, ...itemRuleProblems(ruled.values, item.kind)]))
+      plans.push({ kind: 'CREATE', index, itemId: item.id, itemColourId, values: next.values, rules: ruled.values, cleared: [...next.cleared, ...ruled.cleared] as string[] })
     }
     const removing: { id: string; version: number; index: number }[] = []
     for (const [index, removal] of removals.entries()) {
@@ -117,23 +128,23 @@ export async function bulkItemParameters(caller: CommandCaller, body: BulkItemPa
     const out: { index: number; kind: 'CREATED' | 'EDITED' | 'UNCHANGED'; parameters: ReturnType<typeof itemParametersViewOf>; cleared: string[] }[] = []
     for (const plan of plans) {
       if (plan.kind === 'EDIT') {
-        const changed = ITEM_FIELDS.filter((key) => plan.values[key] !== plan.from[key])
+        const changed = [...ITEM_FIELDS.filter((key) => plan.values[key] !== plan.from[key]), ...changedRules(plan.fromRules, plan.rules)] // B-W2b-GB29 (G220): + the rules
         if (changed.length > 0) {
-          const { count } = await tx.itemPlanning.updateMany({ where: { id: plan.id, version: plan.version }, data: { ...plan.values, version: plan.version + 1 } })
+          const { count } = await tx.itemPlanning.updateMany({ where: { id: plan.id, version: plan.version }, data: { ...plan.values, ...plan.rules, version: plan.version + 1 } })
           if (count !== 1) throw new StaleVersionError('ItemPlanning', plan.id, plan.version + 1, plan.version)
         }
         const after = (await readItemPlanning(tx, plan.id))!
         if (changed.length > 0) {
-          tools.audit({ action: 'planning.bulkItemParameters', recordType: 'ItemPlanning', recordId: plan.id, companyId: site.companyId, siteId: site.id, before: auditValuesOf(plan.from), after: auditValuesOf(itemPlanningValuesOf(after)) })
+          tools.audit({ action: 'planning.bulkItemParameters', recordType: 'ItemPlanning', recordId: plan.id, companyId: site.companyId, siteId: site.id, before: { ...auditValuesOf(plan.from), ...plan.fromRules }, after: { ...auditValuesOf(itemPlanningValuesOf(after)), ...itemRulesOf(after) } })
           emitChange(tools, after, site, after.method, 'EDITED')
         }
         out.push({ index: plan.index, kind: changed.length > 0 ? 'EDITED' : 'UNCHANGED', parameters: itemParametersViewOf(after), cleared: changed.length > 0 ? plan.cleared : [] })
         continue
       }
       const id = newId()
-      await tx.itemPlanning.create({ data: { id, companyId: site.companyId, siteId: site.id, itemId: plan.itemId, itemColourId: plan.itemColourId, ...plan.values, createdById: context.actorId }, select: { id: true } })
+      await tx.itemPlanning.create({ data: { id, companyId: site.companyId, siteId: site.id, itemId: plan.itemId, itemColourId: plan.itemColourId, ...plan.values, ...plan.rules, createdById: context.actorId }, select: { id: true } })
       const row = (await readItemPlanning(tx, id))!
-      tools.audit({ action: 'planning.bulkItemParameters', recordType: 'ItemPlanning', recordId: id, companyId: site.companyId, siteId: site.id, before: null, after: { itemId: plan.itemId, itemColourId: plan.itemColourId, ...auditValuesOf(itemPlanningValuesOf(row)) } })
+      tools.audit({ action: 'planning.bulkItemParameters', recordType: 'ItemPlanning', recordId: id, companyId: site.companyId, siteId: site.id, before: null, after: { itemId: plan.itemId, itemColourId: plan.itemColourId, ...auditValuesOf(itemPlanningValuesOf(row)), ...itemRulesOf(row) } })
       emitChange(tools, row, site, row.method, 'CREATED')
       out.push({ index: plan.index, kind: 'CREATED', parameters: itemParametersViewOf(row), cleared: plan.cleared })
     }

@@ -58,9 +58,10 @@ export interface OpenWorkOrder extends LoadWorkOrder {
 }
 
 /** The site's open work orders that book capacity (RELEASED, IN_PROGRESS), and the held ones. */
-async function readWorkOrders(db: Reader, site: SiteRow): Promise<{ loading: OpenWorkOrder[]; held: { id: string; lineId: string | null; workCentreIds: string[] }[] }> {
+async function readWorkOrders(db: Reader, site: SiteRow, drafts = false): Promise<{ loading: OpenWorkOrder[]; held: { id: string; lineId: string | null; workCentreIds: string[] }[] }> {
   const rows = await db.workOrder.findMany({
-    where: { siteId: site.id, status: { in: [...LOADING_STATUSES, 'ON_HOLD'] } },
+    // B-W2b-GB29 (G224): a promise's queue also counts the DRAFT work orders (made, not released yet); the capacity screens do not.
+    where: { siteId: site.id, status: { in: [...LOADING_STATUSES, 'ON_HOLD', ...(drafts ? (['DRAFT'] as const) : [])] } },
     select: {
       id: true,
       number: true,
@@ -71,8 +72,9 @@ async function readWorkOrders(db: Reader, site: SiteRow): Promise<{ loading: Ope
       style: { select: { id: true, code: true, name: true } },
       sizes: { select: LOAD_CELL_COLUMNS },
       // B-W2b-82: an unplanned operation has no target quantity, so no load: the plan stays the routing's.
+      // B-W2b-GB29 (G215): one with planned garments (added since GB29) loads its lane like a step, for what is left of them.
       // B-W2b-321 (PLN-165): an operation done outside books its workshop (capacity/subcontractors.ts), not our lanes.
-      operations: { where: { routingSeq: { not: null }, outsourced: false }, select: { id: true, seq: true, code: true, name: true, standardMinutes: true, workCentreId: true, /* B-W2b-365 */ routingOperation: { select: STEP_VARIANT_COLUMNS } }, orderBy: { seq: 'asc' } },
+      operations: { where: { outsourced: false, OR: [{ routingSeq: { not: null } }, { plannedQuantity: { not: null } }] }, select: { id: true, seq: true, code: true, name: true, standardMinutes: true, workCentreId: true, /* B-W2b-GB29 */ plannedQuantity: true, /* B-W2b-365 */ routingOperation: { select: STEP_VARIANT_COLUMNS } }, orderBy: { seq: 'asc' } },
     },
     orderBy: [{ dueDate: 'asc' }, { number: 'asc' }],
   })
@@ -90,7 +92,8 @@ async function readWorkOrders(db: Reader, site: SiteRow): Promise<{ loading: Ope
     if (row.status === 'IN_PROGRESS') {
       for (const operation of wips.get(row.id)?.operations ?? []) done.set(operation.operationId, operation.good + operation.scrap)
     }
-    const operations = row.operations.map(({ routingOperation, ...operation }) => ({ ...operation, standardMinutes: operation.standardMinutes.toString(), done: done.get(operation.id) ?? 0, /* B-W2b-365 */ pieces: garmentsOf(routingOperation, row.sizes) }))
+    // B-W2b-GB29 (G215): an unplanned operation's garments are its planned ones.
+    const operations = row.operations.map(({ routingOperation, plannedQuantity, ...operation }) => ({ ...operation, standardMinutes: operation.standardMinutes.toString(), done: done.get(operation.id) ?? 0, /* B-W2b-365 */ pieces: plannedQuantity ?? garmentsOf(routingOperation, row.sizes) }))
     loading.push({
       id: row.id,
       number: row.number,
@@ -148,11 +151,23 @@ export interface CapacityWorld {
   readonly window: { readonly from: BusinessDate; readonly to: BusinessDate }
 }
 
+/**
+ * B-W2b-GB29 (G224): what a promise's queue books on top of the released work (planning/promise/engine `promiseWorld`):
+ * `drafts` the site's DRAFT work orders (their stored operations, by the board's slots or their due date, as a released
+ * one); `extra` load of the caller's own (the plan's planned work orders). Left out: the capacity screens' world exactly.
+ */
+export interface CapacityWorldOptions {
+  readonly drafts?: boolean
+  readonly extra?: readonly OpenWorkOrder[]
+}
+
 /** Everything a capacity answer is made of, read once for the days from `from` to `to` (and this week and the next four). */
-export async function capacityWorld(db: Reader, site: SiteRow, span: { readonly from: BusinessDate; readonly to: BusinessDate }, today: BusinessDate): Promise<CapacityWorld> {
+export async function capacityWorld(db: Reader, site: SiteRow, span: { readonly from: BusinessDate; readonly to: BusinessDate }, today: BusinessDate, options: CapacityWorldOptions = {}): Promise<CapacityWorld> {
   const settings = await readSettings(db, site.id)
   const { lines, workCentres } = await readLanes(db, site.id)
-  const { loading, held } = await readWorkOrders(db, site)
+  const read = await readWorkOrders(db, site, options.drafts === true) // B-W2b-GB29 (G224)
+  const held = read.held
+  const loading = [...read.loading, ...(options.extra ?? [])] // B-W2b-GB29 (G224): the plan's planned work orders, a promise's only
   const slots = await readSlots(db, site, loading.map((workOrder) => workOrder.id))
   // The calendars: the period, this week and the next four weeks, and the slots' days (their shares need whole spans).
   const dates = [span.from, span.to, weekStart(today), plusDays(today, 27)]

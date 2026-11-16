@@ -2,7 +2,8 @@ import type { FactoryClient } from '@nexus/factory-db'
 import type { DataSubjectKind } from '@nexus/factory-domain/privacy/retention/requests'
 import type { ErasureMethod } from '@nexus/factory-domain/privacy/retention/retention'
 import type { ErasureBlocked, KeptWhy } from '@nexus/factory-domain/privacy/retention/erasure'
-import type { CommandEvent, CommandTx } from '../../../../core/command'
+import type { CommandCaller, CommandEvent, CommandTx } from '../../../../core/command'
+import type { FilesRuntime } from '../../../files/service'
 
 export type Reader = FactoryClient | CommandTx
 
@@ -52,6 +53,8 @@ export interface PlannedRecord {
   readonly keptFields: readonly string[]
   readonly why: KeptWhy | null
   readonly apply?: (tools: ApplyTools) => Promise<void>
+  /** B-W2b-GF1: after the erasure's commit (never inside it): e.g. a deleted file's object removed from the store, best effort. */
+  readonly after?: (files: FilesRuntime, caller: CommandCaller, now: Date) => Promise<void>
 }
 
 /** One part of a person's data package: rows written out as JSON (dates as ISO strings), at most ROWS of them. */

@@ -16,8 +16,9 @@ import { readFromStore } from '../../record-panels/store'
  *   GET  /link/files/:fileId/preview          a PDF or a picture in the page (DOCUMENT_VIEW, `preview: 'inline'` rows)
  *   POST /link/files/received {typedName?}    "I received these files" (SECURE_FILE), once (409 `refusal/RECEIVED`)
  *
- *   GET  /people/payroll/link/files           the payroll file a labour consultant downloads (DOCUMENT_VIEW of a
- *   POST /people/payroll/link/files/:id/download   PayrollExport, B-W2b-54): hours only — pay figures never go by link
+ *   GET  /people/payroll/link/files           the payroll file a labour consultant downloads (SECURE_FILE of a
+ *   POST /people/payroll/link/files/:id/download   PayrollExport, B-W2b-54; B-W2b-GF1: the password and the receipt of the
+ *                                             two routes above): hours only — pay figures never go by link
  *
  * The token travels only in `x-factory-link` (the client the link landing made); the unlock key only in
  * `x-factory-link-unlock`, kept in the page's memory, never in an address or in storage. Every write carries its own
@@ -112,19 +113,28 @@ export const payrollFilesSchema = z.object({
   label: z.string(),
   number: z.string().nullable(),
   revision: z.number(),
-  link: z.object({ expiresAt: z.string(), usesLeft: z.number() }),
+  // B-W2b-GF1 (G212): a secure file — the password sent apart and the receipt, as a set of files says them.
+  link: z.object({
+    expiresAt: z.string(),
+    usesLeft: z.number(),
+    password: z.object({ asked: z.boolean(), unlocked: z.boolean(), heldUntil: z.string().nullable() }),
+    receipt: z.object({ asked: z.boolean(), at: z.string().nullable(), name: z.string().nullable() }),
+  }),
+  /** How many files were sent (known before the password). */
+  count: z.number(),
+  /** Listed once the password was given (or when there is none). */
   files: z.array(z.object({ id: z.string(), kind: z.enum(PAYROLL_FILE_KINDS), name: z.string(), sizeBytes: z.number(), sha256: z.string() })),
 })
 export type PayrollFiles = z.infer<typeof payrollFilesSchema>
 
-export function readPayrollFiles(api: ApiClient, signal?: AbortSignal): Promise<PayrollFiles> {
-  return api.get('/people/payroll/link/files', { schema: payrollFilesSchema, signal })
+export function readPayrollFiles(api: ApiClient, unlock: string | null, signal?: AbortSignal): Promise<PayrollFiles> {
+  return api.get('/people/payroll/link/files', { schema: payrollFilesSchema, headers: unlockHeaders(unlock), signal })
 }
 
 const payrollDownloadSchema = z.object({ fileId: z.string(), fileName: z.string(), usesLeft: z.number(), download: presignedSchema })
 
-export async function downloadPayrollFile(api: ApiClient, fileId: string, idempotencyKey: string): Promise<Downloaded> {
-  const answer = await api.post(`/people/payroll/link/files/${encodeURIComponent(fileId)}/download`, { body: {}, schema: payrollDownloadSchema, idempotencyKey })
+export async function downloadPayrollFile(api: ApiClient, fileId: string, unlock: string | null, idempotencyKey: string): Promise<Downloaded> {
+  const answer = await api.post(`/people/payroll/link/files/${encodeURIComponent(fileId)}/download`, { body: {}, schema: payrollDownloadSchema, headers: unlockHeaders(unlock), idempotencyKey })
   return { fileId: answer.fileId, usesLeft: answer.usesLeft, download: answer.download }
 }
 

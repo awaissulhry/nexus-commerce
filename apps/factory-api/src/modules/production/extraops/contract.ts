@@ -12,7 +12,7 @@ import { EXTRA_PAYS, EXTRA_REASON_CODES } from '@nexus/factory-domain/production
 const workOrderParams = input({ workOrderId: id() })
 const operation = output({ id: id(), code: z.string(), name: z.string(), workCentreKind: z.enum(WORK_CENTRE_KINDS), standardMinutes: z.string() })
 const pays = z.enum(EXTRA_PAYS)
-const record = output({ id: id(), workOrderOperationId: id().nullable(), seq: z.number().int().nullable(), at: instant(), operation, reasonCode: z.enum(EXTRA_REASON_CODES), reason: z.string().nullable(), addedOn: z.enum(['FLOOR', 'OFFICE']) })
+const record = output({ id: id(), workOrderOperationId: id().nullable(), seq: z.number().int().nullable(), at: instant(), operation, reasonCode: z.enum(EXTRA_REASON_CODES), reason: z.string().nullable(), addedOn: z.enum(['FLOOR', 'OFFICE']), /* B-W2b-GB29 (G215) */ plannedQuantity: z.number().int().nullable() })
 const workOrder = output({ id: id(), number: z.string() })
 
 export const choicesContract = defineContract({
@@ -37,6 +37,8 @@ export const addContract = defineContract({
     reasonCode: z.enum(EXTRA_REASON_CODES),
     /** A few words; required with OTHER. */
     note: z.string().trim().min(3).max(200).optional(),
+    /** B-W2b-GB29 (G215): the garments it is planned for, 1 up to the work order's (checked in the command); left out: off the plan. */
+    plannedQuantity: z.number().int().min(1).max(100_000).optional(),
   }),
   response: { 200: record.extend({ pays }), 201: record.extend({ pays }) },
 })

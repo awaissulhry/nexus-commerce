@@ -10,6 +10,9 @@ import { purchaseOrderDocumentNumber } from '@nexus/factory-domain/purchasing/do
 import { purchaseQuantityOf, sendChecks, type PurchaseOrderStatus, type SendCheck } from '@nexus/factory-domain/purchasing/orders'
 import type { RequestContext } from '../../core/context'
 import { supplierCalendarsFor } from '../../platform/calendars/service'
+// B-W2b-GB29 (G218): the supplier's own day for the lead-time check.
+import { plusDays } from '@nexus/factory-domain/calendars/dates'
+import { serverClock } from '../../core/time'
 import { companyLegalOf } from '../../platform/documents/documents'
 import { confirmLinksOf } from './confirm-links'
 // B-W2b-296: the delivery schedule, the rate at order and the ship-to (po-depth/store.ts).
@@ -60,6 +63,11 @@ export interface OrderFacts {
    */
   readonly supplierCalendar?: WorkingCalendar | null | undefined
   readonly today?: string | undefined
+  /**
+   * B-W2b-GB29 (G218, B-W2b-20's gap): the supplier's own day now, in its calendar's time zone (an order sent now reaches it on
+   * its day: the lead time counts from there); our `today` when it has no calendar; undefined when read without a day.
+   */
+  readonly supplierToday?: string | undefined
   /** B-W2b-296: the lines' delivery schedules, the rate at order with the company's currency, and the ship-to. */
   readonly depth?: DepthFacts | undefined
   /** B-W2b-328: each line's rolls, certificate and variant, with the register's coverages and the materials' variants. */
@@ -111,14 +119,18 @@ export async function readFacts(db: Reader, order: OrderRow, today?: string): Pr
     plan.set(row.purchaseOrderLineId!, [...(plan.get(row.purchaseOrderLineId!) ?? []), entry])
   }
   let supplierCalendar: WorkingCalendar | null | undefined
+  let supplierToday: string | undefined // B-W2b-GB29 (G218)
   if (today !== undefined) {
     const longest = Math.max(2, party.leadTimeDays ?? 0, ...items.map((item) => item.leadTimeDays ?? 0))
-    supplierCalendar = (await supplierCalendarsFor(db as Prisma.TransactionClient, [party.id], leadTimeWindow(today, Math.min(longest, 400), 'forward'))).get(party.id)?.calendar ?? null
+    // B-W2b-GB29 (G218): from the day before ours (the supplier's own day may still be yesterday), one day longer.
+    const loaded = (await supplierCalendarsFor(db as Prisma.TransactionClient, [party.id], leadTimeWindow(plusDays(today, -1), Math.min(longest, 400) + 1, 'forward'))).get(party.id)
+    supplierCalendar = loaded?.calendar ?? null
+    supplierToday = loaded?.calendarRow ? businessDate(serverClock.now(), loaded.timeZone) : today
   }
   const depth = await readDepthFacts(db, order, lines)
   const kinds = await readKindFacts(db, order, lines)
   const sample = await readSampleFacts(db, order.id)
-  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan, supplierCalendar, today, depth, kinds, sample }
+  return { order, lines, items: new Map(items.map((item) => [item.id, item])), colours: new Map(colours.map((colour) => [colour.id, colour])), party, contact, site, plan, supplierCalendar, today, supplierToday, depth, kinds, sample }
 }
 
 /** The company's letterhead problems, read in this scope (a command's transaction or a client). */
@@ -158,7 +170,8 @@ export function checksOf(facts: OrderFacts, today: string, companyLegal: readonl
         minOrderQuantity: rules.minOrderQuantity,
         orderMultiple: rules.orderMultiple,
         leadTimeDays: rules.leadTimeDays,
-        earliestArrival: facts.supplierCalendar !== undefined && rules.leadTimeDays !== null ? arrivalDate(facts.supplierCalendar, today, rules.leadTimeDays).date : null,
+        // B-W2b-GB29 (G218): the lead time counts from the supplier's own day (its zone), not ours.
+        earliestArrival: facts.supplierCalendar !== undefined && rules.leadTimeDays !== null ? arrivalDate(facts.supplierCalendar, facts.supplierToday ?? today, rules.leadTimeDays).date : null,
       }
     }),
   })

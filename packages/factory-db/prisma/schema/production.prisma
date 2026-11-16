@@ -408,6 +408,10 @@ model WorkOrderOperation {
   standardMinutes Decimal  @db.Decimal(10, 3)
   /// Every bundle is scanned at it.
   scanRequired    Boolean  @default(true)
+  /// B-W2b-GB29 (G215; MES-086): an unplanned operation's planned garments, 1 up to the work order's, given when it was added:
+  /// planning, the board, dispatch and WIP load it with what is still to report there. Null on a routing operation (the work
+  /// order's own garments) and on an unplanned one given no number (off the plan, as B-W2b-82 decided).
+  plannedQuantity Int?
   /// W2b-2 (B-W2b-74; MES-025): the routing step's parallel group, as copied (the same trigger keeps it equal); null on
   /// an unplanned operation.
   parallelGroup   Int?

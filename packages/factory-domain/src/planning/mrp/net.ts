@@ -1,4 +1,5 @@
 import type { Decimal } from 'decimal.js'
+import type { SampleRef } from '../explode' // B-W2b-GB29 (G222)
 import type { BusinessDate } from '../../core/time'
 import { decimalOf, QUANTITY_SCALE, type DecimalInput } from '../../product/units/units'
 import type { LotFacts, OpenPurchase, PurchaseLine, StockEntry, StockLine } from '../netting'
@@ -62,6 +63,8 @@ export interface DemandPart {
   readonly issued: string
   /** B-W2b-318 (PLN-088): the order's backlog rank (SalesOrder.backlogRank, 1 first); left out or null: not ranked. */
   readonly rank?: number | null
+  /** B-W2b-GB29 (G222): the sample work order of no order line this part is (`orderNumber` is its number); left out: an order line's. */
+  readonly sample?: SampleRef
 }
 
 /** An ACTIVE reservation of the material (B-W2a-11), as netting reads it. */

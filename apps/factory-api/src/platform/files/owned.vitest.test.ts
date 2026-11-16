@@ -3,7 +3,7 @@ import { assertGenericPath, MODULE_OWNED_FILES, MODULE_READ_FILES, ownerOf, read
 
 describe('record types whose files only their module writes (owned.ts)', () => {
   it('lists the compliance document, the parcel, the privacy notice and DPIA and the type-change review (every kind), the certificate, the lot and the opening-stock reports (CERTIFICATE) and the DDT (FISCAL_ARCHIVE)', () => {
-    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['AttendanceMonthClose', 'Certificate', /* B-W2b-161 */ 'CompanyBranding', 'ComplianceDocument', /* B-W2b-405 */ 'DataRequest', 'Ddt', /* B-W2b-278 */ 'EvidencePack', /* B-W2b-135 */ 'FitnessJudgement', /* B-W2b-371 */ 'FittingResult', /* B-W2b-135 */ 'HealthVisit', /* B-W2b-125 */ 'InailFiling', 'Incident', 'Lot', /* B-W2b-171 */ 'MeasurementProfile', 'OpeningStock', 'Parcel', 'PayrollExport', /* B-W2b-224 */ 'PointOfMeasure', /* B-W2b-288 */ 'PpeTextApproval', 'PrivacyDpia', 'PrivacyNotice', /* B-W2b-351 */ 'ProductSafetyReport', /* B-W2b-278 */ 'ProductionControlTest', /* B-W2b-165 */ 'QuoteVersion', 'SupplierClaim', 'TypeChangeReview', 'WorkerStatement'])
+    expect(Object.keys(MODULE_OWNED_FILES).sort()).toEqual(['AttendanceMonthClose', 'Certificate', /* B-W2b-161 */ 'CompanyBranding', 'ComplianceDocument', /* B-W2b-405 */ 'DataRequest', 'Ddt', /* B-W2b-278 */ 'EvidencePack', /* B-W2b-135 */ 'FitnessJudgement', /* B-W2b-371 */ 'FittingResult', /* B-W2b-135 */ 'HealthVisit', /* B-W2b-125 */ 'InailFiling', 'Incident', /* B-W2b-GF1 */ 'IncidentPerson', 'Lot', /* B-W2b-171 */ 'MeasurementProfile', 'OpeningStock', 'Parcel', 'PayrollExport', /* B-W2b-224 */ 'PointOfMeasure', /* B-W2b-288 */ 'PpeTextApproval', 'PrivacyDpia', 'PrivacyNotice', /* B-W2b-351 */ 'ProductSafetyReport', /* B-W2b-278 */ 'ProductionControlTest', /* B-W2b-165 */ 'QuoteVersion', 'SupplierClaim', 'TypeChangeReview', 'WorkerStatement'])
     expect(ownerOf('OpeningStock', 'CERTIFICATE')).not.toBeNull()
     expect(ownerOf('OpeningStock', 'ATTACHMENT')).toBeNull()
     expect(ownerOf('PrivacyNotice', 'DOCUMENT')).not.toBeNull()
@@ -45,7 +45,7 @@ describe('record types whose files only their module writes (owned.ts)', () => {
   })
 
   it('reads a closed month\'s LUL calendar (B-W2b-48), a payroll file (B-W2b-54) and a worker statement (B-W2b-62, B-W2b-68) only through their modules, no other record type', () => {
-    expect(Object.keys(MODULE_READ_FILES)).toEqual(['AttendanceMonthClose', 'PayrollExport', 'WorkerStatement', /* B-W2b-125 */ 'Incident', 'InailFiling', /* B-W2b-135 */ 'FitnessJudgement', 'HealthVisit', /* B-W2b-171 */ 'MeasurementProfile', /* B-W2b-371 */ 'FittingResult', /* B-W2b-351 */ 'ProductSafetyReport', /* B-W2b-405 */ 'DataRequest'])
+    expect(Object.keys(MODULE_READ_FILES)).toEqual(['AttendanceMonthClose', 'PayrollExport', 'WorkerStatement', /* B-W2b-125 */ 'Incident', 'InailFiling', /* B-W2b-GF1 */ 'IncidentPerson', /* B-W2b-135 */ 'FitnessJudgement', 'HealthVisit', /* B-W2b-171 */ 'MeasurementProfile', /* B-W2b-371 */ 'FittingResult', /* B-W2b-351 */ 'ProductSafetyReport', /* B-W2b-405 */ 'DataRequest'])
     expect(readsThroughModule('AttendanceMonthClose')).toBe(true)
     expect(readsThroughModule('PayrollExport')).toBe(true)
     // B-W2b-68: one person's pay.
@@ -54,6 +54,10 @@ describe('record types whose files only their module writes (owned.ts)', () => {
     expect(readsThroughModule('Incident')).toBe(true)
     expect(readsThroughModule('InailFiling')).toBe(true)
     expect(ownerOf('Incident', 'PHOTO')).not.toBeNull()
+    // B-W2b-GF1 (G086): a person involved (their injuries; GDPR art. 9): neither taken nor shown by the generic routes, any kind.
+    expect(readsThroughModule('IncidentPerson')).toBe(true)
+    for (const kind of ['PHOTO', 'DOCUMENT', 'ATTACHMENT'] as const) expect(ownerOf('IncidentPerson', kind), kind).not.toBeNull()
+    expect(() => assertGenericPath('IncidentPerson', 'PHOTO', {})).toThrow(/only through its own route: none: a person involved keeps no file/)
     // B-W2b-135: a judgement's copy (protected, each opening recorded); a visit keeps no file.
     expect(readsThroughModule('FitnessJudgement')).toBe(true)
     expect(ownerOf('HealthVisit', 'ATTACHMENT')).not.toBeNull()

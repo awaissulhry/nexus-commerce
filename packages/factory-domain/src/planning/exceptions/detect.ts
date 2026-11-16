@@ -22,6 +22,8 @@ import type { MaterialPegging } from '../mrp/net'
  *   BELOW_SAFETY_STOCK  the material's projected stock falls below its safety stock (the site's item parameters)
  *   NEGATIVE_STOCK      more is reserved for the plan's work orders and order lines than usable stock holds
  *   LANE_OVERLOADED     a line or work centre is booked above its capacity in a week of the next four (B-W2a-16)
+ *   WORKSHOP_OVERLOADED B-W2b-GB29 (G219; PLN-124): a subcontract workshop is booked above its weekly capacity (a capacity
+ *                       line of B-W2b-321: one kind of work, minutes or garments) in a week of the next four
  *
  * Not evaluated in W2a (their thresholds are PLN-194, W3): LANE_UNDERUSED, MOVE_LATER. The run clears only the kinds it
  * evaluates (EVALUATED_KINDS), so another step's kinds are never cleared by it.
@@ -39,10 +41,12 @@ export const EXCEPTION_KINDS = [
   'MOVE_LATER',
   'CANCEL',
   'NEGATIVE_STOCK',
+  // B-W2b-GB29 (G219): a workshop above its weekly capacity.
+  'WORKSHOP_OVERLOADED',
 ] as const
 export type ExceptionKind = (typeof EXCEPTION_KINDS)[number]
 
-export const EVALUATED_KINDS: readonly ExceptionKind[] = Object.freeze(['SHORT', 'SUPPLY_LATE', 'PAST_DUE', 'EXCESS', 'CANCEL', 'MOVE_EARLIER', 'BELOW_SAFETY_STOCK', 'NEGATIVE_STOCK', 'LANE_OVERLOADED'])
+export const EVALUATED_KINDS: readonly ExceptionKind[] = Object.freeze(['SHORT', 'SUPPLY_LATE', 'PAST_DUE', 'EXCESS', 'CANCEL', 'MOVE_EARLIER', 'BELOW_SAFETY_STOCK', 'NEGATIVE_STOCK', 'LANE_OVERLOADED', 'WORKSHOP_OVERLOADED'])
 
 export const EXCEPTION_LABELS: Readonly<Record<ExceptionKind, string>> = Object.freeze({
   SHORT: 'Short',
@@ -56,6 +60,7 @@ export const EXCEPTION_LABELS: Readonly<Record<ExceptionKind, string>> = Object.
   MOVE_LATER: 'Move later',
   CANCEL: 'Cancel',
   NEGATIVE_STOCK: 'Negative stock',
+  WORKSHOP_OVERLOADED: 'Workshop over capacity',
 })
 
 export type FactValue = string | number | boolean | null
@@ -125,6 +130,24 @@ export interface LaneOverload {
   readonly bookedMinutes: string
 }
 
+/**
+ * B-W2b-GB29 (G219): a workshop's capacity line booked above its capacity in a week (planning/subcontract-capacity rules: the
+ * week's available amount, what live subcontract orders and the board's parts book there; the plan's proposals never count).
+ * `unit` MINUTES or PIECES; `workCentreKind` null: any work.
+ */
+export interface WorkshopOverload {
+  readonly partyId: string
+  readonly workshopCode: string
+  readonly workCentreKind: string | null
+  readonly unit: 'MINUTES' | 'PIECES'
+  readonly bucketKey: string
+  readonly from: BusinessDate
+  readonly to: BusinessDate
+  readonly loadPct: string
+  readonly available: string
+  readonly booked: string
+}
+
 export interface DetectInput {
   readonly runDate: BusinessDate
   readonly materials: readonly DetectMaterial[]
@@ -132,6 +155,8 @@ export interface DetectInput {
   readonly purchaseOf: (purchaseOrderLineId: string) => { readonly purchaseOrderId: string; readonly purchaseOrderNumber: string } | undefined
   readonly safetyOnly?: readonly SafetyOnly[]
   readonly overloads?: readonly LaneOverload[]
+  /** B-W2b-GB29 (G219): the workshops above their capacity in the next four weeks. */
+  readonly workshops?: readonly WorkshopOverload[]
 }
 
 const ZERO = decimalOf('0')
@@ -143,7 +168,8 @@ const refOf = (itemId: string, itemColourId: string | null): string => itemColou
 export function detectExceptions(input: DetectInput): ExceptionCondition[] {
   const found: ExceptionCondition[] = []
   const { runDate } = input
-  const pastDue = new Map<string, { orderNumber: string; lineSeq: number; dueDate: BusinessDate; orderId: string }>()
+  // B-W2b-GB29 (G222): + the sample work order of a part of no order line (its exception names the work order).
+  const pastDue = new Map<string, { orderNumber: string; lineSeq: number; dueDate: BusinessDate; orderId: string; sample?: { workOrderId: string } }>()
   for (const material of input.materials) {
     const { pegging } = material
     const ref = refOf(material.itemId, material.itemColourId) + (material.keySuffix ?? '')
@@ -294,11 +320,27 @@ export function detectExceptions(input: DetectInput): ExceptionCondition[] {
       const { part } = coverage
       if (part.dueDate === null || part.dueDate >= runDate) continue
       if (!decimalOf(part.quantity).minus(decimalOf(part.issued)).gt(0)) continue
-      pastDue.set(part.orderLineId, { orderNumber: part.orderNumber, lineSeq: part.lineSeq, dueDate: part.dueDate, orderId: part.orderId })
+      pastDue.set(part.orderLineId, { orderNumber: part.orderNumber, lineSeq: part.lineSeq, dueDate: part.dueDate, orderId: part.orderId, ...(part.sample ? { sample: { workOrderId: part.sample.workOrderId } } : {}) })
     }
   }
   for (const [orderLineId, line] of pastDue) {
     const daysLate = daysFrom(line.dueDate, runDate)
+    // B-W2b-GB29 (G222): a sample work order of no order line is named as itself, never as an order line.
+    if (line.sample) {
+      found.push({
+        kind: 'PAST_DUE',
+        key: `PAST_DUE:WO:${line.sample.workOrderId}`,
+        itemId: null,
+        itemColourId: null,
+        requirementSeq: null,
+        record: { type: 'WorkOrder', id: line.sample.workOrderId },
+        facts: { workOrderNumber: line.orderNumber, dueDate: line.dueDate },
+        ordersAffected: 0,
+        daysLate,
+        sentence: `Sample work order ${line.orderNumber} was due ${line.dueDate} (${daysLate} days ago) and still needs material.`,
+      })
+      continue
+    }
     found.push({
       kind: 'PAST_DUE',
       key: `PAST_DUE:${orderLineId}`,
@@ -337,6 +379,23 @@ export function detectExceptions(input: DetectInput): ExceptionCondition[] {
       ordersAffected: 0,
       daysLate: null,
       sentence: `${lane.laneCode} is booked ${lane.loadPct} % in ${lane.bucketKey} (${lane.bookedMinutes} of ${lane.availableMinutes} minutes).`,
+    })
+  }
+
+  // B-W2b-GB29 (G219): one condition per workshop, kind of work and week.
+  for (const shop of input.workshops ?? []) {
+    const unitWords = shop.unit === 'MINUTES' ? 'minutes' : 'garments'
+    found.push({
+      kind: 'WORKSHOP_OVERLOADED',
+      key: `WORKSHOP_OVERLOADED:${shop.partyId}:${shop.workCentreKind ?? 'ANY'}:${shop.bucketKey}`,
+      itemId: null,
+      itemColourId: null,
+      requirementSeq: null,
+      record: { type: 'Party', id: shop.partyId },
+      facts: { workshopCode: shop.workshopCode, workCentreKind: shop.workCentreKind, unit: shop.unit, bucket: shop.bucketKey, from: shop.from, to: shop.to, loadPct: shop.loadPct, available: shop.available, booked: shop.booked },
+      ordersAffected: 0,
+      daysLate: null,
+      sentence: `Workshop ${shop.workshopCode} is booked ${shop.loadPct} % in ${shop.bucketKey} (${shop.booked} of ${shop.available} ${unitWords}${shop.workCentreKind ? `, ${shop.workCentreKind.toLowerCase()}` : ''}).`,
     })
   }
 

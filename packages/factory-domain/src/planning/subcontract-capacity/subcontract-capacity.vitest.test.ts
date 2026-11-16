@@ -121,3 +121,32 @@ describe('the load heatmap (PLN-117)', () => {
     expect(Object.keys(PLANNING_SUBCONTRACT_ADDS).sort()).toEqual(['buyer', 'planner', 'production_manager'])
   })
 })
+
+// ---- B-W2b-GB29 (G219): the plan's proposals level by the workshops' weekly capacity ----------------------------------------
+describe('levelling a planned subcontract order by the workshops’ capacity (G219)', () => {
+  const P3 = '00000000-0000-7000-8000-000000000003'
+  // 2,400 sewing minutes a week = 480 a weekday; Mon 16 – Fri 20 Nov 2026: 2,400 available.
+  const rows: CapacityRow[] = [sewing, { ...sewing, id: 'r3', partyId: P3 }]
+  const job = (partyId: string, minutes: string, id = 'new'): WorkshopJob => ({ kind: 'PLANNED', id, partyId, workOrderId: null, from: '2026-11-16', to: '2026-11-20', garments: 10, operations: [{ workCentreKind: 'SEWING', minutes }] })
+  const none = new Set<string>()
+  it('a job fits while booked + it stays within the week’s capacity on its days; a workshop with no line is unknown', async () => {
+    const { roomFor } = await import('./rules')
+    expect(roomFor(rows, [job(P2, '1000', 'old')], job(P2, '1400'), none)).toEqual({ partyId: P2, known: true, fits: true, loadPct: '100.0' })
+    expect(roomFor(rows, [job(P2, '1000', 'old')], job(P2, '1401'), none)).toMatchObject({ known: true, fits: false })
+    // Another workshop's work never loads this one; a closed day takes its fifth away.
+    expect(roomFor(rows, [job(P3, '2400', 'old')], job(P2, '2000'), none)).toMatchObject({ fits: true })
+    expect(roomFor(rows, [], job(P2, '2000'), new Set(['2026-11-18']))).toMatchObject({ fits: false, loadPct: '104.2' })
+    expect(roomFor([], [], job(P2, '9999'), none)).toEqual({ partyId: P2, known: false, fits: true, loadPct: null })
+  })
+  it('keeps the routing’s workshop with room, else sends it to the first other approved workshop with room, else keeps it over, said', async () => {
+    const { levelWorkshop, roomFor } = await import('./rules')
+    const booked = [job(P2, '2000', 'old')]
+    const room = (partyId: string) => roomFor(rows, booked, job(partyId, '1000'), none)
+    const moved = levelWorkshop({ partyId: P2, code: 'WS-02' }, [{ partyId: P3, code: 'WS-03' }], room)
+    expect(moved).toMatchObject({ partyId: P3, moved: true, over: false })
+    expect(moved.words).toBe('WS-02 is full on those days (125.0 % with it): sent to WS-03 (41.7 % with it).')
+    expect(levelWorkshop({ partyId: P2, code: 'WS-02' }, [], room)).toMatchObject({ partyId: P2, moved: false, over: true, words: 'WS-02 is over its capacity on those days (125.0 % with it) and no other approved workshop has room.' })
+    expect(levelWorkshop({ partyId: P3, code: 'WS-03' }, [{ partyId: P2, code: 'WS-02' }], room)).toMatchObject({ partyId: P3, moved: false, over: false })
+    expect(levelWorkshop({ partyId: 'none', code: 'WS-09' }, [{ partyId: P3, code: 'WS-03' }], (partyId) => roomFor(rows, booked, job(partyId, '1000'), none))).toMatchObject({ partyId: 'none', moved: false, over: false, words: 'WS-09 has no weekly capacity set: not levelled.' })
+  })
+})

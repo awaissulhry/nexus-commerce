@@ -557,7 +557,12 @@
       "operation": "Pick the operation first.",
       "reason": "Say why it is needed.",
       "words": "Say why in a few words."
-    }
+    },
+    "planned": "Garments that need it (optional)",
+    "plannedUnit": "garments",
+    "plannedEmpty": "Left empty: it stays off the plan",
+    "plannedRange": "A whole number from 1",
+    "plannedHint": "The plan, the board and WIP count it for these garments."
   },
   "firstPiece": {
     "held": "Waiting for first-piece approval.",

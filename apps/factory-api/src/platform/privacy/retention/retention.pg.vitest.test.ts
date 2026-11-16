@@ -4,6 +4,7 @@ import { newId } from '@nexus/factory-domain/core/ids'
 import { LEDGER_KEPT_WORDS, RETENTION_ACTIONS, SWEEP_MODES, SWEEP_STATUSES, UNVERIFIED_WORDS } from '@nexus/factory-domain/privacy/retention/retention'
 // The factory-db seeds are no package export: a test reads them where they live.
 import { seed as seedCore } from '../../../../../../packages/factory-db/seed/_core'
+import { seed as seedEmailIn } from '../../../../../../packages/factory-db/seed/email-in'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { addRole, addUser, Browser, enrolTotp, startHarness, stepUp, type Harness, type TestTenant } from '../../auth/sessions/testing/harness'
 import { applySystemRoleChanges, systemRoleChanges } from '../../auth/roles/system-roles'
@@ -51,6 +52,8 @@ async function jobRun(daysAgo: number): Promise<string> {
 beforeAll(async () => {
   h = await startHarness('retention_405')
   await seedCore({ db: h.database, namespace: NS })
+  // B-W2b-GF1 (F54): received mail for the sweep of InboundEmail (made-up senders).
+  await seedEmailIn({ db: h.database, namespace: NS })
   await h.database.withScope({ audience: 'office', tenantId: T, actorId: newId() }, async (client) => applySystemRoleChanges(client, await systemRoleChanges(client), { now: h.clock.now(), actorId: newId() }))
   const tenant: TestTenant = { id: T, slug: NS, companies: [{ id: companyA, code: 'A' }, { id: companyB, code: 'B' }] }
   const user = await addUser(h, tenant, { email: 'retention.desk.405@example.com' })
@@ -98,6 +101,10 @@ describe('a retention rule reports until a person switches it on (GATE-PRIVACY),
     for (const entry of listed.ledgers as Json[]) expect(entry.words).toBe(LEDGER_KEPT_WORDS)
     expect(JSON.stringify(listed)).not.toMatch(/waits? for the Owner|open question/i)
     expect(listed.datedPurges.map((entry: Json) => entry.job)).toContain('sales.measurementPhotos')
+    // B-W2b-GF1 (G274): a person's data package is purged on its date too.
+    expect(listed.datedPurges.map((entry: Json) => entry.job)).toContain('privacy.purgePackages')
+    // B-W2b-GF1 (F54): received mail may be anonymised by a sweep (the Owner's decision of 15 Nov 2026): nothing holds it.
+    expect(listed.types.find((entry: Json) => entry.recordType === 'InboundEmail')).toMatchObject({ actions: ['ANONYMISE'], holdsAll: null })
     expect(listed.types.map((entry: Json) => entry.recordType)).toEqual(expect.arrayContaining(['CronRun', 'ReportRun', 'IntegrationErrorItem', 'InboundEmail', 'Invoice']))
   })
 
@@ -144,5 +151,46 @@ describe('a retention rule reports until a person switches it on (GATE-PRIVACY),
     expect(after[rule.id]!.n).toBe(before[rule.id])
     const sweeps = await ok('GET', `/privacy/retention/rules/${other.id}/sweeps`)
     expect(sweeps.sweeps[0]).toMatchObject({ mode: 'REPORT', status: 'DONE', requestedBy: null })
+  })
+})
+
+describe('mail received: the sweep anonymises a settled mail past its period (B-W2b-GF1, F54: the Owner\'s decision of 15 Nov 2026)', () => {
+  /** A made-up mail of company A received `when`, copied from a seeded one (its own ids), in the status given. */
+  async function oldMail(when: string, status: 'REJECTED' | 'TRIAGE'): Promise<string> {
+    const id = newId()
+    const from = status === 'REJECTED' ? 'email-in:virus' : 'email-in:triage'
+    await admin(
+      `INSERT INTO "InboundEmail" (id, "tenantId", "companyId", "accountId", "receiptId", "sesMessageId", "s3Bucket", "s3Key", "receivedAt", "envelopeFrom", "envelopeTo", "fromAddress", "fromName",
+                                   "to", subject, "bodyText", "spfVerdict", "dkimVerdict", "dmarcVerdict", "spamVerdict", "virusVerdict", status, "rejectReason", "fetchedAt", "sortedAt", attempts, "createdAt", "updatedAt")
+       SELECT $1::uuid, "tenantId", "companyId", "accountId", "receiptId", 'gf1-' || $1, "s3Bucket", 'inbound/gf1-' || $1, $2::timestamptz, 'old.sender.gf1@example.com', "envelopeTo", 'old.sender.gf1@example.com', 'Old Sender',
+              "to", 'Made-up old mail', 'Made-up text.', "spfVerdict", "dkimVerdict", "dmarcVerdict", "spamVerdict", "virusVerdict", status, "rejectReason", "fetchedAt", "sortedAt", attempts, $2::timestamptz, $2::timestamptz
+         FROM "InboundEmail" WHERE id = $3::uuid`,
+      [id, when, seedUuid(NS, from)],
+    )
+    return id
+  }
+  const columns = async (id: string): Promise<Json> =>
+    (await admin(`SELECT "fromAddress", "fromName", subject, "bodyText", "bodyHtml", "envelopeFrom", status::text, "s3Key" IS NOT NULL AS place FROM "InboundEmail" WHERE id = $1`, [id]))[0]!
+
+  it('reports the settled old mail only; once switched on it blanks its six columns, the row and its place stay; a mail waiting for a person is never due', async () => {
+    const settled = await oldMail('2024-01-10T09:00:00.000Z', 'REJECTED')
+    const waiting = await oldMail('2024-01-11T09:00:00.000Z', 'TRIAGE')
+    let rule = (await ok('POST', '/privacy/retention/rules', { companyId: companyA, recordType: 'InboundEmail', keepMonths: 12, thenAction: 'ANONYMISE', legalReason: 'Mail received: 12 months (made up, GATE-PRIVACY).' }, 201)).rule
+    expect(rule).toMatchObject({ holdsAll: null, does: expect.stringContaining('envelope sender') })
+    const reported = await ok('POST', `/privacy/retention/rules/${rule.id}/sweep`, undefined, 201)
+    expect(reported.sweep).toMatchObject({ mode: 'REPORT', status: 'DONE', due: 1, applied: 0, held: 0 })
+    expect((await columns(settled)).fromAddress).toBe('old.sender.gf1@example.com')
+    await stepUp(h, desk.browser, desk.secret)
+    rule = (await ok('POST', `/privacy/retention/rules/${rule.id}/apply`, { version: reported.rule.version, on: true })).rule
+    const applied = await ok('POST', `/privacy/retention/rules/${rule.id}/sweep`, undefined, 201)
+    expect(applied.sweep).toMatchObject({ mode: 'APPLY', status: 'DONE', due: 1, applied: 1, held: 0 })
+    expect(await columns(settled)).toEqual({ fromAddress: null, fromName: null, subject: null, bodyText: null, bodyHtml: null, envelopeFrom: null, status: 'REJECTED', place: true })
+    expect(await columns(waiting)).toMatchObject({ fromAddress: 'old.sender.gf1@example.com', envelopeFrom: 'old.sender.gf1@example.com', status: 'TRIAGE' })
+    // The recent seeded mails (October 2026) are inside the 12 months: untouched.
+    expect((await columns(seedUuid(NS, 'email-in:virus'))).fromAddress).not.toBeNull()
+    // Nothing left to blank: the next sweep finds nothing due.
+    expect((await ok('POST', `/privacy/retention/rules/${rule.id}/sweep`, undefined, 201)).sweep).toMatchObject({ mode: 'APPLY', due: 0, applied: 0 })
+    // Outside a sweep the database still refuses to blank a mail.
+    await expect(admin(`UPDATE "InboundEmail" SET "fromAddress" = NULL WHERE id = $1`, [waiting])).rejects.toThrow(/it never changes/)
   })
 })

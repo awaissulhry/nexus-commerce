@@ -12,9 +12,9 @@ import type { FileSet, PayrollFiles } from './api'
  *   shared    DOCUMENT_VIEW of a set of files (links.document W2b): each OPEN counts (the landing's), downloads are
  *             logged, never counted; a PDF or a picture can be read in the page; the optional password; a newer
  *             version named, never swapped in.
- *   payroll   DOCUMENT_VIEW of a PayrollExport (B-W2b-54's routes): the hours file and its summary for the labour
- *             consultant — each download counts; no password, no receipt (the API has none for it). Pay figures
- *             never go by link: the office's Send refuses a month with amounts (409 PAY_FIGURES).
+ *   payroll   SECURE_FILE of a PayrollExport (B-W2b-54's routes; B-W2b-GF1, G212): the hours file and its summary for the
+ *             labour consultant — each download counts; the optional password sent apart and the receipt, as a secure
+ *             file. Pay figures never go by link: the office's Send refuses a month with amounts (409 PAY_FIGURES).
  *
  * Every word on screen is the page's own (link-files catalogue) from codes, numbers and days: never the API's English.
  */
@@ -89,9 +89,9 @@ export function pageOfPayroll(read: PayrollFiles): FilePage {
     sender: read.sender,
     expiresAt: read.link.expiresAt,
     usesLeft: read.link.usesLeft,
-    password: { asked: false, unlocked: false, heldUntil: null },
-    receipt: { asked: false, at: null, name: null },
-    count: files.length,
+    password: read.link.password,
+    receipt: read.link.receipt,
+    count: read.count,
     files: files.map((file, index) => ({
       id: file.id,
       position: index + 1,

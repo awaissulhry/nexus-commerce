@@ -14,6 +14,8 @@ import {
   type ItemPlanningPatch,
   type ItemPlanningValues,
 } from './items'
+// B-W2b-GB29 (G220, B-W2b-318's and B-W2b-335's gap): the seven planning rules per item are columns of the import too.
+import { EMPTY_ITEM_RULES, ITEM_RULE_FIELDS, ITEM_RULE_LIMITS, itemRuleProblems, LOT_SIZINGS, mergeItemRules, PLAN_LEVELS, type ItemRulePatch, type ItemRuleValues } from '../lot-sizing/parameters'
 
 /**
  * The item parameters' import (B-W2b-20; B-W2a-16 and B-W2a-59's gap; PLN-005, PLN-099; design planning.settings "Item
@@ -31,6 +33,9 @@ import {
  *   quantities                             safety stock, reorder point, lot size, min and max stock, order minimum, step
  *                                          and maximum, in the item's BASE unit (at most four decimals)
  *   note
+ *   B-W2b-GB29 (G220): the planning rules per item (B-W2b-318; the routes' own): lot sizing (LOT_FOR_LOT, FIXED with its
+ *   lot, MIN_MAX, PERIOD with its days), plan level (STYLE, STYLE_COLOUR, SKU; a finished garment or a component only, and
+ *   planning.strategy.manage: the API's adapter checks both), scrap %, yield % and the days between arrival and use
  *
  * A change of method clears the old method's own fields the row does not give, and a change of source the supplier or
  * make site, exactly as the PATCH does: the review shows them as cleared (a column with its value before and none
@@ -86,6 +91,19 @@ const SOURCE_ALIASES = {
 } as const satisfies Record<string, (typeof IMPORT_SOURCES)[number]>
 
 const days = () => cell.integer({ min: ITEM_PLANNING_LIMITS.days.min, max: ITEM_PLANNING_LIMITS.days.max })
+// B-W2b-GB29 (G220): the rules' cells (their limits are the routes': ../lot-sizing/parameters itemRuleProblems).
+const LOT_SIZING_ALIASES = {
+  'lotto per lotto': 'LOT_FOR_LOT', 'lot for lot': 'LOT_FOR_LOT', 'come serve': 'LOT_FOR_LOT', lfl: 'LOT_FOR_LOT',
+  'lotto fisso': 'FIXED', fisso: 'FIXED', fixed: 'FIXED', 'fixed lot': 'FIXED',
+  'min max': 'MIN_MAX', 'min/max': 'MIN_MAX', minmax: 'MIN_MAX',
+  periodo: 'PERIOD', 'a periodo': 'PERIOD', period: 'PERIOD', 'giorni di copertura': 'PERIOD',
+} as const satisfies Record<string, (typeof LOT_SIZINGS)[number]>
+const PLAN_LEVEL_ALIASES = {
+  modello: 'STYLE', stile: 'STYLE', style: 'STYLE',
+  'modello colore': 'STYLE_COLOUR', 'modello e colore': 'STYLE_COLOUR', 'stile colore': 'STYLE_COLOUR', 'style colour': 'STYLE_COLOUR', 'style color': 'STYLE_COLOUR',
+  taglia: 'SKU', variante: 'SKU', sku: 'SKU', size: 'SKU',
+} as const satisfies Record<string, (typeof PLAN_LEVELS)[number]>
+const percent = () => cell.decimal({ precision: 5, scale: 2, min: '0' })
 const quantity = () => cell.decimal({ precision: QUANTITY.precision, scale: QUANTITY.scale, min: '0' })
 const BASE = 'In the item’s base unit, at most four decimals.'
 
@@ -113,6 +131,14 @@ export const itemParametersImporter = defineImporter({
     orderMultiple: { label: 'Order step', aliases: ['multiplo', 'multiplo di ordine', 'passo', 'order multiple'], type: quantity(), description: BASE },
     maxOrderQty: { label: 'Order maximum', aliases: ['ordine massimo', 'massimo ordinabile', 'maximum order'], type: quantity(), description: BASE },
     note: { label: 'Note', aliases: ['nota', 'note', 'commento'], type: cell.text({ max: ITEM_PLANNING_LIMITS.note }) },
+    // B-W2b-GB29 (G220): the seven planning rules per item (B-W2b-318).
+    lotSizing: { label: 'Lot sizing', aliases: ['dimensionamento lotto', 'regola lotto', 'lot sizing rule'], type: cell.oneOf(LOT_SIZINGS, LOT_SIZING_ALIASES), description: 'LOT_FOR_LOT, FIXED (with its lot), MIN_MAX or PERIOD (with its days).' },
+    fixedLotQty: { label: 'Fixed lot', aliases: ['lotto fisso quantita', 'quantita lotto fisso', 'fixed lot quantity'], type: quantity(), description: `FIXED lot sizing: how much each order brings. ${BASE}` },
+    lotPeriodDays: { label: 'Period (days)', aliases: ['giorni periodo', 'periodo giorni', 'period days'], type: cell.integer({ min: ITEM_RULE_LIMITS.periodDays.min, max: ITEM_RULE_LIMITS.periodDays.max }), description: 'PERIOD lot sizing: the days of need one order brings.' },
+    planLevel: { label: 'Plan level', aliases: ['livello di pianificazione', 'pianifica per', 'plan by'], type: cell.oneOf(PLAN_LEVELS, PLAN_LEVEL_ALIASES), description: 'STYLE, STYLE_COLOUR or SKU (a finished garment or a component only); blank: the site’s size-run rule.' },
+    scrapPct: { label: 'Scrap %', aliases: ['scarto %', 'scarto', 'scrap'], type: percent(), description: 'A percent of the need, from 0 to under 100.' },
+    yieldPct: { label: 'Yield %', aliases: ['resa %', 'resa', 'yield'], type: percent(), description: 'A percent above 0 and at most 100.' },
+    delayDays: { label: 'Days before use', aliases: ['giorni prima uso', 'giorni tra arrivo e uso', 'delay days'], type: cell.integer({ min: ITEM_RULE_LIMITS.delayDays.min, max: ITEM_RULE_LIMITS.delayDays.max }), description: 'The days between arrival and use.' },
   },
   keyColumns: ['site', 'item', 'colour'],
   batchSize: 100,
@@ -121,11 +147,14 @@ export const itemParametersImporter = defineImporter({
 
 type Column = keyof typeof itemParametersImporter.columns
 /** The value columns (every column but the key). */
-const VALUE_COLUMNS = ['method', 'source', 'supplier', 'makeSite', ...LEAD_TIME_FIELDS, ...QUANTITY_FIELDS, 'note'] as const satisfies readonly Column[]
-type ValueColumn = (typeof VALUE_COLUMNS)[number]
+const PLANNING_COLUMNS = ['method', 'source', 'supplier', 'makeSite', ...LEAD_TIME_FIELDS, ...QUANTITY_FIELDS, 'note'] as const satisfies readonly Column[]
+/** B-W2b-GB29 (G220): the rules' columns (named as the rules' fields). */
+const RULE_COLUMNS = ITEM_RULE_FIELDS as readonly (keyof ItemRuleValues & Column)[]
+const VALUE_COLUMNS = [...PLANNING_COLUMNS, ...RULE_COLUMNS] as const
+type ValueColumn = (typeof PLANNING_COLUMNS)[number] | (typeof RULE_COLUMNS)[number]
 
 /** A value's column: the supplier's and make site's ids stand as their codes here. */
-const COLUMN_OF: Readonly<Record<keyof ItemPlanningValues, ValueColumn>> = Object.freeze({
+const COLUMN_OF: Readonly<Record<keyof ItemPlanningValues | keyof ItemRuleValues, ValueColumn>> = Object.freeze({
   method: 'method',
   source: 'source',
   supplierId: 'supplier',
@@ -142,16 +171,31 @@ const COLUMN_OF: Readonly<Record<keyof ItemPlanningValues, ValueColumn>> = Objec
   orderMultiple: 'orderMultiple',
   maxOrderQty: 'maxOrderQty',
   note: 'note',
+  // B-W2b-GB29 (G220): the rules.
+  lotSizing: 'lotSizing',
+  fixedLotQty: 'fixedLotQty',
+  lotPeriodDays: 'lotPeriodDays',
+  planLevel: 'planLevel',
+  scrapPct: 'scrapPct',
+  yieldPct: 'yieldPct',
+  delayDays: 'delayDays',
 })
-const FIELD_OF = Object.fromEntries(Object.entries(COLUMN_OF).map(([field, column]) => [column, field])) as Readonly<Record<ValueColumn, keyof ItemPlanningValues>>
+const FIELD_OF = Object.fromEntries(Object.entries(COLUMN_OF).map(([field, column]) => [column, field])) as Readonly<Record<ValueColumn, keyof ItemPlanningValues | keyof ItemRuleValues>>
 
-/** A site's row as the import sees it: its values with the supplier's and make site's codes where the ids stand. */
-export type ImportedItemParameters = ItemPlanningValues
+/**
+ * A site's row as the import sees it: its values with the supplier's and make site's codes where the ids stand, and
+ * (B-W2b-GB29, G220) its planning rules (left out: none set, lot for lot).
+ */
+export type ImportedItemParameters = ItemPlanningValues & Partial<ItemRuleValues>
+
+/** B-W2b-GB29 (G220): the rules of a row as the import sees it (left out: the empty rules). */
+const rulesOf = (values: ImportedItemParameters): ItemRuleValues => Object.fromEntries(ITEM_RULE_FIELDS.map((field) => [field, values[field] ?? EMPTY_ITEM_RULES[field]])) as unknown as ItemRuleValues
 
 /** The record values the adapter's load answers for a row: every value column (source null is ITEM). */
 export function importRecordValues(values: ImportedItemParameters): RecordValues {
   const out: Record<string, CellValue | null> = {}
-  for (const [field, column] of Object.entries(COLUMN_OF) as [keyof ItemPlanningValues, ValueColumn][]) out[column] = values[field]
+  const all = { ...values, ...rulesOf(values) } // B-W2b-GB29 (G220)
+  for (const [field, column] of Object.entries(COLUMN_OF) as [keyof typeof all, ValueColumn][]) out[column] = all[field] ?? null
   out.source = values.source ?? ITEM_SOURCE
   return out
 }
@@ -167,7 +211,7 @@ function currentOf(existing: ExistingRecord): ImportedItemParameters {
 /** The values a row gives, as a patch of the site's row (codes where the ids stand; source ITEM is none). */
 export function patchOf(values: RowValues): ItemPlanningPatch {
   const patch: Record<string, unknown> = {}
-  for (const column of VALUE_COLUMNS) {
+  for (const column of PLANNING_COLUMNS) {
     const value = values[column]
     if (value === undefined) continue
     patch[FIELD_OF[column]] = column === 'source' && value === ITEM_SOURCE ? null : value
@@ -175,15 +219,31 @@ export function patchOf(values: RowValues): ItemPlanningPatch {
   return patch as ItemPlanningPatch
 }
 
+/** B-W2b-GB29 (G220): the planning rules a row gives, as a patch of the site's rules (a blank cell: not given). */
+export function rulesPatchOf(values: RowValues): ItemRulePatch {
+  const patch: Record<string, unknown> = {}
+  for (const column of RULE_COLUMNS) if (values[column] !== undefined) patch[column] = values[column]
+  return patch as ItemRulePatch
+}
+
+/**
+ * B-W2b-GB29 (G220): the planning rules of a row after its cells, merged as the routes merge them (a change of lot sizing
+ * clears the old one's number). The plan level's item kind is the adapter's to check (it reads the item): here every
+ * other rule.
+ */
+export function mergedRulesOf(current: ImportedItemParameters | null, values: RowValues) {
+  return mergeItemRules(current ? rulesOf(current) : null, rulesPatchOf(values))
+}
+
 /** A rule's path (`body/<field>`) as the column it is about. */
 const rowIssues = (issues: readonly Issue[]): RowIssue[] =>
   issues.map((issue) => {
     const field = issue.path.split('/').at(-1) ?? ''
-    const column = Object.hasOwn(COLUMN_OF, field) ? COLUMN_OF[field as keyof ItemPlanningValues] : undefined
+    const column = Object.hasOwn(COLUMN_OF, field) ? COLUMN_OF[field as keyof typeof COLUMN_OF] : undefined
     return column ? { column, message: issue.message } : { message: issue.message }
   })
 
-const QUANTITY_COLUMNS = new Set<string>(QUANTITY_FIELDS)
+const QUANTITY_COLUMNS = new Set<string>([...QUANTITY_FIELDS, 'fixedLotQty', 'scrapPct', 'yieldPct']) // B-W2b-GB29 (G220): + the rules' decimals
 /** One value column's two values are the same (quantities by value: "12.5" = "12.5000"). */
 function same(column: ValueColumn, a: CellValue | null, b: CellValue | null): boolean {
   if (a === null || b === null) return a === b
@@ -201,8 +261,11 @@ const refused = (errors: readonly RowIssue[]): RowPlan => ({ action: 'ERROR', er
  */
 export function planItemParametersRow(values: RowValues, existing: ExistingRecord | null): RowPlan {
   const current = existing ? currentOf(existing) : null
-  const { values: next } = mergeItemPlanning(current, patchOf(values))
-  const problems = itemPlanningProblems(next)
+  const { values: merged } = mergeItemPlanning(current, patchOf(values))
+  // B-W2b-GB29 (G220): the rules after the row, checked (the plan level's item kind by the adapter: 'FINISHED' passes it here).
+  const rules = mergedRulesOf(current, values).values
+  const next: ImportedItemParameters = { ...merged, ...rules }
+  const problems = [...itemPlanningProblems(merged), ...itemRuleProblems(rules, 'FINISHED')]
   if (problems.length > 0) return refused(rowIssues(problems))
   if (current === null) return { action: 'CREATE', after: values }
   const before: Record<string, CellValue | null> = {}

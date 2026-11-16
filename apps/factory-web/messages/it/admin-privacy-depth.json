@@ -47,6 +47,7 @@
       "NOT_ACCESS": "Solo una richiesta di accesso ha un pacchetto di dati.",
       "NOT_ERASURE": "Solo una richiesta di cancellazione cancella o rende anonima la persona.",
       "NO_PACKAGE": "Raccogli prima il pacchetto di dati della persona: la richiesta di accesso è evasa quando è consegnato.",
+      "PACKAGE_DELETED": "Il pacchetto di dati è stato cancellato alla sua data (30 giorni dopo la preparazione): raccoglilo di nuovo finché la richiesta è aperta.",
       "NOT_ERASED": "Rendi prima anonima la persona (ciò che la legge conserva resta, con il motivo): la richiesta è evasa quando è registrato.",
       "ERASED": "La persona è già stata resa anonima su questa richiesta: ciò che è stato cancellato e conservato è registrato."
     },
@@ -169,6 +170,7 @@
       "file": "File",
       "size": "Dimensione",
       "made": "Preparato",
+      "deleteAfter": "Cancellato il",
       "sha": "SHA-256"
     },
     "action": {
@@ -313,9 +315,10 @@
         "HEALTH": "Sorveglianza sanitaria e infortuni si conservano 10 anni dalla fine del rapporto (art. 25 D.Lgs. 81/2008; art. 17(3)(b) GDPR).",
         "CUSTOMER": "La scheda del cliente nomina la persona e ordini e fatture la richiamano (art. 2220 c.c.: 10 anni; art. 17(3)(b) GDPR).",
         "MEASUREMENTS": "Le misure su cui è stato fatto il capo, per la garanzia legale (art. 132 D.Lgs. 206/2005: 26 mesi); le foto vanno via alla loro data.",
-        "IMMUTABLE": "Ciò che il server di posta ha registrato all'arrivo della mail (il mittente della busta) resta com'era; gli altri dati della persona nella mail vengono svuotati.",
         "ALREADY_ERASED": "Già resa anonima prima: non resta nulla della persona.",
-        "NOTICE_PROOF": "La prova che alla persona è stata data l'informativa (artt. 5(2), 13 GDPR): nomina la versione dell'informativa, non i dati della persona."
+        "NOTICE_PROOF": "La prova che alla persona è stata data l'informativa (artt. 5(2), 13 GDPR): nomina la versione dell'informativa, non i dati della persona.",
+        "LEGAL_HOLD": "Il file è sotto blocco legale (una controversia, un'ispezione o un reclamo ne ha bisogno così com'è; art. 17(3)(e) GDPR).",
+        "RETAINED": "Conservato fino alla sua data di conservazione: la legge o un contratto lo tengono fino ad allora (art. 17(3)(b) GDPR)."
       },
       "type": {
         "PartyContact": "Il contatto",
@@ -333,8 +336,10 @@
         "InboundEmail": "Mail ricevute dalla persona",
         "EmailOutbound": "Mail inviate alla persona",
         "AuditLog": "Storico della sua scheda",
+        "StoredFile": "File allegati a ciò che ha inviato",
         "other": "Altre schede"
       },
+      "historyScope": "Storico: le modifiche alle schede della persona vengono svuotate; una sua menzione nello storico di un'altra scheda non viene cercata (ogni registrazione di cancellazione dice cosa è stato svuotato).",
       "field": {
         "name": "nome",
         "email": "e-mail",
@@ -478,10 +483,6 @@
         "NO_ACTION": "Nessuna pulizia può cancellare, rendere anonimo o archiviare questo tipo di scheda: la regola può fare solo un rapporto."
       },
       "sweepHeld": {
-        "IMMUTABLE": {
-          "short": "trattenute: solo richieste di cancellazione",
-          "long": "Il database svuota una mail ricevuta solo per una richiesta di cancellazione della persona, mai con una pulizia: la regola può solo riferirla."
-        },
         "NEVER_DELETED": {
           "short": "trattenute: mai cancellate",
           "long": "Il database non cancella mai questa scheda (un'esportazione scade, il suo file va via): la regola può fare solo un rapporto."
@@ -541,7 +542,7 @@
           "name": "Mail ricevute",
           "countsFrom": "Da quando la mail è stata ricevuta.",
           "does": {
-            "ANONYMISE": "Svuoterebbe mittente, oggetto e testo, mantenendo la conversazione: oggi trattenuta (il database non cambia una mail letta).",
+            "ANONYMISE": "Svuota mittente, mittente della busta, oggetto, testo e HTML di una mail chiusa (abbinata, respinta o non letta); luogo, ora e stato della mail restano, e la conversazione della scheda tiene il proprio messaggio.",
             "DELETE": "Una mail ricevuta non viene mai cancellata da una pulizia: la regola fa solo un rapporto.",
             "ARCHIVE": "Una mail ricevuta non si archivia con una pulizia: la regola fa solo un rapporto."
           }
@@ -687,6 +688,11 @@
           "what": "I file delle esportazioni",
           "when": "Alla scadenza dell'esportazione (la riga resta)",
           "why": "Art. 5(1)(e) GDPR"
+        },
+        "accessPackages": {
+          "what": "Il pacchetto di dati di una persona (la copia raccolta per una richiesta di accesso)",
+          "when": "30 giorni dopo la preparazione (la richiesta e la traccia di ciò che è stato inviato restano)",
+          "why": "Art. 5(1)(e) GDPR: mai conservato come seconda copia dei dati della persona"
         }
       },
       "kept": {
@@ -707,6 +713,7 @@
         "readme": "un README che spiega ogni parte, con i codici di controllo."
       },
       "ask": "Chiedi i miei dati",
+      "deletes": "cancellata il {date}",
       "asked": "Richiesta inviata: la copia si prepara in sottofondo e compare qui quando è pronta.",
       "downloaded": "Scaricata: la richiesta è evasa.",
       "held": {

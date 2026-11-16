@@ -56,6 +56,8 @@ export const plannedOrderView = output({
   version: z.number().int(),
   /** Why it cannot be made real now, in words; null: it can. */
   held: z.string().nullable(),
+  /** B-W2b-GB29 (G219): a planned subcontract order's workshop load on its days with it, in words; null: not one (or not read). */
+  workshopLoad: output({ loadPct: z.string().nullable(), over: z.boolean(), words: z.string() }).nullable(),
   /** B-W2b-306 (PLN-083): due after the day its demand needs it (late demand starts today); null: in time. */
   late: output({ needDate: businessDate(), daysLate: z.number().int(), reason: z.string() }).nullable(),
   /** B-W2b-306 (PLN-076): the latest plan's value of each protected field (what Reset to plan puts back). */

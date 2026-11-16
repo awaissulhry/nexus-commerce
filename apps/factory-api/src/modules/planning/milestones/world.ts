@@ -43,8 +43,48 @@ import { action, GATE_COLUMNS, lacking, namesOf, ORDER_COLUMNS, SYSTEM_PASSER, t
  *
  * A LEATHER_APPROVED gate says where the order's leather stands: the lots reserved (ACTIVE or ISSUED) for its work orders or
  * its lines, of a LEATHER item — none (not received), some not RELEASED (not passed), all RELEASED (passed: the gate passes by
- * the `lot.released` handler). Days are the business zone's (Europe/Rome).
+ * the `lot.released` handler). B-W2b-GB29 (G221): and the leather lots BOUGHT for it and received, reserved or not
+ * (`boughtLeatherLotsOf`). Days are the business zone's (Europe/Rome).
  */
+
+/**
+ * B-W2b-GB29 (G221, B-W2b-263's gap "leather bought for an order but not reserved to it is not seen by the leather gate"): the
+ * leather lots received for an order without a reservation: an order-specific buy of a LEATHER item (B-W2b-306: a requirement
+ * planned for one order line alone, `orderSpecific` with `reservedForLineId`) ordered on a purchase line (decision ORDERED),
+ * whose receipts made lots. Per lot, the orders it was bought for. Two reads.
+ */
+export async function boughtLeatherLotsOf(db: Reader, where: { readonly orderIds?: readonly string[]; readonly lotId?: string }): Promise<{ lotId: string; qualityStatus: string; orderIds: string[] }[]> {
+  if (where.orderIds !== undefined && where.orderIds.length === 0) return []
+  let lineIds: string[] | undefined
+  if (where.lotId !== undefined) {
+    const lot = await db.lot.findUnique({ where: { id: where.lotId }, select: { receiptLine: { select: { purchaseOrderLineId: true } } } })
+    const line = lot?.receiptLine?.purchaseOrderLineId
+    if (!line) return []
+    lineIds = [line]
+  }
+  const bought = await db.materialRequirement.findMany({
+    where: {
+      orderSpecific: true,
+      decision: 'ORDERED',
+      item: { kind: 'LEATHER' },
+      reservedForLineId: { not: null },
+      ...(lineIds ? { purchaseOrderLineId: { in: lineIds } } : { purchaseOrderLineId: { not: null } }),
+      ...(where.orderIds ? { reservedForLine: { orderId: { in: [...where.orderIds] } } } : {}),
+    },
+    select: { purchaseOrderLineId: true, reservedForLine: { select: { orderId: true } } },
+  })
+  const ordersOfLine = new Map<string, Set<string>>()
+  for (const row of bought) {
+    if (!row.purchaseOrderLineId || !row.reservedForLine) continue
+    ordersOfLine.set(row.purchaseOrderLineId, (ordersOfLine.get(row.purchaseOrderLineId) ?? new Set()).add(row.reservedForLine.orderId))
+  }
+  if (ordersOfLine.size === 0) return []
+  const lots = await db.lot.findMany({
+    where: { item: { kind: 'LEATHER' }, receiptLine: { purchaseOrderLineId: { in: [...ordersOfLine.keys()] } }, ...(where.lotId ? { id: where.lotId } : {}) },
+    select: { id: true, qualityStatus: true, receiptLine: { select: { purchaseOrderLineId: true } } },
+  })
+  return lots.map((lot) => ({ lotId: lot.id, qualityStatus: lot.qualityStatus, orderIds: [...(ordersOfLine.get(lot.receiptLine?.purchaseOrderLineId ?? '') ?? [])] }))
+}
 
 const day = (value: Date | null): BusinessDate | null => (value ? value.toISOString().slice(0, 10) : null)
 const at = (value: Date | null): string | null => (value ? toUtcIso(value) : null)
@@ -114,6 +154,10 @@ async function orderFactsOf(db: Reader, orderIds: readonly string[]): Promise<Ma
     if (!reservation.lot) continue
     const orders = new Set<string>([...(reservation.workOrderId ? (ordersOfWorkOrder.get(reservation.workOrderId) ?? []) : []), ...(reservation.salesOrderLine ? [reservation.salesOrderLine.orderId] : [])])
     for (const orderId of orders) facts.get(orderId)?.lots.set(reservation.lot.id, reservation.lot.qualityStatus)
+  }
+  // B-W2b-GB29 (G221): the leather bought for the order and received counts too, reserved or not.
+  for (const lot of await boughtLeatherLotsOf(db, { orderIds: ids })) {
+    for (const orderId of lot.orderIds) facts.get(orderId)?.lots.set(lot.lotId, lot.qualityStatus)
   }
   return new Map(
     [...facts].map(([id, entry]) => [
