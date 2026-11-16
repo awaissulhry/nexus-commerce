@@ -103,6 +103,9 @@ describe('the mis-send guard (COL-004)', () => {
       { code: 'INTERNAL_MENTION', items: ['marco colombo'] },
       { code: 'OFFICE_FILE', items: ['Calcolo interno.pdf'] },
     ])
+    // B-TH-004: the send refuses another customer's contact unless the person ticks "Send outside this customer" (a company
+    // domain alone stays a warning).
+    expect(view.outsideCustomer).toEqual(['bruno@club.example.invalid'])
     // Another record's file is never named.
     expect(view.attachments).toEqual([
       { id: shared, name: 'Scheda taglie.pdf', sizeBytes: 2048, audience: 'PARTY' },

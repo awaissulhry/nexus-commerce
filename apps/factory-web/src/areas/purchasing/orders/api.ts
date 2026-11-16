@@ -303,7 +303,7 @@ export const isWaitingSend = (answer: SendAnswer): answer is z.infer<typeof wait
 export function sendOrder(
   api: ApiClient,
   id: string,
-  body: { version: number; cc?: string[]; subject?: string | null; message?: string | null; confirmBy?: string | null; changeNote?: string | null },
+  body: { version: number; cc?: string[]; subject?: string | null; message?: string | null; confirmBy?: string | null; changeNote?: string | null; /* B-TH-202 */ sendOutside?: true },
   idempotencyKey: string,
 ): Promise<SendAnswer> {
   return api.post(`${orderUrl(id)}/send`, { body, schema: z.union([sentSchema, waitingSendSchema]), idempotencyKey })

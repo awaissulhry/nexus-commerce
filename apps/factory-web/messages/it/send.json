@@ -71,5 +71,11 @@
     },
     "linkNote": "Il link è solo nella mail del destinatario: qui nessuno ne vede l'indirizzo.",
     "newLink": "Invia un nuovo link"
+  },
+  "outside": {
+    "title": "Il documento non è partito: un indirizzo è di un altro cliente o fornitore",
+    "tick": "Invia fuori da questo cliente",
+    "held": "Spunta «Invia fuori da questo cliente», oppure togli l’indirizzo",
+    "hidden": "Una copia nascosta va solo ai nostri colleghi o ai contatti di questo cliente: toglila e invia di nuovo."
   }
 }

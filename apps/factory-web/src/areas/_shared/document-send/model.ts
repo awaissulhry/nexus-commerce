@@ -1,4 +1,5 @@
 import type { PdfInput } from '@nexus/ui/components/PdfViewer/index'
+import { isApiError, issuePath } from '../../../lib/api/errors'
 
 /**
  * The "sending out" part (SCR-037; 00 §2.6 "Sending out"; design shell.preview): ONE dialog for any document an office
@@ -46,6 +47,17 @@ export interface DocumentSendModel {
   canSend: boolean
   /** Where the time is shown (the site's zone). */
   timeZone?: string
+  /**
+   * B-TH-202 (the brand wall, B-TH-004): the send was refused because an address belongs to another customer or supplier: the
+   * office's words for each address (whose it is), and the person's recorded "Send outside this customer" tick.
+   */
+  outside?: SendOutside | null
+}
+
+/** B-TH-202: what the recipient rule held back, and whether the person ticked "Send outside this customer". */
+export interface SendOutside {
+  readonly lines: readonly string[]
+  readonly checked: boolean
 }
 
 export interface DocumentSendActions {
@@ -55,10 +67,31 @@ export interface DocumentSendActions {
   onRetryChecks?: () => void
   /** After a failed delivery: a new link, mailed again. */
   onNewLink?: () => void
+  /** B-TH-202: the person ticks (or unticks) "Send outside this customer". */
+  onSendOutside?: (checked: boolean) => void
+}
+
+// ---- B-TH-202 (the brand wall, B-TH-004): the recipient rule's refusal of a document send ---------------------------------
+
+/**
+ * The recipient rule's refusal of a send (409 `refusal/OTHER_PARTY`): the office's words for each address held back ("x belongs
+ * to Brand Beta."; the office sees every customer), and whether it was a blind copy outside our people (`refusal/HIDDEN_OUTSIDE`:
+ * no tick lets that through). Null for any other answer.
+ */
+export function outsideRefusalOf(error: unknown): { readonly lines: string[]; readonly hidden: boolean } | null {
+  if (!isApiError(error) || error.kind !== 'conflict') return null
+  const paths = error.issues.map((issue) => issuePath(issue).replace(/\./g, '/'))
+  const hidden = paths.includes('refusal/HIDDEN_OUTSIDE')
+  if (!hidden && !paths.includes('refusal/OTHER_PARTY')) return null
+  return { lines: error.issues.filter((issue) => !issuePath(issue).startsWith('refusal')).map((issue) => issue.message ?? '').filter((line) => line !== ''), hidden }
 }
 
 /** Why Send is held, in the host's words: the first blocking check, an invalid copy address, loading, busy; else null. */
-export function sendHeld(model: Pick<DocumentSendModel, 'checks' | 'sending' | 'canSend' | 'recipient' | 'result'>, ccInvalid: readonly string[], words: { loading: string; busy: string; noRight: string; noEmail: string; cc: (list: string) => string; sent: string }): string | null {
+export function sendHeld(
+  model: Pick<DocumentSendModel, 'checks' | 'sending' | 'canSend' | 'recipient' | 'result' | 'outside'>,
+  ccInvalid: readonly string[],
+  words: { loading: string; busy: string; noRight: string; noEmail: string; cc: (list: string) => string; sent: string; outside?: string },
+): string | null {
   if (model.result) return words.sent
   if (!model.canSend) return words.noRight
   if (model.sending) return words.busy
@@ -67,6 +100,8 @@ export function sendHeld(model: Pick<DocumentSendModel, 'checks' | 'sending' | '
   if (blocking) return blocking.label
   if (!model.recipient?.email) return words.noEmail
   if (ccInvalid.length > 0) return words.cc(ccInvalid.join(', '))
+  // B-TH-202: another customer's address, refused by the send: held until "Send outside this customer" is ticked.
+  if (model.outside && !model.outside.checked) return words.outside ?? null
   return null
 }
 

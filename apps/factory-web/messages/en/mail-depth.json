@@ -65,7 +65,8 @@
       "failed": "The check did not run: try again",
       "refused": "This message cannot be checked: go back",
       "officeFile": "Take off the office-only attachment first",
-      "acknowledge": "Tick that you checked the warnings first"
+      "acknowledge": "Tick that you checked the warnings first",
+      "outside": "Tick “Send outside this customer” first: an address belongs to another customer"
     },
     "problem": {
       "forbidden": "You may not send mail for this record.",
@@ -76,6 +77,11 @@
       "unavailable": "Nexus cannot be reached right now.",
       "failed": "The check did not run.",
       "body": "Nothing was sent. Go back to edit, or try again."
+    },
+    "outside": {
+      "title": "An address is not {party}’s",
+      "body": "{addresses}: another customer’s or supplier’s. The send refuses it unless you confirm it here (your choice is recorded).",
+      "tick": "Send outside this customer"
     }
   },
   "tiles": {

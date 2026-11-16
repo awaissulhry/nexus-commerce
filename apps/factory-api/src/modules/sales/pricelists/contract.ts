@@ -194,7 +194,7 @@ export const keepPriceListPdfContract = defineContract({
 })
 export const sendPriceListPdfContract = defineContract({
   params: versionParams,
-  body: input({ partyId: id(), to: z.array(mailAddress).max(10).optional(), cc: z.array(mailAddress).max(10).optional(), subject: z.string().max(200).nullable().optional(), message: z.string().max(10_000).nullable().optional(), language: z.enum(DOCUMENT_LANGUAGES).optional() }),
+  body: input({ partyId: id(), to: z.array(mailAddress).max(10).optional(), cc: z.array(mailAddress).max(10).optional(), subject: z.string().max(200).nullable().optional(), message: z.string().max(10_000).nullable().optional(), language: z.enum(DOCUMENT_LANGUAGES).optional(), /* B-TH-004 */ sendOutside: z.boolean().optional() }),
   /** `fileId`: the kept PDF; `copyId`: its copy on the customer, the mail's attachment (sourceFileId = fileId). */
   response: { 201: output({ version: z.number().int(), made: z.boolean(), fileId: id(), copyId: id(), outboundId: id(), threadId: id(), pdf: keptPdfState }) },
 })

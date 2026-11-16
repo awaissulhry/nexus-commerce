@@ -13,7 +13,7 @@ import { command, idempotencyKeyFrom, type CommandCaller, type CommandTools } fr
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
 import { emailOrThrow } from '../../../platform/auth/users/email'
-import { sendingIdentity, suppressedAmong } from '../../../platform/email-out/outbound'
+import { checkRecipientRule, sendingIdentity, suppressedAmong } from '../../../platform/email-out/outbound'
 import { processEmail } from '../../../platform/email-out/service'
 import { MissingFileError, presignedView, storeCall, systemCallerOf } from '../../../platform/files/files'
 import { attachmentDisposition, DOWNLOAD_URL_SECONDS } from '../../../platform/files/rules'
@@ -86,6 +86,8 @@ export interface MakeMeasureLink {
   readonly via: 'OFFICE' | 'RENEWAL'
   readonly createdById: string
   readonly renewalOfId?: string | null | undefined
+  /** B-TH-004: "Send outside this customer" ticked: the link may be for another party's contact (recorded). */
+  readonly sendOutside?: boolean | undefined
   readonly subject: (expiresAt: Date) => string
   readonly locale: MeasureMailLocale
   readonly sender: { readonly name: string; readonly email: string } | null
@@ -100,6 +102,9 @@ export async function makeMeasureLinkInCommand(tools: CommandTools, input: MakeM
   await assertNoPayByLink(tools.tx, { recordType: PROFILE_RECORD, recordId: input.profile.id })
   if (!(await measureNotice(tools.tx, input.companyId))) throw new LinkRefusedError('NO_NOTICE', NO_NOTICE)
   if (input.send && input.to && (await suppressedAmong(tools.tx, [input.to])).size > 0) throw new LinkRefusedError('SUPPRESSED', 'This address bounced or complained: correct it first.')
+  // B-TH-004 (WALL-G05, the brand wall): a rider's measurement link goes only to its customer's addresses unless the person ticks
+  // "Send outside this customer" (recorded below).
+  const sentOutside = input.to ? await checkRecipientRule(tools.tx, { recordParty: input.profile.partyId, to: [input.to], sendOutside: input.sendOutside, pathOf: () => (input.contactId ? 'body/contactId' : 'body/email') }) : []
   const terms = linkTerms('MEASUREMENTS', { expiresInDays: input.expiresInDays }, tools.now)
   await tools.tx.oneOffLink.createMany({
     data: [
@@ -127,7 +132,7 @@ export async function makeMeasureLinkInCommand(tools: CommandTools, input: MakeM
     recordType: 'OneOffLink',
     recordId: input.linkId,
     companyId: input.companyId,
-    after: { purpose: 'MEASUREMENTS', recordType: PROFILE_RECORD, recordId: input.profile.id, partyId: input.profile.partyId, email: input.to, expiresAt: toUtcIso(terms.expiresAt), maxUses: terms.maxUses, photos: input.photos, orderNumber: input.orderNumber, salesOrderLineId: input.salesOrderLineId, via: input.via, renewalOfId: input.renewalOfId ?? null },
+    after: { purpose: 'MEASUREMENTS', recordType: PROFILE_RECORD, recordId: input.profile.id, partyId: input.profile.partyId, email: input.to, expiresAt: toUtcIso(terms.expiresAt), maxUses: terms.maxUses, photos: input.photos, orderNumber: input.orderNumber, salesOrderLineId: input.salesOrderLineId, via: input.via, renewalOfId: input.renewalOfId ?? null, /* B-TH-004 */ ...(sentOutside.length > 0 ? { sentOutside: sentOutside.map((address) => ({ address: address.address, parties: address.parties })) } : {}) },
   })
   let outboundId: string | null = null
   if (input.send && input.to) {
@@ -169,6 +174,8 @@ export interface MeasureLinkBody {
   readonly contactId?: string | undefined
   readonly email?: string | undefined
   readonly send: boolean
+  /** B-TH-004: "Send outside this customer" ticked. */
+  readonly sendOutside?: boolean | undefined
   readonly photos?: PhotoRule | undefined
   readonly language?: 'it' | 'en' | undefined
   readonly expiresInDays?: number | undefined
@@ -242,6 +249,7 @@ export async function sendMeasureLink(request: FastifyRequest, body: MeasureLink
       salesOrderLineId: facts.salesOrderLineId,
       via: 'OFFICE',
       createdById: context.actorId,
+      sendOutside: body.sendOutside, // B-TH-004
       subject: (expiresAt) => mailOf(expiresAt, '').subject,
       locale,
       sender,
