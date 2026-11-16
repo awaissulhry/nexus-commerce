@@ -415,6 +415,8 @@ model PartyAddress {
   orderChangeRequestsShipTo OrderChangeRequest[] @relation("OrderChangeRequestShipTo")
   // W2b-5 suppliers-depth.prisma (wave 42/44): the bank account changes checked by calling its phone.
   bankAccountCallBacks SupplierBankAccount[] @relation("SupplierBankAccountCallBackAddress")
+  // TH-1b sales-intake.prisma (threads schema wave 1/9, B-TH-009): the inquiries that ask to deliver there.
+  inquiriesShipTo      Inquiry[] @relation("InquiryShipTo")
 
   @@unique([tenantId, partyId, id])
 }
