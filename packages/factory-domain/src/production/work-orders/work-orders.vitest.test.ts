@@ -3,7 +3,7 @@ import type { BomLineData } from '../../product/bom/rules'
 import type { StepData } from '../../product/routing/rules'
 import type { ItemUnits } from '../../product/units/units'
 import { canTransition } from '../../state/machine'
-import { allOpenCells, cellProblems, clashProblems, duplicateRequests, lineProblems, openSizes, revisionFor, type OrderLineFacts } from './cells'
+import { allOpenCells, cellProblems, clashProblems, duplicateRequests, lineProblems, NO_CUSTOMER_WORDS, ONE_CUSTOMER_WORDS, openSizes, revisionFor, type OrderLineFacts } from './cells'
 import { compareSpec, type SpecSnapshot } from './compare'
 import { daysLate, moveChange, nextActions, workOrderMachine } from './machine'
 import {
@@ -23,6 +23,7 @@ import {
   type MaterialFacts,
 } from './release'
 import { planMaterials, planOperations, type SpecCell } from './spec'
+import { ONE_CUSTOMER_SPLIT_WORDS, splitParty } from './split'
 
 // Every id, code and number is made up.
 const id = (n: number) => `00000000-0000-7000-8000-${String(n).padStart(12, '0')}`
@@ -125,6 +126,73 @@ describe('cells from order lines (MES-001, MES-002)', () => {
     expect(revisionFor(id(8), [{ styleRevisionId: id(9) }], id(8)).problem).toMatch(/another revision/)
     expect(revisionFor(null, [{ styleRevisionId: id(9) }, { styleRevisionId: id(10) }], id(8)).problem).toMatch(/different revisions/)
     expect(revisionFor(null, [], null)).toEqual({ revisionId: null, problem: null })
+  })
+})
+
+// B-PR-02 (production plan: the brand wall): a work order is of ONE customer; the words never name one.
+describe('one customer per work order', () => {
+  const P1 = id(41)
+  const P2 = id(42)
+  const namesNoCustomer = (text: string) => {
+    expect(text).not.toContain(P1)
+    expect(text).not.toContain(P2)
+  }
+
+  it('refuses lines of two customers on one work order, in words that name neither (it + en)', () => {
+    const ofP1 = { ...target, partyId: P1 }
+    expect(lineProblems(line({ partyId: P1 }), ofP1, 'body/lines/0')).toEqual([])
+    const problems = lineProblems(line({ id: id(11), orderNumber: 'SO-2', partyId: P2 }), ofP1, 'body/lines/1')
+    expect(problems).toEqual([{ path: 'body/lines/1', message: 'These order lines are of two customers: one customer per work order.' }])
+    expect(ONE_CUSTOMER_WORDS).toEqual({
+      en: 'These order lines are of two customers: one customer per work order.',
+      it: "Queste righe d'ordine sono di due clienti: un solo cliente per ordine di produzione.",
+    })
+    for (const text of [problems[0]!.message, ONE_CUSTOMER_WORDS.en, ONE_CUSTOMER_WORDS.it]) namesNoCustomer(text)
+    // The customer rule sits beside the others: each problem once.
+    expect(lineProblems(line({ partyId: P2, styleId: id(9) }), ofP1, 'p').map((issue) => issue.message)).toEqual([
+      'SO-1 line 10 is another style: a work order makes one style.',
+      'These order lines are of two customers: one customer per work order.',
+    ])
+  })
+
+  it('takes no order line on a work order of no single customer (one that mixes customers, made before the rule)', () => {
+    expect(lineProblems(line({ partyId: P1 }), { ...target, partyId: null }, 'body/cells/0')).toEqual([
+      { path: 'body/cells/0', message: 'This work order is of no single customer, so it takes no order line: make a new work order for these lines.' },
+    ])
+    expect(NO_CUSTOMER_WORDS.it).toBe("Questo ordine di produzione non è di un solo cliente, quindi non accetta righe d'ordine: crea un nuovo ordine di produzione per queste righe.")
+    for (const text of [NO_CUSTOMER_WORDS.en, NO_CUSTOMER_WORDS.it]) namesNoCustomer(text)
+  })
+
+  it('checks nothing more where the caller names no customer yet (today\'s calls, until the API passes it)', () => {
+    expect(lineProblems(line({ partyId: P2 }), target, 'p')).toEqual([])
+  })
+
+  it('a split keeps its parent\'s customer', () => {
+    const cells = [
+      { id: id(51), partyId: P1 },
+      { id: id(52), partyId: P1 },
+    ]
+    expect(splitParty({ partyId: P1 }, cells, [{ cellId: id(51), quantity: 1 }])).toEqual({ partyId: P1, problems: [] })
+    // A cell of another customer on it (the database refuses one) is never carried into the new work order.
+    expect(splitParty({ partyId: P1 }, [...cells, { id: id(53), partyId: P2 }], [{ cellId: id(53), quantity: 1 }])).toEqual({
+      partyId: null,
+      problems: [{ path: 'body/cells', message: ONE_CUSTOMER_SPLIT_WORDS.en }],
+    })
+  })
+
+  it('lets cells leave a mixed draft one customer at a time: the new work order is that customer\'s', () => {
+    const mixed = [
+      { id: id(61), partyId: P1 },
+      { id: id(62), partyId: P2 },
+      { id: id(63), partyId: P2 },
+    ]
+    expect(splitParty({ partyId: null }, mixed, [{ cellId: id(62), quantity: 2 }, { cellId: id(63), quantity: 1 }])).toEqual({ partyId: P2, problems: [] })
+    const both = splitParty({ partyId: null }, mixed, [{ cellId: id(61), quantity: 1 }, { cellId: id(62), quantity: 1 }], 'body/cells')
+    expect(both).toEqual({ partyId: null, problems: [{ path: 'body/cells', message: "These sizes are of more than one customer: move one customer's sizes at a time (one customer per work order)." }] })
+    expect(ONE_CUSTOMER_SPLIT_WORDS.it).toBe('Queste taglie sono di più clienti: sposta le taglie di un cliente alla volta (un solo cliente per ordine di produzione).')
+    for (const text of [ONE_CUSTOMER_SPLIT_WORDS.en, ONE_CUSTOMER_SPLIT_WORDS.it]) namesNoCustomer(text)
+    // An unknown cell is splitProblems' to name; it decides no customer here.
+    expect(splitParty({ partyId: null }, mixed, [{ cellId: id(99), quantity: 1 }, { cellId: id(61), quantity: 1 }])).toEqual({ partyId: P1, problems: [] })
   })
 })
 

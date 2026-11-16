@@ -289,7 +289,20 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
  * is body data: a role that reads threads but not measurements (finance, the warehouse, read only …) neither reads, writes,
  * follows, is mentioned in nor is notified of its thread.
  */
-export const THREAD_GATES: Readonly<Record<string, Permission>> = Object.freeze({ MeasurementProfile: 'sales.measurements.view' })
+export const THREAD_GATES: Readonly<Record<string, Permission>> = Object.freeze({
+  MeasurementProfile: 'sales.measurements.view',
+  // ---- B-TH-005 (threads plan TH-0, thread-G02; GDPR art. 4 inside the office): notes about a PERSON — a colleague, a role's
+  // holders, a floor device and who uses it, a worker, a team, an outside service's account — are read, written, followed,
+  // mentioned on and notified only to whoever may view that record itself, beside threads.read: a role that reads threads (the
+  // sales office, the warehouse …) no longer reads what HR or the administrator wrote about a person.
+  User: 'users.view',
+  Role: 'roles.view',
+  Device: 'devices.view',
+  Worker: 'workers.view',
+  Team: 'people.view',
+  IntegrationAccount: 'integrations.view',
+  // ---- end B-TH-005
+})
 
 /** The permission on the record's thread AND the record type's gate (when it has one), over the thread's scope. */
 export function mayOnThread(actor: Actor, permission: Permission, recordType: string | null | undefined, scope: ScopedRecord): boolean {

@@ -466,6 +466,8 @@ export const sendContract = defineContract({
     subject: text(200).nullish(),
     /** Your own words above the link paragraph; none: the standard text. */
     message: text(4000).nullish(),
+    /** B-TH-004: "Send outside this customer" ticked: To and Cc may hold another party's address (recorded). */
+    sendOutside: z.boolean().optional(),
   }),
   response: {
     200: output({
@@ -490,7 +492,7 @@ export const sendContract = defineContract({
 
 export const sendLinkContract = defineContract({
   params: quoteParams,
-  body: input({ version, cc: z.array(email).max(10).optional(), message: text(4000).nullish() }),
+  body: input({ version, cc: z.array(email).max(10).optional(), message: text(4000).nullish(), /* B-TH-004 */ sendOutside: z.boolean().optional() }),
   response: {
     200: output({
       quote: quoteView,

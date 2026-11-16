@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   can,
   decide,
+  EVERY_PARTY_WORDS,
   holds,
   isPermission,
   NO_ROWS,
+  reachesEveryParty,
   reachWhere,
   scopeWhere,
   type Actor,
@@ -231,5 +233,59 @@ describe('reachWhere()', () => {
   it('pins a floor session to its site, as scopeWhere() does', () => {
     const actor: Actor = { audience: 'floor', tenantId: TENANT, siteId: SITE_1, grants: [grant(['floor.work'], { companies: [COMPANY_A] })] }
     expect(reachWhere(actor, LOTS)).toEqual(scopeWhere(actor, 'floor.work', LOTS))
+  })
+})
+
+// B-PR-02 (production plan: the brand wall): a view that mixes customers needs a grant over EVERY party.
+describe('reachesEveryParty()', () => {
+  it('an actor limited to some parties never reaches every party, however many it lists', () => {
+    expect(reachesEveryParty(office(grant(['workorders.view'])), 'workorders.view')).toBe(true)
+    expect(reachesEveryParty(office(grant(['workorders.view'], { parties: [PARTY_Y] })), 'workorders.view')).toBe(false)
+    // A list never stands for "all": a new customer tomorrow is not on it.
+    expect(reachesEveryParty(office(grant(['workorders.view'], { parties: [PARTY_X, PARTY_Y] })), 'workorders.view')).toBe(false)
+    expect(reachesEveryParty(office(grant(['workorders.view'], { parties: [] })), 'workorders.view')).toBe(false)
+    // can() lets a record without a party through a party-limited grant; this question does not.
+    const limited = office(grant(['workorders.view'], { parties: [PARTY_Y] }))
+    expect(can(limited, 'workorders.view', { companyId: COMPANY_A, partyId: null })).toBe(true)
+    expect(reachesEveryParty(limited, 'workorders.view', { companyId: COMPANY_A, partyId: null })).toBe(false)
+  })
+
+  it('needs the every-party grant to hold the permission asked', () => {
+    const actor = office(grant(['workorders.view'], { parties: [PARTY_Y] }), grant(['quotes.view']))
+    expect(reachesEveryParty(actor, 'workorders.view')).toBe(false)
+    expect(reachesEveryParty(actor, 'quotes.view')).toBe(true)
+    expect(reachesEveryParty(office(grant(['quotes.view'])), 'workorders.view')).toBe(false)
+    expect(reachesEveryParty(office(), 'workorders.view')).toBe(false)
+  })
+
+  it("needs that grant to cover the record's company and site", () => {
+    const actor = office(grant(['workorders.view'], { companies: [COMPANY_A], sites: [SITE_1] }), grant(['workorders.view'], { companies: [COMPANY_B], parties: [PARTY_X] }))
+    expect(reachesEveryParty(actor, 'workorders.view', { companyId: COMPANY_A, siteId: SITE_1 })).toBe(true)
+    expect(reachesEveryParty(actor, 'workorders.view', { companyId: COMPANY_A, siteId: SITE_2 })).toBe(false)
+    // Company B is reached, but only for party X: not every party there.
+    expect(reachesEveryParty(actor, 'workorders.view', { companyId: COMPANY_B })).toBe(false)
+    // No company or site on the record: tenant-wide, as can() reads it.
+    expect(reachesEveryParty(actor, 'workorders.view', {})).toBe(true)
+  })
+
+  it('fails closed for a partner or link session, a session without what its audience needs, another tenant or another site', () => {
+    const all = [grant(['workorders.view'])]
+    expect(reachesEveryParty({ audience: 'partner', tenantId: TENANT, partyId: PARTY_X, grants: all }, 'workorders.view')).toBe(false)
+    expect(reachesEveryParty({ audience: 'link', tenantId: TENANT, partyId: PARTY_X, grants: all }, 'workorders.view')).toBe(false)
+    expect(reachesEveryParty({ audience: 'office', grants: all }, 'workorders.view')).toBe(false)
+    expect(reachesEveryParty({ audience: 'nobody' as never, tenantId: TENANT, grants: all }, 'workorders.view')).toBe(false)
+    expect(reachesEveryParty(office(...all), 'workorders.view', { tenantId: OTHER_TENANT })).toBe(false)
+    expect(reachesEveryParty(office(...all), 'workorders.view', { tenantId: TENANT })).toBe(true)
+    const floor: Actor = { audience: 'floor', tenantId: TENANT, siteId: SITE_1, grants: [grant(['floor.work'])] }
+    expect(reachesEveryParty(floor, 'floor.work', { siteId: SITE_1 })).toBe(true)
+    expect(reachesEveryParty(floor, 'floor.work', { siteId: SITE_2 })).toBe(false)
+  })
+
+  it('refuses in words that name no customer, in English and Italian', () => {
+    expect(EVERY_PARTY_WORDS).toEqual({
+      en: 'This view mixes customers: it needs access to every customer.',
+      it: "Questa vista mescola più clienti: serve l'accesso a tutti i clienti.",
+    })
+    expect(Object.isFrozen(EVERY_PARTY_WORDS)).toBe(true)
   })
 })

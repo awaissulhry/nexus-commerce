@@ -261,7 +261,8 @@ describe('sending from a record thread (COL-024)', () => {
     const answer = await send(sales, quote, {
       to: [' Buyer@Example.com'],
       cc: ['boss@example.com'],
-      bcc: ['archive@example.com'],
+      // B-TH-004: a blind copy of a party's mail goes only to our own people (here the office archive at our sending domain).
+      bcc: ['archive@mail-a.example.com'],
       subject: 'Preventivo giacche',
       body: 'Buongiorno,\necco il preventivo per le giacche.',
       attachments: [sharedFile],
@@ -275,7 +276,7 @@ describe('sending from a record thread (COL-024)', () => {
       from: { name: 'sara sales via Test company C1', address: 'noreply@mail-a.example.com' },
       to: ['buyer@example.com'],
       cc: ['boss@example.com'],
-      bcc: ['archive@example.com'],
+      bcc: ['archive@mail-a.example.com'],
       subject: 'Preventivo giacche',
       attempts: 0,
     })
@@ -319,13 +320,13 @@ describe('sending from a record thread (COL-024)', () => {
     expect((await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'email.status_changed' AND subject = $1`, [outboundId])).map((event) => event.payload.status)).toEqual(['SENT'])
 
     const mail = h.ses.mails.at(-1)!
-    expect(mail).toMatchObject({ outboundId, to: ['buyer@example.com'], cc: ['boss@example.com'], bcc: ['archive@example.com'], from: 'noreply@mail-a.example.com' })
+    expect(mail).toMatchObject({ outboundId, to: ['buyer@example.com'], cc: ['boss@example.com'], bcc: ['archive@mail-a.example.com'], from: 'noreply@mail-a.example.com' })
     const thread = await first(`SELECT "replyToken" FROM "Thread" WHERE "recordId" = $1`, [quote])
     expect(headerOf(mail.raw, 'Reply-To')).toBe(`r-${thread.replyToken}@reply.mail-a.example.com`)
     expect(headerOf(mail.raw, 'From')).toBe('"sara sales via Test company C1" <noreply@mail-a.example.com>')
     expect(headerOf(mail.raw, 'Message-ID')).toBe(`<${outboundId}@mail-a.example.com>`)
     expect(headerOf(mail.raw, 'Bcc')).toBeNull()
-    expect(mail.raw).not.toContain('archive@example.com')
+    expect(mail.raw).not.toContain('archive@mail-a.example.com')
     const text = textOf(mail.raw)
     expect(text).toContain('Buongiorno,\necco il preventivo per le giacche.')
     expect(text).toContain('Allegati:\n- Preventivo giacche.pdf')
@@ -480,7 +481,7 @@ describe('the walls', () => {
       [newId(), tenant.id, tenant.companies[0]!.id, sandbox],
     )
     const identity = (await first(`SELECT id FROM "EmailIdentity" WHERE "accountId" = $1`, [sandbox])).id
-    const id = (await send(sales, quote, { to: ['sandbox.buyer@example.com'], bcc: ['sandbox.archive@example.com'], body: 'Sandbox.', identityId: identity })).body.email.id
+    const id = (await send(sales, quote, { to: ['sandbox.buyer@example.com'], bcc: ['archive@sandbox.mail-a.example.com'], body: 'Sandbox.', identityId: identity })).body.email.id
     const transport = new FakeSesTransport().answer('POST /v2/email/outbound-emails', { status: 200, body: { MessageId: 'ses-sandbox-0001' } })
     const runtime = createEmailRuntime({
       gateway: createGateway({ environment: 'test', redis: h.redis, prefix: h.redisPrefix, secrets: h.secrets, sleep: async () => {} }),
@@ -491,7 +492,7 @@ describe('the walls', () => {
     expect(await deliverOutbound(runtime, system(), id, { retry: true, build: threadMailBuilder(runtime, system()) })).toBe('sent')
     expect(await outboundOf(id)).toMatchObject({ status: 'SENT', sesMessageId: 'ses-sandbox-0001' })
     expect(transport.requests).toHaveLength(1)
-    expect(JSON.parse(transport.requests[0]!.body).Destination.BccAddresses).toEqual(['sandbox.archive@example.com'])
+    expect(JSON.parse(transport.requests[0]!.body).Destination.BccAddresses).toEqual(['archive@sandbox.mail-a.example.com'])
     expect(transport.requests[0]!.headers.authorization).toContain(`Credential=${SANDBOX_KEY.accessKeyId}/`)
 
     const ledger = await admin(`SELECT to_jsonb(c)::text AS row FROM "IntegrationCall" c WHERE provider = 'SES'`)

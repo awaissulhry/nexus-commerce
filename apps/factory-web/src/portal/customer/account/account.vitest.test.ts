@@ -5,6 +5,10 @@ import { PARTNER_ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templat
 import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
 import type { Handover } from '../../shared/account/api'
+import { ApiError } from '../../../lib/api/errors'
+import { scanText } from '../../../lib/testing/brand-scan'
+import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
+import { inviteFailed } from '../../shared/account/words'
 import { colleagueHeld, colleagueRows, deviceOf, handoverSummary, inviteProblems, maskedEmail, raisesToAdmin, seatsHeld, sessionRows, stepUpFresh, tasksToMove } from '../../shared/account/model'
 import type { DeliveryAddress } from './api'
 import { designScreen } from './fixtures'
@@ -160,6 +164,29 @@ describe('company data and sessions', () => {
     expect(stepUpFresh(new Date(60_000).toISOString(), 0)).toBe(true)
     expect(stepUpFresh(new Date(5_000).toISOString(), 0)).toBe(false)
     expect(maskedEmail('anna@brand.example')).toBe('a…a@brand.example')
+  })
+})
+
+describe('B-TH-202: a refused invitation never reveals another organisation (the brand wall, B-TH-007)', () => {
+  it('answers the factory’s neutral refusal with ONE sentence in it and en, and names nobody', () => {
+    const neutral = new ApiError('conflict', 409, 'conflict', 'We could not invite this address. Ask us.', 'r', [
+      { path: 'email', message: 'We could not invite this address. Ask us.' },
+      { path: 'refusal/NOT_INVITABLE', message: 'We could not invite this address. Ask us.' },
+    ])
+    for (const locale of ['it', 'en'] as const) {
+      const words = (CATALOGUE[locale]['portal-account'] ?? {}) as Record<string, string>
+      const t = (key: string) => words[key] ?? key
+      const said = inviteFailed(neutral, t)
+      expect(said).toBe(words['invite.failed.notInvitable'])
+      for (const word of ['organis', 'organizz', 'office', 'ufficio', 'account']) expect(said.toLowerCase()).not.toContain(word)
+      expect(scanText(said, BRAND_ALPHA)).toEqual([])
+      expect(scanText(said, BRAND_BETA)).toEqual([])
+      // An own colleague already in the portal is said plainly, and it names no other account either.
+      const already = inviteFailed(new ApiError('conflict', 409, 'conflict', 'x', 'r', [{ path: 'email', message: 'x' }]), t)
+      expect(already).toBe(words['invite.failed.address'])
+      expect(already.toLowerCase()).not.toContain('account')
+    }
+    expect((CATALOGUE.en['portal-account'] as Record<string, string>)['invite.failed.notInvitable']).toBe('We could not invite this address. Ask us.')
   })
 })
 

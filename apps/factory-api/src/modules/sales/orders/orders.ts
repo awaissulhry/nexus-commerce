@@ -12,6 +12,8 @@ import { serverClock } from '../../../core/time'
 import { ORDER_DEPOSIT_ONLY } from '../deposits/deposits'
 import { assertMay, officeContextOf } from './access'
 import { makeOrderInCommand } from './make'
+// B-TH-017: what each row carries beside the order (picture, labels, Invoiced, the ids its doors open).
+import { orderRowExtras } from './row-extras'
 import { orderWaitWords } from '../../parties/holds/stops'
 import { officeOrder, recordAfter } from './moves'
 import { asDay, dayOf, dayOrNull, LEFT } from './store'
@@ -56,13 +58,15 @@ export interface ListQuery extends ListFilters {
   readonly limit: number
 }
 
-const lateWhere = (today: BusinessDate): Prisma.SalesOrderWhereInput => ({ status: { in: [...OPEN_STATUSES] }, promiseDate: { lt: asDay(today) } })
+// B-TH-019: exported for the Customer switcher's counts (./customers), the one definition of late.
+export const lateWhere = (today: BusinessDate): Prisma.SalesOrderWhereInput => ({ status: { in: [...OPEN_STATUSES] }, promiseDate: { lt: asDay(today) } })
 // B-W2a-F2: the deposit's requests only (a before-shipping step's own request is the balance, not the deposit).
 const depositOpenWhere: Prisma.SalesOrderWhereInput = { depositRequired: true, depositRequests: { some: { status: 'OPEN', ...ORDER_DEPOSIT_ONLY } } }
 // B-W2b-323: the customer must accept a change (W2a's amendment flag, a priced change of B-W2b-309), the order still running.
 const reacceptWhere: Prisma.SalesOrderWhereInput = { reapprovalNeededAt: { not: null }, status: { notIn: ['CLOSED', 'CANCELLED'] } }
 
-function whereOf(context: OfficeContext, filters: ListFilters, today: BusinessDate): Prisma.SalesOrderWhereInput {
+// B-TH-019: exported for the Customer switcher (./customers): the same scope and terms as the list.
+export function whereOf(context: OfficeContext, filters: ListFilters, today: BusinessDate): Prisma.SalesOrderWhereInput {
   return {
     AND: [
       scopeWhere(actorOf(context), ORDERS_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.SalesOrderWhereInput,
@@ -97,13 +101,26 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
     const page = rows.slice(0, query.limit)
     const ids = page.map((row) => row.id)
     const lines = ids.length > 0 ? await client.salesOrderLine.groupBy({ by: ['orderId'], where: { orderId: { in: ids } }, _sum: { quantity: true }, _count: { _all: true } }) : []
-    const deposits = ids.length > 0 ? await client.depositRequest.findMany({ where: { orderId: { in: ids }, ...ORDER_DEPOSIT_ONLY }, select: { orderId: true, status: true, dueDate: true }, orderBy: { dueDate: 'asc' } }) : []
-    const shipments = ids.length > 0 ? await client.shipment.findMany({ where: { salesOrderId: { in: ids }, status: { in: [...LEFT] } }, select: { id: true, salesOrderId: true } }) : []
+    // B-TH-017: + the request's id (its deposit invoice) and every shipment (their delivery notes).
+    const deposits = ids.length > 0 ? await client.depositRequest.findMany({ where: { orderId: { in: ids }, ...ORDER_DEPOSIT_ONLY }, select: { id: true, orderId: true, status: true, dueDate: true }, orderBy: { dueDate: 'asc' } }) : []
+    const allShipments = ids.length > 0 ? await client.shipment.findMany({ where: { salesOrderId: { in: ids } }, select: { id: true, salesOrderId: true, status: true } }) : []
+    const shipments = allShipments.filter((row) => (LEFT as readonly string[]).includes(row.status))
     const shipped = shipments.length > 0 ? await client.shipmentLine.groupBy({ by: ['shipmentId'], where: { shipmentId: { in: shipments.map((row) => row.id) } }, _sum: { quantity: true } }) : []
     const versionIds = page.flatMap((row) => (row.quoteVersionId ? [row.quoteVersionId] : []))
     const versions = versionIds.length > 0 ? await client.quoteVersion.findMany({ where: { id: { in: versionIds } }, select: { id: true, quoteId: true, revision: true } }) : []
     const quotes = versions.length > 0 ? await client.quote.findMany({ where: { id: { in: [...new Set(versions.map((row) => row.quoteId))] } }, select: { id: true, number: true } }) : []
     const parties = new Map((await client.party.findMany({ where: { id: { in: [...new Set(page.map((row) => row.partyId))] } }, select: { id: true, legalName: true } })).map((row) => [row.id, row.legalName]))
+    // B-TH-017
+    const extras = await orderRowExtras(
+      client,
+      actorOf(context),
+      page.map((row) => {
+        const version = versions.find((entry) => entry.id === row.quoteVersionId)
+        return { id: row.id, companyId: row.companyId, partyId: row.partyId, quote: version ? { id: version.quoteId, versionId: version.id } : null }
+      }),
+      deposits,
+      allShipments,
+    )
     const shippedOf = new Map<string, number>()
     for (const row of shipped) {
       const orderId = shipments.find((shipment) => shipment.id === row.shipmentId)!.salesOrderId
@@ -140,6 +157,8 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
           quote: quote && version ? { id: quote.id, number: quote.number, versionId: version.id, revision: version.revision } : null,
           version: row.version,
           updatedAt: toUtcIso(row.updatedAt),
+          // B-TH-017
+          ...extras.get(row.id)!,
         }
       }),
       nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,

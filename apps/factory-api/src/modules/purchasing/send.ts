@@ -245,6 +245,8 @@ export async function previewOrderPdf(caller: CommandCaller, orderId: string, la
 export interface SendBody {
   readonly version: number
   readonly cc?: readonly string[] | undefined
+  /** B-TH-004: the person ticked "Send outside this customer". */
+  readonly sendOutside?: boolean | undefined
   readonly subject?: string | null | undefined
   /** The office's own words above the link paragraph; none: the standard text. */
   readonly message?: string | null | undefined
@@ -397,6 +399,7 @@ export async function sendAs(host: SendHost, orderId: string, body: SendBody, id
         sender,
         to: plan.to,
         cc: body.cc ?? copiesOf('PO', await tx.partyContact.findMany({ where: { partyId: current.partyId }, select: CONTACT_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }), plan.to),
+        sendOutside: body.sendOutside, // B-TH-004
         subject: body.subject?.trim() ? body.subject.trim() : plan.mail.subject,
         storedText: plan.mail.stored,
         attachments: [file.id],
@@ -465,6 +468,8 @@ export interface NewLinkBody {
   readonly version: number
   readonly cc?: readonly string[] | undefined
   readonly message?: string | null | undefined
+  /** B-TH-004: the person ticked "Send outside this customer". */
+  readonly sendOutside?: boolean | undefined
 }
 
 /**
@@ -516,7 +521,7 @@ export async function sendNewLink(request: FastifyRequest, orderId: string, body
       if (problem) throw new InvalidStateError(problem)
       const revoked = await revokeConfirmLinks(tools, current, context.actorId)
       const link = await insertConfirmLink(tools, plan.link, current, { email: plan.to, terms: plan.terms, actorId: context.actorId })
-      const mail = await queueLinkMail(tools, { orderId: current.id, sender: await senderOf(tools.tx, context), to: plan.to, cc: body.cc ?? copiesOf('PO', await tools.tx.partyContact.findMany({ where: { partyId: current.partyId }, select: CONTACT_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }), plan.to), subject: plan.mail.subject, storedText: plan.mail.stored, attachments: [plan.fileId], locale: plan.language })
+      const mail = await queueLinkMail(tools, { orderId: current.id, sender: await senderOf(tools.tx, context), to: plan.to, cc: body.cc ?? copiesOf('PO', await tools.tx.partyContact.findMany({ where: { partyId: current.partyId }, select: CONTACT_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }), plan.to), /* B-TH-004 */ sendOutside: body.sendOutside, subject: plan.mail.subject, storedText: plan.mail.stored, attachments: [plan.fileId], locale: plan.language })
       tools.audit({ action: 'purchasing.sendLink', recordType: 'PurchaseOrder', recordId: current.id, companyId: current.companyId, siteId: current.siteId, after: { linkId: link.linkId, linkExpiresAt: toUtcIso(link.expiresAt), revokedLinkIds: revoked, outboundId: mail.outbound.id, to: plan.to } })
       tools.emit({ type: 'purchase_order.link_sent', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { purchaseOrderId: current.id, number: current.number, linkId: link.linkId, revokedLinkIds: revoked, outboundId: mail.outbound.id } })
       return { ...(await detailInCommand(tools, current.id)), link: { id: link.linkId, expiresAt: toUtcIso(link.expiresAt), to: plan.to, revokedLinkIds: revoked, emailId: mail.outbound.id } }
