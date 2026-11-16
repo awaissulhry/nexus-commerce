@@ -1,4 +1,4 @@
--- Written by hand (Prisma does not model triggers or functions), after …_config_document_kinds_w2b_policies and before the
+-- Written by hand (Prisma does not model triggers or functions), after …_protected_safety_fatal_w2b_policies and before the
 -- policy migration that follows it. No schema folder of its own. When the migrations are renumbered, keep this file as
 -- it is under its new timestamp.
 
