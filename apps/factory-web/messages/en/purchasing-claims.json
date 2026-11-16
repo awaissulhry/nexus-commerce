@@ -51,13 +51,13 @@
   },
   "claimTab": {
     "facts": "Where it comes from",
-    "fixedAfterSend": "Since it was sent, what the claim is about stays as sent: only the remedy, the credit agreed and the internal note change.",
+    "fixedAfterSend": "Since it was sent, what the claim is about stays as sent: only the remedy, the credit agreed and the office note change.",
     "what": "What is wrong and what is asked"
   },
   "close": {
     "confirm": "Close claim",
     "discrepancies": "Its receipt discrepancies close with it.",
-    "does": "The claim is settled: it changes no more (only its internal note).",
+    "does": "The claim is settled: it changes no more (only its office note).",
     "goodsHere_one": "{count} line’s goods never went back: they stay in stock.",
     "goodsHere_other": "{count} lines’ goods never went back: they stay in stock.",
     "held": {
@@ -219,7 +219,7 @@
     "agreed": "Credit agreed ({currency})",
     "agreedHint": "Empty: the value of the goods.",
     "foundAt": "Found at",
-    "internalNote": "Internal note",
+    "internalNote": "Office note",
     "internalNoteHint": "For the office only; never sent to the supplier.",
     "kind": "Kind",
     "pickReason": "Choose a reason",

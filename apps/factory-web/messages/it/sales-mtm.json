@@ -289,7 +289,7 @@
     "checkStyleNone": "Nessun modello",
     "fitNotes": "Note di vestibilità, postura, asimmetrie",
     "fitNotesHint": "Il pilota le può leggere",
-    "internal": "Nota interna",
+    "internal": "Nota d'ufficio",
     "internalHint": "Solo per l’ufficio",
     "held": {
       "customer": "Scegli prima il cliente.",
@@ -360,7 +360,7 @@
     "photosCount_other": "{count} foto (scheda Foto)",
     "photosNone": "Nessuna",
     "fitNotes": "Note di vestibilità",
-    "internal": "Nota interna",
+    "internal": "Nota d'ufficio",
     "old": "Misurato più di 12 mesi fa: chiedi una nuova misura prima di un riordino."
   },
   "reviewPanel": {

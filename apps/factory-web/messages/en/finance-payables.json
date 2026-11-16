@@ -221,7 +221,7 @@
     "fileHint": "The supplier's PDF: it is kept with the invoice (legal archive).",
     "filePick": "Choose the PDF",
     "fileChange": "Choose another PDF",
-    "note": "Internal note",
+    "note": "Office note",
     "datePlaceholder": "dd/mm/yyyy",
     "dateClear": "Clear the date",
     "submit": "Register invoice",
@@ -389,7 +389,7 @@
     },
     "sendToBuyer": {
       "title": "Send the differences to the buyer",
-      "body": "An internal note on the invoice's thread names each line outside the tolerance (no price) and tells who sent the order.",
+      "body": "An office note on the invoice's thread names each line outside the tolerance (no price) and tells who sent the order.",
       "message": "Message (optional)",
       "confirm": "Send to buyer"
     },

@@ -52,21 +52,21 @@
     },
     "empty": {
       "title": "No messages yet",
-      "body": "Internal notes and mail with the customer or supplier of this record show here, newest first."
+      "body": "Office notes and mail with the customer or supplier of this record show here, newest first."
     }
   },
   "composer": {
     "modeLabel": "Who sees this message",
     "mode": {
-      "note": "Internal note",
+      "note": "Office note",
       "email": "Email to {party}"
     },
     "title": {
-      "note": "Internal note",
+      "note": "Office note",
       "email": "Email to {party}"
     },
     "rule": {
-      "note": "Only people in the office see an internal note: {party} never does.",
+      "note": "Only people in the office see an office note: {party} never does.",
       "noteFloor": "The office and the tablets working on this order see this note: {party} never does.",
       "noParty": "the customer or supplier",
       "email": "Sent from your company's address, as you. {party} sees it, and their reply comes back to this thread."
@@ -134,7 +134,7 @@
       "SYSTEM": "Nexus Factory"
     },
     "kind": {
-      "note": "Internal note",
+      "note": "Office note",
       "outbound": "Email to {party}",
       "inbound": "Email from {party}"
     },
@@ -273,7 +273,7 @@
       }
     },
     "message": {
-      "note": "{who} added an internal note",
+      "note": "{who} added an office note",
       "outbound": "{who} emailed {party}",
       "inbound": "{who} wrote to the office"
     },

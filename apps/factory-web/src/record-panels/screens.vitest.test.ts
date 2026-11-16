@@ -134,7 +134,7 @@ describe('every design case draws in both languages with no key left on screen',
     const html = render(panelsScreen as DesignScreen<unknown>, panelsScreen.cases.find((item) => item.id === 'conversation')!.model, 'en')
     expect(html).toContain('fw-rp-message is-internal')
     expect(html).toContain('fw-rp-message is-shared')
-    expect(html).toContain('Internal note')
+    expect(html).toContain('Office note')
     expect(html).toContain('Email to Marchio Demo S.r.l.')
   })
 
@@ -145,20 +145,20 @@ describe('every design case draws in both languages with no key left on screen',
     const en = render(panelsScreen as DesignScreen<unknown>, caseOf('work-order-note'), 'en')
     expect(en).toContain('For the floor')
     expect(en).toContain('The tablets working on this order read it. No prices.')
-    expect(en).toContain('Only people in the office see an internal note')
+    expect(en).toContain('Only people in the office see an office note')
     expect(en).not.toContain('The office and the tablets working on this order see this note')
     expect(tick(en)).toBe('<input type="checkbox"/>')
     expect(en).toContain('Note added. Only the office sees it.')
     const it_ = render(panelsScreen as DesignScreen<unknown>, caseOf('work-order-note'), 'it')
     expect(it_).toContain('Per il reparto')
     expect(it_).toContain('Niente prezzi.')
-    expect(it_).toContain('Una nota interna la vede solo l&#x27;ufficio')
+    expect(it_).toContain('Una nota d&#x27;ufficio la vede solo l&#x27;ufficio')
   })
 
   it('with the tick on the composer and the notice say the tablets see it too, in both languages (B-W2b-F5)', () => {
     const en = render(panelsScreen as DesignScreen<unknown>, caseOf('work-order-note-floor'), 'en')
     expect(en).toContain('The office and the tablets working on this order see this note')
-    expect(en).not.toContain('Only people in the office see an internal note')
+    expect(en).not.toContain('Only people in the office see an office note')
     expect(tick(en)).toBe('<input type="checkbox" checked=""/>')
     expect(en).toContain('Note added. The office sees it, and the tablets working on this order.')
     const it_ = render(panelsScreen as DesignScreen<unknown>, caseOf('work-order-note-floor'), 'it')
@@ -177,7 +177,7 @@ describe('every design case draws in both languages with no key left on screen',
   it('offers the tick on a work order only (B-W2b-F5)', () => {
     const html = render(panelsScreen as DesignScreen<unknown>, caseOf('conversation'), 'en')
     expect(html).not.toContain('fw-rp-floor-tick')
-    expect(html).toContain('Only people in the office see an internal note')
+    expect(html).toContain('Only people in the office see an office note')
   })
 
   it('a worker the legal gate keeps back is a person in the thread, in both languages (B-W2b-F4)', () => {
@@ -194,11 +194,11 @@ describe('every design case draws in both languages with no key left on screen',
   it('a worker the legal gate keeps back is a person in the history, in both languages (B-W2b-F4)', () => {
     const model = panelsScreen.cases.find((item) => item.id === 'history-person')!.model
     const en = render(panelsScreen as DesignScreen<unknown>, model, 'en')
-    expect(en).toContain('A person added an internal note')
+    expect(en).toContain('A person added an office note')
     expect(en).toContain('A person:')
     expect(en).not.toContain('Nexus Factory added')
     const it_ = render(panelsScreen as DesignScreen<unknown>, model, 'it')
-    expect(it_).toContain('Una persona ha aggiunto una nota interna')
+    expect(it_).toContain('Una persona ha aggiunto una nota d&#x27;ufficio')
     expect(it_).toContain('Una persona:')
   })
 })

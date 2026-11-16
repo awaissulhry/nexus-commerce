@@ -65,7 +65,7 @@
       "IGNORED": "Questa riga del piano è stata esclusa in Cosa comprare e produrre.",
       "OPEN": "Aperta."
     },
-    "noNote": "Una nota sull'ordine richiede il permesso di scrivere note interne.",
+    "noNote": "Una nota sull'ordine richiede il permesso di scrivere note d'ufficio.",
     "sampleNoCustomer": "Un campione interno non ha un cliente a cui chiedere: il suo ordine di lavoro è nostro.",
     "notMustBuy": "Solo una riga da comprare ha una bozza d'ordine.",
     "busy": "Attendi: l'ultima azione è in corso."

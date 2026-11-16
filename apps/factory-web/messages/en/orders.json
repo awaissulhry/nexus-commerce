@@ -1188,7 +1188,7 @@
     "requestedHint": "Today or later; empty: none.",
     "promise": "Promise date",
     "promiseHint": "Today or later; empty: given later.",
-    "note": "Internal note",
+    "note": "Office note",
     "noteHint": "Staff only; never printed.",
     "pricing": "Pricing…",
     "depositValue": "{pct} · {amount}",

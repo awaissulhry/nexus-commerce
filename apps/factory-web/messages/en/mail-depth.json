@@ -41,7 +41,7 @@
       },
       "INTERNAL_MENTION": {
         "title": "@mentions a colleague:",
-        "body": "An @mention belongs in an internal note: {party} reads this message."
+        "body": "An @mention belongs in an office note: {party} reads this message."
       },
       "OFFICE_FILE": {
         "title": "Office-only attachment:",
