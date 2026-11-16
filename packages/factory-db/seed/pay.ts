@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   EarningsKind,
@@ -27,6 +26,7 @@ import { seed as seedNumbering } from './numbering'
 import { seed as seedPeople } from './people'
 import { seed as seedPrivacy } from './privacy'
 import { seed as seedProduction, type ProductionSeed } from './production'
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The piece pay and payroll export seed (W2b schema wave 6/7), per tenant of seed/_core.ts, written in the tenant's
@@ -118,7 +118,6 @@ const YEAR = '2026'
 /** Sewing: 96.5 standard minutes × 0.12 a minute = 11.58 a piece; 2 pieces = 23.16 (minor units 2316). */
 const RATES = { sewMinutes: '96.500', perMinute: '0.120000', sewPiece: '11.580000', packPiece: '0.300000', sew2Minutes: '90.000', sew2Piece: '10.800000' } as const
 const PAID = { pieces: 2, amount: 2_316, adjustment: 500 } as const
-const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 
 /** The generic CSV layout: one row per employee code and pay code. */
 const GENERIC_CSV = {
@@ -204,7 +203,7 @@ export async function seed(context: SeedContext, options: PaySeedOptions = {}): 
   const office = { audience: 'office' as const, tenantId, actorId }
   const stamp = (at: Date) => ({ createdAt: at, updatedAt: at, createdById: actorId })
   const select = { id: true } as const
-  const document = (key: string, recordType: string, recordId: string, name: string, contentType: string, at: Date): Prisma.StoredFileCreateManyInput => ({
+  const document = (key: string, recordType: string, recordId: string, name: string, contentType: string, at: Date): Prisma.StoredFileCreateManyInput => seedFile(tenantId, {
     id: lastId(`pay:file:${key}`),
     companyId: companyA,
     recordType,
@@ -213,7 +212,6 @@ export async function seed(context: SeedContext, options: PaySeedOptions = {}): 
     originalName: name,
     contentType,
     sizeBytes: 1024,
-    sha256: sha256(`seed pay ${namespace} ${key}`),
     storeAccountId: store,
     storageKey: `t/${tenantId}/c/${companyA}/${YEAR}/${id(`pay:file:key:${key}`)}`,
     status: 'AVAILABLE',

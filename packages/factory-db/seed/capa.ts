@@ -22,6 +22,7 @@ import { seed as seedQualityLab } from './quality-lab'
 import { seed as seedReturns } from './returns'
 import { seed as seedRoles } from './roles'
 import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The quality problems seed (W2b schema wave 11/16, B-W2b-79), per tenant of seed/_core.ts, written in the tenant's office
@@ -125,7 +126,7 @@ export async function seed(context: SeedContext): Promise<CapaSeed> {
   const roleId = roleIds['quality_inspector'] as string
   const stamp = (at: Date) => ({ createdAt: at, updatedAt: at, createdById: actorId })
   const sha = (key: string): string => createHash('sha256').update(`seed capa ${key} (${namespace})`).digest('hex')
-  const fileRow = (fileId: string, recordType: string, recordId: string, originalName: string, key: string, at: Date) => ({
+  const fileRow = (fileId: string, recordType: string, recordId: string, originalName: string, key: string, at: Date) => seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType,
@@ -134,7 +135,6 @@ export async function seed(context: SeedContext): Promise<CapaSeed> {
     originalName,
     contentType: 'application/pdf',
     sizeBytes: 2048,
-    sha256: sha(key),
     storeAccountId: id('files:account:r2'),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`capa:file:${key}:key`)}`,
     status: 'AVAILABLE' as const,

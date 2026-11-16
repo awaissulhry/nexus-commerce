@@ -4,9 +4,16 @@ import { seedUuid, type SeedContext } from '../src/seeding'
 /**
  * The tenancy core's synthetic seed: one made-up tenant with two companies, one plant per company, and on each plant
  * four work centres, a line and five stations (two on the line, three standing alone). Every name is invented
- * ("Seed …"); no fiscal identifier is filled in. Company A has a bank account for its deposits: the IBAN is the
- * documented Italian example of the SWIFT IBAN registry (no real account), no BIC; company B has none. The tenant is
- * written in the platform scope, everything else in the tenant's office scope, as the app does.
+ * ("Seed …"). Company A has a bank account for its deposits: the IBAN is the documented Italian example of the SWIFT IBAN
+ * registry (no real account), no BIC; company B has none. The tenant is written in the platform scope, everything else in
+ * the tenant's office scope, as the app does.
+ *
+ * B-W2b-F59, each company's fiscal identity, so an invoice issues, a document prints (c.c. art. 2250) and a send goes to the
+ * (FAKE) SDI on a fresh seed: a made-up Partita IVA with a valid check digit (`0000000` as its number, which no company is
+ * given, and office code 303 or 404, no Italian tax office's: nobody's), the same digits as the codice fiscale, RegimeFiscale
+ * RF01 (the ordinary regime), the registered office with its province and CAP (`00000`, Seedville: made up), a REA office and
+ * number (made up) and a PEC on example.com to receive e-invoices at. Company A's is the number the other seeds' invoices and
+ * customs papers already name (money.ts, customs.ts: IT00000003038).
  */
 
 export interface CoreSeed {
@@ -20,8 +27,8 @@ export interface CoreSeed {
 export const EXAMPLE_IBAN_IT = 'IT60X0542811101000000123456'
 
 const COMPANIES = [
-  { key: 'A', site: 'A1', bank: { bankAccountHolder: 'Seed Company A', iban: EXAMPLE_IBAN_IT, bic: null, bankName: 'Seed example bank' } },
-  { key: 'B', site: 'B1', bank: { bankAccountHolder: null, iban: null, bic: null, bankName: null } },
+  { key: 'A', site: 'A1', bank: { bankAccountHolder: 'Seed Company A', iban: EXAMPLE_IBAN_IT, bic: null, bankName: 'Seed example bank' }, taxNumber: '00000003038', reaNumber: '0000303' },
+  { key: 'B', site: 'B1', bank: { bankAccountHolder: null, iban: null, bic: null, bankName: null }, taxNumber: '00000004044', reaNumber: '0000404' },
 ] as const
 
 const WORK_CENTRES = [
@@ -60,9 +67,16 @@ export async function seed({ db, namespace }: SeedContext): Promise<CoreSeed> {
           code: company.code,
           legalName: `Seed Company ${company.key}`,
           tradeName: `Seed ${company.key}`,
-          address: { line1: `Via Esempio ${company.key === 'A' ? 1 : 2}`, postalCode: '00000', city: 'Seedville', country: 'IT' },
+          address: { line1: `Via Esempio ${company.key === 'A' ? 1 : 2}`, postalCode: '00000', city: 'Seedville', province: 'MI', country: 'IT' },
           documentFooter: `Seed Company ${company.key} - synthetic data`,
           ...company.bank,
+          // B-W2b-F59: the fiscal identity e-invoicing and every document need (see above).
+          vatNumber: `IT${company.taxNumber}`,
+          fiscalCode: company.taxNumber,
+          regimeFiscale: 'RF01',
+          reaOffice: 'MI',
+          reaNumber: company.reaNumber,
+          pec: `seed-company-${company.key.toLowerCase()}@pec.example.com`,
         }
         await tx.company.upsert({ where: { id: company.id }, create: { id: company.id, ...data }, update: data })
       }

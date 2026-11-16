@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedPortalFollowups } from './portal-followups'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The supplier qualification seed (B-W2b-315; SCM-020, SCM-022), per tenant of seed/_core.ts: the tannery P2's chromium VI
@@ -33,7 +33,7 @@ export async function seed(context: SeedContext): Promise<SupplierQualificationS
   if (!exists) {
     await db.withScope(office, (client) =>
       client.storedFile.create({
-        data: {
+        data: seedFile(tenantId, {
           id: fileId,
           companyId: companyA,
           recordType: 'Party',
@@ -45,7 +45,6 @@ export async function seed(context: SeedContext): Promise<SupplierQualificationS
           originalName: 'Seed tannery chromium VI test report 2026.pdf',
           contentType: 'application/pdf',
           sizeBytes: 4096,
-          sha256: createHash('sha256').update(`seed file ${namespace} supplier-qualification ${fileId}`).digest('hex'),
           storageKey: `t/${tenantId}/c/${companyA}/2026/${id('supplier-qualification:key:P2:cr6')}`,
           status: 'AVAILABLE',
           availableAt: AT,
@@ -53,7 +52,7 @@ export async function seed(context: SeedContext): Promise<SupplierQualificationS
           createdAt: AT,
           updatedAt: AT,
           createdById: actorId,
-        },
+        }),
         select: { id: true },
       }),
     )

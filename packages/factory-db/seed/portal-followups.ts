@@ -1,10 +1,10 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import { FileCategory, PartyAddressApproval, PartyAddressKind, PartyChangeRequestStatus, SupplierDocumentUploadStatus } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedPortalAuth } from './portal-auth'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The portal follow-ups seed (W2b schema wave 23, B-W2b-F12), per tenant of seed/_core.ts: what a supplier sent from its
@@ -109,7 +109,8 @@ export async function seed(context: SeedContext, options: PortalFollowupsSeedOpt
   const { uploads, files, changeRequests, partner } = result
 
   /** A file a supplier uploaded in its portal: of its own party record, a PDF (rows only: no object in any store). */
-  const supplierFile = (fileId: string, partyId: string, name: string, at: Date, accepted: { readonly category: FileCategory; readonly expiresOn: Date } | null): Prisma.StoredFileCreateManyInput => ({
+  const supplierFile = (fileId: string, partyId: string, name: string, at: Date, accepted: { readonly category: FileCategory; readonly expiresOn: Date } | null): Prisma.StoredFileCreateManyInput =>
+    seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType: 'Party',
@@ -124,7 +125,6 @@ export async function seed(context: SeedContext, options: PortalFollowupsSeedOpt
     originalName: name,
     contentType: 'application/pdf',
     sizeBytes: 5120,
-    sha256: createHash('sha256').update(`seed file ${namespace} portal-followups ${fileId}`).digest('hex'),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`portal-followups:key:${fileId}`)}`,
     // An accepted upload arrived (AVAILABLE); a waiting one is still announced (its upload not confirmed).
     status: accepted ? 'AVAILABLE' : 'PENDING_UPLOAD',

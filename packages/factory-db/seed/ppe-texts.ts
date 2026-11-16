@@ -1,9 +1,9 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import { PpeTextTemplateKind } from '../src/generated/prisma/enums'
 import { seedUuid, type SeedContext } from '../src/seeding'
 import { seed as seedFiles } from './files'
 import { seed as seedProduction } from './production'
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The PPE text approvals seed (W2b-5, schema wave 34/44, B-W2b-275; GATE-PPE-TEXTS), per tenant of seed/_core.ts, written in the
@@ -56,8 +56,8 @@ export async function seed(context: SeedContext): Promise<PpeTextsSeed> {
 
   if (await db.withScope(office, (client) => client.ppeTextApproval.findUnique({ where: { id: A.doc }, select: { id: true } }))) return result
 
-  /** The consultant's signed check, a file of its approval (rows only: no object in any store). */
-  const file = (fileId: string, approvalId: string, companyId: string, name: string, at: Date): Prisma.StoredFileCreateManyInput => ({
+  /** The consultant's signed check, a file of its approval (a row; its bytes: B-W2b-F59, seed-files.ts). */
+  const file = (fileId: string, approvalId: string, companyId: string, name: string, at: Date): Prisma.StoredFileCreateManyInput => seedFile(tenantId, {
     id: fileId,
     companyId,
     recordType: 'PpeTextApproval',
@@ -67,7 +67,6 @@ export async function seed(context: SeedContext): Promise<PpeTextsSeed> {
     originalName: name,
     contentType: 'application/pdf',
     sizeBytes: 4096,
-    sha256: createHash('sha256').update(`seed file ${namespace} ppe-texts ${fileId}`).digest('hex'),
     storageKey: `t/${tenantId}/c/${companyId}/2026/${id(`ppe-texts:key:${fileId}`)}`,
     status: 'AVAILABLE',
     availableAt: at,

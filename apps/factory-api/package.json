@@ -11,6 +11,7 @@
     "start": "node dist/index.js",
     "start:worker": "node dist/background.js worker",
     "start:scheduler": "node dist/background.js scheduler",
+    "seed:files": "tsx src/platform/files/seed-bytes/cli.ts",
     "typecheck": "node --max-old-space-size=7168 --expose-gc typecheck.mjs",
     "test": "vitest run"
   },

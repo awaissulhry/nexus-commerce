@@ -7,6 +7,7 @@ import { seed as seedParties } from './parties'
 import { seed as seedPrint } from './print'
 import { seed as seedShipping } from './shipping'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The carriers, labels and dispatch seed (W2b-6, schema wave 48/57, B-W2b-367), per tenant of seed/_core.ts, written in the
@@ -190,7 +191,7 @@ export async function seed(context: SeedContext): Promise<CarriersSeed> {
       await tx.shipment.update({ where: { id: shipping.shipmentId }, data: { manifestId: M.open, version: { increment: 1 } }, select })
       const sheetSha = createHash('sha256').update(`seed carriers day sheet A1 seed-express 2026-11-11 version 1 (${namespace})`).digest('hex')
       await tx.storedFile.create({
-        data: {
+        data: seedFile(tenantId, {
           id: result.manifestFileId,
           companyId: companyA,
           recordType: 'DispatchManifest',
@@ -199,14 +200,13 @@ export async function seed(context: SeedContext): Promise<CarriersSeed> {
           originalName: 'Seed day sheet A1 seed-express 2026-11-11.pdf',
           contentType: 'application/pdf',
           sizeBytes: 2048,
-          sha256: sheetSha,
           storeAccountId: id('files:account:r2'),
           storageKey: `t/${tenantId}/c/${companyA}/2026/${id('carriers:manifest:A1:2026-11-11:key')}`,
           status: 'AVAILABLE',
           availableAt: T.sheetClosed,
           visibility: ['OFFICE'],
           ...stamp(T.sheetClosed),
-        },
+        }),
         select,
       })
       await tx.generatedDocument.create({
