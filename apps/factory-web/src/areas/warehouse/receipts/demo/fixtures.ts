@@ -28,6 +28,8 @@ export const expected = (over: Partial<ExpectedLine> = {}): ExpectedLine => ({
   received: '212.4000',
   open: '207.6000',
   tolerancePct: '5',
+  // B-W2b-GF5 (G140): the line's own leather tolerance counts both ways.
+  underPct: '5',
   estimatedHides: 8,
   oneDyeBatch: true,
   requiresCrViTest: true,
@@ -37,9 +39,9 @@ export const expected = (over: Partial<ExpectedLine> = {}): ExpectedLine => ({
 
 export const EXPECTED: ExpectedLine[] = [
   expected(),
-  expected({ purchaseOrderLineId: uid('5803', 33), seq: 30, item: { id: MATERIALS.lining.id, code: MATERIALS.lining.code, name: MATERIALS.lining.name, tracking: 'LOT', baseUom: 'M' }, colour: COLOURS.grey, quantity: '60.0000', uom: 'M', baseQuantity: '60.0000', expected: '60.0000', received: '0.0000', open: '60.0000', tolerancePct: null, estimatedHides: null, oneDyeBatch: false, requiresCrViTest: false }),
-  expected({ purchaseOrderId: uid('5801', 4), number: 'PO-2026-0004', status: 'CONFIRMED', supplier: { id: SUPPLIERS.protector.id, name: SUPPLIERS.protector.legalName }, purchaseOrderLineId: uid('5803', 41), seq: 10, item: { id: MATERIALS.protector.id, code: MATERIALS.protector.code, name: MATERIALS.protector.name, tracking: 'NONE', baseUom: 'PCS' }, colour: null, quantity: '48.0000', uom: 'PCS', baseQuantity: '48.0000', expected: '48.0000', received: '0.0000', open: '48.0000', tolerancePct: null, estimatedHides: null, oneDyeBatch: false, requiresCrViTest: false, needDate: '2026-11-13' }),
-  expected({ purchaseOrderId: uid('5801', 7), number: 'PO-2026-0007', status: 'SENT', supplier: { id: SUPPLIERS.fabric.id, name: SUPPLIERS.fabric.legalName }, purchaseOrderLineId: uid('5803', 71), seq: 10, item: { id: MATERIALS.lining.id, code: MATERIALS.lining.code, name: MATERIALS.lining.name, tracking: 'LOT', baseUom: 'M' }, colour: COLOURS.black, quantity: '15.0000', uom: 'M', baseQuantity: '15.0000', expected: '15.0000', received: '0.0000', open: '15.0000', tolerancePct: null, estimatedHides: null, oneDyeBatch: false, requiresCrViTest: false, needDate: '2026-11-18' }),
+  expected({ purchaseOrderLineId: uid('5803', 33), seq: 30, item: { id: MATERIALS.lining.id, code: MATERIALS.lining.code, name: MATERIALS.lining.name, tracking: 'LOT', baseUom: 'M' }, colour: COLOURS.grey, quantity: '60.0000', uom: 'M', baseQuantity: '60.0000', expected: '60.0000', received: '0.0000', open: '60.0000', tolerancePct: null, underPct: null, estimatedHides: null, oneDyeBatch: false, requiresCrViTest: false }),
+  expected({ purchaseOrderId: uid('5801', 4), number: 'PO-2026-0004', status: 'CONFIRMED', supplier: { id: SUPPLIERS.protector.id, name: SUPPLIERS.protector.legalName }, purchaseOrderLineId: uid('5803', 41), seq: 10, item: { id: MATERIALS.protector.id, code: MATERIALS.protector.code, name: MATERIALS.protector.name, tracking: 'NONE', baseUom: 'PCS' }, colour: null, quantity: '48.0000', uom: 'PCS', baseQuantity: '48.0000', expected: '48.0000', received: '0.0000', open: '48.0000', tolerancePct: null, underPct: null, estimatedHides: null, oneDyeBatch: false, requiresCrViTest: false, needDate: '2026-11-13' }),
+  expected({ purchaseOrderId: uid('5801', 7), number: 'PO-2026-0007', status: 'SENT', supplier: { id: SUPPLIERS.fabric.id, name: SUPPLIERS.fabric.legalName }, purchaseOrderLineId: uid('5803', 71), seq: 10, item: { id: MATERIALS.lining.id, code: MATERIALS.lining.code, name: MATERIALS.lining.name, tracking: 'LOT', baseUom: 'M' }, colour: COLOURS.black, quantity: '15.0000', uom: 'M', baseQuantity: '15.0000', expected: '15.0000', received: '0.0000', open: '15.0000', tolerancePct: null, underPct: null, estimatedHides: null, oneDyeBatch: false, requiresCrViTest: false, needDate: '2026-11-18' }),
 ]
 
 export const COUNTS: ReceiptCounts = { posted: 21, reversed: 1, waiting: 3, postedSince: 2 }

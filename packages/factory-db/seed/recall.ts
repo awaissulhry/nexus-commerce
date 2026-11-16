@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   AuthorityChannel,
@@ -25,6 +24,7 @@ import { seed as seedFiles } from './files'
 import { seed as seedProduct } from './product'
 import { seed as seedShipping } from './shipping'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The recall, authority and claims seed (W2b-4, schema wave 33/33, B-W2b-222), per tenant of seed/_core.ts, written in the
@@ -161,8 +161,9 @@ export async function seed(context: SeedContext): Promise<RecallSeed> {
   }
   const { entryIds: E, noticeIds: N, actionIds: A, progressIds: RP, distributorNoticeIds: D, requestIds: R, claimIds: C, useIds: U, fileIds: F } = result
 
-  /** A file of a record (rows only: no object in any store). */
-  const file = (fileId: string, recordType: string, recordId: string, name: string, kind: 'CERTIFICATE' | 'DOCUMENT', category: FileCategory, at: Date): Prisma.StoredFileCreateManyInput => ({
+  /** A file of a record (a row; its bytes: B-W2b-F59, seed-files.ts). */
+  const file = (fileId: string, recordType: string, recordId: string, name: string, kind: 'CERTIFICATE' | 'DOCUMENT', category: FileCategory, at: Date): Prisma.StoredFileCreateManyInput =>
+    seedFile(tenantId, {
     id: fileId,
     companyId: companyA,
     recordType,
@@ -173,7 +174,6 @@ export async function seed(context: SeedContext): Promise<RecallSeed> {
     originalName: name,
     contentType: 'application/pdf',
     sizeBytes: 4096,
-    sha256: createHash('sha256').update(`seed file ${namespace} recall ${fileId}`).digest('hex'),
     storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`recall:key:${fileId}`)}`,
     status: 'AVAILABLE',
     availableAt: at,

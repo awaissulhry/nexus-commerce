@@ -8,9 +8,14 @@ import {
   type ChecklistMode,
   type Checklist,
   type EvidenceRule,
+  type IncomingReleaseFacts,
   type ReleaseFacts,
   type SettingSource,
 } from '@nexus/factory-domain/quality/lab/rules'
+// B-W2b-GF5 (G369): the lot's incoming inspection in the release checklist.
+import { nextStepOf } from '@nexus/factory-domain/quality/incoming/rules'
+import { Dec } from '@nexus/factory-domain/tax/decimal'
+import { notAcceptedHidesOf } from '../incoming/hold'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { processLotDocuments, type LotDocumentRow } from './documents-store'
@@ -73,13 +78,58 @@ export async function resultsOf(client: Reader, lotId: string): Promise<ResultVi
 const resultWords = (row: LabResultRow): string =>
   crViVerdict(row.belowDetectionLimit ? { belowDetectionLimit: true, detectionLimitMgKg: row.detectionLimitMgKg } : { valueMgKg: row.valueMgKg }, row.limitMgKg).verdict?.words ?? `${row.verdict}.`
 
+// ---- B-W2b-GF5 (G369): the lot's incoming inspection ------------------------------------------------------------------------
+
+/**
+ * How much of a lot not counted by hide is still in it beyond what its inspection accepted, in the inspection's unit (the
+ * unit of the lot's receipt moves, or of its opening stock; their base quantities give the factor), or null when nothing
+ * beyond it is left.
+ */
+async function notAcceptedLeftOf(client: Reader, lotId: string, inspection: { readonly lotSize: { toString(): string }; readonly acceptedQuantity: { toString(): string } | null }): Promise<string | null> {
+  const [row] = await client.$queryRaw<{ received: string | null; onHand: string | null }[]>`
+    SELECT (SELECT sum("baseQuantity") FROM "StockMove" WHERE "lotId" = ${lotId}::uuid AND reason IN ('RECEIPT', 'OPENING') AND "hideId" IS NULL AND "reversalOfId" IS NULL)::text AS "received",
+           (SELECT sum(CASE WHEN "toLocationId" IS NOT NULL THEN "baseQuantity" ELSE 0 END) - sum(CASE WHEN "fromLocationId" IS NOT NULL THEN "baseQuantity" ELSE 0 END) FROM "StockMove" WHERE "lotId" = ${lotId}::uuid)::text AS "onHand"`
+  const lotSize = new Dec(inspection.lotSize.toString())
+  if (!row?.received || lotSize.lessThanOrEqualTo(0)) return null
+  const factor = new Dec(row.received).dividedBy(lotSize)
+  if (factor.lessThanOrEqualTo(0)) return null
+  const left = new Dec(row.onHand ?? '0').dividedBy(factor).minus(inspection.acceptedQuantity?.toString() ?? '0').toDecimalPlaces(4, Dec.ROUND_DOWN)
+  return left.greaterThan(0) ? left.toFixed() : null
+}
+
+/**
+ * The lot's incoming inspection in force for its release (its own, or its parent's for a lot made by a split): the open one,
+ * else the newest decided; null when none is (none recorded, or only cancelled ones). What it did not accept is read for the
+ * lot it inspected: hides still in the lot neither on hold nor decided since (modules/quality/incoming hold.ts), or the part
+ * of a counted lot still in it beyond what was accepted.
+ */
+export async function incomingFactsOf(client: Reader, lot: Pick<LotRow, 'id' | 'parentLotId'>): Promise<IncomingReleaseFacts | null> {
+  const rows = await client.incomingInspection.findMany({
+    where: { lotId: { in: lot.parentLotId ? [lot.id, lot.parentLotId] : [lot.id] }, status: { in: ['OPEN', 'DECIDED'] } },
+    select: { id: true, number: true, lotId: true, status: true, uom: true, lotSize: true, acceptedQuantity: true, rejectedQuantity: true, toSortQuantity: true, overrideReason: true, decidedAt: true, createdAt: true },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+  })
+  const open = rows.find((row) => row.status === 'OPEN')
+  if (open) return { number: open.number, status: 'OPEN', step: null, accepted: null, rejected: null, toSort: null, uom: open.uom, overrideReason: null, unheldHides: [], notAcceptedLeft: null }
+  const decided = rows.filter((row) => row.status === 'DECIDED').sort((a, b) => (b.decidedAt?.getTime() ?? 0) - (a.decidedAt?.getTime() ?? 0))[0]
+  if (!decided) return null
+  const quantities = { accepted: decided.acceptedQuantity?.toString() ?? '0', rejected: decided.rejectedQuantity?.toString() ?? '0', toSort: decided.toSortQuantity?.toString() ?? '0' }
+  const step = nextStepOf(quantities, decided.lotSize.toString())
+  const partly = (step === 'SORT' || step === 'RELEASE_PART') && decided.lotId === lot.id
+  const unheldHides = partly && decided.uom === 'HIDE' ? (await notAcceptedHidesOf(client, decided)).unheld.map((hide) => hide.code) : []
+  const notAcceptedLeft = partly && decided.uom !== 'HIDE' ? await notAcceptedLeftOf(client, lot.id, decided) : null
+  return { number: decided.number, status: 'DECIDED', step, ...quantities, uom: decided.uom, overrideReason: decided.overrideReason, unheldHides, notAcceptedLeft }
+}
+
 /** The facts the checklist needs, read on this client (inside a command: its transaction). */
 export async function checklistFactsOf(client: Reader, tenantId: string, lot: LotRow, day: BusinessDate, releaserId: string | null): Promise<ReleaseFacts> {
   const receipt = await receiptOf(client, lot)
   const { rule } = await ruleFor(client, tenantId, lot.companyId)
   const ppeCertificate = lot.item.isPpeComponent ? await certificateCovering(client, lot, day) : null
   const documents = (await documentsOf(client, lot.id, day)).filter((document) => document.inForce).map((document) => ({ kind: document.kind, validTo: document.validTo }))
-  return { lot: factsOf(lot), receipt: receipt && { number: receipt.number, status: receipt.status }, rule, ppeCertificate, documents, today: day, releaserId }
+  // B-W2b-GF5 (G369): quality releases only what passed its incoming inspection.
+  const incoming = await incomingFactsOf(client, lot)
+  return { lot: factsOf(lot), receipt: receipt && { number: receipt.number, status: receipt.status }, rule, ppeCertificate, documents, today: day, releaserId, incoming }
 }
 
 export async function checklistOf(client: Reader, tenantId: string, lot: LotRow, day: BusinessDate, releaserId: string | null, mode?: ChecklistMode): Promise<Checklist> {

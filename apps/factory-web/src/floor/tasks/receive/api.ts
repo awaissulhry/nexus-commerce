@@ -69,6 +69,8 @@ const orderLine = z.object({
   received: decimal,
   open: decimal,
   tolerancePct: z.string().nullable(),
+  // B-W2b-GF5 (G140): the tolerance under, when a delivery tolerance differs under (absent from an older answer).
+  underPct: z.string().nullable().optional(),
   upTo: decimal,
   needDate: z.string(),
   confirmedDate: z.string().nullable(),

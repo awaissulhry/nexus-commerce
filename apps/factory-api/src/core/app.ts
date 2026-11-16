@@ -20,6 +20,7 @@ import { installGrainFilter } from '../platform/auth/roles/grain-filter'
 import { installReadLog } from '../platform/audit/reads/hooks'
 import { installSecurityEvents } from '../platform/audit/security-events/hooks'
 import { CORE_MANIFEST, defineRoutes, installRouteManifest, isRoutesPlugin, manifestOfRoutes, RouteManifestError, undeclaredPermissions } from './manifest'
+import { requestLimitsOf } from './rate-limit'
 import { BODY_LIMIT_BYTES, registerSecurity } from './security'
 import { serverClock, type Clock } from './time'
 
@@ -47,7 +48,11 @@ export interface AppConfig {
   readonly trustedProxies?: string
   /** Signs cookies (@fastify/cookie). */
   readonly cookieSecret: string
-  readonly rateLimit?: { readonly max: number; readonly timeWindowMs: number }
+  /**
+   * B-W2b-GF6 (core/rate-limit.ts): `max` per signed-in person (and per client address without a session), `perAddressMax`
+   * per client address over every request (left out: ten times `max`). Left out: the Owner's 300 and 3000 a minute.
+   */
+  readonly rateLimit?: { readonly max: number; readonly timeWindowMs: number; readonly perAddressMax?: number }
   /** FACTORY_QUEUE_PREFIX: the rate-limit counters sit under it (rateLimitNamespace). Default `factory`. */
   readonly queuePrefix?: string
 }
@@ -95,8 +100,6 @@ export interface AppDependencies {
   /** Longest wait for one readiness check. Default 2 s. */
   readonly readyTimeoutMs?: number
 }
-
-const DEFAULT_RATE_LIMIT = { max: 300, timeWindowMs: 60_000 }
 
 type CheckState = 'ok' | 'failed' | 'not_configured'
 
@@ -168,16 +171,17 @@ export async function buildApp(config: AppConfig, dependencies: AppDependencies 
   installClientAddress(app, trustedProxies(config.trustedProxies))
 
   installErrorHandling(app)
-  await registerSecurity(app, {
+  const limiter = await registerSecurity(app, {
     webOrigin: config.webOrigin,
     rateLimit: {
-      ...(config.rateLimit ?? DEFAULT_RATE_LIMIT),
+      ...requestLimitsOf(config.rateLimit),
       redis,
       namespace: rateLimitNamespace(config),
     },
   })
   await app.register(cookie, { secret: config.cookieSecret })
-  installRouteManifest(app, authenticate)
+  // B-W2b-GF6: the request budget counts once the access check knows the session (the person, else the address).
+  installRouteManifest(app, authenticate, limiter.budget)
   installGrainFilter(app)
   // B-W2b-399: the security events (refusals; the request's address for its commands' events) and the read log.
   installSecurityEvents(app)

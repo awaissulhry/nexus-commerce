@@ -320,6 +320,8 @@ describe('an opening stock sheet with the existing test reports (SCM-288, QHS-02
       ['PPE_CERTIFICATE', 'NOT_NEEDED'],
       ['SUPPLIER_DOCUMENTS', 'NOT_NEEDED'],
       ['HOLD', 'NOT_NEEDED'],
+      // B-W2b-GF5 (G369): opening stock has no incoming inspection.
+      ['INCOMING', 'NOT_NEEDED'],
       ['RELEASER', 'OK'],
     ])
     const own = await release(db1.id, 'importer')

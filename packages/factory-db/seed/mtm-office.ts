@@ -13,6 +13,7 @@ import { seed as seedAuth } from './auth'
 import { seed as seedFiles } from './files'
 import { seed as seedProduct } from './product'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The made-to-measure office seed (W2b-5, schema wave 44/44, B-W2b-297), per tenant of seed/_core.ts, written in the tenant's
@@ -251,7 +252,7 @@ export async function seed(context: SeedContext): Promise<MtmOfficeSeed> {
       const worksheetSha = createHash('sha256').update(`seed mtm worksheet P1 JACKET 1 version 1 (${namespace})`).digest('hex')
       const worksheetFile = id('mtm-office:worksheet:P1:JACKET:1:1:file')
       await tx.storedFile.create({
-        data: {
+        data: seedFile(tenantId, {
           id: worksheetFile,
           companyId: companyA,
           recordType: 'MeasurementProfile',
@@ -260,7 +261,6 @@ export async function seed(context: SeedContext): Promise<MtmOfficeSeed> {
           originalName: 'Seed Team Rider JACKET rev 1 worksheet.pdf',
           contentType: 'application/pdf',
           sizeBytes: 2048,
-          sha256: worksheetSha,
           storeAccountId: id('files:account:r2'),
           storageKey: `t/${tenantId}/c/${companyA}/2026/${id('mtm-office:worksheet:P1:JACKET:1:1:key')}`,
           status: 'AVAILABLE',
@@ -269,7 +269,7 @@ export async function seed(context: SeedContext): Promise<MtmOfficeSeed> {
           createdAt: T.worksheet,
           updatedAt: T.worksheet,
           createdById: memberId,
-        },
+        }),
         select,
       })
       await tx.generatedDocument.create({

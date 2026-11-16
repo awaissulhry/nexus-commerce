@@ -3,7 +3,7 @@ import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { STEP_UP_CLOSED } from '../../_shared/hooks'
 import { failedRead, ready } from '../../_shared/model'
 import { canFor, PREFIX, ROLE_PERMISSIONS, type RoleCase } from '../../_shared/fixtures'
-import { AMENDMENTS, INCOMING, INCOMING_OPEN, inDepthShell } from '../depth/demo/fixtures'
+import { AMENDMENTS, INCOMING, INCOMING_HELD, INCOMING_OPEN, inDepthShell } from '../depth/demo/fixtures'
 import { AMEND_DRAFT, depthCan, draftFor } from '../depth/model'
 import type { AmendmentsState } from '../depth/use-amendments'
 import { IncomingRecordView, type IncomingRecordModel, type IncomingTab } from './view/IncomingRecordView'
@@ -56,6 +56,8 @@ export const designScreen = defineDesignScreen<IncomingCase>({
   cases: [
     { id: 'units', label: 'Decided, failed: the lot, the sample and the result per class, hide by hide, the lot short of the tannery', model: model('units'), note: 'No person in a list; the inspector is named only where the site’s legal basis allows it.' },
     { id: 'decision', label: 'Decision & signature: the split, the next step in words, Place hold on the rejected hide, the amendments', model: model('decision') },
+    // B-W2b-GF5 (G367): the decision held the rejected hide at once.
+    { id: 'decision-held', label: 'Decision & signature: the rejected hide held at the decision (the hold linked); Place hold held, nothing left to hold', model: model('decision', { read: INCOMING_HELD }) },
     { id: 'amend', label: 'Amend signed result (the note)', model: model('decision', { amendments: amendmentsOf({ read: ready(INCOMING_AMENDMENTS), dialog: { kind: 'amend' }, draft: { ...draftFor(INCOMING_AMENDMENTS.fields[0]!), value: 'Hide 2 back to the tannery; claim opened.', reason: 'The bench forgot the claim.' } }) }) },
     { id: 'open', label: 'Open: recorded hide by hide on the tablet', model: model('units', { read: INCOMING_OPEN, amendments: amendmentsOf() }) },
     { id: 'open-decision', label: 'Open: nothing decided, no amendments yet', model: model('decision', { read: INCOMING_OPEN, amendments: amendmentsOf() }) },

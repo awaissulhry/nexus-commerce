@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   FileCategory,
@@ -22,6 +21,7 @@ import { seed as seedPortalFollowups } from './portal-followups'
 import { seed as seedProduct } from './product'
 import { seed as seedStylesDepth } from './styles-depth'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The materials and restricted substances seed (W2b-4, schema wave 31/33, B-W2b-217), per tenant of seed/_core.ts, written
@@ -403,8 +403,9 @@ export async function seed(context: SeedContext): Promise<SubstancesSeed> {
 
   // --- The declarations asked of suppliers ------------------------------------------------------------------------------
   if (!(await db.withScope(office, (client) => client.supplierDeclarationRequest.findUnique({ where: { id: RQ.accepted }, select })))) {
-    /** A file of a request: the answer that came by e-mail, kept by the office (rows only: no object in any store). */
-    const answerFile = (fileId: string, requestId: string, name: string, at: Date): Prisma.StoredFileCreateManyInput => ({
+    /** A file of a request: the answer that came by e-mail, kept by the office (a row; its bytes: B-W2b-F59, seed-files.ts). */
+    const answerFile = (fileId: string, requestId: string, name: string, at: Date): Prisma.StoredFileCreateManyInput =>
+      seedFile(tenantId, {
       id: fileId,
       companyId: companyA,
       recordType: 'SupplierDeclarationRequest',
@@ -415,7 +416,6 @@ export async function seed(context: SeedContext): Promise<SubstancesSeed> {
       originalName: name,
       contentType: 'application/pdf',
       sizeBytes: 4096,
-      sha256: createHash('sha256').update(`seed file ${namespace} substances ${fileId}`).digest('hex'),
       storageKey: `t/${tenantId}/c/${companyA}/2026/${id(`substances:key:${fileId}`)}`,
       status: 'AVAILABLE',
       availableAt: at,

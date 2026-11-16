@@ -188,6 +188,8 @@ export const designScreen = defineDesignScreen<InlineViewModel>({
     { id: 'fp-approved', label: 'Approved: the run is free', model: bench({ kind: 'fpDone', record: { ...ANSWERED, status: 'DECIDED', outcome: 'APPROVED', signatureSha256: '9f2c4e7a1b03d6c85e0f9a4b7d21c3e8f6a5b4c3d2e1f0a9b8c7d6e5f4a3b2c1' } }), note: 'The operation screens of the run lift their hold at once (live).' },
     { id: 'fp-rejected', label: 'Rejected: the run keeps waiting', model: bench({ kind: 'fpDone', record: { ...CRITICAL_FAIL, status: 'DECIDED', outcome: 'REJECTED', signatureSha256: '0a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9' } }) },
     { id: 'fp-refused', label: 'Refused: a first piece is open already', model: bench({ kind: 'problem', problem: { kind: 'refused', code: 'FIRST_PIECE_OPEN', message: '', fix: null }, code: FIRST }) },
+    // B-W2b-GF5 (G361): the person who made garments of the work order never decides its first piece.
+    { id: 'fp-refused-maker', label: 'Refused: you made garments of this work order', model: bench({ kind: 'problem', problem: { kind: 'refused', code: 'MAKER', message: '', fix: null }, code: FIRST }), note: 'Another inspector, who made none of them, decides the first piece.' },
     // ---- Cutting ----
     { id: 'cut-scan', label: 'Cutting: scan a bundle of the lay', model: bench({ kind: 'scan', check: 'CUTTING' }) },
     { id: 'cut-pass', label: 'Cutting: nothing rejected', model: bench({ kind: 'cutting', card: CARD, draft: cuttingDraftOf(20), defects: ready(CUT_DEFECTS) }) },

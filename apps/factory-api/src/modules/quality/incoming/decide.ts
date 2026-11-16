@@ -16,6 +16,8 @@ import { postedBy, signerOf, type Inspector } from '../final/access'
 import { readComponents, readRolls, sampleFactsOf, type ComponentRow, type RollRow, type SampleFacts } from './facts'
 import { viewOf } from './views'
 import { assertOpen, assertOwn, incomingFor, lockIncoming, takeOver, type IncomingRow, type LotRow, type Reader, type Subject } from './store'
+// B-W2b-GF5 (G367): the hides it did not accept are held right after the decision.
+import { holdNotAcceptedHides } from './hold'
 
 /**
  * The decision of an incoming inspection (B-W2b-98; QHS-034 "Partial acceptance and split"; design floor.incoming
@@ -281,6 +283,9 @@ export async function decideIncoming(caller: CommandCaller, inspectionId: string
     })
     return { id: row.id }
   })
+  // B-W2b-GF5 (G367): rejected and to-sort hides held at once (the system's hold, its source this inspection; a resend never
+  // holds twice). A refused hold leaves the decision as it is: the record offers the office's hold for the rest.
+  if (lot && seen.uom === 'HIDE') await holdNotAcceptedHides(caller, context, result.id)
   return viewOf(caller, result.id, subject, context)
 }
 

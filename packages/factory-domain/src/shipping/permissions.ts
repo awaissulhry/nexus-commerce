@@ -13,7 +13,8 @@ export const SHIPPING_DEFINITIONS = definePermissions('shipping', {
   view: { risk: 'read', description: 'See the shipments and their lines, parcels and serials, and what each sales order has released and not yet shipped.' },
   manage: { risk: 'write', description: "Plan a shipment from a sales order's released garments, change its lines and delivery details, cancel it, and mark it handed over (shipped)." },
   pack: { risk: 'write', description: 'Pack a shipment: parcels, which garments go in which parcel, serials, weights and sizes, packed and unpacked; print its packing list (a floor device: at its own site).' },
-  'settings.view': { risk: 'read', description: "See each site's shipping settings: sender and return addresses, default carrier and service, packing printers, cut-off." },
+  // B-W2b-GF6: also the company's packaging (types, defaults per style or size run, carton marks), on the same page.
+  'settings.view': { risk: 'read', description: "See each site's shipping settings: sender and return addresses, default carrier and service, packing printers, cut-off; and the company's packaging types, defaults and carton marks." },
   'settings.manage': { risk: 'write', description: "Change a site's shipping settings." },
   'ddt.issue': {
     risk: 'write',

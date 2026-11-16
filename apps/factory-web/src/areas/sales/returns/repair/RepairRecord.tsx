@@ -12,6 +12,7 @@ import { problemKey } from '../../../quality/_shared/model'
 import { RecordProblem, RecordSkeleton } from '../../../quality/_shared/parts'
 import {
   cancelRepair,
+  scrapRepair,
   changeRepair,
   checkRepair,
   getRepair,
@@ -275,6 +276,14 @@ function Container({ repairId }: { repairId: string }) {
           setDialog(null)
           setRepair(answer.repair)
           setReceipt({ tone: answer.warnings.length > 0 ? 'warning' : 'success', words: { key: answer.warnings.length > 0 ? 'done.repairCancelledHere' : 'done.repairCancelled', params: { number: current.number } } })
+          break
+        }
+        // B-W2b-GF5 (G513): scrapped, never returned unsafe; the customer is told in writing (the answer's warning).
+        case 'scrap': {
+          const answer = await scrapRepair(api, current, dialog.reason.trim())
+          setDialog(null)
+          setRepair(answer.repair)
+          setReceipt({ tone: 'warning', words: { key: 'done.repairScrapped', params: { number: current.number } } })
           break
         }
       }

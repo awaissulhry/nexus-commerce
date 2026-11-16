@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   AbsenceCategory,
@@ -27,6 +26,7 @@ import { seed as seedCalendar } from './calendar'
 import { seed as seedFiles } from './files'
 import { seed as seedFloorAuth } from './floor-auth'
 import { seed as seedPeople } from './people'
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The time and attendance seed (W2b schema wave 5/7), per tenant of seed/_core.ts. Plant A1 (company A) has a week of
@@ -70,7 +70,6 @@ import { seed as seedPeople } from './people'
  * events and corrections are append-only: written once, never upserted).
  */
 
-const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 const day = (date: string): Date => new Date(`${date}T00:00:00.000Z`)
 const at = (iso: string): Date => new Date(iso)
 const plusSecond = (iso: string): Date => new Date(new Date(iso).getTime() + 1000)
@@ -353,29 +352,25 @@ export async function seed(context: SeedContext): Promise<TimeSeed> {
           data: { status: AttendanceMonthStatus.CLOSED, closedAt: T.septemberClosed, closedById: hrId },
           select,
         })
-        const lulSha = sha256(`seed time lul ${namespace} 2026-09`)
-        await tx.storedFile.createMany({
-          data: [
-            {
-              id: lulFileId,
-              companyId: company.A,
-              recordType: 'AttendanceMonthClose',
-              recordId: monthCloseIds.september,
-              kind: 'DOCUMENT',
-              originalName: 'Calendario presenze LUL 2026-09 (esempio).pdf',
-              contentType: 'application/pdf',
-              sizeBytes: 4096,
-              sha256: lulSha,
-              storeAccountId: store,
-              storageKey: `t/${tenantId}/c/${company.A}/2026/${id('time:file:key:lul:A:2026-09')}`,
-              status: 'AVAILABLE',
-              availableAt: T.lul,
-              visibility: ['OFFICE'],
-              ...stamp(T.lul, hrId),
-            },
-          ],
-          skipDuplicates: true,
+        const lulFile = seedFile(tenantId, {
+          id: lulFileId,
+          companyId: company.A,
+          recordType: 'AttendanceMonthClose',
+          recordId: monthCloseIds.september,
+          kind: 'DOCUMENT',
+          originalName: 'Calendario presenze LUL 2026-09 (esempio).pdf',
+          contentType: 'application/pdf',
+          sizeBytes: 4096,
+          storeAccountId: store,
+          storageKey: `t/${tenantId}/c/${company.A}/2026/${id('time:file:key:lul:A:2026-09')}`,
+          status: 'AVAILABLE',
+          availableAt: T.lul,
+          visibility: ['OFFICE'],
+          ...stamp(T.lul, hrId),
         })
+        // B-W2b-F59: the month close names the hash of its file's seeded bytes.
+        const lulSha = lulFile.sha256
+        await tx.storedFile.createMany({ data: [lulFile], skipDuplicates: true })
         await tx.attendanceMonthClose.update({ where: { id: monthCloseIds.september }, data: { lulFileId, lulSha256: lulSha }, select })
         // Two corrections of the 29th after the close: an early leave typed on the wrong day, then put back.
         const correction = { companyId: company.A, employeeId: employees.operator, dayId: dayIds.september29, monthCloseId: monthCloseIds.september, kind: AttendanceCorrectionKind.ORDINARY }

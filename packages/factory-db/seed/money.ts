@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import {
   DepositRequestStatus,
@@ -16,6 +15,7 @@ import { seed as seedIntegration } from './integration'
 import { seed as seedSales, type SalesSeed } from './sales'
 import { seed as seedShipping, type ShippingSeed } from './shipping'
 import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The money seed, per tenant of seed/_core.ts: the golden flow's stage 06b-deposit and the start of 15-invoice for
@@ -94,7 +94,6 @@ export interface MoneySeed {
   readonly invoiceSeriesId: string
 }
 
-const sha256 = (text: string): string => createHash('sha256').update(text).digest('hex')
 /** Minor units as a Decimal(18,6) string: 40000 → "400.000000". */
 const price = (minor: number): string => `${minor < 0 ? '-' : ''}${Math.floor(Math.abs(minor) / 100)}.${String(Math.abs(minor) % 100).padStart(2, '0')}0000`
 
@@ -137,7 +136,7 @@ export async function seed(context: SeedContext): Promise<MoneySeed> {
     sdiCode: 'SEEDC01',
   }
   const vat22 = (taxable: number, vat: number) => [{ rate: '22.00', nature: null, legalRef: null, taxable, vat, rounding: 0 }]
-  const xmlFile = (key: string, invoiceId: string, fileName: string, at: Date): Prisma.StoredFileCreateManyInput => ({
+  const xmlFile = (key: string, invoiceId: string, fileName: string, at: Date): Prisma.StoredFileCreateManyInput => seedFile(tenantId, {
     id: lastId(`money:file:${key}:xml`),
     companyId: companyA,
     recordType: 'Invoice',
@@ -146,7 +145,6 @@ export async function seed(context: SeedContext): Promise<MoneySeed> {
     originalName: fileName,
     contentType: 'application/xml',
     sizeBytes: 4096,
-    sha256: sha256(`seed money ${namespace} ${key}`),
     storeAccountId: store,
     storageKey: `legal/t/${tenantId}/c/${companyA}/${YEAR}/${id(`money:file:key:${key}`)}`,
     status: 'AVAILABLE',

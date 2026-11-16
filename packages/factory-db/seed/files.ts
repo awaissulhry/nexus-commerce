@@ -1,13 +1,14 @@
-import { createHash } from 'node:crypto'
 import type { Prisma } from '../src/generated/prisma/client'
 import { seedUuid, type SeedContext } from '../src/seeding'
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The files module's synthetic seed, per tenant of seed/_core.ts: the tenant's file store (an R2 account in FAKE mode,
  * the local folder: no network) and one file row of each kind of sharing — office only, the floor of each plant, the
  * portal of party P1 (the audit seed's party), a link of party P2, a fiscal archive file and an upload still pending.
- * Written in the tenant's office scope. Rows only: the objects themselves are not in any store, so a seeded file lists
- * but does not download. Made up and harmless; a second run adds nothing (INSERT … ON CONFLICT DO NOTHING).
+ * Written in the tenant's office scope. Rows only: the objects are put in a seeded stack's store afterwards (B-W2b-F59,
+ * seed-files.ts: `npm run seed:files -w @nexus/factory-api`). Made up and harmless; a second run adds nothing (INSERT …
+ * ON CONFLICT DO NOTHING).
  */
 
 /** Fixed instants, so the seed never depends on the clock. */
@@ -21,12 +22,12 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
   const companyA = id('company:A')
   const companyB = id('company:B')
   const store = id('files:account:r2')
-  const sha256 = (key: string): string => createHash('sha256').update(`seed file ${namespace} ${key}`).digest('hex')
   const key = (companyId: string | null, name: string, legal = false): string =>
     `${legal ? 'legal/' : ''}t/${tenantId}/${companyId ? `c/${companyId}` : 'tenant'}/2026/${id(`files:key:${name}`)}`
   const available = { status: 'AVAILABLE', availableAt: AT, storeAccountId: store, createdAt: AT, updatedAt: AT, createdById: actorId } as const
 
-  const files: Prisma.StoredFileCreateManyInput[] = [
+  // B-W2b-F59: every row with the SHA-256 of its seeded bytes (seed-files.ts), its key checked against the files platform's rule.
+  const rows: Omit<Prisma.StoredFileCreateManyInput, 'sha256'>[] = [
     {
       id: id('files:office'),
       companyId: companyA,
@@ -36,7 +37,6 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       originalName: 'Seed cost sheet.pdf',
       contentType: 'application/pdf',
       sizeBytes: 2048,
-      sha256: sha256('office'),
       storageKey: key(companyA, 'office'),
       visibility: ['OFFICE'],
       ...available,
@@ -47,7 +47,7 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
         ['B1', companyB],
       ] as const
     ).map(
-      ([site, companyId]): Prisma.StoredFileCreateManyInput => ({
+      ([site, companyId]): Omit<Prisma.StoredFileCreateManyInput, 'sha256'> => ({
         id: id(`files:floor:${site}`),
         companyId,
         recordType: 'Site',
@@ -56,7 +56,6 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
         originalName: `Seed bench photo ${site}.jpg`,
         contentType: 'image/jpeg',
         sizeBytes: 4096,
-        sha256: sha256(`floor ${site}`),
         storageKey: key(companyId, `floor:${site}`),
         visibility: ['OFFICE', 'FLOOR'],
         floorSiteId: id(`site:${site}`),
@@ -72,7 +71,6 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       originalName: 'Seed test report.pdf',
       contentType: 'application/pdf',
       sizeBytes: 3072,
-      sha256: sha256('partner P1'),
       storageKey: key(companyA, 'partner:P1'),
       visibility: ['OFFICE', 'PARTNER'],
       partyId: id('party:P1'),
@@ -87,7 +85,6 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       originalName: 'Seed packing list.pdf',
       contentType: 'application/pdf',
       sizeBytes: 1024,
-      sha256: sha256('link P2'),
       storageKey: key(companyA, 'link:P2'),
       visibility: ['OFFICE', 'LINK'],
       partyId: id('party:P2'),
@@ -102,7 +99,6 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       originalName: 'Seed invoice.xml',
       contentType: 'application/xml',
       sizeBytes: 5120,
-      sha256: sha256('fiscal'),
       storageKey: key(companyA, 'fiscal', true),
       visibility: ['OFFICE'],
       retainUntil: TEN_YEARS_LATER,
@@ -117,7 +113,6 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       originalName: 'Seed import.csv',
       contentType: 'text/csv',
       sizeBytes: 512,
-      sha256: sha256('pending'),
       storageKey: key(null, 'pending'),
       visibility: ['OFFICE'],
       status: 'PENDING_UPLOAD',
@@ -127,6 +122,7 @@ export async function seed({ db, namespace }: SeedContext): Promise<void> {
       createdById: actorId,
     },
   ]
+  const files = rows.map((row) => seedFile(tenantId, row))
 
   await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
     client.$transaction(async (tx) => {

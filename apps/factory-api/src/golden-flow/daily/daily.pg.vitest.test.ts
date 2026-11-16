@@ -443,7 +443,7 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
     await settle()
   })
 
-  it('M06 the inspector (not the receiver) records the Cr VI result with the lab report and releases the black lot', async () => {
+  it('M06 the inspector (not the receiver) records the Cr VI result with the lab report, decides the rule’s incoming inspection and releases the black lot', async () => {
     const base = `/quality/lots/${G.mLot.id}`
     let lot = (await ok(P.inspector, 'GET', base)).lot
     expect(lot.receivedById).toBe(P.warehouse.id)
@@ -457,8 +457,26 @@ describe('the W2a golden flow: a factory day through the HTTP routes', { timeout
       { version: lot.version, test: 'CR_VI', method: 'EN ISO 17075-1', valueMgKg: '1.1', lab: 'Test Lab One (made up)', reportNumber: 'TL-DAILY-M1', testedOn: today(), evidence: 'LOT_REPORT', fileId: announced.file.id },
       201,
     )
-    expect(recorded).toMatchObject({ result: { verdict: 'PASS' }, checklist: { ready: true } })
-    lot = recorded.lot
+    // B-W2b-GF5 (G369): the worker's rule opened the lot's incoming inspection at the receipt: the release waits for its decision.
+    expect(recorded).toMatchObject({ result: { verdict: 'PASS' }, checklist: { ready: false, open: [expect.objectContaining({ code: 'INCOMING', state: 'OPEN' })] } })
+    const opened = (await ok(P.inspector, 'GET', `/quality/incoming?lotId=${G.mLot.id}&status=OPEN`)).items as Json[]
+    expect(opened).toHaveLength(1)
+    const iin = `/quality/incoming/${opened[0]!.id}`
+    let record = await ok(P.inspector, 'GET', iin)
+    for (const hide of (G.mHides as Json[]).slice(0, record.inspection.sampleSize)) record = await ok(P.inspector, 'PUT', `${iin}/hides/${hide.id}`, { version: record.inspection.version, decision: 'ACCEPTED' })
+    const checkOf = (code: string) => (record.checks as Json[]).find((check) => check.code === code)!
+    record = await ok(P.inspector, 'PUT', `${iin}/results`, {
+      version: record.inspection.version,
+      results: [
+        { planCheckId: checkOf('SHADE').id ?? checkOf('SHADE').planCheckId, outcome: 'PASS', value: '1' },
+        { planCheckId: checkOf('THICKNESS').id ?? checkOf('THICKNESS').planCheckId, outcome: 'PASS', value: '1.2' },
+      ],
+    })
+    await stepped(w, P.inspector)
+    record = await ok(P.inspector, 'POST', `${iin}/decide`, { version: record.inspection.version, accepted: String(G.mHides.length), rejected: '0', toSort: '0' })
+    expect(record.inspection).toMatchObject({ status: 'DECIDED', computedResult: 'PASS' })
+    expect(record.next).toMatchObject({ step: 'RELEASE', holdPrefill: null })
+    lot = (await ok(P.inspector, 'GET', base)).lot
     const released = (await ok(P.inspector, 'POST', `${base}/release`, { version: lot.version, confirmCode: lot.code })).lot
     expect(released.qualityStatus).toBe('RELEASED')
     G.mLotCode = lot.code

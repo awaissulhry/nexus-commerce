@@ -22,6 +22,8 @@ import { typedNumber } from '../../platform/numbering/override'
 import { unorderRequirement } from '../planning/hooks'
 import { revokeConfirmLinks } from './confirm-links'
 import { lockOrderReceiving, receiptStopsCancel } from './receiving'
+// B-W2b-GF5 (G140): expected deliveries end with the tolerance the receipt decides with.
+import { differenceTolerance, lineTolerancesOf } from './receiving'
 import { endLineFactsOf, reachOf, type Reach } from './revisions/reach'
 import {
   actorIdOf,
@@ -302,15 +304,17 @@ export async function expectedLinesOf(client: Prisma.TransactionClient, filters:
     where: { cancelledAt: null, closedShortAt: null, purchaseOrder: { AND: [...filters, { status: { in: [...EXPECTING_STATUSES] } }] } },
     orderBy: [{ needDate: 'asc' }, { id: 'asc' }],
     take: EXPECTED_LINES_READ + 1,
-    select: { id: true, purchaseOrderId: true, seq: true, itemId: true, itemColourId: true, uom: true, quantity: true, baseQuantity: true, confirmedQuantity: true, needDate: true, confirmedDate: true, areaTolerancePct: true },
+    select: { id: true, purchaseOrderId: true, seq: true, itemId: true, itemColourId: true, uom: true, quantity: true, baseQuantity: true, confirmedQuantity: true, needDate: true, confirmedDate: true, areaTolerancePct: true, purchaseOrder: { select: { companyId: true, partyId: true } } },
   })
   const page = rows.slice(0, EXPECTED_LINES_READ)
+  // B-W2b-GF5 (G140): a line received within its delivery tolerance under is no longer expected (as the receipt decides).
+  const tolerances = await lineTolerancesOf(client, page.map((row) => ({ id: row.id, itemId: row.itemId, areaTolerancePct: row.areaTolerancePct, order: row.purchaseOrder })))
   const sums = page.length === 0 ? [] : await client.goodsReceiptLine.groupBy({ by: ['purchaseOrderLineId'], where: { purchaseOrderLineId: { in: page.map((row) => row.id) }, receipt: { status: 'POSTED' } }, _sum: { baseQuantity: true } })
   const received = new Map(sums.map((row) => [row.purchaseOrderLineId!, new Decimal(row._sum.baseQuantity?.toString() ?? '0')]))
   const lines = page.flatMap((row): ExpectedLine[] => {
     const expected = expectedBaseOf({ quantity: row.quantity.toString(), baseQuantity: row.baseQuantity.toString(), confirmedQuantity: row.confirmedQuantity?.toString() ?? null })
     const came = received.get(row.id) ?? new Decimal(0)
-    if (lineDifference({ expected, receivedBefore: came, receiving: '0', tolerancePct: row.areaTolerancePct?.toString() ?? null }).complete) return []
+    if (lineDifference({ expected, receivedBefore: came, receiving: '0', ...differenceTolerance(tolerances.get(row.id), row.areaTolerancePct) }).complete) return []
     // A line the supplier confirmed at 0 (it cannot deliver it) is expected never: it is no delivery.
     if (row.confirmedQuantity !== null && row.confirmedQuantity.isZero()) return []
     const needDate = dayOf(row.needDate)!

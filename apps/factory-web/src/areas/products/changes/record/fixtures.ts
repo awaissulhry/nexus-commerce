@@ -2,7 +2,7 @@ import { createElement, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
 import type { RecordPanelsViewModel } from '../../../../record-panels/view/RecordPanelsView'
-import { ACCEPTED_REQUEST, APPROVED_ORDER, APPROVER_OPTIONS, canFor, COMPARE, DRAFT_ORDER, DRIFT, inShell, JACKET_DETAIL, ME, NOW, ORDER, PREFIX, REJECTED_REQUEST, REQUEST, REQUESTS, type RoleCase } from '../demo/fixtures'
+import { ACCEPTED_REQUEST, APPROVED_ORDER, APPROVER_OPTIONS, canFor, COMPARE, DRAFT_ORDER, DRIFT, inShell, JACKET_DETAIL, ME, NOW, ORDER, OWN_REQUEST, PREFIX, REJECTED_REQUEST, REQUEST, REQUESTS, type RoleCase } from '../demo/fixtures'
 import { approversOf, orderDraftOf, requestDraftOf, rowOfOrder, rowOfRequest, wipLinesOf, type RecordKind, type RecordTab } from '../model'
 import type { OrderView, RequestView } from '../api'
 import type { ChangeRecordModel, RecordDialog } from './view-model'
@@ -124,6 +124,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'request-impact', label: 'A request: the work order where it was seen, what is already made', model: request('impact') },
     { id: 'request-approvals', label: 'A request: not sent for approval yet', model: request('approvals') },
     { id: 'request-decide', label: 'Accept or reject… (the triage)', model: request('change', { decide: { ...DECIDE, row: rowOfRequest(REQUEST), order: null, request: REQUEST, redline: null, drift: null } }) },
+    // B-W2b-GF5 (G282): the raiser's own request: Accept is held with the reason (never self-approve).
+    { id: 'request-own', label: 'A request you raised: Accept is held (four eyes)', model: request('change', { decide: { ...DECIDE, row: rowOfRequest(OWN_REQUEST), order: null, request: OWN_REQUEST, redline: null, drift: null } }, OWN_REQUEST) },
     { id: 'request-accepted', label: 'An accepted request: Write a change order', model: request('approvals', {}, ACCEPTED_REQUEST) },
     { id: 'request-rejected', label: 'A rejected request: read-only, the reason in a banner', model: request('change', {}, REJECTED_REQUEST) },
     { id: 'request-photos-failed', label: 'Two photos could not be sent', model: request('change', { request: { draft: null, style: { value: JACKET_DETAIL, problem: null }, saving: false, photos: { busy: false, failed: 2 } } }) },

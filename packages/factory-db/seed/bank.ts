@@ -18,6 +18,7 @@ import { seed as seedFiles } from './files'
 import { seed as seedReceivables } from './receivables'
 import { seed as seedSuppliersDepth } from './suppliers-depth'
 import { seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
+import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with their bytes
 
 /**
  * The bank, receivables, payables and accountant's bridge seed (W2b-6, schema wave 50/57, B-W2b-370), per tenant of
@@ -204,7 +205,7 @@ export async function seed(context: SeedContext): Promise<BankSeed> {
 
       // --- the statement file and its lines (FIN-130) ----------------------------------------------------------------------
       await tx.storedFile.create({
-        data: {
+        data: seedFile(tenantId, {
           id: result.statementFileId,
           companyId: companyA,
           recordType: 'BankStatement',
@@ -213,14 +214,13 @@ export async function seed(context: SeedContext): Promise<BankSeed> {
           originalName: 'Seed statement 2026-11-02 to 2026-11-13.xml',
           contentType: 'application/xml',
           sizeBytes: 6144,
-          sha256: sha('statement file'),
           storeAccountId: id('files:account:r2'),
           storageKey: `t/${tenantId}/c/${companyA}/2026/${id('bank:statement:A:2026-11-13:key')}`,
           status: 'AVAILABLE',
           availableAt: T.imported,
           visibility: ['OFFICE'],
           ...stamp(T.imported),
-        },
+        }),
         select,
       })
       await tx.bankStatement.create({

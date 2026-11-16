@@ -38,6 +38,8 @@ import { inspectorOf, mayOn, type Inspector } from '../final/access'
 import { certificateExtras, type CertificateExtras } from './certificates'
 import { classOfDefect, hideDefectsOf, readComponents, readRolls, sampleFactsOf, type SampleFacts } from './facts'
 import { incomingFor, isOwn, readIncoming, receiptAs, type IncomingRow, type Reader, type Subject } from './store'
+// B-W2b-GF5 (G367): what the inspection did not accept and is still in the lot: held, or still to hold.
+import { notAcceptedHidesOf } from './hold'
 
 /**
  * What the screens read of an incoming inspection (B-W2b-98; design floor.incoming Sample, Hide by hide, Decision; quality
@@ -269,7 +271,10 @@ export async function incomingView(db: Reader, row: IncomingRow, subject: Subjec
       const of = (decision: UnitDecision) => hideRows.filter((hide) => hide.decision === decision).map((hide) => ({ hideId: hide.hideId, code: hide.code }))
       const rejected = of('REJECTED')
       const toSort = of('TO_SORT')
-      const held = [...rejected, ...toSort]
+      // B-W2b-GF5 (G367): held at the decision (the system's hold, its source this inspection); what is still in the lot
+      // and not held (a refused hold, a hide outside the sample) is the office's to hold, prefilled.
+      const notAccepted = await notAcceptedHidesOf(db, row)
+      const held = notAccepted.unheld.map((hide) => ({ hideId: hide.id, code: hide.code }))
       next = {
         step,
         words: nextWords(step, lot.code, quantities, row.uom),
@@ -282,6 +287,8 @@ export async function incomingView(db: Reader, row: IncomingRow, subject: Subjec
         rejectedLines: [],
         // POST /quality/holds (quality.holds.place, the office): the sample's rejected and to-sort hides held until they go.
         holdPrefill: held.length > 0 ? { subjectType: 'Hide' as const, subjectIds: held.map((hide) => hide.hideId), reasonNote: `Incoming inspection ${row.number}: ${held.map((hide) => hide.code).join(', ')} not accepted.`.slice(0, 500) } : null,
+        // B-W2b-GF5 (G367): the holds that hold what it did not accept, and what of it is not held yet.
+        held: { holds: [...notAccepted.holds], unheld: held },
         // POST /purchasing/claims (purchasing.claims.manage): the rejected hides go back to the tannery, sent by a person.
         returnPrefill: rejected.length > 0 ? { kind: 'RETURN' as const, foundAt: 'INSPECTION' as const, reasonNote: `Incoming inspection ${row.number} of lot ${lot.code}: ${rejected.length} ${rejected.length === 1 ? 'hide' : 'hides'} rejected (${rejected.map((hide) => hide.code).join(', ')}).`.slice(0, 1000), from: { lotId: lot.id, hideIds: rejected.map((hide) => hide.hideId) } } : null,
       }
@@ -298,6 +305,7 @@ export async function incomingView(db: Reader, row: IncomingRow, subject: Subjec
         rejectedRolls: [],
         rejectedLines: lines.map((line) => ({ id: line.id, seq: line.seq, bundleCode: line.bundleCode, operationCode: line.operationCode, pieces: line.good + line.defective })),
         holdPrefill: null,
+        held: { holds: [], unheld: [] },
         returnPrefill: null,
       }
     }
