@@ -81,7 +81,7 @@ export async function seed(context: SeedContext): Promise<ScheduleSeed> {
   }
 
   const finishedLocationId = lastId('schedule:location:A1-FG')
-  const finishedItemId = lastId('schedule:item:SEED-JKT-02-BLK-52')
+  let finishedItemId = lastId('schedule:item:SEED-JKT-02-BLK-52')
   const plan = { published: firstId('schedule:plan:A1:v1'), working: id('schedule:plan:A1:working') }
   const reworkOrderId = id('schedule:rework:WO-0001:1')
   const replacementRequestId = id('schedule:replacement:WO-0001:1')
@@ -102,7 +102,11 @@ export async function seed(context: SeedContext): Promise<ScheduleSeed> {
         variantId: id('production:variant:JKT-02:BLK:52'),
         updatedAt: T.setup,
       }
-      await tx.item.upsert({ where: { id: finishedItemId }, create: { id: finishedItemId, ...garment, createdAt: T.setup, createdById: actorId }, update: garment, select: { id: true } })
+      // B-W2b-GS1: a SKU has one item, and the app makes a SKU's FINISHED item by itself when finished goods are posted for a SKU
+      // without one (inventory/finished finishedItemFor, an id of its own). Such an item is the tenant's: left as it is, and named.
+      const made = await tx.item.findFirst({ where: { variantId: garment.variantId, id: { not: finishedItemId } }, select: { id: true } })
+      if (made) finishedItemId = made.id
+      else await tx.item.upsert({ where: { id: finishedItemId }, create: { id: finishedItemId, ...garment, createdAt: T.setup, createdById: actorId }, update: garment, select: { id: true } })
     }),
   )
 

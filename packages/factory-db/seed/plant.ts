@@ -7,7 +7,7 @@ import {
   MaintenancePriority,
   MaintenanceRequestStatus,
 } from '../src/generated/prisma/enums'
-import { seedUuid, type SeedContext } from '../src/seeding'
+import { seedUuid, takenBy, type SeedContext } from '../src/seeding'
 import { seed as seedFloorAuth } from './floor-auth'
 import { seedAt } from '../src/seed-calendar' // B-W2b-F53: the seeds' future follows the calendar
 
@@ -174,13 +174,26 @@ export async function seed(context: SeedContext): Promise<PlantSeed> {
   ]
   await db.withScope(office, (client) =>
     client.$transaction(async (tx) => {
+      // B-W2b-GS1: a person adds the starter classes and symptoms with one click (plant.addStarter, ids of their own), with the
+      // codes written here; a code is unique in the tenant. A code the tenant holds already is its row: the seed leaves it
+      // as it is and names it (a symptom's class, the machines, the requests below and the seeds that read these ids).
+      const takenClasses = takenBy(classes, await tx.machineClass.findMany({ select: { id: true, code: true } }), (row) => row.code)
+      const takenSymptoms = takenBy(symptoms, await tx.machineSymptom.findMany({ select: { id: true, code: true } }), (row) => row.code)
+      for (const [ids, taken] of [[classIds, takenClasses], [symptomIds, takenSymptoms]] as const) {
+        for (const [code, rowId] of Object.entries(ids)) ids[code] = taken.get(rowId) ?? rowId
+      }
+      const classOf = (classId: string | null | undefined) => (classId ? (takenClasses.get(classId) ?? classId) : classId)
       for (const { id: rowId, createdAt, createdById, ...data } of classes) {
+        if (takenClasses.has(rowId)) continue
         await tx.machineClass.upsert({ where: { id: rowId }, create: { id: rowId, createdAt, createdById, ...data }, update: data, select })
       }
-      for (const { id: rowId, createdAt, createdById, ...data } of symptoms) {
+      for (const { id: rowId, createdAt, createdById, classId, ...rest } of symptoms) {
+        if (takenSymptoms.has(rowId)) continue
+        const data = { ...rest, classId: classOf(classId) }
         await tx.machineSymptom.upsert({ where: { id: rowId }, create: { id: rowId, createdAt, createdById, ...data }, update: data, select })
       }
-      for (const { id: rowId, createdAt, createdById, status, statusSince, statusReason, updatedAt, ...data } of machines) {
+      for (const { id: rowId, createdAt, createdById, status, statusSince, statusReason, updatedAt, classId, ...rest } of machines) {
+        const data = { ...rest, classId: classOf(classId)! }
         await tx.machine.upsert({ where: { id: rowId }, create: { id: rowId, createdAt, createdById, updatedAt, status, statusSince, statusReason, ...data }, update: data, select })
       }
     }),

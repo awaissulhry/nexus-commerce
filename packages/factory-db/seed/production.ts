@@ -27,7 +27,7 @@ import {
   WorkOrderKind,
   WorkOrderStatus,
 } from '../src/generated/prisma/enums'
-import { seedUuid, type SeedContext } from '../src/seeding'
+import { seedUuid, takenBy, type SeedContext } from '../src/seeding'
 import { seed as seedFloorAuth } from './floor-auth'
 import { seed as seedInventory, type InventorySeed } from './inventory'
 import { seedWorkerNotice } from './privacy'
@@ -631,8 +631,13 @@ export async function seed(context: SeedContext): Promise<ProductionSeed> {
   const refusalId = id('production:scan-refusal:A1:1')
   await db.withScope({ audience: 'office', tenantId, actorId }, (client) =>
     client.$transaction(async (tx) => {
+      // B-W2b-GS1: an EMPTY list gets the API's standard reasons (the worker's start, a daily cron) with ids of its own; a code
+      // is unique in its kind. A reason the app made first is the tenant's: left as it is, as seed/reasons.ts does.
+      const wanted = W1_SCAN_REASONS.map((reason) => ({ id: id(`production:scrap-reason:${reason.kind}:${reason.code}`), kind: reason.kind, code: reason.code }))
+      const taken = takenBy(wanted, await tx.scrapReason.findMany({ select: { id: true, kind: true, code: true } }), (row) => `${row.kind}:${row.code}`)
       for (const reason of W1_SCAN_REASONS) {
         const reasonId = id(`production:scrap-reason:${reason.kind}:${reason.code}`)
+        if (taken.has(reasonId)) continue
         // W2b (B-W2b-10; MES-125): OTHER needs detail (a photo on the floor, a note in the office); no icon: the standard look.
         // W2b-2 (B-W2b-74): the fault of a reason, for pay (placeholders: the labour consultant says what each means).
         const data = { labelIt: reason.label.it, labelEn: reason.label.en, sortOrder: reason.sortOrder, active: reason.active, needsDetail: reason.needsDetail ?? false, fault: FAULT[reason.code] ?? ScrapFault.UNKNOWN }
