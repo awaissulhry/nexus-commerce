@@ -219,6 +219,17 @@ function scopedRecord(scope: RouteScope, context: RequestContext): Record<string
   }
 }
 
+// B-W2b-GF6: the session the access check read for a request, kept for the request limits (core/rate-limit.ts).
+const seenSessions = new WeakMap<FastifyRequest, RequestContext>()
+
+/**
+ * B-W2b-GF6: the session the access check read for this request — also when the route then refused it (another audience,
+ * a permission the person lacks) — or null (a public route, no session, a session that opened nothing).
+ */
+export function sessionSeenOf(request: FastifyRequest): RequestContext | null {
+  return seenSessions.get(request) ?? null
+}
+
 /** The access check of one request against its route's entry. Throws the error to answer with. */
 export async function checkAccess(request: FastifyRequest, authenticate: Authenticator): Promise<void> {
   const entry = request.routeOptions.config.manifest
@@ -231,6 +242,7 @@ export async function checkAccess(request: FastifyRequest, authenticate: Authent
   const session = await authenticate(request)
   if (!session) throw new UnauthenticatedError()
   const context = completeContext(session, String(request.id))
+  seenSessions.set(request, context)
   if (!(entry.audiences as readonly string[]).includes(context.audience)) throw new ForbiddenError()
   request.factoryContext = context
 
@@ -247,9 +259,15 @@ export async function checkAccess(request: FastifyRequest, authenticate: Authent
 
 /**
  * Installs the manifest on the root instance: the registry, the boot checks (every route has an entry, every entry
- * has a route) and the access check, which runs before the body is read (after the rate limit).
+ * has a route) and the access check, which runs before the body is read (after the address ceiling and a route's own
+ * limit). B-W2b-GF6: `afterAccess` (the request budget, core/rate-limit.ts) runs once the check knows the session,
+ * whether it passed or refused; its 429 wins over the refusal.
  */
-export function installRouteManifest(app: FastifyInstance, authenticate: Authenticator): ManifestRegistry {
+export function installRouteManifest(
+  app: FastifyInstance,
+  authenticate: Authenticator,
+  afterAccess?: (request: FastifyRequest, reply: FastifyReply) => Promise<void>,
+): ManifestRegistry {
   const registry = new ManifestRegistry()
   app.decorate('factoryRouteManifest', registry)
   app.decorateRequest('factoryContext', null)
@@ -267,8 +285,12 @@ export function installRouteManifest(app: FastifyInstance, authenticate: Authent
       throw new RouteManifestError(`Manifest entries without a route: ${orphans.join(', ')}`)
     }
   })
-  app.addHook('preParsing', async (request: FastifyRequest, _reply: FastifyReply, payload) => {
-    await checkAccess(request, authenticate)
+  app.addHook('preParsing', async (request: FastifyRequest, reply: FastifyReply, payload) => {
+    try {
+      await checkAccess(request, authenticate)
+    } finally {
+      if (afterAccess) await afterAccess(request, reply)
+    }
     return payload
   })
   return registry
