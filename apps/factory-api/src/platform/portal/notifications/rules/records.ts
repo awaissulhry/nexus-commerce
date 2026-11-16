@@ -8,6 +8,7 @@ import { events as salesEvents } from '@nexus/factory-domain/sales/events'
 import { events as shippingEvents } from '@nexus/factory-domain/shipping/events'
 import { events as threadEvents } from '@nexus/factory-domain/threads/events'
 import { recordLabelOf } from '../../../threads/labels'
+import type { CommandTx } from '../../../../core/command'
 import type { PartnerReader } from '../../tasks/people'
 import type { PartnerDraft, PartnerRule } from './types'
 
@@ -16,7 +17,10 @@ import type { PartnerDraft, PartnerRule } from './types'
  * E-mail settings topics "orders confirmed, dates changed, shipped, invoices, claims, documents ready, messages"):
  *
  *   purchase_order.sent         ORDERS    "New purchase order PO-…"            to the supplier's people
- *   sales_order.created         ORDERS    "Your order SO-… is confirmed"       to the customer's people
+ *   sales_order.created         ORDERS    "Your order SO-… is confirmed"       to the customer's people; B-TH-006: an order
+ *                                         made waiting for our yes (PENDING_APPROVAL) is "received, waiting for our approval"
+ *   sales_order.status_changed  ORDERS    "Your order SO-… is confirmed"       B-TH-006: when a waiting order is let go on
+ *                                         (PENDING_APPROVAL → CONFIRMED)
  *   sales_order.promise_changed DATES     "The delivery date of SO-… changed (by 12 Dec)"
  *   shipment.status_changed     SHIPPED   "SH-… has shipped" (to SHIPPED only)
  *   invoice.issued              INVOICES  "Invoice FT-… was issued"            only to people whose role sees prices
@@ -32,6 +36,22 @@ const payload = <T>(list: readonly { type: string; payload: { parse(raw: unknown
 
 const home = (draft: { companyId: string; partyId: string }) => (reader: PartnerReader) => can(reader.actor, PORTAL_HOME_VIEW, { companyId: draft.companyId, partyId: draft.partyId })
 const withPrice = (draft: { companyId: string; partyId: string }) => (reader: PartnerReader) => home(draft)(reader) && heldGrains(reader.actor).has('price')
+
+// ── B-TH-006 ──
+/**
+ * Whether the order was made waiting for our yes (PENDING_APPROVAL). Nothing moves INTO PENDING_APPROVAL later (B-W2b-281's
+ * guard): an order waits only from its making, and the order's own audit rows say so — the making's `after.status`, and every
+ * move out of it (the yes, the credit let go, the measures checked, the cancel) has `before.status` PENDING_APPROVAL.
+ */
+async function madeWaiting(tx: CommandTx, order: { readonly id: string; readonly status: string }): Promise<boolean> {
+  if (order.status === 'PENDING_APPROVAL') return true
+  const waited = await tx.auditLog.findFirst({
+    where: { recordType: 'SalesOrder', recordId: order.id, OR: [{ after: { path: ['status'], equals: 'PENDING_APPROVAL' } }, { before: { path: ['status'], equals: 'PENDING_APPROVAL' } }] },
+    select: { id: true },
+  })
+  return waited !== null
+}
+// ── end B-TH-006 ──
 
 function draft(input: Omit<PartnerDraft, 'forReader'>, forReader: (draft: { companyId: string; partyId: string }) => (reader: PartnerReader) => boolean = home): PartnerDraft {
   return { ...input, forReader: forReader(input) }
@@ -53,11 +73,33 @@ export const RECORD_RULES: readonly PartnerRule[] = Object.freeze([
     events: ['sales_order.created'],
     async drafts(context, raw) {
       const event = payload<{ orderId: string }>(salesEvents, 'sales_order.created', raw)
+      const order = await context.tx.salesOrder.findUnique({ where: { id: event.orderId }, select: { id: true, number: true, companyId: true, partyId: true, status: true } })
+      if (!order) return []
+      // ── B-TH-006 (L2-G06): "confirmed" only for an order made confirmed. One made waiting for our yes is received; its
+      // confirmed news follows the yes (the rule below). Decided by how the order was MADE, not by its state when the worker
+      // reads it: a yes given before this event is handled sends the confirmed news once, from its own event.
+      if (await madeWaiting(context.tx, order)) {
+        if (order.status === 'CANCELLED') return []
+        return [draft({ partyId: order.partyId, companyId: order.companyId, record: { type: 'SalesOrder', id: order.id, label: order.number }, messageKey: 'portal.order.received', params: {}, anchor: null })]
+      }
+      // ── end B-TH-006 ──
+      return [draft({ partyId: order.partyId, companyId: order.companyId, record: { type: 'SalesOrder', id: order.id, label: order.number }, messageKey: 'portal.order.confirmed', params: {}, anchor: null })]
+    },
+  },
+  // ── B-TH-006 (L2-G06): the yes on a waiting order (credit, a SALES_ORDER rule, measures checked) is the confirmed news. ──
+  {
+    name: 'portalNews.salesOrderApproved',
+    events: ['sales_order.status_changed'],
+    async drafts(context, raw) {
+      const event = payload<{ orderId: string; from: string; to: string }>(salesEvents, 'sales_order.status_changed', raw)
+      if (event.from !== 'PENDING_APPROVAL' || event.to !== 'CONFIRMED') return []
+      // The party from the record, never from the event (W06).
       const order = await context.tx.salesOrder.findUnique({ where: { id: event.orderId }, select: { id: true, number: true, companyId: true, partyId: true } })
       if (!order) return []
       return [draft({ partyId: order.partyId, companyId: order.companyId, record: { type: 'SalesOrder', id: order.id, label: order.number }, messageKey: 'portal.order.confirmed', params: {}, anchor: null })]
     },
   },
+  // ── end B-TH-006 ──
   {
     name: 'portalNews.promiseChanged',
     events: ['sales_order.promise_changed'],

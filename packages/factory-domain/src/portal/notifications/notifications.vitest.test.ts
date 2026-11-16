@@ -132,3 +132,14 @@ describe('our check of a delivery address the person added (B-W2b-F15)', () => {
     expect(partnerSentence({ messageKey: 'portal.address.refused', recordLabel: 'Via $& 1', params: { reason: "Not $' here" } }, 'en', 'Factory Spa')).toBe("Your delivery address Via $& 1 was not accepted: Not $' here")
   })
 })
+
+// ── B-TH-006 (L2-G06) ─────────────────────────────────────────────────────────────────────────────────────────────────
+describe('an order that waits for our yes (B-TH-006)', () => {
+  it('is received, waiting for our approval, never confirmed; it is mailed at once as order news', () => {
+    expect(partnerSentence({ messageKey: 'portal.order.received', recordLabel: 'SO-2026-0042', params: {} }, 'en', 'Factory Spa')).toBe('We received your order SO-2026-0042: it is waiting for our approval')
+    expect(partnerSentence({ messageKey: 'portal.order.received', recordLabel: 'SO-2026-0042', params: {} }, 'it', 'Factory Spa')).toBe('Abbiamo ricevuto il tuo ordine SO-2026-0042: è in attesa della nostra approvazione')
+    for (const locale of ['it', 'en'] as const) expect(partnerSentence({ messageKey: 'portal.order.received', recordLabel: 'SO-1', params: {} }, locale, 'Factory Spa')).not.toMatch(/confirm|conferm/i)
+    expect(topicOfNotice({ messageKey: 'portal.order.received', recordLabel: 'SO-1', params: {} }, () => null)).toBe('ORDERS')
+  })
+})
+// ── end B-TH-006 ──────────────────────────────────────────────────────────────────────────────────────────────────────
