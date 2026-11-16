@@ -47,6 +47,7 @@
       "NOT_ACCESS": "Only an access request has a data package.",
       "NOT_ERASURE": "Only an erasure request erases or anonymises the person.",
       "NO_PACKAGE": "Collect the person's data package first: an access request is done once it is handed over.",
+      "PACKAGE_DELETED": "The data package was deleted on its date (30 days after it was made): collect it again while the request is open.",
       "NOT_ERASED": "Anonymise the person first (what the law keeps stays, with why): an erasure request is done once that is recorded.",
       "ERASED": "The person was anonymised on this request already: what was erased and kept is recorded."
     },
@@ -169,6 +170,7 @@
       "file": "File",
       "size": "Size",
       "made": "Made",
+      "deleteAfter": "Deleted on",
       "sha": "SHA-256"
     },
     "action": {
@@ -313,9 +315,10 @@
         "HEALTH": "Health surveillance and accident records are kept 10 years after the employment ends (D.Lgs. 81/2008 art. 25; GDPR art. 17(3)(b)).",
         "CUSTOMER": "The customer record names the person and the orders and invoices refer to it (c.c. art. 2220: 10 years; GDPR art. 17(3)(b)).",
         "MEASUREMENTS": "The measurements a garment was made to, for the legal guarantee (D.Lgs. 206/2005 art. 132: 26 months); their photos go on their own date.",
-        "IMMUTABLE": "What the mail server recorded when the mail arrived (its envelope sender) stays as it came; the rest of the person's details in the mail are blanked.",
         "ALREADY_ERASED": "Already anonymised earlier: nothing of the person is left in it.",
-        "NOTICE_PROOF": "The proof the person was given the privacy notice (GDPR arts. 5(2), 13): it names the notice's version, not the person's data."
+        "NOTICE_PROOF": "The proof the person was given the privacy notice (GDPR arts. 5(2), 13): it names the notice's version, not the person's data.",
+        "LEGAL_HOLD": "The file is on legal hold (a dispute, an inspection or a claim needs it as it is; GDPR art. 17(3)(e)).",
+        "RETAINED": "Kept until its retention date: the law or a contract keeps the file until then (GDPR art. 17(3)(b))."
       },
       "type": {
         "PartyContact": "The contact",
@@ -333,8 +336,10 @@
         "InboundEmail": "Mails received from them",
         "EmailOutbound": "Mails sent to them",
         "AuditLog": "History of their record",
+        "StoredFile": "Files attached to what they sent",
         "other": "Other records"
       },
+      "historyScope": "History: the changes to the person's own records are blanked; a mention of them in another record's history is not searched (each erasure record says what was blanked).",
       "field": {
         "name": "name",
         "email": "e-mail",
@@ -478,10 +483,6 @@
         "NO_ACTION": "No sweep may delete, anonymise or archive this record type: the rule can only report."
       },
       "sweepHeld": {
-        "IMMUTABLE": {
-          "short": "held: erasure requests only",
-          "long": "The database blanks a received mail only for a person's erasure request, never by a sweep: the rule can only report it."
-        },
         "NEVER_DELETED": {
           "short": "held: never deleted",
           "long": "The database never deletes this record (an export expires, its file goes): the rule can only report it."
@@ -541,7 +542,7 @@
           "name": "Mails received",
           "countsFrom": "From when the mail was received.",
           "does": {
-            "ANONYMISE": "Would blank the sender, the subject and the text, keeping the thread: held today (the database keeps a read mail unchanged).",
+            "ANONYMISE": "Blanks the sender, the envelope sender, the subject, the text and the HTML of a settled mail (matched, rejected or failed); the mail's place, time and status stay, and the record's thread keeps its own message.",
             "DELETE": "A received mail is never deleted by a sweep: the rule only reports.",
             "ARCHIVE": "A received mail cannot be archived by a sweep: the rule only reports."
           }
@@ -687,6 +688,11 @@
           "what": "The files of exports",
           "when": "When the export expires (the export row stays)",
           "why": "GDPR art. 5(1)(e)"
+        },
+        "accessPackages": {
+          "what": "A person's data package (the copy an access request collected)",
+          "when": "30 days after it was made (the request and its record of what was sent stay)",
+          "why": "GDPR art. 5(1)(e): never kept as a second copy of the person's data"
         }
       },
       "kept": {
@@ -708,6 +714,7 @@
       },
       "ask": "Ask for my data",
       "asked": "Asked: the copy is collected in the background and appears here when ready.",
+      "deletes": "deleted on {date}",
       "downloaded": "Downloaded: the request is done.",
       "held": {
         "open": "One request at a time: your last one is still open (download it first).",

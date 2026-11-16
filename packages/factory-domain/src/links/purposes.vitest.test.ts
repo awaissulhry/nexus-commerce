@@ -71,9 +71,11 @@ describe('the purposes', () => {
     expect(ROLE_TEMPLATES.find((template) => template.key === 'read_only')?.permissions).not.toContain(LINKS_MANAGE)
   })
 
-  it('let DOCUMENT_VIEW read files (its record\'s, shared with its party\'s links): a stored file, a shipment, or a payroll export through its own module; and W2b-3\'s APPROVAL and RECORD_INVITE their record\'s', () => {
+  it('let DOCUMENT_VIEW read files (its record\'s, shared with its party\'s links): a stored file or a shipment; and W2b-3\'s APPROVAL and RECORD_INVITE their record\'s', () => {
     expect(linkPermissions('DOCUMENT_VIEW')).toEqual(['files.read', 'links.download', 'links.open', 'money.price'])
-    expect(PURPOSE_RULES.DOCUMENT_VIEW.recordTypes).toEqual(['StoredFile', 'Shipment', 'PayrollExport'])
+    expect(PURPOSE_RULES.DOCUMENT_VIEW.recordTypes).toEqual(['StoredFile', 'Shipment'])
+    // B-W2b-GF1 (G212): the payroll export goes by a SECURE_FILE link (password apart, receipt), served by its own module.
+    expect(PURPOSE_RULES.SECURE_FILE.recordTypes).toEqual(['StoredFile', 'PayrollExport'])
     expect(LINK_PURPOSES.filter((purpose) => linkPermissions(purpose).includes('files.read'))).toEqual(['DOCUMENT_VIEW', 'APPROVAL', 'RECORD_INVITE'])
     // A secure file is served by platform/links from its set only: the generic file routes never see it.
     expect(linkPermissions('SECURE_FILE')).toEqual(['links.download', 'links.open', 'links.receive'])

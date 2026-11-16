@@ -87,6 +87,8 @@ export function requestPasswordReset(auth: OfficeAuth, request: FastifyRequest, 
 const INVALID = 'This reset link is not valid or has expired. Ask for a new one.'
 /** B-W2b-159: a partner person's account has no password. */
 export const PARTNER_NO_PASSWORD = 'A partner person has no password: they sign in to the portal with a code sent by e-mail.'
+/** B-W2b-GF1 (G011): a partner person's access is changed through their organisation (seats, admins and the end of access live there). */
+export const PARTNER_STATUS_ELSEWHERE = "A partner person is suspended, reactivated or removed through their organisation (User › Partner organisation, or the organisation's Portal access tab): its seats, admins and end of access are kept there."
 
 export async function confirmPasswordReset(auth: OfficeAuth, request: FastifyRequest, body: { token: string; password: string }): Promise<{ status: 'password_set' }> {
   const token = parseToken(body.token)

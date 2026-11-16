@@ -454,6 +454,12 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    ledgers that reuse it stay refused), each word for word but for the erasure branch, and adds the door
    `factory_privacy_erase_row` (SECURITY DEFINER, a fixed search path, EXECUTE for factory_runtime only): exactly the named
    columns go blank, only with an ErasureRecord of an ERASURE request written in the same transaction),
+   `…_privacy_partner_w2b_guards` (B-W2b-GF1, no schema folder of its own: it redefines privacy's `factory_staff_notice_ack_check`
+   (an OFFICE person only), wave 6's `factory_stored_file_w2b6_check` (a DataRequest's package takes a delete date; a file without a
+   category no longer slips through), email-in's `factory_inbound_email_guard` (the envelope sender in the erasure; the retention
+   sweep's branch) and the door `factory_privacy_erase_row` (envelopeFrom), each word for word but for the lines marked B-W2b-GF1, and
+   adds `factory_privacy_ops_mail_swept_ok`: six columns of a settled mail go NULL only inside an APPLY sweep of a switched-on
+   InboundEmail ANONYMISE rule written in the same transaction),
    `…_insights_depth_w2b_guards` (W2b-6 schema wave 57/57, B-W2b-381, the metric layer: KPI versions born DRAFT, made from a
    lower version of the same key with what changed, DRAFT → ACTIVE → SUPERSEDED | RETIRED (one ACTIVE per key: a partial unique),
    an ACTIVE one changed only by its end, a past one frozen, only a DRAFT deleted; names, definitions and formulas in Italian and

@@ -16,7 +16,8 @@ const PROSPECT: ErasurePreview = {
   blocked: null,
   anonymised: [
     { recordType: 'Inquiry', method: 'ANONYMISED', count: 1, erasedFields: ['prospectName', 'prospectCompany', 'prospectEmail', 'prospectPhone', 'prospectLawfulBasis'], keptFields: [], why: null },
-    { recordType: 'InboundEmail', method: 'ANONYMISED', count: 3, erasedFields: ['fromAddress', 'fromName', 'subject', 'bodyText', 'bodyHtml'], keptFields: ['envelopeFrom'], why: { code: 'IMMUTABLE' } },
+    // B-W2b-GF1 (F54): the envelope sender goes blank too (it was kept as IMMUTABLE).
+    { recordType: 'InboundEmail', method: 'ANONYMISED', count: 3, erasedFields: ['fromAddress', 'fromName', 'subject', 'bodyText', 'bodyHtml', 'envelopeFrom'], keptFields: [], why: null },
     { recordType: 'AuditLog', method: 'ANONYMISED', count: 4, erasedFields: ['before', 'after'], keptFields: [], why: null },
   ],
   deleted: [],
@@ -33,12 +34,17 @@ const CONTACT: ErasurePreview = {
     { recordType: 'Message', method: 'ANONYMISED', count: 5, erasedFields: ['authorName', 'bodyText', 'bodyHtml'], keptFields: [], why: null },
     { recordType: 'EmailOutbound', method: 'ANONYMISED', count: 2, erasedFields: ['to', 'subject'], keptFields: [], why: null },
   ],
-  deleted: [{ recordType: 'CustomFieldValue', method: 'DELETED', count: 2, erasedFields: [], keptFields: [], why: null }],
+  // B-W2b-GF1 (F54): the files attached to what she sent are deleted, unless a hold or a retention date keeps one.
+  deleted: [
+    { recordType: 'CustomFieldValue', method: 'DELETED', count: 2, erasedFields: [], keptFields: [], why: null },
+    { recordType: 'StoredFile', method: 'DELETED', count: 3, erasedFields: [], keptFields: [], why: null },
+  ],
   kept: [
     { recordType: 'Party', method: 'KEPT', count: 1, erasedFields: [], keptFields: ['legalName', 'tradeName'], why: { code: 'CUSTOMER' } },
+    { recordType: 'StoredFile', method: 'KEPT', count: 1, erasedFields: [], keptFields: [], why: { code: 'RETAINED' } },
     { recordType: 'MeasurementProfile', method: 'KEPT', count: 1, erasedFields: [], keptFields: ['riderName', 'measurements', 'fitNotes'], why: { code: 'MEASUREMENTS' } },
   ],
-  records: 12,
+  records: 16,
   action: { allowed: true, held: null },
 }
 

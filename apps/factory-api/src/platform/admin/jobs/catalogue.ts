@@ -88,6 +88,8 @@ export const JOB_CATALOGUE: readonly JobEntry[] = Object.freeze([
   job('insights.factsHourly', '5 * * * *', 'check'),
   job('insights.factsNightly', '40 2 * * *', 'check'),
   job('privacy.retentionSweep', '50 2 * * *', 'schedule'),
+  // B-W2b-GF1 (G274): a person's data package deleted on its date (an early run deletes nothing the next tick would not).
+  job('privacy.purgePackages', '41 * * * *', 'check'),
   job('shipping.closeDays', '50 * * * *', 'check'),
   // B-W2b-435: the owner's morning e-mail and the report e-mails people asked for (they mail people at their time).
   job('insights.ownerDigest', '*/15 * * * *', 'schedule'),

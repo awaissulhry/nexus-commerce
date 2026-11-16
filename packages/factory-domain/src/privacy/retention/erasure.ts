@@ -8,13 +8,13 @@ import type { Issue } from '../../core/errors'
  *
  * What one record gets, written as one ErasureRecord (column names, never values):
  *   ANONYMISED  the person's columns are blanked or replaced; the rest of the record (the business data) stays
- *   DELETED     the record is gone (a personal custom value)
+ *   DELETED     the record is gone (a personal custom value; B-W2b-GF1: a file attached to what the person sent, its row DELETED)
  *   KEPT        the record stays as it is, with why (a legal hold)
- * A record that keeps some personal columns names them with why (keptFields): a received mail keeps the envelope sender the mail
- * server recorded (IMMUTABLE) while its sender, subject and text are blanked (B-W2b-F54).
+ * A record that keeps some personal columns names them with why (keptFields). B-W2b-GF1 (the Owner's decision of 15 Nov 2026):
+ * a received mail no longer keeps its envelope sender (it was IMMUTABLE): every column of the person in it is blanked.
  */
 
-export const KEPT_WHY = ['FISCAL', 'DISPUTE', 'SAFETY_REPORT', 'EMPLOYMENT', 'HEALTH', 'CUSTOMER', 'MEASUREMENTS', 'IMMUTABLE', 'ALREADY_ERASED', 'NOTICE_PROOF'] as const
+export const KEPT_WHY = ['FISCAL', 'DISPUTE', 'SAFETY_REPORT', 'EMPLOYMENT', 'HEALTH', 'CUSTOMER', 'MEASUREMENTS', 'ALREADY_ERASED', 'NOTICE_PROOF', 'LEGAL_HOLD', 'RETAINED'] as const
 export type KeptWhy = (typeof KEPT_WHY)[number]
 
 /** The words stored as ErasureRecord.keptWhy (3-1000 characters): what the law keeps and why. */
@@ -26,9 +26,11 @@ export const KEPT_WHY_WORDS: Readonly<Record<KeptWhy, string>> = Object.freeze({
   HEALTH: 'Kept: health surveillance and accident records are kept 10 years after the employment ends (D.Lgs. 81/2008 art. 25; GDPR art. 17(3)(b)).',
   CUSTOMER: 'Kept: the customer record names the person and the orders and invoices refer to it (c.c. art. 2220: 10 years; GDPR art. 17(3)(b)).',
   MEASUREMENTS: 'Kept: the measurements a garment was made to, for the legal guarantee of conformity (D.Lgs. 206/2005 art. 132: 26 months; GDPR art. 17(3)(e)); their photos go on their own delete date.',
-  IMMUTABLE: "Kept: what the mail server recorded when the mail arrived (its envelope sender) stays as it came; the database never changes it. The rest of the person's details in the mail are blanked.",
   ALREADY_ERASED: 'Already erased earlier: nothing of the person is left in this record.',
   NOTICE_PROOF: "Kept: the proof that the person was given the privacy notice (GDPR arts. 5(2), 13) names the notice's version, not the person's data.",
+  // B-W2b-GF1 (F54): a file attached to what the person sent, which a hold or a retention date keeps.
+  LEGAL_HOLD: 'Kept: the file is on legal hold (a dispute, an inspection or a claim needs it as it is; GDPR art. 17(3)(e)).',
+  RETAINED: 'Kept until its retention date: the law or a contract keeps the file until then (GDPR art. 17(3)(b)).',
 })
 
 /** Why an erasure cannot run now (a 409 each, with its words); a legal hold is not one of these: it keeps a record (KEPT). */

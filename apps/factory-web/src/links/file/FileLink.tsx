@@ -80,7 +80,7 @@ function FileLinkContainer({ api, source }: { api: ApiClient; source: 'set' | 'p
   const setPage = useCallback((update: (page: FilePage) => FilePage) => setModel((state) => (state.page ? { ...state, page: update(state.page) } : state)), [])
   const setDownload = useCallback((fileId: string, value: DownloadState) => setModel((state) => ({ ...state, downloads: { ...state.downloads, [fileId]: value } })), [])
 
-  const read = useCallback(async (): Promise<FilePage> => (source === 'payroll' ? pageOfPayroll(await readPayrollFiles(api)) : pageOfSet(await readFileSet(api, unlock.current))), [api, source])
+  const read = useCallback(async (): Promise<FilePage> => (source === 'payroll' ? pageOfPayroll(await readPayrollFiles(api, unlock.current)) : pageOfSet(await readFileSet(api, unlock.current))), [api, source])
 
   const load = useCallback(async () => {
     setModel((state) => ({ ...state, link: 'loading', slow: false }))
@@ -181,7 +181,7 @@ function FileLinkContainer({ api, source }: { api: ApiClient; source: 'set' | 'p
       pending.current.set(file.id, key)
       let answer: Downloaded
       try {
-        answer = source === 'payroll' ? await downloadPayrollFile(api, file.id, key) : await downloadSetFile(api, file.id, unlock.current, key)
+        answer = source === 'payroll' ? await downloadPayrollFile(api, file.id, unlock.current, key) : await downloadSetFile(api, file.id, unlock.current, key)
       } catch (error) {
         // A refusal used nothing: the next press is a new request. A lost answer keeps its key (the same use on retry).
         if (!isApiError(error) || error.kind !== 'unavailable') pending.current.delete(file.id)

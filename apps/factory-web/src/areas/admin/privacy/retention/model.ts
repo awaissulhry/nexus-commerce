@@ -31,7 +31,8 @@ export const typeKey = (recordType: string, part: 'name' | 'countsFrom') => `dp.
 export const doesKey = (recordType: string, action: RetentionAction) => (KNOWN.has(recordType) ? `dp.ret.type.${recordType}.does.${action}` : 'dp.ret.type.other.does')
 
 /** The purges that run on their own dates (each by its own job), worded `dp.ret.purge.<key>.*`. */
-export const PURGE_KEYS = ['measurementPhotos', 'portalCodes', 'linkDrafts', 'largeUploads', 'exportFiles'] as const
+// B-W2b-GF1 (G274): accessPackages, a person's data package deleted 30 days after it was made.
+export const PURGE_KEYS = ['measurementPhotos', 'portalCodes', 'linkDrafts', 'largeUploads', 'exportFiles', 'accessPackages'] as const
 export const purgeKnown = (key: string) => (PURGE_KEYS as readonly string[]).includes(key)
 /** Records the privacy pack keeps for good, worded `dp.ret.kept.<Type>`. */
 export const KEPT_KEYS = ['DataRequest', 'ErasureRecord', 'RetentionRule', 'RetentionSweep'] as const

@@ -12,6 +12,7 @@ import { useLocale } from '../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { DATE_FORMATS, DECIMAL_SEPARATORS, DELIMITERS, ENCODINGS, LAYOUT_LIMITS } from '@nexus/factory-domain/people/payroll/layouts'
 import { PAYROLL_LIMITS, PAYROLL_LINK_TERMS } from '@nexus/factory-domain/people/payroll/rules'
+import { LINK_PASSWORD } from '@nexus/factory-domain/links/password'
 import { TIME_ZONE } from '../../_shared/model'
 import type { ColumnKey, ShowAnswer } from '../api'
 import { changeSides, checkWords, COLUMN_KEYS, columnsHeld, confirmHeld, correctHeld, delimiterKey, formatChoices, formatWords, meaningOf, monthWords, placeOf, recordHref, sendHeld, withKey, type ColumnDraft, type PayrollCan } from '../model'
@@ -319,8 +320,9 @@ export function ExportModals({ prefix, can, dialogs, actions }: { prefix: string
 
 /**
  * Send to the labour consultant (design pop:send, the Publish dialog pattern): recipient, expiry, uses, message, then the result in
- * the same dialog; the link can be withdrawn. The mail carries a link, never the file. The consultant's download page comes with a
- * later wave: the dialog says so before Send, because a person must know a real consultant cannot fetch the file in a browser yet.
+ * the same dialog; the link can be withdrawn. The mail carries a link, never the file. B-W2b-GF1 (G212): a secure file — an optional
+ * password the office gives the consultant apart (never in the mail), and the consultant confirms the receipt on their page (the
+ * page exists since B-W2b-169: the old "no page yet" banner is gone).
  */
 function SendModal({ can, dialog, actions }: { can: PayrollCan; dialog: SendDialog; actions?: ExportDialogActions | undefined }) {
   const t = usePayrollWords()
@@ -360,9 +362,6 @@ function SendModal({ can, dialog, actions }: { can: PayrollCan; dialog: SendDial
     >
       <div className="fw-pp-stack">
         <p className="fw-pp-hint">{t('sendDialog.what', { month: label, version: target.revision, number: target.number ?? '—' })}</p>
-        <Banner tone="warning" title={t('sendDialog.noPage')}>
-          {t('sendDialog.noPageBody')}
-        </Banner>
         <LayoutWarning layout={target.layout} />
         {done ? (
           <>
@@ -373,6 +372,7 @@ function SendModal({ can, dialog, actions }: { can: PayrollCan; dialog: SendDial
                 { label: t('sendDialog.to'), value: done.link.email },
                 { label: t('sendDialog.expiresAt'), value: formatDateTime(done.link.expiresAt, place) },
                 { label: t('sendDialog.uses'), value: String(done.link.maxUses) },
+                { label: t('sendDialog.password'), value: t(draft.password !== '' ? 'sendDialog.passwordSet' : 'sendDialog.passwordNone') },
                 { label: t('sendDialog.state'), value: <Tag tone={dialog.withdrawn ? 'neutral' : 'success'}>{t(dialog.withdrawn ? 'link.REVOKED' : 'link.LIVE')}</Tag> },
               ]}
             />
@@ -398,6 +398,9 @@ function SendModal({ can, dialog, actions }: { can: PayrollCan; dialog: SendDial
                 </Select>
               </Field>
             </div>
+            <Field label={t('sendDialog.password')} hint={t('sendDialog.passwordHint')}>
+              <Input type="password" autoComplete="new-password" value={draft.password} maxLength={LINK_PASSWORD.maxLength} onChange={(event) => actions?.onSendDraft?.({ password: event.target.value })} />
+            </Field>
             <Field label={t('sendDialog.message')} hint={t('sendDialog.messageHint')}>
               <Textarea value={draft.message} limit={PAYROLL_LIMITS.message} rows={3} onChange={(event) => actions?.onSendDraft?.({ message: event.target.value })} />
             </Field>

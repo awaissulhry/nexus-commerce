@@ -81,7 +81,7 @@ export function reasonProblem(path: string, value: string | null | undefined, ma
 }
 
 /** Why a request cannot move on now: a code each, with its words (REQUEST_HELD_WORDS). */
-export const REQUEST_HELD = ['CLOSED', 'NOT_STARTED', 'IDENTITY_NOT_CHECKED', 'IDENTITY_CHECKED', 'EXTENDED', 'TOO_LATE_TO_EXTEND', 'NOT_ACCESS', 'NOT_ERASURE', 'NO_PACKAGE', 'NOT_ERASED', 'ERASED'] as const
+export const REQUEST_HELD = ['CLOSED', 'NOT_STARTED', 'IDENTITY_NOT_CHECKED', 'IDENTITY_CHECKED', 'EXTENDED', 'TOO_LATE_TO_EXTEND', 'NOT_ACCESS', 'NOT_ERASURE', 'NO_PACKAGE', 'PACKAGE_DELETED', 'NOT_ERASED', 'ERASED'] as const
 export type RequestHeld = (typeof REQUEST_HELD)[number]
 
 export const REQUEST_HELD_WORDS: Readonly<Record<RequestHeld, string>> = Object.freeze({
@@ -94,6 +94,8 @@ export const REQUEST_HELD_WORDS: Readonly<Record<RequestHeld, string>> = Object.
   NOT_ACCESS: 'Only an access request has a data package.',
   NOT_ERASURE: 'Only an erasure request erases or anonymises the person.',
   NO_PACKAGE: "Collect the person's data package first: an access request is done once it is handed over.",
+  // B-W2b-GF1 (G274): the package went on its delete date.
+  PACKAGE_DELETED: "The person's data package was deleted on its date (30 days after it was made): collect it again while the request is open.",
   NOT_ERASED: 'Erase or anonymise the person first (what the law keeps stays, with why): an erasure request is done once that is recorded.',
   ERASED: 'The person was erased on this request already: what was erased and kept is recorded.',
 })
@@ -105,6 +107,8 @@ export interface RequestFacts {
   readonly extendedDueAt: Date | null
   readonly identityCheckedAt: Date | null
   readonly packageFileId: string | null
+  /** B-W2b-GF1 (G274): the package was deleted on its date (collect it again). */
+  readonly packageDeleted?: boolean
   /** How many erasure records the request has. */
   readonly erasures: number
 }
@@ -125,18 +129,33 @@ export function requestActions(request: RequestFacts, now: Date) {
     checkIdentity: may(closed ?? (request.identityCheckedAt !== null ? 'IDENTITY_CHECKED' : null)),
     extend: may(closed ?? (request.extendedDueAt !== null ? 'EXTENDED' : now.getTime() >= request.dueAt.getTime() ? 'TOO_LATE_TO_EXTEND' : null)),
     collect: may(closed ?? (request.kind !== 'ACCESS' ? 'NOT_ACCESS' : started)),
-    openPackage: may(request.kind !== 'ACCESS' ? 'NOT_ACCESS' : request.packageFileId === null ? 'NO_PACKAGE' : null),
+    openPackage: may(request.kind !== 'ACCESS' ? 'NOT_ACCESS' : request.packageFileId === null ? 'NO_PACKAGE' : request.packageDeleted ? 'PACKAGE_DELETED' : null),
     erase: may(closed ?? (request.kind !== 'ERASURE' ? 'NOT_ERASURE' : started ?? (request.erasures > 0 ? 'ERASED' : null))),
     close: may(
       closed ??
         started ??
-        (request.identityCheckedAt === null ? 'IDENTITY_NOT_CHECKED' : request.kind === 'ACCESS' && request.packageFileId === null ? 'NO_PACKAGE' : request.kind === 'ERASURE' && request.erasures === 0 ? 'NOT_ERASED' : null),
+        (request.identityCheckedAt === null
+          ? 'IDENTITY_NOT_CHECKED'
+          : request.kind === 'ACCESS' && request.packageFileId === null
+            ? 'NO_PACKAGE'
+            : request.kind === 'ACCESS' && request.packageDeleted
+              ? 'PACKAGE_DELETED'
+              : request.kind === 'ERASURE' && request.erasures === 0
+                ? 'NOT_ERASED'
+                : null),
     ),
     refuse: may(closed),
     withdraw: may(closed),
   }
 }
 export type RequestActions = ReturnType<typeof requestActions>
+
+/**
+ * B-W2b-GF1 (G274; GDPR art. 5(1)(e)): a person's data package (the copy of everything about them an access request collected)
+ * is deleted this many days after it was made (StoredFile.deleteAfter; the hourly `privacy.purgePackages`): long enough to
+ * download it within the request's own month, never kept as a second copy of the person's data.
+ */
+export const PACKAGE_KEEP_DAYS = 30
 
 /** The person's name as shown once erased (the records keep the business data; the name is replaced). */
 export const ERASED_PERSON_WORDS = Object.freeze({ it: 'Persona cancellata', en: 'Erased person' })

@@ -991,7 +991,13 @@
       }
     },
     "assignmentsCount_one": "{count} ruolo",
-    "assignmentsCount_other": "{count} ruoli"
+    "assignmentsCount_other": "{count} ruoli",
+    "partnerAccess": {
+      "title": "Accesso al portale",
+      "body": "Questa persona entra nel portale della sua organizzazione con un codice inviato per e-mail: nessuna password e nessun autenticatore. Il suo accesso — la data di fine, sospendere o riattivare, togliere dall'organizzazione — si cambia nella scheda Organizzazione partner, dove si tengono i posti e gli amministratori del portale.",
+      "open": "Apri Organizzazione partner",
+      "signIn": "Codice via e-mail (portale)"
+    }
   },
   "worker": {
     "tab": {

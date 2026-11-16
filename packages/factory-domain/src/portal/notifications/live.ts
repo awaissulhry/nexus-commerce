@@ -83,6 +83,6 @@ export function partnerLiveViewFor(message: LiveMessage, viewer: Actor, catalogu
   if (!can(viewer, rule.permission, { companyId: message.companyId, partyId: viewer.partyId })) return null
   const fields: Record<string, unknown> = {}
   for (const key of rule.fields) if (!isMoneyField(key) && Object.hasOwn(message.fields, key)) fields[key] = message.fields[key]
-  const { tenantId: _tenant, siteId: _site, ...rest } = message
+  const { tenantId: _tenant, siteId: _site, partyIds: _parties, ...rest } = message
   return { ...rest, siteId: null, fields }
 }

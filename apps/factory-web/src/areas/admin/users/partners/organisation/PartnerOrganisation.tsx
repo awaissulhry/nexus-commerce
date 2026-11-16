@@ -15,8 +15,9 @@ import { PartnerOrganisationView } from './view/PartnerOrganisationView'
 /**
  * User › Partner organisation (`/w/<company>/admin/users/<id>?tab=partner`, B-W2b-180): the person's organisation's portal
  * access (`GET /partners/:partyId`: its admins and this person's role, capabilities and end of access); a new end date
- * (`PATCH /partners/:partyId/people/:userId`) and "Remove from organisation" (`POST …/deactivate`, an invited person's
- * invitation revoked instead), each after a fresh code when the API asks; `onChanged` reads the user record again.
+ * (`PATCH /partners/:partyId/people/:userId`), Suspend / Reactivate (`POST …/suspend|reactivate`, B-W2b-GF1) and "Remove from
+ * organisation" (`POST …/deactivate`, an invited person's invitation revoked instead), each after a fresh code when the API
+ * asks; `onChanged` reads the user record again.
  */
 export function PartnerOrganisation({ userId, partyId, onChanged }: { userId: string; partyId: string; onChanged?: () => void }) {
   const api = useOfficeApi()
@@ -26,6 +27,8 @@ export function PartnerOrganisation({ userId, partyId, onChanged }: { userId: st
   const [access, setAccess] = useState<PortalAccess | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [confirm, setConfirm] = useState(false)
+  // B-W2b-GF1 (G011): Suspend / Reactivate through the partner route.
+  const [statusConfirm, setStatusConfirm] = useState<'suspend' | 'reactivate' | null>(null)
   const [busy, setBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
   const [notice, setNotice] = useState<PortalNotice | null>(null)
@@ -54,6 +57,7 @@ export function PartnerOrganisation({ userId, partyId, onChanged }: { userId: st
     try {
       await guard(sentence, work)
       setConfirm(false)
+      setStatusConfirm(null)
       setNotice(done)
       await load()
       onChanged?.()
@@ -73,7 +77,7 @@ export function PartnerOrganisation({ userId, partyId, onChanged }: { userId: st
 
   return (
     <PartnerOrganisationView
-      model={{ prefix, userId, access, problem, can, today: dayOf(now), now, confirm, busy, dialogProblem, notice, stepUp }}
+      model={{ prefix, userId, access, problem, can, today: dayOf(now), now, confirm, statusConfirm, busy, dialogProblem, notice, stepUp }}
       actions={{
         onRetry: () => {
           setProblem(null)
@@ -92,6 +96,14 @@ export function PartnerOrganisation({ userId, partyId, onChanged }: { userId: st
           if (!person) return Promise.resolve(false)
           if (person.status === 'INVITED') return change('stepUp.sentence.invite', () => revokeInvitation(api, partyId, userId, person.version), { key: 'done.revoke', tone: 'success', params: { count: 1 } }, true)
           return change('stepUp.sentence.status', () => changePartnerStatus(api, partyId, userId, 'deactivate', { version: person.version, ...(reason ? { reason } : {}) }), { key: 'done.removed', tone: 'success', params: { name: person.displayName } }, true)
+        },
+        onStatusConfirm: (change) => {
+          setStatusConfirm(change)
+          setDialogProblem(null)
+        },
+        onStatus: (next, reason) => {
+          if (!person) return Promise.resolve(false)
+          return change('stepUp.sentence.status', () => changePartnerStatus(api, partyId, userId, next, { version: person.version, ...(reason ? { reason } : {}) }), { key: `done.${next}`, tone: 'success', params: { count: 1 } }, true)
         },
         onStepUp: (code) => void submitStepUp(code),
         onStepUpClose: cancelStepUp,

@@ -674,7 +674,8 @@ describe('the link-type registry (links/_nav/link-types.ts)', () => {
     // B-W2b-169
     expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'StoredFile' } })).toBe('files')
     expect(linkTaskOf({ purpose: 'SECURE_FILE', record: { type: 'StoredFile' } })).toBe('files')
-    expect(linkTaskOf({ purpose: 'DOCUMENT_VIEW', record: { type: 'PayrollExport' } })).toBe('payroll-file')
+    // B-W2b-GF1 (G212): the payroll file goes by a SECURE_FILE link.
+    expect(linkTaskOf({ purpose: 'SECURE_FILE', record: { type: 'PayrollExport' } })).toBe('payroll-file')
     // B-W2b-199: a PAYMENT link of an invoice or a deposit request opens Pay online.
     expect([linkTaskOf({ purpose: 'PAYMENT', record: { type: 'Invoice' } }), linkTaskOf({ purpose: 'PAYMENT', record: { type: 'DepositRequest' } })]).toEqual(['pay', 'pay'])
     expect(linkTaskOf({ purpose: 'SOMETHING_NEW', record: { type: 'Quote' } })).toBeNull()

@@ -1,7 +1,7 @@
 import type { DataSubjectKind } from '@nexus/factory-domain/privacy/retention/requests'
 import { ownRecords } from './own'
 import { accountRecords, contactRecords, personalValues, workRecords } from './records'
-import { history, mails, messages } from './shared'
+import { attachments, history, mails, messages } from './shared'
 import type { PersonSource } from './type'
 
 /**
@@ -16,6 +16,8 @@ export const PERSON_SOURCES: readonly PersonSource[] = [
   accountRecords,
   messages,
   mails,
+  // B-W2b-GF1 (F54): the files attached to what they sent and wrote.
+  attachments,
   history,
 ]
 
