@@ -94,6 +94,8 @@ export const makeLinkContract = defineContract({
     contactId: id().optional(),
     email: z.string().trim().max(254).optional(),
     send: z.boolean(),
+    /** B-TH-004: "Send outside this customer" ticked: the address may be another party's contact (recorded). */
+    sendOutside: z.boolean().optional(),
     photos: photoRule.optional(),
     language: z.enum(['it', 'en']).optional(),
     expiresInDays: z.number().int().min(1).max(60).optional(),

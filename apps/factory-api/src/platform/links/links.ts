@@ -11,6 +11,7 @@ import type { CommandTx } from '../../core/command'
 import { actorOf, requireContext, type OfficeContext } from '../../core/context'
 import { officeAuthOf } from '../auth/sessions/office-auth'
 import { emailOrThrow } from '../auth/users/email'
+import { checkRecipientRule } from '../email-out/outbound' // B-TH-004
 import type { LinkView } from './contract'
 import { assertNoPayByLink } from './pay'
 import { linkRecordSource } from './records'
@@ -123,6 +124,8 @@ export interface CreateLinkInput {
   readonly note?: string | undefined
   readonly expiresInDays?: number | undefined
   readonly maxUses?: number | undefined
+  /** B-TH-004: "Send outside this customer" ticked: the link may be for another party's address (recorded). */
+  readonly sendOutside?: boolean | undefined
 }
 
 /** links.create: a new link for a record (see above). Returns the link and, the first time only, its URL. */
@@ -151,6 +154,8 @@ export async function createLink(request: FastifyRequest, body: CreateLinkInput,
     await assertNoPayByLink(tx, { recordType: body.recordType, recordId: body.recordId })
     const terms = linkTerms(body.purpose, body, now)
     const to = email !== undefined ? email : record.email ? emailOrThrow(record.email) : null
+    // B-TH-004 (WALL-G05): the address a link is for follows the one recipient rule of every mail on the record's party.
+    const sentOutside = to === null ? [] : await checkRecipientRule(tx, { recordParty: record.partyId, to: [to], sendOutside: body.sendOutside, pathOf: () => 'email' })
     const token = mintLinkToken({ tenantId: context.tenantId, partyId: record.partyId, linkId })
     minted = { value: token.value, partyId: record.partyId }
     await tx.oneOffLink.createMany({
@@ -185,6 +190,8 @@ export async function createLink(request: FastifyRequest, body: CreateLinkInput,
         email: to,
         expiresAt: toUtcIso(terms.expiresAt),
         maxUses: terms.maxUses,
+        // B-TH-004: what "Send outside this customer" let through.
+        ...(sentOutside.length > 0 ? { sentOutside: sentOutside.map((address) => ({ address: address.address, parties: address.parties })) } : {}),
       },
     })
     return { link: linkViewOf(await loadLink(tx, linkId), now) }

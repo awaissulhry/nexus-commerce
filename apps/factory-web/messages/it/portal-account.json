@@ -178,9 +178,10 @@
       "role": "Scegli un ruolo."
     },
     "failed": {
-      "address": "Questo indirizzo non si può invitare qui: è già nel tuo portale, o appartiene a un altro account. Chiedici se dovrebbe essere tuo.",
+      "address": "Questa persona è già nel tuo portale (o è sospesa): cambia il suo ruolo invece di invitarla.",
       "seats": "Non siamo riusciti a invitarlo ora: i posti del tuo portale potrebbero essere esauriti, o il ruolo non è pronto. Chiedici.",
-      "invalid": "Questo ruolo non è aperto alla tua azienda, o un campo non è stato accettato. Controlla e riprova."
+      "invalid": "Questo ruolo non è aperto alla tua azienda, o un campo non è stato accettato. Controlla e riprova.",
+      "notInvitable": "Non abbiamo potuto invitare questo indirizzo. Chiedi a noi."
     }
   },
   "roleDialog": {

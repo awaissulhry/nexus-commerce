@@ -40,6 +40,11 @@ export const misSendView = output({
   warnings: z.array(output({ code: z.enum(MIS_SEND_WARNINGS), items: z.array(z.string()) })),
   /** Each attachment and who sees it: shared with the party, or the office only. */
   attachments: z.array(output({ id: id(), name: z.string(), sizeBytes: z.number().int(), audience: z.enum(['PARTY', 'OFFICE']) })),
+  /**
+   * B-TH-004: the addresses the send refuses unless the person ticks "Send outside this customer" (another party's contact or
+   * portal person, not one of this party's: factory-domain email/recipient-party). Empty: nothing to tick.
+   */
+  outsideCustomer: z.array(z.string()),
 })
 export type MisSendView = z.infer<typeof misSendView>
 

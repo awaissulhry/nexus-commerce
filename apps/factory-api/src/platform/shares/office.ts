@@ -13,7 +13,7 @@ import { actorOf, requireContext, type OfficeContext } from '../../core/context'
 import { deliverMail, queueMail } from '../approvals-out/mail'
 import { officeAuthOf } from '../auth/sessions/office-auth'
 import { emailOrThrow } from '../auth/users/email'
-import { suppressedAmong } from '../email-out/outbound'
+import { checkRecipientRule, suppressedAmong } from '../email-out/outbound'
 import { systemCallerOf } from '../files/files'
 import { assertNoPayByLink } from '../links/pay'
 import { resolveRecord, type RecordScope } from '../threads/records'
@@ -171,6 +171,8 @@ export interface InviteBody {
   readonly note?: string | null | undefined
   readonly send: boolean
   readonly language?: ShareLocale | undefined
+  /** B-TH-004: "Send outside this customer" ticked: the invited address may be another party's contact (recorded). */
+  readonly sendOutside?: boolean | undefined
 }
 
 const fail = (issues: Issue[], what: string): ValidationError => new ValidationError(issues.length === 1 ? issues[0]!.message : what, issues)
@@ -220,6 +222,8 @@ export async function inviteToRecord(request: FastifyRequest, body: InviteBody, 
     if (!again || again.partyId !== partyId || again.companyId !== companyId) throw new NotFoundError('Record not found.')
     const live = await tx.recordShare.count({ where: { recordType: body.recordType, recordId: body.recordId, email: to, revokedAt: null, expiresAt: { gt: at } } })
     if (live > 0) throw refusal('ALREADY_INVITED', 'This address is invited to this record already: change what they may do, or revoke it first.')
+    // B-TH-004 (WALL-G05, the brand wall): the invited address follows the one recipient rule of every mail on the record's party.
+    const sentOutside = await checkRecipientRule(tx, { recordParty: partyId, to: [to], sendOutside: body.sendOutside, pathOf: () => (body.contactId ? 'body/contactId' : 'body/email') })
     await assertNoPayByLink(tx, { recordType: body.recordType, recordId: body.recordId })
     if (body.send && (await suppressedAmong(tx, [to])).size > 0) throw refusal('SUPPRESSED', 'This address bounced or complained: correct it first.')
     // The link first (the share names it), expiring with the share; its one use is never taken (RECORD_INVITE counts nothing).
@@ -232,7 +236,24 @@ export async function inviteToRecord(request: FastifyRequest, body: InviteBody, 
       select: { id: true },
     })
     const outboundId = body.send ? await queueMail(tools, { companyId, record: { type: 'OneOffLink', id: linkId }, template: SHARE_MAIL_TEMPLATES.invite, to, locale, subject: inviteMail(locale, mailFacts, '').subject, sender }) : null
-    tools.audit({ recordType: 'RecordShare', recordId: shareId, companyId, siteId: facts.scope.siteId, after: { recordType: body.recordType, recordId: body.recordId, partyId, contactId: facts.contact?.id ?? null, permissions, expiresAt: toUtcIso(expiresAt!), linkId, mailed: outboundId !== null } })
+    tools.audit({
+      recordType: 'RecordShare',
+      recordId: shareId,
+      companyId,
+      siteId: facts.scope.siteId,
+      after: {
+        recordType: body.recordType,
+        recordId: body.recordId,
+        partyId,
+        contactId: facts.contact?.id ?? null,
+        permissions,
+        expiresAt: toUtcIso(expiresAt!),
+        linkId,
+        mailed: outboundId !== null,
+        // B-TH-004: what "Send outside this customer" let through.
+        ...(sentOutside.length > 0 ? { sentOutside: sentOutside.map((address) => ({ address: address.address, parties: address.parties })) } : {}),
+      },
+    })
     tools.emit({ type: 'record_share.invited', subject: shareId, companyId, payload: { shareId, recordType: body.recordType, recordId: body.recordId, partyId, linkId, permissions, expiresAt: toUtcIso(expiresAt!), mailed: outboundId !== null } })
     return { shareId, outboundId }
   })

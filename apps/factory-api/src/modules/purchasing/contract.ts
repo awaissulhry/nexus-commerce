@@ -331,6 +331,8 @@ export const sendContract = defineContract({
   body: input({
     version,
     cc: z.array(email).max(10).optional(),
+    /** B-TH-004: "Send outside this customer" ticked: To and Cc may hold another party's address (recorded). */
+    sendOutside: z.boolean().optional(),
     subject: text(200).nullish(),
     message: text(MAX_TEXT.message).nullish(),
     /** B-W2a-52 (SCM-087): when the supplier is asked to answer by; default 48 hours, longer by its closed days. */
@@ -365,7 +367,7 @@ export const sendContract = defineContract({
 
 export const sendLinkContract = defineContract({
   params: orderParams,
-  body: input({ version, cc: z.array(email).max(10).optional(), message: text(MAX_TEXT.message).nullish() }),
+  body: input({ version, cc: z.array(email).max(10).optional(), message: text(MAX_TEXT.message).nullish(), /* B-TH-004 */ sendOutside: z.boolean().optional() }),
   response: {
     200: output({
       order: orderView,

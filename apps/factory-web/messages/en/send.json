@@ -71,5 +71,11 @@
     },
     "linkNote": "The link is only in the recipient's mail: nobody here sees its address.",
     "newLink": "Send a new link"
+  },
+  "outside": {
+    "title": "The document did not go: an address belongs to another customer or supplier",
+    "tick": "Send outside this customer",
+    "held": "Tick “Send outside this customer”, or take the address off",
+    "hidden": "A blind copy goes only to our own colleagues or to this customer’s contacts: take it off and send again."
   }
 }

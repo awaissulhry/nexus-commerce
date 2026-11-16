@@ -37,7 +37,9 @@
     "badRecipient": "Non è stato inviato nulla: un indirizzo è stato rifiutato (non valido, oppure in passato respinto o segnalato).",
     "noSubject": "Non è stato inviato nulla: scrivi un oggetto per la prima email di questa conversazione.",
     "attachmentsRefused": "Non è stato inviato nulla: un file non può più partire con l'email (non condiviso con la controparte, o troppo grande insieme agli altri).",
-    "mentionsRefused": "Non è stato salvato nulla: una persona menzionata non può leggere questo record."
+    "mentionsRefused": "Non è stato salvato nulla: una persona menzionata non può leggere questo record.",
+    "outsideCustomer": "Un indirizzo è di un altro cliente o fornitore: il messaggio non è partito. Toglilo, oppure invia dal controllo spuntando «Invia fuori da questo cliente».",
+    "hiddenOutside": "Una copia nascosta (Ccn) va solo ai nostri colleghi o ai contatti di questo cliente: il messaggio non è partito."
   },
   "thread": {
     "loading": "Lettura della conversazione…",
@@ -174,7 +176,8 @@
       "store": "L'archivio dei file non ha accettato il file. Riprova.",
       "refused": "La fabbrica ha rifiutato il file così com'è (formato, dimensione o condivisione).",
       "forbidden": "Non puoi caricare o condividere file su questo record.",
-      "moduleOwned": "Questo tipo di file di questo record si aggiunge dalla pagina del record, non da qui."
+      "moduleOwned": "Questo tipo di file di questo record si aggiunge dalla pagina del record, non da qui.",
+      "otherParty": "Un file si condivide solo con il cliente o fornitore della sua scheda: questa condivisione è stata rifiutata."
     },
     "notice": {
       "uploaded": "File caricato. Compare nell'elenco e nella cronologia.",

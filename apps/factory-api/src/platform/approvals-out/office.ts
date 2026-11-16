@@ -13,7 +13,7 @@ import { command, type CommandTx } from '../../core/command'
 import { actorOf, requireContext, type OfficeContext } from '../../core/context'
 import { officeAuthOf } from '../auth/sessions/office-auth'
 import { emailOrThrow } from '../auth/users/email'
-import { suppressedAmong } from '../email-out/outbound'
+import { checkRecipientRule, suppressedAmong } from '../email-out/outbound'
 import { prepareFileCopy, recordGeneratedFile, systemCallerOf, type PreparedGeneratedFile } from '../files/files'
 import { processFiles } from '../files/service'
 import { assertNoPayByLink, LinkRefusedError } from '../links/pay'
@@ -141,6 +141,8 @@ export interface AskBody {
   readonly fileIds?: readonly string[] | undefined
   readonly send: boolean
   readonly language?: ApprovalLocale | undefined
+  /** B-TH-004: "Send outside this customer" ticked: the address may be another party's contact (recorded). */
+  readonly sendOutside?: boolean | undefined
 }
 
 const fail = (issues: Issue[], what: string): ValidationError => new ValidationError(issues.length === 1 ? issues[0]!.message : what, issues)
@@ -211,6 +213,8 @@ export async function askApproval(request: FastifyRequest, body: AskBody, idempo
       if (open > 0) throw new ConflictError(`An open ${KIND_RULES[body.kind].name.en.toLowerCase()} request waits on this record already: withdraw it first.`)
       await assertNoPayByLink(tx, { recordType: body.recordType, recordId: body.recordId })
       if (body.send && to && (await suppressedAmong(tx, [to])).size > 0) throw new LinkRefusedError('SUPPRESSED', 'This address bounced or complained: correct it first.')
+      // B-TH-004 (WALL-G05, the brand wall): the address the request goes to follows the one recipient rule on the party's record.
+      const sentOutside = to ? await checkRecipientRule(tx, { recordParty: partyId, to: [to], sendOutside: body.sendOutside, pathOf: () => (body.contactId ? 'body/contactId' : 'body/email') }) : []
       await tx.approvalRequest.create({
         data: { id: requestId, companyId: record.companyId, recordType: body.recordType, recordId: body.recordId, partyId, contactId: body.contactId ?? null, kind: body.kind, question: body.question.trim(), dueAt: dueAt!, createdAt: at, updatedAt: at, createdById: context.actorId },
         select: { id: true },
@@ -232,7 +236,25 @@ export async function askApproval(request: FastifyRequest, body: AskBody, idempo
         askedBy: sender ? { id: sender.userId, name: sender.name } : null,
       })
       const outboundId = body.send && to ? await queueMail(tools, { companyId: record.companyId, record: { type: 'OneOffLink', id: linkId }, template: APPROVAL_MAIL_TEMPLATES.request, to, locale, subject: requestMail(locale, mailFacts, '').subject, sender }) : null
-      tools.audit({ recordType: RECORD, recordId: requestId, companyId: record.companyId, siteId: record.siteId, after: { kind: body.kind, recordType: body.recordType, recordId: body.recordId, partyId, dueAt: toUtcIso(dueAt!), files: copies.length, linkId, taskId: task.id, mailed: outboundId !== null } })
+      tools.audit({
+        recordType: RECORD,
+        recordId: requestId,
+        companyId: record.companyId,
+        siteId: record.siteId,
+        after: {
+          kind: body.kind,
+          recordType: body.recordType,
+          recordId: body.recordId,
+          partyId,
+          dueAt: toUtcIso(dueAt!),
+          files: copies.length,
+          linkId,
+          taskId: task.id,
+          mailed: outboundId !== null,
+          // B-TH-004: what "Send outside this customer" let through.
+          ...(sentOutside.length > 0 ? { sentOutside: sentOutside.map((address) => ({ address: address.address, parties: address.parties })) } : {}),
+        },
+      })
       tools.emit({ type: 'approval_request.asked', subject: requestId, companyId: record.companyId, payload: { requestId, kind: body.kind, recordType: body.recordType, recordId: body.recordId, partyId, dueAt: toUtcIso(dueAt!), linkId, taskId: task.id, files: copies.length } })
       return { requestId, outboundId }
     },

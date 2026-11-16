@@ -12,6 +12,7 @@ import { actorOf, type RequestContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
 import { GatewayCallFailed, GatewayRefusal } from '../gateway/gateway'
 import { systemContext } from '../outbox/system'
+import { resolveRecord } from '../threads/records' // B-TH-003
 import type { FileView } from './contract'
 import type { PresignedRequest, StoredObject } from './port'
 import {
@@ -313,6 +314,32 @@ export interface UploadRequest {
   readonly category?: FileCategory | null | undefined
 }
 
+// ---- B-TH-003 (threads plan TH-0, WALL-G02; T25): a file is shared only with its record's party ---------------------------
+
+/** The office's words for a share outside that does not reach the record's own party (only the office shares files). */
+export const RECORD_PARTY_WORDS = Object.freeze({
+  noParty: "This record has no customer or supplier: its files are not shared with a portal or a link. Share the file from the customer's or supplier's own record.",
+  otherParty: "A file is shared only with its record's own customer or supplier, never with another one.",
+})
+
+/**
+ * B-TH-003 (the brand wall, Owner rule 2026-11-16: "one brand must not be able to see anything related to any other brand"):
+ * the party a file shared with a portal or a link reaches is its RECORD's — the customer, supplier or subcontractor the
+ * record's thread resolver names (platform/threads/records.ts, read in the caller's office scope), never one a request names.
+ * Shared outside without a party, the record's is taken; another party, or a record with none (or of a type no resolver
+ * knows), is refused in words (400, `body/partyId`). A sharing with the office or the floor only is returned as it is.
+ */
+export async function withRecordParty(caller: CommandCaller, record: { readonly recordType: string; readonly recordId: string }, sharing: Sharing, at = 'body'): Promise<Sharing> {
+  if (!sharing.visibility.includes('PARTNER') && !sharing.visibility.includes('LINK')) return sharing
+  const scope = await caller.withClient((client) => resolveRecord(client, record.recordType, record.recordId))
+  const own = scope?.partyId ?? null
+  const refused = (message: string) => new ValidationError(message, [{ path: `${at}/partyId`, message }])
+  if (own === null) throw refused(RECORD_PARTY_WORDS.noParty)
+  if (sharing.partyId !== null && sharing.partyId !== own) throw refused(RECORD_PARTY_WORDS.otherParty)
+  return { ...sharing, partyId: own }
+}
+// ---- end B-TH-003
+
 /**
  * files.requestUpload, then the presigned PUT. A repeat with the same Idempotency-Key gets the same file, freshly
  * presigned. A record type whose files its module owns (owned.ts) is refused unless that module calls with `viaModule`.
@@ -322,12 +349,14 @@ export async function requestUpload(runtime: FilesRuntime, caller: CommandCaller
   const now = runtime.clock.now()
   const contentType = normaliseContentType(input.contentType)
   const originalName = cleanFileName(input.originalName)
-  const sharing: Sharing = {
+  const asked: Sharing = {
     visibility: normaliseVisibility(input.visibility),
     companyId: input.companyId ?? null,
     floorSiteId: input.floorSiteId ?? null,
     partyId: input.partyId ?? null,
   }
+  // B-TH-003: through the generic route a portal or link share reaches the record's own party only.
+  const sharing: Sharing = path.generic ? await withRecordParty(caller, input, asked) : asked
   const retention = retentionFor(input.kind, input.retainUntil ? new Date(input.retainUntil) : null, now)
   const problems: Issue[] = [
     ...uploadProblems({ kind: input.kind, contentType, sizeBytes: input.sizeBytes, sha256: input.sha256, clip: path.clip }),
@@ -793,7 +822,13 @@ export async function setVisibility(
   idempotencyKey?: string,
 ): Promise<FileView> {
   const before = await readOffice(caller, fileId)
-  const sharing: Sharing = { visibility: normaliseVisibility(input.visibility), companyId: before.companyId, floorSiteId: input.floorSiteId ?? null, partyId: input.partyId ?? null }
+  // B-TH-003: a portal or link share reaches the file's record's own party only.
+  const sharing: Sharing = await withRecordParty(caller, before, {
+    visibility: normaliseVisibility(input.visibility),
+    companyId: before.companyId,
+    floorSiteId: input.floorSiteId ?? null,
+    partyId: input.partyId ?? null,
+  })
   mayWrite(caller, FILES_MANAGE, { companyId: before.companyId, floorSiteId: null, partyId: null })
   mayWrite(caller, FILES_MANAGE, sharing)
   if (before.status === 'DELETED') throw new InvalidStateError('This file is deleted.')

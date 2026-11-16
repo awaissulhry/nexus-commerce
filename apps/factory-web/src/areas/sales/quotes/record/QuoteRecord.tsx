@@ -10,7 +10,7 @@ import { useLiveChanges } from '../../../../record-panels/live'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { storeUrl } from '../../../../record-panels/store'
 import type { DocumentSendModel } from '../../../_shared/document-send/model'
-import { parseCc } from '../../../_shared/document-send/model'
+import { outsideRefusalOf, parseCc } from '../../../_shared/document-send/model'
 // B-W2b-368 (XF1:04): the send dialog's fix for the MTM_* line checks (the rider profile).
 import { quoteUnits } from '../../../_shared/document-send/fix-tab/mtm/api'
 import { isMtmCode, MTM_FIX_NAMESPACE } from '../../../_shared/document-send/fix-tab/mtm/model'
@@ -487,13 +487,20 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
     if (!current || !model) return
     setSend({ ...model, sending: true, problem: null })
     inFlight.current++
-    sendQuote(api, current, { cc: parseCc(model.fields.cc).valid, subject: model.fields.subject, message: model.fields.message })
+    // B-TH-202: with the person's recorded "Send outside this customer" tick, when the send asked for it.
+    sendQuote(api, current, { cc: parseCc(model.fields.cc).valid, subject: model.fields.subject, message: model.fields.message, sendOutside: model.outside?.checked === true })
       .then((answer) => {
         setValue(answer.quote)
         setSend((state) => (state ? { ...state, sending: false, result: { delivery: answer.delivery, to: answer.sent.to, at: answer.sent.sentAt, linkUntil: answer.sent.link.expiresAt } } : state))
         void loadVersions()
       })
       .catch((error: unknown) => {
+        // B-TH-202 (the brand wall): an address of another customer — the dialog asks "Send outside this customer".
+        const outside = outsideRefusalOf(error)
+        if (outside && !outside.hidden) {
+          setSend((state) => (state ? { ...state, sending: false, problem: null, outside: { lines: outside.lines, checked: false } } : state))
+          return
+        }
         const problem = writeProblem(error)
         setSend((state) => (state ? { ...state, sending: false, problem: t(problem.key === 'problem.write.state' ? 'send.refused' : problem.key) } : state))
         if (problem.reload) {
@@ -632,7 +639,9 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
       }}
       sendParts={sendParts.parts}
       sendActions={{
-        onField: (field, text) => setSend((current) => (current ? { ...current, fields: { ...current.fields, [field]: text } } : current)),
+        // B-TH-202: a changed copy line asks the recipient rule again (the refusal named the old addresses).
+        onField: (field, text) => setSend((current) => (current ? { ...current, fields: { ...current.fields, [field]: text }, ...(field === 'cc' ? { outside: null } : {}) } : current)),
+        onSendOutside: (checked) => setSend((current) => (current?.outside ? { ...current, outside: { ...current.outside, checked } } : current)),
         onSend: doSend,
         onClose: () => setSend(null),
         onRetryChecks: () => void readSendChecks(),
