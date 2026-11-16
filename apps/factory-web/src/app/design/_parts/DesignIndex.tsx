@@ -14,7 +14,7 @@ export function DesignIndex() {
       <PageHeader
         eyebrow="Nexus Factory · local only"
         title="Design index"
-        subtitle={`${DESIGN_SCREENS.length} screens with made-up data. Open one to see every case in light and dark, desktop and phone.`}
+        subtitle={`${DESIGN_SCREENS.length} screens with made-up data. Open one to see every case in light and dark, at 1920, 1440, 1024, 390 and 375 wide.`}
       />
       <div className="fw-design-list">
         {DESIGN_SCREENS.map((screen) => (

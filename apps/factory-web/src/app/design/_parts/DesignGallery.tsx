@@ -16,7 +16,8 @@ type Themes = 'both' | DesignTheme
 /**
  * `/design/SCR-003` — every case of one screen, each in an iframe at the chosen width (so the screen's media queries
  * are real), in light and dark side by side or one of them, in either language. "Open alone" shows a case at full
- * size, for the keyboard check.
+ * size, for the keyboard check. B-TH-297: the widths are the Owner's — Wide 1920, Desktop 1440, Tablet 1024, Phone 390 and
+ * Phone 375 (`?width=wide` or `?width=1920`); a frame wider than the room is drawn smaller, never cut.
  */
 export function DesignGallery({ screenId, initial }: { screenId: string; initial: FrameOptions & { themes: Themes } }) {
   const router = useRouter()
