@@ -72,7 +72,8 @@
     "MOVE_EARLIER": "Move earlier",
     "MOVE_LATER": "Move later",
     "CANCEL": "Cancel",
-    "NEGATIVE_STOCK": "Negative stock"
+    "NEGATIVE_STOCK": "Negative stock",
+    "WORKSHOP_OVERLOADED": "Workshop over capacity"
   },
   "view": {
     "label": "Rows",
@@ -169,7 +170,8 @@
     "you": "You"
   },
   "what": {
-    "orderLine": "{order} line {seq}"
+    "orderLine": "{order} line {seq}",
+    "sampleWorkOrder": "Sample work order {number}"
   },
   "words": {
     "orders_one": "{count} order",
@@ -189,6 +191,8 @@
     },
     "PAST_DUE_one": "{order} line {seq} was due {date} ({count} day ago) and still needs material.",
     "PAST_DUE_other": "{order} line {seq} was due {date} ({count} days ago) and still needs material.",
+    "PAST_DUE_SAMPLE_one": "Sample work order {number} was due {date} ({count} day ago) and still needs material.",
+    "PAST_DUE_SAMPLE_other": "Sample work order {number} was due {date} ({count} days ago) and still needs material.",
     "EXCESS": {
       "po": "{material}: {quantity} of {po} is more than the orders need.",
       "firm": "{material}: {quantity} of the firm planned order is more than the orders need."
@@ -203,7 +207,11 @@
     "NEGATIVE_STOCK": "{material}: {quantity} more is reserved than the usable stock holds (a receipt not posted, or stock moved since).",
     "LANE_OVERLOADED": "{lane} is booked {pct}% from {from} to {to} ({booked} of {available} min).",
     "LANE_UNDERUSED": "{what} is underused.",
-    "MOVE_LATER": "{what}: the supply can come later."
+    "MOVE_LATER": "{what}: the supply can come later.",
+    "WORKSHOP_OVERLOADED": {
+      "minutes": "Workshop {workshop} is booked {pct}% from {from} to {to} ({booked} of {available} min a week).",
+      "pieces": "Workshop {workshop} is booked {pct}% from {from} to {to} ({booked} of {available} garments a week)."
+    }
   },
   "title": {
     "late_one": "{who} will be {count} day late",

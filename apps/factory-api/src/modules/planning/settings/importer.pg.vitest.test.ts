@@ -240,3 +240,19 @@ describe('the item parameters import (B-W2b-20)', () => {
     expect((await rowsOf('plannerB1', limited.id))[0]!.errors).toEqual([{ column: 'site', message: 'Keeping the item parameters of site A1 needs the right to keep the item parameters at that site.' }])
   })
 })
+
+// ---- B-W2b-GB29 (G220, B-W2b-318's and B-W2b-335's gap): the import takes the seven planning rules per item ----------------
+describe('the item parameters import takes the planning rules per item (B-W2b-GB29, G220)', () => {
+  it('plans and applies lot sizing, scrap, yield and the days before use; a plan level on a material is refused at its cell', async () => {
+    const sheet = csv(['Sito;Articolo;Colore;Dimensionamento lotto;Quantita lotto fisso;Scarto %;Resa %;Giorni prima uso;Livello di pianificazione', 'A1;SEED-PRO-300;*;lotto fisso;12;3;95;2;', 'A1;SEED-LEA-100;*;;;;;;taglia'])
+    const job = await upload('planner', sheet)
+    const [protector, leather] = await rowsOf('planner', job.id)
+    // The review shows each value as it will be stored.
+    expect(protector).toMatchObject({ action: 'UPDATE', after: { lotSizing: 'FIXED', fixedLotQty: '12.0000', scrapPct: '3.00', yieldPct: '95.00', delayDays: 2 } })
+    expect(leather!.errors).toEqual([{ column: 'planLevel', message: 'Only a finished garment or a component is planned by style, colour or size; a material is planned per colour.' }])
+    expect(await apply('planner', job)).toMatchObject({ status: 'APPLIED', appliedCount: 1 })
+    expect(await admin('SELECT "lotSizing"::text AS "lotSizing", "fixedLotQty"::text AS "fixedLotQty", "scrapPct"::text AS "scrapPct", "yieldPct"::text AS "yieldPct", "delayDays" FROM "ItemPlanning" WHERE id = $1', [protectorRow])).toEqual([{ lotSizing: 'FIXED', fixedLotQty: '12.0000', scrapPct: '3.00', yieldPct: '95.00', delayDays: 2 }])
+    expect((await admin(`SELECT after FROM "AuditLog" WHERE "tenantId" = $1 AND action = 'planning.importItemParameters' AND "recordId" = $2`, [tenant, protectorRow])).map((row) => row.after)).toContainEqual(expect.objectContaining({ lotSizing: 'FIXED', fixedLotQty: '12.0000' }))
+  })
+})
+// ---- end B-W2b-GB29

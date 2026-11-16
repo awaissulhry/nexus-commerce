@@ -52,7 +52,8 @@ export function ShadeDrawer({ model, actions, words, row, order }: { model: Leat
       open
       onClose={() => actions?.onOpen?.(null)}
       title={t('shade.title')}
-      subtitle={row ? `${row.order.number} · ${t('row.line', { seq: row.orderLine.seq })} · ${row.style.code} · ${row.colourway?.name ?? '—'}` : undefined}
+      // B-W2b-GB29 (G222): a sample says so instead of an order line.
+      subtitle={row ? `${row.sample ? t(row.sample.roundNumber ? 'row.sampleOfRound' : 'row.sample', { workOrder: row.sample.workOrderNumber, round: row.sample.roundNumber ?? '' }) : `${row.order.number} · ${t('row.line', { seq: row.orderLine.seq })}`} · ${row.style.code} · ${row.colourway?.name ?? '—'}` : undefined}
       loading={!row && model.need.status === 'loading'}
       error={!row && model.need.status !== 'loading' ? t('shade.gone') : undefined}
       nav={{ ids: order, current, onGo: (id) => actions?.onOpen?.(id), noun: t('shade.noun') }}
@@ -123,7 +124,8 @@ export function ShadeDrawer({ model, actions, words, row, order }: { model: Leat
           </div>
           <p className="fw-lp-hint">
             {t('shade.links')}{' '}
-            <Link className="fw-lp-link" href={`${model.prefix}/sales/orders/${row.order.id}`}>
+            {/* B-W2b-GB29 (G222): a sample opens its work order (it has no sales order). */}
+            <Link className="fw-lp-link" href={row.sample ? `${model.prefix}/production/work-orders/${row.sample.workOrderId}` : `${model.prefix}/sales/orders/${row.order.id}`}>
               {row.order.number}
             </Link>
             {row.workOrders.map((workOrder) => (

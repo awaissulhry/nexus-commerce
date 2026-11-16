@@ -21,6 +21,12 @@ import { PLANNED_COLUMNS, readPlanned, type PlannedRow } from './store'
 // B-W2b-365: the steps a planned order's cells are for.
 import { STEP_VARIANT_COLUMNS } from '../capacity/steps'
 import { cellsOfDemand, lineOptionsOf, stepsForCells } from './steps'
+// B-W2b-GB29 (G219): a planned subcontract order's workshop load, in words.
+import { businessDate } from '@nexus/factory-domain/core/time'
+import { roomFor } from '@nexus/factory-domain/planning/subcontract-capacity/rules'
+import { serverClock } from '../../../core/time'
+import { SITE_COLUMNS } from '../store'
+import { capacityRowOf, closedDaysOf, readCapacityRows, readJobs } from '../subcontract-capacity/store'
 
 /**
  * Reading the planned orders (B-W2b-293; design planning.mrp "To make"): the site's planned work orders and planned
@@ -134,6 +140,7 @@ export function plannedOrderViewOf(row: PlannedRow, facts: Context, office: Offi
     held,
     // B-W2b-306 (PLN-083, PLN-076).
     late: lateOfRow(row, demand, facts),
+    workshopLoad: null, // B-W2b-GB29 (G219): filled by viewsOf (a read of the workshops' load)
     plan: row.protectedFields.length > 0 ? planViewOf(readPlanValues(protectedPlanOf(facts.logOf(row.siteId), row.id))) : {},
     may: { convert: status === 'PLANNED' && mayAt(office, PLANNING_PLANNED_CONVERT, row), firm: status === 'PLANNED' && mayAt(office, PLANNING_FIRM, row), edit: status === 'PLANNED' && mayAt(office, PLANNING_PLANNED_EDIT, row) },
   }
@@ -162,7 +169,40 @@ function lateOfRow(row: PlannedRow, demand: ReturnType<typeof demandOf>, facts: 
 
 export async function viewsOf(db: Reader, rows: readonly PlannedRow[], office: OfficeContext): Promise<PlannedOrderView[]> {
   const facts = await contextOf(db, rows)
-  return rows.map((row) => plannedOrderViewOf(row, facts, office))
+  const loads = await workshopLoadsOf(db, rows) // B-W2b-GB29 (G219)
+  return rows.map((row) => ({ ...plannedOrderViewOf(row, facts, office), workshopLoad: loads.get(row.id) ?? null }))
+}
+
+/**
+ * B-W2b-GB29 (G219): a planned subcontract order's workshop load on its days, in words: the work booked there (live orders, the
+ * allocation board's parts, the plan's other planned subcontract orders) with it, against the workshop's weekly capacity
+ * (factory-domain planning/subcontract-capacity `roomFor`, as the run levelled it). Null: not a planned subcontract order.
+ */
+async function workshopLoadsOf(db: Reader, rows: readonly PlannedRow[]): Promise<Map<string, NonNullable<PlannedOrderView['workshopLoad']>>> {
+  const out = new Map<string, NonNullable<PlannedOrderView['workshopLoad']>>()
+  const asked = rows.filter((row) => row.kind === 'SUBCONTRACT' && row.status === 'PLANNED' && row.partyId)
+  for (const siteId of [...new Set(asked.map((row) => row.siteId))]) {
+    const site = await db.site.findUnique({ where: { id: siteId }, select: SITE_COLUMNS })
+    if (!site) continue
+    const jobs = await readJobs(db, site, businessDate(serverClock.now(), site.timezone))
+    const mine = asked.filter((row) => row.siteId === siteId)
+    const partyIds = [...new Set(mine.map((row) => row.partyId!))]
+    const capacity = (await readCapacityRows(db, partyIds)).map(capacityRowOf)
+    const codes = new Map((await db.party.findMany({ where: { id: { in: partyIds } }, select: { id: true, code: true } })).map((party) => [party.id, party.code]))
+    for (const row of mine) {
+      const own = jobs.find((job) => job.kind === 'PLANNED' && job.id === row.id)
+      if (!own) continue
+      const shut = (await closedDaysOf(db, [own.partyId], own.from, own.to)).get(own.partyId) ?? new Set<string>()
+      const room = roomFor(capacity, jobs.filter((job) => job !== own), own, shut)
+      const code = codes.get(own.partyId) ?? 'The workshop'
+      out.set(row.id, {
+        loadPct: room.loadPct,
+        over: room.known && !room.fits,
+        words: !room.known ? `${code} has no weekly capacity set.` : room.fits ? `${code} has room on these days (${room.loadPct} % with it).` : `${code} is over its capacity on these days (${room.loadPct} % with it).`,
+      })
+    }
+  }
+  return out
 }
 
 export interface ListQuery {

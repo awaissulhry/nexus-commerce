@@ -5,7 +5,10 @@ import type { CellValue } from '@nexus/factory-domain/imports/cells'
 import type { ExistingRecord, RowIssue, RowValues } from '@nexus/factory-domain/imports/importer'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { itemPlanningProblems, mergeItemPlanning, type ItemPlanningPatch, type ItemPlanningValues } from '@nexus/factory-domain/planning/settings/items'
-import { EVERY_COLOUR, importRecordValues, itemParametersImporter, patchOf as rowPatchOf } from '@nexus/factory-domain/planning/settings/importer'
+import { EVERY_COLOUR, importRecordValues, itemParametersImporter, mergedRulesOf, patchOf as rowPatchOf, type ImportedItemParameters } from '@nexus/factory-domain/planning/settings/importer'
+// B-W2b-GB29 (G220): the seven planning rules per item (B-W2b-318) in the import too: checked as the routes check them.
+import { itemRuleProblems, type ItemRuleValues } from '@nexus/factory-domain/planning/lot-sizing/parameters'
+import { PLANNING_STRATEGY_MANAGE } from '@nexus/factory-domain/planning/strategy/permissions'
 import { PLANNING_ITEMS_MANAGE } from '@nexus/factory-domain/planning/settings/permissions'
 import type { CommandTools, CommandTx } from '../../../core/command'
 import { ApiError } from '../../../core/errors'
@@ -13,7 +16,7 @@ import { ApiError } from '../../../core/errors'
 import type { CheckRow, ImportAdapter, ImportScope } from '../../../platform/imports/registry'
 import { SITE_COLUMNS, type SiteRow } from '../store'
 import { emitChange, factProblems, lockKey } from './items'
-import { auditValuesOf, ITEM_PLANNING_SELECT, ITEM_SELECT, itemPlanningValuesOf, readItemPlanning, type ItemPlanningRow, type ItemRow } from './store'
+import { auditValuesOf, ITEM_PLANNING_SELECT, ITEM_SELECT, itemPlanningValuesOf, itemRulesOf, readItemPlanning, type ItemPlanningRow, type ItemRow } from './store'
 
 /**
  * The item parameters' import adapter (B-W2b-20; platform/imports; factory-domain planning/settings/importer): a row is
@@ -69,9 +72,9 @@ const colourIdOf = (item: ItemRow, colour: string): string | null | undefined =>
 const rowAt = (client: CommandTx, siteId: string, itemId: string, itemColourId: string | null): Promise<ItemPlanningRow | null> =>
   client.itemPlanning.findFirst({ where: { siteId, itemId, itemColourId }, select: ITEM_PLANNING_SELECT })
 
-/** A stored row as the import sees it: the supplier's and make site's codes where the ids stand. */
-function importedOf(row: ItemPlanningRow): ItemPlanningValues {
-  return { ...itemPlanningValuesOf(row), supplierId: row.supplier?.code ?? null, makeSiteId: row.makeSite?.code ?? null }
+/** A stored row as the import sees it: the supplier's and make site's codes where the ids stand (B-W2b-GB29: and its rules). */
+function importedOf(row: ItemPlanningRow): ImportedItemParameters {
+  return { ...itemPlanningValuesOf(row), ...itemRulesOf(row), supplierId: row.supplier?.code ?? null, makeSiteId: row.makeSite?.code ?? null }
 }
 
 /** A rule's or fact's path (`body/<field>`) as the import column it is about. */
@@ -90,6 +93,9 @@ interface Resolved {
   /** The stored row after the row's cells (ids), and what the merge cleared. */
   readonly values: ItemPlanningValues
   readonly before: ItemPlanningValues | null
+  /** B-W2b-GB29 (G220): the rules after the row's cells, and before. */
+  readonly rules: ItemRuleValues
+  readonly rulesBefore: ItemRuleValues | null
 }
 
 type Resolution = { readonly ok: true; readonly row: Resolved } | { readonly ok: false; readonly issues: RowIssue[] }
@@ -132,11 +138,18 @@ async function resolve(client: CommandTx, key: Readonly<Record<string, CellValue
   const current = await rowAt(client, site.id, item.id, itemColourId)
   const before = current ? itemPlanningValuesOf(current) : null
   const merged = mergeItemPlanning(before, patch as ItemPlanningPatch)
-  const problems = itemPlanningProblems(merged.values)
+  // B-W2b-GB29 (G220): the rules after the row's cells, checked with the item's kind (a plan level: a garment or a component).
+  const rulesBefore = current ? itemRulesOf(current) : null
+  const rules = mergedRulesOf(current ? importedOf(current) : null, values).values
+  const problems = [...itemPlanningProblems(merged.values), ...itemRuleProblems(rules, item.kind)]
   if (problems.length > 0) return { ok: false, issues: problems.map(rowIssue) }
+  // A plan level is how a garment is planned: it also asks planning.strategy.manage over the site (as the routes do).
+  if (actor !== null && (rulesBefore?.planLevel ?? null) !== rules.planLevel && !can(actor, PLANNING_STRATEGY_MANAGE, { companyId: site.companyId, siteId: site.id })) {
+    return { ok: false, issues: [{ column: 'planLevel', message: `Changing how ${itemCode} is planned (style, colour or size) needs the right to set the production strategy at site ${siteCode}.` }] }
+  }
   const named = await factProblems(client, site, item, itemColourId, merged.values, before)
   if (named.length > 0) return { ok: false, issues: named.map(rowIssue) }
-  return { ok: true, row: { site, item, itemColourId, current, values: merged.values, before } }
+  return { ok: true, row: { site, item, itemColourId, current, values: merged.values, before, rules, rulesBefore } }
 }
 
 const tenantOf = (tools: CommandTools): string => {
@@ -196,22 +209,22 @@ export const itemParametersImportAdapter = Object.freeze({
     // The person was checked by the batch's check(); here the row is resolved again under the locks.
     const resolved = await resolve(tx, row.key, row.values, scope, facts, null)
     if (!resolved.ok) throw new ImportRowRefused(what, resolved.issues.map((issue) => issue.message).join(' '))
-    const { current, values, before } = resolved.row
+    const { current, values, before, rules, rulesBefore } = resolved.row
     if ((row.action === 'UPDATE') !== (current !== null) || (current !== null && current.id !== row.recordId)) throw new ImportRowRefused(what, row.action === 'CREATE' ? 'the site has made a row for it since' : 'the row was removed')
 
     if (current === null) {
       const id = newId()
       const createdById = tools.context.audience === 'office' ? tools.context.actorId : null
-      await tx.itemPlanning.create({ data: { id, companyId: site.companyId, siteId: site.id, itemId: item.id, itemColourId: colourId, ...values, createdById, createdAt: now, updatedAt: now }, select: { id: true } })
+      await tx.itemPlanning.create({ data: { id, companyId: site.companyId, siteId: site.id, itemId: item.id, itemColourId: colourId, ...values, ...rules, createdById, createdAt: now, updatedAt: now }, select: { id: true } })
       const saved = (await readItemPlanning(tx, id))!
-      tools.audit({ action: ACTION, recordType: 'ItemPlanning', recordId: id, companyId: site.companyId, siteId: site.id, before: null, after: { itemId: item.id, itemColourId: colourId, ...auditValuesOf(itemPlanningValuesOf(saved)) } })
+      tools.audit({ action: ACTION, recordType: 'ItemPlanning', recordId: id, companyId: site.companyId, siteId: site.id, before: null, after: { itemId: item.id, itemColourId: colourId, ...auditValuesOf(itemPlanningValuesOf(saved)), ...itemRulesOf(saved) } })
       emitChange(tools, saved, site, saved.method, 'CREATED')
       return { recordId: id }
     }
     // The routes' version moves: an open edit of the row sees the import as a newer version.
-    await tx.itemPlanning.update({ where: { id: current.id }, data: { ...values, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
+    await tx.itemPlanning.update({ where: { id: current.id }, data: { ...values, ...rules, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
     const saved = (await readItemPlanning(tx, current.id))!
-    tools.audit({ action: ACTION, recordType: 'ItemPlanning', recordId: current.id, companyId: site.companyId, siteId: site.id, before: auditValuesOf(before), after: auditValuesOf(itemPlanningValuesOf(saved)) })
+    tools.audit({ action: ACTION, recordType: 'ItemPlanning', recordId: current.id, companyId: site.companyId, siteId: site.id, before: { ...auditValuesOf(before), ...rulesBefore }, after: { ...auditValuesOf(itemPlanningValuesOf(saved)), ...itemRulesOf(saved) } })
     emitChange(tools, saved, site, saved.method, 'EDITED')
     return { recordId: current.id }
   },

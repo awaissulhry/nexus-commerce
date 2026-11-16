@@ -12,7 +12,7 @@ export type ExtraReasonCode = (typeof REASON_CODES)[number]
 
 const operation = z.object({ id: z.string(), code: z.string(), name: z.string(), workCentreKind: z.string(), standardMinutes: z.string() })
 const pays = z.enum(['PIECE_RATE', 'OFF_STANDARD', 'NO_PIECE_PAY'])
-const record = z.object({ id: z.string(), workOrderOperationId: z.string().nullable(), seq: z.number().nullable(), at: z.string(), operation, reasonCode: z.enum(REASON_CODES), reason: z.string().nullable(), addedOn: z.enum(['FLOOR', 'OFFICE']) })
+const record = z.object({ id: z.string(), workOrderOperationId: z.string().nullable(), seq: z.number().nullable(), at: z.string(), operation, reasonCode: z.enum(REASON_CODES), reason: z.string().nullable(), addedOn: z.enum(['FLOOR', 'OFFICE']), /* B-W2b-GB29 (G215) */ plannedQuantity: z.number().nullable().optional() })
 export type ExtraRecord = z.infer<typeof record>
 
 const listSchema = z.object({ added: z.array(record) })
@@ -34,6 +34,8 @@ export interface ExtraBody {
   operationId: string
   reasonCode: ExtraReasonCode
   note?: string
+  /** B-W2b-GB29 (G215): the garments it is planned for (left out: off the plan). */
+  plannedQuantity?: number
 }
 
 export const addExtra = (api: ApiClient, workOrderId: string, body: ExtraBody, idempotencyKey: string): Promise<ExtraAdded> => api.post(base(workOrderId), { body, schema: addedSchema, idempotencyKey })

@@ -11,7 +11,7 @@ import { demandOpen, readDemands, RESERVATION_COLUMNS } from '../inventory/reser
 import { activeSourcesOf } from '../purchasing/supplier-items/store'
 import { heldByQualityHolds } from '../quality/holds/stock'
 // B-W2b-20: the work orders' scheduled starts (the planning board) are their material's need days.
-import { scheduledStartsOf } from './pegging/starts'
+import { scheduledOperationStartsOf, scheduledStartsOf } from './pegging/starts' // B-W2b-GB29 (G218): + the operations' starts
 // B-W2b-293 (MR1:01, MR1:02): every garment through its multi-level explosion, with the order line's options.
 import type { Garments } from '@nexus/factory-domain/planning/planned-orders/multilevel'
 import { readGarments } from './planned-orders/store'
@@ -19,6 +19,8 @@ import { readGarments } from './planned-orders/store'
 import { readOrderPegs } from './actions/pegs'
 // B-W2b-318 (PLN-006, PLN-008, PLN-081, PLN-088): the planning rules per item and the backlog's ranks.
 import { readItemRules } from './lot-sizing/inputs'
+// B-W2b-GB29 (G222): the open sample work orders of no order line are demand of their own.
+import { readSampleWorkOrders } from './sample-demand'
 import { dayOf, ITEM_COLUMNS, lotFactsOf, planItemOf, readDemand, readLots, readPurchases, readStock, readSupplyRules, readWorkOrders, unitsOf, type DemandRead, type ItemRow, type PlanStockRow as PlanStockOf, type PurchaseRead, type Reader, type SiteRow } from './store'
 
 /**
@@ -151,7 +153,10 @@ export async function readPlanInputs(db: Reader, site: SiteRow, runDate: Busines
   const firmSupply = await readFirmSupply(db, firmFromRunId)
   // B-W2b-293: the materials of every level (and of the options' effects) are the plan's too.
   const explosion = await readGarments(db, site, demand)
-  const demandItemIds = [...new Set([...demand.revisions.flatMap((revision) => revision.lines.map((line) => line.itemId)), ...(explosion?.itemIds ?? [])])]
+  // B-W2b-GB29 (G222): the sample work orders' revisions and what was issued to them.
+  const samples = await readSampleWorkOrders(db, site)
+  const sampleRevisions = samples.revisions.filter((revision) => !demand.revisions.some((entry) => entry.id === revision.id))
+  const demandItemIds = [...new Set([...demand.revisions.flatMap((revision) => revision.lines.map((line) => line.itemId)), ...(explosion?.itemIds ?? []), ...sampleRevisions.flatMap((revision) => revision.lines.map((line) => line.itemId))])]
   const itemPlanning = await db.itemPlanning.findMany({ where: { siteId: site.id }, select: ITEM_PLANNING_COLUMNS, orderBy: { id: 'asc' } })
   const safetyOnlyItemIds = [...new Set(itemPlanning.filter((row) => row.safetyStock !== null && row.safetyStock.gt(0) && !demandItemIds.includes(row.itemId)).map((row) => row.itemId))].sort()
   const itemIds = [...new Set([...demandItemIds, ...firmSupply.map((firm) => firm.itemId), ...safetyOnlyItemIds])].sort()
@@ -164,7 +169,7 @@ export async function readPlanInputs(db: Reader, site: SiteRow, runDate: Busines
   const purchases = await readPurchases(db, site.id, itemIds)
   const reservations = await readReservations(db, site.id, itemIds)
   const sources = await activeSourcesOf(db, itemIds)
-  const bomSupplierIds = demand.revisions.flatMap((revision) => revision.lines.map((line) => line.supplierId))
+  const bomSupplierIds = [...demand.revisions, ...sampleRevisions].flatMap((revision) => revision.lines.map((line) => line.supplierId)) // B-W2b-GB29 (G222)
   const candidateIds = [...bomSupplierIds, ...itemPlanning.map((row) => row.supplierId), ...sources.map((source) => source.partyId)]
   const supplyRulesOf = await readSupplyRules(db, items, candidateIds)
   const partyIds = [...new Set(candidateIds.filter((value): value is string => value !== null))]
@@ -175,10 +180,10 @@ export async function readPlanInputs(db: Reader, site: SiteRow, runDate: Busines
   const input: PlanInput = {
     runDate,
     orderLines: rules.orderLines,
-    revisions: demand.revisions,
+    revisions: [...demand.revisions, ...sampleRevisions], // B-W2b-GB29 (G222): + the sample work orders' revisions
     items: items.map(planItemOf),
     workOrderCells: workOrders.cells,
-    workOrderIssues: workOrders.issues,
+    workOrderIssues: [...workOrders.issues, ...samples.issues], // B-W2b-GB29 (G222)
     stock,
     lots,
     purchases,
@@ -189,9 +194,13 @@ export async function readPlanInputs(db: Reader, site: SiteRow, runDate: Busines
     // B-W2b-318 (PLN-006, PLN-081).
     ...rules.hooks,
     workOrderStarts: await scheduledStartsOf(db, site),
+    // B-W2b-GB29 (G218): a material is needed when the first operation that uses it starts on the board.
+    operationStarts: await scheduledOperationStartsOf(db, site),
     ...(explosion ? { lineSuppliers: explosion.lineSuppliers } : {}),
     // B-W2b-306 (PLN-072): order-specific supply.
     orderSpecific: await readOrderPegs(db, site.id, firmFromRunId),
+    // B-W2b-GB29 (G222): the open sample work orders of no order line.
+    ...(samples.samples.length > 0 ? { sampleWorkOrders: samples.samples } : {}),
   }
   return { input, demand, items, purchases, reservations, firmSupply, itemPlanning, sources, safetyOnlyItemIds, supplierLeadTimes, garments: explosion?.garments ?? null, previousRunId: firmFromRunId }
 }

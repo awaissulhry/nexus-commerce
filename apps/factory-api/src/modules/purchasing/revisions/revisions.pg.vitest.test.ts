@@ -414,3 +414,27 @@ describe('Send n: several orders, each its own send (design grid "Bulk: Send n")
     expect(await one('SELECT status FROM "PurchaseOrder" WHERE id = $1', [empty.id])).toEqual({ status: 'DRAFT' })
   })
 })
+
+// ---- B-W2b-GB29 (G218, B-W2b-20's gap): the lead-time check counts from the supplier's own day ----------------------------
+describe("the send check's lead time counts from the supplier's own day, in its calendar's zone (B-W2b-GB29, G218)", () => {
+  it('a line needed one lead time from our day is late where the supplier is a day ahead, in time where it is a day behind', async () => {
+    // At any moment one of the two is on another day than Rome: Kiritimati (UTC+14) from 11:00 at the plant, Pago Pago (UTC−11) before 12:00.
+    const ahead = businessDate(new Date(), 'Pacific/Kiritimati') > today()
+    const zone = ahead ? 'Pacific/Kiritimati' : 'Pacific/Pago_Pago'
+    const calendarId = newId()
+    // Every weekday works: no closed day moves the arrival (the leather's own lead time: 14 days).
+    await admin(`INSERT INTO "WorkCalendar" (id, "tenantId", scope, "companyId", "partyId", name, "timeZone", "workingWeekdays") SELECT $1, $2, 'SUPPLIER', "companyId", id, 'GB29 supplier calendar', $4, '{1,2,3,4,5,6,7}' FROM "Party" WHERE id = $3`, [calendarId, tenant, P2, zone])
+    try {
+      const order = await draft([{ itemId: leather, colourId: leatherBLK, quantity: '105', uom: 'FT2', days: ahead ? 14 : 13 }])
+      const late = async () => ((await as('POST', '/purchasing/orders/send-checks', { orderIds: [order.id] })).cards[0].checks as Json[]).some((check) => check.code === 'LATE_FOR_LEAD_TIME')
+      // Ahead: it arrives on our day + 15, after the need (+14). Behind: on our day + 13, in time for the need (+13).
+      expect(await late()).toBe(ahead)
+      // The same calendar in our own zone: it arrives on our day + 14.
+      await admin(`UPDATE "WorkCalendar" SET "timeZone" = 'Europe/Rome' WHERE id = $1`, [calendarId])
+      expect(await late()).toBe(!ahead)
+    } finally {
+      await admin(`UPDATE "WorkCalendar" SET status = 'ARCHIVED' WHERE id = $1`, [calendarId])
+    }
+  })
+})
+// ---- end B-W2b-GB29

@@ -308,4 +308,24 @@ describe('planned subcontract orders (PLN-069)', { timeout: 90_000 }, () => {
     const after = (await ok('planner', 'GET', `/planning/planned-orders/${red.id}`)).plannedOrder
     expect(after).toMatchObject({ status: 'CONVERTED', workOrder: { id: draft.id }, subcontractOrder: { id: scId, status: 'DRAFT' } })
   })
+
+  // ---- B-W2b-GB29 (G219, B-W2b-321's gap): the plan's proposals level by the workshops' weekly capacity ------------------------
+  it('levels by the workshop’s weekly capacity: with room it keeps its workshop; full, with no other approved workshop that has room, it stays there over its capacity, said', async () => {
+    const capacityId = newId()
+    await admin(`INSERT INTO "SubcontractorCapacity" (id, "tenantId", "partyId", "workCentreKind", unit, "perWeek", "validFrom") VALUES ($1, $2, $3, 'SEWING', 'MINUTES', 100000, '2026-01-01')`, [capacityId, A.tenant, A.workshop])
+    await runPlan()
+    const roomy = (await planned('&status=PLANNED&kind=SUBCONTRACT')).plannedOrders as Json[]
+    expect(roomy.length).toBeGreaterThan(0)
+    for (const row of roomy) expect(row).toMatchObject({ workshop: { id: A.workshop }, workshopLoad: { over: false, loadPct: expect.any(String), words: expect.stringMatching(/has room on these days/) } })
+    // One minute a week: full. No other workshop has a capacity line, so P2 keeps the work, over its capacity, and the run says so.
+    await admin(`SET session_replication_role = replica; UPDATE "SubcontractorCapacity" SET "perWeek" = 1 WHERE id = '${capacityId}'; SET session_replication_role = origin;`)
+    const { run } = await runPlan()
+    const full = (await planned('&status=PLANNED&kind=SUBCONTRACT')).plannedOrders as Json[]
+    expect(full.length).toBeGreaterThan(0)
+    for (const row of full) expect(row).toMatchObject({ workshop: { id: A.workshop }, workshopLoad: { over: true, words: expect.stringMatching(/is over its capacity on these days/) } })
+    const audit = (await admin<{ after: Json }>(`SELECT "after" FROM "AuditLog" WHERE "recordType" = 'PlanningRun' AND "recordId" = $1 AND "after" ? 'plannedWorkOrders'`, [run.id]))[0]!
+    const levelled = audit.after.plannedWorkOrders.levelled as Json[]
+    expect(levelled.length).toBeGreaterThan(0)
+    expect(levelled.every((entry) => entry.partyId === A.workshop && entry.over === true && entry.moved === false && /no other approved workshop has room/.test(entry.words))).toBe(true)
+  })
 })

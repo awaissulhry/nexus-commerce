@@ -5,7 +5,7 @@ import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { decimalOf } from '@nexus/factory-domain/product/units/units'
 import { pegMaterial } from '@nexus/factory-domain/planning/mrp/net'
 import type { PlanResult } from '@nexus/factory-domain/planning/explode'
-import { EVALUATED_KINDS, type DetectMaterial, type ExceptionCondition, type LaneOverload, type SafetyOnly } from '@nexus/factory-domain/planning/exceptions/detect'
+import { EVALUATED_KINDS, type DetectMaterial, type ExceptionCondition, type LaneOverload, type SafetyOnly, type WorkshopOverload } from '@nexus/factory-domain/planning/exceptions/detect'
 import { refreshOf, type OpenException } from '@nexus/factory-domain/planning/exceptions/lifecycle'
 import { uniformBuckets } from '@nexus/factory-domain/planning/settings/buckets'
 import { itemPlanningFor } from '@nexus/factory-domain/planning/settings/items'
@@ -16,6 +16,8 @@ import { supplierCalendarsFor } from '../../../platform/calendars/service'
 import type { Uom } from '@nexus/factory-domain/product/units/units'
 import type { CommandTools } from '../../../core/command'
 import { capacityAnswer, capacityWorld } from '../capacity/service'
+// B-W2b-GB29 (G219): the workshops' capacity lines (B-W2b-321) for WORKSHOP_OVERLOADED.
+import { subcontractorWorld } from '../capacity/subcontractors'
 import type { PlanInputs } from '../inputs'
 import type { SiteRow } from '../store'
 
@@ -58,7 +60,7 @@ async function withSupplierArrivals(tx: CommandTools['tx'], plan: PlanResult, ma
 }
 
 /** What detection reads of each requirement of the plan, and of materials with a safety stock and no demand. */
-export async function detectInputs(tools: Pick<CommandTools, 'tx'>, site: SiteRow, inputs: PlanInputs, plan: PlanResult, runDate: BusinessDate): Promise<{ materials: DetectMaterial[]; safetyOnly: SafetyOnly[]; overloads: LaneOverload[] }> {
+export async function detectInputs(tools: Pick<CommandTools, 'tx'>, site: SiteRow, inputs: PlanInputs, plan: PlanResult, runDate: BusinessDate): Promise<{ materials: DetectMaterial[]; safetyOnly: SafetyOnly[]; overloads: LaneOverload[]; workshops: WorkshopOverload[] }> {
   const { tx } = tools
   const colourIds = [...new Set([...plan.requirements.flatMap((line) => (line.itemColourId ? [line.itemColourId] : [])), ...inputs.itemPlanning.flatMap((row) => (row.itemColourId ? [row.itemColourId] : [])), ...inputs.input.stock.flatMap((entry) => (entry.itemColourId && inputs.safetyOnlyItemIds.includes(entry.itemId) ? [entry.itemColourId] : []))])]
   const colours = new Map((colourIds.length === 0 ? [] : await tx.itemColour.findMany({ where: { id: { in: colourIds } }, select: { id: true, code: true } })).map((colour) => [colour.id, colour.code]))
@@ -129,7 +131,19 @@ export async function detectInputs(tools: Pick<CommandTools, 'tx'>, site: SiteRo
       overloads.push({ laneKind: lane.kind, laneId: lane.id, laneCode: lane.code, bucketKey: cell.key, from: cell.from, to: cell.to, loadPct: cell.loadPct ?? '—', availableMinutes: cell.availableMinutes, bookedMinutes: cell.bookedMinutes })
     }
   }
-  return { materials: await withSupplierArrivals(tx, plan, materials, runDate), safetyOnly, overloads }
+  // B-W2b-GB29 (G219): workshops booked above their weekly capacity in the same four weeks (what live subcontract orders and the
+  // board's parts book; the plan's own proposals never count, as on Capacity & load).
+  const workshops: WorkshopOverload[] = []
+  const buckets = uniformBuckets(runDate, to, 'WEEK')
+  const shops = await subcontractorWorld(tx, site, buckets, runDate)
+  for (const line of shops.lines) {
+    if (!line.key) continue
+    for (const cell of line.cells) {
+      if (!cell.over || cell.loadPct === null) continue
+      workshops.push({ partyId: line.workshop.id, workshopCode: line.workshop.code, workCentreKind: line.key.workCentreKind, unit: line.key.unit, bucketKey: cell.key, from: cell.from, to: cell.to, loadPct: cell.loadPct, available: cell.available.toFixed(0), booked: cell.booked.toFixed(0) })
+    }
+  }
+  return { materials: await withSupplierArrivals(tx, plan, materials, runDate), safetyOnly, overloads, workshops }
 }
 
 /** Refreshes the site's exception list with what the run found (inside the run's command). */

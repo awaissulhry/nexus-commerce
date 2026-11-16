@@ -71,7 +71,9 @@
     "inHouse_one": "{count} fase esterna fatta internamente",
     "inHouse_other": "{count} fasi esterne fatte internamente",
     "inHouseTip": "Il terzista di queste fasi ora non può ricevere lavoro, quindi si fanno internamente: {steps}.",
-    "inHouseAll": "Fatto internamente"
+    "inHouseAll": "Fatto internamente",
+    "overCapacity": "Oltre la sua capacità in questi giorni ({pct} % con questo)",
+    "overCapacityTip": "Il terzista è pieno in questi giorni con questo lavoro: il piano lo manda a un altro terzista approvato solo se ha posto. Capacità e carico mostra le settimane."
   },
   "orders": {
     "more_one": "+{count} altro",

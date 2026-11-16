@@ -371,3 +371,41 @@ describe('the production strategy per item (PLN-061)', () => {
     expect((await one('SELECT version FROM "ItemPlanning" WHERE "itemId" = $1', [jkt])).version).toBe(3)
   })
 })
+
+// ---- B-W2b-GB29 (G222, B-W2b-284's gap): an internal sample work order (no order line) is in the material plan ----------------
+describe('B-W2b-GB29: a sample work order of no order line is planned by MRP (G222)', () => {
+  it('a FIT round made without an order line: its demand row says planned, and the run plans its materials on the work order, never as an order', async () => {
+    const round = await one<{ id: string }>(`SELECT id FROM "SampleRound" WHERE "tenantId" = $1 AND number = 'SEED-SR-0001'`, [tenant])
+    const before = (await rows('&layer=SAMPLES')).rows.find((row: Json) => row.kind === 'SAMPLE_ROUND')
+    expect(before.planned).toBe(false) // no work order yet: nothing to make it on
+    const made = await as(manager, 'POST', `/sales/samples/rounds/${round.id}/work-orders`, {}, 201)
+    const workOrder = made.workOrder as Json
+    expect((await one<{ n: number }>(`SELECT count(*)::int AS n FROM "WorkOrderSize" WHERE "workOrderId" = $1 AND "salesOrderLineId" IS NOT NULL`, [workOrder.id])).n).toBe(0)
+    const after = (await rows('&layer=SAMPLES')).rows.find((row: Json) => row.kind === 'SAMPLE_ROUND')
+    expect(after).toMatchObject({ planned: true, workOrder: { id: workOrder.id, number: workOrder.number } })
+
+    await as(planner, 'POST', '/planning/runs', { siteId: siteA }, 201)
+    const plan = await as(planner, 'GET', `/planning/runs/latest?siteId=${siteA}`)
+    const sampleSources = (plan.lines as Json[]).flatMap((line) => (line.sources as Json[]).filter((source) => source.sample))
+    expect(sampleSources.length).toBeGreaterThan(0)
+    for (const source of sampleSources) {
+      expect(source).toMatchObject({ orderId: round.id, orderNumber: workOrder.number, workOrders: [workOrder.number], sample: { workOrderId: workOrder.id, workOrderNumber: workOrder.number, roundId: round.id, roundNumber: 'SEED-SR-0001' } })
+    }
+    // The For-orders chips name orders only: the round is never an order there.
+    expect((plan.lines as Json[]).flatMap((line) => line.orders as Json[]).some((order) => order.id === round.id)).toBe(false)
+    // Pegged to the work order alone (WORK_ORDER, no order line).
+    const pegs = await admin<{ demandKind: string; salesOrderLineId: string | null }>(`SELECT "demandKind", "salesOrderLineId" FROM "RequirementPegging" WHERE "workOrderId" = $1`, [workOrder.id])
+    expect(pegs.length).toBeGreaterThan(0)
+    expect(pegs.every((peg) => peg.demandKind === 'WORK_ORDER' && peg.salesOrderLineId === null)).toBe(true)
+    // B-W2b-GB29 (G222 × B-W2b-132): its leather is on Planning › Leather's need page, a row of its own named by the work order
+    // and its round, held for the work order (never a customer's order line).
+    const need = await as(planner, 'GET', `/planning/leather/need?siteId=${siteA}`)
+    const sampleRows = (need.rows as Json[]).filter((row) => row.sample)
+    expect(sampleRows.length).toBeGreaterThan(0)
+    for (const row of sampleRows) {
+      expect(row).toMatchObject({ order: { id: round.id, number: workOrder.number }, sample: { workOrderId: workOrder.id, workOrderNumber: workOrder.number, roundId: round.id, roundNumber: 'SEED-SR-0001' }, workOrders: [{ id: workOrder.id, number: workOrder.number }], demand: { workOrderId: workOrder.id, salesOrderLineId: null } })
+      expect(row.pieces).toBeGreaterThan(0)
+    }
+    expect((need.rows as Json[]).filter((row) => !row.sample).every((row) => row.sample === null)).toBe(true)
+  })
+})

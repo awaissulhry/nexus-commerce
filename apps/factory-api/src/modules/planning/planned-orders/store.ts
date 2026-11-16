@@ -7,6 +7,8 @@ import type { Garments } from '@nexus/factory-domain/planning/planned-orders/mul
 import { itemPlanningFor } from '@nexus/factory-domain/planning/settings/items'
 import { readExplosion, type ExplosionRead } from '../../product/bom/explode'
 import type { DemandRead, Reader, SiteRow } from '../store'
+// B-W2b-GB29 (G226): the accepted cutting loss for planning.
+import { planningLossOf, withPlanningLoss } from '../leather/planning-loss'
 
 /**
  * What the planned orders read (B-W2b-293), in one client, one query after another.
@@ -40,12 +42,24 @@ export async function readGarments(db: Reader, site: SiteRow, demand: DemandRead
     const read = await readExplosion(db, revisionId)
     if (read) reads.set(revisionId, read)
   }
+  // B-W2b-GB29 (G226): an accepted cutting loss decided after a released revision's release reaches its leather lines (every
+  // revision of the explosion: a sub-assembly's style may carry one too).
+  const allRevisions = [...reads.values()].flatMap((read) => [...read.revisions.entries()])
+  const loss = await planningLossOf(db, allRevisions.map(([id]) => id), allRevisions.flatMap(([, revision]) => revision.lines.map((line) => line.itemId)))
+  if (loss.wastageOf.size > 0) {
+    for (const [revisionId, read] of reads) {
+      const revisions = new Map([...read.revisions].map(([id, revision]) => [id, { ...revision, lines: withPlanningLoss(loss, id, revision.lines) }]))
+      reads.set(revisionId, { ...read, top: revisions.get(revisionId) ?? read.top, revisions })
+    }
+  }
   // The options chosen on the lines, and the BOM effects of those values.
   const lineIds = demand.orderLines.map((line) => line.orderLineId)
   const options = lineIds.length === 0 ? [] : await db.salesOrderLineOption.findMany({ where: { lineId: { in: lineIds } }, select: { lineId: true, valueId: true }, orderBy: [{ lineId: 'asc' }, { id: 'asc' }] })
   const chosenOf = new Map<string, Set<string>>()
   for (const option of options) chosenOf.set(option.lineId, new Set([...(chosenOf.get(option.lineId) ?? []), option.valueId]))
-  const valueIds = [...new Set(options.map((option) => option.valueId))]
+  // B-W2b-GB29 (G223): a promise's quote or calculator line (no order line yet) is configured by the options it names.
+  for (const [lineId, values] of demand.chosenOptions ?? []) chosenOf.set(lineId, new Set([...(chosenOf.get(lineId) ?? []), ...values]))
+  const valueIds = [...new Set([...options.map((option) => option.valueId), ...[...(demand.chosenOptions?.values() ?? [])].flat()])]
   const effectRows =
     valueIds.length === 0
       ? []

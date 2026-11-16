@@ -189,3 +189,10 @@
     gap: var(--nds-space-4);
   }
 }
+
+/* B-W2b-GB29 (G217): the publish dialog's "Notify line leaders" switch. */
+.fw-pb-notify {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+}

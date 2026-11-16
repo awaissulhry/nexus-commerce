@@ -181,6 +181,21 @@ function ExceptionsDesign({ model }: { model: ExceptionsCase }) {
 
 const PLANNER = rolePermissions('planner')
 
+// B-W2b-GB29 (G219): a subcontract workshop booked above its weekly capacity (the run's WORKSHOP_OVERLOADED).
+const WORKSHOP_ROW: PlanningException = row(20, {
+  kind: 'WORKSHOP_OVERLOADED',
+  item: null,
+  colour: null,
+  requirementId: null,
+  record: { type: 'Party', id: uid('4545', 1), label: 'LAB-B' },
+  facts: { workshopCode: 'LAB-B', workCentreKind: 'SEWING', unit: 'PIECES', bucket: '2026-W48', from: '2026-11-23', to: '2026-11-29', loadPct: '125', available: '100', booked: '125' },
+  ordersAffected: 0,
+  occurrence: 1,
+  ageDays: 0,
+  firstSeenAt: RUN.finishedAt,
+})
+const WITH_WORKSHOP: PlanningException[] = [WORKSHOP_ROW, ...ROWS]
+
 function make(over: Partial<ExceptionsModel> = {}, permissions: readonly string[] = PLANNER): ExceptionsCase {
   const controls = { site: SITE.id, view: 'queue' as const, kind: null, q: '', open: null, ...(over.controls ?? {}) }
   return {
@@ -229,6 +244,9 @@ export const designScreen = defineDesignScreen<ExceptionsCase>({
     { id: 'detail', label: 'Detail: SO-DEMO-1043 will be 6 days late, with its fixes', model: make({ detail: open(1), controls: { site: SITE.id, view: 'queue', kind: null, q: '', open: uid('8801', 1) } }), note: 'Fixes are real links: the line in What to buy & make, the board at the work order, the work order. ⌘-click keeps the queue open.' },
     { id: 'detail-supply', label: 'Detail: a purchase order arrives too late (acknowledged, mine): Chase it', model: make({ detail: open(2), controls: { site: SITE.id, view: 'queue', kind: null, q: '', open: uid('8801', 2) } }) },
     { id: 'detail-lane', label: 'Detail: a lane over capacity, found again', model: make({ detail: open(3), controls: { site: SITE.id, view: 'queue', kind: null, q: '', open: uid('8801', 3) } }) },
+    // B-W2b-GB29 (G219): a workshop over its weekly capacity, in the queue and in its detail.
+    { id: 'w2b-gb29-workshop', label: 'A workshop over its weekly capacity, in the queue', model: make({ rows: WITH_WORKSHOP }), note: 'The run raises it when the workshop is booked above its capacity in the next four weeks; the plan’s own proposals never count.' },
+    { id: 'w2b-gb29-workshop-detail', label: 'Detail: a workshop over its weekly capacity', model: make({ rows: WITH_WORKSHOP, detail: open(20, WITH_WORKSHOP), controls: { site: SITE.id, view: 'queue', kind: null, q: '', open: uid('8801', 20) } }), note: 'Its fix opens Capacity & load, where the workshop’s weeks are.' },
     { id: 'detail-resolved', label: 'Detail: resolved with a note (actions held)', model: make({ detail: open(11, RESOLVED), rows: RESOLVED, controls: { site: SITE.id, view: 'resolved', kind: null, q: '', open: uid('8801', 11) } }) },
     { id: 'detail-loading', label: 'Detail: reading', model: make({ detail: { id: uid('8801', 4), loaded: { status: 'loading' } } }) },
     { id: 'snooze', label: 'Snooze until: tomorrow, Monday, a date, or after the next run', model: make({ dialog: { kind: 'snooze', id: uid('8801', 1) } }) },

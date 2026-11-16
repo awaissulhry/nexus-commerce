@@ -218,6 +218,26 @@ describe('reserve to an order, leather by area, named hides (SCM-205, SCM-209)',
     expect(after.lots.find((lot: Json) => lot.lot.id === lots.BLK!.id)).toMatchObject({ onHand: '170.0000', reserved: '60.0000', available: '110.0000' })
   })
 
+  // B-W2b-GB29 (G226, B-W2b-132's gap): a split by garment names the size it holds for, and every read says it.
+  it('a line held for one size of the work order names it (its id and its size and colourway in words); the others say none', async () => {
+    // A work order of its own (the other tests read WO.one's reservations), its reservation given back at the end.
+    const own = await releasedWorkOrder(await salesOrder('GB29'))
+    const [cell] = await admin<{ id: string; size: string; colourway: string }>(`SELECT s.id, s.size, c.code AS colourway FROM "WorkOrderSize" s JOIN "Colourway" c ON c.id = s."colourwayId" WHERE s."workOrderId" = $1 ORDER BY s.size LIMIT 1`, [own.id])
+    const made = await reserve('warehouse', { workOrderId: own.id, lines: [{ lotId: lots.BLK!.id, quantity: '5', workOrderSizeId: cell!.id }], note: 'Split by garment (made up)' })
+    expect(made.statusCode, made.body).toBe(201)
+    const [held] = made.json().reservations
+    expect(held).toMatchObject({ workOrderSizeId: cell!.id, cell: { size: cell!.size, colourway: cell!.colourway } })
+    // The size line in every read; a reservation of the whole demand (WO.one's, made above) says none.
+    await reserve('warehouse', { workOrderId: own.id, lines: [{ lotId: lots.BLK!.id, quantity: '1' }] })
+    const listed = await ok('warehouse', 'GET', `/inventory/reservations?workOrderId=${own.id}&status=ACTIVE`)
+    expect(listed.reservations.find((row: Json) => row.id === held.id)).toMatchObject({ workOrderSizeId: cell!.id, cell: { size: cell!.size, colourway: cell!.colourway } })
+    const whole = listed.reservations.filter((row: Json) => row.id !== held.id)
+    expect(whole.length).toBe(1)
+    expect(whole[0]).toMatchObject({ workOrderSizeId: null, cell: null })
+    // Given back at once: the tests after this one count the lot's area without them.
+    await ok('warehouse', 'POST', '/inventory/reservations/release', { reservations: listed.reservations.map((row: Json) => ({ id: row.id, version: row.version })), reason: 'Made-up split, given back' })
+  })
+
   it('refuses more than is available, line by line in words, and held stock', async () => {
     const error = await refused('warehouse', 'POST', '/inventory/reservations', { siteId: A.siteA1, workOrderId: WO.two.id, lines: [{ itemId: A.leather, itemColourId: A.leatherBLK, quantity: '150' }, { itemId: A.leather, itemColourId: A.leatherBLK, quantity: '20' }] }, 409)
     expect(paths(error)).toEqual(['body/lines/1/refusal/NOT_AVAILABLE'])

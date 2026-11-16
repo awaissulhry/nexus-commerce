@@ -85,6 +85,74 @@ export interface PlanOrderLine {
   readonly backlogRank?: number | null
   /** B-W2b-318 (PLN-008): the plan level of the line's style-colourway (its finished garments at the site); none: the site's size-run rule. */
   readonly planLevel?: PlanLevel | null
+  /** B-W2b-GB29 (G222): the stand-in line of a sample work order of no order line (`sampleOrderLines`); left out: an order line. */
+  readonly sample?: SampleRef | null
+}
+
+// ---- B-W2b-GB29 (G222, B-W2b-284's gap): the sample work orders of no order line ---------------------------------------
+
+/** Which sample work order a stand-in line, a source or a demand part is (never an order). */
+export interface SampleRef {
+  readonly workOrderId: string
+  readonly workOrderNumber: string
+  readonly roundId: string | null
+  readonly roundNumber: string | null
+}
+
+/**
+ * An open SAMPLE work order of the site whose cells name no order line (an internal or uncharged round, B-W2b-284): its
+ * material is planned like an order's. Its cells' pieces in the work order's revision (its own, else the style's RELEASED
+ * one), needed on its scheduled start when it is on the board (`workOrderStarts`), else its due day; what was issued to it
+ * is taken off (`workOrderIssues`, as for any open work order).
+ */
+export interface PlanSampleWorkOrder {
+  readonly workOrderId: string
+  readonly workOrderNumber: string
+  readonly status: WorkOrderStatus
+  readonly roundId: string | null
+  readonly roundNumber: string | null
+  readonly styleId: string
+  readonly revisionId: string | null
+  readonly dueDate: BusinessDate | null
+  /** Each cell (its id names the stand-in line of its colourway: the first cell's). */
+  readonly cells: readonly { readonly id: string; readonly colourwayId: string; readonly size: string; readonly pieces: number }[]
+}
+
+/**
+ * The stand-in order lines (one per sample work order and colourway) and their cells, so the explosion, the netting and
+ * the pegging treat a sample work order exactly as the open work order of an order line: `orderId` is its round (else the
+ * work order), `orderNumber` the work order's number, no party (pegged to the work order only: WORK_ORDER, no order line).
+ */
+export function sampleOrderLines(samples: readonly PlanSampleWorkOrder[]): { lines: PlanOrderLine[]; cells: PlanWorkOrderCell[] } {
+  const lines: PlanOrderLine[] = []
+  const cells: PlanWorkOrderCell[] = []
+  for (const sample of samples) {
+    const byColourway = new Map<string, PlanSampleWorkOrder['cells'][number][]>()
+    for (const cell of sample.cells) if (cell.pieces > 0) byColourway.set(cell.colourwayId, [...(byColourway.get(cell.colourwayId) ?? []), cell])
+    let seq = 0
+    for (const [colourwayId, group] of byColourway) {
+      seq += 1
+      const orderLineId = group[0]!.id
+      const sizes = new Map<string, number>()
+      for (const cell of group) sizes.set(cell.size, (sizes.get(cell.size) ?? 0) + cell.pieces)
+      lines.push({
+        orderId: sample.roundId ?? sample.workOrderId,
+        orderNumber: sample.workOrderNumber,
+        orderLineId,
+        lineSeq: seq,
+        styleId: sample.styleId,
+        colourwayId,
+        revisionId: sample.revisionId,
+        sizes: [...sizes.entries()].map(([size, pieces]) => ({ size, pieces })),
+        dueDate: sample.dueDate,
+        partyId: null,
+        madeToMeasure: false,
+        sample: { workOrderId: sample.workOrderId, workOrderNumber: sample.workOrderNumber, roundId: sample.roundId, roundNumber: sample.roundNumber },
+      })
+      for (const [size, pieces] of sizes) cells.push({ workOrderId: sample.workOrderId, workOrderNumber: sample.workOrderNumber, status: sample.status, orderLineId, size, pieces })
+    }
+  }
+  return { lines, cells }
 }
 
 export interface PlanRevision {
@@ -174,6 +242,8 @@ export interface RequirementSource {
   readonly dueDate: BusinessDate | null
   /** The open work orders making these pieces (numbers). */
   readonly workOrders: readonly string[]
+  /** B-W2b-GB29 (G222): the sample work order of no order line these pieces are (its round is `orderId`); left out: an order line. */
+  readonly sample?: SampleRef
 }
 
 export interface PlannedRequirement {
@@ -280,6 +350,13 @@ export interface PlanInput {
    */
   readonly workOrderStarts?: ReadonlyMap<string, BusinessDate>
   /**
+   * B-W2b-GB29 (G218, B-W2b-20's gap): the day each operation of an open work order starts on the working plan, keyed
+   * `<workOrderId>|<routingSeq>` (its earliest bar there). A material whose BOM lines are all tied to a routing step
+   * (BomLine.routingSeq) that is on the board is needed when the first of those steps starts, not on the work order's start;
+   * a line tied to no step, or to a step not on the board, keeps the work order's start. Left out: the work order's start.
+   */
+  readonly operationStarts?: ReadonlyMap<string, BusinessDate>
+  /**
    * B-W2b-293 (MR1:01, MR1:02, PLN-079): what one garment of an order line's size takes, from the multi-level explosion
    * with the line's options, phantoms passed through and customer-supplied lines left out (./planned-orders/explosion);
    * null or left out: W1's one level of the revision's lines.
@@ -294,6 +371,8 @@ export interface PlanInput {
    * whose order line no longer needs the material is free supply again. Left out: W2a's netting exactly.
    */
   readonly orderSpecific?: OrderSpecificInput
+  /** B-W2b-GB29 (G222): the open sample work orders of no order line (`sampleOrderLines`); left out: none. */
+  readonly sampleWorkOrders?: readonly PlanSampleWorkOrder[]
 }
 
 const UP = { scale: QUANTITY_SCALE, rounding: 'UP' } as const
@@ -349,8 +428,10 @@ export function planRequirements(input: PlanInput): PlanResult {
   const draftOf = new Map<string, SourceDraft>()
   const bomLineSupplier = new Map<string, string | null>()
   let planned = 0
-  for (const line of input.orderLines) {
-    const label = `${line.orderNumber} line ${line.lineSeq}`
+  // B-W2b-GB29 (G222): the sample work orders of no order line, as stand-in lines and cells after the orders.
+  const samples = sampleOrderLines(input.sampleWorkOrders ?? [])
+  for (const line of [...input.orderLines, ...samples.lines]) {
+    const label = line.sample ? `Sample work order ${line.orderNumber}` : `${line.orderNumber} line ${line.lineSeq}`
     const revision = line.revisionId ? revisions.get(line.revisionId) : undefined
     if (!revision) {
       warn({ code: 'NO_RELEASED_BOM', message: `${label} is not planned: its style has no released BOM.`, orderId: line.orderId, orderLineId: line.orderLineId })
@@ -361,7 +442,7 @@ export function planRequirements(input: PlanInput): PlanResult {
       warn({ code: 'NO_SIZE', message: `${label} is not planned: it has no size to make (a made-to-measure unit needs its base size).`, orderId: line.orderId, orderLineId: line.orderLineId })
       continue
     }
-    planned++
+    if (!line.sample) planned++ // B-W2b-GB29 (G222): `orderLines` counts order lines only
     if (line.dueDate === null) warn({ code: 'NO_DATE', message: `${label} has no date: its material is planned as needed today.`, orderId: line.orderId, orderLineId: line.orderLineId })
     for (const bomLine of revision.lines) bomLineSupplier.set(bomLine.id, bomLine.supplierId)
     // B-W2b-293: the sub-assemblies' lines name their supplier too.
@@ -395,7 +476,7 @@ export function planRequirements(input: PlanInput): PlanResult {
   }
 
   // ---- work orders: made pieces, and what open ones already hold ----------------------------------------------------
-  for (const cell of input.workOrderCells) {
+  for (const cell of [...input.workOrderCells, ...samples.cells]) { // B-W2b-GB29 (G222)
     const draft = draftOf.get(cellKey(cell.orderLineId, cell.size))
     if (!draft) continue
     if (MADE_WORK_ORDER_STATUSES.includes(cell.status)) draft.made = Math.min(draft.ordered, draft.made + cell.pieces)
@@ -443,6 +524,24 @@ export function planRequirements(input: PlanInput): PlanResult {
    * needs), then the pieces no work order makes. Quantities by cumulative rounding up, so the parts add up to the
    * source exactly; the source's issued material goes to the work orders that took it, capped at each part.
    */
+  // B-W2b-GB29 (G218): the routing step each BOM line of the plan's revisions is used at.
+  const routingSeqOfLine = new Map<string, number | null>()
+  for (const revision of input.revisions) for (const bomLine of revision.lines) routingSeqOfLine.set(bomLine.id, bomLine.routingSeq ?? null)
+  /** B-W2b-GB29 (G218): the day a work order needs a material: the start of the first operation that uses it, else its own start. */
+  const startOf = (workOrderId: string, draft: SourceDraft, key: string): BusinessDate | undefined => {
+    const start = input.workOrderStarts?.get(workOrderId)
+    const lineIds = draft.perPiece.find((entry) => materialKey(entry.itemId, entry.itemColourId) === key)?.lineIds ?? []
+    if (!input.operationStarts || input.operationStarts.size === 0 || lineIds.length === 0) return start
+    let first: BusinessDate | undefined
+    for (const lineId of lineIds) {
+      const seq = routingSeqOfLine.get(lineId) ?? null
+      const day = (seq === null ? undefined : input.operationStarts.get(`${workOrderId}|${seq}`)) ?? start
+      // A line with no day at all (not on the board): the work order's start, else the order line's date, decides.
+      if (day === undefined) return start
+      if (first === undefined || day < first) first = day
+    }
+    return first ?? start
+  }
   const partsOf = (draft: SourceDraft, key: string, source: RequirementSource): DemandPart[] => {
     const per = perPieceOf(draft, key)
     const byWorkOrder = new Map<string, { number: string; pieces: number }>()
@@ -455,6 +554,8 @@ export function planRequirements(input: PlanInput): PlanResult {
     const base = { orderId: draft.line.orderId, orderNumber: draft.line.orderNumber, orderLineId: draft.line.orderLineId, lineSeq: draft.line.lineSeq, partyId: draft.line.partyId ?? null, size, dueDate: draft.line.dueDate }
     // B-W2b-318 (PLN-088): the order's backlog rank rides on its parts (the netting shares scarce material by it).
     if (typeof draft.line.backlogRank === 'number') Object.assign(base, { rank: draft.line.backlogRank })
+    // B-W2b-GB29 (G222): a sample work order's parts say so (its words name the work order, never an order line).
+    if (draft.line.sample) Object.assign(base, { sample: draft.line.sample })
     const parts: { part: Omit<DemandPart, 'issued'>; own: Decimal }[] = []
     let piecesLeft = source.pieces
     let cumulative = 0
@@ -467,7 +568,8 @@ export function planRequirements(input: PlanInput): PlanResult {
       const upTo = roundTo(per.times(cumulative), UP)
       parts.push({
         // B-W2b-20: a work order on the planning board needs its material on its scheduled start.
-        part: { ...base, dueDate: input.workOrderStarts?.get(workOrderId) ?? base.dueDate, key: `${draft.line.orderLineId}|${draft.size}|${workOrderId}`, workOrderId, workOrderNumber: entry.number, pieces, quantity: q(upTo.minus(before)) },
+        // B-W2b-GB29 (G218): …on the start of the first of its operations that uses the material.
+        part: { ...base, dueDate: startOf(workOrderId, draft, key) ?? base.dueDate, key: `${draft.line.orderLineId}|${draft.size}|${workOrderId}`, workOrderId, workOrderNumber: entry.number, pieces, quantity: q(upTo.minus(before)) },
         own: issuedBy.get(`${slot}|${workOrderId}`) ?? ZERO,
       })
       before = upTo
@@ -528,6 +630,7 @@ export function planRequirements(input: PlanInput): PlanResult {
         issued: q(issued.gt(quantity) ? quantity : issued),
         dueDate: draft.line.dueDate,
         workOrders: [...new Set(draft.openCells.map((cell) => cell.workOrderNumber))].sort(),
+        ...(draft.line.sample ? { sample: draft.line.sample } : {}), // B-W2b-GB29 (G222)
       }
       material.sources.push(source)
       material.parts.push(...partsOf(draft, key, source))

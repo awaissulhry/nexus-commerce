@@ -1,13 +1,13 @@
 import type { Prisma } from '@nexus/factory-db'
 import { leadTimeWindow, orderByDate } from '@nexus/factory-domain/calendars/suppliers'
-import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time' // B-W2b-GB29 (G218): + businessDate
 import { stockValue } from '@nexus/factory-domain/inventory/ledger/valuation'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { addDays, hidesFor, type SupplyRules } from '@nexus/factory-domain/planning/buy'
 import { itemPlanningFor } from '@nexus/factory-domain/planning/settings/items'
 import { sourceFor, sourceRules, type SourceFacts } from '@nexus/factory-domain/purchasing/sources/sources'
 import { readDecisionNote } from '@nexus/factory-domain/planning/decisions'
-import type { PlanWarning, RequirementSource } from '@nexus/factory-domain/planning/explode'
+import type { PlanWarning, RequirementSource, SampleRef } from '@nexus/factory-domain/planning/explode'
 import { whyLine } from '@nexus/factory-domain/planning/explain'
 // B-W2b-306 (PLN-083): a planned order is dated today at the earliest.
 import { plannedDateOf } from '@nexus/factory-domain/planning/actions/late'
@@ -15,6 +15,7 @@ import { daysFrom } from '@nexus/factory-domain/calendars/dates'
 import { COST_SCALE, QUANTITY_SCALE, toBase, unitCostIn } from '@nexus/factory-domain/product/units/units'
 import type { PurchaseOrderStatus } from '@nexus/factory-domain/purchasing/orders'
 import { supplierCalendarsFor, type LoadedSupplierCalendar } from '../../platform/calendars/service'
+import { serverClock } from '../../core/time' // B-W2b-GB29 (G218)
 import { activeSourcesOf } from '../purchasing/supplier-items/store'
 import type { LineView, RunView } from './contract'
 import { ITEM_PLANNING_COLUMNS, type ItemPlanningRow } from './inputs'
@@ -130,6 +131,15 @@ export async function runCounts(db: Reader, runIds: readonly string[]): Promise<
   return counts
 }
 
+/** B-W2b-GB29 (G222): a source's sample work order (of no order line), read defensively; none: an order line's. */
+function sampleOf(value: unknown): { sample?: SampleRef } {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return {}
+  const row = value as Record<string, unknown>
+  if (typeof row.workOrderId !== 'string' || typeof row.workOrderNumber !== 'string') return {}
+  const text = (key: string) => (typeof row[key] === 'string' ? (row[key] as string) : null)
+  return { sample: { workOrderId: row.workOrderId, workOrderNumber: row.workOrderNumber, roundId: text('roundId'), roundNumber: text('roundNumber') } }
+}
+
 /** The sources as stored, each field read defensively (an older row may hold fewer). */
 export function sourcesOf(value: Prisma.JsonValue): RequirementSource[] {
   if (!Array.isArray(value)) return []
@@ -151,6 +161,7 @@ export function sourcesOf(value: Prisma.JsonValue): RequirementSource[] {
         issued: quantityOf(str('issued', '0')),
         dueDate: typeof row.dueDate === 'string' ? row.dueDate : null,
         workOrders: Array.isArray(row.workOrders) ? row.workOrders.filter((value): value is string => typeof value === 'string') : [],
+        ...sampleOf(row.sample), // B-W2b-GB29 (G222)
       },
     ]
   })
@@ -171,6 +182,8 @@ export interface LineContext {
   readonly calendars: ReadonlyMap<string, LoadedSupplierCalendar>
   readonly companyOf: ReadonlyMap<string, string>
   readonly supplierLeadTimes: ReadonlyMap<string, number | null>
+  /** B-W2b-GB29 (G218): the moment the lines are read, for the supplier's own day (an order-by day passed AT THE SUPPLIER). */
+  readonly now?: Date
 }
 
 export async function readLineContext(db: Reader, rows: readonly RequirementRow[], withCost: boolean): Promise<LineContext> {
@@ -180,7 +193,8 @@ export async function readLineContext(db: Reader, rows: readonly RequirementRow[
   const colours = colourIds.length === 0 ? [] : await db.itemColour.findMany({ where: { id: { in: colourIds } }, select: { id: true, code: true, name: true } })
   const supplierIds = [...new Set(rows.flatMap((row) => [row.supplierId, row.firmSupplierId].filter((value): value is string => value !== null)))]
   const suppliers = supplierIds.length === 0 ? [] : await db.party.findMany({ where: { id: { in: supplierIds } }, select: { id: true, code: true, legalName: true, tradeName: true, leadTimeDays: true } })
-  const orderIds = [...new Set(rows.flatMap((row) => sourcesOf(row.sources).map((source) => source.orderId)))].filter((id) => id !== '')
+  // B-W2b-GB29 (G222): a sample work order's source names its round, not an order.
+  const orderIds = [...new Set(rows.flatMap((row) => sourcesOf(row.sources).flatMap((source) => (source.sample ? [] : [source.orderId]))))].filter((id) => id !== '')
   const orders = orderIds.length === 0 ? [] : await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true } })
   const orderLineIds = [...new Set(rows.flatMap((row) => (row.purchaseOrderLineId ? [row.purchaseOrderLineId] : [])))]
   const purchaseLines =
@@ -203,6 +217,7 @@ export async function readLineContext(db: Reader, rows: readonly RequirementRow[
     calendars: new Map(),
     companyOf: new Map(sites.map((site) => [site.id, site.companyId])),
     supplierLeadTimes: new Map(suppliers.map((party) => [party.id, party.leadTimeDays])),
+    now: serverClock.now(), // B-W2b-GB29 (G218)
   }
   // The suppliers' closed days around every buy's need date (one read for all lines).
   const windows = rows.flatMap((row) => {
@@ -234,9 +249,14 @@ function orderByOfLine(row: RequirementRow, context: LineContext, today: Busines
   const timing = orderTimingOf(row, context)
   if (!timing) return null
   if (timing.lead === null) return { date: timing.target, leadTimeDays: null, passed: timing.target < today, closedDaysSkipped: 0 }
-  const calendar = timing.supplierId ? (context.calendars.get(timing.supplierId)?.calendar ?? null) : null
+  const loaded = timing.supplierId ? context.calendars.get(timing.supplierId) : undefined
+  const calendar = loaded?.calendar ?? null
   const walk = orderByDate(calendar, timing.target, timing.lead)
-  return { date: walk.date, leadTimeDays: timing.lead, passed: walk.date < today, closedDaysSkipped: walk.skipped.length }
+  // B-W2b-GB29 (G218, B-W2b-20's gap): the order-by day has passed when it is over AT THE SUPPLIER: its own day now, in its
+  // calendar's time zone (platform/calendars supplierZoneOf: its own, else Europe/Rome), not our site's day. A supplier with
+  // no calendar has no zone of its own: our site's day, as before.
+  const supplierToday = loaded?.calendarRow && context.now ? businessDate(context.now, loaded.timeZone) : today
+  return { date: walk.date, leadTimeDays: timing.lead, passed: walk.date < supplierToday, closedDaysSkipped: walk.skipped.length }
 }
 
 export function lineViewOf(row: RequirementRow, context: LineContext, today: BusinessDate, withCost: boolean): LineView {
@@ -255,7 +275,7 @@ export function lineViewOf(row: RequirementRow, context: LineContext, today: Bus
   // The stored suggestion is the run's; what it brings in the base unit follows from it (the item's factor).
   const brings = toBase(row.suggestedQuantity.toString(), row.suggestedUom, units, { scale: QUANTITY_SCALE, rounding: 'HALF_UP' }).toFixed(QUANTITY_SCALE)
   const sources = sourcesOf(row.sources)
-  const orderIds = [...new Set(sources.map((source) => source.orderId))]
+  const orderIds = [...new Set(sources.flatMap((source) => (source.sample ? [] : [source.orderId])))] // B-W2b-GB29 (G222): orders only
   const decided = row.decision === 'IGNORED' ? readDecisionNote(row.decisionNote) : null
   const standardCost = withCost ? (item.standardCost ?? null) : null
   const unitCost = standardCost === null ? null : unitCostIn(standardCost.toString(), row.suggestedUom, units, { scale: COST_SCALE, rounding: 'HALF_UP' }).toFixed(COST_SCALE)

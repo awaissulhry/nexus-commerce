@@ -904,6 +904,9 @@ export function FloorOperation() {
         return step.kind === 'extra' ? setStep({ ...step, draft: { ...step.draft, reason: action.code } }) : undefined
       case 'extraWords':
         return step.kind === 'extra' ? setStep({ ...step, draft: { ...step.draft, words: action.words } }) : undefined
+      // B-W2b-GB29 (G215): the garments that need it (null: off the plan).
+      case 'extraPlanned':
+        return step.kind === 'extra' ? setStep({ ...step, draft: { ...step.draft, planned: action.value } }) : undefined
       case 'extraSend':
         return void sendExtra()
       case 'reason':

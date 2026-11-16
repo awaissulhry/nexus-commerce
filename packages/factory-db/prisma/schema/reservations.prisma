@@ -50,6 +50,9 @@ model Reservation {
   salesOrderLineId String?           @db.Uuid
   /// The order line's party (the order's customer): set exactly with the order line.
   partyId          String?           @db.Uuid
+  /// B-W2b-GB29 (G226; PLN-109): the work order's cell (size) it is held for, when a leather split by garment reserves a
+  /// lot per size: a cell of `workOrderId` (the API checks it); null: the whole work order or order line.
+  workOrderSizeId  String?           @db.Uuid
   /// When the demand needs it (the work order's start, the order line's date): who goes first when material is short.
   needDate         DateTime?         @db.Date
   status           ReservationStatus @default(ACTIVE)

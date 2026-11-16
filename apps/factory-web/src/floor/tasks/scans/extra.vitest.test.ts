@@ -83,5 +83,8 @@ describe('adding one (a team leader, online)', () => {
   it('sends the operation, the reason, and words only when there are some', () => {
     expect(extraBody({ operationId: 'lib', reason: 'QUALITY_FIX', words: ' ' })).toEqual({ operationId: 'lib', reasonCode: 'QUALITY_FIX' })
     expect(extraBody({ operationId: 'lib', reason: 'OTHER', words: '  Extra tack  ' })).toEqual({ operationId: 'lib', reasonCode: 'OTHER', note: 'Extra tack' })
+    // B-W2b-GB29 (G215): the garments that need it, only when typed.
+    expect(extraBody({ operationId: 'lib', reason: 'QUALITY_FIX', words: '', planned: 6 })).toEqual({ operationId: 'lib', reasonCode: 'QUALITY_FIX', plannedQuantity: 6 })
+    expect(extraBody({ ...NEW_EXTRA, operationId: 'lib', reason: 'QUALITY_FIX' })).toEqual({ operationId: 'lib', reasonCode: 'QUALITY_FIX' })
   })
 })

@@ -111,7 +111,8 @@ export function allocationOf(data: Allocation, workOrderId: string): AllocationS
   }
 }
 
-export type AllocationRefusal = 'STALE' | 'WHOLE' | 'TOO_MANY' | 'SAME' | 'UNALLOCATED_PART' | 'CHANGED' | 'LOCKED' | 'NOT_OPEN' | 'LANE_INACTIVE' | 'INVALID' | 'FORBIDDEN' | 'NOT_FOUND' | 'OFFLINE' | 'FAILED'
+// B-W2b-GB29 (G221): + GATE (a gate of its order has not passed).
+export type AllocationRefusal = 'STALE' | 'WHOLE' | 'TOO_MANY' | 'SAME' | 'UNALLOCATED_PART' | 'CHANGED' | 'LOCKED' | 'NOT_OPEN' | 'LANE_INACTIVE' | 'INVALID' | 'FORBIDDEN' | 'NOT_FOUND' | 'OFFLINE' | 'FAILED' | 'GATE'
 
 const DOMAIN: ReadonlyArray<[RegExp, AllocationRefusal]> = [
   [/not in that column any more/, 'STALE'],
@@ -138,6 +139,8 @@ export function refusalOf(error: unknown): AllocationRefusal {
   if (!isApiError(error)) return 'FAILED'
   if (error.kind === 'conflict') {
     if (error.issues.some((issue) => issuePath(issue) === 'version' || issuePath(issue) === 'body/version')) return 'CHANGED'
+    // B-W2b-GB29 (G221): the allocation board holds a gate not passed (the API's refusal code).
+    if (error.issues.some((issue) => issuePath(issue) === 'refusal/GATE_NOT_PASSED')) return 'GATE'
     if (/allocation is kept as it was/.test(error.message)) return 'LOCKED'
     if (/is not open/.test(error.message)) return 'NOT_OPEN'
     if (/already allocated so/.test(error.message)) return 'SAME'

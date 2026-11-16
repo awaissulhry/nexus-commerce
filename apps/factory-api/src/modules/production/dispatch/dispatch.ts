@@ -102,7 +102,8 @@ async function listFor(db: Reader, target: Target, now: Date, flagsOf: FlagsOf) 
     const workOrder = byId.get(slot.workOrderId)!
     const operation = workOrder.operations.find((candidate) => candidate.id === operationId)!
     // B-W2b-88: the step before (of a parallel group before it, the last); a sibling is never before it.
-    const previous = stepBefore(workOrder.operations, operation).at(-1) ?? null
+    // B-W2b-GB29 (G215): an unplanned operation (planned garments) stands outside the routing's flow: no step before it.
+    const previous = operation.routingSeq === null ? null : (stepBefore(workOrder.operations, operation).at(-1) ?? null)
     const flow = wips.get(workOrder.id)!.operations.find((row) => row.operationId === operation.id)
     const done = Math.min(garments, (flow?.good ?? 0) + (flow?.scrap ?? 0))
     const sequenceFacts = { operation: { seq: operation.seq, name: operation.name }, previous: previous ? { seq: previous.seq, name: previous.name } : null }

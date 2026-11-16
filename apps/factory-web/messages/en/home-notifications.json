@@ -249,6 +249,11 @@
       "calls": {
         "raised": "Help call from station {record}: {title}"
       },
+      "planning": {
+        "schedulePublished": "New schedule {record} for line {title}: check the dispatch list",
+        "gatePassed": "A gate you own on order {record} was marked done",
+        "gateStartedBefore": "{actor} started order {record} before a gate you own"
+      },
       "safety": {
         "incidentReported": "New report {record}: {title}",
         "inailDue": "INAIL report for {record} due by {title}",
