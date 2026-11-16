@@ -5,6 +5,12 @@
  * before a person sends a message to a party the API says what it found in what they typed; the person decides. Nothing
  * here refuses a send: these are warnings, read in the person's own text.
  *
+ * B-TH-004 (the brand wall): one warning became a refusal. An address of ANOTHER party's contact or portal person (not one of
+ * the record's party's) is refused by the send itself unless the person ticks "Send outside this customer" — factory-domain
+ * email/recipient-party, asked inside email-out's sendEmail for every mail (thread, module sends) and for a link's address; the
+ * check answers those addresses as `outsideCustomer` so the screen asks for the tick before Send. A company domain alone
+ * (DOMAIN) stays a warning: it never names a person of another party.
+ *
  * Words are compared without case or accents and only as whole words, so "costumi" never reads as "cost" and an address
  * (`marco@…`) never reads as an @mention.
  */

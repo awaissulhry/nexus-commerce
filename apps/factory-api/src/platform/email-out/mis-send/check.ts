@@ -4,7 +4,8 @@ import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors
 import { can } from '@nexus/factory-domain/core/permissions'
 import { addressDomain, isAddress, normalizeAddress } from '@nexus/factory-domain/email/rules'
 import { companyDomainOf } from '@nexus/factory-domain/email-in/rules'
-import type { CommandCaller } from '../../../core/command'
+import type { CommandCaller, CommandTx } from '../../../core/command'
+import { recipientRule, type AddressOwnership } from '@nexus/factory-domain/email/recipient-party' // B-TH-004
 import { actorOf } from '../../../core/context'
 import { mayOnThread } from '../../threads/records'
 import { contextOf, officeRecord, type RecordRef } from '../../threads/threads'
@@ -75,6 +76,8 @@ export async function checkMisSend(caller: CommandCaller, record: RecordRef, bod
       })),
       warnings: MIS_SEND_WARNINGS.filter((code) => found[code].length > 0).map((code) => ({ code, items: firstItems(found[code]) })),
       attachments,
+      // B-TH-004: what the send itself refuses without the tick (the same rule, the same facts).
+      outsideCustomer: recipientRule({ recordParty: partyId, to: addresses, ownership: ownershipOf(facts) }).outside.map((address) => address.address),
     }
   })
 }
@@ -84,8 +87,19 @@ const NOBODY: RecipientFacts = { parties: [], colleague: false, ourDomain: false
 /** The name people use: the trade name, else the registered one. */
 const nameOf = (party: { readonly legalName: string; readonly tradeName: string | null }): string => party.tradeName?.trim() || party.legalName
 
+// ---- B-TH-004: the recipient rule's facts (factory-domain email/recipient-party), read as the warnings read them.
+/** The recipient rule's view of the facts: the parties each address is a contact or portal person of, and whether it is ours. */
+const ownershipOf = (facts: ReadonlyMap<string, RecipientFacts>): Map<string, AddressOwnership> =>
+  new Map([...facts].map(([address, known]) => [address, { address, parties: [...new Set(known.parties.map((entry) => entry.partyId))], ours: known.colleague || known.ourDomain }]))
+
+/** Whose each address is for the recipient rule (email-out's sendEmail and the link address ask it). */
+export async function addressOwnership(client: FactoryClient | CommandTx, addresses: readonly string[]): Promise<Map<string, AddressOwnership>> {
+  return ownershipOf(await recipientFacts(client, [...new Set(addresses.map((address) => normalizeAddress(address)).filter(isAddress))]))
+}
+// ---- end B-TH-004
+
 /** What we know of each address: whose contact or portal person it is, a colleague's, at our own domain, a party's domain. */
-async function recipientFacts(client: FactoryClient, addresses: readonly string[]): Promise<Map<string, RecipientFacts>> {
+async function recipientFacts(client: FactoryClient | CommandTx, addresses: readonly string[]): Promise<Map<string, RecipientFacts>> {
   const facts = new Map<string, RecipientFacts>()
   if (addresses.length === 0) return facts
   const [contacts, users, identities] = await Promise.all([

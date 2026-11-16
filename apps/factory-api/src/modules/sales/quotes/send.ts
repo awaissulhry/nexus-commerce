@@ -232,6 +232,8 @@ export async function sendCheck(caller: CommandCaller, quoteId: string) {
 export interface SendBody {
   readonly version: number
   readonly cc?: readonly string[] | undefined
+  /** B-TH-004: the person ticked "Send outside this customer". */
+  readonly sendOutside?: boolean | undefined
   readonly subject?: string | null | undefined
   /** The office's own words above the link paragraph; none: the standard text. */
   readonly message?: string | null | undefined
@@ -339,6 +341,7 @@ export async function sendQuote(request: FastifyRequest, quoteId: string, body: 
         sender: await senderOf(tools, context),
         to: plan.to,
         cc: body.cc ?? [],
+        sendOutside: body.sendOutside, // B-TH-004
         subject: body.subject?.trim() ? body.subject.trim() : plan.mail.subject,
         storedText: plan.mail.stored,
         attachments: [file.id],
@@ -404,6 +407,8 @@ export interface NewLinkBody {
   readonly version: number
   readonly cc?: readonly string[] | undefined
   readonly message?: string | null | undefined
+  /** B-TH-004: the person ticked "Send outside this customer". */
+  readonly sendOutside?: boolean | undefined
 }
 
 /**
@@ -453,7 +458,7 @@ export async function sendNewLink(request: FastifyRequest, quoteId: string, body
       const current = (await readQuote(tools.tx, quote.id))!
       const revoked = await revokeAcceptLinks(tools, current, context.actorId)
       const link = await insertAcceptLink(tools, plan.link, current, { email: plan.to, terms: plan.terms, actorId: context.actorId })
-      const mail = await queueLinkMail(tools, { quoteId: current.id, sender: await senderOf(tools, context), to: plan.to, cc: body.cc ?? [], subject: plan.mail.subject, storedText: plan.mail.stored, attachments: [plan.fileId], locale: languageOf(version.language) })
+      const mail = await queueLinkMail(tools, { quoteId: current.id, sender: await senderOf(tools, context), to: plan.to, cc: body.cc ?? [], /* B-TH-004 */ sendOutside: body.sendOutside, subject: plan.mail.subject, storedText: plan.mail.stored, attachments: [plan.fileId], locale: languageOf(version.language) })
       tools.audit({ action: 'quotes.sendLink', recordType: 'Quote', recordId: current.id, companyId: current.companyId, after: { versionId: version.id, linkId: link.linkId, linkExpiresAt: toUtcIso(link.expiresAt), revokedLinkIds: revoked, outboundId: mail.outbound.id } })
       tools.emit({ type: 'quote.link_sent', subject: current.id, companyId: current.companyId, payload: { quoteId: current.id, versionId: version.id, linkId: link.linkId, revokedLinkIds: revoked } })
       return { ...(await detailInCommand(tools, current.id)), link: { id: link.linkId, expiresAt: toUtcIso(link.expiresAt), to: plan.to, revokedLinkIds: revoked, emailId: mail.outbound.id } }
