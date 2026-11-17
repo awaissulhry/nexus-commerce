@@ -89,7 +89,9 @@ describe('COL-059: the record thread as the partner sees it', { timeout: SLOW_TE
     const { note, mail } = await officeWrites('SalesOrder', order)
     const answer = await thread(buyer, 'SalesOrder', order)
     expect(answer.status, JSON.stringify(answer.body)).toBe(200)
-    expect(answer.body.record).toMatchObject({ type: 'SalesOrder', id: order, theirRef: 'SEED-PO-77', ourRef: 'SEED-SO-0001' })
+    // th2-backend step 7 (§0.5): "ours" is the customer's own order number, never the office's SO-… series.
+    expect(answer.body.record).toMatchObject({ type: 'SalesOrder', id: order, theirRef: 'SEED-PO-77', ourRef: expect.stringMatching(/^#\d+$/) })
+    expect(JSON.stringify(answer.body)).not.toContain('SEED-SO-0001')
     const ids = answer.body.messages.map((message: Json) => message.id)
     expect(ids).toContain(mail)
     expect(ids).not.toContain(note)

@@ -103,6 +103,8 @@ export async function inquirySource(caller: CommandCaller, query: SourceQuery) {
   if ((query.quoteId === undefined) === (query.salesOrderId === undefined)) throw new ValidationError('Name the quote or the order (one of the two).', [{ path: 'query', message: 'quoteId or salesOrderId, one of the two.' }])
   return caller.withClient(async (db) => {
     let quoteId: string | null = null
+    // B-TH-025: an order made straight from a request names it itself (Inquiry.salesOrderId), no quote between.
+    let orderId: string | null = null
     if (query.quoteId) {
       const quote = isUuid(query.quoteId) ? await db.quote.findUnique({ where: { id: query.quoteId }, select: { id: true, companyId: true, partyId: true } }) : null
       if (!quote || !can(actor, QUOTES_VIEW, { companyId: quote.companyId, partyId: quote.partyId })) throw new NotFoundError('Quote not found.')
@@ -112,8 +114,9 @@ export async function inquirySource(caller: CommandCaller, query: SourceQuery) {
       if (!order || !can(actor, ORDERS_VIEW, { companyId: order.companyId, partyId: order.partyId })) throw new NotFoundError('Order not found.')
       const version = order.quoteVersionId ? await db.quoteVersion.findUnique({ where: { id: order.quoteVersionId }, select: { quoteId: true } }) : null
       quoteId = version?.quoteId ?? null
+      orderId = order.id
     }
-    const row = quoteId ? await db.inquiry.findFirst({ where: { quoteId }, select: INQUIRY_COLUMNS }) : null
+    const row = quoteId ? await db.inquiry.findFirst({ where: { quoteId }, select: INQUIRY_COLUMNS }) : orderId ? await db.inquiry.findFirst({ where: { salesOrderId: orderId }, select: INQUIRY_COLUMNS }) : null
     if (!row || !may(context, SALES_INQUIRIES_VIEW, row)) return { inquiry: null }
     return {
       inquiry: {

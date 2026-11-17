@@ -101,7 +101,7 @@ async function fanOutAll(): Promise<number> {
   return made
 }
 
-const newsOf = (userId: string, orderId: string) => admin<{ messageKey: string; partyId: string; eventType: string }>('SELECT "messageKey", "partyId", "eventType" FROM "Notification" WHERE "userId" = $1 AND "recordType" = \'SalesOrder\' AND "recordId" = $2 ORDER BY "createdAt", id', [userId, orderId])
+const newsOf = (userId: string, orderId: string) => admin<{ messageKey: string; partyId: string; eventType: string; recordLabel: string }>('SELECT "messageKey", "partyId", "eventType", "recordLabel" FROM "Notification" WHERE "userId" = $1 AND "recordType" = \'SalesOrder\' AND "recordId" = $2 ORDER BY "createdAt", id', [userId, orderId])
 const newsAbout = (orderId: string) => admin<{ userId: string; partyId: string; messageKey: string }>('SELECT "userId", "partyId", "messageKey" FROM "Notification" WHERE "recordType" = \'SalesOrder\' AND "recordId" = $1 ORDER BY "createdAt", id', [orderId])
 const statusOf = async (orderId: string) => (await one<{ status: string }>('SELECT status::text FROM "SalesOrder" WHERE id = $1', [orderId])).status
 
@@ -202,7 +202,11 @@ describe('T06: the portal says "confirmed" only for a confirmed order (B-TH-006,
     // Order news is transactional: mailed at once, in the person's language, with the words of the wait.
     const mails = h.ses.mails.slice(before).filter((mail) => mail.templateKey === 'portal.notification' && mail.to[0] === brandA.buyer)
     expect(mails).toHaveLength(1)
-    expect(textOf(mails[0]!.raw)).toContain(`We received your order ${waiting.number}: it is waiting for our approval`)
+    // th2-backend step 7 (§0.5): the customer's own order number ("your order 3"), never the office's SO-… series.
+    const seq = (await one<{ customerSeq: number }>('SELECT "customerSeq" FROM "SalesOrder" WHERE id = $1', [waiting.id])).customerSeq
+    expect(textOf(mails[0]!.raw)).toContain(`We received your order ${seq}: it is waiting for our approval`)
+    expect(textOf(mails[0]!.raw)).not.toContain(waiting.number)
+    expect((await newsOf(ids.aBuyer, waiting.id)).map((row) => row.recordLabel)).toEqual([`#${seq}`])
     expect(textOf(mails[0]!.raw)).not.toMatch(/is confirmed/)
     expect(h.ses.mails.slice(before).some((mail) => mail.to[0] === brandB.buyer)).toBe(false)
   })
@@ -218,7 +222,8 @@ describe('T06: the portal says "confirmed" only for a confirmed order (B-TH-006,
     ])
     expect(await newsOf(ids.bBuyer, waiting.id)).toEqual([])
     const mails = h.ses.mails.slice(before).filter((mail) => mail.templateKey === 'portal.notification' && mail.to[0] === brandA.buyer)
-    expect(mails.map((mail) => textOf(mail.raw).includes(`Your order ${waiting.number} is confirmed`))).toEqual([true])
+    const seq = (await one<{ customerSeq: number }>('SELECT "customerSeq" FROM "SalesOrder" WHERE id = $1', [waiting.id])).customerSeq
+    expect(mails.map((mail) => textOf(mail.raw).includes(`Your order ${seq} is confirmed`))).toEqual([true])
     expect(await fanOutAll()).toBe(0)
   })
 

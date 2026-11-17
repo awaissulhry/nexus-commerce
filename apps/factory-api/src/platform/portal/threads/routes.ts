@@ -2,6 +2,9 @@ import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { listPartnerThreadsContract, postPartnerMessageContract, readPartnerThreadContract } from '../../threads/partner/contract'
 import { listPartnerThreads, postPartnerMessage, readPartnerThread } from '../../threads/partner/service'
+// B-TH-027: the person's own read mark.
+import { markPartnerReadContract } from '../../threads/partner/contract'
+import { markPartnerThreadRead } from '../../threads/partner/service'
 import { manifest } from './manifest'
 
 /**
@@ -24,4 +27,11 @@ export default defineRoutes('portal-threads', manifest, async (app) => {
     const { recordType, recordId } = request.params
     return reply.code(201).send(await postPartnerMessage(request, { type: recordType, id: recordId }, request.body, idempotencyKeyFrom(request)))
   })
+
+  // ---- B-TH-027
+  app.post('/portal/threads/:recordType/:recordId/read', { schema: markPartnerReadContract }, async (request) => {
+    const { recordType, recordId } = request.params
+    return markPartnerThreadRead(request, { type: recordType, id: recordId }, request.body, idempotencyKeyFrom(request))
+  })
+  // ---- end B-TH-027
 })

@@ -218,7 +218,8 @@ describe('one thread per record (COL-001)', () => {
   })
 
   it("takes the record's company and site from the record, and answers an empty panel before the first message", async () => {
-    expect(await thread('author', 'Site', siteOne)).toEqual({ thread: null, messages: [], nextCursor: null })
+    // B-TH-027 / B-TH-028: the office's empty panel also says the reader's reading (none yet) and the head (who answers, what waits).
+    expect(await thread('author', 'Site', siteOne)).toEqual({ thread: null, messages: [], nextCursor: null, reading: null, head: { owner: null, waiting: null } })
     const { thread: made, message } = await note('author', 'Site', siteOne, { body: '  Check the press on line 2.\r\n  ' })
     expect(made).toMatchObject({ recordType: 'Site', recordId: siteOne, companyId: companyOne, siteId: siteOne, status: 'OPEN', version: 1 })
     expect(made.lastMessageAt).toBe(message.at)

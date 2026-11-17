@@ -122,6 +122,11 @@ export const INQUIRY_REFUSALS = [
   'MAIL_NOT_WAITING',
   // B-TH-014: the reader's role reads requests and answers none (the production manager).
   'READ_ONLY',
+  // ---- B-TH-025 / B-TH-026: Make order and Make style draft
+  'NO_LINES',
+  'LINES_NOT_READY',
+  'STYLE_DRAFTS_FULL',
+  // ---- end B-TH-025 / B-TH-026
 ] as const
 export type InquiryRefusalCode = (typeof INQUIRY_REFUSALS)[number]
 export interface InquiryRefusal {
@@ -174,6 +179,67 @@ export const loseRefusal = (facts: InquiryFacts): InquiryRefusal | null => close
 export function quoteRefusal(facts: InquiryFacts): InquiryRefusal | null {
   return closed(facts) ?? (facts.partyId === null ? refusal('NEEDS_CUSTOMER', `${facts.number} is from a prospect: match it to a customer (or make the customer) first; a quote is made for a customer.`) : null)
 }
+
+// ---- B-TH-025 (threads plan G3): Make order — the order made straight from the request -----------------------------------
+
+/** One line as "Make order" reads it (the same facts as a quote's). */
+export type OrderableLine = QuotableLine
+
+/**
+ * Making the order: open, from a customer (an order is made for a party; a prospect is made a customer first), with lines, and
+ * every line ready to order (a style, its colourway, pieces by size). A line that is not is never left out of an order (unlike a
+ * quote, which the office prices and completes later): the refusal names each line and what it lacks ("Make the style draft
+ * first" for a line asked in words).
+ */
+export function orderRefusal(facts: InquiryFacts, lines: readonly OrderableLine[]): InquiryRefusal | null {
+  const shut = closed(facts)
+  if (shut) return shut
+  if (facts.partyId === null) return refusal('NEEDS_CUSTOMER', `${facts.number} is from a prospect: make the customer first (or match it to one); an order is made for a customer.`)
+  if (lines.length === 0) return refusal('NO_LINES', `${facts.number} names nothing to make yet: add its lines (style, colourway, pieces by size), then make the order.`)
+  const { leftOut } = quotableLines(lines)
+  if (leftOut.length === 0) return null
+  const said = leftOut.map((line) => `line ${line.seq}: ${line.reason.replace(/: add (it|the sizes) on the quote\.$/, '')}`).join('; ')
+  const draftFirst = leftOut.some((line) => lines.find((each) => each.seq === line.seq)?.styleId === null) ? ' A line asked in words needs its style first: make the style draft, then pick it on the line.' : ''
+  return refusal('LINES_NOT_READY', `${facts.number} cannot become an order yet (${said}).${draftFirst}`)
+}
+
+/** Why an order made from a request waits for a yes: the customer's credit, or an approval rule for orders. */
+export type OrderWaitsFor = 'CREDIT' | 'APPROVAL'
+
+/** What "Make order" says (the toast, the answer): made and confirmed, or made and waiting — never "confirmed" while it waits (L2-G06). */
+export function orderMadeWords(order: string, request: string, waitsFor: OrderWaitsFor | null): Words {
+  if (waitsFor === 'CREDIT') {
+    return {
+      it: `L'ordine ${order} è stato creato da ${request} ed è in attesa di approvazione: il cliente supera il fido o ha un blocco del credito.`,
+      en: `Order ${order} was made from ${request} and waits for approval: the customer is over its credit limit or on a credit hold.`,
+    }
+  }
+  if (waitsFor === 'APPROVAL') {
+    return {
+      it: `L'ordine ${order} è stato creato da ${request} ed è in attesa di approvazione: una regola di approvazione degli ordini chiede prima un sì.`,
+      en: `Order ${order} was made from ${request} and waits for approval: an approval rule for orders asks for a yes first.`,
+    }
+  }
+  return { it: `L'ordine ${order} è stato creato da ${request} ed è confermato.`, en: `Order ${order} was made from ${request} and is confirmed.` }
+}
+
+// ---- B-TH-026 (threads plan L2-G18): Make style draft — a draft style named on the request ---------------------------------
+
+/** The most style drafts one request names (the database's Inquiry_style_drafts_check). */
+export const STYLE_DRAFTS_MAX = 50
+
+/**
+ * Making a style draft: the request stays open (it is not answered by a draft), so a closed request takes none (the database
+ * freezes its drafts with it); a prospect has no brand to make it for yet; at most STYLE_DRAFTS_MAX per request.
+ */
+export function styleDraftRefusal(facts: InquiryFacts, drafts: number): InquiryRefusal | null {
+  const shut = closed(facts)
+  if (shut) return shut
+  if (facts.partyId === null) return refusal('NEEDS_CUSTOMER', `${facts.number} is from a prospect: make the customer first; a style draft is made for the customer's own label.`)
+  if (drafts >= STYLE_DRAFTS_MAX) return refusal('STYLE_DRAFTS_FULL', `${facts.number} already names ${STYLE_DRAFTS_MAX} style drafts, the most one request names.`)
+  return null
+}
+// ---- end B-TH-025 / B-TH-026
 
 /** B-TH-014: an action the reader's role does not take (it reads requests; sales answers them), said instead of hiding it. */
 export const readOnlyRefusal = (): InquiryRefusal => refusal('READ_ONLY', 'Your role reads requests; answering them (a quote, a question, a decline, who keeps it) is for sales.')

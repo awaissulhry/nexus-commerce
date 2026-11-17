@@ -405,6 +405,8 @@ export function assignHeld(row: Pick<InquiryRow, 'number' | 'status' | 'assignee
 export function actionHeld(view: InquiryView, action: keyof InquiryView['actions'], can: InquiriesCan, offline: boolean): Phrase | null {
   const state = view.actions[action]
   if (!can.manage) return { key: 'held.right', params: { right: 'right.sales.inquiries.manage' } }
+  // B-TH-025 / B-TH-026: Make order and Make style draft are optional in the answer (always sent by the API).
+  if (!state) return { key: 'held.notNow' }
   if (!state.allowed) return state.refusal ? refusalPhrase(state.refusal.code, view.number) : action === 'quote' && !can.quotes ? { key: 'held.right', params: { right: 'right.quotes.manage' } } : { key: 'held.notNow' }
   if (offline) return { key: 'held.offline' }
   return null

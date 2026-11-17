@@ -4,6 +4,7 @@ import { PORTAL_SALES_ORDERS_VIEW } from '@nexus/factory-domain/sales/portal-ord
 import { PORTAL_HOME_VIEW } from '@nexus/factory-domain/portal/tasks/permissions'
 import type { PartnerMessageKey } from '@nexus/factory-domain/portal/notifications/messages'
 import type { PartnerRule } from './types'
+import { orderNamed } from './records' // th2-backend step 7
 
 /**
  * The office's answer to a customer's change or cancel request (B-W2b-183; SAL-077, SAL-078: "the customer gets the answer
@@ -26,16 +27,18 @@ export const CHANGE_REQUEST_RULES: readonly PartnerRule[] = Object.freeze([
     events: ['order_change_request.answered'],
     async drafts(context, raw) {
       const event = answered.payload.parse(raw) as { requestId: string; orderId: string; kind: 'CHANGE' | 'CANCEL'; answer: 'ACCEPTED' | 'REFUSED' }
-      const order = await context.tx.salesOrder.findUnique({ where: { id: event.orderId }, select: { id: true, number: true, companyId: true, partyId: true } })
+      const order = await context.tx.salesOrder.findUnique({ where: { id: event.orderId }, select: { id: true, number: true, companyId: true, partyId: true, customerSeq: true } })
       if (!order) return []
       const place = { companyId: order.companyId, partyId: order.partyId }
+      // th2-backend step 7 (§0.5): the order by the customer's own number ("#12", "your order 12"), never SO-….
+      const named = orderNamed(order)
       return [
         {
           partyId: order.partyId,
           companyId: order.companyId,
-          record: { type: 'SalesOrder', id: order.id, label: order.number },
+          record: named.record,
           messageKey: KEYS[event.kind][event.answer],
-          params: {},
+          params: named.params,
           anchor: `change-request:${event.requestId}`,
           forReader: (reader) => can(reader.actor, PORTAL_HOME_VIEW, place) && can(reader.actor, PORTAL_SALES_ORDERS_VIEW, place),
         },

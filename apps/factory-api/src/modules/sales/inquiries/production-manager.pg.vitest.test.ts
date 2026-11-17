@@ -87,7 +87,11 @@ describe('the production manager reads Incoming (B-TH-014)', () => {
     const { inquiry } = await ok('pm', 'GET', `/sales/inquiries/${typed.id}`)
     expect('targetUnitPrice' in inquiry).toBe(false)
     expect(inquiry.prospectDetails).toMatchObject({ name: 'Seed Prospect', company: 'Seed Moto Club', email: null, phone: null })
-    for (const [verb, held] of Object.entries(inquiry.actions as Record<string, Json>)) expect(held, verb).toEqual({ allowed: false, refusal: { code: 'READ_ONLY', message: expect.stringMatching(/is for sales/) } })
+    // B-TH-026: Make style draft is the product office's — his own right (product.styles.manage), never READ_ONLY; this request
+    // is a prospect's, so it waits for the customer. Every answering verb stays READ_ONLY.
+    const { styleDraft, ...answering } = inquiry.actions as Record<string, Json>
+    for (const [verb, held] of Object.entries(answering)) expect(held, verb).toEqual({ allowed: false, refusal: { code: 'READ_ONLY', message: expect.stringMatching(/is for sales/) } })
+    expect(styleDraft).toMatchObject({ allowed: false, refusal: { code: 'NEEDS_CUSTOMER' } })
     // Sales reads the same request with its target price and the prospect's contact details.
     const seen = (await ok('sales', 'GET', `/sales/inquiries/${typed.id}`)).inquiry
     expect(seen).toMatchObject({ targetUnitPrice: '380', prospectDetails: { email: 'prospect.club@example.com', phone: '+39 000 0000011' } })

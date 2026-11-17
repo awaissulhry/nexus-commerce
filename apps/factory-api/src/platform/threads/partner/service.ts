@@ -20,6 +20,9 @@ import { partnerViewOf, viewFits } from '../../search/partner/views'
 import type { AttachmentView } from '../contract'
 import { afterCursor, cursorOf, ensureThread, type RecordRef } from '../threads'
 import type { PartnerMessageView } from './contract'
+// ---- B-TH-027: the person's own read mark (their post moves it; "New since your last visit"; the list's new counts).
+import { markThreadRead, moveMark, readingOf, unreadCounts } from '../reads'
+// ---- end B-TH-027
 
 /**
  * A record's thread in a portal session (B-W2b-168; COL-059, COL-060; design portal.frame › thread "Ask a question /
@@ -174,6 +177,8 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
       shown,
       attachments: await visibleAttachments(client, caller, shown.flatMap((row) => row.attachmentFileIds)),
       composer: await composerFor(client, caller, scope, thread),
+      // B-TH-027: the person's own reading.
+      reading: thread ? await readingOf(client, thread.id, { userId: caller.context.actorId, office: false }) : null,
     }
   })
   const mine = await minePosts(request, caller, read.shown)
@@ -184,8 +189,17 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
     messages: read.shown.map((row) => messageViewOf(caller, row, read.attachments, mine)),
     nextCursor: read.rows.length > page.limit && last ? encodeCursor(last) : null,
     composer: read.composer,
+    reading: read.reading,
   }
 }
+
+// ---- B-TH-027: POST /portal/threads/<type>/<id>/read — the record as the partner may open it, then the person's own mark.
+export async function markPartnerThreadRead(request: FastifyRequest, ref: RecordRef, body: { readonly messageId?: string | undefined }, idempotencyKey?: string) {
+  const caller = partnerCallerOf(request)
+  await request.withClient((client) => openRecord(client, caller, ref))
+  return markThreadRead(request as CommandCaller, ref, body, idempotencyKey, { preview: caller.session.preview })
+}
+// ---- end B-TH-027
 
 /** GET /portal/threads: the party's conversations by their newest shared message (ours only with from=company). */
 export async function listPartnerThreads(request: FastifyRequest, query: { readonly from: 'any' | 'company'; readonly limit: number }) {
@@ -220,6 +234,11 @@ export async function listPartnerThreads(request: FastifyRequest, query: { reado
       })
       .sort((a, b) => b.last.at.getTime() - a.last.at.getTime() || b.last.id.localeCompare(a.last.id))
       .slice(0, query.limit)
+    return { conversations, kinds }
+  }).then(async ({ conversations }) => {
+    // ---- B-TH-027: each conversation's messages new to the person (one grouped read).
+    const counts = conversations.length === 0 ? new Map<string, number>() : new Map((await unreadCounts(request as CommandCaller, conversations.map(({ thread }) => ({ type: thread.recordType, id: thread.recordId })))).counts.map((count) => [`${count.recordType}:${count.recordId}`, count.newCount]))
+    // ---- end B-TH-027
     return {
       conversations: conversations.map(({ thread, record, last }) => {
         const side = sideOf(last.direction)
@@ -235,6 +254,7 @@ export async function listPartnerThreads(request: FastifyRequest, query: { reado
             attachmentCount: last.attachmentFileIds.length,
             at: toUtcIso(last.at),
           },
+          newCount: counts.get(`${thread.recordType}:${thread.recordId}`) ?? 0,
         }
       }),
     }
@@ -343,6 +363,9 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
           payload: { threadId: current.id, messageId: id, recordType: current.recordType, recordId: current.recordId, direction: 'INBOUND', audience: 'PARTNER' },
         }),
       )
+      // ---- B-TH-027: the person's own post is read by them (their mark moves to it; a preview writes none).
+      if (!caller.session.preview) await moveMark(tools, current, { userId: caller.context.actorId, office: false }, { id, at: tools.now }, true)
+      // ---- end B-TH-027
       const attachments = await visibleAttachments(tools.tx, caller, row.attachmentFileIds)
       return { thread: { id: current.id, status: current.status as ThreadStatus }, message: messageViewOf(caller, row, attachments, new Set([id])) }
     },

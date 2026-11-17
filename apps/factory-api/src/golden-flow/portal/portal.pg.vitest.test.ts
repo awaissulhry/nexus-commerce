@@ -408,7 +408,8 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     await share(false)
     await as(R.buyer, 'GET', `/portal/sales-orders/${so2}/progress`, undefined, 404)
     const thread = await as(R.buyer, 'GET', `/portal/threads/SalesOrder/${id('sales:SO1')}`)
-    expect(thread).toMatchObject({ record: { ourRef: 'SEED-SO-0001' }, composer: { canPost: true } })
+    // th2-backend step 7 (§0.5): the order by the customer's own number, never the office's SO-… series.
+    expect(thread).toMatchObject({ record: { ourRef: expect.stringMatching(/^#\d+$/) }, composer: { canPost: true } })
     const posted = await as(R.buyer, 'POST', `/portal/threads/SalesOrder/${id('sales:SO1')}/messages`, { body: 'Can you ship on Friday?' }, 201)
     expect(posted.message).toMatchObject({ side: 'PARTNER', channel: 'PORTAL', author: { mine: true } })
     expect(JSON.stringify(await ok(P.sales, 'GET', `/threads/SalesOrder/${id('sales:SO1')}`))).toContain('Can you ship on Friday?')

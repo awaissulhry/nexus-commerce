@@ -28,6 +28,11 @@ export const manifest = defineManifest({
   'POST /sales/inquiries/:inquiryId/decline': manage,
   'POST /sales/inquiries/:inquiryId/lost': manage,
   'POST /sales/inquiries/:inquiryId/quote': manage,
+  // B-TH-025: Make order — also orders.manage over the request's company and customer (checked in the handler).
+  'POST /sales/inquiries/:inquiryId/order': manage,
+  // B-TH-026: Make style draft — whoever makes styles (product.styles.manage over the company) and reads the request
+  // (sales.inquiries.view, checked in the handler): the production manager too.
+  'POST /sales/inquiries/:inquiryId/style-draft': { audiences: ['office'], permission: 'product.styles.manage', scope: 'record' },
   // B-W2b-394 (ML1:02): the inquiry addresses — read with the inquiries, changed as sales settings (sales.settings.manage, a
   // company's own or, over every company, the tenant's).
   'GET /sales/inquiries/addresses': view,
