@@ -9,6 +9,8 @@ import { diffView, impactView } from '../orders/daily-contract'
 import { ASK_SAMPLE_KINDS, ASK_VERDICT_CODES } from '@nexus/factory-domain/sales/change-requests/rules'
 import { FREEZE_STATES, ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS } from '@nexus/factory-domain/sales/order-changes/freeze'
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
+// B-PR-26: our counter-offer on a request.
+import { COUNTER_STATES } from '@nexus/factory-domain/sales/change-requests/counter'
 
 /**
  * Change and cancel requests from the portal (B-W2b-183; SAL-077, SAL-078; design portal.customer.orders "Ask for a
@@ -43,7 +45,7 @@ const cell = output({
  * with the total, in minor units of the order's currency — prices, dropped for a reader without the grain. Shown only: no
  * money moves.
  */
-const cancelFee = output({
+export const cancelFee = output({
   /** Percent of each cancelled line's net value (decimal text); null: free. */
   pct: z.string().nullable(),
   words,
@@ -89,7 +91,25 @@ export const askImpact = output({
 })
 // ---- end B-PR-25
 
-const requestFields = {
+/**
+ * B-PR-26: our counter-offer on a request (OrderChangeRequest counter columns; its COUNTER_OFFER approval's status): the date we
+ * offer, the fee — a price in minor units of the order's currency, dropped for a reader without the grain (`priced` says that one
+ * applies) —, our words, and where it stands (WAITING the customer's answer, AGREED, REFUSED, LAPSED) in the reader's words.
+ */
+export const counterOut = output({
+  approvalRequestId: id(),
+  at: instant(),
+  date: day.nullable(),
+  fee: money.price(z.number().int().nullable()),
+  note: z.string().nullable(),
+  priced: notMoney(z.boolean()),
+  /** "Our counter-offer · 10 Dec · a price applies" (never the amount). */
+  offer: words,
+  state: z.enum(COUNTER_STATES),
+  words,
+})
+
+export const requestFields = {
   id: id(),
   orderId: id(),
   orderNumber: z.string(),
@@ -121,6 +141,9 @@ const requestFields = {
   // B-PR-25: the impact the customer saw at Send (null: asked before B-PR-25); a sample round's kind.
   impact: askImpact.nullable(),
   sampleKind: z.enum(ASK_SAMPLE_KINDS).nullable(),
+  // B-PR-26: the batch it was asked in (a bulk ask: one customer, one kind; null: asked alone) and our counter-offer (null: none).
+  batchId: id().nullable(),
+  counter: counterOut.nullable(),
   version: z.number().int(),
 }
 

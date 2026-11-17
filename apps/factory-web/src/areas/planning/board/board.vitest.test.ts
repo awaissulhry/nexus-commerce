@@ -13,7 +13,7 @@ import { LIST_PAGES } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { designScreen as allocationScreen } from '../allocation/fixtures'
 import { getBoard, moveSlot, placeByDueDate, placeSlot, publishPlan, removeSlot, TRAY_CHIPS, type Board } from './api'
-import { BOARD, designScreen, ME, NOW, SLOTS, TODAY, WORK_ORDERS } from './fixtures'
+import { BOARD, designScreen, ME, NOW, SLOTS, TODAY, WORK_ORDERS, /* F-PR-18 */ URGENCY_BOARD } from './fixtures'
 import {
   bandPublishHeld,
   controlsOf,
@@ -37,6 +37,9 @@ import {
   windowFrom,
   type BoardControls,
   type Words,
+  // F-PR-18
+  customerUrgencyMark,
+  urgencyFirst,
 } from './model'
 
 /**
@@ -320,3 +323,81 @@ describe('every design case draws in both languages with no key left on screen',
   })
 })
 
+
+// ---- F-PR-18: the customer's urgency on the board (production plan §3 "Brand-slot rule", §5 Planning board; lead picks L19, R-40) ----
+describe('F-PR-18 — the chip "Customer urgency: Urgent 2" and Customer urgency first', () => {
+  const card = (drawn: ReturnType<typeof drawBoard>, id: string) => drawn.cards.find((entry) => entry.id === id)!
+  const wo = (id: string) => URGENCY_BOARD.workOrders.find((entry) => entry.id === id)!
+
+  it('the address keeps the order (`?sort=urgency`; the plan’s order stays out of it)', () => {
+    expect(controlsOf(new URLSearchParams('sort=urgency')).sort).toBe('urgency')
+    expect(controlsOf(new URLSearchParams('sort=rank')).sort).toBe('plan')
+    expect(queryOf(controls({ sort: 'urgency' }))).toBe('sort=urgency')
+    expect(queryOf(controls({ sort: 'plan' }))).toBe('')
+  })
+
+  it('a bar and a card of a work order its customer marked Urgent carry the chip with its place in the customer’s OWN list; none otherwise', () => {
+    const drawn = drawBoard(URGENCY_BOARD, controls(), words(), ME)
+    expect(card(drawn, SLOTS[1]!.id).marks?.map((mark) => mark.label)).toContain('Customer urgency: Urgent 2')
+    expect(card(drawn, trayCardOf(WO104!.id)).marks?.map((mark) => mark.label)).toContain('Customer urgency: Urgent 1')
+    expect(card(drawn, trayCardOf(WO105!.id)).marks?.some((mark) => mark.label.startsWith('Customer urgency'))).toBe(false)
+    // The plain board (no customer urgency read): no chip anywhere.
+    expect(drawBoard(BOARD, controls(), words(), ME).cards.flatMap((entry) => entry.marks ?? []).some((mark) => mark.label.startsWith('Customer urgency'))).toBe(false)
+    // Italian: "Urgente" alone is already the rush flag.
+    expect(customerUrgencyMark({ customerUrgency: { urgentRank: 2 } }, words('it'))?.label).toBe('Urgente (cliente) 2')
+    expect(customerUrgencyMark({ customerUrgency: { urgentRank: null } }, words('en'))?.label).toBe('Customer urgency: Urgent')
+    expect(customerUrgencyMark({ customerUrgency: null }, words('en'))).toBeNull()
+  })
+
+  it('PW-06: the chip names no customer and no place of another customer; the board draws only the work orders the API gave', () => {
+    const drawn = drawBoard(URGENCY_BOARD, controls(), words(), ME)
+    const chips = drawn.cards.flatMap((entry) => entry.marks ?? []).filter((mark) => mark.label.startsWith('Customer urgency'))
+    expect(chips.length).toBeGreaterThan(0)
+    for (const chip of chips) expect(chip.label).not.toMatch(/Brand (Alpha|Beta)|ALPHA|BETA/)
+    // A board read by a person limited to Brand Beta holds Beta's work orders only: nothing of Alpha is drawn.
+    const betaOnly = { ...URGENCY_BOARD, workOrders: URGENCY_BOARD.workOrders.filter((entry) => entry.customer?.code === 'BETA'), slots: URGENCY_BOARD.slots.filter((slot) => ['WO-0102', 'WO-0103'].includes(wo(slot.workOrderId).number)), tray: [] }
+    const limited = drawBoard(betaOnly, controls({ sort: 'urgency', view: 'orders' }), words(), ME)
+    expect(limited.lanes.map((lane) => lane.label)).toEqual(['WO-0102', 'WO-0103'])
+  })
+
+  it('Customer urgency first: Alpha’s urgent work order takes the tray place Alpha’s other held; nothing is saved', () => {
+    const plain = drawBoard(URGENCY_BOARD, controls(), words(), ME).cards.filter((entry) => entry.laneId === null).map((entry) => entry.id)
+    expect(plain).toEqual([trayCardOf(WO105!.id), trayCardOf(WO104!.id)])
+    const first = drawBoard(URGENCY_BOARD, controls({ sort: 'urgency' }), words(), ME).cards.filter((entry) => entry.laneId === null).map((entry) => entry.id)
+    expect(first).toEqual([trayCardOf(WO104!.id), trayCardOf(WO105!.id)])
+  })
+
+  it('the orders view: each customer’s urgent work orders fill its own places (by place in its list); another customer’s and our rush keep theirs', () => {
+    const lanes = drawBoard(URGENCY_BOARD, controls({ view: 'orders', sort: 'urgency' }), words(), ME).lanes.map((lane) => lane.label)
+    // Alpha held places 1, 4 and 5: urgent 1 (WO-0104), urgent 2 (WO-0101), then WO-0105. Beta's WO-0102 and the rush WO-0103 stay.
+    expect(lanes).toEqual(['WO-0104', 'WO-0102', 'WO-0103', 'WO-0101', 'WO-0105'])
+  })
+
+  it('the rule (pure): another customer’s places are identical before and after; an urgent order never leaves its office level; no customer: no move', () => {
+    type Row = { id: string; customer: { id: string; code: string; name: string } | null; customerUrgency: { urgentRank: number | null } | null; rush: boolean; priority: number }
+    const a = { id: 'party-a', code: 'A', name: 'Brand Alpha' }
+    const b = { id: 'party-b', code: 'B', name: 'Brand Beta' }
+    const row = (id: string, customer: Row['customer'], urgentRank: number | null | 'none', level: { rush?: boolean; priority?: number } = {}): Row => ({ id, customer, customerUrgency: urgentRank === 'none' ? null : { urgentRank }, rush: level.rush ?? false, priority: level.priority ?? 0 })
+    const rows = [row('a1', a, 'none'), row('b1', b, 'none'), row('a2', a, 'none'), row('x', null, 'none'), row('a3', a, 2), row('b2', b, 1), row('a4', a, 1), row('ar', a, 1, { rush: true })]
+    const out = urgencyFirst(rows, (entry) => entry).map((entry) => entry.id)
+    expect(out).toEqual(['a4', 'b2', 'a3', 'x', 'a1', 'b1', 'a2', 'ar'])
+    // Brand Beta's places: b2 (urgent) takes b1's place, b1 moves to b2's — only inside Beta's own places.
+    const placesOf = (ids: string[], customer: string) => ids.map((id, index) => (rows.find((entry) => entry.id === id)!.customer?.id === customer ? index : -1)).filter((index) => index >= 0)
+    expect(placesOf(out, b.id)).toEqual(placesOf(rows.map((entry) => entry.id), b.id))
+    expect(placesOf(out, a.id)).toEqual(placesOf(rows.map((entry) => entry.id), a.id))
+    // The rush one (another office level) keeps its place; the work order of no customer too.
+    expect(out.indexOf('ar')).toBe(7)
+    expect(out.indexOf('x')).toBe(3)
+    // Nobody urgent: the plan's order, as it was.
+    expect(urgencyFirst(rows.map((entry) => ({ ...entry, customerUrgency: null })), (entry) => entry).map((entry) => entry.id)).toEqual(rows.map((entry) => entry.id))
+  })
+
+  it('the new words exist in both languages', () => {
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, [NAMESPACE])[NAMESPACE]!)
+      for (const key of ['toolbar.sort', 'toolbar.sorts.plan', 'toolbar.sorts.urgency', 'board.urgencyHint', 'mark.customerUrgencySome']) expect(t(key), `${locale}: ${key}`).not.toBe(key)
+      expect(t('mark.customerUrgency', { rank: 2 })).toContain('2')
+    }
+  })
+})
+// ---- end F-PR-18

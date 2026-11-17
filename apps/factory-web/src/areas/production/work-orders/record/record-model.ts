@@ -21,6 +21,8 @@ import type { HealthActions, HealthModel } from './health/model'
 import type { GatesPart } from './gates/use-gates'
 // F-PR-21: the supervisor fact's Change… opens THE assign dialog (areas/_shared/production-supervisor).
 import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_shared/production-supervisor/model'
+// F-PR-22: "Ask the supervisor" (the band's ⋯ and the supervisor fact's Ask) opens THE note dialog (areas/production/_shared/notes).
+import type { NoteDialogActions, NoteDialogModel } from '../../_shared/notes/model'
 // F-PR-06: Cutting & bundles — the Cut record merged in (its recuts with Mark cut, the cut orders of this work order).
 import type { CutPartsActions, CutPartsModel } from '../cutting/use-cut-parts'
 
@@ -121,6 +123,8 @@ export interface WorkOrderRecordModel {
   // ---- end F-PR-05a
   /** F-PR-21: the supervisor fact (absent: not drawn); `can` = production.brand.manage (Change… held without); the dialog while open. */
   supervisor?: { readonly can: boolean; readonly assign: AssignSupervisorModel | null }
+  /** F-PR-22: Ask the supervisor (absent: not offered); `can` = threads.post (held in words without); the note dialog while open. */
+  note?: { readonly can: boolean; readonly dialog: NoteDialogModel | null }
   // ---- F-PR-06: Cutting & bundles and Quality ----
   /** The Cut record's parts on Cutting & bundles: the recuts and Mark cut, the cut orders of this work order (absent: not drawn). */
   cut?: CutPartsModel
@@ -176,6 +180,8 @@ export interface WorkOrderRecordActions {
   // ---- end F-PR-05a
   /** F-PR-21: Change… (the work order's orders) and THE assign dialog's actions. */
   supervisor?: AssignSupervisorActions & { readonly onOpen?: () => void }
+  /** F-PR-22: Ask the supervisor (this work order, or its sales orders) and THE note dialog's actions. */
+  note?: NoteDialogActions & { readonly onOpen?: () => void }
   // ---- F-PR-06 ----
   cut?: CutPartsActions
   // ---- end F-PR-06

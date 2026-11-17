@@ -1,6 +1,8 @@
 import { PARTNER_ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
 import { STEP_UP_CLOSED } from '../../../admin/shared/model'
-import type { PartnerKind, PartnerPerson, PartnerRole, PortalAccess } from '../../../admin/users/partners/api'
+import type { PartnerKind, PartnerPerson, PartnerRole, PortalAccess, ProductionLimits, ProductionLimitsView } from '../../../admin/users/partners/api'
+import type { FreezeList, FreezeRule } from './limits/api' // F-PR-07
+import type { LimitsModel } from './limits/model' // F-PR-07
 import type { PartnerCan } from '../../../admin/users/partners/model'
 import type { PortalAccessModel, RequestRow } from './model'
 
@@ -147,6 +149,99 @@ export function portalModel(side: 'customers' | 'suppliers', over: Partial<Porta
     stepUp: STEP_UP_CLOSED,
     requests: { items: side === 'customers' ? REQUESTS : [], problem: null, selected: [] },
     previewing: false,
+    // F-PR-07: a customer's Portal access draws the production limits card.
+    limits: side === 'customers' ? limitsModel() : null,
     ...over,
   }
 }
+
+// ── F-PR-07: the production limits card (made-up: Moda Demo, office people Bea Esempio and Carlo Prova) ─────────────────────
+
+export const OFFICE_PEOPLE = Object.freeze({
+  bea: { id: uid(80), name: 'Bea Esempio', me: false },
+  carlo: { id: uid(81), name: 'Carlo Prova', me: false },
+  me: { id: uid(82), name: 'Alex Demo', me: true },
+})
+
+/** The card as GET /partners/:id/production answers for Moda Demo: everything at its default (Status only, all off). */
+export function productionLimits(over: Partial<ProductionLimitsView> = {}, mayManage = true): ProductionLimits {
+  const party = customerAccess().party
+  return {
+    party,
+    production: {
+      level: 'STATUS',
+      progressShared: false,
+      urgency: { on: false, max: 3, now: 0, dormant: null, overQuota: null },
+      askKinds: [],
+      openAsks: [],
+      approver: null,
+      overrideFourEyes: false,
+      supervisor: null,
+      backup: null,
+      productionRoleOffered: true,
+      productionRoleWords: null,
+      version: 4,
+      ...over,
+    },
+    mayManage,
+  }
+}
+
+const rule = (n: number, over: Partial<FreezeRule> & Pick<FreezeRule, 'field' | 'frozenFrom' | 'action'>): FreezeRule => ({
+  id: uid(n),
+  companyId: '0190f0e2-0001-7000-8000-000000000001',
+  partyId: null,
+  fieldWords: { en: 'field', it: 'campo' },
+  stageWords: { en: 'stage', it: 'fase' },
+  active: true,
+  note: null,
+  words: { en: 'frozen', it: 'bloccato' },
+  updatedBy: 'Chiara Ufficio',
+  updatedAt: at(20, 9, 0),
+  version: 1,
+  ...over,
+})
+
+/** The company's freeze points (sizes at Cutting, dates at Sewing) beside Moda Demo's own (colourway at Released). */
+export function freezeList(over: Partial<FreezeList> = {}): FreezeList {
+  const partyId = customerAccess().party.id
+  const words: Record<FreezeList['fields'][number]['field'], { en: string; it: string }> = {
+    SIZE_QUANTITY: { en: 'sizes and quantities', it: 'taglie e quantità' },
+    COLOURWAY: { en: 'colourway', it: 'variante colore' },
+    OPTION: { en: 'options', it: 'opzioni' },
+    DELIVERY_DATE: { en: 'delivery date', it: 'data di consegna' },
+    SHIP_TO: { en: 'delivery address', it: 'indirizzo di consegna' },
+    PRICE: { en: 'prices', it: 'prezzi' },
+  }
+  const scope = { SIZE_QUANTITY: 'SIZE', COLOURWAY: 'LINE', OPTION: 'LINE', PRICE: 'LINE', DELIVERY_DATE: 'ORDER', SHIP_TO: 'ORDER' } as const
+  return {
+    companyId: '0190f0e2-0001-7000-8000-000000000001',
+    partyId,
+    rules: [
+      rule(90, { field: 'SIZE_QUANTITY', frozenFrom: 'CUT', action: 'CHANGE_REQUEST' }),
+      rule(91, { field: 'SIZE_QUANTITY', frozenFrom: 'SEWING', action: 'BLOCKED' }),
+      rule(92, { field: 'DELIVERY_DATE', frozenFrom: 'SEWING', action: 'CHANGE_REQUEST' }),
+      rule(93, { field: 'COLOURWAY', frozenFrom: 'RELEASED', action: 'BLOCKED', partyId }),
+    ],
+    fields: (Object.keys(words) as Array<keyof typeof words>).map((field) => ({ field, words: words[field], scope: scope[field], set: field === 'COLOURWAY' ? ('CUSTOMER' as const) : ('COMPANY' as const) })),
+    mayManage: true,
+    ...over,
+  }
+}
+
+export function limitsModel(over: Partial<LimitsModel> = {}): LimitsModel {
+  return {
+    state: 'ready',
+    read: productionLimits(),
+    problem: null,
+    supervise: true,
+    pick: { status: 'ready', people: [OFFICE_PEOPLE.me, OFFICE_PEOPLE.bea, OFFICE_PEOPLE.carlo], complete: true, ordersOnDefault: 7 },
+    freeze: { status: 'ready', list: freezeList() },
+    freezeDialog: null,
+    companyName: 'Demo Factory',
+    busy: false,
+    saveProblem: null,
+    ...over,
+  }
+}
+// ── end F-PR-07 ──

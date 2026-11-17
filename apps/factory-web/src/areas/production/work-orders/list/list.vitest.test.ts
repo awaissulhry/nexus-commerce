@@ -5,7 +5,7 @@ import { leftKeys, renderView, textOf } from '../../../../lib/record-thread/part
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { BLOCKED_BY, LIST_SORTS, WAITING_ON, WORK_ORDER_RISKS, type WorkOrderRow } from '../../_shared/api'
-import { designScreen, RISK_OPEN, RISK_ROWS } from '../fixtures'
+import { designScreen, RISK_OPEN, RISK_ROWS, /* F-PR-18 */ URGENCY_ROWS } from '../fixtures'
 import {
   blockedKeyOf,
   boardMarksOf,
@@ -29,7 +29,11 @@ import {
   waitingInputOf,
   withScreenSort,
   type ListTerms,
+  // F-PR-18
+  customerUrgencyCellOf,
 } from './model'
+// F-PR-18: the domain's states (the API's filter and column take the same list).
+import { CUSTOMER_URGENCY_STATES } from '@nexus/factory-domain/production-brand/urgency-state'
 
 /**
  * F-PR-03 — the work orders list by risk (production plan §5, 06-tree A.3, B-PR-34's list): the address (sort by risk by default and
@@ -237,3 +241,62 @@ describe('F-PR-03 — the screen (both languages)', () => {
     }
   })
 })
+
+// ---- F-PR-18: the Customer urgency column (under Columns ▾) and its filter ----------------------------------------------------------
+describe('F-PR-18 — Work orders: the Customer urgency column and filter', () => {
+  it('the filter is an address term the API reads (a computed filter over every page), cleared with the others; an unknown value is off', () => {
+    expect(terms('customerUrgency=ASKED').customerUrgency).toBe('ASKED')
+    expect(terms('customerUrgency=urgent').customerUrgency).toBeNull()
+    const asked = terms('customerUrgency=SET_BACK')
+    expect(listAddress('/w/DEMO/production/work-orders', asked)).toBe('/w/DEMO/production/work-orders?sort=risk&customerUrgency=SET_BACK')
+    expect(listQueryOf(asked)).toMatchObject({ customerUrgency: 'SET_BACK', sort: 'risk' })
+    expect(listQueryOf(terms('')).customerUrgency).toBeUndefined()
+    expect(narrowed(asked)).toBe(true)
+    expect(cleared(asked).customerUrgency).toBeNull()
+    expect(filterChange('customerUrgency', 'URGENT')).toEqual({ customerUrgency: 'URGENT' })
+    expect(filterChange('customerUrgency', 'nope')).toEqual({ customerUrgency: null })
+    expect(FILTER_CHOICES.customerUrgency.map((choice) => choice.value)).toEqual([...CUSTOMER_URGENCY_STATES])
+  })
+
+  it('mirrors the API’s filter and column (the same domain list in its contract)', () => {
+    const contract = readFileSync(new URL('../../../../../../factory-api/src/modules/production/work-orders/contract.ts', import.meta.url), 'utf8')
+    expect(contract).toContain('customerUrgency: z.enum(CUSTOMER_URGENCY_STATES).optional()')
+    expect(contract).toContain('urgencyState: z.enum(CUSTOMER_URGENCY_STATES).nullable()')
+  })
+
+  it('each cell: Urgent 2 (the place in the customer’s OWN list) · Urgent – asked · Regular · Set to regular by us · none', () => {
+    expect(customerUrgencyCellOf({ urgencyState: 'URGENT', customerUrgency: 'URGENT', urgentRank: 2 })).toEqual({ state: 'URGENT', key: 'urgency.cell.URGENT', params: { rank: 2 }, tone: 'info' })
+    expect(customerUrgencyCellOf({ urgencyState: 'URGENT', customerUrgency: 'URGENT', urgentRank: null })).toMatchObject({ key: 'urgency.cell.URGENT_SOME' })
+    expect(customerUrgencyCellOf({ urgencyState: 'ASKED', customerUrgency: 'REGULAR', urgentRank: null })).toMatchObject({ key: 'urgency.cell.ASKED', tone: 'warning' })
+    expect(customerUrgencyCellOf({ urgencyState: 'SET_BACK', customerUrgency: 'REGULAR', urgentRank: null })).toMatchObject({ key: 'urgency.cell.SET_BACK' })
+    expect(customerUrgencyCellOf({ urgencyState: 'REGULAR', customerUrgency: 'REGULAR', urgentRank: null })).toMatchObject({ key: 'urgency.cell.REGULAR' })
+    expect(customerUrgencyCellOf({ urgencyState: null, customerUrgency: null, urgentRank: null })).toBeNull()
+    // An older answer without the state: its urgency alone.
+    expect(customerUrgencyCellOf({ customerUrgency: 'URGENT', urgentRank: 1 })).toMatchObject({ key: 'urgency.cell.URGENT', params: { rank: 1 } })
+  })
+
+  it('the words in both languages: Italian says "Urgenza cliente" and "Urgente (cliente)" ("Urgente" alone is the rush flag)', () => {
+    for (const locale of LOCALES) {
+      const tw = createTranslator(locale, messagesFor(locale, ['production-work-orders'])['production-work-orders']!)
+      for (const key of ['urgency.column', 'urgency.filter', 'urgency.hint', 'urgency.cell.URGENT_SOME', 'urgency.cell.ASKED', 'urgency.cell.REGULAR', 'urgency.cell.SET_BACK', ...FILTER_CHOICES.customerUrgency.map((choice) => choice.key)]) expect(tw(key), `${locale}: ${key}`).not.toBe(key)
+    }
+    const it = createTranslator('it', messagesFor('it', ['production-work-orders'])['production-work-orders']!)
+    expect(it('urgency.column')).toBe('Urgenza cliente')
+    expect(it('urgency.cell.URGENT', { rank: 2 })).toBe('Urgente (cliente) 2')
+    expect(it('urgency.choice.URGENT')).not.toBe('Urgente')
+  })
+
+  it('PW-06 (web side): the cell names no customer and no place in our plan; only the rows the API gave are drawn', () => {
+    const html = draw('urgency-rows')
+    expect(leftKeys(html, ['urgency'])).toEqual([])
+    for (const rowOf of URGENCY_ROWS) {
+      const cell = customerUrgencyCellOf(rowOf)
+      if (cell?.params) expect(Object.keys(cell.params)).toEqual(['rank'])
+    }
+    const filtered = textOf(draw('urgency-filter'))
+    for (const other of URGENCY_ROWS.filter((entry) => entry.urgencyState !== 'ASKED')) expect(filtered).not.toContain(other.number)
+    // Nothing matches: the empty state offers to show every work order (the filter off with the others).
+    expect(textOf(draw('urgency-none'))).toContain(createTranslator('en', messagesFor('en', ['production']).production!)('list.clearFilters'))
+  })
+})
+// ---- end F-PR-18

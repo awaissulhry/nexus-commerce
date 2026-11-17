@@ -15,6 +15,7 @@ import {
   repromiseFactsOf,
   repromiseHeld,
   repromiseQuestion,
+  repromiseReverseHeld, // B-PR-30b
   type CustomerAnswer,
   type RepromiseAsked,
   type RepromiseFacts,
@@ -22,10 +23,13 @@ import {
 import type { ProposalSize } from '@nexus/factory-domain/planning/promise-keep/repromise'
 import { currentPromiseOf } from '@nexus/factory-domain/planning/promise/rules'
 import { events as taskEvents } from '@nexus/factory-domain/tasks/events'
+import { dueAtFor } from '@nexus/factory-domain/approvals-out/rules'
+import { newId } from '@nexus/factory-domain/core/ids'
+import { linkTokenHash, mintLinkToken } from '@nexus/factory-domain/links/token'
 import type { CommandTools } from '../../../core/command'
 import type { OfficeContext } from '../../../core/context'
-import type { RecordAdapter, RequestRef } from '../../../platform/approvals-out/adapter'
-import { lockRequest, RECORD, revokeLinksInCommand, sourceKeyOf } from '../../../platform/approvals-out/store'
+import type { RecordAdapter, RecordReverseFacts, RequestRef, ReverseInput } from '../../../platform/approvals-out/adapter'
+import { localeOf, lockRequest, RECORD, revokeLinksInCommand, sourceKeyOf } from '../../../platform/approvals-out/store'
 import { closeTasksInCommand, openTaskInCommand } from '../../../platform/portal/tasks/store'
 import { mayBeAssigned } from '../../../platform/tasks/tasks'
 import { followInCommand } from '../../../platform/threads/followers'
@@ -53,6 +57,11 @@ import { KEEP_ORDER_STATUSES, readKeepLine, typedOf, type KeepLine, type Proposa
  *            date STANDS, a follow-up task on the order (its id = the request's) for its supervisor, else the person who asked
  *            (when they may keep it; else nobody yet: it shows on the order), task.created / task.assigned (the bell) — and while
  *            that task is open the order waits on us (production/brand/facts reads it: BRAND_REQUEST)
+ *   reverse  B-PR-30b: the office puts the customer's answer back (Reverse: a reason it reads, step-up, a second person when its
+ *            switch is on): the date stands either way, the customer is asked again about the same date — a new REPROMISE
+ *            request, link and task as the first ask made them — unless the order no longer waits or the line's date moved
+ *            since (`held`: the office asks about the newest date from the re-promise). A refusal's follow-up task stays for the
+ *            office to close; the keeper no longer counts a refusal that was put back (production/brand/facts reversedAt).
  *   reads    `customerAnswersOf`: the proposal's customer answer for planning's screens (the newest question of each proposal)
  * The ProposalRecord shape stays as it is (threads' B-TH-077 reads the same proposals on the order record).
  */
@@ -233,6 +242,57 @@ async function repromiseSettle(tools: CommandTools, request: RequestRef): Promis
   return { refused: true, taskId: request.id, assigneeId }
 }
 
+// ---- B-PR-30b: putting the customer's answer back -------------------------------------------------------------------------
+
+/** Whether the customer's answer may be put back and asked again: the order still waits, the line's date did not move since. */
+async function repromiseReverseFacts(client: Client, request: RequestRef): Promise<RecordReverseFacts> {
+  const found = await questionOf(client, request)
+  const facts = { sampleKind: null, cut: null, passedGate: false, applied: false }
+  if (!found) return { ...facts, held: { code: 'HELD', words: repromiseReverseHeld({ orderOpen: false, movedSince: false })! } }
+  const { asked, line } = found
+  const rows = (await readPromiseRows(client, [line.id])).get(line.id) ?? []
+  const typed = typedOf(line)
+  const movedSince = asked.sizes.some((entry) => (currentPromiseOf(entry.size, rows, typed)?.date ?? null) !== entry.to)
+  const held = repromiseReverseHeld({ orderOpen: (KEEP_ORDER_STATUSES as readonly string[]).includes(line.order.status), movedSince })
+  return { ...facts, held: held ? { code: 'HELD', words: held } : null }
+}
+
+/** ASK_AGAIN: the same date asked of the customer again (a new request, link and task), in the reversal's command. */
+async function repromiseReverse(tools: CommandTools, request: RequestRef, input: ReverseInput): Promise<Prisma.InputJsonObject | null> {
+  if (!input.effects.includes('ASK_AGAIN')) return null
+  const { tx, now } = tools
+  const found = await questionOf(tx, request)
+  if (!found) return null
+  const { asked, line } = found
+  const tenantId = 'tenantId' in tools.context ? tools.context.tenantId : undefined
+  if (!tenantId) throw new Error('promise-keep: a reversal outside a tenant')
+  // The link's token is minted outside the command by the route (its URL handed once); a second person's yes mints its own
+  // here (the customer answers in its portal: nobody is handed that link).
+  const ask = input.ask ?? (() => {
+    const linkId = newId()
+    return { requestId: newId(), linkId, tokenHash: linkTokenHash(mintLinkToken({ tenantId, partyId: line.partyId, linkId }).value) }
+  })()
+  const [person, party] = await Promise.all([
+    tx.user.findUnique({ where: { id: input.actorId }, select: { id: true, displayName: true } }),
+    tx.party.findUnique({ where: { id: line.partyId }, select: { language: true } }),
+  ])
+  const context = { ...(tools.context as OfficeContext), actorId: input.actorId }
+  const sizes = asked.sizes.map((entry) => ({ size: entry.size, from: entry.from, to: entry.to }))
+  const asks = await askCustomerInCommand(tools, {
+    context,
+    line,
+    proposal: { id: asked.proposalId, reasonCode: asked.reasonCode },
+    sizes,
+    requestId: ask.requestId,
+    linkId: ask.linkId,
+    tokenHash: ask.tokenHash,
+    dueAt: dueAtFor('REPROMISE', null, now),
+    locale: localeOf(party?.language),
+    askedBy: person ? { id: person.id, name: person.displayName } : null,
+  })
+  return { askedAgain: asks.requestId, taskId: asks.taskId }
+}
+
 const isRepromise = (kind: string): boolean => kind === 'REPROMISE'
 
 /**
@@ -248,6 +308,10 @@ export function withRepromise(base: RecordAdapter): RecordAdapter {
     content: (client, request, locale) => (isRepromise(request.kind) ? repromiseContent(client, request, locale) : base.content(client, request, locale)),
     answerHeld: async (client, request, locale) => (isRepromise(request.kind) ? repromiseAnswerHeld(client, request, locale) : base.answerHeld ? base.answerHeld(client, request, locale) : null),
     settle: async (tools, request) => (isRepromise(request.kind) ? repromiseSettle(tools, request) : base.settle ? base.settle(tools, request) : null),
+    // B-PR-30b: a new date's answer put back asks the customer again; every other kind is the base's (marked put back only).
+    reverseFacts: async (client, request) =>
+      isRepromise(request.kind) ? repromiseReverseFacts(client, request) : base.reverseFacts ? base.reverseFacts(client, request) : { sampleKind: null, cut: null, passedGate: false, applied: false, held: null },
+    reverse: async (tools, request, input) => (isRepromise(request.kind) ? repromiseReverse(tools, request, input) : base.reverse ? base.reverse(tools, request, input) : null),
   })
 }
 

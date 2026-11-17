@@ -15,6 +15,7 @@ import {
   passRefusal,
   reasonOf,
   removeRefusal,
+  roundChangeRefusal, // B-PR-30a
   shapeRefusal,
   startBeforeRefusal,
   type GateFacts,
@@ -61,8 +62,10 @@ import { readGateView, type WorldContext } from './world'
  *                                                       per kind and order (Other: many); a named round already approved passes
  *                                                       it at once (by its round)
  *   PATCH /planning/milestones/gates/:gateId            planning.milestones.manage: words, target date, round, planner — not once
- *                                                       passed
+ *                                                       passed (B-PR-30a: its round never changes while it waits for a customer's
+ *                                                       own open round: CUSTOMER_DECIDES, the hand pass's words)
  *   POST  /planning/milestones/gates/:gateId/remove     planning.milestones.manage: only while neither passed nor started before
+ *                                                       (B-PR-30a: nor while it waits for a customer's own open round)
  *   POST  /planning/milestones/gates/pass               planning.milestones.manage: mark done on a day (today or before); a gate
  *                                                       that names a round only once the round is approved (B-PR-38: a round of a
  *                                                       customer whose portal is on: refused in words, CUSTOMER_DECIDES)
@@ -194,6 +197,9 @@ export async function editGate(
   const now = serverClock.now()
   const facts = await caller.withClient((db) => gateFacts(db, gate, order))
   refuse(editRefusal(facts))
+  // B-PR-30a: never re-pointed away from the customer's open round (the hand pass's refusal and words, CUSTOMER_DECIDES).
+  const rePoints = body.sampleRoundId !== undefined && body.sampleRoundId !== gate.sampleRoundId
+  if (rePoints) refuse(roundChangeRefusal(facts))
   const kind = gate.kind as GateKind
   const label = body.label !== undefined ? labelOf(body.label) : gate.label
   const roundId = body.sampleRoundId !== undefined ? body.sampleRoundId : gate.sampleRoundId
@@ -205,7 +211,9 @@ export async function editGate(
     const { tx } = tools
     const before = await tx.orderGate.findUniqueOrThrow({ where: { id: gateId }, select: GATE_COLUMNS })
     const current = await tx.salesOrder.findUniqueOrThrow({ where: { id: order.id }, select: ORDER_COLUMNS })
-    refuse(editRefusal(await gateFacts(tx, before, current)))
+    const factsNow = await gateFacts(tx, before, current)
+    refuse(editRefusal(factsNow))
+    if (rePoints) refuse(roundChangeRefusal(factsNow)) // B-PR-30a
     const passedNow = before.passedAt === null && round !== null && passesGate(round.decision)
     const data = {
       label,

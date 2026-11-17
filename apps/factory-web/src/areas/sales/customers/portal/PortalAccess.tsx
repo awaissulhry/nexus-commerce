@@ -25,6 +25,8 @@ import {
 } from '../../../admin/users/partners/api'
 import { dayOf, endOfDay, inviteBody, partnerCan, partnerChangeOf, partnerProblem, personBody, portalAddress, settingsBody, signedInOf, type RowAction } from '../../../admin/users/partners/model'
 import { openPreview } from '../../../admin/users/partners/preview'
+import { limitsApply, productionPreviewAddress } from './limits/model' // F-PR-07
+import { useLimits } from './limits/use-limits' // F-PR-07
 import type { PortalDialog, PortalNotice, PortalSide, RequestRow } from './model'
 import { PortalAccessView } from './view/PortalAccessView'
 
@@ -44,6 +46,8 @@ const SENTENCE: Readonly<Record<RowAction, string>> = {
  * reads again); an invitation keeps ONE Idempotency-Key while its dialog is open (a retry never mails twice). Live: the
  * party's partner events read the tab again; a sign-in names the person in the live line; a request's events read the
  * requests again.
+ * F-PR-07: for a customer, the production limits card (`limits/use-limits.ts`): its own reads (the card, who may supervise, the
+ * freeze points), Apply after a fresh code, the freeze dialog; "Open My production as …" previews `/p/<code>/production`.
  */
 export function PortalAccess({ side, party }: { side: PortalSide; party: { id: string; name: string; companyId: string | null } }) {
   const api = useOfficeApi()
@@ -67,6 +71,17 @@ export function PortalAccess({ side, party }: { side: PortalSide; party: { id: s
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
   const inviteKey = useRef<string | null>(null)
   const askKey = useRef<string | null>(null)
+  // ── F-PR-07: the production limits card (a customer's Portal access only; its reads after the tab's own) ──
+  const limits = useLimits({
+    api,
+    partyId: party.id,
+    companyId: party.companyId ?? session.company?.id ?? null,
+    companyName: party.companyId === null || party.companyId === session.company?.id ? (session.company?.name ?? null) : null,
+    enabled: can.view && access !== null && limitsApply(side, access.kinds),
+    supervise: session.permissions.includes('production.brand.manage'),
+    guard,
+    onNotice: setNotice,
+  })
 
   const load = useCallback(async (): Promise<Access | null> => {
     if (!can.view) return null
@@ -108,10 +123,12 @@ export function PortalAccess({ side, party }: { side: PortalSide; party: { id: s
         })
       }
       if (change.type.startsWith('partner_task.') && change.fields.partyId === party.id) void loadRequests()
+      limits.onLive(change) // F-PR-07
     },
     onReconnect: () => {
       void load()
       void loadRequests()
+      limits.reloadAll() // F-PR-07
     },
   })
 
@@ -202,6 +219,7 @@ export function PortalAccess({ side, party }: { side: PortalSide; party: { id: s
         stepUp,
         requests: { ...requests, selected: selectedRequests },
         previewing,
+        limits: limits.model, // F-PR-07
       }}
       actions={{
         onRetry: () => {
@@ -221,7 +239,11 @@ export function PortalAccess({ side, party }: { side: PortalSide; party: { id: s
           if (!access) return Promise.resolve(false)
           const body = settingsBody(access.settings, draft)
           if (!body) return Promise.resolve(true)
-          return write('stepUp.sentence.settings', () => changeSettings(api, party.id, body, newIdempotencyKey()), { key: 'done.settings', tone: 'success' }, false)
+          // F-PR-07: the roles offered decide the card's Production-role warning: the card reads itself again after a save.
+          return write('stepUp.sentence.settings', () => changeSettings(api, party.id, body, newIdempotencyKey()), { key: 'done.settings', tone: 'success' }, false).then((done) => {
+            if (done) void limits.reload()
+            return done
+          })
         },
         onInvite: (draft) => {
           inviteKey.current ??= newIdempotencyKey()
@@ -279,6 +301,18 @@ export function PortalAccess({ side, party }: { side: PortalSide; party: { id: s
           setNotice({ key: 'done.cancelled', tone: refused.length === 0 ? 'success' : count === 0 ? 'danger' : 'warning', params: { count }, ...(refused.length > 0 ? { refused } : {}) })
           void loadRequests()
           return true
+        },
+        // ── F-PR-07: the limits card; "Open My production as …" opens the customer's My production read-only (an hour, recorded) ──
+        limits: {
+          ...limits.actions,
+          onPreviewProduction: () => {
+            if (!access || previewing) return
+            setPreviewing(true)
+            openPreview(api, party.id, productionPreviewAddress(access.party.code))
+              .then(() => setNotice({ key: 'done.previewProduction', tone: 'info', params: { name: access.party.name } }))
+              .catch((error: unknown) => setNotice({ key: partnerProblem(error), tone: 'danger' }))
+              .finally(() => setPreviewing(false))
+          },
         },
         onStepUp: (code) => void submitStepUp(code),
         onStepUpClose: cancelStepUp,
