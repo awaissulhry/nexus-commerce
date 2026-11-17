@@ -10,6 +10,9 @@ import { manifest } from './manifest'
 import { processFiles } from '../../files/service'
 import { announcePartnerFileContract, completePartnerFileContract } from '../../threads/partner/contract'
 import { announcePartnerFile, completePartnerFile } from '../../threads/partner/service'
+// B-TH-092: the person's own drafts.
+import { discardDraftContract, discardRequestDraftContract, getDraftContract, getRequestDraftContract, listPortalDraftsContract, saveDraftContract, saveRequestDraftContract } from '../../threads/contract'
+import { discardPartnerDraft, getPartnerDraft, listPartnerDrafts, savePartnerDraft } from '../../threads/drafts'
 
 /**
  * The record thread as the partner sees it (B-W2b-168; COL-059, COL-060; design portal.frame › thread "Ask a question /
@@ -44,6 +47,16 @@ export default defineRoutes('portal-threads', manifest, async (app) => {
     return completePartnerFile(processFiles(), request, { type: recordType, id: recordId }, fileId, idempotencyKeyFrom(request))
   })
   // ---- end B-TH-085
+
+  // ---- B-TH-092
+  app.get('/portal/drafts', { schema: listPortalDraftsContract }, async (request) => listPartnerDrafts(request))
+  app.get('/portal/drafts/new-request', { schema: getRequestDraftContract }, async (request) => getPartnerDraft(request, null))
+  app.put('/portal/drafts/new-request', { schema: saveRequestDraftContract }, async (request) => savePartnerDraft(request, null, request.body, idempotencyKeyFrom(request)))
+  app.delete('/portal/drafts/new-request', { schema: discardRequestDraftContract }, async (request) => discardPartnerDraft(request, null, idempotencyKeyFrom(request)))
+  app.get('/portal/threads/:recordType/:recordId/draft', { schema: getDraftContract }, async (request) => getPartnerDraft(request, { type: request.params.recordType, id: request.params.recordId }))
+  app.put('/portal/threads/:recordType/:recordId/draft', { schema: saveDraftContract }, async (request) => savePartnerDraft(request, { type: request.params.recordType, id: request.params.recordId }, request.body, idempotencyKeyFrom(request)))
+  app.delete('/portal/threads/:recordType/:recordId/draft', { schema: discardDraftContract }, async (request) => discardPartnerDraft(request, { type: request.params.recordType, id: request.params.recordId }, idempotencyKeyFrom(request)))
+  // ---- end B-TH-092
 
   // ---- B-TH-027
   app.post('/portal/threads/:recordType/:recordId/read', { schema: markPartnerReadContract }, async (request) => {

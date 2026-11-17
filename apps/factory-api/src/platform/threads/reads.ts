@@ -78,6 +78,13 @@ function newWhere(threadId: string, who: Who, after: { at: Date; id: string } | 
   }
 }
 
+// ---- B-TH-079: what is new to the person on a thread (after their own mark), for the timeline's "hidden by this view" count.
+export async function newToReaderWhere(client: Reader, threadId: string, who: Who): Promise<Prisma.MessageWhereInput> {
+  const mark = await markOf(client, threadId, who.userId)
+  return newWhere(threadId, who, mark?.lastReadMessage ? { at: mark.lastReadMessage.at, id: mark.lastReadMessageId } : null)
+}
+// ---- end B-TH-079
+
 /** The reader's reading of one thread (see the module's head). */
 export async function readingOf(client: Reader, threadId: string, who: Who): Promise<Reading> {
   const mark = await markOf(client, threadId, who.userId)

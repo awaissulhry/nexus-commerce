@@ -11,6 +11,21 @@ import { money } from '@nexus/factory-domain/money/marked'
 import { MESSAGE_AMOUNT_MAX } from '@nexus/factory-domain/threads/price-check'
 // ---- end B-TH-049 / B-TH-050
 import { FILE_AUDIENCES, FILE_KINDS, FILE_STATUSES } from '../files/rules'
+// ---- B-TH-079: the feed's audience view, the skipped files of an inbound mail, the mail waiting for a person.
+import { HELD_REASONS, SKIP_REASONS } from '@nexus/factory-domain/email-in/rules'
+import { FEED_AUDIENCES } from '@nexus/factory-domain/threads/timeline'
+/** Office only: a file of an inbound mail that was not kept, with why (a signature logo is never listed). */
+export const skippedAttachmentView = output({ name: z.string(), contentType: z.string(), sizeBytes: z.number().int(), reason: z.enum(SKIP_REASONS) })
+/** Office only: the mails for this conversation that wait for a person (HELD with why, TRIAGE: Mail to sort). */
+export const waitingMailView = output({
+  count: z.number().int(),
+  reasons: z.array(z.enum([...HELD_REASONS, 'TRIAGE'])),
+  /** The reader may open them in Mail to sort (email.triage): "Review"; else "A reply waits for a colleague to check it". */
+  mayReview: z.boolean(),
+})
+/** The audience view ("View ▾"): ALL, PARTNER ("With the customer") or OFFICE ("Office notes"); outside the office it only narrows. */
+const feedAudience = z.enum(FEED_AUDIENCES).default('ALL')
+// ---- end B-TH-079
 
 /**
  * The record threads' contracts (plan A1 §2.3, §3.7; A2 SCR-006 record panels: thread, timeline, files). A record is
@@ -99,6 +114,11 @@ export const messageView = output({
   corrects: linkedMessageView.nullable().optional(),
   correctedBy: output({ id: id(), at: instant() }).nullable().optional(),
   // ---- end B-TH-049 / B-TH-050
+  // ---- B-TH-079 (thread-G09, thread-G10): erased after a privacy request ("Message removed after a privacy request"; never an
+  // attachment-only message), and — office only — the files of an inbound mail that were not kept.
+  erased: z.boolean().optional(),
+  skippedAttachments: z.array(skippedAttachmentView).optional(),
+  // ---- end B-TH-079
   at: instant(),
 })
 export type MessageView = z.infer<typeof messageView>
@@ -124,7 +144,7 @@ export const setOwnerContract = defineContract({
 
 export const readThreadContract = defineContract({
   params: recordParams,
-  querystring: input(page),
+  querystring: input({ ...page, /* B-TH-079 */ audience: feedAudience }),
   response: {
     200: output({
       /** Null: the record has no message yet (or none this reader may see). */
@@ -148,6 +168,10 @@ export const readThreadContract = defineContract({
         }).nullable(),
       }).optional(),
       // ---- end B-TH-028
+      // ---- B-TH-079: office only — mail for this conversation that waits for a person (null: none).
+      waitingMail: waitingMailView.nullable().optional(),
+      // ---- B-TH-093: office only — marked done, when and by whom (null: open work). A portal or link reader is never told.
+      done: output({ at: instant(), by: output({ id: id(), name: z.string().nullable() }) }).nullable().optional(),
     }),
   },
 })
@@ -258,6 +282,9 @@ export const timelineEntry = z.discriminatedUnion('kind', [
     /** The start of its text, one line. */
     excerpt: z.string(),
     attachmentCount: z.number().int(),
+    // ---- B-TH-079: erased after a privacy request (never an attachment-only message); an inbound mail's files not kept.
+    erased: z.boolean(),
+    skippedAttachments: z.array(skippedAttachmentView),
   }),
   output({
     kind: z.literal('change'),
@@ -316,6 +343,8 @@ export const timelineContract = defineContract({
   params: recordParams,
   querystring: input({
     ...page,
+    /** B-TH-079: the audience view of its messages (changes and files are not filtered by it; "Changes" is kinds=change). */
+    audience: feedAudience,
     /** Filter chips: a comma-separated list of message, change, file. Default every kind. B-TH-072: `linked` only when asked (a project). */
     kinds: z
       .string()
@@ -329,7 +358,16 @@ export const timelineContract = defineContract({
         return kinds as (typeof TIMELINE_ASKABLE_KINDS)[number][]
       }),
   }),
-  response: { 200: output({ entries: z.array(timelineEntry), nextCursor: z.string().nullable() }) },
+  response: {
+    200: output({
+      entries: z.array(timelineEntry),
+      nextCursor: z.string().nullable(),
+      // ---- B-TH-079: messages new to the reader that this view hides ("1 new message hidden by this view · Show all"); 0 on All.
+      hiddenNew: z.number().int(),
+      /** Mail for this conversation that waits for a person (null: none). */
+      waitingMail: waitingMailView.nullable(),
+    }),
+  },
 })
 
 // ---- followers (B-W2a-20; COL-011; design shell.panels popup followers) ------------------------------------------------
@@ -416,3 +454,113 @@ export const waitingContract = defineContract({
   },
 })
 // ---- end B-TH-047
+
+// ---- B-TH-076 (X-G01; PL5, O-REC-ANY.summary-F01, P-ANY.summary): one summary row for any record — its type in words, its label, its
+// state and its parent as a link; the office in its scope, the portal through the partner view only (404 in neutral words otherwise).
+const summaryWords = output({ it: z.string(), en: z.string() })
+const summaryLink = output({
+  recordType: z.string(),
+  recordId: id(),
+  /** The record type in words ("Delivery note" / "Documento di trasporto"). */
+  type: summaryWords,
+  /** Its number or code as a chip shows it (the portal: our number, else their reference); null when it has none. */
+  label: z.string().nullable(),
+})
+export const recordSummaryContract = defineContract({
+  params: recordParams,
+  response: {
+    200: output({
+      summary: output({
+        recordType: z.string(),
+        recordId: id(),
+        type: summaryWords,
+        label: z.string().nullable(),
+        /** The portal reader's own reference (their PO number); null in the office answer and when they gave none. */
+        theirRef: z.string().nullable(),
+        /** Its state code and the state in words; null: a record with no state (a rider's measurements). */
+        state: output({ code: z.string(), words: summaryWords }).nullable(),
+        /** The record it belongs to (a delivery's order, a receipt's PO), only when the reader may open it; null: none or not theirs. */
+        parent: summaryLink.nullable(),
+      }),
+    }),
+  },
+})
+// ---- end B-TH-076
+
+// ---- B-TH-091 (N4, L2-G11; T2-F07, T3-F12, PROJ.thread-F06): pins — a message pinned for everyone on the record (a pointer, never a
+// copy of its words). The office reads every pin and who pinned it; a portal reader only the pins of messages shared with it.
+const pinView = output({
+  messageId: id(),
+  pinnedAt: instant(),
+  /** Office only: who pinned it. */
+  pinnedBy: output({ id: id(), name: z.string().nullable() }).optional(),
+  message: output({
+    authorName: z.string().nullable(),
+    /** One line of its words (empty when it carries files only). */
+    excerpt: z.string(),
+    at: instant(),
+    /** Office only: OFFICE (a note) or PARTNER (shared with the customer or supplier). */
+    audience: z.enum(MESSAGE_AUDIENCES).optional(),
+    attachmentCount: z.number().int(),
+    /** Erased after a privacy request: the line says "removed". */
+    removed: z.boolean(),
+  }),
+})
+const pinsAnswer = output({ pins: z.array(pinView) })
+const pinParams = input({ recordType: z.string().regex(RECORD_TYPE), recordId: id(), messageId: id() })
+export const pinsContract = defineContract({ params: recordParams, response: { 200: pinsAnswer } })
+export const pinContract = defineContract({ params: pinParams, response: { 200: pinsAnswer } })
+export const unpinContract = defineContract({ params: pinParams, response: { 200: pinsAnswer } })
+export const pinRequestNoteContract = defineContract({ params: input({ recordId: id() }), response: { 201: output({ pins: z.array(pinView), /** The office note the request's note became. */ messageId: id() }) } })
+// ---- end B-TH-091
+
+// ---- B-TH-092 (N6 = L2-G14; T5-F10, T8-F07, O-SAL-ORD-NEW.form-F07, P-HOME.actions-F02, P-CUS-NEW.message-F02): drafts on the server —
+// one per person and record (and the portal's New order), the person's own only, kept until sent or discarded.
+const draftView = output({
+  /** The record it is for; null for the portal's New order. */
+  recordType: z.string().nullable(),
+  recordId: id().nullable(),
+  /** The composer's mode: OFFICE (an office note) or PARTNER (a reply to the customer or supplier); null: not chosen. */
+  audience: z.enum(MESSAGE_AUDIENCES).nullable(),
+  body: z.string(),
+  /** The composer's other fields as it saved them (subject, wanted date, To and Cc, order lines …). */
+  fields: z.record(z.string(), z.unknown()),
+  /** The files added to it that the person may still see. */
+  attachments: z.array(attachmentView),
+  /** "Draft saved 10:42". */
+  savedAt: instant(),
+  version: z.number().int(),
+})
+export const draftBody = input({
+  audience: z.enum(MESSAGE_AUDIENCES).nullable().optional(),
+  /** What was typed (up to 20 000 characters; empty while nothing is typed). */
+  body: z.string().max(20000),
+  fields: z.record(z.string(), z.unknown()).optional(),
+  attachments: z.array(id()).max(50).optional(),
+  /** The version last read: a newer one saved meanwhile (another tab) is replaced, and `replacedNewer` says so. */
+  version: z.number().int().min(1).optional(),
+})
+const draftAnswer = output({ draft: draftView.nullable() })
+const savedDraftAnswer = output({ draft: draftView, /** Another tab had saved a newer draft, now replaced ("newest wins"). */ replacedNewer: z.boolean() })
+const draftListAnswer = output({
+  drafts: z.array(output({ recordType: z.string().nullable(), recordId: id().nullable(), audience: z.enum(MESSAGE_AUDIENCES).nullable(), /** "Draft: Spring jackets". */ excerpt: z.string(), savedAt: instant() })),
+})
+export const getDraftContract = defineContract({ params: recordParams, response: { 200: draftAnswer } })
+export const saveDraftContract = defineContract({ params: recordParams, body: draftBody, response: { 200: savedDraftAnswer } })
+export const discardDraftContract = defineContract({ params: recordParams, response: { 200: output({ draft: z.null() }) } })
+export const listDraftsContract = defineContract({ querystring: input({ recordType: z.string().regex(RECORD_TYPE).optional() }), response: { 200: draftListAnswer } })
+// The portal's New order draft and the person's drafts (Home).
+export const getRequestDraftContract = defineContract({ response: { 200: draftAnswer } })
+export const saveRequestDraftContract = defineContract({ body: draftBody, response: { 200: savedDraftAnswer } })
+export const discardRequestDraftContract = defineContract({ response: { 200: output({ draft: z.null() }) } })
+export const listPortalDraftsContract = defineContract({ response: { 200: draftListAnswer } })
+// ---- end B-TH-092
+
+// ---- B-TH-093 (N18; T1-F13): Done — a work state apart from Close; office only (the portal is never told).
+export const doneView = output({ at: instant(), by: output({ id: id(), name: z.string().nullable() }) })
+export const setDoneContract = defineContract({
+  params: recordParams,
+  body: input({ /** true: mark done; false: open work again. */ done: z.boolean() }),
+  response: { 200: output({ done: doneView.nullable() }) },
+})
+// ---- end B-TH-093

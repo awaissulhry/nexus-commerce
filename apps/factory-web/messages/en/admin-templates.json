@@ -70,6 +70,14 @@
       },
       "shipping": {
         "tracking_link": "Shipment tracking link"
+      },
+      "request": {
+        "received": "Request received",
+        "need_info": "Ask for info on a request",
+        "declined": "Request declined"
+      },
+      "thread": {
+        "message_posted": "New message for the customer"
       }
     },
     "eventWhen": {
@@ -78,6 +86,14 @@
       },
       "shipping": {
         "tracking_link": "When a shipment's tracking link is sent to the customer."
+      },
+      "request": {
+        "received": "The receipt of a customer's request, with the customer's own number of it: the words the office starts from.",
+        "need_info": "When the office asks a customer for what a request still needs (Ask for info): the words it starts from.",
+        "declined": "When the office declines a request (Decline): the words it starts from, with the reason."
+      },
+      "thread": {
+        "message_posted": "A new message for the customer on one of its records, with the message's text (only a message shared with that customer, never an office note)."
       }
     },
     "inUse": {

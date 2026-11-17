@@ -50,6 +50,8 @@ export const partnerMessageView = output({
   corrects: linkedMessageView.nullable().optional(),
   correctedBy: output({ id: id(), at: instant() }).nullable().optional(),
   // ---- end B-TH-050
+  // ---- B-TH-079 (thread-G09): its writer was erased after a privacy request ("Message removed after a privacy request").
+  erased: z.boolean().optional(),
   at: instant(),
 })
 export type PartnerMessageView = z.infer<typeof partnerMessageView>

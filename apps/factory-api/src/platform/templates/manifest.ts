@@ -32,6 +32,8 @@ export const manifest = defineManifest({
   'PUT /templates/replies/:replyId': { audiences: ['office'], permission: 'email.send', scope: 'record' },
   'DELETE /templates/replies/:replyId': { audiences: ['office'], permission: 'email.send', scope: 'record' },
   'POST /templates/replies/:replyId/fill': { audiences: ['office'], permission: 'email.send', scope: 'record' },
+  // ---- B-TH-098 / B-TH-279: a mail's starting words for a record in the recipient's language (whoever writes mail on it: email.send).
+  'POST /templates/mail/events/:event/fill': { audiences: ['office'], permission: 'email.send', scope: 'record' },
 
   'GET /templates/language': { audiences: ['office'], permission: 'parties.view', scope: 'record' },
   'GET /templates/languages/contacts': { audiences: ['office'], permission: 'parties.view', scope: 'record' },

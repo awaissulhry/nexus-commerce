@@ -4,6 +4,8 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { PARTIES_VIEW } from '@nexus/factory-domain/parties/permissions'
 import { recipientLanguageOf, TEMPLATE_LANGUAGES } from '@nexus/factory-domain/templates/language'
+// B-TH-098: what is written to them (saved replies, the fixed mail texts) may also be German, French or Spanish.
+import { messageLanguageOf } from '@nexus/factory-domain/templates/message-languages'
 import type { CommandCaller } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { PARTY_SCOPE } from '../../modules/parties/store'
@@ -32,7 +34,8 @@ export async function recipientLanguage(caller: CommandCaller, query: { readonly
     const contact = query.contactId ? await db.partyContact.findFirst({ where: { id: query.contactId, partyId: party.id }, select: { id: true, language: true } }) : null
     if (query.contactId && !contact) throw new ValidationError('Pick a contact of this customer or supplier.', [{ path: 'querystring/contactId', message: 'Pick a contact of this customer or supplier.' }])
     const company = party.companyId ? await db.company.findUnique({ where: { id: party.companyId }, select: { locale: true } }) : null
-    return { partyId: party.id, contactId: contact?.id ?? null, ...recipientLanguageOf({ contact: contact?.language, party: party.language, company: company?.locale }) }
+    const from = { contact: contact?.language, party: party.language, company: company?.locale }
+    return { partyId: party.id, contactId: contact?.id ?? null, ...recipientLanguageOf(from), message: messageLanguageOf(from) /* B-TH-098 */ }
   })
 }
 

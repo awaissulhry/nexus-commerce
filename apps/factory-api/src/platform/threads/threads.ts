@@ -47,6 +47,14 @@ import { AMOUNT_WORDS, amountProblems, floorPriceRefusal, type MessageAmount } f
 // ---- B-TH-050: messages that point at messages (reply, correct).
 import { excerptOf } from '@nexus/factory-domain/threads/rules'
 // ---- end B-TH-049 / B-TH-050
+// ---- B-TH-079: the feed tells everything (the audience view, erased messages, mail waiting for a person, an inbound mail's skipped files).
+import type { FeedAudience } from '@nexus/factory-domain/threads/timeline'
+import { erasedAmong, erasedForOutside, feedAudienceWhere, skippedPartsOf, waitingMailOf, type SkippedPart, type WaitingMail } from './feed-depth'
+// ---- end B-TH-079
+// ---- B-TH-092: what was typed has gone out — the sender's draft of the record is removed in the send's own command.
+import { clearDraftInCommand } from './draft-keys'
+// ---- B-TH-093: Done, a work state apart from Close (the office's head; a new shared message reopens it).
+import { doneOf, reopenOnSharedMessage, type DoneView } from './work-state'
 
 /**
  * Record threads (plan A1 §2.3, §3.7; features COL-001, COL-003, COL-020):
@@ -388,12 +396,22 @@ export interface ThreadPage {
   readonly reading?: Reading | null
   readonly head?: Awaited<ReturnType<typeof headOf>>
   // ---- end B-TH-027 / B-TH-028
+  // ---- B-TH-079: the office's only — mail for this conversation that waits for a person (null: none).
+  readonly waitingMail?: WaitingMail | null
+  // ---- B-TH-093: the office's only — marked done (null: open work).
+  readonly done?: DoneView | null
+}
+
+/** B-TH-079: a message as the page shows it, told erased (privacy) and, for the office, with an inbound mail's skipped files. */
+function withDepth(view: MessageView, erased: ReadonlySet<string>, skipped: ReadonlyMap<string, SkippedPart[]>): MessageView {
+  const parts = skipped.get(view.id)
+  return { ...view, ...(erased.has(view.id) ? { erased: true } : {}), ...(parts ? { skippedAttachments: parts } : {}) }
 }
 
 const EMPTY: ThreadPage = Object.freeze({ thread: null, messages: [], nextCursor: null })
 
 /** GET /threads/<type>/<id>: the thread and one page of its messages the caller may see, newest first. */
-export async function readThread(caller: CommandCaller, record: RecordRef, page: { readonly cursor?: string | undefined; readonly limit: number }): Promise<ThreadPage> {
+export async function readThread(caller: CommandCaller, record: RecordRef, page: { readonly cursor?: string | undefined; readonly limit: number; /* B-TH-079 */ readonly audience?: FeedAudience | undefined }): Promise<ThreadPage> {
   const context = contextOf(caller)
   const actor = actorOf(context)
   const cursor = cursorOf(page.cursor)
@@ -404,8 +422,12 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
   // ---- B-PR-08a: a portal or a link reads nothing of a work order's, hold's or NCR's thread — as "none", not even that it exists.
   if (!office && !mayShare(record.type)) return EMPTY
   // ---- end B-PR-08a
+  // ---- B-TH-079: the view narrows only — outside the office the shared messages, whatever is asked ("Office notes" gives none).
+  const audience: FeedAudience = page.audience ?? 'ALL'
+  const viewWhere: Prisma.MessageWhereInput = office ? feedAudienceWhere(audience) : audience === 'OFFICE' ? { id: { in: [] } } : { audience: 'PARTNER' }
+  // ---- end B-TH-079
 
-  return caller.withClient(async (client) => {
+  const read = await caller.withClient(async (client): Promise<ThreadPage> => {
     let thread: SeenThread | null
     if (office) {
       const found = await officeRecord(client, record)
@@ -421,7 +443,7 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     }
     if (!thread) return EMPTY
     const rows = (await client.message.findMany({
-      where: { AND: [{ threadId: thread.id }, office ? {} : { audience: 'PARTNER' }, afterCursor(cursor, 'at') as Prisma.MessageWhereInput] },
+      where: { AND: [{ threadId: thread.id }, viewWhere /* B-TH-079 */, afterCursor(cursor, 'at') as Prisma.MessageWhereInput] },
       orderBy: [{ at: 'desc' }, { id: 'desc' }],
       take: page.limit + 1,
       select: office ? MESSAGE_OFFICE : MESSAGE_COMMON,
@@ -434,19 +456,35 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     // ---- B-TH-027: the reader's own reading (office and portal people; a link has none). B-TH-028: the office's head only (W08).
     const who = whoOf(context)
     const reading = who ? await readingOf(client, thread.id, who) : null
-    const head = office ? await headOf(client, record, { ...thread, ownerId: (await client.thread.findUnique({ where: { id: thread.id }, select: { ownerId: true } }))?.ownerId ?? null }, serverClock.now()) : undefined
+    // ---- B-TH-093: the office also reads the work state; a conversation marked done waits on nobody (it leaves the waiting views).
+    const work = office ? await client.thread.findUnique({ where: { id: thread.id }, select: { ownerId: true, doneAt: true, doneById: true } }) : null
+    const fullHead = office ? await headOf(client, record, { ...thread, ownerId: work?.ownerId ?? null }, serverClock.now()) : undefined
+    const head = fullHead && work?.doneAt ? { ...fullHead, waiting: null } : fullHead
+    const done = office && work ? await doneOf(client, work) : undefined
     // ---- end B-TH-027 / B-TH-028
     // ---- B-TH-050: the office's page points at what its messages answer or correct (a portal or link reader: GET /portal/threads).
     const workerShown = gates.at(thread.siteId).open
     const links = office ? await messageLinksOf(client, thread.id, shown, { sharedOnly: false, workerShown }) : NO_LINKS
+    // ---- B-TH-079: the office reads which messages were erased, an inbound mail's skipped files and the mail waiting for a person.
+    const erased = office ? await erasedAmong(client, shown) : new Set<string>()
+    const skipped = office ? await skippedPartsOf(client, shown) : new Map<string, SkippedPart[]>()
+    const waitingMail = office ? await waitingMailOf(client, actor, thread.id) : undefined
     return {
       thread: threadViewOf(thread),
-      messages: shown.map((row) => messageViewOf(row, attachments, workerShown, links)),
+      messages: shown.map((row) => withDepth(messageViewOf(row, attachments, workerShown, links), erased, skipped)),
       nextCursor: rows.length > page.limit && last ? encodeCursor(last) : null,
       reading,
       ...(head ? { head } : {}),
+      ...(waitingMail !== undefined ? { waitingMail } : {}),
+      ...(done !== undefined ? { done } : {}), // B-TH-093
     }
+    // ---- end B-TH-079
   })
+  // ---- B-TH-079: a portal or link reader is told an erased message too (read in the tenant's scope for the messages it holds).
+  if (office || read.messages.length === 0) return read
+  const erased = await erasedForOutside(caller, context.tenantId, read.messages.map((message) => ({ id: message.id, bodyText: message.body, authorName: message.author.name })))
+  return erased.size === 0 ? read : { ...read, messages: read.messages.map((message) => (erased.has(message.id) ? { ...message, erased: true } : message)) }
+  // ---- end B-TH-079
 }
 
 /** The parts of command()'s tools the seam needs. */
@@ -590,6 +628,11 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
     select: MESSAGE_OFFICE,
   })
   await tools.tx.thread.updateMany({ where: { id: thread.id, OR: [{ lastMessageAt: null }, { lastMessageAt: { lt: at } }] }, data: { lastMessageAt: at } })
+  // ---- B-TH-093: a message shared with the party (theirs or ours) makes a conversation marked done open work again.
+  if (audience === 'PARTNER' && (await reopenOnSharedMessage(tools.tx, thread.id))) {
+    tools.audit({ action: 'threads.reopenWork', recordType: 'Thread', recordId: thread.id, companyId: thread.companyId, siteId: thread.siteId, before: { done: true }, after: { done: false, messageId: id } })
+  }
+  // ---- end B-TH-093
   tools.audit({
     recordType: 'Message',
     recordId: id,
@@ -770,6 +813,7 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
         ...(input.amount ? { amount: input.amount } : {}), // B-TH-049
         ...links, // B-TH-050
       })
+      await clearDraftInCommand(tools, context.actorId, record) // B-TH-092
       const current = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: THREAD_OFFICE })
       const attachments = await visibleAttachments(tools.tx, context, message.attachmentFileIds)
       const linked = await messageLinksOf(tools.tx, thread.id, [message], { sharedOnly: false, workerShown: true }) // B-TH-050

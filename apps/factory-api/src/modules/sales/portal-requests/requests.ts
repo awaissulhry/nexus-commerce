@@ -12,6 +12,8 @@ import { databaseRefusal } from '../inquiries/store'
 import { portalReader } from '../portal-orders/access'
 import { takesRequests } from './open'
 import { partnerRequest, requestViewOf } from './views'
+// B-TH-092: the New order's draft goes with the request sent.
+import { clearDraftInCommand } from '../../../platform/threads/draft-keys'
 
 /**
  * The customer sends a request from the portal (B-TH-010; threads plan G1, L2-G02; design P-CUS-NEW "New order" as an e-mail,
@@ -75,7 +77,11 @@ export async function sendRequest(app: FastifyInstance, request: FastifyRequest,
     fromPortal: true,
   }
   const p = portalOf(app)
-  const outcome = await p.auth.command(p.auth.contextFor(request, session.tenantId, session.userId), { name: 'portalRequests.send', idempotencyKey, input: { ...body, sessionId: session.id } }, async (tools) => insertInquiry(tools, made)).catch(databaseRefusal)
+  const outcome = await p.auth.command(p.auth.contextFor(request, session.tenantId, session.userId), { name: 'portalRequests.send', idempotencyKey, input: { ...body, sessionId: session.id } }, async (tools) => {
+    const inserted = await insertInquiry(tools, made)
+    await clearDraftInCommand(tools, session.userId, null) // B-TH-092
+    return inserted
+  }).catch(databaseRefusal)
   const { id } = outcome.result
   // Their words, the request's first message (its own key: a retry posts them once).
   await postPartnerMessage(request, { type: 'Inquiry', id }, { body: text, attachments: [] }, idempotencyKey ? `${idempotencyKey}:words` : undefined, { firstOfRequest: true })

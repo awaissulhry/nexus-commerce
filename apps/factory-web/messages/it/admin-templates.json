@@ -70,6 +70,14 @@
       },
       "shipping": {
         "tracking_link": "Link di tracciamento della spedizione"
+      },
+      "request": {
+        "received": "Richiesta ricevuta",
+        "need_info": "Chiedere informazioni su una richiesta",
+        "declined": "Richiesta rifiutata"
+      },
+      "thread": {
+        "message_posted": "Nuovo messaggio per il cliente"
       }
     },
     "eventWhen": {
@@ -78,6 +86,14 @@
       },
       "shipping": {
         "tracking_link": "Quando il link di tracciamento di una spedizione va al cliente."
+      },
+      "request": {
+        "received": "La ricevuta della richiesta di un cliente, con il numero che ha per il cliente: le parole da cui parte l’ufficio.",
+        "need_info": "Quando l’ufficio chiede a un cliente ciò che manca a una richiesta (Chiedi informazioni): le parole da cui parte.",
+        "declined": "Quando l’ufficio rifiuta una richiesta (Rifiuta): le parole da cui parte, con il motivo."
+      },
+      "thread": {
+        "message_posted": "Un nuovo messaggio per il cliente su un suo documento, con il testo del messaggio (solo un messaggio condiviso con quel cliente, mai una nota interna)."
       }
     },
     "inUse": {
