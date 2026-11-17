@@ -11,7 +11,7 @@ import type { RecordValue, ValueEntry } from './api'
 
 /**
  * The custom-fields section on every record (B-W2b-431; design admin.fields "The record panels show a custom-fields
- * section"), pure: which panels have one, a value in words, the draft of the section's edit and what it sends, and the
+ * section" — since B-TH-280 at the end of the record frame's first tab), pure: which records have one, a value in words, the draft of the section's edit and what it sends, and the
  * API's refusals in our words (`cf.*` keys of the `admin-fields` catalogue — never `panels.`, `files.` … the record
  * panels' own key test reads those as `records` keys).
  */

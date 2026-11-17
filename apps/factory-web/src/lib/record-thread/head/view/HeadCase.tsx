@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import { useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
-import type { PanelFollowers, PanelRead, RecordPanelsViewModel } from '../../../../record-panels/model'
+import type { PanelFollowers, PanelRead } from '../../../../record-panels/model'
 import type { Assignable } from '../../../../record-panels/tasks/model'
 import type { ApprovalsPanelModel } from '../../../../record-panels/approvals/model'
 import { AskDialog } from '../../../../record-panels/approvals/view/AskDialog'
 import { SHARES_NS, type SharesPanelModel } from '../../../../record-panels/share/model'
 import { InviteDialog } from '../../../../record-panels/share/view/InviteDialog'
-import { FollowersControl } from '../../../../record-panels/view/FollowersControl'
-import { TaskNewDialog } from '../../../../record-panels/view/TaskNewDialog'
+import { FollowersControl } from '../../../../record-panels/tasks/view/FollowersControl'
+import { TaskNewDialog } from '../../../../record-panels/tasks/view/TaskNewDialog'
 import { RemindMeDialog } from '../../../../shell/panels/remind-me/view/RemindMeDialog'
 import { CloseThreadConfirm } from '../../popups/view/Confirms'
 import type { DockWidth, HeadDoor, HeadModel, ThreadView } from '../model'
@@ -91,7 +91,7 @@ function Case({ model }: { model: HeadCaseModel }) {
             {model.portal ? <PortalHeadLine model={model.portal} /> : <RecordThreadHead model={frame === 375 ? { ...head, compact: true, width: null } : head} actions={actions} />}
             {open === 'followers' && frame === model.frames[0] ? (
               <div className="fw-rth-open">
-                <FollowersControl model={{ followers: { ...dialogs.followers, open: true } } as unknown as RecordPanelsViewModel} />
+                <FollowersControl model={{ followers: { ...dialogs.followers, open: true } }} />
               </div>
             ) : (
               <div className="fw-rth-feed" aria-hidden />

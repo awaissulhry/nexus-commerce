@@ -7,7 +7,7 @@ import { Banner, Card, EmptyState, KeyValue, type MenuItemDef } from '@nexus/ui/
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useT } from '../../../../../lib/i18n/provider'
-import { TaskNewDialog } from '../../../../../record-panels/view/TaskNewDialog'
+import { TaskNewDialog } from '../../../../../record-panels/tasks/view/TaskNewDialog'
 import type { ApiFile } from '../../../../../record-panels/api'
 import type { TaskItem } from '../../../../../record-panels/tasks/model'
 import type { ProjectPage, ProjectView } from '../../api'
@@ -27,7 +27,7 @@ export interface ProjectRecordSlots {
   readonly people?: ReactNode
   readonly linked?: ReactNode
   readonly news?: ReactNode
-  /** What the print view shows of the thread (the record panels' print form). */
+  /** What the print view shows of the thread (ThreadPrint: the thread for paper, B-TH-280). */
   readonly printThread?: ReactNode
 }
 

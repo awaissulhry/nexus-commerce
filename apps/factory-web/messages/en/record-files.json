@@ -58,20 +58,6 @@
     "CONSULTANT": "Consultants"
   },
   "required": {
-    "label": "What {status} needs",
-    "blocks_one": "Cannot move to {status} yet: {count} document missing",
-    "blocks_other": "Cannot move to {status} yet: {count} documents missing",
-    "warns_one": "Before {status}: {count} document to add (it does not block)",
-    "warns_other": "Before {status}: {count} documents to add (they do not block)",
-    "reason": {
-      "MET": "On file",
-      "MISSING": "Missing",
-      "EXPIRED": "Expired"
-    },
-    "level": {
-      "BLOCK": "Blocks the move",
-      "WARN": "Only warns"
-    },
     "expiredOn": "expired on {date}",
     "how": "Upload the document here (or on the supplier), then say what it is and until when with \"What it is\".",
     "partyDocuments": "Also counted, from the record's customer or supplier: {names}",

@@ -16,7 +16,7 @@ import '../approvals.css'
 export type { ApprovalsPanelModel, ApprovalsPanelActions } from '../model'
 
 /**
- * The record panels' Approvals tab (B-W2b-188; COL-064; "Ask a partner to approve"): the record's requests to its
+ * A record's requests to its partner (B-W2b-188; COL-064; B-TH-280: drawn in the docked thread's Approvals window; "Ask a partner to approve"): the record's requests to its
  * partner, newest first — what was asked, by when, its state in words, the answer as signed (by link or in the portal,
  * with the marks on a photo), a withdrawal and who did it, the link and whether it was used — and "Ask a partner to
  * approve" (held with its reason: no right, the record's own reason from the API). Withdraw asks first. A link asked

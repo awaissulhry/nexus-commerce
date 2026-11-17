@@ -7,7 +7,8 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { downloadLink } from '../../../../record-panels/api'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useLiveChanges } from '../../../../record-panels/live'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
+import { RecordCustomFields } from '../../../../record-panels/custom-fields/RecordCustomFields' // B-TH-280
 import { storeUrl } from '../../../../record-panels/store'
 import type { DocumentSendModel } from '../../../_shared/document-send/model'
 import { outsideRefusalOf, parseCc } from '../../../_shared/document-send/model'
@@ -544,7 +545,7 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
       depth={{ ...depth, ...priceDepth }}
       proofs={value ? <QuoteProofs api={api} quoteId={value.id} /> : null}
       // B-TH-257: the docked thread (Head with Activity's doors, files line, Files view, feed, box) of THIS quote and its customer only;
-      // the print view keeps the panels' print form.
+      // the print view prints the thread with ThreadPrint (B-TH-280).
       thread={
         value ? (
           <OfficeRecordThread
@@ -558,7 +559,9 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
           />
         ) : null
       }
-      printThread={value ? <RecordPanels record={{ type: 'Quote', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName, emails: value.contact?.email ? [value.contact.email] : [] }} /> : null}
+      printThread={value ? <ThreadPrint record={{ type: 'Quote', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName }} /> : null}
+      // B-TH-280: the quote's custom fields at the end of its first tab (Lines), as the old panels drew them above theirs.
+      fields={value && tab === 'lines' ? <RecordCustomFields record={{ type: 'Quote', id: value.id }} title={value.number} /> : null}
       actions={{
         onRetry: loadAll,
         onReload: loadAll,

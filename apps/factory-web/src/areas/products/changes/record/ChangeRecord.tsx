@@ -8,7 +8,7 @@ import { formatTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { useLiveBus } from '../../../../shell/live/use-live'
 import {
   approverOptions,
@@ -319,7 +319,7 @@ export function ChangeRecord({ kind, id }: { kind: RecordKind; id: string }) {
   )
   const offline = live === 'offline'
 
-  // B-TH-262: the docked thread beside every tab (its Head holds Activity's doors, R-ACT); the print view keeps the panels' print form.
+  // B-TH-262: the docked thread beside every tab (its Head holds Activity's doors, R-ACT); the print view prints the thread with ThreadPrint (B-TH-280).
   // Brand wall (W08, W12, W20, W25, W34): a request's own customer or supplier only (the one who asked); a change order has none (notes only).
   const current = order ?? request
   const record = current ? { type: kind === 'order' ? 'ChangeOrder' : 'ChangeRequest', id, companyId: current.companyId, siteId: request?.siteId ?? null } : null
@@ -330,7 +330,7 @@ export function ChangeRecord({ kind, id }: { kind: RecordKind; id: string }) {
     record && loaded.status === 'ready' ? (
       <OfficeRecordThread docked record={record} title={title} recordLabel={recordLabel || title} party={party} partyRole={request?.source === 'SUPPLIER' ? 'supplier' : 'customer'} printHref={printHref(pathname, params?.toString() ?? '')} />
     ) : null
-  const printThread = record && loaded.status === 'ready' ? <RecordPanels record={record} title={title} party={party ? { ...party, emails: [] } : null} /> : null
+  const printThread = record && loaded.status === 'ready' ? <ThreadPrint record={record} title={title} party={party} partyRole={request?.source === 'SUPPLIER' ? 'supplier' : 'customer'} /> : null
 
   return (
     <ChangeRecordView

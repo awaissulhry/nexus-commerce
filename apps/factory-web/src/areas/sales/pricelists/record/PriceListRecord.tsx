@@ -6,7 +6,7 @@ import { isApiError } from '../../../../lib/api/errors'
 import { formatDate } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { useLive } from '../../../parties/_shared/hooks'
 import { findCustomers, findStyles, getStyle } from '../../quotes/api'
 import { activateVersion, compareVersions, getPriceList, getVersion, moveList, nextVersion, setCustomers, setPrices, type PriceEntry, type PriceListDetail, type PriceRow, type VersionAnswer } from '../api'
@@ -326,13 +326,13 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
     <PriceListRecordView
       model={model}
       // B-TH-258: the list's thread docked beside every tab — notes only (a list prices many customers: no party); none without
-      // threads.read (no dock, no Thread button). The print view keeps the record panels' print form.
+      // threads.read (no dock, no Thread button). The print view prints the thread with ThreadPrint (B-TH-280).
       thread={
         value && can.threads ? (
           <OfficeRecordThread docked record={{ type: 'PriceList', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} recordLabel={value.code} party={null} printHref={printHref(pathname, params?.toString() ?? '')} />
         ) : null
       }
-      printThread={value && can.threads ? <RecordPanels record={{ type: 'PriceList', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} /> : null}
+      printThread={value && can.threads ? <ThreadPrint record={{ type: 'PriceList', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} /> : null}
       actions={{
         onRetry: () => {
           setList({ status: 'loading' })

@@ -56,15 +56,15 @@ export type { OrderRecordActions, OrderRecordModel } from '../../model'
  * view), each mail's delivery is on its thread card. ONE notice in the body column, the rest behind "N more notices".
  */
 // B-TH-263: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
-export function OrderRecordView({ model, actions, thread, printThread, invoices }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /** B-W2a-81: the Invoices tab (Finance's; absent without payables.view: no tab). */ invoices?: ReactNode }) {
+export function OrderRecordView({ model, actions, thread, printThread, fields, invoices }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /** B-TH-280: the custom fields (Lines only). */ fields?: ReactNode; /** B-W2a-81: the Invoices tab (Finance's; absent without payables.view: no tab). */ invoices?: ReactNode }) {
   return (
     <WithMessages namespaces={['buying', 'purchasing-orders', DEPTH, 'calendar-kit', 'lists', 'records', 'send']}>
-      <OrderRecord model={model} actions={actions} thread={thread} printThread={printThread} invoices={invoices} />
+      <OrderRecord model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} invoices={invoices} />
     </WithMessages>
   )
 }
 
-function OrderRecord({ model, actions, thread, printThread, invoices }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; invoices?: ReactNode }) {
+function OrderRecord({ model, actions, thread, printThread, fields, invoices }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; fields?: ReactNode; invoices?: ReactNode }) {
   const t = useT('buying')
   const listHref = `${model.prefix}/purchasing/orders`
   const loaded = model.order
@@ -111,10 +111,10 @@ function OrderRecord({ model, actions, thread, printThread, invoices }: { model:
       </RecordFrame>
     )
   }
-  return <ReadyOrder order={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} invoices={invoices} />
+  return <ReadyOrder order={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} invoices={invoices} />
 }
 
-function ReadyOrder({ order, model, actions, thread, printThread, invoices }: { order: PurchaseOrder; model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; invoices?: ReactNode }) {
+function ReadyOrder({ order, model, actions, thread, printThread, fields, invoices }: { order: PurchaseOrder; model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; fields?: ReactNode; invoices?: ReactNode }) {
   const t = useT('buying')
   const td = useT('purchasing-orders')
   const say = useSay()
@@ -224,6 +224,7 @@ function ReadyOrder({ order, model, actions, thread, printThread, invoices }: { 
         threadLabel={t('po.record.dockLabel')}
         thread={thread ?? null}
         printThread={printThread}
+        fields={fields /* B-TH-280 */}
         wide={isWideTab(model.tab)}
         band={{
           back: <Link href={`${model.prefix}/purchasing/orders`}>{t('po.record.back')}</Link>,

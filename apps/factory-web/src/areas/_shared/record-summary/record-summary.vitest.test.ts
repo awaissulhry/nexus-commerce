@@ -175,8 +175,8 @@ describe('the page (SCR-006-generic)', () => {
   })
 })
 
-describe('the container (record-panels/RecordPage.tsx)', () => {
-  const source = readFileSync(new URL('../../../record-panels/RecordPage.tsx', import.meta.url), 'utf8')
+describe('the container (record-summary/RecordPage.tsx)', () => {
+  const source = readFileSync(new URL('./RecordPage.tsx', import.meta.url), 'utf8')
 
   it('reads the summary first and mounts the office thread full page only once the record is readable (no RecordFrame dock)', () => {
     expect(source).toContain('readRecordSummary(api, record, signal)')
@@ -196,8 +196,9 @@ describe('the container (record-panels/RecordPage.tsx)', () => {
   })
   // ---- end follow-up
 
-  it('keeps the project’s own address (B-TH-249) and the panels’ print form', () => {
+  it('keeps the project’s own address (B-TH-249) and prints the thread with ThreadPrint (B-TH-280)', () => {
     expect(source).toContain("if (type === 'Project') return <ToProjectPage id={id} />")
-    expect(source).toContain('<RecordPanels record={threadRecord}')
+    expect(source).toContain('<ThreadPrint record={threadRecord}')
+    expect(source).not.toContain('RecordPanels')
   })
 })

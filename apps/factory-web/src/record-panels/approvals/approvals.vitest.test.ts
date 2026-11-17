@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../lib/api/errors'
 import { recordRequestsSchema } from './api'
 import { designScreen } from './fixtures'
-import { askDraftProblems, askedNotice, askFilesOf, askHeld, askRefusal, defaultDueAt, newDraft, openCount, statusTone, takesApprovals, withdrawHeld, withdrawRefusal } from './model'
+import { askDraftProblems, askedNotice, askFilesOf, askHeld, askRefusal, defaultDueAt, newDraft, statusTone, takesApprovals, withdrawHeld, withdrawRefusal } from './model'
 
 const NOW = Date.parse('2026-11-10T09:00:00.000Z')
 const DAY = 86_400_000
@@ -59,12 +59,9 @@ describe('record panels › Approvals (ask a partner to approve)', () => {
     expect(askedNotice({ url: null, delivery: 'SENT' })?.key).toBe('note.mailed')
   })
 
-  it('only current, available files may go; the tab counts what still waits', () => {
+  it('only current, available files may go', () => {
     expect(askFilesOf([{ id: 'a', name: 'a', contentType: 'image/png', status: 'AVAILABLE' }, { id: 'b', name: 'b', contentType: 'image/png', status: 'AVAILABLE', supersededAt: '2026-11-01T00:00:00Z' }, { id: 'c', name: 'c', contentType: 'image/png', status: 'QUARANTINED' }])?.map((file) => file.id)).toEqual(['a'])
     expect(askFilesOf(null)).toBeNull()
-    const list = designScreen.cases.find((item) => item.id === 'list')!.model.approvals!
-    expect(openCount(list)).toBe(1)
-    expect(openCount({ read: { status: 'loading' } })).toBeNull()
     expect(statusTone('REFUSED')).toBe('danger')
   })
 
@@ -83,3 +80,32 @@ describe('record panels › Approvals (ask a partner to approve)', () => {
     for (const key of Object.keys(en)) expect(holes(it[key]!), key).toEqual(holes(en[key]!))
   })
 })
+
+// ---- B-TH-280: the old record panels' Approvals tab went; its list (Withdraw) and the record's approval history live in the
+// Approvals window the docked thread's Ask door opens once something is asked.
+describe('B-TH-280 — the Approvals window', () => {
+  it('draws the window over the docked thread, from its own parts only (no record panels)', () => {
+    expect(designScreen.view.name).toBe('ApprovalsWindowCase')
+    for (const name of ['fixtures.ts', 'view/ApprovalsWindow.tsx', 'view/ApprovalsWindowCase.tsx']) {
+      const source = readFileSync(new URL(`./${name}`, import.meta.url), 'utf8')
+      expect(source, name).not.toMatch(/RecordPanels|record-panels\/view\/|from '\.\.\/fixtures'/)
+    }
+    const window = readFileSync(new URL('./view/ApprovalsWindow.tsx', import.meta.url), 'utf8')
+    expect(window).toContain('<ApprovalsPanel model={model} actions={actions} title={record} />')
+    expect(window).toContain('{history}')
+  })
+
+  it('has the history under the requests in its main case, and a case without it', () => {
+    const list = designScreen.cases.find((item) => item.id === 'list')!.model
+    expect(list.history?.read.status).toBe('ready')
+    expect(designScreen.cases.find((item) => item.id === 'no-history')!.model.history).toBeNull()
+  })
+
+  it('names the window and its Close in both languages', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const words = flat(catalogue(locale))
+      for (const key of ['tab', 'close']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+  })
+})
+// ---- end B-TH-280

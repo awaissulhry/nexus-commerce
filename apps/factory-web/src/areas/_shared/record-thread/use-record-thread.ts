@@ -66,6 +66,10 @@ export interface RecordThreadHost {
   /** The record's own address, for Copy link (default: this page). */
   recordHref?: string
   onMakeCustomer?: () => void
+  // ---- B-TH-280: the print form (ThreadPrint) has no box — no draft is read or written (on this device or on the server, B-TH-287)
+  // and no leave guard runs (a draft kept for the record stays untouched; the print tab's own links and closing are never held).
+  readOnly?: boolean
+  // ---- end B-TH-280
 }
 
 type Notice = NonNullable<RecordThreadModel['notice']>
@@ -317,6 +321,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   }
   const personId = session.user.id
   useEffect(() => {
+    if (host.readOnly) return // B-TH-280
     const now = Date.now()
     const note = readDraft(storage(), draftKey(personId, key, 'note'), now)
     const reply = note ? null : readDraft(storage(), draftKey(personId, key, 'reply'), now)
@@ -330,6 +335,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     // Only on arrival: the record's draft.
   }, [personId, key])
   useEffect(() => {
+    if (host.readOnly) return // B-TH-280: the print form never writes (an empty box would forget the kept draft)
     const id = setTimeout(() => {
       const now = Date.now()
       // The other audiences' drafts are forgotten (the text survives a switch); B-TH-237: three audiences.
@@ -433,6 +439,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     draftVersion.current = undefined
     lastSaved.current = ''
     setSaved(null)
+    // B-TH-280: the print form (ThreadPrint) neither reads nor saves the server's draft: never ready, so nothing is ever saved.
+    if (host.readOnly) return
     if (!can.post) {
       draftReady.current = true
       return
@@ -501,7 +509,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   // question; only files still going up are not kept (a draft keeps the files that went up).
   const keptOnServer = saved !== null && (saved.state === 'saved' || saved.state === 'replaced' || saved.state === 'saving')
   const notKept = work.files.filter((file) => file.phase === 'uploading' || file.phase === 'failed').length
-  const leave = useLeaveGuard(keptOnServer ? { text: '', files: notKept } : { text: work.draft.body, files: unsentFiles })
+  // B-TH-280: the print form (ThreadPrint) has no box: no guard at all.
+  const leave = useLeaveGuard(host.readOnly ? { text: '', files: 0 } : keptOnServer ? { text: '', files: notKept } : { text: work.draft.body, files: unsentFiles })
   // ---- end B-TH-287
   const askRef = useRef(leave.ask)
   askRef.current = leave.ask

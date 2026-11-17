@@ -7,7 +7,7 @@ import { formatTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { useLive } from '../../_shared/hooks'
 import {
   actionFiles,
@@ -458,7 +458,7 @@ export function CapaRecord({ capaId }: { capaId: string }) {
 
   // B-TH-266: the CAPA's ONE thread docked beside every tab (Head with Activity's doors, files line, Files view, feed, box) — the
   // customer an 8D is written for is its only party (the API's thread scope: the CAPA's customer), an internal CAPA notes only. Only
-  // with threads.read; the print view keeps the record panels' print form.
+  // with threads.read; the print view prints the thread with ThreadPrint (B-TH-280).
   const ref = record ? { type: 'Capa', id: record.capa.id, companyId: record.capa.companyId, siteId: null } : null
   const customer = record?.capa.customer ?? null
   const title = record ? `${record.capa.number} · ${record.capa.title}` : ''
@@ -466,6 +466,6 @@ export function CapaRecord({ capaId }: { capaId: string }) {
     record && ref && can.threadsRead ? (
       <OfficeRecordThread docked record={ref} title={title} recordLabel={record.capa.number} party={customer ? { id: customer.id, name: customer.name } : null} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
     ) : null
-  const printThread = record && ref && can.threadsRead ? <RecordPanels record={ref} title={title} party={customer ? { id: customer.id, name: customer.name, emails: [] } : null} /> : null
+  const printThread = record && ref && can.threadsRead ? <ThreadPrint record={ref} title={title} party={customer ? { id: customer.id, name: customer.name } : null} /> : null
   return <CapaRecordView model={model} actions={actions} thread={thread} printThread={printThread} />
 }

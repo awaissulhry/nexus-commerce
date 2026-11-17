@@ -1,9 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createApiClient } from '../lib/api/client'
-import { listFiles, messageSchema, postNote, requestUpload, sendEmail, setThreadStatus, timelineEntrySchema } from './api'
-import { parseLiveData } from './live'
-import { sendNotice } from './RecordPanels'
-import { apiErrorFrom } from '../lib/api/errors'
+import { listFiles, messageSchema, postNote, requestUpload, setThreadStatus, timelineEntrySchema } from './api'
 import { putToStore, sha256Hex, storeHeaders, storeUrl, StoreError } from './store'
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -58,21 +55,6 @@ describe('the record panels call the API through its one client', () => {
     expect(call.headers.get('idempotency-key')).toMatch(/^[0-9a-f-]{36}$/)
   })
 
-  it('sends a mail to the party from the thread; an empty subject is left to the API', async () => {
-    const { api, sent } = client(() => json(201, {}))
-    await sendEmail(api, RECORD, { to: ['buyer@example.com'], subject: undefined, body: 'Hello', attachments: [] })
-    expect(sent().url).toBe(`/api/threads/Certificate/${RECORD.id}/emails`)
-    expect(sent().body).toEqual({ to: ['buyer@example.com'], body: 'Hello', attachments: [] })
-  })
-
-  it('B-TH-202: sends the person’s recorded "Send outside this customer" tick only when it was ticked', async () => {
-    const { api, sent } = client(() => json(201, {}))
-    await sendEmail(api, RECORD, { to: ['buyer@example.com'], subject: 'Sizes', body: 'Hello', attachments: [], sendOutside: true })
-    expect(sent().body).toEqual({ to: ['buyer@example.com'], subject: 'Sizes', body: 'Hello', attachments: [], sendOutside: true })
-    await sendEmail(api, RECORD, { to: ['buyer@example.com'], body: 'Hello', attachments: [], sendOutside: false })
-    expect(sent(1).body).toEqual({ to: ['buyer@example.com'], body: 'Hello', attachments: [] })
-  })
-
   it('closes a thread with the version it read (COL-078)', async () => {
     const { api, sent } = client(() => json(200, {}))
     await setThreadStatus(api, RECORD, 'CLOSED', 4)
@@ -121,36 +103,6 @@ describe('the file bytes go straight to the store', () => {
 
   it('hashes the bytes as the store checks them (SHA-256, lower-case hex)', async () => {
     expect(await sha256Hex(new TextEncoder().encode('abc').buffer as ArrayBuffer)).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad')
-  })
-})
-
-describe('a refused mail says what was refused, in the panel\'s words', () => {
-  const refusal = (status: number, code: string, paths: string[] = []) => apiErrorFrom(status, { error: { code, message: 'english', issues: paths.map((path) => ({ path, message: 'english' })) } })
-  it('names the missing sending address, a refused recipient, a missing subject, a file that cannot go', () => {
-    expect(sendNotice(refusal(400, 'validation_failed', ['body/identityId'])).key).toBe('notice.noSender')
-    expect(sendNotice(refusal(400, 'validation_failed', ['body/to/1'])).key).toBe('notice.badRecipient')
-    expect(sendNotice(refusal(400, 'validation_failed', ['body/subject'])).key).toBe('notice.noSubject')
-    expect(sendNotice(refusal(400, 'validation_failed', ['body/attachments/0'])).key).toBe('notice.attachmentsRefused')
-    expect(sendNotice(refusal(400, 'validation_failed', ['body/mentions/0'])).key).toBe('notice.mentionsRefused')
-    expect(sendNotice(refusal(400, 'validation_failed', ['body/forFloor'])).key).toBe('notice.floorRefused')
-    expect(sendNotice(refusal(400, 'validation_failed', ['body/other'])).key).toBe('notice.invalid')
-    expect(sendNotice(refusal(409, 'invalid_state')).key).toBe('notice.sendConflict')
-    expect(sendNotice(refusal(403, 'forbidden')).key).toBe('notice.forbidden')
-  })
-
-  it('B-TH-202: the recipient rule’s refusals say what to do, in words that name no customer', () => {
-    expect(sendNotice(refusal(409, 'conflict', ['refusal/OTHER_PARTY', 'body/cc/0']))).toEqual({ key: 'notice.outsideCustomer', tone: 'danger' })
-    expect(sendNotice(refusal(409, 'conflict', ['refusal/HIDDEN_OUTSIDE', 'body/bcc/0']))).toEqual({ key: 'notice.hiddenOutside', tone: 'danger' })
-    expect(sendNotice(refusal(409, 'conflict')).key).toBe('notice.sendConflict')
-  })
-})
-
-describe('the live stream', () => {
-  it('reads a change message and drops anything else', () => {
-    expect(parseLiveData('{"type":"file.available","fields":{"recordType":"Certificate","recordId":"r1"},"companyId":"c1"}')).toEqual({ type: 'file.available', fields: { recordType: 'Certificate', recordId: 'r1' } })
-    expect(parseLiveData('not json')).toBeNull()
-    expect(parseLiveData('{"fields":{}}')).toBeNull()
-    expect(parseLiveData('{"type":"x"}')).toEqual({ type: 'x', fields: {} })
   })
 })
 

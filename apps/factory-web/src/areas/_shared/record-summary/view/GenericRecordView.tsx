@@ -52,7 +52,7 @@ export interface GenericRecordActions {
 export interface GenericRecordSlots {
   /** The office's thread (OfficeRecordThread docked, outside a RecordFrame: no width menu), once the summary is read. */
   readonly thread?: ReactNode
-  /** What the print view shows of the thread (the record panels' print form). */
+  /** What the print view shows of the thread (ThreadPrint: the thread for paper, B-TH-280). */
   readonly printThread?: ReactNode
 }
 

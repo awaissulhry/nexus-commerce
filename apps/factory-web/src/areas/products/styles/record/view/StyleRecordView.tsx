@@ -55,12 +55,13 @@ export type { StyleRecordViewModel, StyleRecordActions } from '../record-model'
  * offer the draft (or Start revision N). It draws one view model and fetches nothing (StyleRecord.tsx loads it).
  */
 // B-TH-261: `thread` is the docked thread (the office's OfficeRecordThread docked, or a design case's; null: none for this person),
-// `printThread` what the print view shows of it (the record panels' print form).
+// `printThread` what the print view shows of it (ThreadPrint: the thread for paper, B-TH-280).
 export function StyleRecordView({
   model,
   actions,
   thread,
   printThread,
+  fields,
   techPack,
   depth,
   costSheets,
@@ -69,6 +70,8 @@ export function StyleRecordView({
   actions?: StyleRecordActions
   thread?: ReactNode
   printThread?: ReactNode
+  /** B-TH-280: the style's custom fields (the container passes them on Overview & variants only). */
+  fields?: ReactNode
   /** B-W2b-243: the Tech pack tab's body (the container mounts it while the tab is open). */
   techPack?: ReactNode
   /** B-W2b-237: the depth's parts (the container builds them from one model). */
@@ -78,7 +81,7 @@ export function StyleRecordView({
 }) {
   return (
     <WithMessages namespaces={['products', 'records', 'lists', 'products-prepacks', /* B-W2b-243 */ 'products-techpack', /* B-W2b-261 */ 'products-samples', /* B-W2b-242 */ 'products-options', /* B-W2b-244 */ 'products-changes', /* B-W2b-237 */ 'products-styles-depth', /* B-W2b-245 */ 'products-versions', /* B-W2b-283 */ 'products-followups-w2b4']}>
-      <StyleRecord model={model} actions={actions} thread={thread} printThread={printThread} techPack={techPack} depth={depth} costSheets={costSheets} />
+      <StyleRecord model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} techPack={techPack} depth={depth} costSheets={costSheets} />
     </WithMessages>
   )
 }
@@ -88,12 +91,13 @@ interface BodyProps {
   actions?: StyleRecordActions
   thread?: ReactNode
   printThread?: ReactNode
+  fields?: ReactNode // B-TH-280
   techPack?: ReactNode
   depth?: StyleDepthSlots
   costSheets?: ReactNode
 }
 
-function StyleRecord({ model, actions, thread, printThread, techPack, depth, costSheets }: BodyProps) {
+function StyleRecord({ model, actions, thread, printThread, fields, techPack, depth, costSheets }: BodyProps) {
   const t = useT('products')
   const listHref = `${model.prefix}/products/styles`
   const loaded = model.style
@@ -145,10 +149,10 @@ function StyleRecord({ model, actions, thread, printThread, techPack, depth, cos
       </RecordFrame>
     )
   }
-  return <ReadyRecord style={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} techPack={techPack} depth={depth} costSheets={costSheets} />
+  return <ReadyRecord style={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} techPack={techPack} depth={depth} costSheets={costSheets} />
 }
 
-function ReadyRecord({ style, model, actions, thread, printThread, techPack, depth, costSheets }: BodyProps & { style: StyleView }) {
+function ReadyRecord({ style, model, actions, thread, printThread, fields, techPack, depth, costSheets }: BodyProps & { style: StyleView }) {
   const t = useT('products')
   // B-W2b-243: the band's ⋯ "Make tech pack PDF…" (it opens the Tech pack tab with its dialog).
   const tt = useT('products-techpack')
@@ -305,6 +309,7 @@ function ReadyRecord({ style, model, actions, thread, printThread, techPack, dep
         threadLabel={t('record.dockLabel')}
         thread={thread ?? null}
         printThread={printThread}
+        fields={fields /* B-TH-280 */}
         wide={isWideTab(tab)}
         band={{
           back: <Link href={`${model.prefix}/products/styles`}>{t('record.back')}</Link>,

@@ -33,16 +33,17 @@ export interface ApprovalsOptions {
   readonly files: ReadonlyArray<{ id: string; originalName: string; contentType: string; status: string; supersededAt?: string | null }> | null
   readonly party: { readonly name: string; readonly emails: readonly string[] } | null
   /** Reads the record's thread and history again after an ask or a withdrawal (the API writes there too). */
-  readonly reloadPanels?: () => void
+  readonly reloadThread?: () => void
 }
 
 /**
- * The record panels' Approvals tab as RecordPanels mounts it (B-W2b-188): null for a record type no approval names or a
- * person without partners.approvals.view (no tab). It reads the record's requests, asks (one idempotent write; the link
+ * A record's requests to its partner, as the docked thread mounts them (B-W2b-188; B-TH-280: the Ask door, the counts and the
+ * Approvals window — the old record panels' tab went): null for a record type no approval names or a person without
+ * partners.approvals.view. It reads the record's requests, asks (one idempotent write; the link
  * given once is kept in memory only, until dismissed), withdraws (with the request's version), and reads again when the
  * live stream says a request of this record changed (approval_request.asked / answered / withdrawn / expired).
  */
-export function useApprovals({ api, record, title, can, files, party, reloadPanels }: ApprovalsOptions): { model: ApprovalsPanelModel | null; actions: ApprovalsPanelActions } {
+export function useApprovals({ api, record, title, can, files, party, reloadThread }: ApprovalsOptions): { model: ApprovalsPanelModel | null; actions: ApprovalsPanelActions } {
   const locale = useLocale()
   const enabled = can.view && takesApprovals(record.type)
   const [read, setRead] = useState<ApprovalsPanelModel['read']>({ status: 'loading' })
@@ -110,7 +111,7 @@ export function useApprovals({ api, record, title, can, files, party, reloadPane
       setNotice(askedNotice(answer))
       if (answer.url) setLink({ url: answer.url, label: answer.request.record.words[locale] || title })
       await load()
-      reloadPanels?.()
+      reloadThread?.()
     } catch (error) {
       const refusal = askRefusal(error)
       setAsk((now) => (now ? { ...now, problems: refusal.problems, problem: refusal.problem } : now))
@@ -132,7 +133,7 @@ export function useApprovals({ api, record, title, can, files, party, reloadPane
       setWithdraw(null)
       setNotice({ key: 'note.withdrawn', tone: 'success', params: { kind: KIND_RULES[request.kind].name[locale] } })
       await load()
-      reloadPanels?.()
+      reloadThread?.()
     } catch (error) {
       setNotice({ key: withdrawRefusal(error), tone: 'danger' })
       void load()

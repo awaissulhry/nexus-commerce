@@ -133,29 +133,11 @@ a.fw-q-link:focus-visible {
   min-width: 0;
 }
 
-.fw-q-keys {
-  display: inline-flex;
-  gap: var(--nds-space-2);
-  margin-inline-start: var(--nds-space-4);
-}
-
 .fw-q-record-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--nds-space-16);
   align-items: start;
-}
-
-@media (min-width: 1280px) {
-  .fw-q-record-body.has-dock {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
-  }
-}
-
-@media (max-width: 1279px) {
-  .fw-q-record-dock {
-    display: none;
-  }
 }
 
 .fw-q-record-main,

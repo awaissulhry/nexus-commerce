@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
-import { RecordPanels } from '../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../_shared/record-thread/ThreadPrint'
 import { listCompanies, listRoles, listUsers, roleCatalogue, type PermissionCatalogue, type Role, type User } from '../shared/api'
 import { failed, loaded, loading, problemKey, type Loaded, type ScopeOption } from '../shared/model'
 import { isStepUpCancelled, useStepUp } from '../shared/step-up'
@@ -104,10 +104,10 @@ export function RoleRecord({ roleId }: { roleId: string }) {
   const editHeldReason = role && !role.system ? editHeld(role, { manage: held.has('roles.manage'), heldByMe }) : null
   const editable = !!role && !!catalogue && !role.system && editHeldReason === null && role.audience === 'office'
   const archiveHeld = !held.has('roles.manage') ? 'saveRole.held.right' : heldByMe ? 'saveRole.held.mine' : null
-  // B-TH-269: the role's thread (notes only) with threads.read and roles.view; the print view keeps the panels' print form.
+  // B-TH-269: the role's thread (notes only) with threads.read and roles.view; the print view prints the thread with ThreadPrint (B-TH-280).
   const record = role && roleThreadMounted(held) ? { type: 'Role', id: role.id, companyId: null } : null
   const thread = role && record ? <OfficeRecordThread docked record={record} title={role.name} recordLabel={role.name} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = role && record ? <RecordPanels record={record} title={role.name} /> : null
+  const printThread = role && record ? <ThreadPrint record={record} title={role.name} /> : null
 
   return (
     <>

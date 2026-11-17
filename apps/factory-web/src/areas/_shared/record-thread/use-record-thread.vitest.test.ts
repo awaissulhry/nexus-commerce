@@ -240,7 +240,7 @@ describe('B-TH-300 — the docked thread’s container', () => {
 
   it('Activity’s doors open the record panels’ EXISTING dialogs (R-ACT), never a copy', () => {
     const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
-    for (const part of ["record-panels/view/TaskNewDialog'", "record-panels/approvals/view/AskDialog'", "record-panels/share/view/InviteDialog'", "record-panels/view/FollowersControl'", "record-panels/approvals/use-approvals'", "record-panels/share/use-shares'"]) expect(docked).toContain(part)
+    for (const part of ["record-panels/tasks/view/TaskNewDialog'", "record-panels/approvals/view/AskDialog'", "record-panels/share/view/InviteDialog'", "record-panels/tasks/view/FollowersControl'", "record-panels/approvals/use-approvals'", "record-panels/share/use-shares'"]) expect(docked).toContain(part)
     const reminder = readFileSync(new URL('./use-thread-reminder.tsx', import.meta.url), 'utf8')
     expect(reminder).toContain("shell/panels/remind-me/view/RemindMeDialog'")
     expect(reminder).toContain('REMIND_ME_EVENT')
@@ -317,6 +317,45 @@ describe('B-TH-255 — the View asks the API what it hides; the office read keep
 })
 // ---- end B-TH-255
 
+// ---- B-TH-280: the old record panels went; what only they drew lives on in the docked thread (nothing lost, nothing unused).
+describe('B-TH-280 — the docked thread holds what the old record panels held', () => {
+  const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
+
+  it('imports no record panels and no panels view', () => {
+    expect(docked).not.toMatch(/RecordPanels|record-panels\/view\/|record-panels\/RecordPanels/)
+    expect(docked).not.toContain('as unknown as')
+  })
+
+  it('the files in depth sit in the Files view: type and expiry, Versions, Mark up, What it is, and one documents read', () => {
+    expect(docked).toContain("import { useFileDepth } from '../../../record-panels/files/use-file-depth'")
+    expect(docked).toContain("import { DepthActions, DepthDialogs, DepthTags, DepthTop } from '../../../record-panels/files/view/DepthParts'")
+    expect(docked).toMatch(/useFileDepth\(\{[\s\S]*?files: filesOpen && can\.readFiles && base\.filesRead \? base\.files : null/)
+    expect(docked).toContain('slots={depthSlots')
+    // The view's "Missing before …" lines come from the depth's own read (GET /files/documents once, not twice).
+    expect(docked).toContain('missingOf(depth.model.documents)')
+    expect(docked).not.toContain('readDocuments(')
+    // A PDF version opens in the thread's ONE viewer.
+    expect(docked).toContain('openPdf: openOneFile')
+  })
+
+  it('the Ask and Share doors open their window once something is asked or shared; else the dialog at once', () => {
+    expect(docked).toContain("else if (door === 'approve') (anyRequest || anyApproval ? setManaging('approve') : approvals.actions.onAsk?.(true))")
+    expect(docked).toContain("else if (door === 'share') (anyShare ? setManaging('share') : shares.actions.onInvite?.(true))")
+    expect(docked).toContain("{managing === 'approve' && (")
+    expect(docked).toContain('<ApprovalsWindow')
+    expect(docked).toContain('<SharesWindow')
+    // Inside a window its panel draws the dialog: never twice.
+    expect(docked).toContain("approvals.model?.ask && managing !== 'approve' && <AskDialog")
+    expect(docked).toContain("shares.model?.invite && managing !== 'share' && <InviteDialog")
+  })
+
+  it('the record’s approval history is reachable (the Approvals window) and read again on an approval of this record', () => {
+    expect(docked).toContain("useApprovalHistory({ api, record: key, allowed: held.has('approvals.view'), held })")
+    expect(docked).toContain('<ApprovalHistory model={approvalHistory.model} actions={approvalHistory.actions} />')
+    expect(docked).toContain("change.type.startsWith('approval.') && change.fields.recordId === key.id) approvalHistory.refresh()")
+  })
+})
+// ---- end B-TH-280
 // ---- B-TH-286 / 287 / 288 / 289 (TH-9 on B-TH-091 pins, B-TH-092 drafts, B-TH-093 Done, B-TH-097 search, B-TH-096 follow-ups) -------
 import { discardServerDraft, pinMessage, pinRequestNote, readPins, readServerDraft, saveServerDraft, searchThread, setThreadDone, unpinMessage } from './api'
 import { pinRefusalKey } from './state'

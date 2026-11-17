@@ -58,20 +58,6 @@
     "CONSULTANT": "Consulenti"
   },
   "required": {
-    "label": "Cosa serve per {status}",
-    "blocks_one": "Non può passare a {status}: manca {count} documento",
-    "blocks_other": "Non può passare a {status}: mancano {count} documenti",
-    "warns_one": "Prima di {status}: {count} documento da aggiungere (non blocca)",
-    "warns_other": "Prima di {status}: {count} documenti da aggiungere (non bloccano)",
-    "reason": {
-      "MET": "Presente",
-      "MISSING": "Manca",
-      "EXPIRED": "Scaduto"
-    },
-    "level": {
-      "BLOCK": "Blocca il passaggio",
-      "WARN": "Solo avviso"
-    },
     "expiredOn": "scaduto il {date}",
     "how": "Carica qui il documento (o sul fornitore), poi indica cosa è e fino a quando con \"Cosa è\".",
     "partyDocuments": "Contano anche, dal cliente o fornitore del record: {names}",

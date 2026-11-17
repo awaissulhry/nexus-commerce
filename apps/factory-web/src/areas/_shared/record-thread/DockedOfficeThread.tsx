@@ -39,11 +39,10 @@ import { downloadLink, requestUpload, completeUpload, setThreadStatus } from '..
 import { useApprovals } from '../../../record-panels/approvals/use-approvals'
 import { takesApprovals } from '../../../record-panels/approvals/model'
 import { AskDialog } from '../../../record-panels/approvals/view/AskDialog'
-import { readDocuments, restoreVersion } from '../../../record-panels/files/api'
+import { restoreVersion } from '../../../record-panels/files/api'
 import { WithMessages } from '../../../record-panels/i18n'
 import { useLiveChanges } from '../../../record-panels/live'
-import { uploadChoices, uploadProblem, type FileKind, type RecordPanelsViewModel } from '../../../record-panels/model'
-import type { RecordPanelsActions } from '../../../record-panels/view/actions'
+import { uploadChoices, uploadProblem, type FileKind } from '../../../record-panels/model'
 import { contentTypeOf } from '../../../lib/record-thread/attachments/model'
 import { takesSheet } from '../../../lib/record-thread/attachments/model' // B-TH-283
 import { SHARES_NS, takesShares } from '../../../record-panels/share/model'
@@ -53,8 +52,8 @@ import { putToStore, readFromStore, sha256Hex, storeUrl } from '../../../record-
 import { addFollower, createTask, listAssignees, listTasks, readFollowers, setMyFollow, taskReadProblem, taskWriteProblem } from '../../../record-panels/tasks/api'
 import { addTaskHeld, createBody, followersChangeFor, followReasonKey, taskChangeFor, type Assignable, type Followers, type TaskDraft, type TaskItem } from '../../../record-panels/tasks/model'
 import type { PanelRead } from '../../../record-panels/model'
-import { FollowersControl } from '../../../record-panels/view/FollowersControl'
-import { TaskNewDialog } from '../../../record-panels/view/TaskNewDialog'
+import { FollowersControl, type FollowersControlActions, type FollowersControlModel } from '../../../record-panels/tasks/view/FollowersControl'
+import { TaskNewDialog } from '../../../record-panels/tasks/view/TaskNewDialog'
 import { fillReply, listReplies } from '../document-send/template/api'
 import { useRecordFrame } from '../record-frame/RecordFrame'
 import { askedFiles } from '../record-frame/model' // B-TH-264 follow-up
@@ -67,6 +66,17 @@ import type { RecordThreadBase, RecordThreadHost } from './use-record-thread'
 // B-TH-251 (PROJ.linked-F05): "In project …" on the head of a record a project may link.
 import { useInProject } from '../../products/projects/record/linked/use-in-project'
 import { companyPrefix } from '../../../lib/session/session'
+// ---- B-TH-280: what only the old record panels drew lives on here (the panels went): the files in depth in the Files view, the
+// record's requests to its partner and its invitations in windows (Withdraw, Change, Revoke), and the record's approval history.
+import { previewLink } from '../../../record-panels/files/api'
+import { missingOf, panelFileOf } from '../../../record-panels/files/model'
+import { useFileDepth } from '../../../record-panels/files/use-file-depth'
+import { DepthActions, DepthDialogs, DepthTags, DepthTop } from '../../../record-panels/files/view/DepthParts'
+import { ApprovalsWindow } from '../../../record-panels/approvals/view/ApprovalsWindow'
+import { SharesWindow } from '../../../record-panels/share/view/SharesWindow'
+import { useApprovalHistory } from '../../../shell/panels/approvals/use-approval-history'
+import { ApprovalHistory } from '../../../shell/panels/approvals/view/ApprovalHistory'
+// ---- end B-TH-280
 // B-TH-286: the pins on the files line (B-TH-091).
 import { lineShown, pinLinesOf } from '../../../lib/record-thread/files/model'
 // B-TH-287 (B-TH-098): saved replies in the customer's language first (th-backend-g step 3 reads the five languages).
@@ -98,8 +108,11 @@ const latestOf = (files: readonly ThreadFile[]): ThreadFile[] => fileSeries(file
  * The docked thread's office container (B-TH-300; pictures 6–11; T1, T2, T8, T9, T-POP, PL4): RecordThread v1's feed, cards and box
  * (the same container, use-record-thread) with the Head — who answers next, the View, the counts, the width menu of the frame, and
  * the "⋯" that ALWAYS holds Activity's doors (rule R-ACT): Add task, Ask a partner to approve, Share with a partner, Followers,
- * Follow / Mute, Remind me — each opening the EXISTING dialog of the record panels, plus Print and "Close thread…" for
- * threads.manage —, the files line and its strip, the ONE file viewer, the Files view, and Saved replies beside the box. Brand wall
+ * Follow / Mute, Remind me — each opening the EXISTING dialog of the record-panels modules, plus Print and "Close thread…" for
+ * threads.manage —, the files line and its strip, the ONE file viewer, the Files view, and Saved replies beside the box. B-TH-280:
+ * the old record panels went; their Files tab in depth (type and expiry, Versions, Mark up) lives in the Files view's slots, their
+ * Approvals and Partners tabs in windows the Ask / Share doors open once something is asked or shared (Withdraw, Change, Revoke,
+ * the record's approval history). Brand wall
  * (W06, W08, W24, W25, W34): Ask and Share reach only this record's party (the dialogs and the API check it again), the files are this
  * record's only, the @ list is office readers only (B-TH-208).
  */
@@ -221,6 +234,11 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     }
   }
 
+  // ---- B-TH-280 (B-W2b-307): the record's approval history (approvals.view; a type without approvals has none), shown in the
+  // Approvals window under the requests to the partner, read again when a request of this record is asked, decided or taken back.
+  const approvalHistory = useApprovalHistory({ api, record: key, allowed: held.has('approvals.view'), held })
+  // ---- end B-TH-280
+
   useEffect(() => {
     void loadTasks()
     void loadFollowers()
@@ -229,10 +247,13 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     onChange: (change) => {
       if (taskChangeFor(change, key)) void loadTasks()
       if (followersChangeFor(change, key)) void loadFollowers()
+      // B-TH-280: an approval of this record asked, decided, taken back or found changed.
+      if (change.type.startsWith('approval.') && change.fields.recordId === key.id) approvalHistory.refresh()
     },
     onReconnect: () => {
       void loadTasks()
       void loadFollowers()
+      approvalHistory.refresh() // B-TH-280
     },
   })
 
@@ -241,9 +262,9 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const inProject = useInProject(api, key, held.has('threads.read'), companyPrefix(session.company?.code ?? ''))
   // ---- end B-TH-251
 
-  // ── Ask a partner to approve, Share with a partner (the record panels' own containers and dialogs) ─────────────────────
-  const approvals = useApprovals({ api, record: key, title: host.title, can: { view: held.has('partners.approvals.view'), ask: held.has('partners.approvals.ask') }, files: base.files, party: party ? { name: party.name, emails: [] } : null, reloadPanels: () => void base.loadThread() })
-  const shares = useShares({ api, record: key, can: { view: held.has('partners.shares.view'), manage: held.has('partners.shares.manage') }, reloadPanels: () => void base.loadThread() })
+  // ── Ask a partner to approve, Share with a partner (the record-panels modules' own containers and dialogs) ────────────
+  const approvals = useApprovals({ api, record: key, title: host.title, can: { view: held.has('partners.approvals.view'), ask: held.has('partners.approvals.ask') }, files: base.files, party: party ? { name: party.name, emails: [] } : null, reloadThread: () => void base.loadThread() })
+  const shares = useShares({ api, record: key, can: { view: held.has('partners.shares.view'), manage: held.has('partners.shares.manage') }, reloadThread: () => void base.loadThread() })
   // R-8: `panel=approvals` (an old address) opens Ask once the frame says so.
   const askOnArrival = frame?.door === 'approve'
   useEffect(() => {
@@ -251,6 +272,14 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     approvals.actions.onAsk?.(true)
     frame?.clearDoor()
   }, [askOnArrival, approvals.model, approvals.actions, frame])
+  // ---- B-TH-280: the old Approvals and Partners tabs in windows. The Ask / Share door opens its window when the record already has a
+  // request or an approval (an invitation), so what is asked or shared is seen first and can be withdrawn, changed or revoked; with
+  // none, the door opens the Ask dialog (the invitation) at once, as before.
+  const [managing, setManaging] = useState<'approve' | 'share' | null>(null)
+  const anyRequest = approvals.model?.read.status === 'ready' && approvals.model.read.requests.length > 0
+  const anyApproval = approvalHistory.model?.read.status === 'ready' && approvalHistory.model.read.lines.length > 0
+  const anyShare = shares.model?.read.status === 'ready' && shares.model.read.data.shares.length > 0
+  // ---- end B-TH-280
 
   // ── the files line, the viewer and the Files view (T2, T9, T-POP) ──────────────────────────────────────────────────────
   const strip = useStripOpen(session.user.id)
@@ -308,23 +337,46 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const [uploadFiles, setUploadFiles] = useState<File[]>([])
   const [refused, setRefused] = useState<readonly { name: string; reason: string }[]>([])
   const [filesBusy, setFilesBusy] = useState(false)
-  const [missing, setMissing] = useState<readonly MissingDocument[]>([])
-  useEffect(() => {
-    if (!filesOpen || !can.readFiles) return
-    const controller = new AbortController()
-    readDocuments(api, key, controller.signal)
-      .then((docs) =>
-        setMissing(
-          docs.moves.flatMap((move) =>
-            move.requirements
-              .filter((requirement) => requirement.reason !== 'MET')
-              .map((requirement) => ({ id: `${move.toStatus}:${requirement.ruleId}`, document: tf(`category.${requirement.category}`), before: tf(`status.${move.toStatus}`), level: requirement.level })),
-          ),
-        ),
-      )
-      .catch(() => setMissing([]))
-    return () => controller.abort()
-  }, [filesOpen, can.readFiles, api, key, tf])
+  // ---- B-TH-280: the files in depth (B-W2b-177) in the Files view — read while it is open, with every files read: each document's type
+  // and expiry, Versions, Mark up, What it is, and what the record's next moves still need (the view's "Missing before …" lines,
+  // T9-F10, from the same documents read: one GET /files/documents, as the old Files tab did). A PDF version opens in the ONE viewer.
+  const openOneFile = (fileId: string) => {
+    const known = threadFiles.find((file) => file.id === fileId)
+    if (known) return openViewer([known], fileId, document.activeElement as HTMLElement | null)
+    void previewLink(api, fileId)
+      .then(({ preview }) => window.open(storeUrl(preview.url), '_blank', 'noopener'))
+      .catch((error: unknown) => notify({ ns: 'record-thread', key: openRefusal(error), tone: 'danger' }))
+  }
+  const depth = useFileDepth({
+    api,
+    record: key,
+    files: filesOpen && can.readFiles && base.filesRead ? base.files : null,
+    canUpload: can.upload,
+    canRead: can.readFiles,
+    prefix: companyPrefix(session.company?.code ?? ''),
+    reloadFiles: () => void base.loadFiles(),
+    openPdf: openOneFile,
+  })
+  const panelFiles = useMemo(() => new Map(base.files.map((file) => [file.id, panelFileOf(file)] as const)), [base.files])
+  const missing: MissingDocument[] = missingOf(depth.model.documents).map((need) => {
+    const kind = tf(`category.${need.category}`)
+    return { id: need.id, document: need.expiredOn ? `${kind} (${tf('required.expiredOn', { date: formatDate(need.expiredOn, { locale }) })})` : kind, before: tf(`status.${need.toStatus}`), level: need.level }
+  })
+  const depthSlots = can.readFiles
+    ? {
+        top: <DepthTop depth={depth.model} actions={depth.actions} />,
+        tags: (fileId: string) => {
+          const file = panelFiles.get(fileId)
+          return file ? <DepthTags depth={depth.model} file={file} /> : null
+        },
+        rowActions: (fileId: string) => {
+          const file = panelFiles.get(fileId)
+          return file ? <DepthActions depth={depth.model} file={file} actions={depth.actions} /> : null
+        },
+        overlays: <DepthDialogs depth={depth.model} actions={depth.actions} />,
+      }
+    : undefined
+  // ---- end B-TH-280
   const choices = uploadChoices({ can: { share: can.share }, party: party ? { id: party.id, name: party.name, emails: [] } : null, record: { type: key.type, siteId: host.record.siteId ?? null, companyId: host.record.companyId } })
 
   const sendUploads = async (ask: UploadAsk, dropped: readonly File[]) => {
@@ -673,8 +725,9 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     const following = followers.data?.me.following ?? false
     const muted = followers.data?.me.muted ?? false
     if (door === 'task') openTask()
-    else if (door === 'approve') approvals.actions.onAsk?.(true)
-    else if (door === 'share') shares.actions.onInvite?.(true)
+    // B-TH-280: the window when something is asked or shared already, else the dialog at once.
+    else if (door === 'approve') (anyRequest || anyApproval ? setManaging('approve') : approvals.actions.onAsk?.(true))
+    else if (door === 'share') (anyShare ? setManaging('share') : shares.actions.onInvite?.(true))
     else if (door === 'followers') setFollowersOpen((open) => !open)
     else if (door === 'follow') void follow({ following: !following, muted: false })
     else if (door === 'mute') void follow({ following: true, muted: !muted })
@@ -718,7 +771,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
 
   const doorResults = (
     <>
-      {approvals.model?.link && (
+      {/* B-TH-280: while a window is open it shows its own link and notice. */}
+      {approvals.model?.link && managing !== 'approve' && (
         <Banner
           tone="info"
           title={ta('link.title', { label: approvals.model.link.label })}
@@ -736,10 +790,10 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           <span className="fw-rt-door-url">{approvals.model.link.url}</span> {ta('link.once')}
         </Banner>
       )}
-      {approvals.model?.notice && !approvals.model.ask && (
+      {approvals.model?.notice && !approvals.model.ask && managing !== 'approve' && (
         <Banner tone={approvals.model.notice.tone} title={ta(approvals.model.notice.key, approvals.model.notice.params)} onDismiss={() => approvals.actions.onDismissNotice?.()} />
       )}
-      {shares.model?.link && (
+      {shares.model?.link && managing !== 'share' && (
         <Banner
           tone="info"
           title={ts('link.title', { email: shares.model.link.email })}
@@ -757,10 +811,10 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           <span className="fw-rt-door-url">{shares.model.link.url}</span> {ts('link.once')}
         </Banner>
       )}
-      {shares.model?.notice && !shares.model.invite && <Banner tone={shares.model.notice.tone} title={ts(shares.model.notice.key, shares.model.notice.params)} onDismiss={() => shares.actions.onDismissNotice?.()} />}
+      {shares.model?.notice && !shares.model.invite && managing !== 'share' && <Banner tone={shares.model.notice.tone} title={ts(shares.model.notice.key, shares.model.notice.params)} onDismiss={() => shares.actions.onDismissNotice?.()} />}
     </>
   )
-  const hasResults = Boolean(approvals.model?.link || (approvals.model?.notice && !approvals.model.ask) || shares.model?.link || (shares.model?.notice && !shares.model.invite))
+  const hasResults = Boolean((managing !== 'approve' && (approvals.model?.link || (approvals.model?.notice && !approvals.model.ask))) || (managing !== 'share' && (shares.model?.link || (shares.model?.notice && !shares.model.invite))))
 
   const headSlot = (
     <>
@@ -788,8 +842,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       {followersOpen && followers.data && (
         <div className="fw-rt-door">
           <FollowersControl
-            model={{ followers: { count: followers.data.count, me: followers.data.me, list: followers.data.followers.map((entry) => ({ userId: entry.userId, name: entry.name, me: entry.me, reason: entry.reason, muted: entry.muted, since: entry.since, addedBy: entry.addedBy?.name ?? null })), candidates: base.people.filter((person) => person.id !== session.user.id && !followers.data!.followers.some((entry) => entry.userId === person.id)), canAdd: can.post, problem: followers.problem, busy: followBusy, open: true } } as unknown as RecordPanelsViewModel}
-            actions={{ onFollow: (wanted) => void follow(wanted), onAddFollower: (userId) => void addColleague(userId), onRetry: () => void loadFollowers() } satisfies RecordPanelsActions}
+            model={{ followers: { count: followers.data.count, me: followers.data.me, list: followers.data.followers.map((entry) => ({ userId: entry.userId, name: entry.name, me: entry.me, reason: entry.reason, muted: entry.muted, since: entry.since, addedBy: entry.addedBy?.name ?? null })), candidates: base.people.filter((person) => person.id !== session.user.id && !followers.data!.followers.some((entry) => entry.userId === person.id)), canAdd: can.post, problem: followers.problem, busy: followBusy, open: true } } satisfies FollowersControlModel}
+            actions={{ onFollow: (wanted) => void follow(wanted), onAddFollower: (userId) => void addColleague(userId), onRetry: () => void loadFollowers() } satisfies FollowersControlActions}
           />
         </div>
       )}
@@ -873,6 +927,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
             // B-TH-231: one row's file, or the chosen ones.
             onUseOn: (ids) => openUseOn(ids),
           }}
+          slots={depthSlots /* B-TH-280 */}
         />
       )}
       {useOn && (
@@ -916,8 +971,19 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           onClose={() => setTaskDialog(null)}
         />
       )}
-      {approvals.model?.ask && <AskDialog model={approvals.model} actions={approvals.actions} />}
-      {shares.model?.invite && <InviteDialog model={shares.model} actions={shares.actions} />}
+      {/* B-TH-280: inside a window its panel draws the dialog itself (it stacks over the window). */}
+      {approvals.model?.ask && managing !== 'approve' && <AskDialog model={approvals.model} actions={approvals.actions} />}
+      {shares.model?.invite && managing !== 'share' && <InviteDialog model={shares.model} actions={shares.actions} />}
+      {managing === 'approve' && (
+        <ApprovalsWindow
+          model={approvals.model}
+          actions={approvals.actions}
+          record={host.recordLabel}
+          history={approvalHistory.model ? <ApprovalHistory model={approvalHistory.model} actions={approvalHistory.actions} /> : null}
+          onClose={() => setManaging(null)}
+        />
+      )}
+      {managing === 'share' && shares.model && <SharesWindow model={shares.model} actions={shares.actions} record={host.recordLabel} onClose={() => setManaging(null)} />}
       {closing && <CloseThreadConfirm record={host.recordLabel} party={party?.name ?? null} problem={closing.problem} onClose={() => void closeThread()} onCancel={() => setClosing(null)} />}
       {owning && (
         <OwnerDialog

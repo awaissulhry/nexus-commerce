@@ -127,10 +127,10 @@ export interface SupplierDepth {
  * details, Portal access. ONE notice in the body column. Fetches nothing: PartyRecord.tsx reads and writes; the docked thread comes
  * in as `thread`, its print form as `printThread`.
  */
-export function PartyRecordView({ model, actions, thread, printThread, terms, items, overview, portal, questionnaire, depth }: { model: PartyRecordModel; actions?: PartyRecordActions; thread?: ReactNode; printThread?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode; depth?: SupplierDepth }) {
+export function PartyRecordView({ model, actions, thread, printThread, fields, terms, items, overview, portal, questionnaire, depth }: { model: PartyRecordModel; actions?: PartyRecordActions; thread?: ReactNode; printThread?: ReactNode; /* B-TH-280 */ fields?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode; depth?: SupplierDepth }) {
   return (
     <PartiesMessages>
-      <PartyRecord model={model} actions={actions} thread={thread} printThread={printThread} terms={terms} items={items} overview={overview} portal={portal} questionnaire={questionnaire} depth={depth} />
+      <PartyRecord model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} terms={terms} items={items} overview={overview} portal={portal} questionnaire={questionnaire} depth={depth} />
     </PartiesMessages>
   )
 }
@@ -146,7 +146,7 @@ function ShowThreadOnArrival() {
   return null
 }
 
-function PartyRecord({ model, actions, thread, printThread, terms, items, overview, portal, questionnaire, depth }: { model: PartyRecordModel; actions?: PartyRecordActions; thread?: ReactNode; printThread?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode; depth?: SupplierDepth }) {
+function PartyRecord({ model, actions, thread, printThread, fields, terms, items, overview, portal, questionnaire, depth }: { model: PartyRecordModel; actions?: PartyRecordActions; thread?: ReactNode; printThread?: ReactNode; /* B-TH-280 */ fields?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode; depth?: SupplierDepth }) {
   const t = useT('parties')
   const locale = useLocale()
   const side = model.side
@@ -264,6 +264,7 @@ function PartyRecord({ model, actions, thread, printThread, terms, items, overvi
         threadLabel={t('record.dockLabelOf', { name: partyName(party) })}
         thread={thread ?? null}
         printThread={printThread}
+        fields={fields /* B-TH-280: the custom fields, on the Overview only */}
         band={{
           back: backLink,
           title: partyName(party),

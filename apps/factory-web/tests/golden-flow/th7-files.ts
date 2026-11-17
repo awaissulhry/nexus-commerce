@@ -24,7 +24,7 @@ import { words } from './_harness/words'
  *       the measurement sheet, each with its Open;
  *   4   the production manager (sales.measurements.view) opens the measurement sheet from the pane: its download answers;
  *   5   finance (no sales.measurements.view, no sales.inquiries.view) opens the request's record page: the photos by name, the sheet
- *       never named; the sheet answers 404 and is listed locked and nameless (the API read: see `blocked`);
+ *       never named ("Measurement sheet — you cannot open it"); the sheet answers 404 and is listed locked and nameless (its API read);
  *   T00 customer B sends its own request with a photo of its own and visits its receipt, Home, Orders & requests, its own request
  *       and the address of customer A's request ("Request not found", neutral words): every page passes the DOM name scan — no name,
  *       code, number, PO, id or file name of customer A, nor the office number of A's request.
@@ -148,8 +148,8 @@ async function scanned(flow: Flow, page: Page, brand: BrandFixture, extra: reado
 export default defineStage({
   proves:
     'customer A sends a request with two photos and a ticked measurement sheet (fake virus scanner: a file is held until its scan says clean); the office opens the request in Incoming’s reading pane and sees the files; the production manager opens the sheet, finance never sees it named; every page customer B visits passes the DOM name scan (no file or name of customer A)',
-  blocked:
-    'finance’s lock: finance holds no sales.inquiries.view, so it cannot open Incoming’s pane where the new thread draws “Measurement sheet — you cannot open it”; the record page it reaches (/records/Inquiry/<id>, the old record panels) draws the sheet without its name but without the lock words (record-panels ThreadPanel and FilesPanel do not read `locked`) — the stage proves on that page that the sheet is never named, and the lock (404, listed locked and nameless) through finance’s own API read',
+  // B-TH-280: the generic record page finance reaches (/records/Inquiry/<id>) is the office thread now (B-TH-272): the sheet reads
+  // "Measurement sheet — you cannot open it" there too, so nothing of this stage is blocked any more.
   async run(flow) {
     const sales = await flow.desk('sales')
     const alphaId = await flow.seedId('party:P1')
@@ -259,6 +259,8 @@ export default defineStage({
         await seen(page.getByText(PHOTO_FRONT).first(), 60_000)
         const shown = await pageWords(page)
         expect(shown, 'finance’s record page names the sheet').not.toContain(SHEET)
+        // B-TH-280: the old record panels are gone — the page's thread says the sheet is locked, in words, without its name.
+        await seen(page.getByText('Measurement sheet — you cannot open it').first(), 30_000)
         await flow.shot(page, 'finance-record-page')
         // finance's own reads: the sheet is listed locked and nameless, and answers 404 by every door (no name in the refusal).
         const listed = (await flow.read(page, `/files?recordType=Inquiry&recordId=${run.id}`)).files as Json[]

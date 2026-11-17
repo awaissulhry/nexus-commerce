@@ -4,7 +4,6 @@ import type { Locale } from '../../../lib/i18n/locales'
 import type { LiveState } from '../../_shared/buying/hooks'
 import type { HideQuery, HideRecord, HideRow, HidesPage, LabelRequest, PrinterOption, PrintJob, StateCount } from '../../_shared/stock/api'
 import { quantity, type StockCan } from '../../_shared/stock/model'
-import type { RecordPanelsViewModel } from '../../../record-panels/model'
 import type { SiteChoice } from '../lots/model'
 import type { Loaded, Part } from '../lots/shared/model'
 import type { MovesPart } from '../lots/shared/parts'
@@ -318,8 +317,6 @@ export interface HideRecordModel {
   holdReasons: readonly PickerReason[]
   reserve: ReserveDialogModel | null
   writeOff: WriteOffDialogModel | null
-  /** Design cases: the record panels drawn without the API. */
-  panelsPreview?: RecordPanelsViewModel | null
   /** B-W2b-131: the Measurements & grade and Defects tabs (grade, shade, thickness, usable area, changes, measures, defects). */
   grading?: GradingModel | null
   /** B-W2b-131: the hide's photos (Defects & photos) and the Lightbox (hd-photo). */

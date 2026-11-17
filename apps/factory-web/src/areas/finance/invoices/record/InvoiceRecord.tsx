@@ -7,7 +7,7 @@ import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { downloadLink } from '../../../../record-panels/api'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { readFromStore, storeUrl } from '../../../../record-panels/store'
 import {
   correctInvoice,
@@ -245,8 +245,8 @@ function RecordContainer({ invoiceId }: { invoiceId: string }) {
     : undefined
 
   // B-TH-268: the docked thread (Head with Activity's doors, files line, Files view, feed, box) — "Reply to" reaches this invoice's own
-  // customer only (the API's thread party is its buyer), its files are this invoice's; only with threads.read. The print view keeps the
-  // panels' print form.
+  // customer only (the API's thread party is its buyer), its files are this invoice's; only with threads.read. The print view prints
+  // the thread with ThreadPrint (B-TH-280).
   const readsThreads = session.permissions.includes('threads.read')
   const record = value && readsThreads ? { type: 'Invoice', id: value.id, companyId: value.companyId, siteId: null } : null
   const title = value ? `${value.number ?? value.docType} · ${value.party.legalName}` : ''
@@ -256,7 +256,7 @@ function RecordContainer({ invoiceId }: { invoiceId: string }) {
       model={model}
       depth={depth}
       thread={value && record ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.number ?? value.docType} party={{ id: value.buyerPartyId, name: value.party.legalName }} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null}
-      printThread={value && record ? <RecordPanels record={record} title={title} party={{ id: value.buyerPartyId, name: value.party.legalName, emails: [] }} /> : null}
+      printThread={value && record ? <ThreadPrint record={record} title={title} party={{ id: value.buyerPartyId, name: value.party.legalName }} /> : null}
       actions={{
         onRetry: () => void load(),
         onRetryPart: () => value && loadParts(value),
