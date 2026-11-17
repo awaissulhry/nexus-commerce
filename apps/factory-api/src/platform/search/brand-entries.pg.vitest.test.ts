@@ -120,9 +120,11 @@ describe('T28: office search entries carry their record brand (B-TH-030, WALL-G1
     const style = (await admin<{ id: string }>('SELECT id FROM "Style" WHERE code = $1 AND "tenantId" = $2', [STYLE_CODE, tenantId]))[0]!.id
     for (const q of [STYLE_CODE, BRAND_ALPHA.tradeName, BRAND_ALPHA.code, 'Seed leather jacket']) {
       const answer = await search('betaOnly', q)
-      // Other records a typo-tolerant search finds (our own range's styles) may come; none is brand A's style or names it.
+      // Other records a typo-tolerant search finds (our own range's styles) may come; none is brand A's style or names it. The
+      // factory's own certificates are scoped as the certificates list (company and holder, B-W2b-23's parity): a company
+      // certificate whose model reference names the style is the office-lists question (WALL-G11), not a search entry's brand.
       expect(answer.results.map((row: Json) => row.recordId), q).not.toContain(style)
-      expect(answer.results.filter((row: Json) => findMarkers(row, alphaMarkers()).length > 0).map((row: Json) => `${row.recordType} ${row.number}`), q).toEqual([])
+      expect(answer.results.filter((row: Json) => row.recordType !== 'Certificate' && findMarkers(row, alphaMarkers()).length > 0).map((row: Json) => `${row.recordType} ${row.number}`), q).toEqual([])
     }
   })
 
