@@ -9,6 +9,7 @@ import { readDocuments, readLabel } from '../../product/compliance/read'
 import { processLabResults } from '../lab/results-store'
 import { readCells, readHeader, type CellRow, type LabelHeader } from '../../production/serials/store'
 import { mayOn, officeOf } from './access'
+import { mayOnWorkOrder, workOrderReachOf } from '../wall'
 import { certificateOf, gateWords } from './facts'
 import { checklistAnswers, inspectionView } from './inspections'
 import { releaseView } from './releases'
@@ -61,6 +62,9 @@ export async function evidenceTrail(caller: CommandCaller, query: EvidenceQuery)
     const cells: CellRow[] = subject.cellIds ? allCells.filter((cell) => subject.cellIds!.includes(cell.id)) : allCells
     // The walls: the work order's company and site, and every customer of the garments it covers.
     if (!cells.every((cell) => mayOn(context, QUALITY_INSPECTIONS_VIEW, { companyId: header.companyId, siteId: header.siteId, partyId: cell.partyId }))) throw notFound()
+    // B-PR-06: and the work order's own customer (none, or mixed before the rule: only who reaches every customer).
+    const reach = (await workOrderReachOf(db, [header.id])).get(header.id)
+    if (!reach || !mayOnWorkOrder(context, QUALITY_INSPECTIONS_VIEW, reach)) throw notFound()
     const cellIds = cells.map((cell) => cell.id)
 
     const style = await db.style.findUnique({ where: { id: header.styleId }, select: { id: true, code: true, name: true, ppeCategory: true, ppeStandard: true, ppeClass: true, garmentTracking: true } })

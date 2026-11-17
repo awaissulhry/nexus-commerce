@@ -13,7 +13,7 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { dayAt, money, quantity } from '../../../_shared/buying/model'
 import type { PlanLine } from '../api'
-import { decisionPhrase, draftHeld, draftReach, heldByReason, heldReason, MRP_NAMESPACE, PLAN_VIEWS, planState, runSeconds, shortWorkOrders, TILES, visibleLines, type PlanActions, type PlanModel, type PlanView as PlanViewName } from '../model'
+import { decisionPhrase, draftHeld, draftReach, heldByReason, heldReason, MRP_NAMESPACE, PLAN_VIEWS, planState, runSeconds, shortWorkOrders, TILES, unfirmHeld /* W1-BGF */, visibleLines, type PlanActions, type PlanModel, type PlanView as PlanViewName } from '../model'
 import { PlanDialogs } from './PlanDialogs'
 import { ShortList } from './ShortList'
 import { WhyModal } from './WhyModal'
@@ -214,6 +214,11 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
       }
       return <span className={data.decision === 'IGNORED' ? 'fw-by-cell-sub fw-by-ellipsis' : 'fw-by-ellipsis'}>{text}</span>
     }
+    // W1-BGF: Plan it again (not firm), held with its reason in words.
+    const unfirmItem = (data: PlanLine) => {
+      const held = unfirmHeld(data, !!model.canFirm)
+      return { id: 'unfirm', label: w('unfirm.menu'), description: held ? w(held) : w('unfirm.hint', { quantity: quantity(data.suggestedQuantity, locale), unit: t(`uom.${data.suggestedUom}`) }), disabled: !!held, onSelect: () => actions?.onUnfirm?.(data.id) }
+    }
     const MoreCell = ({ data }: ICellRendererParams<PlanLine>) =>
       data ? (
         <Menu
@@ -226,6 +231,8 @@ function PlanScreen({ model, actions }: { model: PlanModel; actions?: PlanAction
             ...(model.depth ? [{ id: 'profile', label: d('profile.menu'), onSelect: () => actions?.depth?.onProfile?.(data.id) }] : []),
             ...(data.decision === 'OPEN' ? [{ id: 'aside', label: t('plan.setAside'), onSelect: () => actions?.onSetAside?.([data.id]), disabled: !model.can.planDecide }] : []),
             ...(data.decision === 'IGNORED' ? [{ id: 'back', label: t('plan.putBack'), onSelect: () => actions?.onReopen?.([data.id]), disabled: !model.can.planDecide }] : []),
+            // W1-BGF: a firm line (a firm planned order, carried or set here) planned again: Draft PO then buys what the plan suggests.
+            ...(data.firm ? [unfirmItem(data)] : []),
             ...(data.purchaseOrder ? [{ id: 'po', label: t('plan.openOrder', { number: data.purchaseOrder.number }), href: `${model.prefix}/purchasing/orders/${data.purchaseOrder.id}` }] : []),
             ...(data.supplier ? [{ id: 'supplier', label: t('plan.openSupplier'), href: `${model.prefix}/purchasing/suppliers/${data.supplier.id}` }] : []),
           ]}

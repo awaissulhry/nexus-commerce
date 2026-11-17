@@ -1,6 +1,6 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, NotFoundError, type Issue } from '@nexus/factory-domain/core/errors'
-import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { pickList } from '@nexus/factory-domain/inventory/issue/pick-list'
 import type { Balance } from '@nexus/factory-domain/inventory/ledger/moves'
@@ -13,6 +13,7 @@ import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { mayAt, stockContextOf, type StockContext } from '../ledger/access'
+import { reachesWorkOrder, workOrderWhere, type WorkOrderReach } from '../../production/work-orders/scope' // B-PR-05
 import { LEDGER_SELECT, type LedgerRow } from '../ledger/post-moves'
 import { reasonWords } from '../../../platform/reasons/service'
 import { activeHoldsOf, type ActiveHold } from '../../quality/holds/checks'
@@ -60,11 +61,20 @@ export class PickRefusedError extends ConflictError {
   }
 }
 
-/** The work order the caller picks for: one it may see with `permission` at its site (else not found). */
+/**
+ * B-PR-05 (production plan §2, the brand wall): may the caller pick for (or read) this work order? Its site (mayAt) and its one
+ * customer (../../production/work-orders/scope): another customer's is not found. The system passes.
+ */
+export function mayPick(context: StockContext, permission: Permission, workOrder: WorkOrderReach): boolean {
+  if (!mayAt(context, permission, workOrder)) return false
+  return context.audience === 'system' || reachesWorkOrder(actorOf(context), permission, workOrder)
+}
+
+/** The work order the caller picks for: one it may see with `permission` at its site and customer (else not found). */
 export async function pickingWorkOrder(caller: CommandCaller, workOrderId: string, permission: Permission = INVENTORY_ISSUE): Promise<{ context: StockContext; workOrder: PickHeader }> {
   const context = stockContextOf(caller)
   const workOrder = await caller.withClient((client) => readPickHeader(client, workOrderId))
-  if (!workOrder || !mayAt(context, permission, workOrder)) throw new NotFoundError('Work order not found.')
+  if (!workOrder || !mayPick(context, permission, workOrder)) throw new NotFoundError('Work order not found.')
   return { context, workOrder }
 }
 
@@ -72,6 +82,8 @@ export interface WorkOrdersQuery {
   readonly siteId?: string | undefined
   /** A scanned or typed work order number (exact). */
   readonly number?: string | undefined
+  /** B-PR-05: one customer's work orders (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly limit: number
 }
 
@@ -80,10 +92,12 @@ export async function pickingWorkOrders(caller: CommandCaller, query: WorkOrders
   const context = stockContextOf(caller)
   const where: Prisma.WorkOrderWhereInput = {
     AND: [
-      scopeWhere(actorOf(context), INVENTORY_ISSUE, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
+      // B-PR-05 (the brand wall): the work orders the caller reaches, by company, site and customer.
+      workOrderWhere(actorOf(context), INVENTORY_ISSUE),
       { status: { in: [...ISSUABLE_STATUSES] } },
       query.siteId ? { siteId: query.siteId } : {},
       query.number ? { number: query.number.trim() } : {},
+      query.partyId ? { partyId: query.partyId } : {},
     ],
   }
   const rows = await caller.withClient((client) =>

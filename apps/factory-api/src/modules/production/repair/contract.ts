@@ -186,6 +186,8 @@ export const listDowngradesContract = defineContract({
     workOrderId: id().optional(),
     from: instant().optional(),
     to: instant().optional(),
+    /** B-PR-05: one customer's downgrades (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     limit: z.coerce.number().int().min(1).max(500).default(200),
   }),
   response: { 200: output({ downgrades: z.array(downgradeView), /** Garments sent to second quality, withdrawn ones left out. */ garments: output({ today: z.number().int(), period: z.number().int() }) }) },

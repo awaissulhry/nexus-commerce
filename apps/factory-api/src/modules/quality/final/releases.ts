@@ -23,6 +23,8 @@ import { readCells, type LabelHeader } from '../../production/serials/store'
 import { holdOnRelease } from '../holds/checks'
 import { benchHolds } from './bench-hold'
 import { finalWorkOrder, inspectorOf, mayOn, officeOf, postedBy, signerOf } from './access'
+// B-PR-06: the brand wall (a release per cell follows its cell's work order).
+import { viaCell } from '../../production/work-orders/scope'
 import { cellGate, cellText, documentBlockers, identityOf, inspectorSigner, makerCheck, ReleaseRefusedError, ruleInForce, type Identity } from './facts'
 import { callerIdentity, qualityNumber, signatureOf } from './inspections'
 // B-W2b-254 (PRD-272): the one compliance gate at the final release (QHS-051 as a requirement); refusals become GateEvents.
@@ -92,7 +94,7 @@ export async function releaseGarments(caller: CommandCaller, body: ReleaseBody, 
   const context = inspectorOf(caller)
   const inspection = await caller.withClient((client) => readInspection(client, body.inspectionId))
   if (!inspection || !(mayOn(context, QUALITY_INSPECTIONS_VIEW, inspection) || mayOn(context, QUALITY_GARMENTS_RELEASE, inspection))) throw new NotFoundError('Inspection not found.')
-  const header = await finalWorkOrder(caller, inspection.workOrderId, QUALITY_GARMENTS_RELEASE)
+  const header = await finalWorkOrder(caller, inspection.workOrderId, QUALITY_GARMENTS_RELEASE, 'Inspection not found.') // B-PR-06
   if (context.audience === 'floor') await assertFloorReady(caller, header.siteId)
   const serialIds = [...new Set(body.serialIds ?? [])]
   if (serialIds.length !== (body.serialIds ?? []).length) throw new ValidationError('Name each serial once.', [{ path: 'body/serialIds', message: 'Each serial once.' }])
@@ -253,7 +255,7 @@ export async function getRelease(caller: CommandCaller, releaseId: string) {
   const context = officeOf(caller)
   const row = await caller.withClient((db) => readRelease(db, releaseId))
   if (!row || !mayOn(context, QUALITY_INSPECTIONS_VIEW, row)) throw new NotFoundError('Release not found.')
-  const header = await finalWorkOrder(caller, row.workOrderId, QUALITY_INSPECTIONS_VIEW)
+  const header = await finalWorkOrder(caller, row.workOrderId, QUALITY_INSPECTIONS_VIEW, 'Release not found.') // B-PR-06
   return caller.withClient(async (db) => {
     const view = await releaseView(db, row, header.number)
     const counts = (await releasedPerCell(db, [row.workOrderSizeId])).get(row.workOrderSizeId)!
@@ -268,6 +270,8 @@ export interface ReleaseQuery {
   readonly companyId?: string | undefined
   readonly siteId?: string | undefined
   readonly workOrderId?: string | undefined
+  /** B-PR-06: the customer filter. */
+  readonly partyId?: string | undefined
   /** The reversed-release view (design dec-reversal; Q3 (a)): releases with garments taken back. */
   readonly reversed?: boolean | undefined
   /** Garments taken back and still on hold (no inspection passed since). */
@@ -282,10 +286,13 @@ export async function listReleases(caller: CommandCaller, query: ReleaseQuery) {
   const where: Prisma.QualityReleaseWhereInput = {
     AND: [
       scope,
+      // B-PR-06: a release per cell follows the cell's work order (its customer; none: only who reaches every customer).
+      viaCell(actorOf(context), QUALITY_INSPECTIONS_VIEW) as Prisma.QualityReleaseWhereInput,
       {
         ...(query.companyId ? { companyId: query.companyId } : {}),
         ...(query.siteId ? { siteId: query.siteId } : {}),
         ...(query.workOrderId ? { workOrderId: query.workOrderId } : {}),
+        ...(query.partyId ? { workOrderSize: { is: { workOrder: { is: { partyId: query.partyId } } } } } : {}),
         ...(query.reversed || query.onHold ? { reversals: { some: {} } } : {}),
       },
     ],

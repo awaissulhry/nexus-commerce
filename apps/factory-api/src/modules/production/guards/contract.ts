@@ -110,6 +110,8 @@ export const flagsContract = defineContract({
     date: businessDate().optional(),
     kind: z.enum(['WARNED', 'OVERRIDDEN']).optional(),
     guard: guardKind.optional(),
+    /** B-PR-04a: one customer's (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     limit: z.coerce.number().int().min(1).max(500).default(200),
   }),
   response: { 200: output({ date: z.string().nullable(), flags: z.array(flagRow) }) },

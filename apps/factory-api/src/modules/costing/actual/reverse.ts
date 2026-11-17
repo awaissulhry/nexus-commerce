@@ -1,6 +1,5 @@
 import { ConflictError, ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { entryKeys, reversalEntry } from '@nexus/factory-domain/costing/ledger/entries'
 import type { LedgerEntryView } from '@nexus/factory-domain/costing/ledger/contracts'
@@ -14,6 +13,7 @@ import { postWorkOrderCosts } from './post'
 import { ENTRY_COLUMNS, entryFacts, lockedPeriods, lockWorkOrderCosts, readWorkOrder } from './store'
 import { ledgerViews } from './views'
 
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-05
 /**
  * The person's two writes on the cost ledger (B-W2a-21; FIN-038; design finance.costing "Cost ledger" › "Reverse entry
  * (reason, ActionConfirm)"), costing.ledger.manage over the work order's company and site:
@@ -28,8 +28,9 @@ async function workOrderFor(caller: CommandCaller, workOrderId: string) {
   const context = contextOf(caller)
   const row = isUuid(workOrderId) ? await caller.withClient((db) => readWorkOrder(db, workOrderId)) : null
   const actor = actorOf(context)
-  if (!row || !can(actor, COSTING_VIEW, { companyId: row.companyId, siteId: row.siteId })) throw new NotFoundError('Work order not found.')
-  if (!can(actor, COSTING_LEDGER_MANAGE, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError()
+  // B-PR-05 (the brand wall): with the work order's one customer (another customer's is not found).
+  if (!row || !reachesWorkOrder(actor, COSTING_VIEW, row)) throw new NotFoundError('Work order not found.')
+  if (!reachesWorkOrder(actor, COSTING_LEDGER_MANAGE, row)) throw new ForbiddenError()
   return row
 }
 
@@ -45,7 +46,10 @@ export async function postNow(caller: CommandCaller, workOrderId: string, idempo
 export async function reverseEntry(caller: CommandCaller, entryId: string, reason: string, idempotencyKey?: string): Promise<{ entry: LedgerEntryView; reversals: LedgerEntryView[]; replayed: boolean }> {
   const seen = isUuid(entryId) ? await caller.withClient((db) => db.workOrderCostEntry.findUnique({ where: { id: entryId }, select: { workOrderId: true } })) : null
   if (!seen) throw new NotFoundError('Cost entry not found.')
-  const workOrder = await workOrderFor(caller, seen.workOrderId)
+  // B-PR-05: an entry of a work order the caller does not reach answers as an unknown entry.
+  const workOrder = await workOrderFor(caller, seen.workOrderId).catch((error: unknown) => {
+    throw error instanceof NotFoundError ? new NotFoundError('Cost entry not found.') : error
+  })
   const { result, replayed } = await command(caller, { name: 'costing.reverseEntry', idempotencyKey, input: { entryId, reason } }, async (tools) => {
     const { tx, now } = tools
     if (!('tenantId' in tools.context)) throw new NotFoundError('Cost entry not found.')

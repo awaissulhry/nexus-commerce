@@ -66,6 +66,7 @@ import { settleJobInCommand } from '../portal-jobs/tasks'
 // B-W2b-228 (PRD-108): the kit takes the BOM's lines for the workshop (./kit-lines.ts).
 import { kitLinesOf } from './kit-lines'
 import { NO_NEW_ORDER, type SupplierStatus } from '@nexus/factory-domain/purchasing/suppliers-depth/rules'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-37
 
 /**
  * Subcontract orders (B-W2a-25; SCM-138; design purchasing.subcontracting "New subcontract order", record tab
@@ -219,7 +220,9 @@ export async function workOrderChoices(caller: CommandCaller, query: { readonly 
   const context = officeContextOf(caller)
   const where: Prisma.WorkOrderWhereInput = {
     AND: [
-      scopeWhere(actorOf(context), PURCHASING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
+      // B-PR-37 (the brand wall): B-PR-03's workOrderWhere — its company, site and customer (another customer's work order,
+      // or one of no customer for a person who does not reach every customer, is not offered).
+      workOrderWhere(actorOf(context), PURCHASING_VIEW),
       { status: { in: [...WORK_ORDER_STATES] } },
       query.siteId ? { siteId: query.siteId } : {},
       query.q

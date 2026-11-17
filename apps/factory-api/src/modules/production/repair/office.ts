@@ -5,7 +5,7 @@ import { PRODUCTION_SCRAP_VIEW } from '@nexus/factory-domain/production/scrap/pe
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { workerGateFor, workersAmong } from '../../people/privacy/worker-gate'
-import { may, officeOf } from './access'
+import { may, officeOf, repairReach } from './access'
 import { readRepair } from './store'
 
 /**
@@ -25,7 +25,7 @@ export async function repairRecord(caller: CommandCaller, reworkId: string) {
   const context = officeOf(caller)
   return caller.withClient(async (db) => {
     const row = await readRepair(db, reworkId)
-    if (!row || !may(context, PRODUCTION_SCRAP_VIEW, row)) throw new NotFoundError('Rework not found.')
+    if (!row || !may(context, PRODUCTION_SCRAP_VIEW, repairReach(row))) throw new NotFoundError('Rework not found.')
     const order = await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { id: true, number: true } })
     const station = row.repairStationId ? await db.station.findUnique({ where: { id: row.repairStationId }, select: { id: true, code: true } }) : null
     const audits = await db.auditLog.findMany({

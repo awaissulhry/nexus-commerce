@@ -8,8 +8,10 @@ import type { CountKind, CountPopoverModel } from '../popups/model'
  * Followers / Follow / Mute · Remind me — always there, held with the reason when the person cannot use one, also at
  * count 0 (R-ACT). "Close thread…" only with threads.manage. No React, no API.
  *
- * Not drawn until the back end has it (honest UI): the owner and the working-hours waiting rule with its amber mark
- * (B-TH-028), "2 new" (G10), search (G11), "Done" (N18), "In project" (PROJ-G12).
+ * B-TH-229 (TH-2, on B-TH-027 / B-TH-028): the API's ONE waiting rule (a request by its state, any other record by its last shared
+ * message; working time on the company calendar; amber only while it waits on us past 1 working day for a request, 3 for any other
+ * record), the owner (who answers it) with "Change owner", and "2 new" — the reader's own new messages. Not drawn until the back end
+ * has it (honest UI): search (G11), "Done" (N18), "In project" (PROJ-G12).
  *
  * Brand wall (W06, W08, W24, W34): the portal head is one plain line from real states, with no office count; "Share with a
  * partner" and "Ask a partner to approve" reach only this record's party (held when it has none); the doors open the
@@ -29,7 +31,58 @@ export interface AnswerInput {
 export interface Answers {
   readonly on: 'us' | 'party'
   readonly since: string
+  // ---- B-TH-229: the API's waiting (B-TH-028, the one rule); absent: the clock-time reading of the messages (whoAnswers)
+  /** Working minutes since, on the record's company calendar (clock minutes when `calendar` is false). */
+  readonly workingMinutes?: number
+  readonly calendar?: boolean
+  /** Over the rule's threshold while it waits on us: the pill is amber. */
+  readonly amber?: boolean
+  /** The rule's threshold in working days (1 for a request, 3 for any other record), said in the tooltip. */
+  readonly thresholdDays?: number
+  // ---- end B-TH-229
 }
+
+// ---- B-TH-229: the API's head (B-TH-028) as the pill reads it -------------------------------------------------------------------
+/** The office thread answer's `head.waiting` (platform/threads contract). */
+export interface ApiWaiting {
+  readonly on: 'US' | 'CUSTOMER'
+  readonly since: string
+  readonly workingMinutes: number
+  readonly calendar: boolean
+  readonly amber: boolean
+  readonly thresholdDays: number
+}
+
+/** The API's waiting as the Head's pill: the same rule as Incoming's tile and Today (factory-domain threads/waiting). */
+export const answersOf = (waiting: ApiWaiting | null): Answers | null =>
+  waiting ? { on: waiting.on === 'US' ? 'us' : 'party', since: waiting.since, workingMinutes: waiting.workingMinutes, calendar: waiting.calendar, amber: waiting.amber, thresholdDays: waiting.thresholdDays } : null
+
+/** One working day, in working minutes (factory-domain sales/inquiries WORKING_DAY_MINUTES). */
+export const WORKING_DAY = 480
+
+/**
+ * How long, short, by the rule's own clock: working time when the API counted it on the calendar ("4 h" = four working hours, a
+ * day = 8 working hours), else clock time since the message (waitWords).
+ */
+export function waitingWords(answers: Answers, now: number): { readonly key: 'wait.minutes' | 'wait.hours' | 'wait.days'; readonly n: number } {
+  if (answers.workingMinutes === undefined || !answers.calendar) return waitWords(answers.since, now)
+  const minutes = Math.max(1, answers.workingMinutes)
+  if (minutes < 60) return { key: 'wait.minutes', n: minutes }
+  if (minutes < WORKING_DAY) return { key: 'wait.hours', n: Math.floor(minutes / 60) }
+  return { key: 'wait.days', n: Math.floor(minutes / WORKING_DAY) }
+}
+
+/** The thread's owner (B-TH-028): who answers it — set on the thread, else the request's assignee or the order's supervisor, else its maker. */
+export interface HeadOwner {
+  readonly id: string
+  readonly name: string
+  readonly active: boolean
+  readonly source: 'SET' | 'ASSIGNEE' | 'SUPERVISOR' | 'MAKER'
+}
+
+/** "2 new", "99+ new": the reader's own new messages (null: nothing new, no chip). */
+export const newWords = (count: number): { readonly key: 'new.count' | 'new.many'; readonly n: number } | null => (count <= 0 ? null : count > 99 ? { key: 'new.many', n: 99 } : { key: 'new.count', n: count })
+// ---- end B-TH-229
 
 /**
  * The waiting rule as far as the back end holds it today: the last message SHARED with the party decides (an office note
@@ -168,6 +221,14 @@ export interface HeadModel {
   readonly print?: boolean
   readonly now: number
   readonly timeZone?: string
+  // ---- B-TH-229
+  /** Who answers the thread; null: nobody known; undefined: not read (no owner drawn). */
+  readonly owner?: HeadOwner | null
+  /** "Change owner" (threads.post): held with why, or null; undefined: not offered. */
+  readonly ownerHeld?: Held | null
+  /** The reader's own new messages ("2 new"); 0: no chip. */
+  readonly newCount?: number
+  // ---- end B-TH-229
 }
 
 /** One row of the "⋯", in order: an R-ACT door, a View choice (phone), Print, Close / Reopen. */
@@ -176,12 +237,14 @@ export type MenuRow =
   | { readonly kind: 'view'; readonly view: ThreadView; readonly checked: boolean }
   | { readonly kind: 'print' }
   | { readonly kind: 'close' | 'reopen' }
+  // B-TH-229: "Change owner…" (threads.post), after the doors.
+  | { readonly kind: 'owner'; readonly held: Held | null }
 
 /**
  * The "⋯" rows: the five R-ACT tools ALWAYS (held with why, also at count 0), the views on a phone, Print, then Close.
  * `folded`: the count chips did not fit the row (a narrow dock): the counts go on their door's line.
  */
-export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' | 'counts' | 'canManage' | 'closed' | 'compact' | 'views' | 'view' | 'print'>, folded = false): MenuRow[] {
+export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' | 'counts' | 'canManage' | 'closed' | 'compact' | 'views' | 'view' | 'print' | 'ownerHeld'>, folded = false): MenuRow[] {
   const following = model.follow?.following ?? false
   const muted = model.follow?.muted ?? false
   const followers = model.counts.followers?.count
@@ -199,6 +262,8 @@ export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' 
     { kind: 'door', door: 'mute', held: model.holds.mute ?? (following ? null : { key: 'held.followFirst' }), label: { key: muted ? 'act.unmute' : 'act.mute' }, hint: { key: 'act.muteHint' } },
     { kind: 'door', door: 'remind', held: model.holds.remind, label: { key: 'act.remind' }, ...(model.reminder ? { hint: { key: 'act.reminderSet', params: { at: model.reminder.at } } } : {}) },
   ]
+  // B-TH-229: who answers it, changed by whoever may write on it.
+  if (model.ownerHeld !== undefined) rows.push({ kind: 'owner', held: model.ownerHeld })
   if (model.compact) for (const view of model.views) rows.push({ kind: 'view', view, checked: view === model.view })
   if (model.print) rows.push({ kind: 'print' })
   if (model.canManage) rows.push({ kind: model.closed ? 'reopen' : 'close' })

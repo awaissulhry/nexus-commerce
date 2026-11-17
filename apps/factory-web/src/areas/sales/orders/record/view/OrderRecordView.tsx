@@ -6,7 +6,6 @@ import { FileX, ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { StepUpModal } from '../../../../../lib/i18n/ds-parts'
-import { useDsLabels } from '../../../../../lib/i18n/ds-labels'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
@@ -112,8 +111,6 @@ function OrderRecord({ model, actions, thread, printThread, delivered }: { model
 function ReadyRecord({ order, model, actions, thread, printThread, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; delivered?: ReactNode }) {
   const t = useT('orders')
   const d = useT(DEPTH) // B-W2b-323
-  // B-W2b-16: the step-up (now also the owner's waive) in the person's language (B-W2b-04's DS words).
-  const dsLabels = useDsLabels()
   const locale = useLocale()
   const recordHref = `${model.prefix}/sales/orders/${order.id}`
   const step = nextStep(order, model.can)
@@ -246,7 +243,13 @@ function ReadyRecord({ order, model, actions, thread, printThread, delivered }: 
           meta: (
             <>
               {order.customerRef && <Tag tone="neutral">{t('record.customerRef', { ref: order.customerRef })}</Tag>}
-              {!order.chain.quote && <Tag tone="neutral">{t('record.typed')}</Tag>}
+              {/* B-TH-228: an order made straight from a request names it (office only), else "Typed by the office". */}
+              {!order.chain.quote && model.madeFrom && (
+                <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/incoming/${encodeURIComponent(model.madeFrom.id)}`}>
+                  {t('record.madeFrom', { number: model.madeFrom.number })}
+                </Link>
+              )}
+              {!order.chain.quote && !model.madeFrom && !model.madeFromReading && <Tag tone="neutral">{t('record.typed')}</Tag>}
               {order.chain.quote &&
                 (model.can.viewQuotes ? (
                   <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/quotes/${order.chain.quote.id}`}>
@@ -347,6 +350,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, delivered }: 
 
       <OrderDialogs order={order} model={model} actions={actions} />
       {model.depth && <DepthDialogs order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
+      {/* W1 browser repair: no labels here — ds-parts' StepUpModal takes the DS words itself (this page loads no ds-words catalogue). */}
       <StepUpModal
         open={model.stepUp.open}
         title={t('stepUp.title')}
@@ -356,7 +360,6 @@ function ReadyRecord({ order, model, actions, thread, printThread, delivered }: 
         onSubmit={(code) => actions?.onStepUpSubmit?.(code)}
         onClose={() => actions?.onStepUpCancel?.()}
         confirmLabel={t('stepUp.confirm')}
-        labels={dsLabels.stepUp}
       />
     </>
   )

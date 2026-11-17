@@ -6,6 +6,9 @@ import { newIdempotencyKey } from '../../../lib/api/client'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { companyPrefix } from '../../../lib/session/session'
 import { useLiveBus } from '../../../shell/live/use-live'
+// B-TH-230: the New messages column — one read of the page's rows.
+import { readUnreadWith } from '../../../lib/last-message-cell/api'
+import { useUnread } from '../../../lib/last-message-cell/use-unread'
 import {
   assignMany,
   companiesWithoutNumbering,
@@ -39,6 +42,8 @@ import {
 } from './model'
 import type { RecordVerb } from './record-model'
 import { useInquiry } from './use-inquiry'
+// B-TH-228: which receipts stay on the page when the queue moves on.
+import { receiptStays } from './model'
 import { useNewRequest } from './use-new-request'
 import type { PictureLoader } from './view/cells'
 import { InquiriesView, type BulkDialog } from './view/InquiriesView'
@@ -159,6 +164,16 @@ export function InquiriesPage() {
   )
   const offline = live === 'offline'
 
+  // ---- B-TH-230: the reader's own new messages per request on the page (threads.read; ONE POST /threads/unread of ≤ 200 rows), read
+  // again on a live message and when the pane moves on (the request just read in the pane counts 0 then).
+  const readsThreads = can.thread
+  const [unreadTick, setUnreadTick] = useState(0)
+  useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setUnreadTick((tick) => tick + 1), onReconnect: () => setUnreadTick((tick) => tick + 1) }, readsThreads)
+  useEffect(() => setUnreadTick((tick) => tick + 1), [address.open])
+  const unreadRows = useMemo(() => (list ? list.rows.map((row) => ({ recordType: 'Inquiry', id: row.id })) : []), [list])
+  const unread = useUnread(readsThreads ? readUnreadWith(api) : null, unreadRows, unreadTick)
+  // ---- end B-TH-230
+
   // ---- the inquiry in its DetailModal ------------------------------------------------------------------------------------------
   const [pendingVerb, setPendingVerb] = useState<RecordVerb | null>(null)
   const ids = useMemo(() => (list ? list.rows.map((row) => row.id) : []), [list])
@@ -179,7 +194,8 @@ export function InquiriesPage() {
   const detailNotice = record.model.notice
   useEffect(() => {
     // A decision's receipt stays on the page when the queue moves on to the next inquiry.
-    if (detailNotice && (detailNotice.key.startsWith('done.quote') || detailNotice.key === 'done.decline' || detailNotice.key === 'done.lost')) setNotice(detailNotice)
+    // B-TH-228: Make order's receipt (confirmed, or waiting for approval and why) stays too (model receiptStays).
+    if (detailNotice && receiptStays(detailNotice.key)) setNotice(detailNotice)
   }, [detailNotice])
 
   const onRowVerb = useCallback(
@@ -295,6 +311,7 @@ export function InquiriesPage() {
         pane: address.open ? { handled: record.handled, closing: record.closing, rights: { erase: session.permissions.includes('privacy.requests.manage'), closeThread: session.permissions.includes('threads.manage') } } : null,
         companies, // B-TH-216
         noticeFacts, // B-TH-216
+        unread: readsThreads ? unread : null, // B-TH-230
       }}
       slots={{ thread: record.thread }}
       actions={{

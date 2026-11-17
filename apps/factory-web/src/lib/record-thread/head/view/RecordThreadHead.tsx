@@ -9,7 +9,9 @@ import { useLocale, useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { CountPopover } from '../../popups/view/CountPopover'
 import type { CountKind } from '../../popups/model'
-import { DOCK_WIDTHS, menuRows, waitWords, type DockWidth, type HeadDoor, type HeadModel, type ThreadView } from '../model'
+import { DOCK_WIDTHS, menuRows, newWords, waitingWords, type DockWidth, type HeadDoor, type HeadModel, type ThreadView } from '../model'
+// B-TH-229: the owner's tile (the factory web's Avatar, B-TH-298).
+import { Avatar } from '../../parts/Avatar'
 import '../head.css'
 
 export const HEAD_NS = 'record-thread-head'
@@ -24,6 +26,8 @@ export interface HeadActions {
   /** "Close thread…": the container opens "Close thread?" (popups/Confirms). */
   onCloseThread?: () => void
   onReopen?: () => void
+  /** B-TH-229: "Change owner…" — the container opens the picker of the office people who read the thread. */
+  onOwner?: () => void
 }
 
 /** The door a count popover's one action opens. */
@@ -100,6 +104,8 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
       moreItems.push({ id: `view-${row.view}`, label: viewWord(row.view), checked: row.checked, onSelect: () => actions?.onView?.(row.view) })
     } else if (row.kind === 'print') {
       moreItems.push({ id: 'print', label: t('act.print'), onSelect: () => actions?.onPrint?.() })
+    } else if (row.kind === 'owner') {
+      moreItems.push({ id: 'owner', label: t('owner.change'), disabled: row.held !== null, ...(row.held ? { description: words(row.held) } : model.owner ? { description: t('owner.now', { name: model.owner.name }) } : {}), onSelect: () => actions?.onOwner?.() })
     } else if (row.kind === 'close') {
       moreItems.push({ id: 'close', label: t('act.close'), description: t('act.closeHint'), tone: 'danger', onSelect: () => actions?.onCloseThread?.() })
     } else {
@@ -107,11 +113,26 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
     }
   }
 
-  const wait = model.answers ? waitWords(model.answers.since, model.now) : null
+  // B-TH-229: the API's ONE waiting rule (working time on the company calendar, amber only while it waits on us past its threshold);
+  // without it (a design case), the clock-time reading of the messages.
+  const wait = model.answers ? waitingWords(model.answers, model.now) : null
   const pillWords = model.answers && wait ? (model.answers.on === 'us' ? t('answers.us', { wait: t(wait.key, { n: wait.n }) }) : t(`answers.${role}`, { wait: t(wait.key, { n: wait.n }) })) : null
+  const when = model.answers ? `${formatDate(model.answers.since, place)} ${formatTime(model.answers.since, place)}` : ''
   const tip = model.answers
-    ? t(model.answers.on === 'us' ? 'answers.tipUs' : 'answers.tipParty', { party: model.party?.name ?? '', when: `${formatDate(model.answers.since, place)} ${formatTime(model.answers.since, place)}` })
+    ? model.answers.workingMinutes === undefined
+      ? t(model.answers.on === 'us' ? 'answers.tipUs' : 'answers.tipParty', { party: model.party?.name ?? '', when })
+      : [
+          t(model.answers.on === 'us' ? 'rule.sinceUs' : `rule.since.${role}`, { when }),
+          t(model.answers.calendar ? 'rule.working' : 'rule.clock'),
+          model.answers.on === 'us' ? t('rule.amber', { count: model.answers.thresholdDays ?? 1 }) : t('rule.notAmber'),
+        ].join(' ')
     : null
+  const amber = model.answers?.amber === true
+  const fresh = newWords(model.newCount ?? 0)
+  const owner = model.owner
+  const ownerName = owner ? (owner.active ? owner.name : t('owner.inactive', { name: owner.name })) : null
+  const ownerLabel = owner === undefined ? null : ownerName ? t('owner.label', { name: ownerName }) : t('owner.nobody')
+  const ownerOpens = model.ownerHeld === null && !compact
 
   return (
     <div ref={ref} className={`fw-rth${compact ? ' is-compact' : ''}`} role="group" aria-label={t('label', { record: model.record })}>
@@ -129,7 +150,7 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
       ) : pillWords && tip ? (
         <Tooltip label={tip} portal>
           <span className="fw-rth-pillwrap" tabIndex={0} aria-describedby={tipId}>
-            <Pill tone="neutral" truncate>
+            <Pill tone={amber ? 'warning' : 'neutral'} truncate>
               {pillWords}
             </Pill>
             <span id={tipId} className="nds-vh">
@@ -138,6 +159,24 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
           </span>
         </Tooltip>
       ) : null}
+      {fresh && (
+        // B-TH-229 (T1-F04): the reader's own new messages since their last visit; the band's Thread button says the same.
+        <Pill tone="info">{t(fresh.key, { count: fresh.n })}</Pill>
+      )}
+      {ownerLabel && !compact && (
+        // B-TH-229 (T1-F03): who answers it, as a tile; the name on hover and for screen readers; a click changes it (threads.post).
+        <Tooltip label={ownerLabel} portal>
+          {ownerOpens ? (
+            <button type="button" className="fw-rth-owner" aria-label={`${ownerLabel} · ${t('owner.change')}`} onClick={() => actions?.onOwner?.()}>
+              {owner ? <Avatar name={owner.name} size="sm" /> : <span className="fw-rth-owner-none">—</span>}
+            </button>
+          ) : (
+            <span className="fw-rth-owner" tabIndex={0} role="img" aria-label={ownerLabel}>
+              {owner ? <Avatar name={owner.name} size="sm" /> : <span className="fw-rth-owner-none">—</span>}
+            </span>
+          )}
+        </Tooltip>
+      )}
       {model.offline && (
         <Pill tone="warning" icon={<WifiOff size={12} aria-hidden />}>
           {t('offline', { time: formatTime(model.offline.asOf, place) })}

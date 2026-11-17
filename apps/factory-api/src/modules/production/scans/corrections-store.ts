@@ -159,6 +159,8 @@ export interface CorrectionFilter {
   readonly since?: Date
   /** At most this many, the oldest asks first. */
   readonly take?: number
+  /** B-PR-04a (the brand wall): only the asks of the work orders this filter reaches (../work-orders/scope workOrderWhere). */
+  readonly workOrder?: Prisma.WorkOrderWhereInput
 }
 
 /** The requests that match, oldest ask first, in the caller's scope. */
@@ -174,6 +176,7 @@ export async function readCorrectionRequests(db: Reader, filter: CorrectionFilte
       ...(filter.askedById ? { askedById: filter.askedById } : {}),
       ...(filter.stationId ? { stationId: filter.stationId, askedById: null } : {}),
       ...(filter.since ? { serverTime: { gte: filter.since } } : {}),
+      ...(filter.workOrder ? { workOrder: { is: filter.workOrder } } : {}), // B-PR-04a
     },
     select: COLUMNS,
     orderBy: [{ serverTime: 'asc' }, { id: 'asc' }],

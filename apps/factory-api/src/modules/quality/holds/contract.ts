@@ -91,6 +91,8 @@ export const listContract = defineContract({
     nextStep: z.enum(HOLD_NEXT_STEPS).optional(),
     /** B-W2b-114: the holds of one hold by genealogy. */
     groupId: id().optional(),
+    /** B-PR-06: the customer filter (the holds of that customer's goods); the brand wall applies first. */
+    partyId: id().optional(),
   }),
   response: { 200: output({ holds: z.array(holdView), truncated: z.boolean() }) },
 })

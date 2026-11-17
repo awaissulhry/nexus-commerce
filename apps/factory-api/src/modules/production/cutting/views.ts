@@ -1,6 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { issueDecision } from '@nexus/factory-domain/inventory/issue/rules'
 import { quantityText } from '@nexus/factory-domain/inventory/ledger/moves'
@@ -32,6 +31,8 @@ import { evaluateChecks, readCheckFacts } from './checks'
 import { photoCheck } from './photo'
 import { minimumRemnantAt } from '../../inventory/remnants/size'
 import { cuttingWorkOrder, entryView, mayCut } from './cut'
+import { maySite } from '../scans/access' // B-PR-04b
+import { workOrderWhere } from '../work-orders/scope' // B-PR-04b
 import {
   CUT_HEADER,
   latestEntryOf,
@@ -91,6 +92,8 @@ async function colourCodes(db: Reader, ids: readonly (string | null)[]): Promise
 
 export interface CuttingQuery {
   readonly number?: string | undefined
+  /** B-PR-04b: one customer's (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly limit: number
 }
 
@@ -100,10 +103,12 @@ export async function cuttingWorkOrders(caller: CommandCaller, query: CuttingQue
   if (!context || (context.audience !== 'floor' && context.audience !== 'office')) throw new NotFoundError('Work order not found.')
   const where: Prisma.WorkOrderWhereInput = {
     AND: [
-      scopeWhere(actorOf(context), PRODUCTION_CUT, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
+      // B-PR-04b (the brand wall): the work orders the caller reaches, by company, site and customer.
+      workOrderWhere(actorOf(context), PRODUCTION_CUT),
       { status: { in: [...CUTTABLE_STATUSES] } },
       context.audience === 'floor' ? { siteId: context.siteId } : {},
       query.number ? { number: query.number.trim() } : {},
+      query.partyId ? { partyId: query.partyId } : {},
     ],
   }
   return caller.withClient(async (db) => {
@@ -208,7 +213,8 @@ export async function scanHide(caller: CommandCaller, query: { readonly code: st
     const lot = (await readLot(db, hide.lotId))!
     const item = (await readItem(db, hide.itemId))!
     const site = await db.site.findUnique({ where: { id: hide.siteId }, select: { id: true, companyId: true } })
-    if (!site || !mayCut(context, PRODUCTION_CUT, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError("Not a hide of this site: scan the hide's tag.")
+    // A hide names no customer: its site (B-PR-04b: the work orders below are walled by their customer).
+    if (!site || !maySite(context, PRODUCTION_CUT, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError("Not a hide of this site: scan the hide's tag.")
     const colour = lot.itemColourId ? await db.itemColour.findUnique({ where: { id: lot.itemColourId }, select: { code: true, name: true } }) : null
     const usability = usabilityOf(lot)
     const onHand = await readHideOnHand(db, hide.siteId, hide.id)

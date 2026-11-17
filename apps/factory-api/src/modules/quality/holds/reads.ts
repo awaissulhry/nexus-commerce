@@ -26,6 +26,8 @@ import { heldStockOf } from './depth'
 import { officeOf, releaseChecksFor } from './holds'
 import { placerMayReleaseOf } from './settings'
 import { HOLD_COLUMNS, holdView, idsOfCodes, quantityWords, readHold, readSubjects, viewFactsOf, type Subject } from './store'
+// B-PR-06 (the brand wall): a hold names the customers of the goods it holds.
+import { customersOf, holdListWhere, NO_CUSTOMER, reachesCustomers, reachesHold } from '../wall'
 
 /**
  * The holds' reads (B-W2a-26; design quality.holds qh-metrics, qh-grid, the Hold record, qh-place's preview; Owner answer
@@ -61,6 +63,8 @@ export interface ListQuery {
   /** B-W2b-114: one lane of the hold board; the holds of one hold by genealogy. */
   readonly nextStep?: HoldNextStep | undefined
   readonly groupId?: string | undefined
+  /** B-PR-06: the customer filter (the holds of that customer's goods). */
+  readonly partyId?: string | undefined
 }
 
 function whereOf(caller: CommandCaller, query: ListQuery): Prisma.QualityHoldWhereInput {
@@ -87,8 +91,10 @@ function whereOf(caller: CommandCaller, query: ListQuery): Prisma.QualityHoldWhe
 
 export async function listHolds(caller: CommandCaller, query: ListQuery) {
   if (query.ownerId && query.ownerId !== 'me' && !/^[0-9a-f-]{36}$/i.test(query.ownerId)) throw new ValidationError('Not an owner.', [{ path: 'querystring/ownerId', message: 'A person\'s id, or me.' }])
-  const where = whereOf(caller, query)
+  const context = officeOf(caller)
   return caller.withClient(async (client) => {
+    // B-PR-06: less the holds of goods of a customer the caller does not reach (several customers: every customer only).
+    const where = await holdListWhere(client, actorOf(context), QUALITY_HOLDS_VIEW, whereOf(caller, query), query.partyId)
     const rows = await client.qualityHold.findMany({ where, select: HOLD_COLUMNS, orderBy: [{ placedAt: 'desc' }, { id: 'desc' }], take: LIST_LIMIT + 1 })
     const shown = rows.slice(0, LIST_LIMIT)
     const facts = await viewFactsOf(client, shown, serverClock.now())
@@ -98,23 +104,29 @@ export async function listHolds(caller: CommandCaller, query: ListQuery) {
 
 export async function holdCounts(caller: CommandCaller, query: { readonly siteId?: string | undefined }) {
   const context = officeOf(caller)
-  const base = (extra: ListQuery) => whereOf(caller, { status: 'ACTIVE', ...(query.siteId ? { siteId: query.siteId } : {}), ...extra })
-  return caller.withClient(async (client) => ({
-    counts: {
-      open: await client.qualityHold.count({ where: base({}) }),
-      overdue: await client.qualityHold.count({ where: base({ overdue: true }) }),
-      system: await client.qualityHold.count({ where: base({ system: true }) }),
-      mine: await client.qualityHold.count({ where: base({ ownerId: context.actorId }) }),
-      waitingQuarantine: await client.qualityHold.count({ where: base({ quarantine: 'ASKED' }) }),
-    },
-  }))
+  const plain = (extra: ListQuery) => whereOf(caller, { status: 'ACTIVE', ...(query.siteId ? { siteId: query.siteId } : {}), ...extra })
+  return caller.withClient(async (client) => {
+    // B-PR-06: every tile counts only the holds the caller reaches (the wall once over the open holds, then each tile).
+    const walled = await holdListWhere(client, actorOf(context), QUALITY_HOLDS_VIEW, plain({}))
+    const base = (extra: ListQuery) => ({ AND: [walled, plain(extra)] })
+    return {
+      counts: {
+        open: await client.qualityHold.count({ where: base({}) }),
+        overdue: await client.qualityHold.count({ where: base({ overdue: true }) }),
+        system: await client.qualityHold.count({ where: base({ system: true }) }),
+        mine: await client.qualityHold.count({ where: base({ ownerId: context.actorId }) }),
+        waitingQuarantine: await client.qualityHold.count({ where: base({ quarantine: 'ASKED' }) }),
+      },
+    }
+  })
 }
 
 export async function getHold(caller: CommandCaller, holdId: string) {
   const context = officeOf(caller)
   return caller.withClient(async (client) => {
     const row = await readHold(client, holdId)
-    if (!row || !can(actorOf(context), QUALITY_HOLDS_VIEW, { companyId: row.companyId, siteId: row.siteId })) throw new NotFoundError('Hold not found.')
+    // B-PR-06: and every customer of the goods it holds (else not found, as an unknown hold).
+    if (!row || !(await reachesHold(client, actorOf(context), QUALITY_HOLDS_VIEW, row))) throw new NotFoundError('Hold not found.')
     const now = serverClock.now()
     const facts = await viewFactsOf(client, [row], now)
     const workOrders =
@@ -162,7 +174,11 @@ export async function previewHold(caller: CommandCaller, body: PreviewBody) {
   return caller.withClient(async (client) => {
     const byCode = await idsOfCodes(client, body.subjectType, codes)
     const wanted = [...new Set([...ids, ...codes.flatMap((code) => byCode.get(code.trim()) ?? byCode.get(code.trim().toUpperCase()) ?? [])])]
-    const found = new Map((await readSubjects(client, body.subjectType, wanted)).map((subject) => [subject.id, subject]))
+    const read = await readSubjects(client, body.subjectType, wanted)
+    // B-PR-06 (the brand wall): another customer's goods are as unknown ones — left out here, so their row is an unknown
+    // record's row (no id echoed, "Not found at a site you reach.").
+    const customers = await customersOf(client, read.map((subject) => ({ type: body.subjectType, id: subject.id })))
+    const found = new Map(read.filter((subject) => reachesCustomers(actorOf(context), QUALITY_HOLDS_VIEW, subject, customers.get(`${body.subjectType}:${subject.id}`) ?? NO_CUSTOMER) || !can(actorOf(context), QUALITY_HOLDS_VIEW, { companyId: subject.companyId, siteId: subject.siteId })).map((subject) => [subject.id, subject]))
     const visible = (subject: Subject) => can(actorOf(context), QUALITY_HOLDS_VIEW, { companyId: subject.companyId, siteId: subject.siteId })
     const sites = new Set([...found.values()].filter(visible).map((subject) => subject.siteId))
     const rows = [

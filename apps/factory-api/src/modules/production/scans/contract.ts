@@ -290,7 +290,8 @@ const listed = request.extend({
 })
 
 export const correctionsContract = defineContract({
-  querystring: input({ status: z.enum(CORRECTION_STATUSES).optional(), workOrderId: id().optional(), siteId: id().optional(), limit: z.coerce.number().int().min(1).max(200).default(50) }),
+  // B-PR-04a: partyId = one customer's (inside the caller's reach: another customer's gives none).
+  querystring: input({ status: z.enum(CORRECTION_STATUSES).optional(), workOrderId: id().optional(), siteId: id().optional(), partyId: id().optional(), limit: z.coerce.number().int().min(1).max(200).default(50) }),
   response: { 200: output({ requests: z.array(listed) }) },
 })
 
@@ -490,7 +491,8 @@ export const workOrderScansContract = defineContract({
 const officeRefusal = refusalRow.extend({ siteId: id(), device: output({ id: id(), name: z.string() }) })
 
 export const refusalsContract = defineContract({
-  querystring: input({ siteId: id().optional(), deviceId: id().optional(), workOrderId: id().optional(), all: z.enum(['true', 'false']).transform((value) => value === 'true').optional(), limit: z.coerce.number().int().min(1).max(200).default(100) }),
+  // B-PR-04a: partyId = one customer's (inside the caller's reach: another customer's gives none).
+  querystring: input({ siteId: id().optional(), deviceId: id().optional(), workOrderId: id().optional(), partyId: id().optional(), all: z.enum(['true', 'false']).transform((value) => value === 'true').optional(), limit: z.coerce.number().int().min(1).max(200).default(100) }),
   response: { 200: output({ refusals: z.array(officeRefusal) }) },
 })
 

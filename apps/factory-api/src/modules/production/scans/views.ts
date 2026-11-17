@@ -23,20 +23,21 @@ import {
 } from '@nexus/factory-domain/production/scans/rules'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import type { CommandCaller } from '../../../core/command'
-import { actorOf } from '../../../core/context'
+import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { bundleFlowOf } from '../bundles/flow'
 import { readBundleByCode, readCellLabels } from '../bundles/store'
 import { workerGateFor, workersAmong } from '../../people/privacy/worker-gate'
 import { hasAcknowledgedNotice, scanSubjectFor } from '../settings/subject'
-import { floorOf, floorOrOffice, mayScan, officeOf, scanWorkOrder } from './access'
+import { floorOf, floorOrOffice, mayScan, maySite, officeOf, scanWorkOrder } from './access'
+import { workOrderWhere } from '../work-orders/scope' // B-PR-04a
 import { readCorrectionRequests } from './corrections-store'
 import { readDefects } from './defects-store'
 import type { ScanReason } from '@nexus/factory-domain/production/scans/reasons'
 import { readReasons } from './reasons-store'
 import { discardRefusal, readRefusal, readRefusals, type RefusalState } from './refusals-store'
 import { requestView, scanView } from './scans'
-import { deviceStationOf, latestOnDevice, readBundleScans, readHeader, readOperations, readOwnScans, readStations, readWorkOrderScans, siteTimeZone, workerNames } from './store'
+import { deviceStationOf, latestOnDevice, readBundleScans, readHeader, readOperations, readOwnScans, readStations, readWorkOrderScans, siteTimeZone, workerNames, type Reader } from './store'
 import { firstPieceCardOf } from '../terminal/first-piece'
 
 /**
@@ -279,13 +280,28 @@ function refusalRow(row: RefusalState) {
   }
 }
 
+/**
+ * B-PR-04a (the brand wall): the office reaches a refused scan with production.scan.correct over its work order (company,
+ * site and one customer: mayScan); one of no work order (a code not of this site: it names no customer) over its site.
+ */
+async function mayRefusal(db: Reader, context: OfficeContext, row: Pick<RefusalState, 'siteId' | 'workOrderId'>): Promise<boolean> {
+  if (row.workOrderId) {
+    const workOrder = await readHeader(db, row.workOrderId)
+    return !!workOrder && mayScan(context, PRODUCTION_SCAN_CORRECT, workOrder)
+  }
+  const site = await db.site.findUnique({ where: { id: row.siteId }, select: { id: true, companyId: true } })
+  return !!site && maySite(context, PRODUCTION_SCAN_CORRECT, { companyId: site.companyId, siteId: site.id })
+}
+
 /** The refused scans of the caller's sites (SCR-023's data for the office; design floor.sync): open ones by default; no names (a list). */
-export async function listRefusals(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly deviceId?: string | undefined; readonly workOrderId?: string | undefined; readonly all?: boolean | undefined; readonly limit: number }) {
+export async function listRefusals(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly deviceId?: string | undefined; readonly workOrderId?: string | undefined; readonly partyId?: string | undefined; readonly all?: boolean | undefined; readonly limit: number }) {
   const context = officeOf(caller)
   return caller.withClient(async (db) => {
     const sites = await db.site.findMany({ where: { AND: [scopeWhere(actorOf(context), PRODUCTION_SCAN_CORRECT, { company: 'companyId', site: 'id' }) as Prisma.SiteWhereInput, query.siteId ? { id: query.siteId } : {}] }, select: { id: true } })
     if (sites.length === 0) return { refusals: [] }
-    const rows = await readRefusals(db, { siteIds: sites.map((site) => site.id), ...(query.deviceId ? { deviceId: query.deviceId } : {}), ...(query.workOrderId ? { workOrderId: query.workOrderId } : {}), open: !query.all })
+    // B-PR-04a (the brand wall): a refusal of a work order the caller does not reach is left out (one of no work order stays).
+    const wall = { reach: workOrderWhere(actorOf(context), PRODUCTION_SCAN_CORRECT), ...(query.partyId ? { partyId: query.partyId } : {}) }
+    const rows = await readRefusals(db, { siteIds: sites.map((site) => site.id), ...(query.deviceId ? { deviceId: query.deviceId } : {}), ...(query.workOrderId ? { workOrderId: query.workOrderId } : {}), open: !query.all, ...wall })
     const devices = new Map((await db.device.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.deviceId))] } }, select: { id: true, name: true } })).map((row) => [row.id, row.name]))
     return { refusals: rows.slice(0, query.limit).map((row) => ({ ...refusalRow(row), siteId: row.siteId, device: { id: row.deviceId, name: devices.get(row.deviceId) ?? '' } })) }
   })
@@ -296,8 +312,7 @@ export async function refusalOf(caller: CommandCaller, refusalId: string) {
   const context = officeOf(caller)
   return caller.withClient(async (db) => {
     const row = await readRefusal(db, refusalId)
-    const site = row ? await db.site.findUnique({ where: { id: row.siteId }, select: { id: true, companyId: true } }) : null
-    if (!row || !site || !mayScan(context, PRODUCTION_SCAN_CORRECT, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Refused scan not found.')
+    if (!row || !(await mayRefusal(db, context, row))) throw new NotFoundError('Refused scan not found.')
     const who = await workerGateFor(db, row.siteId)
     const names = await workerNames(db, who.lookup([row.workerId]))
     const device = await db.device.findUnique({ where: { id: row.deviceId }, select: { id: true, name: true } })
@@ -314,9 +329,8 @@ export async function discard(caller: CommandCaller, refusalId: string, idempote
   if (!row) throw new NotFoundError('Refused scan not found.')
   if (context.audience === 'floor') {
     if (row.deviceId !== context.deviceId) throw new NotFoundError('Refused scan not found.')
-  } else {
-    const site = await caller.withClient((db) => db.site.findUnique({ where: { id: row.siteId }, select: { id: true, companyId: true } }))
-    if (!site || !mayScan(context, PRODUCTION_SCAN_CORRECT, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Refused scan not found.')
+  } else if (!(await caller.withClient((db) => mayRefusal(db, context, row)))) {
+    throw new NotFoundError('Refused scan not found.')
   }
   // Who discarded it: the office user; on the floor the worker, where the site names workers and they acknowledged the
   // notice in force (no floor record names a worker before that), else nobody (the station's tablet did).

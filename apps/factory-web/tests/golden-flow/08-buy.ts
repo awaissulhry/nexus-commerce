@@ -1,6 +1,10 @@
 import { expect } from '@playwright/test'
 import { defineStage } from './_harness/stages'
-import { answerOf, day, dialog, pickDate, press } from './_harness/ui'
+import { answerOf, chooseFromMenu, day, dialog, pickDate, press } from './_harness/ui'
+import { startsWith, words } from './_harness/words'
+
+const B = words('buying')
+const M = words('planning-mrp')
 
 export default defineStage({
   proves: 'what to buy → PO → email → supplier confirms by link (no prices on the link)',
@@ -15,6 +19,13 @@ export default defineStage({
       const red = planner.page.getByRole('row').filter({ hasText: 'RED Red' }).first()
       await expect(red).toContainText(order.number)
       await expect(red).toContainText(/Buy/)
+      // The run carries the seeded plan's firm planned order of red leather (B-W2a-22: 4 hides for the seeded order); the
+      // planner plans the line again, so the buyer buys what the plan suggests for every order (as the API golden flow).
+      const rowIndex = await red.getAttribute('aria-rowindex')
+      const menu = planner.page.locator(`[role="row"][aria-rowindex="${rowIndex}"]`).getByRole('button', { name: B('plan.rowMenu', { material: 'SEED-LEA-100' }) })
+      const unfirm = planner.page.getByRole('menuitem', { name: startsWith(M('unfirm.menu')) })
+      await answerOf(planner.page, 'POST', /^\/planning\/requirements\/[0-9a-f-]+\/unfirm$/, () => chooseFromMenu(menu, unfirm))
+      await expect(planner.page.getByText(M('notice.unfirmed', { material: 'SEED-LEA-100' })).first()).toBeVisible()
       await flow.shot(planner.page, 'plan')
     })
 
@@ -41,8 +52,7 @@ export default defineStage({
       await answerOf(page, 'POST', /\/lines$/, () => press(form.getByRole('button', { name: 'Add line' })))
       await expect(page.getByText('Line added.').first()).toBeVisible()
       for (const seq of ['10', '20']) {
-        await page.getByRole('button', { name: `Actions for line ${seq}` }).click()
-        await page.getByRole('menuitem', { name: 'Change the line…' }).click()
+        await chooseFromMenu(page.getByRole('button', { name: `Actions for line ${seq}` }), page.getByRole('menuitem', { name: 'Change the line…' }))
         form = dialog(page)
         await pickDate(form, 'Need date', day(40))
         const tolerance = form.getByRole('textbox', { name: 'Area tolerance (%)' })
@@ -50,7 +60,13 @@ export default defineStage({
         await answerOf(page, 'PATCH', /\/lines\/[0-9a-f-]+$/, () => press(form.getByRole('button', { name: 'Save', exact: true })))
         await expect(page.getByText('Line saved.').first()).toBeVisible()
       }
-      await expect(page.getByText('Nothing stops the send.').first()).toBeVisible()
+      // Nothing stops the send: no check BLOCKS (as the API golden flow asks). A warning may stand and still sends — the
+      // plan buys the order's 4 hides, under the supplier's 5-hide minimum — and the card names each check it has.
+      const { checks } = (await flow.read(page, `/purchasing/orders/${po.id}/send-check`)) as { checks: { code: string; severity: string }[] }
+      expect(checks.filter((check) => check.severity === 'BLOCKS').map((check) => check.code)).toEqual([])
+      if (checks.length === 0) await expect(page.getByText(B('po.lines.ready')).first()).toBeVisible()
+      for (const check of checks) await expect(page.getByText(B(`po.check.${check.code}`)).first()).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Send to supplier' }).first()).toBeEnabled()
       await flow.shot(page, 'po-lines')
     })
 

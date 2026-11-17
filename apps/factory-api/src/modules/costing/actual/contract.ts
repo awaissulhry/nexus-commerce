@@ -8,9 +8,10 @@ import { afterCloseView } from '@nexus/factory-domain/costing/close/after-close'
 
 const workOrder = input({ workOrderId: id() })
 
-export const workOrderCostsContract = defineContract({ querystring: workOrderCostsQuery, response: { 200: workOrderCostsAnswer } })
+// B-PR-05: partyId = one customer's work orders / entries (inside the caller's reach: another customer's gives none).
+export const workOrderCostsContract = defineContract({ querystring: workOrderCostsQuery.extend({ partyId: id().optional() }), response: { 200: workOrderCostsAnswer } })
 // B-W2b-F46: + afterClose (null unless CLOSED).
 export const workOrderCostContract = defineContract({ params: workOrder, response: { 200: output({ detail: workOrderCostView.extend({ afterClose: afterCloseView.nullable() }) }) } })
-export const ledgerContract = defineContract({ querystring: ledgerQuery, response: { 200: output({ entries: z.array(ledgerEntryView), nextCursor: id().nullable() }) } })
+export const ledgerContract = defineContract({ querystring: ledgerQuery.extend({ partyId: id().optional() }), response: { 200: output({ entries: z.array(ledgerEntryView), nextCursor: id().nullable() }) } })
 export const postNowContract = defineContract({ params: workOrder, response: { 200: postAnswer, 201: postAnswer } })
 export const reverseContract = defineContract({ params: input({ entryId: id() }), body: reverseBody, response: { 200: reverseAnswer, 201: reverseAnswer } })

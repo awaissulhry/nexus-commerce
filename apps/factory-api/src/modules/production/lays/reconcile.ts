@@ -8,7 +8,7 @@ import { CONSUMPTION_UOM, differenceWords, estimateOf, recordedOf } from '@nexus
 import { bySize, CUT_VARIANCE_REASONS, fabricCut, leatherCut, lineFigures, reasonProblems, reconcileRefusal, reconcileWords, VARIANCE_WORDS, type ReasonDraft } from '@nexus/factory-domain/production/lays/reconcile'
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller } from '../../../core/command'
-import { invalid, may, notFound, officeOf } from '../cutorders/access'
+import { invalid, may, notFound, officeOf, partiesOf } from '../cutorders/access' // B-PR-04b: partiesOf
 import { readCutOrder, readLayRolls, readLays, readLines, type CutOrderRow, type Reader } from '../cutorders/store'
 import { cutCountsOf } from '../cutting/views'
 import { refuse } from './access'
@@ -136,7 +136,7 @@ async function reconciliationOf(db: Reader, order: CutOrderRow) {
 async function seenOrder(caller: CommandCaller, cutOrderId: string) {
   const context = officeOf(caller)
   const order = await caller.withClient((db) => readCutOrder(db, cutOrderId))
-  if (!order || !may(context, PRODUCTION_CUTTING_VIEW, order)) return notFound('Cut order')
+  if (!order || !may(context, PRODUCTION_CUTTING_VIEW, order, partiesOf(order))) return notFound('Cut order')
   return { context, order: order! }
 }
 
@@ -145,7 +145,7 @@ export async function readReconciliation(caller: CommandCaller, cutOrderId: stri
   const { context, order } = await seenOrder(caller, cutOrderId)
   return caller.withClient(async (db) => {
     const view = await reconciliationOf(db, order)
-    return { ...view, can: { reconcile: may(context, PRODUCTION_CUTORDERS_MANAGE, order) && view.refusal === null } }
+    return { ...view, can: { reconcile: may(context, PRODUCTION_CUTORDERS_MANAGE, order, partiesOf(order)) && view.refusal === null } }
   })
 }
 
@@ -157,7 +157,7 @@ export interface ReconcileBody {
 /** POST /production/cut-orders/:cutOrderId/reconcile: each line still open reconciled, the cut order RECONCILED. */
 export async function reconcileCutOrder(caller: CommandCaller, cutOrderId: string, body: ReconcileBody, idempotencyKey?: string) {
   const { context, order } = await seenOrder(caller, cutOrderId)
-  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, order)) throw new ForbiddenError('A cut order is reconciled with the right to plan cut orders at its site.')
+  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, order, partiesOf(order))) throw new ForbiddenError('A cut order is reconciled with the right to plan cut orders at its site.')
   const { result } = await command(caller, { name: 'production.reconcileCutOrder', idempotencyKey, input: { cutOrderId, ...body }, record: { type: 'CutOrder', id: cutOrderId, expectedVersion: body.version } }, async (tools) => {
     const { tx, now } = tools
     const current = (await readCutOrder(tx, cutOrderId))!

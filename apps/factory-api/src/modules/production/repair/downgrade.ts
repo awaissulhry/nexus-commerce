@@ -2,7 +2,6 @@ import type { Prisma } from '@nexus/factory-db'
 import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
 import { ConflictError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
 import { PRODUCTION_DOWNGRADE } from '@nexus/factory-domain/production/repair/permissions'
 import {
@@ -26,7 +25,8 @@ import { InsufficientStockError, postMoves, type MoveDraft } from '../../invento
 import { lockWorkOrderIssues } from '../../inventory/issue/store'
 import { lockReservations } from '../../inventory/reservations/store'
 import { scrapPostingHeld } from '../scrap/over-limit'
-import { assertMay, bodyIssue, may, officeOf, refuse } from './access'
+import { assertMay, bodyIssue, downgradeReach, may, officeOf, refuse } from './access'
+import { viaCell } from '../work-orders/scope' // B-PR-05
 import { DOWNGRADE_COLUMNS, downgradesOfSource, lockDowngrade, readDowngrade, readOrder, type DowngradeRow, type Reader } from './store'
 // B-W2b-219: the second-quality move by the row's moveId.
 import { movesOfDowngrades, originalAmong, originalMoveOf } from './downgrade-move'
@@ -79,8 +79,6 @@ export interface DowngradeBody extends DowngradeSource {
   readonly ppeConfirmed?: boolean | undefined
   readonly periodLockOverride?: PeriodLockOverride | undefined
 }
-
-const SCOPE = { company: 'companyId', site: 'siteId' } as const
 
 /** The source row of a downgrade: what it scrapped, its work order, cell and bundle. */
 async function sourceOf(db: Reader, source: DowngradeSource) {
@@ -308,8 +306,8 @@ async function postMovesOrRefuse(tools: CommandTools, drafts: MoveDraft[], optio
 export async function withdrawDowngrade(caller: CommandCaller, downgradeId: string, body: { readonly version: number; readonly reason: string; readonly periodLockOverride?: PeriodLockOverride | undefined }, idempotencyKey?: string) {
   const context = officeOf(caller)
   const known = await caller.withClient((db) => readDowngrade(db, downgradeId))
-  if (!known || !may(context, PRODUCTION_SCRAP_VIEW, known)) throw new NotFoundError('Downgrade not found.')
-  assertMay(context, PRODUCTION_DOWNGRADE, known, 'Downgrade')
+  if (!known || !may(context, PRODUCTION_SCRAP_VIEW, downgradeReach(known))) throw new NotFoundError('Downgrade not found.')
+  assertMay(context, PRODUCTION_DOWNGRADE, downgradeReach(known), 'Downgrade')
   const { result, replayed } = await inWords(() => command(caller, { name: 'production.withdrawDowngrade', idempotencyKey, input: { downgradeId, ...body } }, async (tools) => {
     const { tx } = tools
     const row = (await lockDowngrade(tx, downgradeId))!
@@ -363,13 +361,18 @@ export interface DowngradeQuery {
   readonly workOrderId?: string | undefined
   readonly from?: Date | undefined
   readonly to?: Date | undefined
+  /** B-PR-05: one customer's downgrades (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly limit: number
 }
 
 /** GET /production/downgrades: newest first, with the garments of the same scope (today's garments, the period's). */
 export async function listDowngrades(caller: CommandCaller, query: DowngradeQuery) {
   const context = officeOf(caller)
-  const scope = scopeWhere(actorOf(context), PRODUCTION_SCRAP_VIEW, SCOPE) as Prisma.GarmentDowngradeWhereInput
+  // B-PR-05 (the brand wall): through the downgrade's cell's work order (company, site and customer); the garments count the same.
+  const scope: Prisma.GarmentDowngradeWhereInput = {
+    AND: [viaCell(actorOf(context), PRODUCTION_SCRAP_VIEW) as Prisma.GarmentDowngradeWhereInput, query.partyId ? { workOrderSize: { is: { workOrder: { is: { partyId: query.partyId } } } } } : {}],
+  }
   const where: Prisma.GarmentDowngradeWhereInput = {
     AND: [scope, query.siteId ? { siteId: query.siteId } : {}, query.workOrderId ? { workOrderId: query.workOrderId } : {}, query.from ? { createdAt: { gte: query.from } } : {}, query.to ? { createdAt: { lt: query.to } } : {}],
   }

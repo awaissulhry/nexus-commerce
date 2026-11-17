@@ -15,12 +15,37 @@ const threadPath = (record: RecordKey) => `/threads/${enc(record.type)}/${enc(re
 /** A page of messages ("Show 50 earlier"; the API allows up to 200), newest first. */
 export const THREAD_PAGE = 50
 
-const page = z.object({ thread: threadSchema.nullable(), messages: z.array(messageSchema), nextCursor: z.string().nullable() })
+// ---- B-TH-229: the reader's own reading (B-TH-027) and the office head — who answers, what waits (B-TH-028)
+export const readingSchema = z.object({ lastReadMessageId: z.string().nullable(), newCount: z.number().int(), firstNewMessageId: z.string().nullable() })
+export type Reading = z.infer<typeof readingSchema>
+const ownerSchema = z.object({ id: z.string(), name: z.string(), active: z.boolean(), source: z.enum(['SET', 'ASSIGNEE', 'SUPERVISOR', 'MAKER']) })
+export const headSchema = z.object({
+  owner: ownerSchema.nullable(),
+  waiting: z.object({ on: z.enum(['US', 'CUSTOMER']), since: z.string(), workingMinutes: z.number().int(), calendar: z.boolean(), amber: z.boolean(), thresholdDays: z.number().int() }).nullable(),
+})
+export type ThreadHead = z.infer<typeof headSchema>
+// ---- end B-TH-229
+
+const page = z.object({ thread: threadSchema.nullable(), messages: z.array(messageSchema), nextCursor: z.string().nullable(), reading: readingSchema.nullable().optional(), head: headSchema.optional() })
 export type ThreadPageAnswer = z.infer<typeof page>
 
 export function readThreadPage(api: ApiClient, record: RecordKey, cursor: string | null, signal?: AbortSignal): Promise<ThreadPageAnswer> {
   return api.get(threadPath(record), { query: { cursor: cursor ?? undefined, limit: THREAD_PAGE }, schema: page, signal })
 }
+
+// ---- B-TH-229 (B-TH-027 / B-TH-028): the person's own read mark; who answers the thread ---------------------------------------
+/** POST …/read: the person read the thread up to this message (the mark only moves forward); their reading after it. */
+export async function markThreadRead(api: ApiClient, record: RecordKey, messageId: string): Promise<Reading> {
+  const answer = await api.post(`${threadPath(record)}/read`, { body: { messageId }, schema: z.object({ reading: readingSchema }), idempotencyKey: globalThis.crypto.randomUUID() })
+  return answer.reading
+}
+
+/** PUT …/owner: who answers the thread (an office person who reads it), or null: the record's own (assignee, supervisor, maker). */
+export async function setThreadOwner(api: ApiClient, record: RecordKey, ownerId: string | null): Promise<ThreadHead['owner']> {
+  const answer = await api.request('PUT', `${threadPath(record)}/owner`, { body: { ownerId }, schema: z.object({ owner: ownerSchema.nullable() }), idempotencyKey: globalThis.crypto.randomUUID() })
+  return answer.owner
+}
+// ---- end B-TH-229
 
 const posted = z.object({ message: z.object({ id: z.string() }).passthrough() }).passthrough()
 const sent = z.object({ messageId: z.string() }).passthrough()

@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
+import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { cellLabel, partsOf } from '@nexus/factory-domain/production/cutting/rules'
 import { PRODUCTION_SCRAP, PRODUCTION_SCRAP_APPROVE, PRODUCTION_SCRAP_VIEW } from '@nexus/factory-domain/production/scrap/permissions'
 import {
@@ -18,7 +18,8 @@ import {
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { readPlannedParts } from '../cutting/store'
-import { lockReplacement, readCellLabels, readReplacement, REPLACEMENT_COLUMNS, replacementViews, type ReplacementRow } from './store'
+import { lockReplacement, readCellLabels, readReplacement, REPLACEMENT_COLUMNS, replacementViews, type Reader, type ReplacementRow } from './store'
+import { reachesWorkOrder, viaWorkOrder, type WorkOrderReach } from '../work-orders/scope' // B-PR-05
 // B-W2b-53 (MES-128): held scrap posts no replacement.
 import { scrapPostingHeld } from './over-limit'
 // B-W2b-219: a RECUT done by its DONE recut ticket.
@@ -61,7 +62,18 @@ function officeOf(caller: Pick<CommandCaller, 'factoryContext'>): OfficeContext 
   return context
 }
 
-const may = (context: OfficeContext, permission: Permission, row: { readonly companyId: string; readonly siteId: string }) => can(actorOf(context), permission, { companyId: row.companyId, siteId: row.siteId })
+// ── B-PR-05 (production plan §2, the brand wall) ──
+/** May the caller do this on a work order's row? Its company, site and one customer (../work-orders/scope). */
+const may = (context: OfficeContext, permission: Permission, row: WorkOrderReach) => reachesWorkOrder(actorOf(context), permission, row)
+
+/** A replacement with its reach: its company and site, and its work order's one customer. */
+async function knownReplacement(client: Reader, replacementId: string): Promise<{ row: ReplacementRow; reach: WorkOrderReach } | null> {
+  const row = await readReplacement(client, replacementId)
+  if (!row) return null
+  const order = await client.workOrder.findUnique({ where: { id: row.workOrderId }, select: { partyId: true } })
+  return { row, reach: { companyId: row.companyId, siteId: row.siteId, partyId: order?.partyId ?? null } }
+}
+// ── end B-PR-05 ──
 const bodyIssue = (path: string, message: string) => new ValidationError(message, [{ path: `body/${path}`, message }])
 
 // ---- ask -----------------------------------------------------------------------------------------------------------------------
@@ -99,7 +111,7 @@ async function workOrderOfAsk(caller: CommandCaller, body: AskInput): Promise<st
 export async function askReplacement(caller: CommandCaller, body: AskInput, idempotencyKey?: string) {
   const context = officeOf(caller)
   const workOrderId = await workOrderOfAsk(caller, body)
-  const order = await caller.withClient((client) => client.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true } }))
+  const order = await caller.withClient((client) => client.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, partyId: true } }))
   if (!order || !may(context, PRODUCTION_SCRAP, order)) throw new NotFoundError('Work order not found.')
   if (body.workOrderId && body.workOrderId !== order.id) throw bodyIssue('workOrderId', 'The scan or rework named is of another work order.')
   if ((body.recordType === undefined) !== (body.recordId === undefined)) throw bodyIssue('recordType', 'Name the record behind it as type and id, or neither.')
@@ -197,8 +209,8 @@ const PERMISSION: Record<Change, Permission> = { approve: PRODUCTION_SCRAP_APPRO
 /** POST /production/replacements/:replacementId/approve|refuse|done|cancel. */
 export async function changeReplacement(caller: CommandCaller, replacementId: string, change: Change, body: ChangeInput, idempotencyKey?: string) {
   const context = officeOf(caller)
-  const known = await caller.withClient((client) => readReplacement(client, replacementId))
-  if (!known || !may(context, PERMISSION[change], known)) throw new NotFoundError('Replacement not found.')
+  const found = await caller.withClient((client) => knownReplacement(client, replacementId))
+  if (!found || !may(context, PERMISSION[change], found.reach)) throw new NotFoundError('Replacement not found.')
   if (change === 'refuse' && !body.note?.trim()) throw bodyIssue('note', 'Say why the reduction is refused.')
   if (change === 'cancel' && !body.reason?.trim()) throw bodyIssue('reason', 'Say why the request is cancelled.')
   // B-W2b-219: a RECUT is done by its cut log entry, or (none named) by its DONE recut ticket (./rework/recut-close).
@@ -273,18 +285,20 @@ export interface ListQuery {
   readonly workOrderId?: string | undefined
   readonly kind?: ReplacementKind | undefined
   readonly status?: readonly ReplacementStatus[] | undefined
+  /** B-PR-05: one customer's requests (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
-
-const SCOPE = { company: 'companyId', site: 'siteId' } as const
 
 /** GET /production/replacements: newest first (the recut list: kind=RECUT&status=OPEN). */
 export async function listReplacements(caller: CommandCaller, query: ListQuery) {
   const context = officeOf(caller)
   const where: Prisma.ReplacementRequestWhereInput = {
     AND: [
-      scopeWhere(actorOf(context), PRODUCTION_SCRAP_VIEW, SCOPE) as Prisma.ReplacementRequestWhereInput,
+      // B-PR-05 (the brand wall): through the request's work order (company, site and customer).
+      viaWorkOrder(actorOf(context), PRODUCTION_SCRAP_VIEW) as Prisma.ReplacementRequestWhereInput,
+      query.partyId ? { workOrder: { is: { partyId: query.partyId } } } : {},
       query.siteId ? { siteId: query.siteId } : {},
       query.workOrderId ? { workOrderId: query.workOrderId } : {},
       query.kind ? { kind: query.kind } : {},
@@ -303,9 +317,9 @@ export async function listReplacements(caller: CommandCaller, query: ListQuery) 
 export async function replacementRecord(caller: CommandCaller, replacementId: string) {
   const context = officeOf(caller)
   return caller.withClient(async (client) => {
-    const row = await readReplacement(client, replacementId)
-    if (!row || !may(context, PRODUCTION_SCRAP_VIEW, row)) throw new NotFoundError('Replacement not found.')
-    const [view] = await replacementViews(client, [row])
+    const found = await knownReplacement(client, replacementId)
+    if (!found || !may(context, PRODUCTION_SCRAP_VIEW, found.reach)) throw new NotFoundError('Replacement not found.')
+    const [view] = await replacementViews(client, [found.row])
     return { replacement: view! }
   })
 }
