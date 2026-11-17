@@ -23,7 +23,8 @@ export const PARTNER_MESSAGE_TEMPLATES = {
   // confirmed; "confirmed" follows the yes.
   'portal.order.received': { topic: 'ORDERS', category: 'FOLLOWING', en: 'We received {yours}: it is waiting for our approval', it: 'Abbiamo ricevuto {yours}: è in attesa della nostra approvazione' },
   'portal.order.dates_changed': { topic: 'DATES', category: 'FOLLOWING', en: 'The delivery date of {yours} changed{due}', it: 'Nuova data di consegna per {yours}{due}' },
-  'portal.shipment.shipped': { topic: 'SHIPPED', category: 'FOLLOWING', en: '{label} has shipped', it: '{label} è stata spedita' },
+  // th3b follow-up 5 (§0.5): a delivery of the customer's own order ({yours}: "your order 12"), never the office's SH-… series.
+  'portal.shipment.shipped': { topic: 'SHIPPED', category: 'FOLLOWING', en: 'A delivery of {yours} has shipped', it: 'È stata spedita una consegna per {yours}' },
   'portal.invoice.issued': { topic: 'INVOICES', category: 'FOLLOWING', en: 'Invoice {label} was issued', it: 'È stata emessa la fattura {label}' },
   'portal.claim.sent': { topic: 'CLAIMS', category: 'FOLLOWING', en: 'New claim {label}', it: 'Nuovo reclamo {label}' },
   // B-W2b-183: the office's answer to a change or cancel request from the portal (the words are on the order's page).

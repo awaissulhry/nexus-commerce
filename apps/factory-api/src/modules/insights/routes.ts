@@ -34,6 +34,9 @@ import { library, reportAbout, reportResults, reportSchedule, type ResultsQuery 
 // quote speed (Sales › Quotes).
 import { backlogContract, headlineContract, intakeContract, quoteSpeedContract, returnsContract } from './sales-reports/contract'
 import { backlogAnswer, headlineAnswer, intakeAnswer, quoteSpeedAnswer, returnsAnswer } from './sales-reports/reads'
+// B-TH-052: the request-to-order figure.
+import { requestsContract } from './sales-reports/contract'
+import { requestsAnswer } from './sales-reports/reads'
 // B-W2b-428: the metric layer — the KPI library and its versions (kpis/), the facts and measures (facts/).
 import { factsContract, measuresContract, rebuildContract } from './facts/contract'
 import { factsAnswer, measuresAnswer, rebuildAnswer, type FactsQuery } from './facts/answers'
@@ -114,6 +117,9 @@ export default defineRoutes('insights', manifest, async (app) => {
   app.get('/sales/reports/backlog', { schema: backlogContract }, async (request) => backlogAnswer(request, request.query))
   app.get('/sales/reports/returns', { schema: returnsContract }, async (request) => returnsAnswer(request, request.query))
   app.get('/sales/reports/quote-speed', { schema: quoteSpeedContract }, async (request) => quoteSpeedAnswer(request, request.query))
+  // ---- B-TH-052
+  app.get('/sales/reports/requests', { schema: requestsContract }, async (request) => requestsAnswer(request, request.query))
+  // ---- end B-TH-052
 
   // B-W2b-428 (ANA-012, ANA-028, ANA-069, ANA-070): the KPI library (read: home.kpis.view; write: home.kpis.manage), each value
   // also its measures' list permissions and grains; the facts and measures (the measure's permission and grain).

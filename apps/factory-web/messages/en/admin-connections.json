@@ -387,21 +387,24 @@
         "SENT": "Sent",
         "DELIVERED": "Delivered",
         "PROBLEM": "Bounced or complained",
-        "FAILED": "Not sent"
+        "FAILED": "Not sent",
+        "WITHDRAWN": "Taken back"
       },
       "tile": {
         "WAITING": "Waiting",
         "SENT": "Sent",
         "DELIVERED": "Delivered",
         "PROBLEM": "Bounced or complained",
-        "FAILED": "Not sent"
+        "FAILED": "Not sent",
+        "WITHDRAWN": "Taken back"
       },
       "tileHint": {
         "WAITING": "Queued or being sent now (last 30 days).",
         "SENT": "The mail service took them; no word back yet (last 30 days).",
         "DELIVERED": "The recipient's mail server accepted them (last 30 days).",
         "PROBLEM": "They bounced for good or the recipient marked them as spam: the address is blocked (last 30 days).",
-        "FAILED": "They never left: refused, or out of tries (last 30 days)."
+        "FAILED": "They never left: refused, or out of tries (last 30 days).",
+        "WITHDRAWN": "Taken back by their sender in the 10 seconds after Send: they never left (last 30 days)."
       },
       "about": {
         "INVOICES": "Invoices",

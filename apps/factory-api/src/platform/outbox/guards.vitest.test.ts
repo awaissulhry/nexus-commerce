@@ -123,7 +123,9 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // a corrected invoice's declaration of intent used or given back: declaration_of_intent.changed): 948, 1495 → 1497.
     // B-TH-013: no event and one literal emit (the customer's answer takes a request up again: inquiry.changed RESUMED by the
     // resume handler): 948, 1497 → 1498.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(948 declared event version\(s\), 1498 literal emit/) })
+    // B-TH-042: no event and one literal emit (a contact the prospect becomes of an existing customer: party.contacts_changed):
+    // 948, 1498 → 1499.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(948 declared event version\(s\), 1499 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

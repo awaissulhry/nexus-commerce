@@ -387,21 +387,24 @@
         "SENT": "Inviata",
         "DELIVERED": "Consegnata",
         "PROBLEM": "Respinta o segnalata",
-        "FAILED": "Non inviata"
+        "FAILED": "Non inviata",
+        "WITHDRAWN": "Invio annullato"
       },
       "tile": {
         "WAITING": "In attesa",
         "SENT": "Inviate",
         "DELIVERED": "Consegnate",
         "PROBLEM": "Respinte o segnalate",
-        "FAILED": "Non inviate"
+        "FAILED": "Non inviate",
+        "WITHDRAWN": "Invio annullato"
       },
       "tileHint": {
         "WAITING": "In coda o in invio ora (ultimi 30 giorni).",
         "SENT": "Il servizio di posta le ha prese; ancora nessuna risposta (ultimi 30 giorni).",
         "DELIVERED": "Il server di posta del destinatario le ha accettate (ultimi 30 giorni).",
         "PROBLEM": "Respinte in modo definitivo o segnalate come spam dal destinatario: l'indirizzo è bloccato (ultimi 30 giorni).",
-        "FAILED": "Non sono mai partite: rifiutate, o tentativi esauriti (ultimi 30 giorni)."
+        "FAILED": "Non sono mai partite: rifiutate, o tentativi esauriti (ultimi 30 giorni).",
+        "WITHDRAWN": "Ritirate da chi le ha inviate nei 10 secondi dopo Invia: non sono mai partite (ultimi 30 giorni)."
       },
       "about": {
         "INVOICES": "Fatture",
