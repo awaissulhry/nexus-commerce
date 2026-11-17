@@ -84,6 +84,8 @@ export interface MailDetail extends MailSummary {
   attachments: readonly MailAttachment[]
   /** The thread it names, with its record. */
   thread: { recordType: string; recordId: string; status: 'OPEN' | 'CLOSED' } | null
+  /** B-TH-224: the request made of this mail (null: none; absent: not read — the person does not answer requests). */
+  inquiry?: { id: string; number: string } | null
   attempts: number
   fetchedAt: string | null
 }

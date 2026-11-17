@@ -24,6 +24,7 @@ import { LINK_TASK_RULES, LINK_TASKS, linkKinds, linkTaskOf } from '../../links/
 import { matchPages } from '../palette/palette-model'
 import { FLOOR, FLOOR_NO_TILE, FRAME, LINKS, LINKS_NO_TOKEN, OFFICE, type TreePage } from './approved-tree'
 import { FRAME_PAGES, OFFICE_NAV, OFFICE_PAGES, officeAreaDeclarations, officeNavFor, palettePages, translateNav } from './office-nav'
+import { officeRedirects, RENAMED_PAGES, renamedAddress } from './renamed'
 
 /**
  * B-W1-08, the W1 navigation check, and B-W2a-83, the W2a one (SCR-003; PLT-160, PLT-036; design check I2): the whole map
@@ -114,7 +115,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/kpis': 'home.kpis.view', // GET /insights/kpis (B-W2b-433)
       '/home/dashboards': 'home.kpis.view', // GET /insights/dashboards (B-W2b-434)
       '/sales/customers': 'parties.view', // GET /parties
-      '/sales/inquiries': 'sales.inquiries.view', // GET /sales/inquiries (B-W2b-322)
+      '/sales/incoming': 'sales.inquiries.view', // GET /sales/inquiries (B-W2b-322; B-TH-216: the page is Sales › Incoming)
       '/sales/quotes': 'quotes.view', // GET /sales/quotes
       '/sales/orders': 'orders.view', // GET /sales/orders
       '/sales/made-to-measure': 'sales.measurements.view', // GET /sales/mtm/profiles (B-W2b-358; B-W2b-362)
@@ -302,8 +303,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/home/kpis',
       '/home/alerts',
       '/sales/customers',
-      // B-W2b-322: Sales › Inquiries.
-      '/sales/inquiries',
+      // B-W2b-322: Sales › Inquiries; B-TH-216: renamed Sales › Incoming.
+      '/sales/incoming',
       '/sales/quotes',
       '/sales/orders',
       // B-W2b-362: Sales › Special orders › Made-to-measure (sales.measurements.view).
@@ -357,7 +358,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
   // template change that adds or removes one of these reads changes this table on purpose).
   it('the W2b-5 rows per role: Sales, Planning, Purchasing, Warehouse, Home › Approvals, Admin › Approval rules', () => {
     // B-W2b-362: Special orders › Made-to-measure after Orders (sales.measurements.view: owner, sales, production manager, admin).
-    const allSales = ['customers', 'inquiries', 'quotes', 'orders', /* B-W2b-362 */ 'made-to-measure', 'returns', 'service', 'price-lists', 'reports', 'settings']
+    const allSales = ['customers', /* B-TH-216 */ 'incoming', 'quotes', 'orders', /* B-W2b-362 */ 'made-to-measure', 'returns', 'service', 'price-lists', 'reports', 'settings']
     const allPlanning = ['mrp', 'leather', 'board', 'capacity', 'allocation', 'exceptions', 'promise', 'milestones', 'demand', 'mps', 'reports', 'settings']
     const allPurchasing = ['suppliers', 'requests', 'orders', 'subcontracting', 'sourcing', 'claims', 'reports', 'settings']
     const allWarehouse = ['stock', 'hides', 'lots', 'moves', 'receipts', 'picking', 'transfers', 'counts', 'shipments', 'reports', 'locations', 'shipping', 'settings']
@@ -369,8 +370,8 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       planner: { sales: ['orders'], planning: allPlanning, purchasing: without(allPurchasing, 'suppliers'), warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: false },
       buyer: { sales: ['customers'], planning: without(allPlanning, 'promise'), purchasing: allPurchasing, warehouse: without(allWarehouse, 'counts', 'shipments', 'shipping'), approvals: true, rules: false },
       warehouse: { sales: ['customers', 'orders', 'returns'], planning: [], purchasing: allPurchasing, warehouse: allWarehouse, approvals: true, rules: false },
-      finance: { sales: without(allSales, 'inquiries', /* B-W2b-362 */ 'made-to-measure'), planning: [], purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'shipping'), approvals: true, rules: false },
-      production_manager: { sales: ['customers', /* B-TH-014 (Owner ask P7): the production manager reads Incoming */ 'inquiries', 'orders', /* B-W2b-362: the factory review */ 'made-to-measure', 'returns', 'service', 'reports'], planning: allPlanning, purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: true },
+      finance: { sales: without(allSales, 'incoming', /* B-W2b-362 */ 'made-to-measure'), planning: [], purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'shipping'), approvals: true, rules: false },
+      production_manager: { sales: ['customers', /* B-TH-014 (Owner ask P7): the production manager reads Incoming */ 'incoming', 'orders', /* B-W2b-362: the factory review */ 'made-to-measure', 'returns', 'service', 'reports'], planning: allPlanning, purchasing: ['suppliers', 'requests', 'reports'], warehouse: without(allWarehouse, 'counts', 'shipping'), approvals: true, rules: true },
       quality_inspector: { sales: ['customers', 'returns', 'service'], planning: [], purchasing: ['suppliers', 'requests'], warehouse: without(allWarehouse, 'counts', 'reports', 'shipping'), approvals: true, rules: false },
       floor_supervisor: { sales: [], planning: [], purchasing: ['requests'], warehouse: ['stock', 'hides', 'lots', 'moves', 'receipts', 'picking', 'transfers', 'locations', 'settings'], approvals: true, rules: false },
     }
@@ -748,3 +749,27 @@ describe('the two naming fixes', () => {
     }
   })
 })
+
+// ── B-TH-216 (threads plan TH-1b; O-SAL-INQ-REC.band-F02): a renamed page opens from its old address ──
+describe('renamed pages keep their old addresses (B-TH-216)', () => {
+  it('Sales › Inquiries is Sales › Incoming: the old page and its records redirect, the query and the id kept; no page file is left behind', () => {
+    expect(RENAMED_PAGES.map((page) => [page.from, page.to])).toEqual([['/sales/inquiries', '/sales/incoming']])
+    expect(officeRedirects()).toEqual([
+      { source: '/w/:company/sales/inquiries', destination: '/w/:company/sales/incoming', permanent: false },
+      { source: '/w/:company/sales/inquiries/:rest*', destination: '/w/:company/sales/incoming/:rest*', permanent: false },
+    ])
+    expect(renamedAddress('/sales/inquiries?tile=NEW&open=i1')).toBe('/sales/incoming?tile=NEW&open=i1')
+    expect(renamedAddress('/sales/inquiries/i1')).toBe('/sales/incoming/i1')
+    expect(renamedAddress('/sales/inquiriesx')).toBe('/sales/inquiriesx')
+    for (const { from, to } of RENAMED_PAGES) {
+      expect(OFFICE_PAGES.has(to), to).toBe(true)
+      expect(OFFICE_PAGES.has(from), from).toBe(false)
+      expect(existsSync(join(dirname(fileURLToPath(import.meta.url)), '../../app/(office)/w/[company]', from, 'page.tsx')), from).toBe(false)
+    }
+    // Incoming sits where Inquiries was: right after Customers, with the tree's words.
+    const sales = OFFICE.find((area) => area.id === 'sales')!.groups[0]!.pages
+    expect(sales.map((page) => page.href)).toEqual(['/sales/customers', '/sales/incoming', '/sales/quotes', '/sales/orders'])
+    expect(sales[1]).toMatchObject({ title: 'Incoming', titleIt: 'In arrivo' })
+  })
+})
+// ── end B-TH-216 ──

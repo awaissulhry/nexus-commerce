@@ -241,10 +241,11 @@
     "followUp": "Sollecita…",
     "clearFollowUp": "Togli il sollecito",
     "move": "Sposta in…",
-    "openInquiry": "Apri la richiesta {number}",
-    "createInquiry": "Crea una richiesta",
+    "openInquiry": "Apri {number} in In arrivo",
+    "createInquiry": "Crea richiesta in arrivo",
     "openRecord": "Apri il record",
-    "menu": "Azioni per {subject}"
+    "menu": "Azioni per {subject}",
+    "openInIncoming": "Apri in In arrivo"
   },
   "col": {
     "from": "Da",
@@ -303,11 +304,12 @@
   },
   "inquiry": {
     "held": {
-      "noRight": "Serve il permesso di gestire le richieste",
-      "made": "Da questa mail è già stata creata una richiesta",
+      "noRight": "Serve il permesso di rispondere alle richieste (sales.inquiries.manage)",
+      "made": "Da questa mail è già stata creata una richiesta: aprila in In arrivo",
       "failed": "Questa mail non si è potuta leggere",
       "notWaiting": "Solo una mail in attesa qui o in una conversazione"
-    }
+    },
+    "madeHint": "Questa mail è diventata una richiesta: si risponde in In arrivo, mai qui"
   },
   "capture": {
     "copy": "Copia l'indirizzo di cattura",

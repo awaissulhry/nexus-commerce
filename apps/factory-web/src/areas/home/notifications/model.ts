@@ -181,7 +181,12 @@ export function openAddress(notification: Pick<Notification, 'anchor' | 'record'
   if (kind === 'today' && id && built.has('/home/today')) return `/home/today?open=${encodeURIComponent(id)}`
   if (kind === 'approval' && id && built.has('/home/approvals')) return `/home/approvals?open=${encodeURIComponent(id)}`
   if (kind === 'alert' && id) return recordAddress({ type: 'Alert', id, label: notification.record.label, companyId: notification.companyId }, built)
-  return recordAddress(record, built)
+  // ── B-TH-224 (threads plan TH-1b; thread-G03, O-HOME-NOTIF.list-F01): a request opens in Incoming beside its list, and a
+  //    notice about a message opens that exact message (`?message=<id>`; the record's thread scrolls to it and opens it). ──
+  const place = record.type === 'Inquiry' && built.has('/sales/incoming') ? `/sales/incoming?open=${encodeURIComponent(record.id)}` : recordAddress(record, built)
+  if (kind === 'message' && id) return `${place}${place.includes('?') ? '&' : '?'}message=${encodeURIComponent(id)}`
+  return place
+  // ── end B-TH-224 ──
 }
 
 /** The rows of a page as the screen draws them, with where each opens. */

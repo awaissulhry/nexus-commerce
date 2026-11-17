@@ -104,7 +104,7 @@
     "attachments_one": "{count} attachment",
     "attachments_other": "{count} attachments",
     "checksFailed": "Checks failed",
-    "inquiryMade": "Inquiry {number}",
+    "inquiryMade": "Request {number}",
     "noRecord": "No record yet",
     "state": {
       "OPEN": "Open",
@@ -241,10 +241,11 @@
     "followUp": "Follow up…",
     "clearFollowUp": "Clear the follow-up",
     "move": "Move to…",
-    "openInquiry": "Open inquiry {number}",
-    "createInquiry": "Create an inquiry",
+    "openInquiry": "Open {number} in Incoming",
+    "createInquiry": "Make incoming request",
     "openRecord": "Open the record",
-    "menu": "Actions for {subject}"
+    "menu": "Actions for {subject}",
+    "openInIncoming": "Open in Incoming"
   },
   "col": {
     "from": "From",
@@ -303,11 +304,12 @@
   },
   "inquiry": {
     "held": {
-      "noRight": "Needs the right to manage inquiries",
-      "made": "An inquiry was made of this mail already",
+      "noRight": "Needs the right to answer requests (sales.inquiries.manage)",
+      "made": "A request was made of this mail already: open it in Incoming",
       "failed": "This mail could not be read",
       "notWaiting": "Only a mail waiting here or in a thread"
-    }
+    },
+    "madeHint": "This mail became a request: it is answered in Incoming, never here"
   },
   "capture": {
     "copy": "Copy capture address",
@@ -328,7 +330,7 @@
   },
   "captureAdmin": {
     "title": "Capture address",
-    "intro": "Forward or BCC any mail to it: it joins the record its subject names (an order, a quote, an inquiry…), else the customer's or supplier's conversation; what it cannot place waits in Mail to sort. Only a colleague's own mail that passes DMARC is matched.",
+    "intro": "Forward or BCC any mail to it: it joins the record its subject names (an order, a quote, a request…), else the customer's or supplier's conversation; what it cannot place waits in Mail to sort. Only a colleague's own mail that passes DMARC is matched.",
     "reading": "Reading the capture address…",
     "failed": "Couldn't read the capture address",
     "noDomain": {
