@@ -601,3 +601,7 @@ export async function setThreadStatus(
   )
   return result
 }
+
+// ---- B-TH-044: the portal reply (./replies.ts) answers as the note route does: the message as the office reads it, its files.
+export { messageViewOf, visibleAttachments }
+// ---- end B-TH-044

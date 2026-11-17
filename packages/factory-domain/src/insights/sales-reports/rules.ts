@@ -489,3 +489,105 @@ export function quoteSpeedOf(answers: readonly { readonly minutes: number | null
     won: valueFiguresOf(accepted, companyCurrency),
   }
 }
+
+// ---- B-TH-052 (threads plan L2-G10, X-SAL-REPORTS.drill): the request-to-order figure ---------------------------------------
+//
+//   requests  the requests (inquiries) RECEIVED in the period (receivedAt), whatever door they came by, and what each became
+//             now: quoted (a quote was made from it), ordered (an order was made straight from it — the request is ORDERED —
+//             or from its quote: an order of one of the quote's versions, not cancelled), declined, lost, still open; "Not an
+//             order" (a decline with that reason: a question, a mail that asks nothing) is counted apart and never in the
+//             rates' whole. By week or month of arrival, and by customer (the prospects in one group, never a person's data).
+
+/** The group of the requests from prospects (no customer yet): one group, named by nobody. */
+export const PROSPECTS_KEY = 'prospects'
+
+/** The request states still open (waiting on us or on the customer). */
+const REQUEST_OPEN = ['NEW', 'ASSIGNED', 'NEED_INFO'] as const
+
+/** One request received in the period, as the funnel reads it. */
+export interface RequestEntry {
+  /** Its customer; null: a prospect. */
+  readonly partyId: string | null
+  /** The day it came (Europe/Rome). */
+  readonly receivedOn: BusinessDate
+  /** Its own state now (NEW, ASSIGNED, NEED_INFO, QUOTED, ORDERED, DECLINED, LOST). */
+  readonly status: string
+  /** DECLINED: why (NOT_AN_ORDER is counted apart). */
+  readonly declineReason: string | null
+  /** A quote was made from it. */
+  readonly quoted: boolean
+  /** An order was made from it: straight (ORDERED) or from its quote. */
+  readonly ordered: boolean
+}
+
+export interface RequestFigures {
+  readonly received: number
+  readonly open: number
+  readonly quoted: number
+  readonly ordered: number
+  readonly declined: number
+  readonly lost: number
+  /** Declined as "Not an order": left out of the rates' whole. */
+  readonly notAnOrder: number
+  /** quoted ÷ (received − not an order), one decimal; null without a whole. */
+  readonly quotedPct: string | null
+  /** ordered ÷ (received − not an order), one decimal; null without a whole. */
+  readonly orderedPct: string | null
+}
+
+export interface RequestGroup {
+  /** The customer's id, or PROSPECTS_KEY. */
+  readonly key: string
+  readonly partyId: string | null
+  readonly figures: RequestFigures
+  readonly buckets: { readonly key: string; readonly figures: RequestFigures }[]
+}
+
+export interface RequestFold {
+  readonly all: RequestFigures
+  readonly buckets: { readonly key: string; readonly from: BusinessDate; readonly to: BusinessDate; readonly figures: RequestFigures }[]
+  /** The most requests first, then by key. */
+  readonly groups: RequestGroup[]
+}
+
+export function requestFiguresOf(entries: readonly RequestEntry[]): RequestFigures {
+  const notAnOrder = entries.filter((entry) => entry.status === 'DECLINED' && entry.declineReason === 'NOT_AN_ORDER').length
+  const quoted = entries.filter((entry) => entry.quoted).length
+  const ordered = entries.filter((entry) => entry.ordered).length
+  const whole = entries.length - notAnOrder
+  return {
+    received: entries.length,
+    open: entries.filter((entry) => (REQUEST_OPEN as readonly string[]).includes(entry.status)).length,
+    quoted,
+    ordered,
+    declined: entries.filter((entry) => entry.status === 'DECLINED' && entry.declineReason !== 'NOT_AN_ORDER').length,
+    lost: entries.filter((entry) => entry.status === 'LOST').length,
+    notAnOrder,
+    quotedPct: pctOf(quoted, whole),
+    orderedPct: pctOf(ordered, whole),
+  }
+}
+
+/** The requests of the period by bucket of arrival, and per customer (each per bucket too). */
+export function requestFold(entries: readonly RequestEntry[], buckets: readonly ReportBucket[]): RequestFold {
+  const inBucket = (own: readonly RequestEntry[], key: string) => own.filter((entry) => bucketOfDay(buckets, entry.receivedOn) === key)
+  const byKey = new Map<string, RequestEntry[]>()
+  for (const entry of entries) {
+    const key = entry.partyId ?? PROSPECTS_KEY
+    byKey.set(key, [...(byKey.get(key) ?? []), entry])
+  }
+  const groups = [...byKey.entries()]
+    .map(([key, own]) => ({
+      key,
+      partyId: key === PROSPECTS_KEY ? null : key,
+      figures: requestFiguresOf(own),
+      buckets: buckets.map((bucket) => ({ key: bucket.key, figures: requestFiguresOf(inBucket(own, bucket.key)) })),
+    }))
+    .sort((a, b) => b.figures.received - a.figures.received || a.key.localeCompare(b.key))
+  return {
+    all: requestFiguresOf(entries),
+    buckets: buckets.map((bucket) => ({ key: bucket.key, from: bucket.from, to: bucket.to, figures: requestFiguresOf(inBucket(entries, bucket.key)) })),
+    groups,
+  }
+}
+// ---- end B-TH-052

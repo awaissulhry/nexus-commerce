@@ -127,6 +127,13 @@ export const INQUIRY_REFUSALS = [
   'LINES_NOT_READY',
   'STYLE_DRAFTS_FULL',
   // ---- end B-TH-025 / B-TH-026
+  // ---- B-TH-042: answer a new customer (make the customer from the prospect, or match it after the check)
+  'NOT_PROSPECT',
+  'PROSPECT_ERASED',
+  'CONFIRM_MATCH',
+  'MATCH_FOUND',
+  'CODE_TAKEN',
+  // ---- end B-TH-042
 ] as const
 export type InquiryRefusalCode = (typeof INQUIRY_REFUSALS)[number]
 export interface InquiryRefusal {
@@ -457,3 +464,66 @@ export function quotableLines<Line extends QuotableLine>(lines: readonly Line[])
   }
   return { copy, leftOut }
 }
+
+// ---- B-TH-042 (threads plan G5; O-SAL-INQ-LIST.pane-actions-F08, O-SAL-INQ-REC.side, wall W23): answer a new customer --------
+
+/** How the check found a customer the prospect may already be: its contact's address, its contacts' e-mail domain, its name. */
+export const CUSTOMER_MATCHES = ['CONTACT', 'DOMAIN', 'NAME'] as const
+export type CustomerMatch = (typeof CUSTOMER_MATCHES)[number]
+/** The strongest first: a candidate found several ways is named by the strongest. */
+export const MATCH_RANK: Readonly<Record<CustomerMatch, number>> = Object.freeze({ CONTACT: 0, DOMAIN: 1, NAME: 2 })
+/** The most candidates the check names. */
+export const CANDIDATES_MAX = 20
+
+/** Why a prospect's request may not be made a customer, or matched to one, now (null: it may). */
+export function makeCustomerRefusal(facts: InquiryFacts & { readonly prospectErased: boolean }, making: boolean): InquiryRefusal | null {
+  const shut = closed(facts)
+  if (shut) return shut
+  if (facts.partyId !== null) return refusal('NOT_PROSPECT', `${facts.number} is already from its customer: a request of another customer is a new request.`)
+  if (making && facts.prospectErased) return refusal('PROSPECT_ERASED', `The prospect of ${facts.number} was erased: nothing is left to make a customer from; match it to a customer instead.`)
+  return null
+}
+
+/**
+ * Whether matching to this customer asks first (W23): only a match by the address of one of ITS active contacts, and no other
+ * customer found that strongly, goes on without the person's yes; a match by domain or name, an ambiguous one, or a customer the
+ * check did not find, waits for `confirmed` (refusal CONFIRM_MATCH, the words name only the customer the person picked).
+ */
+export function matchRefusal(input: { readonly number: string; readonly customer: string; readonly found: CustomerMatch | null; readonly contactMatches: number; readonly confirmed: boolean }): InquiryRefusal | null {
+  if (input.confirmed) return null
+  if (input.found === 'CONTACT' && input.contactMatches === 1) return null
+  const why =
+    input.found === 'CONTACT'
+      ? `the prospect's address is a contact of more than one customer`
+      : input.found === 'DOMAIN'
+        ? `only the e-mail domain ties the prospect to ${input.customer}`
+        : input.found === 'NAME'
+          ? `only the name ties the prospect to ${input.customer}`
+          : `nothing ties the prospect to ${input.customer} yet (no contact, no e-mail domain, no name)`
+  return refusal('CONFIRM_MATCH', `Check that ${input.number} is from ${input.customer}: ${why}. Confirm to match it.`)
+}
+
+/** Making a new customer while the check found one the prospect may already be asks first (no duplicate by mistake). */
+export function makeRefusal(input: { readonly number: string; readonly candidates: readonly string[]; readonly confirmed: boolean }): InquiryRefusal | null {
+  if (input.confirmed || input.candidates.length === 0) return null
+  return refusal('MATCH_FOUND', `${input.number}'s prospect may already be a customer (${input.candidates.join(', ')}): use it, or confirm a new customer.`)
+}
+
+export const codeTakenRefusal = (code: string): InquiryRefusal => refusal('CODE_TAKEN', `The code ${code} is another party's: choose another.`)
+
+const CODE_MAX = 24
+/** A party code proposed from the prospect's company (or name): capital letters and digits, at most 24, never empty. */
+export function suggestedCode(prospect: { readonly company: string | null; readonly name: string | null; readonly email: string | null }): string {
+  const words = prospect.company ?? prospect.name ?? prospect.email?.split('@')[0] ?? ''
+  const folded = words.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  const code = folded.slice(0, CODE_MAX).replace(/-+$/g, '')
+  return code === '' ? 'NEW-CUSTOMER' : code
+}
+
+/** The consent of a prospect, carried to its contact (GDPR art. 7(1)): when the request came, and how. */
+export function carriedConsent(basis: LawfulBasis | null, request: { readonly number: string; readonly receivedAt: Date; readonly source: InquirySource }): { readonly lawfulBasis: LawfulBasis; readonly consentAt: Date | null; readonly consentSource: string | null } {
+  const lawfulBasis = basis ?? PROSPECT_DEFAULT_BASIS
+  if (lawfulBasis !== 'CONSENT') return { lawfulBasis, consentAt: null, consentSource: null }
+  return { lawfulBasis, consentAt: request.receivedAt, consentSource: `Given with request ${request.number} (${SOURCE_WORDS[request.source].en.toLowerCase()})` }
+}
+// ---- end B-TH-042

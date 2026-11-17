@@ -147,3 +147,52 @@ describe('the catalogues', () => {
     expect(updateInquiryBody.safeParse({ version: 1, prospect: null }).success).toBe(true)
   })
 })
+
+// ---- B-TH-042: answer a new customer ---------------------------------------------------------------------------------------
+import { carriedConsent, makeCustomerRefusal, makeRefusal, matchRefusal, suggestedCode } from './rules'
+import { makeCustomerBody } from './contracts'
+
+describe('answer a new customer (B-TH-042, W23)', () => {
+  const open = { number: 'INQ-0007', status: 'NEW' as const, assigneeId: null, partyId: null, prospectErased: false }
+  it('only an open prospect’s request; an erased prospect is matched, never made a customer', () => {
+    expect(makeCustomerRefusal(open, true)).toBeNull()
+    expect(makeCustomerRefusal({ ...open, status: 'LOST' }, false)?.code).toBe('CLOSED')
+    expect(makeCustomerRefusal({ ...open, partyId: 'p' }, false)?.code).toBe('NOT_PROSPECT')
+    expect(makeCustomerRefusal({ ...open, prospectErased: true }, true)?.code).toBe('PROSPECT_ERASED')
+    expect(makeCustomerRefusal({ ...open, prospectErased: true }, false)).toBeNull()
+  })
+  it('a match asks first unless one of the customer’s own contacts has the address, and only that customer', () => {
+    const base = { number: 'INQ-0007', customer: 'Brand Beta', contactMatches: 1, confirmed: false }
+    expect(matchRefusal({ ...base, found: 'CONTACT' })).toBeNull()
+    expect(matchRefusal({ ...base, found: 'CONTACT', contactMatches: 2 })?.code).toBe('CONFIRM_MATCH')
+    for (const found of ['DOMAIN', 'NAME', null] as const) {
+      const refusal = matchRefusal({ ...base, found })
+      expect(refusal?.code).toBe('CONFIRM_MATCH')
+      expect(refusal?.message).toContain('Brand Beta')
+    }
+    expect(matchRefusal({ ...base, found: null, confirmed: true })).toBeNull()
+    expect(makeRefusal({ number: 'INQ-0007', candidates: ['BETA'], confirmed: false })?.code).toBe('MATCH_FOUND')
+    expect(makeRefusal({ number: 'INQ-0007', candidates: [], confirmed: false })).toBeNull()
+    expect(makeRefusal({ number: 'INQ-0007', candidates: ['BETA'], confirmed: true })).toBeNull()
+  })
+  it('the code proposed is the prospect’s company in capitals (accents folded, at most 24), never empty', () => {
+    expect(suggestedCode({ company: 'Moto Club Città di Prato', name: null, email: null })).toBe('MOTO-CLUB-CITTA-DI-PRATO')
+    expect(suggestedCode({ company: null, name: 'Anna Rossi', email: null })).toBe('ANNA-ROSSI')
+    expect(suggestedCode({ company: null, name: null, email: 'buyer.one@example.com' })).toBe('BUYER-ONE')
+    expect(suggestedCode({ company: '***', name: null, email: null })).toBe('NEW-CUSTOMER')
+    expect(suggestedCode({ company: 'A very long made-up company name of riders', name: null, email: null }).length).toBeLessThanOrEqual(24)
+  })
+  it('the lawful basis is carried to the contact; a consent with when (the request) and how', () => {
+    const request = { number: 'INQ-0007', receivedAt: new Date('2026-11-10T09:00:00.000Z'), source: 'PORTAL' as const }
+    expect(carriedConsent('CONTRACT', request)).toEqual({ lawfulBasis: 'CONTRACT', consentAt: null, consentSource: null })
+    expect(carriedConsent(null, request).lawfulBasis).toBe('CONTRACT')
+    const consent = carriedConsent('CONSENT', request)
+    expect(consent.consentAt).toEqual(request.receivedAt)
+    expect(consent.consentSource).toContain('INQ-0007')
+  })
+  it('the body matches or makes (the API refuses both or neither), and takes the yes to what the check asked', () => {
+    expect(makeCustomerBody.safeParse({ version: 1, match: { partyId: '00000000-0000-4000-8000-000000000001' } }).success).toBe(true)
+    expect(makeCustomerBody.safeParse({ version: 1, make: { code: 'BETA', status: 'ACTIVE' }, confirmed: true }).success).toBe(true)
+    expect(makeCustomerBody.safeParse({ version: 1, make: { partyId: 'x' } }).success).toBe(false)
+  })
+})

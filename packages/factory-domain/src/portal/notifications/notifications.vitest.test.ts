@@ -187,3 +187,15 @@ describe('an order that waits for our yes (B-TH-006)', () => {
   })
 })
 // ── end B-TH-006 ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+// ── th3b follow-up 5 (threads plan §0.5, counts do not leak) ───────────────────────────────────────────────────────────────
+describe('a delivery that shipped (th3b follow-up 5)', () => {
+  it("names the customer's own order, never the office's shipment or order series", () => {
+    const shipped = { messageKey: 'portal.shipment.shipped' as const, recordLabel: '#12', params: { yourKind: 'ORDER', yourSeq: 12 } }
+    expect(partnerSentence(shipped, 'en', 'Factory Spa')).toBe('A delivery of your order 12 has shipped')
+    expect(partnerSentence(shipped, 'it', 'Factory Spa')).toBe('È stata spedita una consegna per il vostro ordine 12')
+    for (const locale of ['it', 'en'] as const) expect(partnerSentence(shipped, locale, 'Factory Spa')).not.toMatch(/SH-|SO-/)
+    expect(topicOfNotice(shipped, () => null)).toBe('SHIPPED')
+  })
+})
+// ── end th3b follow-up 5 ────────────────────────────────────────────────────────────────────────────────────────────────────

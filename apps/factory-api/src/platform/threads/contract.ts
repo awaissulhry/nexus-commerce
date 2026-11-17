@@ -154,6 +154,21 @@ export const postNoteContract = defineContract({
   response: { 201: output({ thread: threadView, message: messageView }) },
 })
 
+// ---- B-TH-044 (G15): a reply the record's party reads in its portal, with no mail (OUTBOUND on the PORTAL channel). One action that
+// replies on several records sends the same batchId with each (B-TH-045: one bell item per reader).
+export const postReplyContract = defineContract({
+  params: recordParams,
+  body: input({
+    body: z.string().max(MAX_BODY_LENGTH),
+    /** Files of this record already shared with its party (AVAILABLE, readable by the writer). */
+    attachments: z.array(id()).max(MAX_ATTACHMENTS).optional(),
+    /** The batch of one action that replies on several records (the same id on each call). */
+    batchId: id().optional(),
+  }),
+  response: { 201: output({ thread: threadView, message: messageView }) },
+})
+// ---- end B-TH-044
+
 /**
  * Who a note on the record may mention (COL-006; A2 SCR-006's composer): every ACTIVE person whose roles let them read
  * the record's thread, by name. Names only: no address, no role.

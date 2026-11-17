@@ -40,13 +40,15 @@ export function taskView(row: TaskRow, now: Date, names: ReadonlyMap<string, str
 
 /**
  * The partner's row: the record's page at the task, whether it can be marked done here, whether Undo is still offered;
+ * th3b follow-up 5: `labels` (partnerLabelsOf) — what the partner reads of the record instead of the office's label;
  * B-W2b-F14: whether it is handed to this person (`mine`) and whether they may take it or hand it on (an open task, not a
  * preview).
  */
-export function partnerTaskView(row: TaskRow, now: Date, facts: { readonly partyCode: string; readonly personId: string; readonly preview: boolean; readonly names?: ReadonlyMap<string, string>; readonly partnerKind?: string | null }) {
+export function partnerTaskView(row: TaskRow, now: Date, facts: { readonly partyCode: string; readonly personId: string; readonly preview: boolean; readonly names?: ReadonlyMap<string, string>; readonly partnerKind?: string | null; readonly labels?: ReadonlyMap<string, string> }) {
   const source = sourceOf(row.sourceKey)
   return {
-    ...taskView(row, now, facts.names),
+    // th3b follow-up 5 (§0.5): the record as the partner reads it (./partner-label.ts: a customer's own numbers), never the office's.
+    ...taskView({ ...row, recordLabel: facts.labels?.get(row.id) ?? row.recordLabel }, now, facts.names),
     // B-W2b-F17: the area as the person's partner kind has it (a supplier's approvals on Home), as the badges count it.
     area: taskArea(row.kind, facts.partnerKind),
     mine: row.assigneeId === facts.personId,
