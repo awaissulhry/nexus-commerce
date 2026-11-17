@@ -1,4 +1,6 @@
 import { STEP_CODE } from '@nexus/factory-domain/production/checklists/rules'
+// F-PR-02: the production pages' one customer filter.
+import { PARTY_KEY, partyTerm } from '../_shared/customer/model'
 import { INSTRUCTION_ICONS, INSTRUCTION_LIMITS, MEDIA_TYPES, wordsIn, type MediaKind } from '@nexus/factory-domain/production/instructions/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Acknowledgements, AckPerson, FileFacts, InstructionList, InstructionRecord, InstructionRow, SaveBody, StepView, VersionAnswer, VersionView } from './api'
@@ -70,6 +72,8 @@ export interface ListAddress {
   readonly creating: boolean
   /** `?typed=1`: Bring in typed steps open. */
   readonly typed: boolean
+  /** F-PR-02: the customer filter (`?party=`); absent or null: every customer. */
+  readonly party?: string | null
 }
 
 interface Params {
@@ -83,6 +87,7 @@ export function listAddressOf(params: Params | null | undefined): ListAddress {
     q: params?.get('q') ?? '',
     creating: params?.get('new') === '1',
     typed: params?.get('typed') === '1',
+    ...partyTerm(params),
   }
 }
 
@@ -92,11 +97,12 @@ export function listQueryText(address: ListAddress): string {
   if (address.q.trim()) search.set('q', address.q.trim())
   if (address.creating) search.set('new', '1')
   if (address.typed) search.set('typed', '1')
+  if (address.party) search.set(PARTY_KEY, address.party)
   const text = search.toString()
   return text ? `?${text}` : ''
 }
 
-export const isFiltered = (address: ListAddress): boolean => address.view !== 'active' || address.q.trim() !== ''
+export const isFiltered = (address: ListAddress): boolean => address.view !== 'active' || address.q.trim() !== '' || !!address.party
 
 /** The API's status a view reads (the other views are read from the ACTIVE list). */
 export const statusOfView = (view: ListView): 'ACTIVE' | 'ARCHIVED' => (view === 'archived' ? 'ARCHIVED' : 'ACTIVE')

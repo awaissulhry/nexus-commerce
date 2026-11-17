@@ -43,6 +43,8 @@ const cardSchema = z.object({
     dueDate: z.string().nullable(),
     style: z.object({ code: z.string(), name: z.string() }),
     holdReason: z.string().nullable(),
+    // B-PR-11 (L13) / F-PR-02: the customer's CODE (a floor surface: never the name); null: none.
+    customerCode: z.string().nullable().optional(),
   }),
   operation: z.object({ id: z.string(), seq: z.number(), name: z.string(), workCentreId: z.string() }),
   previous: z.object({ seq: z.number(), name: z.string() }).nullable(),

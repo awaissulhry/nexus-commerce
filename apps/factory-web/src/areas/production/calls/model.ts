@@ -1,4 +1,6 @@
 import { CALL_KINDS, CALL_LIMITS, CALL_TILES, CALL_VIEWS, RESOLUTION_CODE, type CallKind, type CallStatus, type CallTile, type CallView } from '@nexus/factory-domain/production/calls/rules'
+// F-PR-02: the production pages' one customer filter.
+import { PARTY_KEY, partyTerm } from '../_shared/customer/model'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Call, CallCounts, CallRecord, CallsByHour, CallType, Person } from './api'
 
@@ -52,6 +54,8 @@ export interface CallsAddress {
   q: string
   /** The call open in its DetailModal. */
   open: string | null
+  /** F-PR-02: the customer filter (`?party=`); absent or null: every customer. */
+  party?: string | null
 }
 
 const pick = <T extends string>(values: readonly T[], value: string | null | undefined): T | null => (value && (values as readonly string[]).includes(value) ? (value as T) : null)
@@ -63,6 +67,7 @@ export function addressOf(params: { get(name: string): string | null } | null): 
     kind: pick(CALL_KINDS, params?.get('kind')),
     q: params?.get('q') ?? '',
     open: params?.get('open') || null,
+    ...partyTerm(params),
   }
 }
 
@@ -74,6 +79,7 @@ export function addressText(address: CallsAddress): string {
   if (address.kind) query.set('kind', address.kind)
   if (address.q.trim()) query.set('q', address.q.trim())
   if (address.open) query.set('open', address.open)
+  if (address.party) query.set(PARTY_KEY, address.party)
   const text = query.toString()
   return text ? `?${text}` : ''
 }

@@ -17,6 +17,7 @@ import { BUNDLE_COLUMNS, readBundle, readReprints, readTicketJobs, type BundleRo
 import { placeView, stationsOf, trackBundles, type Tracked } from './track'
 import { hidesOf } from './views'
 import { workOrderWhere } from '../work-orders/scope' // B-PR-04a
+import { customerFacts } from '../work-orders/customers' // F-PR-02
 
 /**
  * Where every bundle is (B-W2b-41; MES-074, MES-168; design production.bundles SCR-259: tiles, the grid, the Bundle
@@ -48,7 +49,7 @@ function scopeOf(context: OfficeContext, partyId?: string): Prisma.BundleWhereIn
 }
 
 /** The grid's row: the bundle, its work order and cell, its place now, last scan, stuck wait and genealogy (MES-074). */
-function rowView(row: Tracked, stations: Awaited<ReturnType<typeof stationsOf>>, hides: Awaited<ReturnType<typeof hidesOf>>) {
+function rowView(row: Tracked, stations: Awaited<ReturnType<typeof stationsOf>>, hides: Awaited<ReturnType<typeof hidesOf>>, customerCode: string | null) {
   const own = new Map(row.bundle.cutLogIds.flatMap((id) => (hides.has(id) ? [[hides.get(id)!.hideId, hides.get(id)!] as const] : [])))
   return {
     id: row.bundle.id,
@@ -69,13 +70,20 @@ function rowView(row: Tracked, stations: Awaited<ReturnType<typeof stationsOf>>,
     hides: [...own.values()].sort((a, b) => (a.code < b.code ? -1 : 1)),
     voidedAt: row.bundle.voidedAt ? toUtcIso(row.bundle.voidedAt) : null,
     createdAt: toUtcIso(row.bundle.createdAt),
+    customerCode, // F-PR-02
   }
 }
 
 export async function rowsOf(db: Reader, rows: readonly Tracked[]) {
   const stations = await stationsOf(db, rows.map((row) => row.lastScan?.stationId ?? null))
   const hides = await hidesOf(db, [...new Set(rows.flatMap((row) => row.bundle.cutLogIds))])
-  return rows.map((row) => rowView(row, stations, hides))
+  // F-PR-02: each bundle's customer CODE (its work order's one customer, else its cell's on a work order made before the rule):
+  // the Customer column of Bundles, and a code only, as this row also feeds floor surfaces (L13).
+  const cells = await db.workOrderSize.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.bundle.workOrderSizeId))] } }, select: { id: true, partyId: true, workOrder: { select: { partyId: true } } } })
+  const partyOf = new Map(cells.map((cell) => [cell.id, cell.workOrder.partyId ?? cell.partyId]))
+  const codes = await customerFacts(db, [...partyOf.values()])
+  const codeOf = (row: Tracked): string | null => codes.get(partyOf.get(row.bundle.workOrderSizeId) ?? '')?.code ?? null
+  return rows.map((row) => rowView(row, stations, hides, codeOf(row)))
 }
 
 // ---- the grid ----------------------------------------------------------------------------------------------------------------

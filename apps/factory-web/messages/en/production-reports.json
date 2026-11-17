@@ -51,7 +51,8 @@
     "read": "Something went wrong while reading. Try again.",
     "forbidden": "You have no permission to read this.",
     "notFound": "There is no site where you may read this.",
-    "offline": "No answer from the server. Check the connection and try again."
+    "offline": "No answer from the server. Check the connection and try again.",
+    "everyCustomer": "This view adds up every customer; it needs access to all customers."
   },
   "tile": {
     "good": "Good",

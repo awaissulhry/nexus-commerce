@@ -13,6 +13,8 @@ import { readProblem, writeProblem } from '../_shared/model'
 import { getRules } from '../settings/api'
 import { bundleTiles, findingsSummary, listBundles, listFindings, reprintTicket, reviewFinding, showWho, type BundleTiles, type Finding, type TrackedBundle } from './api'
 import type { BundlesModel, FindingsDialog, ReprintRun } from './list-model'
+// F-PR-02: the customer filter.
+import { useProductionCustomers } from '../_shared/customer/use-customers'
 import { addressOf, addressText, BUNDLES_NAMESPACE, BUNDLES_NAMESPACES, bundlesCanOf, csvCell, isBundleChange, oneHit, reviewProblem, viewQuery, whoProblem, type BundlesAddress, type FindingsAsk, type WhoPurpose } from './model'
 import { BundlesView } from './view/BundlesView'
 
@@ -43,6 +45,9 @@ function Container() {
   const prefix = pathname.replace(/\/production\/bundles\/?$/, '')
   const can = useMemo(() => bundlesCanOf(session.permissions), [session.permissions])
   const address = addressOf(params)
+  // F-PR-02: the customer filter (the list and its tiles follow it).
+  const customers = useProductionCustomers('bundles')
+  const partyId = customers.partyId
   const siteId = scope.siteId
 
   const [rows, setRows] = useState<BundlesModel['rows']>({ items: null, more: false, problem: null })
@@ -65,7 +70,7 @@ function Container() {
     if (!can.view) return
     const id = ++readId.current
     try {
-      const page = await listBundles(api, viewQuery(address.view, address.q, siteId))
+      const page = await listBundles(api, viewQuery(address.view, address.q, siteId, null, partyId))
       if (id !== readId.current) return
       setRows({ items: page.bundles, more: page.nextCursor !== null, problem: null })
       setCursor(page.nextCursor)
@@ -82,10 +87,10 @@ function Container() {
       if (id !== readId.current) return
       setRows({ items: null, more: false, problem: readProblem(error) })
     }
-    bundleTiles(api, siteId)
+    bundleTiles(api, siteId, undefined, partyId)
       .then((answer) => id === readId.current && setTiles(answer))
       .catch(() => id === readId.current && setTiles(null))
-  }, [api, can.view, address.view, address.q, siteId, prefix, router])
+  }, [api, can.view, address.view, address.q, siteId, prefix, router, partyId])
 
   const loadSummary = useCallback(() => {
     if (!can.view) return
@@ -103,17 +108,17 @@ function Container() {
   const more = useCallback(async () => {
     if (!cursor) return
     try {
-      const page = await listBundles(api, viewQuery(address.view, address.q, siteId, cursor))
+      const page = await listBundles(api, viewQuery(address.view, address.q, siteId, cursor, partyId))
       setRows((current) => ({ items: [...(current.items ?? []), ...page.bundles.filter((row) => !current.items?.some((seen) => seen.id === row.id))], more: page.nextCursor !== null, problem: null }))
       setCursor(page.nextCursor)
     } catch (error) {
       setNotice({ tone: 'danger', words: { key: `production:${readProblem(error)}` } })
     }
-  }, [api, cursor, address.view, address.q, siteId])
+  }, [api, cursor, address.view, address.q, siteId, partyId])
 
   // Live: rows never move under the cursor; the tiles and the counts follow at once.
   const refresh = useCoalesced(() => {
-    bundleTiles(api, siteId)
+    bundleTiles(api, siteId, undefined, partyId)
       .then(setTiles)
       .catch(() => undefined)
     loadSummary()
@@ -260,13 +265,14 @@ function Container() {
     [rows.items, t],
   )
 
-  const model: BundlesModel = { prefix, can, view: address.view, q: address.q, rows, tiles, asOf, live, updates, notice, summary, findings, reprint }
+  const model: BundlesModel = { prefix, can, view: address.view, q: address.q, rows, tiles, asOf, live, updates, notice, summary, findings, reprint, customers: customers.state }
 
   return (
     <BundlesView
       model={model}
       actions={{
         onView: (view) => go({ view }),
+        onCustomer: customers.onPick,
         onSearch: (q) => go({ q }),
         onScan: (q) => {
           scanned.current = q

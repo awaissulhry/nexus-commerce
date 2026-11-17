@@ -153,7 +153,7 @@ export function CutOrderRecord({ cutOrderId }: { cutOrderId: string }) {
   )
 
   const value: Record_ | null = record.value
-  const model: CutOrderRecordModel = { prefix, can, tab, timeZone: TIME_ZONE, record, recon, live, dialog, candidates, printers, reconcile, shown, busy, problem, notice }
+  const model: CutOrderRecordModel = { prefix, can, tab, timeZone: TIME_ZONE, record, recon, live, dialog, candidates, printers, reconcile, shown, busy, problem, notice, customerNames: session.permissions.includes('parties.view') }
 
   return (
     <CutOrderRecordView

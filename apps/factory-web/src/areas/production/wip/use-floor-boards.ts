@@ -33,7 +33,7 @@ const NOTHING = { value: null, problem: null }
  * never reads it. Live: a burst of scans is one read at most every 10 seconds (the design's aggregation), a help call or a
  * reason reads its own part at once. Each write's refusal comes back in our words.
  */
-export function useFloorBoards(api: ApiClient, can: FloorBoardsCan) {
+export function useFloorBoards(api: ApiClient, can: FloorBoardsCan, partyId?: string) {
   const scope = useOfficeScope()
   const siteIds = useMemo(() => (scope.siteId ? [scope.siteId] : scope.sites.map((site) => site.id)), [scope.siteId, scope.sites])
   const key = siteIds.join(',')
@@ -52,10 +52,10 @@ export function useFloorBoards(api: ApiClient, can: FloorBoardsCan) {
 
   const loadCalls = useCallback(() => {
     if (!can.calls) return
-    callCounts(api, scope.siteId)
+    callCounts(api, scope.siteId, undefined, partyId)
       .then((value) => setOpenCalls(value.tiles.OPEN))
       .catch(() => setOpenCalls(null))
-  }, [api, can.calls, scope.siteId])
+  }, [api, can.calls, scope.siteId, partyId])
 
   const loadScanFed = useCallback(() => {
     loadHours()
@@ -65,14 +65,14 @@ export function useFloorBoards(api: ApiClient, can: FloorBoardsCan) {
         .catch((error: unknown) => setHeat({ value: null, problem: readProblem(error) }))
     }
     if (can.bundles) {
-      getStuck(api, scope.siteId)
+      getStuck(api, scope.siteId, partyId)
         .then((answer) => setStuck({ value: answer.bundles, problem: null, capped: answer.capped }))
         .catch((error: unknown) => setStuck({ value: null, problem: readProblem(error), capped: false }))
-      getBundleTiles(api, scope.siteId)
+      getBundleTiles(api, scope.siteId, partyId)
         .then(setTiles)
         .catch(() => setTiles(null))
     }
-  }, [api, can.boards, can.bundles, loadHours, scope.siteId, siteIds])
+  }, [api, can.boards, can.bundles, loadHours, scope.siteId, siteIds, partyId])
 
   const load = useCallback(() => {
     loadScanFed()
@@ -81,8 +81,8 @@ export function useFloorBoards(api: ApiClient, can: FloorBoardsCan) {
 
   useEffect(() => {
     load()
-    // `key`: the same sites in a new array read nothing again.
-  }, [key, can.boards, can.bundles, can.calls])
+    // `key`: the same sites in a new array read nothing again. F-PR-17: and again for another customer.
+  }, [key, can.boards, can.bundles, can.calls, partyId])
 
   const rereadScans = useCoalesced(loadScanFed, 10_000)
   const onLive = useCallback(

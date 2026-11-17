@@ -186,3 +186,32 @@ export function tvLine(lines: readonly { readonly id: string }[] | null, scope: 
   if (scope) return scope
   return lines?.length === 1 ? lines[0]!.id : null
 }
+
+// ── F-PR-17 (production plan §5 "Floor now: held work shown; Customer column; no silent cap"; 09-design R11) ─────────────────
+
+/**
+ * The sections that add up every customer (line totals: Lines, the heat map, hour by hour, the line TV, the cutting room board)
+ * open only for a person who reaches every customer (B-PR-07: the API refuses the others). Unknown yet: none is read, so
+ * nobody limited to some customers ever gets a refusal drawn as an error.
+ */
+export function mixedSectionsCan(can: FloorBoardsCan, everyCustomer: boolean | null): FloorBoardsCan {
+  return everyCustomer === true ? can : { ...can, boards: false, targets: false }
+}
+
+/** "100 of 143": the rows shown of the rows there are; null when every one is shown (or the total is not known). */
+export function shownOf(shown: number, total: number | null | undefined): { readonly shown: number; readonly total: number } | null {
+  return typeof total === 'number' && total > shown ? { shown, total } : null
+}
+
+/** A held work order's words on the floor: "On hold · <its reason>" (the office's own words), else "On hold"; not held: null. */
+export function heldPhrase(row: { readonly workOrder: { readonly status: string }; readonly holdReason?: string | null | undefined }): { readonly key: string; readonly params?: Readonly<Record<string, string>> } | null {
+  if (row.workOrder.status !== 'ON_HOLD') return null
+  const reason = row.holdReason?.trim()
+  return reason ? { key: 'floor.heldWhy', params: { reason } } : { key: 'floor.held' }
+}
+
+/** Show more: the next page's rows added to those shown (a row read twice, after a live change moved the order, once). */
+export function withNextPage<T extends { readonly workOrder: { readonly id: string } }>(shown: readonly T[], next: readonly T[]): T[] {
+  const seen = new Set(shown.map((row) => row.workOrder.id))
+  return [...shown, ...next.filter((row) => !seen.has(row.workOrder.id))]
+}

@@ -342,6 +342,8 @@ export const trackedRow = output({
   hides: z.array(hideRef),
   voidedAt: instant().nullable(),
   createdAt: instant(),
+  /** F-PR-02: its customer's CODE (never the name: this row also reaches floor surfaces, L13); null: none. */
+  customerCode: z.string().nullable(),
 })
 
 export const listBundlesContract = defineContract({

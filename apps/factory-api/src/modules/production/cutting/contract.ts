@@ -460,6 +460,9 @@ export const cutsListContract = defineContract({
           lastCutAt: instant().nullable(),
           /** Recuts asked for scrapped pieces and not cut yet (MES-130). */
           recutsOpen: z.number().int(),
+          /** F-PR-02: its work order's one customer (null: none), or one made before the one-customer rule with several. */
+          customer: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+          mixedCustomers: z.boolean(),
         }),
       ),
       /** More cuts match than `limit`. */

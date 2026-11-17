@@ -99,6 +99,8 @@ export const cutOrderSummarySchema = z.object({
   createdAt: z.string(),
   version: z.number(),
   words,
+  // F-PR-02: the customers of its cells, by name (the office only; "Customers: A, B" on the record).
+  customers: z.array(z.object({ id: z.string(), code: z.string(), name: z.string() })).optional(),
 })
 export type CutOrderSummary = z.infer<typeof cutOrderSummarySchema>
 
@@ -168,8 +170,9 @@ const listSchema = z.object({ rows: z.array(cutOrderSummarySchema), nextCursor: 
 export type CutOrderPage = z.infer<typeof listSchema>
 
 /** production.cutting.view: the cut orders of the caller's scope, newest first, with the counts per status. */
-export function listCutOrders(api: ApiClient, query: { view: CutOrderView; q?: string; limit: number; kind?: CutOrderKind }, signal?: AbortSignal): Promise<CutOrderPage> {
-  return api.get('/production/cut-orders', { query: { view: query.view, q: query.q?.trim() || undefined, limit: query.limit, kind: query.kind }, schema: listSchema, signal })
+export function listCutOrders(api: ApiClient, query: { view: CutOrderView; q?: string; limit: number; kind?: CutOrderKind; partyId?: string | undefined }, signal?: AbortSignal): Promise<CutOrderPage> {
+  // F-PR-02: partyId = the customer filter (`?party=`): the cut orders with a cell of that customer.
+  return api.get('/production/cut-orders', { query: { view: query.view, q: query.q?.trim() || undefined, limit: query.limit, kind: query.kind, partyId: query.partyId }, schema: listSchema, signal })
 }
 
 // ---- New cut order ----------------------------------------------------------------------------------------------------------

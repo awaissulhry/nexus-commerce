@@ -58,6 +58,9 @@ export const workOrderRowSchema = z.object({
   splitFrom: z.object({ id: z.string(), number: z.string() }).nullable().optional(),
   releasedAt: z.string().nullable(),
   createdAt: z.string(),
+  // F-PR-17 (B-PR-03's row): its one customer (null: none), or one made before the one-customer rule with several.
+  customer: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable().optional(),
+  mixedCustomers: z.boolean().optional(),
 })
 export type WorkOrderRow = z.infer<typeof workOrderRowSchema>
 
@@ -76,6 +79,8 @@ export interface ListQuery {
   salesOrderId?: string
   cursor?: string | null
   limit?: number
+  /** F-PR-17: one customer's work orders (the Production pages' customer filter, `?party=`). */
+  partyId?: string | undefined
 }
 
 export function listWorkOrders(api: ApiClient, query: ListQuery, signal?: AbortSignal): Promise<WorkOrderPage> {
@@ -90,6 +95,7 @@ export function listWorkOrders(api: ApiClient, query: ListQuery, signal?: AbortS
       salesOrderId: query.salesOrderId,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
+      partyId: query.partyId,
     },
     schema: listSchema,
     signal,
@@ -100,8 +106,9 @@ export function listWorkOrders(api: ApiClient, query: ListQuery, signal?: AbortS
 const countsSchema = z.object({ counts: z.object({ draft: z.number(), released: z.number(), inProgress: z.number(), completed: z.number(), open: z.number(), late: z.number(), onHold: z.number().optional() }) })
 export type WorkOrderCounts = z.infer<typeof countsSchema>['counts']
 
-export async function countWorkOrders(api: ApiClient, signal?: AbortSignal): Promise<WorkOrderCounts> {
-  return (await api.get('/production/work-orders/counts', { schema: countsSchema, signal })).counts
+export async function countWorkOrders(api: ApiClient, signal?: AbortSignal, partyId?: string): Promise<WorkOrderCounts> {
+  // F-PR-17: partyId = one customer's counts (Floor now's customer filter).
+  return (await api.get('/production/work-orders/counts', { query: { partyId }, schema: countsSchema, signal })).counts
 }
 
 const operationSchema = z.object({
@@ -496,6 +503,10 @@ export const siteWipSchema = z.object({
   workOrders: z.array(
     z.object({
       workOrder: z.object({ id: z.string(), number: z.string(), status, siteId: z.string() }),
+      // F-PR-17: a held one's reason (held work is on the floor too), and its one customer.
+      holdReason: z.string().nullable().optional(),
+      customer: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable().optional(),
+      mixedCustomers: z.boolean().optional(),
       siteCode: z.string(),
       style: z.object({ code: z.string(), name: z.string() }),
       dueDate: z.string().nullable(),
@@ -520,12 +531,16 @@ export const siteWipSchema = z.object({
       allFinished: z.boolean(),
     }),
   ),
+  /** F-PR-17: how many work orders the floor holds in all (no silent cap: "100 of 143 · Show more"). */
+  total: z.number().optional(),
 })
 export type SiteWip = z.infer<typeof siteWipSchema>
 export type SiteWipRow = SiteWip['workOrders'][number]
 
-export function getSiteWip(api: ApiClient, signal?: AbortSignal): Promise<SiteWip> {
-  return api.get('/production/scans/wip', { query: { limit: 100 }, schema: siteWipSchema, signal })
+/** F-PR-17: a page of Floor now's work orders (100 at a time; `offset` = the rows already shown), one customer's when asked. */
+export const SITE_WIP_PAGE = 100
+export function getSiteWip(api: ApiClient, query: { readonly partyId?: string | undefined; readonly offset?: number } = {}, signal?: AbortSignal): Promise<SiteWip> {
+  return api.get('/production/scans/wip', { query: { limit: SITE_WIP_PAGE, offset: query.offset || undefined, partyId: query.partyId }, schema: siteWipSchema, signal })
 }
 
 // ---- materials: the pick list ------------------------------------------------------------------------------------------------

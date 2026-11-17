@@ -119,12 +119,13 @@ export function getHeatCell(api: ApiClient, query: { siteId: string; lineId: str
   return api.get('/production/boards/heatmap/cell', { query: { siteId: query.siteId, lineId: query.lineId ?? undefined, code: query.code }, schema: bundlesAnswer })
 }
 
-export function getStuck(api: ApiClient, siteId: string | null): Promise<BundlesAnswer> {
-  return api.get('/production/bundles/stuck', { query: { siteId: siteId ?? undefined }, schema: bundlesAnswer })
+// F-PR-17: partyId = Floor now's customer filter (the stuck bundles and their tile are rows of work orders, walled per row).
+export function getStuck(api: ApiClient, siteId: string | null, partyId?: string): Promise<BundlesAnswer> {
+  return api.get('/production/bundles/stuck', { query: { siteId: siteId ?? undefined, partyId }, schema: bundlesAnswer })
 }
 
-export function getBundleTiles(api: ApiClient, siteId: string | null): Promise<BundleTiles> {
-  return api.get('/production/bundles/tiles', { query: { siteId: siteId ?? undefined }, schema: tilesSchema })
+export function getBundleTiles(api: ApiClient, siteId: string | null, partyId?: string): Promise<BundleTiles> {
+  return api.get('/production/bundles/tiles', { query: { siteId: siteId ?? undefined, partyId }, schema: tilesSchema })
 }
 
 /** The Office's preview of a line's TV: the same board as the wall's (SCR-173 display.preview). */

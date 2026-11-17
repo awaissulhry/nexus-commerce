@@ -99,6 +99,8 @@ export const cutOrderSummary = output({
   version: z.number().int(),
   /** "2 lays · 60 plies · 360 garments" (it "2 materassi · 60 strati · 360 capi"). */
   words,
+  /** F-PR-02: the customers of its cells by name, for the office (a floor answer holds none: L13). */
+  customers: z.array(output({ id: id(), code: z.string(), name: z.string() })),
 })
 
 const warning = output({ code: z.enum(ALLOCATION_WARNINGS), message: z.string() })

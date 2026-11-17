@@ -5,6 +5,8 @@ import { CORRECTION_REFUSAL_REASONS } from '@nexus/factory-domain/production/sca
 import { DEFECT_KINDS, REASON_CODE } from '@nexus/factory-domain/production/scans/reasons'
 import { CLIENT_SCAN_ID, MAX_BATCH_ITEMS, SCAN_REFUSALS } from '@nexus/factory-domain/production/scans/rules'
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
+// F-PR-17: the floor's total is a count, not money.
+import { notMoney } from '@nexus/factory-domain/money/marked'
 import { CORRECTION_STATUSES } from './corrections-store'
 import { REFUSED_ACTIONS } from './refusals-store'
 // B-W2b-46 hook: the lots scanned at the operation (modules/production/guards).
@@ -425,13 +427,18 @@ export const workOrderWipContract = defineContract({
 })
 
 export const siteWipContract = defineContract({
-  // B-PR-03: one customer's work orders (inside the caller's reach).
-  querystring: input({ siteId: id().optional(), partyId: id().optional(), limit: z.coerce.number().int().min(1).max(200).default(100) }),
+  // B-PR-03: one customer's work orders (inside the caller's reach). F-PR-17: `offset` = the rows already shown (Show more).
+  querystring: input({ siteId: id().optional(), partyId: id().optional(), limit: z.coerce.number().int().min(1).max(200).default(100), offset: z.coerce.number().int().min(0).max(100_000).optional() }),
   response: {
     200: output({
       workOrders: z.array(
         output({
           workOrder: output({ id: id(), number: z.string(), status, siteId: id() }),
+          /** F-PR-17: an ON_HOLD one's reason (null: not held, or none kept). */
+          holdReason: z.string().nullable(),
+          /** F-PR-17: its one customer (null: none), or one made before the one-customer rule with several. */
+          customer: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+          mixedCustomers: z.boolean(),
           siteCode: z.string(),
           style: output({ code: z.string(), name: z.string() }),
           dueDate: businessDate().nullable(),
@@ -458,6 +465,8 @@ export const siteWipContract = defineContract({
           allFinished: z.boolean(),
         }),
       ),
+      /** F-PR-17: how many work orders the floor holds in all (released, in progress, on hold), not only this page (a count). */
+      total: notMoney(z.number().int()),
     }),
   },
 })

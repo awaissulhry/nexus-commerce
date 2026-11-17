@@ -51,7 +51,8 @@
     "read": "Qualcosa è andato storto durante la lettura. Riprova.",
     "forbidden": "Non hai il permesso di leggerlo.",
     "notFound": "Non c'è uno stabilimento in cui tu possa leggerlo.",
-    "offline": "Il server non risponde. Controlla la connessione e riprova."
+    "offline": "Il server non risponde. Controlla la connessione e riprova.",
+    "everyCustomer": "Questa vista somma tutti i clienti: serve l'accesso a tutti i clienti."
   },
   "tile": {
     "good": "Buoni",
