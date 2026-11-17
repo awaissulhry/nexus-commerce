@@ -100,7 +100,12 @@ export const messages: PersonSource = {
     return rows.flatMap((row): PlannedRecord[] => {
       const erasedFields = MESSAGE_COLUMNS.filter((column) => (column === 'bodyText' ? row.bodyText !== '' : row[column] !== null))
       if (erasedFields.length === 0) return []
-      return [{ recordType: 'Message', recordId: row.id, method: 'ANONYMISED', erasedFields, keptFields: [], why: null, apply: (tools) => blank(tools) }]
+      // B-TH-097: the message's words leave the search index with it (its entry held them).
+      const apply = async (tools: ApplyTools): Promise<void> => {
+        await blank(tools)
+        await tools.tx.searchEntry.deleteMany({ where: { recordType: 'Message', recordId: row.id } })
+      }
+      return [{ recordType: 'Message', recordId: row.id, method: 'ANONYMISED', erasedFields, keptFields: [], why: null, apply }]
     })
   },
 }

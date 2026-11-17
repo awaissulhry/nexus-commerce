@@ -275,6 +275,48 @@ describe('an erasure: previewed with the law’s exceptions, a fresh code and th
     expect(await one(`SELECT "prospectName", "prospectEmail", "prospectCompany", "prospectPhone", "prospectErasedAt" IS NOT NULL AS erased, status FROM "Inquiry" WHERE id = $1`, [inquiryId])).toMatchObject({ prospectName: null, prospectEmail: null, prospectCompany: null, prospectPhone: null, erased: true })
   })
 
+  // ---- threads plan follow-up (TH-2 notes, Open 3): a CLOSED prospect request — declined, lost — is frozen by the database
+  // (factory_inquiry_guard: only its note and the erasure of its prospect change). The erasure blanked the lawful basis too, which
+  // that guard refuses, so the person's erasure failed. Now the four personal columns blank and the basis stays (it names no one;
+  // the retention sweep keeps it as well).
+  it("erases the prospect of a CLOSED request: the four columns blank for good, the lawful basis and the closed request as they were", async () => {
+    const inquiryId = newId()
+    await insertFixture('Inquiry', {
+      id: inquiryId,
+      companyId: companyA,
+      number: 'INQ-TH-FU3-1',
+      source: 'FAIR',
+      receivedAt: new Date(Date.now() - 40 * 86_400_000).toISOString(),
+      status: 'DECLINED',
+      declineReason: 'CAPACITY',
+      closedAt: new Date(Date.now() - 30 * 86_400_000).toISOString(),
+      request: 'Made-up: fifty rain covers for the club.',
+      prospectName: 'Carla Chiusa',
+      prospectCompany: 'Moto Club Chiuso',
+      prospectEmail: 'carla.chiusa@moto-club.example.com',
+      prospectPhone: '+39 000 0000031',
+      prospectLawfulBasis: 'CONTRACT',
+    })
+    let request = (await ok('POST', '/privacy/requests', { companyId: companyA, personKind: 'PROSPECT', personRecordId: inquiryId, kind: 'ERASURE' }, 201)).request
+    request = (await ok('POST', `/privacy/requests/${request.id}/identity`, { version: request.version, how: 'Replied from the address on the request (made up).' })).request
+    await stepUp(h, desk.browser, desk.secret)
+    const erased = await ok('POST', `/privacy/requests/${request.id}/erase`, { version: request.version, reason: 'Asked by mail (made up).', confirmName: request.person.name })
+    expect(erased.erased.anonymised).toBe(1)
+    expect(await one(`SELECT "prospectName", "prospectCompany", "prospectEmail", "prospectPhone", "prospectLawfulBasis"::text AS basis, "prospectErasedAt" IS NOT NULL AS erased, status::text AS status, "declineReason"::text AS "declineReason", request FROM "Inquiry" WHERE id = $1`, [inquiryId])).toEqual({
+      prospectName: null,
+      prospectCompany: null,
+      prospectEmail: null,
+      prospectPhone: null,
+      basis: 'CONTRACT',
+      erased: true,
+      status: 'DECLINED',
+      declineReason: 'CAPACITY',
+      request: 'Made-up: fifty rain covers for the club.',
+    })
+    expect(await one(`SELECT method::text AS method, "erasedFields" FROM "ErasureRecord" WHERE "dataRequestId" = $1 AND "recordType" = 'Inquiry'`, [request.id])).toEqual({ method: 'ANONYMISED', erasedFields: ['prospectName', 'prospectCompany', 'prospectEmail', 'prospectPhone'] })
+  })
+  // ---- end follow-up
+
   it("blanks the mail they sent and got, the messages they wrote and their values in their record's history; the rows stay (PV1:01, B-W2b-F54)", async () => {
     const partyId = seedUuid(NS, 'party:P1')
     const contactId = newId()
@@ -324,6 +366,11 @@ describe('an erasure: previewed with the law’s exceptions, a fresh code and th
     await insertRow('AuditLog', { id: named, companyId: companyA, audience: 'OFFICE', actorId: desk.userId, action: 'parties.updateContact', recordType: 'PartyContact', recordId: contactId, before: { name: 'Erika P.', email: 'old.f54@example.com', roles: ['ORDERS'] }, after: { name: 'Erika Prova', email: address, roles: ['ORDERS'] }, requestId: `f54-${named}` })
     await insertRow('AuditLog', { id: plain, companyId: companyA, audience: 'OFFICE', actorId: desk.userId, action: 'parties.contactRoles', recordType: 'PartyContact', recordId: contactId, before: { roles: [] }, after: { roles: ['ORDERS'] }, requestId: `f54-${plain}` })
 
+    // B-TH-097: her messages' words are in the search index too (as the message indexer writes them), and the office note's.
+    for (const messageId of [fromMail, posted, note]) {
+      await insertRow('SearchEntry', { id: newId(), companyId: companyA, partyId: messageId === note ? null : partyId, recordType: 'Message', recordId: messageId, title: 'SEED-C1 Made-up', subtitle: 'Made-up', status: 'INBOUND', area: 'home', viewPermission: 'threads.read', searchText: 'made-up mail please call me on my mobile', indexedAt: at })
+    }
+
     let request = (await ok('POST', '/privacy/requests', { companyId: companyA, personKind: 'CONTACT', personRecordId: contactId, kind: 'ERASURE' }, 201)).request
     request = (await ok('POST', `/privacy/requests/${request.id}/identity`, { version: request.version, how: 'Replied from the address we hold (made up).' })).request
     // A mail to her is being sent this very minute: the erasure waits for it (409 in words).
@@ -355,6 +402,8 @@ describe('an erasure: previewed with the law’s exceptions, a fresh code and th
     const status = async (id: string) => (await one<{ status: string }>(`SELECT status::text FROM "StoredFile" WHERE id = $1`, [id])).status
     expect([await status(hersOnly), await status(waitingFile), await status(retained), await status(shared)]).toEqual(['DELETED', 'DELETED', 'AVAILABLE', 'AVAILABLE'])
 
+    // B-TH-097: her messages' words left the search index with them; the office note's entry stays.
+    expect((await admin<{ recordId: string }>(`SELECT "recordId" FROM "SearchEntry" WHERE "recordType" = 'Message' AND "recordId" = ANY($1::uuid[])`, [[fromMail, posted, note]])).map((row) => row.recordId)).toEqual([note])
     // The messages she wrote: no name, no text; the office note as it was.
     const message = (id: string) => one(`SELECT "authorName", "bodyText", "bodyHtml", "threadId" FROM "Message" WHERE id = $1`, [id])
     expect(await message(fromMail)).toEqual({ authorName: null, bodyText: '', bodyHtml: null, threadId })
