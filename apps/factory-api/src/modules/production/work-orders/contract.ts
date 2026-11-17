@@ -16,6 +16,8 @@ import { TRAVELLER_BULK_LIMIT } from '@nexus/factory-domain/production/work-orde
 import { HEALTH_REASON_CODES } from '@nexus/factory-domain/production-brand/health'
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 import { BLOCKED_BY, LIST_SORTS, WORK_ORDER_RISKS } from './risk'
+// B-PR-42a: the production supervisor — a mark per row, by name on the record.
+import { SUPERVISOR_MARKS, SUPERVISOR_SOURCES } from '@nexus/factory-domain/production-brand/supervisor'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-003, MES-005, MES-007, MES-305; A2 SCR-069, SCR-070): the
@@ -137,6 +139,16 @@ export const workOrderSchema = output({
   /** B-PR-03: its one customer. */
   ...customerFacts,
   orders: z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), partyId: id(), partyName: z.string(), depositRequired: z.boolean() })),
+  // ── B-PR-42a ── (GET /production/work-orders/:workOrderId only; the other answers leave both out)
+  /**
+   * Its production supervisor, by name inside this one record (lists say Me / Someone else / Not set): its order's own (ORDER,
+   * when every cell comes from one order) or the customer's default (BRAND); `active` false: "no longer active". Null: none set,
+   * or a work order of no customer.
+   */
+  supervisor: output({ id: id(), name: z.string(), active: z.boolean(), from: z.enum(SUPERVISOR_SOURCES), me: z.boolean() }).nullable().optional(),
+  /** Only for the supervisor himself: he muted his follow of this work order's or its order's thread ("You muted this order"); null for anyone else. */
+  youMuted: z.boolean().nullable().optional(),
+  // ── end B-PR-42a ──
   cells: z.array(
     output({
       id: id(),
@@ -198,6 +210,8 @@ export const listContract = defineContract({
     /** Open work orders blocked by a hold, the customer or material. */
     blockedBy: z.enum(BLOCKED_BY).optional(),
     // ── end B-PR-34 ──
+    /** B-PR-42a: `me` — the work orders whose production supervisor is the caller ("Mine"); there is no filter by another person. */
+    supervisor: z.enum(['me']).optional(),
     /** The `nextCursor` of the page before (newest: a work order id; risk and due: a position token of that sort). */
     cursor: z.string().trim().min(1).max(80).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
@@ -241,6 +255,8 @@ export const listContract = defineContract({
           /** B-PR-34: its risk (null: finished) and what it waits on (null: finished, or nothing known). */
           risk: riskFacts.nullable(),
           waitingOn: waitingFacts.nullable(),
+          /** B-PR-42a: its production supervisor for the caller — ME, SOMEONE_ELSE or NOT_SET (never a name on a list); null: no customer. */
+          supervisor: z.enum(SUPERVISOR_MARKS).nullable(),
         }),
       ),
       /** B-PR-34: a work order id (newest) or a position token (risk, due). */
@@ -257,7 +273,8 @@ export const countsContract = defineContract({
       /** Work orders the caller may see per state; `open` = draft + released + in progress; `late` = open past the due date. */
       // B-W2a-46: onHold (design wo-metrics "On hold (W2a)").
       // B-PR-34: atRisk (open, not late, at risk) and waitingOnCustomer (open, its order waits on the customer).
-      counts: output({ draft: z.number().int(), released: z.number().int(), inProgress: z.number().int(), completed: z.number().int(), open: z.number().int(), late: z.number().int(), onHold: z.number().int(), atRisk: z.number().int(), waitingOnCustomer: z.number().int() }),
+      // B-PR-42a: mine (open, the caller is its production supervisor: the "Mine" tile).
+      counts: output({ draft: z.number().int(), released: z.number().int(), inProgress: z.number().int(), completed: z.number().int(), open: z.number().int(), late: z.number().int(), onHold: z.number().int(), atRisk: z.number().int(), waitingOnCustomer: z.number().int(), mine: z.number().int() }),
     }),
   },
 })

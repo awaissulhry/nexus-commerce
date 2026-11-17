@@ -367,7 +367,7 @@ describe('a work order from order lines (MES-001, MES-002)', () => {
     const of = (status: string) => all.filter((row: Json) => row.status === status).length
     // B-PR-34: at risk and waiting on the customer, over the open rows (each row says its risk and what it waits on).
     const openRows = all.filter((row: Json) => row.risk !== null)
-    expect(counts).toEqual({ draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: open.workOrders.length, late: 0, onHold: of('ON_HOLD'), atRisk: openRows.filter((row: Json) => row.risk.state === 'AT_RISK').length, waitingOnCustomer: openRows.filter((row: Json) => row.waitingOn?.on === 'BRAND').length })
+    expect(counts).toEqual({ draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: open.workOrders.length, late: 0, onHold: of('ON_HOLD'), atRisk: openRows.filter((row: Json) => row.risk.state === 'AT_RISK').length, waitingOnCustomer: openRows.filter((row: Json) => row.waitingOn?.on === 'BRAND').length, mine: 0 /* B-PR-42a: the viewer supervises none */ })
     expect((await ok('viewer', 'GET', `/production/work-orders/counts?siteId=${A.siteA1}`)).counts.draft).toBe(all.filter((row: Json) => row.status === 'DRAFT' && row.siteId === A.siteA1).length)
   })
 
@@ -647,7 +647,7 @@ describe('the walls (A1 §2.2): tenant, company, site; the floor reads and never
     expect(seenByB.some((row) => row.companyId === A.companyA || row.companyId === A.companyB)).toBe(false)
     expect((await ok('companyB', 'GET', '/production/work-orders')).workOrders.every((row: Json) => row.companyId === A.companyB)).toBe(true)
     expect((await ok('otherSite', 'GET', '/production/work-orders')).workOrders).toEqual([])
-    expect((await ok('otherSite', 'GET', '/production/work-orders/counts')).counts).toEqual({ draft: 0, released: 0, inProgress: 0, completed: 0, open: 0, late: 0, onHold: 0, atRisk: 0, waitingOnCustomer: 0 }) // B-PR-34: + atRisk, waitingOnCustomer
+    expect((await ok('otherSite', 'GET', '/production/work-orders/counts')).counts).toEqual({ draft: 0, released: 0, inProgress: 0, completed: 0, open: 0, late: 0, onHold: 0, atRisk: 0, waitingOnCustomer: 0, mine: 0 }) // B-PR-34: + atRisk, waitingOnCustomer; B-PR-42a: + mine
     expect((await ok('otherTenant', 'GET', '/production/work-orders?q=WO-00')).workOrders.map((row: Json) => row.id)).not.toContain(workOrder.id)
     expect((await refused('companyB', 'POST', '/production/work-orders', { lines: [{ salesOrderLineId: order.lineIds[0]! }] }, 404)).message).toBe('Sales order line not found.')
     expect((await refused('companyB', 'GET', `/production/work-orders/open-lines?salesOrderId=${order.orderId}`, undefined, 404)).message).toBe('Sales order not found.')

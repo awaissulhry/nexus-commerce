@@ -9,6 +9,10 @@ import { HEALTH_REASON_CODES } from '@nexus/factory-domain/production-brand/heal
 import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
 import { HEALTH_REASON_WORDS, HEALTH_WORDS, OFFICE_WAITING_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { BLOCKED_BY, LIST_SORTS, WORK_ORDER_RISKS } from '../../../modules/production/work-orders/risk'
+// B-PR-42a: the list's "Mine" in the address, and the supervisor cell as the list's (Me / Someone else / Not set, never a name).
+import { SUPERVISOR_FILTERS } from '../../../modules/production/work-orders/work-orders'
+import { SUPERVISOR_MARKS } from '@nexus/factory-domain/production-brand/supervisor'
+import { SUPERVISOR_MARK_WORDS } from '@nexus/factory-domain/production-brand/words'
 
 /**
  * Production › Work orders (SCR-069, `/production/work-orders`): the export of the list as the screen shows it. The
@@ -22,6 +26,8 @@ import { BLOCKED_BY, LIST_SORTS, WORK_ORDER_RISKS } from '../../../modules/produ
  * B-PR-34 (the list by risk): the list's own sort (`?sort=risk|due|newest`) and its computed filters (`?waitingOn=`, `?risk=`,
  * `?blockedBy=`), a bad value refused in words as the list refuses it; the cells `risk` ("Late · 3 d", "At risk · raised: …"),
  * `waitingOn` (the office's words: "Waiting on the customer") and `blockedBy`, as the list's columns of the same ids.
+ * B-PR-42a (the production supervisor): `?supervisor=me` ("Mine", the only value) and the cell `supervisor` — Me / Someone else /
+ * Not set for the person who asked for the file, never a name (worker privacy, as the list).
  */
 
 type Row = Awaited<ReturnType<typeof listWorkOrders>>['workOrders'][number]
@@ -73,6 +79,7 @@ const wordsOf = (locale: 'it' | 'en'): Record<string, string> => ({
   ...Object.fromEntries(BLOCKED_BY.map((by) => [`blocked.${by}`, BLOCKED_WORDS[by][locale]])),
   days: locale === 'it' ? 'gg' : 'd',
   raised: locale === 'it' ? 'segnalato' : 'raised',
+  ...Object.fromEntries(SUPERVISOR_MARKS.map((mark) => [`supervisor.${mark}`, SUPERVISOR_MARK_WORDS[mark][locale]])), // B-PR-42a
 })
 // ── end B-PR-34 ──
 
@@ -89,7 +96,7 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     const rush = rushWord === 'true' ? true : rushWord === 'false' ? false : undefined
     const partyId = partyTerm(address) // B-PR-03
     // B-PR-34: the list's sort and computed filters.
-    const ranked = { sort: termOf(address, 'sort', LIST_SORTS), waitingOn: termOf(address, 'waitingOn', WAITING_ON), risk: termOf(address, 'risk', WORK_ORDER_RISKS), blockedBy: termOf(address, 'blockedBy', BLOCKED_BY) }
+    const ranked = { sort: termOf(address, 'sort', LIST_SORTS), waitingOn: termOf(address, 'waitingOn', WAITING_ON), risk: termOf(address, 'risk', WORK_ORDER_RISKS), blockedBy: termOf(address, 'blockedBy', BLOCKED_BY), /* B-PR-42a */ supervisor: termOf(address, 'supervisor', SUPERVISOR_FILTERS) }
     const view = address.get('view') ?? (address.get('late') === 'true' ? 'late' : (address.get('status') ?? 'open'))
     if (view === 'late') return { late: true, q, due, rush, partyId, ...ranked }
     if (view === 'all') return { q, due, rush, partyId, ...ranked }
@@ -116,6 +123,8 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     risk: { value: (row, words) => riskText(row, words) },
     waitingOn: { value: (row, words) => (row.waitingOn ? words(`waiting.${row.waitingOn.on}`) : null) },
     blockedBy: { value: (row, words) => (row.risk?.blockedBy ? words(`blocked.${row.risk.blockedBy}`) : null) },
+    // B-PR-42a: the production supervisor for the person who asked for the file (Me / Someone else / Not set).
+    supervisor: { value: (row, words) => (row.supervisor ? words(`supervisor.${row.supervisor}`) : null) },
   },
   words: {
     it: {
