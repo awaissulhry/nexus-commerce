@@ -386,3 +386,91 @@ describe("the customer's own materials (SAL-306)", () => {
     expect((await outbox('customer_material.changed', w39.id)).map((payload) => payload.change)).toEqual(expect.arrayContaining(['PLANNED', 'RECOUNTED']))
   })
 })
+
+// ---- B-PR-14: a customer's own freeze rules ---------------------------------------------------------------------------------
+
+describe("a customer's own freeze rules beat the company's for that customer (B-PR-14)", () => {
+  let p3: string
+  let p2: string
+  const field = (reading: Json, name: string) => (reading.order.fields as Json[]).find((entry) => entry.field === name)
+  const limited = (role: string, actorId: string, parties: string[]): SessionContext => ({ audience: 'office', tenantId: A.tenant, actorId, grants: grantsOf(role).map((grant) => ({ ...grant, parties })) })
+
+  beforeAll(async () => {
+    p3 = (await one<{ id: string }>(`SELECT id FROM "Party" WHERE "tenantId" = $1 AND code = 'SEED-C2'`, [A.tenant])).id
+    p2 = (await one<{ id: string }>(`SELECT id FROM "Party" WHERE "tenantId" = $1 AND code = 'SEED-S1'`, [A.tenant])).id
+    // The production manager keeps a customer's limits (partners.production.manage), not the company's rules.
+    SESSIONS['pm'] = { audience: 'office', tenantId: A.tenant, actorId: PEOPLE.planner, grants: grantsOf('production_manager') }
+    // Sales people limited to one customer each (the wall).
+    SESSIONS['sales.p1'] = limited('sales', PEOPLE.sales, [p1])
+    SESSIONS['sales.p3'] = limited('sales', PEOPLE.sales, [p3])
+  })
+
+  it("a rule of P1's own decides that field on P1's order; the company's set decides the rest; P3's own never decides for P1", async () => {
+    const before = await ok('reader', 'GET', `/sales/orders/${order.id}/freeze`)
+    expect(field(before, 'DELIVERY_DATE')).toMatchObject({ state: expect.not.stringMatching(/^BLOCKED$/) })
+    // The company keeps its rules; the production manager keeps P1's own (partners.production.manage), never the company's.
+    await no('pm', 'POST', '/sales/order-freeze-rules', { companyId: A.companyA, field: 'DELIVERY_DATE', frozenFrom: 'RELEASED', action: 'BLOCKED' }, 403)
+    const own = (await ok('pm', 'POST', '/sales/order-freeze-rules', { companyId: A.companyA, partyId: p1, field: 'DELIVERY_DATE', frozenFrom: 'RELEASED', action: 'BLOCKED', note: 'Ships on fixed dates only (made-up)' }, 201)).rule
+    expect(own).toMatchObject({ partyId: p1, field: 'DELIVERY_DATE', frozenFrom: 'RELEASED', action: 'BLOCKED', active: true })
+    expect(await outbox('order_freeze_rule.changed', own.id)).toEqual([expect.objectContaining({ partyId: p1, change: 'MADE' })])
+    // P3's own rule of the sizes: it must never reach P1's order.
+    const other = (await ok('pm', 'POST', '/sales/order-freeze-rules', { companyId: A.companyA, partyId: p3, field: 'SIZE_QUANTITY', frozenFrom: 'RELEASED', action: 'BLOCKED' }, 201)).rule
+    expect(other.partyId).toBe(p3)
+
+    const reading = await ok('reader', 'GET', `/sales/orders/${order.id}/freeze`)
+    expect(field(reading, 'DELIVERY_DATE')).toMatchObject({ state: 'BLOCKED', ruleId: own.id })
+    const first = reading.lines.find((entry: Json) => entry.lineId === line10.id)
+    expect(first.sizes.find((size: Json) => size.size === cutSize)).toMatchObject({ state: 'CHANGE_REQUEST', words: { en: 'Cutting started: size frozen' } })
+    expect(first.sizes.find((size: Json) => size.size === openSize)).toMatchObject({ locked: false, state: 'OPEN' })
+    expect(JSON.stringify(reading)).not.toContain(other.id)
+    // A date change of P1's order is now refused by P1's own rule.
+    const row = await orderRow(order.id)
+    const preview = await ok('sales', 'POST', `/sales/orders/${order.id}/amendments/preview`, { version: row.version, reason: 'Made-up: a later date.', requestedDate: '2027-03-01', lines: [{ id: line10.id }, { id: line20.id }] })
+    expect(preview.ok).toBe(false)
+    expect(preview.problems).toEqual(expect.arrayContaining([{ path: 'body/DELIVERY_DATE', message: 'The order: Ships on fixed dates only (made-up).' }]))
+  })
+
+  it('lists a customer\'s own rules beside the company\'s for whoever reaches it; without partyId the company\'s only', async () => {
+    const company = await ok('reader', 'GET', `/sales/order-freeze-rules?companyId=${A.companyA}`)
+    expect(company.partyId).toBeNull()
+    expect((company.rules as Json[]).every((rule) => rule.partyId === null)).toBe(true)
+    const ofP1 = await ok('reader', 'GET', `/sales/order-freeze-rules?companyId=${A.companyA}&partyId=${p1}`)
+    expect(ofP1.partyId).toBe(p1)
+    expect(new Set((ofP1.rules as Json[]).map((rule) => rule.partyId))).toEqual(new Set([null, p1]))
+    expect((ofP1.fields as Json[]).find((entry) => entry.field === 'DELIVERY_DATE')).toMatchObject({ set: 'CUSTOMER' })
+    expect((ofP1.fields as Json[]).find((entry) => entry.field === 'SIZE_QUANTITY')).toMatchObject({ set: 'COMPANY' })
+    expect(ofP1.mayManage).toBe(false)
+    expect((await ok('pm', 'GET', `/sales/order-freeze-rules?companyId=${A.companyA}&partyId=${p1}`)).mayManage).toBe(true)
+  })
+
+  it("wall: a person limited to P3 gets 404 on P1's rules (list, new, change) and never reads them; its own customer's rules answer", async () => {
+    const p1Rule = await one<Json>(`SELECT id, version FROM "OrderFreezeRule" WHERE "companyId" = $1 AND "partyId" = $2 AND field = 'DELIVERY_DATE'`, [A.companyA, p1])
+    for (const answer of [
+      await no('sales.p3', 'GET', `/sales/order-freeze-rules?companyId=${A.companyA}&partyId=${p1}`, undefined, 404),
+      await no('sales.p3', 'POST', '/sales/order-freeze-rules', { companyId: A.companyA, partyId: p1, field: 'SHIP_TO', frozenFrom: 'CUT', action: 'BLOCKED' }, 404),
+      await no('sales.p3', 'PATCH', `/sales/order-freeze-rules/${p1Rule.id}`, { version: p1Rule.version, active: false }, 404),
+    ]) {
+      expect(JSON.stringify(answer)).not.toContain(p1)
+      expect(answer.message).not.toMatch(/Brand|SEED-C1/)
+    }
+    const ofP3 = await ok('sales.p3', 'GET', `/sales/order-freeze-rules?companyId=${A.companyA}&partyId=${p3}`)
+    expect((ofP3.rules as Json[]).some((rule) => rule.partyId === p1)).toBe(false)
+    expect(ofP3.mayManage).toBe(true)
+    // A sales person keeps its own customer's rules (partners.production.manage), never the company's.
+    expect((await ok('sales.p3', 'POST', '/sales/order-freeze-rules', { companyId: A.companyA, partyId: p3, field: 'SHIP_TO', frozenFrom: 'CUT', action: 'BLOCKED' }, 201)).rule).toMatchObject({ partyId: p3 })
+    await no('sales.p3', 'POST', '/sales/order-freeze-rules', { companyId: A.companyA, field: 'SHIP_TO', frozenFrom: 'SHIPPED', action: 'BLOCKED' }, 403)
+    // The live event of P1's rule names P1 only (the office's live wall: people limited to P3 never receive it).
+    expect(await outbox('order_freeze_rule.changed', p1Rule.id)).toEqual([expect.objectContaining({ partyId: p1 })])
+  })
+
+  it("refuses a second active rule of one field and stage in one set, a reader, a supplier; switched off, the company's rule decides again", async () => {
+    expect((await no('pm', 'POST', '/sales/order-freeze-rules', { companyId: A.companyA, partyId: p1, field: 'DELIVERY_DATE', frozenFrom: 'RELEASED', action: 'BLOCKED' }, 409)).message).toMatch(/^This customer has an active rule for the delivery date from "released to production" already/)
+    await no('reader', 'POST', '/sales/order-freeze-rules', { companyId: A.companyA, partyId: p1, field: 'OPTION', frozenFrom: 'CUT', action: 'BLOCKED' }, 403)
+    await no('sales.p1', 'PATCH', `/sales/order-freeze-rules/${(await one<Json>(`SELECT id FROM "OrderFreezeRule" WHERE "partyId" = $1 LIMIT 1`, [p3])).id}`, { version: 1, active: false }, 404)
+    expect((await no('pm', 'POST', '/sales/order-freeze-rules', { companyId: A.companyA, partyId: p2, field: 'OPTION', frozenFrom: 'CUT', action: 'BLOCKED' }, 409)).message).toBe("A customer's own freeze rules are for a customer or a brand.")
+    const p1Rule = await one<Json>(`SELECT id, version FROM "OrderFreezeRule" WHERE "companyId" = $1 AND "partyId" = $2 AND field = 'DELIVERY_DATE'`, [A.companyA, p1])
+    expect((await ok('pm', 'PATCH', `/sales/order-freeze-rules/${p1Rule.id}`, { version: p1Rule.version, active: false })).rule).toMatchObject({ partyId: p1, active: false })
+    const reading = await ok('reader', 'GET', `/sales/orders/${order.id}/freeze`)
+    expect(field(reading, 'DELIVERY_DATE').ruleId).not.toBe(p1Rule.id)
+  })
+})

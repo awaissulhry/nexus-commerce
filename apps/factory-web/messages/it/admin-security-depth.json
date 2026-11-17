@@ -192,7 +192,8 @@
       "branding_change": "Grafica dei documenti",
       "signatures_sign": "Firmare come responsabile",
       "legal_outward": "Atti legali inviati all'esterno",
-      "security_settings": "Queste impostazioni di sicurezza"
+      "security_settings": "Queste impostazioni di sicurezza",
+      "production_override": "Decidere per un cliente o annullare un suo atto"
     },
     "fixed": {
       "ACCESS": "Sempre: una sessione rubata non deve mai concedere diritti.",

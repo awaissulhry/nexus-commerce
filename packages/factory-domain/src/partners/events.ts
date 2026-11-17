@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { CAPABILITIES, PARTNER_KINDS } from '../auth/partners/kinds'
 import { defineEvent } from '../events/define'
+import { PRODUCTION_ASK_KINDS } from '../production-brand/kinds'
+import { PRODUCTION_SHARE_LEVELS } from '../production-brand/levels'
 
 /**
  * Partner organisations and their people (B-W2b-162; PLT-006, PLT-021, PLT-022). apps/factory-api's platform/auth/partners
@@ -8,7 +10,10 @@ import { defineEvent } from '../events/define'
  * module folder: the code is factory-domain auth/partners.
  *
  *   partner_portal.settings_changed   a party's portal was switched on or off, its limits (people, roles) or its production
- *                                     progress switch (Owner answer C1) changed
+ *                                     progress switch (Owner answer C1) changed; B-PR-14: or its production limits (level,
+ *                                     urgency switch, urgent quota, production asks, named approver, second person) — the
+ *                                     payload carries the level, the switch, the quota and the asks, NEVER the supervisor
+ *                                     or the backup (brand_production.supervisor_changed, office only: PW-15)
  *   partner_user.invited              a person of a party was invited to its portal (or invited again)
  *   partner_user.changed              a portal person's role, capabilities, end of access or status changed, or their
  *                                     open invitation was revoked
@@ -29,8 +34,20 @@ export const events = [
   defineEvent({
     type: 'partner_portal.settings_changed',
     context: 'partners',
-    description: "A party's portal was switched on or off, or its limits (people, roles) or its production-progress switch changed.",
-    payload: z.strictObject({ partyId: z.uuid(), fields: z.array(z.string()), portalOn: z.boolean(), progressShared: z.boolean() }),
+    description: "A party's portal was switched on or off, or its limits (people, roles), its production-progress switch or its production limits changed.",
+    payload: z.strictObject({
+      partyId: z.uuid(),
+      fields: z.array(z.string()),
+      portalOn: z.boolean(),
+      /** Kept in every contract until B-PR-40 drops it: derived from the level (PROGRESS or more). */
+      progressShared: z.boolean(),
+      // B-PR-14: the production limits after the change (never the supervisor, the backup or the approver: PW-15). Every emit
+      // sends them; optional only so an event written before B-PR-14 still parses (the livePartyId precedent, events/define).
+      productionLevel: z.enum(PRODUCTION_SHARE_LEVELS).optional(),
+      productionUrgencyOn: z.boolean().optional(),
+      productionUrgentMax: z.number().int().min(0).max(20).optional(),
+      productionAskKinds: z.array(z.enum(PRODUCTION_ASK_KINDS)).optional(),
+    }),
     live: live(['partyId', 'fields', 'portalOn']),
   }),
   defineEvent({
