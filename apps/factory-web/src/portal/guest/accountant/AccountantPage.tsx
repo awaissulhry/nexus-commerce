@@ -38,7 +38,8 @@ import type { ListSection } from './view/Lists'
  * 60-second link after the API recorded the download; a zip (the whole period, its XML, the files chosen) comes as bytes the
  * API writes, recorded too. The page reads again when the tab comes back into view (a new export or lock shows up then: the
  * accounting events carry no party, so the partner live channel does not bring them). Ask finance is the frame's
- * conversation about the firm's own account (`Party`), in the element `#messages` (the band's ⋯ "Ask a question" goes there).
+ * conversation about the firm's own account (`Party`), docked in the portal record frame (B-TH-276: `#messages`, the band's ⋯
+ * "Ask a question" focuses its box; below 1280 px its "Messages" button opens it full width).
  */
 export function AccountantRoute() {
   return (
@@ -265,9 +266,6 @@ function Container() {
     notice,
   }
 
-  return (
-    <AccountantView model={model} actions={actions}>
-      {value ? <PortalThread type="Party" id={value.access.firm.id} title={t('ask.title')} showRecord={false} /> : null}
-    </AccountantView>
-  )
+  // B-TH-276 (P-ACC.thread [P2]): Ask finance — the firm's account conversation — docked beside the room (one place per page).
+  return <AccountantView model={model} actions={actions} thread={value ? <PortalThread type="Party" id={value.access.firm.id} title={t('ask.title')} showRecord={false} /> : null} />
 }

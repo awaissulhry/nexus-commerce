@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs' // B-TH-276
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -177,3 +178,54 @@ describe('SCR-268 design cases', () => {
     expect(html).not.toContain('E-invoices')
   })
 })
+
+// ---- B-TH-276 (P-ACC.thread [P2]; PL3-F03): Ask finance is the page's docked conversation — one place, no inline copy ----------
+describe('B-TH-276 — Ask finance docked like every portal record page', () => {
+  const renderCase = (id: string, locale: 'it' | 'en' = 'en') => {
+    const entry = designScreen.cases.find((item) => item.id === id)!
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
+  }
+
+  it('from 1280 px: ONE conversation, docked beside the room (the frame’s aside #messages), none at the foot', () => {
+    const html = renderCase('normal')
+    expect(html.match(/id="messages"/g)?.length).toBe(1)
+    expect(html).toMatch(/<aside[^>]*id="messages"[^>]*class="fw-prf-dock"|<aside[^>]*class="fw-prf-dock"[^>]*id="messages"/)
+    expect(html).toContain('aria-label="Ask finance"')
+    expect(html).toContain('data-mode="docked"')
+    expect(html).not.toContain('fw-pacc-ask')
+    expect(html.match(/class="nds-pthread[ "]/g)?.length).toBe(1)
+  })
+
+  it('narrower: the room leads with "Messages (2 new)"; open, the conversation alone with its Back', () => {
+    const narrow = renderCase('narrow')
+    expect(narrow).toContain('data-mode="stacked"')
+    expect(narrow).toContain('data-view="body"')
+    expect(narrow).toContain('Messages (2 new)')
+    const open = renderCase('narrow-open')
+    expect(open).toContain('data-view="thread"')
+    expect(open).not.toContain('Messages (2 new)')
+    expect(renderCase('narrow-open', 'it')).toContain('Indietro')
+  })
+
+  it('no conversation before the room is read: no dock, no button (loading, a failed read)', () => {
+    for (const id of ['loading', 'error']) {
+      const html = renderCase(id)
+      expect(html, id).not.toContain('fw-prf-dock')
+      expect(html, id).not.toMatch(/Messages \(\d+ new\)/)
+    }
+  })
+
+  it('no frame word is left on screen as a key, in either language', () => {
+    for (const locale of ['it', 'en'] as const) for (const id of ['normal', 'narrow', 'narrow-open']) expect(renderCase(id, locale), `${id} ${locale}`).not.toMatch(/\brecord\.frame\.[a-zA-Z_]+/)
+  })
+
+  it('the live page docks PortalThread on the firm’s own account conversation (the session’s party, W09), no inline copy', () => {
+    const page = readFileSync(new URL('./AccountantPage.tsx', import.meta.url), 'utf8')
+    expect(page).toContain('thread={value ? <PortalThread type="Party" id={value.access.firm.id}')
+    expect(page).not.toMatch(/<AccountantView[^>]*>\s*\{value \?/)
+    const view = readFileSync(new URL('./view/AccountantView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("<PortalRecordFrame thread={thread} threadLabel={t('ask.title')} design={frame}>")
+    expect(view).not.toContain('id="messages"')
+  })
+})
+// ---- end B-TH-276

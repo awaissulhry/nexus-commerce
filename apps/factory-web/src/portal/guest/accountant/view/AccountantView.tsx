@@ -9,14 +9,20 @@ import { Countdown } from '../../../../lib/i18n/ds-parts'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { dayWords, NS, type PeriodOption } from '../model'
 import { ExportsList, InvoicesList, RegistersList, type ListsActions, type ListsModel } from './Lists'
+// ---- B-TH-276 (P-ACC.thread [P2]): Ask finance is the page's docked conversation (the portal record frame), one place per page.
+import type { PortalFrameMode } from '../../../shell/record/model'
+import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
+// ---- end B-TH-276
 import '../accountant.css'
 
 /**
  * SCR-268 — the accountant's room (design portal.guest.accountant; FIN-158, PLT-022): Your access said at rest (whose books,
  * who gave it, until when, every download recorded; the time left once it ends soon), the Period (month, quarter or year;
  * the months not handed over yet and the locked ones marked), the Accounting exports, the E-invoices, VAT and registers
- * (what the exports hold besides the journals: the VAT registers, Intrastat, the year-end stock pack), and Ask finance (the frame's conversation, given as
- * `children`). Read-only: the band's primary is "Download period (zip)". No amount on screen.
+ * (what the exports hold besides the journals: the VAT registers, Intrastat, the year-end stock pack), and Ask finance — B-TH-276
+ * (P-ACC.thread [P2]): the firm's account conversation (`thread`) DOCKED beside the room like every portal record page (the portal
+ * record frame: ~40 % from 1280 px, sticky, "Messages (2 new)" below; no inline copy at the foot). Read-only: the band's primary is
+ * "Download period (zip)". No amount on screen.
  */
 
 export interface AccessModel {
@@ -60,7 +66,7 @@ export interface AccountantActions extends ListsActions {
   onDismissNotice?: () => void
 }
 
-export function AccountantView({ model, actions, children }: { model: AccountantViewModel; actions?: AccountantActions; children?: ReactNode }) {
+export function AccountantView({ model, actions, thread = null, frame }: { model: AccountantViewModel; actions?: AccountantActions; /** B-TH-276: Ask finance, docked (PortalThread live; the design's ThreadView); null: none yet. */ thread?: ReactNode | null; /** B-TH-276: the design review's width (docked at 1440, the narrow page, its view open). */ frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number } }) {
   const t = useT(NS)
   if (model.state === 'error') {
     return (
@@ -80,17 +86,16 @@ export function AccountantView({ model, actions, children }: { model: Accountant
     )
   }
   return (
-    <div className="fw-pacc">
-      {model.notice ? (
-        <Banner tone={model.notice.tone} title={t(model.notice.key, model.notice.params)} action={<Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>{t('notice.hide')}</Button>} />
-      ) : null}
-      {model.access ? <AccessPanel access={model.access} /> : null}
-      {model.period ? <PeriodPanel period={model.period} actions={actions} /> : <EmptyState title={t('period.noneYet')} description={t('period.noneYetBody')} />}
-      {model.period ? <PeriodBody model={model} actions={actions} /> : null}
-      <section className="fw-pacc-section fw-pacc-ask" id="messages" aria-label={t('ask.title')}>
-        {children}
-      </section>
-    </div>
+    <PortalRecordFrame thread={thread} threadLabel={t('ask.title')} design={frame}>
+      <div className="fw-pacc">
+        {model.notice ? (
+          <Banner tone={model.notice.tone} title={t(model.notice.key, model.notice.params)} action={<Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>{t('notice.hide')}</Button>} />
+        ) : null}
+        {model.access ? <AccessPanel access={model.access} /> : null}
+        {model.period ? <PeriodPanel period={model.period} actions={actions} /> : <EmptyState title={t('period.noneYet')} description={t('period.noneYetBody')} />}
+        {model.period ? <PeriodBody model={model} actions={actions} /> : null}
+      </div>
+    </PortalRecordFrame>
   )
 }
 

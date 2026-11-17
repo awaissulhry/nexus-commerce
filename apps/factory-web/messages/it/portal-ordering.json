@@ -405,7 +405,8 @@
     "colour": "Colore",
     "offered": "offerta",
     "notOffered": "non offerta",
-    "later": "Foto, istruzioni di cura e d'uso, ordine minimo e tempi di consegna non sono ancora nel portale: chiedici."
+    "later": "Foto, istruzioni di cura e d'uso, ordine minimo e tempi di consegna non sono ancora nel portale: chiedici.",
+    "ask": "Chiedi di questo modello"
   },
   "sheet": {
     "title": "Scheda modello {code}",
@@ -424,7 +425,8 @@
     "notDraft": "Questa richiesta è già stata inviata.",
     "problems_one": "{count} problema da risolvere — Mostrami",
     "problems_other": "{count} problemi da risolvere — Mostrami",
-    "mayNotOrder": "Solo i colleghi che possono ordinare iniziano un ordine: chiedi al tuo amministratore."
+    "mayNotOrder": "Solo i colleghi che possono ordinare iniziano un ordine: chiedi al tuo amministratore.",
+    "mayNotAsk": "Solo i colleghi che possono inviare richieste chiedono di un modello da qui: usa “Fai una domanda” nel menu ⋯."
   },
   "refusal": {
     "conflict": "Qualcuno ha cambiato questa bozza nello stesso momento: rileggila e riprova.",
