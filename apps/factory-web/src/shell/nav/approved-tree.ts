@@ -156,6 +156,8 @@ export const OFFICE: readonly TreeArea[] = [
           { id: 'products.samples', title: 'Samples & prototypes', titleIt: 'Campionature e prototipi', wave: 'W2b', href: '/products/samples' },
           // W2b: B-W2b-244 Changes & versions (SCR-117).
           { id: 'products.changes', title: 'Changes & versions', titleIt: 'Modifiche e versioni', wave: 'W2b', href: '/products/changes' },
+          // B-TH-248 (threads plan TH-5, 09-tree.md G): Projects, beside Samples and Changes — the plan's one new page (shipped with W2b).
+          { id: 'products.projects', title: 'Projects', titleIt: 'Progetti', wave: 'W2b', href: '/products/projects' },
         ],
       },
       {

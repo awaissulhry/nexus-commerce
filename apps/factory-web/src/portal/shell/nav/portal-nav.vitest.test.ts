@@ -135,7 +135,12 @@ describe('the portal navigation (B-W2b-173; design portal.frame › rail, bottom
     // B-W2b-196: our check of a delivery address opens the Account on that address.
     // B-W2b-191: a customer's sales order opens its own page; B-W2b-197: a return and a complaint too; B-W2b-195: an invoice opens Documents on it.
     // B-TH-222: a customer's request opens its own page (its true state and its thread).
-    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'Inquiry', 'PurchaseOrder', 'SubcontractOrder', 'ShipNotice', 'ReturnAuthorisation', 'Complaint', 'RepairOrder', 'PartyAddress', 'Invoice'])
+    // B-TH-253: a project opens its own page for every kind that has projects (customer, supplier, workshop); never a guest.
+    expect(RECORD_PAGES.filter((page) => page.built).map((page) => page.type)).toEqual(['SalesOrder', 'Inquiry', 'PurchaseOrder', 'SubcontractOrder', 'ShipNotice', 'ReturnAuthorisation', 'Complaint', 'RepairOrder', 'PartyAddress', 'Invoice', 'Project'])
+    expect(recordPageOf(['CUSTOMER'], 'Project', 'p1')).toBe('/projects/p1')
+    expect(recordPageOf(['SUPPLIER'], 'Project', 'p1')).toBe('/projects/p1')
+    expect(recordPageOf(['SUBCONTRACTOR'], 'Project', 'p1')).toBe('/projects/p1')
+    expect(recordPageOf(['GUEST'], 'Project', 'p1')).toBeNull()
     expect(recordPageOf(['CUSTOMER'], 'Inquiry', 'q1')).toBe('/orders/requests/q1')
     expect(recordPageOf(['SUPPLIER'], 'Inquiry', 'q1')).toBeNull()
     // B-W2b-342: a repair opens its own page.

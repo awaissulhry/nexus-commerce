@@ -9,6 +9,8 @@ import type { CustomerCheck, InquiryView } from '../../api'
 import { HOME_ADDRESS } from '../../model'
 import type { InquiryRecordModel } from '../../record-model'
 import { InquiriesView, type InquiriesModel } from '../InquiriesView'
+// B-TH-252: "Start a project…" (⋯) and its dialog.
+import { carriableFiles, startDraftOf } from '../../start-project'
 
 /**
  * SCR-105-pane — Incoming's reading pane (B-TH-217, B-TH-218; threads plan TH-1b, pictures 13–15 drawn to the approved look: the
@@ -143,5 +145,9 @@ export const designScreen = defineDesignScreen<PaneCase>({
     { id: 'th3-234-task-refused', label: 'TH-3 · The task refused in words: the request was closed meanwhile', model: paneCase(VIEW, 'owner', { can: { ...canFor('owner'), tasks: true }, dialog: { kind: 'task', draft: { kind: 'UPLOAD_DOCUMENT', due: null }, busy: false, notice: { key: 'task.refusal.REQUEST_CLOSED', tone: 'danger' } } }) },
     // ---- end B-TH-234
     { id: 'th-230-pane-new', label: 'TH-2 · New messages beside the pane: "● 2 new" under the request; amber waiting by the one rule', model: paneCase(VIEW, 'owner', {}, { unread: { [ROWS[0]!.id]: { newCount: 2, lastAt: '2026-11-17T09:42:00.000Z' }, [ROWS[2]!.id]: { newCount: 3, lastAt: '2026-11-16T15:10:00.000Z' } } }) },
+    // ---- B-TH-252: "Start a project…" in ⋯ (PROJ.new-F07)
+    { id: 'th5-252-start', label: 'TH-5 · ⋯ Start a project: the request\'s customer is the project\'s (said, never chosen); a name, the target date, the files to carry', model: paneCase(VIEW, 'owner', { startProject: { held: null, dialog: { number: VIEW.number, customer: VIEW.party?.name ?? 'Brand Alpha', draft: { ...startDraftOf(VIEW), targetDate: '2027-03-31' }, files: carriableFiles(VIEW), busy: false, notice: null, offline: false } } }), note: 'The request is linked to the new project and stays as it is; the project opens after Start.' },
+    { id: 'th5-252-start-prospect', label: 'TH-5 · A prospect\'s request: ⋯ Start a project is held — match it to its customer first', model: paneCase(PROSPECT_VIEW, 'owner', { startProject: { held: 'project.held.prospect', dialog: null } }), note: 'Open ⋯: the line is held with the reason (a project\'s outside company never changes afterwards).' },
+    // ---- end B-TH-252
   ],
 })

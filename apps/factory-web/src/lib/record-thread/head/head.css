@@ -20,6 +20,12 @@ span.fw-rth-owner { cursor: default; }
 .fw-rth-owner:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
 .fw-rth-owner-none { font-size: var(--nds-font-size-sm); }
 .fw-rth.is-compact { padding-left: var(--nds-space-12); }
+/* B-TH-251 (PROJ.linked-F05): "In project: FW27 airbag line" — a quiet chip that opens the project (a real link). */
+.fw-rth-project { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: var(--nds-space-4); height: 26px; padding: 0 var(--nds-space-8); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-pill); color: var(--nds-text-link); font-size: var(--nds-font-size-sm); text-decoration: none; white-space: nowrap; }
+.fw-rth-project:hover { background: var(--nds-surface-hover); }
+.fw-rth-project:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+.fw-rth-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fw-rth-project-more { flex: none; color: var(--nds-text-2); font-variant-numeric: tabular-nums; }
 /* The count chips fold into the "⋯" on a narrow dock from the first paint (the view's measure then adds their counts to the doors). */
 @container fw-rth (max-width: 559px) { .fw-rth-counts { display: none; } }
 

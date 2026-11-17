@@ -1,0 +1,84 @@
+/*
+ * Today › My projects (B-TH-252) LAYOUT only: one line per project — the project (number and name) and its outside company,
+ * then its facts (status, target date with its words, the stale nudge, my new messages). Semantic tokens only.
+ */
+.fw-today-myprj {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-today-myprj-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-6) 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-today-myprj-row:last-child {
+  border-bottom: 0;
+}
+
+.fw-today-myprj-icon {
+  color: var(--nds-text-2);
+}
+
+.fw-today-myprj-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-today-myprj-link {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-today-myprj-number {
+  font-family: var(--nds-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-today-myprj-facts,
+.fw-today-myprj-date {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-6);
+}
+
+.fw-today-myprj-new {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-today-myprj-muted {
+  display: inline-flex;
+  align-items: center;
+}
+
+.fw-today-myprj-all {
+  margin-left: auto;
+  font-size: var(--nds-font-size-sm);
+}
+
+/* A phone: the facts go under the project. */
+@media (max-width: 719px) {
+  .fw-today-myprj-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .fw-today-myprj-facts {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+}

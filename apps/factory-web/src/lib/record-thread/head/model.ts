@@ -229,7 +229,26 @@ export interface HeadModel {
   /** The reader's own new messages ("2 new"); 0: no chip. */
   readonly newCount?: number
   // ---- end B-TH-229
+  // ---- B-TH-251 (PROJ.linked-F05): "In project: FW27 airbag line" — the projects linking this record that the reader may open (open
+  // ones first, each with its page); absent or empty: no chip. A project the reader may not open never comes here (the API's read).
+  readonly projects?: readonly HeadProject[]
+  // ---- end B-TH-251
 }
+
+// ---- B-TH-251: one project the record is in (the chip's first one, the others in its tooltip).
+export interface HeadProject {
+  readonly id: string
+  readonly number: string
+  readonly label: string
+  readonly href: string
+}
+
+/** The chip's words: the first project's name, and how many more (the tooltip names them all); null: no chip. */
+export function inProjectWords(projects: readonly HeadProject[] | undefined): { readonly first: HeadProject; readonly more: number; readonly all: string } | null {
+  if (!projects || projects.length === 0) return null
+  return { first: projects[0]!, more: projects.length - 1, all: projects.map((project) => `${project.number} ${project.label}`).join(' · ') }
+}
+// ---- end B-TH-251
 
 /** One row of the "⋯", in order: an R-ACT door, a View choice (phone), Print, Close / Reopen. */
 export type MenuRow =

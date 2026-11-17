@@ -1,0 +1,69 @@
+{
+  "band": {
+    "title": "Progetto"
+  },
+  "loading": "Lettura del progetto…",
+  "offline": "Nessuna connessione. Quello che vedi è stato letto alle {time}.",
+  "status": {
+    "ACTIVE": "Attivo",
+    "ON_HOLD": "In pausa",
+    "CLOSED": "Chiuso"
+  },
+  "summary": {
+    "kind": "Progetto",
+    "target": "Data obiettivo {date}",
+    "shared": "I messaggi qui sono condivisi tra il vostro team e {company}. Vedono questo progetto solo le persone del vostro team che abbiamo aggiunto.",
+    "onHold": "Il progetto è in pausa per ora: potete scrivere a {company} qui.",
+    "closed": "Il progetto è chiuso: i suoi messaggi restano da leggere."
+  },
+  "thread": {
+    "title": "Messaggi su questo progetto"
+  },
+  "news": {
+    "title": "Novità dei vostri record",
+    "hint": "Quando un vostro record collegato al progetto va avanti, lo vedete qui.",
+    "empty": "Nessuna novità dei vostri record per ora.",
+    "failed": "Le novità non si possono leggere ora.",
+    "record": "{type} {ref}",
+    "moved": "{record}: da {from} a {to}",
+    "now": "{record}: ora {to}",
+    "changed": "{record} è andato avanti",
+    "more_one": "+{count} altro quel giorno",
+    "more_other": "+{count} altri quel giorno",
+    "older": "Mostra le novità più vecchie",
+    "reading": "Lettura…"
+  },
+  "move": {
+    "REQUESTED": "richiesto",
+    "IN_PROGRESS": "in lavorazione",
+    "SENT": "inviato",
+    "RECEIVED": "ricevuto",
+    "DECIDED": "deciso",
+    "APPROVED": "approvato",
+    "REJECTED": "respinto",
+    "ACCEPTED": "accettato",
+    "DECLINED": "rifiutato",
+    "EXPIRED": "scaduto",
+    "CONFIRMED": "confermato",
+    "IN_PRODUCTION": "in produzione",
+    "READY": "pronto",
+    "PARTLY_SHIPPED": "spedito in parte",
+    "SHIPPED": "spedito",
+    "DELIVERED": "consegnato",
+    "CLOSED": "chiuso",
+    "CANCELLED": "annullato",
+    "ON_HOLD": "in pausa",
+    "OPEN": "aperto",
+    "COMPLETED": "completato"
+  },
+  "missing": {
+    "title": "Progetto non trovato",
+    "body": "Questo progetto non è tra i vostri, oppure non esiste più.",
+    "home": "Vai alla Home"
+  },
+  "failed": {
+    "title": "Il progetto non si può leggere",
+    "body": "Riprova tra poco.",
+    "retry": "Riprova"
+  }
+}

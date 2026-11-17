@@ -28,6 +28,8 @@ import { SamplesMessages } from './parts'
 import type { DecideModel } from './view/DecideDialog'
 import type { NewRoundModel } from './view/NewRoundDialog'
 import { SamplesListView } from './view/SamplesListView'
+// B-TH-251: "Add to project" on the selected rounds.
+import { useAddToProject } from '../projects/add-to/use-add-to-project'
 
 /**
  * `/w/<company>/products/samples` (SCR-110): the rounds as a board by stage (the page as the design draws it), a list
@@ -122,6 +124,7 @@ function Container() {
     can.view,
   )
   const offline = live === 'offline'
+  const addToProject = useAddToProject('SampleRound', offline) // B-TH-251
 
   // ---- New sample request ------------------------------------------------------------------------------------------------
   const [newRound, setNewRound] = useState<NewRoundModel | null>(null)
@@ -285,6 +288,7 @@ function Container() {
         moving,
         newRound: newRound ? { ...newRound, offline } : null,
         decide: decide ? { ...decide, offline } : null,
+        addToProject: { manage: addToProject.manage, offline, dialog: addToProject.model }, // B-TH-251
       }}
       actions={{
         onAddress: (patch) => go(patch),
@@ -318,6 +322,9 @@ function Container() {
             .catch(() => undefined)
         },
         onDismissNotice: () => setNotice(null),
+        // B-TH-251
+        onAddToProject: addToProject.open,
+        addToProject: addToProject.actions,
       }}
     />
   )

@@ -1,0 +1,121 @@
+{
+  "block": {
+    "heading": "Record collegati ({count})",
+    "headingNone": "Record collegati",
+    "link": "Collega…",
+    "linkLabel": "Collega un record al progetto",
+    "none": "Nessun record collegato. Collega un modello, una campionatura o un ordine.",
+    "noneRead": "Nessun record collegato.",
+    "group": "{group} ({count})",
+    "showAll": "Mostra tutti i {count}",
+    "showFewer": "Mostra meno",
+    "cannotOpen": "{type} — non puoi aprirlo",
+    "linkedBy": "Collegato da {name} · {date}",
+    "linkedOn": "Collegato il {date}",
+    "note": "Perché: {note}",
+    "rowMenu": "Azioni per {label}",
+    "open": "Apri",
+    "openNewTab": "Apri in una nuova scheda",
+    "unlink": "Scollega…",
+    "scopeParty": "Possono entrare solo record di {party}, o di nessuna azienda esterna.",
+    "scopeOffice": "Progetto solo interno: possono entrare solo record che non sono di un’azienda esterna.",
+    "statusOnly": "Solo lo stato a parole: mai un importo."
+  },
+  "type": {
+    "Style": "Modello",
+    "SampleRound": "Giro campione",
+    "Quote": "Preventivo",
+    "SalesOrder": "Ordine",
+    "PurchaseOrder": "Ordine d’acquisto",
+    "SubcontractOrder": "Ordine di lavorazione",
+    "ChangeRequest": "Richiesta di modifica",
+    "Certificate": "Certificato",
+    "Inquiry": "Richiesta",
+    "Shipment": "Spedizione",
+    "MeasurementProfile": "Profilo di misura",
+    "other": "Record"
+  },
+  "link": {
+    "title": "Collega un record a {project}",
+    "search": "Numero o nome",
+    "searchLabel": "Cerca i record da collegare",
+    "kind": "Tipo di record",
+    "allKinds": "Ogni tipo che può entrare",
+    "idle": "Scrivi un numero o un nome.",
+    "tooShort": "Scrivi almeno 2 lettere.",
+    "loading": "Ricerca…",
+    "none": "Nessun record trovato che possa entrare in questo progetto.",
+    "failed": "La ricerca non ha risposto.",
+    "retry": "Riprova",
+    "already": "Già collegato",
+    "results": "Risultati",
+    "picked": "Verrà collegato: {label}",
+    "note": "Perché (facoltativo)",
+    "noteHint": "Una riga, fino a 500 caratteri.",
+    "noteTooLong": "La nota supera i 500 caratteri.",
+    "noteOneLine": "La nota è una riga sola.",
+    "submit": "Collega",
+    "cancel": "Annulla",
+    "pickFirst": "Scegli prima un record."
+  },
+  "refused": {
+    "party": "{label} è di un’altra azienda esterna: non può entrare in questo progetto.",
+    "label": "{label} non può entrare in questo progetto.",
+    "already": "{label} è già collegato a questo progetto.",
+    "notFound": "{label} non è stato trovato, oppure non puoi aprirlo."
+  },
+  "unlink": {
+    "title": "Scollegare {label}?",
+    "body": "Il record resta com’è; il progetto non lo elenca più e una riga nel thread dice chi l’ha scollegato.",
+    "confirm": "Scollega",
+    "cancel": "Tienilo"
+  },
+  "notice": {
+    "linked": "Collegato {label}.",
+    "unlinked": "Scollegato {label}.",
+    "unlinkedHidden": "Scollegato un record che non puoi aprire."
+  },
+  "addTo": {
+    "button": "Aggiungi a un progetto",
+    "buttonCount_one": "Aggiungi {count} a un progetto",
+    "buttonCount_other": "Aggiungi {count} a un progetto",
+    "titleStyle_one": "Aggiungi {count} modello a un progetto",
+    "titleStyle_other": "Aggiungi {count} modelli a un progetto",
+    "titleSampleRound_one": "Aggiungi {count} giro campione a un progetto",
+    "titleSampleRound_other": "Aggiungi {count} giri campione a un progetto",
+    "intro": "Un progetto raccoglie il lavoro su più modelli, campionature e ordini. Entrano solo i record della sua azienda esterna, o di nessuna.",
+    "search": "Trova un progetto per numero o nome",
+    "projects": "Progetti aperti",
+    "loading": "Lettura dei progetti aperti…",
+    "none": "Nessun progetto aperto corrisponde.",
+    "noneAtAll": "Ancora nessun progetto aperto: creane uno in Prodotti › Sviluppo › Progetti.",
+    "failed": "I progetti non sono stati letti.",
+    "retry": "Riprova",
+    "officeOnly": "Solo interno",
+    "choice": "{number} · {name}",
+    "note": "Perché (facoltativo)",
+    "noteHint": "Una riga, fino a 500 caratteri, per ogni record collegato.",
+    "submit": "Aggiungi al progetto",
+    "cancel": "Annulla",
+    "held": {
+      "tooMany": "Al massimo {count} record alla volta.",
+      "pick": "Scegli prima un progetto."
+    },
+    "result": {
+      "title": "Aggiunti a {project}",
+      "linked_one": "{count} collegato",
+      "linked_other": "{count} collegati",
+      "skipped_one": "{count} saltato",
+      "skipped_other": "{count} saltati",
+      "skippedTitle": "Saltati, con il perché",
+      "row": "{number}: {reason}",
+      "open": "Apri il progetto",
+      "done": "Fatto"
+    },
+    "skip": {
+      "LINK_PARTY": "è di un’altra azienda esterna: non può entrare in questo progetto",
+      "ALREADY_LINKED": "è già collegato a questo progetto",
+      "MISSING": "non trovato, oppure non puoi aprirlo"
+    }
+  }
+}

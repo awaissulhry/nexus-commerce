@@ -10,6 +10,8 @@ import type { Grains, StyleAbilities, StyleListView } from '../model'
 import type { StylesGalleryModel } from '../gallery/gallery-model'
 // B-W2b-237 (SCR-343): the release column's completeness and Set season.
 import type { ListGate, SeasonResult } from './depth/model'
+// B-TH-251: "Add to project" (the bulk bar's button and its dialog).
+import type { AddToListPart, AddToProjectActions, AddToRecord } from '../../projects/add-to/model'
 
 export interface StyleFilters {
   view: StyleListView
@@ -131,6 +133,8 @@ export interface StylesListViewModel {
   gate?: ListGate
   /** B-W2b-237: Set season's outcome (the pop-up says it), and the design cases' pop-up already open. */
   season?: { result: SeasonResult | null; open?: boolean }
+  /** B-TH-251: "Add to project" on the selected styles (absent: no button). */
+  addToProject?: AddToListPart
 }
 
 export interface StylesListActions {
@@ -159,4 +163,7 @@ export interface StylesListActions {
   /** B-W2b-237: Set season on the selected styles (null clears it); the pop-up closing clears the outcome. */
   onSetSeason?: (ids: string[], season: string | null) => Promise<void>
   onSeasonClosed?: () => void
+  /** B-TH-251: "Add to project" on the selected styles (each by its code), and its dialog. */
+  onAddToProject?: (records: AddToRecord[]) => void
+  addToProject?: AddToProjectActions
 }

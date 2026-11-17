@@ -1166,5 +1166,46 @@
       "noDomain": "Configura prima il dominio di posta",
       "setUp": "Admin › Connessioni"
     }
+  },
+  "project": {
+    "open": "Avvia un progetto…",
+    "openHint": "Lavoro di sviluppo per questo cliente (una collezione, una famiglia di modelli, un programma): la richiesta vi viene collegata",
+    "held": {
+      "read": "Serve il permesso di leggere le conversazioni.",
+      "right": "Serve il permesso di gestire i progetti.",
+      "prospect": "La richiesta non ha ancora un cliente: associala prima al suo cliente (l’azienda esterna di un progetto non cambia più dopo).",
+      "offline": "Sei offline: riprova quando torna la rete."
+    },
+    "title": "Avvia un progetto da questa richiesta",
+    "rule": "Un progetto è per un lavoro su più modelli, campionature o ordini, o su un lavoro che non ha ancora un record. Riguarda solo questo ordine? Rispondi alla richiesta.",
+    "customer": "Azienda esterna",
+    "customerHint": "Nel progetto ci saranno solo {customer} e il nostro team. Non si potrà cambiare dopo.",
+    "name": "Nome",
+    "nameHint": "L’oggetto della richiesta, se non scrivi un altro nome.",
+    "target": "Data obiettivo",
+    "targetHint": "Quando dovrebbe essere concluso; al responsabile viene ricordato quando la data è passata e non ci sono messaggi.",
+    "goal": "Obiettivo",
+    "goalHint": "Un paragrafo: cosa deve raggiungere il progetto.",
+    "files_one": "Porta {count} file nel progetto",
+    "files_other": "Porta {count} file nel progetto",
+    "noFiles": "La richiesta non ha file da portare.",
+    "after": "La richiesta viene collegata al progetto e resta com’è: rispondi, prepara il preventivo o rifiutala come prima. Il responsabile del progetto sei tu; aggiungi colleghi e persone di {customer} nella sua pagina.",
+    "go": "Avvia il progetto",
+    "problem": {
+      "name": "Il nome è una riga di massimo 200 caratteri.",
+      "target": "Scegli la data obiettivo.",
+      "targetPast": "La data obiettivo è passata: scegli oggi o un giorno successivo.",
+      "goal": "L’obiettivo è di massimo 4000 caratteri.",
+      "invalid": "Controlla i campi: il progetto non può essere creato così.",
+      "forbidden": "Il tuo ruolo non può avviare un progetto per questo cliente.",
+      "notFound": "La richiesta non c’è più.",
+      "unavailable": "Il servizio non risponde ora. Riprova tra poco."
+    },
+    "refusal": {
+      "NO_PARTY_REQUEST": "La richiesta non ha ancora un cliente: associala prima al suo cliente (l’azienda esterna di un progetto non cambia più dopo).",
+      "PARTY_BLOCKED": "Questo cliente è bloccato o archiviato: un nuovo progetto non può essere condiviso con lui.",
+      "SEASON": "Questa stagione non è una stagione della società della richiesta.",
+      "LEAD": "Il responsabile di un progetto è una persona attiva dell’ufficio che può leggerlo."
+    }
   }
 }

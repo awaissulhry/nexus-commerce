@@ -59,6 +59,9 @@ import { readUseOnTargets, useFileOn } from './api'
 import { carriable, offeredTargets, openRefusal, queryReady, targetLabel, useOnRefusal } from '../../../lib/record-thread/files/use-on'
 import { UseOnDialog, type UseOnModel } from '../../../lib/record-thread/files/view/UseOnDialog'
 import type { RecordThreadBase, RecordThreadHost } from './use-record-thread'
+// B-TH-251 (PROJ.linked-F05): "In project …" on the head of a record a project may link.
+import { useInProject } from '../../products/projects/record/linked/use-in-project'
+import { companyPrefix } from '../../../lib/session/session'
 
 /** What the docked thread needs of its record beyond RecordThread v1's host (B-TH-300). */
 export interface DockedHost extends RecordThreadHost {
@@ -192,6 +195,11 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       void loadFollowers()
     },
   })
+
+  // ---- B-TH-251 (PROJ.linked-F05): the projects this record is in that the reader may open (threads.read), read once and again when
+  // this record is linked or unlinked; the Head's "In project: …" chip opens the first.
+  const inProject = useInProject(api, key, held.has('threads.read'), companyPrefix(session.company?.code ?? ''))
+  // ---- end B-TH-251
 
   // ── Ask a partner to approve, Share with a partner (the record panels' own containers and dialogs) ─────────────────────
   const approvals = useApprovals({ api, record: key, title: host.title, can: { view: held.has('partners.approvals.view'), ask: held.has('partners.approvals.ask') }, files: base.files, party: party ? { name: party.name, emails: [] } : null, reloadPanels: () => void base.loadThread() })
@@ -527,6 +535,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     owner: base.server.head ? base.server.head.owner : undefined,
     ownerHeld: base.server.head ? (offline ? { key: 'held.offline' } : can.post ? null : { key: 'held.noRight', params: { right: rightRef('threads.post') } }) : undefined,
     newCount: base.newCount,
+    projects: inProject, // B-TH-251
     closed,
     offline: base.offline ? { asOf: base.offline.since } : null,
     view: shown,

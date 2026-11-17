@@ -22,6 +22,8 @@ import { useGalleryLooks } from '../gallery/use-gallery-looks'
 import { readGateSummaries } from '../record/overview/api'
 import { depthProblem } from '../record/overview/model'
 import { NO_GATE, unreadIds, type ListGate, type SeasonResult } from './depth/model'
+// B-TH-251: "Add to project" on the selected styles.
+import { useAddToProject } from '../../projects/add-to/use-add-to-project'
 
 const PRODUCT_TYPES = ['JACKET', 'TROUSERS', 'SUIT', 'GLOVES', 'VEST', 'OTHER']
 const PPE_CATEGORIES = ['NOT_PPE', 'CATEGORY_I', 'CATEGORY_II', 'CATEGORY_III']
@@ -99,6 +101,7 @@ function StylesContainer() {
   const [gate, setGate] = useState<ListGate>(NO_GATE)
   const gateRef = useRef<ListGate>(NO_GATE)
   const [season, setSeason] = useState<{ result: SeasonResult | null }>({ result: null })
+  const addToProject = useAddToProject('Style', false) // B-TH-251
   const duplicate = useDuplicate(api, () => {
     void load()
     loadTiles()
@@ -367,6 +370,8 @@ function StylesContainer() {
     // B-W2b-237
     gate,
     season,
+    // B-TH-251
+    addToProject: { manage: addToProject.manage, offline: false, dialog: addToProject.model },
   }
 
   return (
@@ -405,6 +410,9 @@ function StylesContainer() {
         // B-W2b-237
         onSetSeason: setSeasonMany,
         onSeasonClosed: () => setSeason({ result: null }),
+        // B-TH-251
+        onAddToProject: addToProject.open,
+        addToProject: addToProject.actions,
       }}
     />
   )
