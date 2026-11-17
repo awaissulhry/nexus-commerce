@@ -171,6 +171,8 @@ describe('B-PR-33: the all-customers overview', { timeout: SLOW_TEST_TIMEOUT_MS 
       for (const block of ['HOLD', 'CUSTOMER', 'MATERIAL'] as const) expect((await listIds(session, `&blockedBy=${block}`)).length, `${session} ${block}`).toBe(overall.blockedBy[block])
       expect((await listIds(session, '&gate=true&open=true')).length, session).toBe(overall.blockedBy.GATE)
       expect((await listIds(session, '&mixed=true&open=true')).length, session).toBe(overall.blockedBy.NEEDS_SPLIT)
+      // Customer urgency: the list's F-PR-18 filter (Urgent counts only while the customer's switch is on).
+      expect((await listIds(session, '&customerUrgency=URGENT&open=true')).length, session).toBe(overall.customerUrgent)
       expect((await listIds(session, `&open=true&partyId=${world.ids.b}`)).length, session).toBe(rowOf(answer, world.ids.b)!.inProduction.workOrders)
       // The Customer requests tile counts the very rows Home › Approvals shows this reader.
       expect(tiles.customerRequests, session).toBe(await approvalsCount(session))
@@ -233,7 +235,7 @@ describe('B-PR-33: the all-customers overview', { timeout: SLOW_TEST_TIMEOUT_MS 
     expect(onlyB.mixed).toBeNull()
     expect(onlyB.filter.partyId).toBe(world.ids.b)
     // One site (the harness's); an unknown site is not found.
-    expect((await overview('office.all', `?siteId=${world.w.siteId}`)).overall.inProduction.workOrders).toBe(all.overall.inProduction.workOrders)
+    expect((await overview('office.all', `?siteId=${world.w.siteId}`)).overall.inProduction.workOrders).toBe((await listIds('office.all', `&open=true&siteId=${world.w.siteId}`)).length)
     expect((await call('office.all', 'GET', `/production/overview?siteId=${newId()}`)).status).toBe(404)
   })
 
