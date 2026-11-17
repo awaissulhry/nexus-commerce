@@ -5,6 +5,8 @@ import { draftOf, newKey, type DraftLine } from '../daily-model'
 import { STEP_UP_CLOSED } from '../hooks'
 import type { NewOrderModel } from '../new/new-model'
 import { NewOrderView } from '../new/view/NewOrderView'
+// B-TH-231: the fold's held files.
+import { holdFiles, type HeldFile } from '../new/new-files'
 import {
   AMEND_PREVIEW,
   AMEND_PREVIEW_PROBLEMS,
@@ -230,6 +232,17 @@ const TYPED: DraftLine[] = [
   { key: newKey(STYLE_ID, BRN.id), lineId: null, styleId: STYLE_ID, colourwayId: BRN.id, sizes: { '50': 2, '52': 2 }, price: '430', locked: false },
 ]
 const typedDraft = { lines: TYPED, requestedDate: '2026-12-01', promiseDate: '2026-12-08', internalNote: 'Etichetta del cliente sulle giacche.' }
+// B-TH-231: the customer's files held in the new order (made up).
+const HELD: HeldFile[] = holdFiles(
+  [],
+  [
+    { name: 'Rider sheet (made up).pdf', type: 'application/pdf', size: 320_000 },
+    { name: 'Collar detail.jpg', type: 'image/jpeg', size: 2_100_000 },
+    { name: 'Logo.ai', size: 4_200_000 },
+    { name: 'logo.svg', type: 'image/svg+xml', size: 12_000 },
+  ],
+  (index) => `held-${index}`,
+).held.map((file, index): HeldFile => (index === 0 ? { ...file, sheet: true } : file))
 
 // ---- B-W2b-323 ----
 const waitingOrder = order('CONFIRMED', { status: 'PENDING_APPROVAL' })
@@ -405,6 +418,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'new-composer', label: 'W2a · Sales · New order: Add a style — colours picked', model: draftCase('sales', { composer: { ...COMPOSER_EMPTY, query: 'DEMO', results: STYLE_ROWS, chosen: STYLE, picked: [BRN.id] } }) },
     { id: 'new-reading', label: 'W2a · New order: reading the customer', model: draftCase('sales', { party: { status: 'loading' }, number: undefined }) },
     { id: 'new-missing', label: 'W2a · New order: an address without a customer (start again from the list)', model: draftCase('sales', { header: null, party: { status: 'missing' } }) },
+    // ---- B-TH-231: the fold "Customer files" — held in the page, attached right after Confirm (O-SAL-ORD-NEW.form-F08)
+    { id: 'th-231-files', label: 'TH-2 · Sales · New order: Customer files held until Confirm (a ticked measurement sheet, a photo, a refused SVG)', model: draftCase('sales', { draft: typedDraft, styles: { [STYLE_ID]: STYLE }, preview: { phase: 'ready', value: MANUAL_PREVIEW, problem: null }, files: { held: HELD, canUpload: true, leftOut: 0, made: null, busy: false } }), note: '"Added to the order when you confirm, for the office only": nothing exists before the order.' },
+    { id: 'th-231-files-failed', label: 'TH-2 · Sales · Order made; 2 files did not attach — Retry', model: draftCase('sales', { draft: typedDraft, styles: { [STYLE_ID]: STYLE }, preview: { phase: 'ready', value: MANUAL_PREVIEW, problem: null }, files: { held: HELD.map((file, index): HeldFile => (file.problem ? file : { ...file, state: index === 0 ? 'attached' : 'failed' })), canUpload: true, leftOut: 0, made: { number: 'SO-2026-0089', href: `${PREFIX}/sales/orders/x` }, busy: false } }), note: 'The order stays made (Confirm is held: never twice); Retry sends only what did not attach.' },
+    { id: 'th-231-files-no-right', label: 'TH-2 · Sales · New order: no right to upload files (said; the order is made without them)', model: draftCase('sales', { files: { held: [], canUpload: false, leftOut: 0, made: null, busy: false } }) },
+    // ---- end B-TH-231
     { id: 'new-error', label: 'W2a · New order: the customer could not be read (Try again)', model: draftCase('sales', { party: { status: 'error', problem: 'problem.read.unavailable' } }) },
     { id: 'new-no-manage', label: 'W2a · Finance · New order held: taking orders is the sales right', model: draftCase('finance', { draft: typedDraft, styles: { [STYLE_ID]: STYLE }, preview: { phase: 'ready', value: MANUAL_PREVIEW, problem: null } }) },
     // ---- B-W2a-72: the Margin tab (margin grain only; Owner answer S2: sales see %, never cost amounts) ----

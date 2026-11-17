@@ -129,3 +129,28 @@ export async function officeOnly(api: ApiClient, file: { id: string; version: nu
 export async function removeFile(api: ApiClient, file: { id: string; version: number }): Promise<void> {
   await api.request('DELETE', `/files/${enc(file.id)}`, { query: { version: file.version }, schema: fileAnswer })
 }
+
+// ---- B-TH-231: carry a file to another record (B-TH-024) and the records it may go to (same customer or none) ----
+const targetsAnswer = z.object({
+  tooShort: z.boolean(),
+  targets: z.array(z.object({ recordType: z.string(), recordId: z.string(), number: z.string().nullable(), title: z.string(), subtitle: z.string().nullable(), area: z.string(), partyId: z.string().nullable() })),
+})
+
+/** GET /files/<id>/use-on/targets?q=: the records of the file's customer, or of none, the person may add files to. */
+export function readUseOnTargets(api: ApiClient, fileId: string, q: string, signal?: AbortSignal): Promise<z.infer<typeof targetsAnswer>> {
+  return api.get(`/files/${enc(fileId)}/use-on/targets`, { query: { q }, schema: targetsAnswer, signal })
+}
+
+/**
+ * POST /files/<id>/use-on: a copy onto the chosen record (kind and category kept, naming its source); the office only, or also
+ * the target's own customer (files.manage). The caller's key: "Retry" after a lost answer never copies twice.
+ */
+export async function useFileOn(api: ApiClient, fileId: string, target: { recordType: string; recordId: string; share: boolean }, idempotencyKey: string): Promise<{ id: string }> {
+  const answer = await api.post(`/files/${enc(fileId)}/use-on`, {
+    body: { recordType: target.recordType, recordId: target.recordId, visibility: target.share ? ['OFFICE', 'PARTNER'] : ['OFFICE'] },
+    schema: z.object({ file: z.object({ id: z.string() }).passthrough() }),
+    idempotencyKey,
+  })
+  return { id: answer.file.id }
+}
+// ---- end B-TH-231

@@ -23,4 +23,6 @@ export const manifest = defineManifest({
   'PUT /email/ses-accounts/:accountId/webhook-secret': { audiences: ['office'], permission: 'email.manage', scope: 'record' },
   // B-W2b-397 (COL-004): the mis-send guard: email.send over the record (can() in the handler), read only.
   'POST /threads/:recordType/:recordId/emails/check': { audiences: ['office'], permission: 'email.send', scope: 'record' },
+  // B-TH-048 (undo send): the sender takes a mail back in its 10 seconds (email.send over the record; can() in the handler).
+  'POST /threads/:recordType/:recordId/emails/:emailId/undo': { audiences: ['office'], permission: 'email.send', scope: 'record' },
 })

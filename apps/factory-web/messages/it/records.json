@@ -147,7 +147,8 @@
       "DELIVERED": "Consegnata",
       "BOUNCED": "Respinta",
       "COMPLAINED": "Segnalata come spam",
-      "FAILED": "Non inviata"
+      "FAILED": "Non inviata",
+      "WITHDRAWN": "Invio annullato"
     },
     "forFloor": "Per il reparto",
     "emailTo": "A {to} · {subject}",
@@ -421,7 +422,8 @@
       "CREATOR": "l'ha creato",
       "ASSIGNEE": "ha ricevuto qualcosa su di esso",
       "MENTIONED": "è stato menzionato",
-      "CHOSE": "ha scelto di seguirlo"
+      "CHOSE": "ha scelto di seguirlo",
+      "ADDED": "è stato aggiunto"
     },
     "addedBy": "aggiunto da {name}",
     "since": "dal {date}",

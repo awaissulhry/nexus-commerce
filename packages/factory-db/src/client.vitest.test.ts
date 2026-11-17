@@ -17,8 +17,10 @@ import { MIGRATIONS_DIR } from './tools'
  * client — and 10-25 MB of query-compiler memory outside the heap at its first query. The graph grows with each schema
  * wave (about 91 MB with wave 22). CLIENT_HEAP_BOUND_MB leaves room for a few more waves: when it fails, measure again
  * (the notes of B-W2b-F9 hold the script) and lower FACTORY_DATABASE_CLIENTS before raising the bound.
+ * 2026-11-17 (main ab2ac6d524, TH schema waves 5-7): 131.45 MB, past 130. DEFAULT_CLIENT_CAPACITY went 16 → 15 and the bound
+ * 130 → 138, the same total heap (15 × 138 = 2070 MB ≤ 16 × 130 = 2080 MB).
  */
-const CLIENT_HEAP_BOUND_MB = 130
+const CLIENT_HEAP_BOUND_MB = 138
 
 v8.setFlagsFromString('--expose-gc')
 const gc = vm.runInNewContext('gc') as () => void
@@ -119,7 +121,9 @@ describe('what a client costs', () => {
     expect(held).toBeLessThan(2 * CLIENT_HEAP_BOUND_MB)
   }, 60_000)
 
-  it('keeps sixteen clients by default', () => {
-    expect(DEFAULT_CLIENT_CAPACITY).toBe(16)
+  // 2026-11-17: fifteen (was sixteen), so CLIENT_HEAP_BOUND_MB could rise to 138 MB with the same total heap.
+  it('keeps fifteen clients by default, within the heap the bound allows sixteen of 130 MB', () => {
+    expect(DEFAULT_CLIENT_CAPACITY).toBe(15)
+    expect(DEFAULT_CLIENT_CAPACITY * CLIENT_HEAP_BOUND_MB).toBeLessThanOrEqual(16 * 130)
   })
 })

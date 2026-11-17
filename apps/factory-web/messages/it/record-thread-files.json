@@ -34,5 +34,53 @@
     "frame711": "Dock a 1920, 711 px",
     "frame375": "Telefono, 375 px",
     "frameLabel": "Colonna del thread larga {width} px"
+  },
+  "locked": {
+    "sheet": "Scheda misure — non puoi aprirla"
+  },
+  "useOn": {
+    "action": "Usa su un altro record…",
+    "actionFor": "Usa {name} su un altro record",
+    "bulk_one": "Usa su un altro record ({count})",
+    "bulk_other": "Usa su un altro record ({count})",
+    "title_one": "Usa «{name}» su un altro record",
+    "title_other": "Usa {count} file su un altro record",
+    "subtitle": "Una copia va lì e dice da dove viene: record di {party}, o di nessun cliente.",
+    "subtitleNone": "Una copia va lì e dice da dove viene.",
+    "search": "Trova un record",
+    "searchHint": "Un ordine, un preventivo, una richiesta o un modello: il numero o il nome (almeno 3 caratteri).",
+    "searching": "Ricerca dei record…",
+    "tooShort": "Scrivi almeno 3 caratteri.",
+    "empty": "Nessun record di questo cliente, o di nessun cliente, corrisponde.",
+    "results": "Record a cui puoi aggiungere file",
+    "relation": {
+      "same": "Stesso cliente",
+      "none": "Nessun cliente",
+      "customer": "Record di un cliente"
+    },
+    "share": "Condividi la copia anche con {party}",
+    "shareHint": "Solo con il cliente del record scelto; altrimenti solo l’ufficio.",
+    "shareNoRight": "Per condividere con il cliente serve il diritto di gestire i file.",
+    "confirm_one": "Copia il file",
+    "confirm_other": "Copia {count} file",
+    "cancel": "Annulla",
+    "choose": "Scegli prima un record.",
+    "busy": "Copia in corso…",
+    "partial": "{copied} copiati; questi non sono andati:",
+    "refused": {
+      "otherParty": "Quel record è di un altro cliente: un file va solo su un record dello stesso cliente, o di nessun cliente.",
+      "notFound": "Il file o il record è fuori dalla tua portata, o non esiste più.",
+      "forbidden": "Non puoi aggiungere file a quel record, né condividerli con il suo cliente.",
+      "sameRecord": "Il file è già su questo record.",
+      "owned": "Quel record tiene i suoi file nella propria schermata: aggiungi il file lì.",
+      "state": "Il file non è più disponibile (trattenuto o rimosso).",
+      "network": "Nessuna risposta dal server: non è stato copiato nulla. Riprova.",
+      "failed": "Il file non è stato copiato. Riprova."
+    },
+    "source": {
+      "line": "Copiato da {type} · {name} (versione {n})",
+      "hidden": "Una copia: la fonte è su un record fuori dalla tua portata.",
+      "locked": "Copia di una scheda misure."
+    }
   }
 }

@@ -5,9 +5,10 @@ import type { OutboundStatus, SuppressionReason } from '../email/rules'
  * The mail delivery log and the blocked addresses (B-W2a-41; PLT-149; design admin.connections "Delivery log and
  * blocked addresses"), pure:
  *
- *   - where a mail is, in five words the log filters by: WAITING (queued or being sent), SENT (the provider took it, no
- *     word back yet), DELIVERED, PROBLEM (bounced or complained: the address is blocked) and FAILED (never left: refused
- *     or out of tries). The time shown is the time of its latest state.
+ *   - where a mail is, in six words the log filters by: WAITING (queued or being sent), SENT (the provider took it, no
+ *     word back yet), DELIVERED, PROBLEM (bounced or complained: the address is blocked), FAILED (never left: refused
+ *     or out of tries) and WITHDRAWN (B-TH-048: taken back by its sender in the 10 seconds after Send). The time shown is
+ *     the time of its latest state.
  *   - addresses are masked for readers who do not manage the company's mail (`a•••@cliente.example`): the domain stays,
  *     so the reader knows whose mail it was; the person in full only with email.manage.
  *   - a blocked address (Suppression) is never deleted: it is the record of why mail stopped. Unblocking keeps the row
@@ -16,7 +17,8 @@ import type { OutboundStatus, SuppressionReason } from '../email/rules'
  *     address again in a new row, and the unblocked row still says what it was, when and why it was unblocked (audit).
  */
 
-export const DELIVERY_STATES = ['WAITING', 'SENT', 'DELIVERED', 'PROBLEM', 'FAILED'] as const
+// B-TH-048: WITHDRAWN, a thread mail taken back in its 10 seconds after Send (it never left, and it is no failure).
+export const DELIVERY_STATES = ['WAITING', 'SENT', 'DELIVERED', 'PROBLEM', 'FAILED', 'WITHDRAWN'] as const
 export type DeliveryState = (typeof DELIVERY_STATES)[number]
 
 /** The statuses of each state (for a filter). */
@@ -25,8 +27,9 @@ export const STATUSES_OF: Readonly<Record<DeliveryState, readonly OutboundStatus
   SENT: ['SENT'],
   DELIVERED: ['DELIVERED'],
   PROBLEM: ['BOUNCED', 'COMPLAINED'],
-  // B-TH-038: a mail taken back in its undo window never left either (its own word comes with undo send, B-TH-048).
-  FAILED: ['FAILED', 'WITHDRAWN'],
+  FAILED: ['FAILED'],
+  // B-TH-048: taken back in its undo window (B-TH-038 counted it as FAILED until it had its own word).
+  WITHDRAWN: ['WITHDRAWN'],
 })
 
 export function deliveryStateOf(status: OutboundStatus): DeliveryState {
@@ -43,6 +46,8 @@ export function deliveryTimeOf(row: {
   readonly bouncedAt: Date | null
   readonly complainedAt: Date | null
   readonly failedAt: Date | null
+  /** B-TH-048: when it was taken back (WITHDRAWN). */
+  readonly withdrawnAt?: Date | null
 }): Date {
   switch (row.status) {
     case 'COMPLAINED':
@@ -55,6 +60,8 @@ export function deliveryTimeOf(row: {
       return row.sentAt ?? row.queuedAt
     case 'FAILED':
       return row.failedAt ?? row.queuedAt
+    case 'WITHDRAWN': // B-TH-048
+      return row.withdrawnAt ?? row.queuedAt
     default:
       return row.queuedAt
   }

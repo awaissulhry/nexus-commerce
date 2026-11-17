@@ -37,6 +37,7 @@ const EMAIL_TONE: Readonly<Record<EmailStatus, 'neutral' | 'info' | 'success' | 
   BOUNCED: 'danger',
   COMPLAINED: 'danger',
   FAILED: 'danger',
+  WITHDRAWN: 'neutral', // B-TH-048: taken back by its sender (no failure)
 }
 
 const sizeWords = (bytes: number, locale: string) =>

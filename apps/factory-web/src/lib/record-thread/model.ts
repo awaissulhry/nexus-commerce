@@ -21,7 +21,9 @@ export interface ThreadApiMessage {
   forFloor: boolean
   body: string
   mentions?: readonly string[]
-  attachments: ReadonlyArray<{ id: string; originalName: string; contentType: string; sizeBytes: number; status: CardFileStatus }>
+  attachments: ReadonlyArray<{ id: string; originalName: string; contentType: string; sizeBytes: number; status: CardFileStatus; locked?: 'MEASUREMENTS' | undefined }>
+  /** B-TH-231 (B-TH-029): the message's files the reader may not see (counted, never dropped). */
+  hiddenAttachments?: number | undefined
   at: string
 }
 
@@ -79,7 +81,10 @@ export function cardOf(message: ThreadApiMessage, sources: CardSources): CardMes
     body: message.body,
     forFloor: message.forFloor,
     mentions: (message.mentions ?? []).map((id) => sources.names.get(id) ?? null),
-    files: message.attachments.map((file) => ({ id: file.id, name: file.originalName, sizeBytes: file.sizeBytes, contentType: file.contentType, status: file.status })),
+    // B-TH-231: a sheet locked for the reader (B-TH-083) and the files the API left out are counted, never shown by name.
+    files: message.attachments.filter((file) => !file.locked).map((file) => ({ id: file.id, name: file.originalName, sizeBytes: file.sizeBytes, contentType: file.contentType, status: file.status })),
+    ...(message.hiddenAttachments ? { hiddenFiles: message.hiddenAttachments } : {}),
+    ...(message.attachments.some((file) => file.locked) ? { lockedSheets: message.attachments.filter((file) => file.locked).length } : {}),
     email: email ? { to: email.to, subject: email.subject, status: email.status } : null,
     bounceTask: email?.status === 'BOUNCED' && delivery?.task && delivery.task.status === 'OPEN' && sources.taskHref ? { href: sources.taskHref(delivery.task.id) } : null,
   }

@@ -20,6 +20,9 @@ import type { Issue } from '../../core/errors'
  * prospect is matched to a party first. DECLINED says why (OTHER in words); LOST says in words why the customer went away.
  * TH-2 (threads schema wave 3/9, B-TH-022): an ORDERED inquiry names the order made straight from it (one order per inquiry,
  * B-TH-025); "Not an order" (NOT_AN_ORDER) is a decline reason for a request that asks nothing to make (B-TH-043).
+ * TH-9 (threads schema wave 9/9, B-TH-090): a customer may withdraw its own request before the office decided (WITHDRAWN, from
+ * an open state, closed by a portal person of that customer: B-TH-095); production's answer (OK, or not before a week) is a
+ * column of the office's (B-TH-094).
  * A closed inquiry is frozen but for its note (and the erasure of its prospect, GDPR art. 17). The brand's tech pack is a set
  * of files of the inquiry or of its mail with the version the brand names; the quote and the order made from it read it from
  * the inquiry, each file as its current version ("always the version in force").
@@ -31,10 +34,11 @@ export type InquirySource = (typeof INQUIRY_SOURCES)[number]
 export const TYPED_SOURCES = ['OFFICE', 'PHONE', 'FAIR', 'PORTAL'] as const satisfies readonly InquirySource[]
 export type TypedSource = (typeof TYPED_SOURCES)[number]
 
-export const INQUIRY_STATUSES = ['NEW', 'ASSIGNED', 'NEED_INFO', 'QUOTED', 'DECLINED', 'LOST', 'ORDERED'] as const
+// B-TH-090: WITHDRAWN, the customer withdrew it before the office decided (final, like the others closed).
+export const INQUIRY_STATUSES = ['NEW', 'ASSIGNED', 'NEED_INFO', 'QUOTED', 'DECLINED', 'LOST', 'ORDERED', 'WITHDRAWN'] as const
 export type InquiryStatus = (typeof INQUIRY_STATUSES)[number]
 export const OPEN_STATUSES = ['NEW', 'ASSIGNED', 'NEED_INFO'] as const satisfies readonly InquiryStatus[]
-export const CLOSED_STATUSES = ['QUOTED', 'DECLINED', 'LOST', 'ORDERED'] as const satisfies readonly InquiryStatus[]
+export const CLOSED_STATUSES = ['QUOTED', 'DECLINED', 'LOST', 'ORDERED', 'WITHDRAWN'] as const satisfies readonly InquiryStatus[]
 export const isOpen = (status: InquiryStatus): boolean => (OPEN_STATUSES as readonly string[]).includes(status)
 
 export const DECLINE_REASONS = ['CAPACITY', 'LEAD_TIME', 'NOT_OUR_PRODUCT', 'PRICE', 'OTHER', 'NOT_AN_ORDER'] as const
@@ -90,6 +94,7 @@ export const STATUS_WORDS: Readonly<Record<InquiryStatus, Words>> = Object.freez
   DECLINED: { it: 'Rifiutata', en: 'Declined' },
   LOST: { it: 'Persa', en: 'Lost' },
   ORDERED: { it: 'Ordinata', en: 'Ordered' },
+  WITHDRAWN: { it: 'Ritirata', en: 'Withdrawn' },
 })
 export const SOURCE_WORDS: Readonly<Record<InquirySource, Words>> = Object.freeze({
   OFFICE: { it: 'Ufficio', en: 'Office' },
@@ -127,6 +132,13 @@ export const INQUIRY_REFUSALS = [
   'LINES_NOT_READY',
   'STYLE_DRAFTS_FULL',
   // ---- end B-TH-025 / B-TH-026
+  // ---- B-TH-042: answer a new customer (make the customer from the prospect, or match it after the check)
+  'NOT_PROSPECT',
+  'PROSPECT_ERASED',
+  'CONFIRM_MATCH',
+  'MATCH_FOUND',
+  'CODE_TAKEN',
+  // ---- end B-TH-042
 ] as const
 export type InquiryRefusalCode = (typeof INQUIRY_REFUSALS)[number]
 export interface InquiryRefusal {
@@ -457,3 +469,66 @@ export function quotableLines<Line extends QuotableLine>(lines: readonly Line[])
   }
   return { copy, leftOut }
 }
+
+// ---- B-TH-042 (threads plan G5; O-SAL-INQ-LIST.pane-actions-F08, O-SAL-INQ-REC.side, wall W23): answer a new customer --------
+
+/** How the check found a customer the prospect may already be: its contact's address, its contacts' e-mail domain, its name. */
+export const CUSTOMER_MATCHES = ['CONTACT', 'DOMAIN', 'NAME'] as const
+export type CustomerMatch = (typeof CUSTOMER_MATCHES)[number]
+/** The strongest first: a candidate found several ways is named by the strongest. */
+export const MATCH_RANK: Readonly<Record<CustomerMatch, number>> = Object.freeze({ CONTACT: 0, DOMAIN: 1, NAME: 2 })
+/** The most candidates the check names. */
+export const CANDIDATES_MAX = 20
+
+/** Why a prospect's request may not be made a customer, or matched to one, now (null: it may). */
+export function makeCustomerRefusal(facts: InquiryFacts & { readonly prospectErased: boolean }, making: boolean): InquiryRefusal | null {
+  const shut = closed(facts)
+  if (shut) return shut
+  if (facts.partyId !== null) return refusal('NOT_PROSPECT', `${facts.number} is already from its customer: a request of another customer is a new request.`)
+  if (making && facts.prospectErased) return refusal('PROSPECT_ERASED', `The prospect of ${facts.number} was erased: nothing is left to make a customer from; match it to a customer instead.`)
+  return null
+}
+
+/**
+ * Whether matching to this customer asks first (W23): only a match by the address of one of ITS active contacts, and no other
+ * customer found that strongly, goes on without the person's yes; a match by domain or name, an ambiguous one, or a customer the
+ * check did not find, waits for `confirmed` (refusal CONFIRM_MATCH, the words name only the customer the person picked).
+ */
+export function matchRefusal(input: { readonly number: string; readonly customer: string; readonly found: CustomerMatch | null; readonly contactMatches: number; readonly confirmed: boolean }): InquiryRefusal | null {
+  if (input.confirmed) return null
+  if (input.found === 'CONTACT' && input.contactMatches === 1) return null
+  const why =
+    input.found === 'CONTACT'
+      ? `the prospect's address is a contact of more than one customer`
+      : input.found === 'DOMAIN'
+        ? `only the e-mail domain ties the prospect to ${input.customer}`
+        : input.found === 'NAME'
+          ? `only the name ties the prospect to ${input.customer}`
+          : `nothing ties the prospect to ${input.customer} yet (no contact, no e-mail domain, no name)`
+  return refusal('CONFIRM_MATCH', `Check that ${input.number} is from ${input.customer}: ${why}. Confirm to match it.`)
+}
+
+/** Making a new customer while the check found one the prospect may already be asks first (no duplicate by mistake). */
+export function makeRefusal(input: { readonly number: string; readonly candidates: readonly string[]; readonly confirmed: boolean }): InquiryRefusal | null {
+  if (input.confirmed || input.candidates.length === 0) return null
+  return refusal('MATCH_FOUND', `${input.number}'s prospect may already be a customer (${input.candidates.join(', ')}): use it, or confirm a new customer.`)
+}
+
+export const codeTakenRefusal = (code: string): InquiryRefusal => refusal('CODE_TAKEN', `The code ${code} is another party's: choose another.`)
+
+const CODE_MAX = 24
+/** A party code proposed from the prospect's company (or name): capital letters and digits, at most 24, never empty. */
+export function suggestedCode(prospect: { readonly company: string | null; readonly name: string | null; readonly email: string | null }): string {
+  const words = prospect.company ?? prospect.name ?? prospect.email?.split('@')[0] ?? ''
+  const folded = words.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  const code = folded.slice(0, CODE_MAX).replace(/-+$/g, '')
+  return code === '' ? 'NEW-CUSTOMER' : code
+}
+
+/** The consent of a prospect, carried to its contact (GDPR art. 7(1)): when the request came, and how. */
+export function carriedConsent(basis: LawfulBasis | null, request: { readonly number: string; readonly receivedAt: Date; readonly source: InquirySource }): { readonly lawfulBasis: LawfulBasis; readonly consentAt: Date | null; readonly consentSource: string | null } {
+  const lawfulBasis = basis ?? PROSPECT_DEFAULT_BASIS
+  if (lawfulBasis !== 'CONSENT') return { lawfulBasis, consentAt: null, consentSource: null }
+  return { lawfulBasis, consentAt: request.receivedAt, consentSource: `Given with request ${request.number} (${SOURCE_WORDS[request.source].en.toLowerCase()})` }
+}
+// ---- end B-TH-042

@@ -52,7 +52,7 @@ describe('the delivery log in words', () => {
     expect(Object.keys(STATE_TONE).sort()).toEqual([...DELIVERY_STATES].sort())
     expect(STATE_TONE.PROBLEM).toBe('danger')
     expect(tileValue(null, 'SENT')).toBe('—')
-    expect(tileValue({ WAITING: 0, SENT: 3, DELIVERED: 9, PROBLEM: 1, FAILED: 0 }, 'SENT')).toBe('3')
+    expect(tileValue({ WAITING: 0, SENT: 3, DELIVERED: 9, PROBLEM: 1, FAILED: 0, WITHDRAWN: 0 }, 'SENT')).toBe('3')
   })
 
   it('says each problem in words; a delivered mail has none', () => {
@@ -113,7 +113,7 @@ function mockApi(answers: Array<{ status: number; body: unknown }>) {
 
 describe('the calls', () => {
   it('reads the log with the filter and the cursor, and the blocked list; checks each answer\'s shape', async () => {
-    const page = { mails: MAILS.slice(0, 2), nextBefore: MAILS[1]!.id, counts: { WAITING: 1, SENT: 0, DELIVERED: 1, PROBLEM: 1, FAILED: 0 }, blocked: 2 }
+    const page = { mails: MAILS.slice(0, 2), nextBefore: MAILS[1]!.id, counts: { WAITING: 1, SENT: 0, DELIVERED: 1, PROBLEM: 1, FAILED: 0, WITHDRAWN: 0 }, blocked: 2 }
     const { api, calls } = mockApi([
       { status: 200, body: page },
       { status: 200, body: { addresses: BLOCKED, nextBefore: null, canUnblock: true } },

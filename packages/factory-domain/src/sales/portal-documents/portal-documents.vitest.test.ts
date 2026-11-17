@@ -28,7 +28,8 @@ describe('who sees which documents (the plan: Quality certificates, Finance invo
       PARTNER_ROLE_TEMPLATES.filter((template) => template.permissions.includes(permission as never))
         .map((template) => template.key)
         .sort()
-    expect(holders(PORTAL_CUSTOMER_DOCUMENTS_VIEW)).toEqual(['customer-admin', 'customer-buyer', 'customer-finance', 'customer-quality', 'customer-viewer'])
+    // B-PR-13 (R-52): + the customer Production role (the order's shared files; never conformity or finance).
+    expect(holders(PORTAL_CUSTOMER_DOCUMENTS_VIEW)).toEqual(['customer-admin', 'customer-buyer', 'customer-finance', 'customer-production', 'customer-quality', 'customer-viewer'])
     expect(holders(PORTAL_CUSTOMER_DOCUMENTS_CONFORMITY)).toEqual(['customer-admin', 'customer-buyer', 'customer-quality', 'customer-viewer'])
     expect(holders(PORTAL_CUSTOMER_DOCUMENTS_FINANCE)).toEqual(['customer-admin', 'customer-finance'])
   })

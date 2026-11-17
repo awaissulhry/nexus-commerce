@@ -55,6 +55,8 @@ import type { EmailView } from './contract'
 import { processEmail, type EmailRuntime } from './service'
 // B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
 import { mayOnThread } from '../threads/records'
+// B-TH-048: undo send (a thread mail waits 10 s and may be taken back meanwhile).
+import { isDue, sendAfterOf, UNDO_REFUSALS, undoRefusal, undoUntilOf, waitMsOf, type UndoRefusal } from '@nexus/factory-domain/email/undo-send'
 
 /**
  * Mail out on record threads (plan A1 §3.3 `email-out`, §3.7; features PLT-139, PLT-149, COL-024):
@@ -74,6 +76,11 @@ import { mayOnThread } from '../threads/records'
  *             to QUEUED for the job's next try, or FAILED after MAX_SEND_ATTEMPTS or when it cannot succeed. A mail
  *             already SENT (a repeated event) is left alone: it is sent once.
  *   list      GET /threads/<type>/<id>/emails: the thread's mail and where each one is (threads.read).
+ *   undo      B-TH-048 (threads plan TH-3, thread-G08, Owner decision 6): a mail sent from the thread's composer (the route's
+ *             send) waits 10 seconds (sendAfter; its message is held: no customer reads it meanwhile) and its sender may take
+ *             it back in that time: POST /threads/<type>/<id>/emails/<emailId>/undo, QUEUED → WITHDRAWN, never claimed. The
+ *             worker's job waits until sendAfter (the dispatcher's delay) and claims only after it; the claim (or a failure)
+ *             releases the message (the database). A module's document mail and the system's mail leave at once.
  *
  * Sign-in mail uses the same `deliverOutbound` with a body made in memory (auth-mail.ts).
  */
@@ -103,12 +110,17 @@ const OUTBOUND_VIEW = {
   bouncedAt: true,
   complainedAt: true,
   failedAt: true,
+  // B-TH-048: the undo window, who sent it, the take-back.
+  sendAfter: true,
+  createdById: true,
+  withdrawnAt: true,
+  withdrawnById: true,
 } as const satisfies Prisma.EmailOutboundSelect
 type OutboundViewRow = Prisma.EmailOutboundGetPayload<{ select: typeof OUTBOUND_VIEW }>
 
 const iso = (date: Date | null): string | null => (date === null ? null : toUtcIso(date))
 
-export function emailViewOf(row: OutboundViewRow): EmailView {
+export function emailViewOf(row: OutboundViewRow, now: Date = new Date()): EmailView {
   return {
     id: row.id,
     companyId: row.companyId,
@@ -131,6 +143,12 @@ export function emailViewOf(row: OutboundViewRow): EmailView {
     bouncedAt: iso(row.bouncedAt),
     complainedAt: iso(row.complainedAt),
     failedAt: iso(row.failedAt),
+    // B-TH-048: "Sending… · Undo" until undoUntil; a mail taken back says when and by whom.
+    sendAfter: iso(row.sendAfter),
+    undoUntil: iso(undoUntilOf(row, now)),
+    sentById: row.createdById,
+    withdrawnAt: iso(row.withdrawnAt),
+    withdrawnById: row.withdrawnById,
   }
 }
 
@@ -240,6 +258,11 @@ export interface ThreadMailInput {
    * (recorded in the send's audit row). Without it such an address is refused (checkRecipientRule).
    */
   readonly sendOutside?: boolean | undefined
+  /**
+   * B-TH-048: the mail waits UNDO_SEND_MS (10 s) before it leaves and its sender may take it back meanwhile; its message is
+   * held until then. Only the thread composer's Send (sendFromThread); a module's document mail leaves at once.
+   */
+  readonly undoWindow?: boolean | undefined
 }
 
 export interface ThreadMailResult {
@@ -292,6 +315,8 @@ export async function sendEmail(tools: SendTools, input: ThreadMailInput): Promi
   const outboundId = newId()
   const emailMessageId = messageIdFor(outboundId, identity.domain)
   const from = fromLine(identity, { name: input.sender.name, email: input.sender.email })
+  // B-TH-048: the mail and its message wait together (the database requires both or neither).
+  const sendAfter = input.undoWindow === true ? sendAfterOf(now) : null
 
   const message = await writeMessage(tools, thread, {
     direction: 'OUTBOUND',
@@ -300,6 +325,7 @@ export async function sendEmail(tools: SendTools, input: ThreadMailInput): Promi
     bodyText,
     attachments,
     emailMessageId,
+    ...(sendAfter ? { held: true } : {}), // B-TH-048
   })
   const outbound = await tx.emailOutbound.create({
     data: {
@@ -323,6 +349,7 @@ export async function sendEmail(tools: SendTools, input: ThreadMailInput): Promi
       referenceIds: threading.references,
       status: 'QUEUED',
       queuedAt: now,
+      ...(sendAfter ? { sendAfter } : {}), // B-TH-048
       createdAt: now,
       updatedAt: now,
       createdById: input.sender.userId,
@@ -342,11 +369,12 @@ export async function sendEmail(tools: SendTools, input: ThreadMailInput): Promi
       recipients: allRecipients(recipients).length,
       attachments: attachments.length,
       status: 'QUEUED',
+      ...(sendAfter ? { sendAfter: toUtcIso(sendAfter) } : {}), // B-TH-048
       // B-TH-004: what the person's "Send outside this customer" let through, and whose each address is.
       ...(sentOutside.length > 0 ? { sentOutside: sentOutside.map((address) => ({ address: address.address, parties: address.parties })) } : {}),
     },
   })
-  tools.emit(eventFor(queued, { subject: outboundId, companyId: identity.companyId, siteId: thread.siteId, payload: { outboundId, threadId: thread.id, messageId: message.id } }))
+  tools.emit(eventFor(queued, { subject: outboundId, companyId: identity.companyId, siteId: thread.siteId, payload: { outboundId, threadId: thread.id, messageId: message.id, ...(sendAfter ? { sendAfter: toUtcIso(sendAfter) } : {}) } }))
   return { thread, messageId: message.id, outbound }
 }
 
@@ -374,10 +402,11 @@ export async function sendFromThread(caller: CommandCaller, record: RecordRef, b
 
   const { result } = await command(caller, { name: 'email.send', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...body } }, async (tools) => {
     const user = await tools.tx.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { displayName: true, email: true } })
-    const sent = await sendEmail(tools, { ...body, record, sender: { userId: context.actorId, name: user.displayName, email: user.email } })
+    // B-TH-048: the composer's Send waits 10 s, so its sender can take it back (POST …/emails/:emailId/undo).
+    const sent = await sendEmail(tools, { ...body, record, sender: { userId: context.actorId, name: user.displayName, email: user.email }, undoWindow: true })
     // The thread as it is now (made by this command or a racing one): its scope decides.
     if (!can(actor, EMAIL_SEND, scopeOfThread(sent.thread))) throw new ForbiddenError()
-    return { thread: threadViewOf(sent.thread), messageId: sent.messageId, email: emailViewOf(sent.outbound) }
+    return { thread: threadViewOf(sent.thread), messageId: sent.messageId, email: emailViewOf(sent.outbound, tools.now) }
   })
   return result
 }
@@ -399,9 +428,70 @@ export async function listThreadEmails(caller: CommandCaller, record: RecordRef,
     })
     const shown = rows.slice(0, page.limit)
     const last = shown.at(-1)
-    return { emails: shown.map(emailViewOf), nextCursor: rows.length > page.limit && last ? encodeCursor({ at: last.queuedAt, id: last.id }) : null }
+    const now = new Date()
+    return { emails: shown.map((row) => emailViewOf(row, now)), nextCursor: rows.length > page.limit && last ? encodeCursor({ at: last.queuedAt, id: last.id }) : null }
   })
 }
+
+// ---- B-TH-048 (threads plan TH-3, thread-G08, feature T7-F06; Owner decision 6): take a mail back in its 10 seconds ---------
+
+function undoRefused(code: UndoRefusal): DomainError {
+  const words = UNDO_REFUSALS[code].en
+  return new DomainError('conflict', words, [{ path: `refusal/${code}`, message: words }])
+}
+
+/**
+ * POST /threads/<type>/<id>/emails/<emailId>/undo (email.send over the record): the person who sent a mail from the thread
+ * takes it back before it leaves — QUEUED → WITHDRAWN with when and by whom, only while it was never claimed and before its
+ * sendAfter (the commands' clock); the worker then has nothing to claim, and its message stays held for good (the customer
+ * never reads it; the office reads it as taken back). Refused in words (409 refusal/<code>: NO_WINDOW, LEFT, NOT_SENT,
+ * NOT_YOURS). A mail already taken back by them is answered again without a change. The answer gives the mail's text back
+ * (to, cc, bcc, subject, body, attachments) for the composer: "taken back = the text back in the box".
+ */
+export async function takeBackEmail(caller: CommandCaller, record: RecordRef, emailId: string, idempotencyKey?: string) {
+  const context = contextOf(caller)
+  if (context.audience !== 'office') throw new ForbiddenError()
+  const actor = actorOf(context)
+  const { thread, scope } = await caller.withClient((client) => officeRecord(client, record))
+  if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
+  if (!can(actor, EMAIL_SEND, scope)) throw new ForbiddenError()
+  if (!thread) throw new NotFoundError('Mail not found.')
+
+  const { result } = await command(caller, { name: 'email.takeBack', idempotencyKey, input: { recordType: record.type, recordId: record.id, emailId } }, async (tools) => {
+    // One take-back or claim at a time: the worker's claim reads the same row.
+    await tools.tx.$queryRaw`SELECT id FROM "EmailOutbound" WHERE id = ${emailId}::uuid FOR UPDATE`
+    const row = await tools.tx.emailOutbound.findFirst({ where: { id: emailId, threadId: thread.id }, select: { ...OUTBOUND_VIEW, messageId: true } })
+    if (!row || !row.messageId) throw new NotFoundError('Mail not found.')
+    const refusal = undoRefusal(row, context.actorId, tools.now)
+    if (refusal) throw undoRefused(refusal)
+    let current = row
+    if (row.status !== 'WITHDRAWN') {
+      const { count } = await tools.tx.emailOutbound.updateMany({
+        where: { id: row.id, status: 'QUEUED', attempts: 0 },
+        data: { status: 'WITHDRAWN', withdrawnAt: tools.now, withdrawnById: context.actorId, version: { increment: 1 } },
+      })
+      if (count !== 1) throw undoRefused('LEFT')
+      current = await tools.tx.emailOutbound.findUniqueOrThrow({ where: { id: row.id }, select: { ...OUTBOUND_VIEW, messageId: true } })
+      emitStatus(tools, { id: row.id, companyId: row.companyId, threadId: thread.id, recordType: thread.recordType, recordId: thread.recordId }, 'WITHDRAWN')
+    }
+    tools.audit({
+      action: 'email.takeBack',
+      recordType: 'EmailOutbound',
+      recordId: row.id,
+      companyId: row.companyId,
+      siteId: thread.siteId,
+      before: { status: row.status },
+      after: { status: 'WITHDRAWN', messageId: row.messageId, ...(row.status === 'WITHDRAWN' ? { unchanged: true } : {}) },
+    })
+    const message = await tools.tx.message.findUniqueOrThrow({ where: { id: row.messageId }, select: { bodyText: true, attachmentFileIds: true } })
+    return {
+      email: emailViewOf(current, tools.now),
+      text: { to: current.to, cc: current.cc, bcc: current.bcc, subject: current.subject, body: message.bodyText, attachments: message.attachmentFileIds },
+    }
+  })
+  return result
+}
+// ---- end B-TH-048
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Delivery
@@ -418,7 +508,7 @@ const OUTBOUND_SEND = {
 } as const satisfies Prisma.EmailOutboundSelect
 export type ClaimedOutbound = Prisma.EmailOutboundGetPayload<{ select: typeof OUTBOUND_SEND }>
 
-/** How a delivery ended: sent, failed for good, to be retried by the job, or nothing to do (sent or claimed elsewhere). */
+/** How a delivery ended: sent, failed for good, to be retried by the job, or nothing to do (sent, claimed elsewhere, taken back). */
 export type DeliveryOutcome = 'sent' | 'failed' | 'retry' | 'settled'
 
 export interface DeliverOptions {
@@ -453,24 +543,41 @@ async function fail(tools: CommandTools, row: ClaimedOutbound, reason: string): 
 
 /**
  * Sends one EmailOutbound row (see the module comment). Safe to repeat: only a QUEUED row (or a SENDING one whose claim
- * lapsed) is claimed, so a mail is sent once however often its event comes.
+ * lapsed) is claimed, so a mail is sent once however often its event comes. B-TH-048: a thread mail still in its undo window
+ * is not claimed — 'retry' (the modules' own mails, which never wait, never meet it; the worker's handler reads it apart with
+ * deliverWhenDue).
  */
 export async function deliverOutbound(runtime: EmailRuntime, caller: CommandCaller, outboundId: string, options: DeliverOptions): Promise<DeliveryOutcome> {
+  const outcome = await deliverWhenDue(runtime, caller, outboundId, options)
+  return outcome === 'waiting' ? 'retry' : outcome
+}
+
+/** B-TH-048: deliverOutbound, saying 'waiting' for a mail still in its undo window (not claimed: come back at its sendAfter). */
+export async function deliverWhenDue(runtime: EmailRuntime, caller: CommandCaller, outboundId: string, options: DeliverOptions): Promise<DeliveryOutcome | 'waiting'> {
   const settings = { ...COMMAND_SETTINGS, ...(options.clock ? { clock: options.clock } : {}) }
   const run = <Result>(spec: CommandSpec, work: (tools: CommandTools) => Promise<Result>) =>
     runCommand(caller, { ...spec, ...(options.causationId ? { causationId: options.causationId } : {}) }, work, settings)
 
   // Nothing to claim (sent already, or claimed by another worker): no command, no audit row.
-  const before = await caller.withClient((client) => client.emailOutbound.findUnique({ where: { id: outboundId }, select: { status: true, claimedUntil: true } }))
+  const before = await caller.withClient((client) => client.emailOutbound.findUnique({ where: { id: outboundId }, select: { status: true, claimedUntil: true, sendAfter: true } }))
   const open = before?.status === 'QUEUED' || (before?.status === 'SENDING' && (before.claimedUntil === null || before.claimedUntil.getTime() <= settings.clock.now().getTime()))
   if (!open) return 'settled'
+  // B-TH-048: a thread mail is not claimed before its sendAfter (its sender may still take it back).
+  if (before.status === 'QUEUED' && !isDue(before, settings.clock.now())) return 'waiting'
 
-  const { result: claim } = await run({ name: 'email.claim', input: { outboundId } }, async (tools): Promise<'claimed' | 'failed' | 'settled'> => {
+  const { result: claim } = await run({ name: 'email.claim', input: { outboundId } }, async (tools): Promise<'claimed' | 'failed' | 'settled' | 'waiting'> => {
+    // B-TH-048: the row locked, so a take-back (email.takeBack locks it too) and this claim never cross.
+    await tools.tx.$queryRaw`SELECT id FROM "EmailOutbound" WHERE id = ${outboundId}::uuid FOR UPDATE`
     const row = await tools.tx.emailOutbound.findUnique({ where: { id: outboundId }, select: OUTBOUND_SEND })
     const lapsed = row?.status === 'SENDING' && (row.claimedUntil === null || row.claimedUntil.getTime() <= tools.now.getTime())
     if (!row || (row.status !== 'QUEUED' && !lapsed)) {
       tools.audit({ action: 'email.claimSkipped', recordType: 'EmailOutbound', recordId: outboundId, after: { status: row?.status ?? null } })
       return 'settled'
+    }
+    // B-TH-048: still in its undo window (read again under the lock): not claimed yet.
+    if (row.status === 'QUEUED' && !isDue(row, tools.now)) {
+      tools.audit({ action: 'email.claimSkipped', recordType: 'EmailOutbound', recordId: outboundId, after: { status: row.status, waitingUntil: toUtcIso(row.sendAfter!) } })
+      return 'waiting'
     }
     const suppressed = await suppressedAmong(tools.tx, [...row.to, ...row.cc, ...row.bcc])
     if (suppressed.size > 0) {
@@ -615,20 +722,44 @@ export function threadMailBuilder(runtime: EmailRuntime, caller: CommandCaller, 
 export const EMAIL_SEND_HANDLER = 'email.sendQueued'
 const queuedPayload = queued.payload
 
+export interface EmailSendHandlerOptions {
+  /** B-TH-048: the clock the handler reads the undo window on (and the delivery's commands run on). Default the server's. */
+  readonly clock?: Clock
+  /** How the handler waits for a window's end (tests may pass one that returns at once). Default a timer. */
+  readonly sleep?: (ms: number) => Promise<void>
+}
+
+const sleepFor = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
+
 /**
  * The worker's handler of email.queued (background.ts HANDLERS). A try that should be repeated throws, so BullMQ retries
  * it with backoff (as many tries as the mail has); a mail sent, failed for good or taken by another worker ends the job.
+ * B-TH-048: a thread mail's job waits until its sendAfter (the dispatcher's `delay`, from the event); one that runs early
+ * anyway (a retry, the golden flow's drain, another clock) waits the rest here — at most the window's cap — and tries again.
  */
-export function emailSendHandler(runtime: () => EmailRuntime = processEmail): EventHandler {
+export function emailSendHandler(runtime: () => EmailRuntime = processEmail, options: EmailSendHandlerOptions = {}): EventHandler {
+  const clock = options.clock ?? COMMAND_SETTINGS.clock
+  const sleep = options.sleep ?? sleepFor
   return defineHandler({
     name: EMAIL_SEND_HANDLER,
     events: ['email.queued'],
     attempts: MAX_SEND_ATTEMPTS,
+    delayMs(event, now) {
+      const sendAfter = (event.payload as { sendAfter?: unknown } | null)?.sendAfter
+      return typeof sendAfter === 'string' ? waitMsOf({ sendAfter: new Date(sendAfter) }, now) : 0
+    },
     async handle(event, tools) {
       const { outboundId } = queuedPayload.parse(event.payload)
       const email = runtime()
-      const outcome = await deliverOutbound(email, tools.caller, outboundId, { retry: true, build: threadMailBuilder(email, tools.caller), causationId: event.eventId })
-      if (outcome === 'retry') throw new Error(`mail ${outboundId} was not sent this time; it will be tried again`)
+      const deliver = () => deliverWhenDue(email, tools.caller, outboundId, { retry: true, clock, build: threadMailBuilder(email, tools.caller, clock), causationId: event.eventId })
+      let outcome = await deliver()
+      if (outcome === 'waiting') {
+        // B-TH-048: read the window again (the row is the truth, not the event) and wait its rest once.
+        const row = await tools.caller.withClient((client) => client.emailOutbound.findUnique({ where: { id: outboundId }, select: { sendAfter: true } }))
+        await sleep(waitMsOf({ sendAfter: row?.sendAfter ?? null }, clock.now()) + 50)
+        outcome = await deliver()
+      }
+      if (outcome === 'retry' || outcome === 'waiting') throw new Error(`mail ${outboundId} was not sent this time; it will be tried again`)
     },
   })
 }

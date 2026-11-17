@@ -198,6 +198,9 @@ import { SHIPPING_PICKUPS_ADDS } from '../../shipping/pickups/permissions'
 import { THEIR_FIGURES_ADDS } from '../../receivables-figures/permissions'
 // B-W2b-415: integration health (the administrator retries and dismisses failed messages and runs a job now).
 import { INTEGRATION_HEALTH_ADDS } from '../../integration-health/permissions'
+// B-PR-13: a customer's own production (office: the limits card, answering, overrides, the production hold; partner: the
+// customer Production role, urgency to the Buyer, production read to Quality and Viewer).
+import { PRODUCTION_BRAND_ADDS, PRODUCTION_PARTNER_ADDS } from '../../production-brand/permissions'
 
 /**
  * The system role templates (plan A1 §3.11 "Role"; feature PLT-030): ready roles every tenant gets as system roles
@@ -1152,7 +1155,9 @@ const addedFor = (key: string, audience: RoleAudience): Permission[] => [...(aud
   // B-W2b-427
   ...(audience === 'office' ? (IMPORTS_DUPLICATES_ADDS[key] ?? []) : []),
   // B-W2b-415
-  ...(audience === 'office' ? (INTEGRATION_HEALTH_ADDS[key] ?? []) : [])]
+  ...(audience === 'office' ? (INTEGRATION_HEALTH_ADDS[key] ?? []) : []),
+  // B-PR-13
+  ...(audience === 'office' ? (PRODUCTION_BRAND_ADDS[key] ?? []) : [])]
 /**
  * B-W2a-33 (exception rules and stored alerts, ANA-036; design home.alerts): every office template that sees Today sees and
  * handles the alerts of the records it sees (each alert is also behind its record's own view permission); the
@@ -1806,6 +1811,9 @@ const PARTNER_ADDS: readonly Readonly<Record<string, readonly Permission[]>>[] =
   PORTAL_SAMPLES_READERS,
   // B-W2b-315: the bank details in the profile (SCM-007): the supplier's Invoices role sees them masked, each Admin proposes a change.
   PORTAL_BANK_ADDS,
+  // B-PR-13: the customer Production role (its orders and their production, urgency, approvals, samples, shared files, messages;
+  // no price grain); the Buyer also marks orders urgent; Quality and Viewer read production.
+  PRODUCTION_PARTNER_ADDS,
 ]
 export const PARTNER_ROLE_TEMPLATES: readonly PartnerRoleTemplate[] = partnerRoleTemplates(PARTNER_ADDS)
 const partnerProblems = partnerTemplateProblems(PARTNER_ROLE_TEMPLATES)

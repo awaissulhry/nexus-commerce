@@ -32,9 +32,12 @@ const file = (more: Partial<DraftFile> = {}): DraftFile => ({ key: key(), name: 
 
 describe('a refused file names the limit and the way out', () => {
   it('scripts and SVG, design files, unknown types, empty files, and sizes (15 MB a photo, 25 MB a file)', () => {
-    expect(refusalOf({ name: 'logo.svg', type: 'image/svg+xml', size: 10 })).toEqual({ key: 'refused.type' })
-    expect(refusalOf({ name: 'page.html', size: 10 })).toEqual({ key: 'refused.type' })
-    expect(refusalOf({ name: 'artwork.ai', type: 'application/postscript', size: 10 })).toEqual({ key: 'refused.design' })
+    // B-TH-084: SVG, HTML and scripts never (the words name the way out); design files are taken, download-only.
+    expect(refusalOf({ name: 'logo.svg', type: 'image/svg+xml', size: 10 })).toEqual({ key: 'refused.page' })
+    expect(refusalOf({ name: 'page.html', size: 10 })).toEqual({ key: 'refused.page' })
+    expect(refusalOf({ name: 'artwork.ai', type: 'application/postscript', size: 10 })).toBeNull()
+    expect(refusalOf({ name: 'logo.psd', size: 10 })).toBeNull()
+    expect(refusalOf({ name: 'pack.zip', type: 'application/zip', size: 10 })).toBeNull()
     expect(refusalOf({ name: 'clip.mov', type: 'video/quicktime', size: 10 })).toEqual({ key: 'refused.type' })
     expect(refusalOf({ name: 'empty.pdf', type: 'application/pdf', size: 0 })).toEqual({ key: 'refused.empty' })
     expect(refusalOf({ name: 'big.jpg', type: 'image/jpeg', size: PHOTO_MAX + 1 })).toEqual({ key: 'refused.photoSize', params: { limit: 15 } })
@@ -47,6 +50,9 @@ describe('a refused file names the limit and the way out', () => {
     expect(contentTypeOf({ name: 'IMG_0001.HEIC' })).toBe('image/heic')
     expect(kindOf('image/jpeg')).toBe('PHOTO')
     expect(kindOf('application/pdf')).toBe('ATTACHMENT')
+    // B-TH-084: a ZIP is a document; Illustrator, EPS, Photoshop a file.
+    expect(kindOf('application/zip')).toBe('DOCUMENT')
+    expect(kindOf('application/postscript')).toBe('ATTACHMENT')
   })
 
   it('a drop past 20 files leaves the rest out and says how many; a refused file keeps its reason', () => {
@@ -54,7 +60,7 @@ describe('a refused file names the limit and the way out', () => {
     const result = addDropped(current, [{ name: 'a.jpg', type: 'image/jpeg', size: 10 }, { name: 'b.jpg', type: 'image/jpeg', size: 10 }, { name: 'x.svg', type: 'image/svg+xml', size: 10 }], 'OFFICE', key)
     expect(result.leftOut).toBe(1)
     expect(result.added.map((item) => item.phase)).toEqual(['uploading', 'refused'])
-    expect(result.added[1].problem).toEqual({ key: 'refused.type' })
+    expect(result.added[1].problem).toEqual({ key: 'refused.page' }) // B-TH-084: an SVG names the way out
   })
 })
 

@@ -143,7 +143,8 @@
     "QUOTED": "Quoted",
     "DECLINED": "Declined",
     "LOST": "Lost",
-    "ORDERED": "Ordered"
+    "ORDERED": "Ordered",
+    "WITHDRAWN": "Withdrawn"
   },
   "source": {
     "OFFICE": "Office",
@@ -238,6 +239,11 @@
     "NO_LINES": "{number} names nothing to make yet: add its lines (style, colourway, sizes) first",
     "LINES_NOT_READY": "{number} has lines that are not ready to order: each needs a style, its colourway and pieces by size (make the style draft first)",
     "STYLE_DRAFTS_FULL": "{number} already names the most style drafts one request holds",
+    "NOT_PROSPECT": "{number} is already from its customer",
+    "PROSPECT_ERASED": "The prospect of {number} was erased: match it to a customer instead",
+    "CONFIRM_MATCH": "Check that {number} is from this customer, then confirm the match",
+    "MATCH_FOUND": "The prospect of {number} may already be a customer: use it, or confirm a new customer",
+    "CODE_TAKEN": "This code is already another party's: choose another",
     "other": "The factory refused this change"
   },
   "problem": {

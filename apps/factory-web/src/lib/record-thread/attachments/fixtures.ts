@@ -39,8 +39,8 @@ export const designScreen = defineDesignScreen<AttachCaseModel>({
     {
       id: 'refused',
       label: 'Refused files',
-      model: { ...base, draft: { ...base.draft, body: 'Logo files for the embroidery.' }, files: [file('a', 'logo.svg', 40_000, 'image/svg+xml', { phase: 'refused', problem: { key: 'refused.type' } }), file('b', 'artwork.ai', 5_200_000, 'application/postscript', { phase: 'refused', problem: { key: 'refused.design' } }), file('c', 'logo-print.pdf', 900_000, 'application/pdf')] },
-      note: 'Name and reason: the type (SVG can carry scripts) or design files not taken yet; a refused file holds nothing.',
+      model: { ...base, draft: { ...base.draft, body: 'Logo files for the embroidery.' }, files: [file('a', 'logo.svg', 40_000, 'image/svg+xml', { phase: 'refused', problem: { key: 'refused.page' } }), file('b', 'artwork.ai', 5_200_000, 'application/postscript'), file('c', 'logo-print.pdf', 900_000, 'application/pdf')] },
+      note: 'Name and reason: SVG can carry scripts (send a PDF or PNG); design files are taken download-only (B-TH-084); a refused file holds nothing.',
     },
     {
       id: 'mail-limit',

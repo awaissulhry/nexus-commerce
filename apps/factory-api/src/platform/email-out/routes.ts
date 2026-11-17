@@ -2,10 +2,10 @@ import { idempotencyKeyFrom } from '../../core/command'
 import { defineRoutes } from '../../core/manifest'
 import { requireStepUp } from '../auth/office/account'
 import { officeAuthOf } from '../auth/sessions/office-auth'
-import { checkIdentityContract, createIdentityContract, listEmailsContract, listIdentitiesContract, sendEmailContract, updateIdentityContract } from './contract'
+import { checkIdentityContract, createIdentityContract, listEmailsContract, listIdentitiesContract, sendEmailContract, takeBackEmailContract, updateIdentityContract } from './contract'
 import { checkIdentity, createIdentity, listIdentities, updateIdentity } from './identities'
 import { manifest } from './manifest'
-import { listThreadEmails, sendFromThread } from './outbound'
+import { listThreadEmails, sendFromThread, takeBackEmail } from './outbound'
 import { processEmail } from './service'
 // B-W2a-41: the delivery log and the blocked addresses (delivery/).
 import { listBlockedContract, listDeliveryContract, unblockContract } from './delivery/contract'
@@ -68,4 +68,10 @@ export default defineRoutes('email-out', manifest, async (app) => {
 
   // B-W2b-397 (COL-004): what a message to the record's party is about to say and to whom, checked before it is sent.
   app.post('/threads/:recordType/:recordId/emails/check', { schema: misSendContract }, async (request) => checkMisSend(request, { type: request.params.recordType, id: request.params.recordId }, request.body))
+
+  // B-TH-048 (undo send): the sender takes a mail back in the 10 seconds after Send; its text comes back for the composer.
+  app.post('/threads/:recordType/:recordId/emails/:emailId/undo', { schema: takeBackEmailContract }, async (request) => {
+    const { recordType, recordId, emailId } = request.params
+    return takeBackEmail(request, { type: recordType, id: recordId }, emailId, idempotencyKeyFrom(request))
+  })
 })

@@ -15,7 +15,7 @@ import {
   mayWrite,
   prepareFileCopy,
   presignedView,
-  readOffice,
+  readOfficeReached, // B-PR-44
   readVisible,
   scopeOf,
   SELECT_FOR,
@@ -119,7 +119,7 @@ export async function planNewVersion(
 ): Promise<VersionPlan> {
   const context = contextOf(caller)
   if (context.audience !== 'office' && context.audience !== 'system') throw new NotFoundError('File not found.')
-  const named = await readOffice(caller, fileId)
+  const named = await readOfficeReached(caller, fileId) // B-PR-44
   mayWrite(caller, FILES_UPLOAD, { companyId: named.companyId, floorSiteId: null, partyId: null })
   assertGenericPath(named.recordType, named.kind, {})
   const root = seriesRootOf(named)
@@ -259,7 +259,7 @@ export async function listVersions(caller: CommandCaller, fileId: string): Promi
 export async function restoreVersion(runtime: FilesRuntime, caller: CommandCaller, fileId: string, idempotencyKey?: string): Promise<FileView> {
   const context = contextOf(caller)
   if (context.audience !== 'office' && context.audience !== 'system') throw new NotFoundError('File not found.')
-  const old = await readOffice(caller, fileId)
+  const old = await readOfficeReached(caller, fileId) // B-PR-44
   mayWrite(caller, FILES_UPLOAD, { companyId: old.companyId, floorSiteId: null, partyId: null })
   assertGenericPath(old.recordType, old.kind, {})
   const root = seriesRootOf(old)

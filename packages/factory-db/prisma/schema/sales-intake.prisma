@@ -35,6 +35,10 @@
 // (ORDERED, naming the order: B-TH-025 "Make order"), or closed as "Not an order" (DECLINED with NOT_AN_ORDER: it asks nothing
 // to make; B-TH-043); the style drafts made from it are named on it (styleIds, B-TH-026), office only. Its customer's portal
 // people read the order it became (salesOrderId), never the style drafts or the decline reason.
+//
+// TH-9 (threads plan, schema wave 9/9, B-TH-090; gaps N17, N20): a request carries production's answer (OK, or not before a
+// week: B-TH-094), office only; and the customer may withdraw its own request before the office decided (WITHDRAWN, from the
+// portal: B-TH-095).
 
 /// Where an inquiry came from (SAL-032, SAL-033).
 enum InquirySource {
@@ -49,9 +53,9 @@ enum InquirySource {
   FAIR
 }
 
-/// NEW → ASSIGNED ⇄ NEED_INFO → QUOTED | ORDERED | DECLINED | LOST (the last four final). NEW has nobody assigned, ASSIGNED
-/// has someone; NEED_INFO waits for the customer (design: "Need info", the "Waiting for the customer" tile); ASSIGNED goes
-/// back to NEW when the assignee is taken off.
+/// NEW → ASSIGNED ⇄ NEED_INFO → QUOTED | ORDERED | DECLINED | LOST | WITHDRAWN (the last five final). NEW has nobody assigned,
+/// ASSIGNED has someone; NEED_INFO waits for the customer (design: "Need info", the "Waiting for the customer" tile); ASSIGNED
+/// goes back to NEW when the assignee is taken off.
 enum InquiryStatus {
   NEW
   ASSIGNED
@@ -64,6 +68,17 @@ enum InquiryStatus {
   LOST
   /// TH-2 (B-TH-022; G3): made straight into an order, without a quote (the inquiry names the order: B-TH-025 "Make order").
   ORDERED
+  /// TH-9 (B-TH-090; N20): the customer withdrew it before the office decided (from an open state), in the portal: closed by a
+  /// portal person of its own customer (B-TH-095), with no words of the office.
+  WITHDRAWN
+}
+
+/// TH-9 (threads plan, schema wave 9/9, B-TH-090; N17): production's answer to a request.
+enum InquiryProductionAnswer {
+  /// It can be made as asked.
+  OK
+  /// Not before the week that starts on productionNotBefore ("not before week 14").
+  NOT_BEFORE
 }
 
 /// Why an inquiry was declined (design inquiries.decline).
@@ -165,9 +180,9 @@ model Inquiry {
   styleIds             String[]              @default([]) @db.Uuid
   /// DECLINED: why (OTHER with closeNote).
   declineReason        InquiryDeclineReason?
-  /// When it ended (QUOTED, ORDERED, DECLINED, LOST) and by whom, exactly then; the words of a decline or a loss (LOST and a decline
-  /// OTHER need them; up to 2000 characters). The words are the office's own reading (B-TH-009): what the customer is told
-  /// is a message of the thread.
+  /// When it ended (QUOTED, ORDERED, DECLINED, LOST, WITHDRAWN) and by whom, exactly then (WITHDRAWN: by a portal person of its
+  /// customer, always named: B-TH-090); the words of a decline or a loss (LOST and a decline OTHER need them; up to 2000
+  /// characters). The words are the office's own reading (B-TH-009): what the customer is told is a message of the thread.
   closedAt             DateTime?             @db.Timestamptz(3)
   closedById           String?               @db.Uuid
   /// @internal
@@ -175,6 +190,15 @@ model Inquiry {
   /// The office's notes (up to 4000 characters); the one column a closed inquiry still changes. Office only (B-TH-009).
   /// @internal
   note                 String?
+  /// TH-9 (threads plan, schema wave 9/9, B-TH-090; N17, X-G04; features O-SAL-INQ-LIST.pane-head-F07, .list-F10): production's
+  /// answer, typed by the production manager (B-TH-094, offered from planning's promise read): OK, or NOT_BEFORE with the
+  /// Monday of the week it can start at the earliest (productionNotBefore: "not before week 14", a date only, never a load);
+  /// when (not in the future) and by whom (an active office person); all or none, changed like the rest only while the request
+  /// is open (the newest shown, the history in the audit). Office only: hidden from its customer's portal people (PR-03).
+  productionAnswer       InquiryProductionAnswer?
+  productionNotBefore    DateTime? @db.Date
+  productionAnsweredAt   DateTime? @db.Timestamptz(3)
+  productionAnsweredById String?   @db.Uuid
   version              Int                   @default(1)
   createdAt            DateTime              @default(now()) @db.Timestamptz(3)
   updatedAt            DateTime              @default(now()) @updatedAt @db.Timestamptz(3)
@@ -446,6 +470,9 @@ model Season {
   /// @not-money the relation to its cost sheets
   costSheets    CostSheet[]
   sizeWeights   SizeWeight[]
+  // TH-5 projects.prisma (threads plan, schema wave 8/9, B-TH-065): the projects for the season (the reference holds the
+  // company and the code).
+  projects      Project[]
 
   @@unique([tenantId, companyId, code])
   // The target of the references from quote versions (tenant, id) and sales orders (tenant, company, id: the order's own

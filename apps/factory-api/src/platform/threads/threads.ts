@@ -37,6 +37,8 @@ import { wallScopeOf, type WallScope } from './records' // B-PR-08a part 2
 import { serverClock } from '../../core/time'
 import { headOf } from './owner'
 import { readingOf, whoOf, type Reading } from './reads'
+// B-TH-083: a measurement sheet on a card is locked for an office reader without sales.measurements.view.
+import { isMeasurementSheet, MEASUREMENT_SHEET_PERMISSION } from '@nexus/factory-domain/files/measurements'
 // ---- end B-TH-027 / B-TH-028
 
 /**
@@ -110,6 +112,8 @@ const FILE_COMMON = {
   status: true,
   visibility: true,
   partyId: true,
+  // B-TH-083: a measurement sheet (MEASUREMENTS) is locked for an office reader without the permission.
+  category: true,
 } as const satisfies Prisma.StoredFileSelect
 /** The partner role cannot read a file's floor site; the office reads it for the audience check. */
 const FILE_OFFICE = { ...FILE_COMMON, floorSiteId: true } as const satisfies Prisma.StoredFileSelect
@@ -205,8 +209,16 @@ function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, Attachm
       const seen = attachments.get(fileId)
       return seen ? [seen] : []
     }),
+    // ---- B-TH-231 / B-TH-029: files of the message the reader may not see are counted, never silently dropped ("One file you cannot open").
+    ...hiddenOf(row.attachmentFileIds, attachments),
     at: toUtcIso(row.at),
   }
+}
+
+/** B-TH-231: how many of a message's files the reader may not see (left out of `attachments`); absent when none. */
+function hiddenOf(fileIds: readonly string[], attachments: ReadonlyMap<string, AttachmentView>): { hiddenAttachments?: number } {
+  const hidden = new Set(fileIds.filter((fileId) => !attachments.has(fileId))).size
+  return hidden > 0 ? { hiddenAttachments: hidden } : {}
 }
 
 /**
@@ -221,11 +233,27 @@ async function visibleAttachments(client: FactoryClient | CommandTx, context: Re
   const rows = await client.storedFile.findMany({ where: { id: { in: ids } }, select: isOffice(context) ? FILE_OFFICE : FILE_COMMON })
   const actor = actorOf(context)
   const viewer = viewerOf(context)
+  // B-TH-083: the office opens a record's measurement sheets only with sales.measurements.view over the record (read once per record).
+  const opens = new Map<string, boolean>()
+  const opensSheetsOf = async (row: { recordType: string; recordId: string; companyId: string | null }): Promise<boolean> => {
+    if (!isOffice(context)) return true
+    const key = `${row.recordType}:${row.recordId}`
+    if (!opens.has(key)) {
+      const scope = await resolveRecord(client, row.recordType, row.recordId)
+      opens.set(key, scope ? mayOnThread(actor, MEASUREMENT_SHEET_PERMISSION, row.recordType, scope) : can(actor, MEASUREMENT_SHEET_PERMISSION, { companyId: row.companyId }))
+    }
+    return opens.get(key)!
+  }
   for (const row of rows) {
     const scope = isOffice(context) ? { companyId: row.companyId } : { companyId: row.companyId, partyId: row.partyId }
     if (!audienceSees(viewer, { ...row, visibility: row.visibility as FileAudience[] })) continue
     if (!isOffice(context) && row.status !== 'AVAILABLE') continue
     if (!can(actor, FILES_READ, scope)) continue
+    // B-TH-083: a sheet the reader may not open is shown locked — counted and named as a sheet, never by its own name.
+    if (isMeasurementSheet(row) && !(await opensSheetsOf(row))) {
+      seen.set(row.id, { id: row.id, kind: row.kind, originalName: '', contentType: row.contentType, sizeBytes: row.sizeBytes, status: row.status, locked: 'MEASUREMENTS' })
+      continue
+    }
     seen.set(row.id, { id: row.id, kind: row.kind, originalName: row.originalName, contentType: row.contentType, sizeBytes: row.sizeBytes, status: row.status })
   }
   return seen
@@ -378,6 +406,10 @@ export interface MessageInput {
   // N orders of one customer): its events carry it, and each reader's notifications of the batch fold into one bell item.
   readonly batchId?: string
   // ---- end B-TH-045
+  // ---- B-TH-048 (undo send): the OUTBOUND mail's message waits with its mail (Message.held): no customer reads it until the mail
+  // leaves its window (the database releases it); written only with a mail that has a sendAfter (email-out sendEmail).
+  readonly held?: boolean
+  // ---- end B-TH-048
 }
 
 /**
@@ -417,6 +449,7 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
       emailMessageId: input.emailMessageId ?? null,
       at,
       createdAt: tools.now,
+      ...(input.held ? { held: true } : {}), // B-TH-048
     },
     select: MESSAGE_OFFICE,
   })
@@ -453,14 +486,16 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
  */
 export async function attachmentProblems(tx: CommandTx, context: RequestContext, thread: ThreadRow, fileIds: readonly string[], audience: 'OFFICE' | 'PARTNER'): Promise<Issue[]> {
   if (fileIds.length === 0) return []
-  const rows = await tx.storedFile.findMany({ where: { id: { in: [...fileIds] } }, select: { id: true, companyId: true, recordType: true, recordId: true, status: true, partyId: true } })
+  const rows = await tx.storedFile.findMany({ where: { id: { in: [...fileIds] } }, select: { id: true, companyId: true, recordType: true, recordId: true, status: true, partyId: true, category: true } })
   const byId = new Map(rows.map((row) => [row.id, row]))
   const actor = actorOf(context)
   const problems: Issue[] = []
+  // B-TH-083: a measurement sheet goes with a message only from a writer who may open it (sales.measurements.view over the record).
+  const opensSheets = !isOffice(context) || !rows.some(isMeasurementSheet) || mayOnThread(actor, MEASUREMENT_SHEET_PERMISSION, thread.recordType, (await resolveRecord(tx, thread.recordType, thread.recordId)) ?? scopeOfThread(thread))
   fileIds.forEach((fileId, index) => {
     const path = `body/attachments/${index}`
     const row = byId.get(fileId)
-    if (!row || (isOffice(context) && !can(actor, FILES_READ, { companyId: row.companyId }))) problems.push({ path, message: 'File not found.' })
+    if (!row || (isOffice(context) && !can(actor, FILES_READ, { companyId: row.companyId })) || (isMeasurementSheet(row) && !opensSheets)) problems.push({ path, message: 'File not found.' })
     else if (row.recordType !== thread.recordType || row.recordId !== thread.recordId) problems.push({ path, message: 'Only a file of this record can be attached.' })
     else if (row.status !== 'AVAILABLE') problems.push({ path, message: `This file is ${row.status}; only an available file can be attached.` })
     else if (audience === 'PARTNER' && row.partyId !== thread.partyId) problems.push({ path, message: "Share the file with the record's party first." })
@@ -612,3 +647,7 @@ export async function setThreadStatus(
   )
   return result
 }
+
+// ---- B-TH-044: the portal reply (./replies.ts) answers as the note route does: the message as the office reads it, its files.
+export { messageViewOf, visibleAttachments }
+// ---- end B-TH-044

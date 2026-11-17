@@ -19,8 +19,8 @@
     "file": "File"
   },
   "refused": {
-    "type": "questo tipo non è accettato (PDF, foto, documenti Office, CSV o testo)",
-    "design": "i file di grafica (AI, EPS, PSD) non sono ancora accettati: invia un PDF",
+    "type": "questo tipo non è accettato (PDF, foto, documenti Office, CSV, testo, o file Illustrator, EPS, Photoshop e ZIP)",
+    "page": "un file SVG, HTML o uno script non è mai accettato (il browser lo eseguirebbe): invia un PDF o un PNG",
     "empty": "il file è vuoto",
     "photoSize": "troppo grande: una foto può essere al massimo di {limit} MB",
     "fileSize": "troppo grande: un file può essere al massimo di {limit} MB"

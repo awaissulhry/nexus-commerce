@@ -37,6 +37,8 @@ import { orderCustomers } from './customers'
 import { orderPicture } from './picture'
 // B-TH-058: the overall view's honest totals.
 import { orderSummary } from './summary'
+// B-TH-077: what points at the order (its complaints and returns, planning's open re-promises, the gates' refusals).
+import { orderLinks, recordLinksContract } from './record-links'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A2 SCR-038, SCR-039): the
@@ -121,4 +123,7 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
 
   // B-TH-017 / B-TH-063: the Picture cell's small preview.
   app.get('/sales/orders/:orderId/picture', { schema: orderPictureContract }, async (request) => orderPicture(request, request.params.orderId))
+
+  // B-TH-077: what points at the order, for its record (W27: only its own customer's).
+  app.get('/sales/orders/:orderId/links', { schema: recordLinksContract }, async (request) => orderLinks(request, request.params.orderId))
 })

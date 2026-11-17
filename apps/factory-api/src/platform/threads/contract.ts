@@ -44,6 +44,8 @@ export const attachmentView = output({
   contentType: z.string(),
   sizeBytes: z.number().int(),
   status: z.enum(FILE_STATUSES),
+  /** B-TH-083: a measurement sheet this office reader may not open — no name ("Measurement sheet — you cannot open it"). */
+  locked: z.literal('MEASUREMENTS').optional(),
 })
 export type AttachmentView = z.infer<typeof attachmentView>
 
@@ -70,6 +72,8 @@ export const messageView = output({
   mentions: z.array(id()).optional(),
   /** The attached files the reader may see, in order; the others are left out. */
   attachments: z.array(attachmentView),
+  /** B-TH-231 (B-TH-029): how many attached files the reader may not see (left out above; absent when none): "One file you cannot open". */
+  hiddenAttachments: z.number().int().min(1).optional(),
   at: instant(),
 })
 export type MessageView = z.infer<typeof messageView>
@@ -153,6 +157,21 @@ export const postNoteContract = defineContract({
   }),
   response: { 201: output({ thread: threadView, message: messageView }) },
 })
+
+// ---- B-TH-044 (G15): a reply the record's party reads in its portal, with no mail (OUTBOUND on the PORTAL channel). One action that
+// replies on several records sends the same batchId with each (B-TH-045: one bell item per reader).
+export const postReplyContract = defineContract({
+  params: recordParams,
+  body: input({
+    body: z.string().max(MAX_BODY_LENGTH),
+    /** Files of this record already shared with its party (AVAILABLE, readable by the writer). */
+    attachments: z.array(id()).max(MAX_ATTACHMENTS).optional(),
+    /** The batch of one action that replies on several records (the same id on each call). */
+    batchId: id().optional(),
+  }),
+  response: { 201: output({ thread: threadView, message: messageView }) },
+})
+// ---- end B-TH-044
 
 /**
  * Who a note on the record may mention (COL-006; A2 SCR-006's composer): every ACTIVE person whose roles let them read

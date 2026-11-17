@@ -180,6 +180,9 @@ enum NumberKind {
   /// W2b-6 wave 49/57: a self-invoice's number (AF-…; money.prisma Invoice of type TD16-TD19, tax.prisma SelfInvoice), a
   /// fiscal series of its own per company (sezionale), next to INVOICE. An office document kind.
   SELF_INVOICE
+  /// TH-5 (threads plan, schema wave 8/9, B-TH-065; PROJ-G01, PROJ.new-F06): a project's number (PRJ-…; projects.prisma
+  /// Project.number). An office document kind: the API numbers it when the project is made.
+  PROJECT
 }
 
 enum NumberReset {

@@ -8,7 +8,7 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
 - `@nexus/factory-db`: `openFactoryDatabase({ connectionString })` → `withScope(scope, client => …)`. One audited pg
   pool for the runtime login `factory_app` (db-kit's `AuditedPool`; the first connection is audited at open, so an
   unsafe login stops the boot), and one Prisma client per scope behind db-kit's `TenantPg`, kept in a cache
-  (`clientCapacity`, default 16, least recently used idle one closed). Scopes: `office` (tenantId, actorId), `floor`
+  (`clientCapacity`, default 15, least recently used idle one closed). Scopes: `office` (tenantId, actorId), `floor`
   (+ siteId), `partner` (+ partyId), `platform` (none). Ids are UUIDs; a missing value throws before any query. Use a
   client only inside its callback. Also the model types and enums. Never the PrismaClient class.
 - The client cache and memory (B-W2b-F9): a Prisma 7.10 client takes about 86 MB of heap and 95 ms the moment it is
@@ -18,7 +18,7 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
   and partner scope but is not a database setting, and every actor of a tenant, site or party shares one client.
   `client.vitest.test.ts` fails when a migration reads a setting no scope sets (a guard on `factory.actor_id` would
   put the actor back into `SCOPE_DEFINITIONS` and the cache back to one client per person) and when one more client
-  costs more than 130 MB of heap.
+  costs more than 138 MB of heap (11-17: 131.45 MB measured; capacity 16 → 15 to keep the same total).
 - `@nexus/factory-db/testing`: `migratedDatabase(label)`, a throwaway database copied from `factory_tpl_<hash of the migrations>` (B-W2b-F27, `src/testing/template.ts`: built once per migration set under the lock, then `CREATE DATABASE … TEMPLATE` without it); `FACTORY_PG_TEST_TEMPLATE=off` migrates each one from zero instead.
 - The test migration lock (B-W2b-F11, `src/testing/migration-lock.ts`): builds of test databases on one server take
   turns under `MIGRATION_LOCK`, now a transaction-level advisory lock on a connection of its own that is closed when the
@@ -532,7 +532,29 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    customer fixed, a CUSTOMER or BRAND party; one active rule per company, customer or none, field and stage; no loosening
    inside one set, the company's set keeping its lock key); its data step `…_production_brand_limits_copy` (hand-written,
    between the schema and the guards folders) sets the level PROGRESS where progress was shared and overrideFourEyes for the
-   customers listed for a second person at release, and raises a NOTICE of both counts):
+   customers listed for a second person at release, and raises a NOTICE of both counts),
+   `…_projects_th_guards` (threads plan schema wave 8/9, B-TH-065, projects: the number from the company's PROJECT series
+   (numbering's `factory_document_number_guard`); its own triggers `Project_guard` (made ACTIVE; ACTIVE ⇄ ON_HOLD → CLOSED with
+   outcome DONE or STOPPED, its one line and when → reopened ACTIVE on its own; a CLOSED one frozen; company, number, outside
+   company and creation fixed; an active office lead; the outside company a customer, brand, supplier or subcontractor of its
+   company or every company, not blocked or archived), `ProjectLink_party` (BEFORE: the link's party is its project's),
+   `ProjectLink_fixed` (never changed; removed only while the project is not CLOSED), `ProjectLink_guard` (one of the linkable
+   kinds of `factory_project_link_columns`, a record of the tenant read by `factory_project_link_record`, of the project's
+   company or tenant-wide and of its outside company or of none; the key; the project open), one `<Table>_project_links`
+   trigger per linkable table (Style, Certificate, SampleRound, Quote, SalesOrder, PurchaseOrder, SubcontractOrder,
+   ChangeRequest, Inquiry, Shipment, MeasurementProfile: a change of its party or company column that would leave it in a
+   project of another company is refused), `RecordFollower_party_check` (a portal person follows only as a member of a project
+   of their own party, ADDED by the office; ADDED names someone else as the adder; the party fixed) and `Thread_project_party`
+   (a project's thread names the project's own outside company, or none); no earlier function redefined),
+   `…_threads_later_th_guards` (wave 9/9, B-TH-090: its own triggers `Thread_done_check` (Done both or neither, by an active
+   office person, never on a new thread), `ThreadPin_party` (BEFORE: the pin's party is its message's; never changed),
+   `ThreadPin_guard` (the key, never a held mail, an active office pinner, not in the future), `ComposerDraft_guard` (person,
+   party, record and key fixed; an office person's with no party or a portal person's of their own party, on their own party's
+   record (`factory_file_record_party`) or their New order, never an office note; text, fields and files in shape),
+   `ErasureRecord_composer_drafts` (a User's erasure, but KEPT, removes that person's drafts) and
+   `Inquiry_production_answer_check` (production's answer all or none, NOT_BEFORE exactly with a Monday, an active office
+   person); it redefines the wave 3/9 `factory_inquiry_guard` word for word but for the lines marked B-TH-090 (WITHDRAWN a
+   fifth final state, from an open one, only for a customer's request, closed by a portal person of that customer)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

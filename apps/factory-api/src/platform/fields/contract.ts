@@ -69,10 +69,21 @@ export const fieldView = output({
   /** LINK: the model it links to, and the record type of the registry that opens it (null: none). */
   linkTo: z.string().nullable(),
   linkRecordType: recordType.nullable(),
+  /** B-TH-056: the one customer the field is for — shown on that customer's records only (null: every customer). */
+  partyId: id().nullable(),
 })
 export type FieldView = z.infer<typeof fieldView>
 
-const editorField = fieldView.extend({ valueCount: z.number().int().min(0), createdAt: instant(), updatedAt: instant() })
+const editorField = fieldView.extend({
+  valueCount: z.number().int().min(0),
+  createdAt: instant(),
+  updatedAt: instant(),
+  // ---- B-TH-056: the field's line names its customer; EVERY_CUSTOMER: shown in the portal to every customer, so every customer
+  // sees its name (factory-domain fields/access EVERY_CUSTOMER_NOTICE: "Every customer will see this column name in its portal.").
+  partyName: z.string().nullable(),
+  portalNotice: z.enum(['EVERY_CUSTOMER']).nullable(),
+  // ---- end B-TH-056
+})
 
 export const recordTypeView = output({
   key: recordType,
@@ -138,6 +149,8 @@ export const createFieldContract = defineContract({
     labelEn: words(),
     picklistId: id().nullable().optional(),
     linkTo: recordType.nullable().optional(),
+    /** B-TH-056: "For: one customer" — an active customer of the field's company (or of every company); customers, quotes and orders only. Never changes. */
+    partyId: id().nullable().optional(),
   }),
   response: { 201: output({ field: fieldView }) },
 })
@@ -197,7 +210,8 @@ export const orderOptionsContract = defineContract({
 // ---- forms, grids, the portal ----------------------------------------------------------------------------------------
 
 export const fieldsContract = defineContract({
-  querystring: input({ recordType, companyId: id().optional() }),
+  // B-TH-056: partyId — one customer's sheet: the fields for every customer and that customer's own (never another customer's).
+  querystring: input({ recordType, companyId: id().optional(), partyId: id().optional() }),
   response: { 200: output({ recordType, fields: z.array(fieldView) }) },
 })
 

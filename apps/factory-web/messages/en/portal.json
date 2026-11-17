@@ -307,7 +307,9 @@
       "portal_returns_request": "Ask for a return or report a quality problem",
       "portal_complaints_view": "Follow your quality complaints",
       "portal_approvals_view": "See what we ask you to approve",
-      "portal_samples_view": "See your samples, your styles in development and their tech packs"
+      "portal_samples_view": "See your samples, your styles in development and their tech packs",
+      "portal_production_view": "See your orders in production: stage, expected date, health and who acts next",
+      "portal_production_urgency": "Mark your orders in production urgent or regular, within your urgent quota"
     }
   },
   "display": {
@@ -340,6 +342,7 @@
     "customer-finance": "Finance",
     "customer-quality": "Quality",
     "customer-designer": "Designer",
+    "customer-production": "Production",
     "customer-viewer": "Viewer",
     "customer-admin": "Admin",
     "supplier-orders": "Orders",

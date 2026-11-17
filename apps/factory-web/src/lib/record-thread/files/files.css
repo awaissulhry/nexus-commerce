@@ -34,3 +34,10 @@ div.fw-rtf-line[role="status"] { border-bottom: 1px solid var(--nds-border-subtl
 .fw-rtf-frame.is-375 { width: 375px; }
 .fw-rtf-frame-label { margin: 0 0 var(--nds-space-6); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
 .fw-rtf-feed { height: 72px; background: var(--nds-surface-sunken); }
+
+/* B-TH-231 — "Use on another record…": the search, the records offered (same customer or none), the share tick. */
+.fw-rtf-useon { display: flex; flex-direction: column; gap: var(--nds-space-12); min-width: 0; }
+.fw-rtf-useon-hint { margin: 0; display: flex; align-items: center; gap: var(--nds-space-6); font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+.fw-rtf-useon-list { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: var(--nds-space-2); max-height: 320px; overflow-y: auto; min-width: 0; }
+.fw-rtf-useon-row { display: inline-flex; align-items: center; gap: var(--nds-space-8); flex-wrap: wrap; min-width: 0; }
+.fw-rtf-useon-failed { margin: var(--nds-space-4) 0 0; padding-left: var(--nds-space-16); }

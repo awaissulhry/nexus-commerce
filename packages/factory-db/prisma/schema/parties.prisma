@@ -307,6 +307,8 @@ model Party {
   scheduleSlots           ScheduleSlot[]
   // TH-4 config.prisma (threads plan, schema wave 7/9, B-TH-055): as a customer, the custom fields made for it alone.
   customFields            CustomField[]
+  // TH-5 projects.prisma (threads plan, schema wave 8/9, B-TH-065): the projects it is the outside company of.
+  projects                Project[]
 
   @@unique([tenantId, code])
   // W2b-6 (wave 48/57): one sealed carrier account per party (a secret is never shared).
