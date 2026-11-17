@@ -187,7 +187,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   cards on a phone; the Urgent order dialog on DS OrderedList). Never the office's number, a queue place or who set something.
   F-PR-12a: the order's Status & progress reads `GET /portal/production/:orderId` (OrderPage, portal.production.view; 404/403 =
   hidden: no section) — waiting for you on this order, the hold banner (lib/production), the plain stage as the "In production"
-  step's note, health and waiting on (StatusTab's F-PR-12a block).
+  step's note, health and waiting on (StatusTab's F-PR-12a block). F-PR-12b: + Gates & dates (real gates, swatch answers as
+  approvals, the published plan's days) and + Progress (lib PiecesGrid per line and size, read again every `refreshSeconds`) from
+  the same read; today's progress card only where that read does not draw (`productionOwnsProgress`).
 - `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
   SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
   &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every
