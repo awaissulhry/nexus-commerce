@@ -2,7 +2,7 @@ import type { Tone } from '@nexus/ui/primitives'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 // F-PR-01: the one progress rule lives with the shared production parts (office and portal).
 import { percentOf, progressFigure, type ProgressFigure } from '../../../lib/production/model'
-import type { BundleRow, CutEntry, CutLog, ListQuery, ReleaseCheck, ReleaseCheckCode, WorkOrder, WorkOrderCounts, WorkOrderRow, WorkOrderStatus, WorkOrderWip } from './api'
+import type { BundleRow, CutEntry, CutLog, ListQuery, ReleaseCheck, ReleaseCheckCode, WorkOrder, WorkOrderRow, WorkOrderStatus, WorkOrderWip } from './api'
 
 /**
  * The Production office screens' rules, without a screen (SCR-069 … SCR-073): what a person may do (from the session's
@@ -110,15 +110,7 @@ export function viewQuery(view: ListView, q: string, cursor: string | null = nul
   return { ...base, status: view }
 }
 
-/** The tiles (design wo-metrics): each IS a saved view, so pressing one shows its rows (one filter model). */
-export const TILES = [
-  { id: 'draft', view: 'DRAFT', count: (counts: WorkOrderCounts) => counts.draft },
-  { id: 'released', view: 'RELEASED', count: (counts: WorkOrderCounts) => counts.released },
-  { id: 'inProgress', view: 'IN_PROGRESS', count: (counts: WorkOrderCounts) => counts.inProgress },
-  { id: 'late', view: 'late', count: (counts: WorkOrderCounts) => counts.late },
-  // B-W2a-46: work orders on hold.
-  { id: 'onHold', view: 'ON_HOLD', count: (counts: WorkOrderCounts) => counts.onHold ?? 0 },
-] as const satisfies ReadonlyArray<{ id: string; view: ListView; count: (counts: WorkOrderCounts) => number }>
+// F-PR-03: the tiles moved to work-orders/list/model.ts listTiles (+ At risk and Waiting on customer, the API's filters).
 
 // ---- numbers --------------------------------------------------------------------------------------------------------------------
 

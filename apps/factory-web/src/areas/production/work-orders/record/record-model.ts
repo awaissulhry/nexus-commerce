@@ -1,6 +1,6 @@
 import type { BundleScan, CutLog, FinalState, PickList, ReleaseCheck, TicketPrinters, WorkOrder, WorkOrderBundles, WorkOrderWip } from '../../_shared/api'
 import type { LiveState } from '../../_shared/hooks'
-import type { Phrase, ProductionCan, RecordTab, SizeLayer, StepKind } from '../../_shared/model'
+import type { Phrase, ProductionCan, RecordTab, StepKind } from '../../_shared/model'
 import type { DailyActions, DailyModel } from '../daily/model'
 import type { LabourModel } from '../labour/model'
 import type { SplitActions, SplitModel } from '../every-shift/use-split'
@@ -16,6 +16,9 @@ import type { CloseActions, CloseModel } from '../close/use-close'
 import type { VarianceModel } from '../labour/variance/model'
 // B-TH-265: the work order on RecordFrame — "Order files (n)" and the orders' threads beside the work order's own notes.
 import type { OrderFilesActions, OrderFilesModel, OrderThreadChoice } from './order-files/model'
+// F-PR-05a: the band facts' health (each order's, B-PR-35) with Raise to At risk, and the Overview's Gates & readiness.
+import type { HealthActions, HealthModel } from './health/model'
+import type { GatesPart } from './gates/use-gates'
 
 /** SCR-070 … SCR-072 — the work order studio's view model (WorkOrderRecordView draws it and fetches nothing). */
 
@@ -68,7 +71,6 @@ export interface WorkOrderRecordModel {
   /** A refused write while its dialog is open: said inside the dialog (the typed reason stays). */
   dialogProblem: Phrase | null
   reprint: ReprintRun | null
-  sizeLayer: SizeLayer
   /** Bundles: only those waiting at this operation (seq), from Floor now's operation cells. */
   waitingAt: number | null
   /** A bundle's detail (its scans per operation). */
@@ -103,6 +105,16 @@ export interface WorkOrderRecordModel {
   /** The orders whose thread the reader may read (the dialog's "Open the order's thread"; the dock's pick). */
   threadChoices?: readonly OrderThreadChoice[]
   // ---- end B-TH-265
+  // ---- F-PR-05a: band facts and the Overview body ----
+  /** The health of the work order's own orders (absent: not drawn) and Raise to At risk. */
+  health?: HealthModel
+  /** The gates of its orders (planning.view; null without the right: no card). */
+  gates?: GatesPart | null
+  /** "Preview as <customer>" (partners.preview); `busy` while the portal opens. */
+  preview?: { readonly can: boolean; readonly busy: boolean }
+  /** parties.view: the customer fact names the customer and links to it (else its code, 06-tree A.0). */
+  partiesView?: boolean
+  // ---- end F-PR-05a
   /** Design cases: a dialog's typed reason, the overview's fields in edit, a draft's grid being edited. */
   draft?: { reason?: string; override?: boolean; dueDate?: string; priority?: string; editing?: boolean; grid?: Record<string, Record<string, number>>; opsBySize?: boolean }
 }
@@ -119,7 +131,6 @@ export interface WorkOrderRecordActions {
   onSaveDetails?: (details: { dueDate: string | null; priority: number; rush: boolean }) => void
   onSaveSizes?: (grid: Record<string, Record<string, number>>) => void
   onDirty?: (part: 'details' | 'sizes', dirty: boolean) => void
-  onSizeLayer?: (layer: SizeLayer) => void
   onCorrect?: (entryId: string, reason: string) => void
   onReprint?: (bundleIds: string[], reason: string, printerId: string) => void
   onCloseReprint?: () => void
@@ -145,4 +156,10 @@ export interface WorkOrderRecordActions {
   onRetryVariance?: () => void
   /** B-TH-265: Order files (open, close, open a file or worksheet, show an order's thread). */
   orderFiles?: OrderFilesActions
+  // ---- F-PR-05a ----
+  health?: HealthActions
+  onRetryGates?: () => void
+  /** Open the customer's portal as it sees it (read-only, an hour, recorded). */
+  onPreview?: () => void
+  // ---- end F-PR-05a
 }
