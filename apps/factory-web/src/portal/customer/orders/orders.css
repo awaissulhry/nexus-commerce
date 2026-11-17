@@ -503,3 +503,8 @@
   overflow-wrap: anywhere;
 }
 /* ---- end B-TH-275 */
+
+/* F-PR-12a: the order's health and who acts next, under where it is (Status & progress). */
+.fw-pord-production {
+  margin-top: var(--nds-space-12);
+}

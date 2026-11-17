@@ -185,6 +185,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `model.ts` (pure: own name of an order, Urgent / Regular groups, the mark's hold words, refusal and conflict words — also the
   order production helpers F-PR-12a uses on Status & progress), `ProductionPage.tsx` (container), `view/` (list on the list frame,
   cards on a phone; the Urgent order dialog on DS OrderedList). Never the office's number, a queue place or who set something.
+  F-PR-12a: the order's Status & progress reads `GET /portal/production/:orderId` (OrderPage, portal.production.view; 404/403 =
+  hidden: no section) — waiting for you on this order, the hold banner (lib/production), the plain stage as the "In production"
+  step's note, health and waiting on (StatusTab's F-PR-12a block).
 - `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
   SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
   &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every

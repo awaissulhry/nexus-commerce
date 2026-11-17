@@ -1,8 +1,10 @@
 import type { Locale } from '../../../lib/i18n/locales'
 import { isApiError, issuePath } from '../../../lib/api/errors'
-import type { HealthInput, HealthState, PlainStage, WaitingInput } from '../../../lib/production/model'
+import { countWords } from '@nexus/factory-domain/production-brand/portal-read' // F-PR-12a
+import type { HealthInput, HealthState, HoldInput, PlainStage, WaitingInput } from '../../../lib/production/model'
+import { PORTAL_AREAS } from '../../shell/nav/portal-nav' // F-PR-12a
 import { recordHref } from '../orders/model'
-import type { BrandUrgencyCode, ProductionChip, ProductionHealth, ProductionList, ProductionRow, ProductionWaiting, Urgency, UrgencyAnswer, UrgencyOutcome, UrgentUse, Words } from './api'
+import type { BrandUrgencyCode, ProductionChip, ProductionHealth, ProductionList, ProductionOrder, ProductionRow, ProductionWaiting, Urgency, UrgencyAnswer, UrgencyOutcome, UrgentUse, Words } from './api'
 import { isProductionChip, URGENCY_OUTCOMES } from './api'
 
 /**
@@ -256,3 +258,34 @@ export const waitingInputOf = (waiting: ProductionWaiting): WaitingInput => ({ w
 
 /** The plain stage of the lib's strip (the API's five stages are the same). */
 export const plainStageOf = (stage: { readonly code: string } | null): PlainStage | null => (stage ? (stage.code as PlainStage) : null)
+
+// ── F-PR-12a: the order's Status & progress (portal/customer/orders/view/StatusTab.tsx) ─────────────────────────────────────
+/** What holds its work, as the lib's banner reads it: the curated words only (every level). */
+export const holdsOf = (holds: ProductionOrder['holds'], locale: Locale): HoldInput[] => holds.map((hold, index) => ({ id: `${hold.kind}-${index}`, kind: hold.kind, since: hold.since, customerWords: say(hold.words, locale) }))
+
+const COUNT_OF: Readonly<Partial<Record<PlainStage, 'cut' | 'sewn' | 'inspected' | 'packed'>>> = Object.freeze({ CUTTING: 'cut', SEWING: 'sewn', QUALITY: 'inspected', READY: 'packed' })
+
+/**
+ * The note of the order's "In production" step (06-tree §0.2: the plain stage is the step's note): "Sewing · 32 of 40 sewn ·
+ * 1 line ahead" — the count only from + Progress (its own cells; "—" never 0 where sewing is not counted).
+ */
+export function stageNoteOf(read: Pick<ProductionOrder, 'stage' | 'progress'>, locale: Locale): string | null {
+  const stage = read.stage
+  if (!stage) return null
+  const parts = [say(stage.words, locale)]
+  const key = COUNT_OF[stage.code as PlainStage]
+  const whole = read.progress?.whole ?? null
+  const done = key && whole ? whole[key] : null
+  // The list's own count words (factory-domain portal-read countWords: "32 of 40 sewn"), so the list and the order say the same.
+  if (key && whole && done !== null && done !== undefined && !(stage.code === 'SEWING' && stage.sewingNotCounted)) parts.push(say(countWords(key, done, whole.ordered), locale))
+  if (stage.sewingNotCounted && stage.sewingNotCountedWords) parts.push(say(stage.sewingNotCountedWords, locale))
+  if (stage.ahead > 0 && stage.aheadWords) parts.push(say(stage.aheadWords, locale))
+  return parts.join(' · ')
+}
+
+/** Where "See what waits for you" leads: Waiting for you once built (F-PR-14), until then Home, which lists what waits. */
+export function waitingHrefOf(prefix: string, areas = PORTAL_AREAS): string {
+  const built = areas.some((area) => (area.pages ?? []).some((page) => page.id === 'home.waiting' && page.built))
+  return built ? `${prefix}/waiting` : `${prefix}/`
+}
+// ── end F-PR-12a
