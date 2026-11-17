@@ -75,8 +75,11 @@
   color: var(--nds-info-text);
 }
 
-.fw-rt-cx-text {
+/* The text box is TH-1c's MentionInput (a DS Textarea): inside the coloured box the box itself is the field (its focus ring is
+   the box's), so the textarea draws no border or ground of its own. */
+.fw-rt-cx-box .fw-rt-cx-text {
   width: 100%;
+  box-shadow: none;
   min-height: 40px;
   resize: none;
   border: none;
@@ -90,7 +93,13 @@
   overflow-y: hidden;
 }
 
-.fw-rt-cx-text::placeholder {
+.fw-rt-cx-box .fw-rt-cx-text:focus,
+.fw-rt-cx-box .fw-rt-cx-text:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.fw-rt-cx-box .fw-rt-cx-text::placeholder {
   color: var(--nds-placeholder);
 }
 

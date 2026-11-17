@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { ThreadMessages } from '../../parts/ThreadMessages'
 import type { ComposerContext, ComposerDraft, SwitchNote } from '../model'
 import { Composer } from './Composer'
-import { LeaveDialog } from './LeaveDialog'
+import { LeaveConfirm } from '../../popups/view/Confirms'
 
 export interface ComposerCaseModel {
   context: ComposerContext
@@ -41,7 +41,7 @@ export function ComposerCase({ model }: { model: ComposerCaseModel }) {
           onReopen={() => undefined}
           onMakeCustomer={() => undefined}
         />
-        <LeaveDialog open={leaving} record={model.context.recordLabel} onStay={() => setLeaving(false)} onDiscard={() => setLeaving(false)} />
+        {leaving && <LeaveConfirm onStay={() => setLeaving(false)} onDiscard={() => setLeaving(false)} />}
       </div>
     </ThreadMessages>
   )

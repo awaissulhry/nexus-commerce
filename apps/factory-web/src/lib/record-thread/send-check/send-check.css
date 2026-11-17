@@ -1,6 +1,6 @@
 /*
- * To / Cc and the send check (B-TH-207, T7; picture 5). Another customer's address is a red chip and a red warning with its
- * tick; an unknown address amber. DS tokens only.
+ * To / Cc and the send check (B-TH-207, T7; picture 5). Another customer's address is a red chip; an unknown address amber;
+ * the check itself is TH-1c's send-check window (popups). DS tokens only.
  */
 .fw-rt-rcpt {
   display: flex;
@@ -191,18 +191,6 @@
   flex: none;
 }
 
-.fw-rt-check-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.fw-rt-check {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
 .fw-rt-check-who {
   margin: 0;
   padding: 8px 10px;
@@ -224,57 +212,7 @@
   line-height: 1.5;
 }
 
-.fw-rt-warns {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.fw-rt-warns li {
-  display: flex;
-  gap: 10px;
-  padding: 9px 11px;
-  border-radius: var(--nds-radius-lg);
-  background: var(--nds-surface-raised);
-  border: 1px solid var(--nds-border-subtle);
-  border-inline-start: 3px solid var(--nds-warning);
-  font-size: var(--nds-font-size-sm-plus);
-  line-height: 1.45;
-  color: var(--nds-text-2);
-  overflow-wrap: anywhere;
-}
-
-.fw-rt-warns li > svg {
-  flex: none;
-  margin-top: 2px;
-  color: var(--nds-warning-text);
-}
-
-.fw-rt-warns li.is-block {
-  border-inline-start-color: var(--nds-danger);
-  background: var(--nds-danger-soft);
-}
-
-.fw-rt-warns li.is-block > svg {
-  color: var(--nds-danger-strong);
-}
-
-.fw-rt-warns b {
-  display: block;
-  color: var(--nds-text);
-}
-
-.fw-rt-warns-tick {
-  margin-top: 6px;
-}
-
-/* SCR-006-send (design review). */
-.fw-rt-send-case {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  min-width: 0;
+/* The send check's key wrapper: no box of its own (the window is the DS Modal). */
+.fw-rt-contents {
+  display: contents;
 }

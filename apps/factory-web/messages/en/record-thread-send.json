@@ -23,21 +23,14 @@
   },
   "who": {
     "person": "{name} ({org})",
-    "to": "To: {list}",
-    "cc": "Cc: {list}",
     "files_one": "{count} file",
     "files_other": "{count} files",
     "from": "From you, with this record's reply address, so the answer lands back here."
   },
   "check": {
-    "title": "Send to {party}?",
-    "back": "Back to the text",
     "send": "Send to {party}",
     "retry": "Try again",
     "checking": "Checking the recipients and the text…",
-    "clean": "Nothing to check: the e-mail goes when you send it.",
-    "count_one": "{count} thing to check before it goes:",
-    "count_other": "{count} things to check before it goes:",
     "failed": "Could not check",
     "refused": "This message cannot be checked",
     "held": {

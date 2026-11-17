@@ -5,7 +5,11 @@ import { useRouter } from 'next/navigation'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { addDropped, contentTypeOf, draftOfRecordFile, kindOf, sendable, uploadAudience, type DraftFile, type RecordFile } from '../../../lib/record-thread/attachments/model'
 import { messageLink, type CardMessage } from '../../../lib/record-thread/card/model'
-import { mentionsOf, startDraft, switchMode, type ComposerContext, type ComposerDraft } from '../../../lib/record-thread/composer/model'
+import { startDraft, switchMode, type ComposerContext, type ComposerDraft } from '../../../lib/record-thread/composer/model'
+// TH-1c's helpers (B-TH-208) and pop-ups (B-TH-211): the draft kept on this device, @mentions, the leave guard.
+import { draftKey, mentionsIn, readDraft, writeDraft, type LocalDraft } from '../../../lib/record-thread/helpers/model'
+import { withMentionTags } from '../../../lib/record-thread/helpers/tags'
+import { useLeaveGuard } from '../../../lib/record-thread/popups/use-leave-guard'
 import type { FeedModel } from '../../../lib/record-thread/feed/view/Feed'
 import { anchorOf, cardOf, closedBy, eventOf, feedShowsChange, withOutbox, type ThreadApiChange, type ThreadApiDelivery, type ThreadApiEmail } from '../../../lib/record-thread/model'
 import type { RecordThreadActions, RecordThreadModel } from '../../../lib/record-thread/RecordThread'
@@ -17,7 +21,7 @@ import { useLiveChanges } from '../../../record-panels/live'
 import { liveParts } from '../../../record-panels/model'
 import { putToStore, sha256Hex, storeUrl, StoreError } from '../../../record-panels/store'
 import { checkReply, postNoteKeyed, readContacts, readDeliveries, readThreadPage, sendReplyKeyed, shareWithParty } from './api'
-import { afterRead, applyNewest, applyOlder, checkProblemOf, draftStoreKey, EMPTY_SERVER, hasUnsent, parseStoredDraft, readStatusOf, replyRefusal, sendReason, uploadReason, type ServerThread, type Work } from './state'
+import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type ServerThread, type Work } from './state'
 
 /**
  * The office container of RecordThread v1 (B-TH-212): it reads a record's thread (page by page), its mail states and bounce tasks,
@@ -46,7 +50,7 @@ type Notice = NonNullable<RecordThreadModel['notice']>
 
 const EMPTY_WORK = (draft: ComposerDraft = { mode: 'note', body: '', forFloor: false }): Work => ({ draft, notes: [], files: [], to: [], cc: [], subject: '', outbox: [] })
 
-export function useRecordThread(host: RecordThreadHost): { model: RecordThreadModel; actions: RecordThreadActions; guard: { pending: string | null } } {
+export function useRecordThread(host: RecordThreadHost): { model: RecordThreadModel; actions: RecordThreadActions; kept: LocalDraft | null; guard: { ask: (leave: () => void) => boolean } } {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -56,7 +60,6 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     () => ({ read: held.has('threads.read'), post: held.has('threads.post'), email: held.has('email.send'), manage: held.has('threads.manage'), readFiles: held.has('files.read'), upload: held.has('files.upload'), share: held.has('files.manage') }),
     [held],
   )
-  const storeKey = draftStoreKey(host.record.companyId, key)
   const prefix = companyPrefix(session.company?.code ?? '')
 
   const [server, setServer] = useState<ServerThread>(EMPTY_SERVER)
@@ -72,7 +75,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   const [pickerOpen, setPickerOpen] = useState(false)
   const [notice, setNotice] = useState<Notice | null>(null)
   const [offline, setOffline] = useState<{ since: string } | null>(null)
-  const [pending, setPending] = useState<string | null>(null)
+  const [kept, setKept] = useState<LocalDraft | null>(null)
   // The message a link names (`?message=<id>`), read from the address once on arrival.
   const [anchor, setAnchor] = useState<string | null>(null)
   useEffect(() => setAnchor(anchorOf(window.location.search)), [])
@@ -205,52 +208,71 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     }
   }, [loadAll])
 
-  // The draft on this device (a reload, the network gone): read once, written as it changes, cleared after a send.
-  useEffect(() => {
+  // The draft on this device (TH-1c's store, B-TH-208: per person, record and audience, 30 days): read once on arrival (every visit
+  // starts on Office note, so the note's draft first), written a moment after typing stops under the box's audience (the other
+  // audience's is forgotten: the text survives a switch), forgotten after a send.
+  const storage = (): Storage | null => {
     try {
-      const stored = parseStoredDraft(window.localStorage.getItem(storeKey))
-      if (stored) setWork((now) => (now.draft.body === '' ? { ...now, draft: stored.mode === 'reply' && !(can.email && partyId) ? { ...stored, mode: 'note' } : stored } : now))
+      return window.localStorage
     } catch {
-      // Storage blocked: the draft lives in this tab only.
+      return null
     }
-    // Only on arrival (the record's draft): the rights and the party do not re-read it.
-  }, [storeKey])
+  }
+  const personId = session.user.id
+  useEffect(() => {
+    const now = Date.now()
+    const note = readDraft(storage(), draftKey(personId, key, 'note'), now)
+    const reply = note ? null : readDraft(storage(), draftKey(personId, key, 'reply'), now)
+    const found = note ?? reply
+    if (!found) return
+    setKept(found)
+    setWork((latest) => (latest.draft.body === '' ? { ...latest, draft: { ...latest.draft, mode: reply && can.email && partyId ? 'reply' : 'note', body: found.text } } : latest))
+    // Only on arrival: the record's draft.
+  }, [personId, key])
   useEffect(() => {
     const id = setTimeout(() => {
-      try {
-        if (work.draft.body.trim() === '') window.localStorage.removeItem(storeKey)
-        else window.localStorage.setItem(storeKey, JSON.stringify(work.draft))
-      } catch {
-        // Storage blocked: fine.
-      }
-    }, 400)
+      const now = Date.now()
+      const other = work.draft.mode === 'note' ? 'reply' : 'note'
+      writeDraft(storage(), draftKey(personId, key, other), '', now)
+      setKept(writeDraft(storage(), draftKey(personId, key, work.draft.mode), work.draft.body, now))
+    }, 600)
     return () => clearTimeout(id)
-  }, [work.draft, storeKey])
+  }, [work.draft.body, work.draft.mode, personId, key])
+  const forgetDraft = () => {
+    const now = Date.now()
+    writeDraft(storage(), draftKey(personId, key, 'note'), '', now)
+    writeDraft(storage(), draftKey(personId, key, 'reply'), '', now)
+    setKept(null)
+  }
 
-  // ── the leave guard (T5-F10): the browser's own question on close; a link of this app waits for Stay / Discard ─────────
-  const unsent = hasUnsent(work)
-  const unsentRef = useRef(unsent)
-  unsentRef.current = unsent
-  useEffect(() => {
-    if (!unsent) return
-    const onLeave = (event: BeforeUnloadEvent) => event.preventDefault()
-    window.addEventListener('beforeunload', onLeave)
-    return () => window.removeEventListener('beforeunload', onLeave)
-  }, [unsent])
+  // ── the leave guard (T5-F10; TH-1c's useLeaveGuard): the browser's own question on close; a link of this app outside the
+  // thread waits for "Leave with unsent text?" (Stay / Discard; Discard forgets the draft, then the move goes on) ────────────
+  const unsentFiles = work.files.filter((file) => file.phase !== 'refused').length
+  const leave = useLeaveGuard({ text: work.draft.body, files: unsentFiles })
+  const askRef = useRef(leave.ask)
+  askRef.current = leave.ask
+  const discardRef = useRef<() => void>(() => undefined)
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
-      if (!unsentRef.current || event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
+      if (event.defaultPrevented || event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return
       const link = (event.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null
       if (!link || link.target === '_blank' || link.closest('.fw-rt-column')) return
       const to = new URL(link.href, window.location.href)
       if (to.origin !== window.location.origin || (to.pathname === window.location.pathname && to.search === window.location.search)) return
-      event.preventDefault()
-      event.stopPropagation()
-      setPending(`${to.pathname}${to.search}${to.hash}`)
+      const address = `${to.pathname}${to.search}${to.hash}`
+      if (
+        askRef.current(() => {
+          discardRef.current()
+          router.push(address)
+        })
+      ) {
+        event.preventDefault()
+        event.stopPropagation()
+      }
     }
     document.addEventListener('click', onClick, true)
     return () => document.removeEventListener('click', onClick, true)
-  }, [])
+  }, [router])
 
   // ── the recipients as the check sees them (the chips' organisations), a moment after they change ────────────────────
   const lineKey = [...work.to, ...work.cc].map((item) => item.address).join(',')
@@ -295,7 +317,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     can: { post: can.post, email: can.email, manage: can.manage },
     closed,
     offline: offline !== null,
-    people: people.filter((person) => person.id !== session.user.id),
+    people: withMentionTags(key, people.filter((person) => person.id !== session.user.id)),
   }
   const feed: FeedModel = {
     state: server.status,
@@ -328,7 +350,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     },
     pickerOpen,
     check,
-    leaving: pending !== null,
+    leaving: leave.asking,
+    kept,
     notice,
   }
 
@@ -419,9 +442,10 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     const idempotencyKey = newIdempotencyKey()
     const attachments = sendable(now.files).map((file) => file.fileId as string)
     const card: CardMessage = { id: outboxKey, kind: 'note', channel: 'APP', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, forFloor: now.draft.forFloor, mentions: [], files: [] }
-    const item = { key: outboxKey, idempotencyKey, body: now.draft.body, mentions: mentionsOf(now.draft.body, context.people).map((person) => person.id), attachments, forFloor: now.draft.forFloor, card }
+    const item = { key: outboxKey, idempotencyKey, body: now.draft.body, mentions: mentionsIn(now.draft.body, context.people), attachments, forFloor: now.draft.forFloor, card }
     retries.current.set(outboxKey, () => sendNote(item))
     setWork((latest) => ({ ...latest, draft: { ...latest.draft, body: '', forFloor: false }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
+    forgetDraft()
     void sendNote(item)
   }
 
@@ -471,6 +495,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     setCheck(null)
     // After a send the mode stays as used while the person stays on the record (T5-F02).
     setWork((latest) => ({ ...latest, draft: { ...latest.draft, body: '' }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
+    forgetDraft()
     void go()
   }
 
@@ -524,19 +549,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     onCheckRetry: runCheck,
     onOutside: (ticked) => setCheck((current) => (current ? { ...current, outside: ticked } : current)),
     onConfirm: confirm,
-    onStay: () => setPending(null),
-    onDiscard: () => {
-      const to = pending
-      setPending(null)
-      setWork((now) => ({ ...EMPTY_WORK(startDraft(context)), outbox: now.outbox }))
-      try {
-        window.localStorage.removeItem(storeKey)
-      } catch {
-        // Fine.
-      }
-      unsentRef.current = false
-      if (to) router.push(to)
-    },
+    onStay: leave.stay,
+    onDiscard: leave.discard,
     onDismissNotice: () => setNotice(null),
     onOlder: () => void loadOlder(),
     onReload: loadAll,
@@ -580,5 +594,10 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     },
   }
 
-  return { model, actions, guard: { pending } }
+  discardRef.current = () => {
+    setWork((now) => ({ ...EMPTY_WORK(startDraft(context)), outbox: now.outbox }))
+    forgetDraft()
+  }
+
+  return { model, actions, kept, guard: { ask: leave.ask } }
 }

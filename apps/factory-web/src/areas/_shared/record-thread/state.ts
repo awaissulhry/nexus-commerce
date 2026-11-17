@@ -132,21 +132,3 @@ export function uploadReason(error: unknown, storeFailed: boolean): string {
   if (error.kind === 'forbidden' || error.kind === 'step_up') return 'failed.forbidden'
   return 'failed.failed'
 }
-
-/** Where the draft waits on this device (offline, a reload): one key per company and record. Text and mode only, never files. */
-export const draftStoreKey = (companyId: string | null, record: { type: string; id: string }) => `fw-rt-draft:${companyId ?? '-'}:${record.type}:${record.id}`
-
-/** The draft kept on this device, read back safely (anything else is ignored). */
-export function parseStoredDraft(text: string | null): ComposerDraft | null {
-  if (!text) return null
-  try {
-    const value = JSON.parse(text) as Partial<ComposerDraft>
-    if (typeof value.body !== 'string' || value.body.trim() === '' || (value.mode !== 'note' && value.mode !== 'reply')) return null
-    return { mode: value.mode, body: value.body.slice(0, 20_000), forFloor: value.forFloor === true }
-  } catch {
-    return null
-  }
-}
-
-/** The box holds something the person would lose by leaving. */
-export const hasUnsent = (work: Pick<Work, 'draft' | 'files'>): boolean => work.draft.body.trim() !== '' || work.files.some((file) => file.phase !== 'refused')

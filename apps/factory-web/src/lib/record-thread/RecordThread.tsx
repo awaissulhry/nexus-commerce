@@ -7,7 +7,9 @@ import { AttachmentLines, AttachmentTray, ClipMenu, FromRecordPicker } from './a
 import { MAIL_MAX, mailBytes, trayHeld, type DraftFile, type RecordFile } from './attachments/model'
 import { composerModes, keyMode, switchMode, type ComposerContext, type ComposerDraft, type SwitchNote } from './composer/model'
 import { Composer } from './composer/view/Composer'
-import { LeaveDialog } from './composer/view/LeaveDialog'
+import { LeaveConfirm } from './popups/view/Confirms'
+import { DraftLine } from './helpers/view/SavedReplies'
+import type { LocalDraft } from './helpers/model'
 import { Feed, type FeedActions, type FeedModel } from './feed/view/Feed'
 import { recipientsHeld, type CheckState, type Contact, type Recipient } from './send-check/model'
 import { Recipients } from './send-check/view/Recipients'
@@ -40,7 +42,9 @@ export interface RecordThreadModel {
   pickerOpen?: boolean
   /** The send check, open. */
   check?: { state: CheckState; outside: boolean } | null
-  /** "Leave with unsent text?" open. */
+  /** The draft kept on this device (TH-1c's DraftLine under the box, B-TH-208). */
+  kept?: LocalDraft | null
+  /** "Leave with unsent text?" open (TH-1c's LeaveConfirm, B-TH-211). */
   leaving?: boolean
   /** A notice over the thread: a key of a record-thread catalogue, with its tone. */
   notice?: { ns: string; key: string; params?: Record<string, string | number>; tone: 'success' | 'info' | 'warning' | 'danger' } | null
@@ -148,6 +152,7 @@ function Column({ model, actions, remind }: { model: RecordThreadModel; actions:
           onMakeCustomer={actions.onMakeCustomer}
           onEscape={() => column.current?.querySelector<HTMLElement>('.fw-rt-feed')?.focus()}
           onFiles={composer.canUpload ? actions.onFiles : undefined}
+          hint={<DraftLine draft={model.kept ?? null} />}
         />
       )}
       <FromRecordPicker open={model.pickerOpen ?? false} files={composer.recordFiles} mode={mode} partyName={party} record={composer.context.recordLabel} onClose={() => actions.onPicker(false)} onAdd={actions.onAddRecordFiles} />
@@ -164,7 +169,7 @@ function Column({ model, actions, remind }: { model: RecordThreadModel; actions:
         }}
         actions={{ onBack: actions.onCheckBack, onRetry: actions.onCheckRetry, onOutside: actions.onOutside, onConfirm: actions.onConfirm }}
       />
-      <LeaveDialog open={model.leaving ?? false} record={composer.context.recordLabel} onStay={actions.onStay} onDiscard={actions.onDiscard} />
+      {model.leaving && <LeaveConfirm files={composer.files.filter((file) => file.phase !== 'refused').length} onStay={actions.onStay} onDiscard={actions.onDiscard} />}
     </section>
   )
 }

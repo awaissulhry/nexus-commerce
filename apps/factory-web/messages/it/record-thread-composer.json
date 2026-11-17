@@ -52,11 +52,5 @@
     "note": "Rilascia i file per aggiungerli a questa nota d'ufficio (solo ufficio)",
     "reply": "Rilascia i file per inviarli a {party}"
   },
-  "counter": "Restano {count} caratteri",
-  "leave": {
-    "title": "Uscire con un testo non inviato?",
-    "body": "Quello che hai scritto su {record} non è ancora inviato.",
-    "stay": "Resta",
-    "discard": "Scarta"
-  }
+  "counter": "Restano {count} caratteri"
 }

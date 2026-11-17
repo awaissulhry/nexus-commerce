@@ -1,3 +1,5 @@
+import { mentionsIn } from '../helpers/model'
+
 /**
  * B-TH-205 — the composer's audience switch (threads plan T5; picture 3, approved 2026-11-17): who reads what I write, safe by
  * default. Every visit starts on "Office note", so nothing reaches a customer by mistake (P3); one click (or R) switches to
@@ -88,9 +90,9 @@ export const audienceName = (context: Pick<ComposerContext, 'party' | 'prospect'
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
-/** The people a text @mentions: a colleague's whole name after an "@", case aside, not part of a longer word. */
+/** The people a text @mentions, by TH-1c's one rule (helpers' mentionsIn: a whole name after "@", case aside, not inside a word). */
 export function mentionsOf(body: string, people: readonly ComposerPerson[]): ComposerPerson[] {
-  return people.filter((person) => new RegExp(`(^|[^\\p{L}\\p{N}])@${escape(person.name)}(?![\\p{L}\\p{N}])`, 'iu').test(body))
+  return mentionsIn(body, people).flatMap((id) => people.filter((person) => person.id === id))
 }
 
 /** A switch note: a key of record-thread-composer and its parameters. */

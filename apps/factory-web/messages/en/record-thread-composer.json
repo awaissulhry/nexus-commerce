@@ -52,11 +52,5 @@
     "note": "Drop the files to add them to this office note (office only)",
     "reply": "Drop the files to send them to {party}"
   },
-  "counter": "{count} characters left",
-  "leave": {
-    "title": "Leave with unsent text?",
-    "body": "What you wrote on {record} is not sent yet.",
-    "stay": "Stay",
-    "discard": "Discard"
-  }
+  "counter": "{count} characters left"
 }

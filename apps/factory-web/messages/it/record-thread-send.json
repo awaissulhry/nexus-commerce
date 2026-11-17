@@ -23,21 +23,14 @@
   },
   "who": {
     "person": "{name} ({org})",
-    "to": "A: {list}",
-    "cc": "Cc: {list}",
     "files_one": "{count} file",
     "files_other": "{count} file",
     "from": "Da te, con l'indirizzo di risposta di questo record, così la risposta torna qui."
   },
   "check": {
-    "title": "Inviare a {party}?",
-    "back": "Torna al testo",
     "send": "Invia a {party}",
     "retry": "Riprova",
     "checking": "Controllo dei destinatari e del testo…",
-    "clean": "Niente da controllare: l'email parte quando la invii.",
-    "count_one": "{count} cosa da controllare prima che parta:",
-    "count_other": "{count} cose da controllare prima che parta:",
     "failed": "Controllo non riuscito",
     "refused": "Questo messaggio non si può controllare",
     "held": {

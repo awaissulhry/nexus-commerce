@@ -4,7 +4,7 @@ import { ApiError } from '../../../lib/api/errors'
 import type { ApiClient } from '../../../lib/api/client'
 import type { ApiMessage } from '../../../record-panels/api'
 import { checkReply, postNoteKeyed, readContacts, sendReplyKeyed, shareWithParty } from './api'
-import { afterRead, applyNewest, applyOlder, checkProblemOf, draftStoreKey, EMPTY_SERVER, hasUnsent, parseStoredDraft, readStatusOf, replyRefusal, sendReason, uploadReason, type Work } from './state'
+import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type Work } from './state'
 
 /** B-TH-212 — the office container of RecordThread v1: its calls, a live read that never drops the draft, the errors in words. */
 
@@ -42,13 +42,12 @@ describe('a live read never drops the draft (T4-F06)', () => {
     expect(afterRead(work, EMPTY_SERVER)).toBe(work)
   })
 
-  it('the draft waits on this device per company and record, text and mode only', () => {
-    expect(draftStoreKey('c1', { type: 'Inquiry', id: 'i1' })).toBe('fw-rt-draft:c1:Inquiry:i1')
-    expect(parseStoredDraft(JSON.stringify({ mode: 'reply', body: 'Hi', forFloor: false }))).toEqual({ mode: 'reply', body: 'Hi', forFloor: false })
-    expect(parseStoredDraft('{"mode":"other","body":"x"}')).toBeNull()
-    expect(parseStoredDraft('not json')).toBeNull()
-    expect(hasUnsent(work)).toBe(true)
-    expect(hasUnsent({ draft: { mode: 'note', body: ' ', forFloor: false }, files: [] })).toBe(false)
+  it('the container keeps the draft with TH-1c’s store and guard, never a second copy (B-TH-208, B-TH-211)', () => {
+    const source = readFileSync(new URL('./use-record-thread.ts', import.meta.url), 'utf8')
+    expect(source).toContain("from '../../../lib/record-thread/helpers/model'")
+    expect(source).toContain("from '../../../lib/record-thread/popups/use-leave-guard'")
+    expect(source).not.toMatch(/localStorage\.(setItem|getItem)/)
+    expect(source).not.toContain("addEventListener('beforeunload'")
   })
 })
 

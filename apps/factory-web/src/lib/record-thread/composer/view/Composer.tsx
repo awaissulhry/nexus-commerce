@@ -3,6 +3,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { Ban, Lock, Mail, Paperclip, UserPlus } from 'lucide-react'
 import { Button, Checkbox, SegmentedControl } from '@nexus/ui/primitives'
+import { MentionButton, MentionInput, type MentionInputHandle } from '../../helpers/view/MentionInput'
 import { useLocale, useT } from '../../../i18n/provider'
 import { shortDateOf, dayOf } from '../../parts/time'
 import {
@@ -53,6 +54,8 @@ export interface ComposerProps {
   onEscape?: () => void
   /** Files dropped or pasted on the box. */
   onFiles?: (files: File[]) => void
+  /** A line in the foot: "Draft kept on this device · saved 10:42" (TH-1c's DraftLine). */
+  hint?: ReactNode
 }
 
 /**
@@ -65,9 +68,10 @@ export function Composer(props: ComposerProps) {
   const { context, draft, notes = [], sending = false } = props
   const t = useT('record-thread-composer')
   const locale = useLocale()
-  const textId = useId()
   const heldId = useId()
-  const text = useRef<HTMLTextAreaElement>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const mention = useRef<MentionInputHandle>(null)
+  const textArea = () => boxRef.current?.querySelector<HTMLTextAreaElement>('textarea') ?? null
   const [dragging, setDragging] = useState(false)
   const [announce, setAnnounce] = useState('')
   const lastMode = useRef(draft.mode)
@@ -82,7 +86,7 @@ export function Composer(props: ComposerProps) {
 
   // The box grows with the text up to about 40 % of the thread's column, then scrolls inside (T5-F01).
   useLayoutEffect(() => {
-    const area = text.current
+    const area = textArea()
     if (!area) return
     area.style.height = 'auto'
     const column = area.closest<HTMLElement>('.fw-rt-column')?.clientHeight ?? 0
@@ -133,7 +137,7 @@ export function Composer(props: ComposerProps) {
   const setMode = (mode: ComposerMode) => {
     const switched = switchMode(draft, mode, context.people)
     props.onDraft(switched.draft, switched.notes)
-    text.current?.focus()
+    mention.current?.focus()
   }
 
   const send = () => {
@@ -190,6 +194,7 @@ export function Composer(props: ComposerProps) {
       {draft.mode === 'reply' && props.recipients}
 
       <div
+        ref={boxRef}
         className={`fw-rt-cx-box${dragging ? ' is-dragging' : ''}`}
         onDragEnter={(event) => onDrag(event, true)}
         onDragOver={(event) => onDrag(event, true)}
@@ -203,19 +208,18 @@ export function Composer(props: ComposerProps) {
           {draft.mode === 'note' ? <Lock size={13} aria-hidden /> : <Mail size={13} aria-hidden />}
           <span>{t(draft.mode === 'note' ? 'mark.note' : 'mark.reply', { party })}</span>
         </p>
-        <label htmlFor={textId} className="fw-rt-sr">
-          {t(draft.mode === 'note' ? 'mode.note' : 'mode.reply', { party })}
-        </label>
-        <textarea
-          ref={text}
-          id={textId}
+        <MentionInput
+          ref={mention}
           className="fw-rt-cx-text"
           value={draft.body}
+          onChange={(body) => change({ body })}
+          people={context.people}
+          mode={draft.mode}
+          label={t(draft.mode === 'note' ? 'mode.note' : 'mode.reply', { party })}
           rows={2}
-          maxLength={MAX_BODY + 1000}
+          honourRows
           placeholder={t(draft.mode === 'note' ? 'placeholder.note' : 'placeholder.reply', { party })}
           aria-describedby={heldText ? heldId : undefined}
-          onChange={(event) => change({ body: event.target.value })}
           onKeyDown={onKeyDown}
           onPaste={(event) => {
             if (!takesFiles) return
@@ -267,6 +271,8 @@ export function Composer(props: ComposerProps) {
 
       <div className="fw-rt-cx-foot">
         {props.clip}
+        {draft.mode === 'note' && context.people.length > 0 && <MentionButton onClick={() => mention.current?.startMention()} />}
+        {props.hint}
         <span className="fw-rt-cx-grow" />
         {length >= COUNTER_FROM && <span className={`fw-rt-cx-count${length > MAX_BODY ? ' is-over' : ''}`}>{t('counter', { count: MAX_BODY - length })}</span>}
         {heldText && (
