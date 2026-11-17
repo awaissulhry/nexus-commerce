@@ -21,6 +21,9 @@ import style from './views/style'
 // ---- B-TH-069: a project of the organisation, to its members only (its thread, the Projects group of the portal search).
 import project from './views/project'
 // ---- end B-TH-069
+// ---- B-TH-081: a customer's repairs (the portal repair page's thread, the Returns group of the portal search).
+import repairOrder from './views/repair-order'
+// ---- end B-TH-081
 
 /**
  * The partner views (./view.ts) of the records a partner may open: the portal's search finds them, the portal's record
@@ -50,6 +53,9 @@ export const PARTNER_VIEWS: readonly PartnerView[] = Object.freeze([
   // ---- B-TH-069
   project,
   // ---- end B-TH-069
+  // ---- B-TH-081
+  repairOrder,
+  // ---- end B-TH-081
 ])
 
 const byType = new Map<string, PartnerView>()

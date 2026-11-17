@@ -487,7 +487,9 @@ async function uploadPlace(request: FastifyRequest, caller: PartnerCaller, ref: 
   const locale = caller.session.person.locale
   const company = caller.session.company.name
   return request.withClient(async (client) => {
-    const { record, scope } = await openRecord(client, caller, ref)
+    // B-TH-081 (found while giving the repair its portal thread): the person the partner view reads for, as every other caller of
+    // openRecord passes it since B-TH-069 (a project opens to its members only).
+    const { record, scope } = await openRecord(client, caller, ref, partnerReaderOf(request, caller))
     if (caller.session.preview) throw new ForbiddenError(partnerThreadWords('PREVIEW', locale, company))
     if (!options.requester && !can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', locale, company))
     if (!can(caller.actor, PORTAL_UPLOAD, scope)) {
