@@ -109,9 +109,23 @@ export interface RecordDockedInput {
  * party. Brand Beta's words never appear in Brand Alpha's copy (the made-up party's name replaces Brand Alpha's everywhere).
  */
 export function recordDockedThread(input: RecordDockedInput, head: Partial<HeadModel> = {}): ThreadCaseModel {
-  const name = input.party?.name ?? BRAND_ALPHA.tradeName
-  // The made-up party's own words everywhere: its name, and its own file's name (never Brand Alpha's in another party's thread).
-  const brand: BrandFixture = { ...BRAND_ALPHA, legalName: name, tradeName: name, fileName: input.party ? `${name} tech pack.pdf` : BRAND_ALPHA.fileName, numbers: { ...BRAND_ALPHA.numbers, order: input.record } }
+  // The made-up party's own words everywhere — its name and code, its contacts, its file, its numbers: nothing of Brand Alpha's
+  // (brandMarkers) reaches another party's thread; a record without a party is named by its own number.
+  const name = input.party?.name ?? input.record
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'demo'
+  const brand: BrandFixture = {
+    ...BRAND_ALPHA,
+    legalName: name,
+    tradeName: name,
+    code: slug.toUpperCase(),
+    contact: { name: 'Giulia Esempio', email: `ordini@${slug}.example.com` },
+    portalPerson: { name: 'Marta Esempio', email: `marta@${slug}.example.com` },
+    address: { ...BRAND_ALPHA.address, line1: 'Via Esempio 1' },
+    fileName: `${name} tech pack.pdf`,
+    customerRef: `PO-${slug.toUpperCase()}`,
+    message: 'Please confirm the delivery date.',
+    numbers: { order: input.record, quote: input.record, request: input.record, invoice: input.record, style: input.record },
+  }
   const base = dockedThread(brand, head, true)
   const party = input.party
   if (party) {

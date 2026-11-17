@@ -230,6 +230,7 @@
     "partFailed": "{part} couldn't be read",
     "partLoading": "Reading {part}…",
     "more": "More actions",
+    "dockLabel": "The count's thread",
     "edit": "Edit team and note",
     "sendBack": "Send back for a recount",
     "copyNumber": "Copy the number",
@@ -246,15 +247,12 @@
     "movedBody": "Nothing is frozen until W2b: a move after the snapshot is not in the expected quantity. Count what is there and say why it differs.",
     "draftBanner": "Draft: nothing is counted yet",
     "draftCycle": "Start counting to freeze the expected quantities and make the lines.",
-    "draftYearEnd": "It starts on {date} or after it; the expected quantities are the stock at the end of that day.",
-    "noPanels": "The thread, files and history of this count open here.",
-    "noThreads": "The thread of a count needs the right to read threads."
+    "draftYearEnd": "It starts on {date} or after it; the expected quantities are the stock at the end of that day."
   },
   "tab": {
     "lines": "Lines",
     "differences": "Differences",
-    "approval": "Approval",
-    "activity": "Activity"
+    "approval": "Approval"
   },
   "lines": {
     "draft": "No lines yet",

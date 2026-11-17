@@ -230,6 +230,7 @@
     "partFailed": "Non è stato possibile leggere {part}",
     "partLoading": "Lettura di {part}…",
     "more": "Altre azioni",
+    "dockLabel": "La conversazione dell'inventario",
     "edit": "Modifica squadra e nota",
     "sendBack": "Rimanda per un riconteggio",
     "copyNumber": "Copia il numero",
@@ -246,15 +247,12 @@
     "movedBody": "Nulla è bloccato fino alla W2b: un movimento dopo la fotografia non è nella quantità attesa. Conta ciò che c'è e indica perché differisce.",
     "draftBanner": "Bozza: nulla è ancora contato",
     "draftCycle": "Avvia il conteggio per fissare le quantità attese e creare le righe.",
-    "draftYearEnd": "Si avvia il {date} o dopo; le quantità attese sono la giacenza alla fine di quel giorno.",
-    "noPanels": "Qui si aprono la discussione, i file e la cronologia di questo inventario.",
-    "noThreads": "La discussione di un inventario richiede il permesso di leggere le discussioni."
+    "draftYearEnd": "Si avvia il {date} o dopo; le quantità attese sono la giacenza alla fine di quel giorno."
   },
   "tab": {
     "lines": "Righe",
     "differences": "Differenze",
-    "approval": "Approvazione",
-    "activity": "Attività"
+    "approval": "Approvazione"
   },
   "lines": {
     "draft": "Ancora nessuna riga",

@@ -2,11 +2,11 @@
 
 import { useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
-import { FileX, MessageSquare, ShieldOff } from 'lucide-react'
+import { FileX, ShieldOff } from 'lucide-react'
 import { Card, EmptyState, Tabs, type TabItem } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Kbd, Skeleton, Spinner } from '@nexus/ui/primitives'
+import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { Modal } from '../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
@@ -21,8 +21,9 @@ import '../../../_shared/stock/stock.css'
 import './warehouse-lots.css'
 
 /**
- * View parts Hides (SCR-200) and Lots & traceability (SCR-201) share: the catalogue wrapper, the record frame (band
- * with back link, title, pills, actions, tabs, the ⌘J thread button; loading / not found / no right / failed states),
+ * View parts Hides (SCR-200) and Lots & traceability (SCR-201) share: the catalogue wrapper, the hide's record frame (band
+ * with back link, title, pills, actions, tabs; loading / not found / no right / failed states; the lot is on the shared
+ * RecordFrame with its docked thread since B-TH-264),
  * the moves of one record (the ledger read for its stock key, with the running balance), the hide's area bar (a
  * stand-in for the design's AreaBalanceBar, missing from the DS) and the full keys list behind `?`.
  */
@@ -117,20 +118,6 @@ export function RecordFrame({ backHref, backLabel, loaded, kind, title, meta, ac
       </div>
       {children}
     </div>
-  )
-}
-
-/** The ⌘J thread button (Owner O1): the record's thread beside any tab on a wide screen. */
-export function DockButton({ open, onDock }: { open: boolean; onDock?: () => void }) {
-  const t = useWords()
-  return (
-    <Button size="sm" variant={open ? 'tonal' : 'secondary'} active={open} aria-pressed={open} onClick={onDock} title={t('rec.dockHint')}>
-      <MessageSquare size={14} aria-hidden /> <span>{t('rec.dock')}</span>
-      <span className="fw-st-inline" aria-hidden>
-        <Kbd>⌘</Kbd>
-        <Kbd>J</Kbd>
-      </span>
-    </Button>
   )
 }
 
