@@ -20,6 +20,8 @@ import type { CommandTx } from '../../../core/command'
 // B-PR-25: the impact kept at Send, a sample round's kind.
 import { impactKeepable, type Impact } from '@nexus/factory-domain/sales/change-requests/impact'
 import type { AskSampleKind } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-PR-26: our counter-offer, where it stands.
+import { counteredWords, counterPriced, counterStateOf, COUNTER_STATE_WORDS, type Counter, type CounterState } from '@nexus/factory-domain/sales/change-requests/counter'
 
 /**
  * The reads of change and cancel requests (B-W2b-183). Two kinds, never mixed in one query:
@@ -158,6 +160,13 @@ export const REQUEST_COLUMNS = {
   // B-PR-25: the impact kept at Send (never an amount) and a sample round's kind (both partner-readable).
   impact: true,
   sampleKind: true,
+  // B-PR-26: the batch it was asked in and our counter-offer (partner-readable; who countered is not: counteredById).
+  batchId: true,
+  counterApprovalId: true,
+  counteredAt: true,
+  counterDate: true,
+  counterFee: true,
+  counterNote: true,
 } as const satisfies Prisma.OrderChangeRequestSelect
 export type RequestRow = Prisma.OrderChangeRequestGetPayload<{ select: typeof REQUEST_COLUMNS }>
 
@@ -237,6 +246,10 @@ export interface ViewFacts {
   readonly names: { readonly styles: ReadonlyMap<string, { readonly code: string; readonly name: string }>; readonly colourways: ReadonlyMap<string, { readonly code: string; readonly name: string }> }
   readonly addresses: ReadonlyMap<string, AddressRow>
   readonly reasons: ReadonlyMap<string, Words>
+  /** B-PR-26: where each counter-offer stands, by its approval request's id (readCounterStates); none: read as waiting. */
+  readonly counters?: ReadonlyMap<string, CounterState> | undefined
+  /** B-PR-26: whose words the counter's state is said in (the customer's portal, or the office). */
+  readonly audience?: 'customer' | 'office' | undefined
 }
 
 /**
@@ -281,7 +294,47 @@ export function requestView(row: RequestRow, cells: readonly AskedCell[], facts:
     // B-PR-25: the impact the customer saw at Send, as kept (the database holds its shape: words, codes, dates, yes or no).
     impact: keptImpactOf(row.impact),
     sampleKind: (row.sampleKind as AskSampleKind | null) ?? null,
+    // B-PR-26: the batch it was asked in (a bulk ask: one customer, one kind) and our counter-offer, where it stands.
+    batchId: row.batchId,
+    counter: counterView(row, facts),
     version: row.version,
+  }
+}
+
+// ---- B-PR-26 (production plan §3 "We accept, counter or refuse with words it reads", "Money"; review fix R-32): the counter --
+
+/**
+ * Where each counter-offer stands, by its approval request's id (its status; an answer we put back reads LAPSED). The partner reads
+ * its own party's approval requests (status and reversedAt are partner columns); the office every one it reads.
+ */
+export async function readCounterStates(db: Reader, rows: readonly { readonly counterApprovalId: string | null }[]): Promise<Map<string, CounterState>> {
+  const ids = [...new Set(rows.flatMap((row) => (row.counterApprovalId ? [row.counterApprovalId] : [])))]
+  if (ids.length === 0) return new Map()
+  const found = await db.approvalRequest.findMany({ where: { id: { in: ids } }, select: { id: true, status: true, reversedAt: true } })
+  return new Map(found.map((row) => [row.id, counterStateOf(row.status, row.reversedAt !== null) ?? 'LAPSED']))
+}
+
+/**
+ * Our counter-offer as both audiences read it: the date, the fee (a price: dropped for a reader without the grain, who reads only
+ * that a price applies), our words, where it stands (factory-domain counter COUNTER_STATES) in the reader's words. null: never
+ * countered.
+ */
+export function counterView(row: Pick<RequestRow, 'counterApprovalId' | 'counteredAt' | 'counterDate' | 'counterFee' | 'counterNote'>, facts: Pick<ViewFacts, 'counters' | 'audience'>) {
+  if (!row.counterApprovalId || !row.counteredAt) return null
+  const counter: Counter = { date: dayOrNull(row.counterDate), fee: row.counterFee, note: row.counterNote }
+  const state: CounterState = facts.counters?.get(row.counterApprovalId) ?? 'WAITING'
+  const words = COUNTER_STATE_WORDS[state][facts.audience ?? 'customer']
+  return {
+    approvalRequestId: row.counterApprovalId,
+    at: toUtcIso(row.counteredAt),
+    date: counter.date,
+    fee: asMoney('price', counter.fee),
+    note: counter.note,
+    priced: counterPriced(counter),
+    /** "Our counter-offer · 10 Dec · a price applies" (never the amount). */
+    offer: counteredWords(counter),
+    state,
+    words: { it: words.it, en: words.en },
   }
 }
 
@@ -317,5 +370,5 @@ export const feeView = (fee: CancelFee) => ({
 export const feeLinesOf = (lines: readonly { readonly id: string; readonly seq: number; readonly netAmount: number; readonly closedShortQuantity: number | null }[]): FeeLine[] =>
   lines.map((line) => ({ id: line.id, seq: line.seq, netAmount: line.netAmount, closedShort: line.closedShortQuantity !== null }))
 
-/** The events after which a request's screens read again. */
-export const LIVE_EVENTS = ['order_change_request.asked', 'order_change_request.withdrawn', 'order_change_request.answered', 'sales_order.amended', 'sales_order.status_changed'] as const
+/** The events after which a request's screens read again (B-PR-26: + our counter-offer and the customer's answer to it). */
+export const LIVE_EVENTS = ['order_change_request.asked', 'order_change_request.withdrawn', 'order_change_request.answered', 'order_change_request.countered', 'order_change_request.counter_answered', 'sales_order.amended', 'sales_order.status_changed'] as const

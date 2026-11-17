@@ -82,6 +82,12 @@ export interface RequestRef {
   readonly answeredAt: Date | null
 }
 
+/** B-PR-26: who answers (the portal person or a link) and whether they see prices (the price grain of their role; a link: no). */
+export interface AnswererFacts {
+  readonly via: 'LINK' | 'PORTAL'
+  readonly seesPrices: boolean
+}
+
 export interface RecordAdapter {
   readonly recordType: string
   readonly kinds: readonly ApprovalKind[]
@@ -101,6 +107,11 @@ export interface RecordAdapter {
   content(client: Client, request: RequestRef, locale: ApprovalLocale): Promise<ApprovalContent>
   /** Why an OPEN request takes no answer now although it is not past due (the record moved on), in the reader's words. */
   answerHeld?(client: Client, request: RequestRef, locale: ApprovalLocale): Promise<string | null>
+  /**
+   * B-PR-26: why THIS answerer may not answer it (null: they may), in their words — a priced counter-offer only by a customer
+   * role with the price grain (the Buyer, the Admin), and only in the portal. Read in the tenant's system scope.
+   */
+  answererHeld?(client: Client, request: RequestRef, who: AnswererFacts, locale: ApprovalLocale): Promise<string | null>
   onAsked?(tools: CommandTools, request: RequestRef): Promise<void>
   onAnswered?(tools: CommandTools, request: RequestRef): Promise<void>
   /** Returns what it did (audit), or null when nothing was left to do. */

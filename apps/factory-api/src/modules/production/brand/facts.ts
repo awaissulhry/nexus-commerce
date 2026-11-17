@@ -276,6 +276,16 @@ export async function readOrderProductionFacts(db: Reader, context: OfficeContex
   for (const row of outside) blockers.push({ kind: 'SUBCONTRACT', since: row.issuedAt })
   const requests = await db.orderChangeRequest.findMany({ where: { orderId: order.id, status: 'OPEN' }, select: { createdAt: true } })
   for (const row of requests) blockers.push({ kind: 'BRAND_REQUEST', since: row.createdAt })
+  // B-PR-26: a request we countered waits on the customer while our counter-offer is open (an approval), and on us again once
+  // they said yes (we accept it to carry it out) or the counter lapsed (we answer it); a no withdraws it.
+  const countered = await db.orderChangeRequest.findMany({ where: { orderId: order.id, status: 'COUNTERED' }, select: { counterApprovalId: true, counteredAt: true } })
+  const counterIds = countered.flatMap((row) => (row.counterApprovalId ? [row.counterApprovalId] : []))
+  const counters = new Map((counterIds.length > 0 ? await db.approvalRequest.findMany({ where: { id: { in: counterIds } }, select: { id: true, status: true, reversedAt: true, answeredAt: true, updatedAt: true } }) : []).map((row) => [row.id, row]))
+  for (const row of countered) {
+    const counter = row.counterApprovalId ? counters.get(row.counterApprovalId) : undefined
+    if (counter?.status === 'OPEN') blockers.push({ kind: 'APPROVAL', since: row.counteredAt })
+    else if (counter?.status !== 'REFUSED' || (counter?.reversedAt ?? null) !== null) blockers.push({ kind: 'BRAND_REQUEST', since: counter?.reversedAt ?? counter?.answeredAt ?? counter?.updatedAt ?? row.counteredAt })
+  }
   const reported = await db.productionIssue.findMany({ where: { salesOrderId: order.id, status: 'OPEN', source: 'BRAND' }, select: { raisedAt: true } })
   for (const row of reported) blockers.push({ kind: 'BRAND_REQUEST', since: row.raisedAt })
   // B-PR-28: a new date the customer did not accept waits for us while its follow-up task is open (the task's id is the

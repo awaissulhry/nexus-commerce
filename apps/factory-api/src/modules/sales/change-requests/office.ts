@@ -21,7 +21,12 @@ import { impactView, readCancelFacts } from '../orders/impact'
 import { cancelOrderInCommand } from '../orders/moves'
 import { lockOrder, readLines, readOrder, readOrderFacts, type LineRecord, type OrderRow } from '../orders/store'
 import { approveWaitingInCommand } from '../portal-ordering/address-check'
+// B-PR-26: our counter-offer (the accept of an agreed one carries it out with the counter); a partly shipped order's cancel.
+import { acceptedWithCounter, officeAnswersOf, type CounterState } from '@nexus/factory-domain/sales/change-requests/counter'
+import type { RequestStatus } from '@nexus/factory-domain/sales/change-requests/rules'
+import { answerableIn, counterOfRow, counterStateIn } from './counter'
 import {
+  readCounterStates,
   addressesOf,
   dayOrNull,
   feeLinesOf,
@@ -69,8 +74,8 @@ const LIST_MAX = 200
 
 const blankToNull = (value: string | null | undefined): string | null => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null)
 
-/** The office's views of these requests (one query per table, whatever the count). */
-async function officeViews(db: Reader, context: ReturnType<typeof officeContextOf>, rows: readonly OfficeRequestRow[]) {
+/** The office's views of these requests (one query per table, whatever the count). B-PR-26: production/brand-requests reads them too. */
+export async function officeViews(db: Reader, context: ReturnType<typeof officeContextOf>, rows: readonly OfficeRequestRow[]) {
   if (rows.length === 0) return []
   const orderIds = [...new Set(rows.map((row) => row.orderId))]
   const orders = new Map((await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true, customerRef: true, currency: true } })).map((row) => [row.id, row]))
@@ -91,6 +96,8 @@ async function officeViews(db: Reader, context: ReturnType<typeof officeContextO
   const names = new Map((people.length > 0 ? await db.user.findMany({ where: { id: { in: people } }, select: { id: true, displayName: true } }) : []).map((row) => [row.id, row.displayName]))
   const amendmentIds = rows.flatMap((row) => (row.amendmentId ? [row.amendmentId] : []))
   const amendments = new Map((amendmentIds.length > 0 ? await db.salesOrderAmendment.findMany({ where: { id: { in: amendmentIds } }, select: { id: true, revision: true } }) : []).map((row) => [row.id, row]))
+  // B-PR-26: where each counter-offer stands (its approval's status).
+  const counters = await readCounterStates(db, rows)
   // B-W2b-F14: the cancel fee in force per company, for the waiting cancels.
   const feeCompanies = [...new Set(rows.filter((row) => row.kind === 'CANCEL' && row.status === 'OPEN').map((row) => row.companyId))]
   const feePct = new Map<string, string | null>()
@@ -106,7 +113,12 @@ async function officeViews(db: Reader, context: ReturnType<typeof officeContextO
       addresses,
       reasons,
       fee: feePct.has(row.companyId) ? { pct: feePct.get(row.companyId) ?? null, currency: order?.currency ?? 'EUR', lines: feeLinesOf(lines.filter((line) => line.orderId === row.orderId)) } : null,
+      // B-PR-26
+      counters,
+      audience: 'office' as const,
     }
+    // B-PR-26: an OPEN request, or a COUNTERED one the customer said yes to (accept) or whose counter lapsed (refuse).
+    const answers = officeAnswersOf({ kind: row.kind as OrderRequestKind, status: row.status as RequestStatus }, counterStateOfView(row, counters))
     return {
       ...requestView(row, cells.get(row.id) ?? [], facts),
       companyId: row.companyId,
@@ -115,10 +127,14 @@ async function officeViews(db: Reader, context: ReturnType<typeof officeContextO
       answeredBy: row.answeredById ? (names.get(row.answeredById) ?? null) : null,
       amendment: row.amendmentId ? (amendments.get(row.amendmentId) ?? null) : null,
       // B-PR-23: Sales answers CHANGE and CANCEL; a production ask is read here and answered in Home › Approvals (B-PR-26).
-      mayAnswer: row.status === 'OPEN' && isSalesRequestKind(row.kind) && mayOn(context, ORDERS_MANAGE, { companyId: row.companyId, partyId: row.partyId }),
+      mayAnswer: (answers.accept || answers.refuse) && isSalesRequestKind(row.kind) && mayOn(context, ORDERS_MANAGE, { companyId: row.companyId, partyId: row.partyId }),
     }
   })
 }
+
+/** B-PR-26: where a request's counter stands, from the states read with the views (null: never countered). */
+const counterStateOfView = (row: Pick<OfficeRequestRow, 'counterApprovalId'>, counters: ReadonlyMap<string, CounterState>): CounterState | null =>
+  row.counterApprovalId ? (counters.get(row.counterApprovalId) ?? 'LAPSED') : null
 
 export interface ListQuery {
   readonly status: 'OPEN' | 'ACCEPTED' | 'REFUSED' | 'WITHDRAWN' | 'COUNTERED' | 'ALL'
@@ -175,7 +191,8 @@ function reasonOf(row: OfficeRequestRow, given: string | undefined): string {
  */
 function amendmentOf(row: OfficeRequestRow, cells: readonly AskedCell[], order: OrderRow, lines: readonly LineRecord[], reason: string): AmendBody | null {
   const { lines: amendLines, changed } = amendmentLinesOf(cells, lines)
-  const asked = dayOrNull(row.requestedDate)
+  // B-PR-26: a request the customer agreed with our counter-offer is carried out with the counter's date.
+  const asked = row.status === 'COUNTERED' ? acceptedWithCounter({ requestedDate: dayOrNull(row.requestedDate) }, counterOfRow(row)).date : dayOrNull(row.requestedDate)
   const dateChanges = asked !== null && asked !== dayOrNull(order.requestedDate)
   if (!changed && !dateChanges) return null
   const body: { version: number; reason: string; lines: AmendLineInput[]; requestedDate?: string } = { version: order.version, reason, lines: amendLines }
@@ -206,13 +223,20 @@ export async function officeRecord(caller: CommandCaller, requestId: string, now
     // The request itself is not "another one waiting": the rules are read as if none waited.
     const rules = rulesOf({ status: order.status, promiseDate: dayOrNull(order.promiseDate), lines: ruleLinesOf(lines, cuts), openRequestDay: null }, cutoffs, today)
     let preview = null
-    if (view!.mayAnswer) {
+    // B-PR-26: what accepting does, while it may be accepted (OPEN, or the customer said yes to our counter-offer).
+    const accepts = officeAnswersOf({ kind: row.kind as OrderRequestKind, status: row.status as RequestStatus }, await counterStateIn(client, row)).accept
+    if (view!.mayAnswer && accepts) {
       const cells = (await readCells(client, [row.id])).get(row.id) ?? []
       const problems: Issue[] = []
       let amendment = null
       let cancel = null
       let closes = null
-      if (row.kind === 'CANCEL' && cells.length === 0) {
+      if (row.kind === 'CANCEL' && cells.length === 0 && order.status === 'PARTLY_SHIPPED') {
+        // B-PR-26: a partly shipped order's "whole order" is what is still to ship: those lines are closed short.
+        const plan = closeShortPlan(order.status, shortLinesOf(await readOrderFacts(client, order)), [])
+        if (Array.isArray(plan)) problems.push(...plan)
+        else closes = plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity }))
+      } else if (row.kind === 'CANCEL' && cells.length === 0) {
         const impact = cancelImpact(await readCancelFacts(client, order, await readOrderFacts(client, order)))
         cancel = impactView(impact)
         problems.push(...impact.blocks.map((item) => ({ path: `cancel/${item.code}`, message: item.message })))
@@ -245,8 +269,8 @@ export async function officeRecord(caller: CommandCaller, requestId: string, now
   })
 }
 
-/** Inside the command: the request locked, OPEN, at the version read. */
-async function openRequestIn(tools: CommandTools, requestId: string, version: number): Promise<OfficeRequestRow> {
+/** Inside the command: the request locked, OPEN (B-PR-26: or COUNTERED, as its counter lets this answer), at the version read. */
+async function openRequestIn(tools: CommandTools, requestId: string, version: number, answer: 'ACCEPTED' | 'REFUSED'): Promise<OfficeRequestRow> {
   await lockRequest(tools.tx, requestId)
   const row = await tools.tx.orderChangeRequest.findUnique({ where: { id: requestId }, select: OFFICE_REQUEST_COLUMNS })
   if (!row) throw new NotFoundError('Change request not found.')
@@ -255,6 +279,8 @@ async function openRequestIn(tools: CommandTools, requestId: string, version: nu
     const words = ORDER_REQUEST_KIND_WORDS[row.kind as OrderRequestKind]
     throw new DomainError('invalid_state', `This is a production ask ("${words.en}"): it is answered in Home › Approvals, not here.`, [{ path: 'request/PRODUCTION_ASK', message: 'A production ask is answered in Home › Approvals.' }])
   }
+  // B-PR-26: a countered request is accepted once the customer said yes (carried out with the counter), refused once it lapsed.
+  if (row.status === 'COUNTERED') return (await answerableIn(tools, requestId, version, answer)).row
   if (row.status !== 'OPEN') throw new DomainError('invalid_state', row.status === 'WITHDRAWN' ? 'The customer withdrew this request.' : 'This request is already answered.', [{ path: `request/${row.status}`, message: `The request is ${row.status}.` }])
   if (row.version !== version) throw new StaleVersionError('OrderChangeRequest', requestId, row.version, version)
   return row
@@ -286,7 +312,7 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
   const { result } = await runCommand(caller, { name: 'orders.acceptChangeRequest', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
     const { tx } = tools
-    const row = await openRequestIn(tools, requestId, body.version)
+    const row = await openRequestIn(tools, requestId, body.version, 'ACCEPTED')
     const cells = (await readCells(tx, [requestId])).get(requestId) ?? []
     const reason = reasonOf(row, body.reason)
     let amendmentId: string | null = null
@@ -299,7 +325,12 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       cancelFee = cancelFeeFor(feeLinesOf(orderLines), cells.map((cell) => cell.orderLineId), (await readCutoffs(tx, context.tenantId, order.companyId)).cancelFeePct, order.currency)
     }
     const feeAudit = cancelFee ? { cancelFee: { pct: cancelFee.pct, currency: cancelFee.currency, lines: cancelFee.lines.map((line) => ({ lineId: line.lineId, seq: line.seq, fee: markMoney('price', line.fee) })), totalFee: markMoney('price', cancelFee.totalFee) } } : {}
-    if (row.kind === 'CANCEL' && cells.length === 0) {
+    // B-PR-26: a partly shipped order's "whole order" is what is still to ship: those lines are closed short (the order is not
+    // cancelled: some of it shipped).
+    const partlyShipped = row.kind === 'CANCEL' && cells.length === 0 && (await readOrder(tx, order.id))?.status === 'PARTLY_SHIPPED'
+    if (partlyShipped) {
+      await closeLinesInCommand(tools, context, order, { reason, reasonCode: row.reasonCode ?? undefined, lineIds: [] })
+    } else if (row.kind === 'CANCEL' && cells.length === 0) {
       await cancelOrderInCommand(tools, context.tenantId, order, { reason })
       orderCancelled = true
     } else if (row.kind === 'CANCEL') {
@@ -323,7 +354,7 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       data: { status: 'ACCEPTED', answer: blankToNull(body.answer), answeredAt: tools.now, answeredById: context.actorId, amendmentId, updatedAt: tools.now, version: { increment: 1 } },
       select: { id: true },
     })
-    tools.audit({ action: 'orders.acceptChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: 'OPEN' }, after: { status: 'ACCEPTED', amendmentId, orderCancelled, answer: blankToNull(body.answer), ...feeAudit } })
+    tools.audit({ action: 'orders.acceptChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: row.status }, after: { status: 'ACCEPTED', amendmentId, orderCancelled, answer: blankToNull(body.answer), ...feeAudit, /* B-PR-26 */ ...(row.status === 'COUNTERED' ? { withCounter: row.counterApprovalId } : {}), ...(partlyShipped ? { closedRest: true } : {}) } })
     tools.audit({ action: 'orders.changeRequestAccepted', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { requestId, kind: row.kind, amendmentId, orderCancelled, ...feeAudit } })
     tools.emit({ type: 'order_change_request.answered', subject: requestId, companyId: row.companyId, payload: { requestId, orderId: order.id, partyId: row.partyId, kind: row.kind, answer: 'ACCEPTED', amendmentId, orderCancelled } })
     return { orderCancelled, cancelFee }
@@ -338,10 +369,10 @@ export async function refuseRequest(caller: CommandCaller, requestId: string, bo
   const problems = answerProblems('REFUSED', body.answer)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
   await runCommand(caller, { name: 'orders.refuseChangeRequest', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
-    const row = await openRequestIn(tools, requestId, body.version)
+    const row = await openRequestIn(tools, requestId, body.version, 'REFUSED')
     const answer = body.answer.trim()
     await tools.tx.orderChangeRequest.update({ where: { id: requestId }, data: { status: 'REFUSED', answer, answeredAt: tools.now, answeredById: context.actorId, updatedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
-    tools.audit({ action: 'orders.refuseChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: 'OPEN' }, after: { status: 'REFUSED', answer } })
+    tools.audit({ action: 'orders.refuseChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: row.status }, after: { status: 'REFUSED', answer } })
     tools.audit({ action: 'orders.changeRequestRefused', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { requestId, kind: row.kind } })
     tools.emit({ type: 'order_change_request.answered', subject: requestId, companyId: row.companyId, payload: { requestId, orderId: order.id, partyId: row.partyId, kind: row.kind, answer: 'REFUSED', amendmentId: null, orderCancelled: false } })
     return null
