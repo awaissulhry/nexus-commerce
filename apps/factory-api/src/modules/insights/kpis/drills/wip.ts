@@ -1,5 +1,4 @@
-import type { Prisma } from '@nexus/factory-db'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { COSTING_VIEW } from '@nexus/factory-domain/costing/permissions'
 import { ageBucketOf, ageDays, waitingSince, WIP_AGE_BUCKETS, type WipAgeBucket } from '@nexus/factory-domain/insights/kpis/wip'
@@ -10,6 +9,7 @@ import type { CommandCaller } from '../../../../core/command'
 import { serverClock } from '../../../../core/time'
 import { wipFor } from '../../../production/scans/progress'
 import { asOf, drillActor, holdsGrain, limited, namesOf, refOf, sitesFor } from './access'
+import { reachesWorkOrder, workOrderWhere } from '../../../production/work-orders/scope' // B-PR-37
 
 /**
  * GET /insights/kpis/drills/wip (B-W2b-429; ANA-015 "units and value in each stage and how long they waited, by line"; KPIs
@@ -41,12 +41,14 @@ export async function wipDrill(caller: CommandCaller, query: WipDrillQuery) {
     const orders = await db.workOrder.findMany({
       where: {
         AND: [
-          scopeWhere(actor, PRODUCTION_REPORTS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
+          // B-PR-37 (the brand wall): B-PR-03's workOrderWhere — the customers' work orders the person reaches; the line and
+          // stage totals below count only those.
+          workOrderWhere(actor, PRODUCTION_REPORTS_VIEW),
           { siteId: { in: sites.map((site) => site.id) }, status: { in: [...OPEN] }, releasedAt: { not: null } },
           query.lineId === 'none' ? { lineId: null } : query.lineId ? { lineId: query.lineId } : {},
         ],
       },
-      select: { id: true, number: true, status: true, companyId: true, siteId: true, lineId: true, styleId: true, releasedAt: true, startedAt: true, sizes: { select: { quantity: true } } },
+      select: { id: true, number: true, status: true, companyId: true, siteId: true, partyId: true, lineId: true, styleId: true, releasedAt: true, startedAt: true, sizes: { select: { quantity: true } } },
       orderBy: [{ releasedAt: 'asc' }, { number: 'asc' }],
     })
     const currencyOf = new Map((await db.company.findMany({ where: { id: { in: [...new Set(orders.map((order) => order.companyId))] } }, select: { id: true, currency: true } })).map((row) => [row.id, row.currency]))
@@ -68,7 +70,7 @@ export async function wipDrill(caller: CommandCaller, query: WipDrillQuery) {
       const waitedDays = ageDays(since, today, timeZone)
       if (query.minWaitDays !== undefined && waitedDays < query.minWaitDays) continue
       const wip = await wipFor(db, order)
-      const mayValue = valued && can(actor, COSTING_VIEW, { companyId: order.companyId, siteId: order.siteId })
+      const mayValue = valued && can(actor, COSTING_VIEW, { companyId: order.companyId, siteId: order.siteId }) && reachesWorkOrder(actor, COSTING_VIEW, order) // B-PR-37
       rowsAll.push({
         order,
         week,

@@ -3,6 +3,9 @@ import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
 import { systemView } from '../../production/scans/access'
+import type { WorkOrderReach } from '../../production/work-orders/scope'
+import { mayOnWorkOrder, workOrderReachOf } from '../wall'
+import type { Reader } from './store'
 
 /**
  * Who may reach an in-process check (B-W2b-99): the office with the permission over the check's company and site, a floor
@@ -37,10 +40,28 @@ export function mayOn(context: Checker, permission: Permission, record: { readon
   return can(actorOf(context), permission, { companyId: record.companyId, siteId: record.siteId })
 }
 
-/** Seen with `view` (else not found), acted on with `permission` (else forbidden). */
-export function assertOn(context: Checker, view: Permission, permission: Permission, record: { readonly companyId: string; readonly siteId: string }, what: string): void {
-  if (!mayOn(context, view, record) && !mayOn(context, permission, record)) throw new NotFoundError(`${what} not found.`)
-  if (!mayOn(context, permission, record)) throw new ForbiddenError(`This needs a right your role does not hold over the ${what.toLowerCase()}'s company and site.`)
+/**
+ * B-PR-06 (the brand wall): a record on a work order (a check on it, its bundle, its operation) also needs the work order's
+ * customer — B-PR-03's reachesWorkOrder through `workOrder` (null: a record of a line, which names no customer).
+ */
+export function mayOnWork(context: Checker, permission: Permission, record: { readonly companyId: string; readonly siteId: string }, workOrder: WorkOrderReach | null | undefined): boolean {
+  if (workOrder === undefined) return false
+  return mayOn(context, permission, record) && (workOrder === null || mayOnWorkOrder(context, permission, workOrder))
+}
+
+/** B-PR-06: the scope of a record's work order (null: it names none; undefined: an unknown work order, which nobody reaches). */
+export async function workOrderReachFor(db: Reader, workOrderId: string | null | undefined): Promise<WorkOrderReach | null | undefined> {
+  if (!workOrderId) return null
+  return (await workOrderReachOf(db, [workOrderId])).get(workOrderId)
+}
+
+/**
+ * Seen with `view` (else not found), acted on with `permission` (else forbidden). B-PR-06: a record on a work order names it
+ * (`workOrder`): another customer's is not found, as an unknown one.
+ */
+export function assertOn(context: Checker, view: Permission, permission: Permission, record: { readonly companyId: string; readonly siteId: string }, what: string, workOrder: WorkOrderReach | null | undefined = null): void {
+  if (!mayOnWork(context, view, record, workOrder) && !mayOnWork(context, permission, record, workOrder)) throw new NotFoundError(`${what} not found.`)
+  if (!mayOnWork(context, permission, record, workOrder)) throw new ForbiddenError(`This needs a right your role does not hold over the ${what.toLowerCase()}'s company and site.`)
 }
 
 /** Who records and signs: the floor's signed-in worker, or the office user. */

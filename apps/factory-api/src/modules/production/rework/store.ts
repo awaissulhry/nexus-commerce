@@ -39,6 +39,8 @@ export const REWORK_COLUMNS = {
   version: true,
   createdAt: true,
   createdById: true,
+  // B-PR-05: its work order's one customer, for the brand wall (rework.ts mayRework); never in an answer.
+  workOrder: { select: { partyId: true } },
 } as const satisfies Prisma.ReworkOrderSelect
 export type ReworkRow = Prisma.ReworkOrderGetPayload<{ select: typeof REWORK_COLUMNS }>
 
@@ -81,7 +83,8 @@ export async function readReworksOfScan(db: Reader, scanId: string) {
 /** The work order as the rework reads it. */
 export async function readOrder(db: Reader, workOrderId: string) {
   if (!isUuid(workOrderId)) return null
-  return db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, number: true, status: true, holdReason: true, styleId: true } })
+  // B-PR-05: partyId, its one customer (the brand wall).
+  return db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, number: true, status: true, holdReason: true, styleId: true, partyId: true } })
 }
 export type OrderRow = NonNullable<Awaited<ReturnType<typeof readOrder>>>
 

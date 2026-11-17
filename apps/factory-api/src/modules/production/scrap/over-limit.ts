@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ConflictError, ForbiddenError, NotFoundError, UnauthenticatedError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import {
   approvalStateOf,
@@ -27,6 +27,7 @@ import type { WorkOrderStatus } from '@nexus/factory-domain/production/work-orde
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
 import { systemView } from '../scans/access'
+import { reachesWorkOrder, workOrderWhere } from '../work-orders/scope' // B-PR-05
 import { lockBundleScans, scanWorkOrderLock, workerUsers } from '../scans/store'
 import { floorChecksFor, FLOOR_RULES_ACTION, scrapLimitHistory } from '../settings/floor-rules'
 
@@ -439,9 +440,10 @@ async function officeScan(caller: CommandCaller, scanId: string): Promise<{ cont
   const context = officeOf(caller)
   const scan = await readScanRow(caller, scanId)
   if (!scan) throw notFound()
-  const order = await caller.withClient((client) => client.workOrder.findUnique({ where: { id: scan.workOrderId }, select: { companyId: true, siteId: true } }))
-  if (!order || !can(actorOf(context), PRODUCTION_SCRAP_VIEW, order)) throw notFound()
-  if (!can(actorOf(context), PRODUCTION_SCRAP_OVER_LIMIT, order)) throw new ForbiddenError()
+  // B-PR-05 (the brand wall): with the work order's one customer (another customer's scan is not found).
+  const order = await caller.withClient((client) => client.workOrder.findUnique({ where: { id: scan.workOrderId }, select: { companyId: true, siteId: true, partyId: true } }))
+  if (!order || !reachesWorkOrder(actorOf(context), PRODUCTION_SCRAP_VIEW, order)) throw notFound()
+  if (!reachesWorkOrder(actorOf(context), PRODUCTION_SCRAP_OVER_LIMIT, order)) throw new ForbiddenError()
   return { context, scan }
 }
 
@@ -476,7 +478,8 @@ export async function officeWaiting(db: Reader, scope: Prisma.WorkOrderWhereInpu
   return waitingScans(db, { AND: [{ workOrder: { is: scope } }, ...filters] })
 }
 
-export const scopeOfScrapView = (context: OfficeContext) => scopeWhere(actorOf(context), PRODUCTION_SCRAP_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput
+/** B-PR-05 (the brand wall): the work orders whose scrap the office reads (company, site and customer). */
+export const scopeOfScrapView = (context: OfficeContext, partyId?: string): Prisma.WorkOrderWhereInput => ({ AND: [workOrderWhere(actorOf(context), PRODUCTION_SCRAP_VIEW), partyId ? { partyId } : {}] })
 
 // ---- the team leader on the tablet (floor.lead) ---------------------------------------------------------------------------
 
@@ -510,10 +513,10 @@ export async function floorDecide(caller: CommandCaller, scanId: string, input: 
 }
 
 /** The waiting rows for the office's scope (the same row shape as the floor's, for the Scrap & rework DetailModal). */
-export async function officeWaitingRows(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly workOrderId?: string | undefined }) {
+export async function officeWaitingRows(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly workOrderId?: string | undefined; readonly partyId?: string | undefined }) {
   const context = officeOf(caller)
   return caller.withClient(async (db) => {
-    const waiting = await officeWaiting(db, scopeOfScrapView(context), [query.siteId ? { siteId: query.siteId } : {}, query.workOrderId ? { workOrderId: query.workOrderId } : {}])
+    const waiting = await officeWaiting(db, scopeOfScrapView(context, query.partyId), [query.siteId ? { siteId: query.siteId } : {}, query.workOrderId ? { workOrderId: query.workOrderId } : {}])
     return { rows: await rowsOf(db, waiting.reverse()), refusalTiles: SCRAP_REFUSAL_TILES.map((tile) => ({ ...tile })) }
   })
 }

@@ -8,7 +8,7 @@ import { dhuOf, firstPieceHold, KIND_WORDS, OUTCOME_WORDS, rovingColourOf, STATU
 import type { CommandCaller } from '../../../core/command'
 import { workerGateFor, type WorkerGate, workerGate } from '../../people/privacy/worker-gate'
 import { contentOfCheck, readChecks } from '../plans/store'
-import { checkerOf, mayOn, type Checker } from './access'
+import { checkerOf, mayOnWork, workOrderReachFor, type Checker } from './access'
 import { firstPieceRows, kindOf, outcomeOf, readCheck, readResults, statusOf, type CheckRow, type Reader } from './store'
 
 /**
@@ -84,9 +84,11 @@ async function gateOf(caller: CommandCaller, context: Checker, siteId: string): 
 export async function checkViewOf(caller: CommandCaller, checkId: string) {
   const context = checkerOf(caller)
   const row = await caller.withClient((db) => readCheck(db, checkId))
-  if (!row || !mayOn(context, QUALITY_INPROCESS_VIEW, row)) {
+  // B-PR-06 (the brand wall): a check on a work order also needs its customer; another customer's is not found.
+  const reach = row ? await caller.withClient((db) => workOrderReachFor(db, row.workOrderId)) : undefined
+  if (!row || !mayOnWork(context, QUALITY_INPROCESS_VIEW, row, reach)) {
     // The writer may hold `record` alone (a floor role holds both; an office custom role may not).
-    if (!row || !mayOn(context, 'quality.inprocess.record', row)) throw new NotFoundError('Check not found.')
+    if (!row || !mayOnWork(context, 'quality.inprocess.record', row, reach)) throw new NotFoundError('Check not found.')
   }
   const gate = (await gateOf(caller, context, row.siteId)) ?? workerGate(false)
   return caller.withClient(async (db) => {

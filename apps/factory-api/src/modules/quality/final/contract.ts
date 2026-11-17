@@ -358,6 +358,8 @@ export const listInspectionsContract = defineContract({
     companyId: id().optional(),
     siteId: id().optional(),
     workOrderId: id().optional(),
+    /** B-PR-06: the customer filter (its work orders' inspections); the brand wall applies first. */
+    partyId: id().optional(),
     status: status.optional(),
     /** Goods on hold through it (Q3 (a)): the newest decided inspection FAILED, or its released garments were taken back. */
     onHold: flag.optional(),
@@ -465,6 +467,8 @@ export const listReleasesContract = defineContract({
     companyId: id().optional(),
     siteId: id().optional(),
     workOrderId: id().optional(),
+    /** B-PR-06: the customer filter (its work orders' releases); the brand wall applies first. */
+    partyId: id().optional(),
     /** The reversed-release view: releases with garments taken back. */
     reversed: flag.optional(),
     /** Taken-back garments still on hold (Q3 (a)). */

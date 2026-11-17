@@ -31,6 +31,8 @@ export const SCAN_HEADER = {
   status: true,
   kind: true,
   styleId: true,
+  // B-PR-04a: its one customer, for the brand wall (access.ts mayScan).
+  partyId: true,
 } as const satisfies Prisma.WorkOrderSelect
 export type ScanHeader = Prisma.WorkOrderGetPayload<{ select: typeof SCAN_HEADER }>
 

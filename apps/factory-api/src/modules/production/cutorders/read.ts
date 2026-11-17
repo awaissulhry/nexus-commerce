@@ -6,7 +6,8 @@ import { PRODUCTION_CUTORDERS_MANAGE } from '@nexus/factory-domain/production/cu
 import { cellLeft, type CutOrderKind, type CutOrderStatus } from '@nexus/factory-domain/production/cutorders/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
-import { may, notFound, officeOf } from './access'
+import { cutOrderWall, may, notFound, officeOf, partiesOf } from './access'
+import { workOrderWhere } from '../work-orders/scope' // B-PR-04b
 import { CUT_ORDER_COLUMNS, garmentsElsewhere, readCutOrder, readLayRolls, readLays, readLines, readPlyRuns, readTickets, type CutOrderRow, type Reader } from './store'
 import { recordView, summaryView } from './views'
 
@@ -33,6 +34,8 @@ export interface ListQuery {
   readonly view?: CutOrderView | undefined
   readonly kind?: CutOrderKind | undefined
   readonly q?: string | undefined
+  /** B-PR-04b: the cut orders with a cell of this customer (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly limit: number
   readonly cursor?: string | undefined
 }
@@ -40,7 +43,15 @@ export interface ListQuery {
 /** GET /production/cut-orders: newest first, `limit` a page, with the tiles of the scope (counts per status). */
 export async function listCutOrders(caller: CommandCaller, query: ListQuery) {
   const context = officeOf(caller)
-  const scope = scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.CutOrderWhereInput
+  // B-PR-04b (the brand wall): a cut order shows only when every cell's work order is reached (a cut order of two customers:
+  // only for people of every customer); the tiles count the same.
+  const scope: Prisma.CutOrderWhereInput = {
+    AND: [
+      scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.CutOrderWhereInput,
+      cutOrderWall(context, PRODUCTION_CUTTING_VIEW),
+      query.partyId ? { lines: { some: { workOrderSize: { is: { workOrder: { is: { partyId: query.partyId } } } } } } } : {},
+    ],
+  }
   const q = query.q?.trim()
   const search: Prisma.CutOrderWhereInput = q
     ? {
@@ -90,7 +101,7 @@ export async function recordOf(db: Reader, context: OfficeContext | FloorContext
   const [lines, lays, tickets] = await Promise.all([readLines(db, [order.id]), readLays(db, [order.id]), readTickets(db, [order.id])])
   const layIds = lays.map((lay) => lay.id)
   const [layRolls, plyRuns] = await Promise.all([readLayRolls(db, layIds), readPlyRuns(db, layIds)])
-  return recordView({ order, lines, lays, layRolls, tickets, plyRuns, manage: context.audience === 'office' && may(context, PRODUCTION_CUTORDERS_MANAGE, order) })
+  return recordView({ order, lines, lays, layRolls, tickets, plyRuns, manage: context.audience === 'office' && may(context, PRODUCTION_CUTORDERS_MANAGE, order, partiesOf(order)) })
 }
 
 /** The record of one cut order (production.cutting.view at its company and site). */
@@ -98,13 +109,15 @@ export async function readRecord(caller: CommandCaller, cutOrderId: string) {
   const context = officeOf(caller)
   return caller.withClient(async (db) => {
     const order = await readCutOrder(db, cutOrderId)
-    if (!order || !may(context, PRODUCTION_CUTTING_VIEW, order)) return notFound('Cut order')
+    if (!order || !may(context, PRODUCTION_CUTTING_VIEW, order, partiesOf(order))) return notFound('Cut order')
     return recordOf(db, context, order!)
   })
 }
 
 export interface WaitingQuery {
   readonly siteId?: string | undefined
+  /** B-PR-04b: one customer's cells (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly itemId?: string | undefined
   readonly itemColourId?: string | undefined
 }
@@ -120,7 +133,8 @@ const WAITING_WORK_ORDERS = 300
  */
 export async function waitingCells(caller: CommandCaller, query: WaitingQuery) {
   const context = officeOf(caller)
-  const scope = scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput
+  // B-PR-04b (the brand wall): the cells of the work orders the caller reaches (company, site and customer).
+  const scope: Prisma.WorkOrderWhereInput = { AND: [workOrderWhere(actorOf(context), PRODUCTION_CUTTING_VIEW), query.partyId ? { partyId: query.partyId } : {}] }
   return caller.withClient(async (db) => {
     const orders = await db.workOrder.findMany({
       where: { AND: [scope, query.siteId ? { siteId: query.siteId } : {}, { status: { in: ['RELEASED', 'IN_PROGRESS'] } }] },

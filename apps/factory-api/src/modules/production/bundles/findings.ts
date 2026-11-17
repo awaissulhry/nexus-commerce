@@ -3,7 +3,7 @@ import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import { daysOf } from '@nexus/factory-domain/calendars/working-time'
 import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
+import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import {
   bunchedAtShiftEnd,
@@ -30,6 +30,7 @@ import { workingCalendarFor } from '../../../platform/calendars/service'
 import { activeTenants, systemContext } from '../../../platform/outbox/system'
 import type { Reader } from './store'
 import { operationsOf, stationsOf } from './track'
+import { reachesWorkOrder, workOrderWhere } from '../work-orders/scope' // B-PR-04a
 import { assertPersonDecides } from '../../people/privacy/decide'
 import { legalGateFor, type GateReader } from '../../people/privacy/gate'
 
@@ -231,9 +232,12 @@ export async function runScanFindings(options: FindingsOptions): Promise<Finding
 
 // ---- reads ------------------------------------------------------------------------------------------------------------------
 
-/** The findings the caller may read with `permission`, through their bundle's work order's company and site. */
-function findingScope(context: OfficeContext, permission: Permission = PRODUCTION_BUNDLES_VIEW): Prisma.ScanPatternFindingWhereInput {
-  return { bundle: { is: { workOrder: { is: scopeWhere(actorOf(context), permission, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput } } } }
+/**
+ * The findings the caller may read with `permission`, through their bundle's work order's company and site. B-PR-04a (the
+ * brand wall): and customer (../work-orders/scope); `partyId`: only that customer's.
+ */
+function findingScope(context: OfficeContext, permission: Permission = PRODUCTION_BUNDLES_VIEW, partyId?: string): Prisma.ScanPatternFindingWhereInput {
+  return { bundle: { is: { workOrder: { is: { AND: [workOrderWhere(actorOf(context), permission), partyId ? { partyId } : {}] } } } } }
 }
 
 const FINDING_COLUMNS = { id: true, siteId: true, workOrderId: true, bundleId: true, workOrderOperationId: true, kind: true, windowStart: true, windowEnd: true, detail: true, status: true, reviewedAt: true, reviewNote: true, version: true, createdAt: true } as const
@@ -275,7 +279,7 @@ async function findingViews(db: Reader, rows: readonly FindingRow[]) {
 }
 
 /** GET /production/bundles/findings/summary: the checks' state per site and the counts per line, operation and kind (7 days). */
-export async function findingsSummary(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly days?: number | undefined }) {
+export async function findingsSummary(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly days?: number | undefined; readonly partyId?: string | undefined }) {
   const context = officeOf(caller)
   const now = serverClock.now()
   const days = query.days ?? PATTERN_RULES.summaryDays
@@ -288,7 +292,7 @@ export async function findingsSummary(caller: CommandCaller, query: { readonly s
     const states = []
     for (const site of sites) states.push({ site, ...(await checksStateOf(db, site.id, now)) })
     const rows = await db.scanPatternFinding.findMany({
-      where: { AND: [findingScope(context), query.siteId ? { siteId: query.siteId } : {}, { createdAt: { gte: new Date(now.getTime() - days * 24 * 60 * MINUTE) } }] },
+      where: { AND: [findingScope(context, PRODUCTION_BUNDLES_VIEW, query.partyId), query.siteId ? { siteId: query.siteId } : {}, { createdAt: { gte: new Date(now.getTime() - days * 24 * 60 * MINUTE) } }] },
       select: { kind: true, status: true, detail: true, workOrderOperationId: true },
     })
     const operationIds = [...new Set(rows.flatMap((row) => (row.workOrderOperationId ? [row.workOrderOperationId] : [])))]
@@ -314,6 +318,8 @@ export interface FindingsQuery {
   readonly status?: FindingStatus | undefined
   readonly lineId?: string | undefined
   readonly operationCode?: string | undefined
+  /** B-PR-04a: one customer's (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
@@ -324,7 +330,7 @@ export async function listFindings(caller: CommandCaller, query: FindingsQuery) 
   return caller.withClient(async (db) => {
     const where: Prisma.ScanPatternFindingWhereInput = {
       AND: [
-        findingScope(context),
+        findingScope(context, PRODUCTION_BUNDLES_VIEW, query.partyId),
         query.siteId ? { siteId: query.siteId } : {},
         query.bundleId ? { bundleId: query.bundleId } : {},
         query.kind ? { kind: query.kind } : {},
@@ -344,8 +350,9 @@ async function namedFinding(caller: CommandCaller, findingId: string, permission
   const context = officeOf(caller)
   const row = isUuid(findingId) ? await caller.withClient((db) => db.scanPatternFinding.findFirst({ where: { AND: [{ id: findingId }, findingScope(context)] }, select: FINDING_COLUMNS })) : null
   if (!row) throw new NotFoundError('Finding not found.')
-  const workOrder = (await caller.withClient((db) => db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { companyId: true, siteId: true } })))!
-  if (!can(actorOf(context), permission, { companyId: workOrder.companyId, siteId: workOrder.siteId })) throw new ForbiddenError()
+  // B-PR-04a: with its one customer (the read above reached it already; the permission asked must too).
+  const workOrder = (await caller.withClient((db) => db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { companyId: true, siteId: true, partyId: true } })))!
+  if (!reachesWorkOrder(actorOf(context), permission, workOrder)) throw new ForbiddenError()
   return { context, row, scope: workOrder }
 }
 

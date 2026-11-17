@@ -184,6 +184,13 @@ export interface RefusalFilter {
   readonly workOrderId?: string
   /** Only the open ones: not discarded, not resolved. */
   readonly open?: boolean
+  /**
+   * B-PR-04a (the brand wall): the work orders the reader reaches (../work-orders/scope workOrderWhere): a refusal of
+   * another one is left out; a refusal of no work order (a code not of this site: it names no customer) stays.
+   */
+  readonly reach?: Prisma.WorkOrderWhereInput
+  /** B-PR-04a: only the refusals of this customer's work orders. */
+  readonly partyId?: string
 }
 
 /** The refusals that match, with what resolved them, newest first, in the caller's scope. */
@@ -194,6 +201,8 @@ export async function readRefusals(db: Reader, filter: RefusalFilter = {}): Prom
       ...(filter.deviceId ? { deviceId: filter.deviceId } : {}),
       ...(filter.workOrderId ? { workOrderId: filter.workOrderId } : {}),
       ...(filter.open ? { discardedAt: null, resolvedByScanId: null, resolvedByRequestId: null } : {}),
+      // B-PR-04a (the brand wall).
+      AND: [filter.reach ? { OR: [{ workOrderId: null }, { workOrder: { is: filter.reach } }] } : {}, filter.partyId ? { workOrder: { is: { partyId: filter.partyId } } } : {}],
     },
     select: COLUMNS,
     orderBy: [{ serverTime: 'desc' }, { id: 'desc' }],

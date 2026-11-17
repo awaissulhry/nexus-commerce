@@ -9,6 +9,8 @@ import { inspectedNow } from '@nexus/factory-domain/quality/final/plan'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { officeOf } from './access'
+// B-PR-06: the brand wall (an inspection follows its work order's customer).
+import { workOrderWhere } from '../../production/work-orders/scope'
 import { assignedView, assigneeNames } from './assign'
 import { INSPECTION_COLUMNS, type InspectionRow } from './store'
 
@@ -23,6 +25,8 @@ export interface InspectionQuery {
   readonly companyId?: string | undefined
   readonly siteId?: string | undefined
   readonly workOrderId?: string | undefined
+  /** B-PR-06: the customer filter. */
+  readonly partyId?: string | undefined
   readonly status?: InspectionStatus | undefined
   readonly onHold?: boolean | undefined
   readonly waitingRelease?: boolean | undefined
@@ -42,11 +46,16 @@ const linkedWorkersOf = (caller: CommandCaller, userId: string): Promise<string[
 
 export async function listInspections(caller: CommandCaller, query: InspectionQuery) {
   const context = officeOf(caller)
-  const scope = scopeWhere(actorOf(context), QUALITY_INSPECTIONS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.InspectionWhereInput
+  // B-PR-06: its company and site, and its work order's customer (B-PR-03's workOrderWhere: a work order of no customer, or
+  // mixed before the rule, only for who reaches every customer).
+  const scope: Prisma.InspectionWhereInput = {
+    AND: [scopeWhere(actorOf(context), QUALITY_INSPECTIONS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.InspectionWhereInput, { workOrder: { is: workOrderWhere(actorOf(context), QUALITY_INSPECTIONS_VIEW) } }],
+  }
   const filter: Prisma.InspectionWhereInput = {
     ...(query.companyId ? { companyId: query.companyId } : {}),
     ...(query.siteId ? { siteId: query.siteId } : {}),
     ...(query.workOrderId ? { workOrderId: query.workOrderId } : {}),
+    ...(query.partyId ? { workOrder: { is: { partyId: query.partyId } } } : {}),
     ...(query.status ? { status: query.status } : {}),
     ...(query.onHold ? { status: { in: ['PASSED', 'FAILED'] } } : {}),
     ...(query.waitingRelease ? { status: 'PASSED' } : {}),

@@ -33,6 +33,8 @@ export const WORK_ORDER_COLUMNS = {
   // B-W2b-GB02 (G053): the close that stands (set by the close, cleared by an undo or a reopen).
   closedAt: true,
   createdAt: true,
+  // B-PR-05: its one customer, for the brand wall (reads.ts, reverse.ts reachesWorkOrder).
+  partyId: true,
 } as const satisfies Prisma.WorkOrderSelect
 export type WorkOrderRow = Prisma.WorkOrderGetPayload<{ select: typeof WORK_ORDER_COLUMNS }>
 

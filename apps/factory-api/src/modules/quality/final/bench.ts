@@ -1,10 +1,10 @@
 import type { Prisma } from '@nexus/factory-db'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { QUALITY_INSPECTIONS_VIEW } from '@nexus/factory-domain/quality/final/permissions'
 import { RELEASE_STATUSES } from '@nexus/factory-domain/quality/release/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { scanProgressOf } from '../../production/scans/progress'
+import { workOrderWhere } from '../../production/work-orders/scope'
 import { inspectorOf } from './access'
 import { assigneeNames } from './assign'
 import { releasedPerCell } from './store'
@@ -32,7 +32,9 @@ export async function benchWorkOrders(caller: CommandCaller, query: BenchQuery) 
   const number = query.number?.trim()
   const where: Prisma.WorkOrderWhereInput = {
     AND: [
-      scopeWhere(actorOf(context), QUALITY_INSPECTIONS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
+      // B-PR-06: the brand wall — B-PR-03's workOrderWhere (company, site and customer; a floor device reaches every
+      // customer of its own site).
+      workOrderWhere(actorOf(context), QUALITY_INSPECTIONS_VIEW),
       context.audience === 'floor' ? { siteId: context.siteId } : {},
       number ? { number } : { status: { in: ['IN_PROGRESS', 'COMPLETED'] } },
     ],

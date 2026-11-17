@@ -1,6 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
 import { ForbiddenError } from '@nexus/factory-domain/core/errors'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayRange, toUtcIso } from '@nexus/factory-domain/core/time'
 import { quantityText } from '@nexus/factory-domain/inventory/ledger/moves'
 import { fixedRatio, type Uom } from '@nexus/factory-domain/product/units/units'
@@ -14,6 +13,7 @@ import { serverClock } from '../../../core/time'
 import { workOrderYieldOf } from '../yield/views'
 import type { CUT_STATES, CUT_VIEWS } from './contract'
 import { liveOf, readCells, readEntries, readPieces, readPlannedParts, readStations, type CellRow, type EntryRow, type Reader } from './store'
+import { workOrderWhere } from '../work-orders/scope' // B-PR-04b
 
 /**
  * The cutting office (B-W2a-60; design production.cutting, SCR-238; MES-056, MES-057): one cut per work order whose parts
@@ -98,13 +98,16 @@ export interface CutsQuery {
   readonly siteId?: string | undefined
   readonly view: CutView
   readonly q?: string | undefined
+  /** B-PR-04b: one customer's (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly limit: number
 }
 
 /** GET /production/cutting/cuts: the cuts of the view (most urgent first, at most `limit`), with the tiles of the scope. */
 export async function cutsList(caller: CommandCaller, query: CutsQuery) {
   const context = officeOf(caller)
-  const scope = scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput
+  // B-PR-04b (the brand wall): the work orders the caller reaches, by company, site and customer (the tiles too).
+  const scope: Prisma.WorkOrderWhereInput = { AND: [workOrderWhere(actorOf(context), PRODUCTION_CUTTING_VIEW), query.partyId ? { partyId: query.partyId } : {}] }
   const q = query.q?.trim()
   const search: Prisma.WorkOrderWhereInput = q
     ? { OR: [{ number: { contains: q, mode: 'insensitive' } }, { batchNumber: { contains: q, mode: 'insensitive' } }, { style: { is: { OR: [{ code: { contains: q, mode: 'insensitive' } }, { name: { contains: q, mode: 'insensitive' } }] } } }] }
