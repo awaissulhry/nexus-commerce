@@ -2,8 +2,8 @@
   "nav": {
     "home": "Home",
     "orders": "Orders",
-    "ordersTracking": "Orders & tracking",
-    "newOrder": "New order & reorder",
+    "ordersRequests": "Orders & requests",
+    "newOrder": "New order",
     "quotesSamples": "Quotes & samples",
     "quotes": "Quotes & requests",
     "catalogue": "Catalogue",
@@ -185,6 +185,7 @@
       "ReturnAuthorisation": "Return",
       "Complaint": "Complaint",
       "RepairOrder": "Repair",
+      "Inquiry": "Request",
       "other": "Record"
     }
   },

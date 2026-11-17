@@ -81,9 +81,10 @@ export function tilesOf(defs: readonly TileDef[], home: HomeRead | null, can: (p
 export interface NextOrderRow {
   readonly id: string
   readonly kind: 'ORDER' | 'REQUEST'
-  /** Their PO first, our number second (RefPair). */
+  /** Their PO first, then the customer's own number (RefPair: "Your order" · "12"; B-TH-303 — never the office's series). */
   readonly theirs: string | null
   readonly ours: string | null
+  readonly oursLabel: string | null
   readonly status: OrderRow['status']
   /** The six steps of the compact tracker, in the customer's words. */
   readonly steps: MilestoneStep[]
@@ -119,7 +120,9 @@ export function nextOrderRows(read: OrdersRead | null, locale: Locale, prefix: s
       id: row.id,
       kind: row.kind,
       theirs: row.customerRef,
-      ours: row.number,
+      // B-TH-303
+      ours: row.yourNumber ? String(row.yourNumber.seq) : null,
+      oursLabel: row.yourNumber ? row.yourNumber.words[locale].replace(new RegExp(`\\s*${row.yourNumber.seq}$`), '') : null,
       status: row.status,
       steps,
       promise: to,
@@ -264,9 +267,11 @@ export const decidedTone = (status: ApprovalStatus): 'success' | 'warning' | 'ne
  * A new customer with no order sees a clear first step instead of empty panels: nothing waits for them, there is no order
  * at all (or their role does not see orders) and no new document. Undecided while the reads are on their way.
  */
-export function isFirstVisit(input: { tasks: 'loading' | 'error' | 'ready'; openTasks: number; seesOrders: boolean; ordersAll: number | null; newDocuments: number | null }): boolean {
+export function isFirstVisit(input: { tasks: 'loading' | 'error' | 'ready'; openTasks: number; seesOrders: boolean; ordersAll: number | null; newDocuments: number | null; requestsAll?: number | null }): boolean {
   if (input.tasks !== 'ready' || input.openTasks > 0) return false
   if (input.seesOrders && input.ordersAll !== 0) return false
+  // B-TH-223: a customer who sent a request (any door) is past its first step; unknown yet = not a first visit (no flicker).
+  if (input.seesOrders && input.requestsAll !== undefined && input.requestsAll !== 0) return false
   return !input.newDocuments
 }
 

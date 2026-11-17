@@ -3,8 +3,7 @@
   "band": {
     "updated": "Updated {time}",
     "statement": "Download statement of account",
-    "emailSettings": "E-mail settings",
-    "newOrder": "New order"
+    "emailSettings": "E-mail settings"
   },
   "keys": {
     "todo": "Move through What waits for you",
@@ -260,5 +259,18 @@
     "previous": "Previous waiting approval",
     "first": "This is the first waiting approval.",
     "last": "This is the last waiting approval."
+  },
+  "start": {
+    "label": "Start",
+    "newOrder": "New order",
+    "newOrderHint": "Write what you need, like an e-mail.",
+    "ask": "Ask a question",
+    "askHint": "A question for us that is not about one order.",
+    "draft": "Draft: {subject}",
+    "draftKept": "kept on this device · {time}",
+    "continue": "Continue",
+    "noRight": "Only the buyers of your company send orders.",
+    "noRightAsk": "Your admin can give you the right: {names}.",
+    "noRightAskUs": "Ask us to add a buyer for your company."
   }
 }

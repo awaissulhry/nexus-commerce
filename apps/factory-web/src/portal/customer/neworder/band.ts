@@ -55,3 +55,33 @@ export function newOrderBandOf(input: {
   }
   return { title: t('band.title'), actions: [], more: [template] }
 }
+
+// ── B-TH-220: New order as an e-mail ─────────────────────────────────────────────────────────────────────────────────
+/**
+ * The band of New order as an e-mail: the title; Send lives at the compose's foot (under the message, as in a mail), so the
+ * band has no button; ⌘ Enter in the keys. After Send: "Request sent", their PO first, the request's true state.
+ */
+export function requestBandOf(input: {
+  words: OrderingWords
+  phase: 'loading' | 'compose' | 'closed' | 'noRight' | 'sent'
+  /** The sent request's true state (its words in the page's language). */
+  state?: { label: string; code: string } | null
+  customerRef?: string | null
+}): PortalBand {
+  const { t } = input.words
+  if (input.phase === 'sent') {
+    return {
+      title: t('receipt.bandTitle'),
+      refs: input.customerRef ? { theirs: input.customerRef, ours: null } : null,
+      status: input.state ? { label: input.state.label, tone: 'info' } : null,
+      actions: [],
+      more: [],
+    }
+  }
+  return {
+    title: t('request.title'),
+    actions: [],
+    more: [],
+    ...(input.phase === 'compose' ? { keys: [{ keys: ['⌘', '↵'], words: t('request.keySend') }] } : {}),
+  }
+}

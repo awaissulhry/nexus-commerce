@@ -1,4 +1,5 @@
 import { KIND_RULES, taskWords, type PartnerTaskKind } from '@nexus/factory-domain/portal/tasks/kinds'
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import { formatDate, formatTime } from '../../../lib/i18n/format'
 import type { Locale } from '../../../lib/i18n/locales'
@@ -144,6 +145,8 @@ const row = (n: number, status: OrdersRead['items'][number]['status'], over: Par
   id: id(200 + n),
   customerRef: `PO-BA-${880 + n}`,
   number: `SO-2026-00${40 + n}`,
+  // B-TH-303: the customer's own count (a catalogue order still waiting for us has none).
+  yourNumber: customerNumberOf('ORDER', 30 + n),
   status,
   promiseDate: dayAt(3 + n * 4),
   originalPromiseDate: dayAt(3 + n * 4),
@@ -167,7 +170,7 @@ const ORDERS: OrdersRead = {
     row(2, 'READY', { progressPercent: 100 }),
     row(3, 'IN_PRODUCTION', { promiseMoved: true, originalPromiseDate: dayAt(8), promiseDate: dayAt(15), progressPercent: 45 }),
     row(4, 'CONFIRMED', { progressPercent: 0 }),
-    row(5, 'REQUESTED', { kind: 'REQUEST', number: 'RQ-2026-0007', promiseDate: null, originalPromiseDate: null }),
+    row(5, 'REQUESTED', { kind: 'REQUEST', number: 'RQ-2026-0007', yourNumber: null, promiseDate: null, originalPromiseDate: null }),
   ],
   live: { events: ['partner_notification.created'] },
 }
@@ -369,6 +372,8 @@ function homeModel(locale: Locale, can: (permission: string) => boolean, built: 
   return {
     prefix: PREFIX,
     search: can('portal.search') ? { query: '', state: 'idle', groups: [], found: 0, capped: false, recent: [] } : null,
+    // B-TH-223: New order (the e-mail-like compose) and Ask a question, or who can give the right to order.
+    start: { newOrderHref: can('portal.orderRequests.manage') ? `${PREFIX}/orders/new` : null, buyer: can('portal.orderRequests.manage'), admins: ['Paolo Esempio'], draft: null },
     welcome: null,
     tiles: defs.some((def) => can(def.permission)) ? { state: 'ready', items: tilesOf(defs, HOME, can, { openItems: OPEN_ITEMS, format: moneyWriter(locale) }) } : null,
     orders: can('portal.salesOrders.view') ? { state: 'ready', items: nextOrderRows(ORDERS, locale, PREFIX, day), open: counts.open, seeAllHref: built.orders ? `${PREFIX}/orders` : null, newOrderHref: null, why: {} } : null,
@@ -415,6 +420,9 @@ export const designScreen = defineDesignScreen<HomeCaseBuilder>({
       model: homeCase(),
       note: 'Find anything first; What waits for you with Review / Approve opening the pop-up (the record a link for ⌘-click); five numbers (the lists are not built yet: counts without a link; no Invoices tile for a buyer); the next five deliveries with the compact steps, the promise, a moved date (its popover reads why) and the % where the account shares it; new documents with Preview and Download; our last three messages with Reply.',
     },
+    { id: 'th-223-start', label: 'Start: New order like an e-mail, or a question', model: homeCase(), note: 'B-TH-223: New order is the page’s main button (the e-mail-like compose); Ask a question beside it. The band keeps one primary: none.' },
+    { id: 'th-223-draft', label: 'Start with a draft kept on this device', model: homeCase((locale) => ({ home: { start: { newOrderHref: `${PREFIX}/orders/new`, buyer: true, admins: [], draft: { subject: 'Rain jackets like last spring, 40 pieces', at: formatTime(at(-2), { locale }) } } } })), note: '“Draft: … · kept on this device · 10:42 · Continue” (on this device until drafts live on the server).' },
+    { id: 'th-223-no-right', label: 'Start for a colleague who may not order', model: homeCase((locale) => ({ can: DESIGNER, tasks: tasksOf(locale, [TASKS[1]!]) })), note: 'No dead button: who in their company can give the right, and Ask a question.' },
     { id: 'linked', label: 'As it will be: every tile a link', model: homeCase(() => ({ built: ALL_BUILT })), note: 'Once Orders, Documents and Returns are built, each tile opens its list with the matching chip, and "See all 7 open orders" / "See all documents" appear.' },
     { id: 'finance', label: 'Finance: invoices and the statement', model: homeCase((locale) => ({ can: FINANCE, statement: true, tasks: tasksOf(locale, [PAY, ...TASKS.slice(2)]) })), note: 'The Invoices tile with its count, the open amount and the overdue count (price grain); ⋯ Download statement of account opens the PDF in a new tab; Pay on the invoice’s row opens its record.' },
     { id: 'designer', label: 'A designer (no orders, documents or prices)', model: homeCase((locale) => ({ can: DESIGNER, tasks: tasksOf(locale, [TASKS[1]!]) })), note: 'Sections the role cannot open are not drawn (fails closed); what waits and our messages remain.' },

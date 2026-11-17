@@ -57,7 +57,7 @@ export interface NewOrderViewModel {
   sendHeld: string | null
   /** The problems are listed (after Show me, or a send that was held). */
   showProblems: boolean
-  sent: { number: string; customerRef: string | null; confirmBy: string | null; lines: number; pieces: number; net: string | null; currency: string; seesPrices: boolean } | null
+  sent: { number: string; customerRef: string | null; lines: number; pieces: number; net: string | null; currency: string; seesPrices: boolean } | null
   closed: { status: RequestStatus; number: string | null; salesOrder: { id: string; number: string } | null } | null
   offlineSince: string | null
   dialogs: { picker: PickerModel | null; address: AddressDialogModel | null; discard: DiscardModel | null }
@@ -96,12 +96,12 @@ export function NewOrderView({ model, actions }: { model: NewOrderViewModel; act
 
   if (model.phase === 'sent' && model.sent) {
     const sent = model.sent
-    const confirmBy = sent.confirmBy ? words.day(sent.confirmBy) : null
     return (
       <div className="fw-pno">
         <EndState
           title={t('sent.title')}
-          body={sent.customerRef ? t(confirmBy ? 'sent.bodyRef' : 'sent.bodyRefNoDay', { ref: sent.customerRef, number: sent.number, day: confirmBy ?? '' }) : t(confirmBy ? 'sent.body' : 'sent.bodyNoDay', { number: sent.number, day: confirmBy ?? '' })}
+          // B-TH-220 (with B-TH-041): no answer-time promise.
+          body={sent.customerRef ? t('sent.bodyRef', { ref: sent.customerRef, number: sent.number }) : t('sent.body', { number: sent.number })}
           next={[t('summary.notice'), t('sent.next')]}
           facts={[
             { label: t('summary.lines'), value: String(sent.lines) },

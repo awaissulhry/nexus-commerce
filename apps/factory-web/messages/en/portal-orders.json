@@ -49,25 +49,26 @@
   "chips": {
     "label": "Which orders",
     "chip": "{name}: {count}",
-    "clear": "Clear filters"
+    "clear": "Clear filters",
+    "closedRequests": "Closed requests"
   },
   "list": {
-    "title": "Orders & tracking",
-    "label": "Your orders",
+    "title": "Orders & requests",
+    "label": "Your orders and requests",
     "fileName": "orders",
     "search": "Search your orders",
-    "searchHint": "Your PO, our order or a style code…",
-    "count_one": "{count} order",
-    "count_other": "{count} orders",
-    "countOf": "{shown} of {count} orders",
+    "searchHint": "Your PO, our order, a style code or your request’s subject…",
+    "count_one": "{count} order or request",
+    "count_other": "{count} orders and requests",
+    "countOf": "{shown} of {count} orders and requests",
     "more": "Show more",
-    "failed": "Your orders could not be read",
+    "failed": "Your orders and requests could not be read",
     "failedBody": "Nothing changed. Try again in a moment.",
-    "empty": "No orders yet.",
-    "emptyBody": "Your orders with us show here as soon as we confirm them.",
-    "noMatch": "No orders match these filters",
+    "empty": "No orders or requests yet.",
+    "emptyBody": "What you send with New order shows here first, with where it stands; your orders follow as soon as we make them.",
+    "noMatch": "Nothing matches these filters",
     "noMatchSearch": "Nothing found for “{q}”.",
-    "noMatchChip": "No order is in this group right now.",
+    "noMatchChip": "Nothing is in this group right now.",
     "clear": "Clear filters",
     "requestWaits": "To be confirmed by us",
     "asked": "date asked",
@@ -76,15 +77,16 @@
     "piecesOpen_one": "{count} open",
     "piecesOpen_other": "{count} open",
     "allShipped": "All shipped",
-    "eta": "expected {date}"
+    "eta": "expected {date}",
+    "needsYou": "Needs your answer",
+    "wanted": "wanted",
+    "updated": "updated {date}",
+    "piecesAsked": "{count} asked",
+    "requestsFailed": "Your requests could not be read: only your orders are shown."
   },
   "col": {
-    "order": "Order",
     "yourPo": "Your PO",
-    "ourOrder": "Our order",
-    "orderedOn": "Ordered",
     "status": "Status",
-    "promise": "Promised",
     "pieces": "Pieces",
     "ordered": "Ordered",
     "shipped": "Shipped",
@@ -92,14 +94,22 @@
     "value": "Net value",
     "currency": "Currency",
     "nextShipment": "Next shipment",
-    "actions": "Actions"
+    "actions": "Actions",
+    "number": "Number",
+    "kind": "Kind",
+    "yours": "Your number",
+    "subject": "Subject",
+    "date": "Date",
+    "wanted": "Wanted or promised"
   },
   "row": {
     "open": "Open the order",
     "lines": "Lines",
     "shipments": "Shipments & tracking",
     "messages": "Messages",
-    "menu": "Actions for order {number}"
+    "menu": "Actions for order {number}",
+    "openRequest": "Open the request",
+    "requestMenu": "Actions for {name}"
   },
   "bulk": {
     "export": "Export {count}"
@@ -133,7 +143,7 @@
     "filtersSearch": "Shown: {chip} · search “{q}”",
     "chipOpen": "Open",
     "printedBy": "Printed by {name} on {when}",
-    "capped": "The first {shown} of {count} orders."
+    "capped": "The first {shown} of {count} orders and requests."
   },
   "record": {
     "title": "Order {number}",
@@ -560,5 +570,10 @@
     "cutToMax": "{cell}: cut to {max}.",
     "pasted": "{applied} pasted, {skipped} left out.",
     "issues": "Check these sizes"
+  },
+  "kind": {
+    "request": "Request",
+    "catalogue": "Catalogue",
+    "order": "Order"
   }
 }
