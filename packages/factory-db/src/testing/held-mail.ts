@@ -2,7 +2,7 @@ import { seedUuid, type SeedContext } from '../seeding'
 
 /**
  * B-TH-038 (threads plan, schema wave 5/9; Owner decision 6 "undo send, 10 seconds"): a mail taken back in its undo window, for
- * the tests. On the threads seed's quote thread of company A for party P1, the office's OUTBOUND mail message, held, and its
+ * the tests. On the threads seed's quote thread of company A for party P1, an OUTBOUND mail message, held, and its
  * EmailOutbound row with a 10-second window, queued and then taken back (WITHDRAWN) by the seed's office person 4 seconds
  * later: the message stays held for good, so P1's portal never reads it. The generated isolation test needs a held message
  * inside P1's scope to prove the partner role's value filter (Message.held: onlyValues false).
@@ -44,9 +44,10 @@ export async function seedHeldMail({ db, namespace }: SeedContext): Promise<Held
             direction: 'OUTBOUND',
             audience: 'PARTNER',
             channel: 'EMAIL',
-            authorKind: 'USER',
-            authorId: actorId,
-            authorName: 'Seed Office User',
+            // Written by the system (no author id), so the generated test's partner copy of it, which cannot name an author id
+            // (no grant), meets the partner policy's value filter first, not the shape guard's author rule.
+            authorKind: 'SYSTEM',
+            authorName: 'Seed A',
             bodyText: 'Seed message: the price list is attached (taken back: the wrong file).',
             emailMessageId,
             held: true,

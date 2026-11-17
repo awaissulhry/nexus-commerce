@@ -531,8 +531,9 @@ beforeAll(async () => {
   // value filter on Message (held: false) has a row of the other value inside P1's scope to prove itself against.
   await seedHeldMail({ db: factory, namespace: 'iso-a' })
   // ---- end B-TH-038
-  // Every seed of both tenants: under a full parallel run this takes more than a minute.
-}, 120_000)
+  // Every seed of both tenants: under a full parallel run this takes more than a minute (B-TH-038: and over two on a machine
+  // short of memory, 2026-11-17).
+}, 300_000)
 
 afterAll(async () => {
   await factory?.close()
