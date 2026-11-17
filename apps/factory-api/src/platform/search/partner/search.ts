@@ -112,8 +112,8 @@ export async function searchForPartner(request: FastifyRequest, params: PartnerS
   )
   const capped = indexed.length > PARTNER_SEARCH_LIMITS.candidates
 
-  // 2.–4. Lookups, the wall and the match, in the partner's own scope.
-  return request.withClient(async (client) => {
+  // 2.–3. Lookups and the wall, in the partner's own scope.
+  const read = await request.withClient(async (client) => {
     const wanted = new Map<string, Set<string>>(views.map((view) => [view.recordType, new Set<string>()]))
     for (const candidate of indexed.slice(0, PARTNER_SEARCH_LIMITS.candidates)) wanted.get(candidate.recordType)?.add(candidate.recordId)
     const typed = query.whole.trim()
@@ -121,45 +121,61 @@ export async function searchForPartner(request: FastifyRequest, params: PartnerS
       if (!view.lookup) continue
       for (const id of await view.lookup(client, typed, PARTNER_SEARCH_LIMITS.lookup)) wanted.get(view.recordType)!.add(id)
     }
-
-    const found: { result: PartnerSearchResult; hit: PartnerHit; time: number }[] = []
+    const records: { view: PartnerView; records: PartnerRecord[] }[] = []
     for (const view of views) {
       const ids = [...wanted.get(view.recordType)!]
-      if (ids.length === 0) continue
-      for (const record of await view.read(client, ids)) {
-        if (!mayFind(caller, view, record)) continue
-        const hit = partnerMatchOf(query, record)
-        if (!hit) continue
-        found.push({
-          hit,
-          time: timeOf(record),
-          result: {
-            recordType: view.recordType,
-            recordId: record.id,
-            group: view.group!,
-            theirRef: record.theirRef,
-            ourRef: record.ourRef,
-            subtitle: record.subtitle,
-            status: record.status,
-            date: record.date ? toUtcIso(record.date) : null,
-            match: hit.match,
-          },
-        })
-      }
+      if (ids.length > 0) records.push({ view, records: await view.read(client, ids) })
     }
-    found.sort((a, b) => compareHits(a.hit, b.hit) || b.time - a.time || a.result.recordId.localeCompare(b.result.recordId))
-    const ordered = found.map((entry) => entry.result)
-    return {
-      query: query.text,
-      words: [...query.words],
-      tooShort: false,
-      groups: groups.flatMap((group) => {
-        const inGroup = ordered.filter((result) => result.group === group)
-        return inGroup.length > 0 ? [{ group, count: inGroup.length, results: inGroup.slice(0, params.limit) }] : []
-      }),
-      found: ordered.length,
-      single: singleOf(ordered),
-      capped,
-    }
+    return records
   })
+
+  // ---- follow-up th-backend-d (Not an order → Closed): the partner's own word where it rests on an office column (system scope,
+  // the records read above only, the person's party checked again); nothing is added.
+  for (const entry of read) {
+    const refine = entry.view.refine
+    if (!refine || entry.records.length === 0) continue
+    const known = new Set(entry.records.map((record) => record.id))
+    const refined = await system.withClient((client) => refine(client, entry.records, caller.context.partyId))
+    entry.records = refined.filter((record) => known.has(record.id))
+  }
+  // ---- end follow-up th-backend-d
+
+  // 4. The match.
+  const found: { result: PartnerSearchResult; hit: PartnerHit; time: number }[] = []
+  for (const { view, records } of read) {
+    for (const record of records) {
+      if (!mayFind(caller, view, record)) continue
+      const hit = partnerMatchOf(query, record)
+      if (!hit) continue
+      found.push({
+        hit,
+        time: timeOf(record),
+        result: {
+          recordType: view.recordType,
+          recordId: record.id,
+          group: view.group!,
+          theirRef: record.theirRef,
+          ourRef: record.ourRef,
+          subtitle: record.subtitle,
+          status: record.status,
+          date: record.date ? toUtcIso(record.date) : null,
+          match: hit.match,
+        },
+      })
+    }
+  }
+  found.sort((a, b) => compareHits(a.hit, b.hit) || b.time - a.time || a.result.recordId.localeCompare(b.result.recordId))
+  const ordered = found.map((entry) => entry.result)
+  return {
+    query: query.text,
+    words: [...query.words],
+    tooShort: false,
+    groups: groups.flatMap((group) => {
+      const inGroup = ordered.filter((result) => result.group === group)
+      return inGroup.length > 0 ? [{ group, count: inGroup.length, results: inGroup.slice(0, params.limit) }] : []
+    }),
+    found: ordered.length,
+    single: singleOf(ordered),
+    capped,
+  }
 }

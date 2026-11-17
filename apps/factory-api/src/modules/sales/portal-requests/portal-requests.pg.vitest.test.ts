@@ -276,3 +276,29 @@ describe('the real state of the request, its news and live (B-TH-011)', { timeou
     expect((await ok(browsers.other, 'GET', '/portal/inquiries?state=CLOSED')).rows.map((row: Json) => row.id)).toEqual([other])
   })
 })
+
+// ---- follow-up th-backend-d (Not an order → Closed): the customer's own search reads the word its request page reads. A request
+// declined as "Not an order" is CLOSED in the portal search too (the decline reason is an office column the partner role never reads:
+// the search reads it in the tenant's system scope); a request declined for another reason stays DECLINED; nothing of the reason leaks.
+describe('follow-up th-backend-d: the portal search says Closed for a "Not an order" request', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('Not an order → CLOSED in the search and on the request page; a capacity decline stays DECLINED; another customer finds neither', async () => {
+    const notAnOrder = (await ok(browsers.buyer, 'POST', '/portal/inquiries', { message: 'Made-up: please add us to your newsletter.', customerRef: 'BA-PO-NAO-9' }, 201)).request.id as string
+    const capacity = (await ok(browsers.buyer, 'POST', '/portal/inquiries', { message: 'Made-up: 900 racing suits by next week.', customerRef: 'BA-PO-CAP-8' }, 201)).request.id as string
+    await declineInquiry(office(), notAnOrder, { version: await version(notAnOrder), reason: 'NOT_AN_ORDER' }, officeKey())
+    await declineInquiry(office(), capacity, { version: await version(capacity), reason: 'CAPACITY' }, officeKey())
+    expect((await ok(browsers.buyer, 'GET', `/portal/inquiries/${notAnOrder}`)).request.state).toMatchObject({ code: 'CLOSED', words: { en: 'Closed' } })
+
+    const hit = async (ref: string) => {
+      const answer = await ok(browsers.buyer, 'GET', `/portal/search?q=${encodeURIComponent(ref)}`)
+      return (answer.groups as Json[]).flatMap((group) => group.results as Json[]).find((result) => result.theirRef === ref)
+    }
+    expect(await hit('BA-PO-NAO-9')).toMatchObject({ recordType: 'Inquiry', recordId: notAnOrder, status: 'CLOSED', ourRef: expect.stringMatching(/^#\d+$/) })
+    expect(await hit('BA-PO-CAP-8')).toMatchObject({ recordType: 'Inquiry', recordId: capacity, status: 'DECLINED' })
+    // The office's reason never reaches the customer's answer.
+    const answer = await ok(browsers.buyer, 'GET', `/portal/search?q=${encodeURIComponent('BA-PO-NAO-9')}`)
+    expect(JSON.stringify(answer)).not.toMatch(/NOT_AN_ORDER|declineReason/)
+    // The other customer finds neither by their references.
+    for (const ref of ['BA-PO-NAO-9', 'BA-PO-CAP-8']) expect(JSON.stringify((await call(browsers.other, 'GET', `/portal/search?q=${encodeURIComponent(ref)}`)).body)).not.toContain(ref === 'BA-PO-NAO-9' ? notAnOrder : capacity)
+  })
+})
+// ---- end follow-up th-backend-d

@@ -48,6 +48,15 @@ export interface PartnerView {
   readonly grain?: Grain
   read(client: FactoryClient, ids: readonly string[]): Promise<PartnerRecord[]>
   lookup?(client: FactoryClient, typed: string, take: number): Promise<string[]>
+  // ---- follow-up th-backend-d (Not an order → Closed)
+  /**
+   * The partner's own word for what `read` returned, where it rests on an office column the partner role may not read (a request
+   * declined as "Not an order" reads "Closed", never "Declined": B-TH-043). Read in the tenant's system scope, for exactly the records
+   * `read` gave and of the person's own party (checked again): it may only change a record's `status` to the partner's word — never
+   * add a record, never name the office column.
+   */
+  refine?(system: FactoryClient, records: readonly PartnerRecord[], partyId: string): Promise<PartnerRecord[]>
+  // ---- end follow-up th-backend-d
 }
 
 export class PartnerViewConfigError extends Error {
