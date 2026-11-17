@@ -416,3 +416,35 @@ export const waitingContract = defineContract({
   },
 })
 // ---- end B-TH-047
+
+// ---- B-TH-076 (X-G01; PL5, O-REC-ANY.summary-F01, P-ANY.summary): one summary row for any record — its type in words, its label, its
+// state and its parent as a link; the office in its scope, the portal through the partner view only (404 in neutral words otherwise).
+const summaryWords = output({ it: z.string(), en: z.string() })
+const summaryLink = output({
+  recordType: z.string(),
+  recordId: id(),
+  /** The record type in words ("Delivery note" / "Documento di trasporto"). */
+  type: summaryWords,
+  /** Its number or code as a chip shows it (the portal: our number, else their reference); null when it has none. */
+  label: z.string().nullable(),
+})
+export const recordSummaryContract = defineContract({
+  params: recordParams,
+  response: {
+    200: output({
+      summary: output({
+        recordType: z.string(),
+        recordId: id(),
+        type: summaryWords,
+        label: z.string().nullable(),
+        /** The portal reader's own reference (their PO number); null in the office answer and when they gave none. */
+        theirRef: z.string().nullable(),
+        /** Its state code and the state in words; null: a record with no state (a rider's measurements). */
+        state: output({ code: z.string(), words: summaryWords }).nullable(),
+        /** The record it belongs to (a delivery's order, a receipt's PO), only when the reader may open it; null: none or not theirs. */
+        parent: summaryLink.nullable(),
+      }),
+    }),
+  },
+})
+// ---- end B-TH-076

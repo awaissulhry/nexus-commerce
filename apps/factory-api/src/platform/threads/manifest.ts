@@ -30,4 +30,8 @@ export const manifest = defineManifest({
   // ---- B-TH-047: the conversations waiting on us across records (Customer replies, Supplier replies) — office only; each row also
   // asks its record type's own view permission over the record (factory-domain threads/view-gates).
   'GET /threads/waiting': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
+  // ---- B-TH-076: one summary row for any record (type, label, state, parent) — the office in its scope (threads.read over the
+  // record), a portal session through the record type's partner view only.
+  'GET /records/:recordType/:recordId/summary': { audiences: ['office', 'partner'], permission: 'threads.read', scope: 'record' },
+  // ---- end B-TH-076
 })

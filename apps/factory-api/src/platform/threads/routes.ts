@@ -18,6 +18,9 @@ import { postPortalReply } from './replies'
 // B-TH-047: conversations waiting on us across records.
 import { waitingContract } from './contract'
 import { listWaiting } from './waiting-list'
+// B-TH-076: one summary row for any record.
+import { recordSummaryContract } from './contract'
+import { readRecordSummary } from './summary'
 
 /**
  * Record threads and the record timeline (platform part; plan A1 §2.3, §3.7; features COL-001, COL-002, COL-003): read
@@ -34,6 +37,10 @@ export default defineRoutes('threads', manifest, async (app) => {
   // ---- B-TH-047
   app.get('/threads/waiting', { schema: waitingContract }, async (request) => listWaiting(request, request.query))
   // ---- end B-TH-047
+
+  // ---- B-TH-076
+  app.get('/records/:recordType/:recordId/summary', { schema: recordSummaryContract }, async (request) => readRecordSummary(request, { type: request.params.recordType, id: request.params.recordId }))
+  // ---- end B-TH-076
 
   // ---- B-TH-027
   app.post('/threads/unread', { schema: unreadContract }, async (request) => unreadCounts(request, request.body.records.map((record) => ({ type: record.recordType, id: record.recordId }))))
