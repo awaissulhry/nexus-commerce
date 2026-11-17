@@ -118,11 +118,23 @@ export function depthChecks(depth: DepthFacts, lines: readonly LineRow[], items:
   ]
 }
 
-/** The order's delivery address as its PDF prints it when it ships to a third party ("Deliver to"), or null. */
-export function shipToPrintOf(depth: DepthFacts | undefined): { name: string; line1: string; line2: string | null; postalCode: string; city: string; province: string | null; country: string } | null {
+/**
+ * B-TH-036 (WALL-G18, W36; the brand wall): a supplier never reads a customer's or a brand's name. A ship-to of a customer or a
+ * brand is printed under OUR company's name (the address stays: it is where the goods go; its own label, which may name the
+ * brand, is left out); a workshop's ship-to keeps its name (a workshop is no brand). Letting a supplier see the brand's name
+ * per order waits for the Owner's per-job switch (a schema column; not in TH-2).
+ */
+export const shipToHidesParty = (roles: readonly string[]): boolean => roles.includes('CUSTOMER') || roles.includes('BRAND')
+
+/**
+ * The order's delivery address as its PDF and the supplier's portal print it when it ships to a third party ("Deliver to"), or
+ * null. `ourName`: our company's name, printed for a customer's or a brand's address (B-TH-036).
+ */
+export function shipToPrintOf(depth: Pick<DepthFacts, 'shipTo'> | undefined, ourName: string): { name: string; line1: string; line2: string | null; postalCode: string; city: string; province: string | null; country: string } | null {
   const address = depth?.shipTo?.address
   if (!depth?.shipTo || !address) return null
-  return { name: address.name ? `${depth.shipTo.party.name} — ${address.name}` : depth.shipTo.party.name, line1: address.line1, line2: address.line2, postalCode: address.postalCode, city: address.city, province: address.province, country: address.country }
+  const name = shipToHidesParty(depth.shipTo.party.roles) ? ourName : address.name ? `${depth.shipTo.party.name} — ${address.name}` : depth.shipTo.party.name
+  return { name, line1: address.line1, line2: address.line2, postalCode: address.postalCode, city: address.city, province: address.province, country: address.country }
 }
 
 /** Whether the order takes a rate at order (its currency is not its company's). */

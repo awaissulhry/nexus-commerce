@@ -23,7 +23,7 @@ import { mayOn as inspectionMay } from '../final/access'
 import { inspectionFor } from '../final/inspections'
 import type { Reader } from '../final/store'
 import { certificateFacts, certificateRecordOf, CERTIFICATE_KIND } from './certificate'
-import { REPORT_KIND, reportRecordOf, signedInspection } from './report'
+import { REPORT_KIND, reportRecordOf, sharedProductionProblem, signedInspection, workOrderPartiesOf } from './report'
 import { readVersions, versionView, type DocumentKind, type DocumentRecord } from './versions'
 
 /**
@@ -153,6 +153,9 @@ export async function shareReport(files: FilesRuntime, email: EmailRuntime, requ
   const shipment = await officeShipment(request, body.shipmentId, SHIPPING_VIEW)
   const carries = await request.withClient((db) => db.shipmentLine.count({ where: { shipmentId: shipment.id, workOrderId: inspection.workOrderId } }))
   if (carries === 0) throw held('NOT_ON_SHIPMENT', `Shipment ${shipment.number} carries no garment of ${header.number}: the report goes with the goods it judged.`)
+  // B-TH-032 (WALL-G07): a work order of several customers' garments: its report goes to none of them as is.
+  const shared = sharedProductionProblem(await request.withClient((db) => workOrderPartiesOf(db, inspection.workOrderId)), shipment.partyId, header.number)
+  if (shared) throw held('SHARED_PRODUCTION', shared)
   const record = reportRecordOf(inspection, header.number)
   return shareVersion({
     files,
@@ -216,10 +219,13 @@ export async function reportsOf(caller: CommandCaller, inspectionId: string) {
     const numbers = new Map(shipments.map((shipment) => [shipment.id, shipment.number]))
     const copies = await copiesOf(db, shipments.map((shipment) => shipment.id), versions)
     const holds: Issue[] = [...(signed ? [] : [{ path: 'held/NOT_SIGNED', message: `This inspection is ${inspection.status}: a report is made of a signed result.` }]), ...legal]
+    // B-TH-032 (WALL-G07): a shipment whose customer is not the work order's only one cannot take the report as is.
+    const made = await workOrderPartiesOf(db, inspection.workOrderId)
+    const problemOf = (shipment: { readonly status: string; readonly partyId: string }) => attachStateProblem(shipment.status as never) ?? sharedProductionProblem(made, shipment.partyId, header.number)
     return {
       inspection: { id: inspection.id, number: inspection.number ?? `${header.number} · inspection`, status: inspection.status, workOrderId: inspection.workOrderId, signed },
       versions: versions.map((version) => versionView(version, names)),
-      shipments: shipments.map((shipment) => ({ id: shipment.id, number: shipment.number, status: shipment.status, customer: parties.get(shipment.partyId) ?? null, shareable: attachStateProblem(shipment.status as never) === null, problem: attachStateProblem(shipment.status as never) })),
+      shipments: shipments.map((shipment) => ({ id: shipment.id, number: shipment.number, status: shipment.status, customer: parties.get(shipment.partyId) ?? null, shareable: problemOf(shipment) === null, problem: problemOf(shipment) })),
       shares: copies.map((copy) => shareView(copy, numbers)),
       ready: { ok: holds.length === 0, held: holds },
       may: { make: signed && inspectionMay(context, QUALITY_DOCUMENTS_MAKE, inspection), share: signed && versions.length > 0 && inspectionMay(context, QUALITY_DOCUMENTS_SHARE, inspection) },

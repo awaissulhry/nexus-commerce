@@ -565,6 +565,15 @@
             "ANONYMISE": "Una fattura non si rende mai anonima: la legge la conserva come emessa."
           }
         },
+        "Inquiry": {
+          "name": "Potenziali clienti delle richieste chiuse",
+          "countsFrom": "Dalla chiusura della richiesta (una richiesta aperta, di un cliente o con il potenziale cliente già cancellato non scade mai). Suggerito: 24 mesi, finché il consulente privacy non conferma.",
+          "does": {
+            "ANONYMISE": "Cancella il potenziale cliente di una richiesta chiusa: nome, azienda, e-mail e telefono vuoti per sempre, con quando e chi; restano la richiesta, le righe, la conversazione e la base giuridica.",
+            "DELETE": "Una richiesta non si cancella mai con una pulizia: si cancella solo il potenziale cliente.",
+            "ARCHIVE": "Una richiesta non si archivia con una pulizia: si cancella solo il potenziale cliente."
+          }
+        },
         "other": {
           "name": "Altre schede",
           "countsFrom": "La pulizia non conosce questo tipo di scheda.",

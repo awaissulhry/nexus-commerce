@@ -194,8 +194,15 @@ export async function deleteReply(caller: CommandCaller, replyId: string, versio
 
 const day = (value: Date | null | undefined, language: TemplateLanguage): string | null => (value ? formatDate(businessDate(value, 'UTC'), language) : null)
 
+/** B-TH-046: what a request is about — its mail's subject, else the first line of its words, at most 120 characters (null: none). */
+export function inquirySubjectOf(mailSubject: string | null, request: string): string | null {
+  const subject = mailSubject?.trim() || request.split(/\r?\n/).map((line) => line.trim()).find((line) => line !== '') || ''
+  if (subject === '') return null
+  return subject.length > 120 ? `${subject.slice(0, 119)}…` : subject
+}
+
 /** The record's own values (its number, dates), its party and the contact it names, for its record type. */
-async function recordValues(db: Reader, type: ReplyRecordType, id: string, language: TemplateLanguage): Promise<{ values: PlaceholderValues; partyId: string | null; contactId: string | null; companyId: string | null }> {
+async function recordValues(db: Reader, type: ReplyRecordType, id: string, language: TemplateLanguage): Promise<{ values: PlaceholderValues; partyId: string | null; contactId: string | null; companyId: string | null; prospect?: { readonly name: string | null; readonly company: string | null } }> {
   switch (type) {
     case 'SalesOrder': {
       const row = await db.salesOrder.findUnique({ where: { id }, select: { number: true, customerRef: true, promiseDate: true, partyId: true, companyId: true } })
@@ -229,6 +236,14 @@ async function recordValues(db: Reader, type: ReplyRecordType, id: string, langu
       if (!row) break
       return { values: {}, partyId: row.id, contactId: null, companyId: row.companyId }
     }
+    // B-TH-046: a request of Sales › Incoming — its number, what it is about, the wanted date; the contact is the customer's
+    // own who wrote it (fill reads a contact of the request's customer only: brand A's request never names brand B's contact).
+    case 'Inquiry': {
+      const row = await db.inquiry.findUnique({ where: { id }, select: { number: true, request: true, wantedDate: true, partyId: true, contactId: true, companyId: true, sourceEmailId: true, prospectName: true, prospectCompany: true } })
+      if (!row) break
+      const mail = row.sourceEmailId ? await db.inboundEmail.findUnique({ where: { id: row.sourceEmailId }, select: { subject: true } }) : null
+      return { values: { 'inquiry.number': row.number, 'inquiry.subject': inquirySubjectOf(mail?.subject ?? null, row.request), 'inquiry.wantedDate': day(row.wantedDate, language) }, partyId: row.partyId, contactId: row.contactId, companyId: row.companyId, ...(row.partyId === null ? { prospect: { name: row.prospectName, company: row.prospectCompany } } : {}) }
+    }
   }
   throw new NotFoundError('Record not found.')
 }
@@ -257,8 +272,9 @@ export async function fillReply(caller: CommandCaller, replyId: string, body: { 
     const me = await db.user.findUnique({ where: { id: context.actorId }, select: { displayName: true, email: true } })
     return {
       ...record.values,
-      'contact.name': contact?.name?.trim() || null,
-      'party.name': party ? party.tradeName?.trim() || party.legalName.trim() : null,
+      // B-TH-046: a prospect's request (no customer yet) names the prospect and its company.
+      'contact.name': contact?.name?.trim() || record.prospect?.name?.trim() || null,
+      'party.name': party ? party.tradeName?.trim() || party.legalName.trim() : record.prospect?.company?.trim() || null,
       'me.name': me ? me.displayName?.trim() || me.email.split('@')[0]! : null,
       today: formatDate(businessDate(serverClock.now()), language),
       ...(company ? companyValues(company) : {}),

@@ -20,6 +20,7 @@ import { labelsFor } from '../revisions/read'
 import { dayOf, decimal, quantityText, type Reader } from '../store'
 import { SUPPLIER_LINE_COLUMNS, SUPPLIER_ORDER_COLUMNS } from '../supplier-view'
 import { siteAddressOf } from '../views'
+import { readShipTo, shipToPrintOf, type ShipToFacts } from '../po-depth/store'
 
 /**
  * The supplier's purchase orders in the portal (B-W2b-174; SCM-094 "PO list and detail"; design portal.supplier.orders: the
@@ -197,6 +198,12 @@ const LINE_COLUMNS = {
 
 type PortalOrderRow = Prisma.PurchaseOrderGetPayload<{ select: typeof ORDER_COLUMNS }>
 type PortalLineRow = Prisma.PurchaseOrderLineGetPayload<{ select: typeof LINE_COLUMNS }>
+
+/** B-TH-036: the third party an order ships to (the tenant's system scope, this order only), or null: it goes to its site. */
+export async function shipToOfOrder(tenant: Reader, orderId: string): Promise<ShipToFacts | null> {
+  const row = await tenant.purchaseOrder.findUnique({ where: { id: orderId }, select: { siteId: true, shipToPartyId: true, shipToAddressId: true, shipToLocationId: true } })
+  return row ? readShipTo(tenant, row) : null
+}
 
 /** One order the supplier holds, in the session's scope, or 404 (another party's, another company's, or a draft never sent). */
 export async function heldOrder(client: Reader, session: PortalSession, orderId: string): Promise<PortalOrderRow> {
@@ -384,6 +391,8 @@ export async function portalOrder(request: FastifyRequest, orderId: string) {
     )
     const company = await client.company.findUnique({ where: { id: order.companyId }, select: { legalName: true, tradeName: true } })
     const site = await client.site.findUnique({ where: { id: order.siteId }, select: { name: true, address: true } })
+    // B-TH-036 (WALL-G18): where the goods go — a third party's address, under our name for a customer's or a brand's.
+    const shipTo = await shipToOfOrder(client, order.id)
     const sender = await client.purchaseOrder.findUnique({ where: { id: order.id }, select: { sentById: true } })
     const buyerName = sender?.sentById ? ((await client.user.findUnique({ where: { id: sender.sentById }, select: { displayName: true } }))?.displayName ?? null) : null
     const sums = lines.length === 0 ? [] : await client.goodsReceiptLine.groupBy({ by: ['purchaseOrderLineId'], where: { purchaseOrderLineId: { in: lines.map((line) => line.id) }, receipt: { status: 'POSTED' } }, _sum: { baseQuantity: true } })
@@ -392,7 +401,7 @@ export async function portalOrder(request: FastifyRequest, orderId: string) {
     const choices = answerable ? await substituteChoices(client, session, lines.filter((line) => line.cancelledAt === null && line.closedShortAt === null), labels) : {}
     const states = revisions.flatMap((row) => [row.before as unknown as RevisionState | null, row.after as unknown as RevisionState])
     const changeLabels = await labelsFor(client, states)
-    return { labels, company, site, buyerName, received, choices, changeLabels }
+    return { labels, company, site, shipTo, buyerName, received, choices, changeLabels }
   })
 
   const problem = portalAnswerProblem(order.status)
@@ -458,7 +467,7 @@ export async function portalOrder(request: FastifyRequest, orderId: string) {
       version: order.version,
     },
     from: { legalName: tenant.company?.legalName ?? '', tradeName: tenant.company?.tradeName ?? null, buyerName: tenant.buyerName },
-    deliverTo: tenant.site ? siteAddressOf(tenant.site) : null,
+    deliverTo: shipToPrintOf({ shipTo: tenant.shipTo }, tenant.company?.legalName ?? '') ?? (tenant.site ? siteAddressOf(tenant.site) : null),
     lines: heldState ? heldState.lines.map((line) => heldLineView(line, tenant.labels)) : lines.map((line) => liveLineView(line, tenant.labels, tenant.received)),
     proposal: order.proposedAt && !draft
       ? {

@@ -14,6 +14,7 @@ import { companyLegalOf } from '../../../../platform/documents/documents'
 import { prepareFileCopy, recordGeneratedFile } from '../../../../platform/files/files'
 import type { FilesRuntime } from '../../../../platform/files/service'
 import { capasOf, portalOnFor } from '../../../sales/portal-returns/store'
+import type { Reader } from '../../capa/store'
 import { officeComplaint } from '../access'
 import { keepLetterInCommand, prepareLetter } from '../answer'
 import { recordOf } from '../log'
@@ -73,6 +74,47 @@ export async function publishAnswer(files: FilesRuntime, caller: CommandCaller, 
   return { complaint: await recordOf(caller, seen.id), document: result.document }
 }
 
+// ---- B-TH-031 (WALL-G06, W15; Owner rule 2026-11-16 "one brand must not be able to see anything related to any other brand") --
+/**
+ * Why the CAPA's 8D may not go to this complaint's customer (null: it may): the CAPA is written for another customer
+ * (OTHER_CUSTOMER), it answers complaints of other customers too (OTHER_CUSTOMERS_COMPLAINTS), or the kept report was made
+ * while a complaint of another customer was one of its sources and printed its number (REPORT_OUTDATED: keep a new version).
+ * The words are the office's: they name the other customer's records (the office sees the real reason; nothing reaches the
+ * customer). The report prints only the named customer's complaints (capa/report.ts), so an 8D written for this customer is
+ * never refused for a source of another customer that came later.
+ */
+async function eightDWallProblem(
+  db: Reader,
+  capa: { readonly id: string; readonly number: string; readonly customerId: string | null },
+  report: { readonly createdAt: Date },
+  partyId: string,
+): Promise<{ code: string; words: string } | null> {
+  if (capa.customerId !== null && capa.customerId !== partyId) {
+    const other = await db.party.findUnique({ where: { id: capa.customerId }, select: { legalName: true, tradeName: true } })
+    const name = other ? other.tradeName?.trim() || other.legalName : 'another customer'
+    return { code: 'OTHER_CUSTOMER', words: `${capa.number} is written for ${name}: an 8D goes only to its own customer.` }
+  }
+  if (capa.customerId !== null) return null
+  const sources = await db.capaSource.findMany({ where: { capaId: capa.id, recordType: COMPLAINT_RECORD }, select: { recordId: true } })
+  const complaints = sources.length === 0 ? [] : await db.complaint.findMany({ where: { id: { in: sources.map((source) => source.recordId) } }, select: { number: true, partyId: true }, orderBy: { number: 'asc' } })
+  const others = complaints.filter((row) => row.partyId !== partyId)
+  if (others.length > 0) {
+    return { code: 'OTHER_CUSTOMERS_COMPLAINTS', words: `${capa.number} also answers ${others.map((row) => row.number).join(', ')} of another customer: write this customer's own 8D (name the customer on it), or take those complaints off first.` }
+  }
+  // A complaint of another customer taken off after the kept version: that version still prints its number.
+  const removed = await db.auditLog.findMany({ where: { recordType: 'Capa', recordId: capa.id, action: 'quality.removeCapaSource', at: { gte: report.createdAt } }, select: { before: true } })
+  const removedIds = removed.flatMap((row) => {
+    const before = row.before as { recordType?: unknown; recordId?: unknown } | null
+    return before && before.recordType === COMPLAINT_RECORD && typeof before.recordId === 'string' && isUuid(before.recordId) ? [before.recordId] : []
+  })
+  const printed = removedIds.length === 0 ? [] : await db.complaint.findMany({ where: { id: { in: removedIds } }, select: { number: true, partyId: true }, orderBy: { number: 'asc' } })
+  const stale = printed.filter((row) => row.partyId !== partyId)
+  if (stale.length > 0) {
+    return { code: 'REPORT_OUTDATED', words: `The kept 8D report of ${capa.number} still names ${stale.map((row) => row.number).join(', ')} of another customer: keep a new version first.` }
+  }
+  return null
+}
+
 export async function shareEightD(files: FilesRuntime, caller: CommandCaller, complaintId: string, body: { readonly capaId?: string | undefined }, idempotencyKey?: string) {
   const { context, complaint } = await officeComplaint(caller, complaintId, QUALITY_COMPLAINTS_MANAGE)
   if (!can(actorOf(context), FILES_MANAGE, { companyId: complaint.companyId })) throw new ForbiddenError('Sharing a file with the customer needs the right to share files over the company.')
@@ -86,7 +128,7 @@ export async function shareEightD(files: FilesRuntime, caller: CommandCaller, co
           const newest = (await capasOf(db, [complaint.id])).get(complaint.id)
           return newest ? db.capa.findUnique({ where: { id: newest.id }, select: { id: true, number: true, type: true, companyId: true, customerId: true, status: true } }) : null
         })()
-    const report = capa ? await db.generatedDocument.findFirst({ where: { recordType: 'Capa', recordId: capa.id, kind: 'EIGHT_D' }, select: { id: true, version: true, fileId: true }, orderBy: { version: 'desc' } }) : null
+    const report = capa ? await db.generatedDocument.findFirst({ where: { recordType: 'Capa', recordId: capa.id, kind: 'EIGHT_D' }, select: { id: true, version: true, fileId: true, createdAt: true }, orderBy: { version: 'desc' } }) : null
     const shared = report ? await db.storedFile.findFirst({ where: { recordType: COMPLAINT_RECORD, recordId: complaint.id, sourceFileId: report.fileId, status: 'AVAILABLE' }, select: { id: true } }) : null
     return { capa, report, shared }
   })
@@ -96,6 +138,9 @@ export async function shareEightD(files: FilesRuntime, caller: CommandCaller, co
   if (problem) throw held(problem.code, problem.words)
   const capa = facts.capa!
   const report = facts.report!
+  // B-TH-031 (WALL-G06, W15): the brand wall — an 8D goes to a customer only when it is that customer's alone.
+  const wall = await caller.withClient((db) => eightDWallProblem(db, capa, report, complaint.partyId))
+  if (wall) throw held(wall.code, wall.words)
   if (facts.shared) return { complaint: await recordOf(caller, complaint.id), shared: { fileId: facts.shared.id, sourceFileId: report.fileId, capaNumber: capa.number, version: report.version, made: false } }
   const prepared = await prepareFileCopy(files, caller, report.fileId, { companyId: complaint.companyId, recordType: COMPLAINT_RECORD, recordId: complaint.id, kind: 'DOCUMENT', visibility: ['OFFICE', 'PARTNER', 'LINK'], partyId: complaint.partyId })
   const { result } = await command(caller, { name: 'complaints.shareEightD', idempotencyKey, input: { complaintId, capaId: capa.id, fileId: report.fileId } }, async (tools) => {

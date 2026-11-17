@@ -108,6 +108,8 @@ export const SAMPLE_REFUSALS = [
   'LINE_OF_ANOTHER_PARTY',
   // B-W2b-284: a sample work order without an order line is for an internal or uncharged proto, fit or salesman round only.
   'ORDER_LINE_NEEDED',
+  // B-TH-034 (WALL-G15): a round for a customer never uses another customer's private-label style.
+  'PRIVATE_STYLE',
 ] as const
 export type SampleRefusalCode = (typeof SAMPLE_REFUSALS)[number]
 export interface SampleRefusal {
@@ -159,6 +161,17 @@ export function styleRefusal(style: { readonly code: string; readonly status: st
   if (style.status === 'ARCHIVED') return refusal('STYLE_CLOSED', `Style ${style.code} is archived: reactivate it before asking for samples.`)
   if (style.lifecycle === 'DISCONTINUED') return refusal('STYLE_CLOSED', `Style ${style.code} is discontinued: no new samples are made of it.`)
   return null
+}
+
+/**
+ * B-TH-034 (WALL-G15, W12; the brand wall, as quotes and orders already refuse it: quote-warnings privateLabelFinding): a round
+ * for a customer is made only on a style of our own range or of that customer's private label (a rider of the brand's team
+ * counts as the brand). An internal round (no customer) may use any style: it stays the office's. The words are the office's;
+ * the brand's name is said only when the caller passes it (the office sees the real reason).
+ */
+export function privateStyleRefusal(style: { readonly code: string; readonly brandPartyId: string | null }, party: { readonly id: string; readonly teamPartyId: string | null } | null, brandName: string | null = null): SampleRefusal | null {
+  if (party === null || style.brandPartyId === null || style.brandPartyId === party.id || style.brandPartyId === party.teamPartyId) return null
+  return refusal('PRIVATE_STYLE', `${style.code} is ${brandName ? `${brandName}'s` : "another customer's"} private-label style: its samples are made for that customer only.`)
 }
 
 /** A charge goes to the round's customer: an internal round charges nobody. */

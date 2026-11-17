@@ -217,18 +217,23 @@ export function companyDomainOf(address: string, shared: ReadonlySet<string> = S
  * Whether the sender of a mail that names a thread is someone the thread already knows (A1 §3.7: "a participant or a
  * known party domain"; COL-022: "match a known contact"): a contact of the thread's party, an address the thread's mail
  * went to, or an address at the (company) domain of one of the party's contacts.
+ *
+ * B-TH-033 (WALL-G14, W22; the brand wall): a company domain makes a sender known only when it is the thread's party's ALONE.
+ * `elsewhere` holds the addresses of other parties' contacts and portal people at the sender's domain (a group of two brands
+ * on one domain): any of them, and the domain proves nothing — the mail is held for a person.
  */
 export function knownSender(
   sender: string | null,
-  known: { readonly contacts: readonly string[]; readonly participants: readonly string[] },
+  known: { readonly contacts: readonly string[]; readonly participants: readonly string[]; readonly elsewhere?: readonly string[] | undefined },
   shared: ReadonlySet<string> = SHARED_MAIL_DOMAINS,
 ): 'CONTACT' | 'PARTICIPANT' | 'DOMAIN' | null {
   if (sender === null || !isAddress(sender)) return null
   if (known.contacts.includes(sender)) return 'CONTACT'
   if (known.participants.includes(sender)) return 'PARTICIPANT'
   const domain = companyDomainOf(sender, shared)
-  if (domain !== null && known.contacts.some((contact) => companyDomainOf(contact, shared) === domain)) return 'DOMAIN'
-  return null
+  if (domain === null || !known.contacts.some((contact) => companyDomainOf(contact, shared) === domain)) return null
+  if ((known.elsewhere ?? []).some((address) => companyDomainOf(address, shared) === domain)) return null
+  return 'DOMAIN'
 }
 
 /** SES's verdicts on one mail. */
