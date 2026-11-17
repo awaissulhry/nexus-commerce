@@ -15,7 +15,7 @@ import type { OfficeAuth } from '../../../platform/auth/sessions/office-auth'
 import { asSystem } from '../../../platform/outbox/system'
 import { rowsOf } from '../bundles/tracked'
 import { devicePlaceOf } from '../calls/store'
-import { assertMay, contextOf, knownLine, may, officeOf, readerOf, refuse, type BoardContext } from './access'
+import { assertEveryCustomer, assertMay, contextOf, knownLine, may, officeOf, readerOf, refuse, type BoardContext } from './access'
 import { hourView, lineDays, shiftView, stationStates, totalsView, waitingOfSite } from './facts'
 import { activeLinesOf, notesOf, reasonWordsOf, siteRow, siteView, type LineRow, type Reader } from './store'
 // B-W2b-99: the line's DHU from its end-of-line checks (QHS-042), replacing the estimate once the line has one that day.
@@ -80,6 +80,7 @@ export async function hourlyBoard(caller: CommandCaller, query: HourlyQuery) {
     const site = await caller.withClient((db) => siteRow(db, query.siteId!))
     if (!site) throw new NotFoundError('Site not found.')
     assertMay(context, PRODUCTION_BOARDS_VIEW, { companyId: site.companyId, siteId: site.id }, 'Site')
+    assertEveryCustomer(context, PRODUCTION_BOARDS_VIEW, { companyId: site.companyId, siteId: site.id }) // B-PR-07
     lines = await caller.withClient((db) => activeLinesOf(db, site.id))
   }
   return readerOf(caller, context).withClient(async (db) => {
@@ -111,6 +112,7 @@ export async function wipHeatmap(caller: CommandCaller, query: { readonly siteId
   return caller.withClient(async (db) => {
     const site = await siteOfQuery(db, query.siteId)
     assertMay(context, PRODUCTION_BOARDS_VIEW, { companyId: site.companyId, siteId: site.id }, 'Site')
+    assertEveryCustomer(context, PRODUCTION_BOARDS_VIEW, { companyId: site.companyId, siteId: site.id }) // B-PR-07
     const lines = await activeLinesOf(db, site.id)
     const { waiting, capped, stuckLimitHours } = await waitingOfSite(db, site.id, now)
     const map = heatMap(waiting, lines.map((line) => line.id))
@@ -135,6 +137,7 @@ export async function heatCell(caller: CommandCaller, query: { readonly siteId: 
   return caller.withClient(async (db) => {
     const site = await siteOfQuery(db, query.siteId)
     assertMay(context, PRODUCTION_BOARDS_VIEW, { companyId: site.companyId, siteId: site.id }, 'Site')
+    assertEveryCustomer(context, PRODUCTION_BOARDS_VIEW, { companyId: site.companyId, siteId: site.id }) // B-PR-07
     const { waiting, capped } = await waitingOfSite(db, site.id, now)
     const here = waiting.filter((bundle) => bundle.lineId === (query.lineId ?? null) && bundle.operation.code === query.code)
     return { asOf: toUtcIso(now), bundles: await rowsOf(db, here.map((bundle) => bundle.tracked)), capped }

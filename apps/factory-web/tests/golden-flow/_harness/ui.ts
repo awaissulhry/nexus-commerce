@@ -85,6 +85,17 @@ export async function answerOf(page: Page, method: string, path: RegExp, action:
   return body as Record<string, any>
 }
 
+/**
+ * Opens a DS Menu by its trigger and picks an item. A grid that draws its rows again (a save, a live update) closes a menu
+ * opened on one of its rows, so the menu is opened again until the item is picked.
+ */
+export async function chooseFromMenu(trigger: Locator, item: Locator): Promise<void> {
+  await expect(async () => {
+    if (!(await item.isVisible())) await trigger.click()
+    await item.click({ timeout: 3_000 })
+  }).toPass({ timeout: 45_000 })
+}
+
 /** Marks a part of a stage the screens do not do yet (done through the API instead), in the report. */
 export function byApi(what: string): void {
   test.info().annotations.push({ type: 'by API', description: what })

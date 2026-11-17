@@ -7,7 +7,7 @@ import { amountText, capacityWords, daysBetween, jobAmount, loadPctOf, spreadJob
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { siteFor } from '../access'
+import { everyPartySiteFor } from '../access'
 import { readSettings } from '../settings/store'
 import type { Reader, SiteRow } from '../store'
 import { capacityRowOf, cellView, closedDaysOf, linesOf, readCapacityRows, readJobs, siteWorkshops, windowOf, type WorkshopLine } from '../subcontract-capacity/store'
@@ -68,7 +68,7 @@ export const lineView = (line: WorkshopLine, rows: SubcontractorWorld['rows']) =
 
 /** GET /planning/capacity/subcontractors. */
 export async function subcontractorCapacity(caller: CommandCaller, query: { readonly siteId: string; readonly from?: string | undefined; readonly to?: string | undefined; readonly bucket?: string | undefined }) {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-07: mixes customers
   const now = serverClock.now()
   const today = businessDate(now, site.timezone)
   return caller.withClient(async (db) => {
@@ -97,7 +97,7 @@ export async function subcontractorCapacity(caller: CommandCaller, query: { read
 
 /** GET /planning/capacity/subcontractors/cell. */
 export async function subcontractorCell(caller: CommandCaller, query: { readonly siteId: string; readonly partyId: string; readonly workCentreKind?: string | undefined; readonly from: BusinessDate; readonly to: BusinessDate }) {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-07: mixes customers
   if (query.to < query.from) throw new ValidationError('The days end before they start.', [{ path: 'querystring/to', message: 'Give a last day on or after the first.' }])
   if (daysFrom(query.from, query.to) + 1 > CAPACITY_MAX_DAYS) throw new ValidationError(`A capacity question covers at most ${CAPACITY_MAX_DAYS} days.`, [{ path: 'querystring/to', message: `At most ${CAPACITY_MAX_DAYS} days from the first.` }])
   const today = businessDate(serverClock.now(), site.timezone)

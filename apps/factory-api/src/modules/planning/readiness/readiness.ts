@@ -5,7 +5,9 @@ import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { READINESS_WORDS, type WorkOrderReadiness } from '@nexus/factory-domain/planning/readiness/readiness'
 import { decimalOf, QUANTITY_SCALE } from '@nexus/factory-domain/product/units/units'
 import type { CommandCaller } from '../../../core/command'
-import { assertMayAt, officeContextOf, siteFor } from '../access'
+import { assertMayAt, officeContextOf, reachedWorkOrders, siteFor } from '../access'
+import { actorOf } from '../../../core/context'
+import { reachesWorkOrder } from '../../production/work-orders/scope'
 import { dayOf, SITE_COLUMNS, type Reader } from '../store'
 import { livePlanOf, openWorkOrdersOf, readinessFor, type LivePlan } from './service'
 
@@ -32,13 +34,17 @@ const workOrderRef = (row: WorkOrderRow) => ({
 const countsOf = (rows: readonly WorkOrderReadiness[]) => Object.fromEntries(READINESS_WORDS.map((word) => [word, rows.filter((row) => row.word === word).length])) as Record<(typeof READINESS_WORDS)[number], number>
 
 export async function readiness(caller: CommandCaller, query: { readonly siteId: string; readonly workOrderIds?: string | undefined }) {
+  const context = officeContextOf(caller)
   const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
   const ids = query.workOrderIds ? [...new Set(query.workOrderIds.split(',').map((value) => value.trim()).filter((value) => value !== ''))] : null
   if (ids && (ids.length > 100 || ids.some((value) => !isUuid(value)))) throw new ValidationError('Name at most 100 work orders by their ids.', [{ path: 'querystring/workOrderIds', message: 'Comma-separated work order ids, at most 100.' }])
   return caller.withClient(async (db) => {
-    const workOrders = ids
+    const asked = ids
       ? await db.workOrder.findMany({ where: { siteId: site.id, id: { in: ids } }, select: { id: true, number: true, status: true, kind: true, dueDate: true, startedAt: true, style: { select: { id: true, code: true, name: true } } }, orderBy: { number: 'asc' } })
       : await openWorkOrdersOf(db, site.id)
+    // B-PR-07: only the work orders of the customers the caller reaches (another customer's id is as unknown).
+    const reached = await reachedWorkOrders(db, context, PLANNING_VIEW, asked.map((row) => row.id))
+    const workOrders = asked.filter((row) => reached.has(row.id))
     const live = await livePlanOf(db, site)
     const answers = await readinessFor(db, site, workOrders.map((row) => row.id), live)
     const rows = answers.map((answer, index) => ({ workOrder: workOrderRef(workOrders[index]!), ...without(answer) }))
@@ -55,9 +61,9 @@ export async function workOrderReadiness(caller: CommandCaller, workOrderId: str
   const context = officeContextOf(caller)
   return caller.withClient(async (db) => {
     const row = isUuid(workOrderId)
-      ? await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, status: true, kind: true, dueDate: true, startedAt: true, companyId: true, siteId: true, style: { select: { id: true, code: true, name: true } } } })
+      ? await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, status: true, kind: true, dueDate: true, startedAt: true, companyId: true, siteId: true, /* B-PR-07 */ partyId: true, style: { select: { id: true, code: true, name: true } } } })
       : null
-    assertMayAt(context, PLANNING_VIEW, row ? { companyId: row.companyId, siteId: row.siteId } : null, 'Work order')
+    assertMayAt(context, PLANNING_VIEW, row && reachesWorkOrder(actorOf(context), PLANNING_VIEW, row) ? { companyId: row.companyId, siteId: row.siteId } : null, 'Work order') // B-PR-07: and its customer
     const site = await db.site.findUnique({ where: { id: row!.siteId }, select: SITE_COLUMNS })
     if (!site) throw new NotFoundError('Work order not found.')
     const live = await livePlanOf(db, site)
@@ -132,9 +138,13 @@ export async function shortageRows(db: Reader, live: LivePlan) {
 }
 
 export async function shortages(caller: CommandCaller, query: { readonly siteId: string }) {
+  const context = officeContextOf(caller)
   const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
   return caller.withClient(async (db) => {
     const live = await livePlanOf(db, site)
-    return { siteId: site.id, asOf: live.today, latestRunId: live.latestRun?.id ?? null, rows: await shortageRows(db, live) }
+    const rows = await shortageRows(db, live)
+    // B-PR-07: only the rows of work orders of the customers the caller reaches.
+    const reached = await reachedWorkOrders(db, context, PLANNING_VIEW, rows.map((row) => row.workOrder.id))
+    return { siteId: site.id, asOf: live.today, latestRunId: live.latestRun?.id ?? null, rows: rows.filter((row) => reached.has(row.workOrder.id)) }
   })
 }

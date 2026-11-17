@@ -19,7 +19,8 @@ import { travellerOptionsTable, type TravellerOptionRow } from '../../documents/
  *   header    the number, the batch number, the rush flag (a box in words: URGENTE / RUSH) and a banner when the floor
  *             must not start it (a draft, a held, cancelled or finished work order).
  *   facts     style and revision, site, due date, priority, pieces, colourways, the order numbers it makes (never a
- *             customer's name or a price: the paper goes round the floor), the work order it was split from.
+ *             customer's name or a price: the paper goes round the floor), the customer's CODE (B-PR-11, L13), the work
+ *             order it was split from.
  *   tables    the size run (colourway × size, totals); the operations with empty columns to write by hand when the
  *             tablet is down (done, scrap, date, station: per operation and station, never a person — Statuto dei
  *             Lavoratori art. 4); the planned materials (no cost).
@@ -80,6 +81,11 @@ export interface TravellerFacts {
   readonly revision: number | null
   /** The sales order numbers its cells make. */
   readonly orders: readonly string[]
+  /**
+   * B-PR-11 (L13): the customer as the floor reads it — its CODE only (production/floor-customer `floorCustomer`; several codes
+   * on a mixed work order made before the rule), never its name; null: none (a sample for no customer, our own stock).
+   */
+  readonly customer: string | null
   /** The number of the work order it was split from, or null. */
   readonly splitFrom: string | null
   readonly note: string | null
@@ -121,6 +127,7 @@ const WORDS = {
       pieces: 'Capi',
       colourways: 'Varianti colore',
       orders: 'Ordini',
+      customer: 'Cliente',
       splitFrom: 'Diviso da',
       released: 'Rilasciato il',
     },
@@ -173,6 +180,7 @@ const WORDS = {
       pieces: 'Pieces',
       colourways: 'Colourways',
       orders: 'Orders',
+      customer: 'Customer',
       splitFrom: 'Split from',
       released: 'Released',
     },
@@ -312,6 +320,7 @@ export function travellerPaper(facts: TravellerFacts, language: DocumentLanguage
     { label: words.facts.colourways, value: [...new Set(facts.cells.map((cell) => cell.colourway))].sort((a, b) => a.localeCompare(b)).join(', ') },
     { label: words.facts.orders, value: facts.orders.join(', ') },
   ]
+  if (facts.customer) list.push({ label: words.facts.customer, value: facts.customer }) // B-PR-11: the code only
   if (facts.splitFrom) list.push({ label: words.facts.splitFrom, value: facts.splitFrom })
   if (facts.releasedAt) list.push({ label: words.facts.released, value: formatDateTime(facts.releasedAt, facts.timeZone, language) })
   const notes = [...(facts.note ? [`${words.note}: ${facts.note}`] : []), ...(facts.frozen ? [] : [words.notFrozen]), words.fallback]

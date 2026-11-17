@@ -301,6 +301,11 @@ export const boardContract = defineContract({
       problems: z.array(problemView),
       /** B-W2b-312: the problems list's W2b kinds (see moreProblemView). */
       moreProblems: z.array(moreProblemView),
+      /**
+       * B-PR-07 (production plan §2): why the lanes carry no load cells and the list no overbooking, in words that name no
+       * customer (a person limited to some customers: line load and capacity totals count every customer's work); null: shown.
+       */
+      loadWithheld: z.string().nullable(),
     }),
   },
 })

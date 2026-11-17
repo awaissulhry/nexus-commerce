@@ -10,7 +10,7 @@
       }
     },
     "EmailOutbound": {
-      "about": "A send command adds the row (QUEUED) with its thread message; the worker claims it, sends it through the gateway and records SENT or the failure; the SES notifications move it to DELIVERED, BOUNCED or COMPLAINED. The office lists a thread's mails and their states.",
+      "about": "A send command adds the row (QUEUED) with its thread message; the worker claims it, sends it through the gateway and records SENT or the failure; the SES notifications move it to DELIVERED, BOUNCED or COMPLAINED. The office lists a thread's mails and their states. TH-3 (B-TH-038, PR-03): a thread mail may wait in its undo window (sendAfter) and be taken back there by an office person (WITHDRAWN, withdrawnAt, withdrawnById); office only, like the rest of the row: a party never learns that a mail waited or was taken back (its message stays held, threads.json).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId" },
       "access": {

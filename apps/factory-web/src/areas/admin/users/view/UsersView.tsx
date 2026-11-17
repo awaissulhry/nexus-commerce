@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { PauseCircle, PlayCircle, Plus, Trash2, UserX, Users } from 'lucide-react'
 import { Banner, Field, MetricStrip, SummaryTable } from '@nexus/ui/components'
@@ -17,6 +17,7 @@ import { BulkConfirm } from '../../shared/view/BulkConfirm'
 import { AdminMessages, BulkButton, FrameState, GrainChips, heldText, ListKeysHelp, ListSearch, NoticeBanner, PageHead, StepUp, useRoleWords } from '../../shared/view/parts'
 import { ScopePicker } from '../../shared/view/ScopePicker'
 import {
+  blankWorkerDraft /* W1-BGF */,
   FLOOR_LOCALES,
   FLOOR_TILES,
   floorReach,
@@ -29,6 +30,7 @@ import {
   officeRows,
   peopleFromPaste,
   tileCounts,
+  workerDraftWithSites /* W1-BGF */,
   workerProblems,
   type Audience,
   type FloorAction,
@@ -542,14 +544,20 @@ function InviteModal({ model, open, onClose, actions }: { model: UsersViewModel;
 function AddWorkerModal({ model, open, onClose, actions }: { model: UsersViewModel; open: boolean; onClose: () => void; actions?: UsersActions }) {
   const t = useT('admin')
   const href = (path: string) => adminHref(model.prefix, path)
-  const blank: WorkerDraft = { displayName: '', locale: 'it', employeeCode: '', siteId: model.sites[0]?.id ?? '', roleIds: [] }
-  const [draft, setDraft] = useState<WorkerDraft>(blank)
+  const [draft, setDraft] = useState<WorkerDraft>(() => blankWorkerDraft(model.sites))
   const [tried, setTried] = useState(false)
+  // W1-BGF: an empty form when the dialog opens; the site list arriving later fills the site only (it used to empty the
+  // whole form, so a name, a language or roles picked before it came were lost).
+  const sites = useRef(model.sites)
+  sites.current = model.sites
   useEffect(() => {
     if (open) {
-      setDraft({ displayName: '', locale: 'it', employeeCode: '', siteId: model.sites[0]?.id ?? '', roleIds: [] })
+      setDraft(blankWorkerDraft(sites.current))
       setTried(false)
     }
+  }, [open])
+  useEffect(() => {
+    if (open) setDraft((current) => workerDraftWithSites(current, model.sites))
   }, [open, model.sites])
   const floorRoles = (model.roles ?? []).filter((role) => role.audience === 'floor')
   const problems = workerProblems(draft)

@@ -9,7 +9,7 @@ import type { DetectMaterial } from '@nexus/factory-domain/planning/exceptions/d
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
-import { mayAt, officeContextOf, siteFor } from '../access'
+import { everyPartySiteFor, mayAt, officeContextOf } from '../access'
 import type { PlanInputs } from '../inputs'
 import { latestDoneRun } from '../inputs'
 import { dayOf, type Reader, type SiteRow } from '../store'
@@ -216,7 +216,7 @@ export interface ListMessagesQuery {
 /** GET /planning/action-messages: the latest DONE run's messages (or the run named), OPEN unless asked. */
 export async function listActionMessages(caller: CommandCaller, query: ListMessagesQuery) {
   const office = officeContextOf(caller)
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-07: the material plan's messages mix customers
   return caller.withClient(async (db) => {
     const run = query.runId ? await db.planningRun.findFirst({ where: { id: query.runId, siteId: site.id }, select: { id: true, startedAt: true, finishedAt: true, status: true } }) : await latestDoneRun(db, site.id)
     if (query.runId && !run) throw new NotFoundError('Run not found.')
@@ -256,7 +256,7 @@ export async function decideActionMessages(caller: CommandCaller, body: DecideBo
   const sites = [...new Set(rows.map((row) => row.siteId))]
   if (sites.length !== 1) throw new ValidationError('Decide the messages of one site at a time.', [{ path: 'body/messages', message: 'Name messages of one site.' }])
   const first = rows[0]!
-  await siteFor(caller, first.siteId, PLANNING_ACTIONS_MANAGE)
+  await everyPartySiteFor(caller, first.siteId, PLANNING_ACTIONS_MANAGE) // B-PR-07: the material plan's messages mix customers
   const note = body.note?.trim() ? body.note.trim() : null
   const { replayed } = await command(caller, { name: 'planning.actionMessages.decide', idempotencyKey, input: { messages: body.messages, status: body.status, note } }, async (tools) => {
     const { tx, now, context } = tools

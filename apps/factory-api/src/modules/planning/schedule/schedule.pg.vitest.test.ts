@@ -324,7 +324,9 @@ describe('a publish tells the leaders of the lines it covers in their bell (B-W2
     const told = () => admin<Json>(`SELECT "userId", category::text AS category, "messageKey", "recordType", "recordId", "recordLabel", params FROM "Notification" WHERE "tenantId" = $1 AND "recordType" = 'PlanVersion' ORDER BY "createdAt", id`, [T])
     // Without the right to read the dispatch list (no role yet), nobody is told.
     expect(await fan(newId(), row.payload)).toBe(0)
-    await admin(`INSERT INTO "RoleAssignment" (id, "tenantId", "userId", "roleId", "allCompanies", "validFrom") VALUES ($1, $2, $3, $4, true, now() - interval '1 day')`, [newId(), T, member, roleId])
+    // The role from the day before the file's fixed clock (NOW), not the server's: a real now() - 1 day lies after NOW from the
+    // morning after NOW's day on, and the lead would hold no right yet (the date-dependent red of 17 Nov 2026).
+    await admin(`INSERT INTO "RoleAssignment" (id, "tenantId", "userId", "roleId", "allCompanies", "validFrom") VALUES ($1, $2, $3, $4, true, $5)`, [newId(), T, member, roleId, new Date(NOW.getTime() - 86_400_000)])
     // The switch off: nobody.
     expect(await fan(newId(), { ...row.payload, notifyLeaders: false })).toBe(0)
     expect(await told()).toEqual([])
@@ -333,6 +335,10 @@ describe('a publish tells the leaders of the lines it covers in their bell (B-W2
     expect(await told()).toEqual([expect.objectContaining({ userId: member, category: 'SYSTEM', messageKey: 'notifications.planning.schedulePublished', recordType: 'PlanVersion', recordId: row.payload.planVersionId, recordLabel: `v${row.payload.number}`, params: expect.objectContaining({ title: 'L1', lineId: lineL1 }) })])
     // A replayed event tells nobody twice.
     await fan(row.id, row.payload)
+    expect(await told()).toHaveLength(1)
+    // B-PR-07: the dispatch list needs every customer at the site: the lead limited to one customer cannot open it, so is not told.
+    await admin(`UPDATE "RoleAssignment" SET "partyIds" = ARRAY[$3]::uuid[] WHERE "userId" = $1 AND "roleId" = $2`, [member, roleId, idOf('party:P1')])
+    expect(await fan(newId(), row.payload)).toBe(0)
     expect(await told()).toHaveLength(1)
   })
 })

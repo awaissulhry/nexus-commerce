@@ -12,7 +12,10 @@ import type { Permission } from '@nexus/factory-domain/core/permissions'
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { assertMayAt, officeContextOf, siteFor } from '../access'
+import { assertEveryPartyAt, assertMayAt, everyPartySiteFor, officeContextOf } from '../access'
+// B-PR-07: the board's wall on a bar's work order.
+import { actorOf } from '../../../core/context'
+import { reachesWorkOrder } from '../../production/work-orders/scope'
 import { SITE_COLUMNS, type SiteRow } from '../store'
 import { scheduleViewOf } from './board'
 import type { MoveSlotBody, PlaceByDueDateBody, PlaceSlotBody } from './contract'
@@ -62,17 +65,22 @@ interface Target {
 
 async function workOrderFor(caller: CommandCaller, workOrderId: string, permission: Permission): Promise<Target> {
   const context = officeContextOf(caller)
-  const row = await caller.withClient((db) => (isUuid(workOrderId) ? db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, site: { select: SITE_COLUMNS } } }) : Promise.resolve(null)))
-  assertMayAt(context, permission, row ? { companyId: row.companyId, siteId: row.siteId } : null, 'Work order')
+  const row = await caller.withClient((db) => (isUuid(workOrderId) ? db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, /* B-PR-07 */ partyId: true, site: { select: SITE_COLUMNS } } }) : Promise.resolve(null)))
+  // B-PR-07: another customer's work order is as unknown (404).
+  assertMayAt(context, permission, row && reachesWorkOrder(actorOf(context), PLANNING_VIEW, row) ? { companyId: row.companyId, siteId: row.siteId } : null, 'Work order')
+  // B-PR-07: a bar takes room on a lane every customer's work shares (an overload names the lane's load): every customer.
+  assertEveryPartyAt(context, permission, row!)
   return row!
 }
 
 async function slotFor(caller: CommandCaller, slotId: string, permission: Permission): Promise<Target & { slot: SlotRow }> {
   const context = officeContextOf(caller)
-  const slot = await caller.withClient((db) => (isUuid(slotId) ? db.scheduleSlot.findUnique({ where: { id: slotId }, select: { ...SLOT_COLUMNS, workOrder: { select: { id: true, companyId: true, siteId: true, site: { select: SITE_COLUMNS } } } } }) : Promise.resolve(null)))
-  assertMayAt(context, PLANNING_VIEW, slot ? { companyId: slot.workOrder.companyId, siteId: slot.siteId } : null, 'Slot')
+  const slot = await caller.withClient((db) => (isUuid(slotId) ? db.scheduleSlot.findUnique({ where: { id: slotId }, select: { ...SLOT_COLUMNS, workOrder: { select: { id: true, companyId: true, siteId: true, /* B-PR-07 */ partyId: true, site: { select: SITE_COLUMNS } } } } }) : Promise.resolve(null)))
+  // B-PR-07: a bar of another customer's work order is as unknown (404).
+  assertMayAt(context, PLANNING_VIEW, slot && reachesWorkOrder(actorOf(context), PLANNING_VIEW, { companyId: slot.workOrder.companyId, siteId: slot.siteId, partyId: slot.workOrder.partyId }) ? { companyId: slot.workOrder.companyId, siteId: slot.siteId } : null, 'Slot')
   if (slot!.planKind !== 'WORKING') throw new NotFoundError('Slot not found on the working plan: a published version never changes.')
   assertMayAt(context, permission, { companyId: slot!.workOrder.companyId, siteId: slot!.siteId }, 'Slot')
+  assertEveryPartyAt(context, permission, { companyId: slot!.workOrder.companyId, siteId: slot!.siteId }) // B-PR-07: as workOrderFor
   return { ...slot!.workOrder, slot: slot! }
 }
 
@@ -400,7 +408,8 @@ const proposalView = (proposal: Proposal) => ({
 /** POST /planning/schedule/place-by-due-date: the tray by backward scheduling; a preview, or applied in one command. */
 export async function placeByDueDate(caller: CommandCaller, body: PlaceByDueDateBody, idempotencyKey?: string) {
   const context = officeContextOf(caller)
-  const site = await siteFor(caller, body.siteId, body.apply ? PLANNING_SCHEDULE_MANAGE : PLANNING_VIEW)
+  // B-PR-07: the tray by due date places every customer's work on shared lanes: only with every customer.
+  const site = await everyPartySiteFor(caller, body.siteId, body.apply ? PLANNING_SCHEDULE_MANAGE : PLANNING_VIEW)
   if (!body.apply) {
     const now = serverClock.now()
     return caller.withClient(async (db) => {

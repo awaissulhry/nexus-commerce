@@ -36,7 +36,12 @@ export default defineStage({
       for (const [size, carton] of [['50', 1], ['52', 1], ['54', 2]] as const) {
         await answerOf(page, 'PUT', /\/parcel$/, () => page.getByRole('combobox', { name: `Carton for ${STYLE.code} size ${size}` }).selectOption({ label: `Carton ${carton} of 2` }))
       }
-      await expect(page.getByText('Every garment is in a weighed carton: mark it packed.').first()).toBeVisible()
+      // Every garment in a weighed carton: each size shows its carton, and the packing has no problem left (the cartons card
+      // is the pack station's now, B-W2b-410: it counts what was scanned there, so W1's "mark it packed" sentence went).
+      for (const [size, carton] of [['50', 1], ['52', 1], ['54', 2]] as const) {
+        await expect(page.getByRole('combobox', { name: `Carton for ${STYLE.code} size ${size}` }).locator('option:checked')).toHaveText(`Carton ${carton} of 2`)
+      }
+      expect((await flow.read(page, `/shipping/shipments/${shipment.id}`)).shipment.packingProblems).toEqual([])
       await answerOf(page, 'POST', /\/pack$/, () => press(page.getByRole('button', { name: 'Mark packed' }).first()))
       await expect(page.getByText('Marked packed.').first()).toBeVisible()
       await flow.shot(page, 'packed')

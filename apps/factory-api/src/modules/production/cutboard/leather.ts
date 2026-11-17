@@ -1,5 +1,4 @@
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
-import { can } from '@nexus/factory-domain/core/permissions'
 import { shadeLotKey, type ShadeFacts } from '@nexus/factory-domain/inventory/reservations/shade'
 import { shadeSummary } from '@nexus/factory-domain/production/cutboard/shade'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
@@ -11,6 +10,7 @@ import { shadeFactsOf, shadeRuleFor } from '../../inventory/reservations/shade'
 import { officeContextOf } from '../reports/daily'
 import { liveEntries } from '../yield/views'
 import type { AreaUom } from './board'
+import { reachesWorkOrder } from '../work-orders/scope' // B-PR-07
 
 /**
  * GET /production/cutboard/work-orders/:workOrderId/leather (B-W2b-130; SCM-206; design production.workorders "Materials & leather"
@@ -27,8 +27,9 @@ const materialKey = (itemId: string, itemColourId: string | null) => `${itemId}|
 export async function workOrderLeather(caller: CommandCaller, workOrderId: string) {
   const context = officeContextOf(caller)
   return caller.withClient(async (db) => {
-    const workOrder = await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, status: true, companyId: true, siteId: true } })
-    if (!workOrder || !can(actorOf(context), WORKORDERS_VIEW, workOrder)) throw new NotFoundError('Work order not found.')
+    const workOrder = await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, status: true, companyId: true, siteId: true, /* B-PR-07 */ partyId: true } })
+    // B-PR-07: another customer's work order is as unknown.
+    if (!workOrder || !reachesWorkOrder(actorOf(context), WORKORDERS_VIEW, workOrder)) throw new NotFoundError('Work order not found.')
     const rule = await shadeRuleFor(db, workOrder.siteId)
 
     // The leathers of the work order: its planned materials tracked by the hide.

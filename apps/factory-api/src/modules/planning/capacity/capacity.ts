@@ -4,7 +4,7 @@ import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { siteFor } from '../access'
+import { everyPartySiteFor } from '../access'
 import { readSettings } from '../settings/store'
 import { CAPACITY_MAX_DAYS, type CapacityCellQuery, type CapacityQuery } from './contract'
 import { capacityAnswer, capacityWorld, cellAnswer, periodOf } from './service'
@@ -18,7 +18,7 @@ import { capacityAnswer, capacityWorld, cellAnswer, periodOf } from './service'
 
 /** planning.view: every lane's available, booked and load per bucket over the period, and the tiles. */
 export async function capacity(caller: CommandCaller, query: CapacityQuery) {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-07: mixes customers
   const now = serverClock.now()
   const today = businessDate(now, site.timezone)
   return caller.withClient(async (client) => {
@@ -30,7 +30,7 @@ export async function capacity(caller: CommandCaller, query: CapacityQuery) {
 
 /** planning.view: the work orders' operations booked on one lane between two days (the cell's DetailModal). */
 export async function capacityCell(caller: CommandCaller, query: CapacityCellQuery) {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-07: mixes customers
   if (query.to < query.from) throw new ValidationError('The days end before they start.', [{ path: 'querystring/to', message: 'Give a last day on or after the first.' }])
   if (daysFrom(query.from, query.to) + 1 > CAPACITY_MAX_DAYS) throw new ValidationError(`A capacity question covers at most ${CAPACITY_MAX_DAYS} days.`, [{ path: 'querystring/to', message: `At most ${CAPACITY_MAX_DAYS} days from the first.` }])
   const today = businessDate(serverClock.now(), site.timezone)

@@ -9,6 +9,7 @@ import type { Wip } from '@nexus/factory-domain/production/scans/wip'
 import type { FloorRuleMode } from '@nexus/factory-domain/production/settings/floor-rules'
 import type { ScanSubject } from '@nexus/factory-domain/production/settings/monitoring'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
+import { floorCustomer } from '@nexus/factory-domain/production/floor-customer' // B-PR-11
 import type { Prisma } from '@nexus/factory-db'
 import { wipForMany } from '../../planning/capacity/wip'
 import { readinessFor } from '../../planning/readiness/service'
@@ -347,3 +348,25 @@ export async function materialFlags(db: Reader, site: SiteRow, workOrderIds: rea
     },
   }
 }
+
+// ── B-PR-11 ──
+/** The customer codes of work orders, by id (`customerCodesOf`). */
+export type CustomerCodes = ReadonlyMap<string, string | null>
+
+/**
+ * B-PR-11 (production plan §2 and L13: "Shared floor screens (tickets, travellers, Line TV, dispatch, wall screens) show the
+ * customer code, never the name"): each work order's customer as the dispatch lists, cards and paper print it — its CODE only
+ * (factory-domain production/floor-customer): its one customer, else its cells' (a mixed work order made before the rule);
+ * null: none. Read where the Party table is readable: the office's own client, or the tenant's system view for a floor
+ * device (the floor role reads no party).
+ */
+export async function customerCodesOf(db: Reader, workOrderIds: readonly string[]): Promise<CustomerCodes> {
+  const unique = [...new Set(workOrderIds)]
+  if (unique.length === 0) return new Map()
+  const rows = await db.workOrder.findMany({ where: { id: { in: unique } }, select: { id: true, partyId: true, sizes: { select: { partyId: true } } } })
+  const partiesOf = new Map(rows.map((row) => [row.id, row.partyId ? [row.partyId] : [...new Set(row.sizes.flatMap((cell) => (cell.partyId ? [cell.partyId] : [])))]]))
+  const partyIds = [...new Set([...partiesOf.values()].flat())]
+  const codes = new Map(partyIds.length === 0 ? [] : (await db.party.findMany({ where: { id: { in: partyIds } }, select: { id: true, code: true } })).map((party) => [party.id, party.code]))
+  return new Map(unique.map((id) => [id, floorCustomer((partiesOf.get(id) ?? []).flatMap((partyId) => (codes.has(partyId) ? [{ code: codes.get(partyId)! }] : [])))]))
+}
+// ── end B-PR-11 ──

@@ -92,7 +92,8 @@
     "DELIVERED": "Delivered",
     "BOUNCED": "Bounced",
     "COMPLAINED": "Marked as spam",
-    "FAILED": "Failed"
+    "FAILED": "Failed",
+    "WITHDRAWN": "Taken back"
   },
   "taskState": {
     "OPEN": "open",

@@ -304,7 +304,7 @@ describe('handover notes (MES-033)', () => {
 })
 
 describe('the printed list (MES-032)', () => {
-  const card = { order: 1, rush: true, workOrder: 'WO-1', style: 'JKT Giacca', operation: { seq: 20, name: 'Sewing' }, bundles: ['B-1', 'B-2'], pieces: 12, minutes: '60.0', dueDate: '2026-11-20', material: 'MISSING', held: false } as const
+  const card = { order: 1, rush: true, workOrder: 'WO-1', customer: 'C-DEMO', style: 'JKT Giacca', operation: { seq: 20, name: 'Sewing' }, bundles: ['B-1', 'B-2'], pieces: 12, minutes: '60.0', dueDate: '2026-11-20', material: 'MISSING', held: false } as const
   const facts = {
     site: { code: 'A1', name: 'Plant' },
     target: { kind: 'LINE', code: 'L1', name: 'Line one' },
@@ -325,7 +325,10 @@ describe('the printed list (MES-032)', () => {
     expect(it_.facts).toContainEqual({ label: 'Stampata', value: '2026-11-17 07:00' })
     expect(it_.sections).toHaveLength(1)
     expect(it_.sections[0]).toMatchObject({ title: 'SEW-01 · Machine 1', operators: 'Operatori: Made-up Person', footer: 'Totale: 12 · 60.0 min' })
-    expect(it_.sections[0]!.rows[0]!.cells).toEqual(['1', 'WO-1 URGENTE', 'JKT Giacca', 'Op 20 Sewing', 'B-1, B-2', '12', '60.0', '2026-11-20', 'Manca', ''])
+    expect(it_.columns).toEqual(['N.', 'Ordine di lavoro', 'Cliente', 'Modello', 'Operazione', 'Mazzi', 'Pezzi', 'Min', 'Consegna', 'Materiale', 'Fatto'])
+    // B-PR-11 (L13): the customer by its code.
+    expect(it_.sections[0]!.rows[0]!.cells).toEqual(['1', 'WO-1 URGENTE', 'C-DEMO', 'JKT Giacca', 'Op 20 Sewing', 'B-1, B-2', '12', '60.0', '2026-11-20', 'Manca', ''])
+    expect(dispatchPaper({ ...facts, sections: [{ ...facts.sections[0], cards: [{ ...card, customer: null }] }] }, 'en').sections[0]!.rows[0]!.cells[2]).toBe('—')
     expect(dispatchPaper(facts, 'en').sections[0]!.rows[0]!.cells.slice(1, 2)).toEqual(['WO-1 RUSH'])
     // Printed just after midnight at the plant: the plant's day, not London's.
     expect(dispatchPaper({ ...facts, printedAt: new Date('2026-11-17T23:30:00.000Z') }, 'en').facts).toContainEqual({ label: 'Printed', value: '2026-11-18 00:30' })

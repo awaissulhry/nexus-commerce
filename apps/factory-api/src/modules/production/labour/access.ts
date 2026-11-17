@@ -5,6 +5,7 @@ import { PRODUCTION_LABOUR_VIEW } from '@nexus/factory-domain/production/labour/
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
 import { readLine, sitesById, type LineRow, type SiteRow } from './store'
+import { assertEveryParty, everyPartyActor } from '../work-orders/scope' // B-PR-07
 
 /**
  * Who reaches labour records (B-W2b-45), and the refusal every route answers with: the office within its grants (can()
@@ -56,5 +57,20 @@ export async function officeLine(caller: CommandCaller, lineId: string, permissi
     return line && site ? { line, site } : null
   })
   if (!found || !reaches(context, permission, { companyId: found.site.companyId, siteId: found.site.id })) throw new NotFoundError('Line not found.')
+  assertEveryCustomer(context, { companyId: found.site.companyId, siteId: found.site.id }) // B-PR-07
   return found
 }
+
+// ── B-PR-07 ──
+/**
+ * B-PR-07 (production plan §2: a view that mixes brands needs access to every brand; L5 "Factory only: … labour and pay"): a
+ * line's day, a labour record, a dispute and the labour lists hold every customer's work orders. A person limited to some
+ * customers gets 403 in words that name none.
+ */
+export function assertEveryCustomer(context: OfficeContext, place: { readonly companyId: string; readonly siteId: string }): void {
+  assertEveryParty(actorOf(context), PRODUCTION_LABOUR_VIEW, place)
+}
+
+/** The scope of the labour lists: the sites where the caller reaches every customer (none: 403 in the same words). */
+export const labourActor = (context: OfficeContext) => everyPartyActor(actorOf(context), PRODUCTION_LABOUR_VIEW)
+// ── end B-PR-07 ──

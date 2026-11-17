@@ -67,6 +67,8 @@ export interface BoardWorkOrder {
   readonly family: string
   /** B-W2b-20: the customers whose order lines it makes (its cells' parties), by code; usually one. */
   readonly customers: readonly { readonly id: string; readonly code: string; readonly name: string }[]
+  /** B-PR-07: the work order's one customer (B-PR-01), null for none or a mixed one made before the rule: the board's wall. */
+  readonly partyId: string | null
   readonly garments: number
   /** Every operation, with its garments still to do. */
   readonly operations: readonly BoardOperation[]
@@ -110,6 +112,7 @@ export interface ScheduleWorld {
 const WORK_ORDER_COLUMNS = {
   id: true,
   companyId: true,
+  partyId: true, // B-PR-07
   number: true,
   status: true,
   kind: true,
@@ -172,6 +175,7 @@ async function readBoardWorkOrders(db: Reader, site: SiteRow, capacity: Capacity
         .map((id) => parties.get(id))
         .filter((party): party is { id: string; code: string; name: string } => party !== undefined)
         .sort((a, b) => (a.code < b.code ? -1 : a.code > b.code ? 1 : 0)),
+      partyId: row.partyId, // B-PR-07
       garments,
       booksCapacity: BOOKING.has(row.status),
       operations: row.operations.map((operation) => ({
