@@ -3,7 +3,7 @@
 import { ArrowLeft, Printer } from 'lucide-react'
 import { SummaryTable } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
-import type { OrderRow } from '../api'
+import { kindKey, rowState, yoursOf, type ListRow } from '../model'
 import { useOrderWords } from '../words'
 import { Loading, ReadFailed } from './parts'
 import '../orders.css'
@@ -15,7 +15,8 @@ import '../orders.css'
  */
 export interface OrdersPrintModel {
   state: 'loading' | 'error' | 'ready'
-  rows: readonly OrderRow[]
+  // B-TH-223: the requests and the orders of the view, each with the customer's own number.
+  rows: readonly ListRow[]
   /** The rows the view holds in all (the paper says when it shows fewer). */
   count: number
   seesPrices: boolean
@@ -59,20 +60,37 @@ export function OrdersPrintView({ model, onRetry }: { model: OrdersPrintModel; o
       ) : (
         <SummaryTable
           label={t('list.label')}
-          columns={[t('col.yourPo'), t('col.ourOrder'), t('facts.orderedOn'), t('col.status'), t('facts.promise'), t('col.pieces'), t('col.open'), ...(model.seesPrices ? [t('col.value')] : []), t('col.nextShipment')]}
+          columns={[t('col.yourPo'), t('col.yours'), t('col.kind'), t('col.subject'), t('col.date'), t('col.status'), t('col.wanted'), t('col.pieces'), t('col.open'), ...(model.seesPrices ? [t('col.value')] : []), t('col.nextShipment')]}
           rows={model.rows.map((row) => ({
             id: row.id,
-            cells: [
-              row.customerRef ?? '—',
-              row.number ?? '—',
-              row.orderedOn ? day(row.orderedOn) : '—',
-              row.words[locale],
-              row.promiseDate ? day(row.promiseDate) : '—',
-              t('list.piecesShipped', { shipped: row.pieces.shipped, ordered: row.pieces.ordered }),
-              String(row.pieces.open),
-              ...(model.seesPrices ? [words.money(row.netAmount, row.currency)] : []),
-              row.nextShipment ? [row.nextShipment.date ? day(row.nextShipment.date) : null, row.nextShipment.carrierName, row.nextShipment.words[locale]].filter(Boolean).join(' · ') : '—',
-            ],
+            cells:
+              row.kind === 'request'
+                ? [
+                    row.request.customerRef ?? '—',
+                    yoursOf(row, locale) ?? '—',
+                    t(kindKey(row)),
+                    row.request.subject,
+                    day(row.request.receivedAt.slice(0, 10)),
+                    rowState(row, locale).words,
+                    row.request.wantedDate ? day(row.request.wantedDate) : '—',
+                    row.request.pieces > 0 ? t('list.piecesAsked', { count: row.request.pieces }) : '—',
+                    '—',
+                    ...(model.seesPrices ? ['—'] : []),
+                    '—',
+                  ]
+                : [
+                    row.order.customerRef ?? '—',
+                    yoursOf(row, locale) ?? '—',
+                    t(kindKey(row)),
+                    '—',
+                    row.order.orderedOn ? day(row.order.orderedOn) : '—',
+                    rowState(row, locale).words,
+                    row.order.promiseDate ? day(row.order.promiseDate) : '—',
+                    t('list.piecesShipped', { shipped: row.order.pieces.shipped, ordered: row.order.pieces.ordered }),
+                    String(row.order.pieces.open),
+                    ...(model.seesPrices ? [words.money(row.order.netAmount, row.order.currency)] : []),
+                    row.order.nextShipment ? [row.order.nextShipment.date ? day(row.order.nextShipment.date) : null, row.order.nextShipment.carrierName, row.order.nextShipment.words[locale]].filter(Boolean).join(' · ') : '—',
+                  ],
           }))}
         />
       )}

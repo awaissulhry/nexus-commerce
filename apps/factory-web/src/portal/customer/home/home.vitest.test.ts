@@ -5,6 +5,9 @@ import { messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
 import type { ApprovalRead, DocumentsRead, HomeRead, OrdersRead } from './api'
 import { homeBandOf } from './band'
+import { scanText } from '../../../lib/testing/brand-scan'
+import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
+import { CustomerHomeView, type CustomerHomeViewModel, type StartModel } from './view/CustomerHomeView'
 import { designScreen } from './fixtures'
 import {
   answerProblem,
@@ -97,7 +100,7 @@ const ORDERS: OrdersRead = {
   ],
   count: 7,
   items: [
-    { kind: 'ORDER', id: UUID(1), customerRef: 'PO-1', number: 'SO-1', status: 'IN_PRODUCTION', promiseDate: '2026-11-20', originalPromiseDate: '2026-11-13', promiseMoved: true, requestedDate: '2026-11-10', pieces: { ordered: 70, shipped: 0, open: 70 }, nextShipment: null, progressPercent: 45 },
+    { kind: 'ORDER', id: UUID(1), customerRef: 'PO-1', number: 'SO-1', yourNumber: { seq: 12, words: { en: 'Your order 12', it: 'Il vostro ordine 12' } }, status: 'IN_PRODUCTION', promiseDate: '2026-11-20', originalPromiseDate: '2026-11-13', promiseMoved: true, requestedDate: '2026-11-10', pieces: { ordered: 70, shipped: 0, open: 70 }, nextShipment: null, progressPercent: 45 },
     { kind: 'REQUEST', id: UUID(2), customerRef: 'PO-2', number: 'RQ-1', status: 'REQUESTED', promiseDate: null, originalPromiseDate: null, promiseMoved: false, requestedDate: '2026-12-01', pieces: { ordered: 10, shipped: 0, open: 10 }, nextShipment: null, progressPercent: null },
   ],
   live: { events: [] },
@@ -106,7 +109,8 @@ const ORDERS: OrdersRead = {
 describe('your next deliveries', () => {
   it('their PO first, the six steps from the status, the promise and how it moved, the % where shared', () => {
     const [order, request] = nextOrderRows(ORDERS, 'en', '/p/X', (day) => day)
-    expect(order).toMatchObject({ theirs: 'PO-1', ours: 'SO-1', promise: '2026-11-20', moved: { from: '2026-11-13', to: '2026-11-20' }, progress: 45, href: `/p/X/open/SalesOrder/${UUID(1)}` })
+    // B-TH-303: the customer's own number, never the office's series.
+    expect(order).toMatchObject({ theirs: 'PO-1', ours: '12', oursLabel: 'Your order', promise: '2026-11-20', moved: { from: '2026-11-13', to: '2026-11-20' }, progress: 45, href: `/p/X/open/SalesOrder/${UUID(1)}` })
     expect(order!.steps.map((step) => [step.id, step.state, step.current])).toEqual([
       ['REQUESTED', 'done', false],
       ['CONFIRMED', 'done', false],
@@ -117,7 +121,8 @@ describe('your next deliveries', () => {
     ])
     expect(order!.steps[2]!.label).toBe('In production')
     // A request has no page of its own yet, no promise; it says the date they asked for.
-    expect(request).toMatchObject({ kind: 'REQUEST', href: null, promise: null, requested: '2026-12-01', moved: null, progress: null })
+    expect(nextOrderRows(ORDERS, 'it', '/p/X', (day) => day)[0]).toMatchObject({ ours: '12', oursLabel: 'Il vostro ordine' })
+    expect(request).toMatchObject({ kind: 'REQUEST', ours: null, oursLabel: null, href: null, promise: null, requested: '2026-12-01', moved: null, progress: null })
   })
 
   it('no % when the account does not share progress (C1); "see all" counts the Open chip; any order at all for the first visit', () => {
@@ -207,6 +212,10 @@ describe('the rest of Home', () => {
   it('the first visit: nothing waits, no order at all (or none to see), no new document', () => {
     expect(isFirstVisit({ tasks: 'ready', openTasks: 0, seesOrders: true, ordersAll: 0, newDocuments: 0 })).toBe(true)
     expect(isFirstVisit({ tasks: 'ready', openTasks: 0, seesOrders: false, ordersAll: null, newDocuments: 0 })).toBe(true)
+    // B-TH-223: a request sent (or not read yet) is past the first step.
+    expect(isFirstVisit({ tasks: 'ready', openTasks: 0, seesOrders: true, ordersAll: 0, newDocuments: 0, requestsAll: 1 })).toBe(false)
+    expect(isFirstVisit({ tasks: 'ready', openTasks: 0, seesOrders: true, ordersAll: 0, newDocuments: 0, requestsAll: null })).toBe(false)
+    expect(isFirstVisit({ tasks: 'ready', openTasks: 0, seesOrders: true, ordersAll: 0, newDocuments: 0, requestsAll: 0 })).toBe(true)
     expect(isFirstVisit({ tasks: 'ready', openTasks: 1, seesOrders: true, ordersAll: 0, newDocuments: 0 })).toBe(false)
     expect(isFirstVisit({ tasks: 'ready', openTasks: 0, seesOrders: true, ordersAll: 3, newDocuments: 0 })).toBe(false)
     expect(isFirstVisit({ tasks: 'ready', openTasks: 0, seesOrders: true, ordersAll: null, newDocuments: 0 })).toBe(false)
@@ -233,7 +242,7 @@ describe('the rest of Home', () => {
   })
 })
 
-const KEY = /\b(band|keys|state|search|tiles|orders|documents|doc|messages|welcome|verb|held|kind|status|approve)\.[a-zA-Z_-]+/
+const KEY = /\b(band|keys|state|search|tiles|orders|documents|doc|messages|welcome|verb|held|kind|status|approve|start)\.[a-zA-Z_-]+/
 
 describe('SCR-183 design cases', () => {
   it('every case draws in Italian and English with no raw key and made-up data only', () => {
@@ -255,5 +264,38 @@ describe('SCR-183 design cases', () => {
     expect(html).toContain('Trova qualsiasi cosa')
     expect(html).not.toContain('Your next deliveries')
     expect(html).not.toContain('New documents')
+  })
+})
+
+// ── B-TH-223: New order on Home (P-HOME.actions) ───────────────────────────────────────────────────────────────────
+describe('B-TH-223 — Start: New order like an e-mail, or a question', () => {
+  const view = (start: StartModel, locale: 'it' | 'en' = 'en') => {
+    const model = { prefix: '/p/BRAND-BETA', search: null, welcome: null, tiles: null, orders: null, documents: null, messages: null, approve: null, document: null, start } as CustomerHomeViewModel
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['portal-customer-home', 'ds-words']) }, createElement(CustomerHomeView, { model, tasks: null })))
+  }
+
+  it('New order is the page’s main button (the e-mail-like compose), Ask a question beside it; the band has no second primary', () => {
+    const html = view({ newOrderHref: '/p/BRAND-BETA/orders/new', buyer: true, admins: [], draft: null })
+    expect(html).toMatch(/<a class="fw-pch-door is-primary" href="\/p\/BRAND-BETA\/orders\/new">/)
+    expect(html).toContain('Ask a question')
+    expect(homeBandOf({ t: (key: string) => key, asOf: null, statement: null, emailSettings: true, ordersKey: true }).actions).toEqual([])
+  })
+
+  it('a colleague without the order right reads who can give it — no dead button', () => {
+    const html = view({ newOrderHref: null, buyer: false, admins: [BRAND_BETA.portalPerson.name], draft: null })
+    expect(html).not.toContain('/orders/new')
+    expect(html).toContain('Only the buyers of your company send orders.')
+    expect(html).toContain(BRAND_BETA.portalPerson.name)
+    expect(view({ newOrderHref: null, buyer: false, admins: [], draft: null })).toContain('Ask us to add a buyer for your company.')
+  })
+
+  it('a draft kept on this device: "Draft: … · Continue"; Brand Beta’s Home holds nothing of Brand Alpha', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const html = view({ newOrderHref: '/p/BRAND-BETA/orders/new', buyer: true, admins: [BRAND_BETA.portalPerson.name], draft: { subject: BRAND_BETA.customerRef, at: '10:42' } }, locale)
+      expect(html).toContain(locale === 'en' ? `Draft: ${BRAND_BETA.customerRef}` : `Bozza: ${BRAND_BETA.customerRef}`)
+      expect(html).toContain(locale === 'en' ? 'Continue' : 'Continua')
+      expect(html).not.toMatch(KEY)
+      expect(scanText(html, BRAND_ALPHA)).toEqual([])
+    }
   })
 })

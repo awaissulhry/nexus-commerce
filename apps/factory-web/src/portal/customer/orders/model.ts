@@ -24,6 +24,9 @@ import type {
   VerdictCode,
 } from './api'
 import { VERDICT_CODES } from './api'
+// B-TH-223: the customer's requests beside its orders.
+import type { RequestRow } from '../requests/api'
+import { matchesSearch, requestHref, requestOrder, stateTone as requestStateTone, yourNumberText } from '../requests/model'
 
 /**
  * SCR-184 — the customer's Orders & tracking (B-W2b-191; design portal.customer.orders), pure: the list's address, the
@@ -42,7 +45,7 @@ export type RecordTab = (typeof RECORD_TABS)[number]
 export const tabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'status')
 
 /** The list's address: the chip (OPEN is the API's default and is left out) and the search. */
-export function listQuery(chip: OrderChip | null, q: string, extra: Readonly<Record<string, string>> = {}): string {
+export function listQuery(chip: ListChip | null, q: string, extra: Readonly<Record<string, string>> = {}): string {
   const params = new URLSearchParams()
   if (chip && chip !== 'OPEN') params.set('chip', chip)
   if (q.trim()) params.set('q', q.trim())
@@ -387,24 +390,106 @@ export function payHeld(facts: { preview: boolean; mayPay: boolean; cardAvailabl
 // ── the list's export (in the person's words; prices only with the grain) ───────────────────────────────────────────
 const csvCell = (value: string): string => (/[",\r\n;]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value)
 
-export function ordersCsv(rows: readonly OrderRow[], t: Translate, locale: Locale, seesPrices: boolean, day: (iso: string) => string): string {
-  const head = [t('col.yourPo'), t('col.ourOrder'), t('facts.orderedOn'), t('col.status'), t('facts.promise'), t('col.ordered'), t('col.shipped'), t('col.open'), ...(seesPrices ? [t('col.value'), t('col.currency')] : []), t('col.nextShipment')]
-  const lines = rows.map((row) =>
-    [
-      row.customerRef ?? '',
-      row.number ?? '',
-      row.orderedOn ? day(row.orderedOn) : '',
-      row.words[locale],
-      row.promiseDate ? day(row.promiseDate) : '',
-      String(row.pieces.ordered),
-      String(row.pieces.shipped),
-      String(row.pieces.open),
-      ...(seesPrices ? [row.netAmount != null ? (row.netAmount / 100).toFixed(2) : '', row.currency] : []),
-      row.nextShipment ? [row.nextShipment.number, row.nextShipment.words[locale], row.nextShipment.date ? day(row.nextShipment.date) : '', row.nextShipment.carrierName ?? ''].filter(Boolean).join(' · ') : '',
-    ]
-      .map(csvCell)
-      .join(','),
-  )
+// ── B-TH-223, B-TH-303: Orders & requests ───────────────────────────────────────────────────────────────────────────────
+/**
+ * The customer's list holds its requests (GET /portal/inquiries, the request like an e-mail) and its orders (with a catalogue
+ * order still waiting for us, `kind` REQUEST of the orders' read). A row is one of the two; each says what kind it is, its true
+ * state and the customer's OWN number ("Your request 7", "Your order 12"): never the office's series (INQ-, SO-, RQ-), so no
+ * customer reads another's volume from a number (Owner decision PR-06, pick A). Requests come first — the one that needs the
+ * customer on top, then by their last move — then the orders as the API sorts them (by the promise date).
+ */
+export type ListRow = { kind: 'request'; id: string; request: RequestRow } | { kind: 'order'; id: string; order: OrderRow }
+
+/** The web's own choice beside the API's chips: the requests that ended (declined, closed, or made into an order). */
+export const CLOSED_REQUESTS = 'CLOSED_REQUESTS'
+export type ListChip = OrderChip | typeof CLOSED_REQUESTS
+export const isListChip = (value: unknown, chips: readonly string[]): value is ListChip => value === CLOSED_REQUESTS || (typeof value === 'string' && chips.includes(value))
+
+/** The requests a chip shows: the open ones under Open and Requested, all under All, the ended ones under Closed requests. */
+export function requestsInChip(chip: ListChip, rows: readonly RequestRow[]): RequestRow[] {
+  if (chip === 'OPEN' || chip === 'REQUESTED') return rows.filter((row) => row.state.open)
+  if (chip === 'ALL') return [...rows]
+  if (chip === CLOSED_REQUESTS) return rows.filter((row) => !row.state.open)
+  return []
+}
+
+/** The orders' read answers this chip (the closed requests have no order in them). */
+export const ordersInChip = (chip: ListChip): boolean => chip !== CLOSED_REQUESTS
+
+/** The rows of the list: the chip's requests that match the search, then the orders read. */
+export function listRows(chip: ListChip, q: string, requests: readonly RequestRow[], orders: readonly OrderRow[], locale: Locale): ListRow[] {
+  const asked = requestOrder(requestsInChip(chip, requests).filter((row) => matchesSearch(row, q, locale)))
+  return [...asked.map((request): ListRow => ({ kind: 'request', id: request.id, request })), ...(ordersInChip(chip) ? orders.map((order): ListRow => ({ kind: 'order', id: order.id, order })) : [])]
+}
+
+/** A chip's count in words: the orders' count plus the chip's requests; "200+" when more requests exist than were read. */
+export interface ListChipEntry {
+  chip: ListChip
+  label: string
+  count: string
+}
+
+export function listChips(chips: readonly { chip: OrderChip; count: number; words: { it: string; en: string } }[], requests: { rows: readonly RequestRow[]; complete: boolean } | null, locale: Locale, closedLabel: string): ListChipEntry[] {
+  const plus = requests && !requests.complete ? '+' : ''
+  const extra = (chip: ListChip) => (requests ? requestsInChip(chip, requests.rows).length : 0)
+  const entries: ListChipEntry[] = chips.map((entry) => {
+    const added = extra(entry.chip)
+    return { chip: entry.chip, label: entry.words[locale], count: `${entry.count + added}${added > 0 ? plus : ''}` }
+  })
+  if (requests && requests.rows.some((row) => !row.state.open)) entries.push({ chip: CLOSED_REQUESTS, label: closedLabel, count: `${extra(CLOSED_REQUESTS)}${plus}` })
+  return entries
+}
+
+/** What kind a row is, as words (a key of `portal-orders`). */
+export const kindKey = (row: ListRow): string => (row.kind === 'request' ? 'kind.request' : row.order.kind === 'REQUEST' ? 'kind.catalogue' : 'kind.order')
+
+/** The customer's own number of a row, written: "Your request 7", "Your order 12"; null when it has none. */
+export const yoursOf = (row: ListRow, locale: Locale): string | null => (row.kind === 'request' ? yourNumberText(row.request.yourNumber, locale) : yourNumberText(row.order.yourNumber ?? null, locale))
+
+/** The row's own number as RefPair's second side: its words' label and the count ("Your order" · "12"). */
+export function ownRef(row: ListRow, locale: Locale): { label: string; value: string } | null {
+  const number = row.kind === 'request' ? row.request.yourNumber : (row.order.yourNumber ?? null)
+  if (!number) return null
+  const words = number.words[locale]
+  const value = String(number.seq)
+  return { label: words.endsWith(value) ? words.slice(0, words.length - value.length).trim() : words, value }
+}
+
+/** Where a row opens: the request's page, the order's page; a catalogue order still waiting for us has none yet. */
+export function rowHref(prefix: string, row: ListRow): string | null {
+  if (row.kind === 'request') return requestHref(prefix, row.request.id)
+  return opens(row.order) ? recordHref(prefix, row.order.id) : null
+}
+
+/** The row's state and its tone (true states only: the API's words). */
+export function rowState(row: ListRow, locale: Locale): { words: string; tone: Tone } {
+  if (row.kind === 'request') return { words: row.request.state.words[locale], tone: requestStateTone(row.request.state.code) }
+  return { words: row.order.words[locale], tone: statusTone(row.order.status) }
+}
+
+/** The CSV of the rows shown (or selected): their PO, the kind, the customer's own number, the subject, dates, state, pieces; the value only with the price grain. */
+export function listCsv(rows: readonly ListRow[], t: Translate, locale: Locale, seesPrices: boolean, day: (iso: string) => string): string {
+  const head = [t('col.yourPo'), t('col.kind'), t('col.yours'), t('col.subject'), t('col.date'), t('col.status'), t('col.wanted'), t('col.ordered'), t('col.shipped'), t('col.open'), ...(seesPrices ? [t('col.value'), t('col.currency')] : []), t('col.nextShipment')]
+  const lines = rows.map((row) => {
+    const cells =
+      row.kind === 'request'
+        ? [row.request.customerRef ?? '', t(kindKey(row)), yoursOf(row, locale) ?? '', row.request.subject, day(row.request.receivedAt.slice(0, 10)), row.request.state.words[locale], row.request.wantedDate ? day(row.request.wantedDate) : '', row.request.pieces > 0 ? String(row.request.pieces) : '', '', '', ...(seesPrices ? ['', ''] : []), '']
+        : [
+            row.order.customerRef ?? '',
+            t(kindKey(row)),
+            yoursOf(row, locale) ?? '',
+            '',
+            row.order.orderedOn ? day(row.order.orderedOn) : '',
+            row.order.words[locale],
+            row.order.promiseDate ? day(row.order.promiseDate) : row.order.requestedDate ? day(row.order.requestedDate) : '',
+            String(row.order.pieces.ordered),
+            String(row.order.pieces.shipped),
+            String(row.order.pieces.open),
+            ...(seesPrices ? [row.order.netAmount != null ? (row.order.netAmount / 100).toFixed(2) : '', row.order.currency] : []),
+            row.order.nextShipment ? [row.order.nextShipment.words[locale], row.order.nextShipment.date ? day(row.order.nextShipment.date) : '', row.order.nextShipment.carrierName ?? ''].filter(Boolean).join(' · ') : '',
+          ]
+    return cells.map(csvCell).join(',')
+  })
   return [head.map(csvCell).join(','), ...lines].join('\r\n')
 }
 

@@ -31,7 +31,13 @@ import {
   neighbourOf,
   NS,
   opens,
-  ordersCsv,
+  listCsv,
+  listChips,
+  listRows,
+  kindKey,
+  ownRef,
+  rowHref,
+  CLOSED_REQUESTS,
   paymentStateOf,
   payHeld,
   promiseMoves,
@@ -45,6 +51,11 @@ import {
   transitSteps,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
+// B-TH-223, B-TH-303: Orders & requests.
+import { scanText } from '../../../lib/testing/brand-scan'
+import { BRAND_ALPHA } from '../../../lib/testing/two-brands'
+import { REQUESTS, requestRow } from '../requests/design-data'
+import type { OrdersListViewModel } from './view/OrdersListView'
 
 /**
  * SCR-184 (B-W2b-191): the customer's Orders & tracking, pure — the list's address and the record's tabs, the tracker's
@@ -237,14 +248,57 @@ describe('documents and the CSV', () => {
     expect(confirmationFileOf([])).toBeNull()
   })
 
-  it('exports in the person’s words; the value only with the price grain', () => {
-    const rows = ordersRead('ALL').items
-    const csv = ordersCsv(rows, t, 'en', true, day).split('\r\n')
+  it('exports the rows shown in the person’s words, own numbers only; the value only with the price grain', () => {
+    const rows = listRows('ALL', '', REQUESTS, ordersRead('ALL').items, 'en')
+    const csv = listCsv(rows, t, 'en', true, day).split('\r\n')
     expect(csv).toHaveLength(rows.length + 1)
-    expect(csv[0]).toBe('Your PO,Our order,Ordered on,Status,Promise date,Ordered,Shipped,Open,Net value,Currency,Next shipment')
-    expect(csv[1]).toContain('7520.00')
-    const without = ordersCsv(ordersRead('ALL', null, { seesPrices: false }).items, t, 'en', false, day)
+    expect(csv[0]).toBe('Your PO,Kind,Your number,Subject,Date,Status,Wanted or promised,Ordered,Shipped,Open,Net value,Currency,Next shipment')
+    expect(csv[1]).toContain('Request')
+    expect(csv[1]).toContain('Your request 7')
+    expect(csv.join('\n')).toContain('7520.00')
+    expect(csv.join('\n')).not.toMatch(/\b(?:INQ|SO|RQ)-\d{4}-\d+/)
+    const without = listCsv(listRows('ALL', '', [], ordersRead('ALL', null, { seesPrices: false }).items, 'en'), t, 'en', false, day)
     expect(without).not.toMatch(/Value|EUR|\d+\.\d\d/)
+  })
+
+  it('B-TH-223: requests first (the one that needs the customer on top), then the orders; each chip its own requests', () => {
+    const orders = ordersRead('OPEN').items
+    const rows = listRows('OPEN', '', REQUESTS, orders, 'en')
+    const open = REQUESTS.filter((row) => row.state.open)
+    expect(rows.slice(0, open.length).every((row) => row.kind === 'request')).toBe(true)
+    expect(rows[0]).toMatchObject({ kind: 'request', request: { state: { code: 'NEED_INFO' } } })
+    expect(rows).toHaveLength(open.length + orders.length)
+    expect(listRows('REQUESTED', '', REQUESTS, [], 'en')).toHaveLength(open.length)
+    expect(listRows('ALL', '', REQUESTS, [], 'en')).toHaveLength(REQUESTS.length)
+    expect(listRows(CLOSED_REQUESTS, '', REQUESTS, orders, 'en').map((row) => (row.kind === 'request' ? row.request.state.code : 'ORDER')).sort()).toEqual(['DECLINED', 'ORDER_CONFIRMED'])
+    expect(listRows('DELIVERED', '', REQUESTS, [], 'en')).toEqual([])
+    expect(listRows('ALL', 'gloves', REQUESTS, [], 'en').map((row) => row.id)).toEqual([REQUESTS[1]!.id])
+  })
+
+  it('B-TH-223: chip counts add the chip’s requests; Closed requests only when there are some; "+" when not all were read', () => {
+    const read = ordersRead('OPEN')
+    const chips = listChips(read.chips, { rows: REQUESTS, complete: true }, 'en', 'Closed requests')
+    const open = REQUESTS.filter((row) => row.state.open).length
+    expect(chips.find((chip) => chip.chip === 'OPEN')!.count).toBe(String(read.chips.find((chip) => chip.chip === 'OPEN')!.count + open))
+    expect(chips.find((chip) => chip.chip === 'DELIVERED')!.count).toBe(String(read.chips.find((chip) => chip.chip === 'DELIVERED')!.count))
+    expect(chips.at(-1)).toEqual({ chip: CLOSED_REQUESTS, label: 'Closed requests', count: '2' })
+    expect(listChips(read.chips, { rows: REQUESTS, complete: false }, 'en', 'x').find((chip) => chip.chip === 'ALL')!.count).toMatch(/\+$/)
+    expect(listChips(read.chips, { rows: [requestRow(1, 'SENT')], complete: true }, 'en', 'x').some((chip) => chip.chip === CLOSED_REQUESTS)).toBe(false)
+  })
+
+  it('B-TH-303: a row names the customer’s own number, its kind, and where it opens', () => {
+    const [request, order, catalogue] = [
+      listRows('ALL', '', [REQUESTS[0]!], [], 'en')[0]!,
+      listRows('ALL', '', [], [ROWS[0]!], 'en')[0]!,
+      listRows('ALL', '', [], [ROWS[3]!], 'en')[0]!,
+    ]
+    expect(ownRef(request, 'en')).toEqual({ label: 'Your request', value: '7' })
+    expect(ownRef(order, 'it')).toEqual({ label: 'Il vostro ordine', value: '11' })
+    expect(ownRef(catalogue, 'en')).toBeNull()
+    expect([kindKey(request), kindKey(order), kindKey(catalogue)]).toEqual(['kind.request', 'kind.order', 'kind.catalogue'])
+    expect(rowHref('/p/B', request)).toBe(`/p/B/orders/requests/${REQUESTS[0]!.id}`)
+    expect(rowHref('/p/B', order)).toBe(`/p/B/orders/${ROWS[0]!.id}?tab=status`)
+    expect(rowHref('/p/B', catalogue)).toBeNull()
   })
 })
 
@@ -302,5 +356,45 @@ describe('SCR-184 design cases', () => {
       expect(html, id).not.toMatch(/€/)
     }
     expect(mtmRecord().order.noWithdrawal).toBe(true)
+  })
+})
+
+describe('B-TH-223 — Orders & requests read by Brand Beta', () => {
+  const screen = listScreen as unknown as DesignScreen<unknown>
+  const render = (locale: 'it' | 'en', id: string) => renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(screen.view, { model: screen.cases.find((item) => item.id === id)!.model })))
+
+  it('every th-223 case holds nothing of Brand Alpha and no office series; the list says kinds and true states', () => {
+    for (const locale of ['it', 'en'] as const) {
+      for (const entry of screen.cases.filter((item) => item.id.startsWith('th-223-'))) {
+        const html = render(locale, entry.id)
+        expect(scanText(html, BRAND_ALPHA), `${entry.id} (${locale})`).toEqual([])
+        expect(html.match(/\b(?:INQ|SO|RQ|QT)-\d{4}-\d+/)?.[0] ?? null, `${entry.id} (${locale})`).toBeNull()
+      }
+    }
+    const html = render('en', 'th-223-all')
+    expect(html).toContain('Orders &amp; requests')
+    expect(html).toContain('Closed requests')
+  })
+
+  it('the rows of each th-223 case (what the grid and the phone cards draw, what the file writes) are Brand Beta’s alone', () => {
+    for (const entry of screen.cases.filter((item) => item.id.startsWith('th-223-'))) {
+      const body = (entry.model as (locale: 'en') => { body: { kind: string; model: OrdersListViewModel } })('en').body
+      if (body.kind !== 'list') continue
+      const view = body.model
+      const rows = listRows(view.chip ?? view.read?.chip ?? 'OPEN', view.q, view.requests.state === 'ready' ? view.requests.rows : [], view.rows, 'en')
+      const file = listCsv(rows, t, 'en', true, day)
+      expect(scanText(file, BRAND_ALPHA), entry.id).toEqual([])
+      expect(file.match(/\b(?:INQ|SO|RQ|QT)-\d{4}-\d+/)?.[0] ?? null, entry.id).toBeNull()
+    }
+    const open = listCsv(listRows('OPEN', '', REQUESTS, [], 'en'), t, 'en', true, day)
+    for (const words of ['We need something from you', 'Quote being prepared', 'Being reviewed', 'Sent', 'Order waiting for approval']) expect(open).toContain(words)
+    expect(open).not.toMatch(/Quote sent|Order confirmed/)
+  })
+
+  it('every case of the list draws its own numbers, never the office’s order numbers', () => {
+    for (const entry of screen.cases.filter((item) => item.id !== 'no-access')) {
+      const html = render('en', entry.id)
+      expect(html.match(/\bSO-2026-\d+/)?.[0] ?? null, entry.id).toBeNull()
+    }
   })
 })

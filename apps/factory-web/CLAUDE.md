@@ -180,6 +180,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `/orders/new?styles=…`: the newest draft takes them, else a new one), `/p/<party>/catalogue/<style>/sheet` (tab:style-sheet).
   Problems, reorder differences and sheet reasons are said from codes and figures (`model.ts`); the address pop-up uses
   `portal-account`'s field words. The Orders band, its empty state, a line's ⋯ "Reorder this line" and Home's band link here.
+- B-TH-220/222/223/303 (threads TH-1b, portal): `/orders/new` is New order as an e-mail (`neworder/ComposePage.tsx` over the shared
+  compose `src/lib/request-compose/` — fixed "Goes to: Sales at <company>", subject, message, files held with the API's sentence,
+  "Add details (optional)", draft kept on this device, same-words guard, one Idempotency-Key per content; catalogue `request-compose`;
+  the receipt says "your request N"). The catalogue door above is CLOSED (`request-model.ts CATALOGUE_DOOR_OPEN`, B-TH-304 reopens it).
+  `src/portal/customer/requests/` — POST/GET /portal/inquiries (`api.ts`), the request page `/orders/requests/<id>` (SCR-185-request:
+  true states, the question with Answer, PortalThread type Inquiry; `RECORD_PAGES.Inquiry`; catalogue `portal-requests`). Orders &
+  tracking became Orders & requests (requests first, "Closed requests" chip, Kind/Subject columns, Next shipment from 1600 px); Home's
+  Start card (New order / Ask a question / the draft). Portal pages show the customer's own numbers only, never INQ-/SO-/QT-/RQ-.
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
