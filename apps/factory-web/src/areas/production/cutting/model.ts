@@ -2,8 +2,8 @@ import type { Tone } from '@nexus/ui/primitives'
 // F-PR-02: the production pages' one customer filter.
 import { PARTY_KEY, partyTerm } from '../_shared/customer/model'
 import { isApiError, issuePath } from '../../../lib/api/errors'
-import type { BundleRow, CutEntry, CutLog, WorkOrder, WorkOrderBundles } from '../_shared/api'
-import { CUT_VIEWS, type CutRow, type CutState, type CutTiles, type CutView, type Replacement, type WorkOrderYield, type YieldFigures, type YieldHide } from './api'
+import type { CutEntry, CutLog } from '../_shared/api'
+import { CUT_VIEWS, type CutRow, type CutState, type CutTiles, type CutView, type Replacement, type YieldFigures, type YieldHide } from './api'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
 import { rightRef } from '../../../lib/i18n/rights'
 
@@ -11,9 +11,9 @@ import { rightRef } from '../../../lib/i18n/rights'
  * Production › Cutting room › Cutting (SCR-238; design production.cutting): the rules without a screen. What a person may
  * do (from the session's permissions; the API checks every call again), the page's address (`?view=` the saved filters,
  * `?q=`, `?new=1` New cut order, `?alloc=<work order>` Allocate hides), the tiles, the words of a cut's state, its area
- * per unit (never added across units), the record's tabs, its pieces by part and size with the recuts, the yield per lot
- * and supplier, the tickets and what holds a reprint or a void, and a refused write in words. Here a cut is one work
- * order's leather, cut by hide at the cutting table; cut orders of several work orders (fabric lays, markers, a leather
+ * per unit (never added across units), a work order's pieces by part and size with the recuts and the yield per lot and
+ * supplier (F-PR-06: drawn on the work order's Cutting & bundles tab, where the Cut record merged), and a refused write in
+ * words. Here a cut is one work order's leather, cut by hide at the cutting table; cut orders of several work orders (fabric lays, markers, a leather
  * group, MES-034/037) are B-W2b-129's `orders/` beside it on the same page. Words are message keys
  * of the `cutting` catalogue with their parameters; the views translate them. Never who cut: per work order, table, hide
  * and lot only (Statuto dei Lavoratori art. 4; SCM-255).
@@ -190,6 +190,11 @@ export function lotLine(row: Pick<CutRow, 'lots'>): string {
   return row.lots.map((lot) => (lot.dyeBatch ? `${lot.code} (${lot.dyeBatch})` : lot.code)).join(', ') || '—'
 }
 
+/**
+ * F-PR-06: a leather cut opens its work order's Cutting & bundles tab (the Cut record merged there; its old address redirects).
+ */
+export const cutHref = (prefix: string, workOrderId: string): string => `${prefix}/production/work-orders/${encodeURIComponent(workOrderId)}?tab=cutting`
+
 // ---- Allocate hides ---------------------------------------------------------------------------------------------------------------
 
 /** Why Allocate hides is held for a cut (else null). */
@@ -209,11 +214,7 @@ export function ticketsHeld(selected: number, can: CuttingCan): Phrase | null {
   return null
 }
 
-// ---- the record ----------------------------------------------------------------------------------------------------------------------
-
-export const RECORD_TABS = ['lay', 'pieces', 'yield', 'tickets'] as const
-export type RecordTab = (typeof RECORD_TABS)[number]
-export const tabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'lay')
+// ---- a work order's parts (F-PR-06: the Cut record merged into the work order's Cutting & bundles tab) ------------------------
 
 /** One part of a work order read on its own: its value, or the problem in words (a message key), or neither while loading. */
 export interface Part<T> {
@@ -260,49 +261,6 @@ export function writeProblem(error: unknown): Phrase {
   return phrase('problem.write')
 }
 
-// ---- Lay or hides: each hide's area -----------------------------------------------------------------------------------------------
-
-export interface HideLine {
-  readonly hideId: string
-  readonly code: string
-  readonly lotCode: string
-  readonly grade: string | null
-  readonly shade: string | null
-  readonly state: CutLog['hides'][number]['state']
-  readonly uom: string
-  /** The hide's area at receipt (null: not cut yet, so not in the yield). */
-  readonly areaIn: string | null
-  readonly used: string
-  readonly remnant: string | null
-  readonly waste: string
-  readonly wastePct: string | null
-  /** The cut log's bar: cut + waste + returned + left = issued. */
-  readonly bar: CutLog['hides'][number]
-}
-
-/** The hides of a cut: the cut log's bars, with the yield's grade, shade, area in and remnant where the hide was cut. */
-export function hideLines(log: CutLog, figures: WorkOrderYield | null): HideLine[] {
-  const yields = new Map((figures?.hides ?? []).map((row) => [row.hide.id, row]))
-  return log.hides.map((hide) => {
-    const row = yields.get(hide.hideId)
-    return {
-      hideId: hide.hideId,
-      code: hide.code,
-      lotCode: hide.lotCode,
-      grade: row?.hide.grade ?? null,
-      shade: row?.hide.shade ?? null,
-      state: hide.state,
-      uom: row?.item.uom ?? '',
-      areaIn: row?.areaIn ?? null,
-      used: hide.cut,
-      remnant: row?.remnant ?? null,
-      waste: hide.waste,
-      wastePct: row?.wastePct ?? null,
-      bar: hide,
-    }
-  })
-}
-
 // ---- Pieces: by part and size ---------------------------------------------------------------------------------------------------
 
 export interface PieceCell {
@@ -323,7 +281,7 @@ export interface PieceRow {
 }
 
 /** The matrix part × size: planned (the cell's garments), cut, recut open, short; the BOM's parts first. */
-export function piecesMatrix(log: CutLog, recuts: readonly Replacement[]): PieceRow[] {
+export function piecesMatrix(log: Pick<CutLog, 'cells'>, recuts: readonly Replacement[]): PieceRow[] {
   const parts: { part: string; planned: boolean }[] = []
   for (const cell of log.cells) for (const part of cell.parts) if (!parts.some((row) => row.part === part.part)) parts.push({ part: part.part, planned: part.planned })
   parts.sort((a, b) => (a.planned === b.planned ? 0 : a.planned ? -1 : 1))
@@ -372,13 +330,16 @@ export interface LotYield {
   readonly yieldPct: string | null
 }
 
+/** What a yield row brings to its lot (the work order's yield read, `GET /production/yield/work-orders/:id`). */
+export type LotHide = Pick<YieldHide, 'lot' | 'supplier' | 'item' | 'used' | 'unmatched' | 'pattern' | 'waste'>
+
 /** The work order's hides summed per lot: the areas added first, the percentage of the sums (never an average of percentages). */
-export function lotYields(hides: readonly YieldHide[]): LotYield[] {
-  const groups = new Map<string, YieldHide[]>()
+export function lotYields(hides: readonly LotHide[]): LotYield[] {
+  const groups = new Map<string, LotHide[]>()
   for (const hide of hides) groups.set(hide.lot.id, [...(groups.get(hide.lot.id) ?? []), hide])
   return [...groups.values()].map((rows) => {
     const first = rows[0]!
-    const sum = (pick: (row: YieldHide) => string) => rows.reduce((total, row) => total + Number(pick(row)), 0)
+    const sum = (pick: (row: LotHide) => string) => rows.reduce((total, row) => total + Number(pick(row)), 0)
     const counted = sum((row) => row.used) - sum((row) => row.unmatched)
     const pattern = sum((row) => row.pattern)
     return {
@@ -394,108 +355,4 @@ export function lotYields(hides: readonly YieldHide[]): LotYield[] {
       yieldPct: counted > 0 ? ((pattern * 100) / counted).toFixed(2) : null,
     }
   })
-}
-
-/** The chart's data: one bar per hide (its yield %), the planned line. */
-export function yieldChart(figures: WorkOrderYield): Array<Record<string, number | string>> {
-  return figures.hides.map((hide) => ({ hide: hide.hide.code, yieldPct: hide.yieldPct === null ? 0 : Number(hide.yieldPct), plannedPct: figures.overall.plannedPct === null ? 0 : Number(figures.overall.plannedPct) }))
-}
-
-// ---- Tickets ---------------------------------------------------------------------------------------------------------------------------
-
-export type TicketState = 'QUEUED' | 'SENT' | 'PRINTED' | 'FAILED' | 'PDF' | 'UNKNOWN'
-
-export interface TicketLine {
-  readonly bundle: BundleRow
-  /** The last print job's state; PDF: printed as a PDF label; UNKNOWN: no print.view. */
-  readonly print: TicketState
-  readonly reprints: number
-}
-
-export function ticketLines(bundles: WorkOrderBundles): TicketLine[] {
-  return bundles.bundles.map((bundle) => {
-    const last = bundle.tickets === null ? null : [...bundle.tickets].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0]
-    return { bundle, print: bundle.tickets === null ? 'UNKNOWN' : last ? last.status : 'PDF', reprints: bundle.reprints.length }
-  })
-}
-
-export const PRINT_TONE: Readonly<Record<TicketState, Tone>> = { QUEUED: 'info', SENT: 'info', PRINTED: 'success', FAILED: 'danger', PDF: 'neutral', UNKNOWN: 'neutral' }
-
-/** Why Reprint is held (else null). */
-export function reprintHeld(bundle: BundleRow, can: CuttingCan, busy: boolean): Phrase | null {
-  if (!can.bundles) return phrase('held.permission', { right: rightRef('production.bundles') })
-  if (bundle.status === 'VOID') return phrase('held.ticket.voided')
-  if (busy) return phrase('held.busy')
-  return null
-}
-
-/** Why Void is held (else null): only a bundle no operation scanned yet. */
-export function voidHeld(bundle: BundleRow, can: CuttingCan, busy: boolean): Phrase | null {
-  if (!can.bundles) return phrase('held.permission', { right: rightRef('production.bundles') })
-  if (bundle.status === 'VOID') return phrase('held.ticket.voided')
-  if (bundle.scans > 0) return phrase('held.ticket.scanned', { count: bundle.scans })
-  if (busy) return phrase('held.busy')
-  return null
-}
-
-/** A typed reason long enough for the API (3 to 200 characters). */
-export const reasonOk = (value: string): boolean => value.trim().length >= 3 && value.trim().length <= 200
-
-// ---- a cut from its work order (the record) ---------------------------------------------------------------------------------------
-
-/** Where a cut stands — the API's rule (cutting/office.ts cutStateOf): held, cut, waiting, else cutting. */
-export function cutStateOf(status: string, cells: readonly { readonly toCut: number | null }[], liveEntries: number): CutState {
-  if (status === 'ON_HOLD') return 'HELD'
-  const counted = cells.filter((cell) => cell.toCut !== null)
-  if (status === 'COMPLETED' || (counted.length > 0 && counted.every((cell) => cell.toCut === 0))) return 'CUT'
-  return liveEntries === 0 ? 'WAITING' : 'CUTTING'
-}
-
-const AREA_UNITS = new Set(['FT2', 'M2', 'DM2'])
-
-/**
- * The record's cut, built from the work order, its cut log and its yield (the list's row, for the record's band and
- * its Allocate hides): the leathers are the frozen materials counted in an area.
- */
-export function cutOf(workOrder: WorkOrder, log: CutLog | null, figures: WorkOrderYield | null, allocated: number): CutRow {
-  const live = log ? log.entries.filter((entry) => entry.live && !entry.reversalOfId) : []
-  const counted = (log?.cells ?? []).filter((cell) => cell.cut !== null)
-  const planned = counted.reduce((sum, cell) => sum + cell.quantity, 0)
-  const cut = counted.reduce((sum, cell) => sum + (cell.cut ?? 0), 0)
-  const lots = new Map<string, { id: string; code: string; dyeBatch: string | null }>()
-  for (const hide of figures?.hides ?? []) lots.set(hide.lot.id, { id: hide.lot.id, code: hide.lot.code, dyeBatch: null })
-  const used = new Map<string, number>()
-  for (const hide of figures?.hides ?? []) used.set(hide.item.uom, (used.get(hide.item.uom) ?? 0) + Number(hide.used))
-  const stations = new Map<string, { id: string; code: string }>()
-  for (const entry of live) if (entry.station) stations.set(entry.station.id, { id: entry.station.id, code: entry.station.code })
-  const last = (log?.entries ?? []).reduce<string | null>((latest, entry) => (latest === null || entry.serverTime > latest ? entry.serverTime : latest), null)
-  return {
-    workOrder: {
-      id: workOrder.id,
-      number: workOrder.number,
-      batchNumber: workOrder.batchNumber,
-      status: workOrder.status,
-      companyId: workOrder.companyId,
-      siteId: workOrder.siteId,
-      dueDate: workOrder.dueDate,
-      priority: workOrder.priority,
-      holdReason: workOrder.status === 'ON_HOLD' ? (workOrder.hold?.reason ?? null) : null,
-    },
-    style: { id: workOrder.style.id, code: workOrder.style.code, name: workOrder.style.name },
-    kind: 'LEATHER',
-    state: cutStateOf(workOrder.status, log?.cells ?? [], live.length),
-    materials: workOrder.spec.materials.filter((material) => AREA_UNITS.has(material.baseUom)).map((material) => ({ itemId: material.itemId, itemColourId: material.itemColourId, code: material.itemCode, name: material.itemName, baseUom: material.baseUom, colourCode: material.colourCode })),
-    lots: [...lots.values()],
-    garments: { planned, cut, toCut: Math.max(0, planned - cut) },
-    pieces: {
-      planned: (log?.cells ?? []).reduce((sum, cell) => sum + cell.quantity * cell.parts.filter((part) => part.planned).length, 0),
-      cut: (log?.cells ?? []).reduce((sum, cell) => sum + cell.parts.reduce((total, part) => total + part.pieces, 0), 0),
-    },
-    hides: { count: figures?.hides.length ?? 0, used: [...used.entries()].map(([uom, area]) => ({ uom, area: area.toFixed(4) })) },
-    allocated,
-    yield: { yieldPct: figures?.overall.yieldPct ?? null, plannedPct: figures?.overall.plannedPct ?? null, variancePct: figures?.overall.variancePct ?? null, plannedSource: figures?.plannedSource ?? 'BOM' },
-    stations: [...stations.values()],
-    lastCutAt: last,
-    recutsOpen: 0,
-  }
 }

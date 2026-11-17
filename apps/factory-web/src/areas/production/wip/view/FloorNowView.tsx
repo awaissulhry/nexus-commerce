@@ -372,7 +372,7 @@ function FloorRow({ row, prefix, showSite, customer }: { row: SiteWipRow; prefix
           return (
             <div key={op.operationId} role="listitem" className="fw-pr-op-item">
               {op.scanRequired ? (
-                <Link className={cls} href={`${href}?tab=bundles&at=${op.seq}`} aria-label={t('floor.opLink', { seq: op.seq, code: op.code, waiting: op.waiting, good: op.good })}>
+                <Link className={cls} href={`${href}?tab=cutting&at=${op.seq}`} aria-label={t('floor.opLink', { seq: op.seq, code: op.code, waiting: op.waiting, good: op.good })}>
                   {body}
                 </Link>
               ) : (
