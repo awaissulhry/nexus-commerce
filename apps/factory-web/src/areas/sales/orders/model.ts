@@ -2,6 +2,7 @@ import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Locale } from '../../../lib/i18n/locales'
 import {
   BOARD_LANES,
+  ORDER_SORT_KEYS, // B-TH-057
   ORDER_STATUSES,
   SETTLEMENT_GAPS,
   type BoardLane,
@@ -13,6 +14,8 @@ import {
   type OrderBoard,
   type OrderQuery,
   type OrderRow,
+  type OrderSort, // B-TH-057
+  type OrderSortKey, // B-TH-057
   type OrderStatus,
   type Progress,
   type SdiStateCode,
@@ -165,12 +168,64 @@ export function companyFromAddress(params: { get(name: string): string | null } 
 export interface Narrowing {
   readonly brand?: string | null
   readonly companyId?: string | null
+  /** B-TH-057: the custom field filter of the address (`?cf=`), applied by the list, its counts and its file alike. */
+  readonly cf?: string | null
+  /** B-TH-057: the server sort of the address (`?sort=`); the rows read in that order (the counts do not change). */
+  readonly sort?: OrderSort | null
 }
 // ── end B-TH-225 ──
+
+// ── B-TH-057 (threads plan TH-4; SHEET-G15, SHEET-G05, feature SHEET.overall-F05): the server sort and the custom field filter ──
+const SORTS: readonly string[] = [...ORDER_SORT_KEYS, ...ORDER_SORT_KEYS.map((key) => `-${key}`)]
+
+/** The server sort the address names (`?sort=promise`, `?sort=-daysLate`), or null: newest first. */
+export function sortFromAddress(params: { get(name: string): string | null } | null): OrderSort | null {
+  const value = params?.get('sort')?.trim() ?? ''
+  return SORTS.includes(value) ? (value as OrderSort) : null
+}
+
+/** The custom field filter the address names (`?cf=code:A,B`), or null; the API checks its clauses and refuses a bad one. */
+export function cfFromAddress(params: { get(name: string): string | null } | null): string | null {
+  const value = params?.get('cf')?.trim() ?? ''
+  return value === '' ? null : value.slice(0, 2000)
+}
+
+/** The sheet's columns that sort on the server (their header click sorts every page), by the sort's key. */
+export const SORT_COLUMNS: Readonly<Record<string, OrderSortKey>> = Object.freeze({ customer: 'customer', brand: 'brand', promised: 'promise', orderDate: 'ordered' })
+
+/** A column header's sort as the grid shows it: `asc` / `desc` on the column the address sorts by, else none. */
+export function columnSort(sort: OrderSort | null, colId: string): 'asc' | 'desc' | null {
+  if (!sort) return null
+  const key = sort.startsWith('-') ? sort.slice(1) : sort
+  return SORT_COLUMNS[colId] === key ? (sort.startsWith('-') ? 'desc' : 'asc') : null
+}
+
+/** A header click's sort: the column's key the way the grid asks, or none (the grid's third click: newest first again). */
+export function sortOfColumn(colId: string, direction: 'asc' | 'desc' | null): OrderSort | null {
+  const key = SORT_COLUMNS[colId]
+  if (!key || !direction) return null
+  return direction === 'desc' ? `-${key}` : key
+}
+
+/** The Sort menu's choices ('' = newest first), each with its `orders-sheet` word (`sort.<word>`). */
+export const SORT_CHOICES: ReadonlyArray<{ readonly value: OrderSort | ''; readonly word: string }> = Object.freeze([
+  { value: '', word: 'newest' },
+  { value: 'customer', word: 'customer' },
+  { value: '-customer', word: 'customerBack' },
+  { value: 'brand', word: 'brand' },
+  { value: 'promise', word: 'promise' },
+  { value: '-promise', word: 'promiseBack' },
+  { value: '-daysLate', word: 'daysLate' },
+  { value: 'daysLate', word: 'daysLateBack' },
+  { value: 'ordered', word: 'ordered' },
+  { value: '-ordered', word: 'orderedBack' },
+  { value: '-brand', word: 'brandBack' },
+])
+// ── end B-TH-057 ──
 // ── end B-TH-201 ──
 
 /** The page's address for a saved rows view, a search and a layout (the defaults leave the address clean). */
-export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null }): string {
+export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null /* B-TH-057 */ }): string {
   const query = new URLSearchParams()
   if (next.layout === 'board') query.set('view', 'board')
   if (next.layout === 'week') query.set('view', 'week') // B-W2b-323
@@ -182,6 +237,8 @@ export function listAddress(path: string, next: { rows: RowView; q: string; layo
   if (next.party) query.set('party', next.party) // B-TH-201
   if (next.brand) query.set('brand', next.brand) // B-TH-225
   if (next.company) query.set('company', next.company) // B-TH-225
+  if (next.cf) query.set('cf', next.cf) // B-TH-057
+  if (next.sort) query.set('sort', next.sort) // B-TH-057
   if (next.q.trim()) query.set('q', next.q.trim())
   const qs = query.toString()
   return `${path}${qs ? `?${qs}` : ''}`
@@ -227,7 +284,8 @@ export function laneQuery(lane: BoardLane, rows: RowView, q: string, partyId?: s
 }
 
 // B-TH-225: only the terms that narrow (an absent one never reaches the API).
-const narrowingOf = (narrow: Narrowing): Pick<OrderQuery, 'brand' | 'companyId'> => ({ ...(narrow.brand ? { brand: narrow.brand } : {}), ...(narrow.companyId ? { companyId: narrow.companyId } : {}) })
+// B-TH-057: + the custom field filter and the server sort.
+const narrowingOf = (narrow: Narrowing): Pick<OrderQuery, 'brand' | 'companyId' | 'cf' | 'sort'> => ({ ...(narrow.brand ? { brand: narrow.brand } : {}), ...(narrow.companyId ? { companyId: narrow.companyId } : {}), ...(narrow.cf ? { cf: narrow.cf } : {}), ...(narrow.sort ? { sort: narrow.sort } : {}) })
 
 /**
  * B-TH-225 (band-F01: the honest count): how many orders the rows view holds, from the board's counts — the same filters

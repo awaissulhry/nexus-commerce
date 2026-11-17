@@ -94,7 +94,8 @@
     "brand": "Brand: {name}",
     "company": "Company: {name}",
     "remove": "Remove “{name}”",
-    "clearAll": "Clear all"
+    "clearAll": "Clear all",
+    "cf": "Custom fields: {terms}"
   },
   "switcher": {
     "title": "Customer",
@@ -142,5 +143,19 @@
     "doorTab": "Open it in a new tab",
     "peek": "Peek at the customer or the order (on its link)"
   },
-  "shippedOf": "{shipped} of {units}"
+  "shippedOf": "{shipped} of {units}",
+  "sort": {
+    "label": "Sort",
+    "newest": "Newest first",
+    "customer": "Customer A–Z",
+    "customerBack": "Customer Z–A",
+    "brand": "Brand A–Z",
+    "brandBack": "Brand Z–A",
+    "promise": "Promise date, soonest first",
+    "promiseBack": "Promise date, latest first",
+    "daysLate": "Days late, most first",
+    "daysLateBack": "Days late, fewest first",
+    "ordered": "Order date, oldest first",
+    "orderedBack": "Order date, newest first"
+  }
 }
