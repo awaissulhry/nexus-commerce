@@ -3,10 +3,11 @@ import { defineRoutes } from '../../../core/manifest'
 import { attachmentDisposition } from '../../../platform/files/rules'
 import { appClock } from '../../../platform/portal/tasks/clock'
 import { inlineDisposition } from '../../inventory/receipts/report'
-import { listContract, markUrgencyContract, orderContract, qualityContract, qualityReportContract, undoUrgencyContract, urgentOrderContract } from './contract'
+import { listContract, markUrgencyContract, orderContract, qualityContract, qualityReportContract, reportProblemContract, undoUrgencyContract, urgentOrderContract } from './contract'
 import { manifest } from './manifest'
 import { productionQuality, productionQualityReport } from './quality'
 import { productionCsv, productionList, productionOrder } from './read'
+import { reportProblem } from './problems' // B-PR-45
 import { markUrgency, orderUrgent, undoUrgency } from './urgency'
 
 /**
@@ -41,4 +42,7 @@ export default defineRoutes('portal-production', manifest, async (app) => {
     const file = await productionQualityReport(app, request, request.params.orderId, request.params.inspectionId)
     return reply.type('application/pdf').header('content-disposition', inlineDisposition(file.fileName)).header('cache-control', 'no-store').send(file.bytes)
   })
+
+  // B-PR-45: "Report a problem" (./problems.ts).
+  app.post('/portal/production/problems', { schema: reportProblemContract }, async (request) => reportProblem(app, request, request.body, idempotencyKeyFrom(request)))
 })
