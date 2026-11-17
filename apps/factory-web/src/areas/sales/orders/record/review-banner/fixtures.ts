@@ -4,7 +4,7 @@ import type { DocumentUnits } from '../../../mtm/api'
 import { inShell, order, PREFIX, type Role } from '../../_demo/fixtures'
 import { APPROVAL_PENDING, depthModel } from '../../depth/demo/fixtures'
 import type { Approval } from '../../depth/api'
-import { base } from '../fixtures'
+import { base, orderDesignThread } from '../fixtures'
 import type { OrderRecordModel } from '../record-model'
 import { OrderRecordView } from '../view/OrderRecordView'
 import { reviewBannerOf, type ReviewBannerModel } from './model'
@@ -50,7 +50,7 @@ const record = (role: Role, model: ReviewBannerModel | null, approval: Approval 
 }
 
 function ReviewBannerDesign({ model }: { model: Case }) {
-  return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record }), model.role)
+  return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record, thread: orderDesignThread() /* B-TH-214 */ }), model.role)
 }
 
 export const designScreen = defineDesignScreen<Case>({

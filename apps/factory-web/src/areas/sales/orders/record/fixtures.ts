@@ -28,7 +28,6 @@ import {
   NO_AMENDMENTS,
   order,
   PAID,
-  panelsModel,
   PARTY,
   PREFIX,
   SCHEDULE,
@@ -51,6 +50,11 @@ import {
 } from '../_demo/fixtures'
 import { COMPOSER_EMPTY, type AmendState, type OrderRecordModel } from './record-model'
 import { OrderRecordView } from './view/OrderRecordView'
+// ---- B-TH-214: the docked thread the order's cases show (RecordFrame beside every tab) ----
+import { dockedThread } from '../../../../lib/record-thread/fixtures'
+import { ThreadCase } from '../../../../lib/record-thread/ThreadCase'
+import { BRAND_ALPHA, type BrandFixture } from '../../../../lib/testing/two-brands'
+import { useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
 // B-W2b-380 (XF6:02): cost changed since priced on the lines.
 import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
 import { MARGIN, marginAs } from './margin/fixtures'
@@ -66,6 +70,33 @@ import { APPROVAL_CREDIT, APPROVAL_NOBODY, APPROVAL_PENDING, CHANGES, CHANGES_NO
  * draft, the review), Close remaining lines and Reopen, Cancel order with its impact and the typed number, Copy as new
  * quote, the payment schedule, the amended band — and a typed New order (the draft studio before "Confirm order").
  */
+
+// ---- B-TH-214: the order's docked thread in the design cases (SCR-039, SCR-107, SCR-039-review-banner) ----------------------------
+/**
+ * The made-up thread of the order's customer with the Head, the files line and the box, inside the RecordFrame the case draws (whose
+ * width menu it drives). Design only: the page mounts the office's OfficeRecordThread docked.
+ */
+const ORDER_BRAND: BrandFixture = {
+  ...BRAND_ALPHA,
+  legalName: 'Moto Demo S.r.l.',
+  tradeName: 'Moto Demo S.r.l.',
+  code: 'MOTO-DEMO',
+  contact: { name: 'Giulia Esempio', email: 'ordini@moto-demo.example.com' },
+  portalPerson: { name: 'Marta Esempio', email: 'marta@moto-demo.example.com' },
+  fileName: 'Moto Demo tech pack AX-100.pdf',
+  customerRef: 'PO-ESEMPIO-88',
+  message: 'Please keep the yellow piping on the collar of AX-100.',
+  numbers: { ...BRAND_ALPHA.numbers, order: 'SO-2026-0088' },
+}
+
+function OrderThread() {
+  const frame = useRecordFrame()
+  const model = dockedThread(ORDER_BRAND, { width: frame?.width ?? null }, true)
+  return createElement(ThreadCase, { model, onWidth: frame?.choose })
+}
+
+/** The element a design case passes to OrderRecordView as its `thread`. */
+export const orderDesignThread = () => createElement(OrderThread)
 
 type RecordCase = { role: Role; record: OrderRecordModel; draft?: undefined } | { role: Role; draft: NewOrderModel; record?: undefined }
 
@@ -85,8 +116,6 @@ export const base = (role: Role, value: Order, over: Partial<OrderRecordModel> =
       settlement: can.viewInvoices ? { value: forRole(value.status === 'SHIPPED' || value.status === 'CLOSED' ? SETTLEMENT_SHIPPED : SETTLEMENT_OPEN, role), problem: null } : null,
       sdi: can.viewInvoices ? (value.chain.invoices.some((invoice) => invoice.id === TD02_ID) ? CHAIN_SDI('DELIVERED', 'NONE') : {}) : null,
       versions: can.viewQuotes ? { value: VERSIONS, problem: null } : null,
-      live: 'live',
-      dockOpen: false,
       changed: null,
       notice: null,
       busy: false,
@@ -103,7 +132,6 @@ export const base = (role: Role, value: Order, over: Partial<OrderRecordModel> =
       cancelCheck: null,
       closedLines: null,
       copied: null,
-      panelsPreview: panelsModel(),
       ...over,
     },
   }
@@ -225,16 +253,16 @@ const W2B_323 = [
   { id: 'w2b-323-changes-no-rules', label: 'W2b · Sales · Changes: the company keeps no freeze rule; no priced change yet', model: d323('sales', production, { tab: 'changes' }, { freeze: { value: FREEZE_NONE, problem: null }, changes: { value: CHANGES_NONE, problem: null } }) },
   { id: 'w2b-323-changes-manager', label: 'W2b · Production manager · Changes: no money column; Put back held', model: d323('manager', amended(production), { tab: 'changes' }) },
   { id: 'w2b-323-put-back', label: 'W2b · Sales · Put back revision 2 (turned down)', model: d323('sales', amended(production), { tab: 'changes' }, { dialog: { kind: 'putBack', changeId: CHANGES.changes[1]!.id, reason: 'Respinta dall’amministrazione.' } }) },
-  { id: 'w2b-323-dates', label: 'W2b · Owner · Dates: Production finish forecast per line (6 days to spare; 7 days short) and the milestones', model: d323('owner', production, { tab: 'dates' }) },
-  { id: 'w2b-323-dates-sales', label: 'W2b · Sales · Dates: the forecast (the milestones are the planner’s)', model: d323('sales', production, { tab: 'dates' }) },
-  { id: 'w2b-323-dates-error', label: "W2b · Sales · Dates: the forecast couldn't be read (said once, Try again)", model: d323('sales', production, { tab: 'dates' }, { forecasts: { value: null, problem: 'problem.read.unavailable' } }) },
-  { id: 'w2b-323-documents', label: 'W2b · Sales · Documents: the confirmation (v2, sent) in the PDF viewer; the brand tech pack in force (a newer version)', model: d323('sales', production, { tab: 'documents' }) },
-  { id: 'w2b-323-documents-none', label: 'W2b · Sales · Documents: no confirmation yet — Make confirmation', model: d323('sales', production, { tab: 'documents' }, { confirmation: { value: CONFIRMATION_NONE, problem: null }, confirmationPdf: null }) },
-  { id: 'w2b-323-documents-outdated', label: 'W2b · Sales · Documents: the order changed since v2 — Make version 3', model: d323('sales', production, { tab: 'documents' }, { confirmation: { value: CONFIRMATION_OUTDATED, problem: null } }) },
-  { id: 'w2b-323-documents-error', label: "W2b · Sales · Documents: the confirmation couldn't be read", model: d323('sales', production, { tab: 'documents' }, { confirmation: { value: null, problem: 'problem.read.unavailable' }, confirmationPdf: null }) },
-  { id: 'w2b-323-send', label: 'W2b · Sales · Send the confirmation (the one send dialog): to the orders contact, the PDF, the checks', model: d323('sales', production, { tab: 'documents' }, { dialog: { kind: 'send', cc: '', subject: '', message: 'Buongiorno, in allegato la conferma d’ordine.' }, send: { recipient: { name: 'Giulia Esempio', email: 'ordini@moto-demo.example.com' }, pdf: null, result: null } }) },
-  { id: 'w2b-323-send-no-recipient', label: 'W2b · Sales · Send held: the customer has no orders contact with an e-mail', model: d323('sales', production, { tab: 'documents' }, { dialog: { kind: 'send', cc: '', subject: '', message: '' }, send: { recipient: null, pdf: null, result: null } }) },
-  { id: 'w2b-323-waiting', label: 'W2b · Sales · Waiting for a yes: asked of Finance, you asked (Take the request back); the confirmation waits', model: d323('sales', waitingOrder, { tab: 'documents' }, { approval: { value: APPROVAL_PENDING, problem: null }, depth: { value: orderDepth({ status: 'PENDING_APPROVAL', priority: { level: 'NORMAL', urgentReason: null, number: 0 }, confirmation: { versions: 0, sentAt: null, sentVersion: null } }), problem: null }, confirmation: { value: CONFIRMATION_WAITING, problem: null }, confirmationPdf: null }) },
+  { id: 'w2b-323-dates', label: 'W2b · Owner · Production & dates: Production finish forecast per line (6 days to spare; 7 days short) and the milestones', model: d323('owner', production, { tab: 'production' }) },
+  { id: 'w2b-323-dates-sales', label: 'W2b · Sales · Production & dates: the forecast (the milestones are the planner’s)', model: d323('sales', production, { tab: 'production' }) },
+  { id: 'w2b-323-dates-error', label: "W2b · Sales · Production & dates: the forecast couldn't be read (said once, Try again)", model: d323('sales', production, { tab: 'production' }, { forecasts: { value: null, problem: 'problem.read.unavailable' } }) },
+  { id: 'w2b-323-documents', label: 'W2b · Sales · Confirmation & changes: the confirmation (v2, sent) in the PDF viewer; the brand tech pack in force (a newer version)', model: d323('sales', production, { tab: 'changes' }) },
+  { id: 'w2b-323-documents-none', label: 'W2b · Sales · Confirmation & changes: no confirmation yet — Make confirmation', model: d323('sales', production, { tab: 'changes' }, { confirmation: { value: CONFIRMATION_NONE, problem: null }, confirmationPdf: null }) },
+  { id: 'w2b-323-documents-outdated', label: 'W2b · Sales · Confirmation & changes: the order changed since v2 — Make version 3', model: d323('sales', production, { tab: 'changes' }, { confirmation: { value: CONFIRMATION_OUTDATED, problem: null } }) },
+  { id: 'w2b-323-documents-error', label: "W2b · Sales · Confirmation & changes: the confirmation couldn't be read", model: d323('sales', production, { tab: 'changes' }, { confirmation: { value: null, problem: 'problem.read.unavailable' }, confirmationPdf: null }) },
+  { id: 'w2b-323-send', label: 'W2b · Sales · Send the confirmation (the one send dialog): to the orders contact, the PDF, the checks', model: d323('sales', production, { tab: 'changes' }, { dialog: { kind: 'send', cc: '', subject: '', message: 'Buongiorno, in allegato la conferma d’ordine.' }, send: { recipient: { name: 'Giulia Esempio', email: 'ordini@moto-demo.example.com' }, pdf: null, result: null } }) },
+  { id: 'w2b-323-send-no-recipient', label: 'W2b · Sales · Send held: the customer has no orders contact with an e-mail', model: d323('sales', production, { tab: 'changes' }, { dialog: { kind: 'send', cc: '', subject: '', message: '' }, send: { recipient: null, pdf: null, result: null } }) },
+  { id: 'w2b-323-waiting', label: 'W2b · Sales · Waiting for a yes: asked of Finance, you asked (Take the request back); the confirmation waits', model: d323('sales', waitingOrder, { tab: 'changes' }, { approval: { value: APPROVAL_PENDING, problem: null }, depth: { value: orderDepth({ status: 'PENDING_APPROVAL', priority: { level: 'NORMAL', urgentReason: null, number: 0 }, confirmation: { versions: 0, sentAt: null, sentVersion: null } }), problem: null }, confirmation: { value: CONFIRMATION_WAITING, problem: null }, confirmationPdf: null }) },
   { id: 'w2b-323-waiting-nobody', label: 'W2b · Sales · Waiting for a yes, nobody asked yet: Ask for a yes', model: d323('sales', waitingOrder, {}, { approval: { value: APPROVAL_NOBODY, problem: null } }) },
   { id: 'w2b-323-waiting-credit', label: 'W2b · Sales · Waiting: the customer’s credit holds it too (Finance decides; not yours to take back)', model: d323('sales', waitingOrder, {}, { approval: { value: APPROVAL_CREDIT, problem: null } }) },
   { id: 'w2b-323-ask', label: 'W2b · Sales · Ask for a yes (a note for who decides)', model: d323('sales', waitingOrder, {}, { approval: { value: APPROVAL_NOBODY, problem: null }, dialog: { kind: 'ask', note: 'Cliente storico, prezzo concordato con il titolare.' } }) },
@@ -245,7 +273,7 @@ const W2B_323 = [
 
 function OrderDesign({ model }: { model: RecordCase }) {
   if (model.draft) return inShell('/sales/orders/new', createElement(NewOrderView, { model: model.draft }), model.role)
-  return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record }), model.role)
+  return inShell(`/sales/orders/${model.record.order.status === 'ready' ? model.record.order.value.id : 'x'}`, createElement(OrderRecordView, { model: model.record, thread: orderDesignThread() }), model.role)
 }
 
 export const designScreen = defineDesignScreen<RecordCase>({
@@ -264,53 +292,60 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'lines-shipped-layer', label: 'Sales · Lines: Show = Shipped on a partly shipped order', model: base('sales', partly, { sizeLayer: 'shipped' }) },
     { id: 'lines-in-work-orders', label: 'Sales · Lines: Show = In work orders', model: base('sales', production, { sizeLayer: 'inWorkOrders' }) },
     { id: 'manager-lines', label: 'Production manager · Lines: no money; read-only', model: base('manager', paidNotSent) },
-    { id: 'money-new', label: 'Owner · Invoices & payments: deposit asked, page not sent yet', model: base('owner', confirmed, { tab: 'money' }), note: 'The five steps: asked → bank-details page → payment → TD02 → SDI, each with what moves it on.' },
-    { id: 'link-dialog', label: 'Owner · Send the bank-details page (DEPOSIT_INFO link)', model: base('owner', confirmed, { tab: 'money', dialog: { kind: 'depositLink', requestId: PAID.id }, draft: { message: 'Buongiorno, ecco i dati per il bonifico dell’acconto.' } }) },
+    { id: 'money-new', label: 'Owner · Shipments & invoices: deposit asked, page not sent yet', model: base('owner', confirmed, { tab: 'shipments' }), note: 'The five steps: asked → bank-details page → payment → TD02 → SDI, each with what moves it on.' },
+    { id: 'link-dialog', label: 'Owner · Send the bank-details page (DEPOSIT_INFO link)', model: base('owner', confirmed, { tab: 'shipments', dialog: { kind: 'depositLink', requestId: PAID.id }, draft: { message: 'Buongiorno, ecco i dati per il bonifico dell’acconto.' } }) },
     {
       id: 'link-sent',
       label: 'Owner · The page sent: to whom, until when',
-      model: base('owner', pageSent, { tab: 'money', dialog: { kind: 'depositLink', requestId: PAID.id }, sentLink: { link: { id: '0190f0e2-1616-7000-8000-000000000001', expiresAt: SENT_LINK.expiresAt, to: SENT_LINK.to!, revokedLinkIds: [] }, emailId: '0190f0e2-1515-7000-8000-000000000001', delivery: 'sent' } }),
+      model: base('owner', pageSent, { tab: 'shipments', dialog: { kind: 'depositLink', requestId: PAID.id }, sentLink: { link: { id: '0190f0e2-1616-7000-8000-000000000001', expiresAt: SENT_LINK.expiresAt, to: SENT_LINK.to!, revokedLinkIds: [] }, emailId: '0190f0e2-1515-7000-8000-000000000001', delivery: 'sent' } }),
     },
-    { id: 'money-page-sent', label: 'Finance · Page sent, waiting for the transfer', model: base('finance', pageSent, { tab: 'money' }) },
-    { id: 'money-sales', label: 'Sales · Invoices & payments: sees the deposit; sending and recording held with the reason', model: base('sales', pageSent, { tab: 'money' }) },
-    { id: 'payment-dialog', label: 'Finance · Record the payment: amount, day, bank reference, Issue the TD02 now', model: base('finance', pageSent, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { reference: 'CRO-0000-ESEMPIO-88' } }) },
-    { id: 'payment-dialog-over', label: 'Finance · Record the payment: more than is left (the rest stays on the payment)', model: base('finance', partPaid, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { amount: '2000,00', reference: 'CRO-0000-ESEMPIO-89' } }) },
-    { id: 'payment-refused', label: 'Finance · Record the payment: the bank reference was recorded already', model: base('finance', pageSent, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { reference: 'CRO-0000-ESEMPIO-01' }, dialogProblem: { key: 'problem.write.reference' } }) },
-    { id: 'step-up', label: 'Finance · Issuing the TD02 asks a fresh authenticator code', model: base('finance', pageSent, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { reference: 'CRO-0000-ESEMPIO-88' }, busy: true, stepUp: { open: true, busy: false, sentence: 'stepUp.sentence.td02', problem: null } }) },
-    { id: 'payment-done', label: 'Finance · Recorded: the deposit is paid and the TD02 issued', model: base('finance', paidNotSent, { tab: 'money', dialog: { kind: 'depositPayment', requestId: PAID.id }, recorded: RECORDED, sdi: CHAIN_SDI('NOT_SENT', 'SEND', true) }) },
-    { id: 'td02-not-sent', label: 'Finance · Paid; TD02 issued, not sent to SDI yet: Send to SDI', model: base('finance', paidNotSent, { tab: 'money', sdi: CHAIN_SDI('NOT_SENT', 'SEND', true) }) },
-    { id: 'sdi-dialog', label: 'Finance · Send the TD02 to SDI', model: base('finance', paidNotSent, { tab: 'money', sdi: CHAIN_SDI('NOT_SENT', 'SEND', true), dialog: { kind: 'sdiSend', invoiceId: TD02_ID } }) },
-    { id: 'td02-at-sdi', label: 'Finance · TD02 at SDI: waiting for its answer', model: base('finance', paidNotSent, { tab: 'money', sdi: CHAIN_SDI('AT_SDI', 'WAIT'), notice: { tone: 'success', words: { key: 'notice.sdiSent' } } }) },
-    { id: 'td02-delivered', label: 'Owner · TD02 delivered by SDI; production may start', model: base('owner', paidNotSent, { tab: 'money', sdi: CHAIN_SDI('DELIVERED', 'NONE') }) },
-    { id: 'td02-draft', label: 'Sales · Paid; the TD02 is a draft finance issues', model: base('sales', paidDraft, { tab: 'money' }) },
-    { id: 'part-paid', label: 'Finance · A part payment: what is left', model: base('finance', partPaid, { tab: 'money' }) },
-    { id: 'deposit-no-td02', label: 'Finance · An EU business deposit: paid, no deposit invoice (its VAT rule)', model: base('finance', noTd02, { tab: 'money' }) },
-    { id: 'no-deposit', label: 'Sales · An order that needs no deposit', model: base('sales', noDeposit, { tab: 'money' }) },
-    { id: 'manager-money', label: 'Production manager · Invoices & payments without money or invoices', model: base('manager', paidNotSent, { tab: 'money' }) },
-    { id: 'production-gate-paid', label: 'Production manager · Production: deposit paid, Make work orders opens New work order', model: base('manager', paidNotSent, { tab: 'production' }) },
-    { id: 'production-held', label: 'Sales · Production: the gate waits for the deposit; Make work orders held', model: base('sales', confirmed, { tab: 'production' }) },
-    { id: 'production-progress', label: 'Sales · Production: two work orders with their floor progress', model: base('sales', production, { tab: 'production' }) },
-    { id: 'production-no-right', label: 'Finance · Production: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production' }) },
-    { id: 'production-error', label: 'Sales · Production: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', workOrders: { value: null, problem: 'problem.read.unavailable' } }) },
-    { id: 'dates', label: 'Sales · Dates & promise: first promise kept, two changes with who and why', model: base('sales', late, { tab: 'dates' }) },
-    { id: 'promise-dialog', label: 'Sales · Change promise date: the whole order', model: base('sales', production, { tab: 'dates', dialog: { kind: 'promise' }, draft: { date: '2026-12-29', reason: 'La pelle nera arriva una settimana dopo.' } }) },
-    { id: 'promise-lines', label: 'Sales · Change promise date: chosen lines', model: base('sales', production, { tab: 'dates', dialog: { kind: 'promise' }, draft: { scope: 'lines', lineIds: [production.lines[1]!.id], date: '2026-12-29', reason: 'Il rosso chiede un secondo bagno di colore.' } }) },
+    { id: 'money-page-sent', label: 'Finance · Page sent, waiting for the transfer', model: base('finance', pageSent, { tab: 'shipments' }) },
+    { id: 'money-sales', label: 'Sales · Shipments & invoices: sees the deposit; sending and recording held with the reason', model: base('sales', pageSent, { tab: 'shipments' }) },
+    { id: 'payment-dialog', label: 'Finance · Record the payment: amount, day, bank reference, Issue the TD02 now', model: base('finance', pageSent, { tab: 'shipments', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { reference: 'CRO-0000-ESEMPIO-88' } }) },
+    { id: 'payment-dialog-over', label: 'Finance · Record the payment: more than is left (the rest stays on the payment)', model: base('finance', partPaid, { tab: 'shipments', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { amount: '2000,00', reference: 'CRO-0000-ESEMPIO-89' } }) },
+    { id: 'payment-refused', label: 'Finance · Record the payment: the bank reference was recorded already', model: base('finance', pageSent, { tab: 'shipments', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { reference: 'CRO-0000-ESEMPIO-01' }, dialogProblem: { key: 'problem.write.reference' } }) },
+    { id: 'step-up', label: 'Finance · Issuing the TD02 asks a fresh authenticator code', model: base('finance', pageSent, { tab: 'shipments', dialog: { kind: 'depositPayment', requestId: PAID.id }, draft: { reference: 'CRO-0000-ESEMPIO-88' }, busy: true, stepUp: { open: true, busy: false, sentence: 'stepUp.sentence.td02', problem: null } }) },
+    { id: 'payment-done', label: 'Finance · Recorded: the deposit is paid and the TD02 issued', model: base('finance', paidNotSent, { tab: 'shipments', dialog: { kind: 'depositPayment', requestId: PAID.id }, recorded: RECORDED, sdi: CHAIN_SDI('NOT_SENT', 'SEND', true) }) },
+    { id: 'td02-not-sent', label: 'Finance · Paid; TD02 issued, not sent to SDI yet: Send to SDI', model: base('finance', paidNotSent, { tab: 'shipments', sdi: CHAIN_SDI('NOT_SENT', 'SEND', true) }) },
+    { id: 'sdi-dialog', label: 'Finance · Send the TD02 to SDI', model: base('finance', paidNotSent, { tab: 'shipments', sdi: CHAIN_SDI('NOT_SENT', 'SEND', true), dialog: { kind: 'sdiSend', invoiceId: TD02_ID } }) },
+    { id: 'td02-at-sdi', label: 'Finance · TD02 at SDI: waiting for its answer', model: base('finance', paidNotSent, { tab: 'shipments', sdi: CHAIN_SDI('AT_SDI', 'WAIT'), notice: { tone: 'success', words: { key: 'notice.sdiSent' } } }) },
+    { id: 'td02-delivered', label: 'Owner · TD02 delivered by SDI; production may start', model: base('owner', paidNotSent, { tab: 'shipments', sdi: CHAIN_SDI('DELIVERED', 'NONE') }) },
+    { id: 'td02-draft', label: 'Sales · Paid; the TD02 is a draft finance issues', model: base('sales', paidDraft, { tab: 'shipments' }) },
+    { id: 'part-paid', label: 'Finance · A part payment: what is left', model: base('finance', partPaid, { tab: 'shipments' }) },
+    { id: 'deposit-no-td02', label: 'Finance · An EU business deposit: paid, no deposit invoice (its VAT rule)', model: base('finance', noTd02, { tab: 'shipments' }) },
+    { id: 'no-deposit', label: 'Sales · An order that needs no deposit', model: base('sales', noDeposit, { tab: 'shipments' }) },
+    { id: 'manager-money', label: 'Production manager · Shipments & invoices without money or invoices', model: base('manager', paidNotSent, { tab: 'shipments' }) },
+    { id: 'production-gate-paid', label: 'Production manager · Production & dates: deposit paid, Make work orders opens New work order', model: base('manager', paidNotSent, { tab: 'production' }) },
+    { id: 'production-held', label: 'Sales · Production & dates: the gate waits for the deposit; Make work orders held', model: base('sales', confirmed, { tab: 'production' }) },
+    { id: 'production-progress', label: 'Sales · Production & dates: two work orders with their floor progress', model: base('sales', production, { tab: 'production' }) },
+    { id: 'production-no-right', label: 'Finance · Production & dates: the work orders by number (no floor progress right)', model: base('finance', production, { tab: 'production' }) },
+    { id: 'production-error', label: 'Sales · Production & dates: the work orders could not be read (Try again)', model: base('sales', production, { tab: 'production', workOrders: { value: null, problem: 'problem.read.unavailable' } }) },
+    { id: 'dates', label: 'Sales · Production & dates: first promise kept, two changes with who and why', model: base('sales', late, { tab: 'production' }) },
+    { id: 'promise-dialog', label: 'Sales · Change promise date: the whole order', model: base('sales', production, { tab: 'production', dialog: { kind: 'promise' }, draft: { date: '2026-12-29', reason: 'La pelle nera arriva una settimana dopo.' } }) },
+    { id: 'promise-lines', label: 'Sales · Change promise date: chosen lines', model: base('sales', production, { tab: 'production', dialog: { kind: 'promise' }, draft: { scope: 'lines', lineIds: [production.lines[1]!.id], date: '2026-12-29', reason: 'Il rosso chiede un secondo bagno di colore.' } }) },
     { id: 'ready-dialog', label: 'Sales · Mark ready (quality release not used for this order)', model: base('sales', production, { dialog: { kind: 'ready' }, draft: { reason: 'Controllo finale fatto in reparto.' } }) },
-    { id: 'shipments', label: 'Sales · Shipments: left to ship per size, two shipments', model: base('sales', shipped, { tab: 'shipments' }) },
-    { id: 'shipments-empty', label: 'Sales · Shipments: nothing shipped yet', model: base('sales', production, { tab: 'shipments' }) },
-    { id: 'shipped-close-settled', label: 'Sales · Shipped and settled: Close order', model: base('sales', settled, { tab: 'money' }) },
+    { id: 'shipments', label: 'Sales · Shipments & invoices: left to ship per size, two shipments', model: base('sales', shipped, { tab: 'shipments' }) },
+    { id: 'shipments-empty', label: 'Sales · Shipments & invoices: nothing shipped yet', model: base('sales', production, { tab: 'shipments' }) },
+    { id: 'shipped-close-settled', label: 'Sales · Shipped and settled: Close order', model: base('sales', settled, { tab: 'shipments' }) },
     { id: 'close-dialog-settled', label: 'Sales · Close a settled order', model: base('sales', settled, { dialog: { kind: 'close' } }) },
-    { id: 'shipped-unsettled-sales', label: 'Sales · Shipped, not settled: Close held (the right to close unsettled orders)', model: base('sales', shipped, { tab: 'money' }) },
+    { id: 'shipped-unsettled-sales', label: 'Sales · Shipped, not settled: Close held (the right to close unsettled orders)', model: base('sales', shipped, { tab: 'shipments' }) },
     { id: 'close-dialog-unsettled', label: 'Finance · Close an unsettled order: what is missing, a reason', model: base('finance', shipped, { dialog: { kind: 'close' }, draft: { reason: 'Il cliente salda a parte con il prossimo ordine.' } }) },
     { id: 'closed', label: 'Owner · Closed: final, nothing changes', model: base('owner', closed) },
     { id: 'cancelled', label: 'Sales · Cancelled with its reason', model: base('sales', cancelled) },
-    { id: 'documents', label: 'Sales · Documents: the accepted quote and its evidence', model: base('sales', paidNotSent, { tab: 'documents' }) },
-    { id: 'documents-no-right', label: 'Production manager · Documents: the quote by number only', model: base('manager', paidNotSent, { tab: 'documents' }) },
-    { id: 'activity', label: 'Sales · Activity: thread, files, history', model: base('sales', paidNotSent, { tab: 'activity' }) },
-    { id: 'dock', label: 'Sales · The thread beside a tab (⌘J, 1280 px and wider)', model: base('sales', paidNotSent, { dockOpen: true }) },
+    { id: 'documents', label: 'Sales · Confirmation & changes: the accepted quote and its evidence', model: base('sales', paidNotSent, { tab: 'changes' }) },
+    { id: 'documents-no-right', label: 'Production manager · Confirmation & changes: the quote by number only', model: base('manager', paidNotSent, { tab: 'changes' }) },
+    // ---- B-TH-214: the docked thread (picture 29) ----
+    {
+      id: 'thread-docked',
+      label: 'Sales · The thread docked beside Production & dates (40 %)',
+      model: base('sales', production, { tab: 'production' }),
+      note: 'The band sits in the shell’s band row; the thread is docked at 40 % (519 px at 1440, 711 px at 1920), sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me). Below 1280 px the band’s Thread button opens it full width.',
+    },
+    { id: 'thread-lines', label: 'Sales · Lines with the thread: one third under 1600 px', model: base('sales', production), note: 'The size grids need the room: on Lines the thread takes one third below 1600 px unless the person chose a width in its width menu.' },
+    { id: 'notices', label: 'Sales · One notice, the rest behind “N more notices”', model: base('sales', late, { tab: 'production', changed: { at: at(29, 10, 42) } }), note: 'The order is late and changed meanwhile: the most serious notice shows, the other waits behind "1 more notice".' },
     { id: 'changed', label: 'Sales · Someone changed the order while a dialog was open', model: base('sales', production, { changed: { at: at(29, 10, 42) } }) },
-    { id: 'notice', label: 'Sales · After a write: a notice', model: base('sales', production, { tab: 'dates', notice: { tone: 'success', words: { key: 'notice.promise' } } }) },
-    { id: 'loading', label: 'Loading', model: { ...base('sales', confirmed), record: { ...base('sales', confirmed).record, order: { status: 'loading' }, live: 'connecting' } } },
+    { id: 'notice', label: 'Sales · After a write: a notice', model: base('sales', production, { tab: 'production', notice: { tone: 'success', words: { key: 'notice.promise' } } }) },
+    { id: 'loading', label: 'Loading', model: { ...base('sales', confirmed), record: { ...base('sales', confirmed).record, order: { status: 'loading' } } } },
     { id: 'error', label: 'The read failed (in words, Try again)', model: { ...base('sales', confirmed), record: { ...base('sales', confirmed).record, order: { status: 'error', problem: 'problem.read.unavailable' } } } },
     { id: 'not-found', label: 'Not found (another company, or a wrong address)', model: { ...base('sales', confirmed), record: { ...base('sales', confirmed).record, order: { status: 'not_found' } } } },
     { id: 'no-permission', label: 'No permission (orders.view over its company and customer)', model: { ...base('sales', confirmed), record: { ...base('sales', confirmed).record, order: { status: 'forbidden' } } } },
@@ -337,27 +372,27 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'cancel-failed', label: 'W2a · Sales · Cancel order: the impact check could not be read (Try again)', model: base('sales', production, { dialog: { kind: 'cancel' }, cancelCheck: { value: null, problem: 'problem.read.unavailable' } }) },
     { id: 'copy-quote', label: 'W2a · Sales · Copy as new quote', model: base('sales', cancelled, { dialog: { kind: 'copyQuote' } }) },
     { id: 'copy-quote-done', label: 'W2a · Sales · Copied: the new quote and what it left out', model: base('sales', cancelled, { dialog: { kind: 'copyQuote' }, copied: COPIED }) },
-    { id: 'money-schedule', label: 'W2a · Finance · Payment schedule: deposit paid, balance before shipping', model: base('finance', paidNotSent, { tab: 'money' }) },
-    { id: 'money-schedule-overdue', label: 'W2a · Finance · Payment schedule: the deposit step overdue', model: base('finance', confirmed, { tab: 'money', schedule: { value: SCHEDULE_OVERDUE, problem: null } }) },
-    { id: 'money-schedule-remade', label: 'W2a · Owner · Payment schedule remade by an amendment (one step replaced)', model: base('owner', amended(production), { tab: 'money', schedule: { value: SCHEDULE_REMADE, problem: null } }) },
+    { id: 'money-schedule', label: 'W2a · Finance · Payment schedule: deposit paid, balance before shipping', model: base('finance', paidNotSent, { tab: 'shipments' }) },
+    { id: 'money-schedule-overdue', label: 'W2a · Finance · Payment schedule: the deposit step overdue', model: base('finance', confirmed, { tab: 'shipments', schedule: { value: SCHEDULE_OVERDUE, problem: null } }) },
+    { id: 'money-schedule-remade', label: 'W2a · Owner · Payment schedule remade by an amendment (one step replaced)', model: base('owner', amended(production), { tab: 'shipments', schedule: { value: SCHEDULE_REMADE, problem: null } }) },
     // B-W2a-80: the schedule card's verbs (B-W2a-F2's note).
-    { id: 'w2a80-schedule-open', label: 'W2a · Finance · Schedule: Open the balance before shipping for payment; invoice the paid deposit (its TD02)', model: base('finance', paidNotSent, { tab: 'money', scheduleSteps: { can: { manageOrders: true, manageInvoices: true, waive: false }, opening: null, busy: false, problem: null } }) },
-    { id: 'w2a80-schedule-day', label: 'W2a · Finance · Open for payment of a step without a day: the day its request falls due', model: base('finance', paidNotSent, { tab: 'money', schedule: { value: { ...SCHEDULE, steps: SCHEDULE.steps.map((step) => (step.kind === 'BEFORE_SHIPPING' ? { ...step, dueDate: null } : step)) }, problem: null }, scheduleSteps: { can: { manageOrders: true, manageInvoices: true, waive: false }, opening: { ...SCHEDULE.steps[1]!, dueDate: null }, busy: false, problem: null } }) },
-    { id: 'w2a80-schedule-sales', label: 'W2a · Sales · Schedule verbs held (orders and invoices are managed by others)', model: base('sales', paidNotSent, { tab: 'money', scheduleSteps: { can: { manageOrders: false, manageInvoices: false, waive: false }, opening: null, busy: false, problem: null } }) },
-    { id: 'money-schedule-none', label: 'W2a · Sales · No milestones: paid on invoice terms', model: base('sales', noDeposit, { tab: 'money', schedule: { value: SCHEDULE_NONE, problem: null } }) },
+    { id: 'w2a80-schedule-open', label: 'W2a · Finance · Schedule: Open the balance before shipping for payment; invoice the paid deposit (its TD02)', model: base('finance', paidNotSent, { tab: 'shipments', scheduleSteps: { can: { manageOrders: true, manageInvoices: true, waive: false }, opening: null, busy: false, problem: null } }) },
+    { id: 'w2a80-schedule-day', label: 'W2a · Finance · Open for payment of a step without a day: the day its request falls due', model: base('finance', paidNotSent, { tab: 'shipments', schedule: { value: { ...SCHEDULE, steps: SCHEDULE.steps.map((step) => (step.kind === 'BEFORE_SHIPPING' ? { ...step, dueDate: null } : step)) }, problem: null }, scheduleSteps: { can: { manageOrders: true, manageInvoices: true, waive: false }, opening: { ...SCHEDULE.steps[1]!, dueDate: null }, busy: false, problem: null } }) },
+    { id: 'w2a80-schedule-sales', label: 'W2a · Sales · Schedule verbs held (orders and invoices are managed by others)', model: base('sales', paidNotSent, { tab: 'shipments', scheduleSteps: { can: { manageOrders: false, manageInvoices: false, waive: false }, opening: null, busy: false, problem: null } }) },
+    { id: 'money-schedule-none', label: 'W2a · Sales · No milestones: paid on invoice terms', model: base('sales', noDeposit, { tab: 'shipments', schedule: { value: SCHEDULE_NONE, problem: null } }) },
     // B-W2b-16: the owner waives an advance; a typed order's deposit page; the close's reason code.
-    { id: 'w2b16-waive', label: 'W2b · Owner · Schedule: Waive… on the open balance before shipping (and on its deposit card)', model: base('owner', confirmed, { tab: 'money', scheduleSteps: WAIVE_STEPS }) },
-    { id: 'w2b16-waive-dialog', label: 'W2b · Owner · Waive the balance before shipping: what it means, the reason; a fresh code after Waive', model: base('owner', confirmed, { tab: 'money', scheduleSteps: { ...WAIVE_STEPS, waiving: { target: { kind: 'step', id: BALANCE.id, version: BALANCE.version }, label: BALANCE.label, stepKind: 'BEFORE_SHIPPING' } } }) },
-    { id: 'w2b16-waive-deposit', label: 'W2b · Owner · Waive the deposit: production may start without it', model: base('owner', confirmed, { tab: 'money', scheduleSteps: { ...WAIVE_STEPS, waiving: { target: { kind: 'step', id: SCHEDULE.steps[0]!.id, version: 1 }, label: SCHEDULE.steps[0]!.label, stepKind: 'DEPOSIT' } } }) },
-    { id: 'w2b16-waive-refused', label: 'W2b · Owner · Waive refused: the step moved meanwhile (said in the dialog)', model: base('owner', confirmed, { tab: 'money', scheduleSteps: { ...WAIVE_STEPS, problem: { key: 'schedule.verbs.problem.moved' }, waiving: { target: { kind: 'step', id: BALANCE.id, version: BALANCE.version }, label: BALANCE.label, stepKind: 'BEFORE_SHIPPING' } } }) },
-    { id: 'w2b16-waive-held', label: 'W2b · Finance · Waive… held: only the owner waives', model: base('finance', confirmed, { tab: 'money', scheduleSteps: { ...WAIVE_STEPS, can: { ...WAIVE_STEPS.can, waive: false } } }) },
-    { id: 'w2b16-deposit-typed', label: 'W2b · Finance · A typed order’s deposit: Send the bank-details page (to the invoices contact)', model: base('finance', typed, { tab: 'money' }) },
-    { id: 'w2b16-deposit-typed-dialog', label: 'W2b · Finance · Send the page of a typed order’s deposit', model: base('finance', typed, { tab: 'money', dialog: { kind: 'depositLink', requestId: typed.chain.depositRequests[0]!.id } }) },
+    { id: 'w2b16-waive', label: 'W2b · Owner · Schedule: Waive… on the open balance before shipping (and on its deposit card)', model: base('owner', confirmed, { tab: 'shipments', scheduleSteps: WAIVE_STEPS }) },
+    { id: 'w2b16-waive-dialog', label: 'W2b · Owner · Waive the balance before shipping: what it means, the reason; a fresh code after Waive', model: base('owner', confirmed, { tab: 'shipments', scheduleSteps: { ...WAIVE_STEPS, waiving: { target: { kind: 'step', id: BALANCE.id, version: BALANCE.version }, label: BALANCE.label, stepKind: 'BEFORE_SHIPPING' } } }) },
+    { id: 'w2b16-waive-deposit', label: 'W2b · Owner · Waive the deposit: production may start without it', model: base('owner', confirmed, { tab: 'shipments', scheduleSteps: { ...WAIVE_STEPS, waiving: { target: { kind: 'step', id: SCHEDULE.steps[0]!.id, version: 1 }, label: SCHEDULE.steps[0]!.label, stepKind: 'DEPOSIT' } } }) },
+    { id: 'w2b16-waive-refused', label: 'W2b · Owner · Waive refused: the step moved meanwhile (said in the dialog)', model: base('owner', confirmed, { tab: 'shipments', scheduleSteps: { ...WAIVE_STEPS, problem: { key: 'schedule.verbs.problem.moved' }, waiving: { target: { kind: 'step', id: BALANCE.id, version: BALANCE.version }, label: BALANCE.label, stepKind: 'BEFORE_SHIPPING' } } }) },
+    { id: 'w2b16-waive-held', label: 'W2b · Finance · Waive… held: only the owner waives', model: base('finance', confirmed, { tab: 'shipments', scheduleSteps: { ...WAIVE_STEPS, can: { ...WAIVE_STEPS.can, waive: false } } }) },
+    { id: 'w2b16-deposit-typed', label: 'W2b · Finance · A typed order’s deposit: Send the bank-details page (to the invoices contact)', model: base('finance', typed, { tab: 'shipments' }) },
+    { id: 'w2b16-deposit-typed-dialog', label: 'W2b · Finance · Send the page of a typed order’s deposit', model: base('finance', typed, { tab: 'shipments', dialog: { kind: 'depositLink', requestId: typed.chain.depositRequests[0]!.id } }) },
     { id: 'w2b16-close-lines-code', label: 'W2b · Sales · Close remaining lines: the reason code from the cancel list, beside the words', model: base('sales', order('PARTLY_SHIPPED'), { dialog: { kind: 'closeLines' }, cancelReasons: CANCEL_REASONS, draft: { reason: 'Il cliente non vuole il resto.', reasonCode: 'CUSTOMER_REQUEST' } }) },
     { id: 'w2b16-close-lines-no-code', label: 'W2b · Sales · Close remaining lines held: pick a reason code', model: base('sales', order('PARTLY_SHIPPED'), { dialog: { kind: 'closeLines' }, cancelReasons: CANCEL_REASONS, draft: { reason: 'Il cliente non vuole il resto.' } }) },
     { id: 'w2b16-closed-short-code', label: 'W2b · Sales · Lines: the closed line names its reason code in words', model: base('sales', closedShort, { cancelReasons: CANCEL_REASONS }) },
-    { id: 'money-schedule-manager', label: 'W2a · Production manager · Payment schedule without money', model: base('manager', paidNotSent, { tab: 'money' }) },
-    { id: 'money-schedule-error', label: 'W2a · Sales · The payment schedule could not be read (Try again)', model: base('sales', confirmed, { tab: 'money', schedule: { value: null, problem: 'problem.read.unavailable' } }) },
+    { id: 'money-schedule-manager', label: 'W2a · Production manager · Payment schedule without money', model: base('manager', paidNotSent, { tab: 'shipments' }) },
+    { id: 'money-schedule-error', label: 'W2a · Sales · The payment schedule could not be read (Try again)', model: base('sales', confirmed, { tab: 'shipments', schedule: { value: null, problem: 'problem.read.unavailable' } }) },
     { id: 'new-empty', label: 'W2a · Sales · New order (typed): the draft studio, no line yet — Confirm held', model: draftCase('sales'), note: 'Add a style (n), pick colours, type sizes; the rail prices it as you type.' },
     { id: 'new-priced', label: 'W2a · Sales · New order: two colour lines priced by the API (list price and a typed one), deposit and schedule', model: draftCase('sales', { draft: typedDraft, styles: { [STYLE_ID]: STYLE }, preview: { phase: 'ready', value: MANUAL_PREVIEW, problem: null } }) },
     { id: 'new-owner', label: 'W2a · Owner · New order priced: cost too (cost grain)', model: draftCase('owner', { draft: typedDraft, styles: { [STYLE_ID]: STYLE }, preview: { phase: 'ready', value: MANUAL_PREVIEW, problem: null } }) },

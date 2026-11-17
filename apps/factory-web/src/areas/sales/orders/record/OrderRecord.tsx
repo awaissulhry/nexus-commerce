@@ -43,7 +43,7 @@ import {
   type SdiStatus,
   type Settlement,
 } from '../api'
-import { isStepUpCancelled, useCoalesced, useLive, useStepUp, useThreadDock } from '../hooks'
+import { isStepUpCancelled, useCoalesced, useLive, useStepUp } from '../hooks'
 import { amendLines, draftOf, namesOf, newKey, withCells } from '../daily-model'
 import { abilitiesOf, knownIds, liveTouches, readProblem, romeToday, tabOf, writeProblem, type SizeLayer } from '../model'
 import { COMPOSER_EMPTY, PART_LOADING, type AmendState, type Loaded, type OrderRecordModel, type Part, type RecordDialog } from './record-model'
@@ -68,6 +68,9 @@ import { NewLineOptions } from '../../_shared/options-entry/NewLineOptions'
 // B-W2b-380 (XF6:02): cost changed since priced, on the order's lines.
 import { useCostChanged } from '../../_shared/cost-changed/use-cost-changed'
 import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark'
+// ---- B-TH-214: the docked thread on the order (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -102,9 +105,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const pathname = usePathname()
   const router = useRouter()
   const params = useSearchParams()
-  const tab = tabOf(params?.get('tab'))
   const prefix = pathname.replace(/\/sales\/orders\/[^/]+\/?$/, '')
   const can = useMemo(() => abilitiesOf(session.permissions), [session.permissions])
+  // B-TH-214: the five tabs; an old address lands on the tab it merged into (Margin only with the margin grain).
+  const tab = tabOf(params?.get('tab'), can)
 
   const [order, setOrder] = useState<Loaded<Order>>({ status: 'loading' })
   const current = useRef<Order | null>(null)
@@ -141,7 +145,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
     return () => abort.abort()
   }, [api])
   const searchSeq = useRef(0)
-  const { dockOpen, toggleDock } = useThreadDock()
   const { stepUp, guard, ensureFresh, submitStepUp, cancelStepUp } = useStepUp(api)
 
   const loadParts = useCallback(
@@ -220,7 +223,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const known = order.status === 'ready' ? knownIds(order.value) : null
   const knownRef = useRef(known)
   knownRef.current = known
-  const live = useLive(
+  // B-TH-214: the tab's live state shows in the shell's band (beside the record's band); here only the re-reads.
+  useLive(
     (change) => {
       if (!knownRef.current || !liveTouches(change, knownRef.current)) return
       const open = dialogRef.current
@@ -398,8 +402,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     settlement,
     sdi,
     versions,
-    live,
-    dockOpen,
+    personId: session.user.id, // B-TH-214
     changed,
     notice,
     busy,
@@ -442,7 +445,21 @@ function RecordContainer({ orderId }: { orderId: string }) {
     <OrderRecordView
       model={model}
       delivered={value ? <Deliveries orderId={value.id} prefix={prefix} /> : null}
-      panels={value ? <RecordPanels record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName, emails: [] } : null} /> : null}
+      // B-TH-214: the docked thread (Head with Activity's doors, files line, Files view, feed, box); the print view keeps the panels' print form.
+      thread={
+        value ? (
+          <OfficeRecordThread
+            docked
+            record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }}
+            title={`${value.number} · ${value.party?.legalName ?? ''}`}
+            recordLabel={value.number}
+            party={value.party ? { id: value.partyId, name: value.party.legalName } : null}
+            partyRole="customer"
+            printHref={printHref(pathname, params?.toString() ?? '')}
+          />
+        ) : null
+      }
+      printThread={value ? <RecordPanels record={{ type: 'SalesOrder', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party?.legalName ?? ''}`} party={value.party ? { id: value.partyId, name: value.party.legalName, emails: [] } : null} /> : null}
       actions={{
         onPortal: () => {
           const current = order.status === 'ready' ? order.value : null
@@ -478,7 +495,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
           if (value) loadParts(value)
         },
         onReload: () => void load(),
-        onDock: toggleDock,
         onDismissNotice: () => setNotice(null),
         onDialog: (next) => {
           setDialog(next)
