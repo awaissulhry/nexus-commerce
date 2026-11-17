@@ -167,7 +167,7 @@ export async function planNotes(db: Reader, context: OfficeContext, draft: NoteD
   const actor = actorOf(context)
   const bodyText = cleanBody(draft.body)
   const mentions = uniqueIds(draft.mentions)
-  const problems: Issue[] = noteProblems({ bodyText, mentions, attachments: [], forFloor: false })
+  const problems: Issue[] = noteProblems({ bodyText, mentions, attachments: [] })
   if (problems.length > 0) throw new ValidationError('The note is not valid.', problems)
   const people = mentions.length === 0 ? [] : await db.user.findMany({ where: { id: { in: mentions }, status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
   const persons = mentions.flatMap((userId, index) => (people.some((person) => person.id === userId) ? [] : [{ path: `body/mentions/${index}`, message: NOTE_WORDS.NOT_A_PERSON.en }]))
