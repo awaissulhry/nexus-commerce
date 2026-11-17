@@ -9,6 +9,8 @@ import { fetchRequests, type RequestRow } from '../requests/api'
 import { fetchInTransit, fetchOrders, ORDER_CHIPS, PAGE_SIZE, type InTransitRead, type OrderRow, type OrdersRead } from './api'
 import { listBandOf } from './band'
 import { CLOSED_REQUESTS, isListChip, listCsv, listQuery, listRows, NAV_KEY, NS, opens, ordersInChip, recordHref, rowHref, type ListChip } from './model'
+// B-TH-238: the tiles (We need something from you · Open requests · Open orders) and the API chip of a tile's rows.
+import { apiChipOf, listTiles, TILE_CHIPS } from './model'
 import { saveText, useOffline } from './hooks'
 import { OrdersListView } from './view/OrdersListView'
 // B-TH-230: the New messages column — one read of the rows shown (the portal's own client: its party's shared messages only).
@@ -66,7 +68,8 @@ function ListContainer() {
   const q = search?.get('q') ?? ''
   // B-TH-223: the requests are read whole (every state) and narrowed here; a reader without the orders' right reads none.
   const seesRequests = frame.me.permissions.includes('portal.salesOrders.view')
-  const [requests, setRequests] = useState<{ state: 'loading' | 'error' | 'ready' | 'none'; rows: RequestRow[]; complete: boolean }>({ state: seesRequests ? 'loading' : 'none', rows: [], complete: true })
+  // B-TH-238: with the API's counts (what needs the customer, its open requests): the tiles' numbers, the same read as Home's.
+  const [requests, setRequests] = useState<{ state: 'loading' | 'error' | 'ready' | 'none'; rows: RequestRow[]; complete: boolean; counts: { needsYou: number; open: number } | null }>({ state: seesRequests ? 'loading' : 'none', rows: [], complete: true, counts: null })
 
   const [read, setRead] = useState<OrdersRead | null>(null)
   const [rows, setRows] = useState<OrderRow[]>([])
@@ -82,8 +85,8 @@ function ListContainer() {
     const control = new AbortController()
     reading.current = control
     try {
-      // Closed requests hold no order: the orders' read only brings the chips' counts then.
-      const next = chip !== null && !ordersInChip(chip) ? await fetchOrders(api, { chip: 'OPEN', q, limit: 1 }, control.signal) : await fetchOrders(api, { chip: chip as Exclude<ListChip, typeof CLOSED_REQUESTS> | null, q }, control.signal)
+      // Closed requests (and the two request tiles, B-TH-238) hold no order: the orders' read only brings the chips' counts then.
+      const next = chip !== null && !ordersInChip(chip) ? await fetchOrders(api, { chip: 'OPEN', q, limit: 1 }, control.signal) : await fetchOrders(api, { chip: apiChipOf(chip), q }, control.signal)
       if (control.signal.aborted) return
       setRead(next)
       setRows(chip !== null && !ordersInChip(chip) ? [] : next.items)
@@ -100,7 +103,7 @@ function ListContainer() {
     if (!seesRequests) return
     try {
       const next = await fetchRequests(api, { state: 'ALL', limit: 200 })
-      setRequests({ state: 'ready', rows: next.rows, complete: next.complete })
+      setRequests({ state: 'ready', rows: next.rows, complete: next.complete, counts: next.counts })
     } catch {
       setRequests((current) => ({ ...current, state: 'error' }))
     }
@@ -152,7 +155,7 @@ function ListContainer() {
     if (!read || loadingMore || (chip !== null && !ordersInChip(chip))) return
     setLoadingMore(true)
     try {
-      const next = await fetchOrders(api, { chip: chip as Exclude<ListChip, typeof CLOSED_REQUESTS> | null, q, offset: rows.length })
+      const next = await fetchOrders(api, { chip: apiChipOf(chip), q, offset: rows.length })
       setRows((current) => [...current, ...next.items.filter((row) => !current.some((old) => old.id === row.id))])
     } catch {
       setState('error')
@@ -206,6 +209,8 @@ function ListContainer() {
         // B-W2b-194: the empty state's New order.
         newOrderHref: newOrder,
         unread: readsThreads ? unread : null, // B-TH-230
+        // B-TH-238: the tiles (the customer's own reads only; "—" while unknown).
+        tiles: seesRequests ? listTiles(requests.state === 'ready' && requests.counts ? { counts: requests.counts } : null, read) : null,
       }}
       actions={{
         onChip: (next) => go(next, q),
@@ -255,7 +260,7 @@ function PrintContainer() {
   const load = useCallback(async () => {
     try {
       const [orders, asked] = await Promise.all([
-        chip !== null && !ordersInChip(chip) ? fetchOrders(api, { chip: 'OPEN', q, limit: 1 }) : fetchOrders(api, { chip: chip as Exclude<ListChip, typeof CLOSED_REQUESTS> | null, q, limit: PAGE_SIZE * 4 }),
+        chip !== null && !ordersInChip(chip) ? fetchOrders(api, { chip: 'OPEN', q, limit: 1 }) : fetchOrders(api, { chip: apiChipOf(chip), q, limit: PAGE_SIZE * 4 }),
         seesRequests ? fetchRequests(api, { state: 'ALL', limit: 200 }) : Promise.resolve(null),
       ])
       setRead(chip !== null && !ordersInChip(chip) ? { ...orders, items: [], count: 0 } : orders)
@@ -273,7 +278,8 @@ function PrintContainer() {
   const current: ListChip = chip ?? read?.chip ?? 'OPEN'
   const rows = read ? listRows(current, q, requests, read.items, locale) : []
   const asked = rows.filter((row) => row.kind === 'request').length
-  const chipWords = current === CLOSED_REQUESTS ? t('chips.closedRequests') : (read?.chips.find((entry) => entry.chip === current)?.words[locale] ?? t('print.chipOpen'))
+  // B-TH-238: a tile's rows are named by the tile's words.
+  const chipWords = current === CLOSED_REQUESTS ? t('chips.closedRequests') : (TILE_CHIPS as readonly string[]).includes(current) ? t(`tiles.${current}`) : (read?.chips.find((entry) => entry.chip === current)?.words[locale] ?? t('print.chipOpen'))
   return (
     <OrdersPrintView
       model={{

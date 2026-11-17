@@ -183,7 +183,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - B-TH-220/222/223/303 (threads TH-1b, portal): `/orders/new` is New order as an e-mail (`neworder/ComposePage.tsx` over the shared
   compose `src/lib/request-compose/` — fixed "Goes to: Sales at <company>", subject, message, files held with the API's sentence,
   "Add details (optional)", draft kept on this device, same-words guard, one Idempotency-Key per content; catalogue `request-compose`;
-  the receipt says "your request N"). The catalogue door above is CLOSED (`request-model.ts CATALOGUE_DOOR_OPEN`, B-TH-304 reopens it).
+  the receipt says "your request N"). B-TH-304: the catalogue door above is OPEN again (`request-model.ts CATALOGUE_DOOR_OPEN`): New order's
+  side column offers its three ways (`?way=pick|reorder|upload`); the door's pages name the customer's own order numbers (`/portal/reorder/*`
+  `yourNumber`) and its PO, never an office number.
   `src/portal/customer/requests/` — POST/GET /portal/inquiries (`api.ts`), the request page `/orders/requests/<id>` (SCR-185-request:
   true states, the question with Answer, PortalThread type Inquiry; `RECORD_PAGES.Inquiry`; catalogue `portal-requests`). Orders &
   tracking became Orders & requests (requests first, "Closed requests" chip, Kind/Subject columns, Next shipment from 1600 px); Home's

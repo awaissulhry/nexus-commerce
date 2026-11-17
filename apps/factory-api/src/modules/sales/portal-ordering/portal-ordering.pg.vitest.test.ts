@@ -279,6 +279,15 @@ describe('reorder (SAL-072)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     const copied = await ok(browsers.buyer, 'POST', `/portal/order-requests/${draft.request.id}/reorder`, { version: draft.request.version, orderId: so1 })
     expect(copied.added).toBe(plan.lines.filter((line: Json) => line.addable).length)
     expect(copied.request.lines.every((line: Json) => line.source?.orderNumber === 'SEED-SO-0001')).toBe(true)
+    // ---- B-TH-304 (pick A, plan §0.5): the catalogue door names the customer's OWN order number ("Your order N"), the same on the
+    // list, the order's lines and every copied line's source — so the portal never needs the office's series.
+    const own = (await ok(browsers.buyer, 'GET', '/portal/sales-orders?chip=ALL')).items.find((row: Json) => row.id === so1)?.yourNumber ?? null
+    const listed = past.orders.find((order: Json) => order.id === so1)
+    expect(listed.yourNumber).toEqual(own)
+    expect(plan.order.yourNumber).toEqual(own)
+    expect(copied.request.lines.every((line: Json) => JSON.stringify(line.source?.yourNumber ?? null) === JSON.stringify(own))).toBe(true)
+    for (const order of past.orders) if (order.yourNumber) expect(order.yourNumber.words.en).toBe(`Your order ${order.yourNumber.seq}`)
+    // ---- end B-TH-304
     const sent = await ok(browsers.buyer, 'POST', `/portal/order-requests/${draft.request.id}/send`, { version: copied.request.version })
     const view = await officeRequestView(office(), draft.request.id)
     await expect(refuseRequest(office(), draft.request.id, { version: view.request.version, reason: '   ' })).rejects.toThrow(/Say why/)

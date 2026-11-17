@@ -26,6 +26,12 @@ export const LIMITS = Object.freeze({ lines: 200, sizesPerLine: 60, quantity: 99
 
 const named = z.object({ id: z.string(), code: z.string(), name: z.string() })
 const sizeRow = z.object({ size: z.string(), quantity: z.number() })
+/**
+ * B-TH-304 (pick A, plan §0.5): the customer's own number of an order ("Your order 12"); the portal draws it and never the
+ * office's `number` (SO-…), whose series would tell a customer how much the others order. Absent from an older answer: none.
+ */
+const ownNumber = z.object({ seq: z.number(), words: z.object({ it: z.string(), en: z.string() }) }).nullable().default(null)
+export type OwnNumber = z.infer<typeof ownNumber>
 const pair = z.object({ it: z.string(), en: z.string() })
 export type Pair = z.infer<typeof pair>
 
@@ -50,7 +56,8 @@ export const lineSchema = z.object({
   priceNow: z.string().nullable().optional(),
   amount: z.string().nullable().optional(),
   note: z.string().nullable(),
-  source: z.object({ orderLineId: z.string(), orderId: z.string(), orderNumber: z.string(), customerRef: z.string().nullable(), orderDate: z.string() }).nullable(),
+  // B-TH-304: `orderNumber` is the office's (never drawn in the portal); `yourNumber` the customer's own ("Your order 12").
+  source: z.object({ orderLineId: z.string(), orderId: z.string(), orderNumber: z.string(), yourNumber: ownNumber, customerRef: z.string().nullable(), orderDate: z.string() }).nullable(),
   notices: z.array(noticeSchema),
   problems: z.array(problemSchema),
 })
@@ -172,7 +179,7 @@ export const sendDraft = (api: ApiClient, id: string, version: number, idempoten
   api.post(`${path(id)}/send`, { body: { version }, schema: sentSchema, idempotencyKey })
 
 // ── reorder ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
-export const pastOrderRowSchema = z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable(), orderDate: z.string().nullable(), lines: z.number(), pieces: z.number() })
+export const pastOrderRowSchema = z.object({ id: z.string(), number: z.string(), yourNumber: ownNumber /* B-TH-304 */, customerRef: z.string().nullable(), orderDate: z.string().nullable(), lines: z.number(), pieces: z.number() })
 export type PastOrderRow = z.infer<typeof pastOrderRowSchema>
 export const fetchPastOrders = async (api: ApiClient, q: string | null, signal?: AbortSignal): Promise<PastOrderRow[]> =>
   (await api.get('/portal/reorder/orders', { query: { q: q && q.trim() !== '' ? q.trim() : undefined }, schema: z.object({ orders: z.array(pastOrderRowSchema) }), signal })).orders
@@ -194,7 +201,7 @@ export const pastLineSchema = z.object({
 })
 export type PastLine = z.infer<typeof pastLineSchema>
 export const pastOrderSchema = z.object({
-  order: z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable(), orderDate: z.string().nullable() }),
+  order: z.object({ id: z.string(), number: z.string(), yourNumber: ownNumber /* B-TH-304 */, customerRef: z.string().nullable(), orderDate: z.string().nullable() }),
   lines: z.array(pastLineSchema),
   seesPrices: z.boolean(),
 })

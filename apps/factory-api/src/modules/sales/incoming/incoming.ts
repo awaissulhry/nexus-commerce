@@ -93,7 +93,8 @@ const VIEW_OF: Readonly<Record<IncomingKind, Permission>> = Object.freeze({ REQU
 /** The kinds this reader may see at all (a grant of the kind's view permission) and this query lets in. */
 function kindsOf(actor: Actor, query: IncomingListQuery): { readonly sees: ReadonlySet<IncomingKind>; readonly listed: readonly IncomingKind[] } {
   const sees = new Set(INCOMING_KINDS.filter((kind) => grantsFor(actor, VIEW_OF[kind]).length > 0))
-  const requestsOnly = query.status !== undefined || query.prospect === true || (query.source !== undefined && query.source !== 'PORTAL')
+  // B-TH-235: `outcome` (what a request became, Sales › Reports' request figure) lists requests only.
+  const requestsOnly = query.status !== undefined || query.prospect === true || (query.source !== undefined && query.source !== 'PORTAL') || query.outcome !== undefined
   const listed = INCOMING_KINDS.filter((kind) => sees.has(kind) && (query.kind === undefined || query.kind === kind) && (!requestsOnly || kind === 'REQUEST'))
   return { sees, listed }
 }
@@ -127,7 +128,7 @@ async function filtersOf(db: Reader, context: OfficeContext, query: IncomingList
   const common = [query.partyId ? { partyId: query.partyId } : {}, query.companyId ? { companyId: query.companyId } : {}]
   return {
     // The requests: the inquiries' own list filter (the same scope, the same words).
-    request: baseWhere(context, { status: query.status, source: query.source, partyId: query.partyId, prospect: query.prospect, companyId: query.companyId, receivedFrom: query.receivedFrom, receivedTo: query.receivedTo, q }),
+    request: baseWhere(context, { status: query.status, source: query.source, partyId: query.partyId, prospect: query.prospect, companyId: query.companyId, receivedFrom: query.receivedFrom, receivedTo: query.receivedTo, q, outcome: query.outcome /* B-TH-235 */ }),
     catalogue: {
       AND: [
         scopeWhere(actor, ORDERS_VIEW, PARTY_SCOPE) as Prisma.PortalOrderRequestWhereInput,

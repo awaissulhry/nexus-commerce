@@ -46,6 +46,9 @@ import { EMAIL_SEND } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { sendEmail } from '../../../platform/email-out/outbound'
 import { ensureThread, writeMessage } from '../../../platform/threads/threads'
 import { joinMailInCommand } from './join'
+// B-TH-235: the list's door from Sales › Reports' request figure (what a request became).
+import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+import type { RequestOutcome } from '@nexus/factory-domain/sales/inquiries/rules'
 import {
   asDay,
   assertNoProblems,
@@ -131,6 +134,7 @@ export function baseWhere(context: OfficeContext, query: Omit<InquiryListQuery, 
       query.companyId ? { companyId: query.companyId } : {},
       query.receivedFrom ? { receivedAt: { gte: businessDayStart(query.receivedFrom) } } : {},
       query.receivedTo ? { receivedAt: { lt: businessDayStart(plusOne(query.receivedTo)) } } : {},
+      query.outcome ? outcomeWhere(context, query.outcome) : {}, // B-TH-235
       q
         ? {
             OR: [
@@ -147,6 +151,27 @@ export function baseWhere(context: OfficeContext, query: Omit<InquiryListQuery, 
     ],
   }
 }
+
+// ---- B-TH-235 (threads plan X-SAL-REPORTS.drill; Owner rule "every total opens its rows") ----------------------------------
+/**
+ * What a request became, exactly as Sales › Reports' request figure counts it (modules/insights/sales-reports facts requestsOf):
+ * ORDERED — ORDERED (made straight into an order), or QUOTED with an order of one of its quote's versions that is not cancelled
+ * and that the reader may see (orders.view over that order's company and customer; none without it, as the figure counts none);
+ * DECLINED — declined for any reason but "Not an order"; NOT_AN_ORDER — declined as not an order.
+ */
+function outcomeWhere(context: OfficeContext, outcome: RequestOutcome): Prisma.InquiryWhereInput {
+  switch (outcome) {
+    case 'ORDERED': {
+      const seen = scopeWhere(actorOf(context), ORDERS_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.SalesOrderWhereInput
+      return { OR: [{ status: 'ORDERED' }, { status: 'QUOTED', quote: { versions: { some: { salesOrders: { some: { AND: [seen, { status: { not: 'CANCELLED' } }] } } } } } }] }
+    }
+    case 'DECLINED':
+      return { status: 'DECLINED', NOT: { declineReason: 'NOT_AN_ORDER' } }
+    case 'NOT_AN_ORDER':
+      return { status: 'DECLINED', declineReason: 'NOT_AN_ORDER' }
+  }
+}
+// ---- end B-TH-235
 
 const plusOne = (day: string): string => new Date(asDay(day).getTime() + 86_400_000).toISOString().slice(0, 10)
 const OPEN: Prisma.InquiryWhereInput = { status: { in: [...OPEN_STATUSES] } }

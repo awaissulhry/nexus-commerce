@@ -118,7 +118,16 @@
     "clearAll": "Clear all",
     "status": "State: {status}",
     "company": "Company: {name}",
-    "companyUnknown": "Company: one company"
+    "companyUnknown": "Company: one company",
+    "received": "Came in: {from} – {to}",
+    "receivedOn": "Came in: {day}",
+    "receivedFrom": "Came in from {from}",
+    "receivedTo": "Came in until {to}",
+    "outcome": {
+      "ORDERED": "Became: an order (straight or from its quote)",
+      "DECLINED": "Became: declined (not “Not an order”)",
+      "NOT_AN_ORDER": "Became: not an order"
+    }
   },
   "notice": {
     "label": "Notices",

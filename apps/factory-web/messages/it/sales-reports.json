@@ -31,7 +31,8 @@
     "csv": {
       "intake": "Esporta l'acquisito ordini (CSV)",
       "backlog": "Esporta il portafoglio (CSV)",
-      "returns": "Esporta le righe di reso (CSV)"
+      "returns": "Esporta le righe di reso (CSV)",
+      "requests": "Esporta richieste arrivate, preventivate e ordinate (CSV)"
     },
     "csvHeld": "Attendi che il pannello sia letto.",
     "dashboard": "Salva come cruscotto (Home)",
@@ -383,5 +384,50 @@
     "loading": "Lettura…",
     "retry": "Riprova",
     "incomplete": "Più preventivi di quanti un report ne legge: sono contati i primi 5.000."
+  },
+  "requests": {
+    "title": "Richieste arrivate, preventivate e ordinate",
+    "hint": "Le richieste arrivate dal {from} al {to}, da qualsiasi canale, e che cosa è diventata ciascuna finora. Ogni numero apre quelle richieste in Vendite › In arrivo.",
+    "failed": "Impossibile leggere i numeri delle richieste.",
+    "outside": "Le richieste non sono nel tuo ruolo",
+    "outsideBody": "Questo dato conta le richieste di Vendite › In arrivo: serve il permesso di vederle.",
+    "empty": "Nessuna richiesta arrivata in questo periodo",
+    "emptyHint": "Una richiesta per e-mail, dal portale, per telefono o in fiera è contata qui il giorno in cui arriva.",
+    "figure": {
+      "received": "Arrivate",
+      "quoted": "Preventivate",
+      "ordered": "Ordinate",
+      "declined": "Rifiutate",
+      "lost": "Perse",
+      "notAnOrder": "Non è un ordine",
+      "open": "Ancora aperte"
+    },
+    "figureHint": {
+      "received": "Arrivate in questo periodo",
+      "quoted": "È stato fatto un preventivo",
+      "ordered": "È stato fatto un ordine",
+      "declined": "Rifiutate da noi",
+      "lost": "Il cliente è andato altrove",
+      "notAnOrder": "Contate a parte: fuori dalle percentuali",
+      "open": "In attesa da noi o dal cliente"
+    },
+    "hintRate": "{pct} delle richieste",
+    "hintOrdered": "{pct} delle richieste · subito o dal preventivo",
+    "open": "{figure}: {count} ({where}) — apri queste richieste in Vendite › In arrivo",
+    "thePeriod": "tutto il periodo",
+    "by": {
+      "week": "Richieste per settimana",
+      "month": "Richieste per mese"
+    },
+    "byCustomer": "Richieste per cliente",
+    "prospects": "Potenziali clienti (non ancora clienti)",
+    "col": {
+      "week": "Settimana",
+      "month": "Mese",
+      "customer": "Cliente",
+      "quotedPct": "Quota preventivate",
+      "orderedPct": "Quota ordinate"
+    },
+    "definition": "Ordinate conta un ordine fatto subito dalla richiesta o dal suo preventivo (un ordine che puoi vedere e non annullato); una richiesta preventivata e poi ordinata è in entrambe. “Non è un ordine” (una domanda, una mail che non chiede nulla) è contata a parte e fuori dalle percentuali."
   }
 }

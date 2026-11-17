@@ -73,8 +73,10 @@
     "empty": "No lines yet.",
     "emptyBody": "Add a style, reorder a past order or upload a sheet.",
     "lineTitle": "Line {seq}: {title}",
-    "fromOrder": "from order {order}",
-    "fromOrderRef": "from order {order} (your PO {ref})",
+    "fromOwn": "from your order {seq}",
+    "fromOwnRef": "from your order {seq} (your PO {ref})",
+    "fromDay": "from your order of {day}",
+    "fromDayRef": "from your order of {day} (your PO {ref})",
     "colour": "Colour",
     "colourGone": "{colour} (discontinued)",
     "menu": "More for line {seq}",
@@ -117,7 +119,8 @@
     "back": "All past orders",
     "orderFailed": "We could not read this order.",
     "todayPrices": "Lines that can be copied are chosen already. A line with a discontinued colour can be chosen once you pick another colour.",
-    "linesLabel": "Lines of {order}",
+    "linesOwn": "Lines of your order {seq}",
+    "linesDay": "Lines of your order of {day}",
     "linesCount_one": "{count} line",
     "linesCount_other": "{count} lines",
     "noLines": "This order has no lines to copy.",
@@ -240,18 +243,16 @@
   },
   "sent": {
     "title": "Order request sent",
-    "body": "Our request {number}.",
-    "bodyRef": "Your PO {ref}, our request {number}.",
+    "bodyNone": "You find it under Orders & requests as a catalogue order.",
+    "bodyYours": "Your PO {ref}: you find it under Orders & requests as a catalogue order.",
     "next": "Until then you can follow it under Orders as To be confirmed by us.",
-    "reference": "Our request",
     "open": "Open the order",
     "newOrder": "New order"
   },
   "closed": {
-    "title": "Request {number}",
     "titleNone": "This request",
     "SENT": "This request was sent: our answer comes under Orders. To change it, withdraw it in Orders or ask us.",
-    "ACCEPTED": "We confirmed this request as order {order}.",
+    "ACCEPTED": "We confirmed this request as an order: open it to follow it.",
     "REFUSED": "We did not accept this request: the reason is in Orders.",
     "WITHDRAWN": "This request was withdrawn.",
     "DRAFT": "This draft is open."
@@ -457,8 +458,7 @@
     "home": "Go to Home"
   },
   "ref": {
-    "yours": "Your PO",
-    "ours": "Our order"
+    "yours": "Your PO"
   },
   "request": {
     "title": "New order",
@@ -503,7 +503,9 @@
     "returnsLink": "Go to Returns & claims",
     "returnsSafety": "A safety problem with a garment? Report it there too.",
     "unsaved": "Your request is not sent yet, and this device cannot keep it.",
-    "keySend": "Send the request (from the message box)"
+    "keySend": "Send the request (from the message box)",
+    "catalogueTitle": "Order from the catalogue",
+    "catalogueBody": "Pick your styles with the whole size run in one grid, reorder a past order or upload a sheet. It reaches Sales like a request: you follow it under Orders & requests."
   },
   "receipt": {
     "title": "Received — your request {seq}.",

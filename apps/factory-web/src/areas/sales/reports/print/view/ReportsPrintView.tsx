@@ -8,6 +8,9 @@ import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { BACKLOG_HORIZONS, type Backlog, type Headline, type Intake, type Returns } from '../../api'
+// B-TH-235: the request figure on paper.
+import { REQUEST_FIGURES, type Requests } from '../../api'
+import { requestGroupName } from '../../model'
 import { backlogWeekLabel, bucketLabel, countText, groupName, pctText, reasonWords, valueText, workingTime, type ReportsCan } from '../../model'
 import '../../reports.css'
 
@@ -27,6 +30,8 @@ export interface ReportsPrintModel {
   intake: Intake | null
   backlog: Backlog | null
   returns: Returns | null
+  /** B-TH-235: the requests received, quoted and ordered (absent: not read; `all` null: not in the role). */
+  requests?: Requests | null
   /** A message key (sales-reports) of the part that failed. */
   problem: string | null
 }
@@ -123,6 +128,8 @@ function Print({ model }: { model: ReportsPrintModel }) {
               </>
             )}
           </PrintSection>
+          {/* B-TH-235: the request figure on paper — the same counts as the screen, by period and by customer. */}
+          {model.requests ? <RequestsPrint answer={model.requests} /> : null}
           <PrintSection title={t('section.backlog')}>
             {backlog!.all.pieces === 0 ? (
               <p>{t('backlog.empty')}</p>
@@ -172,3 +179,41 @@ function Print({ model }: { model: ReportsPrintModel }) {
     </PrintView>
   )
 }
+
+// ── B-TH-235: requests received, quoted and ordered (the screen's every number opens Incoming; paper says the counts) ──────────
+function RequestsPrint({ answer }: { answer: Requests }) {
+  const t = useT('sales-reports')
+  const locale = useLocale()
+  const rate = (pct: string | null) => (pct === null ? '—' : pctText(pct, locale))
+  const cells = (figures: Requests['buckets'][number]['figures']) => [...REQUEST_FIGURES.map((figure) => countText(figures[figure], locale)), rate(figures.orderedPct)]
+  const columns = [...REQUEST_FIGURES.map((figure) => t(`requests.figure.${figure}`)), t('requests.col.orderedPct')]
+  return (
+    <PrintSection title={t('requests.title')}>
+      {answer.all === null ? (
+        <p>{t('requests.outside')}</p>
+      ) : answer.all.received === 0 ? (
+        <p>{t('requests.empty')}</p>
+      ) : (
+        <>
+          <SummaryTable
+            label={t(`requests.by.${answer.by}`)}
+            widths={['22%']}
+            columns={[t(`requests.col.${answer.by}`), ...columns]}
+            rows={[
+              ...answer.buckets.map((bucket) => ({ id: bucket.key, cells: [bucketLabel(bucket, locale), ...cells(bucket.figures)] })),
+              { id: 'all', cells: [<strong key="a">{t('print.total')}</strong>, ...cells(answer.all)] },
+            ]}
+          />
+          <SummaryTable
+            label={t('requests.byCustomer')}
+            widths={['22%']}
+            columns={[t('requests.col.customer'), ...columns]}
+            rows={answer.groups.map((group) => ({ id: group.key, cells: [requestGroupName(group, t('requests.prospects')), ...cells(group.figures)] }))}
+          />
+          <p className="fw-slr-print-note">{[t('requests.definition'), answer.more > 0 ? t('common.moreGroups', { count: answer.more }) : null].filter(Boolean).join(' ')}</p>
+        </>
+      )}
+    </PrintSection>
+  )
+}
+

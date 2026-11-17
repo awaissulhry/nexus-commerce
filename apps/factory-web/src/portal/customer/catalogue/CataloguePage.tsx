@@ -7,6 +7,8 @@ import { WithMessages } from '../../../record-panels/i18n'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive } from '../../shell/frame'
 import { useOffline } from '../orders/hooks'
 import { newOrderHref } from '../neworder/model'
+// B-TH-304: "Start an order" opens the catalogue door's style picker while the door is open.
+import { catalogueStartHref } from '../neworder/request-model'
 import { NotInAccess } from '../neworder/view/parts'
 import { useOrderingWords } from '../neworder/words'
 import { fetchCatalogue, fetchStyle, type CatalogueRead, type StyleDetail } from './api'
@@ -155,7 +157,7 @@ function CatalogueContainer() {
 
   usePortalBand(
     allowed
-      ? catalogueBandOf({ words, asOf: read?.asOf ?? null, start: newOrderHref(frame.prefix), startHeld: held ? words.t(held) : null })
+      ? catalogueBandOf({ words, asOf: read?.asOf ?? null, start: catalogueStartHref(frame.prefix) /* B-TH-304 */, startHeld: held ? words.t(held) : null })
       : { title: words.t('catalogue.title') },
   )
 

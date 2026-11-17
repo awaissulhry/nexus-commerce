@@ -11,6 +11,8 @@ import { useLive } from '../../_shared/buying/hooks'
 import { readProblem } from '../../_shared/stock/model'
 import { liveMatches } from '../../quality/_shared/hooks'
 import { getBacklog, getHeadline, getIntake, getReturns, type Backlog, type Headline, type Intake, type Returns } from './api'
+// B-TH-235: the intake panel's request figure.
+import { getRequests, type Requests } from './api'
 import { csvName, csvOf, LAYOUT_KEY, LIVE_EVERY_MS, LIVE_TYPES, rangeShown, reportsAddressOf, reportsAddressText, reportsCan, romeToday, sectionSpecs, type DrillTarget, type ReportsAddress, type ReportSection } from './model'
 import { ReportsView, type Read } from './view/ReportsView'
 
@@ -49,7 +51,8 @@ function useAtMostEvery(run: () => void, ms: number): () => void {
  * `/w/<company>/sales/reports?from=&to=&by=&split=&backlog=&also=` (SCR-250): the top bar's company, the period of the address
  * (else this month so far: the monthly sales review), four panels each read on its own (a failed one says so and the others
  * stay), what a tile, a bar or a cell counts (from the panel's own answer; J / K to the next bar), live re-reads on order, quote,
- * return and shipment changes at most once a minute, Arrange saved per person on this device, a panel's rows as a CSV file, the
+ * return, shipment and request changes at most once a minute, the intake panel's request figure (B-TH-235, each number a door to
+ * Sales › Incoming), Arrange saved per person on this device, a panel's rows as a CSV file, the
  * print view (SCR-427) in a new tab.
  */
 export function ReportsPage() {
@@ -69,6 +72,7 @@ export function ReportsPage() {
   const [intake, setIntake] = useState<Read<Intake>>({ status: 'idle' })
   const [backlog, setBacklog] = useState<Read<Backlog>>({ status: 'idle' })
   const [returns, setReturns] = useState<Read<Returns>>({ status: 'idle' })
+  const [requests, setRequests] = useState<Read<Requests>>({ status: 'idle' }) // B-TH-235
   const [asOf, setAsOf] = useState<string | null>(null)
   const [arranging, setArranging] = useState(false)
   const [drill, setDrill] = useState<DrillTarget | null>(null)
@@ -121,15 +125,28 @@ export function ReportsPage() {
     }
   }, [api, enabled, period, companyId])
 
-  // One read after another (four answers per refresh, never four at once).
+  // B-TH-235: the requests received, quoted and ordered, by the intake's buckets (its own read: it fails on its own).
+  const readRequests = useCallback(async () => {
+    if (!enabled) return
+    try {
+      const value = await getRequests(api, period, address.by)
+      setRequests({ status: 'ready', value })
+      setAsOf(value.asOf)
+    } catch (error) {
+      setRequests({ status: 'error', problem: readProblem(error) })
+    }
+  }, [api, enabled, period, address.by, companyId])
+
+  // One read after another (five answers per refresh, never five at once).
   const readAll = useCallback(() => {
     void (async () => {
       await readHeadline()
       await readIntake()
+      await readRequests()
       await readBacklog()
       await readReturns()
     })()
-  }, [readHeadline, readIntake, readBacklog, readReturns])
+  }, [readHeadline, readIntake, readRequests, readBacklog, readReturns])
 
   useEffect(() => {
     if (!enabled) return
@@ -141,6 +158,11 @@ export function ReportsPage() {
     setIntake({ status: 'loading' })
     void readIntake()
   }, [enabled, readIntake])
+  useEffect(() => {
+    if (!enabled) return
+    setRequests({ status: 'loading' })
+    void readRequests()
+  }, [enabled, readRequests])
   useEffect(() => {
     if (!enabled) return
     setBacklog({ status: 'loading' })
@@ -161,7 +183,11 @@ export function ReportsPage() {
   const range = rangeShown(address, answered, today)
   useEffect(() => setDrill(null), [period, address.by, address.split, address.backlog])
 
-  const retry: Record<ReportSection, () => void> = {
+  const retry: Record<ReportSection | 'requests', () => void> = {
+    requests: () => {
+      setRequests({ status: 'loading' })
+      void readRequests()
+    },
     strip: () => {
       setHeadline({ status: 'loading' })
       void readHeadline()
@@ -183,7 +209,7 @@ export function ReportsPage() {
   return (
     <>
       <ReportsView
-        model={{ prefix, can, address, scope, range, today, headline, intake, backlog, returns, live, asOf, layout, specs, arranging, drill }}
+        model={{ prefix, can, address, scope, range, today, headline, intake, backlog, returns, requests, live, asOf, layout, specs, arranging, drill }}
         actions={{
           onAddress: go,
           onRetry: (panel) => retry[panel](),

@@ -9,6 +9,14 @@ import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
 import { CustomerHomeView, type CustomerHomeViewModel, type StartModel } from './view/CustomerHomeView'
 import { designScreen } from './fixtures'
+// B-TH-238: the Messages card — its model, Brand Beta's case data, and the portal's own reads.
+import type { ApiClient } from '../../../lib/api/client'
+import { readUnreadWith } from '../../../lib/last-message-cell/api'
+import { fetchRequests } from '../requests/api'
+import { REQUESTS as BETA_REQUESTS } from '../requests/design-data'
+import { fetchRecentMessages } from './api'
+import { betaMessagesOf } from './fixtures'
+import { messagesCardOf, messagesCountsOf, messagesEmpty } from './model'
 import {
   answerProblem,
   answerRefusal,
@@ -299,3 +307,124 @@ describe('B-TH-223 — Start: New order like an e-mail, or a question', () => {
     }
   })
 })
+
+// ---- B-TH-238 (P-HOME.messages; wall W05, W06, W08, W10): the Messages card ---------------------------------------------------
+describe('B-TH-238 — Home’s Messages: what needs the customer first, then new messages, the account’s conversation', () => {
+  const OFFICE = /\b(?:INQ|QT|SO|RQ)-\d{4}-\d{2,}/
+  const renderCase = (id: string, locale: 'it' | 'en' = 'en') => {
+    const entry = designScreen.cases.find((item) => item.id === id)!
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
+  }
+
+  it('the card’s order: requests that need the customer, then conversations with new messages, then by last message, the account last', () => {
+    const card = betaMessagesOf('en').card!
+    expect(card.needsYou.map((row) => row.yours)).toEqual(['Your request 7'])
+    expect(card.needsYou[0]).toMatchObject({ kind: 'needsYou', href: `/p/${BRAND_BETA.code}/orders/requests/${BETA_REQUESTS[0]!.id}`, newCount: 2, last: { from: 'us' } })
+    // The waiting request is not repeated among the conversations; the account's conversation is not one of them either.
+    expect(card.conversations.map((row) => row.ours)).toEqual(['#12', '#3'])
+    expect(card.conversations[0]).toMatchObject({ newCount: 1, last: { from: 'us' } })
+    expect(card.conversations[1]).toMatchObject({ newCount: 0, last: { from: 'you' } })
+    expect(card.account).toMatchObject({ kind: 'account', href: `/p/${BRAND_BETA.code}/open/Party/b2b2b2b2-0000-4000-8000-000000000299#messages`, last: { from: 'us' } })
+    expect(messagesCountsOf(card)).toEqual({ needsYou: 1, newMessages: 3, conversations: 2 })
+    // No request waits: its conversation joins the others; new messages first, then the newest.
+    const plain = betaMessagesOf('en', { waiting: [] }).card!
+    expect(plain.needsYou).toEqual([])
+    expect(plain.conversations.map((row) => [row.ours, row.newCount])).toEqual([['#7', 2], ['#12', 1], ['#3', 0]])
+    // Nothing yet: the account is still offered (its page opens before a first message).
+    const none = betaMessagesOf('en', { waiting: [], conversations: [] }).card!
+    expect(messagesEmpty(none)).toBe(true)
+    expect(none.account).toMatchObject({ last: null, newCount: 0 })
+  })
+
+  it('on screen: "We need something from you" with Answer, "Last message: from you / from <company>", new marks, Write to us — it and en', () => {
+    const en = renderCase('th-238-messages')
+    expect(en).toContain('We need something from you · 1 request')
+    expect(en).toContain('Answer')
+    expect(en).toContain('2 new')
+    expect(en).toContain('Last message: from Pelletteria Esempio')
+    expect(en).toContain('Last message: from you')
+    expect(en).toContain('Your conversation with Pelletteria Esempio')
+    expect(en.indexOf('We need something from you')).toBeLessThan(en.indexOf('#12'))
+    expect(en.indexOf('#12')).toBeLessThan(en.indexOf('Your conversation with'))
+    const it_ = renderCase('th-238-messages', 'it')
+    expect(it_).toContain('Ci serve qualcosa da voi · 1 richiesta')
+    expect(it_).toContain('Ultimo messaggio: da voi')
+    const none = renderCase('th-238-messages-none')
+    expect(none).toContain('No messages yet.')
+    expect(none).toContain('Write to us')
+  })
+
+  it('scanText: Brand Beta’s Home holds nothing of Brand Alpha and no office series', () => {
+    for (const id of ['th-238-messages', 'th-238-messages-new', 'th-238-messages-none']) {
+      for (const locale of ['it', 'en'] as const) {
+        const html = renderCase(id, locale)
+        expect(scanText(html, BRAND_ALPHA), `${id} (${locale})`).toEqual([])
+        expect(html.match(OFFICE)?.[0] ?? null, `${id} (${locale})`).toBeNull()
+      }
+    }
+  })
+
+  it('W05/W06/W08: customer B’s Home counts never move with customer A’s orders, requests or messages (two customers, each its own reads)', async () => {
+    type Json = Record<string, unknown>
+    const stateOf = (code: 'NEED_INFO' | 'BEING_REVIEWED') => ({ code, words: { en: code === 'NEED_INFO' ? 'We need something from you' : 'Being reviewed', it: code === 'NEED_INFO' ? 'Ci serve qualcosa da voi' : 'In esame' }, open: true, needsYou: code === 'NEED_INFO' })
+    const request = (brand: typeof BRAND_ALPHA, n: number, code: 'NEED_INFO' | 'BEING_REVIEWED') => ({
+      id: `${brand.ids.order.slice(0, 24)}${String(800 + n).padStart(12, '0')}`,
+      number: `INQ-2026-0${brand.key === 'alpha' ? 1 : 2}${n}`,
+      yourNumber: { seq: n, words: { en: `Your request ${n}`, it: `La vostra richiesta ${n}` } },
+      customerRef: brand.customerRef,
+      subject: `${brand.tradeName} request ${n}`,
+      state: stateOf(code),
+      wantedDate: null,
+      receivedAt: '2026-11-10T09:00:00.000Z',
+      updatedAt: `2026-11-1${n}T09:00:00.000Z`,
+      pieces: 0,
+    })
+    const conversation = (brand: typeof BRAND_ALPHA, type: string, recordId: string, newCount: number) => ({
+      record: { type, id: recordId, theirRef: brand.customerRef, ourRef: '#1', subtitle: null, status: null },
+      thread: { id: brand.ids.thread, status: 'OPEN' },
+      last: { id: brand.ids.file, side: 'COMPANY', channel: 'PORTAL', authorName: null, excerpt: brand.message, attachmentCount: 0, at: '2026-11-16T09:00:00.000Z' },
+      newCount,
+    })
+    const world: Record<'alpha' | 'beta', { requests: Json[]; conversations: Json[]; unread: Record<string, number> }> = {
+      alpha: { requests: [request(BRAND_ALPHA, 1, 'NEED_INFO')], conversations: [conversation(BRAND_ALPHA, 'SalesOrder', BRAND_ALPHA.ids.order, 1)], unread: {} },
+      beta: { requests: [request(BRAND_BETA, 1, 'NEED_INFO'), request(BRAND_BETA, 2, 'BEING_REVIEWED')], conversations: [conversation(BRAND_BETA, 'SalesOrder', BRAND_BETA.ids.order, 2)], unread: {} },
+    }
+    // The portal's own client of one sign-in: it answers that customer's rows only, as the API's partner scope does.
+    const apiOf = (key: 'alpha' | 'beta') =>
+      ({
+        get: async (path: string, options: { schema: { parse: (value: unknown) => unknown } }) => {
+          const own = world[key]
+          if (path === '/portal/inquiries') return options.schema.parse({ rows: own.requests, counts: { needsYou: own.requests.filter((row) => (row.state as { needsYou: boolean }).needsYou).length, open: own.requests.length }, complete: true })
+          if (path === '/portal/threads') return options.schema.parse({ conversations: own.conversations })
+          throw new Error(`unexpected GET ${path}`)
+        },
+        post: async (path: string, options: { body: { records: { recordId: string }[] }; schema: { parse: (value: unknown) => unknown } }) => {
+          if (path !== '/threads/unread') throw new Error(`unexpected POST ${path}`)
+          return options.schema.parse({ counts: options.body.records.map((record) => ({ recordType: 'Inquiry', recordId: record.recordId, newCount: world[key].unread[record.recordId] ?? 0, lastAt: null })) })
+        },
+      }) as unknown as ApiClient
+    const homeOf = async (key: 'alpha' | 'beta') => {
+      const api = apiOf(key)
+      const brand = key === 'alpha' ? BRAND_ALPHA : BRAND_BETA
+      const waiting = await fetchRequests(api, { state: 'OPEN', limit: 50 })
+      const { conversations } = await fetchRecentMessages(api)
+      const counts = await readUnreadWith(api)(waiting.rows.filter((row) => row.state.needsYou).map((row) => ({ recordType: 'Inquiry', recordId: row.id })), new AbortController().signal)
+      return messagesCardOf({ prefix: `/p/${brand.code}`, partyId: brand.ids.order, locale: 'en', waiting: waiting.rows, needsYouCount: waiting.counts.needsYou, conversations, unread: Object.fromEntries(counts.map((count) => [count.recordId, count.newCount])), recordPage: () => null })
+    }
+    world.beta.unread[(world.beta.requests[0] as { id: string }).id] = 1
+    const before = messagesCountsOf(await homeOf('beta'))
+    const alphaBefore = messagesCountsOf(await homeOf('alpha'))
+    expect(before).toEqual({ needsYou: 1, newMessages: 3, conversations: 1 })
+    // Customer A moves: a new request waits for it, new messages on its order, a new order with a message, its request read.
+    world.alpha.requests.push(request(BRAND_ALPHA, 2, 'NEED_INFO'))
+    ;(world.alpha.conversations[0] as { newCount: number }).newCount += 4
+    world.alpha.conversations.push(conversation(BRAND_ALPHA, 'SalesOrder', BRAND_ALPHA.ids.file, 1))
+    world.alpha.unread[(world.alpha.requests[0] as { id: string }).id] = 5
+    const after = await homeOf('beta')
+    expect(messagesCountsOf(after)).toEqual(before)
+    expect(messagesCountsOf(await homeOf('alpha'))).not.toEqual(alphaBefore)
+    // B's card names nothing of A (its rows, links and words are B's own).
+    expect(scanText(JSON.stringify(after), BRAND_ALPHA)).toEqual([])
+  })
+})
+// ---- end B-TH-238
