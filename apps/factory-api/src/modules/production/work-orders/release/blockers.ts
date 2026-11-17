@@ -38,8 +38,15 @@ export async function readHoldFacts(db: Reader, workOrderId: string): Promise<Ho
   const row = await db.workOrder.findUnique({ where: { id: workOrderId }, select: { status: true, holdReason: true, heldAt: true, holdRecordType: true, holdRecordId: true } })
   const words = holds.length > 0 ? await reasonWords(db, 'HOLD') : new Map()
   const facts: HoldFact[] = holds.map((hold) => ({ holdId: hold.id, reason: words.get(hold.reasonCode)?.labelEn ?? hold.reasonCode, placedAt: toUtcIso(hold.placedAt) }))
+  // ── B-PR-21: and every ACTIVE plain hold (production or the customer's pause), lifted by Production, not by Quality ──
+  const plain = await db.workOrderHold.findMany({ where: { workOrderId, status: 'ACTIVE' }, select: { id: true, kind: true, reasonCode: true, placedAt: true }, orderBy: [{ placedAt: 'asc' }, { id: 'asc' }] })
+  const plainWords = plain.length > 0 ? await reasonWords(db, 'PRODUCTION_HOLD') : new Map()
+  for (const hold of plain) {
+    facts.push({ holdId: null, reason: plainWords.get(hold.reasonCode)?.labelEn ?? hold.reasonCode, placedAt: toUtcIso(hold.placedAt), liftedBy: hold.kind === 'BRAND' ? 'The customer asked to pause: lift the hold when it resumes.' : 'Lift the production hold first.' })
+  }
+  // ── end B-PR-21 ──
   // ON_HOLD under a record that is not one of these quality holds (an NCR): the work order's own reason.
-  const named = row?.holdRecordType === 'QualityHold' && holds.some((hold) => hold.id === row.holdRecordId)
+  const named = (row?.holdRecordType === 'QualityHold' && holds.some((hold) => hold.id === row.holdRecordId)) || (row?.holdRecordType === 'WorkOrderHold' && plain.some((hold) => hold.id === row.holdRecordId)) /* B-PR-21 */
   if (row?.status === 'ON_HOLD' && !named) facts.push({ holdId: null, reason: row.holdReason ?? 'on hold', placedAt: toUtcIso(row.heldAt ?? new Date(0)) })
   facts.push(...(await proofHoldFacts(db, workOrderId)))
   return facts
