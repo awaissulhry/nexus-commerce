@@ -20,6 +20,12 @@ import { betaMessagesOf } from './fixtures'
 import { betaProjectConversation } from './fixtures'
 import { BETA_PROJECTS } from '../projects/design-data'
 import { messagesCardOf, messagesCountsOf, messagesEmpty } from './model'
+// F-PR-15: What waits for you's first five, My production's tile, topic PRODUCTION.
+import { firstWaiting, HOME_WAITING_SHOWN, productionHintOf } from './model'
+import { fetchHome } from './api'
+import { emailTopicNoteKey, backOnFrequency } from '../../shell/model'
+import { isTransactional, PARTNER_EMAIL_TOPICS, TOPIC_WORDS } from '@nexus/factory-domain/portal/notifications/topics'
+import { partnerSentence } from '@nexus/factory-domain/portal/notifications/messages'
 import {
   answerProblem,
   answerRefusal,
@@ -516,3 +522,136 @@ describe('B-TH-287 — Home: "Draft: … · saved 10:42 · Continue" from the se
   })
 })
 // ---- end B-TH-287
+
+// ---- F-PR-15 (production plan §5 Home; 06-tree B.4 P-HOME-waiting, P-NOTIF; B-PR-20's Home source, B-PR-31's notices; wall PW-P07)
+describe('F-PR-15 — Home: the first five of What waits for you and "All N waiting"; In production opens My production', () => {
+  const PRODUCTION_BUILT = { ...ALL_BUILT, production: true }
+  const sees = (permission: string) => permission !== 'portal.payments.view'
+  const blind = (permission: string) => sees(permission) && permission !== 'portal.production.view'
+  const withProduction = (counts: { waiting: number | null; atRisk: number | null; onHold: number | null }, inProduction = 3): HomeRead => ({
+    ...HOME,
+    counts: [
+      ...HOME.counts.filter((count) => count.key !== 'orders.in_production'),
+      { key: 'orders.in_production', area: 'orders', words: { it: '', en: '' }, value: inProduction },
+      { key: 'production.waiting_on_you', area: 'production', words: { it: '', en: '' }, value: counts.waiting },
+      { key: 'production.at_risk', area: 'production', words: { it: '', en: '' }, value: counts.atRisk },
+      { key: 'production.on_hold', area: 'production', words: { it: '', en: '' }, value: counts.onHold },
+    ],
+  })
+
+  it('In production opens My production for a person who sees production (once it is built), the orders list’s chip otherwise', () => {
+    const tile = (built: typeof NONE_BUILT & { production?: boolean }, can: (permission: string) => boolean) => tilesFor(built, can).find((entry) => entry.key === 'orders.in_production')!
+    expect(tile(PRODUCTION_BUILT, sees)).toMatchObject({ href: '/production', production: true })
+    // No production right (a Finance colleague, a Designer who still sees orders): the orders list, as before.
+    expect(tile(PRODUCTION_BUILT, blind)).toMatchObject({ href: '/orders?chip=IN_PRODUCTION' })
+    expect(tile(PRODUCTION_BUILT, blind).production).toBeUndefined()
+    // My production not built (or the orders list not built either): never a door to nowhere.
+    expect(tile(ALL_BUILT, sees).href).toBe('/orders?chip=IN_PRODUCTION')
+    expect(tile({ ...NONE_BUILT, production: true }, sees).href).toBe('/production')
+    expect(tile(NONE_BUILT, sees).href).toBeNull()
+    // The five tiles stay five, in their order.
+    expect(tilesFor(PRODUCTION_BUILT, sees).map((entry) => entry.key)).toEqual(['orders.open', 'orders.in_production', 'orders.shipping_this_week', 'invoices.to_pay', 'returns.open'])
+  })
+
+  it('its hint says what waits on My production — waiting on you, at risk, on hold — the counts above 0 only, never a made-up 0', () => {
+    const tile = (home: HomeRead | null) => tilesOf(tilesFor(PRODUCTION_BUILT, sees), home, sees).find((entry) => entry.key === 'orders.in_production')!
+    expect(tile(withProduction({ waiting: 2, atRisk: 1, onHold: 0 })).waiting).toEqual([
+      { words: 'tiles.productionWaiting', count: 2 },
+      { words: 'tiles.productionAtRisk', count: 1 },
+    ])
+    expect(tile(withProduction({ waiting: 2, atRisk: 1, onHold: 0 })).tone).toBe('warning')
+    // Nothing waits: the tile's own hint, no warning; a count not read says nothing (not 0).
+    expect(tile(withProduction({ waiting: 0, atRisk: 0, onHold: 0 })).waiting).toEqual([])
+    expect(tile(withProduction({ waiting: 0, atRisk: 0, onHold: 0 })).tone).toBeUndefined()
+    expect(tile(withProduction({ waiting: null, atRisk: null, onHold: 1 })).waiting).toEqual([{ words: 'tiles.productionOnHold', count: 1 }])
+    expect(tile(null)).toMatchObject({ value: null, waiting: [] })
+    expect(productionHintOf(withProduction({ waiting: 4, atRisk: 0, onHold: 2 }))).toEqual([
+      { words: 'tiles.productionWaiting', count: 4 },
+      { words: 'tiles.productionOnHold', count: 2 },
+    ])
+    // Without My production the tile keeps the orders' words only.
+    expect(tilesOf(tilesFor(ALL_BUILT, sees), withProduction({ waiting: 2, atRisk: 1, onHold: 1 }), sees).find((entry) => entry.key === 'orders.in_production')!.waiting).toBeUndefined()
+  })
+
+  it('What waits for you: the first five in reading order, a row just done stays and counts no more; "more" only past five', () => {
+    const rowsOf = (kind: string, n: number, done = 0) => Array.from({ length: n }, (_, index) => ({ id: `${kind}-${index}`, kind, done: index < done ? { canUndo: true } : null }))
+    const groups = [{ kind: 'APPROVE', rows: rowsOf('APPROVE', 3, 1) }, { kind: 'UPLOAD_DOCUMENT', rows: rowsOf('UPLOAD_DOCUMENT', 2) }, { kind: 'PAY_INVOICE', rows: rowsOf('PAY_INVOICE', 3) }]
+    const cut = firstWaiting(groups)
+    expect(cut.open).toBe(7)
+    expect(cut.more).toBe(true)
+    expect(cut.groups.map((group) => [group.kind, group.rows.map((row) => row.id)])).toEqual([
+      ['APPROVE', ['APPROVE-0', 'APPROVE-1', 'APPROVE-2']],
+      ['UPLOAD_DOCUMENT', ['UPLOAD_DOCUMENT-0', 'UPLOAD_DOCUMENT-1']],
+      ['PAY_INVOICE', ['PAY_INVOICE-0']],
+    ])
+    expect(HOME_WAITING_SHOWN).toBe(5)
+    // Five or fewer: the whole list, no "All N waiting".
+    const five = firstWaiting(groups.slice(0, 2))
+    expect(five).toMatchObject({ open: 4, more: false })
+    expect(five.groups.flatMap((group) => group.rows).length).toBe(5)
+    expect(firstWaiting([])).toEqual({ groups: [], open: 0, more: false })
+  })
+
+  it('on screen: the tile opens My production and says what waits there; "All 6 waiting" opens Waiting for you — it and en, no raw key', () => {
+    const render = (locale: 'it' | 'en') => {
+      const entry = designScreen.cases.find((item) => item.id === 'f-pr-15-production')!
+      return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
+    }
+    const en = render('en')
+    expect(en).toContain('href="/p/BRAND-ALPHA/production"')
+    expect(en).toContain('2 waiting on you · 1 at risk')
+    expect(en).toMatch(/<a[^>]*href="\/p\/BRAND-ALPHA\/waiting"[^>]*>All 6 waiting<\/a>/)
+    const it_ = render('it')
+    expect(it_).toContain('2 in attesa di voi · 1 a rischio')
+    expect(it_).toContain('Tutto ciò che vi aspetta (6)')
+    for (const html of [en, it_]) {
+      expect(html).not.toMatch(KEY)
+      expect(html).not.toMatch(/\bwaiting\.all\b|tiles\.production/)
+    }
+    // Waiting for you not built (today's nav): the list stays whole, no door to it.
+    const whole = designScreen.cases.find((item) => item.id === 'linked')!
+    const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell', 'portal']) }, createElement(designScreen.view, { model: whole.model })))
+    expect(html).not.toContain('/waiting"')
+  })
+
+  it('PW-P07: customer B’s production tile is its own read only — it never moves with customer A’s production and names nothing of A', async () => {
+    const counts: Record<'alpha' | 'beta', HomeRead> = { alpha: withProduction({ waiting: 1, atRisk: 0, onHold: 0 }, 2), beta: withProduction({ waiting: 0, atRisk: 2, onHold: 1 }, 4) }
+    // The portal's own client of one sign-in: GET /portal/home answers that customer's counts only (the API's partner scope).
+    const apiOf = (key: 'alpha' | 'beta') =>
+      ({
+        get: async (path: string, options: { schema: { parse: (value: unknown) => unknown } }) => {
+          if (path !== '/portal/home') throw new Error(`unexpected GET ${path}`)
+          return options.schema.parse(counts[key])
+        },
+      }) as unknown as ApiClient
+    const tileOf = async (key: 'alpha' | 'beta') => tilesOf(tilesFor(PRODUCTION_BUILT, sees), await fetchHome(apiOf(key)), sees).find((entry) => entry.key === 'orders.in_production')!
+    const before = await tileOf('beta')
+    expect(before).toMatchObject({ value: 4, waiting: [{ words: 'tiles.productionAtRisk', count: 2 }, { words: 'tiles.productionOnHold', count: 1 }] })
+    // Customer A's production moves: its waiting, its risk, its holds — B's tile stays as it was.
+    counts.alpha = withProduction({ waiting: 6, atRisk: 3, onHold: 2 }, 9)
+    expect(await tileOf('beta')).toEqual(before)
+    expect((await tileOf('alpha')).value).toBe(9)
+    // B's Home on screen holds nothing of A.
+    const model = { prefix: `/p/${BRAND_BETA.code}`, search: null, welcome: null, tiles: { state: 'ready', items: tilesOf(tilesFor(PRODUCTION_BUILT, sees), counts.beta, sees) }, orders: null, documents: null, messages: null, approve: null, document: null, start: null, slow: false } as unknown as CustomerHomeViewModel
+    for (const locale of ['it', 'en'] as const) {
+      const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['portal-customer-home', 'ds-words']) }, createElement(CustomerHomeView, { model, tasks: null })))
+      expect(html).toContain(`href="/p/${BRAND_BETA.code}/production"`)
+      expect(scanText(html, BRAND_ALPHA)).toEqual([])
+    }
+  })
+
+  it('topic PRODUCTION in the e-mail settings (B-PR-31): listed with its own name, not locked, a daily summary by default; the bell and mail words are the API’s', () => {
+    expect(PARTNER_EMAIL_TOPICS).toContain('PRODUCTION')
+    expect(isTransactional('PRODUCTION')).toBe(false)
+    expect(backOnFrequency('PRODUCTION')).toBe('DAILY')
+    // A daily default needs no note beside the setting (only an "as it happens" default says so).
+    expect(emailTopicNoteKey({ topic: 'PRODUCTION', locked: false })).toBeNull()
+    expect(TOPIC_WORDS.PRODUCTION).toEqual({ it: 'Produzione', en: 'Production' })
+    // The production news a customer reads in its bell and mail: every kind the plan names, each in English and Italian.
+    for (const key of ['cutting', 'at_risk', 'late', 'on_hold', 'hold_lifted', 'rush_accepted', 'countered', 'problem_answered', 'gate_passed', 'gate_started_before', 'qc_passed', 'qc_failed']) {
+      const messageKey = `portal.production.${key}`
+      for (const locale of ['it', 'en'] as const) expect(partnerSentence({ messageKey, recordLabel: '#12', params: { yourKind: 'ORDER', yourSeq: 12 } }, locale, 'Pelletteria Esempio'), messageKey).toMatch(locale === 'it' ? /vostro ordine 12/i : /your order 12/i)
+    }
+  })
+})
+// ---- end F-PR-15

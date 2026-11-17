@@ -198,6 +198,11 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   with every production read: released / taken back per line and size, checks, final inspections (report PDF from
   `…/quality/report/:inspectionId` in the order's PDF viewer, saved under our own name), holds, shared photos (`GET /files/:id/preview`,
   one at a time in `QualityPhotoDialog`). Never the inspection's number, a work order or a person of ours.
+- F-PR-15 `src/portal/customer/home/` — Home's What waits for you shows the first five (`firstWaiting`) and "All N waiting" →
+  `/waiting` (TasksView `more`) once Waiting for you is built and the person holds portal.approvals.view (else the whole list); the
+  In production tile opens My production for portal.production.view (`tilesFor` + B-PR-20's `production.*` counts in its hint,
+  `productionHintOf`). Bell and mail sentences are the API's (B-PR-31 messages.ts, incl. gate and QC notices); topic PRODUCTION
+  comes from the API's e-mail settings (daily by default).
 - `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
   SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
   &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every
