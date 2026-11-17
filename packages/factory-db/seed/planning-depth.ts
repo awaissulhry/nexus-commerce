@@ -409,5 +409,15 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
       })
     }),
   )
+
+  // ---- TH-2 (B-TH-023 follow-up; isolation.pg needs a row of every table): a style's cutting loss accepted for planning
+  // (B-W2b-GB29), the jacket's, made up. Idempotent: skipDuplicates.
+  await db.withScope(office, (client) =>
+    client.styleCuttingLoss.createMany({
+      data: [{ id: id('planning-depth:cutting-loss:JKT-01'), styleId: jkt01.styleId, lossPct: '12.50', basedOnCuts: 8, decidedAt: T.setup, createdAt: T.setup, createdById: actorId }],
+      skipDuplicates: true,
+    }),
+  )
+  // ---- end TH-2
   return result
 }
