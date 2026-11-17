@@ -329,3 +329,51 @@ describe('planned subcontract orders (PLN-069)', { timeout: 90_000 }, () => {
     expect(levelled.every((entry) => entry.partyId === A.workshop && entry.over === true && entry.moved === false && /no other approved workshop has room/.test(entry.words))).toBe(true)
   })
 })
+
+// ---- B-PR-03 (production plan: one customer per work order, B-PR-01): planned work orders of one customer each ----------------
+describe('one customer per planned work order (B-PR-03)', { timeout: 90_000 }, () => {
+  it('lines of two customers with the same style, colourway and day: one planned order each, and each is made real as its customer’s work order', async () => {
+    const jkt02 = { styleId: idOf('production:style:JKT-02'), blk: idOf('production:colourway:JKT-02:BLK') }
+    const first = idOf('party:P1')
+    const other = newId()
+    const lines = { first: newId(), other: newId() }
+    await database.withScope({ audience: 'office', tenantId: A.tenant, actorId: A.actor }, (client) =>
+      client.$transaction(async (tx) => {
+        await tx.party.create({ data: { id: other, code: `T-PR03-C-${run}`, kind: 'ORGANISATION', legalName: 'Made-up Second Customer S.r.l.', roles: ['CUSTOMER'], status: 'ACTIVE', country: 'IT', currency: 'EUR', language: 'it' }, select: { id: true } })
+        for (const [key, partyId, size, pieces] of [['first', first, '50', 3], ['other', other, '52', 2]] as const) {
+          const orderId = newId()
+          await tx.salesOrder.create({
+            data: { id: orderId, companyId: A.companyA, partyId, number: `T-PR03-${key}-${run}`, status: 'CONFIRMED', orderDate: new Date('2026-11-02T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' }, promiseDate: new Date('2027-02-15T00:00:00.000Z'), depositRequired: false },
+            select: { id: true },
+          })
+          await tx.salesOrderLine.create({
+            data: { id: lines[key], companyId: A.companyA, orderId, partyId, seq: 10, kind: 'SIZE_GRID', styleId: jkt02.styleId, colourwayId: jkt02.blk, quantity: pieces, unitPrice: '100.000000', netAmount: pieces * 10_000, vatRatePct: '22.00', vatAmount: pieces * 2_200 },
+            select: { id: true },
+          })
+          await tx.salesOrderLineSize.create({ data: { id: newId(), lineId: lines[key], partyId, size, quantity: pieces }, select: { id: true } })
+        }
+      }),
+    )
+    await runPlan()
+    const rows = (await planned('&status=PLANNED')).plannedOrders as Json[]
+    const ofFirst = ofLine(rows, lines.first)
+    const ofOther = ofLine(rows, lines.other)
+    expect(ofFirst).toHaveLength(1)
+    expect(ofOther).toHaveLength(1)
+    expect(ofFirst[0].id).not.toBe(ofOther[0].id)
+    expect(sizesOf(ofFirst[0])).toBe('50x3')
+    expect(sizesOf(ofOther[0])).toBe('52x2')
+    // A later run keeps both rows (a row of one customer keeps its key).
+    await runPlan()
+    const again = (await planned('&status=PLANNED')).plannedOrders as Json[]
+    expect([ofLine(again, lines.first)[0]?.id, ofLine(again, lines.other)[0]?.id]).toEqual([ofFirst[0].id, ofOther[0].id])
+    const made = await convert('planner', [ofLine(again, lines.first)[0], ofLine(again, lines.other)[0]], {}, key())
+    expect(made, JSON.stringify(made.results)).toMatchObject({ made: 2, held: 0 })
+    const parties = await admin<{ partyId: string; line: string }>(
+      `SELECT DISTINCT w."partyId", c."salesOrderLineId" AS line FROM "WorkOrder" w JOIN "WorkOrderSize" c ON c."workOrderId" = w.id WHERE w.id = ANY($1::uuid[])`,
+      [made.results.map((result: Json) => result.workOrder.id)],
+    )
+    expect(parties.sort((a, b) => (a.line < b.line ? -1 : 1))).toEqual([{ partyId: first, line: lines.first }, { partyId: other, line: lines.other }].sort((a, b) => (a.line < b.line ? -1 : 1)))
+  })
+})
+// ---- end B-PR-03

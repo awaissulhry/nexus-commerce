@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { formatNumber } from '@nexus/factory-domain/numbering/format'
 import { yearOfScope } from '@nexus/factory-domain/numbering/kinds'
@@ -45,7 +45,9 @@ import {
   type Reader,
   type RevisionRow,
 } from './store'
-import { progressTotalsOf, workOrderView, type WorkOrderView } from './views'
+import { customerOf, progressTotalsOf, workOrderView, type WorkOrderView } from './views'
+// B-PR-03 (production plan, the brand wall): the work orders an office person reaches, by customer too.
+import { workOrderWhere } from './scope'
 // B-W2b-340 (CF1:03): a cell made from an order line names the option values chosen on it.
 import { optionValueIdsOf } from '../../sales/configurator/copy'
 // B-W2b-368 (XF1:01): a made-to-measure unit is made on its own work order (W1 refused it: MADE_TO_MEASURE_LATER).
@@ -94,6 +96,8 @@ export interface ListQuery {
   readonly due?: RelativeDay | undefined
   /** B-W2b-51 (MES-009): rush work orders only (true), or none of them (false). */
   readonly rush?: boolean | undefined
+  /** B-PR-03: one customer's work orders (inside the caller's reach: another customer's gives none). */
+  readonly partyId?: string | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
@@ -108,7 +112,9 @@ function listWhere(context: ReturnType<typeof officeContextOf>, query: Omit<List
   const q = query.q?.trim()
   return {
     AND: [
-      scopeWhere(actorOf(context), WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
+      // B-PR-03: its companies, sites and customers (a work order of no customer only with every customer).
+      workOrderWhere(actorOf(context), WORKORDERS_VIEW),
+      query.partyId ? { partyId: query.partyId } : {},
       query.status ? { status: query.status } : {},
       query.kind ? { kind: query.kind } : {},
       query.open ? { status: { in: [...OPEN_STATUSES] } } : {},
@@ -132,7 +138,11 @@ function listWhere(context: ReturnType<typeof officeContextOf>, query: Omit<List
   }
 }
 
-/** The work orders the caller may see (its companies and sites), newest first, with SCR-069's filters (MES-305). */
+/**
+ * The work orders the caller may see (its companies, sites and customers: B-PR-03), newest first, with SCR-069's filters
+ * (MES-305). Each row names its one customer (null: a sample of no customer, or `mixedCustomers`, made before the
+ * one-customer rule) and its sales orders with their customer PO.
+ */
 export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
   const context = officeContextOf(caller)
   const today = todayNow()
@@ -160,7 +170,10 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
         site: { select: { code: true } },
         style: { select: { id: true, code: true, name: true } },
         styleRevision: { select: { revision: true } },
-        sizes: { select: { quantity: true, colourway: { select: { code: true } }, salesOrderLine: { select: { order: { select: { id: true, number: true, party: { select: { legalName: true, tradeName: true } } } } } } } },
+        // B-PR-03: its one customer, each cell's, and the customer PO of each order.
+        partyId: true,
+        party: { select: { id: true, code: true, legalName: true, tradeName: true } },
+        sizes: { select: { quantity: true, partyId: true, colourway: { select: { code: true } }, salesOrderLine: { select: { order: { select: { id: true, number: true, customerRef: true, party: { select: { legalName: true, tradeName: true } } } } } } } },
       },
     }),
   )
@@ -191,7 +204,9 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
         styleName: row.style.name,
         revision: row.styleRevision?.revision ?? null,
         colourways: [...new Set(row.sizes.map((cell) => cell.colourway.code))].sort(),
-        orders: [...orders.values()].map((order) => ({ id: order.id, number: order.number, partyName: order.party.tradeName ?? order.party.legalName })),
+        // B-PR-03: the customer, and the customer PO of each order.
+        ...customerOf(row),
+        orders: [...orders.values()].map((order) => ({ id: order.id, number: order.number, customerRef: order.customerRef, partyName: order.party.tradeName ?? order.party.legalName })),
         cells: row.sizes.length,
         pieces: row.sizes.reduce((sum, cell) => sum + cell.quantity, 0),
         progress: progress.get(row.id) ?? null,
@@ -211,15 +226,17 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
 /**
  * How many work orders the caller may see per state, for the list's tiles (SCR-069 "Work order tiles"; the floor's
  * tiles, SCR-073): draft, released not started, in progress, completed, and late (open past its due date). The same
- * scope as the list (its companies and sites; one site when asked).
+ * scope as the list (its companies, sites and customers; one site, one customer when asked).
  */
-export async function countWorkOrders(caller: CommandCaller, query: { readonly siteId?: string | undefined }) {
+export async function countWorkOrders(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly partyId?: string | undefined }) {
   const context = officeContextOf(caller)
   const today = todayNow()
+  // B-PR-03: the customer filter, as the list's.
+  const filter = { siteId: query.siteId, partyId: query.partyId }
   return caller.withClient(async (client) => {
-    const byStatus = await client.workOrder.groupBy({ by: ['status'], where: listWhere(context, { siteId: query.siteId }, today), _count: { _all: true } })
+    const byStatus = await client.workOrder.groupBy({ by: ['status'], where: listWhere(context, filter, today), _count: { _all: true } })
     const of = (status: WorkOrderStatus) => byStatus.find((row) => row.status === status)?._count._all ?? 0
-    const late = await client.workOrder.count({ where: listWhere(context, { siteId: query.siteId, late: true }, today) })
+    const late = await client.workOrder.count({ where: listWhere(context, { ...filter, late: true }, today) })
     return { counts: { draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: of('DRAFT') + of('RELEASED') + of('IN_PROGRESS'), late, onHold: of('ON_HOLD') } }
   })
 }
@@ -228,8 +245,9 @@ export async function countWorkOrders(caller: CommandCaller, query: { readonly s
 export async function openLines(caller: CommandCaller, salesOrderId: string) {
   const context = officeContextOf(caller)
   return caller.withClient(async (client) => {
-    const order = isUuid(salesOrderId) ? await client.salesOrder.findUnique({ where: { id: salesOrderId }, select: { id: true, number: true, status: true, companyId: true } }) : null
-    if (!order || !can(actorOf(context), WORKORDERS_VIEW, { companyId: order.companyId })) throw new NotFoundError('Sales order not found.')
+    const order = isUuid(salesOrderId) ? await client.salesOrder.findUnique({ where: { id: salesOrderId }, select: { id: true, number: true, status: true, companyId: true, partyId: true } }) : null
+    // B-PR-03: an order of a customer the caller does not reach is not found.
+    if (!order || !can(actorOf(context), WORKORDERS_VIEW, { companyId: order.companyId, partyId: order.partyId })) throw new NotFoundError('Sales order not found.')
     const ids = (await client.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true }, orderBy: { seq: 'asc' } })).map((line) => line.id)
     const lines = await readOrderLines(client, ids)
     const styles = await client.style.findMany({ where: { id: { in: [...new Set([...lines.values()].map((line) => line.styleId))] } }, select: { id: true, code: true, name: true } })
@@ -271,13 +289,16 @@ export async function numberPreview(db: Reader, companyId: string): Promise<stri
 
 // ---- the lines a request names --------------------------------------------------------------------------------------
 
-/** The named lines, each one the caller may see (else 404). B-W2b-368: a made-to-measure unit is checked by the caller (./mtm-cells). */
+/**
+ * The named lines, each one the caller may see (else 404; B-PR-03: at its company and of a customer it reaches). B-W2b-368: a
+ * made-to-measure unit is checked by the caller (./mtm-cells).
+ */
 async function linesFor(caller: CommandCaller, lineIds: readonly string[]): Promise<Map<string, LineRow>> {
   const context = officeContextOf(caller)
   const lines = await caller.withClient((client) => readOrderLines(client, lineIds))
   for (const lineId of lineIds) {
     const line = lines.get(lineId)
-    if (!line || !can(actorOf(context), WORKORDERS_VIEW, { companyId: line.companyId })) throw new NotFoundError('Sales order line not found.')
+    if (!line || !can(actorOf(context), WORKORDERS_VIEW, { companyId: line.companyId, partyId: line.partyId })) throw new NotFoundError('Sales order line not found.')
   }
   return lines
 }
@@ -400,7 +421,7 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
     if (!site || site.companyId !== first.companyId || site.kind !== 'PLANT' || site.status !== 'ACTIVE') {
       throw new ValidationError("Not an active plant of the order's company.", [{ path: 'body/siteId', message: "Expected an active plant (site kind PLANT) of the order lines' company." }])
     }
-    assertMay(context, WORKORDERS_MANAGE, { companyId: site.companyId, siteId: site.id }, 'Sales order line')
+    assertMay(context, WORKORDERS_MANAGE, { companyId: site.companyId, siteId: site.id, partyId: first.partyId /* B-PR-03 */ }, 'Sales order line')
     const askedId = sample?.revisionId ?? body.styleRevisionId
     const asked = askedId ? await revisionOf(client, style.id, askedId, 'body/styleRevisionId') : null
     const released = await readReleasedRevision(client, style.id)
@@ -554,7 +575,8 @@ export async function createSampleWorkOrder(
     if (!site || site.companyId !== sample.companyId || site.kind !== 'PLANT' || site.status !== 'ACTIVE') {
       throw new ValidationError("Not an active plant of the round's company.", [{ path: 'body/siteId', message: "Expected an active plant (site kind PLANT) of the sample round's company." }])
     }
-    assertMay(context, WORKORDERS_MANAGE, { companyId: site.companyId, siteId: site.id }, 'Sample round')
+    // B-PR-03: a round for no customer makes a work order of no customer: only with every customer.
+    assertMay(context, WORKORDERS_MANAGE, { companyId: site.companyId, siteId: site.id, partyId: sample.partyId }, 'Sample round')
     const revision = await revisionOf(client, style.id, sample.revisionId, 'body/styleRevisionId')
     const colourways = new Set((await client.colourway.findMany({ where: { styleId: style.id }, select: { id: true } })).map((row) => row.id))
     return { style, site, revisionId: revision.id, colourways }

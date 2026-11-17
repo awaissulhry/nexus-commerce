@@ -163,14 +163,35 @@ export interface Proposal {
   readonly partyId: string | null
   readonly operationSeqs: readonly number[]
   readonly transitDays: number
+  /** B-PR-03: the one customer whose order lines it makes (a work order is of one customer, B-PR-01); null: none named. */
+  readonly customerId: string | null
 }
 
-export const proposalKey = (row: { readonly kind: string; readonly styleId: string; readonly colourwayId: string; readonly styleRevisionId: string | null; readonly sizeGroup: string | null; readonly dueDate: BusinessDate }): string =>
-  [row.kind, row.styleId, row.colourwayId, row.styleRevisionId ?? '-', row.sizeGroup ?? '-', row.dueDate].join('|')
+/**
+ * The row's key across runs. B-PR-03: with its customer (`customerId`, from its demand's order lines: `customerOfDemand`), so a
+ * stored row of one customer keeps its key and one that pegs lines of several customers (planned before the one-customer
+ * rule) matches no proposal: the next run plans its pieces again, one planned order per customer.
+ */
+export const proposalKey = (row: { readonly kind: string; readonly styleId: string; readonly colourwayId: string; readonly styleRevisionId: string | null; readonly sizeGroup: string | null; readonly dueDate: BusinessDate; readonly customerId: string | null }): string =>
+  [row.kind, row.styleId, row.colourwayId, row.styleRevisionId ?? '-', row.sizeGroup ?? '-', row.dueDate, row.customerId ?? '-'].join('|')
+
+// ── B-PR-03 ──
+/**
+ * The customer of a planned order's demand: the one party of its order lines (`partyOf`: an order line's party, unknown when
+ * the run does not read the line); null for stock (no demand); several customers, or a line the run does not know, give a
+ * key part that matches no proposal (`proposalKey`), never one customer's.
+ */
+export function customerOfDemand(demand: readonly Pick<PeggedDemand, 'orderLineId'>[], partyOf: (orderLineId: string) => string | null | undefined): string | null {
+  if (demand.length === 0) return null
+  const parties = new Set(demand.map((entry) => partyOf(entry.orderLineId) ?? '?'))
+  return [...parties].sort().join(',')
+}
+// ── end B-PR-03 ──
 
 /**
- * The planned orders for the open cells: grouped by style, the revision the lines name, colourway and due date (a line
- * without a date is due on the run's day), split by the size-run rule; sizes in the style's order as the lines give them.
+ * The planned orders for the open cells: grouped by style, the revision the lines name, colourway, due date (a line without a
+ * date is due on the run's day) and customer (B-PR-03: one customer per work order, so one per planned order), split by the
+ * size-run rule; sizes in the style's order as the lines give them.
  */
 export function proposeWork(input: {
   readonly cells: readonly OpenCell[]
@@ -188,7 +209,8 @@ export function proposeWork(input: {
   const groups = new Map<string, OpenCell[]>()
   for (const cell of input.cells) {
     const due = cell.line.dueDate ?? input.runDate
-    const key = [cell.line.styleId, cell.ownRevisionId ?? '-', cell.line.revisionId, cell.line.colourwayId, due].join('|')
+    // B-PR-03: and by the line's customer.
+    const key = [cell.line.styleId, cell.ownRevisionId ?? '-', cell.line.revisionId, cell.line.colourwayId, due, cell.line.partyId ?? '-'].join('|')
     groups.set(key, [...(groups.get(key) ?? []), cell])
   }
   const out: Proposal[] = []
@@ -215,7 +237,7 @@ export function proposeWork(input: {
         // B-W2b-306 (PLN-083): each demand says the day it is needed (the row's key day, whatever its due date becomes).
         .map((cell) => ({ orderId: cell.line.orderId, orderLineId: cell.line.orderLineId, size: cell.size, pieces: cell.pieces, needDate: dueDate }))
       const kind: PlannedOrderKind = subcontract ? 'SUBCONTRACT' : 'MAKE'
-      const row = { kind, styleId: first.line.styleId, colourwayId: first.line.colourwayId, styleRevisionId: first.ownRevisionId, sizeGroup, dueDate }
+      const row = { kind, styleId: first.line.styleId, colourwayId: first.line.colourwayId, styleRevisionId: first.ownRevisionId, sizeGroup, dueDate, customerId: first.line.partyId ?? null /* B-PR-03 */ }
       out.push({
         ...row,
         key: proposalKey(row),

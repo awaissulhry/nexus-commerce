@@ -19,7 +19,8 @@ export async function listReadiness(caller: CommandCaller, query: { readonly ids
   const ids = [...new Set(query.ids.split(',').map((value) => value.trim()).filter((value) => value !== ''))]
   if (ids.length > 100 || ids.some((value) => !isUuid(value))) throw new ValidationError('Name at most 100 work orders by their ids.', [{ path: 'querystring/ids', message: 'Comma-separated work order ids, at most 100.' }])
   return caller.withClient(async (db) => {
-    const rows = (await db.workOrder.findMany({ where: { id: { in: ids } }, select: { id: true, companyId: true, siteId: true } })).filter((row) => mayOn(context, WORKORDERS_VIEW, row))
+    // B-PR-03: with its customer (another customer's work order is left out, as one the caller may not see).
+    const rows = (await db.workOrder.findMany({ where: { id: { in: ids } }, select: { id: true, companyId: true, siteId: true, partyId: true } })).filter((row) => mayOn(context, WORKORDERS_VIEW, row))
     const bySite = new Map<string, string[]>()
     for (const row of rows) bySite.set(row.siteId, [...(bySite.get(row.siteId) ?? []), row.id])
     const answers = []

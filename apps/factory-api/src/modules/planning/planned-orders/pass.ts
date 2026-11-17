@@ -3,6 +3,7 @@ import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import {
+  customerOfDemand, // B-PR-03
   demandOf,
   inHouseDays,
   keptByRun,
@@ -209,9 +210,12 @@ export async function planWork(tools: CommandTools, site: SiteRow, runId: string
   for (const [rowId, index] of claims) claimedBy.set(index, guarded.find((row) => row.id === rowId)!)
 
   const byKey = new Map<string, PlannedRow>()
+  // B-PR-03: a stored row's customer, from its demand's order lines (one planned order per customer, as a work order).
+  const partyOfLine = new Map(lines.map((line) => [line.orderLineId, line.partyId ?? null]))
   for (const row of plain) {
     // B-W2b-306 (PLN-083): a row's key day is its demand's need, not its (maybe later) due date.
-    const key = proposalKey({ kind: row.kind, styleId: row.styleId, colourwayId: row.colourwayId, styleRevisionId: row.styleRevisionId, sizeGroup: row.sizeGroup, dueDate: needDateOf(demandOf(row.demand), dayOf(row.dueDate)) })
+    const demand = demandOf(row.demand)
+    const key = proposalKey({ kind: row.kind, styleId: row.styleId, colourwayId: row.colourwayId, styleRevisionId: row.styleRevisionId, sizeGroup: row.sizeGroup, dueDate: needDateOf(demand, dayOf(row.dueDate)), customerId: customerOfDemand(demand, (orderLineId) => partyOfLine.get(orderLineId)) })
     if (!byKey.has(key)) byKey.set(key, row)
   }
   const cache = new Map<string, BusinessDate>()
