@@ -47,6 +47,7 @@ import { refreshCompanyValue } from './po-depth/value'
 import { assertNoNewOrder } from './suppliers-depth/store'
 // B-W2b-305: a waiting order's request is withdrawn when the order is cancelled.
 import { withdrawPending } from '../../platform/approvals/engine'
+import { waitingRowsOf } from '../../platform/threads/waiting-list' // B-TH-047
 
 /**
  * Purchase orders (B-W1-30; SCM-050, SCM-053; A2 SCR-058 "Purchase orders", SCR-059 the record): the list, the record, a
@@ -267,6 +268,8 @@ export interface ListOrdersQuery {
   readonly due?: 'LATE' | 'THIS_WEEK' | undefined
   /** B-W2a-52 (SCM-087): only orders still waiting for the supplier's answer after their confirm-by time. */
   readonly pastConfirmBy?: boolean | undefined
+  /** B-TH-047: only orders whose conversation waits on us (the supplier wrote last). */
+  readonly supplierReplies?: boolean | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
@@ -375,8 +378,13 @@ export async function listOrders(caller: CommandCaller, query: ListOrdersQuery) 
     const late = ordersWith(expected.lines, 'LATE')
     const thisWeek = ordersWith(expected.lines, 'THIS_WEEK')
     const dueWhere: Prisma.PurchaseOrderWhereInput = query.due === 'LATE' ? { id: { in: late } } : query.due === 'THIS_WEEK' ? { id: { in: thisWeek } } : {}
+    // ---- B-TH-047: "Supplier replies" — the orders whose conversation waits on us, among those the reader may open (threads.read and
+    // purchasing.view over each order: platform/threads waiting-list).
+    const replied = (await waitingRowsOf(client, officeContextOf(caller), { side: 'SUPPLIER', recordType: 'PurchaseOrder', companyId: query.companyId, partyId: query.partyId })).rows.map((row) => row.recordId)
+    const repliedWhere: Prisma.PurchaseOrderWhereInput = query.supplierReplies ? { id: { in: replied } } : {}
+    // ---- end B-TH-047
     const rows = await client.purchaseOrder.findMany({
-      where: { AND: [...filters, query.status ? { status: query.status } : {}, query.waitingOver48h ? waitingLongWhere : {}, query.pastConfirmBy ? pastConfirmByWhere : {}, dueWhere, query.cursor ? { id: { lt: query.cursor } } : {}] },
+      where: { AND: [...filters, query.status ? { status: query.status } : {}, query.waitingOver48h ? waitingLongWhere : {}, query.pastConfirmBy ? pastConfirmByWhere : {}, dueWhere, repliedWhere, query.cursor ? { id: { lt: query.cursor } } : {}] },
       orderBy: { id: 'desc' },
       take: query.limit + 1,
       select: { id: true, number: true, companyId: true, siteId: true, partyId: true, status: true, revision: true, currency: true, orderDate: true, requestedDate: true, netAmount: true, sentAt: true, confirmBy: true, confirmedAt: true, confirmedVia: true, confirmedByName: true, declinedAt: true, createdById: true, updatedAt: true, version: true },
@@ -389,6 +397,7 @@ export async function listOrders(caller: CommandCaller, query: ListOrdersQuery) 
     const count = (status: string) => counted.find((row) => row.status === status)?._count._all ?? 0
     const waitingLong = await client.purchaseOrder.count({ where: { AND: [...filters, waitingLongWhere] } })
     const pastConfirmBy = await client.purchaseOrder.count({ where: { AND: [...filters, pastConfirmByWhere] } })
+    const supplierReplies = replied.length === 0 ? 0 : await client.purchaseOrder.count({ where: { AND: [...filters, { id: { in: replied } }] } }) // B-TH-047
     return {
       summary: {
         drafts: count('DRAFT'),
@@ -400,6 +409,7 @@ export async function listOrders(caller: CommandCaller, query: ListOrdersQuery) 
         dueThisWeek: expected.complete ? thisWeek.length : null,
         late: expected.complete ? late.length : null,
         pastConfirmBy,
+        supplierReplies, // B-TH-047
       },
       orders: page.map((row) => {
         const own = lines.filter((line) => line.purchaseOrderId === row.id && line.cancelledAt === null)
