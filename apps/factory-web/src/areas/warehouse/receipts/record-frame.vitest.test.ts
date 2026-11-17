@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
-import type { ComponentType } from 'react'
+import { describe, expect, it, vi } from 'vitest'
+import { createElement, type ComponentType } from 'react'
 import { renderView, textOf } from '../../../lib/record-thread/parts/testing'
 import { arrivalOf } from '../../_shared/record-frame/model'
 import { SUPPLIERS } from '../../_shared/buying/fixtures'
@@ -8,6 +8,15 @@ import { receipt } from './demo/fixtures'
 import { designScreen as receiptsScreen } from './list/fixtures'
 import { designScreen as lotsScreen } from './record/fixtures'
 import { isWideReceiptTab, MERGED_TABS, RECEIPT_TABS, receiptTabOf } from './model'
+
+// B-TH-264: the DS Modal opens only after hydration, so the server draws no dialog: drawn in place here (as daily.vitest.test.ts does),
+// so a dialog's words are checked too.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), subtitle as never, children as never, footer as never) : null
+  return { ...actual, Modal }
+})
 
 /**
  * B-TH-264 — the goods receipt on RecordFrame (threads plan O-WH-REC; the rule of picture 38, the tabs of picture 39): the band in the
