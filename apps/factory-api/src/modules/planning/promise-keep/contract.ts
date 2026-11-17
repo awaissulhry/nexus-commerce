@@ -4,6 +4,8 @@ import { FINISH_SOURCES, PROMISE_TILES, RISK_STATES } from '@nexus/factory-domai
 import { PROPOSAL_DECISIONS, PROPOSAL_STATES } from '@nexus/factory-domain/planning/promise-keep/repromise'
 import { PROMISE_REASON_CODES, SIZE_STATES } from '@nexus/factory-domain/planning/promise/rules'
 import { CERTIFICATE_STATES } from '../promise/certificates'
+// B-PR-28: the customer's answer to a new date.
+import { CUSTOMER_ANSWERS } from '@nexus/factory-domain/planning/promise-keep/brand-answer'
 
 /**
  * Keeping promises (B-W2b-317; PLN-173, PLN-174, PLN-175; design planning.promise › tiles, lines, the Re-promise modal):
@@ -193,6 +195,19 @@ export const proposalView = output({
   /** Its task on the order for sales (the same id). */
   task: output({ id: id(), status: z.enum(['OPEN', 'DONE', 'CANCELLED']).nullable(), assignee: person.nullable() }),
   words: z.string(),
+  /**
+   * B-PR-28: the customer's answer to the new date when sales asked it (null: not asked): waiting, accepted, refused with its
+   * words (the date stands either way; a refusal's follow-up task waits for us), no longer asked, or not answered in time.
+   */
+  customerAnswer: output({
+    requestId: id(),
+    state: z.enum(CUSTOMER_ANSWERS),
+    words: z.string(),
+    at: instant().nullable(),
+    answer: z.string().nullable(),
+    typedName: z.string().nullable(),
+    followUp: output({ taskId: id(), status: z.enum(['OPEN', 'DONE', 'CANCELLED']) }).nullable(),
+  }).nullable(),
   may: output({ accept: z.boolean(), tell: z.boolean(), decline: z.boolean(), withdraw: z.boolean() }),
 })
 
@@ -256,6 +271,8 @@ export const acceptContract = defineContract({
     to: z.array(z.string().trim().email().max(254)).min(1).max(10).optional(),
     subject: z.string().trim().min(1).max(200).optional(),
     body: z.string().trim().min(1).max(10_000).optional(),
+    /** B-PR-28: ask the customer to accept or refuse the new date (a REPROMISE approval on the order; the date stands either way). */
+    askBrand: z.boolean().optional(),
   }),
   response: {
     200: output({
@@ -266,6 +283,11 @@ export const acceptContract = defineContract({
       lineDate: businessDate().nullable(),
       replayed: z.boolean(),
       proposal: proposalView,
+      /**
+       * B-PR-28: the customer's question about the new date (null: not asked); its APPROVAL link once, for a customer who answers
+       * outside its portal (null on a replay: the link is never handed twice).
+       */
+      brandAsk: output({ requestId: id(), url: z.string().nullable() }).nullable(),
     }),
   },
 })
