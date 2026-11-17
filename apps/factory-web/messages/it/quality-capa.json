@@ -224,6 +224,9 @@
     "NO_PERMISSION": "Portarla a CAPA richiede il permesso di gestire le NC nel suo stabilimento.",
     "NO_CAPA": "Il reclamo non nomina nessuna CAPA o 8D.",
     "NO_REPORT": "L'8D non ha ancora una versione conservata.",
+    "OTHER_CUSTOMER": "Questo 8D è scritto per un altro cliente: va solo a quel cliente.",
+    "OTHER_CUSTOMERS_COMPLAINTS": "Questo 8D risponde anche a reclami di un altro cliente: scrivi un 8D di questo cliente, oppure togli prima quei reclami.",
+    "REPORT_OUTDATED": "Il rapporto 8D conservato nomina ancora un reclamo di un altro cliente: conserva prima una nuova versione.",
     "other": "Non è possibile nel suo stato attuale."
   },
   "problem": {

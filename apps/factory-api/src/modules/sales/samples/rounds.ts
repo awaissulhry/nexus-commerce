@@ -20,6 +20,7 @@ import {
   stageMoveRefusal,
   storedCells,
   styleRefusal,
+  privateStyleRefusal,
   testZonesRefusal,
   type RoundTile,
   type SampleCell,
@@ -146,7 +147,7 @@ export async function listRounds(caller: CommandCaller, query: RoundListQuery) {
 
 // ---- what a request names ------------------------------------------------------------------------------------------------
 
-const STYLE_COLUMNS = { id: true, code: true, name: true, companyId: true, sizes: true, status: true, lifecycle: true } as const satisfies Prisma.StyleSelect
+const STYLE_COLUMNS = { id: true, code: true, name: true, companyId: true, sizes: true, status: true, lifecycle: true, brandPartyId: true } as const satisfies Prisma.StyleSelect
 
 async function colourwayIdsOf(db: Reader, styleId: string): Promise<string[]> {
   return (await db.colourway.findMany({ where: { styleId }, select: { id: true } })).map((row) => row.id)
@@ -206,6 +207,12 @@ export async function createRound(caller: CommandCaller, body: CreateRoundBody, 
     if (body.partyId) {
       await assertCustomer(db, body.partyId, companyId!)
       if (!may(context, SALES_SAMPLES_VIEW, { companyId: companyId!, partyId: body.partyId })) badBody('partyId', 'No such customer or brand for this company.')
+      // B-TH-034 (WALL-G15): never another customer's private-label style.
+      if (style.brandPartyId !== null && style.brandPartyId !== body.partyId) {
+        const party = await db.party.findUnique({ where: { id: body.partyId }, select: { id: true, teamPartyId: true } })
+        const brand = await db.party.findUnique({ where: { id: style.brandPartyId }, select: { legalName: true, tradeName: true } })
+        refuse(privateStyleRefusal(style, party, brand ? brand.tradeName?.trim() || brand.legalName : null))
+      }
     }
     assertCells(body.cells, style, await colourwayIdsOf(db, style.id), 'body/cells')
     refuse(chargeRefusal(body.partyId ?? null, amount !== undefined))

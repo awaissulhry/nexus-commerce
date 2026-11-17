@@ -467,8 +467,11 @@ export function stepAction(actions: readonly Pick<CapaAction, 'id'>[], current: 
 
 // ---- refusals --------------------------------------------------------------------------------------------------------------------
 
-/** Every `held/<CODE>` the CAPA routes send (B-W2b-108) and the complaint's share (B-W2b-192), said by `refused.<CODE>`. */
-export const HELD_CODES = ['FINAL', 'NOT_LAST_STAGE', 'NO_ACTION_DONE', 'ACTIONS_OPEN', 'ACTION_ENDED', 'ESCALATED_ELSEWHERE', 'NCR_CANCELLED', 'NCR_KEEPS_CAPA', 'OTHER_COMPANY', 'TOO_MANY_REMINDERS', 'NO_PERMISSION', 'NO_CAPA', 'NO_REPORT'] as const
+/**
+ * Every `held/<CODE>` the CAPA routes send (B-W2b-108) and the complaint's share (B-W2b-192), said by `refused.<CODE>`. B-TH-031:
+ * the 8D's brand wall (OTHER_CUSTOMER, OTHER_CUSTOMERS_COMPLAINTS, REPORT_OUTDATED).
+ */
+export const HELD_CODES = ['FINAL', 'NOT_LAST_STAGE', 'NO_ACTION_DONE', 'ACTIONS_OPEN', 'ACTION_ENDED', 'ESCALATED_ELSEWHERE', 'NCR_CANCELLED', 'NCR_KEEPS_CAPA', 'OTHER_COMPANY', 'TOO_MANY_REMINDERS', 'NO_PERMISSION', 'NO_CAPA', 'NO_REPORT', 'OTHER_CUSTOMER', 'OTHER_CUSTOMERS_COMPLAINTS', 'REPORT_OUTDATED'] as const
 
 /** The fields a 400 names (`body/<field>`), said by `field.<name>` (the team's rows as `team`). */
 export const FIELD_NAMES = ['title', 'ownerId', 'team', 'dueOn', 'priority', 'customerId', 'companyId', 'problemWhat', 'problemWhere', 'problemWhen', 'problemHowMany', 'sources', 'description', 'kind', 'escalateToId', 'evidenceNote', 'reason', 'note', 'to'] as const

@@ -62,11 +62,28 @@ export async function signedInspection(caller: CommandCaller, inspectionId: stri
 /** The inspection as the record of its report's versions (the number printed: its own, else the work order's). */
 export const reportRecordOf = (row: InspectionRow, workOrderNumber: string): DocumentRecord => ({ recordType: 'Inspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, number: row.number ?? `${workOrderNumber} · inspection` })
 
+/** The customers the work order's cells make garments for (B-W2b-275: a SAMPLE cell may name no order line, so no customer). */
+export async function workOrderPartiesOf(db: Reader, workOrderId: string): Promise<string[]> {
+  return [...new Set((await readCells(db, workOrderId)).flatMap((cell) => (cell.partyId === null ? [] : [cell.partyId])))]
+}
+
+/**
+ * B-TH-032 (WALL-G07, W16; Owner decision 16 of the threads plan): an inspection judges a whole work order — its lot size, its
+ * sample, its results — and one work order may make garments for several customers. Its report goes to a customer only when
+ * every customer cell of the work order is that customer's; otherwise that customer gets its own shipment's certificate of
+ * conformity. The words are the office's (they name the work order; never another customer's name). Null: it may go.
+ */
+export function sharedProductionProblem(parties: readonly string[], partyId: string, workOrderNumber: string): string | null {
+  const others = parties.filter((party) => party !== partyId).length
+  return others === 0
+    ? null
+    : `${workOrderNumber} also makes garments for ${others === 1 ? 'another customer' : `${others} other customers`}: its inspection report shows the whole lot and goes to no single customer. Share this shipment's certificate of conformity instead.`
+}
+
 /** The report's language: asked, else the one the work order's customers share (it or en), else Italian. */
 async function languageOf(db: Reader, workOrderId: string, asked: DocumentLanguage | undefined): Promise<DocumentLanguage> {
   if (asked) return asked
-  // B-W2b-275: a SAMPLE cell may name no order line, so no customer.
-  const parties = [...new Set((await readCells(db, workOrderId)).flatMap((cell) => (cell.partyId === null ? [] : [cell.partyId])))]
+  const parties = await workOrderPartiesOf(db, workOrderId)
   const languages = parties.length === 0 ? [] : [...new Set((await db.party.findMany({ where: { id: { in: parties } }, select: { language: true } })).map((party) => party.language))]
   return languages.length === 1 && isDocumentLanguage(languages[0]) ? languages[0] : 'it'
 }

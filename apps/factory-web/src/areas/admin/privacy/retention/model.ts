@@ -24,7 +24,8 @@ export const retentionCan = (permissions: readonly string[]): RetentionCan => {
 }
 
 /** The record types the sweep knows (B-W2b-405's registry), each worded `dp.ret.type.<Type>.*`; any other: "Other records". */
-export const RETENTION_TYPE_NAMES = ['ReportRun', 'CronRun', 'IntegrationErrorItem', 'InboundEmail', 'ExportJob', 'Invoice'] as const
+// B-TH-053: Inquiry — the prospects of closed requests.
+export const RETENTION_TYPE_NAMES = ['ReportRun', 'CronRun', 'IntegrationErrorItem', 'InboundEmail', 'ExportJob', 'Invoice', 'Inquiry'] as const
 const KNOWN: ReadonlySet<string> = new Set(RETENTION_TYPE_NAMES)
 export const typeKey = (recordType: string, part: 'name' | 'countsFrom') => `dp.ret.type.${KNOWN.has(recordType) ? recordType : 'other'}.${part}`
 /** What an applying sweep does with the action, in the page's words. */
