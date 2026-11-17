@@ -117,6 +117,10 @@ describe('swatches (SAL-314)', () => {
     expect(swatchDecisionRefusal({ ...sent, decision: 'APPROVED' }, null)?.code).toBe('SWATCH_DECIDED')
     expect(swatchAskRefusal(sent, 'COLOUR', null)).toMatchObject({ code: 'SWATCH_KIND', message: 'This is a leather swatch: ask with Leather.' })
     expect(swatchAskRefusal(sent, 'LEATHER', null)).toBeNull()
+    // B-PR-23: a fabric or a trim swatch is asked with its own kind, named on the office's button.
+    expect(swatchAskRefusal({ ...sent, kind: 'FABRIC' }, 'COLOUR', null)).toMatchObject({ code: 'SWATCH_KIND', message: 'This is a fabric swatch: ask with Fabric.' })
+    expect(swatchAskRefusal({ ...sent, kind: 'TRIM' }, 'LEATHER', null)).toMatchObject({ code: 'SWATCH_KIND', message: 'This is a trim swatch: ask with Trim.' })
+    expect(swatchAskRefusal({ ...sent, kind: 'FABRIC' }, 'FABRIC', null)).toBeNull()
     expect(swatchAskRefusal(swatch, 'LEATHER', null)?.code).toBe('SWATCH_NOT_SENT')
     expect(swatchRoundRefusal({ number: 'SR-1', stage: 'CANCELLED', partyId: 'p' }, 'p')?.code).toBe('SWATCH_ROUND_CANCELLED')
     expect(swatchRoundRefusal({ number: 'SR-1', stage: 'SENT', partyId: 'p' }, 'q')?.code).toBe('NOT_THE_ROUNDS_PARTY')

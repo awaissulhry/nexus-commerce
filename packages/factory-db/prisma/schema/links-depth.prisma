@@ -158,6 +158,17 @@ model ApprovalRequest {
   withdrawnAt       DateTime?      @db.Timestamptz(3)
   withdrawnById     String?        @db.Uuid
   withdrawReason    String?
+  // B-PR-23 (production plan, schema wave 4/5; 08-backend §4.6, Owner answer 11-10 Q3).
+  /// Decided for the party: an office person answered for it (production.brand.override, step-up), with why (the party
+  /// reads "Decided by <company> for you: <reason>"); then the third of the three answerers (exactly one of the portal
+  /// user, the link and this person). Never the person who asked; never on a CONCESSION, REVISED_ORDER, SIGNATURE or PROOF.
+  decidedForPartyById   String?   @db.Uuid
+  decidedForPartyReason String?
+  /// Reversed (undone) after it was answered: when, by whom (an office person) and why; set once, all or none. The answer
+  /// itself never changes; each record's adapter undoes its effect. Never on a CONCESSION, REVISED_ORDER, SIGNATURE or PROOF.
+  reversedAt            DateTime? @db.Timestamptz(3)
+  reversedById          String?   @db.Uuid
+  reverseReason         String?
   version           Int            @default(1)
   createdAt         DateTime       @default(now()) @db.Timestamptz(3)
   updatedAt         DateTime       @default(now()) @updatedAt @db.Timestamptz(3)
@@ -178,6 +189,11 @@ model ApprovalRequest {
   // W2b-4 samples.prisma (wave 29/33): the sample round (SAMPLE) or swatch (COLOUR, LEATHER) it asks the brand to decide.
   sampleRounds             SampleRound[]
   sampleSwatches           SampleSwatch[]
+  // B-PR-23: who decided for the party, who reversed it (office people); portal-sales.prisma: the change request a
+  // COUNTER_OFFER counters.
+  decidedForPartyBy User?               @relation("ApprovalRequestDecidedForParty", fields: [tenantId, decidedForPartyById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  reversedBy        User?               @relation("ApprovalRequestReversedBy", fields: [tenantId, reversedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  counteredRequests OrderChangeRequest[] @relation("OrderChangeRequestCounter")
 
   // The target of the concession's reference: a concession names a request of its own customer.
   @@unique([tenantId, partyId, id])
@@ -204,6 +220,14 @@ enum ApprovalKind {
   REVISED_ORDER
   /// An outside signer's signature (B-W2b-122: the risk assessment's outside roles).
   SIGNATURE
+  // B-PR-23 (production plan, schema wave 4/5; 08-backend §4.3, §4.4): B-PR-24 gives each its rule.
+  /// A fabric or a trim swatch (samples.prisma SwatchKind FABRIC, TRIM) or a record with a thread, as COLOUR and LEATHER.
+  FABRIC
+  TRIM
+  /// A new date for an order: the customer accepts or refuses; the date stands either way (record SalesOrder).
+  REPROMISE
+  /// The office's counter-offer to a change request (record OrderChangeRequest, which names it back).
+  COUNTER_OFFER
 }
 
 /// OPEN → APPROVED | APPROVED_WITH_CHANGES | REFUSED (the party's answer) | WITHDRAWN (the office) | EXPIRED (past its

@@ -3,13 +3,13 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { APPROVAL_STATUSES as DOMAIN_APPROVAL_STATUSES } from '@nexus/factory-domain/approvals-out/kinds'
 import { INTENT_STATUSES as DOMAIN_INTENT_STATUSES } from '@nexus/factory-domain/payments/online/rules'
-import { REQUEST_STATUSES as DOMAIN_REQUEST_STATUSES, VERDICT_CODES as DOMAIN_VERDICTS } from '@nexus/factory-domain/sales/change-requests/rules'
+import { ORDER_REQUEST_KINDS as DOMAIN_REQUEST_KINDS, REQUEST_STATUSES as DOMAIN_REQUEST_STATUSES, VERDICT_CODES as DOMAIN_VERDICTS } from '@nexus/factory-domain/sales/change-requests/rules'
 import { DEPOSIT_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 import { ApiError } from '../../../lib/api/errors'
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { CATALOGUE, createTranslator, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
-import { APPROVAL_STATUSES, FAKE_SCENARIOS, INTENT_STATUSES, pickRevision, REQUEST_STATUSES, VERDICT_CODES } from './api'
+import { APPROVAL_STATUSES, FAKE_SCENARIOS, INTENT_STATUSES, pickRevision, REQUEST_KINDS, REQUEST_STATUSES, VERDICT_CODES } from './api'
 import { approvalPage, documentsRead, mtmRecord, orderRecord, ordersRead, ROWS, rulesOf, withoutPrices } from './design-data'
 import { designScreen as listScreen } from './fixtures'
 import {
@@ -86,6 +86,12 @@ describe('the web keeps the API’s codes', () => {
     expect(REQUEST_STATUSES).toEqual(DOMAIN_REQUEST_STATUSES)
     expect(APPROVAL_STATUSES).toEqual(DOMAIN_APPROVAL_STATUSES)
     expect(INTENT_STATUSES).toEqual(DOMAIN_INTENT_STATUSES)
+  })
+
+  // B-PR-23: an order's list of requests holds every kind (the production asks too) and a countered request.
+  it('request kinds are the domain’s, the production asks included', () => {
+    expect(REQUEST_KINDS).toEqual(DOMAIN_REQUEST_KINDS)
+    expect(REQUEST_STATUSES).toContain('COUNTERED')
   })
 })
 

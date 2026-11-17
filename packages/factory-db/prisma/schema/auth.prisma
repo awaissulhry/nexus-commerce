@@ -162,6 +162,11 @@ model User {
   doneThreads              Thread[]         @relation("ThreadDoneBy")
   pinnedMessages           ThreadPin[]      @relation("ThreadPinPinnedBy")
   composerDrafts           ComposerDraft[]
+  // B-PR-23 portal-sales.prisma, links-depth.prisma (production plan, schema wave 4/5): the change requests they countered,
+  // the approvals they decided for a party and the answers they reversed (an office person).
+  counteredChangeRequests  OrderChangeRequest[] @relation("OrderChangeRequestCounteredBy")
+  approvalsDecidedForParty ApprovalRequest[]    @relation("ApprovalRequestDecidedForParty")
+  approvalsReversed        ApprovalRequest[]    @relation("ApprovalRequestReversedBy")
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.

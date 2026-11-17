@@ -25,7 +25,9 @@
     "SALESMAN": "Campionario vendita",
     "PRE_PRODUCTION": "Pre-produzione",
     "CERTIFICATION": "Campione per prova CE",
-    "BRAND": "Campione del brand"
+    "BRAND": "Campione del brand",
+    "SIZE_SET": "Set di taglie",
+    "TOP_OF_PRODUCTION": "Primi capi di produzione (TOP)"
   },
   "stage": {
     "REQUESTED": "Richiesto",
@@ -62,7 +64,9 @@
   },
   "swatch": {
     "COLOUR": "Colore",
-    "LEATHER": "Pelle"
+    "LEATHER": "Pelle",
+    "FABRIC": "Tessuto",
+    "TRIM": "Accessorio"
   },
   "wo": {
     "status": {
