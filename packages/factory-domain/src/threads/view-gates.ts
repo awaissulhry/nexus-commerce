@@ -73,6 +73,9 @@ export const THREAD_VIEW_GATES: Readonly<Record<string, Permission>> = Object.fr
   PortalOrderRequest: 'orders.view',
   // B-TH-066: a project is read as its thread (threads.read over its company and outside company): no record view of its own.
   Project: 'threads.read',
+  // B-TH-075's technical file (a thread record since #1571) had no gate: its page reads with the certificate register's view
+  // (modules/compliance/techfiles manifest), so its conversation is listed with it (closes "every thread type has a view gate").
+  TechnicalFile: 'compliance.certificates.view',
 } satisfies Record<string, Permission>)
 
 /** A record type's own view permission, or null: none known (never listed). */
