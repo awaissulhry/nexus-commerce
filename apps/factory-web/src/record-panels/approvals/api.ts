@@ -30,7 +30,8 @@ export const officeRequestSchema = z.object({
       at: z.string(),
       typedName: z.string(),
       words: z.string().nullable(),
-      via: z.enum(['LINK', 'PORTAL']),
+      // B-PR-30a: OFFICE — decided for the customer by an office person (typedName / personName), with the reason it reads.
+      via: z.enum(['LINK', 'PORTAL', 'OFFICE']),
       personName: z.string().nullable(),
       markup: z.object({ fileId: z.string(), page: z.number().nullable(), shapes: z.array(z.unknown()), note: z.string().nullable() }).nullable(),
     })

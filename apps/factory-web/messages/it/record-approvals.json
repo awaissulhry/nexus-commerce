@@ -106,6 +106,7 @@
     "answer": "La risposta",
     "answeredLink": "Firmata da {name} dal link, {at}",
     "answeredPortal": "Firmata da {name} nel portale, {at}",
+    "answeredOffice": "Deciso da noi per il cliente: {name}, {at}",
     "portalPerson": "account di {name}",
     "marked": "Segni su una foto: {count}",
     "markedPage": "Segni a pagina {page}: {count}",

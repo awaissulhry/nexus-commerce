@@ -106,6 +106,7 @@
     "answer": "The answer",
     "answeredLink": "Signed by {name} by link, {at}",
     "answeredPortal": "Signed by {name} in the portal, {at}",
+    "answeredOffice": "Decided by us for the customer: {name}, {at}",
     "portalPerson": "account of {name}",
     "marked": "Marks on a photo: {count}",
     "markedPage": "Marks on page {page}: {count}",
