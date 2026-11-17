@@ -6,7 +6,7 @@ import { everyCase, leftKeys, textOf } from './parts/testing'
 import { THREAD_NAMESPACES } from './parts/ThreadMessages'
 import { CATALOGUE } from '../i18n/messages'
 import { designScreen } from './fixtures'
-import { anchorOf, cardOf, closedBy, eventOf, feedShowsChange, settleOutbox, walkScope, withOutbox, type OutboxItem, type ThreadApiChange, type ThreadApiMessage } from './model'
+import { anchorOf, cardOf, closedBy, eventOf, feedForView, feedKinds, feedShowsChange, settleOutbox, walkScope, withOutbox, type OutboxItem, type ThreadApiChange, type ThreadApiMessage } from './model'
 
 /** B-TH-212 — RecordThread v1: an API message becomes a card by its audience, the anchor, the J / K focus rule, the outbox and the draft. */
 
@@ -126,11 +126,57 @@ describe('SCR-006-thread, both languages', () => {
   })
 
   it('the views fetch nothing and import no office or portal code (lib/record-thread stays a view, PR-15)', () => {
-    const files = ['RecordThread.tsx', 'ThreadCase.tsx', 'model.ts', 'card/view/MessageCard.tsx', 'feed/view/Feed.tsx', 'composer/view/Composer.tsx', 'attachments/view/AttachmentTray.tsx', 'send-check/view/Recipients.tsx', 'send-check/view/SendCheckDialog.tsx']
+    const files = ['RecordThread.tsx', 'ThreadCase.tsx', 'parts/DockedStage.tsx', 'model.ts', 'card/view/MessageCard.tsx', 'feed/view/Feed.tsx', 'composer/view/Composer.tsx', 'attachments/view/AttachmentTray.tsx', 'send-check/view/Recipients.tsx', 'send-check/view/SendCheckDialog.tsx']
     for (const file of files) {
       const source = readFileSync(new URL(`./${file}`, import.meta.url), 'utf8')
       expect(source, file).not.toMatch(/from '[^']*(areas|portal|shell|record-panels|lib\/api|lib\/session)\//)
       expect(source, file).not.toMatch(/\bfetch\(/)
+    }
+  })
+})
+
+describe('B-TH-300 — the docked thread', () => {
+  const card = (id: string, kind: 'theirs' | 'ours' | 'note' | 'floor') => ({ ...cardOf(message({ id }), sources), kind })
+  const feed = { messages: [card('a', 'theirs'), card('b', 'note'), card('c', 'ours'), card('d', 'floor')], events: [eventOf({ kind: 'change', id: 'e', at: '2026-11-12T15:00:00Z', action: 'sales.orders.update', actor: { audience: 'OFFICE', id: null }, actorHidden: false, status: null, fields: [] }, sources.names)] }
+
+  it('the Head’s View: with the customer, office notes, changes; All shows everything', () => {
+    expect(feedForView(feed, 'all')).toBe(feed)
+    expect(feedForView(feed, 'shared').messages.map((item) => item.id)).toEqual(['a', 'c'])
+    expect(feedForView(feed, 'shared').events).toEqual([])
+    expect(feedForView(feed, 'notes').messages.map((item) => item.id)).toEqual(['b', 'd'])
+    expect(feedForView(feed, 'changes').messages).toEqual([])
+    expect(feedForView(feed, 'changes').events).toHaveLength(1)
+    expect(feedKinds(feed.messages)).toEqual({ hasShared: true, hasNotes: true })
+    expect(feedKinds([card('x', 'note')])).toEqual({ hasShared: false, hasNotes: true })
+  })
+
+  const cases = everyCase(designScreen)
+  const docked = (id: string) => cases.find(([locale, caseId]) => locale === 'en' && caseId === id)?.[2] ?? ''
+
+  it('three bands above the first message: the Head, the files line, then the feed (pictures 6–11)', () => {
+    const html = docked('docked')
+    const head = html.indexOf('class="fw-rth')
+    const files = html.indexOf('fw-rtf-line')
+    const feedAt = html.indexOf('role="feed"')
+    expect(head).toBeGreaterThan(-1)
+    expect(files).toBeGreaterThan(head)
+    expect(feedAt).toBeGreaterThan(files)
+    expect(html).toContain('class="fw-rt-column is-docked"')
+    expect(html).toContain('fw-rtm-replies')
+  })
+
+  it('R-ACT: the Head’s "⋯" is there at count 0 too (Activity’s tools never hide), and no "?" key overlay in the thread (PR-14)', () => {
+    const html = docked('docked-no-files')
+    expect(html).toContain('aria-label="Thread tools"')
+    expect(textOf(html)).not.toMatch(/Keyboard shortcuts|Press \?/)
+    expect(html).not.toContain('fw-rtf-line')
+  })
+
+  it('the brand wall: Brand Beta’s docked order shows nothing of Brand Alpha (B-TH-203)', () => {
+    for (const [, id, html] of cases) {
+      if (id !== 'docked-brand-beta') continue
+      expect(scanText(textOf(html), BRAND_ALPHA)).toEqual([])
+      expect(textOf(html)).toContain(BRAND_BETA.tradeName)
     }
   })
 })

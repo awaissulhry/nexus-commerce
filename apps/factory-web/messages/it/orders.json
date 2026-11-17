@@ -209,15 +209,12 @@
   },
   "tab": {
     "lines": "Righe",
-    "dates": "Date e promessa",
-    "production": "Produzione",
-    "shipments": "Spedizioni",
+    "production": "Produzione e date",
+    "shipments": "Spedizioni e fatture",
     "money": "Fatture e pagamenti",
-    "documents": "Documenti",
     "margin": "Margine",
-    "activity": "Attività",
     "depositOpen": "C'è un acconto aperto",
-    "changes": "Modifiche"
+    "changes": "Conferma e modifiche"
   },
   "step": {
     "makeWorkOrders": "Crea ordini di lavoro",
@@ -255,13 +252,10 @@
         "title": "Impossibile caricare l'ordine"
       }
     },
-    "dock": "Conversazione",
-    "dockHint": "La conversazione dell'ordine accanto alla scheda",
     "dockLabel": "La conversazione dell'ordine",
     "more": "Altro per questo ordine",
     "tabsLabel": "Sezioni dell'ordine",
     "depositOpen": "Acconto aperto — scade il {date}",
-    "depositPaid": "Acconto pagato",
     "depositMissing": "Acconto non chiesto",
     "late_one": "In ritardo di {count} giorno",
     "late_other": "In ritardo di {count} giorni",
@@ -273,7 +267,6 @@
     "closed": "Chiuso il {date}: non cambia più nulla.",
     "closedNoDate": "Chiuso: non cambia più nulla.",
     "readOnly": "Sola lettura: il tuo ruolo segue gli ordini e non ne cambia nessuno.",
-    "noPanels": "La conversazione, i file e la cronologia si aprono con il record.",
     "amended": "Modificato · rev. {revision}",
     "reapproval": "In attesa che il cliente accetti la modifica",
     "typed": "Inserito dall'ufficio"
@@ -683,10 +676,7 @@
     "document": "Il PDF firmato",
     "matches": "Uguale al PDF inviato",
     "differs": "Diverso dal PDF inviato",
-    "terms": "Versione delle condizioni",
-    "filesTitle": "Documenti e file",
-    "filesBody": "I file dell'ordine — l'ordine del cliente, le copie, quanto aggiunto — sono in Attività › File, con chi può vedere ciascuno.",
-    "openFiles": "Apri i file"
+    "terms": "Versione delle condizioni"
   },
   "part": {
     "loading": "Caricamento di {part}…",

@@ -56,6 +56,11 @@ const SOURCES: FileStripCaseModel['sources'] = {
   [id(4)]: demoPdf(['Declaration of conformity (made up)', 'EN 17092-3']),
 }
 
+/** B-TH-300: the files the docked thread's design cases (SCR-006-thread, SCR-039) show, their party and made-up sources. */
+export const DEMO_FILES: readonly ThreadFile[] = FILES
+export const DEMO_FILES_PARTY: FilesParty = PARTY
+export const DEMO_FILE_SOURCES: FileStripCaseModel['sources'] = SOURCES
+
 const c = (over: Partial<FileStripCaseModel> = {}): FileStripCaseModel => ({
   files: FILES,
   party: PARTY,

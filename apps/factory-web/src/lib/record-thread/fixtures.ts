@@ -5,12 +5,19 @@ import type { CardContext } from './card/model'
 import { DEMO_NOW, demoThread, OFFICE_PEOPLE } from './demo-data'
 import type { RecordThreadModel } from './RecordThread'
 import { ThreadCase, type ThreadCaseModel } from './ThreadCase'
+// B-TH-300: the docked thread's bands.
+import { DEMO_FILE_SOURCES, DEMO_FILES, DEMO_FILES_PARTY } from './files/fixtures'
+import { demoHead } from './head/fixtures'
+import type { HeadModel } from './head/model'
+import type { SavedRepliesModel } from './helpers/model'
 
 /**
  * SCR-006-thread — RecordThread v1 (B-TH-212; pictures 1–5 in one column): the feed, the cards and the box for Incoming's reading
  * pane and the request's full page. Made-up data (the brand-wall helpers' brands, the design kit's people). Cases: the full page,
  * the reading pane (SplitPane, 35 : 65), a reply with To / Cc, the send check, a link to one message, loading, no permission, a
  * closed thread, and Brand Beta's copy (the brand wall). Light / dark and 375 / 1440 / 1920 from the frame.
+ * B-TH-300 (pictures 6–11, PL1, PL4): the DOCKED thread — the Head with Activity's doors, the files line, the feed and the box with
+ * Saved replies — in a stand-in record frame (40 % beside the body from 1280 px; the phone's full page with its short head below 720).
  */
 
 const recordFiles = (brand: BrandFixture): RecordFile[] => [
@@ -43,6 +50,48 @@ function threadOf(brand: BrandFixture, more: Partial<CardContext> = {}): RecordT
 }
 
 const ALPHA = threadOf(BRAND_ALPHA)
+
+const REPLIES: SavedRepliesModel = {
+  status: 'ready',
+  language: 'en',
+  replies: [
+    { id: 'r-1', name: 'Sample on its way', language: 'en', shared: true },
+    { id: 'r-2', name: 'Campione in arrivo', language: 'it', shared: true },
+    { id: 'r-3', name: 'Delivery date moved', language: 'en', shared: false },
+  ],
+}
+
+/**
+ * The docked thread of a sales order (B-TH-300) as the design cases draw it: the order's title, the Head (who answers next, the
+ * counts, View, the width, the "⋯" with Activity's doors), the order's files and Saved replies. SCR-039 docks it on the order.
+ */
+export function dockedThread(brand: BrandFixture = BRAND_ALPHA, head: Partial<HeadModel> = {}, fill = false): ThreadCaseModel {
+  const base = threadOf(brand)
+  return {
+    thread: {
+      ...base,
+      title: `${brand.numbers.order} · ${brand.tradeName}`,
+      composer: { ...base.composer, context: { ...base.composer.context, recordType: 'SalesOrder', recordLabel: brand.numbers.order }, subject: `Re: ${brand.numbers.order}` },
+    },
+    // Brand Beta's copy carries none of Brand Alpha's made-up counts or files (the brand wall, B-TH-203); a copy of Brand Alpha under
+    // another name (SCR-039's customer) gets the same counts and files in its own name.
+    docked: {
+      head: demoHead({ record: brand.numbers.order, party: { name: brand.tradeName, role: 'customer' }, counts: brand.key === 'alpha' ? renamed(demoHead().counts, brand) : {}, ...head }),
+      files: brand.key === 'alpha' ? renamed(DEMO_FILES, brand) : [],
+      party: DEMO_FILES_PARTY,
+      replies: REPLIES,
+      sources: DEMO_FILE_SOURCES,
+    },
+    fill,
+  }
+}
+/** Brand Alpha's made-up words said with another made-up customer's (its name, its tech pack's file name). */
+function renamed<T>(value: T, brand: BrandFixture): T {
+  if (brand === BRAND_ALPHA) return value
+  const text = JSON.stringify(value).split(BRAND_ALPHA.fileName).join(brand.fileName).split(BRAND_ALPHA.tradeName).join(brand.tradeName)
+  return JSON.parse(text) as T
+}
+const DOCKED = dockedThread()
 const reply = (thread: RecordThreadModel): RecordThreadModel => ({ ...thread, composer: { ...thread.composer, draft: { mode: 'reply', body: 'Hello Alma,\nthe quote follows tomorrow morning.\nAlex', forFloor: false } } })
 
 export const designScreen = defineDesignScreen<ThreadCaseModel>({
@@ -64,5 +113,21 @@ export const designScreen = defineDesignScreen<ThreadCaseModel>({
     { id: 'closed', label: 'Closed thread', model: { thread: { ...ALPHA, composer: { ...ALPHA.composer, context: { ...ALPHA.composer.context, closed: { by: 'Bea Esempio', at: '2026-11-12T15:00:00.000Z' } } } } } },
     { id: 'notice', label: 'After a note', model: { thread: { ...ALPHA, notice: { ns: 'record-thread', key: 'notice.noteAdded', tone: 'success' } } } },
     { id: 'brand-beta', label: 'Brand Beta’s copy (brand wall)', model: { thread: threadOf(BRAND_BETA) }, note: 'The same thread on Brand Beta’s request: nothing of Brand Alpha (B-TH-203 scan).' },
+    // ---- B-TH-300: the docked thread ----
+    {
+      id: 'docked',
+      label: 'Docked on a record page: Head, files line, feed, box',
+      model: DOCKED,
+      note: 'Three bands above the first message with the record band in the shell’s row: the Head (who answers next, the counts, View ▾, the width menu, the "⋯" that always holds Activity’s doors — R-ACT), the files line, then the feed. Saved replies ▾ beside @ in the box. Below 720 px the phone head: the record and the pill, the rest in "⋯".',
+    },
+    { id: 'docked-strip', label: 'Docked: the files strip open', model: { ...DOCKED, docked: { ...DOCKED.docked!, stripOpen: true } }, note: '← / → walk the tiles, Enter opens the one file viewer; "All files" opens the Files view.' },
+    { id: 'docked-notes', label: 'Docked: View › Office notes', model: { ...DOCKED, docked: { ...DOCKED.docked!, head: { ...DOCKED.docked!.head, view: 'notes' } } }, note: 'The chip names the view; its × shows everything again.' },
+    {
+      id: 'docked-closed',
+      label: 'Docked: a closed thread',
+      model: { ...DOCKED, thread: { ...DOCKED.thread, composer: { ...DOCKED.thread.composer, context: { ...DOCKED.thread.composer.context, closed: { by: 'Bea Esempio', at: '2026-11-12T15:00:00.000Z' } } } }, docked: { ...DOCKED.docked!, head: { ...DOCKED.docked!.head, closed: { by: 'Bea Esempio', at: '2026-11-12T15:00:00.000Z' } } } },
+    },
+    { id: 'docked-no-files', label: 'Docked: no files (no line)', model: { ...DOCKED, docked: { ...DOCKED.docked!, files: [] } }, note: 'Nothing empty takes a band (T2-F09): the feed starts under the Head.' },
+    { id: 'docked-brand-beta', label: 'Docked: Brand Beta’s order (brand wall)', model: dockedThread(BRAND_BETA), note: 'Brand Beta’s order shows nothing of Brand Alpha: its own files only (none here), its own name on Reply.' },
   ],
 })
