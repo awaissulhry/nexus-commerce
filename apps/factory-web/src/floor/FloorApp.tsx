@@ -29,6 +29,7 @@ import { warmPdfReader } from './tasks/sds/warm-pdf'
 import { browserKeptStorage, KeptClocks, type KeptSnapshot } from './tasks/clock/kept'
 import type { SignedOutWhy } from './sign-in/view/SignInView'
 import { DEFAULT_TIME_ZONE } from '../lib/i18n/format'
+import { leaveSignIn } from './gate' // W1-BGF
 
 /**
  * The floor app (SCR-020 … 025): one client root under `/floor` that knows the device and the signed-in operator,
@@ -446,11 +447,21 @@ export function FloorApp({ appVersion, catalogues, children }: { appVersion: str
       if (pathname !== SIGN_IN) router.replace(SIGN_IN)
       return
     }
-    if (pathname === SIGN_IN && !pendingSwitch && !crewStep) {
-      if (me.notice.due) router.replace(NOTICE)
-      else if (!arriving) router.replace(arrivalTo.current ?? (device.rules?.landing === 'LINE_VIEW' && me.permissions.includes('floor.lead') ? LINE_VIEW : HOME))
+    if (pathname === SIGN_IN) {
+      // W1-BGF: the decision in floor/gate.ts; `moveHeld` in the deps: a move taken back is tried again when its words go.
+      const next = leaveSignIn({
+        noticeDue: me.notice.due,
+        arriving,
+        pendingSwitch: !!pendingSwitch,
+        crewStep: !!crewStep,
+        moveHeld,
+        arrivalTo: arrivalTo.current,
+        landing: device.rules?.landing === 'LINE_VIEW' && me.permissions.includes('floor.lead') ? LINE_VIEW : HOME,
+        notice: NOTICE,
+      })
+      if (next) router.replace(next)
     }
-  }, [load.status, device, me, pathname, pendingSwitch, crewStep, arriving, router])
+  }, [load.status, device, me, pathname, pendingSwitch, crewStep, arriving, moveHeld, router])
 
   // B-W2b-66: nobody presses Try again on a wall screen: while the server does not answer, the app keeps asking.
   useEffect(() => {

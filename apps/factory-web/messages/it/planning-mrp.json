@@ -26,7 +26,8 @@
   "notice": {
     "moved": "L’ordine pianificato fisso di {material} ora arriva il {date}.",
     "sent_one": "{count} ordine d’acquisto inviato: il fornitore riceve l’ordine e il link per confermare.",
-    "sent_other": "{count} ordini d’acquisto inviati: ogni fornitore riceve il suo ordine e il link per confermare."
+    "sent_other": "{count} ordini d’acquisto inviati: ogni fornitore riceve il suo ordine e il link per confermare.",
+    "unfirmed": "{material} è di nuovo pianificato: Bozza d’ordine compra quanto la pianificazione suggerisce per tutti gli ordini."
   },
   "view": {
     "shortWo": "Mancanti sugli ordini di produzione aperti"
@@ -138,5 +139,9 @@
       "forbidden": "Non inviato: il tuo ruolo non può inviarlo",
       "other": "Non inviato: aprilo per vedere perché"
     }
+  },
+  "unfirm": {
+    "menu": "Pianifica di nuovo (non fisso)",
+    "hint": "Poi Bozza d’ordine compra {quantity} {unit}, quanto la pianificazione suggerisce per tutti gli ordini."
   }
 }

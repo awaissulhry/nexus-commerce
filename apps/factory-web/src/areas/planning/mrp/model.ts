@@ -196,6 +196,15 @@ export function fixHeld(fix: Shortage['fixes'][number], lines: readonly PlanLine
   return can.planFirm ? (line.firm ? null : 'held.notFirm') : 'held.noFirm'
 }
 
+// ── W1-BGF: Plan it again (not firm) on a Buy line ──
+/** Why planning a line again (its firm planned order taken back) is held (a key of planning-mrp), or null. */
+export function unfirmHeld(line: Pick<PlanLine, 'firm' | 'decision'>, canFirm: boolean): string | null {
+  if (!canFirm) return 'held.noFirm'
+  if (!line.firm) return 'held.notFirm'
+  return line.decision === 'OPEN' ? null : 'held.lineNotOpen'
+}
+// ── end W1-BGF ──
+
 /** Why moving a firm order to this day is held (a key of planning-mrp), or null: a day from today, earlier than now. */
 export function moveFirmProblem(line: PlanLine | null, date: string, today: string): string | null {
   if (!line?.firm) return 'held.notFirm'
@@ -321,6 +330,8 @@ export interface PlanActions {
   /** B-W2a-70: Short on open work orders. */
   onRetryShortages?: () => void
   onMoveFirm?: (requirementId: string) => void
+  /** W1-BGF: a firm line planned again (its firm planned order taken back). */
+  onUnfirm?: (lineId: string) => void
   /** B-W2b-332: a shortage asked to buy (or drafted at once by a buyer): requests/ask's dialog. */
   onAskToBuy?: (row: Shortage) => void
   moveFirm?: { onDate?: (date: string) => void; onConfirm?: () => void }

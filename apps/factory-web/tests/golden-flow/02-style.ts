@@ -1,4 +1,5 @@
 import { expect } from '@playwright/test'
+import { seen } from './_harness/flow'
 import { defineStage } from './_harness/stages'
 import { answerOf, byApi, dialog, press } from './_harness/ui'
 
@@ -84,10 +85,17 @@ export default defineStage({
       })
 
       await page.getByRole('radio', { name: 'By size' }).click()
+      // The By size view is the DS SizeColumns grid (B-W2b-241): a cell opens its editor (named "<line>, size <size>")
+      // on a double click; Enter saves it (PUT …/sizes, one size).
+      const grid = page.getByRole('region', { name: 'By size' })
+      const leatherRow = await seen(grid.getByRole('row').filter({ hasText: 'SEED-LEA-100' }))
+      const rowIndex = await leatherRow.getAttribute('aria-rowindex')
       for (const [size, quantity] of [['50', '20'], ['52', '21'], ['54', '22']] as const) {
+        await grid.locator(`[role="row"][aria-rowindex="${rowIndex}"] [role="gridcell"][col-id="size:${size}"]`).dblclick()
         const cell = page.getByRole('textbox', { name: new RegExp(`SEED-LEA-100, size ${size}$`) })
         await cell.fill(quantity)
         await answerOf(page, 'PUT', /\/bom\/lines\/[0-9a-f-]+\/sizes$/, () => cell.press('Enter'))
+        await expect(grid.locator(`[role="row"][aria-rowindex="${rowIndex}"] [role="gridcell"][col-id="size:${size}"]`)).toContainText(quantity)
       }
       await page.getByRole('radio', { name: 'By colourway' }).click()
       await answerOf(page, 'PUT', /\/bom\/lines\/[0-9a-f-]+\/colours$/, () => page.getByRole('combobox', { name: /SEED-LEA-100, colourway RED$/ }).selectOption({ label: 'RED · Red (S-002)' }))

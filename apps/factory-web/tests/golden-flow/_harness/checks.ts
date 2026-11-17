@@ -31,6 +31,14 @@ const NOT_WRITES: readonly { readonly path: RegExp; readonly when?: (capture: Ca
   { path: /^\/auth\/office\/sign-in$/, when: (capture) => (capture.body as Record<string, unknown> | undefined)?.status === 'totp_required', why: 'the password step of the sign-in asks for the code and writes nothing' },
   { path: /^\/shipping\/shipments\/[0-9a-f-]+\/ddt\/preview(\/pdf)?$/, why: 'the DDT as it would be (the SAMPLE draft): nothing stored, no number used' },
   { path: /^\/compliance\/certificates\/gate$/, why: 'a question to the certificate gate (the lapse check on a chosen day): it answers, it writes nothing' },
+  { path: /^\/duplicates\/(parties|materials)\/check$/, why: 'a question to the duplicate check while a record is typed (the records it looks like): it answers, it writes nothing' },
+  { path: /^\/threads\/unread$/, why: "the new-message counts of a page of records (B-TH-027: a read in a POST, its records in the body): it answers, it writes nothing" },
+  {
+    path: /^\/floor\/device\/state$/,
+    // A report whose answer was not read (the page moved on) is bookkeeping too unless it said the app was updated.
+    when: (capture) => (capture.body as Record<string, unknown> | undefined)?.appUpdated !== true,
+    why: "the tablet's own state report (app version, battery, queue count): bookkeeping written without an audit row by design (a new app version is audited)",
+  },
 ]
 const notAWrite = (capture: Capture) => NOT_WRITES.some((rule) => rule.path.test(capture.path) && (!rule.when || rule.when(capture)))
 
@@ -84,7 +92,7 @@ export const endChecks = {
       // A repeat of a write (same Idempotency-Key) answers from the first one's receipt: its audit rows are the first's.
       const auditedKeys = new Set(counted.filter((capture) => capture.idempotencyKey && capture.requestId && audited.has(capture.requestId)).map((capture) => capture.idempotencyKey))
       const unaudited = counted.filter((capture) => !(capture.requestId && audited.has(capture.requestId)) && !(capture.idempotencyKey && auditedKeys.has(capture.idempotencyKey))).map(describe)
-      test.info().annotations.push({ type: 'audit', description: `${counted.length} writes through the screens, ${counted.length - unaudited.length} audited; ${writes.length - counted.length} that write nothing by design (uploads to the file store, the sign-in’s password step, the DDT preview, the gate’s lapse check) not counted` })
+      test.info().annotations.push({ type: 'audit', description: `${counted.length} writes through the screens, ${counted.length - unaudited.length} audited; ${writes.length - counted.length} that write nothing by design (uploads to the file store, the sign-in’s password step, the DDT preview, the gate’s lapse check, the duplicate check, the threads’ unread counts, the tablets’ state reports) not counted` })
       expect(writes.length, 'the screens made writes').toBeGreaterThan(0)
       expect(unaudited, 'writes without an audit row').toEqual([])
     })
