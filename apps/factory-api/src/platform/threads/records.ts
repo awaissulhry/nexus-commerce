@@ -282,6 +282,14 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     const profile = await client.measurementProfile.findUnique({ where: { id }, select: { partyId: true, supersedesId: true } })
     return profile && profile.supersedesId === null ? { companyId: null, siteId: null, partyId: profile.partyId } : null
   },
+  // ---- B-TH-040 (threads plan TH-3, G16, L2-G04; modules/sales/portal-ordering): a catalogue order, once sent, has its thread —
+  // the selling company and the customer, so the office and the customer discuss it there (the customer through its partner view,
+  // search/partner/views/portal-order-request.ts). A DRAFT is the customer's alone: no record here, so no thread, for anyone.
+  PortalOrderRequest: async (client, id) => {
+    const request = await client.portalOrderRequest.findUnique({ where: { id }, select: { companyId: true, partyId: true, status: true } })
+    return request && request.status !== 'DRAFT' ? { companyId: request.companyId, siteId: null, partyId: request.partyId } : null
+  },
+  // ---- end B-TH-040
 })
 
 /**

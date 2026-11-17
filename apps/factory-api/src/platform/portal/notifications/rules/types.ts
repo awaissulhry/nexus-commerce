@@ -23,6 +23,8 @@ export interface PartnerDraft {
   readonly anchor: string | null
   /** Whether this reader of the party is told (their role reaches what the record shows). */
   readonly forReader: (reader: PartnerReader) => boolean
+  /** B-TH-045: the batch of the action that caused it (one answer to several records): the person's rows of a batch are one group. */
+  readonly batchId?: string | null
 }
 
 export interface PartnerRuleContext {

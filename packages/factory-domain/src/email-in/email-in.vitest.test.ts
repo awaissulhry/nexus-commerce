@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { assertTransition } from '../state/machine'
 import {
+  INLINE_PICTURE_MIN_BYTES,
+  inlinePictureName,
+  keepsInlinePart,
   addressesOf,
   cleanMessageId,
   cleanSubject,
@@ -148,5 +151,21 @@ describe('safe rendering (COL-026)', () => {
     const long = cleanInboundText('x'.repeat(MAX_INBOUND_TEXT + 10))
     expect(long.length).toBeLessThanOrEqual(MAX_INBOUND_TEXT)
     expect(long.endsWith('…')).toBe(true)
+  })
+})
+
+describe('B-TH-088: pictures pasted in a mail', () => {
+  it('keeps a pasted picture as a file; a small or repeated one (a signature logo) and an inline part that is no picture stay out', () => {
+    expect(keepsInlinePart({ contentType: 'image/jpeg', sizeBytes: 250_000, copies: 1 })).toBe(true)
+    expect(keepsInlinePart({ contentType: 'image/png', sizeBytes: INLINE_PICTURE_MIN_BYTES, copies: 1 })).toBe(true)
+    expect(keepsInlinePart({ contentType: 'image/png', sizeBytes: INLINE_PICTURE_MIN_BYTES - 1, copies: 1 })).toBe(false)
+    expect(keepsInlinePart({ contentType: 'image/png', sizeBytes: 250_000, copies: 2 })).toBe(false)
+    expect(keepsInlinePart({ contentType: 'text/calendar', sizeBytes: 250_000, copies: 1 })).toBe(false)
+  })
+
+  it('names a pasted picture the mail gave no name by its type', () => {
+    expect(inlinePictureName('image/jpeg', 2)).toBe('picture-2.jpg')
+    expect(inlinePictureName('image/png', 1)).toBe('picture-1.png')
+    expect(inlinePictureName('image/x-unknown', 3)).toBe('picture-3.img')
   })
 })

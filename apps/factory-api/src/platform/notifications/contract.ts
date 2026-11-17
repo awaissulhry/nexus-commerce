@@ -33,7 +33,8 @@ const notification = output({
   snoozed: output({ at: instant(), until: instant().nullable() }).nullable(),
   createdAt: instant(),
   /** The notifications of one record and kind that came close together, shown as this one (its newest). */
-  group: output({ key: z.string(), count: z.number().int(), ids: z.array(id()) }),
+  /** B-TH-045: `records` = how many different records the reader's group holds (a batch: "on 12 orders"; else 1). */
+  group: output({ key: z.string(), count: z.number().int(), ids: z.array(id()), records: z.number().int() }),
 })
 
 const counts = output({

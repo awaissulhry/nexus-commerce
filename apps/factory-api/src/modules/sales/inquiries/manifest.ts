@@ -18,6 +18,8 @@ export const manifest = defineManifest({
   'POST /sales/inquiries/assign': manage,
   'POST /sales/inquiries/decline': manage,
   'GET /sales/inquiries/:inquiryId': view,
+  // B-TH-216 (Sales › Incoming): the Picture cell's small preview (the file also needs files.read over its company).
+  'GET /sales/inquiries/:inquiryId/picture': view,
   'POST /sales/inquiries': manage,
   'PATCH /sales/inquiries/:inquiryId': manage,
   'POST /sales/inquiries/:inquiryId/assign': manage,

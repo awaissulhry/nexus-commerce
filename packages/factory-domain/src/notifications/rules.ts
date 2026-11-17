@@ -122,7 +122,8 @@ export const MESSAGE_TEMPLATES = {
   // asked; an inquiry given to a person; a product-safety report to the people who assess them (with an accident: said).
   'notifications.purchasing.requestOrdered': { en: 'Your request to buy {record} was put on purchase order {title}', it: 'La tua richiesta di acquisto {record} è stata messa nell’ordine di acquisto {title}' },
   'notifications.purchasing.requestRefused': { en: '{actor} refused your request to buy {record}', it: '{actor} ha rifiutato la tua richiesta di acquisto {record}' },
-  'notifications.inquiries.assigned': { en: '{actor} gave you inquiry {record}', it: '{actor} ti ha affidato la richiesta {record}' },
+  // B-TH-224 (threads plan TH-1b): one word — request (Sales › Incoming).
+  'notifications.inquiries.assigned': { en: '{actor} gave you request {record}', it: '{actor} ti ha affidato la richiesta {record}' },
   // B-TH-015: a new request, to the people who answer requests (its company and customer), not to who made it.
   'notifications.inquiries.newRequest': { en: 'New request {record} came in: take it or give it to someone', it: 'È arrivata la nuova richiesta {record}: prendila o affidala a qualcuno' },
   'notifications.safety.productReport': { en: 'Product-safety report {record} came in: assess it', it: 'È arrivata la segnalazione di sicurezza {record}: valutala' },
@@ -225,6 +226,16 @@ export function groupKeyFor(previous: { readonly groupKey: string | null; readon
   if (previous && now.getTime() - previous.createdAt.getTime() <= GROUP_WINDOW_MS) return previous.groupKey ?? previous.id
   return ownId
 }
+
+// ---- B-TH-045 (threads plan TH-3; production lane T6): one action that writes on several records at once (a note to N records, the
+// answer to N orders of one customer) names a batch; each reader's notifications of that batch and category are ONE group, whatever
+// their records — "mentioned you on 12 orders" is one bell item. Rows are per reader and made only for the records that reader may
+// read, so the group's count and newest record are that reader's own. The office bell (office) and the portal bell (partner) alike.
+export const batchGroupKey = (batchId: string, category: string): string => `batch:${batchId}:${category}`
+
+/** The number of different records among a group's rows (a batch group spans several; a record group one). */
+export const recordsInGroup = (rows: readonly { readonly recordType: string; readonly recordId: string }[]): number => new Set(rows.map((row) => `${row.recordType}:${row.recordId}`)).size
+// ---- end B-TH-045
 
 // ---- snooze (H: "until a time or new activity") ---------------------------------------------------------------------------
 

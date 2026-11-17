@@ -9,8 +9,8 @@ import type { Issue } from '../../core/errors'
  *
  * The TRANSACTIONAL topics (orders, shipped, invoices: "order, delivery and invoice mail always on") are locked on, as it
  * happens, with the reason "Needed to run your orders": the API never stores another value for them. Everything else is
- * non-essential: a daily summary by default, and one switch (or the unsubscribe link in every mail) turns all of it off
- * (GDPR). Notifications stay in the portal's bell whatever the e-mail settings say.
+ * non-essential: a daily summary by default — messages as it happens (B-TH-045) — and one switch (or the unsubscribe link in
+ * every mail) turns all of it off (GDPR). Notifications stay in the portal's bell whatever the e-mail settings say.
  */
 
 export const PARTNER_EMAIL_TOPICS = ['ORDERS', 'DATES', 'SHIPPED', 'INVOICES', 'CLAIMS', 'DOCUMENTS', 'MESSAGES', 'REMINDERS'] as const
@@ -25,6 +25,15 @@ export const NON_ESSENTIAL_TOPICS: readonly PartnerEmailTopic[] = Object.freeze(
 /** A transactional topic's one frequency; a non-essential topic's default (no row). */
 export const TRANSACTIONAL_FREQUENCY: PartnerEmailFrequency = 'INSTANT'
 export const DEFAULT_FREQUENCY: PartnerEmailFrequency = 'DAILY'
+
+// ---- B-TH-045 (threads plan TH-3, thread-G05; Owner decision 5): a message from us waits for its answer, so a person with no
+// setting of their own hears of it AS IT HAPPENS (a daily summary would delay the answer by a day). Every other non-essential
+// topic keeps the daily summary; a stored setting (or the one switch, or the unsubscribe link) always wins.
+export const DEFAULT_FREQUENCIES: Readonly<Partial<Record<PartnerEmailTopic, PartnerEmailFrequency>>> = Object.freeze({ MESSAGES: 'INSTANT' })
+
+/** A non-essential topic's default when the person stored none. */
+export const defaultFrequencyOf = (topic: PartnerEmailTopic): PartnerEmailFrequency => DEFAULT_FREQUENCIES[topic] ?? DEFAULT_FREQUENCY
+// ---- end B-TH-045
 
 export const LOCKED_REASON = { it: 'Servono per gestire i tuoi ordini.', en: 'Needed to run your orders.' } as const
 
@@ -42,10 +51,10 @@ export const TOPIC_WORDS: Readonly<Record<PartnerEmailTopic, { readonly it: stri
 export const isTopic = (value: unknown): value is PartnerEmailTopic => typeof value === 'string' && (PARTNER_EMAIL_TOPICS as readonly string[]).includes(value)
 export const isFrequency = (value: unknown): value is PartnerEmailFrequency => typeof value === 'string' && (PARTNER_EMAIL_FREQUENCIES as readonly string[]).includes(value)
 
-/** How often a topic reaches the person: a transactional one always as it happens; else the stored row, else daily. */
+/** How often a topic reaches the person: a transactional one always as it happens; else the stored row, else its default (B-TH-045). */
 export function frequencyOf(topic: PartnerEmailTopic, stored: ReadonlyMap<PartnerEmailTopic, PartnerEmailFrequency>): PartnerEmailFrequency {
   if (isTransactional(topic)) return TRANSACTIONAL_FREQUENCY
-  return stored.get(topic) ?? DEFAULT_FREQUENCY
+  return stored.get(topic) ?? defaultFrequencyOf(topic)
 }
 
 /** Every topic with its frequency, whether it is locked, and whether it is the default (no row). */

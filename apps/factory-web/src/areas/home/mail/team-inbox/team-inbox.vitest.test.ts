@@ -118,7 +118,7 @@ describe('the queue’s rules', () => {
 
 describe('Create an inquiry and the capture address', () => {
   it('Create an inquiry links to Sales › Inquiries with the mail, held without the right, once made, or for a mail not read', () => {
-    expect(inquiryHref('/w/DEMO', 'm 1')).toBe('/w/DEMO/sales/inquiries?mail=m%201')
+    expect(inquiryHref('/w/DEMO', 'm 1')).toBe('/w/DEMO/sales/incoming?mail=m%201')
     expect(inquiryHeld({ status: 'TRIAGE' }, true)).toBeNull()
     expect(inquiryHeld({ status: 'MATCHED' }, true)).toBeNull()
     expect(inquiryHeld({ status: 'TRIAGE' }, false)).toBe('inquiry.held.noRight')

@@ -15,7 +15,7 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { snoozeOptions } from '../../../today/snooze'
 import { SnoozeDialog } from '../../../today/view/SnoozeDialog'
-import { inquiryHeld, inquiryHref } from '../../create-inquiry/model'
+import { incomingHref, inquiryHeld, inquiryHref } from '../../create-inquiry/model'
 import type { WorkChange } from '../api'
 import { bulkReach, moveTargets, QUEUE_VIEWS, stateWords, untilHeld, verbHeld, viewCount, type QueueMail, type QueueView, type RowVerb, type TeamInbox, type TeamInboxDialog, type TeamInboxModel } from '../model'
 import '../team-inbox.css'
@@ -116,7 +116,7 @@ export function TeamInboxQueue({ model, actions }: { model: TeamInboxModel; acti
       if (!data) return null
       if (data.inquiry)
         return (
-          <a className="fw-tin-link" href={`${model.prefix}${recordAddress({ type: 'Inquiry', id: data.inquiry.id }, OFFICE_PAGES)}`}>
+          <a className="fw-tin-link" href={incomingHref(model.prefix, data.inquiry.id) /* B-TH-224 */} title={t('verb.openInquiry', { number: data.inquiry.number })}>
             {t('inbox.inquiryMade', { number: data.inquiry.number })} <ExternalLink size={11} aria-hidden />
           </a>
         )
@@ -155,7 +155,8 @@ export function TeamInboxQueue({ model, actions }: { model: TeamInboxModel; acti
         data.followUpUntil ? verbItem(data, 'clearFollowUp', t('verb.clearFollowUp'), () => run([data.id], { kind: 'followUp', until: null })) : verbItem(data, 'followUp', t('verb.followUp'), () => open({ kind: 'followUp', id: data.id })),
         verbItem(data, 'move', t('verb.move'), () => open({ kind: 'move', ids: [data.id] })),
       ]
-      if (data.inquiry) items.push({ id: 'inquiry', label: t('verb.openInquiry', { number: data.inquiry.number }), href: `${model.prefix}${recordAddress({ type: 'Inquiry', id: data.inquiry.id }, OFFICE_PAGES)}` })
+      // B-TH-224: a mail made into a request opens it in Incoming (beside the list), where it is answered.
+      if (data.inquiry) items.push({ id: 'inquiry', label: t('verb.openInquiry', { number: data.inquiry.number }), href: incomingHref(model.prefix, data.inquiry.id) })
       else {
         const held = inquiryHeld({ status: data.status, inquiry: data.inquiry }, model.canInquiry)
         items.push(held ? { id: 'inquiry', label: t('verb.createInquiry'), disabled: true, description: t(held) } : { id: 'inquiry', label: t('verb.createInquiry'), href: inquiryHref(model.prefix, data.id) })

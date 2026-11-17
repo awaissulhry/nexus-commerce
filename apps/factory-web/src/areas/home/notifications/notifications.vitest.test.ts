@@ -134,9 +134,24 @@ describe('the rules of the screen', () => {
     expect(openAddress({ ...base, anchor: 'today:MENTION:so1:n1' }, built)).toBe(`/home/today?open=${encodeURIComponent('MENTION:so1:n1')}`)
     expect(openAddress({ ...base, anchor: 'approval:r1' }, built)).toBe('/home/approvals?open=r1')
     expect(openAddress({ ...base, anchor: 'alert:a1' }, built)).toMatch(/^\/(home\/alerts\?open=a1|records\/Alert\/a1)/)
-    expect(openAddress({ ...base, anchor: 'message:m1' }, built)).toBe('/sales/orders/so1')
+    // B-TH-224 (thread-G03): a notice about a message opens that exact message.
+    expect(openAddress({ ...base, anchor: 'message:m1' }, built)).toBe('/sales/orders/so1?message=m1')
     expect(openAddress({ ...base, anchor: null }, built)).toBe('/sales/orders/so1')
   })
+
+  // ── B-TH-224 (threads plan TH-1b): the bell points at Incoming ──
+  it('a request opens beside its list in Incoming, at its message when the notice names one; the new-request words name no customer words', () => {
+    const request = { ...base, record: { type: 'Inquiry', id: 'r 1', label: 'INQ-2026-0007' } }
+    expect(openAddress({ ...request, anchor: null }, OFFICE_PAGES)).toBe('/sales/incoming?open=r%201')
+    expect(openAddress({ ...request, anchor: 'message:m1' }, OFFICE_PAGES)).toBe('/sales/incoming?open=r%201&message=m1')
+    // Without the Incoming page built (another app, a test) the record's own page.
+    expect(openAddress({ ...request, anchor: 'message:m1' }, new Set(['/sales/incoming/[id]']))).toBe('/sales/incoming/r%201?message=m1')
+    const en = createTranslator('en', CATALOGUE.en['home-notifications']!)
+    const newRequest = sentenceWords({ ...request, messageKey: 'notifications.inquiries.newRequest', params: {}, actor: null, people: {} } as never, en, 'en')
+    expect(newRequest).toBe('New request INQ-2026-0007 came in: take it or give it to someone')
+    expect(sentenceWords({ ...request, messageKey: 'notifications.inquiries.assigned', params: { actorId: 'u1' }, actor: null, people: { u1: 'Marco Demo' } } as never, en, 'en')).toBe('Marco Demo gave you request INQ-2026-0007')
+  })
+  // ── end B-TH-224 ──
 
   it('the keys: e done, h snooze, m mute, ⇧E mark all read; writes held offline or while one is sent', () => {
     expect(pageKey({ key: 'e', shiftKey: false })).toBe('done')

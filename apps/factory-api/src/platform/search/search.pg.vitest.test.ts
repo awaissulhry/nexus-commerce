@@ -124,6 +124,8 @@ describe('the index (worker side)', () => {
       ...['ProductSafetyReport'],
       // B-W2b-383: transfers between sites (Warehouse › Transfers, B-W2b-326).
       ...['TransferOrder'],
+      // B-TH-040: catalogue orders (orders.view); B-TH-097: the messages of record threads (threads.read, found only when asked).
+      ...['PortalOrderRequest', 'Message'],
     ].sort())
     const handlers = searchHandlers(indexers)
     expect(handlers.map((handler) => handler.name)).toEqual([INDEX_HANDLER, REBUILD_HANDLER])
@@ -272,7 +274,8 @@ describe('GET /search (the reader side)', () => {
 
   it('shows only what the reader may open: their view permissions over their companies, sites and parties', async () => {
     const salesB = await search('salesB', 'q=seed&limit=100')
-    expect(salesB.results.every((row: Json) => ['SalesOrder', 'Quote', 'Party'].includes(row.recordType))).toBe(true)
+    // B-TH-040: a catalogue order is read with orders.view, as the office's request list.
+    expect(salesB.results.every((row: Json) => ['SalesOrder', 'Quote', 'Party', 'PortalOrderRequest'].includes(row.recordType))).toBe(true)
     expect(salesB.results.filter((row: Json) => row.recordType !== 'Party').every((row: Json) => row.companyId === companyB)).toBe(true)
     expect(salesB.results.map((row: Json) => row.recordId)).not.toContain(id('sales:SO1'))
     const warehouse = await search('warehouseA1', 'q=seed&limit=100')
@@ -281,7 +284,7 @@ describe('GET /search (the reader side)', () => {
     expect(warehouse.results.every((row: Json) => ['Lot', 'Hide', 'GoodsReceipt', 'TransferOrder'].includes(row.recordType) && (row.siteId === siteA1 || row.siteId === null))).toBe(true)
     const p1 = await search('partyP1', 'q=seed&limit=100')
     expect(p1.results.length).toBeGreaterThan(0)
-    expect(p1.results.every((row: Json) => row.recordId === id('party:P1') || row.recordType === 'SalesOrder')).toBe(true)
+    expect(p1.results.every((row: Json) => row.recordId === id('party:P1') || row.recordType === 'SalesOrder' || row.recordType === 'PortalOrderRequest')).toBe(true)
     expect((await search('nobody', 'q=seed')).results).toEqual([])
     const other = await search('other', 'q=seed')
     expect(other).toMatchObject({ results: [], total: 0, asOf: null })
