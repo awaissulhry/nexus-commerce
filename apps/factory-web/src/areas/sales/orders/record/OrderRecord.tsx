@@ -86,9 +86,12 @@ import { printHref } from '../../../../shell/print/print-model'
 /** B-W2b-380: no lines yet (the order is read). */
 const NO_LINES: readonly never[] = []
 
+/** The catalogues the order's page loads (W1 browser repair: its tests draw the record with these, as the page does). */
+export const RECORD_NAMESPACES = ['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */] as const
+
 export function OrderRecord({ orderId }: { orderId: string }) {
   return (
-    <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */]}>
+    <WithMessages namespaces={RECORD_NAMESPACES}>
       <RecordContainer orderId={orderId} />
     </WithMessages>
   )
