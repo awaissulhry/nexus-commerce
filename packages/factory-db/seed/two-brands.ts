@@ -26,6 +26,10 @@ import { seed as seedRoles } from './roles'
  *   portal       Seed Brand Two's people: the fixture's buyer gets the Buyer role, plus a Viewer and a Designer (ACTIVE, e-mail
  *                code only); its portal settings with the portal OFF (every customer ships OFF: Owner answer C1; the walk
  *                switches it on) and the three roles allowed.
+ *   B-PR-15      (production plan, schema wave 3/5; the seeds B-PR-14 left) a fourth person of Seed Brand Two with the customer
+ *                Production role (customer-production: its orders in production, no prices), that role allowed too, and
+ *                its share level PROGRESS (production progress shared: progressShared in step). P1 keeps STATUS: the portal
+ *                golden flow and the portal-orders tests read its progress as not shared, and its people fill its seats.
  *
  * Local and test databases only: the seed CLI refuses any other (src/cli.ts assertTestDatabaseUrl). Runs the auth, roles,
  * files and production seeds first (each idempotent). Every name, address and number is invented (`example.com`). Ids start
@@ -59,7 +63,7 @@ export interface TwoBrandsSeed {
   readonly salesOrderLineId: string
   readonly workOrderIds: { readonly inProduction: string; readonly draft: string }
   readonly officeUserId: string
-  readonly portalUserIds: { readonly buyer: string; readonly viewer: string; readonly designer: string }
+  readonly portalUserIds: { readonly buyer: string; readonly viewer: string; readonly designer: string; readonly production: string } // B-PR-15: + production
 }
 
 export async function seed(context: SeedContext): Promise<TwoBrandsSeed> {
@@ -87,7 +91,7 @@ export async function seed(context: SeedContext): Promise<TwoBrandsSeed> {
     salesOrderLineId: lineId,
     workOrderIds: { inProduction: id('work-order:WO-B001'), draft: id('work-order:WO-B002') },
     officeUserId: id('user:office'),
-    portalUserIds: { buyer: second.userId, viewer: id('user:viewer'), designer: id('user:designer') },
+    portalUserIds: { buyer: second.userId, viewer: id('user:viewer'), designer: id('user:designer'), production: id('user:production') /* B-PR-15 */ },
   }
   const stamp = (at: Date) => ({ createdAt: at, updatedAt: at, createdById: actorId })
   const select = { id: true } as const
@@ -173,6 +177,8 @@ export async function seed(context: SeedContext): Promise<TwoBrandsSeed> {
         { id: made.officeUserId, email: `brand-two.office.${namespace}@example.com`, displayName: 'Seed Brand Two Office', status: UserStatus.ACTIVE, requireMfa: false },
         { id: made.portalUserIds.viewer, email: `viewer.second-brand.${namespace}@example.com`, displayName: 'Seed Second Brand Viewer', status: UserStatus.ACTIVE, audience: UserAudience.PARTNER, partyId, partnerKind: 'CUSTOMER' as const, locale: 'en' },
         { id: made.portalUserIds.designer, email: `designer.second-brand.${namespace}@example.com`, displayName: 'Seed Second Brand Designer', status: UserStatus.ACTIVE, audience: UserAudience.PARTNER, partyId, partnerKind: 'CUSTOMER' as const, locale: 'it' },
+        // B-PR-15: the customer's Production person.
+        { id: made.portalUserIds.production, email: `production.second-brand.${namespace}@example.com`, displayName: 'Seed Second Brand Production', status: UserStatus.ACTIVE, audience: UserAudience.PARTNER, partyId, partnerKind: 'CUSTOMER' as const, locale: 'it' },
       ]
       for (const { id: userId, ...data } of people) {
         await tx.user.upsert({ where: { id: userId }, create: { id: userId, ...data, createdAt: T.setup, createdById: actorId }, update: data, select })
@@ -183,13 +189,15 @@ export async function seed(context: SeedContext): Promise<TwoBrandsSeed> {
         { key: 'buyer', userId: made.portalUserIds.buyer, role: 'customer-buyer' },
         { key: 'viewer', userId: made.portalUserIds.viewer, role: 'customer-viewer' },
         { key: 'designer', userId: made.portalUserIds.designer, role: 'customer-designer' },
+        { key: 'production', userId: made.portalUserIds.production, role: 'customer-production' }, // B-PR-15
       ]
       for (const { key, role, userId } of assignments) {
         const assignmentId = id(`assignment:${key}`)
         const row = { userId, roleId: roleIds[role]!, allCompanies: true, companyIds: [], siteIds: [], partyIds: [partyId], validFrom: T.setup, grantedById: actorId }
         await tx.roleAssignment.upsert({ where: { id: assignmentId }, create: { id: assignmentId, ...row, createdAt: T.setup }, update: row, select })
       }
-      const settings = { partyId, portalOn: false, progressShared: false, maxUsers: 5, allowedRoleKeys: ['customer-buyer', 'customer-viewer', 'customer-designer'] }
+      // B-PR-15: + the Production role; its share level PROGRESS, so progressShared on (the database keeps the two in step).
+      const settings = { partyId, portalOn: false, progressShared: true, productionLevel: 'PROGRESS' as const, maxUsers: 5, allowedRoleKeys: ['customer-buyer', 'customer-viewer', 'customer-designer', 'customer-production'] }
       // ---- th3b fix: ONE row per party, its id the party's (the PortalSettings convention, B-W2b-152; the party's id starts with
       // ffffffff too). A second row of the party under another id made "switch the portal on" fail (the office's settings read by
       // the party, then updated by the party's id) and the portal's on/off read either row (order-news T06 red with this seed).

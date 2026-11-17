@@ -275,15 +275,23 @@ describe('the brand wall walk seed (B-PR-39)', () => {
     const people = await admin(
       `SELECT u.id::text AS id, u.audience::text AS audience, u."partyId"::text AS party, r.key, a."partyIds"::text[] AS "partyIds"
          FROM "User" u JOIN "RoleAssignment" a ON a."userId" = u.id AND a."endedAt" IS NULL JOIN "Role" r ON r.id = a."roleId" WHERE u.id = ANY($1::uuid[]) ORDER BY r.key`,
-      [[made.officeUserId, made.portalUserIds.buyer, made.portalUserIds.viewer, made.portalUserIds.designer]],
+      [[made.officeUserId, made.portalUserIds.buyer, made.portalUserIds.viewer, made.portalUserIds.designer, made.portalUserIds.production]],
     )
     expect(people).toEqual([
       { id: made.portalUserIds.buyer, audience: 'PARTNER', party: second, key: 'customer-buyer', partyIds: [second] },
       { id: made.portalUserIds.designer, audience: 'PARTNER', party: second, key: 'customer-designer', partyIds: [second] },
+      // B-PR-15: the customer's Production person (the seeds B-PR-14 left).
+      { id: made.portalUserIds.production, audience: 'PARTNER', party: second, key: 'customer-production', partyIds: [second] },
       { id: made.portalUserIds.viewer, audience: 'PARTNER', party: second, key: 'customer-viewer', partyIds: [second] },
       { id: made.officeUserId, audience: 'OFFICE', party: null, key: 'production_manager', partyIds: [second] },
     ])
-    expect((await admin(`SELECT "portalOn", "allowedRoleKeys" FROM "PortalSettings" WHERE "partyId" = $1`, [second]))[0]).toEqual({ portalOn: false, allowedRoleKeys: ['customer-buyer', 'customer-viewer', 'customer-designer'] })
+    // B-PR-15: the Production role allowed too, and its share level PROGRESS (progressShared in step); the portal still OFF.
+    expect((await admin(`SELECT "portalOn", "allowedRoleKeys", "productionLevel"::text AS level, "progressShared" FROM "PortalSettings" WHERE "partyId" = $1`, [second]))[0]).toEqual({
+      portalOn: false,
+      allowedRoleKeys: ['customer-buyer', 'customer-viewer', 'customer-designer', 'customer-production'],
+      level: 'PROGRESS',
+      progressShared: true,
+    })
     // Idempotent: a second run adds nothing.
     const count = async () => (await admin(`SELECT (SELECT count(*) FROM "WorkOrder") + (SELECT count(*) FROM "WorkOrderSize") + (SELECT count(*) FROM "User") + (SELECT count(*) FROM "RoleAssignment") + (SELECT count(*) FROM "SalesOrderLine") AS n`))[0]!.n
     const before = await count()

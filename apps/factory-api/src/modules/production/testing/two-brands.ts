@@ -31,7 +31,12 @@ import type { World } from '../../../golden-flow/testing/world'
  *   - the sessions `office.all` (every customer), `office.p1` and `office.p2` (a grant limited to that customer);
  *   - `markersOf`: everything of a brand that must never reach the other — the threads' record markers (golden-flow portal
  *     testing/two-brands.ts recordMarkers: names, codes, numbers, references, file names, ids) and its work orders' numbers,
- *     batch numbers and ids; `findMarkers` (theirs) scans an answer for them.
+ *     batch numbers and ids; `findMarkers` (theirs) scans an answer for them;
+ *   - B-PR-15 (production plan schema wave 3/5; R-57: the seed's fixtures, seed/brand-production.ts): the production state of
+ *     both brands' orders — brand A's SEED-SO-0002 and its new order Urgent (1st and 2nd, one batch, marked by A), brand B's
+ *     SEED-SO-B001 set back to Regular and locked by us with the reason B reads — and brand B's open BRAND issue on its order,
+ *     raised with B's own portal message in the order's thread, with its Task (record = the SALES ORDER). Office only, but the
+ *     production state, which each brand reads of its own orders.
  *
  * Needs the core, files, production and numbering seeds of the namespace first, and an app whose test authenticator knows
  * `office.all` (twoBrandSessions). Every name, address and number is invented (`example.com`; no real company).
@@ -60,6 +65,20 @@ export interface ProductionTwoBrands {
   readonly second: SecondBrand
   /** A work order of no customer made before the rule: a cell of each brand ("Mixed brands (made before the rule)"). */
   readonly mixed: { readonly workOrderId: string; readonly number: string }
+  /** B-PR-15: the production state of both brands' orders and brand B's open issue. */
+  readonly production: BrandProductionRows
+}
+
+/** B-PR-15: what productionTwoBrands writes of the brands' production state (seed/brand-production.ts's fixtures). */
+export interface BrandProductionRows {
+  /** Brand A's two Urgent orders, in its Urgent list's order (SEED-SO-0002 1st, its new order 2nd), marked in one batch. */
+  readonly urgent: readonly [string, string]
+  readonly batchId: string
+  /** Brand B's order, set back to Regular and locked by us with the reason B reads. */
+  readonly locked: string
+  readonly lockReason: string
+  /** Brand B's open BRAND issue on its order, its task and the portal message it was raised with. */
+  readonly issue: { readonly id: string; readonly taskId: string; readonly messageId: string }
 }
 
 const grantOf = (permissions: readonly Permission[], parties: Grant['parties']): Grant => ({ permissions: [...permissions], companies: 'all', sites: 'all', parties })
@@ -147,8 +166,99 @@ export async function productionTwoBrands(t: { readonly db: MigratedDatabase; re
      ${cellOf(beta.workOrderId, newId(), '52')}
      COMMIT;`,
   )
-  return { tenantId, companyId, siteId, styleId, a: alpha, b: beta, second, mixed }
+  const production = await brandProductionRows(t, { tenantId, companyId, actorId, a: alpha, b: beta, second, so2: id('production:sales-order:SO-0002') })
+  return { tenantId, companyId, siteId, styleId, a: alpha, b: beta, second, mixed, production }
 }
+
+// ── B-PR-15: the brands' production state (seed/brand-production.ts's fixtures, R-57) ────────────────────────────────────────
+/**
+ * Writes, in the office scope as the app does: brand A's SEED-SO-0002 and its new order Urgent (1st, 2nd; one batch; marked by
+ * A, no person named: the harness has no portal person of A), brand B's SEED-SO-B001 Regular and locked by us, waiting on us;
+ * brand B's open BRAND issue with its Task, made from B's own portal message in the order's thread (the second brand's fixture).
+ * An order that has a production state already (a harness that ran seed/brand-production.ts) takes the fixture's state.
+ */
+async function brandProductionRows(
+  t: { readonly database: FactoryDatabase; readonly namespace: string },
+  of: { readonly tenantId: string; readonly companyId: string; readonly actorId: string; readonly a: BrandInProduction; readonly b: BrandInProduction; readonly second: SecondBrand; readonly so2: string },
+): Promise<BrandProductionRows> {
+  const fixed = (key: string) => seedUuid(t.namespace, `two-brands:production:${key}`)
+  const at = new Date('2026-11-13T09:00:00.000Z')
+  const reported = new Date('2026-10-29T08:20:00.000Z')
+  const batchId = fixed('batch:A')
+  const lockReason = 'Made-up: this order waits for its deposit; we plan it as soon as it is paid.'
+  const issue = { id: fixed('issue:B'), taskId: fixed('task:B'), messageId: of.second.messageIds[1]! }
+  const marked = { urgency: 'URGENT' as const, urgencySetAt: at, urgencySetBy: 'BRAND' as const, urgencySetById: null, urgencyBatchId: batchId, urgencyLocked: false, urgencyLockReason: null, urgencyLockedAt: null, urgencyLockedById: null }
+  const rows = [
+    { salesOrderId: of.so2, partyId: of.a.partyId, state: { ...marked, urgentRank: 1, waitingOn: 'US' as const, waitingSince: at } },
+    { salesOrderId: of.a.salesOrderId, partyId: of.a.partyId, state: { ...marked, urgentRank: 2, waitingOn: 'US' as const, waitingSince: at } },
+    {
+      salesOrderId: of.b.salesOrderId,
+      partyId: of.b.partyId,
+      state: {
+        urgency: 'REGULAR' as const,
+        urgentRank: null,
+        urgencySetAt: at,
+        urgencySetBy: 'FACTORY' as const,
+        urgencySetById: of.actorId,
+        urgencyBatchId: fixed('batch:B:lock'),
+        urgencyLocked: true,
+        urgencyLockReason: lockReason,
+        urgencyLockedAt: at,
+        urgencyLockedById: of.actorId,
+        waitingOn: 'US' as const,
+        waitingSince: reported,
+      },
+    },
+  ]
+  await t.database.withScope({ audience: 'office', tenantId: of.tenantId, actorId: of.actorId }, (client) =>
+    client.$transaction(async (tx) => {
+      for (const { salesOrderId, partyId, state } of rows) {
+        const key = `brand-production:${salesOrderId}`
+        const existing = await tx.brandOrderProduction.findFirst({ where: { key }, select: { id: true, version: true } })
+        if (existing) await tx.brandOrderProduction.update({ where: { id: existing.id }, data: { ...state, version: existing.version + 1 }, select: { id: true } })
+        else await tx.brandOrderProduction.create({ data: { id: newId(), companyId: of.companyId, partyId, salesOrderId, key, ...state, createdById: of.actorId }, select: { id: true } })
+      }
+      if (!(await tx.task.findUnique({ where: { id: issue.taskId }, select: { id: true } }))) {
+        await tx.task.create({
+          data: {
+            id: issue.taskId,
+            companyId: of.companyId,
+            partyId: of.b.partyId,
+            title: 'Made-up: answer the problem the customer reported',
+            recordType: 'SalesOrder',
+            recordId: of.b.salesOrderId,
+            recordLabel: 'SEED-SO-B001',
+            dueDate: new Date('2026-10-30T00:00:00.000Z'),
+            messageId: issue.messageId,
+            createdById: of.actorId,
+          },
+          select: { id: true },
+        })
+      }
+      if (!(await tx.productionIssue.findUnique({ where: { id: issue.id }, select: { id: true } }))) {
+        await tx.productionIssue.create({
+          data: {
+            id: issue.id,
+            companyId: of.companyId,
+            partyId: of.b.partyId,
+            recordType: 'SalesOrder',
+            recordId: of.b.salesOrderId,
+            salesOrderId: of.b.salesOrderId,
+            taskId: issue.taskId,
+            messageId: issue.messageId,
+            source: 'BRAND',
+            raisedAt: reported,
+            dueDate: new Date('2026-10-30T00:00:00.000Z'),
+            createdById: of.actorId,
+          },
+          select: { id: true },
+        })
+      }
+    }),
+  )
+  return { urgent: [of.so2, of.a.salesOrderId], batchId, locked: of.b.salesOrderId, lockReason, issue }
+}
+// ── end B-PR-15 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
  * Everything of a customer that must never reach another: the threads' record markers (its names, code, contacts, addresses,
