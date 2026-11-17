@@ -28,6 +28,8 @@
  *   --stages  run only these stages (comma-separated names); the others are skipped.
  *   --attach  with --shots of a kept run: run the spec again on that stack and web, the flow's state read back from
  *             <shots>/state.json (to work on one stage without walking the ones before it); add --stop to stop them.
+ * Env: FACTORY_BGF_PORTS=<api>,<control>,<web> (default 8276,8277,3276), FACTORY_BGF_PREFIX (queue prefix, default w106) and
+ *      FACTORY_BGF_REDIS_URL (default redis://127.0.0.1:6399): a worktree's own, to run beside another worktree's flow.
  * Exit 1 when a stage or an end check fails, or the stack is not usable. Never touches a database it did not make.
  */
 import { spawn, spawnSync } from 'node:child_process'
@@ -46,9 +48,16 @@ const WEB = join(ROOT, 'apps/factory-web')
 const API = join(ROOT, 'apps/factory-api')
 const HARNESS = join(WEB, 'tests/golden-flow/_harness')
 const BIN = join(ROOT, 'node_modules/.bin')
-const PORTS = { api: 8276, control: 8277, web: 3276 }
-const PREFIX = 'w106'
-const REDIS_URL = 'redis://127.0.0.1:6399'
+// The run's ports, queue prefix and Redis: these defaults, or a worktree's own (FACTORY_BGF_PORTS=<api>,<control>,<web>,
+// FACTORY_BGF_PREFIX, FACTORY_BGF_REDIS_URL), so two worktrees can run the flow side by side without touching each other.
+const [apiPort, controlPort, webPort] = (process.env.FACTORY_BGF_PORTS ?? '8276,8277,3276').split(',').map(Number)
+const PORTS = { api: apiPort, control: controlPort, web: webPort }
+const PREFIX = process.env.FACTORY_BGF_PREFIX ?? 'w106'
+const REDIS_URL = process.env.FACTORY_BGF_REDIS_URL ?? 'redis://127.0.0.1:6399'
+if (![apiPort, controlPort, webPort].every((port) => Number.isInteger(port) && port > 0) || !/^[a-z0-9]+$/.test(PREFIX)) {
+  console.error('browser-golden-flow: FACTORY_BGF_PORTS is three ports (api,control,web) and FACTORY_BGF_PREFIX letters and digits')
+  process.exit(1)
+}
 // Pages the flow opens, compiled once before the spec so a first visit does not wait for the dev compiler.
 const WARM = ['/sign-in', '/l', '/floor', '/floor/enrol', '/floor/sign-in', '/w/SCA/home/today', '/w/SCA/sales/customers', '/w/SCA/products/styles', '/w/SCA/compliance/certificates', '/w/SCA/sales/quotes', '/w/SCA/sales/orders', '/w/SCA/planning/mrp', '/w/SCA/purchasing/orders', '/w/SCA/production/work-orders', '/w/SCA/warehouse/shipping', '/w/SCA/finance/invoices', '/w/SCA/finance/payments', '/w/SCA/admin/devices', '/w/SCA/admin/users']
 

@@ -26,7 +26,8 @@
   "notice": {
     "moved": "The firm planned order of {material} now comes {date}.",
     "sent_one": "{count} purchase order sent: its supplier gets the order and the link to confirm.",
-    "sent_other": "{count} purchase orders sent: each supplier gets its order and the link to confirm."
+    "sent_other": "{count} purchase orders sent: each supplier gets its order and the link to confirm.",
+    "unfirmed": "{material} is planned again: Draft PO buys what the plan suggests for every order."
   },
   "view": {
     "shortWo": "Short on open work orders"
@@ -138,5 +139,9 @@
       "forbidden": "Not sent: your role cannot send it",
       "other": "Not sent: open it to see why"
     }
+  },
+  "unfirm": {
+    "menu": "Plan it again (not firm)",
+    "hint": "Draft PO then buys {quantity} {unit}, what the plan suggests for every order."
   }
 }

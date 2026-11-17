@@ -283,6 +283,13 @@ export async function firmLine(api: ApiClient, requirementId: string, body: { ve
   return (await api.post(`/planning/requirements/${encodeURIComponent(requirementId)}/firm`, { body, schema: z.object({ line: lineSchema, replayed: z.boolean() }), idempotencyKey: newIdempotencyKey() })).line
 }
 
+// ── W1-BGF (the W1 browser stages' repair): a firm Buy line planned again on the screen ──
+/** A line's firm planned order taken back (B-W2a-22's unfirm): the line follows the plan again, Draft PO buys what it suggests. */
+export async function unfirmLine(api: ApiClient, requirementId: string, version: number): Promise<PlanLine> {
+  return (await api.post(`/planning/requirements/${encodeURIComponent(requirementId)}/unfirm`, { body: { version }, schema: z.object({ line: lineSchema, replayed: z.boolean() }), idempotencyKey: newIdempotencyKey() })).line
+}
+// ── end W1-BGF ──
+
 const refusedSchema = z.object({ code: z.string(), message: z.string(), issues: z.array(z.object({ path: z.string(), message: z.string() })) })
 const sendCardSchema = z.object({
   id: z.string(),
