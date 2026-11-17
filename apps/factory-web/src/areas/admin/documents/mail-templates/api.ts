@@ -1,8 +1,11 @@
 import { z } from 'zod'
 import { MAIL_EVENTS } from '@nexus/factory-domain/templates/mail'
 import { TEMPLATE_LANGUAGES } from '@nexus/factory-domain/templates/language'
+// th-backend-g step 3 (B-TH-098's web half): a mail's words in the five message languages; German, French and Spanish start from
+// Claude's drafts, "to be read once" until LANGUAGE_REVIEW names who read them.
+import { MESSAGE_LANGUAGES, type MessageLanguage } from '@nexus/factory-domain/templates/message-languages'
 import { newIdempotencyKey, type ApiClient } from '../../../../lib/api/client'
-import { personSchema, slotVersionSchema, TEMPLATE_STATUSES, type TemplateLanguage } from '../doc-templates/api'
+import { personSchema, slotVersionSchema, TEMPLATE_STATUSES } from '../doc-templates/api'
 
 /**
  * E-mail templates' calls (B-W2b-432 on B-W2b-422's API): the events whose mail takes a template (placeholders, the code's
@@ -37,7 +40,7 @@ export type EmailTemplate = z.infer<typeof emailTemplateSchema>
 const pairSchema = z.object({ active: slotVersionSchema.nullable(), draft: slotVersionSchema.nullable() })
 export const mailSlotSchema = z.object({
   event: z.enum(MAIL_EVENTS),
-  language: z.enum(TEMPLATE_LANGUAGES),
+  language: z.enum(MESSAGE_LANGUAGES), // th-backend-g step 3
   inUse: z.enum(IN_USE),
   company: pairSchema,
   all: pairSchema,
@@ -53,9 +56,18 @@ export const mailEventSchema = z.object({
   recordType: z.string(),
   placeholders: z.array(z.string()),
   words: z.record(z.string(), z.object({ subject: z.string(), body: z.string() })),
+  /** th-backend-g step 3: the code's words in German, French and Spanish — Claude's drafts (absent: an answer of before). */
+  drafts: z.record(z.string(), z.object({ subject: z.string(), body: z.string() })).optional(),
 })
 export type MailEventInfo = z.infer<typeof mailEventSchema>
-const eventsAnswer = z.object({ events: z.array(mailEventSchema), languages: z.array(z.enum(TEMPLATE_LANGUAGES)) })
+const reviewSchema = z.object({ readBy: z.string().nullable(), readOn: z.string().nullable() })
+const eventsAnswer = z.object({
+  events: z.array(mailEventSchema),
+  languages: z.array(z.enum(TEMPLATE_LANGUAGES)),
+  // ---- th-backend-g step 3: the five message languages and who read each drafted one once (readBy null: to be read once).
+  messageLanguages: z.array(z.enum(MESSAGE_LANGUAGES)).optional(),
+  review: z.object({ de: reviewSchema, fr: reviewSchema, es: reviewSchema }).optional(),
+})
 export type MailEventsAnswer = z.infer<typeof eventsAnswer>
 
 const oneAnswer = z.object({ template: emailTemplateSchema, mayManage: z.boolean() })
@@ -69,7 +81,7 @@ const path = (templateId: string, rest = '') => `/templates/mail/${encodeURIComp
 
 export const mailEvents = (api: ApiClient, signal?: AbortSignal) => api.get('/templates/mail/events', { schema: eventsAnswer, signal })
 
-export const listEmailTemplates = (api: ApiClient, query: { companyId: string; event?: MailEvent; language?: TemplateLanguage }, signal?: AbortSignal) =>
+export const listEmailTemplates = (api: ApiClient, query: { companyId: string; event?: MailEvent; language?: MessageLanguage }, signal?: AbortSignal) =>
   api.get('/templates/mail', { query, schema: listAnswer, signal })
 
 export const getEmailTemplate = (api: ApiClient, templateId: string, signal?: AbortSignal) => api.get(path(templateId), { schema: oneAnswer, signal })
@@ -79,7 +91,7 @@ export const previewEmailTemplate = (api: ApiClient, templateId: string, company
   api.post(path(templateId, '/preview'), { body: companyId ? { companyId } : {}, schema: previewAnswer })
 
 /** A new draft (companyId null: every company's), from `from`, else the version in use, else the code's words. */
-export const createEmailTemplate = (api: ApiClient, body: { companyId: string | null; event: MailEvent; language: TemplateLanguage; from?: string }, idempotencyKey: string = newIdempotencyKey()) =>
+export const createEmailTemplate = (api: ApiClient, body: { companyId: string | null; event: MailEvent; language: MessageLanguage; from?: string }, idempotencyKey: string = newIdempotencyKey()) =>
   api.post('/templates/mail', { body, idempotencyKey, schema: written }).then((answer) => answer.template)
 
 export const saveEmailTemplate = (api: ApiClient, template: Pick<EmailTemplate, 'id' | 'version'>, words: { subject?: string; body?: string }) =>

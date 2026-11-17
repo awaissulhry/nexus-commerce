@@ -141,7 +141,7 @@ export const emailTemplateView = output({
   /** null: every company's (a company's own wins). */
   companyId: id().nullable(),
   event: z.enum(MAIL_EVENTS),
-  /** As kept (two letters); the API writes Italian and English only. */
+  /** As kept (two letters); th-backend-g step 3: Italian, English, German, French or Spanish. */
   language: z.string(),
   revision: z.number().int(),
   status,
@@ -179,7 +179,8 @@ export const mailEventsContract = defineContract({
 })
 
 export const listEmailTemplatesContract = defineContract({
-  querystring: input({ companyId: id(), event: z.enum(MAIL_EVENTS).optional(), language: language.optional(), status: status.optional() }),
+  // th-backend-g step 3 (B-TH-098's web half): the five message languages.
+  querystring: input({ companyId: id(), event: z.enum(MAIL_EVENTS).optional(), language: messageLanguage.optional(), status: status.optional() }),
   response: {
     200: output({
       /** The company's own and every company's versions that match, newest first (at most 500). */
@@ -188,7 +189,7 @@ export const listEmailTemplatesContract = defineContract({
       slots: z.array(
         output({
           event: z.enum(MAIL_EVENTS),
-          language,
+          language: messageLanguage, // th-backend-g step 3
           inUse: z.enum(['COMPANY', 'ALL', 'CODE']),
           company: output({ active: slotVersion.nullable(), draft: slotVersion.nullable() }),
           all: output({ active: slotVersion.nullable(), draft: slotVersion.nullable() }),
@@ -207,7 +208,8 @@ export const createEmailTemplateContract = defineContract({
     /** null: every company's. */
     companyId: id().nullable(),
     event: z.enum(MAIL_EVENTS),
-    language,
+    /** th-backend-g step 3: any of the five message languages (German, French, Spanish start from Claude's drafts). */
+    language: messageLanguage,
     /** A version of the same event, company and language to start from; default the one in use, else the code's words. */
     from: id().optional(),
     subject: words(200).optional(),

@@ -6,7 +6,10 @@
     "newTab": "(si apre in una nuova scheda)",
     "language": {
       "it": "Italiano",
-      "en": "English"
+      "en": "English",
+      "de": "Deutsch",
+      "fr": "Français",
+      "es": "Español"
     },
     "status": {
       "DRAFT": "Bozza",
@@ -283,7 +286,9 @@
       "fallback": "Un documento stampato prima tiene l'impaginazione con cui è stato stampato; una nuova versione cambia solo ciò che si stampa da ora."
     },
     "mail": {
-      "allCompanies": "Tutte le società"
+      "allCompanies": "Tutte le società",
+      "draftUnread": "Bozza — da leggere una volta",
+      "draftUnreadHint": "Queste parole in {language} le ha scritte Claude: una e-mail che Nexus manda da sola le usa solo dopo che il titolare o un contatto fidato del cliente le ha lette; fino ad allora parte in inglese. Una versione scritta qui da una persona non va letta."
     },
     "mailList": {
       "intro": "Le parole delle e-mail che Nexus invia da solo, per evento e lingua. La versione di questa società prevale su quella di tutte le società; senza nessuna delle due partono le parole standard.",
@@ -511,7 +516,7 @@
       "deleteLeft_one": "1 risposta selezionata non è tua da eliminare: resta.",
       "deleteLeft_other": "{count} risposte selezionate non sono tue da eliminare: restano.",
       "deleteSharedAck": "Ho capito che anche l'ufficio perde quelle condivise",
-      "languages": "Le risposte salvate si scrivono in italiano o in inglese. A un contatto che legge un'altra lingua viene proposta quella inglese.",
+      "languages": "Le risposte salvate si scrivono in italiano, inglese, tedesco, francese o spagnolo, ognuna da una persona (mai tradotte). A un contatto che legge un’altra lingua viene proposta quella inglese.",
       "sendsNothing": "Una risposta salvata non invia nulla da sola: compila soltanto il messaggio che una persona poi legge, modifica e invia.",
       "newTitle": "Nuova risposta salvata",
       "editTitle": "Risposta salvata: {name}",
@@ -521,7 +526,7 @@
         "name": "Nome",
         "nameHint": "Come la si trova nel riquadro del messaggio, es. \"Ritardo di qualche giorno\".",
         "language": "Lingua",
-        "languageHint": "Italiano o inglese: il riquadro del messaggio la propone in quella lingua.",
+        "languageHint": "Una delle cinque: il riquadro del messaggio la propone per prima a un contatto che legge quella lingua.",
         "record": "Per",
         "recordHint": "Il tipo di documento su cui viene proposta, e quindi quali dati può compilare.",
         "shared": "Condividi con l'ufficio",

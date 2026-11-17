@@ -217,3 +217,25 @@ describe('th-backend-g step 2: the receipt of a request, in the customer’s lan
   })
 })
 // ---- end th-backend-g step 2
+
+// ---- th-backend-g step 3 (B-TH-098's web half: Admin › Documents › Mail templates takes the de / fr / es slots) -------------------
+describe('th-backend-g step 3: the mail templates keep the five languages', () => {
+  it('one slot per event and language; a new French version starts from Claude’s draft and previews; another language is refused', async () => {
+    const list = await owner.get(`/templates/mail?companyId=${companyId}`)
+    expect(list.status, JSON.stringify(list.body)).toBe(200)
+    expect(list.body.slots).toHaveLength(MAIL_EVENTS.length * 5)
+    expect(new Set(list.body.slots.map((slot: Json) => slot.language))).toEqual(new Set(['it', 'en', 'de', 'fr', 'es']))
+    // The company's own German receipt (step 2's test) is the one in use; French still reads the code's words (Claude's draft).
+    expect(list.body.slots.find((slot: Json) => slot.event === 'request.received' && slot.language === 'de')).toMatchObject({ inUse: 'COMPANY' })
+    expect(list.body.slots.find((slot: Json) => slot.event === 'request.need_info' && slot.language === 'fr')).toMatchObject({ inUse: 'CODE' })
+    const fr = await owner.post('/templates/mail', { companyId, event: 'request.need_info', language: 'fr' })
+    expect(fr.status, JSON.stringify(fr.body)).toBe(201)
+    expect(fr.body.template).toMatchObject({ language: 'fr', status: 'DRAFT', subject: MAIL_DRAFTS['request.need_info'].fr.subject, body: MAIL_DRAFTS['request.need_info'].fr.body })
+    const preview = await owner.post(`/templates/mail/${fr.body.template.id}/preview`, {})
+    expect(preview.status, JSON.stringify(preview.body)).toBe(200)
+    expect(preview.body.subject).toBe('Votre demande 7 : il nous manque encore quelque chose')
+    expect((await owner.get(`/templates/mail?companyId=${companyId}&language=fr`)).body.templates.map((template: Json) => template.language)).toEqual(['fr'])
+    expect((await owner.post('/templates/mail', { companyId, event: 'request.need_info', language: 'pt' })).status).toBe(400)
+  })
+})
+// ---- end th-backend-g step 3

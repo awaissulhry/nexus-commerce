@@ -18,6 +18,7 @@ import { documentTemplatePreviewHref, printsNowHref, type DocumentKind, type Doc
 import { documentChanges, documentProblems, droppedColumns, layoutColumns, newVersionHeld, partWhyKey, publishHeld, saveHeld, STATUS_TONE, toggleColumn, type DocumentDraft, type Said } from '../model'
 import { TemplateEditor, TemplateText } from './TemplateEditor'
 import { useTplWords } from './words'
+import { isMessageLanguage } from '@nexus/factory-domain/templates/message-languages' // th-backend-g step 3
 
 /**
  * SCR-631 — Template: Quote (Italiano) (B-W2b-432; design admin.documents pop:template-editor, a builder page; PLT-231):
@@ -80,7 +81,8 @@ export function DocTemplateEditorView({ model, actions }: { model: DocEditorMode
 /** "Quote", "Italiano": a kind and a language in words. */
 export function useKindWords() {
   const t = useTplWords()
-  return { kind: (kind: string) => t(`tpl.kind.${kind}`), language: (language: string) => t(`tpl.language.${language === 'en' ? 'en' : 'it'}`) }
+  // th-backend-g step 3 (B-TH-098): each of the five message languages by its own name; another code as written (upper case).
+  return { kind: (kind: string) => t(`tpl.kind.${kind}`), language: (language: string) => (isMessageLanguage(language) ? t(`tpl.language.${language}`) : language.toUpperCase()) }
 }
 
 function Editor({ model, actions }: { model: DocEditorModel; actions?: DocEditorActions }) {
