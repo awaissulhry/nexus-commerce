@@ -105,7 +105,8 @@ describe('the address: the tiles and saved rows are the API’s `view`, one chip
 
   it('a case opens its page; a row verb opens it with that verb’s dialog', () => {
     expect(recordHref(PREFIX, 'c1')).toBe(`${PREFIX}/sales/service/c1`)
-    expect(recordHref(PREFIX, 'c1', 'actions', 'repair')).toBe(`${PREFIX}/sales/service/c1?tab=actions&do=repair`)
+    // B-TH-259: Actions is part of Linked records & actions.
+    expect(recordHref(PREFIX, 'c1', 'linked', 'repair')).toBe(`${PREFIX}/sales/service/c1?tab=linked&do=repair`)
   })
 })
 
@@ -283,3 +284,46 @@ describe('every design case draws in both languages with no key left on screen',
     }
   }
 })
+
+// ---- B-TH-259 (threads plan TH-6; O-SAL-SVC; the rule of picture 38, the tabs of picture 39): the case on RecordFrame ---------------
+describe('B-TH-259 — the service case on RecordFrame: tabs 5 → 3, the status mails on Case, the thread docked', () => {
+  it('Case · Warranty check · Linked records & actions; Actions → Linked records & actions, Activity → Case (R-8), own keys only', async () => {
+    const { MERGED_TABS, RECORD_TABS, recordTabOf } = await import('./model')
+    expect(RECORD_TABS).toEqual(['case', 'warranty', 'linked'])
+    expect(MERGED_TABS).toEqual({ actions: 'linked', activity: 'case' })
+    expect(recordTabOf('actions')).toBe('linked')
+    expect(recordTabOf('activity')).toBe('case')
+    for (const odd of ['nope', 'constructor', 'toString', null, undefined]) expect(recordTabOf(odd as string | null)).toBe('case')
+    for (const locale of LOCALES) expect(CATALOGUE[locale]['sales-service']!['tab.linked'], locale).toBeTruthy()
+    expect(CATALOGUE.en['sales-service']!['tab.linked']).toBe('Linked records & actions')
+  })
+
+  it('the status mails sent to the customer are on Case now (R1-G04), with the thread docked beside it — ONE thread, R-ACT in its "⋯"', async () => {
+    const { renderView, textOf } = await import('../../../lib/record-thread/parts/testing')
+    const { designScreen: caseScreen } = await import('./record/fixtures')
+    const draw = (id: string) => renderView(caseScreen.view as ComponentType<{ model: unknown }>, caseScreen.cases.find((item) => item.id === id)!.model, 'en')
+    const html = draw('activity')
+    expect(html).toContain('id="svc-mails"')
+    expect(html.match(/class="fw-rcf-dock"/g)?.length).toBe(1)
+    expect(html).toContain('aria-label="Thread tools"')
+    expect(textOf(html.slice(0, html.indexOf('class="fw-rcf-dock"')))).not.toMatch(/\bActivity\b/)
+    // Linked records & actions: the records, then the actions that make one.
+    expect(draw('actions')).toContain('class="fw-rcf-dock"')
+    // A rider's case: the thread holds notes only; without threads.read no thread.
+    expect(draw('thread-no-right')).not.toContain('class="fw-rcf-dock"')
+  })
+
+  it('the page mounts the case’s thread docked with its own customer only, with threads.read', async () => {
+    const { readFileSync } = await import('node:fs')
+    const source = readFileSync(new URL('./record/ServiceRecord.tsx', import.meta.url), 'utf8')
+    expect(source).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(source).toContain("type: 'ServiceCase'")
+    expect(source).toContain('partyRole="customer"')
+    expect(source).toContain('can.threads')
+    const view = readFileSync(new URL('./record/view/ServiceRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<RecordFrame')
+    expect(view).not.toContain('RecordPanelsView')
+    expect(view).toContain('<StatusMails record={record} />')
+  })
+})
+// ---- end B-TH-259

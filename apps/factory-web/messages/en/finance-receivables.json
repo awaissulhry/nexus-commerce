@@ -253,7 +253,8 @@
     "callNote": "What was said",
     "skipped": "Skipped",
     "cancelled": "Cancelled",
-    "cancel": "Cancel reminder"
+    "cancel": "Cancel reminder",
+    "threadLabel": "Thread of reminder {level} · {customer}"
   },
   "emailStatus": {
     "QUEUED": "Waiting to go",

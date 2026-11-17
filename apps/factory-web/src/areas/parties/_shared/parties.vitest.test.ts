@@ -116,12 +116,14 @@ describe('one party record, two sides (SCR-032, SCR-056)', () => {
 
   it('a record shows the tabs whose reads the person may make', () => {
     const can = { view: true, manage: true, block: true, vies: true, quotes: true, orders: true, purchaseOrders: true, price: true, cost: true, threads: true }
-    expect(recordTabs(SIDES.customers, can)).toEqual(['overview', 'addresses', 'tax', 'orders', 'documents', 'activity'])
-    expect(recordTabs(SIDES.customers, { ...can, quotes: false, orders: false, threads: false })).toEqual(['overview', 'addresses', 'tax'])
-    // B-W2b-324: Requirements after Tax & terms, with Sales' depth slot.
-    expect(recordTabs(SIDES.customers, { ...can, depth: true })).toEqual(['overview', 'addresses', 'tax', 'requirements', 'orders', 'documents', 'activity'])
-    // B-W2a-69: Items & prices stays in view without purchasing.view: the tab says what is missing.
-    expect(recordTabs(SIDES.suppliers, { ...can, purchaseOrders: false })).toEqual(['overview', 'contacts', 'items', 'activity'])
+    // B-TH-260: Terms & requirements (Tax & terms + Requirements); Documents and Activity went to the docked thread.
+    expect(recordTabs(SIDES.customers, can)).toEqual(['overview', 'addresses', 'terms', 'orders'])
+    expect(recordTabs(SIDES.customers, { ...can, quotes: false, orders: false, threads: false })).toEqual(['overview', 'addresses', 'terms'])
+    expect(recordTabs(SIDES.customers, { ...can, depth: true, partners: true })).toEqual(['overview', 'addresses', 'terms', 'orders', 'portal'])
+    // B-W2a-69: Items & prices stays in view without purchasing.view: the tab says what is missing. B-TH-260: Contacts is part of
+    // Overview & contacts; Documents & questionnaire with the depth slot or the questionnaire.
+    expect(recordTabs(SIDES.suppliers, { ...can, purchaseOrders: false })).toEqual(['overview', 'items'])
+    expect(recordTabs(SIDES.suppliers, { ...can, questionnaire: true })).toEqual(['overview', 'items', 'documents', 'orders'])
   })
 
   it('a party opens on its record page from anywhere (Today, the palette); New party opens New customer', () => {
@@ -409,7 +411,7 @@ describe('every design case draws in both languages with no key left on screen',
     for (const screen of [customersScreen, suppliersScreen] as DesignScreen<unknown>[])
       expect(ids(screen)).toEqual(expect.arrayContaining(['list', 'loading', 'error', 'empty', 'filtered-empty', 'no-access', 'read-only', 'selection', 'new', 'block', 'archive']))
     for (const screen of [customerRecordScreen, supplierRecordScreen] as DesignScreen<unknown>[])
-      expect(ids(screen)).toEqual(expect.arrayContaining(['loading', 'not-found', 'no-access', 'read-only', 'blocked', 'activity', 'dock']))
+      expect(ids(screen)).toEqual(expect.arrayContaining(['loading', 'not-found', 'no-access', 'read-only', 'blocked', 'thread-docked', 'thread-no-right', 'notices'])) // B-TH-260
   })
 
   it('a role without the grain sees no amount at all', () => {

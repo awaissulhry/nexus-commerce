@@ -215,7 +215,9 @@ describe('B-TH-074 golden flow TH-5 (T00, T38): a project for brand A, its peopl
     await ok(P.owner, 'POST', `/threads/Project/${G.project.id}/replies`, { body: TO_ALPHA }, 201)
     await settle()
     const read = await A('GET', `/portal/threads/Project/${G.project.id}`)
-    expect(read.record).toMatchObject({ type: 'Project', id: G.project.id, ourRef: G.project.number, subtitle: PROJECT_NAME, status: 'ACTIVE' })
+    // TH-5 follow-up (B-TH-303's rule): the member reads it by its name and target date, never by the office's PRJ number.
+    expect(read.record).toMatchObject({ type: 'Project', id: G.project.id, ourRef: null, subtitle: PROJECT_NAME, status: 'ACTIVE', date: `${G.project.targetDate as string}T00:00:00.000Z` })
+    expect(JSON.stringify(read)).not.toContain(G.project.number as string)
     const bodies = (read.messages as Json[]).map((message) => message.body)
     expect(bodies).toContain(TO_ALPHA)
     expect(JSON.stringify(read)).not.toContain(NOTE)

@@ -131,12 +131,9 @@
     "tab": {
       "overview": "Overview",
       "addresses": "Addresses & contacts",
-      "tax": "Tax & terms",
-      "requirements": "Requirements",
+      "terms": "Terms & requirements",
       "orders": "Quotes & orders",
-      "documents": "Documents",
-      "portal": "Portal access",
-      "activity": "Activity"
+      "portal": "Portal access"
     },
     "side": {
       "contacts": "Main contacts",
@@ -152,7 +149,9 @@
     },
     "identity": {
       "none": "No tax identity yet: it cannot be invoiced until it has one."
-    }
+    },
+    "openSheet": "Open this customer’s sheet",
+    "requirementsLabel": "Requirements in force"
   },
   "suppliers": {
     "contactRoleHint": {
@@ -207,16 +206,13 @@
     "blockedBanner": "Blocked since {date}: no new purchase orders.",
     "activate": "Approve supplier",
     "tab": {
-      "overview": "Overview",
-      "contacts": "Contacts",
+      "overview": "Overview & contacts",
       "items": "Items & prices",
-      "documents": "Documents & qualification",
+      "documents": "Documents & questionnaire",
       "orders": "Orders",
       "quality": "Quality & rating",
       "bank": "Bank details",
-      "questionnaire": "Questionnaire",
-      "portal": "Portal access",
-      "activity": "Activity"
+      "portal": "Portal access"
     },
     "side": {
       "contacts": "Who receives POs",
@@ -240,7 +236,8 @@
     },
     "identity": {
       "none": "No tax identity yet: purchase orders and its invoices name its tax numbers."
-    }
+    },
+    "questionnaireLabel": "Supplier questionnaire"
   },
   "quoteStatus": {
     "DRAFT": "Draft",
@@ -464,7 +461,8 @@
     "bulkMax": "At most {max} at a time: select fewer",
     "nothingToBlock": "Nothing selected can be blocked (only active ones)",
     "nothingToArchive": "Nothing selected can be archived (blocked ones are unblocked first)",
-    "noEmail": "Needs an email first"
+    "noEmail": "Needs an email first",
+    "projects": "Starting a project needs the right {right}."
   },
   "csv": {
     "code": "Code",
@@ -762,12 +760,8 @@
     "open": "Open the row",
     "select": "Select the row",
     "palette": "Search everything",
-    "help": "This list",
     "tabs": "Next / previous tab (in the tab bar)",
-    "dock": "Thread beside the tab (wide screens)",
-    "save": "Save the form",
-    "submit": "Send a dialog",
-    "close": "Close a dialog"
+    "save": "Save the form"
   },
   "overview": {
     "identity": "Identity",
@@ -841,8 +835,6 @@
     "failedTitle": "Couldn't load the record",
     "loading": "Loading the record…",
     "tabsLabel": "Sections of the record",
-    "dock": "Thread",
-    "dockHint": "Keep the thread beside the tab (⌘J)",
     "dockLabel": "Thread of the record",
     "more": "More actions",
     "copyCode": "Copy code {code}",
@@ -852,6 +844,9 @@
     "reload": "Reload",
     "blockedReason": "Reason: {reason}",
     "archivedBanner": "Archived: read only until it is reactivated (⋯ › Reactivate).",
-    "readOnly": "You can view, not change: your role does not manage customers and suppliers."
+    "readOnly": "You can view, not change: your role does not manage customers and suppliers.",
+    "dockLabelOf": "Thread of {name}",
+    "startProject": "Start a project…",
+    "projects": "Projects ({count})"
   }
 }

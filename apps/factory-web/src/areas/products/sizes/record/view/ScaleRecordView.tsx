@@ -339,7 +339,7 @@ function WhereUsedTab({ scale, model }: { scale: ScaleView; model: ScaleRecordVi
           rows={read.value.styles.map((style) => ({
             id: style.id,
             cells: [
-              <Link key="s" className="fw-lib-link" href={`${model.prefix}/products/styles/${style.id}?tab=variants`}>
+              <Link key="s" className="fw-lib-link" href={`${model.prefix}/products/styles/${style.id}?tab=overview#style-variants` /* B-TH-261: Colourways & sizes is part of Overview & variants */}>
                 {style.code} · {style.name}
               </Link>,
               rangeText(style.sizes.length ? style.sizes : scale.codes),

@@ -77,17 +77,15 @@
     }
   },
   "tab": {
-    "overview": "Panoramica",
-    "variants": "Varianti e taglie",
+    "overview": "Panoramica e varianti",
     "sizes": "Taglie e misure",
     "bom": "Distinta base",
     "routing": "Ciclo di lavoro",
     "cost": "Costo",
     "techpack": "Scheda tecnica",
     "compliance": "Conformità",
-    "files": "File e cartamodelli",
+    "patterns": "Cartamodelli",
     "versions": "Versioni e modifiche",
-    "activity": "Attività",
     "problems_one": "{count} problema prima del rilascio",
     "problems_other": "{count} problemi prima del rilascio"
   },
@@ -118,17 +116,16 @@
     "thingsBefore_one": "{count} cosa prima del rilascio",
     "thingsBefore_other": "{count} cose prima del rilascio",
     "readyToRelease": "Pronta per il rilascio",
-    "dock": "Conversazione",
-    "dockHint": "Mostra la conversazione accanto alla scheda (⌘J)",
     "dockLabel": "Conversazione del modello",
     "more": "Altre azioni",
-    "noPanels": "La conversazione si apre qui quando il modello è caricato.",
     "changed": "Qualcun altro ha modificato questo modello alle {time}.",
     "reload": "Ricarica",
     "archivedBanner": "Archiviato: sola lettura. Riattivalo (⋯) per modificarlo.",
     "frozenReleased": "La revisione {revision} è rilasciata e bloccata: gli ordini di lavoro la usano così com’è.",
     "frozenObsolete": "La revisione {revision} è obsoleta: conservata per lo storico, non più usata.",
-    "goToDraft": "Vai alla revisione {revision} (bozza)"
+    "goToDraft": "Vai alla revisione {revision} (bozza)",
+    "madeFrom": "Creato da {number} — Apri",
+    "variantsLabel": "Varianti e taglie"
   },
   "action": {
     "release": "Rilascia la revisione {revision}",
@@ -137,8 +134,8 @@
     "archive": "Archivia il modello…",
     "reactivate": "Riattiva il modello",
     "copyCode": "Copia il codice",
-    "keys": "Scorciatoie da tastiera",
-    "duplicate": "Duplica…"
+    "duplicate": "Duplica…",
+    "startProject": "Avvia un progetto…"
   },
   "save": {
     "saving": "Salvataggio…",
@@ -156,7 +153,8 @@
     "checking": "Il controllo di rilascio è ancora in lettura.",
     "blockers_one": "{count} cosa da sistemare prima (r apre il controllo)",
     "blockers_other": "{count} cose da sistemare prima (r apre il controllo)",
-    "long": "Al massimo 500 caratteri."
+    "long": "Al massimo 500 caratteri.",
+    "noProjects": "Per avviare un progetto serve il permesso {right}."
   },
   "problem": {
     "read": {
@@ -181,7 +179,7 @@
       "rate_limited": "Troppe modifiche insieme: attendi un momento e ripeti.",
       "unavailable": "Il server della fabbrica non ha risposto: nulla è stato salvato, riprova.",
       "internal": "Qualcosa è andato storto: nulla è stato salvato, riprova.",
-      "piecesUse": "Da questa riga si tagliano pezzi del cartamodello: modificali prima in File e cartamodelli."
+      "piecesUse": "Da questa riga si tagliano pezzi del cartamodello: modificali prima in Cartamodelli."
     }
   },
   "notice": {
@@ -263,7 +261,7 @@
     "range": "Gamma",
     "created": "Creato",
     "updated": "Aggiornato",
-    "activity": "Conversazione e storico",
+    "activity": "Mostra la conversazione e lo storico",
     "release": "Controllo di rilascio",
     "coverage": "Copertura del certificato",
     "open": "Apri",
@@ -849,15 +847,13 @@
     "release": "Apri il controllo di rilascio",
     "prevRevision": "Revisione precedente",
     "nextRevision": "Revisione successiva",
-    "thread": "Conversazione accanto alla scheda",
     "save": "Salva il modulo",
     "add": "Aggiungi una riga di distinta o operazioni",
     "bomView": "Vista successiva della distinta",
     "skuCell": "Accendi o spegni una cella SKU",
     "skuRow": "Accendi o spegni un’intera variante",
     "moveUp": "Sposta su (riga, operazione)",
-    "moveDown": "Sposta giù (riga, operazione)",
-    "help": "Queste scorciatoie"
+    "moveDown": "Sposta giù (riga, operazione)"
   },
   "kind": {
     "LEATHER": "Pelle",
@@ -1354,8 +1350,8 @@
     "always": "Copiati sempre: identità, gamma taglie, DPI, dati doganali, tracciatura dei capi e le varianti attive. Non copiati: SKU (creati su richiesta), nomi per lingua, immagini.",
     "linked": "La copia parte in bozza collegata all’originale: la sua revisione 1 e la sua cronologia dicono da dove è copiata.",
     "skus": "Crea subito i suoi SKU",
-    "skusHint_one": "Uno SKU per taglia della sua {count} variante; altrimenti dopo da Varianti e taglie.",
-    "skusHint_other": "Uno SKU per taglia di ognuna delle sue {count} varianti; altrimenti dopo da Varianti e taglie.",
+    "skusHint_one": "Uno SKU per taglia della sua {count} variante; altrimenti dopo da Panoramica e varianti.",
+    "skusHint_other": "Uno SKU per taglia di ognuna delle sue {count} varianti; altrimenti dopo da Panoramica e varianti.",
     "done": "{code} è un nuovo modello in bozza, copiato da {from}.",
     "doneRevision": "Le sue parti vengono dalla revisione {revision} e sono nella sua revisione 1 (bozza).",
     "doneNoRevision": "Nessuna parte richiedeva una revisione: avvia la revisione 1 nel suo studio.",
@@ -1689,7 +1685,7 @@
     },
     "files": {
       "title": "Documenti e file",
-      "where": "Schizzi, immagini e pagine del cliente sono nella galleria della Panoramica; i file del cartamodello sono qui sopra. Gli altri file aggiunti al modello sono nella sua scheda Attività."
+      "where": "Schizzi, immagini e pagine del cliente sono nella galleria di Panoramica e varianti; i file del cartamodello sono qui sopra. Gli altri file aggiunti al modello sono nella vista File della sua conversazione."
     }
   }
 }

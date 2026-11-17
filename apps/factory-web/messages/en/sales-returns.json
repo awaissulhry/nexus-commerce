@@ -696,7 +696,12 @@
     },
     "more": "More actions",
     "openIt": "Open it",
-    "reload": "Reload"
+    "reload": "Reload",
+    "title": "Return",
+    "repairTitle": "Repair",
+    "dockLabel": "Thread of the record",
+    "dockLabelOf": "Thread of {number}",
+    "tabsLabel": "Parts of the record"
   },
   "refusal": {
     "aboveSold": "More than was sold: the quantity was put back.",
@@ -953,7 +958,6 @@
     "waitingBy": "Waiting for the goods by {date}"
   },
   "tab": {
-    "activity": "Activity",
     "credit": "Replacement & credit",
     "inspection": "Inspection & decision",
     "intake": "Intake & photos",

@@ -801,7 +801,17 @@
     "onLoanTo": "To line {line} until {time}",
     "setLead": "Lead of team {team}",
     "tableLabel": "Team members",
-    "title": "Teams"
+    "title": "Teams",
+    "open": "Open the team",
+    "openNamed": "Open team {team}: its members and office notes",
+    "window": {
+      "noun": "team",
+      "threadLabel": "Office notes of team {team}",
+      "line": "Line",
+      "site": "Site",
+      "members": "Members",
+      "loansIn": "Lent in today"
+    }
   },
   "tile": {
     "ACTIVE": "Active",

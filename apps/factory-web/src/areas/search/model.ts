@@ -35,6 +35,9 @@ export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'P
   'ProductSafetyReport',
   // B-W2b-383: a transfer between sites (its indexer; it opens its page, Warehouse › Transfers).
   'TransferOrder',
+  // B-TH-261 follow-up (B-TH-040's indexer, #1545): a catalogue order a customer sent from its portal (orders.view; it opens beside the
+  // Incoming list with its thread).
+  'PortalOrderRequest',
   // B-TH-252: a project (B-TH-066's indexer, by number or name; it opens its page, Products › Development › Projects).
   'Project'] as const
 
@@ -66,6 +69,8 @@ export const STATUS_CODES: ReadonlySet<string> = new Set([
   'WAITING_CUSTOMER', 'WAITING_PART', 'RESOLVED',
   // B-W2b-361: a product-safety report's (NEW and CLOSED are above).
   'ASSESSING',
+  // B-TH-261 follow-up: a catalogue order's (SENT, ACCEPTED and WITHDRAWN are above; a DRAFT is never indexed).
+  'REFUSED',
 ])
 
 /** The areas whose name the shell's navigation says (`shell:nav.<area>.area`). */
@@ -146,7 +151,7 @@ export function numbersOf(results: readonly Pick<SearchResult, 'recordId' | 'num
 }
 
 const WARNING = new Set(['PENDING_APPROVAL', 'CHANGES_PROPOSED', 'ON_HOLD', 'QUARANTINE', 'PARTLY_SHIPPED', 'PARTLY_RECEIVED', /* B-W2b-23 */ 'DISPUTED', 'SUSPENDED', 'UNDER_MAINTENANCE', 'WAITING_PARTS', 'SUBMITTED', 'HELD'])
-const DANGER = new Set(['BLOCKED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'REJECTED', 'NOT_DELIVERABLE', 'ERROR', 'REVERSED', 'RETURNED', /* B-W2b-23 */ 'VOIDED', 'FAILED', 'WITHDRAWN', 'DOWN', 'DO_NOT_USE'])
+const DANGER = new Set(['BLOCKED', 'DECLINED', 'EXPIRED', 'CANCELLED', 'REJECTED', 'NOT_DELIVERABLE', 'ERROR', 'REVERSED', 'RETURNED', /* B-W2b-23 */ 'VOIDED', 'FAILED', 'WITHDRAWN', 'DOWN', 'DO_NOT_USE', /* B-TH-261 follow-up */ 'REFUSED'])
 const DONE = new Set(['ACCEPTED', 'SHIPPED', 'RECEIVED', 'RELEASED', 'COMPLETED', 'DELIVERED', 'POSTED', 'ISSUED', 'ACTIVE', 'CONFIRMED', 'APPROVED', 'INSPECTED', 'REPAIRED', 'ANSWERED', /* B-W2b-23 */ 'PAID', 'PASSED', 'VALID', 'APPLIED', 'SIGNED_OFF', 'RUNNING', 'HANDED_BACK', /* B-W2b-129 */ 'CUT', 'RECONCILED'])
 
 /** The tone a status is drawn in (a pill): waiting, refused or stopped, done, or neutral. */

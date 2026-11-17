@@ -801,7 +801,17 @@
     "onLoanTo": "Alla linea {line} fino alle {time}",
     "setLead": "Capo della squadra {team}",
     "tableLabel": "Membri delle squadre",
-    "title": "Squadre"
+    "title": "Squadre",
+    "open": "Apri la squadra",
+    "openNamed": "Apri la squadra {team}: persone e note d’ufficio",
+    "window": {
+      "noun": "squadra",
+      "threadLabel": "Note d’ufficio della squadra {team}",
+      "line": "Linea",
+      "site": "Stabilimento",
+      "members": "Persone",
+      "loansIn": "In prestito oggi"
+    }
   },
   "tile": {
     "ACTIVE": "Attivi",

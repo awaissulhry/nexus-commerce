@@ -18,7 +18,7 @@ import { CustomerDepthProvider, customerDepthSlot } from '../depth/CustomerDepth
  * Returns this year tiles and the open returns and claims under Now (money/: three reads beside the party, each with
  * its permission). B-W2b-324: the customer in depth through the shared record's `depth` slot (depth/): the glance on the
  * Overview (free credit, promises, samples in progress, measurement profiles, riders, repairs, the hold and its reason, a
- * rider's team, the requirements in force), the Requirements tab (`?tab=requirements`), Tax & terms › Hold and Customer PO
+ * rider's team, the requirements in force), Terms & requirements (B-TH-260: `?tab=terms`, the old Tax & terms and Requirements) › Hold and Customer PO
  * number required, and the contacts' consent, lawful basis and personal-data actions on Addresses & contacts.
  */
 export function CustomerRecord({ partyId }: { partyId: string }) {

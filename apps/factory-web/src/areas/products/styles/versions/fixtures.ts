@@ -5,7 +5,8 @@ import type { OrderRow, RequestRow, StyleDriftView, VersionsCompareView } from '
 import { ORDERS, REQUESTS } from '../../changes/demo/fixtures'
 import { CAN, COLOURWAY_IDS as CW, COMPANY_ID, newStyle, recordModel, REV, STYLE_ID } from '../demo/fixtures'
 import type { StyleRecordViewModel } from '../record/record-model'
-import { StyleRecordView } from '../record/view/StyleRecordView'
+// B-TH-261: the studio with its docked thread (RecordFrame).
+import { StyleDesign } from '../demo/fixtures'
 import type { GateView, ReleasedScopeView } from '../release/api'
 import { WHOLE, type ScopePick } from '../release/model'
 import type { ReleaseModel } from '../release/use-release'
@@ -289,7 +290,7 @@ const production = (versions: Partial<VersionsModel> = {}) => recordModel('produ
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-348',
   title: 'Style › Versions & changes, Compare revisions, Release on the gate',
-  view: StyleRecordView,
+  view: StyleDesign,
   cases: [
     { id: 'versions', label: 'Versions & changes (owner)', model: tab(), note: 'Revisions with what changed, who released them and the records made from each; revision 2 released for NERO and ANTR in 46–56 (Release more…); the compare of revision 2 → 3 with the cost difference; the style\'s changes; a quote and an order on revision 1 with the cost difference per garment.' },
     { id: 'production', label: 'Production manager (no cost grain)', model: production(), note: 'No cost difference anywhere: "not in your role".' },

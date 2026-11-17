@@ -1,6 +1,6 @@
 /*
- * Styles (SCR-040 list, SCR-041 … SCR-045 studio) LAYOUT: the studio's band and tabs, the body with the optional thread
- * beside it, the two-column overview, the colour × size SKU matrix, the BOM's size and colour grids, the routing, the
+ * Styles (SCR-040 list, SCR-041 … SCR-045 studio) LAYOUT: the studio's band details and tabs (B-TH-261: the band, the body and
+ * the docked thread are RecordFrame's), the two-column overview, the colour × size SKU matrix, the BOM's size and colour grids, the routing, the
  * cost waterfall and the compliance coverage. The controls are the design system's; this file places them with semantic
  * tokens only. A swatch's colour is the colour library's own value (data), set inline on the element.
  * No page max-width (Owner 2026-10-29): every block fills the shell's main area; wide screens get more columns.
@@ -13,23 +13,7 @@
   min-width: 0;
 }
 
-/* ---- the band ---- */
-.fw-st-band {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-8);
-  min-width: 0;
-}
-
-.fw-st-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nds-space-8) var(--nds-space-16);
-  min-width: 0;
-}
-
+/* ---- the band's details (B-TH-261: inside RecordFrame's band) ---- */
 .fw-st-title {
   overflow-wrap: anywhere;
 }
@@ -57,12 +41,6 @@
   display: inline-flex;
   align-items: center;
   gap: var(--nds-space-6);
-}
-
-.fw-st-keys {
-  display: inline-flex;
-  gap: 2px;
-  margin-left: var(--nds-space-4);
 }
 
 .fw-st-save {
@@ -98,29 +76,7 @@
   }
 }
 
-/* ---- the body, with the thread beside it (O1, 1280 px and wider) ---- */
-.fw-st-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--nds-space-16);
-  min-width: 0;
-}
-
-.fw-st-body.has-dock {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
-}
-
-@media (max-width: 1279px) {
-  .fw-st-body.has-dock {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .fw-st-dock {
-    display: none;
-  }
-}
-
-.fw-st-main,
+/* ---- the body (B-TH-261: the thread docks beside it in RecordFrame) ---- */
 .fw-st-col,
 .fw-st-side,
 .fw-st-stack,
@@ -133,15 +89,14 @@
   min-width: 0;
 }
 
-.fw-st-stack-lg,
-.fw-st-main {
+.fw-st-stack-lg {
   gap: var(--nds-space-14);
 }
 
-.fw-st-dock {
-  position: sticky;
-  top: var(--nds-space-16);
+/* B-TH-261: Overview & variants' range and colourways (a Fix scrolls here): clear of the sticky band. */
+.fw-st-variants {
   min-width: 0;
+  scroll-margin-top: calc(var(--fw-rcf-top, 64px) + var(--nds-space-8));
 }
 
 /* Overview: the identity two thirds, the side one third on a wide screen; one column below 1100 px. */
@@ -300,31 +255,6 @@
   margin: 0;
   min-width: 0;
   overflow-wrap: anywhere;
-}
-
-.fw-st-keymap {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-6);
-  margin: 0;
-}
-
-.fw-st-keymap-row {
-  display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
-  gap: var(--nds-space-12);
-  align-items: center;
-}
-
-.fw-st-keymap-row dt {
-  display: inline-flex;
-  gap: 2px;
-}
-
-.fw-st-keymap-row dd {
-  margin: 0;
-  color: var(--nds-text-2);
-  font-size: var(--nds-font-size-sm);
 }
 
 /* ---- forms ---- */

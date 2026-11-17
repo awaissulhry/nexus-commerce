@@ -4,7 +4,7 @@ import { RmaRecord } from '../../../../../../../areas/sales/returns/record/RmaRe
 
 export const metadata: Metadata = { title: 'Return · Nexus Factory' }
 
-/** Sales › Returns & repairs › a return (SCR-112; `?tab=lines|inspection|credit|shipments|activity`, `?do=receive`). */
+/** Sales › Returns & repairs › a return (SCR-112; `?tab=lines|inspection|credit|shipments`, `?do=receive`; B-TH-259: an old `?tab=activity` opens the thread). */
 export default async function ReturnRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (

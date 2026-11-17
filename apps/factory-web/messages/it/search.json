@@ -101,6 +101,7 @@
     "ProductSafetyReport": "Segnalazione di sicurezza prodotto",
     "TransferOrder": "Trasferimento",
     "Project": "Progetto",
+    "PortalOrderRequest": "Ordine dal catalogo",
     "other": "Record"
   },
   "chip": {
@@ -152,6 +153,7 @@
     "ProductSafetyReport": "Segnalazioni di sicurezza prodotto",
     "TransferOrder": "Trasferimenti",
     "Project": "Progetti",
+    "PortalOrderRequest": "Ordini dal catalogo",
     "other": "Altri record"
   },
   "status": {
@@ -250,6 +252,7 @@
     "WAITING_CUSTOMER": "In attesa del cliente",
     "WAITING_PART": "In attesa di un ricambio",
     "RESOLVED": "Risolto",
-    "ASSESSING": "In valutazione"
+    "ASSESSING": "In valutazione",
+    "REFUSED": "Rifiutato"
   }
 }

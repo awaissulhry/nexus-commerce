@@ -82,7 +82,8 @@ export const SECTION_HOME: Readonly<Record<TechPackSection, StyleTab>> = {
   // B-W2b-274: the sketches and pictures live in the Overview's gallery section (B-W2b-236, SCR-304), not in Files & patterns.
   SKETCHES: 'overview',
   BOM: 'bom',
-  COLOURWAYS: 'variants',
+  // B-TH-261: Colourways & sizes is part of Overview & variants.
+  COLOURWAYS: 'overview',
   SIZE_SPEC: 'sizes',
   CONSTRUCTION: 'routing',
   LABELS: 'compliance',

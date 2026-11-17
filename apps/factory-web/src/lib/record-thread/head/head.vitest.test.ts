@@ -183,6 +183,20 @@ describe('the doors (R-ACT)', () => {
     expect(menuRows(base({ canManage: true, closed: { by: 'Alex Demo', at: '2026-11-12T16:00:00.000Z' } })).at(-1)).toEqual({ kind: 'reopen' })
   })
 
+  // ---- TH-5 follow-up (B-TH-249, PROJ.record-F04): a closed project reopens its thread from its own band (one command); the API refuses
+  // the thread's own Reopen, so the head never offers it — closing an open project's thread stays as it was.
+  it('a closed project: no Reopen in the head (neither the ⋯ line nor the closed line\'s button); Close thread stays on an open one', () => {
+    const render = (model: HeadModel) => renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: { head: model, frames: [718], dialogs: designScreen.cases[0]!.model.dialogs, open: null } })))
+    const closed = { by: 'Alex Demo', at: '2026-11-12T16:00:00.000Z' }
+    expect(menuRows(base({ canManage: true, closed, reopenWithRecord: true })).some((row) => row.kind === 'reopen' || row.kind === 'close')).toBe(false)
+    expect(menuRows(base({ canManage: true, reopenWithRecord: true })).at(-1)).toEqual({ kind: 'close' })
+    const html = render(base({ canManage: true, closed, reopenWithRecord: true }))
+    expect(html).toContain('Closed by Alex Demo')
+    expect(html).not.toContain('>Reopen<')
+    expect(render(base({ canManage: true, closed }))).toContain('>Reopen<')
+  })
+  // ---- end TH-5 follow-up
+
   it('folds the counts onto their doors when the chips do not fit', () => {
     const counts = { tasks: { kind: 'tasks' as const, count: 2, lines: [] } }
     expect(menuRows(base({ counts }), true)[0]).toMatchObject({ hint: { key: 'act.openTasks', params: { count: 2 } } })

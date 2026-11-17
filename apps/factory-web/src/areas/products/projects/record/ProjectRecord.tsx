@@ -265,6 +265,8 @@ export function ProjectRecord({ projectId }: { projectId: string }) {
         {...(audience.partyRole ? { partyRole: audience.partyRole } : {})}
         recordHref={projectHref(prefix, project.id)}
         printHref={printHref(pathname, params?.toString() ?? '')}
+        // TH-5 follow-up: a closed project's thread opens only with the project (the closed banner's Reopen), never from the thread's head.
+        reopenWithRecord={project.status === 'CLOSED'}
       />
     ) : null
   const printThread = project && threadRecord ? <RecordPanels record={threadRecord} title={title} party={project.party ? { id: project.party.id, name: project.party.name, emails: [] } : null} /> : null

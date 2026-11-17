@@ -110,6 +110,10 @@ export interface InquiriesCan {
   tasks?: boolean
   partiesManage?: boolean
   // ---- end B-TH-234
+  // ---- B-TH-290: planning's suggestion for production's answer (planning.promise.view); typing the answer is the record's own
+  // productionAction (planning.promise.manage over the request).
+  promise?: boolean
+  // ---- end B-TH-290
 }
 
 export function inquiriesCan(permissions: readonly string[]): InquiriesCan {
@@ -135,6 +139,8 @@ export function inquiriesCan(permissions: readonly string[]): InquiriesCan {
     // B-TH-234
     tasks: has('partners.tasks.manage'),
     partiesManage: has('parties.manage'),
+    // B-TH-290
+    promise: has('planning.promise.view'),
   }
 }
 

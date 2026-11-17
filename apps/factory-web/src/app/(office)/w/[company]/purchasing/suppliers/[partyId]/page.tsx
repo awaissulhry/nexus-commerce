@@ -4,7 +4,7 @@ import { SupplierRecord } from '../../../../../../../areas/purchasing/suppliers/
 
 export const metadata: Metadata = { title: 'Supplier · Nexus Factory' }
 
-/** Purchasing › Suppliers › a supplier (SCR-057; `?tab=overview|contacts|items|orders|activity`). */
+/** Purchasing › Suppliers › a supplier (SCR-057; `?tab=overview|items|documents|orders|quality|bank|portal`; B-TH-260: old `contacts` → overview, `questionnaire` → documents, `activity` opens the thread). */
 export default async function SupplierPage({ params }: { params: Promise<{ partyId: string }> }) {
   const { partyId } = await params
   return (

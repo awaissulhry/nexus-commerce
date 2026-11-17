@@ -120,7 +120,8 @@ export const fetchMyAccess = (api: ApiClient, signal?: AbortSignal) => api.get('
 export const searchPortal = (api: ApiClient, q: string, signal?: AbortSignal): Promise<PartnerSearchAnswer> => api.get('/portal/search', { query: { q }, schema: partnerSearchAnswer, signal })
 
 // ── a record's conversation (B-W2b-168, COL-059, COL-060) ────────────────────────────────────────────────────────────────
-const partnerRecord = z.object({ type: z.string(), id: z.string(), theirRef: z.string().nullable(), ourRef: z.string().nullable(), subtitle: z.string().nullable(), status: z.string().nullable() })
+// TH-5 follow-up (B-TH-253): + the record's date as its partner view gives it (a project's target date), kept, not dropped.
+const partnerRecord = z.object({ type: z.string(), id: z.string(), theirRef: z.string().nullable(), ourRef: z.string().nullable(), subtitle: z.string().nullable(), status: z.string().nullable(), date: z.string().nullable().optional() })
 export type PartnerRecord = z.infer<typeof partnerRecord>
 const partnerMessage = z.object({
   id: z.string(),

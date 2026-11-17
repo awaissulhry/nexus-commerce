@@ -4,7 +4,7 @@ import { RepairRecord } from '../../../../../../../../areas/sales/returns/repair
 
 export const metadata: Metadata = { title: 'Repair · Nexus Factory' }
 
-/** Sales › Returns & repairs › a repair or alteration (SCR-112; `?tab=intake|work|safety|return|activity`). */
+/** Sales › Returns & repairs › a repair or alteration (SCR-112; `?tab=intake|estimate|work|safety|return`; B-TH-259: an old `?tab=activity` opens the thread). */
 export default async function RepairRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (
