@@ -16,4 +16,14 @@ export const manifest = defineManifest({
   // (portal.upload) over the record, the outside-upload gate and the record's partner view.
   'POST /portal/threads/:recordType/:recordId/files': { audiences: ['partner'], permission: 'portal.comment', scope: 'party' },
   'POST /portal/threads/:recordType/:recordId/files/:fileId/complete': { audiences: ['partner'], permission: 'portal.comment', scope: 'party' },
+  // ---- B-TH-092: the person's own drafts — a reply on a record (whoever may write there: portal.comment), the New order (who sends
+  // requests: portal.orderRequests.manage), the person's drafts for Home (whoever reads conversations).
+  'GET /portal/drafts': { audiences: ['partner'], permission: 'threads.read', scope: 'party' },
+  'GET /portal/drafts/new-request': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
+  'PUT /portal/drafts/new-request': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
+  'DELETE /portal/drafts/new-request': { audiences: ['partner'], permission: 'portal.orderRequests.manage', scope: 'party' },
+  'GET /portal/threads/:recordType/:recordId/draft': { audiences: ['partner'], permission: 'portal.comment', scope: 'party' },
+  'PUT /portal/threads/:recordType/:recordId/draft': { audiences: ['partner'], permission: 'portal.comment', scope: 'party' },
+  'DELETE /portal/threads/:recordType/:recordId/draft': { audiences: ['partner'], permission: 'portal.comment', scope: 'party' },
+  // ---- end B-TH-092
 })

@@ -42,4 +42,10 @@ export const manifest = defineManifest({
   'DELETE /threads/:recordType/:recordId/pins/:messageId': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
   'POST /threads/Inquiry/:recordId/pins/note': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
   // ---- end B-TH-091
+  // ---- B-TH-092: the person's own draft of a record they may write on (threads.post over it), and their drafts (the lists' "Draft").
+  'GET /threads/drafts': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  'GET /threads/:recordType/:recordId/draft': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  'PUT /threads/:recordType/:recordId/draft': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  'DELETE /threads/:recordType/:recordId/draft': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  // ---- end B-TH-092
 })

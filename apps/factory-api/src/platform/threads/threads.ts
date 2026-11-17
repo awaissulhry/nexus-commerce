@@ -51,6 +51,8 @@ import { excerptOf } from '@nexus/factory-domain/threads/rules'
 import type { FeedAudience } from '@nexus/factory-domain/threads/timeline'
 import { erasedAmong, erasedForOutside, feedAudienceWhere, skippedPartsOf, waitingMailOf, type SkippedPart, type WaitingMail } from './feed-depth'
 // ---- end B-TH-079
+// ---- B-TH-092: what was typed has gone out — the sender's draft of the record is removed in the send's own command.
+import { clearDraftInCommand } from './draft-keys'
 
 /**
  * Record threads (plan A1 §2.3, §3.7; features COL-001, COL-003, COL-020):
@@ -797,6 +799,7 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
         ...(input.amount ? { amount: input.amount } : {}), // B-TH-049
         ...links, // B-TH-050
       })
+      await clearDraftInCommand(tools, context.actorId, record) // B-TH-092
       const current = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: THREAD_OFFICE })
       const attachments = await visibleAttachments(tools.tx, context, message.attachmentFileIds)
       const linked = await messageLinksOf(tools.tx, thread.id, [message], { sharedOnly: false, workerShown: true }) // B-TH-050

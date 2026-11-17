@@ -511,3 +511,45 @@ export const pinContract = defineContract({ params: pinParams, response: { 200: 
 export const unpinContract = defineContract({ params: pinParams, response: { 200: pinsAnswer } })
 export const pinRequestNoteContract = defineContract({ params: input({ recordId: id() }), response: { 201: output({ pins: z.array(pinView), /** The office note the request's note became. */ messageId: id() }) } })
 // ---- end B-TH-091
+
+// ---- B-TH-092 (N6 = L2-G14; T5-F10, T8-F07, O-SAL-ORD-NEW.form-F07, P-HOME.actions-F02, P-CUS-NEW.message-F02): drafts on the server —
+// one per person and record (and the portal's New order), the person's own only, kept until sent or discarded.
+const draftView = output({
+  /** The record it is for; null for the portal's New order. */
+  recordType: z.string().nullable(),
+  recordId: id().nullable(),
+  /** The composer's mode: OFFICE (an office note) or PARTNER (a reply to the customer or supplier); null: not chosen. */
+  audience: z.enum(MESSAGE_AUDIENCES).nullable(),
+  body: z.string(),
+  /** The composer's other fields as it saved them (subject, wanted date, To and Cc, order lines …). */
+  fields: z.record(z.string(), z.unknown()),
+  /** The files added to it that the person may still see. */
+  attachments: z.array(attachmentView),
+  /** "Draft saved 10:42". */
+  savedAt: instant(),
+  version: z.number().int(),
+})
+export const draftBody = input({
+  audience: z.enum(MESSAGE_AUDIENCES).nullable().optional(),
+  /** What was typed (up to 20 000 characters; empty while nothing is typed). */
+  body: z.string().max(20000),
+  fields: z.record(z.string(), z.unknown()).optional(),
+  attachments: z.array(id()).max(50).optional(),
+  /** The version last read: a newer one saved meanwhile (another tab) is replaced, and `replacedNewer` says so. */
+  version: z.number().int().min(1).optional(),
+})
+const draftAnswer = output({ draft: draftView.nullable() })
+const savedDraftAnswer = output({ draft: draftView, /** Another tab had saved a newer draft, now replaced ("newest wins"). */ replacedNewer: z.boolean() })
+const draftListAnswer = output({
+  drafts: z.array(output({ recordType: z.string().nullable(), recordId: id().nullable(), audience: z.enum(MESSAGE_AUDIENCES).nullable(), /** "Draft: Spring jackets". */ excerpt: z.string(), savedAt: instant() })),
+})
+export const getDraftContract = defineContract({ params: recordParams, response: { 200: draftAnswer } })
+export const saveDraftContract = defineContract({ params: recordParams, body: draftBody, response: { 200: savedDraftAnswer } })
+export const discardDraftContract = defineContract({ params: recordParams, response: { 200: output({ draft: z.null() }) } })
+export const listDraftsContract = defineContract({ querystring: input({ recordType: z.string().regex(RECORD_TYPE).optional() }), response: { 200: draftListAnswer } })
+// The portal's New order draft and the person's drafts (Home).
+export const getRequestDraftContract = defineContract({ response: { 200: draftAnswer } })
+export const saveRequestDraftContract = defineContract({ body: draftBody, response: { 200: savedDraftAnswer } })
+export const discardRequestDraftContract = defineContract({ response: { 200: output({ draft: z.null() }) } })
+export const listPortalDraftsContract = defineContract({ response: { 200: draftListAnswer } })
+// ---- end B-TH-092

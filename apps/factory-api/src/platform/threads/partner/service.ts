@@ -39,6 +39,8 @@ import { markThreadRead, moveMark, readingOf, unreadCounts } from '../reads'
 // ---- end B-TH-027
 // ---- B-TH-079: a message erased after a privacy request is told apart from one that only carries files.
 import { erasedForOutside } from '../feed-depth'
+// ---- B-TH-092: the person's draft of the record goes with their post.
+import { clearDraftInCommand } from '../draft-keys'
 
 /**
  * A record's thread in a portal session (B-W2b-168; COL-059, COL-060; design portal.frame › thread "Ask a question /
@@ -111,6 +113,10 @@ async function openRecord(client: FactoryClient, caller: PartnerCaller, ref: Rec
   if (!record || !can(caller.actor, THREADS_READ, scope)) throw new NotFoundError('Record not found.')
   return { record, scope }
 }
+
+// ---- B-TH-092: the portal's drafts open a record the same way (../drafts.ts).
+export { openRecord as openPartnerRecord }
+// ---- end B-TH-092
 
 const recordViewOf = (type: string, record: PartnerRecord) => ({ type, id: record.id, theirRef: record.theirRef, ourRef: record.ourRef, subtitle: record.subtitle, status: record.status })
 
@@ -406,6 +412,7 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
       // ---- B-TH-027: the person's own post is read by them (their mark moves to it; a preview writes none).
       if (!caller.session.preview) await moveMark(tools, current, { userId: caller.context.actorId, office: false }, { id, at: tools.now }, true)
       // ---- end B-TH-027
+      if (!caller.session.preview) await clearDraftInCommand(tools, caller.context.actorId, ref) // B-TH-092
       const attachments = await visibleAttachments(tools.tx, caller, row.attachmentFileIds)
       return { thread: { id: current.id, status: current.status as ThreadStatus }, message: messageViewOf(caller, row, attachments, new Set([id])) }
     },
