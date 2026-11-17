@@ -459,7 +459,7 @@ export async function openInspection(caller: CommandCaller, body: OpenBody, idem
       // The reasons for another plan or another profile than the ones that apply (no column keeps them: B-W2b-76's gap).
       ...(reasons.length ? { reason: reasons.join(' · ') } : {}),
     })
-    tools.emit({ type: 'quality.inspection_opened', subject: id, companyId: header.companyId, siteId: header.siteId, payload: { inspectionId: id, inspectionNumber: number, workOrderId: header.id, number: header.number, lotSize: body.lotSize, postedBy: postedBy(context) } })
+    tools.emit({ type: 'quality.inspection_opened', subject: id, companyId: header.companyId, siteId: header.siteId, payload: { inspectionId: id, inspectionNumber: number, workOrderId: header.id, number: header.number, partyId: header.partyId /* B-PR-09 */, lotSize: body.lotSize, postedBy: postedBy(context) } })
     return { id: row.id }
   })
   return caller.withClient(async (db) => ({ inspection: await viewOf(db, (await readInspection(db, result.id))!, header.number) }))
@@ -730,7 +730,7 @@ export async function decideInspection(caller: CommandCaller, inspectionId: stri
       subject: current.id,
       companyId: header.companyId,
       siteId: header.siteId,
-      payload: { inspectionId: current.id, workOrderId: header.id, number: header.number, status, computedResult: again.result, overridden: overrideReason !== null, postedBy: postedBy(context) },
+      payload: { inspectionId: current.id, workOrderId: header.id, number: header.number, partyId: header.partyId /* B-PR-09 */, status, computedResult: again.result, overridden: overrideReason !== null, postedBy: postedBy(context) },
     })
     return { id: current.id }
   })
@@ -748,7 +748,7 @@ export async function cancelInspection(caller: CommandCaller, inspectionId: stri
     // B-W2b-213: an inspection a rule opened that nobody took is cancelled as it is (no inspector: the database allows it).
     await tools.tx.inspection.update({ where: { id: current.id }, data: { status: 'CANCELLED', ...(untaken(current) ? {} : takeOver(context, current)), version: { increment: 1 }, updatedAt: tools.now }, select: { id: true } })
     tools.audit({ recordType: 'Inspection', recordId: current.id, companyId: header.companyId, siteId: header.siteId, before: { status: 'OPEN' }, after: { status: 'CANCELLED' }, reason: body.reason.trim() })
-    tools.emit({ type: 'quality.inspection_cancelled', subject: current.id, companyId: header.companyId, siteId: header.siteId, payload: { inspectionId: current.id, workOrderId: header.id, number: header.number } })
+    tools.emit({ type: 'quality.inspection_cancelled', subject: current.id, companyId: header.companyId, siteId: header.siteId, payload: { inspectionId: current.id, workOrderId: header.id, number: header.number, partyId: header.partyId /* B-PR-09 */ } })
     return { id: current.id }
   })
   return caller.withClient(async (db) => ({ inspection: await viewOf(db, (await readInspection(db, result.id))!, header.number) }))

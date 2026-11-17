@@ -32,12 +32,23 @@ export interface BoardSheetRow {
   readonly note: string | null
 }
 
-export type BoardSheetQuery = { readonly siteId: string; readonly from?: BusinessDate; readonly to?: BusinessDate } | { readonly versionId: string }
+// B-PR-09 (the brand wall): `partyId`, the screen's customer filter (`?party=`): only the bars of that customer's work orders.
+export type BoardSheetQuery = ({ readonly siteId: string; readonly from?: BusinessDate; readonly to?: BusinessDate } | { readonly versionId: string }) & { readonly partyId?: string | undefined }
+
+// ── B-PR-09 ──
+/** The bars of one customer's work orders (the filter of the screen the file follows); every bar without one. */
+async function ofCustomer<Bar>(caller: CommandCaller, bars: readonly Bar[], workOrderOf: (bar: Bar) => string, partyId: string | undefined): Promise<Bar[]> {
+  if (!partyId) return [...bars]
+  const ids = [...new Set(bars.map(workOrderOf))]
+  const theirs = new Set(ids.length === 0 ? [] : (await caller.withClient((db) => db.workOrder.findMany({ where: { id: { in: ids }, partyId }, select: { id: true } }))).map((row) => row.id))
+  return bars.filter((bar) => theirs.has(workOrderOf(bar)))
+}
+// ── end B-PR-09 ──
 
 export async function boardSheetRows(caller: CommandCaller, query: BoardSheetQuery): Promise<BoardSheetRow[]> {
   if ('versionId' in query) {
     const answer = await versionBoard(caller, query.versionId)
-    return answer.slots.map((slot) => ({
+    return (await ofCustomer(caller, answer.slots, (slot) => slot.workOrder.id, query.partyId)).map((slot) => ({
       id: slot.id,
       lane: { kind: slot.lane.kind, code: slot.laneCode, name: slot.laneName },
       startAt: slot.startAt,
@@ -58,7 +69,7 @@ export async function boardSheetRows(caller: CommandCaller, query: BoardSheetQue
   const answer = await board(caller, { siteId: query.siteId, ...(query.from ? { from: query.from } : {}), ...(query.to ? { to: query.to } : {}), readiness: 'false' })
   const lanes = new Map(answer.lanes.map((lane) => [`${lane.kind}:${lane.id}`, lane]))
   const orders = new Map(answer.workOrders.map((workOrder) => [workOrder.id, workOrder]))
-  return [...answer.slots]
+  return [...(await ofCustomer(caller, answer.slots, (slot) => slot.workOrderId, query.partyId))] // B-PR-09
     .sort((a, b) => a.startAt.localeCompare(b.startAt) || a.id.localeCompare(b.id))
     .map((slot) => {
       const lane = lanes.get(`${slot.lane.kind}:${slot.lane.id}`)

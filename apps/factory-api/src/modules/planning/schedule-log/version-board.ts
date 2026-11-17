@@ -8,7 +8,7 @@ import { compareVersion, compareWords, type CompareSlot } from '@nexus/factory-d
 import { laneKey, laneOfSlot } from '@nexus/factory-domain/planning/schedule/slots'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { assertMayAt, officeContextOf } from '../access'
+import { assertMayAt, /* B-PR-09 */ assertEveryPartyAt, officeContextOf } from '../access'
 import { dayOf, SITE_COLUMNS, type Reader, type SiteRow } from '../store'
 import { siteViewOf, storedSlotView, versionHeaderOf } from '../schedule/publish'
 import { scheduleWorld, type ScheduleWorld } from '../schedule/service'
@@ -49,6 +49,10 @@ export async function publishedVersionFor(db: Reader, caller: CommandCaller, ver
   const version = isUuid(versionId) ? await db.planVersion.findUnique({ where: { id: versionId }, select: { ...PLAN_COLUMNS, site: { select: SITE_COLUMNS } } }) : null
   if (!version || version.kind !== 'PUBLISHED') throw new NotFoundError('Published version not found.')
   assertMayAt(context, PLANNING_VIEW, { companyId: version.companyId, siteId: version.siteId }, 'Published version')
+  // B-PR-09 (the brand wall; as B-PR-07's version list and Publish): a published version holds every customer's bars, so its
+  // board (and the board's sheet, the export) is the production unit's: 403 in words that name no customer for a person limited
+  // to some customers.
+  assertEveryPartyAt(context, PLANNING_VIEW, { companyId: version.companyId, siteId: version.siteId })
   return version
 }
 

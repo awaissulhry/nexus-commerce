@@ -124,7 +124,7 @@ async function askInCommand(tools: CommandTools, workOrderId: string, body: AskI
   const { tx } = tools
   // The work order's row: two asks of one source take turns (the scrap left to replace is read under it).
   await tx.$queryRaw`SELECT "id" FROM "WorkOrder" WHERE "id" = ${workOrderId}::uuid FOR UPDATE`
-  const workOrder = (await tx.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, number: true, status: true } }))!
+  const workOrder = (await tx.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, number: true, status: true, /* B-PR-09 */ partyId: true } }))!
   let cellId = body.workOrderSizeId ?? null
   let source: AskFacts['source'] = null
   if (body.sourceScanId) {
@@ -185,7 +185,7 @@ async function askInCommand(tools: CommandTools, workOrderId: string, body: AskI
     type: 'production.replacement_requested',
     subject: workOrder.id,
     ...scope,
-    payload: { workOrderId: workOrder.id, number: workOrder.number, replacementId: id, workOrderSizeId: cell.id, kind: body.kind, quantity: body.quantity, sourceScanId: data.sourceScanId ?? null, reworkOrderId: data.reworkOrderId ?? null },
+    payload: { workOrderId: workOrder.id, number: workOrder.number, partyId: workOrder.partyId /* B-PR-09 */, replacementId: id, workOrderSizeId: cell.id, kind: body.kind, quantity: body.quantity, sourceScanId: data.sourceScanId ?? null, reworkOrderId: data.reworkOrderId ?? null },
   })
   const [view] = await replacementViews(tx, [(await readReplacement(tx, id))!])
   return { replacement: view! }
@@ -235,7 +235,7 @@ export async function changeReplacement(caller: CommandCaller, replacementId: st
       ...(change !== 'approve' && change !== 'refuse' && body.note?.trim() ? { note: body.note.trim() } : {}),
     }
     await tx.replacementRequest.update({ where: { id: row.id }, data, select: { id: true } })
-    const workOrder = (await tx.workOrder.findUnique({ where: { id: row.workOrderId }, select: { number: true } }))!
+    const workOrder = (await tx.workOrder.findUnique({ where: { id: row.workOrderId }, select: { number: true, /* B-PR-09 */ partyId: true } }))!
     const scope = { companyId: row.companyId, siteId: row.siteId }
     tools.audit({
       action: `production.${change}Replacement`,
@@ -250,7 +250,7 @@ export async function changeReplacement(caller: CommandCaller, replacementId: st
       type: 'production.replacement_changed',
       subject: row.workOrderId,
       ...scope,
-      payload: { workOrderId: row.workOrderId, number: workOrder.number, replacementId: row.id, kind: row.kind, status, cutLogId: change === 'done' ? (body.cutLogId ?? null) : null },
+      payload: { workOrderId: row.workOrderId, number: workOrder.number, partyId: workOrder.partyId /* B-PR-09 */, replacementId: row.id, kind: row.kind, status, cutLogId: change === 'done' ? (body.cutLogId ?? null) : null },
     })
     const [view] = await replacementViews(tx, [(await readReplacement(tx, row.id))!])
     return { replacement: view! }

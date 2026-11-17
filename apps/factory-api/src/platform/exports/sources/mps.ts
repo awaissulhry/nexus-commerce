@@ -3,7 +3,7 @@ import { PRODUCTION_STRATEGIES, STRATEGY_ITEM_KINDS, STRATEGY_LIMITS, STRATEGY_W
 import { officeContextOf } from '../../../modules/planning/access'
 import { listSettings } from '../../../modules/planning/settings/settings'
 import { listStrategy, type ListStrategyQuery } from '../../../modules/planning/strategy/strategy'
-import { defineExportSource } from '../source'
+import { defineExportSource, /* B-PR-09 */ everyCustomerRefusal } from '../source'
 
 /**
  * Planning › Long range › Master schedule & S&OP, its production strategy per item (SCR-202 sec:strategy, `/planning/mps`, the
@@ -28,6 +28,8 @@ export const mps = defineExportSource<Query, Row>({
   listKey: 'planning.mps',
   page: '/planning/mps',
   permission: PLANNING_VIEW,
+  // B-PR-09 (the brand wall): it adds up every customer's work: the production unit's file alone (403 in words otherwise).
+  refusal: everyCustomerRefusal(PLANNING_VIEW),
   query(address) {
     const q = address.get('q')?.trim().slice(0, 100)
     const set = address.get('set')

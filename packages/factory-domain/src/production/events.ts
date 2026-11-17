@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-PR-09 */ livePartyId } from '../events/define'
 import { HIDE_STATES } from '../inventory/issue/rules'
 import { GARMENT_TRACKINGS } from './serials/rules'
 import { SCAN_SUBJECTS } from './settings/monitoring'
@@ -28,7 +28,9 @@ import { CUT_OVERRIDE_REASON_CODES, CUT_WARNING_KINDS } from './cutting/checks'
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
  * 02 "Work orders" Live: a work order's status change refreshes the late list and the tiles). apps/factory-api's
  * modules/production emits them in the commands that make the change. Ids, numbers, counts and states only: no money,
- * no customer, no legal-basis text, no reason, no person's name in a payload.
+ * no customer name, no legal-basis text, no reason, no person's name in a payload. B-PR-09 (the brand wall): the work order,
+ * cut, bundle, rework and scrap events carry `partyId`, the work order's one customer's id (null: none), so the office's live
+ * screens send them only to people who reach that customer (events/define.ts livePartyId, events/live.ts).
  *
  *   production.monitoring_changed   a site's floor rules changed: who floor records name (WIDENED: the station → the
  *                                   worker; NARROWED: the worker → the station) or the legal basis on record
@@ -140,6 +142,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       siteId: z.uuid(),
       styleId: z.uuid(),
       /** B-W2b-284: empty for a SAMPLE work order of an internal or uncharged round (its cells name no order line). */
@@ -157,7 +160,7 @@ export const events = [
     type: 'workorder.changed',
     context: 'production',
     description: "A work order's cells or revision (while a DRAFT), or its due date, priority or note changed.",
-    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), changes: z.array(z.enum(WORK_ORDER_CHANGES)).min(1), cells: z.number().int().min(0), pieces: z.number().int().min(0) }),
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), /* B-PR-09 */ partyId: livePartyId(), changes: z.array(z.enum(WORK_ORDER_CHANGES)).min(1), cells: z.number().int().min(0), pieces: z.number().int().min(0) }),
     live,
   }),
   // B-W2b-51 (MES-009): the dispatch board, the tablet's My work and the planning board put a rush work order first.
@@ -165,7 +168,7 @@ export const events = [
     type: 'workorder.priority_changed',
     context: 'production',
     description: "A work order's priority or rush flag changed: the dispatch lists and the tablets of its site order their work again.",
-    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), siteId: z.uuid(), priority: z.number().int(), rush: z.boolean(), previousPriority: z.number().int(), previousRush: z.boolean() }),
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), /* B-PR-09 */ partyId: livePartyId(), siteId: z.uuid(), priority: z.number().int(), rush: z.boolean(), previousPriority: z.number().int(), previousRush: z.boolean() }),
     live: { ...live, floor: 'floor.work', fields: ['workOrderId', 'number', 'rush'] },
   }),
   defineEvent({
@@ -175,6 +178,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       batchNumber: z.string(),
       siteId: z.uuid(),
       styleId: z.uuid(),
@@ -195,7 +199,7 @@ export const events = [
     type: 'workorder.status_changed',
     context: 'production',
     description: 'A work order was started, completed, closed or cancelled.',
-    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), from: z.enum(WORK_ORDER_STATUSES), to: z.enum(WORK_ORDER_STATUSES) }),
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), /* B-PR-09 */ partyId: livePartyId(), from: z.enum(WORK_ORDER_STATUSES), to: z.enum(WORK_ORDER_STATUSES) }),
     live: { ...live, floor: 'floor.work', fields: ['workOrderId', 'number', 'to'] },
   }),
   // B-W2a-12 (modules/production/completion): report finished to stock and taking a report back.
@@ -206,6 +210,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       siteId: z.uuid(),
       /** The report: its first move's id. */
       reportId: z.uuid(),
@@ -222,7 +227,7 @@ export const events = [
     type: 'workorder.finished_reversed',
     context: 'production',
     description: 'A report to finished goods was taken back (the reason is in the audit row): its garments left stock again.',
-    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), siteId: z.uuid(), reportId: z.uuid(), moveIds: z.array(z.uuid()).min(1), pieces: z.number().int().min(1) }),
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), /* B-PR-09 */ partyId: livePartyId(), siteId: z.uuid(), reportId: z.uuid(), moveIds: z.array(z.uuid()).min(1), pieces: z.number().int().min(1) }),
     live: { ...live, fields: ['workOrderId', 'number', 'reportId'] },
   }),
   defineEvent({
@@ -232,6 +237,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       cutLogId: z.uuid(),
       hideId: z.uuid(),
       lotId: z.uuid(),
@@ -255,6 +261,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       hideId: z.uuid(),
       lotId: z.uuid(),
       /** The last entry, with the rest of the hide; null: nothing more was used. */
@@ -274,6 +281,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       /** The mirror entry. */
       cutLogId: z.uuid(),
       reversedId: z.uuid(),
@@ -294,6 +302,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       bundleId: z.uuid(),
       code: z.string(),
       workOrderSizeId: z.uuid(),
@@ -308,14 +317,14 @@ export const events = [
     type: 'production.bundle_reprinted',
     context: 'production',
     description: "A bundle's ticket was reprinted with a new code; a scan of the old code is refused with the new one in the words.",
-    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), bundleId: z.uuid(), code: z.string(), replacedCode: z.string(), postedBy: postedBy() }),
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), /* B-PR-09 */ partyId: livePartyId(), bundleId: z.uuid(), code: z.string(), replacedCode: z.string(), postedBy: postedBy() }),
     live: bundleLive,
   }),
   defineEvent({
     type: 'production.bundle_voided',
     context: 'production',
     description: 'A bundle made by mistake was voided before any scan named it: its garments are cut, not in bundles, again.',
-    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), bundleId: z.uuid(), code: z.string(), workOrderSizeId: z.uuid(), quantity: z.number().int().min(1), postedBy: postedBy() }),
+    payload: z.strictObject({ workOrderId: z.uuid(), number: z.string(), /* B-PR-09 */ partyId: livePartyId(), bundleId: z.uuid(), code: z.string(), workOrderSizeId: z.uuid(), quantity: z.number().int().min(1), postedBy: postedBy() }),
     live: bundleLive,
   }),
   defineEvent({
@@ -441,6 +450,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       reworkId: z.uuid(),
       workOrderSizeId: z.uuid(),
       bundleId: z.uuid().nullable(),
@@ -461,6 +471,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       reworkId: z.uuid(),
       bundleId: z.uuid().nullable(),
       status: z.enum(REWORK_STATUSES),
@@ -477,6 +488,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       replacementId: z.uuid(),
       workOrderSizeId: z.uuid(),
       kind: z.enum(REPLACEMENT_KINDS),
@@ -493,6 +505,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       replacementId: z.uuid(),
       kind: z.enum(REPLACEMENT_KINDS),
       status: z.enum(REPLACEMENT_STATUSES),
@@ -507,6 +520,7 @@ export const events = [
     payload: z.strictObject({
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       /** The first move's id. */
       scrapId: z.uuid(),
       moveIds: z.array(z.uuid()),

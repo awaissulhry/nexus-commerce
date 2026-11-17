@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-PR-09 */ livePartyId } from '../events/define'
 
 /**
  * The final inspection by plan (B-W2b-97; QHS-014, QHS-023, QHS-049, QHS-052, QHS-053, QHS-054; design floor.final "aql"
@@ -24,6 +24,7 @@ export const events = [
     context: 'quality-final',
     description: 'Results, measurements, the serial or batch check, the units inspected or a photo were recorded on an open final inspection run on its plan.',
     payload: z.strictObject({
+      partyId: livePartyId(), // B-PR-09
       inspectionId: z.uuid(),
       workOrderId: z.uuid(),
       what: z.enum(RECORDED_WHAT),
