@@ -1,12 +1,17 @@
 'use client'
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
-import { Ban, Lock, Mail, Paperclip, UserPlus } from 'lucide-react'
+import { Ban, CornerDownRight, Euro, Globe, Lock, Mail, Paperclip, PencilLine, Ruler, UserPlus, X } from 'lucide-react'
 import { Button, Checkbox, SegmentedControl } from '@nexus/ui/primitives'
 import { MentionButton, MentionInput, type MentionInputHandle } from '../../helpers/view/MentionInput'
 import { useLocale, useT } from '../../../i18n/provider'
-import { shortDateOf, dayOf } from '../../parts/time'
+import { shortDateOf, dayOf, timeOf } from '../../parts/time'
+// B-TH-236: the amount field (B-TH-049) beside the box, price readers only.
+import { amountOffered, AMOUNT_CURRENCIES } from '../../helpers/amount'
+import { AmountField } from '../../helpers/view/AmountField'
 import {
+  floorLocked,
+  toCustomer,
   audienceName,
   boxState,
   composerModes,
@@ -58,7 +63,12 @@ export interface ComposerProps {
   hint?: ReactNode
   /** B-TH-300: the helpers beside the @ button (Saved replies ▾, TH-1c's B-TH-208). */
   helpers?: ReactNode
+  /** B-TH-283 (B-TH-083): files dropped on the box's "measurement sheet" side go up ticked as measurement sheets. */
+  onSheets?: (files: File[]) => void
 }
+
+/** The icon of each audience: the lock for an Office note, the mail for a reply, the globe for the portal (B-TH-237). */
+const MODE_ICON = { note: Lock, reply: Mail, portal: Globe } as const
 
 /**
  * The composer (B-TH-205, T5; picture 3): sticky under the feed, ~104 px at rest, growing while typing to about 40 % of the column
@@ -75,6 +85,8 @@ export function Composer(props: ComposerProps) {
   const mention = useRef<MentionInputHandle>(null)
   const textArea = () => boxRef.current?.querySelector<HTMLTextAreaElement>('textarea') ?? null
   const [dragging, setDragging] = useState(false)
+  // B-TH-283: which side of the box a drag is over (the right side files them as measurement sheets).
+  const [dropSide, setDropSide] = useState<'files' | 'sheets'>('files')
   const [announce, setAnnounce] = useState('')
   const lastMode = useRef(draft.mode)
 
@@ -82,6 +94,8 @@ export function Composer(props: ComposerProps) {
   const modes = composerModes(context)
   const party = audienceName(context)
   const prospect = !context.party && context.prospect ? context.prospect : null
+  const ModeIcon = MODE_ICON[draft.mode]
+  const mentionMode = draft.mode === 'note' ? 'note' : 'reply'
   const held = heldReason(draft, context, { sending, hasFiles: props.hasFiles })
   const heldText = held ? t(held.key, held.params) : (props.extraHeld ?? null)
   const length = [...draft.body].length
@@ -101,7 +115,7 @@ export function Composer(props: ComposerProps) {
   useEffect(() => {
     if (lastMode.current === draft.mode) return
     lastMode.current = draft.mode
-    setAnnounce(t(draft.mode === 'note' ? 'live.note' : 'live.reply', { party }))
+    setAnnounce(t(`live.${draft.mode}`, { party }))
   }, [draft.mode, party, t])
 
   if (state === 'closed') {
@@ -161,18 +175,35 @@ export function Composer(props: ComposerProps) {
   }
 
   const takesFiles = Boolean(props.onFiles)
+  const sheetSide = (event: DragEvent<HTMLDivElement>): 'files' | 'sheets' => {
+    if (!props.onSheets) return 'files'
+    const box = event.currentTarget.getBoundingClientRect()
+    return box.width > 0 && event.clientX > box.left + box.width * 0.6 ? 'sheets' : 'files'
+  }
   const onDrag = (event: DragEvent<HTMLDivElement>, on: boolean) => {
     if (!takesFiles || !event.dataTransfer?.types.includes('Files')) return
     event.preventDefault()
     setDragging(on)
+    setDropSide(sheetSide(event))
   }
   const onDrop = (event: DragEvent<HTMLDivElement>) => {
     if (!takesFiles) return
     event.preventDefault()
     setDragging(false)
     const files = [...(event.dataTransfer?.files ?? [])]
-    if (files.length > 0) props.onFiles?.(files)
+    if (files.length === 0) return
+    if (sheetSide(event) === 'sheets' && props.onSheets) props.onSheets(files)
+    else props.onFiles?.(files)
   }
+  // B-TH-236: what the message answers or corrects, said above the box with × to let it go.
+  const link = draft.link ?? null
+  const dropLink = () => {
+    const { link: _link, ...rest } = draft
+    void _link
+    props.onDraft(rest, notes)
+  }
+  const amount = amountOffered(draft.mode, context.can.price)
+  const lockedFloor = floorLocked(draft)
 
   return (
     <div className="fw-rt-composer" data-mode={draft.mode}>
@@ -185,15 +216,30 @@ export function Composer(props: ComposerProps) {
             className="fw-rt-cx-seg"
             value={draft.mode}
             onChange={(value) => setMode(value as ComposerMode)}
-            options={[
-              { value: 'note', label: t('mode.note'), icon: <Lock size={13} aria-hidden /> },
-              { value: 'reply', label: t(prospect ? 'mode.replyProspect' : 'mode.reply', { party }), icon: <Mail size={13} aria-hidden /> },
-            ]}
+            options={modes.map((mode) => {
+              const Icon = MODE_ICON[mode]
+              const label = mode === 'note' ? t('mode.note') : mode === 'portal' ? t('mode.portal', { party }) : t(prospect ? 'mode.replyProspect' : 'mode.reply', { party })
+              return { value: mode, label, icon: <Icon size={13} aria-hidden /> }
+            })}
           />
         </div>
       )}
 
       {draft.mode === 'reply' && props.recipients}
+
+      {link && (
+        <p className="fw-rt-cx-link">
+          {link.kind === 'reply' ? <CornerDownRight size={13} aria-hidden /> : <PencilLine size={13} aria-hidden />}
+          <span>
+            {link.kind === 'reply'
+              ? t('link.replying', { who: link.who ?? t('link.someone'), when: shortDateOf(link.at, locale, dayOf(props.now ?? new Date().toISOString())) })
+              : t(`link.correcting.${link.way ?? draft.mode}`, { time: timeOf(link.at, locale), party })}
+          </span>
+          <Button size="sm" variant="quiet" aria-label={t(link.kind === 'reply' ? 'link.dropReply' : 'link.dropCorrect')} onClick={dropLink}>
+            <X size={13} aria-hidden />
+          </Button>
+        </p>
+      )}
 
       <div
         ref={boxRef}
@@ -207,8 +253,8 @@ export function Composer(props: ComposerProps) {
         onDrop={onDrop}
       >
         <p className="fw-rt-cx-mark">
-          {draft.mode === 'note' ? <Lock size={13} aria-hidden /> : <Mail size={13} aria-hidden />}
-          <span>{t(draft.mode === 'note' ? 'mark.note' : 'mark.reply', { party })}</span>
+          <ModeIcon size={13} aria-hidden />
+          <span>{t(`mark.${draft.mode}`, { party })}</span>
         </p>
         <MentionInput
           ref={mention}
@@ -216,11 +262,11 @@ export function Composer(props: ComposerProps) {
           value={draft.body}
           onChange={(body) => change({ body })}
           people={context.people}
-          mode={draft.mode}
-          label={t(draft.mode === 'note' ? 'mode.note' : 'mode.reply', { party })}
+          mode={mentionMode}
+          label={t(`mode.${draft.mode}`, { party })}
           rows={2}
           honourRows
-          placeholder={t(draft.mode === 'note' ? 'placeholder.note' : 'placeholder.reply', { party })}
+          placeholder={t(`placeholder.${draft.mode}`, { party })}
           aria-describedby={heldText ? heldId : undefined}
           onKeyDown={onKeyDown}
           onPaste={(event) => {
@@ -232,10 +278,22 @@ export function Composer(props: ComposerProps) {
           }}
         />
         {props.tray}
-        {dragging && (
+        {dragging && !props.onSheets && (
           <div className="fw-rt-cx-drop" aria-hidden="true">
             <Paperclip size={18} aria-hidden />
-            {t(draft.mode === 'note' ? 'drop.note' : 'drop.reply', { party })}
+            {t(`drop.${draft.mode}`, { party })}
+          </div>
+        )}
+        {dragging && props.onSheets && (
+          <div className="fw-rt-cx-drop is-split" aria-hidden="true">
+            <span className={dropSide === 'files' ? 'is-on' : ''}>
+              <Paperclip size={18} aria-hidden />
+              {t(`drop.${draft.mode}`, { party })}
+            </span>
+            <span className={dropSide === 'sheets' ? 'is-on' : ''}>
+              <Ruler size={18} aria-hidden />
+              {t('drop.sheets')}
+            </span>
           </div>
         )}
       </div>
@@ -249,7 +307,22 @@ export function Composer(props: ComposerProps) {
           ))}
         </div>
       )}
-      {draft.mode === 'reply' && prospect && (
+      {draft.mode === 'portal' && <p className="fw-rt-cx-line">{t('portal.line', { party })}</p>}
+      {amount && draft.amount !== undefined && (
+        <AmountField
+          value={draft.amount}
+          currency={draft.currency ?? AMOUNT_CURRENCIES[0]}
+          forFloor={draft.forFloor}
+          onChange={(next) => change({ amount: next.amount, currency: next.currency })}
+          onRemove={() => {
+            const { amount: _amount, currency: _currency, ...rest } = draft
+            void _amount
+            void _currency
+            props.onDraft(rest, notes)
+          }}
+        />
+      )}
+      {toCustomer(draft.mode) && prospect && (
         <p className="fw-rt-cx-warn">
           <span>{t('prospect.line', { party: prospect.name })}</span>
           {props.onMakeCustomer && (
@@ -263,9 +336,10 @@ export function Composer(props: ComposerProps) {
       {modes.length === 1 && modes[0] === 'note' && !context.party && !context.prospect && <p className="fw-rt-cx-line">{t('box.noParty')}</p>}
       {floorOffered(context, draft.mode) && (
         <div className="fw-rt-cx-floor">
-          <Checkbox label={t('floor.label')} checked={draft.forFloor} onChange={(event) => change({ forFloor: event.target.checked })} />
+          <Checkbox label={t('floor.label')} checked={draft.forFloor || lockedFloor} disabled={lockedFloor} onChange={(event) => change({ forFloor: event.target.checked })} />
           <p className="fw-rt-cx-line">
-            {draft.forFloor ? t('floor.on', { record: context.recordLabel, limit: FLOOR_TEXT }) : t('floor.off')}
+            {draft.forFloor || lockedFloor ? t('floor.on', { record: context.recordLabel, limit: FLOOR_TEXT }) : t('floor.off')}
+            {lockedFloor ? ` ${t('floor.locked')}` : ''}
             {floorTooLong(draft) ? ` ${t('floor.long', { limit: FLOOR_TEXT })}` : ''}
           </p>
         </div>
@@ -275,6 +349,11 @@ export function Composer(props: ComposerProps) {
         {props.clip}
         {draft.mode === 'note' && context.people.length > 0 && <MentionButton onClick={() => mention.current?.startMention()} />}
         {props.helpers}
+        {amount && draft.amount === undefined && (
+          <Button size="sm" variant="quiet" onClick={() => change({ amount: '', currency: draft.currency ?? AMOUNT_CURRENCIES[0] })}>
+            <Euro size={13} aria-hidden /> {t('amount.add')}
+          </Button>
+        )}
         {props.hint}
         <span className="fw-rt-cx-grow" />
         {length >= COUNTER_FROM && <span className={`fw-rt-cx-count${length > MAX_BODY ? ' is-over' : ''}`}>{t('counter', { count: MAX_BODY - length })}</span>}

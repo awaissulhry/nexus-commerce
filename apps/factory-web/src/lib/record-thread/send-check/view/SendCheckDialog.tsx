@@ -17,6 +17,8 @@ export interface SendCheckModel {
   /** "Send outside this customer" ticked (recorded by the API with the send). */
   outside: boolean
   sending: boolean
+  /** B-TH-236 (B-TH-050): the mail corrects one we sent ("Send the correction to Brand Alpha?"). */
+  correction?: boolean
 }
 
 export interface SendCheckActions {
@@ -69,7 +71,7 @@ export function SendCheckDialog({ model, actions }: { model: SendCheckModel; act
   return (
     <div className="fw-rt-contents" onKeyDown={onKeyDown}>
       <SendCheckWindow
-        model={{ to: who(model.to), cc: who(model.cc), party: model.partyName || null, warnings, outside: outside.length > 0 ? { ticked: model.outside } : null, sendLabel: t('check.send', { party: model.partyName }), held: ownHeld }}
+        model={{ to: who(model.to), cc: who(model.cc), party: model.partyName || null, warnings, outside: outside.length > 0 ? { ticked: model.outside } : null, sendLabel: t(model.correction ? 'check.sendCorrection' : 'check.send', { party: model.partyName }), held: ownHeld }}
         onTickOutside={actions.onOutside}
         onBack={actions.onBack}
         onSend={actions.onConfirm}
@@ -77,6 +79,11 @@ export function SendCheckDialog({ model, actions }: { model: SendCheckModel; act
         <p className="fw-rt-check-who">
           {model.files > 0 && `${t('who.files', { count: model.files })} · `}
           {t('who.from')}
+        </p>
+        {/* B-TH-236 (B-TH-048): the 10 seconds after Send, said before it goes; a correction says the old mail stays. */}
+        <p className="fw-rt-check-who">
+          {model.correction ? `${t('who.correction')} ` : ''}
+          {t('who.undo')}
         </p>
         {model.state.status === 'error' && model.state.retry && (
           <p className="fw-rt-check-line">

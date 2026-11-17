@@ -1,6 +1,6 @@
 import { defineDesignScreen } from '../../design/design-screen'
 import { BRAND_ALPHA, BRAND_BETA } from '../../testing/two-brands'
-import { demoCards, demoThread } from '../demo-data'
+import { DEMO_NOW, demoCards, demoThread } from '../demo-data'
 import type { CardContext, CardMessage } from './model'
 import { CardGallery, type CardGalleryModel } from './view/CardGallery'
 
@@ -24,6 +24,33 @@ const LONG = [
 const cards = demoCards(BRAND_ALPHA)
 const mail = cards[0]
 const ours = cards[3]
+
+// ---- B-TH-236 (B-TH-048, B-TH-049, B-TH-050): Correct, "In reply to", the office amount, Undo — made-up messages of picture 2.
+const NOW_MS = Date.parse(DEMO_NOW)
+const corrected = { ...ours, mine: true, correctedBy: { id: 'correction-1', at: '2026-11-17T08:20:00.000Z' } }
+const correction = {
+  ...ours,
+  id: 'correction-1',
+  at: '2026-11-17T08:20:00.000Z',
+  body: 'Sorry, one change: cutting starts on Thursday 19 Nov, not Wednesday.',
+  files: [],
+  mine: true,
+  corrects: { id: ours.id, author: 'Alex Demo', excerpt: 'Good morning, here are the photos of the pre-production sample…', at: ours.at },
+}
+const replyToPortal = {
+  ...ours,
+  id: 'reply-portal-1',
+  channel: 'PORTAL' as const,
+  at: '2026-11-17T09:50:00.000Z',
+  body: 'Yes: 3 cm from the hem on both sizes, 54 and 56. The old care label text stays.',
+  files: [],
+  email: null,
+  mine: true,
+  replyTo: { id: cards[0]!.id, author: BRAND_ALPHA.portalPerson.name, excerpt: 'Photos look good. On the PDF: is the label 3 cm from the hem on both sizes, 54 and 56?', at: '2026-11-17T09:41:00.000Z' },
+}
+const pricedNote = { ...cards[1]!, id: 'priced-1', body: 'Agreed with the buyer on the phone: the second run at the price below, delivery unchanged.', mentions: [], mine: true, amount: { value: 1_845_000, currency: 'EUR' } }
+const sending = { ...ours, id: 'undo-1', at: DEMO_NOW, body: 'Good morning, the size chart follows.', files: [], mine: true, email: { to: [BRAND_ALPHA.contact.email], subject: 'Re: size chart', status: 'QUEUED' as const, id: 'mail-undo-1', undoUntil: new Date(NOW_MS + 7_000).toISOString() } }
+// ---- end B-TH-236
 
 export const designScreen = defineDesignScreen<CardGalleryModel>({
   screen: 'SCR-006-card',
@@ -82,6 +109,32 @@ export const designScreen = defineDesignScreen<CardGalleryModel>({
       model: alpha([mail, ours], { canReadFiles: false, canReply: false, canTask: false }),
       note: '“2 files you cannot open”: counted, never dropped. No Reply and no task without the rights.',
     },
+    // ---- B-TH-236
+    {
+      id: 'corrected',
+      label: 'Correct: the old message and its correction',
+      model: alpha([corrected, correction], { canCorrect: { note: true, email: true, portal: true } }),
+      note: 'Messages are never edited: Correct posts a new message linked to the old one. The old one says “Corrected below”; the new one “Correction of 09:12”. ⋯ › Correct on one’s own message only, by the way it went.',
+    },
+    {
+      id: 'reply-link',
+      label: 'A reply names the message it answers',
+      model: alpha([replyToPortal], { canCorrect: { note: true, email: true, portal: true } }),
+      note: '“In reply to …, 17 Nov: …” above the words opens the message it answers; our reply in the portal says “In the portal · Brand Alpha”.',
+    },
+    {
+      id: 'amount',
+      label: 'An office note with its amount (price readers)',
+      model: alpha([pricedNote]),
+      note: 'The price in its own field, never in the words: only people who see prices read it (the API drops it for everyone else; never the customer, a link or the floor).',
+    },
+    {
+      id: 'undo',
+      label: 'Sending… · Undo (10 seconds)',
+      model: alpha([sending], { now: NOW_MS }),
+      note: 'The sender’s mail waits 10 seconds: “Sending to Brand Alpha… · Undo (7)”. Taken back = the text is back in the box; then the honest words: Sent → Delivered.',
+    },
+    // ---- end B-TH-236
     {
       id: 'brand-beta',
       label: 'Brand Beta’s copy (brand wall)',

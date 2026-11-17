@@ -6,6 +6,8 @@ import { OFFICE_PEOPLE } from '../demo-data'
 import { everyCase, leftKeys, render, textOf } from '../parts/testing'
 import { designScreen } from './fixtures'
 import { boxState, composerModes, floorOffered, floorTooLong, heldReason, keyMode, mentionsOf, startDraft, switchMode, type ComposerContext, type ComposerDraft } from './model'
+// B-TH-236 / B-TH-237
+import { floorLocked, sendKey, toCustomer } from './model'
 import { Composer } from './view/Composer'
 
 /** B-TH-205 — the composer's audience switch (T5): starts on Office note, the switch keeps the text, the floor tick, every state. */
@@ -112,3 +114,96 @@ describe('SCR-006-composer in both languages', () => {
     for (const [, id, html] of everyCase(designScreen)) if (id === 'brand-beta') expect(scanText(textOf(html), BRAND_ALPHA)).toEqual([])
   })
 })
+
+// ---- B-TH-237 (B-TH-044): reply in the portal without e-mail; B-TH-236: Reply / Correct links, the amount, the floor's price check.
+describe('B-TH-237: “In the portal only” — offered by the customer’s portal, the default stays Office note', () => {
+  const PORTAL: ComposerContext = { ...ORDER, portal: true }
+
+  it('the third audience needs a customer, threads.post and the portal offered; every visit still starts on Office note', () => {
+    expect(composerModes(PORTAL)).toEqual(['note', 'reply', 'portal'])
+    expect(composerModes(ORDER)).toEqual(['note', 'reply'])
+    expect(composerModes({ ...PORTAL, party: null })).toEqual(['note'])
+    expect(composerModes({ ...PORTAL, can: { ...PORTAL.can, email: false } })).toEqual(['note', 'portal'])
+    expect(composerModes({ ...PORTAL, can: { ...PORTAL.can, post: false } })).toEqual(['reply'])
+    expect(startDraft(PORTAL).mode).toBe('note')
+    expect(toCustomer('portal')).toBe(true)
+    expect(toCustomer('note')).toBe(false)
+  })
+
+  it('the portal box: blue, no To or Cc, its line names the customer’s mail setting, Send names the customer (W08, W20)', () => {
+    const html = composer(PORTAL, draft({ mode: 'portal', body: 'Yes, both sizes.' }))
+    expect(html).toContain('data-mode="portal"')
+    const text = textOf(html)
+    expect(text).toContain('In the portal only')
+    expect(text).toContain(`In ${BRAND_ALPHA.tradeName}’s portal · no e-mail`)
+    expect(text).toContain('their mail setting decides when they hear of it')
+    expect(text).toContain(`Post to ${BRAND_ALPHA.tradeName}`)
+    expect(sendKey('portal')).toBe('send.portal')
+    expect(textOf(composer(PORTAL, draft({ mode: 'portal', body: 'x' }), 'it'))).toContain(`Pubblica per ${BRAND_ALPHA.tradeName}`)
+    const beta = textOf(composer({ ...PORTAL, party: { name: BRAND_BETA.tradeName } }, draft({ mode: 'portal', body: 'x' })))
+    expect(scanText(beta, BRAND_ALPHA)).toEqual([])
+  })
+
+  it('switching to the portal keeps the text, takes mentions and the amount out (said), drops the floor tick', () => {
+    const after = switchMode(draft({ body: '@Bea Esempio the price is set.', amount: '10', forFloor: true }), 'portal', OFFICE_PEOPLE)
+    expect(after.draft).toEqual({ mode: 'portal', body: 'the price is set.', forFloor: false })
+    expect(after.notes.map((note) => note.key)).toEqual(['switch.mentions', 'switch.amount'])
+    expect(heldReason(draft({ mode: 'portal', body: 'x' }), { party: null, prospect: { name: 'Nova' } })).toEqual({ key: 'held.prospect' })
+  })
+})
+
+describe('B-TH-236: what the message answers or corrects, the amount, the floor’s price check', () => {
+  const REPLY = { kind: 'reply' as const, messageId: 'm-1', who: 'Anna Alfieri', at: '2026-11-17T09:41:00.000Z' }
+  const FIX = { kind: 'correct' as const, messageId: 'm-2', who: null, at: '2026-11-17T08:12:00.000Z', way: 'reply' as const }
+
+  it('the box names the message: “Replying to Anna Alfieri, 17 Nov” or “Correcting your mail of 09:12”, with ×', () => {
+    expect(textOf(composer({ ...ORDER, portal: true }, draft({ mode: 'portal', link: REPLY }), 'en'))).toContain('Replying to Anna Alfieri, 17 Nov')
+    const fix = textOf(composer(ORDER, draft({ mode: 'reply', body: 'Thursday.', link: FIX })))
+    expect(fix).toContain('Correcting your mail of 09:12: whoever got it gets the correction')
+    expect(textOf(composer(ORDER, draft({ mode: 'reply', body: 'x', link: FIX }), 'it'))).toContain('Correggi la tua mail delle 09:12')
+  })
+
+  it('a reply link survives a switch; a correction keeps its way — leaving it lets the correction go (said)', () => {
+    expect(switchMode(draft({ mode: 'reply', body: 'x', link: REPLY }), 'note', OFFICE_PEOPLE).draft.link).toEqual(REPLY)
+    expect(switchMode(draft({ mode: 'note', body: 'x', link: REPLY }), 'portal', OFFICE_PEOPLE).draft.link).toEqual(REPLY)
+    const left = switchMode(draft({ mode: 'reply', body: 'x', link: FIX }), 'note', OFFICE_PEOPLE)
+    expect(left.draft.link).toBeUndefined()
+    expect(left.notes).toEqual([{ key: 'switch.correction' }])
+  })
+
+  it('the floor tick of a correction of a floor note is on and stays on', () => {
+    const wo = { ...ORDER, recordType: 'WorkOrder', recordLabel: 'WO-2026-0311', party: null }
+    const fixFloor = draft({ body: 'Black mesh.', forFloor: true, link: { kind: 'correct', messageId: 'm-3', who: null, at: '2026-11-17T08:30:00.000Z', way: 'note', forFloor: true } })
+    expect(floorLocked(fixFloor)).toBe(true)
+    expect(floorLocked(draft())).toBe(false)
+    const html = composer(wo, fixFloor)
+    expect(textOf(html)).toContain('The note you correct is on the tablets: the correction goes there too.')
+    expect(html).toMatch(/type="checkbox"[^>]*checked=""[^>]*disabled=""|type="checkbox"[^>]*disabled=""[^>]*checked=""|disabled=""[^>]*type="checkbox"[^>]*checked=""|checked=""[^>]*disabled=""[^>]*type="checkbox"/)
+  })
+
+  it('the amount field: on an office note for a price reader only; Send is held while it is not a number or with “For the floor”', () => {
+    const priced = { ...ORDER, can: { ...ORDER.can, price: true } }
+    expect(textOf(composer(priced, draft({ body: 'x' })))).toContain('Amount')
+    expect(textOf(composer(ORDER, draft({ body: 'x' })))).not.toContain('Amount')
+    expect(textOf(composer(priced, draft({ mode: 'reply', body: 'x' })))).not.toContain('Amount')
+    expect(heldReason(draft({ body: 'x', amount: '12,50' }), ORDER)).toBeNull()
+    expect(heldReason(draft({ body: 'x', amount: 'twelve' }), ORDER)).toEqual({ key: 'held.amount' })
+    expect(heldReason(draft({ body: 'x', amount: '12', forFloor: true }), ORDER)).toEqual({ key: 'held.amountFloor' })
+    expect(heldReason(draft({ body: 'x', amount: '' }), ORDER)).toBeNull()
+  })
+
+  it('W08/W34: a floor note whose words look like a price is held, naming what looked like one; an office note may say prices', () => {
+    expect(heldReason(draft({ body: 'Lining at € 4,50 a metre.', forFloor: true }), ORDER)).toEqual({ key: 'held.floorPrice', params: { found: '€ 4,50' } })
+    expect(heldReason(draft({ body: 'prezzo 12 al metro', forFloor: true }), ORDER)?.key).toBe('held.floorPrice')
+    expect(heldReason(draft({ body: 'Lining at € 4,50 a metre.' }), ORDER)).toBeNull()
+    expect(heldReason(draft({ body: 'Cut 40 pieces, total 120.', forFloor: true }), ORDER)).toBeNull()
+    const wo = { ...ORDER, recordType: 'WorkOrder', recordLabel: 'WO-2026-0311', party: null }
+    expect(textOf(composer(wo, draft({ body: 'Lining at € 4,50 a metre.', forFloor: true })))).toContain('Held: “€ 4,50” looks like a price, and the floor never sees money.')
+  })
+
+  it('the new cases draw with no key left on screen, in both languages', () => {
+    for (const [locale, id, html] of everyCase(designScreen)) expect(leftKeys(html, ['mode', 'mark', 'placeholder', 'send', 'live', 'held', 'portal', 'link', 'switch', 'floor', 'drop', 'amount']), `${locale} ${id}`).toEqual([])
+    expect(designScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['portal', 'replying', 'correcting', 'amount', 'floor-price', 'correct-floor']))
+  })
+})
+// ---- end B-TH-236 / B-TH-237

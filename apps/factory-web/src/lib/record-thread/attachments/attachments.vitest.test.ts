@@ -22,6 +22,7 @@ import {
   type DraftFile,
   type RecordFile,
 } from './model'
+import { takesSheet } from './model' // B-TH-283
 import { AttachmentLines, AttachmentTray } from './view/AttachmentTray'
 
 /** B-TH-206 — files straight into the message (T6): progress, refusals, Send held while uploading, the message's audience. */
@@ -143,3 +144,39 @@ describe('SCR-006-attach in both languages', () => {
     }
   })
 })
+
+// ---- B-TH-237: a message in the portal shares its files like a reply (no mail limit); B-TH-283 (B-TH-083): measurement sheets.
+describe('B-TH-237 / B-TH-283: files of a portal message, and files that go up as measurement sheets', () => {
+  it('a portal message’s files are shared with this record’s customer (files.manage), an office-only one is named, no mail limit', () => {
+    expect(uploadAudience('portal', true, true)).toBe('PARTY')
+    expect(uploadAudience('portal', false, true)).toBe('OFFICE')
+    expect(uploadAudience('portal', true, false)).toBe('OFFICE')
+    const big: DraftFile = { key: 'b', name: 'big.pdf', sizeBytes: MAIL_MAX + 1, contentType: 'application/pdf', source: 'device', phase: 'done', fileId: 'f-b', audience: 'PARTY' }
+    expect(trayHeld([big], 'portal')).toBeNull()
+    expect(trayHeld([big], 'reply')).toEqual({ key: 'held.mailLimit' })
+    const office: DraftFile = { ...big, key: 'o', sizeBytes: 10, audience: 'OFFICE' }
+    expect(officeInReply([office], 'portal')).toEqual([office])
+    expect(trayHeld([office], 'portal')).toEqual({ key: 'held.officeFile' })
+  })
+
+  it('a PDF or a photo goes up as a measurement sheet; any other file is refused with why', () => {
+    expect(takesSheet('application/pdf')).toBe(true)
+    expect(takesSheet('image/jpeg')).toBe(true)
+    expect(takesSheet('application/zip')).toBe(false)
+    const added = addDropped([], [{ name: 'sizes-anna.pdf', type: 'application/pdf', size: 90_000 }, { name: 'logo.ai', type: 'application/postscript', size: 9_000 }], 'OFFICE', key, true)
+    expect(added.added[0]).toMatchObject({ name: 'sizes-anna.pdf', phase: 'uploading', sheet: true })
+    expect(added.added[1]).toMatchObject({ name: 'logo.ai', phase: 'refused', problem: { key: 'refused.sheetType' } })
+    expect(added.added[1]!.sheet).toBeUndefined()
+    expect(addDropped([], [{ name: 'a.pdf', type: 'application/pdf', size: 9 }], 'OFFICE', key).added[0]!.sheet).toBeUndefined()
+  })
+
+  it('the tray marks a sheet in words (it and en), never naming another customer', () => {
+    const sheet: DraftFile = { key: 's', name: 'sizes-anna.pdf', sizeBytes: 90_000, contentType: 'application/pdf', source: 'device', phase: 'done', fileId: 'f-s', audience: 'OFFICE', sheet: true }
+    const html = render(createElement(AttachmentTray, { files: [sheet], partyName: BRAND_BETA.tradeName, onRemove: () => undefined, onRetry: () => undefined }))
+    expect(textOf(html)).toContain('Measurement sheet · only those with the measurements right open it')
+    expect(textOf(render(createElement(AttachmentTray, { files: [sheet], partyName: BRAND_BETA.tradeName, onRemove: () => undefined, onRetry: () => undefined }), 'it'))).toContain('Scheda misure')
+    expect(scanText(textOf(html), BRAND_ALPHA)).toEqual([])
+    expect(leftKeys(html, ['sheet', 'tray', 'audience', 'kind'])).toEqual([])
+  })
+})
+// ---- end B-TH-237 / B-TH-283

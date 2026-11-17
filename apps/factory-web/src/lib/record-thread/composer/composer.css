@@ -26,7 +26,8 @@
   color: var(--nds-warning-text);
 }
 
-.fw-rt-composer[data-mode='reply'] .fw-rt-cx-seg [role='radio'][aria-checked='true'] {
+.fw-rt-composer[data-mode='reply'] .fw-rt-cx-seg [role='radio'][aria-checked='true'],
+.fw-rt-composer[data-mode='portal'] .fw-rt-cx-seg [role='radio'][aria-checked='true'] {
   background: var(--nds-info-soft);
   color: var(--nds-info-text);
 }
@@ -49,7 +50,8 @@
   border-color: var(--nds-warning);
 }
 
-.fw-rt-composer[data-mode='reply'] .fw-rt-cx-box {
+.fw-rt-composer[data-mode='reply'] .fw-rt-cx-box,
+.fw-rt-composer[data-mode='portal'] .fw-rt-cx-box {
   background: var(--nds-info-soft);
   border-color: var(--nds-info);
 }
@@ -71,7 +73,8 @@
   color: var(--nds-warning-text);
 }
 
-.fw-rt-composer[data-mode='reply'] .fw-rt-cx-mark {
+.fw-rt-composer[data-mode='reply'] .fw-rt-cx-mark,
+.fw-rt-composer[data-mode='portal'] .fw-rt-cx-mark {
   color: var(--nds-info-text);
 }
 
@@ -192,6 +195,56 @@
 
 .fw-rt-cx-held > span {
   flex: 1 1 200px;
+}
+
+/* B-TH-236: what the message answers or corrects, above the box ("Replying to Alma, 14 Nov ×"). */
+.fw-rt-cx-link {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 2px 4px 2px 10px;
+  border-inline-start: 2px solid var(--nds-border-strong);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rt-cx-link > span {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* B-TH-283: a drag over the box offers two sides — the message's files, or measurement sheets (body data). */
+.fw-rt-cx-drop.is-split {
+  padding: 6px;
+  gap: 6px;
+  border-style: solid;
+  background: var(--nds-surface);
+}
+
+.fw-rt-cx-drop.is-split > span {
+  flex: 1 1 0;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px;
+  border: 2px dashed var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text-2);
+}
+
+.fw-rt-cx-drop.is-split > span:last-child {
+  flex-basis: 40%;
+}
+
+.fw-rt-cx-drop.is-split > span.is-on {
+  border-color: var(--nds-primary);
+  background: var(--nds-primary-soft);
+  color: var(--nds-text);
 }
 
 /* SCR-006-composer (design review): the composer at the foot of a thread-tall column. */

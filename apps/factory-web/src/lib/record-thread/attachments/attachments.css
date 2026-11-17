@@ -102,6 +102,11 @@
   color: var(--nds-info-text);
 }
 
+/* B-TH-283: a file going up as a measurement sheet (body data) says so beside its audience. */
+.fw-rt-file-aud.is-sheet {
+  color: var(--nds-warning-text);
+}
+
 .fw-rt-clip {
   display: inline-flex;
 }

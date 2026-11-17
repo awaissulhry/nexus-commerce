@@ -25,7 +25,9 @@
     "person": "{name} ({org})",
     "files_one": "{count} file",
     "files_other": "{count} file",
-    "from": "Da te, con l'indirizzo di risposta di questo record, così la risposta torna qui."
+    "from": "Da te, con l'indirizzo di risposta di questo record, così la risposta torna qui.",
+    "correction": "Una correzione di una mail che hai inviato: la vecchia resta e dice “Corretto più sotto”.",
+    "undo": "Dopo Invia hai 10 secondi per riprenderla."
   },
   "check": {
     "send": "Invia a {party}",
@@ -39,7 +41,8 @@
       "refused": "Torna indietro: questo messaggio non può partire da qui",
       "officeFile": "Prima condividi o togli il file solo ufficio",
       "outside": "Spunta “Invia fuori da questo cliente”, o togli l'indirizzo"
-    }
+    },
+    "sendCorrection": "Invia la correzione a {party}"
   },
   "problem": {
     "forbidden": "Non puoi inviare posta per questo record.",
@@ -83,6 +86,14 @@
     "failed": "Non inviata: {reason}. Il tuo testo è ancora nel riquadro.",
     "outside": "Un indirizzo è di un altro cliente: l'email non è partita. Toglilo, o spunta “Invia fuori da questo cliente” nel controllo.",
     "hidden": "Una copia nascosta va solo ai nostri colleghi o ai contatti di questo cliente: l'email non è partita.",
-    "badRecipient": "Non inviata: un indirizzo è stato rifiutato (non valido, o respinto o segnalato prima). Correggi l'indirizzo e invia di nuovo."
+    "badRecipient": "Non inviata: un indirizzo è stato rifiutato (non valido, o respinto o segnalato prima). Correggi l'indirizzo e invia di nuovo.",
+    "takenBack": "Ripresa: la mail non è partita. Il tuo testo è di nuovo nel riquadro.",
+    "undoFailed": "Non è stato possibile riprendere la mail: Nexus non risponde. Potrebbe essere già partita.",
+    "undo": {
+      "NO_WINDOW": "Non ripresa: questa mail è partita subito, senza i 10 secondi per annullarla.",
+      "LEFT": "Non ripresa: la mail è già partita.",
+      "NOT_SENT": "Non ripresa: la mail non è partita, non c'è niente da annullare.",
+      "NOT_YOURS": "Non ripresa: solo chi ha inviato questa mail può annullarla."
+    }
   }
 }

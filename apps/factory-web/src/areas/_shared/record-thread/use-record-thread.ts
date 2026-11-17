@@ -21,6 +21,12 @@ import { useLiveChanges } from '../../../record-panels/live'
 import { liveParts } from '../../../record-panels/model'
 import { putToStore, sha256Hex, storeUrl, StoreError } from '../../../record-panels/store'
 import { checkReply, postNoteKeyed, readContacts, readDeliveries, readThreadPage, sendReplyKeyed, shareWithParty } from './api'
+// B-TH-236 / B-TH-237: the portal reply, Undo, the links and the amount; refusals in words.
+import { postPortalReplyKeyed, takeBackMail, type MessageLinks } from './api'
+import { floorPriceRefused, NOT_SHAREABLE_TYPES, portalRefusal, undoRefusalKey } from './state'
+import { amountBody, floorPriceFound } from '../../../lib/record-thread/helpers/amount'
+import { correctionWay } from '../../../lib/record-thread/card/model'
+import { floorLocked, type ComposerMode, type DraftLink } from '../../../lib/record-thread/composer/model'
 import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type ServerThread, type Work } from './state'
 // B-TH-229: the person's own read mark (B-TH-027).
 import { markThreadRead } from './api'
@@ -115,6 +121,12 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   // The message a link names (`?message=<id>`), read from the address once on arrival.
   const [anchor, setAnchor] = useState<string | null>(null)
   useEffect(() => setAnchor(anchorOf(window.location.search)), [])
+  // ---- B-TH-237: the API said nobody of the customer reads this record in the portal (NO_PORTAL): the choice goes for this record.
+  const [portalRefused, setPortalRefused] = useState(false)
+  useEffect(() => setPortalRefused(false), [key])
+  // ---- B-TH-236 (B-TH-048): the mails this screen just sent, until the mail list says when they may be taken back.
+  const [undoable, setUndoable] = useState<ReadonlyMap<string, { emailId: string; until: string }>>(new Map())
+  // ---- end B-TH-236 / B-TH-237
   const lastRead = useRef(new Date().toISOString())
   const uploads = useRef(new Map<string, File>())
   const workRef = useRef(work)
@@ -266,7 +278,9 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     const now = Date.now()
     const note = readDraft(storage(), draftKey(personId, key, 'note'), now)
     const reply = note ? null : readDraft(storage(), draftKey(personId, key, 'reply'), now)
-    const found = note ?? reply
+    // B-TH-237: a message for the portal kept on this device comes back as an office note (the box always starts there).
+    const portal = note || reply ? null : readDraft(storage(), draftKey(personId, key, 'portal'), now)
+    const found = note ?? reply ?? portal
     if (!found) return
     setKept(found)
     setWork((latest) => (latest.draft.body === '' ? { ...latest, draft: { ...latest.draft, mode: reply && can.email && partyId ? 'reply' : 'note', body: found.text } } : latest))
@@ -275,8 +289,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   useEffect(() => {
     const id = setTimeout(() => {
       const now = Date.now()
-      const other = work.draft.mode === 'note' ? 'reply' : 'note'
-      writeDraft(storage(), draftKey(personId, key, other), '', now)
+      // The other audiences' drafts are forgotten (the text survives a switch); B-TH-237: three audiences.
+      for (const other of (['note', 'reply', 'portal'] as const).filter((mode) => mode !== work.draft.mode)) writeDraft(storage(), draftKey(personId, key, other), '', now)
       setKept(writeDraft(storage(), draftKey(personId, key, work.draft.mode), work.draft.body, now))
     }, 600)
     return () => clearTimeout(id)
@@ -285,6 +299,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     const now = Date.now()
     writeDraft(storage(), draftKey(personId, key, 'note'), '', now)
     writeDraft(storage(), draftKey(personId, key, 'reply'), '', now)
+    writeDraft(storage(), draftKey(personId, key, 'portal'), '', now) // B-TH-237
     setKept(null)
   }
 
@@ -337,8 +352,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   // ── what the column draws ──────────────────────────────────────────────────────────────────────────────────────────
   const names = useMemo(() => new Map<string, string>([...people.map((person) => [person.id, person.name] as const), [session.user.id, session.user.displayName]]), [people, session.user])
   const cards = useMemo<CardMessage[]>(
-    () => server.messages.map((message) => cardOf(message, { emails, deliveries, names, taskHref: (taskId) => `${prefix}/home/tasks?open=${encodeURIComponent(taskId)}` })),
-    [server.messages, emails, deliveries, names, prefix],
+    () => server.messages.map((message) => cardOf(message, { emails, deliveries, names, taskHref: (taskId) => `${prefix}/home/tasks?open=${encodeURIComponent(taskId)}`, me: session.user.id, undo: undoable })),
+    [server.messages, emails, deliveries, names, prefix, session.user.id, undoable],
   )
   const closed = server.thread?.status === 'CLOSED' ? closedBy(changes, names) : null
   const lastSubject = useMemo(() => {
@@ -357,16 +372,27 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     recordLabel: host.recordLabel,
     party: party ? { name: party.name } : null,
     prospect: host.prospect ?? null,
-    can: { post: can.post, email: can.email, manage: can.manage },
+    can: { post: can.post, email: can.email, manage: can.manage, price: held.has('money.price') },
     closed,
     offline: offline !== null,
     people: withMentionTags(key, people.filter((person) => person.id !== session.user.id)),
+    // B-TH-237: "In the portal only" — a customer, threads.post, a thread shared with customers, and no NO_PORTAL answer yet.
+    portal: party !== null && can.post && !NOT_SHAREABLE_TYPES.has(host.record.type) && !portalRefused,
   }
   const feed: FeedModel = {
     state: server.status,
     messages: withOutbox(cards, work.outbox),
     events: changes.filter(feedShowsChange).map((entry) => eventOf(entry, names)),
-    context: { partyName: party?.name ?? null, canReadFiles: can.readFiles, canReply: can.email && party !== null, canTask: false, anchorId: anchor },
+    context: {
+      partyName: party?.name ?? null,
+      canReadFiles: can.readFiles,
+      // B-TH-237: a customer's message may be answered by e-mail or in the portal.
+      canReply: (can.email || context.portal === true) && party !== null,
+      canTask: false,
+      anchorId: anchor,
+      // B-TH-236 (B-TH-050): Correct on one's own message, by the way it went.
+      canCorrect: { note: can.post, email: can.email && party !== null, portal: context.portal === true },
+    },
     more: server.more,
     older: server.older,
     offline,
@@ -422,6 +448,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
         visibility: row.audience === 'PARTY' ? ['OFFICE', 'PARTNER'] : ['OFFICE'],
         floorSiteId: null,
         partyId: row.audience === 'PARTY' ? partyId : null,
+        // B-TH-283 (B-TH-083): filed as a measurement sheet (body data).
+        ...(row.sheet ? { measurementSheet: true } : {}),
       })
       set({ fileId: announced.file.id, progress: 50 })
       try {
@@ -441,13 +469,13 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     }
   }
 
-  const addFiles = (dropped: File[]) => {
+  const addFiles = (dropped: File[], sheet = false) => {
     const audience = uploadAudience(workRef.current.draft.mode, can.share, partyId !== null)
     let current = workRef.current.files
     let leftOut = 0
     const added: Array<[DraftFile, File]> = []
     for (const file of dropped) {
-      const result = addDropped(current, [{ name: file.name || 'Pasted image.png', type: file.type, size: file.size }], audience, () => `up-${newIdempotencyKey()}`)
+      const result = addDropped(current, [{ name: file.name || 'Pasted image.png', type: file.type, size: file.size }], audience, () => `up-${newIdempotencyKey()}`, sheet)
       leftOut += result.leftOut
       current = result.files
       for (const row of result.added) added.push([row, file])
@@ -461,20 +489,54 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     }
   }
 
-  const sendNote = async (item: { key: string; idempotencyKey: string; body: string; mentions: string[]; attachments: string[]; forFloor: boolean; card: CardMessage }) => {
+  const sendNote = async (item: { key: string; idempotencyKey: string; body: string; mentions: string[]; attachments: string[]; forFloor: boolean; card: CardMessage; amount?: { value: number; currency: string } | null; links?: MessageLinks; snapshot?: Work }) => {
     setSending(true)
     try {
-      const messageId = await postNoteKeyed(api, key, { body: item.body, mentions: item.mentions, attachments: item.attachments, forFloor: item.forFloor }, item.idempotencyKey)
+      const messageId = await postNoteKeyed(api, key, { body: item.body, mentions: item.mentions, attachments: item.attachments, forFloor: item.forFloor, amount: item.amount ?? null, ...item.links }, item.idempotencyKey)
       setWork((now) => ({ ...now, outbox: now.outbox.map((entry) => (entry.key === item.key ? { ...entry, messageId } : entry)) }))
       setNotice({ ns: 'record-thread', key: item.forFloor ? 'notice.noteAddedFloor' : 'notice.noteAdded', tone: 'success' })
       void loadThread()
       void loadTimeline()
     } catch (error) {
+      // B-TH-236 (B-TH-049): the API's price check held a floor note — the text comes back into the box with what looked like a price.
+      if (floorPriceRefused(error) && item.snapshot) {
+        const snapshot = item.snapshot
+        setWork((now) => ({ ...now, draft: snapshot.draft, files: snapshot.files, outbox: now.outbox.filter((entry) => entry.key !== item.key) }))
+        setNotice({ ns: 'record-thread', key: 'notice.floorPrice', params: { found: floorPriceFound(item.body, true) ?? item.body.slice(0, 40) }, tone: 'danger' })
+        return
+      }
       setWork((now) => ({ ...now, outbox: now.outbox.map((entry) => (entry.key === item.key ? { ...entry, state: 'failed', reason: sendReason(error) } : entry)) }))
     } finally {
       setSending(false)
     }
   }
+
+  // ---- B-TH-237 (B-TH-044): a message the customer reads in its portal, no e-mail -------------------------------------------------
+  const sendPortal = async (item: { key: string; idempotencyKey: string; body: string; attachments: string[]; links?: MessageLinks; snapshot: Work }) => {
+    setSending(true)
+    try {
+      const messageId = await postPortalReplyKeyed(api, key, { body: item.body, attachments: item.attachments, ...item.links }, item.idempotencyKey)
+      setWork((now) => ({ ...now, outbox: now.outbox.map((entry) => (entry.key === item.key ? { ...entry, messageId } : entry)) }))
+      setNotice({ ns: 'record-thread', key: 'notice.portalPosted', tone: 'success' })
+      void loadThread()
+    } catch (error) {
+      const refusal = portalRefusal(error)
+      if (refusal) {
+        // The person must change it: the text and files come back into the box, with why. Nobody reads the portal here: the choice goes.
+        const snapshot = item.snapshot
+        const noPortal = refusal === 'notice.portal.NO_PORTAL'
+        if (noPortal) setPortalRefused(true)
+        const back: ComposerMode = noPortal ? (can.email && party ? 'reply' : 'note') : snapshot.draft.mode
+        setWork((now) => ({ ...now, draft: { ...snapshot.draft, mode: back, ...(noPortal && snapshot.draft.link?.kind === 'correct' ? { link: undefined } : {}) }, files: snapshot.files, outbox: now.outbox.filter((entry) => entry.key !== item.key) }))
+        setNotice({ ns: 'record-thread', key: refusal, tone: 'danger' })
+      } else {
+        setWork((now) => ({ ...now, outbox: now.outbox.map((entry) => (entry.key === item.key ? { ...entry, state: 'failed', reason: sendReason(error) } : entry)) }))
+      }
+    } finally {
+      setSending(false)
+    }
+  }
+  // ---- end B-TH-237
 
   const retries = useRef(new Map<string, () => Promise<void>>())
 
@@ -487,10 +549,24 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     const outboxKey = `local-${newIdempotencyKey()}`
     const idempotencyKey = newIdempotencyKey()
     const attachments = sendable(now.files).map((file) => file.fileId as string)
-    const card: CardMessage = { id: outboxKey, kind: 'note', channel: 'APP', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, forFloor: now.draft.forFloor, mentions: [], files: [] }
-    const item = { key: outboxKey, idempotencyKey, body: now.draft.body, mentions: mentionsIn(now.draft.body, context.people), attachments, forFloor: now.draft.forFloor, card }
+    const links = linksOf(now.draft.link)
+    // ---- B-TH-237: in the portal — ours, on the PORTAL channel, no mail.
+    if (now.draft.mode === 'portal') {
+      const card: CardMessage = { id: outboxKey, kind: 'ours', channel: 'PORTAL', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, mentions: [], files: [] }
+      const item = { key: outboxKey, idempotencyKey, body: now.draft.body, attachments, links, snapshot: now }
+      retries.current.set(outboxKey, () => sendPortal(item))
+      setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: false }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
+      forgetDraft()
+      void sendPortal(item)
+      return
+    }
+    // ---- end B-TH-237
+    const forFloor = now.draft.forFloor || floorLocked(now.draft)
+    const amount = amountBody(now.draft.amount, now.draft.currency)
+    const card: CardMessage = { id: outboxKey, kind: 'note', channel: 'APP', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, forFloor, mentions: [], files: [], ...(amount ? { amount } : {}) }
+    const item = { key: outboxKey, idempotencyKey, body: now.draft.body, mentions: mentionsIn(now.draft.body, context.people), attachments, forFloor, card, amount, links, snapshot: now }
     retries.current.set(outboxKey, () => sendNote(item))
-    setWork((latest) => ({ ...latest, draft: { ...latest.draft, body: '', forFloor: false }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
+    setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: false }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
     forgetDraft()
     void sendNote(item)
   }
@@ -511,7 +587,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     const now = workRef.current
     const outside = check?.outside ?? false
     const subject = model.composer.subject
-    const body = sendBody({ to: now.to, cc: now.cc, subject, body: now.draft.body, attachments: sendable(now.files).map((file) => file.fileId as string), outside })
+    // B-TH-236 (B-TH-050): the message it answers or corrects goes with it.
+    const body = { ...sendBody({ to: now.to, cc: now.cc, subject, body: now.draft.body, attachments: sendable(now.files).map((file) => file.fileId as string), outside }), ...linksOf(now.draft.link) }
     const outboxKey = `local-${newIdempotencyKey()}`
     const idempotencyKey = newIdempotencyKey()
     const card: CardMessage = { id: outboxKey, kind: 'ours', channel: 'EMAIL', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, mentions: [], files: [], email: { to: body.to, subject, status: 'QUEUED' } }
@@ -519,8 +596,10 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     const go = async () => {
       setSending(true)
       try {
-        const messageId = await sendReplyKeyed(api, key, body, idempotencyKey)
+        const { messageId, email } = await sendReplyKeyed(api, key, body, idempotencyKey)
         setWork((latest) => ({ ...latest, outbox: latest.outbox.map((entry) => (entry.key === outboxKey ? { ...entry, messageId } : entry)) }))
+        // B-TH-236 (B-TH-048): "Sending to <customer>… · Undo" from the answer, before the next read of the mail list.
+        if (email?.undoUntil) setUndoable((known) => new Map(known).set(messageId, { emailId: email.id, until: email.undoUntil! }))
         setNotice({ ns: 'record-thread', key: 'notice.emailQueued', tone: 'success' })
         void loadThread()
         void loadEmails()
@@ -539,8 +618,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     }
     retries.current.set(outboxKey, go)
     setCheck(null)
-    // After a send the mode stays as used while the person stays on the record (T5-F02).
-    setWork((latest) => ({ ...latest, draft: { ...latest.draft, body: '' }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
+    // After a send the mode stays as used while the person stays on the record (T5-F02); its link goes with the message.
+    setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: latest.draft.forFloor }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
     forgetDraft()
     void go()
   }
@@ -632,15 +711,82 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     },
     onReply: (messageId) => {
       const message = server.messages.find((item) => item.id === messageId)
-      const switched = switchMode(workRef.current.draft, 'reply', context.people)
+      // B-TH-237: a message from the portal is answered in the portal when it is offered; else by e-mail (or the portal alone).
+      const way: ComposerMode = message?.channel === 'PORTAL' && context.portal ? 'portal' : can.email && party ? 'reply' : context.portal ? 'portal' : 'reply'
+      const switched = switchMode(workRef.current.draft, way, context.people)
       const contact = contacts.find((item) => item.name === message?.author.name && cleanAddress(item.email))
+      // B-TH-236 (B-TH-050): the box names the message it answers ("Replying to Alma, 14 Nov ×").
+      const link: DraftLink | undefined = message ? { kind: 'reply', messageId: message.id, who: message.authorHidden ? null : message.author.name, at: message.at } : undefined
       setWork((now) => ({
         ...now,
-        draft: switched.draft,
+        draft: { ...switched.draft, ...(link ? { link } : {}) },
         notes: switched.notes,
-        to: contact ? [{ address: contact.email.toLowerCase(), name: contact.name, kind: 'PARTY', organisation: party?.name ?? null } satisfies Recipient] : now.to,
+        to: contact && way === 'reply' ? [{ address: contact.email.toLowerCase(), name: contact.name, kind: 'PARTY', organisation: party?.name ?? null } satisfies Recipient] : now.to,
       }))
     },
+    // ---- B-TH-236 (B-TH-050): Correct — a new message linked to the old one, the way it went (never an edit).
+    onCorrect: (messageId) => {
+      const card = cards.find((item) => item.id === messageId)
+      const message = server.messages.find((item) => item.id === messageId)
+      if (!card || !message) return
+      const way = correctionWay(card, feed.context)
+      if (!way) return
+      const switched = switchMode(workRef.current.draft, way, context.people)
+      const link: DraftLink = { kind: 'correct', messageId, who: null, at: message.at, way, ...(message.forFloor ? { forFloor: true } : {}) }
+      const mail = emails.get(messageId)
+      setWork((now) => ({
+        ...now,
+        draft: { ...switched.draft, ...(message.forFloor ? { forFloor: true } : {}), link },
+        notes: switched.notes,
+        // A mail's correction goes to whoever got it: To, Cc and the subject of the mail it corrects.
+        ...(way === 'reply' && mail
+          ? {
+              to: mail.to.map((address) => ({ address, name: null, kind: null, organisation: null }) satisfies Recipient),
+              cc: (mail.cc ?? []).map((address) => ({ address, name: null, kind: null, organisation: null }) satisfies Recipient),
+              subject: mail.subject,
+            }
+          : {}),
+      }))
+    },
+    // ---- B-TH-236 (B-TH-048): Undo in the mail's 10 seconds — taken back, its text, recipients, files and link come back into the box.
+    onUndo: async (messageId) => {
+      const emailId = undoable.get(messageId)?.emailId ?? emails.get(messageId)?.id
+      if (!emailId) return
+      try {
+        const taken = await takeBackMail(api, key, emailId)
+        const text = taken.text
+        const linkedId = text.correctsMessageId ?? text.replyToMessageId ?? null
+        const linked = linkedId ? server.messages.find((item) => item.id === linkedId) : undefined
+        const link: DraftLink | undefined = linked
+          ? text.correctsMessageId
+            ? { kind: 'correct', messageId: linked.id, who: null, at: linked.at, way: 'reply' }
+            : { kind: 'reply', messageId: linked.id, who: linked.authorHidden ? null : linked.author.name, at: linked.at }
+          : undefined
+        const asRecipient = (address: string): Recipient => {
+          const contact = contacts.find((item) => item.email.toLowerCase() === address.toLowerCase())
+          return { address, name: contact?.name ?? null, kind: contact ? 'PARTY' : null, organisation: contact ? (party?.name ?? null) : null }
+        }
+        const files = text.attachments.flatMap((id) => {
+          const known = recordFiles.find((file) => file.id === id)
+          return known ? [draftOfRecordFile(known, `record-${id}`)] : []
+        })
+        setWork((now) => ({ ...now, draft: { mode: 'reply', body: text.body, forFloor: false, ...(link ? { link } : {}) }, notes: [], to: text.to.map(asRecipient), cc: text.cc.map(asRecipient), subject: text.subject, files }))
+        setUndoable((known) => {
+          const next = new Map(known)
+          next.delete(messageId)
+          return next
+        })
+        setNotice({ ns: 'record-thread-send', key: 'notice.takenBack', tone: 'success' })
+      } catch (error) {
+        setNotice({ ns: 'record-thread-send', key: undoRefusalKey(error), tone: 'warning' })
+      } finally {
+        void loadThread()
+        void loadEmails()
+      }
+    },
+    // ---- B-TH-283 (B-TH-083): files that go up as measurement sheets.
+    onSheets: (dropped) => addFiles(dropped, true),
+    // ---- end B-TH-236 / B-TH-283
     onCopyLink: (messageId) => {
       const base = host.recordHref ?? `${window.location.pathname}${window.location.search}`
       const address = `${window.location.origin}${messageLink(base, messageId)}`
@@ -671,4 +817,10 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
 
   const base: RecordThreadBase = { key, server, files, filesRead, closed, offline, held, can, partyId, people, loadFiles, loadThread, loadTimeline, notify: setNotice, newCount: server.reading?.newCount ?? 0, peopleState, loadPeople }
   return { model, actions, kept, guard: { ask: leave.ask }, base }
+}
+
+// ---- B-TH-236 (B-TH-050): what a draft's link sends — the message it answers, or the one it corrects (one at most). ----------------
+function linksOf(link: DraftLink | undefined): MessageLinks {
+  if (!link) return {}
+  return link.kind === 'correct' ? { correctsMessageId: link.messageId } : { replyToMessageId: link.messageId }
 }

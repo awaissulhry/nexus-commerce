@@ -190,3 +190,33 @@ export function uploadReason(error: unknown, storeFailed: boolean): string {
   if (error.kind === 'forbidden' || error.kind === 'step_up') return 'failed.forbidden'
   return 'failed.failed'
 }
+
+// ---- B-TH-236 / B-TH-237: refusals in this app's words, by the API's code at `refusal/<CODE>` -----------------------------------
+
+/** The code of a refusal at `refusal/<CODE>` (a 409 or 403 with words), or null. */
+export function refusalCode(error: unknown): string | null {
+  if (!isApiError(error)) return null
+  const path = paths(error).find((one) => one.startsWith('refusal/'))
+  return path ? path.slice('refusal/'.length) : null
+}
+
+/** B-TH-237 (B-TH-044): why a portal reply did not go, as a key of record-thread `notice.portal.*`, or null (a fault: Retry). */
+export function portalRefusal(error: unknown): string | null {
+  const code = refusalCode(error)
+  if (code === 'NO_PARTY' || code === 'NO_PORTAL' || code === 'CLOSED' || code === 'NOT_SHAREABLE') return `notice.portal.${code}`
+  if (isApiError(error) && (error.kind === 'invalid' || error.kind === 'conflict')) return 'notice.portal.other'
+  return null
+}
+
+/** B-TH-236 (B-TH-049): a note for the floor held by the API's price check (409 refusal/FLOOR_PRICE). */
+export const floorPriceRefused = (error: unknown): boolean => refusalCode(error) === 'FLOOR_PRICE'
+
+/** B-TH-236 (B-TH-048): why a mail was not taken back, as a key of record-thread-send `notice.undo.*` (else `notice.undoFailed`). */
+export function undoRefusalKey(error: unknown): string {
+  const code = refusalCode(error)
+  return code === 'NO_WINDOW' || code === 'LEFT' || code === 'NOT_SENT' || code === 'NOT_YOURS' ? `notice.undo.${code}` : 'notice.undoFailed'
+}
+
+/** B-TH-237: the record types whose thread is never shared with a customer (factory-api platform/threads/records NOT_SHAREABLE). */
+export const NOT_SHAREABLE_TYPES: ReadonlySet<string> = new Set(['WorkOrder', 'QualityHold', 'Nonconformance'])
+// ---- end B-TH-236 / B-TH-237

@@ -23,7 +23,8 @@
     "page": "un file SVG, HTML o uno script non è mai accettato (il browser lo eseguirebbe): invia un PDF o un PNG",
     "empty": "il file è vuoto",
     "photoSize": "troppo grande: una foto può essere al massimo di {limit} MB",
-    "fileSize": "troppo grande: un file può essere al massimo di {limit} MB"
+    "fileSize": "troppo grande: un file può essere al massimo di {limit} MB",
+    "sheetType": "una scheda misure è un PDF o una sua foto"
   },
   "failed": {
     "failed": "riprova",
@@ -50,7 +51,9 @@
     "record": "Da questo record…",
     "noRight": "Per aggiungere file serve il permesso di caricare o leggere file",
     "noUpload": "serve il permesso di caricare file",
-    "noRead": "serve il permesso di leggere file"
+    "noRead": "serve il permesso di leggere file",
+    "sheet": "Scheda misure…",
+    "sheetHint": "un PDF o una foto; dati del corpo: la apre solo chi ha il permesso sulle misure"
   },
   "office": {
     "line": "{name} è solo ufficio.",
@@ -78,5 +81,8 @@
     "leftOut_other": "{count} file sono rimasti fuori: al massimo 20 in un messaggio.",
     "shared": "{name} ora è condiviso con {party} (registrato).",
     "shareFailed": "Non è stato possibile condividere {name}: {reason}."
+  },
+  "sheet": {
+    "mark": "Scheda misure · la apre solo chi ha il permesso sulle misure"
   }
 }

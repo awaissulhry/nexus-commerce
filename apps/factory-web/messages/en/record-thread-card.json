@@ -47,7 +47,9 @@
     "link": "Copy link to message",
     "linkHint": "opens the record with this message open",
     "useOn": "Use on another record…",
-    "useOnHint": "Copy its files to an order, a quote or a style of the same customer"
+    "useOnHint": "Copy its files to an order, a quote or a style of the same customer",
+    "correct": "Correct",
+    "correctHint": "a new message linked to this one; nothing is edited"
   },
   "body": {
     "showAll": "Show all ({count} lines)",
@@ -105,5 +107,18 @@
     "unavailable": "Nexus could not be reached",
     "outside": "an address belongs to another customer",
     "failed": "something went wrong"
+  },
+  "link": {
+    "replyTo": "In reply to {who}, {when}: “{excerpt}”",
+    "correction": "Correction of {time}",
+    "correctedBelow": "Corrected below · {time}"
+  },
+  "amount": {
+    "line": "Amount: {amount} · office only, for those who see prices"
+  },
+  "undo": {
+    "sending": "Sending to {party}…",
+    "button": "Undo ({seconds})",
+    "label": "Take the mail back: {seconds} seconds left"
   }
 }
