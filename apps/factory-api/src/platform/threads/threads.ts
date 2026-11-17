@@ -37,6 +37,7 @@ import { wallScopeOf, type WallScope } from './records' // B-PR-08a part 2
 import { serverClock } from '../../core/time'
 import { headOf } from './owner'
 import { readingOf, whoOf, type Reading } from './reads'
+import { peopleTagsOf, taggedFirst, tagLanguageOf } from './people-tags' // T7
 // B-TH-083: a measurement sheet on a card is locked for an office reader without sales.measurements.view.
 import { isMeasurementSheet, MEASUREMENT_SHEET_PERMISSION } from '@nexus/factory-domain/files/measurements'
 // ---- end B-TH-027 / B-TH-028
@@ -725,7 +726,7 @@ export const MAX_MENTIONABLE = 500
  * checks at write: ACTIVE people whose roles let them read the record's thread (two-factor taken as proved). Office
  * writers only (threads.post over the record); names only, never an address or a role.
  */
-export async function mentionablePeople(caller: CommandCaller, record: RecordRef, now: Date): Promise<Array<{ id: string; name: string }>> {
+export async function mentionablePeople(caller: CommandCaller, record: RecordRef, now: Date): Promise<Array<{ id: string; name: string; /* T7 */ tag?: string }>> {
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
@@ -744,7 +745,11 @@ export async function mentionablePeople(caller: CommandCaller, record: RecordRef
       const reader: Actor = { audience: 'office', tenantId: context.tenantId, grants: sessionGrants({ requireMfa: false }, await heldRoles(client, user.id, now), true) }
       if (mayOnThread(reader, THREADS_READ, record.type, scope)) people.push({ id: user.id, name: user.displayName })
     }
-    return people
+    // ---- T7 (production lane agreement): the tags a module registered (./people-tags: the record's production supervisor),
+    // tagged people first, in the reader's language; a tag only marks a person already listed.
+    const locale = (await client.user.findUnique({ where: { id: context.actorId }, select: { locale: true } }))?.locale ?? null
+    return taggedFirst(people, await peopleTagsOf(client, record), tagLanguageOf(locale))
+    // ---- end T7
   })
 }
 

@@ -152,3 +152,9 @@ export function escalationStepsDue(clock: EscalationClock, taken: EscalationStep
   const reached = escalationStepAt(clock, now)
   return ([1, 2] as const).filter((step) => step > taken && step <= reached)
 }
+
+// ---- T7 (threads agreement, production plan §3 "Supervisor"; Italian pick "Supervisore di produzione", plan §5): the tag beside
+// the record's production supervisor in a note's @ list (apps/factory-api platform/threads/people-tags.ts), the reader's language.
+// Office only: the customer is never told who supervises (R-41).
+export const SUPERVISOR_TAG_WORDS = Object.freeze({ it: 'Supervisore', en: 'Supervisor' })
+// ---- end T7
