@@ -26,6 +26,8 @@ export const reminderView = output({
   state: z.enum(REMINDER_STATES),
   version: z.number().int(),
   createdAt: instant(),
+  /** B-TH-096: AT_TIME on a message I shared with the customer: it stops by itself when they answer ("if no answer"). */
+  followUp: z.boolean(),
 })
 
 const one = output({ reminder: reminderView })

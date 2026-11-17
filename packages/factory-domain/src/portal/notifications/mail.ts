@@ -22,6 +22,11 @@ export interface MailItem {
   readonly sentence: string
   /** The record's page in the portal (absolute). */
   readonly link: string
+  /**
+   * B-TH-080 (threads plan TH-6, thread-G11): the message the notice is about — only a message shared with the reader's own
+   * customer, never an internal note (the API's email-out/digest/message-text cuts it); null or left out: none.
+   */
+  readonly quote?: string | null
 }
 
 export interface MailLinks {
@@ -85,9 +90,12 @@ export function composeNotificationMail(input: { readonly recipientName: string;
   const words = WORDS[input.locale]
   const link = linkOrThrow(input.item.link)
   const end = closing(input.links, input.footer, input.locale)
-  const text = [words.hello(input.recipientName), '', input.item.sentence, '', `${words.open}: ${link}`, ...end.text].join('\n')
+  // B-TH-080: the shared message quoted under the sentence.
+  const quote = input.item.quote ? [`“${input.item.quote}”`, ''] : []
+  const text = [words.hello(input.recipientName), '', input.item.sentence, '', ...quote, `${words.open}: ${link}`, ...end.text].join('\n')
   const html =
     `<p>${escapeHtml(words.hello(input.recipientName))}</p><p>${escapeHtml(input.item.sentence)}</p>` +
+    (input.item.quote ? `<blockquote>${escapeHtml(input.item.quote)}</blockquote>` : '') +
     `<p><a href="${escapeHtml(link)}">${escapeHtml(words.open)}</a></p>` +
     end.html
   return { subject: input.item.sentence.slice(0, 200), text, html }
@@ -108,11 +116,12 @@ export function composeDigestMail(input: {
   const total = input.items.length + input.more
   const subject = (input.weekly ? words.weekly : words.daily)(input.company, total)
   const end = closing(input.links, input.footer, input.locale)
-  const lines = input.items.map((item) => `• ${item.sentence}\n  ${linkOrThrow(item.link)}`)
+  // B-TH-080: each item's shared message quoted under its sentence.
+  const lines = input.items.map((item) => `• ${item.sentence}${item.quote ? `\n  “${item.quote}”` : ''}\n  ${linkOrThrow(item.link)}`)
   const text = [words.hello(input.recipientName), words.digestIntro(input.company), '', ...lines, ...(input.more > 0 ? ['', words.more(input.more)] : []), ...end.text].join('\n')
   const html =
     `<p>${escapeHtml(words.hello(input.recipientName))}</p><p>${escapeHtml(words.digestIntro(input.company))}</p><ul>` +
-    input.items.map((item) => `<li><a href="${escapeHtml(linkOrThrow(item.link))}">${escapeHtml(item.sentence)}</a></li>`).join('') +
+    input.items.map((item) => `<li><a href="${escapeHtml(linkOrThrow(item.link))}">${escapeHtml(item.sentence)}</a>${item.quote ? `<br><em>“${escapeHtml(item.quote)}”</em>` : ''}</li>`).join('') +
     '</ul>' +
     (input.more > 0 ? `<p>${escapeHtml(words.more(input.more))}</p>` : '') +
     end.html
