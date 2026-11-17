@@ -46,6 +46,11 @@ export interface SearchDocument {
   readonly area?: string
   /** More words people may type (codes, references, a VAT number). */
   readonly words?: readonly (string | null | undefined)[]
+  // ---- B-PR-08a part 2 (the brand wall): the record names several customers (a cut order of two customers' work orders, a hold of
+  // goods of several, a work order of none: mixed before the rule) — SearchEntry.everyParty (B-PR-01): only a reader who reaches
+  // every customer finds it, and partyId names none of them (null). Default false.
+  readonly everyParty?: boolean
+  // ---- end B-PR-08a
 }
 
 /** The records an event names. */

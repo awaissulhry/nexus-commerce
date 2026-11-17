@@ -22,7 +22,8 @@ import { addWrites, noWrites, removeEntries, removeUnread, writeDocuments, type 
  *                   rewrites what changed and removes the entries of records that are gone. A second rebuild writes
  *                   nothing new.
  *   at start        the worker indexes every active tenant whose index was never built (a database that had records
- *                   before search existed), with the same rebuild.
+ *                   before search existed), with the same rebuild. B-PR-08a: a tenant built before the brand wall's entries
+ *                   carried their customer reads those types again, once (WALL_REREAD).
  */
 
 export const REBUILD_PAGE = 200
@@ -147,6 +148,24 @@ export function searchHandlers(indexers: readonly SearchIndexer[]): EventHandler
   return handlers
 }
 
+// ---- B-PR-08a part 2 (the brand wall): these entries carry their customer since this step (WorkOrder.partyId, SearchEntry.everyParty).
+// A tenant whose index was built before reads them again ONCE at the worker's start; its rebuild pages, keyed by WALL_REREAD.key,
+// mark it done (their audit rows; a repeat answers from the receipts). A tenant built from nothing reads them as they are now.
+export const WALL_REREAD = Object.freeze({
+  key: 'search-wall-b-pr-08a',
+  recordTypes: Object.freeze(['WorkOrder', 'CutOrder', 'Inspection', 'QualityHold', 'Nonconformance', 'SubcontractOrder', 'Message']),
+})
+
+async function rereadForTheWall(database: FactoryDatabase, indexers: readonly SearchIndexer[], tenantId: string, requestId: string): Promise<boolean> {
+  const done = await asSystem(database, tenantId, requestId, (client) =>
+    client.auditLog.findFirst({ where: { recordType: 'Tenant', recordId: tenantId, action: 'search.rebuild', idempotencyKey: { startsWith: `${WALL_REREAD.key}-` } }, select: { id: true } }),
+  )
+  if (done) return false
+  await rebuildIndex(callerFor(database, systemContext(tenantId, requestId)), indexers, { recordTypes: WALL_REREAD.recordTypes, key: WALL_REREAD.key })
+  return true
+}
+// ---- end B-PR-08a
+
 /**
  * At the worker's start: every active tenant whose index was never built (no `search.rebuild` audit row: a database that
  * had records before search existed, or only the seed's sample entries) is indexed from its records. Logged, never thrown.
@@ -157,11 +176,15 @@ export async function indexNewTenants(options: { readonly database: FactoryDatab
   const tenants = await activeTenants(options.database)
   let indexed = 0
   let failed = 0
+  let rereads = 0 // B-PR-08a part 2
   for (const tenantId of tenants) {
     try {
       // Built once: a tenant whose index was ever rebuilt (its `search.rebuild` audit rows) is kept current by the events.
       const built = await asSystem(options.database, tenantId, requestId, (client) => client.auditLog.findFirst({ where: { recordType: 'Tenant', recordId: tenantId, action: 'search.rebuild' }, select: { id: true } }))
-      if (built) continue
+      if (built) {
+        if (await rereadForTheWall(options.database, options.indexers, tenantId, requestId)) rereads++ // B-PR-08a part 2
+        continue
+      }
       const outcome = await rebuildIndex(callerFor(options.database, systemContext(tenantId, requestId)), options.indexers, { recordTypes: null, key: requestId })
       if (outcome.written > 0) indexed++
     } catch (error) {
@@ -169,6 +192,6 @@ export async function indexNewTenants(options: { readonly database: FactoryDatab
       options.log.error({ err: error, tenantId }, "a tenant's empty search index could not be built")
     }
   }
-  options.log.info({ tenants: tenants.length, indexed, failed }, 'search index built for tenants that had none')
+  options.log.info({ tenants: tenants.length, indexed, failed, rereads }, 'search index built for tenants that had none')
   return { tenants: tenants.length, indexed, failed }
 }

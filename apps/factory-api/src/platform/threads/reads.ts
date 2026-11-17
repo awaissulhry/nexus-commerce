@@ -7,7 +7,8 @@ import { RECORD_TYPE } from '@nexus/factory-domain/threads/rules'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../core/command'
 import { actorOf, type RequestContext } from '../../core/context'
 import { mayOnThread, mayShare } from './records'
-import { contextOf, scopeOfThread, type RecordRef } from './threads'
+import { wallScopeOf, wallScopesOf } from './records' // B-PR-08a part 2
+import { contextOf, type RecordRef } from './threads' // B-PR-08a part 2: scopeOfThread → wallScopeOf
 
 /**
  * B-TH-027 (threads plan TH-2, G10; design T1-F04 "2 new", T4-F04 "New since your last visit", PL3-F08, the lists' "New
@@ -112,7 +113,8 @@ const THREAD_SCOPE = { id: true, companyId: true, siteId: true, partyId: true, r
 async function readableThread(client: Reader, context: RequestContext, record: RecordRef) {
   if (context.audience !== 'office' && !mayShare(record.type)) return null
   const thread = await client.thread.findFirst({ where: { recordType: record.type, recordId: record.id }, select: THREAD_SCOPE })
-  if (!thread || !mayOnThread(actorOf(context), THREADS_READ, record.type, scopeOfThread(thread))) return null
+  // B-PR-08a part 2: a work order's, hold's or NCR's thread (office only: refused above for anyone else) through its wall party.
+  if (!thread || !mayOnThread(actorOf(context), THREADS_READ, record.type, await wallScopeOf(client, thread))) return null
   return thread
 }
 
@@ -192,7 +194,12 @@ export async function unreadCounts(caller: CommandCaller, records: readonly Reco
   const asked = records.filter((record) => RECORD_TYPE.test(record.type) && isUuid(record.id))
   const counted = await caller.withClient(async (client) => {
     const threads = asked.length === 0 ? [] : await client.thread.findMany({ where: { OR: asked.map((record) => ({ recordType: record.type, recordId: record.id })) }, select: THREAD_SCOPE })
-    const readable = threads.filter((thread) => (who.office || mayShare(thread.recordType)) && mayOnThread(actorOf(context), THREADS_READ, thread.recordType, scopeOfThread(thread)))
+    // ---- B-PR-08a part 2: the office's work order, hold and NCR threads through their wall party (no read for a portal caller: its
+    // threads of these types are left out first).
+    const seen = threads.filter((thread) => who.office || mayShare(thread.recordType))
+    const scopeOf = await wallScopesOf(client, seen)
+    const readable = seen.filter((thread) => mayOnThread(actorOf(context), THREADS_READ, thread.recordType, scopeOf(thread)))
+    // ---- end B-PR-08a
     if (readable.length === 0) return new Map<string, { newCount: number; lastAt: Date | null }>()
     const ids = readable.map((thread) => thread.id)
     // Two statements, never one with both: the partner role holds no grant on a message's author (a column privilege is checked
