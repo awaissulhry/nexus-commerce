@@ -1,7 +1,5 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import { at, canFor, COMPANY, inShell, ITEMS, LOCATIONS, named, NOW, PREFIX, SITE, TIME_ZONE, uid, WORK_ORDERS, type RoleCase } from '../../../_shared/stock/fixtures'
 import { CHECKLIST_DONE, CHECKLIST_OPEN, CHECKLIST_RELEASED, LOT_ROWS, lotMoves, lotRecordOf } from '../demo/fixtures'
 import { dailyFor, holdRow, HOLD_REASONS, writeOffDialog } from '../demo/daily/fixtures'
@@ -15,15 +13,19 @@ import { LotRecordView } from './view/LotRecordView'
 import { BEHIND_DEPTH, DEPLETED_CHILD, depthModel, FAMILY_READ, nappaDepth, NOT_KEPT_DEPTH, QUARANTINE_DEPTH, REPORT_DONE, reportDialog, REPORTS, SPLIT_DONE, SPLIT_READ, splitDraftFor } from '../depth/demo/fixtures'
 import type { LotDepthModel } from '../depth/view-model'
 import type { SplitDraft } from '../depth/model'
+// B-TH-264: the lot's docked thread (made-up; the page mounts the office's OfficeRecordThread docked).
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-201-record — a lot with made-up data only: the released nappa lot (its checklist, stock in two places, hides, used
  * by two work orders, one shipped to a customer), a lot in quarantine waiting for its Cr VI result (checklist open), a
  * suede lot whose Cr VI failed (blocked), an opening-stock lot (no receipt), a rejected lot (read only), the Moves tab with
- * the running balance, the Activity tab and the thread docked; the states (loading, not found, failed, no right). Roles:
+ * the running balance, the thread docked beside every tab (B-TH-264: RecordFrame, Activity's tools in the thread's "⋯"; Overview &
+ * quality holds the status, holds and inspections; "Same conversation as Compliance › Tests & substances"); the states (loading, not
+ * found, failed, no right). Roles:
  * Owner, Warehouse (sees the checklist read-only), Quality, Read-only, Sales (no inventory.stock.view). B-W2a-64: "Where
- * it is" with reserved and available at the site and who reserved it (one stale), the Quality status tab (holds of the
- * lot and of its hides; none; no right; failed), the Trace tab's tree (both ways with gaps, possible nodes, a hold, a
+ * it is" with reserved and available at the site and who reserved it (one stale), the status and holds on Overview & quality (holds
+ * of the lot and of its hides; none; no right; failed), the Trace tab's tree (both ways with gaps, possible nodes, a hold, a
  * hidden customer; only affected customers; a large trace counted first; not used yet; opening stock; failed), a rejected
  * lot with stock (return to the supplier or write it off per place, its dialog) and the Trace dialog.
  */
@@ -32,8 +34,6 @@ interface LotCase {
   role: RoleCase
   record: LotRecordModel
 }
-
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
 
 function lotCase(role: RoleCase, row = LOT_ROWS[0]!, over: Partial<LotRecordModel> = {}, tab: LotTab = 'overview'): LotCase {
   const can = canFor(role)
@@ -50,9 +50,8 @@ function lotCase(role: RoleCase, row = LOT_ROWS[0]!, over: Partial<LotRecordMode
       live: 'live',
       asOf: NOW,
       changed: null,
-      dockOpen: false,
+      personId: null,
       timeZone: TIME_ZONE,
-      panelsPreview: { ...conversation, record: { type: 'Lot', id: row.id, companyId: COMPANY, siteId: SITE.id }, title: row.code, party: null },
       daily: dailyFor(role),
       figures: part(FIGURES),
       trace: part(row.id === LOT_ROWS[0]!.id ? LOT_TRACE : row.opening ? OPENING_TRACE : UNUSED_TRACE),
@@ -67,7 +66,10 @@ function lotCase(role: RoleCase, row = LOT_ROWS[0]!, over: Partial<LotRecordMode
 
 function LotDesign({ model }: { model: LotCase }) {
   const value = model.record.record.status === 'ready' ? model.record.record.value : null
-  return inShell(`/warehouse/lots/${value?.lot.id ?? 'x'}`, createElement(LotRecordView, { model: model.record }), model.role)
+  // B-TH-264: the lot's ONE thread docked beside every tab (its supplier the only party; an opening-stock lot has none: notes only).
+  const supplier = value?.lot.supplier ?? null
+  const thread = value ? designDockedThread({ recordType: 'Lot', record: value.lot.code, party: supplier ? { name: supplier.name, role: 'supplier' } : null }) : null
+  return inShell(`/warehouse/lots/${value?.lot.id ?? 'x'}`, createElement(LotRecordView, { model: model.record, thread }), model.role)
 }
 
 const [released, quarantine, failed, , , opening, rejected] = LOT_ROWS
@@ -128,8 +130,15 @@ export const designScreen = defineDesignScreen<LotCase>({
     { id: 'moves', label: 'Moves: the ledger of the lot with the running balance', model: lotCase('warehouse', released, {}, 'moves') },
     { id: 'moves-loading', label: 'Moves loading', model: lotCase('warehouse', released, { moves: { value: null, problem: null } }, 'moves') },
     { id: 'moves-error', label: "Moves couldn't be read", model: lotCase('warehouse', released, { moves: { value: null, problem: 'problem.offline' } }, 'moves') },
-    { id: 'activity', label: 'Activity: thread, files and history', model: lotCase('owner', released, {}, 'activity') },
-    { id: 'docked', label: 'Thread beside the overview (wide screen, ⌘J)', model: lotCase('owner', released, { dockOpen: true }) },
+    // ---- B-TH-264: the lot on RecordFrame (the rule of picture 38, the tabs of picture 39) ----
+    {
+      id: 'thread-docked',
+      label: 'TH-6 · Overview & quality with the thread docked (40 %): Activity’s tools in its "⋯"; the same conversation as Compliance › Tests',
+      model: lotCase('owner', released),
+      note: 'The band sits in the shell’s band row; the lot’s ONE thread is docked at 40 % (519 px at 1440, 711 px at 1920), sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me. The band says it is the same conversation as Compliance › Tests & substances. Below 1280 px the band’s Thread button opens it full width.',
+    },
+    { id: 'thread-moves', label: 'TH-6 · Moves with the thread: one third under 1600 px (the ledger needs the room)', model: lotCase('warehouse', released, {}, 'moves') },
+    { id: 'thread-opening', label: 'TH-6 · An opening-stock lot with no supplier: the thread takes office notes only (no party to reply to)', model: lotCase('warehouse', { ...opening!, supplier: null }) },
     { id: 'checklist-error', label: "The checklist couldn't be read", model: lotCase('quality', quarantine, { checklist: { value: null, problem: 'problem.read' } }) },
     { id: 'changed', label: 'Changed by someone else meanwhile', model: lotCase('owner', released, { changed: { at: NOW } }) },
     { id: 'loading', label: 'Loading', model: lotCase('owner', released, { record: { status: 'loading' } }) },
@@ -138,10 +147,10 @@ export const designScreen = defineDesignScreen<LotCase>({
     { id: 'reserved', label: 'B-W2a-64 — Where it is: reserved and available at the site; who reserved it (one done: release it)', model: lotCase('warehouse') },
     { id: 'figures-loading', label: 'B-W2a-64 — The site figures still reading', model: lotCase('warehouse', released, { figures: { value: null, problem: null } }) },
     { id: 'over-reserved', label: 'B-W2a-64 — More reserved than there is (said, never hidden)', model: lotCase('owner', released, { figures: part({ ...FIGURES, lot: { onHand: '96.0000', held: '0.0000', reserved: '148.4000', available: '-52.4000', overReserved: true } }) }) },
-    { id: 'quality-tab', label: 'B-W2a-64 — Quality status: the status (decided in Compliance) and the holds of the lot and its hides', model: lotCase('quality', released, {}, 'quality') },
-    { id: 'quality-none', label: 'B-W2a-64 — Quality status: no holds', model: lotCase('warehouse', quarantine, { holds: part({ lot: [], hides: [] }) }, 'quality') },
-    { id: 'quality-no-right', label: 'B-W2a-64 — Quality status for a role without quality.holds.view', model: lotCase('owner', released, { holds: null }, 'quality') },
-    { id: 'quality-error', label: "B-W2a-64 — Quality status: the holds couldn't be read", model: lotCase('quality', released, { holds: { value: null, problem: 'problem.offline' } }, 'quality') },
+    { id: 'quality-tab', label: 'B-W2a-64 / B-TH-264 — Overview & quality: the status (decided in Compliance) and the holds of the lot and its hides', model: lotCase('quality', released) },
+    { id: 'quality-none', label: 'B-W2a-64 / B-TH-264 — Overview & quality: no holds', model: lotCase('warehouse', quarantine, { holds: part({ lot: [], hides: [] }) }) },
+    { id: 'quality-no-right', label: 'B-W2a-64 / B-TH-264 — Overview & quality for a role without quality.holds.view', model: lotCase('owner', released, { holds: null }) },
+    { id: 'quality-error', label: "B-W2a-64 / B-TH-264 — Overview & quality: the holds couldn't be read", model: lotCase('quality', released, { holds: { value: null, problem: 'problem.offline' } }) },
     { id: 'trace-tree', label: 'B-W2a-64 — Trace tree both ways: levels with counts, gaps, may-hold-it nodes, a hide on hold, a hidden customer', model: lotCase('owner', released, {}, 'trace') },
     { id: 'trace-affected', label: 'B-W2a-64 — Trace tree: only affected customers', model: lotCase('quality', released, { affectedOnly: true }, 'trace') },
     { id: 'trace-large', label: 'B-W2a-64 — A large trace: 30 garments of a bundle counted first, listed when opened', model: lotCase('owner', released, { trace: part(LARGE_TRACE) }, 'trace') },
@@ -168,8 +177,8 @@ export const designScreen = defineDesignScreen<LotCase>({
     { id: 'w2b-warehouse', label: 'B-W2b-320 — Warehouse: sorts hides and records attributes, no trace report (held in words)', model: lotCase('warehouse', released, { depth: depthModel(nappaDepth({ may: { manage: true, split: true, report: false } }), {}, ['inventory.lots.manage']) }) },
     { id: 'w2b-read-only', label: 'B-W2b-320 — Read-only: attributes and split held (inventory.lots.manage), no report', model: lotCase('readOnly', released, { depth: depthModel(nappaDepth({ may: { manage: false, split: false, report: false }, attributes: { ...nappaDepth().attributes, canEdit: false } }), {}, []) }) },
     { id: 'w2b-quarantine', label: 'B-W2b-320 — In quarantine: inspection still open; you received it, another person releases it', model: lotCase('quality', quarantine, { depth: depthModel(QUARANTINE_DEPTH) }) },
-    { id: 'w2b-quality-tab', label: 'B-W2b-320 — Quality status: separation kept (received and decided by two people), holds and incoming inspections', model: lotCase('quality', released, { depth: depthModel(nappaDepth()) }, 'quality') },
-    { id: 'w2b-not-kept', label: 'B-W2b-320 — Quality status: separation not kept (the receiver decided)', model: lotCase('owner', released, { depth: depthModel(NOT_KEPT_DEPTH) }, 'quality') },
+    { id: 'w2b-quality-tab', label: 'B-W2b-320 / B-TH-264 — Overview & quality: separation kept (received and decided by two people), holds and incoming inspections', model: lotCase('quality', released, { depth: depthModel(nappaDepth()) }) },
+    { id: 'w2b-not-kept', label: 'B-W2b-320 / B-TH-264 — Overview & quality: separation not kept (the receiver decided)', model: lotCase('owner', released, { depth: depthModel(NOT_KEPT_DEPTH) }) },
     {
       id: 'w2b-depleted',
       label: 'B-W2b-320 — A child lot depleted: nothing left · depleted 29 Oct, split from its parent, the parent’s inspection',

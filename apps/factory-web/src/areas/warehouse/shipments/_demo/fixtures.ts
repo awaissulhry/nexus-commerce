@@ -1,7 +1,5 @@
 import { createElement, type ReactNode } from 'react'
 import { permissionCheck } from '../../../../lib/session/session'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../../shell/design-data'
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
@@ -413,14 +411,6 @@ export const READY: ReadyOrder[] = [
   { salesOrderId: uid('5150', 30), number: 'SO-2026-0091', customerRef: 'PO-ER-552', status: 'IN_PRODUCTION', companyId: COMPANY, partyId: PARTIES[1]!.id, party: { code: 'C-DEMO-02', legalName: PARTIES[1]!.name }, cells: [cell(1, '50', 3), cell(2, '52', 5), cell(3, '54', 2)] },
   { salesOrderId: uid('5150', 31), number: 'SO-2026-0093', customerRef: null, status: 'READY', companyId: COMPANY, partyId: PARTIES[2]!.id, party: { code: 'C-DEMO-03', legalName: PARTIES[2]!.name }, cells: [cell(4, '48', 4, { styleCode: 'DEMO-PNT-02', styleName: 'Pantalone Demo', serialTracked: true })] },
 ]
-
-// ---- the record panels on a shipment ---------------------------------------------------------------------------------------------
-
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-
-export function panelsModel(): RecordPanelsViewModel {
-  return { ...conversation, record: { type: 'Shipment', id: SHIPMENT_ID, companyId: COMPANY, siteId: SITE }, title: 'SH-00160 · Moto Demo S.r.l.', party: null }
-}
 
 // ---- B-W2a-71 (every day): the backorder, the packing list's versions, the evidence, a void's outcome ----------------------
 

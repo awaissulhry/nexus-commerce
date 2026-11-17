@@ -20,13 +20,17 @@ import { setDatedPrices, type DatedRow } from '../depth/api'
 import { daysHeld, daysRows, splitRows } from '../depth/model'
 import { PriceListImport } from '../import/PriceListImport'
 import { useBreaks } from './use-breaks'
+// ---- B-TH-258: the list's thread docked on RecordFrame (Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 const NO_STYLE: StylePick = { query: '', results: null, problem: null, chosen: null, colourwayId: '', price: '' }
 const NO_CUSTOMERS: CustomerPick = { query: '', results: null, problem: null, picked: [] }
 const NO_COMPARE: CompareView = { beforeId: '', afterId: '', answer: null, problem: null, loading: false }
 
 /**
- * `/w/<company>/sales/price-lists/<id>` (SCR-106 record; `?tab=prices|customers|versions|activity`, `?version=<id>` on
+ * `/w/<company>/sales/price-lists/<id>` (SCR-106 record; `?tab=prices|breaks|customers|versions` — an old `activity` lands on Prices
+ * with the docked thread opened (B-TH-258) —, `?version=<id>` on
  * Prices): reads the list (pricelists.view; the API drops the money the person's grains do not reach), the version the
  * Prices tab shows, and — on Versions — how many rows each version changed against the one before. Writes are one at a
  * time, each with the version read (a 409 reads it again and says so, never overwrites): a price cell when it is left,
@@ -314,13 +318,21 @@ function PriceListRecordContainer({ listId }: { listId: string }) {
     compare,
     // B-W2b-343
     breaks: breaks.model,
+    personId: session.user.id, // B-TH-258
     importer: value && importing ? <PriceListImport companyId={value.companyId} open onClose={() => setImporting(false)} onApplied={() => { void loadList(); if (shown) void loadPrices(shown.id) }} /> : null,
   }
 
   return (
     <PriceListRecordView
       model={model}
-      panels={value && can.threads ? <RecordPanels record={{ type: 'PriceList', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} /> : null}
+      // B-TH-258: the list's thread docked beside every tab — notes only (a list prices many customers: no party); none without
+      // threads.read (no dock, no Thread button). The print view keeps the record panels' print form.
+      thread={
+        value && can.threads ? (
+          <OfficeRecordThread docked record={{ type: 'PriceList', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} recordLabel={value.code} party={null} printHref={printHref(pathname, params?.toString() ?? '')} />
+        ) : null
+      }
+      printThread={value && can.threads ? <RecordPanels record={{ type: 'PriceList', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} /> : null}
       actions={{
         onRetry: () => {
           setList({ status: 'loading' })

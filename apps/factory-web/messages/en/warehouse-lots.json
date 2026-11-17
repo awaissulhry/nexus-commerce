@@ -7,10 +7,6 @@
     "retry": "Try again",
     "partFailed": "{part}: couldn't be read",
     "partLoading": "Reading {part}…",
-    "dock": "Thread",
-    "dockHint": "The thread beside this page (wide screens)",
-    "dockLabel": "Thread, files and history",
-    "noPanels": "Your role does not read threads.",
     "more": "More actions",
     "actions": "Actions",
     "open": "Open",
@@ -549,7 +545,9 @@
       "toChecklist": "Release checklist in Tests & substances",
       "noQuality": "Your role cannot see a lot's quality record: quality decides lots in Compliance › Tests & substances.",
       "copyCode": "Copy the lot code",
-      "rejected": "Rejected on {date}: final, its stock is never used."
+      "rejected": "Rejected on {date}: final, its stock is never used.",
+      "dockLabel": "The lot’s thread",
+      "sameThread": "Same conversation as Compliance › Tests & substances"
     },
     "list": {
       "tableLabel": "Lots",
@@ -644,11 +642,9 @@
       "issuedTo": "Work orders"
     },
     "tab": {
-      "overview": "Overview",
+      "overview": "Overview & quality",
       "trace": "Trace",
-      "moves": "Moves",
-      "activity": "Activity",
-      "quality": "Quality status"
+      "moves": "Moves"
     },
     "movesLabel": "Moves of lot {code}",
     "release": {
@@ -825,7 +821,6 @@
       "noScrap": "Your role may not write off stock."
     },
     "quality": {
-      "status": "Status and decisions",
       "where": "Release, block, reject and the Cr VI result are decided in Compliance › Tests & substances.",
       "holdsTitle": "Holds and inspections",
       "noRight": "Your role does not see quality holds.",

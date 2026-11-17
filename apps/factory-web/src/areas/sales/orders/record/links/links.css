@@ -1,0 +1,33 @@
+/* B-TH-256 — what points at the order: the gates' refusals and planning's re-promises in the notices, complaints and returns in
+   Shipments & invoices. Design-system tokens only. */
+.fw-so-links-gate,
+.fw-so-links-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-so-links-style {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-so-links-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-so-links-sizes {
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-so-links-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-16);
+  min-width: 0;
+}

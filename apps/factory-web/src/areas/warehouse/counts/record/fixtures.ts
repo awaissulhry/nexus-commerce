@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
+// ---- B-TH-264: the count's docked thread in the design cases (notes only: a count has no party) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 // B-W2b-320: the places running counts block (made-up).
 import { BLOCKED } from '../depth/demo/fixtures'
 import {
@@ -32,11 +32,10 @@ import { CountRecordView } from './view/CountRecordView'
  * saving, saved and refused, a recount due, a hide, a found line, ⌘Z), Differences (values with the cost grain, reasons,
  * recounts, the selection's Ask recount / Give a reason, "No differences ✓"), Approval (waiting, the counter's own
  * variance held, under the limit, applied, the year-end sign-off and its frozen valued list), every dialog (Apply N
- * differences, Approve, Send back, Year-end sign-off, Found stock, Give a reason, Edit, Cancel) and the states. Roles:
+ * differences, Approve, Send back, Year-end sign-off, Found stock, Give a reason, Edit, Cancel), the docked thread beside every
+ * tab (B-TH-264: notes only — a count has no party; Activity went, its tools in the thread's "⋯") and the states. Roles:
  * Owner, Warehouse (the counter: no money; may not approve their own variance), Finance (signs off), Read-only, Sales.
  */
-
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
 
 interface RecordCase {
   role: CountRole
@@ -46,7 +45,10 @@ interface RecordCase {
 const recordCase = (role: CountRole, record: CountRecord | null, over: Partial<CountRecordModel> = {}): RecordCase => ({ role, record: recordModel(role, record, over) })
 
 function RecordDesign({ model }: { model: RecordCase }) {
-  return inShell('/warehouse/counts/[id]', createElement(CountRecordView, { model: model.record }), model.role)
+  const loaded = model.record.record
+  // B-TH-264: the count's thread (notes only), with threads.read; none without it (no dock, no Thread button).
+  const thread = loaded.status === 'ready' && model.record.can.threads ? designDockedThread({ recordType: 'StockCount', record: loaded.value.number, party: null }) : null
+  return inShell('/warehouse/counts/[id]', createElement(CountRecordView, { model: model.record, thread }), model.role)
 }
 
 const lines = (items: typeof LINES) => ({ filter: 'all' as const, q: '', locationId: null, items, more: false, problem: null })
@@ -112,8 +114,14 @@ export const designScreen = defineDesignScreen<RecordCase>({
         },
       }),
     },
-    { id: 'activity', label: 'Activity: the count\'s thread, files and history (internal notes only)', model: recordCase('warehouse', COUNTING, { tab: 'activity', panelsPreview: { ...conversation, record: { type: 'StockCount', id: COUNTING.id, companyId: COUNTING.companyId, siteId: COUNTING.site.id }, title: COUNTING.number, party: null } }) },
-    { id: 'activity-no-right', label: 'Activity without threads.read: said in words', model: recordCase('readOnly', COUNTING, { tab: 'activity', can: { ...recordModel('readOnly', COUNTING).can, threads: false } }) },
+    // ---- B-TH-264: the docked thread (the rule of picture 38) ----
+    {
+      id: 'thread-docked',
+      label: 'Warehouse · The thread docked beside Approval (40 %, notes only)',
+      model: recordCase('owner', SUBMITTED, { tab: 'approval', ...doneSubmitted }),
+      note: 'The band sits in the shell’s band row; the thread is docked at 40 % (one third on Lines and Differences under 1600 px), sticky while the body scrolls, ⌘J hides it. A count has no party: Office notes only, no "Reply to". Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me). An old ?tab=activity opens Lines with the thread.',
+    },
+    { id: 'thread-no-right', label: 'Read-only without threads.read: no thread beside the tabs (no Thread button)', model: recordCase('readOnly', COUNTING, { can: { ...recordModel('readOnly', COUNTING).can, threads: false } }) },
     { id: 'lines-places', label: 'Lines: the place filter lists every place with its lines and counted (the API\'s figures)', model: recordCase('warehouse', COUNTING, { lines: { ...lines(LINES), locationId: PLACES[2]!.id } }) },
     { id: 'dialog-reason', label: 'Dialog: Give a reason to 2 lines (it asks for a note)', model: recordCase('owner', COUNTING, { tab: 'differences', dialog: { kind: 'reason', lineIds: [DIFFS[0]!.id, DIFFS[2]!.id], reasonCode: 'NOT_RECORDED', reasonNote: '' } }) },
     { id: 'dialog-cancel', label: 'Dialog: Cancel the count (reason first)', model: recordCase('warehouse', COUNTING, { dialog: { kind: 'cancel', reason: '' } }) },

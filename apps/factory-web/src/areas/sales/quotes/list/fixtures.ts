@@ -55,6 +55,19 @@ export const ROWS: QuoteListRow[] = [
   row(35, { status: 'CANCELLED' }),
 ]
 
+// ---- B-TH-257 (X-SAL-QUO-LIST.grid-F03, F07, F08): made from requests, the accepted rows' orders, the reader's own new messages.
+const SOURCED: QuoteListRow[] = ROWS.map((entry): QuoteListRow =>
+  entry.id === id(42)
+    ? { ...entry, madeFrom: { inquiryId: '0190f0e2-5151-7000-8000-000000000042', number: 'INQ-2026-0042' }, order: null }
+    : entry.id === id(38)
+      ? { ...entry, madeFrom: { inquiryId: '0190f0e2-5151-7000-8000-000000000038', number: 'INQ-2026-0038' }, order: { state: 'MADE', id: '0190f0e2-4444-7000-8000-000000000088', number: 'SO-2026-0088', status: 'CONFIRMED', reason: null, words: null } }
+      : entry.id === id(39)
+        ? { ...entry, status: 'ACCEPTED', order: { state: 'WAITS', id: null, number: null, status: null, reason: 'NOT_MADE', words: 'Order waits.' } }
+        : entry,
+)
+const UNREAD = { [id(42)]: { newCount: 2, lastAt: '2026-10-29T09:42:00.000Z' }, [id(40)]: { newCount: 140, lastAt: '2026-10-27T16:05:00.000Z' } }
+// ---- end B-TH-257
+
 const priceOnly = (rows: QuoteListRow[]) => rows.map(({ marginPct: _m, marginFloorBreached: _b, ...rest }) => rest as QuoteListRow)
 
 const TILES: Record<QuoteTile, TileCount> = {
@@ -144,6 +157,9 @@ export const designScreen = defineDesignScreen<QuotesListViewModel>({
       label: 'W2a: Duplicated — a warning about the price basis',
       model: model({ grains: GRAINS.sales, can: CAN.sales, duplicate: { ...duplicateOf({ id: ROWS[0]!.id, number: ROWS[0]!.number, partyId: ROWS[0]!.partyId, partyName: ROWS[0]!.partyName, revision: 1, versions: [] }), done: { quoteId: id(61), number: 'Q-2026-0161', lines: 2, dropped: [], warnings: ['The source was priced without VAT; this customer buys with VAT included: check the prices kept as typed.'] } } }),
     },
+    // B-TH-257: New messages (threads.read), "from INQ-…" and an accepted row's order.
+    { id: 'th-257-sources', label: 'TH-6 · Sales · New messages, "from INQ-…", an accepted row’s order or "Order waits"', model: model({ grains: GRAINS.sales, can: CAN.sales, rows: { items: SOURCED, more: false, problem: null }, unread: UNREAD, readsRequests: true, readsOrders: true }), note: 'New messages counts only messages you have not read on that quote (99+ above 99); the cell opens the quote with the thread at the first new one. "from INQ-…" opens the request; an accepted quote names its order, or says the order waits. Picture waits for its API (no picture on a quote row yet).' },
+    { id: 'th-257-no-threads', label: 'TH-6 · A role without threads.read: no New messages column', model: model({ grains: GRAINS.sales, can: CAN.sales, rows: { items: SOURCED, more: false, problem: null }, unread: null, readsRequests: false, readsOrders: false }) },
     { id: 'loading', label: 'Loading', model: model({ rows: { items: null, more: false, problem: null }, tiles: UNKNOWN, asOf: null }), note: 'Unknown counts show "—", never 0.' },
     { id: 'error', label: 'Error', model: model({ rows: { items: null, more: false, problem: 'problem.read.unavailable' }, tiles: UNKNOWN }) },
     { id: 'no-permission', label: 'No permission (direct address)', model: model({ rows: { items: null, more: false, problem: 'problem.read.forbidden' }, tiles: UNKNOWN, can: CAN.viewer }), note: 'The page is absent from the navigation; a direct address says the role does not allow it.' },

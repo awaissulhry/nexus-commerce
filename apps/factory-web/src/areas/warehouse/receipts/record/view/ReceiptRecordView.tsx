@@ -1,27 +1,28 @@
 'use client'
 
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, CheckCircle2, Download, FileX, MessageSquare, MoreHorizontal, PackageX, ShieldOff, Undo2, XCircle } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, Menu, Tabs, type TabItem } from '@nexus/ui/components'
+import { AlertTriangle, CheckCircle2, Download, FileX, MoreHorizontal, PackageX, ShieldOff, Undo2, XCircle } from 'lucide-react'
+import { Banner, Card, EmptyState, Field, KeyValue, Menu, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
-import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Kbd, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { formatDate, formatDateTime, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import { dayAt, money, quantity } from '../../../../_shared/buying/model'
 import type { LotWithHides, Receipt, ReceiptHide, ReceiptLine, ReceiptLot } from '../../api'
-import { DAILY_TABS, RECEIPT_TABS, RECEIPT_TONE, reversalMoves, type ReceiptRecordActions, type ReceiptRecordModel, type ReceiptTab } from '../../model'
+import { DAILY_TABS, isWideReceiptTab, RECEIPT_TABS, RECEIPT_TONE, reversalMoves, type ReceiptRecordActions, type ReceiptRecordModel, type ReceiptTab } from '../../model'
 import { blankDiscrepancy, NAMESPACE as DAILY, takesDiscrepancies } from '../../daily-model'
 import { DailyDialogs } from './DailyDialogs'
 import { DailyNoticeBanner, DiscrepanciesTab, DiscrepancyDetail, DocumentsTab } from './DailyTabs'
 // B-W2b-300: the reception report and goods without a PO (their own folder; the record mounts the slot).
 import type { ReceiptDepthSlot } from '../../reception/useReceiptDepth'
 import { NAMESPACE as DEPTH } from '../../reception/model'
+// ---- B-TH-264: the receipt on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import '../../../../_shared/buying/buying.css'
 
 export type { ReceiptRecordActions, ReceiptRecordModel } from '../../model'
@@ -30,31 +31,39 @@ export const LOT_TONE = { QUARANTINE: 'warning', RELEASED: 'success', BLOCKED: '
 const CR_VI_TONE = { NOT_REQUIRED: 'neutral', PENDING: 'warning', PASS: 'success', FAIL: 'danger' } as const
 
 /**
- * SCR-063 — a goods receipt (design warehouse.receipts "Record: Receipt"): the band (‹ Receipts, "<number> ·
- * <supplier> · <PO>", the state, the supplier's DDT, site and goods-in location, when it came and was posted, ⋯ Reverse
- * receipt…), the tabs: Lines (what came against which order line, with the difference against the order and its
- * tolerance; values with the cost grain), Lots & hides (SCR-062 the lots with their quality state, chromium VI and why
- * they wait; SCR-061 every hide one by one on the list frame, with what lies of it now), Activity. Reverse: only while
- * its stock is untouched — else held with what used it, in words — with the reason; nothing is deleted.
+ * SCR-063 — a goods receipt (design warehouse.receipts "Record: Receipt"), on RecordFrame (B-TH-264; threads plan O-WH-REC, the rule
+ * of picture 38, the tabs of picture 39): the band in the shell's band row (‹ Receipts, "<number> · <supplier> · <PO>", ONE pill — the
+ * state —, the supplier's DDT, site and goods-in location, when it came; Reverse receipt… while posted; ⋯ Reverse, the order, the
+ * claims, the discrepancies, Copy, the reception report), the Thread button (⌘J) and the docked thread beside every tab (40 %; one
+ * third on Lines and Lots & hides under 1600 px): the receipt's ONE thread with its supplier, Activity's tools in its "⋯" (R-ACT),
+ * its files in the Files view. Tabs 5 → 4: Lines (what came against which order line, with the difference against the order and its
+ * tolerance; values with the cost grain), Lots & hides (SCR-062 the lots with their quality state, chromium VI and why they wait;
+ * SCR-061 every hide one by one on the list frame, with what lies of it now), Documents check (the DDT photo; "Request from supplier"
+ * writes its mail in the docked thread, where the answer arrives), Discrepancies. ONE notice in the body column, the most serious
+ * first, the rest behind "N more notices". Reverse: only while its stock is untouched — else held with what used it, in words — with
+ * the reason; nothing is deleted.
  */
-export function ReceiptRecordView({ model, actions, panels, depth }: { model: ReceiptRecordModel; actions?: ReceiptRecordActions; panels?: ReactNode; depth?: ReceiptDepthSlot }) {
+export function ReceiptRecordView({ model, actions, thread, printThread, depth }: { model: ReceiptRecordModel; actions?: ReceiptRecordActions; thread?: ReactNode; printThread?: ReactNode; depth?: ReceiptDepthSlot }) {
   return (
     <WithMessages namespaces={['buying', 'lists', 'records', DAILY, 'photo-kit', /* B-W2b-300 */ DEPTH]}>
-      <ReceiptRecord model={model} actions={actions} panels={panels} depth={depth} />
+      <ReceiptRecord model={model} actions={actions} thread={thread} printThread={printThread} depth={depth} />
     </WithMessages>
   )
 }
 
-function ReceiptRecord({ model, actions, panels, depth }: { model: ReceiptRecordModel; actions?: ReceiptRecordActions; panels?: ReactNode; depth?: ReceiptDepthSlot }) {
+function ReceiptRecord({ model, actions, thread, printThread, depth }: { model: ReceiptRecordModel; actions?: ReceiptRecordActions; thread?: ReactNode; printThread?: ReactNode; depth?: ReceiptDepthSlot }) {
   const t = useT('buying')
   const listHref = `${model.prefix}/warehouse/receipts`
   const loaded = model.receipt
   if (loaded.status !== 'ready') {
     return (
-      <div className="fw-by">
-        <div className="fw-by-band">
-          <DetailHeader backAsChild backLabel={<Link href={listHref}>{t('rc.back')}</Link>} title={loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('rc.record.title')} />
-        </div>
+      <RecordFrame
+        recordType="GoodsReceipt"
+        personId={model.personId ?? null}
+        band={{ back: <Link href={listHref}>{t('rc.back')}</Link>, title: loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('rc.record.title'), moreLabel: t('record.more') }}
+        thread={null}
+        threadLabel={t('rc.record.dockLabel')}
+      >
         {loaded.status === 'loading' ? (
           <Card padded aria-busy="true">
             <p className="fw-by-hint" role="status">
@@ -86,30 +95,19 @@ function ReceiptRecord({ model, actions, panels, depth }: { model: ReceiptRecord
             />
           </Card>
         )}
-      </div>
+      </RecordFrame>
     )
   }
-  return <ReadyReceipt receipt={loaded.value} model={model} actions={actions} panels={panels} depth={depth} />
+  return <ReadyReceipt receipt={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} depth={depth} />
 }
 
-function ReadyReceipt({ receipt, model, actions, panels, depth }: { receipt: Receipt; model: ReceiptRecordModel; actions?: ReceiptRecordActions; panels?: ReactNode; depth?: ReceiptDepthSlot }) {
+function ReadyReceipt({ receipt, model, actions, thread, printThread, depth }: { receipt: Receipt; model: ReceiptRecordModel; actions?: ReceiptRecordActions; thread?: ReactNode; printThread?: ReactNode; depth?: ReceiptDepthSlot }) {
   const t = useT('buying')
   const td = useT(DAILY)
   const daily = model.daily ?? null
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
   const href = `${model.prefix}/warehouse/receipts/${receipt.id}`
-
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') {
-        event.preventDefault()
-        actions?.onDock?.()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
 
   const reverseHeld = !model.can.reverse ? t('held.noReverse') : receipt.status !== 'POSTED' ? t('rc.reverse.notPosted') : receipt.reversal && !receipt.reversal.possible ? t('rc.reverse.used') : null
   // B-W2a-63: Documents check and Discrepancies are drawn only with the W2a parts (a design case of the W1 tabs has none).
@@ -138,10 +136,8 @@ function ReadyReceipt({ receipt, model, actions, panels, depth }: { receipt: Rec
     ),
     count: tab === 'lines' ? receipt.lines.length : tab === 'lots' ? receipt.summary.lots : tab === 'discrepancies' ? receipt.discrepancies.count : null,
   }))
-  const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
-  const showDock = model.dockOpen && model.tab !== 'activity' && !!activity
-  const more = [
-    { id: 'reverse', label: t('rc.reverse.menu'), tone: 'danger' as const, disabled: reverseHeld !== null, onSelect: () => actions?.onDialog?.({ kind: 'reverse', reason: '' }) },
+  const more: MenuItemDef[] = [
+    { id: 'reverse', label: t('rc.reverse.menu'), tone: 'danger' as const, disabled: reverseHeld !== null, description: reverseHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'reverse', reason: '' }) },
     ...(receipt.purchaseOrder ? [{ id: 'po', label: t('rc.openOrder', { number: receipt.purchaseOrder.number }), href: `${model.prefix}/purchasing/orders/${receipt.purchaseOrder.id}` }] : []),
     // B-W2a-63 (design page.conn "Supplier claims (purchasing.claims, W2a)"): the claims about this receipt, every state.
     ...(daily?.can.claimsView ? [{ id: 'claims', label: td('band.claims'), href: `${model.prefix}/purchasing/claims?receipt=${encodeURIComponent(receipt.id)}` }] : []),
@@ -152,94 +148,79 @@ function ReadyReceipt({ receipt, model, actions, panels, depth }: { receipt: Rec
   ]
 
   return (
-    <div className="fw-by">
-      <div className="fw-by-band">
-        <DetailHeader
-          backAsChild
-          backLabel={<Link href={`${model.prefix}/warehouse/receipts`}>{t('rc.back')}</Link>}
-          title={
-            <span className="fw-by-title">
-              {receipt.number}{' '}
-              <span className="fw-by-title-sub">
-                · {receipt.supplier.name}
-                {receipt.purchaseOrder ? ` · ${receipt.purchaseOrder.number}` : ''}
-              </span>
+    <RecordFrame
+      recordType="GoodsReceipt"
+      personId={model.personId ?? null}
+      threadLabel={t('rc.record.dockLabel')}
+      thread={thread ?? null}
+      printThread={printThread}
+      wide={isWideReceiptTab(model.tab)}
+      band={{
+        back: <Link href={`${model.prefix}/warehouse/receipts`}>{t('rc.back')}</Link>,
+        title: (
+          <span className="fw-by-title">
+            {receipt.number}{' '}
+            <span className="fw-by-title-sub">
+              · {receipt.supplier.name}
+              {receipt.purchaseOrder ? ` · ${receipt.purchaseOrder.number}` : ''}
             </span>
-          }
-          actions={
-            <span className="fw-by-actions">
-              {receipt.status === 'POSTED' && (
-                <Button size="sm" heldReason={reverseHeld} onClick={() => actions?.onDialog?.({ kind: 'reverse', reason: '' })}>
-                  <Undo2 size={14} aria-hidden /> {t('rc.reverse.button')}
-                </Button>
-              )}
-              {activity && (
-                <Button size="sm" variant={model.dockOpen ? 'tonal' : 'secondary'} active={model.dockOpen} aria-pressed={model.dockOpen} onClick={() => actions?.onDock?.()} title={t('record.dockHint')}>
-                  <MessageSquare size={14} aria-hidden /> <span>{t('record.dock')}</span>
-                  <span className="fw-by-keys" aria-hidden>
-                    <Kbd>⌘</Kbd>
-                    <Kbd>J</Kbd>
-                  </span>
-                </Button>
-              )}
-              <Menu label={<MoreHorizontal size={16} aria-label={t('record.more')} />} items={more} align="right" triggerProps={{ 'aria-label': t('record.more') }} />
-            </span>
-          }
-        />
-        <div className="fw-by-meta-row">
-          <span className="fw-by-meta">
-            <Pill tone={RECEIPT_TONE[receipt.status]}>{t(`rcStatus.${receipt.status}`)}</Pill>
+          </span>
+        ),
+        status: <Pill tone={RECEIPT_TONE[receipt.status]}>{t(`rcStatus.${receipt.status}`)}</Pill>,
+        meta: (
+          <>
             {receipt.supplierDdtNumber ? <Tag tone="neutral">{t('rc.ddt', { number: receipt.supplierDdtNumber, date: receipt.supplierDdtDate ? formatDate(dayAt(receipt.supplierDdtDate), place) : '—' })}</Tag> : <Tag tone="warning">{t('rc.noDdt')}</Tag>}
             <span className="fw-by-hint">{[`${receipt.site.code} · ${receipt.site.name}`, receipt.location ? t('rc.record.at', { location: receipt.location.code }) : null, t('rc.record.receivedAt', { time: formatDateTime(receipt.receivedAt, place) })].filter(Boolean).join(' · ')}</span>
-          </span>
-          <span className="fw-by-status" role="status">
-            {t(`live.${model.live}`)}
-          </span>
-        </div>
-        <Tabs ariaLabel={t('rc.record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
-      </div>
-
-      {model.changed && (
-        <Banner
-          tone="info"
-          title={t('record.changed', { time: formatTime(model.changed.at, place) })}
-          action={
-            <Button size="sm" onClick={() => actions?.onReload?.()}>
-              {t('record.reload')}
+          </>
+        ),
+        primary:
+          receipt.status === 'POSTED' ? (
+            <Button size="sm" heldReason={reverseHeld} onClick={() => actions?.onDialog?.({ kind: 'reverse', reason: '' })}>
+              <Undo2 size={14} aria-hidden /> {t('rc.reverse.button')}
             </Button>
-          }
-        />
-      )}
-      {model.notice && (
-        <Banner
-          tone={model.notice.tone}
-          title={t(model.notice.words.key, model.notice.words.params)}
-          action={
-            <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
-              {t('common.dismiss')}
-            </Button>
-          }
-        />
-      )}
-      {daily && <DailyNoticeBanner daily={daily} actions={actions?.daily} />}
-      {/* B-W2b-300: goods without a PO, while they wait (or what became of them). */}
-      {depth?.banner}
-      {receipt.status === 'REVERSED' && <Banner tone="danger" title={t('rc.record.reversed', { time: receipt.reversedAt ? formatDateTime(receipt.reversedAt, place) : '—' })}>{receipt.reversalReason}</Banner>}
-      {receipt.status === 'POSTED' && <Banner tone="info" title={t('rc.record.posted', { time: receipt.postedAt ? formatDateTime(receipt.postedAt, place) : '—' })} />}
+          ) : undefined,
+        more,
+        moreLabel: t('record.more'),
+      }}
+    >
+      <Tabs ariaLabel={t('rc.record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
 
-      <div className={showDock ? 'fw-by-body has-dock' : 'fw-by-body'}>
-        <div className="fw-by-main">
-          {model.tab === 'lines' && <LinesTab receipt={receipt} model={model} actions={actions} />}
-          {model.tab === 'lots' && <LotsTab receipt={receipt} model={model} actions={actions} />}
-          {model.tab === 'documents' && daily && <DocumentsTab receipt={receipt} lots={model.lots.value} daily={daily} actions={actions?.daily} prefix={model.prefix} timeZone={model.timeZone} />}
-          {model.tab === 'discrepancies' && daily && <DiscrepanciesTab receipt={receipt} daily={daily} actions={actions?.daily} prefix={model.prefix} timeZone={model.timeZone} />}
-          {model.tab === 'activity' && (activity ?? <p className="fw-by-hint">{t('record.noPanels')}</p>)}
-        </div>
-        {showDock && (
-          <aside className="fw-by-dock" aria-label={t('record.dockLabel')}>
-            {activity}
-          </aside>
+      {/* B-TH-264: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+      <RecordNotices>
+        {model.notice && (
+          <Banner
+            tone={model.notice.tone}
+            title={t(model.notice.words.key, model.notice.words.params)}
+            action={
+              <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
+                {t('common.dismiss')}
+              </Button>
+            }
+          />
         )}
+        {daily && <DailyNoticeBanner daily={daily} actions={actions?.daily} />}
+        {/* B-W2b-300: goods without a PO, while they wait (or what became of them); B-W2b-382: a receipt that waits for a yes. */}
+        {depth?.banner}
+        {receipt.status === 'REVERSED' && <Banner tone="danger" title={t('rc.record.reversed', { time: receipt.reversedAt ? formatDateTime(receipt.reversedAt, place) : '—' })}>{receipt.reversalReason}</Banner>}
+        {model.changed && (
+          <Banner
+            tone="info"
+            title={t('record.changed', { time: formatTime(model.changed.at, place) })}
+            action={
+              <Button size="sm" onClick={() => actions?.onReload?.()}>
+                {t('record.reload')}
+              </Button>
+            }
+          />
+        )}
+        {receipt.status === 'POSTED' && <Banner tone="info" title={t('rc.record.posted', { time: receipt.postedAt ? formatDateTime(receipt.postedAt, place) : '—' })} />}
+      </RecordNotices>
+
+      <div className="fw-by-main">
+        {model.tab === 'lines' && <LinesTab receipt={receipt} model={model} actions={actions} />}
+        {model.tab === 'lots' && <LotsTab receipt={receipt} model={model} actions={actions} />}
+        {model.tab === 'documents' && daily && <DocumentsTab receipt={receipt} lots={model.lots.value} daily={daily} actions={actions?.daily} prefix={model.prefix} timeZone={model.timeZone} />}
+        {model.tab === 'discrepancies' && daily && <DiscrepanciesTab receipt={receipt} daily={daily} actions={actions?.daily} prefix={model.prefix} timeZone={model.timeZone} />}
       </div>
 
       {model.dialog?.kind === 'reverse' && <ReverseDialog receipt={receipt} model={model} actions={actions} />}
@@ -247,7 +228,7 @@ function ReadyReceipt({ receipt, model, actions, panels, depth }: { receipt: Rec
       {daily && <DailyDialogs receipt={receipt} daily={daily} actions={actions?.daily} timeZone={model.timeZone} />}
       {/* B-W2b-300 */}
       {depth?.dialogs}
-    </div>
+    </RecordFrame>
   )
 }
 

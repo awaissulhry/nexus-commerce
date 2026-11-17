@@ -1,4 +1,6 @@
 import { createElement, type ComponentType } from 'react'
+// B-TH-263: the one dock rule reads the record pages' sources.
+import { readFileSync } from 'node:fs'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { RECEIPT_NOTE_CODES, REVERSAL_BLOCKERS } from '@nexus/factory-domain/inventory/receipts/rules'
@@ -252,4 +254,34 @@ describe('every design case draws in both languages with no key left on screen',
       for (const code of WARNING_CODES) has(`plan.warning.${code}`, 2)
     }
   })
+})
+
+// ---- B-TH-263 (threads plan TH-6; the rule of picture 38): ONE dock rule for the buying records — the purchase order, the subcontract
+// order and the supplier claim each mount the office's thread docked in RecordFrame (the thread beside every tab, ⌘J the frame's),
+// with the record's own supplier only; none keeps the old per-area dock hook, an Activity tab or the record panels as a tab.
+describe('B-TH-263: one dock rule for the purchase order, the subcontract order and the claim', () => {
+  const read = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+  const pages = [
+    { container: '../../purchasing/orders/record/OrderRecord.tsx', view: '../../purchasing/orders/record/view/OrderRecordView.tsx', type: 'PurchaseOrder' },
+    { container: '../../purchasing/subcontracting/record/SubcontractRecord.tsx', view: '../../purchasing/subcontracting/record/view/SubcontractRecordView.tsx', type: 'SubcontractOrder' },
+    { container: '../../purchasing/claims/record/ClaimRecord.tsx', view: '../../purchasing/claims/record/view/ClaimRecordView.tsx', type: 'SupplierClaim' },
+  ] as const
+
+  for (const page of pages) {
+    it(`${page.type}: the thread docked in RecordFrame, the record's own supplier, no dock hook, no Activity tab`, () => {
+      const container = read(page.container)
+      const view = read(page.view)
+      expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+      expect(container).toContain(`type: '${page.type}'`)
+      expect(container).toContain('partyRole="supplier"')
+      expect(container).not.toContain('useThreadDock')
+      expect(container).not.toMatch(/tab === 'activity'/)
+      expect(view).toContain('<RecordFrame')
+      expect(view).toContain('<RecordNotices>')
+      expect(view).not.toContain('RecordPanelsView')
+      expect(view).not.toMatch(/'activity'/)
+      // ⌘J is the frame's: the view no longer listens for it itself.
+      expect(view).not.toMatch(/key\.toLowerCase\(\) === 'j'/)
+    })
+  }
 })

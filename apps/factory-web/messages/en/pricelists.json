@@ -233,13 +233,13 @@
     "archivedBanner": "Archived: it prices nobody. Reactivate it to change it.",
     "readOnly": "You can view, not change",
     "copied": "{code} copied.",
-    "copyFailed": "Couldn't copy {code}."
+    "copyFailed": "Couldn't copy {code}.",
+    "dockLabel": "The price list's thread"
   },
   "tab": {
     "prices": "Prices",
     "customers": "Customers",
-    "versions": "Versions",
-    "activity": "Activity"
+    "versions": "Versions"
   },
   "prices": {
     "version": "Version shown",

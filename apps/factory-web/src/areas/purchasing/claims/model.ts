@@ -1,6 +1,5 @@
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Locale } from '../../../lib/i18n/locales'
-import type { RecordPanelsViewModel } from '../../../record-panels/model'
 import type { LiveState } from '../../_shared/buying/hooks'
 import type {
   Claim,
@@ -543,9 +542,19 @@ export function returnRefusal(error: unknown): Words {
 
 // ---- the record ------------------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['claim', 'goods', 'credit', 'activity'] as const
+// ---- B-TH-263 (threads plan TH-6; 08-tabs O-PUR-CLM; the rule of picture 38): tabs 4 → 2. Goods returned and Credit merge into
+// "Goods & credit" (two small read-only outcome tabs answering one question for one reader: R-5; every action of both kept: R-6);
+// Activity goes (R-ACT: its tools are in the docked thread's "⋯").
+export const RECORD_TABS = ['claim', 'goods'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
-export const tabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'claim')
+/** Every old `?tab=` keeps working (R-8): Credit → Goods & credit; Activity → Claim with the thread opened (RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ credit: 'goods', activity: 'claim' })
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'claim'
+}
+// ---- end B-TH-263
 
 export type ClaimAct = 'send' | 'answer' | 'returnGoods' | 'close' | 'cancel' | 'removeLines'
 
@@ -871,7 +880,8 @@ export interface ClaimRecordModel {
   tab: RecordTab
   claim: Loaded<Claim>
   live: LiveState
-  dockOpen: boolean
+  /** B-TH-263: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
   /** Changed by someone else while a dialog or the form was open. */
   changed: { at: string } | null
   notice: { tone: 'success' | 'danger' | 'info'; words: Words } | null
@@ -890,7 +900,6 @@ export interface ClaimRecordModel {
   photos?: Readonly<Record<string, string | null>>
   photoStep?: boolean
   uploading?: boolean
-  panelsPreview?: RecordPanelsViewModel
   timeZone?: string
 }
 
@@ -937,7 +946,6 @@ export function evidenceRefusal(error: unknown): Words {
 export interface ClaimRecordActions {
   onRetry?: () => void
   onReload?: () => void
-  onDock?: () => void
   onDialog?: (dialog: ClaimDialog | null) => void
   onConfirm?: () => void
   onForm?: (form: ClaimForm | null) => void

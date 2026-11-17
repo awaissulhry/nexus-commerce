@@ -524,9 +524,9 @@
   "tab": {
     "change": "Modifica",
     "impact": "Impatto",
+    "impactAffected": "Impatto e record coinvolti",
     "approvals": "Approvazioni",
-    "affected": "Record coinvolti",
-    "activity": "Attività"
+    "affected": "Record coinvolti"
   },
   "record": {
     "back": "Modifiche e versioni",
@@ -559,7 +559,8 @@
     "draftStarted": "Avviata la revisione in bozza {revision}: fai lì la modifica",
     "wipSaved": "Lavori in corso salvati",
     "approversSaved": "Approvatori salvati",
-    "requestsSaved": "Richieste salvate"
+    "requestsSaved": "Richieste salvate",
+    "dockLabel": "La conversazione della modifica"
   },
   "approvers": {
     "change": "Cambia approvatori",
@@ -596,17 +597,13 @@
   "photos": {
     "none": "Ancora nessuna foto.",
     "sending": "Invio delle foto…",
-    "inActivity": "Sono anche in Attività › File.",
+    "inFiles": "Sono anche nella vista File del thread.",
     "count_one": "{count} foto",
     "failed_one": "{count} foto non è stata inviata: aggiungila di nuovo.",
     "added_one": "{count} foto aggiunta",
     "count_other": "{count} foto",
     "failed_other": "{count} foto non sono state inviate: aggiungile di nuovo.",
     "added_other": "{count} foto aggiunte"
-  },
-  "activity": {
-    "none": "Ancora niente. La prima modifica o il primo messaggio compaiono qui.",
-    "noRight": "Il tuo ruolo non legge la conversazione e la cronologia."
   },
   "dialog": {
     "cancelTitle": "Annullare {number}?",

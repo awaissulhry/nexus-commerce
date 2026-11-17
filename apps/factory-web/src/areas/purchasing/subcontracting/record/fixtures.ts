@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { samplePdf } from '../../../_shared/document-send/sample-pdf'
 import type { SubcontractOrder } from '../api'
-import { BUNDLES, canFor, CELLS, DDT_LIVE, inShell, kitLine, LOCATIONS, MATERIALS, order, OUTSIDE, panelsModel, PREFIX, STOCK, TIME_ZONE, TODAY, withoutFees, type RoleCase } from '../demo/fixtures'
+import { BUNDLES, canFor, CELLS, DDT_LIVE, inShell, kitLine, LOCATIONS, MATERIALS, order, OUTSIDE, PREFIX, STOCK, TIME_ZONE, TODAY, withoutFees, type RoleCase } from '../demo/fixtures'
 import { words, type SubcontractCan } from '../model'
 import { LOADING, NO_DDT, NO_KIT_LINE, ready, receiveDraftOf, sendDraftOf, sourcesFor, type RecordDialog, type SubcontractRecordModel } from './record-model'
 import { SubcontractRecordView } from './view/SubcontractRecordView'
@@ -13,6 +13,8 @@ import { adjustDraftOf, bookDraftOf, declareDraftOf, type BalanceModel, type Cos
 import { BalanceTabView } from '../depth/view/BalanceTabView'
 import { CostTabView } from '../depth/view/CostTabView'
 import { TermsLinkView } from '../depth/view/TermsLinkView'
+// ---- B-TH-263: the order's docked thread in the design cases (RecordFrame beside every tab; its own workshop, made-up) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-128 record — a subcontract order (design purchasing.subcontracting "Record: Subcontract order") with made-up data
@@ -40,7 +42,6 @@ function recordCase(role: RoleCase, value: SubcontractOrder, over: Partial<Subco
       tab: 'ops',
       order: { status: 'ready', value: shown },
       live: 'live',
-      dockOpen: false,
       changed: null,
       notice: null,
       busy: false,
@@ -48,7 +49,6 @@ function recordCase(role: RoleCase, value: SubcontractOrder, over: Partial<Subco
       dialogProblem: null,
       marks: {},
       pdf: null,
-      panelsPreview: panelsModel(value.id, value.number),
       timeZone: TIME_ZONE,
       today: TODAY,
       ...over,
@@ -157,7 +157,7 @@ const fee = { ...bookDraftOf(COST, 'FEE'), quantity: '3', unitPrice: '6.50', rec
 function RecordDesign({ model }: { model: RecordCase }) {
   const value = model.record.order.status === 'ready' ? model.record.order.value : null
   const path = `/purchasing/subcontracting/${value?.id ?? 'demo'}`
-  return inShell(path, createElement(SubcontractRecordView, { model: model.record }), model.role)
+  return inShell(path, createElement(SubcontractRecordView, { model: model.record, thread: value ? designDockedThread({ recordType: 'SubcontractOrder', record: value.number, party: { name: value.workshop.name, role: 'supplier' } }) : null }), model.role)
 }
 
 export const designScreen = defineDesignScreen<RecordCase>({
@@ -198,13 +198,18 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'closed', label: 'Closed', model: recordCase('buyer', closed) },
     { id: 'cancel', label: 'Cancel a sent order (the reason)', model: recordCase('buyer', issued, { dialog: { kind: 'cancel', reason: 'Il cliente ha spostato la consegna.' } }) },
     { id: 'cancelled', label: 'Cancelled, with its reason', model: recordCase('buyer', cancelled) },
-    { id: 'documents', label: 'Documents: job sheet, the live kit DDT shown inline, an annulled one', model: recordCase('warehouse', partly, { tab: 'documents', pdf: { ddtId: DDT_LIVE.id, data: PDF, problem: null } }) },
-    { id: 'documents-loading', label: 'Documents: the DDT’s PDF loading', model: recordCase('warehouse', atWorkshop, { tab: 'documents', pdf: { ddtId: DDT_LIVE.id, data: null, problem: null } }) },
-    { id: 'documents-missing', label: 'Documents: the DDT issued, its PDF not stored — Print again', model: recordCase('warehouse', atWorkshop, { tab: 'documents', pdf: { ddtId: DDT_LIVE.id, data: null, problem: 'docs.pdf.missing' } }) },
-    { id: 'documents-none', label: 'Documents of a draft: the job sheet only', model: recordCase('buyer', draft, { tab: 'documents' }) },
-    { id: 'annul', label: 'Annul a kit DDT: the reason and its number typed', model: recordCase('warehouse', atWorkshop, { tab: 'documents', dialog: { kind: 'annul', ddtId: DDT_LIVE.id, reason: 'Colli sbagliati', typed: '212/2026' } }) },
-    { id: 'activity', label: 'Activity: changes, messages and mails in one thread', model: recordCase('buyer', atWorkshop, { tab: 'activity' }) },
-    { id: 'dock', label: 'The thread beside a tab (⌘J, wide screens)', model: recordCase('buyer', atWorkshop, { dockOpen: true }) },
+    // ---- B-TH-263: Kit & documents (the old Documents tab merged into Kit sent) ----
+    { id: 'documents', label: 'Kit & documents: the kit, the job sheet, the live kit DDT shown inline, an annulled one', model: recordCase('warehouse', partly, { tab: 'kit', pdf: { ddtId: DDT_LIVE.id, data: PDF, problem: null } }) },
+    { id: 'documents-loading', label: 'Kit & documents: the DDT’s PDF loading', model: recordCase('warehouse', atWorkshop, { tab: 'kit', pdf: { ddtId: DDT_LIVE.id, data: null, problem: null } }) },
+    { id: 'documents-missing', label: 'Kit & documents: the DDT issued, its PDF not stored — Print again', model: recordCase('warehouse', atWorkshop, { tab: 'kit', pdf: { ddtId: DDT_LIVE.id, data: null, problem: 'docs.pdf.missing' } }) },
+    { id: 'documents-none', label: 'Kit & documents of a draft: no kit yet, the job sheet only', model: recordCase('buyer', draft, { tab: 'kit' }) },
+    { id: 'annul', label: 'Annul a kit DDT: the reason and its number typed', model: recordCase('warehouse', atWorkshop, { tab: 'kit', dialog: { kind: 'annul', ddtId: DDT_LIVE.id, reason: 'Colli sbagliati', typed: '212/2026' } }) },
+    {
+      id: 'thread-docked',
+      label: 'The thread docked beside Received back (40 %): its "⋯" holds Activity’s tools',
+      model: recordCase('buyer', atWorkshop, { tab: 'back' }),
+      note: 'The band sits in the shell’s band row; the thread is docked at 40 % (one third on Operations & quantities and Kit & documents under 1600 px), ⌘J hides it. Its "⋯" holds Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me.',
+    },
     { id: 'changed', label: 'Changed by someone else while a dialog is open', model: recordCase('buyer', issued, { changed: { at: '2026-11-18T09:42:00.000Z' }, dialog: { kind: 'cancel', reason: '' } }) },
     { id: 'owner', label: 'Owner: everything, with costs', model: recordCase('owner', issued) },
     { id: 'planner', label: 'Planner: reads, no money, every act held with the permission', model: recordCase('planner', atWorkshop) },

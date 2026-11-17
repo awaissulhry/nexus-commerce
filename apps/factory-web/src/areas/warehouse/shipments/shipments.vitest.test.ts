@@ -1,4 +1,5 @@
-import { createElement } from 'react'
+import { readFileSync } from 'node:fs'
+import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../../lib/api/errors'
@@ -28,9 +29,16 @@ import {
   tileCounts,
   writeProblem,
   zonedInstant,
+  // B-TH-264
+  isWideTab,
+  MERGED_TABS,
+  RECORD_TABS,
+  tabOf,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
 import { ShipmentRecordView } from './record/view/ShipmentRecordView'
+// B-TH-264: the shipment on RecordFrame.
+import { renderView, textOf } from '../../../lib/record-thread/parts/testing'
 
 const WAREHOUSE = abilitiesOf(['shipping.view', 'shipping.manage', 'shipping.pack', 'shipping.ddt.issue', 'shipping.ddt.cancel', 'shipping.labels.buy', 'print.labels', 'files.read', 'shipping.settings.view'])
 const VIEWER = abilitiesOf(['shipping.view'])
@@ -204,5 +212,76 @@ describe('SCR-066 and SCR-067 draw every design case in both languages', () => {
     expect(buy).toContain('Test mode: the test carrier makes the labels, marked TEST; nothing is bought or charged.')
     expect(buy).not.toContain('Buy 2 labels')
     expect(draw('buy-dialog', 'en')).toContain('Buy 2 labels')
+  })
+})
+
+// ---- B-TH-264: the shipment on RecordFrame (the rule of picture 38; 08-tabs O-WH-SHP) ---------------------------------------------
+describe('B-TH-264 — the shipment on RecordFrame: tabs 7 → 5, the docked thread of its own customer, Activity gone (R-ACT)', () => {
+  const drawCase = (id: string, locale: 'it' | 'en' = 'en') => renderView(recordScreen.view as ComponentType<{ model: unknown }>, recordScreen.cases.find((item) => item.id === id)!.model, locale)
+  const dockOf = (html: string) => html.slice(html.indexOf('class="fw-rcf-dock"'))
+
+  it('five tabs: Lines & cartons · Documents · Carrier & tracking · Export · Invoice; every old ?tab= keeps working (R-8)', () => {
+    expect(RECORD_TABS).toEqual(['lines', 'documents', 'carrier', 'export', 'invoice'])
+    expect(MERGED_TABS).toEqual({ tracking: 'carrier', activity: 'lines' })
+    expect(tabOf('tracking')).toBe('carrier')
+    expect(tabOf('carrier')).toBe('carrier')
+    expect(tabOf('activity')).toBe('lines')
+    for (const tab of RECORD_TABS) expect(tabOf(tab)).toBe(tab)
+    expect(tabOf(null)).toBe('lines')
+    expect(tabOf('nope')).toBe('lines')
+    expect(isWideTab('lines')).toBe(true)
+    expect(isWideTab('documents')).toBe(false)
+    const text = textOf(drawCase('thread-docked'))
+    for (const tab of ['Lines & cartons', 'Documents', 'Carrier & tracking', 'Export', 'Invoice']) expect(text).toContain(tab)
+    expect(text).not.toMatch(/\bActivity\b/)
+    expect(text).not.toContain('Carrier & label')
+    expect(textOf(drawCase('thread-docked', 'it'))).toContain('Corriere e tracciamento')
+  })
+
+  it('Carrier & tracking keeps every action of both tabs: the booking and the labels, then the carrier’s events', () => {
+    const text = textOf(drawCase('thread-carrier'))
+    expect(text).toContain('Booking')
+    expect(text).toContain('Tracking')
+    const source = readFileSync(new URL('./record/view/ShipmentRecordView.tsx', import.meta.url), 'utf8')
+    expect(source).toMatch(/model\.tab === 'carrier' && \(\s*<div className="fw-sh-stack">\s*<CarrierTab[\s\S]*?\/>\s*<TrackingTab/)
+    expect(source).not.toMatch(/model\.tab === 'tracking'/)
+  })
+
+  it('ONE thread on the page: the docked thread, no record panels', () => {
+    const html = drawCase('thread-docked')
+    expect(html.match(/class="fw-rcf-dock"/g)?.length).toBe(1)
+    expect(html.match(/class="fw-rt-column[ "]/g)?.length).toBe(1)
+    expect(html).toContain('class="fw-rt-column is-docked"')
+    expect(html).not.toContain('fw-rp-tabs')
+  })
+
+  it('R-ACT: the thread’s "⋯" is reachable on every tab (Activity’s tools moved there)', () => {
+    for (const id of ['thread-lines', 'docs-draft', 'thread-carrier', 'export-awaited', 'invoice-rule']) expect(drawCase(id), id).toContain('aria-label="Thread tools"')
+  })
+
+  it('the brand wall: the thread names this shipment’s own customer only (Reply to it; no other customer)', () => {
+    const own = shipment('PACKED').party.legalName
+    const dock = textOf(dockOf(drawCase('thread-docked')))
+    expect(dock).toContain(own)
+    for (const other of ['Esempio Racing S.p.A.', 'Squadra Fittizia S.r.l.', 'Brand Beta']) expect(dock).not.toContain(other)
+  })
+
+  it('one notice in the body column, never above the thread', () => {
+    const html = drawCase('notice')
+    const dockAt = html.indexOf('class="fw-rcf-dock"')
+    expect(html.indexOf('class="fw-rcf-notices"')).toBeGreaterThan(-1)
+    expect(html.indexOf('class="fw-rcf-notices"')).toBeLessThan(dockAt)
+    expect(dockOf(html)).not.toContain('fw-rcf-notices')
+  })
+
+  it('the page mounts the office thread docked with the shipment’s own customer; the area’s dock hook and its ?tab=activity push are gone', () => {
+    const container = readFileSync(new URL('./record/ShipmentRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain('party={{ id: value.partyId, name: value.party.legalName }}')
+    expect(container).toContain('partyRole="customer"')
+    expect(container).not.toContain('useThreadDock')
+    const hooks = readFileSync(new URL('./hooks.ts', import.meta.url), 'utf8')
+    expect(hooks).not.toContain('export function useThreadDock')
+    expect(hooks).not.toContain('?tab=activity')
   })
 })

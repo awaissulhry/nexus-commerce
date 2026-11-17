@@ -26,7 +26,7 @@ export interface QuoteDepthSlots {
   termsDelivery?: ReactNode
   /** Versions: the versions in the list frame (two selected → Compare), in place of W1's table. */
   versionsList?: ReactNode
-  /** Documents › Deposit request: Send the pay-online page. */
+  /** Approval & sending › Deposit request: Send the pay-online page (B-TH-257). */
   depositActions?: ReactNode
   /** The line drawer and the W2b dialogs (paste, fill, bulk, compare). */
   overlay?: ReactNode

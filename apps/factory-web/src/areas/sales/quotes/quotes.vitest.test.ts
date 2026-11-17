@@ -21,7 +21,7 @@ import { designScreen as approvalsScreen } from '../../home/approvals/fixtures'
 import { APPROVAL_VIEWS, heldKey, recheck } from '../../home/approvals/model'
 import { designScreen as acceptScreen } from '../../../links/quote-accept/fixtures'
 import { declineNote, DECLINE_REASONS, groupedIban, privacyCompany } from '../../../links/quote-accept/model'
-import { APPROVAL_REASONS, APPROVAL_STATUSES, DECIDE_HELD, VERSION_STATUSES } from './api'
+import { APPROVAL_REASONS, APPROVAL_STATUSES, DECIDE_HELD, QUOTE_ORDER_WAITS, VERSION_STATUSES } from './api'
 import { designScreen as listScreen, ROWS as LIST_ROWS } from './list/fixtures'
 import {
   abilitiesOf,
@@ -40,6 +40,8 @@ import {
   quotesCsv,
   QUOTE_TABS,
   QUOTE_TILES,
+  MERGED_TABS,
+  tabOf,
   styleBlocks,
   termsDraftOf,
   termsPatch,
@@ -224,6 +226,27 @@ describe('the navigation: Sales › Quotes and Home › Approvals', () => {
   })
 })
 
+// ---- B-TH-257: the record's tabs 7 → 5 on RecordFrame; every old address keeps working (R-8) ----------------------------------
+describe('the quote record’s tabs (B-TH-257): Lines · Price & margin · Terms & delivery · Revisions · Approval & sending', () => {
+  it('five tabs, no Activity and no Documents', () => {
+    expect(QUOTE_TABS).toEqual(['lines', 'price', 'terms', 'versions', 'approval'])
+    expect(QUOTE_TABS).not.toContain('activity' as never)
+    expect(QUOTE_TABS).not.toContain('documents' as never)
+  })
+  it('every old ?tab= lands on its tab or the tab it merged into; Activity on Lines (the frame opens the thread)', () => {
+    expect(MERGED_TABS).toEqual({ documents: 'approval', activity: 'lines' })
+    for (const [old, now] of [['documents', 'approval'], ['activity', 'lines'], ['lines', 'lines'], ['price', 'price'], ['terms', 'terms'], ['versions', 'versions'], ['approval', 'approval'], ['', 'lines'], ['unknown', 'lines']] as const) expect(tabOf(old), old).toBe(now)
+    expect(tabOf(undefined)).toBe('lines')
+  })
+  it('the tab words: "Revisions" for the quote’s copies, "Approval & sending" for the merged tab, in it and en', () => {
+    expect(CATALOGUE.en.sales?.['tab.versions']).toBe('Revisions')
+    expect(CATALOGUE.it.sales?.['tab.versions']).toBe('Revisioni')
+    expect(CATALOGUE.en.sales?.['tab.approval']).toBe('Approval & sending')
+    expect(CATALOGUE.it.sales?.['tab.approval']).toBe('Approvazione e invio')
+    for (const locale of LOCALES) for (const gone of ['tab.documents', 'tab.activity', 'record.dock', 'record.dockHint', 'record.noPanels']) expect(CATALOGUE[locale].sales?.[gone], `${locale} ${gone}`).toBeUndefined()
+  })
+})
+
 // ---- every key in both languages ---------------------------------------------------------------------------------------
 
 const SRC = fileURLToPath(new URL('../../..', import.meta.url))
@@ -265,6 +288,7 @@ const salesBuilt = [
   ...['LIVE', 'REVOKED', 'USED_UP', 'EXPIRED'].map((state) => `link.state.${state}`),
   ...QUOTE_TILES.map((tile) => `list.tile.${tile}`),
   ...QUOTE_TABS.map((tab) => `tab.${tab}`),
+  ...QUOTE_ORDER_WAITS.map((reason) => `record.orderWaits.${reason}`), // B-TH-257
   ...['signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited', 'contract', 'internal'].map((kind) => `problem.read.${kind}`),
   ...['signed_out', 'forbidden', 'not_found', 'invalid', 'rate_limited', 'unavailable', 'internal', 'moved', 'state', 'stepUp'].map((kind) => `problem.write.${kind}`),
   ...['not_found', 'forbidden', 'error'].flatMap((state) => [`record.state.${state}.title`, `record.state.${state}.body`]),

@@ -2,16 +2,17 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { FileX, MessageSquare, MoreHorizontal, ShieldOff } from 'lucide-react'
-import { Banner, Card, EmptyState, Menu, Tabs, type TabItem } from '@nexus/ui/components'
-import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Kbd, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { FileX, ShieldOff } from 'lucide-react'
+import { Banner, Card, EmptyState, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDateTime, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import type { Shipment } from '../../api'
-import { actsOnShipments, carrierWords, hasLeft, isFinal, nextStep, openChecks, placeOf, readyChecks, RECORD_TABS, STATUS_TONE, TRACKING_TONE, type RecordTab, type StepKind } from '../../model'
+import { actsOnShipments, carrierWords, hasLeft, isFinal, isWideTab, nextStep, openChecks, placeOf, readyChecks, RECORD_TABS, STATUS_TONE, TRACKING_TONE, type RecordTab, type StepKind } from '../../model'
+// ---- B-TH-264: the shipment on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
 // B-W2b-410: the record's parts in depth (holds, split, cartons, how it travels, label prints, papers, delivery, notice).
 import type { ShipmentDepthSlots } from '../../queue/record-depth'
@@ -27,39 +28,45 @@ import '../../shipments.css'
 export type { ShipmentRecordActions, ShipmentRecordModel } from '../record-model'
 
 /**
- * SCR-067 — a shipment (design warehouse.shipments "Record: Shipment"; 00 §2.2; Owner L1: the tabs always in view). The
- * band: ‹ Shipments, "<number> · <customer> · <city CC>", the order, who carries it, the state (and the tracking once it
- * left), the next step as the primary — Mark packed → Issue DDT → Buy labels → Mark handed over, each held with its
- * reason — the thread (⌘J), ⋯ (Annul DDT…, Cancel shipment, Change delivery). The tabs: Lines & cartons (Ready to ship:
- * every check the law and the customer need with its fix; the lines from released garments only; the cartons), Documents
- * (the DDT: the draft and its problems, issued once with its number and frozen, annulled with its reason; the
- * Declaration of Conformity and the user information; the customer's document link), Carrier & label, Tracking &
- * delivery, Activity (the record panels; beside any tab on a wide screen with ⌘J). B-W2a-71 adds Export (the intra-EU
- * transport evidence: the papers that prove the goods reached another EU state) and Invoice (the freight charged — the
- * one price on a shipment, drawn only with the price grain), Void labels, the order's backorder, Other documents and the
- * driver's pack (a new tab).
+ * SCR-067 — a shipment (design warehouse.shipments "Record: Shipment"; 00 §2.2; Owner L1: the tabs always in view), on RecordFrame
+ * (B-TH-264; the rule of picture 38). The band in the shell's band row: ‹ Shipments, "<number> · <customer> · <city CC>", ONE state
+ * pill, the order, the customer's PO, who carries it (and the tracking once it left), the next step as the primary — Mark packed →
+ * Issue DDT → Buy labels → Mark handed over, each held with its reason —, the Thread button (⌘J), ⋯ (Annul DDT…, Cancel shipment,
+ * Change delivery, the driver's pack …, its Keyboard line). The thread is docked beside every tab (40 %; one third on Lines &
+ * cartons under 1600 px): "Reply to <customer>" reaches this shipment's customer only, its files are this shipment's; Activity's
+ * tools are in its "⋯" (R-ACT). The tabs 7 → 5: Lines & cartons (Ready to ship: every check the law and the customer need with its
+ * fix; the lines from released garments only; the cartons), Documents (the DDT: the draft and its problems, issued once with its
+ * number and frozen, annulled with its reason; the Declaration of Conformity and the user information; the customer's document
+ * link; the files open in the File viewer), Carrier & tracking (who carries it, the labels, then the carrier's events and the proof
+ * of delivery: every action of Carrier & label and Tracking & delivery), Export (the intra-EU transport evidence) and Invoice (the
+ * freight charged — the one price on a shipment, drawn only with the price grain). ONE notice in the body column.
  */
-// B-W2b-170: `trackingLink`, the container's tracking-page card (links.tracking) on the Tracking & delivery tab.
+// B-W2b-170: `trackingLink`, the container's tracking-page card (links.tracking) on Carrier & tracking.
 // B-W2b-410: `depth`, the parts in depth (each its own container) slotted into the tabs, the band and ⋯.
-export function ShipmentRecordView({ model, actions, panels, trackingLink, depth }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
+// B-TH-264: `thread` the docked thread (the office's OfficeRecordThread docked, or a design case's), `printThread` what the print
+// view shows of it.
+export function ShipmentRecordView({ model, actions, thread, printThread, trackingLink, depth }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
   return (
     <WithMessages namespaces={['shipments', 'lists', 'records']}>
-      <ShipmentRecord model={model} actions={actions} panels={panels} trackingLink={trackingLink} depth={depth} />
+      <ShipmentRecord model={model} actions={actions} thread={thread} printThread={printThread} trackingLink={trackingLink} depth={depth} />
     </WithMessages>
   )
 }
 
-function ShipmentRecord({ model, actions, panels, trackingLink, depth }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
+function ShipmentRecord({ model, actions, thread, printThread, trackingLink, depth }: { model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
   const t = useT('shipments')
   const listHref = `${model.prefix}/warehouse/shipments`
   const loaded = model.shipment
 
   if (loaded.status !== 'ready') {
     return (
-      <div className="fw-sh">
-        <div className="fw-sh-band">
-          <DetailHeader backAsChild backLabel={<Link href={listHref}>{t('record.back')}</Link>} title={loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('record.title')} />
-        </div>
+      <RecordFrame
+        recordType="Shipment"
+        personId={model.personId ?? null}
+        band={{ back: <Link href={listHref}>{t('record.back')}</Link>, title: loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('record.title'), moreLabel: t('record.more') }}
+        thread={null}
+        threadLabel={t('record.dockLabel')}
+      >
         {loaded.status === 'loading' ? (
           <Card padded aria-busy="true">
             <p className="fw-sh-hint" role="status">
@@ -91,15 +98,15 @@ function ShipmentRecord({ model, actions, panels, trackingLink, depth }: { model
             />
           </Card>
         )}
-      </div>
+      </RecordFrame>
     )
   }
-  return <ReadyRecord shipment={loaded.value} model={model} actions={actions} panels={panels} trackingLink={trackingLink} depth={depth} />
+  return <ReadyRecord shipment={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} trackingLink={trackingLink} depth={depth} />
 }
 
 const STEP_DIALOG: Record<Exclude<StepKind, 'pack'>, 'issueDdt' | 'buyLabels' | 'handOver'> = { issueDdt: 'issueDdt', buyLabels: 'buyLabels', handOver: 'handOver' }
 
-function ReadyRecord({ shipment, model, actions, panels, trackingLink, depth }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; panels?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
+function ReadyRecord({ shipment, model, actions, thread, printThread, trackingLink, depth }: { shipment: Shipment; model: ShipmentRecordModel; actions?: ShipmentRecordActions; thread?: ReactNode; printThread?: ReactNode; trackingLink?: ReactNode; depth?: ShipmentDepthSlots }) {
   const t = useT('shipments')
   const locale = useLocale()
   const recordHref = `${model.prefix}/warehouse/shipments/${shipment.id}`
@@ -117,16 +124,12 @@ function ReadyRecord({ shipment, model, actions, panels, trackingLink, depth }: 
     else actions?.onDialog?.({ kind: STEP_DIALOG[step.kind] })
   }
 
-  // Keys: ⌘J the thread; ⌘↵ the next step; d issue DDT, l buy labels (each opens its confirm; never while typing or in a dialog).
+  // Keys: ⌘↵ the next step; d issue DDT, l buy labels (each opens its confirm; never while typing or in a dialog). ⌘J is the
+  // frame's (the thread).
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const typing = !!target && (!!target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') {
-        event.preventDefault()
-        actions?.onDock?.()
-        return
-      }
       if (target?.closest('[role="dialog"]') || model.dialog || typing) return
       if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
         event.preventDefault()
@@ -150,8 +153,8 @@ function ReadyRecord({ shipment, model, actions, panels, trackingLink, depth }: 
   const tabCount = (tab: RecordTab): number | null => {
     if (tab === 'lines') return shipment.lines.length
     if (tab === 'documents') return model.documents.value ? model.documents.value.documents.filter((entry) => entry.byLink).length : null
+    // B-TH-264: Carrier & tracking counts the parcels a carrier takes (the tracking events are read inside it).
     if (tab === 'carrier') return shipment.transportBy === 'CARRIER' ? shipment.parcels.length : null
-    if (tab === 'tracking') return model.tracking?.value ? model.tracking.value.events.length : null
     return null
   }
   const problemTabs = new Set<RecordTab>(checks.filter((check) => check.state === 'open').map((check) => check.tab))
@@ -182,7 +185,7 @@ function ReadyRecord({ shipment, model, actions, panels, trackingLink, depth }: 
   const annulHeld = !model.can.annulDdt ? t('held.noAnnul') : shipment.status === 'DELIVERED' || shipment.status === 'RETURNED' ? t('held.annulDelivered') : null
   const cancelHeld = !model.can.manage ? t('held.noManage') : shipment.parcels.some((parcel) => parcel.trackingNumber) ? t('held.cancelLabels') : liveDdt ? t('held.cancelDdt') : null
   const deliveryHeld = !model.can.manage ? t('held.noManage') : liveDdt ? t('held.deliveryDdt') : null
-  const more = [
+  const more: MenuItemDef[] = [
     ...(shipment.status === 'DRAFT' || shipment.status === 'PACKED' ? [{ id: 'delivery', label: t('action.delivery'), disabled: !!deliveryHeld, description: deliveryHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'delivery' }) }] : []),
     ...(liveDdt ? [{ id: 'annul', label: t('action.annul', { number: liveDdt.number }), disabled: !!annulHeld, description: annulHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'annulDdt', ddtId: liveDdt.id }) }] : []),
     ...(shipment.status === 'PACKED' && model.can.pack ? [{ id: 'unpack', label: t('action.unpack'), disabled: !!liveDdt || shipment.parcels.some((parcel) => parcel.trackingNumber), description: liveDdt ? t('held.unpackDdt') : shipment.parcels.some((parcel) => parcel.trackingNumber) ? t('held.unpackLabels') : undefined, onSelect: () => actions?.onDialog?.({ kind: 'unpack' }) }] : []),
@@ -201,20 +204,23 @@ function ReadyRecord({ shipment, model, actions, panels, trackingLink, depth }: 
     ...(depth?.more ?? []),
   ]
 
-  const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
-  const showDock = model.dockOpen && model.tab !== 'activity' && !!activity
   const place = placeOf(shipment.shipTo)
   const carrier = carrierWords(shipment)
   const trackingProblem = model.tracking?.value?.problem
   const latest = model.tracking?.value?.parcels.map((parcel) => parcel.status).find((value) => value !== null) ?? null
 
   return (
-    <div className="fw-sh">
-      <div className="fw-sh-band">
-        <DetailHeader
-          backAsChild
-          backLabel={<Link href={`${model.prefix}/warehouse/shipments`}>{t('record.back')}</Link>}
-          title={
+    <>
+      <RecordFrame
+        recordType="Shipment"
+        personId={model.personId ?? null}
+        threadLabel={t('record.dockLabel')}
+        thread={thread ?? null}
+        printThread={printThread}
+        wide={isWideTab(model.tab)}
+        band={{
+          back: <Link href={`${model.prefix}/warehouse/shipments`}>{t('record.back')}</Link>,
+          title: (
             <span className="fw-sh-title">
               {shipment.number}{' '}
               <span className="fw-sh-title-sub">
@@ -222,102 +228,90 @@ function ReadyRecord({ shipment, model, actions, panels, trackingLink, depth }: 
                 {place ? ` · ${place}` : ''}
               </span>
             </span>
-          }
-          actions={
-            <span className="fw-sh-actions">
-              {primary}
-              {activity && (
-                <Button size="sm" variant={model.dockOpen ? 'tonal' : 'secondary'} active={model.dockOpen} aria-pressed={model.dockOpen} onClick={() => actions?.onDock?.()} title={t('record.dockHint')}>
-                  <MessageSquare size={14} aria-hidden /> <span>{t('record.dock')}</span>
-                  <span className="fw-sh-keys" aria-hidden>
-                    <Kbd>⌘</Kbd>
-                    <Kbd>J</Kbd>
-                  </span>
-                </Button>
+          ),
+          status: <Pill tone={STATUS_TONE[shipment.status]}>{t(`status.${shipment.status}`)}</Pill>,
+          meta: (
+            <>
+              {latest && hasLeft(shipment.status) && <Tag tone={TRACKING_TONE[latest] ?? 'neutral'}>{t(`trackingStatus.${latest}`)}</Tag>}
+              {!isFinal(shipment.status) && !hasLeft(shipment.status) && open > 0 && <Tag tone="warning">{t('record.checksOpen', { count: open })}</Tag>}
+              {model.can.viewOrders ? (
+                <Link className="fw-sh-link fw-sh-hint" href={`${model.prefix}/sales/orders/${shipment.salesOrderId}?tab=shipments`}>
+                  {t('record.order', { number: shipment.salesOrder.number })}
+                </Link>
+              ) : (
+                <span className="fw-sh-hint">{t('record.order', { number: shipment.salesOrder.number })}</span>
               )}
-              <Menu label={<MoreHorizontal size={16} aria-label={t('record.more')} />} items={more} align="right" triggerProps={{ 'aria-label': t('record.more') }} />
-            </span>
-          }
-        />
-        <div className="fw-sh-meta-row">
-          <span className="fw-sh-meta">
-            <Pill tone={STATUS_TONE[shipment.status]}>{t(`status.${shipment.status}`)}</Pill>
-            {latest && hasLeft(shipment.status) && <Pill tone={TRACKING_TONE[latest] ?? 'neutral'}>{t(`trackingStatus.${latest}`)}</Pill>}
-            {!isFinal(shipment.status) && !hasLeft(shipment.status) && open > 0 && <Tag tone="warning">{t('record.checksOpen', { count: open })}</Tag>}
-            {model.can.viewOrders ? (
-              <Link className="fw-sh-link fw-sh-hint" href={`${model.prefix}/sales/orders/${shipment.salesOrderId}?tab=shipments`}>
-                {t('record.order', { number: shipment.salesOrder.number })}
-              </Link>
-            ) : (
-              <span className="fw-sh-hint">{t('record.order', { number: shipment.salesOrder.number })}</span>
+              {shipment.salesOrder.customerRef && <Tag tone="neutral">{t('record.customerRef', { ref: shipment.salesOrder.customerRef })}</Tag>}
+              <span className="fw-sh-hint">
+                {t(carrier.key, carrier.params)}
+                {shipment.serviceCode ? ` · ${shipment.serviceCode}` : ''}
+              </span>
+            </>
+          ),
+          primary,
+          more,
+          moreLabel: t('record.more'),
+        }}
+      >
+        <div className="fw-sh">
+          <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+
+          {/* B-TH-264: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+          <RecordNotices>
+            {model.notice && (
+              <Banner
+                tone={model.notice.tone}
+                title={t(model.notice.words.key, model.notice.words.params)}
+                action={
+                  actions?.onDismissNotice ? (
+                    <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
+                      {t('common.dismiss')}
+                    </Button>
+                  ) : undefined
+                }
+              >
+                {model.notice.detail}
+              </Banner>
             )}
-            {shipment.salesOrder.customerRef && <Tag tone="neutral">{t('record.customerRef', { ref: shipment.salesOrder.customerRef })}</Tag>}
-            <span className="fw-sh-hint">
-              {t(carrier.key, carrier.params)}
-              {shipment.serviceCode ? ` · ${shipment.serviceCode}` : ''}
-            </span>
-          </span>
-          <span className="fw-sh-status" role="status">
-            {t(`live.${model.live}`)}
-          </span>
-        </div>
-        <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
-      </div>
+            {shipment.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: shipment.cancelReason ?? '—' })} />}
+            {shipment.status === 'SHIPPED' && shipment.ddtRequired && !liveDdt && model.ddts.value && <Banner tone="danger" title={t('record.needsDdt')} />}
+            {depth?.banner}
+            {trackingProblem && <Banner tone="warning" title={t('record.trackingProblem')}>{trackingProblem}</Banner>}
+            {model.changed && (
+              <Banner
+                tone="info"
+                title={t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
+                action={
+                  <Button size="sm" onClick={() => actions?.onReload?.()}>
+                    {t('record.reload')}
+                  </Button>
+                }
+              />
+            )}
+            {hasLeft(shipment.status) && shipment.shippedAt && <Banner tone="info" title={t('record.shipped', { when: formatDateTime(shipment.shippedAt, { locale }) })} />}
+            {!actsOnShipments(model.can) && !isFinal(shipment.status) && <Banner tone="info" title={t('record.readOnly')} />}
+          </RecordNotices>
 
-      {model.changed && (
-        <Banner
-          tone="info"
-          title={t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
-          action={
-            <Button size="sm" onClick={() => actions?.onReload?.()}>
-              {t('record.reload')}
-            </Button>
-          }
-        />
-      )}
-      {model.notice && (
-        <Banner
-          tone={model.notice.tone}
-          title={t(model.notice.words.key, model.notice.words.params)}
-          action={
-            actions?.onDismissNotice ? (
-              <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
-                {t('common.dismiss')}
-              </Button>
-            ) : undefined
-          }
-        >
-          {model.notice.detail}
-        </Banner>
-      )}
-      {shipment.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: shipment.cancelReason ?? '—' })} />}
-      {hasLeft(shipment.status) && shipment.shippedAt && <Banner tone="info" title={t('record.shipped', { when: formatDateTime(shipment.shippedAt, { locale }) })} />}
-      {shipment.status === 'SHIPPED' && shipment.ddtRequired && !liveDdt && model.ddts.value && <Banner tone="danger" title={t('record.needsDdt')} />}
-      {trackingProblem && <Banner tone="warning" title={t('record.trackingProblem')}>{trackingProblem}</Banner>}
-      {!actsOnShipments(model.can) && !isFinal(shipment.status) && <Banner tone="info" title={t('record.readOnly')} />}
-      {depth?.banner}
-
-      <div className={showDock ? 'fw-sh-body has-dock' : 'fw-sh-body'}>
-        <div className="fw-sh-main">
-          {model.tab === 'lines' && <LinesTab shipment={shipment} checks={checks} model={model} actions={actions} depth={depth ? { cartons: depth.cartons, holds: depth.holds, held: depth.held } : undefined} />}
-          {model.tab === 'documents' && <DocumentsTab shipment={shipment} model={model} actions={actions} papers={depth?.papers} />}
-          {model.tab === 'carrier' && <CarrierTab shipment={shipment} model={model} actions={actions} depth={depth ? { booking: depth.booking, labels: depth.labels, noLabels: depth.noLabels } : undefined} />}
-          {model.tab === 'tracking' && <TrackingTab shipment={shipment} model={model} actions={actions} trackingLink={trackingLink} depth={depth ? { delivery: depth.delivery, notice: depth.notice } : undefined} />}
-          {/* B-W2b-412: the export papers in place of W2a's destination card. */}
-          {model.tab === 'export' && <ExportTab shipment={shipment} model={model} actions={actions} papers={depth?.exportPapers} />}
-          {model.tab === 'invoice' && <InvoiceTab shipment={shipment} model={model} actions={actions} />}
-          {model.tab === 'activity' && (activity ?? <p className="fw-sh-hint">{t('record.noPanels')}</p>)}
+          <div className="fw-sh-main">
+            {model.tab === 'lines' && <LinesTab shipment={shipment} checks={checks} model={model} actions={actions} depth={depth ? { cartons: depth.cartons, holds: depth.holds, held: depth.held } : undefined} />}
+            {model.tab === 'documents' && <DocumentsTab shipment={shipment} model={model} actions={actions} papers={depth?.papers} />}
+            {/* B-TH-264: Carrier & tracking — who carries it and the labels, then the carrier's events and the delivery (both bodies as they are). */}
+            {model.tab === 'carrier' && (
+              <div className="fw-sh-stack">
+                <CarrierTab shipment={shipment} model={model} actions={actions} depth={depth ? { booking: depth.booking, labels: depth.labels, noLabels: depth.noLabels } : undefined} />
+                <TrackingTab shipment={shipment} model={model} actions={actions} trackingLink={trackingLink} depth={depth ? { delivery: depth.delivery, notice: depth.notice } : undefined} />
+              </div>
+            )}
+            {/* B-W2b-412: the export papers in place of W2a's destination card. */}
+            {model.tab === 'export' && <ExportTab shipment={shipment} model={model} actions={actions} papers={depth?.exportPapers} />}
+            {model.tab === 'invoice' && <InvoiceTab shipment={shipment} model={model} actions={actions} />}
+          </div>
         </div>
-        {showDock && (
-          <aside className="fw-sh-dock" aria-label={t('record.dockLabel')}>
-            {activity}
-          </aside>
-        )}
-      </div>
+      </RecordFrame>
 
       <ShipmentDialogs shipment={shipment} model={model} actions={actions} />
       {depth?.dialogs}
-    </div>
+    </>
   )
 }
 

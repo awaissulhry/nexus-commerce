@@ -1,5 +1,5 @@
 /*
- * Warehouse › Counts (SCR-132) LAYOUT: the page column, the list's head row, the record band, the approval panel's
+ * Warehouse › Counts (SCR-132) LAYOUT: the page column, the list's head row, the record band's parts, the approval panel's
  * columns, the check list, the count cell of the Lines grid and the dialogs' forms. The controls are the design system's
  * (stock.css holds the cells and numbers every stock screen shares); semantic tokens only, no colours of their own. No page
  * max-width (Owner rule 2026-10-29): the pages fill the shell's main area; wide screens put cards side by side.
@@ -20,13 +20,6 @@
   min-width: 0;
 }
 
-.fw-cn-band {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-8);
-  min-width: 0;
-}
-
 .fw-cn-title {
   overflow-wrap: anywhere;
 }
@@ -36,16 +29,6 @@
   color: var(--nds-text-muted);
 }
 
-.fw-cn-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nds-space-8) var(--nds-space-16);
-  min-width: 0;
-}
-
-.fw-cn-chips,
 .fw-cn-actions,
 .fw-cn-row {
   display: inline-flex;
