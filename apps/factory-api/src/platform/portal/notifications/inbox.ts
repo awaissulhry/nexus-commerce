@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { Prisma } from '@nexus/factory-db'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { recordsInGroup } from '@nexus/factory-domain/notifications/rules'
 import { portalRecordPath } from '@nexus/factory-domain/portal/home/links'
 import { partnerSentence } from '@nexus/factory-domain/portal/notifications/messages'
 import { portalSessionOf, type PortalSession } from '../../auth/portal/authenticator'
@@ -86,7 +87,8 @@ export async function listMine(request: FastifyRequest, query: { readonly unread
         link: portalRecordPath(code, row.recordType, row.recordId, row.anchor),
         read: group.every((member) => member.readAt !== null),
         createdAt: toUtcIso(row.createdAt),
-        group: { key: row.groupKey ?? row.id, count: group.length, ids: group.map((member) => member.id) },
+        // B-TH-045: how many different records of the person's own the group holds (a batch of ours spans several).
+        group: { key: row.groupKey ?? row.id, count: group.length, ids: group.map((member) => member.id), records: recordsInGroup(group) },
       }
     }),
     nextCursor: rows.length > consumed && last ? cursorOf(last) : null,

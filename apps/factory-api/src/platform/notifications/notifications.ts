@@ -7,6 +7,7 @@ import {
   NOTIFICATION_TABS,
   paramsFor,
   peopleOf,
+  recordsInGroup,
   sentenceOf,
   snoozeProblem,
   stateOf,
@@ -107,7 +108,7 @@ async function namesFor(caller: CommandCaller, rows: readonly NotificationRow[])
   return caller.withClient(async (client) => new Map((await client.user.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } })).map((user) => [user.id, user.displayName])))
 }
 
-function viewOf(row: NotificationRow, names: ReadonlyMap<string, string>, state: NotificationState, group: { key: string; count: number; ids: string[] }, held: ReadonlySet<Grain>) {
+function viewOf(row: NotificationRow, names: ReadonlyMap<string, string>, state: NotificationState, group: { key: string; count: number; ids: string[]; records: number }, held: ReadonlySet<Grain>) {
   const people = Object.fromEntries(peopleOf(row).map((id) => [id, names.get(id) ?? '']))
   // The words with only the amounts the reader holds the grain of now (the params field is filtered again by the API).
   const params = paramsFor(row.params, held)
@@ -161,7 +162,8 @@ export async function listNotifications(caller: CommandCaller, query: ListQuery)
     tab: query.tab,
     state: query.state,
     counts: await countsFor(caller, context, now),
-    items: shown.map((group) => viewOf(group[0]!, names, query.state, { key: group[0]!.groupKey ?? group[0]!.id, count: group.length, ids: group.map((row) => row.id) }, heldGrains(actorOf(context)))),
+    // B-TH-045: a batch group spans several records — how many of the reader's own (its rows are made only where they may read).
+    items: shown.map((group) => viewOf(group[0]!, names, query.state, { key: group[0]!.groupKey ?? group[0]!.id, count: group.length, ids: group.map((row) => row.id), records: recordsInGroup(group) }, heldGrains(actorOf(context)))),
     nextCursor: rows.length > consumed && last ? cursorOf(last) : null,
     live: { events: ['notification.created'] },
   }

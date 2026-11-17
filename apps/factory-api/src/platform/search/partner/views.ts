@@ -6,6 +6,8 @@ import inquiry from './views/inquiry'
 import ddt from './views/ddt'
 import invoice from './views/invoice'
 import party from './views/party'
+// B-TH-040: a customer's catalogue orders (their thread, the Orders group of the portal search).
+import portalOrderRequest from './views/portal-order-request'
 import purchaseOrder from './views/purchase-order'
 import quote from './views/quote'
 import returnAuthorisation from './views/return-authorisation'
@@ -32,6 +34,8 @@ export const PARTNER_VIEWS: readonly PartnerView[] = Object.freeze([
   complaint,
   // B-TH-103
   inquiry,
+  // B-TH-040
+  portalOrderRequest,
 ])
 
 const byType = new Map<string, PartnerView>()

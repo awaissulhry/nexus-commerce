@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { EVENT_CATALOGUE } from '../events/catalogue'
 import { markMoney } from '../money/marked'
 import {
+  batchGroupKey,
   DIGEST_DEFAULT_CATEGORIES,
   digestCategoriesOf,
   digestDue,
@@ -15,6 +16,7 @@ import {
   NOTIFICATION_CATEGORIES,
   NOTIFICATION_TABS,
   peopleOf,
+  recordsInGroup,
   sentenceOf,
   snoozeProblem,
   stateOf,
@@ -58,6 +60,14 @@ describe('the notification centre (B-W2a-20: PLT-138, PLT-142, PLT-152)', () => 
     expect(groupKeyFor({ id: 'first', groupKey: 'first', createdAt: minutes(-5) }, 'own', NOW)).toBe('first')
     expect(groupKeyFor({ id: 'first', groupKey: null, createdAt: minutes(-5) }, 'own', NOW)).toBe('first')
     expect(groupKeyFor({ id: 'old', groupKey: 'old', createdAt: new Date(NOW.getTime() - GROUP_WINDOW_MS - 1) }, 'own', NOW)).toBe('own')
+  })
+
+  it('B-TH-045: a batch is one group per reader and kind, whatever its records; the group says how many records it holds', () => {
+    const batch = '0190f0e2-0000-7000-8000-00000000b045'
+    expect(batchGroupKey(batch, 'MENTION')).toBe(`batch:${batch}:MENTION`)
+    expect(batchGroupKey(batch, 'MENTION')).not.toBe(batchGroupKey(batch, 'FOLLOWING'))
+    expect(recordsInGroup([{ recordType: 'SalesOrder', recordId: 'a' }, { recordType: 'SalesOrder', recordId: 'b' }, { recordType: 'SalesOrder', recordId: 'a' }])).toBe(2)
+    expect(recordsInGroup([])).toBe(0)
   })
 
   it('snoozes until a later time (at most 90 days), or until new activity on the record', () => {
