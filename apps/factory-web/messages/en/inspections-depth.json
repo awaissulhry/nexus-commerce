@@ -260,7 +260,8 @@
       "NOT_ON_SHIPMENT": "This shipment carries no garment of this work order.",
       "NO_VERSION": "No version is kept yet: keep one first.",
       "NO_SUCH_VERSION": "That version does not exist any more: read the versions again.",
-      "NO_SHIPMENT": "The shipment was not found."
+      "NO_SHIPMENT": "The shipment was not found.",
+      "SHARED_PRODUCTION": "This work order also makes garments for another customer: its report goes to no single customer. Share this shipment's certificate of conformity instead."
     }
   },
   "checks": {

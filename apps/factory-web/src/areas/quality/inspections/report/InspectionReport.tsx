@@ -11,7 +11,8 @@ import { fileAddress, getReports, keepReport, previewReport, shareReport, type R
 import { depthCan } from '../depth/model'
 import { InspectionReportView, type ReportModel } from './view/InspectionReportView'
 
-const SHARE_REFUSALS = ['NOT_ON_SHIPMENT', 'NO_VERSION', 'NO_SUCH_VERSION', 'NO_SHIPMENT'] as const
+// B-TH-032: SHARED_PRODUCTION — a work order of several customers' garments: its report goes to none of them as is.
+const SHARE_REFUSALS = ['NOT_ON_SHIPMENT', 'NO_VERSION', 'NO_SUCH_VERSION', 'NO_SHIPMENT', 'SHARED_PRODUCTION'] as const
 
 /** A share's refusal in our words: `held/<CODE>` by its code, else by the kind (the API's lines kept as facts). */
 function shareRefusal(error: unknown): { key: string; lines: string[] } {
