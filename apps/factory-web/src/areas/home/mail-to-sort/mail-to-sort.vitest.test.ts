@@ -253,3 +253,41 @@ describe('Make incoming request / Open in Incoming (B-TH-224)', () => {
   })
 })
 // ── end B-TH-224 ──
+
+// ── B-TH-239 (threads plan TH-3; O-HOME-MAIL.tiles-F01, picture 17): the "Mail to sort" tile counts what waits, one rule ──
+describe('the "Mail to sort" tile (B-TH-239)', () => {
+  const page = { mails: [summary('m1', 'TRIAGE'), summary('m2', 'HELD', { heldReason: 'SPAM' }), summary('m3', 'FAILED'), summary('m4', 'MATCHED')], nextCursor: 'next' }
+
+  it('counts the first page of what waits (TRIAGE, HELD, FAILED) — the same number Sales › Incoming’s notice says', async () => {
+    const { mailToSortCount } = await import('../../sales/inquiries/api')
+    const { toSortCountOf } = await import('./model')
+    const tile = toSortCountOf(await listMail(client(() => json(200, page)).api, 'all'))
+    const notice = await mailToSortCount(client(() => json(200, page)).api)
+    expect(tile).toEqual({ count: 3, more: true })
+    expect(tile).toEqual(notice)
+    expect(toSortCountOf({ mails: [], nextCursor: null })).toEqual({ count: 0, more: false })
+    // Not read yet: "—", never 0.
+    expect(toSortCountOf(null)).toEqual({ count: null, more: false })
+  })
+
+  it('never follows the list’s filter or "Show more": a filtered list says "—" unless the page counted on its own', async () => {
+    const { toSortTile } = await import('./model')
+    const items = [summary('m2', 'HELD')].map((mail) => ({ ...mail, suggestedPartyId: null })) as never[]
+    // The page's own count wins, whatever the list below shows.
+    expect(toSortTile({ toSort: { count: 12, more: false }, filter: 'HELD', mails: { items, more: false } })).toEqual({ count: 12, more: false })
+    // Without it (the design index): only the first page of "All to sort" is a count; the Held filter's rows are not.
+    expect(toSortTile({ filter: 'HELD', mails: { items, more: false } })).toEqual({ count: null, more: false })
+    expect(toSortTile({ filter: 'all', mails: { items, more: true } })).toEqual({ count: 1, more: true })
+    expect(toSortTile({ filter: 'all', mails: { items: null, more: false } })).toEqual({ count: null, more: false })
+    const many = Array.from({ length: 75 }, () => items[0]!)
+    expect(toSortTile({ filter: 'all', mails: { items: many, more: false } })).toEqual({ count: 50, more: true })
+  })
+
+  it('the tiles and views stay as built: Mail to sort first, then each team inbox; Open, Mine, Nobody’s, Snoozed, Follow-up, Closed, All', async () => {
+    const { QUEUE_VIEWS } = await import('../mail/team-inbox/model')
+    expect(QUEUE_VIEWS).toEqual(['OPEN', 'MINE', 'UNASSIGNED', 'SNOOZED', 'FOLLOW_UP', 'CLOSED', 'ALL'])
+    const { designScreen } = await import('./fixtures')
+    expect(designScreen.cases.map((entry) => entry.id)).toContain('th3-239-tiles')
+  })
+})
+// ── end B-TH-239 ──

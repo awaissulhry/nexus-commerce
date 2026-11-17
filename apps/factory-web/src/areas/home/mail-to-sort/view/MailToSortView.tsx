@@ -18,6 +18,7 @@ import {
   remotePictureCount,
   senderLine,
   statusLook,
+  toSortTile, // B-TH-239
   verdictWarnings,
   type MailDetail,
   type MailDialog,
@@ -83,7 +84,6 @@ export function MailToSortView({ model, actions }: { model: MailToSortViewModel;
 
 function MailToSort({ model, actions }: { model: MailToSortViewModel; actions?: MailToSortActions }) {
   const t = useT('home')
-  const { items, more } = model.mails
 
   return (
     <div className="fw-mts">
@@ -91,7 +91,8 @@ function MailToSort({ model, actions }: { model: MailToSortViewModel; actions?: 
         <p className="fw-mts-intro">{t('mailToSort.intro')}</p>
         {model.capture && <CopyCaptureAddress state={model.capture} prefix={model.prefix ?? ''} />}
       </div>
-      {model.inboxes && <TeamInboxTiles model={model.inboxes} toSort={{ count: items?.length ?? null, more }} onInbox={actions?.inboxes?.onInbox} />}
+      {/* B-TH-239: the tile counts what waits (one rule with Incoming's notice), never the loaded rows of the current filter. */}
+      {model.inboxes && <TeamInboxTiles model={model.inboxes} toSort={toSortTile(model)} onInbox={actions?.inboxes?.onInbox} />}
       {model.inboxes?.queue && <SortNotice model={model} actions={actions} />}
       {model.inboxes?.queue ? (
         <TeamInboxQueue model={model.inboxes} actions={{ ...actions?.inboxes, onOpenMail: actions?.onOpen }} />

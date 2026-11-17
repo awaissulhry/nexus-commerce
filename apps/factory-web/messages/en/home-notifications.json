@@ -77,6 +77,8 @@
   },
   "together_one": "{count} together",
   "together_other": "{count} together",
+  "togetherRecords_one": "{count} together, on {records} records",
+  "togetherRecords_other": "{count} together, on {records} records",
   "openRecord": "Open {record}",
   "when": {
     "TODAY": "Today",
@@ -314,5 +316,9 @@
     },
     "margin": "margin {value} %",
     "figure": " ({parts})"
+  },
+  "fold": {
+    "newRequests_one": "{count} new request came in: take it or give it to someone",
+    "newRequests_other": "{count} new requests came in: take them or give them to someone"
   }
 }

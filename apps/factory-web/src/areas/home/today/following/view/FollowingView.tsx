@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Bookmark, Check, Eye, EyeOff } from 'lucide-react'
+import { Bookmark, Check, Eye, EyeOff, MessageSquare } from 'lucide-react'
 import { Banner, EmptyState } from '@nexus/ui/components'
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { AsOf } from '../../../../../lib/i18n/ds-parts'
@@ -90,18 +90,23 @@ function Following({ model, actions }: { model: FollowingModel; actions?: Follow
           <ul ref={listRef} className="fw-mywork-following" aria-label={t('following.title')}>
             {rows.map((row) => {
               const sentence = sentenceWords(row, words, locale)
+              // B-TH-239 (O-HOME-TODAY.changed-F01): with the reader's own new messages the line says "SO-0042: 3 new messages" and opens
+              // the first unread one (its news stays under it); without a count it reads the news as before — never a made-up number.
+              const fresh = row.newMessages !== undefined && row.newMessages > 0 ? row.newMessages : 0
+              const label = fresh > 0 ? t('following.newMessages', { record: row.record.label, count: fresh }) : sentence
               return (
                 <li key={row.key} data-following-row={row.key} className="fw-mywork-following-row">
-                  {row.view ? <Bookmark size={16} className="fw-mywork-following-icon" aria-hidden /> : <Eye size={16} className="fw-mywork-following-icon" aria-hidden />}
+                  {row.view ? <Bookmark size={16} className="fw-mywork-following-icon" aria-hidden /> : fresh > 0 ? <MessageSquare size={16} className="fw-mywork-following-icon" aria-hidden /> : <Eye size={16} className="fw-mywork-following-icon" aria-hidden />}
                   <span className="fw-mywork-following-text">
                     {row.href ? (
-                      <a className="fw-mywork-following-link" href={row.href}>
-                        {sentence}
+                      <a className="fw-mywork-following-link" href={row.href} title={fresh > 0 ? t('following.newMessagesHint') : undefined}>
+                        {label}
                       </a>
                     ) : (
-                      <span title={t('following.notBuilt')}>{sentence}</span>
+                      <span title={t('following.notBuilt')}>{label}</span>
                     )}
                     <span className="fw-today-muted">
+                      {fresh > 0 ? `${sentence} · ` : ''}
                       {formatDateTime(row.at, { locale })}
                       {row.count > 1 ? ` · ${t('following.more', { count: row.count - 1 })}` : ''}
                     </span>

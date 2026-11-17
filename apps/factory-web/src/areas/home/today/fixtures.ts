@@ -7,6 +7,7 @@ import {
   ncrDecisionWords,
   orderPromiseWords,
   phrase,
+  portalOrderRequestWords, // B-TH-239
   poNotConfirmedWords,
   quoteApprovalWords,
   registerDutyWords,
@@ -24,6 +25,7 @@ import type { KeyNumbers } from './numbers/api'
 import { OWNER_NUMBERS, PROBLEM_NUMBERS } from './numbers/demo'
 import { W2A_TILES, type ComingUpView, DEFAULT_LAYOUT, type FlowLensView, type HandledView, type PanelView, type QueueData, type QueueItem, type QuoteReview, type TodayItem, type TodayLayout, type TodayViewModel } from './model'
 import { TodayView } from './view/TodayView'
+import { catalogueOrderHref, incomingLinesOf, type IncomingToday } from './incoming/model' // B-TH-239
 
 /**
  * SCR-029 Home › Today — made-up data only (PLAN §3.1): invented companies, customers, suppliers, numbers and amounts.
@@ -668,6 +670,42 @@ const W2A_CASES: { id: string; label: string; model: TodayViewModel; note?: stri
   { id: 'w2a-coming-error', label: 'W2a — Coming up could not be read', model: { ...w2a, comingUp: { status: 'error', problem: 'today.problem.offline' } }, note: 'Only that section fails; the rest works.' },
 ]
 
+// ---- B-TH-239 (threads plan TH-3, picture 17): Incoming on Today — one read with Sales › Incoming's tiles; a catalogue order opens there ----
+const CATALOGUE_ORDER: QueueItem = (() => {
+  const item = row(40, {
+    kind: 'PORTAL_ORDER_REQUEST',
+    state: 'WAITING_DECISION',
+    severity: 'HIGH',
+    group: 'NOW',
+    category: 'APPROVAL',
+    record: { type: 'PortalOrderRequest', id: id(40), label: 'POR-2026-0007' },
+    said: portalOrderRequestWords({ number: 'POR-2026-0007', customer: 'Alpha Moto Demo', lines: 3, pieces: 120 }),
+    act: 'orders.manage',
+  })
+  return { ...item, href: catalogueOrderHref('/w/DEMO', item.record.id) }
+})()
+const incomingOf = (counts: Record<string, number | null>, kinds: { REQUEST: number | null; CATALOGUE_ORDER: number | null; CHANGE_REQUEST: number | null }, complete = true): { status: 'ready'; data: IncomingToday } => ({
+  status: 'ready',
+  data: { asOf: AS_OF, lines: incomingLinesOf({ counts, kinds, complete }, '/w/DEMO') },
+})
+const INCOMING = incomingOf({ NEW: 5, WAITING_US: 3, WAITING_CUSTOMER: 2, QUOTED_THIS_WEEK: 4, MINE: 1, OPEN: 9 }, { REQUEST: 3, CATALOGUE_ORDER: 2, CHANGE_REQUEST: 0 })
+const withIncoming: TodayViewModel = { ...base, incoming: INCOMING, queue: { status: 'ready', data: queueOf([CATALOGUE_ORDER, ...OWNER_ITEMS]) } }
+const TH3_239_CASES: Array<{ id: string; label: string; model: TodayViewModel; note?: string }> = [
+  {
+    id: 'th3-239-incoming',
+    label: 'TH-3 · Incoming on Today (one read with Sales › Incoming)',
+    model: withIncoming,
+    note: 'Right after "Needs me now": New incoming requests 5 = Incoming’s New tile; Catalogue orders to decide 2 (its catalogue orders); Waiting on us over a working day 3 (everyone’s; the row in "Needs me now" is yours or nobody’s). Each line opens Incoming at that tile. The catalogue order POR-2026-0007 in "Needs me now" opens Incoming with the order in the reading pane.',
+  },
+  { id: 'th3-239-catalogue-open', label: 'TH-3 · A catalogue order to decide, opened', model: { ...withIncoming, open: CATALOGUE_ORDER.key }, note: 'Decided on its record: "Open record" goes to Sales › Incoming with the catalogue order beside the list (never the bare record panels).' },
+  { id: 'th3-239-incoming-sales', label: 'TH-3 · A reader of requests without orders', model: { ...base, incoming: incomingOf({ NEW: 3, WAITING_US: 1 }, { REQUEST: 3, CATALOGUE_ORDER: null, CHANGE_REQUEST: null }) }, note: 'No orders.view: the API does not count catalogue orders (null), so that line is not drawn — never a 0.' },
+  { id: 'th3-239-incoming-unknown', label: 'TH-3 · Counts not known', model: { ...base, incoming: incomingOf({ NEW: null, WAITING_US: 1000 }, { REQUEST: null, CATALOGUE_ORDER: 0, CHANGE_REQUEST: 0 }, false) }, note: 'An unknown count is "—", never 0; over 1000 open rows the waiting count is "1000+".' },
+  { id: 'th3-239-incoming-offline', label: 'TH-3 · Offline', model: { ...withIncoming, live: 'offline' }, note: 'The last numbers read with their as-of time; they are read again when the live channel is back.' },
+  { id: 'th3-239-incoming-loading', label: 'TH-3 · Incoming loading', model: { ...base, incoming: { status: 'loading' } } },
+  { id: 'th3-239-incoming-error', label: 'TH-3 · Incoming could not be counted', model: { ...base, incoming: { status: 'error', problem: 'today.problem.offline' } }, note: 'Only that section fails, with Try again; the rest of Today works.' },
+]
+// ---- end B-TH-239
+
 export const designScreen = defineDesignScreen<TodayViewModel>({
   screen: 'SCR-029',
   title: 'Today',
@@ -884,5 +922,6 @@ export const designScreen = defineDesignScreen<TodayViewModel>({
     },
     ...W2A_CASES,
     ...W2A79_CASES,
+    ...TH3_239_CASES, // B-TH-239
   ],
 })

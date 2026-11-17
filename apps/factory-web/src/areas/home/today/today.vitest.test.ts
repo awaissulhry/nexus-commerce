@@ -33,6 +33,10 @@ import { phraseText, sentenceText } from './words'
 import { todayKeys } from './view/TodayView'
 import { CODE_WORDS, EN_TEMPLATES, invoiceToIssueWords, mailToSortWords, orderPromiseWords, phrase, registerDutyWords, workOrderHeldWords } from '@nexus/factory-domain/insights/words'
 import { createTranslator } from '../../../lib/i18n/messages'
+// B-TH-239
+import { fetchIncomingCounts } from './incoming/api'
+import { catalogueOrderHref, countText, incomingLinesOf, incomingWants, mayReadIncoming } from './incoming/model'
+import { firstUnreadHref, unreadRowsOf, withUnread, type FollowingRow } from './following/model'
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 
@@ -442,3 +446,120 @@ describe('the keys live in ONE info icon in the list footer (Owner rule 2026-10-
     expect(html.slice(html.indexOf('fw-today-queue-foot'))).toContain('Keyboard keys of this list')
   })
 })
+
+// ---- B-TH-239 (threads plan TH-3; O-HOME-TODAY.incoming-F01 / F03, O-HOME-TODAY.changed-F01): Today and the bell around Incoming ----
+describe('B-TH-239: Today counts with Incoming’s own read, opens catalogue orders in Incoming, and says "3 new messages"', () => {
+  const INCOMING_ANSWER = {
+    rows: [],
+    counts: { NEW: 5, WAITING_US: 3, WAITING_CUSTOMER: 2, QUOTED_THIS_WEEK: 4, MINE: 1, OPEN: 9, QUOTED: 7, ORDERED: 2, DECLINED: 1, NOT_AN_ORDER: 0, LOST: 0, ALL: 21, CUSTOMER_REPLIES: 6 },
+    kinds: { REQUEST: 3, CATALOGUE_ORDER: 2, CHANGE_REQUEST: 0 },
+    next: null,
+    complete: true,
+  }
+
+  it('reads GET /sales/incoming — the route and tile Sales › Incoming reads — with no filter, one row, against the API’s contract', async () => {
+    const today = client(() => json(200, INCOMING_ANSWER))
+    const answer = await fetchIncomingCounts(today.api)
+    expect(today.sent().url).toBe('/api/sales/incoming?tile=NEW&limit=1')
+    expect(today.sent().method).toBe('GET')
+    expect(answer.counts.NEW).toBe(5)
+    // A shape the contract does not know is a contract error, never a half-read count.
+    await expect(fetchIncomingCounts(client(() => json(200, { counts: { NEW: 'five' } })).api)).rejects.toThrow()
+  })
+
+  it('each line is the number Incoming’s tile shows for the same read, and opens Incoming at that tile', () => {
+    const lines = incomingLinesOf(INCOMING_ANSWER, '/w/DEMO')
+    expect(lines.map((line) => [line.id, line.count, line.href])).toEqual([
+      ['NEW', INCOMING_ANSWER.counts.NEW, '/w/DEMO/sales/incoming?tile=NEW'],
+      ['CATALOGUE_ORDERS', INCOMING_ANSWER.kinds.CATALOGUE_ORDER, '/w/DEMO/sales/incoming?tile=NEW&kind=CATALOGUE_ORDER'],
+      ['WAITING_US', INCOMING_ANSWER.counts.WAITING_US, '/w/DEMO/sales/incoming?tile=WAITING_US'],
+    ])
+    expect(lines.map(countText)).toEqual(['5', '2', '3'])
+  })
+
+  it('wall: a kind the reader may not see is not drawn (never a 0); an unknown count is "—"; a partial wait "1000+"', () => {
+    const sales = incomingLinesOf({ counts: { NEW: 3, WAITING_US: null }, kinds: { REQUEST: 3, CATALOGUE_ORDER: null, CHANGE_REQUEST: null }, complete: false }, '')
+    expect(sales.map((line) => line.id)).toEqual(['NEW', 'WAITING_US'])
+    expect(countText(sales[1]!)).toBe('—')
+    const unknown = incomingLinesOf({ counts: {}, kinds: { REQUEST: null, CATALOGUE_ORDER: 0, CHANGE_REQUEST: 0 }, complete: false }, '')
+    expect(countText(unknown[0]!)).toBe('—')
+    expect(countText({ count: 1000, partial: true })).toBe('1000+')
+    expect(countText({ count: 0, partial: false })).toBe('0')
+  })
+
+  it('only a reader of requests sees the section, once Incoming is built; requests, catalogue orders and change requests read it again', () => {
+    expect(mayReadIncoming(new Set(['home.view', 'sales.inquiries.view']), OFFICE_PAGES)).toBe(true)
+    expect(mayReadIncoming(new Set(['home.view', 'orders.view']), OFFICE_PAGES)).toBe(false)
+    expect(mayReadIncoming(new Set(['sales.inquiries.view']), new Set(['/home/today']))).toBe(false)
+    for (const type of ['inquiry.received', 'inquiry.changed', 'portal_order_request.sent', 'order_change_request.asked']) expect(incomingWants(type), type).toBe(true)
+    for (const type of ['sales_order.promise_changed', 'thread.message_posted', 'notification.created']) expect(incomingWants(type), type).toBe(false)
+  })
+
+  it('a catalogue order to decide opens Sales › Incoming with the order beside the list (it opened only its record panels before)', () => {
+    const order = queueItem(item('o', { kind: 'PORTAL_ORDER_REQUEST', category: 'APPROVAL', record: { type: 'PortalOrderRequest', id: 'por 1', label: 'POR-1' } }), '/w/DEMO')
+    expect(order.href).toBe('/w/DEMO/sales/incoming?tile=ALL&kind=CATALOGUE_ORDER&open=por+1')
+    expect(order.reviewHref).toBeNull()
+    expect(catalogueOrderHref('/w/DEMO', 'x')).toBe('/w/DEMO/sales/incoming?tile=ALL&kind=CATALOGUE_ORDER&open=x')
+    // Without Incoming built it keeps the record rule (never a link to a page that does not exist).
+    expect(queueItem(item('o', { kind: 'PORTAL_ORDER_REQUEST', record: { type: 'PortalOrderRequest', id: 'p1', label: 'POR-1' } }), '/w/DEMO', new Set(['/records/[type]/[id]'])).href).toBe('/w/DEMO/records/PortalOrderRequest/p1?label=POR-1&company=c1')
+    // Any other row as before.
+    expect(queueItem(item('l'), '/w/DEMO').href).toBe('/w/DEMO/sales/orders/id-l')
+  })
+
+  it('Changed since you looked: "3 new messages" opens the first unread one; a failed or empty count changes nothing (never a made-up number)', () => {
+    const line = (type: string, recordId: string, view = false): FollowingRow => ({
+      key: `${type}:${recordId}`,
+      record: { type, id: recordId, label: `${type}-1` },
+      companyId: 'c1',
+      anchor: null,
+      view,
+      listKey: view ? 'sales.orders' : null,
+      messageKey: 'notifications.following.mail_in',
+      params: {},
+      sentence: 'English',
+      actor: null,
+      people: {},
+      at: '2026-11-17T09:00:00.000Z',
+      count: 1,
+      ids: ['n1'],
+      href: `/w/DEMO/records/${type}/${recordId}`,
+    })
+    const rows = [line('SalesOrder', 'o1'), line('Inquiry', 'r1'), line('SavedView', 'v1', true), line('Quote', 'q1')]
+    expect(unreadRowsOf(rows)).toEqual([
+      { recordType: 'SalesOrder', id: 'o1' },
+      { recordType: 'Inquiry', id: 'r1' },
+      { recordType: 'Quote', id: 'q1' },
+    ])
+    const counted = withUnread(rows, { o1: { newCount: 3, lastAt: '2026-11-17T09:00:00.000Z' }, r1: { newCount: 1, lastAt: null }, q1: { newCount: 0, lastAt: null }, v1: { newCount: 9, lastAt: null } }, '/w/DEMO', OFFICE_PAGES)
+    expect(counted.map((row) => [row.record.id, row.newMessages ?? 0, row.href])).toEqual([
+      ['o1', 3, '/w/DEMO/sales/orders/o1?thread=new'],
+      ['r1', 1, '/w/DEMO/sales/incoming?open=r1'],
+      ['v1', 0, rows[2]!.href],
+      ['q1', 0, rows[3]!.href],
+    ])
+    expect(firstUnreadHref({ record: { type: 'Shipment', id: 's1', label: 'SH-1' }, companyId: 'c1' }, '/w/DEMO', new Set())).toBe('/w/DEMO/records/Shipment/s1?label=SH-1&company=c1&thread=new')
+    expect(withUnread(rows, {}, '/w/DEMO', OFFICE_PAGES)).toEqual(rows)
+    for (const locale of ['en', 'it'] as const) {
+      const words = CATALOGUE[locale]['home-mywork']!
+      for (const key of ['following.newMessages_one', 'following.newMessages_other', 'following.newMessagesHint']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+    expect(createTranslator('en', CATALOGUE.en['home-mywork']!)('following.newMessages', { record: 'SO-1', count: 3 })).toBe('SO-1: 3 new messages')
+  })
+
+  it('the design cases: the Incoming section after "Needs me now", the catalogue order opening Incoming, every state in both languages', () => {
+    const ids = designScreen.cases.map((entry) => entry.id)
+    for (const wanted of ['th3-239-incoming', 'th3-239-catalogue-open', 'th3-239-incoming-sales', 'th3-239-incoming-unknown', 'th3-239-incoming-offline', 'th3-239-incoming-loading', 'th3-239-incoming-error']) expect(ids).toContain(wanted)
+    const html = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: designScreen.cases.find((entry) => entry.id === 'th3-239-incoming')!.model })))
+    expect(html).toContain('New incoming requests')
+    expect(html).toContain('Catalogue orders to decide')
+    expect(html).toContain('/w/DEMO/sales/incoming?tile=NEW')
+    expect(html.indexOf('id="fw-today-needs"')).toBeLessThan(html.indexOf('id="fw-today-incoming"'))
+    const sales = renderToString(createElement(I18nProvider, { locale: 'it', messages: messagesFor('it', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: designScreen.cases.find((entry) => entry.id === 'th3-239-incoming-sales')!.model })))
+    expect(sales).toContain('Nuove richieste in arrivo')
+    expect(sales).not.toContain('Ordini dal catalogo da decidere')
+    // Without the section in the model (not a reader of requests) nothing of it is drawn.
+    const owner = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: designScreen.cases.find((entry) => entry.id === 'owner')!.model })))
+    expect(owner).not.toContain('fw-today-incoming')
+  })
+})
+// ---- end B-TH-239
