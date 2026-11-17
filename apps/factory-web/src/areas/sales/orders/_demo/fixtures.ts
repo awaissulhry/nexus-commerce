@@ -1,7 +1,5 @@
 import { createElement, type ReactNode } from 'react'
 import { permissionCheck } from '../../../../lib/session/session'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../../shell/design-data'
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
@@ -426,14 +424,6 @@ export const VERSIONS: VersionsAnswer = {
       deposit: null,
     },
   ],
-}
-
-// ---- the record panels on an order -------------------------------------------------------------------------------------------
-
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-
-export function panelsModel(): RecordPanelsViewModel {
-  return { ...conversation, record: { type: 'SalesOrder', id: ORDER_ID, companyId: COMPANY, siteId: null }, title: 'SO-2026-0088 · Moto Demo S.r.l.', party: null }
 }
 
 // ---- B-W2a-50: the order every day (amendments, the schedule, the cancel's impact, a typed New order) ------------------------

@@ -485,7 +485,24 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    before the rule takes no new or changed cell, its cells only leave it by removal or a lower quantity: the split); no
    earlier function redefined; its data step `…_production_brand_wall_copy` (hand-written, between the schema and the
    guards folders) fills WorkOrder.partyId from the cells once, with `WorkOrder_guard` off for that one statement, and
-   raises a NOTICE of the mixed count):
+   raises a NOTICE of the mixed count),
+   `…_sales_intake_orders_th_guards` (threads plan schema wave 3/9, B-TH-022, a request becomes an order: it redefines
+   sales intake's `factory_inquiry_guard` word for word but for the lines marked B-TH-022 (ORDERED a fourth final state,
+   from an open one only, exactly with its order, named once, never at insert); its own trigger
+   `Inquiry_style_drafts_check` (the style drafts made from it: none at insert, then only appended, each once, at most 50,
+   of its company or tenant-wide, never another customer's private label, rechecked when its customer changes) and the
+   partial unique `Inquiry_one_per_order`; NOT_AN_ORDER is a decline reason needing no words),
+   `…_threads_reads_th_guards` (wave 4/9, B-TH-023: its own triggers `ThreadRead_guard` (an office person's mark has no
+   party, a portal person's their own party; the message of its own thread and, for a portal person, shared with their
+   party; thread, person and party fixed; read not in the future), `Thread_owner_check` (who answers it: an active office
+   person when named) and `ErasureRecord_thread_reads` (a User's erasure, but KEPT, removes that person's marks in the same
+   transaction); no earlier function redefined),
+   `…_files_record_party_th_guards` (follow-up WALL-G02 of TH-0 part A, no schema folder of its own: its own triggers
+   `StoredFile_record_party` and `StoredFile_record_party_change` with `factory_file_record_party`: a file that names a
+   party names its record's own, read from the record's "partyId" or the resolver's column (Party id, Style brandPartyId,
+   Invoice buyerPartyId, Certificate holderPartyId, Lot and GoodsReceipt supplierId, Capa customerId); a record of none
+   shares with none; a table with no party column, a row or column the session cannot read is left to the API; a NOTICE
+   counts older files that disagree; no earlier function redefined):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

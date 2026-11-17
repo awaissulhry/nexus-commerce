@@ -462,10 +462,13 @@ describe('the party opens its link (SCR-101)', () => {
     const label = await make('Parcel', S.p1!, 'label.pdf', { visibility: ['FLOOR'], floorSiteId: A.siteA1 })
     const packing = await make('Shipment', sh2(), 'packing list.pdf', { visibility: ['FLOOR'], floorSiteId: A.siteA1 })
     const internal = await make('Shipment', sh2(), 'internal.pdf', {})
-    const otherParty = await make('Shipment', sh2(), 'for P2.pdf', { visibility: ['LINK'], partyId: A.P2 })
+    // ---- WALL-G02 (TH-2, …_files_record_party_th_guards): a file of P1's shipment shared with another party is not even
+    // written: the database refuses it, whatever path writes it.
+    await expect(make('Shipment', sh2(), 'for P2.pdf', { visibility: ['LINK'], partyId: A.P2 })).rejects.toThrow(/shared only with the party its Shipment belongs to/)
+    // ---- end WALL-G02
     const listed = (await asLink(S.token1, 'GET', '/shipping/link/documents')).json().documents.map((document: Json) => document.fileId)
     expect(listed).toHaveLength(3)
-    for (const file of [label, packing, internal, otherParty]) {
+    for (const file of [label, packing, internal]) {
       expect(listed).not.toContain(file.id)
       expect((await asLink(S.token1, 'POST', `/shipping/link/documents/${file.id}/download`, {}, key())).statusCode).toBe(404)
       // The files platform's own routes agree (the link reads files: DOCUMENT_VIEW holds files.read).

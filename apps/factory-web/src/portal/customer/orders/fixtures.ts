@@ -3,6 +3,9 @@ import type { Locale } from '../../../lib/i18n/locales'
 import type { OrderChip } from './api'
 import { listBandOf } from './band'
 import { at, inTransitRead, orderWords, ordersRead, PREFIX, ROWS, shellOf, words } from './design-data'
+// B-TH-223: Orders & requests read by Brand Beta (brand B), the made-up reader of every wall scan.
+import { betaShellOf, PREFIX as BETA, REQUESTS } from '../requests/design-data'
+import { CLOSED_REQUESTS, listRows, type ListChip } from './model'
 import { CustomerCase, type CustomerCaseBuilder } from './view/CustomerCase'
 import type { OrdersListViewModel } from './view/OrdersListView'
 
@@ -20,6 +23,7 @@ function listModel(over: Partial<OrdersListViewModel> = {}): OrdersListViewModel
     state: 'ready',
     read,
     rows: read?.items ?? [],
+    requests: { state: 'ready', rows: [], complete: true },
     chip: null,
     q: '',
     prefix: PREFIX,
@@ -43,6 +47,19 @@ function listCase(build: (locale: Locale) => Partial<OrdersListViewModel> = () =
 }
 
 const chipCase = (chip: OrderChip) => listCase(() => ({ chip, read: ordersRead(chip) }))
+
+// ── B-TH-223: Orders & requests, read by Brand Beta ─────────────────────────────────────────────────────────────────
+function betaCase(build: (locale: Locale) => Partial<OrdersListViewModel> = () => ({})): CustomerCaseBuilder {
+  return (locale) => {
+    const model = listModel({ prefix: BETA, requests: { state: 'ready', rows: REQUESTS, complete: true }, newOrderHref: `${BETA}/orders/new`, ...build(locale) })
+    const shown = model.read ? listRows(model.chip ?? model.read.chip, model.q, model.requests.state === 'ready' ? model.requests.rows : [], model.rows, locale).length : 0
+    return {
+      shell: betaShellOf(locale, listBandOf({ words: orderWords(locale), asOf: model.read?.asOf ?? null, rows: shown, chip: model.chip, q: model.q, prefix: BETA, newOrder: `${BETA}/orders/new` }), '/orders'),
+      body: { kind: 'list', model },
+    }
+  }
+}
+const betaChip = (chip: ListChip) => betaCase(() => ({ chip, read: chip === CLOSED_REQUESTS ? { ...ordersRead('OPEN'), items: [], count: 0 } : ordersRead(chip), rows: chip === CLOSED_REQUESTS ? [] : ordersRead(chip).items }))
 const all = ordersRead('ALL')
 
 export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
@@ -50,6 +67,29 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
   title: 'Customer Orders & tracking (portal.customer.orders)',
   view: CustomerCase,
   cases: [
+    { id: 'th-223-list', label: 'Orders & requests: the open ones (requests first)', model: betaCase(), note: 'One list: Number (their PO, then the customer’s own number: “Your request 7”, “Your order 11” — never INQ-, SO-, RQ-), Kind, Subject, Date, State (true states), Wanted or promised, Pieces, Value (price roles), Next shipment. The request that needs them on top. New order is the band’s primary.' },
+    { id: 'th-223-all', label: 'Everything', model: betaChip('ALL'), note: 'Every request and every order, closed ones too.' },
+    { id: 'th-223-requested', label: 'Requested: the requests and the catalogue order still waiting for us', model: betaChip('REQUESTED') },
+    { id: 'th-223-closed', label: 'Closed requests: never vanished', model: betaChip(CLOSED_REQUESTS), note: 'Declined, closed and made-into-an-order requests stay findable under their own choice.' },
+    { id: 'th-223-search', label: 'A search finds a request by its subject or its number', model: betaCase(() => ({ q: 'gloves', read: ordersRead('OPEN', []), rows: [] })), note: 'Their PO, our order or a style code on the orders; the subject, their PO and their own number on the requests.' },
+    { id: 'th-223-requests-failed', label: 'The requests could not be read', model: betaCase(() => ({ requests: { state: 'error', rows: [], complete: true } })), note: 'Said in words with Try again; the orders still show (never drawn as “no requests”).' },
+    {
+      id: 'th-223-empty',
+      label: 'Nothing yet: New order',
+      model: betaCase(() => {
+        const read = { ...ordersRead('OPEN', []), chips: ordersRead('OPEN', []).chips.map((chip) => ({ ...chip, count: 0 })) }
+        return { read, rows: [], requests: { state: 'ready', rows: [], complete: true }, transit: { state: 'ready', read: inTransitRead({ items: [] }) } }
+      }),
+      note: 'What lands here and the first action.',
+    },
+    {
+      id: 'th-223-no-prices',
+      label: 'A colleague without prices',
+      model: betaCase(() => {
+        const read = ordersRead('OPEN', null, { seesPrices: false })
+        return { read, rows: read.items }
+      }),
+    },
     { id: 'normal', label: 'Open orders (the default chip) and On the way', model: listCase(), note: 'Chips with counts in customer words; their PO first, ours second; sorted by the promise date with the moved mark; value (net) with the price grain; the next shipment with its ETA; a request sent waits for our confirmation (no page yet). On the way: the parcel, its status, ETA, steps and the carrier’s site.' },
     { id: 'all', label: 'Every order', model: chipCase('ALL'), note: 'Delivered and cancelled orders too.' },
     { id: 'selected', label: 'Two orders selected', model: listCase(() => ({ chip: 'ALL', read: all, rows: all.items, selected: [ROWS[0]!.id, ROWS[2]!.id] })), note: 'The bulk action takes the search’s place: Export 2 (CSV of the selected rows).' },
@@ -92,7 +132,7 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
       label: 'tab:print — Print this list',
       model: (locale) => ({
         shell: shellOf(locale, { title: words(locale)('print.title') }),
-        body: { kind: 'print', model: { state: 'ready', rows: ordersRead('OPEN').items, count: ordersRead('OPEN').count, seesPrices: true, filters: { chip: locale === 'it' ? 'Aperti' : 'Open', q: '' }, partyName: 'Brand Alpha S.r.l.', printedBy: 'Anna Esempio', printedAt: at(0), backHref: `${PREFIX}/orders` } },
+        body: { kind: 'print', model: { state: 'ready', rows: listRows('OPEN', '', REQUESTS, ordersRead('OPEN').items, locale), count: ordersRead('OPEN').count + REQUESTS.filter((row) => row.state.open).length, seesPrices: true, filters: { chip: locale === 'it' ? 'Aperti' : 'Open', q: '' }, partyName: 'Brand Alpha S.r.l.', printedBy: 'Anna Esempio', printedAt: at(0), backHref: `${PREFIX}/orders` } },
       }),
       note: 'Its own tab: the filters written at the top, every row, who printed it and when; on paper only the sheet.',
     },

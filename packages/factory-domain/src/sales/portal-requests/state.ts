@@ -64,6 +64,11 @@ export function requestStateOf(facts: RequestStateFacts): PortalRequestState {
       return 'DECLINED'
     case 'LOST':
       return 'CLOSED'
+    // TH-2 (B-TH-022): made straight into an order: the order's own state (B-TH-025 reads it into orderStatus).
+    case 'ORDERED':
+      if (facts.orderStatus === 'PENDING_APPROVAL') return 'ORDER_WAITING'
+      if (facts.orderStatus === 'CANCELLED') return 'CLOSED'
+      return 'ORDER_CONFIRMED'
     case 'QUOTED':
       if (facts.orderStatus !== null) {
         if (facts.orderStatus === 'PENDING_APPROVAL') return 'ORDER_WAITING'

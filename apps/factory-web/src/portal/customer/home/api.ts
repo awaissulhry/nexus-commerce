@@ -34,6 +34,8 @@ export const orderRowSchema = z.object({
   id: z.string(),
   customerRef: z.string().nullable(),
   number: z.string().nullable(),
+  // B-TH-303: the customer's own number ("Your order 12"), drawn instead of the office's series.
+  yourNumber: z.object({ seq: z.number(), words }).nullable().optional(),
   status: z.enum(CUSTOMER_ORDER_STATUSES),
   promiseDate: z.string().nullable(),
   originalPromiseDate: z.string().nullable(),

@@ -14,10 +14,12 @@ import type { Issue } from '../../core/errors'
  *
  *   NEW ──assign──▶ ASSIGNED ──ask for more information──▶ NEED_INFO ──answered──▶ ASSIGNED (or NEW: nobody assigned)
  *    ◀──take off──┘     │                                        │
- *                       └─────── make quote · decline · lost ────┴──▶ QUOTED | DECLINED | LOST (final)
+ *                       └── make quote · make order · decline · lost ──┴──▶ QUOTED | ORDERED | DECLINED | LOST (final)
  *
  * A QUOTED inquiry names the quote it became (one quote per inquiry, one inquiry per quote); a quote needs a customer, so a
  * prospect is matched to a party first. DECLINED says why (OTHER in words); LOST says in words why the customer went away.
+ * TH-2 (threads schema wave 3/9, B-TH-022): an ORDERED inquiry names the order made straight from it (one order per inquiry,
+ * B-TH-025); "Not an order" (NOT_AN_ORDER) is a decline reason for a request that asks nothing to make (B-TH-043).
  * A closed inquiry is frozen but for its note (and the erasure of its prospect, GDPR art. 17). The brand's tech pack is a set
  * of files of the inquiry or of its mail with the version the brand names; the quote and the order made from it read it from
  * the inquiry, each file as its current version ("always the version in force").
@@ -29,13 +31,13 @@ export type InquirySource = (typeof INQUIRY_SOURCES)[number]
 export const TYPED_SOURCES = ['OFFICE', 'PHONE', 'FAIR', 'PORTAL'] as const satisfies readonly InquirySource[]
 export type TypedSource = (typeof TYPED_SOURCES)[number]
 
-export const INQUIRY_STATUSES = ['NEW', 'ASSIGNED', 'NEED_INFO', 'QUOTED', 'DECLINED', 'LOST'] as const
+export const INQUIRY_STATUSES = ['NEW', 'ASSIGNED', 'NEED_INFO', 'QUOTED', 'DECLINED', 'LOST', 'ORDERED'] as const
 export type InquiryStatus = (typeof INQUIRY_STATUSES)[number]
 export const OPEN_STATUSES = ['NEW', 'ASSIGNED', 'NEED_INFO'] as const satisfies readonly InquiryStatus[]
-export const CLOSED_STATUSES = ['QUOTED', 'DECLINED', 'LOST'] as const satisfies readonly InquiryStatus[]
+export const CLOSED_STATUSES = ['QUOTED', 'DECLINED', 'LOST', 'ORDERED'] as const satisfies readonly InquiryStatus[]
 export const isOpen = (status: InquiryStatus): boolean => (OPEN_STATUSES as readonly string[]).includes(status)
 
-export const DECLINE_REASONS = ['CAPACITY', 'LEAD_TIME', 'NOT_OUR_PRODUCT', 'PRICE', 'OTHER'] as const
+export const DECLINE_REASONS = ['CAPACITY', 'LEAD_TIME', 'NOT_OUR_PRODUCT', 'PRICE', 'OTHER', 'NOT_AN_ORDER'] as const
 export type DeclineReason = (typeof DECLINE_REASONS)[number]
 
 /** GDPR art. 6(1): a contact's and a prospect's lawful basis. A request for a quote is CONTRACT (steps at the person's request). */
@@ -87,6 +89,7 @@ export const STATUS_WORDS: Readonly<Record<InquiryStatus, Words>> = Object.freez
   QUOTED: { it: 'Preventivata', en: 'Quoted' },
   DECLINED: { it: 'Rifiutata', en: 'Declined' },
   LOST: { it: 'Persa', en: 'Lost' },
+  ORDERED: { it: 'Ordinata', en: 'Ordered' },
 })
 export const SOURCE_WORDS: Readonly<Record<InquirySource, Words>> = Object.freeze({
   OFFICE: { it: 'Ufficio', en: 'Office' },
@@ -101,6 +104,7 @@ export const DECLINE_WORDS: Readonly<Record<DeclineReason, Words>> = Object.free
   NOT_OUR_PRODUCT: { it: 'Non è un nostro prodotto', en: 'Not our product' },
   PRICE: { it: 'Prezzo', en: 'Price' },
   OTHER: { it: 'Altro', en: 'Other' },
+  NOT_AN_ORDER: { it: 'Non è un ordine', en: 'Not an order' },
 })
 
 // ---- refusals ----------------------------------------------------------------------------------------------------------

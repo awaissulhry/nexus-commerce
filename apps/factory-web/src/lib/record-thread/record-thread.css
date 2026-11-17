@@ -63,3 +63,57 @@
   color: var(--nds-tonal-fg);
   font-weight: 600;
 }
+
+/* ── B-TH-300: the docked thread (RecordFrame) — the Head and the files line above the feed; a door's line under the Head ── */
+.fw-rt-door {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  background: var(--nds-surface);
+}
+
+.fw-rt-door-actions {
+  display: inline-flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.fw-rt-door-url {
+  font-family: var(--nds-font-mono);
+  font-size: var(--nds-font-size-sm);
+  overflow-wrap: anywhere;
+}
+
+/* SCR-006-thread docked cases: the column fills the stand-in dock (DockedStage) or a record page's dock (SCR-039). */
+.fw-rt-thread-case.is-docked,
+.fw-rt-thread-case.is-fill {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fw-rt-thread-case.is-docked > .fw-rt-column,
+.fw-rt-thread-case.is-fill > .fw-rt-column {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.fw-rt-stage-dock > .fw-rt-thread-case.is-docked > .fw-rt-column {
+  border: 0;
+  border-radius: 0;
+}
+
+/* B-TH-300: the docked column measures itself: in the narrowest dock (one third at 1440) Saved replies shows its icon only. */
+.fw-rt-column.is-docked {
+  container: fw-rtcol / inline-size;
+}
+
+@container fw-rtcol (max-width: 480px) {
+  .fw-rtm-replies-word {
+    display: none;
+  }
+}

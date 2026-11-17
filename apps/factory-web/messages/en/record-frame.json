@@ -1,0 +1,30 @@
+{
+  "thread": {
+    "button": "Thread",
+    "hintDocked": "Show or hide the thread beside the record (⌘J)",
+    "hintView": "Open the thread (⌘J); Back returns to the same tab",
+    "back": "Back to the record"
+  },
+  "more": "More actions",
+  "details": {
+    "open": "Details",
+    "title": "Details"
+  },
+  "keys": {
+    "line": "Keyboard",
+    "lineHint": "The keys of this page",
+    "title": "Keyboard",
+    "thread": "Show or hide the thread",
+    "step": "The band's main step",
+    "walk": "Next and previous message, while the messages have the focus",
+    "reply": "Reply to the customer, from the thread outside a field",
+    "note": "Office note, from the thread outside a field",
+    "esc": "Leave the box (the text stays); from full width back to the record"
+  },
+  "notices": {
+    "more_one": "1 more notice",
+    "more_other": "{count} more notices",
+    "fewer_one": "Hide 1 notice",
+    "fewer_other": "Hide {count} notices"
+  }
+}

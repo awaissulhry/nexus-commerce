@@ -1,0 +1,140 @@
+/*
+ * SCR-185-request — the customer's request page (B-TH-222): layout only, semantic tokens only. The state line spans the page;
+ * below it the thread is the main column and what was asked sits beside it from 1280 px (about a third), so a 1920 screen has
+ * no dead space; on a phone the state line, then the thread, then the details. No page max-width (Owner rule 2026-10-29).
+ */
+
+.fw-preq,
+.fw-preq-main,
+.fw-preq-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-preq-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .fw-preq-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  }
+  .fw-preq-side {
+    position: sticky;
+    top: var(--nds-space-16);
+  }
+}
+
+.fw-preq-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  border-left: 3px solid var(--nds-info);
+}
+
+.fw-preq-state.is-waiting {
+  border-left-color: var(--nds-warning);
+}
+
+.fw-preq-label,
+.fw-preq-h3 {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.fw-preq-h2 {
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-preq-stateline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+}
+
+.fw-preq-when {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.fw-preq-hint,
+.fw-preq-made {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-preq-question {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+  margin-top: var(--nds-space-4);
+  padding: var(--nds-space-12) var(--nds-space-16);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-warning-soft);
+  color: var(--nds-text);
+}
+
+.fw-preq-question > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--nds-warning-text);
+}
+
+.fw-preq-question-body {
+  flex: 1 1 260px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-preq-quote {
+  margin: 0;
+  padding-left: var(--nds-space-12);
+  border-left: 2px solid var(--nds-border-strong);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-preq-details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-preq-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--nds-space-8) var(--nds-space-16);
+  margin: 0;
+}
+
+.fw-preq-facts dt {
+  color: var(--nds-text-muted);
+}
+
+.fw-preq-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-preq-lines {
+  margin: 0;
+  padding-left: var(--nds-space-16);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}

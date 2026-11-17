@@ -1,8 +1,8 @@
 import type { PortalBand } from '../../shell/frame'
 
 /**
- * The frame's band of the customer's Home (design portal.customer.home h): "Updated 10:42"; no button while New order is
- * not built (the design's primary, a buyer's; "Ask for a quote" is W3); ⋯ Download statement of account (Finance, a new
+ * The frame's band of the customer's Home (design portal.customer.home h): "Updated 10:42"; no button (New order is the page's
+ * own main button, B-TH-223; "Ask for a quote" is W3); ⋯ Download statement of account (Finance, a new
  * tab), E-mail settings (not in a preview) and the frame's own Ask a question; the page's keys. One builder for the live
  * page and its design cases.
  */
@@ -18,14 +18,12 @@ export function homeBandOf(input: {
   emailSettings: boolean
   /** `g o` opens Orders (the page is built and theirs). */
   ordersKey: boolean
-  /** B-W2b-194: New order's address for a buyer (not in a preview), else null. */
-  newOrder?: string | null
 }): PortalBand {
   const { t } = input
   return {
     status: input.asOf ? { label: t('band.updated', { time: input.asOf }), tone: 'neutral' } : null,
-    // B-W2b-194: the design's primary "New order" (h.act), a buyer's.
-    actions: input.newOrder ? [{ id: 'new-order', label: t('band.newOrder'), variant: 'primary', href: input.newOrder }] : [],
+    // B-TH-223: New order is the page's main button (the Start card, P-HOME.actions), beside Ask a question: one primary.
+    actions: [],
     more: [
       ...(input.statement ? [{ id: 'statement', label: t('band.statement'), href: input.statement, target: '_blank' as const }] : []),
       ...(input.emailSettings ? [{ id: 'email', label: t('band.emailSettings'), href: '?dialog=email-settings' }] : []),

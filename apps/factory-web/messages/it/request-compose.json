@@ -1,0 +1,74 @@
+{
+  "compose": {
+    "label": "La vostra richiesta"
+  },
+  "to": {
+    "label": "Va a",
+    "why": "Questo portale invia solo a questa azienda."
+  },
+  "subject": {
+    "label": "Oggetto (facoltativo)",
+    "hint": "Vuoto: usiamo la prima riga del messaggio.",
+    "used": "Vuoto: usiamo “{subject}”."
+  },
+  "message": {
+    "label": "Il vostro messaggio",
+    "hint": "Con parole vostre, nella vostra lingua. Solo testo: lo leggiamo esattamente come l'avete scritto."
+  },
+  "problem": {
+    "tooLong": "Oggetto e messaggio insieme hanno al massimo 20 000 caratteri.",
+    "refLong": "Il vostro numero d'ordine ha al massimo {max} caratteri.",
+    "datePast": "Il giorno in cui volete la merce è oggi o più avanti.",
+    "shipTo": "Non è uno dei vostri indirizzi di consegna: sceglietene un altro."
+  },
+  "kept": {
+    "at": "Bozza tenuta su questo dispositivo · {time}",
+    "failed": "Non tenuta su questo dispositivo.",
+    "retry": "Riprova",
+    "offline": "Siete offline: il testo resta su questo dispositivo."
+  },
+  "files": {
+    "title": "File",
+    "closed": "Per ora i caricamenti dall'esterno sono chiusi: l'antivirus qui non è ancora attivo. Mandate il file al vostro referente per e-mail."
+  },
+  "details": {
+    "title": "Aggiungi dettagli (facoltativo)",
+    "none": "Niente qui serve per inviare.",
+    "ref": "Il vostro numero d'ordine",
+    "refHint": "Il vostro numero d'ordine, se ne avete uno.",
+    "date": "Desiderata entro",
+    "dateHint": "Il giorno in cui vorreste la merce. Nella risposta diciamo cosa possiamo fare.",
+    "shipTo": "Consegna a",
+    "shipToHint": "Uno dei vostri indirizzi di consegna.",
+    "shipToWaiting": "Un indirizzo nuovo: lo verifichiamo prima della prima consegna. Potete comunque inviare.",
+    "shipToUsual": "Non scelto",
+    "shipToChoiceWaiting": "{place} (in attesa della nostra verifica)",
+    "shipToFailed": "Non è stato possibile leggere i vostri indirizzi di consegna.",
+    "sumRef": "Vostro numero {ref}",
+    "sumDate": "entro il {date}",
+    "sumShipTo": "a {place}"
+  },
+  "same": {
+    "title": "Avete inviato queste parole alle {time}.",
+    "titleAs": "Avete inviato queste parole alle {time} come {yours}.",
+    "body": "Inviatele di nuovo solo se intendete una seconda richiesta.",
+    "anyway": "Invia comunque"
+  },
+  "send": {
+    "discard": "Scarta la bozza",
+    "send": "Invia",
+    "sending": "Invio…"
+  },
+  "held": {
+    "preview": "Un'anteprima del portale: non si invia nulla.",
+    "closed": "Gli ordini dal portale non sono ancora aperti.",
+    "sending": "Invio…",
+    "offline": "Siete offline: il testo resta qui.",
+    "empty": "Scrivete prima cosa vi serve.",
+    "problems": "Correggete prima ciò che è segnato."
+  },
+  "state": {
+    "retry": "Riprova",
+    "loading": "Caricamento…"
+  }
+}

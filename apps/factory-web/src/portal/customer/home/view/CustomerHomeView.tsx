@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
-import { AlertCircle, Clock, FileText, History, MessageSquare, PackageOpen, Search, Sparkles } from 'lucide-react'
+import { AlertCircle, Clock, FilePen, FileText, History, Lock, MessageSquare, PackageOpen, PenLine, Search, Sparkles } from 'lucide-react'
 import { Banner, Card, DetailPopover, MetricStrip, ProgressBar, type Metric } from '@nexus/ui/components'
 import { MilestoneTracker } from '@nexus/ui/components/MilestoneTracker/index'
 import { RefPair } from '@nexus/ui/components/RefPair/index'
@@ -50,12 +50,26 @@ export interface WelcomeModel {
 
 export type PromiseWhy = { state: Async; words: string | null }
 
+// B-TH-223 (P-HOME.actions): the two doors — an order like an e-mail, or a question — and the draft kept on this device.
+export interface StartModel {
+  /** New order's address (a buyer, the page built, not in a preview), else null. */
+  newOrderHref: string | null
+  /** The person may order (portal.orderRequests.manage). */
+  buyer: boolean
+  /** Who can give the right to order (their admins). */
+  admins: readonly string[]
+  /** The unsent New order kept on this device: its subject (or first line) and when it was kept (written). */
+  draft: { subject: string; at: string } | null
+}
+
 export interface CustomerHomeViewModel {
   prefix: string
   /** null: the person cannot search. */
   search: HomeSearchModel | null
   /** A first visit: the first step instead of empty panels. */
   welcome: WelcomeModel | null
+  // B-TH-223
+  start?: StartModel | null
   tiles: { state: Async; items: readonly Tile[] } | null
   orders: { state: Async; items: readonly NextOrderRow[]; open: number | null; seeAllHref: string | null; newOrderHref: string | null; why: Readonly<Record<string, PromiseWhy>> } | null
   documents: { state: Async; items: readonly DocumentRow[]; seeAllHref: string | null; busy: string | null; problem: string | null; held: string | null } | null
@@ -110,6 +124,7 @@ export function CustomerHomeView({ model, actions, tasks }: { model: CustomerHom
   return (
     <div className="fw-pch">
       {model.search ? <SearchHero model={model.search} actions={actions?.search} /> : null}
+      {model.start && !model.welcome ? <StartCard model={model.start} onAsk={actions?.onAsk} /> : null}
       {model.welcome ? (
         // The first step fills the page; our messages beside it only when there are some (no empty column).
         model.messages && model.messages.items.length > 0 ? (
@@ -286,6 +301,56 @@ function SearchHero({ model, actions }: { model: HomeSearchModel; actions?: Cust
   )
 }
 
+// ── B-TH-223: Start (P-HOME.actions) ───────────────────────────────────────────────────────────────────────────────────
+function StartCard({ model, onAsk }: { model: StartModel; onAsk?: () => void }) {
+  const { t } = useHomeWords()
+  return (
+    <section className="fw-pch-section fw-pch-start" aria-labelledby="fw-pch-start">
+      <h2 id="fw-pch-start" className="fw-sr">
+        {t('start.label')}
+      </h2>
+      <div className="fw-pch-start-doors">
+        {model.buyer && model.newOrderHref ? (
+          <a className="fw-pch-door is-primary" href={model.newOrderHref}>
+            <PenLine size={20} aria-hidden />
+            <span className="fw-pch-door-text">
+              <strong>{t('start.newOrder')}</strong>
+              <span>{t('start.newOrderHint')}</span>
+            </span>
+          </a>
+        ) : null}
+        {!model.buyer ? (
+          <div className="fw-pch-door is-held" role="note">
+            <Lock size={20} aria-hidden />
+            <span className="fw-pch-door-text">
+              <strong>{t('start.noRight')}</strong>
+              <span>{model.admins.length > 0 ? t('start.noRightAsk', { names: model.admins.join(', ') }) : t('start.noRightAskUs')}</span>
+            </span>
+          </div>
+        ) : null}
+        <button type="button" className="fw-pch-door" onClick={() => onAsk?.()}>
+          <MessageSquare size={20} aria-hidden />
+          <span className="fw-pch-door-text">
+            <strong>{t('start.ask')}</strong>
+            <span>{t('start.askHint')}</span>
+          </span>
+        </button>
+      </div>
+      {model.draft && model.newOrderHref ? (
+        <p className="fw-pch-draft">
+          <FilePen size={16} aria-hidden />
+          <span className="fw-pch-draft-text">
+            <strong>{t('start.draft', { subject: model.draft.subject })}</strong> <span className="fw-pch-sub">{t('start.draftKept', { time: model.draft.at })}</span>
+          </span>
+          <Button size="sm" asChild>
+            <a href={model.newOrderHref}>{t('start.continue')}</a>
+          </Button>
+        </p>
+      ) : null}
+    </section>
+  )
+}
+
 // ── First visit ────────────────────────────────────────────────────────────────────────────────────────────────────────
 function WelcomeHero({ model, onAsk }: { model: WelcomeModel; onAsk?: () => void }) {
   const { t } = useHomeWords()
@@ -370,12 +435,12 @@ function NextOrders({
       ) : (
         <ul className="fw-pch-rows" aria-label={t('orders.title')}>
           {model.items.map((row) => {
-            const name = row.ours ?? row.theirs ?? ''
+            const name = [row.oursLabel, row.ours].filter(Boolean).join(' ') || row.theirs || ''
             const head = (
               <>
                 <span className="fw-pch-order-refs">
                   {row.kind === 'REQUEST' ? <Tag tone="neutral">{t('orders.request')}</Tag> : null}
-                  <RefPair theirs={row.theirs} ours={row.ours} theirsLabel={t('orders.yours')} oursLabel={t('orders.ours')} copy={false} size="sm" labels={ds.refPair} />
+                  <RefPair theirs={row.theirs} ours={row.ours} theirsLabel={t('orders.yours')} oursLabel={row.oursLabel ?? ''} copy={false} size="sm" labels={ds.refPair} />
                 </span>
                 <MilestoneTracker steps={row.steps} layout="compact" label={t('orders.steps', { number: name })} labels={ds.milestoneTracker} />
                 <span className="fw-pch-sub">

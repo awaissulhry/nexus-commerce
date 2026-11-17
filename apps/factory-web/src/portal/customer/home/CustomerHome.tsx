@@ -6,6 +6,8 @@ import type { ApprovalDecision } from '@nexus/factory-domain/approvals-out/kinds
 import { isApiError } from '../../../lib/api/errors'
 import { formatDate, formatTime } from '../../../lib/i18n/format'
 import { useT } from '../../../lib/i18n/provider'
+import { composeDraftKey, readKeptCompose, subjectUsed } from '../../../lib/request-compose/model'
+import { fetchRequests } from '../requests/api'
 import { WithMessages } from '../../../record-panels/i18n'
 import { searchPortal } from '../../shell/api'
 import { PORTAL_AREAS, recordPageOf } from '../../shell/nav/portal-nav'
@@ -121,6 +123,18 @@ function HomeContainer() {
   const [openItems, setOpenItems] = useState<OpenItemsRead | null>(null)
   const [why, setWhy] = useState<Record<string, PromiseWhy>>({})
   const [slow, setSlow] = useState(false)
+  // B-TH-223 (P-HOME.actions-F02): the unsent New order kept on this device ("Draft: … · Continue"), read after mounting.
+  const [draft, setDraft] = useState<{ subject: string; at: string } | null>(null)
+  useEffect(() => {
+    let storage: Storage | null = null
+    try {
+      storage = window.localStorage
+    } catch {
+      storage = null
+    }
+    const kept = readKeptCompose(storage, composeDraftKey(frame.me.user.id, frame.me.party.code), Date.now())
+    setDraft(kept ? { subject: subjectUsed(kept.draft) || kept.draft.customerRef || '…', at: formatTime(new Date(kept.savedAt).toISOString(), { locale }) } : null)
+  }, [frame.me.user.id, frame.me.party.code, locale])
 
   const keep = <T,>(set: (update: (current: Async<T>) => Async<T>) => void) => () => set((current) => ({ state: current.value ? 'ready' : 'error', value: current.value }))
   const readHome = useCallback(() => {
@@ -135,6 +149,18 @@ function HomeContainer() {
       .then((value) => setOrders({ state: 'ready', value }))
       .catch(keep(setOrders))
   }, [api, seesOrders])
+  // B-TH-223: whether the customer has any request (its first step is done): one row is enough.
+  const [requestsAll, setRequestsAll] = useState<number | null>(null)
+  const readRequests = useCallback(() => {
+    if (!seesOrders) return
+    fetchRequests(api, { state: 'ALL', limit: 1 })
+      .then((value) => setRequestsAll(value.rows.length))
+      // Not read: unknown, so Home is not drawn as a first visit (the panels stay).
+      .catch(() => undefined)
+  }, [api, seesOrders])
+  useEffect(() => {
+    readRequests()
+  }, [readRequests])
   const readDocuments = useCallback(() => {
     if (!seesDocuments) return
     fetchNewDocuments(api)
@@ -375,17 +401,16 @@ function HomeContainer() {
       statement: seesPayments && seesPrices && !preview ? statementHref(locale) : null,
       emailSettings: !preview,
       ordersKey: built.orders && seesOrders,
-      // B-W2b-194: New order (a buyer, the page built, not in a preview).
-      newOrder: can('portal.orderRequests.manage') && pageBuilt('orders.new') && !preview ? `${prefix}/orders/new` : null,
     }),
   )
 
   // ── the model ──
   const openTasks = tasks.model.groups.reduce((sum, group) => sum + group.rows.filter((row) => !row.done).length, 0)
   const counts = orderCounts(orders.value)
-  const first = isFirstVisit({ tasks: tasks.model.state, openTasks, seesOrders, ordersAll: seesOrders ? (orders.state === 'ready' ? counts.all : null) : 0, newDocuments: seesDocuments ? (documents.value?.items.length ?? null) : 0 })
+  const first = isFirstVisit({ tasks: tasks.model.state, openTasks, seesOrders, ordersAll: seesOrders ? (orders.state === 'ready' ? counts.all : null) : 0, newDocuments: seesDocuments ? (documents.value?.items.length ?? null) : 0, requestsAll })
   const buyer = can('portal.orderRequests.manage')
   const newOrderHref = buyer && pageBuilt('orders.new') ? `${prefix}/orders/new` : null
+  // B-TH-223: New order is the page's main button (not in a preview: nothing is sent from one).
   const tileDefs = tilesFor(built, can)
   const queue = approvalIds(tasks.model.groups)
 
@@ -394,6 +419,8 @@ function HomeContainer() {
       model={{
         prefix,
         search: can('portal.search') ? { ...search, recent } : null,
+        // B-TH-223
+        start: { newOrderHref: preview ? null : newOrderHref, buyer, admins, draft: buyer && !preview ? draft : null },
         welcome: first
           ? {
               name: frame.me.user.displayName.split(' ')[0] ?? frame.me.user.displayName,

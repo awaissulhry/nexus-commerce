@@ -142,7 +142,8 @@
     "NEED_INFO": "Need info",
     "QUOTED": "Quoted",
     "DECLINED": "Declined",
-    "LOST": "Lost"
+    "LOST": "Lost",
+    "ORDERED": "Ordered"
   },
   "source": {
     "OFFICE": "Office",
@@ -543,12 +544,14 @@
     "NOT_OUR_PRODUCT": "Not our product",
     "PRICE": "Price",
     "OTHER": "Other",
+    "NOT_AN_ORDER": "Not an order",
     "hint": {
       "CAPACITY": "We cannot make it in the time they need",
       "LEAD_TIME": "The date they want is too close",
       "NOT_OUR_PRODUCT": "We do not make this kind of product",
       "PRICE": "Their target price is out of reach",
-      "OTHER": "Say why in words"
+      "OTHER": "Say why in words",
+      "NOT_AN_ORDER": "It asks nothing to make (a question, a catalogue request)"
     },
     "note": "Why, in words",
     "noteHint": "Optional; kept on the request",

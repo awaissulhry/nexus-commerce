@@ -48,9 +48,31 @@ export interface RecordThreadHost {
 
 type Notice = NonNullable<RecordThreadModel['notice']>
 
+/**
+ * B-TH-300: what the docked thread's bands read of the same container (one read of each part for the page): the record, what the
+ * server said, the files, who closed the thread, the person's rights, and the reads to run again.
+ */
+export interface RecordThreadBase {
+  readonly key: { readonly type: string; readonly id: string }
+  readonly server: ServerThread
+  readonly files: readonly ApiFile[]
+  /** The files were read once (null in the files line until then). */
+  readonly filesRead: boolean
+  readonly closed: { readonly by: string | null; readonly at: string | null } | null
+  readonly offline: { readonly since: string } | null
+  readonly held: ReadonlySet<string>
+  readonly can: { readonly read: boolean; readonly post: boolean; readonly email: boolean; readonly manage: boolean; readonly readFiles: boolean; readonly upload: boolean; readonly share: boolean }
+  readonly partyId: string | null
+  readonly people: readonly { readonly id: string; readonly name: string }[]
+  readonly loadFiles: () => Promise<void>
+  readonly loadThread: () => Promise<void>
+  readonly loadTimeline: () => Promise<void>
+  readonly notify: (notice: Notice | null) => void
+}
+
 const EMPTY_WORK = (draft: ComposerDraft = { mode: 'note', body: '', forFloor: false }): Work => ({ draft, notes: [], files: [], to: [], cc: [], subject: '', outbox: [] })
 
-export function useRecordThread(host: RecordThreadHost): { model: RecordThreadModel; actions: RecordThreadActions; kept: LocalDraft | null; guard: { ask: (leave: () => void) => boolean } } {
+export function useRecordThread(host: RecordThreadHost): { model: RecordThreadModel; actions: RecordThreadActions; kept: LocalDraft | null; guard: { ask: (leave: () => void) => boolean }; base: RecordThreadBase } {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
@@ -66,6 +88,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   const [emails, setEmails] = useState<ReadonlyMap<string, ThreadApiEmail>>(new Map())
   const [deliveries, setDeliveries] = useState<ReadonlyMap<string, ThreadApiDelivery>>(new Map())
   const [files, setFiles] = useState<ApiFile[]>([])
+  const [filesRead, setFilesRead] = useState(false) // B-TH-300
   const [changes, setChanges] = useState<ThreadApiChange[]>([])
   const [people, setPeople] = useState<Array<{ id: string; name: string }>>([])
   const [contacts, setContacts] = useState<Contact[]>([])
@@ -132,6 +155,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       setFiles((await listFiles(api, key)).files)
     } catch {
       // "From this record" then offers nothing; the cards still name their files.
+    } finally {
+      setFilesRead(true)
     }
   }, [api, key, can.readFiles])
   const loadTimeline = useCallback(async () => {
@@ -599,5 +624,6 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     forgetDraft()
   }
 
-  return { model, actions, kept, guard: { ask: leave.ask } }
+  const base: RecordThreadBase = { key, server, files, filesRead, closed, offline, held, can, partyId, people, loadFiles, loadThread, loadTimeline, notify: setNotice }
+  return { model, actions, kept, guard: { ask: leave.ask }, base }
 }

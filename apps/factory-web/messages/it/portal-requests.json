@@ -1,0 +1,60 @@
+{
+  "title": "La vostra richiesta {seq}",
+  "titleNone": "La vostra richiesta",
+  "back": "Ordini e richieste",
+  "state": {
+    "label": "A che punto è",
+    "since": "dal {when}",
+    "madeOrder": "Diventata {order}",
+    "madeQuote": "Preventivo: {quote} (inviato per e-mail)",
+    "theOrder": "il vostro ordine",
+    "theQuote": "il vostro preventivo"
+  },
+  "hint": {
+    "SENT": "L'abbiamo ricevuta; nessuno l'ha ancora presa in carico. Potete aggiungere qualcosa qui sotto.",
+    "BEING_REVIEWED": "Una persona dell'ufficio vendite ci sta lavorando. Potete aggiungere qualcosa qui sotto.",
+    "NEED_INFO": "Vi abbiamo chiesto qualcosa: rispondete qui sotto.",
+    "QUOTE_BEING_PREPARED": "Stiamo preparando un preventivo. Vi arriva per e-mail quando è pronto.",
+    "QUOTE_SENT": "Vi abbiamo inviato un preventivo per e-mail. Lo accettate da quella e-mail.",
+    "QUOTE_ACCEPTED": "Avete accettato il preventivo: ne facciamo l'ordine.",
+    "ORDER_WAITING": "L'ordine attende la nostra approvazione. Non è ancora confermato.",
+    "ORDER_CONFIRMED": "Il vostro ordine è confermato. Seguitelo in Ordini e richieste.",
+    "DECLINED": "Non possiamo accettare questa richiesta. Il nostro messaggio, se l'abbiamo scritto, è qui sotto.",
+    "CLOSED": "Questa richiesta è chiusa. Scrivete qui sotto se vi serve ancora qualcosa."
+  },
+  "question": {
+    "title": "Ci serve qualcosa da voi",
+    "quote": "La nostra domanda, {when}:",
+    "none": "La nostra domanda è nei messaggi qui sotto.",
+    "answer": "Rispondi"
+  },
+  "details": {
+    "title": "Ciò che avete chiesto",
+    "subject": "Oggetto",
+    "ref": "Vostro numero d'ordine",
+    "date": "Desiderata entro",
+    "shipTo": "Consegna a",
+    "shipToWaiting": "in attesa della nostra verifica",
+    "received": "Inviata",
+    "lines": "Righe",
+    "line": "{style}: {sizes}",
+    "lineQuantity": "{style}: {count} pezzi",
+    "pieces": "Pezzi",
+    "none": "Niente oltre al vostro messaggio."
+  },
+  "thread": {
+    "title": "Messaggi su questa richiesta"
+  },
+  "missing": {
+    "title": "Richiesta non trovata",
+    "body": "Questa richiesta non è vostra, o non esiste più.",
+    "back": "Torna a Ordini e richieste"
+  },
+  "failed": {
+    "title": "Non è stato possibile leggere questa richiesta",
+    "body": "Non è cambiato nulla. Riprovate tra un momento.",
+    "retry": "Riprova"
+  },
+  "offline": "Nessuna connessione — si vede ciò che è stato caricato alle {time}",
+  "loading": "Lettura della richiesta…"
+}
