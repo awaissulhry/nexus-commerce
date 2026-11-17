@@ -140,6 +140,8 @@ model Party {
   // swatches and sample shipments sent to it, the gates of its orders.
   styleChangeRequests ChangeRequest[]
   sampleRounds        SampleRound[]
+  // B-PR-01 production.prisma (production plan, schema wave 1/5): the work orders made for it.
+  workOrders          WorkOrder[]
   sampleSwatches      SampleSwatch[]
   sampleShipments     SampleShipment[]
   orderGates          OrderGate[]

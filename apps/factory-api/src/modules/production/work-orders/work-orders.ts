@@ -418,7 +418,8 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
   })
   const dueDate = body.dueDate ?? (dues.length > 0 ? [...dues].sort()[0]! : null)
   const priority = body.priority ?? Math.max(0, ...[...lines.values()].map((line) => line.priority ?? orderOf.get(line.orderId)?.priority ?? 0))
-  const target: CellTarget = { companyId: site.companyId, siteId: site.id, styleId: style.id, styleSizes: style.sizes, styleRevisionId: revisionId }
+  // B-PR-01: one customer per work order, the lines' (B-PR-02's lineProblems refuses a line of another customer).
+  const target: CellTarget = { companyId: site.companyId, siteId: site.id, styleId: style.id, styleSizes: style.sizes, styleRevisionId: revisionId, partyId: first.partyId }
 
   const spec: CommandSpec = sample
     ? { name: 'workorders.createSample', idempotencyKey, input: { ...body, sampleRoundId: sample.roundId }, record: { type: 'SampleRound', id: sample.roundId, expectedVersion: sample.version } }
@@ -454,6 +455,7 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
         number: number.formatted,
         kind, // B-W2b-368
         ...(sample ? { sampleRoundId: sample.roundId } : {}),
+        partyId: first.partyId, // B-PR-01: the customer of its lines, never changed
         styleId: style.id,
         styleRevisionId: revisionId,
         dueDate: dueDate ? asDay(dueDate) : null,
@@ -482,6 +484,7 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
         status: 'DRAFT',
         kind, // B-W2b-368
         ...(sample ? { sampleRoundId: sample.roundId } : {}),
+        partyId: first.partyId, // B-PR-01: the customer of its lines, never changed
         styleId: style.id,
         styleRevisionId: revisionId,
         dueDate,
@@ -536,7 +539,7 @@ export async function createSampleWorkOrder(
   caller: CommandCaller,
   body: SampleWithoutLineInput,
   idempotencyKey: string | undefined,
-  sample: SampleWorkOrder & { readonly styleId: string; readonly companyId: string },
+  sample: SampleWorkOrder & { readonly styleId: string; readonly companyId: string; /** B-PR-01: the round's customer (null: a round for no customer). */ readonly partyId: string | null },
 ): Promise<{ workOrder: WorkOrderView }> {
   const context = officeContextOf(caller)
   const plan = await caller.withClient(async (client) => {
@@ -588,6 +591,7 @@ export async function createSampleWorkOrder(
         number: number.formatted,
         kind: 'SAMPLE',
         sampleRoundId: sample.roundId,
+        partyId: sample.partyId, // B-PR-01: a customer's round's samples are that customer's
         styleId: style.id,
         styleRevisionId: revisionId,
         dueDate: body.dueDate ? asDay(body.dueDate) : null,
@@ -676,7 +680,10 @@ export async function setCells(caller: CommandCaller, workOrderId: string, body:
     await lockOrderLines(tx, context.tenantId, lineIds)
     const lines = await readOrderLines(tx, lineIds, current.id)
     const held = await tx.workOrderSize.findMany({ where: { workOrderId: current.id }, select: { id: true, salesOrderLineId: true, colourwayId: true, size: true, quantity: true } })
-    const target: CellTarget = { companyId: current.companyId, siteId: current.siteId, styleId: current.styleId, styleSizes: style.sizes, styleRevisionId: current.styleRevisionId }
+    // B-PR-01: a line of another customer than the work order's is refused in words (B-PR-02's lineProblems). A work order of
+    // no customer (a mixed one made before the rule, a SAMPLE of a round for no customer) is left to the database's guard,
+    // which lets its cells leave (lowered, removed) and refuses any other change.
+    const target: CellTarget = { companyId: current.companyId, siteId: current.siteId, styleId: current.styleId, styleSizes: style.sizes, styleRevisionId: current.styleRevisionId, ...(current.partyId !== null ? { partyId: current.partyId } : {}) }
     const withColour = requests.map((request) => ({ ...request, colourwayId: lines.get(request.salesOrderLineId)!.colourwayId }))
     // B-W2b-275: a held SAMPLE cell may name no order line; it is never the cell a request names.
     const sameCell = (cell: { salesOrderLineId: string | null; size: string }, request: { salesOrderLineId: string; size: string }) => cell.salesOrderLineId === request.salesOrderLineId && cell.size === request.size

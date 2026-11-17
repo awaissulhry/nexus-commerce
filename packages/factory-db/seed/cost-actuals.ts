@@ -194,7 +194,7 @@ export async function seed(context: SeedContext): Promise<CostActualsSeed> {
       if (await tx.workOrder.findUnique({ where: { id: workOrderId }, select })) return
       const stamp = { createdAt: T.planned, updatedAt: T.planned, createdById: actorId }
       await tx.workOrder.create({
-        data: { id: workOrderId, companyId: companyA, siteId: siteA, number: 'SEED-WO-0004', kind: WorkOrderKind.SIZE_GRID, styleId: production.styleId, styleRevisionId: production.revisionId, ...stamp },
+        data: { id: workOrderId, companyId: companyA, siteId: siteA, number: 'SEED-WO-0004', kind: WorkOrderKind.SIZE_GRID, styleId: production.styleId, styleRevisionId: production.revisionId, /* B-PR-01 */ partyId: P1, ...stamp },
         select,
       })
       await tx.workOrderSize.create({

@@ -242,6 +242,6 @@ async function makeWithoutLine(
     note: made.note,
     cells: plan.cells.map((cell) => ({ ...cell, optionValueIds })),
   }
-  const { workOrder } = await createSampleWorkOrder(caller, input, idempotencyKey, { ...made.sample(round.revisionId), styleId: round.styleId, companyId: round.companyId }).catch(databaseRefusal)
+  const { workOrder } = await createSampleWorkOrder(caller, input, idempotencyKey, { ...made.sample(round.revisionId), styleId: round.styleId, companyId: round.companyId, /* B-PR-01 */ partyId: round.partyId }).catch(databaseRefusal)
   return { workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status }, round: await readRound(caller, round.id) }
 }

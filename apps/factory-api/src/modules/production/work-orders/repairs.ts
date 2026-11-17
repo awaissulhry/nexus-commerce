@@ -192,6 +192,7 @@ export async function createRepairWorkOrder(caller: CommandCaller, body: RepairI
         siteId: site.id,
         number: number.formatted,
         kind: 'REPAIR',
+        partyId: line.partyId, // B-PR-01: the customer the garment was sold to (its one cell's)
         styleId: style.id,
         styleRevisionId: revision.id,
         dueDate: body.dueDate ? asDay(body.dueDate) : null,

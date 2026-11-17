@@ -33,6 +33,10 @@ model SearchEntry {
   searchText     String
   /// When its indexer last wrote it (the results' AsOf).
   indexedAt      DateTime @db.Timestamptz(3)
+  /// B-PR-01 (production plan, schema wave 1/5; the brand wall): the record is shared by several customers (a cut order of
+  /// two customers' work orders, a hold group), so partyId names none of them: only a reader who reaches every customer
+  /// sees it. False: partyId is the record's one customer, or it is of no customer.
+  everyParty     Boolean  @default(false)
   createdAt      DateTime @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime @default(now()) @updatedAt @db.Timestamptz(3)
 

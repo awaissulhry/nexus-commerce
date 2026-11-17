@@ -477,7 +477,15 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    due exactly 24 hours after the incident happened (DPR 1124/1965 art. 53), no certificate, never WAITING_CERTIFICATE; it
    redefines the protected-safety step's `factory_inail_filing_guard`, every other rule and word kept),
    `…_planning_gb29_w2b_guards` (B-W2b-GB29: two CHECKs only — an unplanned operation's planned garments above 0 and never on a
-   routing operation; a style's planning cutting loss of 0 up to below 100 percent; no function):
+   routing operation; a style's planning cutting loss of 0 up to below 100 percent; no function),
+   `…_production_brand_wall_guards` (production plan schema wave 1/5, B-PR-01, one customer per work order: its own triggers
+   `WorkOrder_party_fixed` (every kind but SAMPLE made with its customer, a SAMPLE of a customer's round that customer's;
+   never changed, but set once from none when every cell left is of that one customer) and `WorkOrderSize_one_party` (a
+   cell of its work order's customer; a work order of none takes only cells of none and only as a SAMPLE; a mixed one made
+   before the rule takes no new or changed cell, its cells only leave it by removal or a lower quantity: the split); no
+   earlier function redefined; its data step `…_production_brand_wall_copy` (hand-written, between the schema and the
+   guards folders) fills WorkOrder.partyId from the cells once, with `WorkOrder_guard` off for that one statement, and
+   raises a NOTICE of the mixed count):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new
