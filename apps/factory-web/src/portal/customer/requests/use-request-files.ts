@@ -97,7 +97,7 @@ export function useRequestFiles(api: ApiClient, words: { network: string; store:
             ids.forEach((fileId) => carried.current.add(fileId))
           } catch (error) {
             const why = failureOf(error)
-            update((current) => current.map((file) => (file.fileId && ids.includes(file.fileId) ? { ...file, state: 'failed', failure: why } : file)))
+            update((current) => current.map((file): HeldFile => (file.fileId && ids.includes(file.fileId) ? { ...file, state: 'failed', failure: why } : file)))
           }
         }
       } finally {
