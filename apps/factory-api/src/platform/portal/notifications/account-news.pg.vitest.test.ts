@@ -105,7 +105,9 @@ async function partnerNews(messageIds: readonly string[]): Promise<void> {
 async function officeNews(messageIds: readonly string[]): Promise<void> {
   for (const event of await eventsOf(messageIds, ['thread.user_mentioned', 'thread.message_posted'])) await fanOut(system(), event as never)
 }
-const ours = (bodyText: string, batchId?: string): MessageInput => ({ direction: 'OUTBOUND', channel: 'EMAIL', author: { kind: 'USER', id: null, name: 'Made-up Office' }, bodyText, ...(batchId ? { batchId } : {}) })
+/** The seed's office person writes (a USER author has an id: the threads guard). */
+const OFFICE_ACTOR = seedUuid(NS, 'actor')
+const ours = (bodyText: string, batchId?: string): MessageInput => ({ direction: 'OUTBOUND', channel: 'EMAIL', author: { kind: 'USER', id: OFFICE_ACTOR, name: 'Made-up Office' }, bodyText, ...(batchId ? { batchId } : {}) })
 const bell = async (who: keyof typeof people): Promise<Json[]> => {
   const answer = await browsers[who].get('/portal/notifications')
   expect(answer.status, JSON.stringify(answer.body)).toBe(200)
@@ -121,6 +123,7 @@ async function officeBell(who: OfficePerson): Promise<Json[]> {
 beforeAll(async () => {
   h = await startHarness('account_news_th045')
   h.clock.set(new Date())
+  freshGuard(h)
   usePortalOptions({ answerFloorMs: 0 })
   for (const file of readdirSync(SEED_DIR).filter((name) => name.endsWith('.ts')).sort()) {
     const module = (await import(pathToFileURL(join(SEED_DIR, file)).href)) as { seed: (context: { db: FactoryDatabase; namespace: string }) => Promise<unknown> }
@@ -199,7 +202,7 @@ describe('B-TH-045: portal message news everywhere and at once', { timeout: SLOW
 
   it('a note to three records of two customers, mentioning two colleagues in one batch: ONE bell item each, the limited one counting A’s records only', async () => {
     const batch = newId()
-    const mention = (bodyText: string): MessageInput => ({ direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'USER', id: null, name: 'Made-up Planner' }, bodyText, mentions: [OFFICE.everyone, OFFICE.alphaDesk], batchId: batch })
+    const mention = (bodyText: string): MessageInput => ({ direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'USER', id: OFFICE_ACTOR, name: 'Made-up Planner' }, bodyText, mentions: [OFFICE.everyone, OFFICE.alphaDesk], batchId: batch })
     const made = await write([
       { record: { type: 'SalesOrder', id: orders[0]! }, input: mention('Made-up: the cutting starts tomorrow.') },
       { record: { type: 'SalesOrder', id: orders[1]! }, input: mention('Made-up: the cutting starts tomorrow.') },

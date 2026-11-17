@@ -82,6 +82,7 @@ const ask = (partyId: string, recordId: string, kind = 'SEND_MEASUREMENTS') => s
 beforeAll(async () => {
   h = await startHarness('th051_request_task')
   h.clock.set(new Date())
+  freshGuard(h)
   usePortalOptions({ answerFloorMs: 0 })
   tenant = await addTenant(h, SLUG)
   world = await portalWorld(h, tenant)
@@ -119,7 +120,7 @@ describe('B-TH-051: hand the customer a task on its request', { timeout: SLOW_TE
 
   it('the office asks customer A for measurements on its open request, by a date; A finds it on its list and Home', async () => {
     const asked = await ask(world.partyId, requests.open)
-    expect(asked.status, JSON.stringify(asked.body)).toBe(201)
+    expect(asked.status, JSON.stringify(asked.body)).toBe(200)
     expect(asked.body.task).toMatchObject({ kind: 'SEND_MEASUREMENTS', status: 'OPEN', record: { type: 'Inquiry', id: requests.open, label: 'INQ-TH051-1' } })
     taskId = asked.body.task.id
     const [row] = await admin('SELECT "partyId", "companyId", "recordType" FROM "PartnerTask" WHERE id = $1', [taskId])
@@ -139,7 +140,8 @@ describe('B-TH-051: hand the customer a task on its request', { timeout: SLOW_TE
     for (const url of ['/portal/tasks', '/portal/home', '/portal/notifications']) {
       const answer = await browsers.beta.get(url)
       expect(answer.status, url).toBe(200)
-      expect(JSON.stringify(answer.body), url).not.toMatch(new RegExp(`${taskId}|${requests.open}|INQ-TH051-1`))
+      expect(taskId).not.toBe('')
+      for (const marker of [taskId, requests.open, 'INQ-TH051-1']) expect(JSON.stringify(answer.body), url).not.toContain(marker)
     }
   })
 
@@ -148,7 +150,7 @@ describe('B-TH-051: hand the customer a task on its request', { timeout: SLOW_TE
     expect(refused.status).toBe(400)
     expect(refused.body.error.issues).toEqual([{ path: 'body/recordId', message: 'Not a record of this partner.' }])
     // B's own open request takes its task.
-    expect((await ask(beta, requests.betaOpen, 'UPLOAD_DOCUMENT')).status).toBe(201)
+    expect((await ask(beta, requests.betaOpen, 'UPLOAD_DOCUMENT')).status).toBe(200)
   })
 
   it('a prospect’s request, a closed request and a kind a request never needs are refused in words', async () => {

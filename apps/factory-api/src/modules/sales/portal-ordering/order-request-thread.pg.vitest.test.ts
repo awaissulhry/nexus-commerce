@@ -47,7 +47,7 @@ let draft = ''
 let officeAnswer = ''
 
 beforeAll(async () => {
-  h = await startHarness('th040_order_request_thread')
+  h = await startHarness('th040_order_thread')
   h.clock.set(new Date())
   freshGuard(h)
   world = await partnerWorld(h, NS)

@@ -74,8 +74,10 @@ async function write(record: RecordRef, messages: Record<string, MessageInput>):
     await indexEvent(system(), indexers, envelope)
   }
 }
-const note = (bodyText: string): MessageInput => ({ direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'USER', id: null, name: 'Made-up Office' }, bodyText })
-const shared = (direction: 'OUTBOUND' | 'INBOUND', bodyText: string): MessageInput => ({ direction, channel: 'EMAIL', author: { kind: direction === 'OUTBOUND' ? 'USER' : 'PARTY', id: null, name: 'Made-up' }, bodyText })
+/** The seed's office person writes (a USER author has an id: the threads guard). */
+const OFFICE_ACTOR = id('actor')
+const note = (bodyText: string): MessageInput => ({ direction: 'INTERNAL_NOTE', channel: 'APP', author: { kind: 'USER', id: OFFICE_ACTOR, name: 'Made-up Office' }, bodyText })
+const shared = (direction: 'OUTBOUND' | 'INBOUND', bodyText: string): MessageInput => ({ direction, channel: 'EMAIL', author: direction === 'OUTBOUND' ? { kind: 'USER', id: OFFICE_ACTOR, name: 'Made-up' } : { kind: 'PARTY', id: null, name: 'Made-up' }, bodyText })
 
 async function search(session: string, query: string): Promise<Json> {
   const response = await app.inject({ method: 'GET', url: `/search?${query}`, headers: { 'x-test-session': session } })

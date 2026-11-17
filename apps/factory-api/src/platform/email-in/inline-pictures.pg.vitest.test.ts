@@ -104,7 +104,7 @@ const pasted = (): RawAttachment[] => [
 const html = '<p>Made-up: the sample, see the photo.</p><img src="cid:photo-1"><img src="cid:logo-1"><img src="cid:banner-1"><blockquote><img src="cid:banner-2"></blockquote>'
 
 beforeAll(async () => {
-  h = await startHarness('email_in_inline_pictures')
+  h = await startHarness('email_in_inline')
   tenant = await addTenant(h, 'th088-mail')
   const companyId = tenant.companies[0]!.id
   quotes = new Map([
