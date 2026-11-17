@@ -40,6 +40,7 @@ import { useLiveChanges } from '../../../record-panels/live'
 import { uploadChoices, uploadProblem, type FileKind, type RecordPanelsViewModel } from '../../../record-panels/model'
 import type { RecordPanelsActions } from '../../../record-panels/view/actions'
 import { contentTypeOf } from '../../../lib/record-thread/attachments/model'
+import { takesSheet } from '../../../lib/record-thread/attachments/model' // B-TH-283
 import { SHARES_NS, takesShares } from '../../../record-panels/share/model'
 import { useShares } from '../../../record-panels/share/use-shares'
 import { InviteDialog } from '../../../record-panels/share/view/InviteDialog'
@@ -115,7 +116,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   // ── tasks (B-W2a-40: Home's tasks; reading them is home.view, adding tasks.manage + threads.post) ──────────────────────
   const seesTasks = held.has('home.view')
   const [tasks, setTasks] = useState<TaskItem[] | null>(null)
-  const [taskDialog, setTaskDialog] = useState<{ people: PanelRead<readonly Assignable[]>; initial?: Partial<TaskDraft> } | null>(null)
+  // B-TH-236 (B-TH-050): a task made from a message keeps its id, so the task links back to the message.
+  const [taskDialog, setTaskDialog] = useState<{ people: PanelRead<readonly Assignable[]>; initial?: Partial<TaskDraft>; messageId?: string } | null>(null)
   const [taskBusy, setTaskBusy] = useState(false)
   const loadTasks = useCallback(async () => {
     if (!seesTasks) return
@@ -133,8 +135,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       setTaskDialog((current) => (current ? { ...current, people: { status: 'error', problem: taskReadProblem(error) } } : current))
     }
   }, [api, key])
-  const openTask = (initial?: Partial<TaskDraft>) => {
-    setTaskDialog({ people: { status: 'loading' }, ...(initial ? { initial } : {}) })
+  const openTask = (initial?: Partial<TaskDraft>, messageId?: string) => {
+    setTaskDialog({ people: { status: 'loading' }, ...(initial ? { initial } : {}), ...(messageId ? { messageId } : {}) })
     void loadAssignees()
   }
 
@@ -287,6 +289,11 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
         failed.push({ name: file.name, reason: tr(problem.key, problem.params) })
         continue
       }
+      // B-TH-283 (B-TH-083): a measurement sheet is a PDF or a photo of one.
+      if (ask.sheet && !takesSheet(contentType)) {
+        failed.push({ name: file.name, reason: tv('upload.sheetType') })
+        continue
+      }
       try {
         const bytes = await file.arrayBuffer()
         const announced = await requestUpload(api, {
@@ -300,6 +307,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           visibility: ask.audience === 'OFFICE' ? ['OFFICE'] : ['OFFICE', ask.audience],
           floorSiteId: ask.audience === 'FLOOR' ? (host.record.siteId ?? null) : null,
           partyId: ask.audience === 'PARTNER' ? partyId : null,
+          ...(ask.sheet ? { measurementSheet: true } : {}), // B-TH-283
         })
         await putToStore(announced.upload, new Blob([bytes], { type: contentType }))
         await completeUpload(api, announced.file.id)
@@ -553,7 +561,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     ...actions,
     onTask: (messageId) => {
       const message = model.feed.messages.find((item) => item.id === messageId)
-      openTask(message ? { title: message.body.replace(/\s+/g, ' ').trim().slice(0, 120) } : undefined)
+      openTask(message ? { title: message.body.replace(/\s+/g, ' ').trim().slice(0, 120) } : undefined, message?.id)
     },
     // A file of a message opens the ONE viewer over that message's files (else the download as before).
     onOpenFile: (fileId) => {
@@ -734,8 +742,9 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           onCreate={async (draft) => {
             setTaskBusy(true)
             try {
-              await createTask(api, createBody(draft, key))
-              base.notify({ ns: 'records', key: 'tasks.notice.created', tone: 'success' })
+              const fromMessage = taskDialog.messageId
+              await createTask(api, { ...createBody(draft, key), ...(fromMessage ? { messageId: fromMessage } : {}) })
+              base.notify(fromMessage ? { ns: 'record-thread', key: 'notice.taskFromMessage', tone: 'success' } : { ns: 'records', key: 'tasks.notice.created', tone: 'success' })
               setTaskDialog(null)
               void loadTasks()
               void loadFollowers()

@@ -10,7 +10,8 @@ import { fileSeries, recordFiles, type FileOrigin, type FileSeries, type FilesPa
  *
  * Not drawn until the back end has it: groups by origin (From the customer · Ours · Made by us · Floor) wait for the
  * file's origin (WALL-G13, B-TH-029) — until then the files group by the system's kinds; "Use on the quote / order /
- * style" (N8, B-TH-024); the measurement-sheet lock (N11, B-TH-083); mark-up and expiry stay on the record's Files tab.
+ * style" (N8, B-TH-024); mark-up and expiry stay on the record's Files tab. B-TH-283 (N11, B-TH-083): the upload asks "This is a
+ * measurement sheet" (a PDF or a photo; never for the floor); a sheet is locked for who may not open it, and marked for who may.
  *
  * Brand wall (W13, W25, W26): "Share with <customer>" shares with THIS record's party only (B-TH-003 refuses any other);
  * the Customer mark shows only on files shared with this party; another record's file is never listed.
@@ -109,6 +110,11 @@ export interface UploadAsk {
   /** The kinds and audiences this record takes (record-panels' uploadChoices). */
   readonly kinds: readonly FileKind[]
   readonly audiences: readonly FileAudience[]
+  /** B-TH-283 (B-TH-083): "This is a measurement sheet" — filed as body data (only holders of the measurements right open it). */
+  readonly sheet?: boolean
 }
+
+/** B-TH-283: why the upload waits (a key of record-thread-files-view), or null: a measurement sheet never goes to the floor. */
+export const uploadAskHeld = (ask: Pick<UploadAsk, 'sheet' | 'audience'>): string | null => (ask.sheet && ask.audience === 'FLOOR' ? 'upload.sheetFloor' : null)
 
 export const START_AUDIENCE: FileAudience = 'OFFICE'

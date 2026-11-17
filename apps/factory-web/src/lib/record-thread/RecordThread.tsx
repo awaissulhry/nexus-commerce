@@ -56,6 +56,8 @@ export interface RecordThreadActions extends FeedActions {
   onReopen?: () => void
   onMakeCustomer?: () => void
   onFiles: (files: File[]) => void
+  /** B-TH-283: files that go up as measurement sheets (the paper clip's "Measurement sheet…", the box's measurement side). */
+  onSheets?: (files: File[]) => void
   onRemoveFile: (key: string) => void
   onRetryFile: (key: string) => void
   onShareFile: (key: string) => void
@@ -149,6 +151,11 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
               actions.onReply?.(messageId)
               focusBox()
             },
+            // B-TH-236: Correct puts the box on the message's way, with its "Correcting …" line, and the cursor in it.
+            onCorrect: (messageId) => {
+              actions.onCorrect?.(messageId)
+              focusBox()
+            },
           }}
           remind={remind}
         />
@@ -164,13 +171,14 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
             recipients={<Recipients to={composer.to} cc={composer.cc} subject={composer.subject} contacts={composer.contacts} partyName={party} onChange={actions.onLines} />}
             tray={<AttachmentTray files={composer.files} partyName={party} onRemove={actions.onRemoveFile} onRetry={actions.onRetryFile} />}
             lines={<AttachmentLines files={composer.files} mode={mode} partyName={party} canShare={composer.canShare} overMailLimit={mailBytes(composer.files) > MAIL_MAX} onShare={actions.onShareFile} onRemove={actions.onRemoveFile} />}
-            clip={<ClipMenu canUpload={composer.canUpload} canPick={composer.canPick} onFiles={actions.onFiles} onPick={() => actions.onPicker(true)} />}
+            clip={<ClipMenu canUpload={composer.canUpload} canPick={composer.canPick} onFiles={actions.onFiles} onPick={() => actions.onPicker(true)} onSheets={actions.onSheets} />}
             onDraft={actions.onDraft}
             onSend={actions.onSend}
             onReopen={actions.onReopen}
             onMakeCustomer={actions.onMakeCustomer}
             onEscape={() => column.current?.querySelector<HTMLElement>('.fw-rt-feed')?.focus()}
             onFiles={composer.canUpload ? actions.onFiles : undefined}
+            onSheets={composer.canUpload ? actions.onSheets : undefined}
             hint={<DraftLine draft={model.kept ?? null} />}
             helpers={slots?.helpers}
           />
@@ -186,6 +194,7 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
             files: composer.files.filter((file) => file.phase === 'done').length,
             outside: model.check?.outside ?? false,
             sending: composer.sending,
+            correction: composer.draft.link?.kind === 'correct',
           }}
           actions={{ onBack: actions.onCheckBack, onRetry: actions.onCheckRetry, onOutside: actions.onOutside, onConfirm: actions.onConfirm }}
         />

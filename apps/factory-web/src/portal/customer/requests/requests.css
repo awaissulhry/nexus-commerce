@@ -138,3 +138,35 @@
   flex-direction: column;
   gap: var(--nds-space-4);
 }
+
+/* B-TH-282: "Add files" beside the thread; B-TH-291: Withdraw in the state card and its question. */
+.fw-preq-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-preq-files .fw-rqc-files {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.fw-preq-withdraw {
+  margin: var(--nds-space-8) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-preq-dialog-text {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.fw-preq-problem {
+  margin: var(--nds-space-12) 0 0;
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-semibold);
+}

@@ -3,30 +3,38 @@
   "mode": {
     "note": "Nota d'ufficio",
     "reply": "Rispondi a {party}",
-    "replyProspect": "Rispondi a {party} (nuovo)"
+    "replyProspect": "Rispondi a {party} (nuovo)",
+    "portal": "Solo nel portale"
   },
   "mark": {
     "note": "Nota d'ufficio · la leggono solo i tuoi colleghi",
-    "reply": "Email a {party} · la leggono le persone in A e Cc"
+    "reply": "Email a {party} · la leggono le persone in A e Cc",
+    "portal": "Nel portale di {party} · nessuna e-mail"
   },
   "placeholder": {
     "note": "Scrivi una nota d'ufficio per i colleghi · @ menziona un collega",
-    "reply": "Scrivi a {party}"
+    "reply": "Scrivi a {party}",
+    "portal": "Scrivi a {party}: lo legge nel suo portale"
   },
   "send": {
     "note": "Aggiungi la nota",
-    "reply": "Invia a {party}"
+    "reply": "Invia a {party}",
+    "portal": "Pubblica per {party}"
   },
   "live": {
     "note": "Nota d'ufficio — la leggono solo i tuoi colleghi",
-    "reply": "Rispondi a {party} — {party} la legge"
+    "reply": "Rispondi a {party} — {party} la legge",
+    "portal": "Solo nel portale — {party} lo legge nel suo portale, nessuna e-mail"
   },
   "held": {
     "offline": "Sei offline · il tuo testo resta su questo dispositivo",
     "sending": "Invio in corso…",
     "prospect": "Prima crea il cliente",
     "empty": "Prima scrivi un messaggio",
-    "tooLong": "Togli {count} caratteri per inviarlo"
+    "tooLong": "Togli {count} caratteri per inviarlo",
+    "amount": "Prima correggi l'importo: un numero, al massimo due decimali",
+    "amountFloor": "Un importo resta in ufficio: togli la spunta “Per il reparto” o l'importo",
+    "floorPrice": "Trattenuta: “{found}” sembra un prezzo, e il reparto non vede mai importi. Toglilo, o scrivilo come importo di una nota d'ufficio"
   },
   "box": {
     "closed": "Chiusa da {who}, {date}. Il cliente non può scrivere qui.",
@@ -40,17 +48,39 @@
     "make": "Crea il cliente"
   },
   "switch": {
-    "mentions": "Le menzioni restano nelle note d'ufficio: tolte da questo messaggio: {names}."
+    "mentions": "Le menzioni restano nelle note d'ufficio: tolte da questo messaggio: {names}.",
+    "amount": "Un importo resta nelle note d'ufficio: tolto da questo messaggio.",
+    "correction": "Una correzione segue la strada del suo messaggio: ora è un messaggio nuovo, non una correzione."
   },
   "floor": {
     "label": "Per il reparto",
     "on": "I tablet di {record} la mostrano: niente prezzi, i primi {limit} caratteri, per 14 giorni, nessun file, nessun nome. Nessuno registra chi l'ha letta.",
     "off": "Spenta: questa nota la legge solo l'ufficio.",
-    "long": "Il tablet mostra i primi {limit} caratteri."
+    "long": "Il tablet mostra i primi {limit} caratteri.",
+    "locked": "La nota che correggi è sui tablet: anche la correzione va lì."
   },
   "drop": {
     "note": "Rilascia i file per aggiungerli a questa nota d'ufficio (solo ufficio)",
-    "reply": "Rilascia i file per inviarli a {party}"
+    "reply": "Rilascia i file per inviarli a {party}",
+    "portal": "Rilascia i file per condividerli con {party} in questo messaggio",
+    "sheets": "Come schede misure (dati del corpo)"
   },
-  "counter": "Restano {count} caratteri"
+  "counter": "Restano {count} caratteri",
+  "portal": {
+    "line": "{party} lo legge nel suo portale. Nessuna e-mail viene inviata: le sue impostazioni di posta decidono quando lo sa (subito, se non le ha cambiate)."
+  },
+  "link": {
+    "replying": "In risposta a {who}, {when}",
+    "someone": "una persona del reparto",
+    "correcting": {
+      "note": "Correggi la tua nota d'ufficio delle {time}: la vecchia resta e dice “Corretto più sotto”",
+      "reply": "Correggi la tua mail delle {time}: chi l'ha ricevuta riceve la correzione",
+      "portal": "Correggi il tuo messaggio delle {time} nel portale di {party}"
+    },
+    "dropReply": "Non più una risposta a quel messaggio",
+    "dropCorrect": "Non più una correzione"
+  },
+  "amount": {
+    "add": "Importo"
+  }
 }

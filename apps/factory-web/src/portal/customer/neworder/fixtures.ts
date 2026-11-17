@@ -11,6 +11,8 @@ import { OrderingCase, type OrderingCaseBuilder } from './view/OrderingCase'
 import { CATALOGUE, createTranslator } from '../../../lib/i18n/messages'
 import { COMPOSE_NS, EMPTY_COMPOSE, problemsOf, sendHeld as composeHeld, type ComposeDraft } from '../../../lib/request-compose/model'
 import type { RequestComposeModel } from '../../../lib/request-compose/view/RequestCompose'
+import type { ComposeFilesModel } from '../../../lib/request-compose/view/ComposeFiles' // B-TH-282
+import type { HeldFile } from '../../../lib/request-compose/files' // B-TH-282
 import { BRAND_BETA } from '../../../lib/testing/two-brands'
 import { at as requestAt, betaShellOf, PREFIX as BETA, REQUESTS, requestView } from '../requests/design-data'
 import { requestBandOf } from './band'
@@ -221,6 +223,22 @@ const RECEIPT = (locale: Locale): NonNullable<RequestPageModel['receipt']> => ({
 })
 const dayOf = (days: number) => requestAt(days * 24).slice(0, 10)
 
+// ---- B-TH-282: the customer's files on New order (made up, Brand Beta): held until Send, then how they went on the receipt.
+const heldFile = (n: number, over: Partial<HeldFile>): HeldFile => ({ key: `n${n}`, name: `file-${n}.pdf`, sizeBytes: 240_000, contentType: 'application/pdf', kind: 'ATTACHMENT', sheet: false, design: false, problem: null, state: 'held', ...over })
+const HELD: readonly HeldFile[] = [
+  heldFile(1, { name: 'Measurements Berta B.pdf', sheet: true }),
+  heldFile(2, { name: 'Jacket front.jpg', contentType: 'image/jpeg', kind: 'PHOTO', sizeBytes: 3_200_000 }),
+  heldFile(3, { name: 'Logo Beta.ai', contentType: 'application/illustrator', design: true }),
+  heldFile(4, { name: 'Logo.svg', contentType: 'image/svg+xml', problem: { key: 'files.problem.page' } }),
+]
+const AFTER: readonly HeldFile[] = [
+  { ...HELD[0]!, state: 'sent', fileId: 'f1', uploaded: true },
+  { ...HELD[1]!, state: 'scanning', fileId: 'f2', uploaded: true },
+  { ...HELD[2]!, state: 'failed', failure: 'This already holds 50 of your files: write to us in the messages for the rest.' },
+]
+const filesArea = (over: Partial<ComposeFilesModel> = {}): ComposeFilesModel => ({ open: true, closedWords: null, held: HELD, leftOut: 0, when: 'hold', readOnly: false, heldReason: null, ...over })
+// ---- end B-TH-282
+
 /** SCR-185's New order as an e-mail (B-TH-220): every state of picture 18 and the receipt of picture 19. */
 export const REQUEST_CASES = [
   { id: 'th-220-compose', label: 'New order as an e-mail — empty', model: requestPage('compose'), note: 'One fixed line “Goes to: Sales at Pelletteria Esempio” (no To field: the session is one company). Subject optional, the message in their own words, files held with the API’s own sentence, “Add details (optional)” folded, Send at the foot. From 1280 px: Your open requests (true states, own numbers) and the pointer to returns.' },
@@ -239,6 +257,11 @@ export const REQUEST_CASES = [
   { id: 'th-220-check-failed', label: 'Could not check whether orders are open', model: requestPage('compose', () => ({ openCheckFailed: true })) },
   { id: 'th-220-receipt', label: 'The receipt: “Received — your request 7.”', model: requestPage('sent', (locale) => ({ receipt: RECEIPT(locale) })), note: 'The customer’s own number (never INQ-…), what was sent, Open the request, New order; no answer-time promise; a copy by e-mail is not claimed as delivered.' },
   { id: 'th-220-loading', label: 'Loading', model: requestPage('loading') },
+  // ---- B-TH-282
+  { id: 'th-282-files', label: 'Files held until Send: a measurement sheet ticked, a photo, a design file, a refused SVG', model: requestPage('compose', () => ({ compose: { draft: TYPED }, files: filesArea() })), note: 'Drop, paste or browse; a PDF or a photo may be ticked “This is a measurement sheet” (body data); Illustrator, EPS, Photoshop and ZIP are kept as they are, download only; SVG is refused naming the way out. They go right after Send, through the virus scan.' },
+  { id: 'th-282-files-closed', label: 'Files closed until the virus scanner runs (production)', model: requestPage('compose', () => ({ compose: { draft: TYPED }, files: filesArea({ open: false, held: [], closedWords: 'Uploads from outside are closed for now: the virus scanner is not running here yet. Please send the file to your contact by e-mail.' }) })), note: 'The API’s own sentence; the area takes nothing; the request still goes (B-TH-086 opens it with ClamAV).' },
+  { id: 'th-282-receipt-files', label: 'The receipt: how the files went — sent, held for the scan, one to retry', model: requestPage('sent', (locale) => ({ receipt: RECEIPT(locale), receiptFiles: { held: AFTER, openHref: `${BETA}/orders/requests/b2b2b2b2-0000-4000-8000-000000000901` } })), note: '“1 file sent · 1 held for the virus scan · 1 file did not go” with Retry and Open the request; the request itself is made.' },
+  // ---- end B-TH-282
 ] as const
 
 export const designScreen = defineDesignScreen<OrderingCaseBuilder>({

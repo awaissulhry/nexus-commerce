@@ -22,3 +22,10 @@
 .fw-rtm-foot { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
 .fw-rtm-grow { flex: 1; min-width: 0; }
 .fw-rtm-label { margin: 0; font-size: var(--nds-font-size-sm); color: var(--nds-text-muted); }
+
+/* B-TH-236 (B-TH-049): the amount field on an office note — price readers only, said in words beside the lock. */
+.fw-rtm-amount { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-4) var(--nds-space-8); }
+.fw-rtm-amount-label { display: inline-flex; align-items: center; gap: var(--nds-space-4); color: var(--nds-warning-text); font-size: var(--nds-font-size-sm); font-weight: 600; }
+.fw-rtm-amount-value { width: 9rem; max-width: 100%; }
+.fw-rtm-amount-hint { flex: 1 1 100%; margin: 0; color: var(--nds-text-muted); font-size: var(--nds-font-size-xs-plus); line-height: 1.4; }
+.fw-rtm-amount-hint.is-problem { color: var(--nds-danger-text); font-weight: 600; }

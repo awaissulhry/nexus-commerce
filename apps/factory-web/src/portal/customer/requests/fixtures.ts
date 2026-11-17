@@ -6,6 +6,8 @@ import type { RequestStateCode, RequestView } from './api'
 import { at, betaShellOf, dayAt, PREFIX, QUESTION, REQUEST_ID, requestView, threadOf } from './design-data'
 import { NS, stateLinks, stateTone, yourNumberText } from './model'
 import { RequestCase, type RequestCaseBuilder } from './view/RequestCase'
+import type { ComposeFilesModel } from '../../../lib/request-compose/view/ComposeFiles'
+import type { HeldFile } from '../../../lib/request-compose/files'
 
 /**
  * SCR-185-request › the customer's request (B-TH-222, B-TH-303; threads plan X-P-CUS-REQ, picture 20 drawn to the approved
@@ -18,7 +20,10 @@ import { RequestCase, type RequestCaseBuilder } from './view/RequestCase'
 
 const words = (locale: Locale) => createTranslator(locale, CATALOGUE[locale][NS] ?? {})
 
-function page(code: RequestStateCode, over: (locale: Locale) => { view?: Partial<RequestView>; state?: 'loading' | 'error' | 'missing' | 'ready'; offline?: string | null; question?: boolean } = () => ({})): RequestCaseBuilder {
+// B-TH-282 / B-TH-291: the page's "Add files" and Withdraw, as a case asks for them.
+type PageExtra = { files?: ComposeFilesModel | null; withdraw?: { allowed: boolean; words: string | null } | null; withdrawing?: { busy: boolean; problem: string | null } | null }
+
+function page(code: RequestStateCode, over: (locale: Locale) => { view?: Partial<RequestView>; state?: 'loading' | 'error' | 'missing' | 'ready'; offline?: string | null; question?: boolean } & PageExtra = () => ({})): RequestCaseBuilder {
   return (locale) => {
     const t = words(locale)
     const extra = over(locale)
@@ -41,11 +46,28 @@ function page(code: RequestStateCode, over: (locale: Locale) => { view?: Partial
         question: code === 'NEED_INFO' && extra.question !== false ? { body: QUESTION, at: at(-20) } : null,
         offlineSince: extra.offline ?? null,
         backHref: `${PREFIX}/orders`,
+        // B-TH-282 / B-TH-291
+        files: extra.files ?? null,
+        withdraw: extra.withdraw ?? null,
+        withdrawing: extra.withdrawing ?? null,
       },
       thread: request ? threadOf(locale, code) : null,
     }
   }
 }
+
+// ---- B-TH-282: Brand Beta's files on its own request (made up): waiting, sent, a measurement sheet, held for the scan, a design file,
+// one that did not go (the API's words), one refused (SVG names the way out).
+const heldFile = (n: number, over: Partial<HeldFile>): HeldFile => ({ key: `h${n}`, name: `file-${n}.pdf`, sizeBytes: 240_000, contentType: 'application/pdf', kind: 'ATTACHMENT', sheet: false, design: false, problem: null, state: 'held', ...over })
+const BETA_FILES: readonly HeldFile[] = [
+  heldFile(1, { name: 'Measurements Berta B.pdf', sheet: true }),
+  heldFile(2, { name: 'Collar photo.jpg', contentType: 'image/jpeg', kind: 'PHOTO', sizeBytes: 2_100_000, state: 'sent', fileId: 'f2', uploaded: true }),
+  heldFile(3, { name: 'Logo Beta.ai', contentType: 'application/illustrator', design: true, state: 'scanning', fileId: 'f3', uploaded: true }),
+  heldFile(4, { name: 'Size chart.pdf', state: 'failed', failure: 'This already holds 50 of your files: write to us in the messages for the rest.' }),
+  heldFile(5, { name: 'Logo.svg', contentType: 'image/svg+xml', problem: { key: 'files.problem.page' } }),
+]
+const filesOf = (over: Partial<ComposeFilesModel> = {}): ComposeFilesModel => ({ open: true, closedWords: null, held: BETA_FILES, leftOut: 0, when: 'send', readOnly: false, heldReason: null, ...over })
+// ---- end B-TH-282
 
 const QUOTE = (sent: boolean) => ({ id: 'b2b2b2b2-0000-4000-8000-000000000961', number: 'QT-2026-0098', yourNumber: customerNumberOf('QUOTE', 3), sent })
 const ORDER = { id: 'b2b2b2b2-0000-4000-8000-000000000971', number: 'SO-2026-0142', yourNumber: customerNumberOf('ORDER', 12) }
@@ -66,6 +88,14 @@ export const designScreen = defineDesignScreen<RequestCaseBuilder>({
     { id: 'th-222-order-confirmed', label: 'Order confirmed', model: page('ORDER_CONFIRMED', () => ({ view: { made: { quote: QUOTE(true), order: ORDER } } })) },
     // B-TH-228: made straight into an order by the office (no quote between): the order's own state.
     { id: 'th-228-ordered-straight', label: 'Made straight into an order, waiting for approval', model: page('ORDER_WAITING', () => ({ view: { made: { quote: null, order: ORDER } } })), note: 'The office made the order from the request (Make order): the page reads the order’s own state — waiting for approval is never “confirmed” — and links “Your order 12”.' },
+    // ---- B-TH-282 / B-TH-291
+    { id: 'th-282-files', label: 'Add files: waiting, sent, held for the virus scan, a design file, did not go, refused', model: page('BEING_REVIEWED', () => ({ files: filesOf(), withdraw: { allowed: true, words: null } })), note: 'Beside the thread: a measurement sheet ticked (body data), the photo sent, the logo held for the virus scan and kept as it is (download only), one that did not go in the API’s words (Retry), the SVG refused naming the way out. They reach the request while it is undecided, its thread after.' },
+    { id: 'th-282-files-closed', label: 'Add files closed until the virus scanner runs', model: page('SENT', () => ({ files: filesOf({ open: false, held: [], closedWords: 'Uploads from outside are closed for now: the virus scanner is not running here yet. Please send the file to your contact by e-mail.' }) })), note: 'Production keeps the API’s own sentence until the scanner (B-TH-086); the area takes nothing.' },
+    { id: 'th-291-withdraw', label: 'Withdraw — before the office decided', model: page('SENT', () => ({ withdraw: { allowed: true, words: null } })), note: '“Withdraw this request · Possible until we decide on it.” Its question names their own number; Withdraw is the danger button, Keep it the default.' },
+    { id: 'th-291-withdraw-ask', label: 'Withdraw — the question, refused in the API’s words', model: page('SENT', () => ({ withdraw: { allowed: true, words: null }, withdrawing: { busy: false, problem: 'The factory already decided this request: ask us if something should change.' } })) },
+    { id: 'th-291-decided', label: 'Withdraw not offered: the office decided', model: page('QUOTE_BEING_PREPARED', () => ({ view: { made: { quote: QUOTE(false), order: null } }, withdraw: { allowed: false, words: 'The factory already decided this request: ask us if something should change.' } })) },
+    { id: 'th-291-withdrawn', label: 'Withdrawn', model: page('WITHDRAWN') },
+    // ---- end B-TH-282 / B-TH-291
     { id: 'th-222-declined', label: 'Declined — our message in the thread', model: page('DECLINED') },
     { id: 'th-222-closed', label: 'Closed', model: page('CLOSED') },
     {
