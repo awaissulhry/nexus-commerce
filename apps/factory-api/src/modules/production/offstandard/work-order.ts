@@ -1,6 +1,5 @@
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can } from '@nexus/factory-domain/core/permissions'
 import { PRODUCTION_OFFSTANDARD_VIEW } from '@nexus/factory-domain/production/offstandard/permissions'
 import { minutesOf, offStandardByWorkOrder } from '@nexus/factory-domain/production/offstandard/rules'
 import type { CommandCaller } from '../../../core/command'
@@ -9,6 +8,7 @@ import { openWorkOf } from '../terminal/timing'
 import { officeOf } from './access'
 import { codesById, type Reader, type Subject } from './store'
 import { tileOf } from './views'
+import { reachesWorkOrder } from '../work-orders/scope' // B-PR-07
 
 /**
  * Off-standard time per work order (B-W2b-81; the Labour tab of a work order; OffStandardEntry.workOrderId, nullable).
@@ -42,8 +42,9 @@ export async function workOrderMinutes(caller: CommandCaller, workOrderId: strin
   const context = officeOf(caller)
   const now = new Date()
   return caller.withClient(async (db) => {
-    const workOrder = isUuid(workOrderId) ? await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true } }) : null
-    if (!workOrder || !can(actorOf(context), PRODUCTION_OFFSTANDARD_VIEW, { companyId: workOrder.companyId, siteId: workOrder.siteId })) throw new NotFoundError('Work order not found.')
+    const workOrder = isUuid(workOrderId) ? await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, /* B-PR-07 */ partyId: true } }) : null
+    // B-PR-07: another customer's work order is as unknown.
+    if (!workOrder || !reachesWorkOrder(actorOf(context), PRODUCTION_OFFSTANDARD_VIEW, workOrder)) throw new NotFoundError('Work order not found.')
     const blocks = await db.offStandardEntry.findMany({ where: { workOrderId: workOrder.id, status: { not: 'REJECTED' } }, select: { codeId: true, status: true, startedAt: true, endedAt: true } })
     const totals = offStandardByWorkOrder(blocks.map((block) => ({ codeId: block.codeId, status: block.status, minutes: minutesOf(block.startedAt, block.endedAt, now) })))
     const codes = await codesById(db, totals.codes.map((entry) => entry.codeId))

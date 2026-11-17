@@ -27,7 +27,7 @@ import { assertPersonDecides } from '../../people/privacy/decide'
 import { refuse as refuseOffStandard } from '../offstandard/access'
 import { blocksAround, BLOCK, closedDays, dayKey, lockBlock, readBlock, readCode, type BlockRow } from '../offstandard/store'
 import { scanSubjectFor } from '../settings/subject'
-import { floorOf, officeOf, reaches, refuse } from './access'
+import { assertEveryCustomer, floorOf, officeOf, reaches, refuse } from './access'
 import type { AnswerBody, RaiseBody, WithdrawBody } from './contract'
 import type { GateReader } from '../../people/privacy/gate'
 import { workerGateFor } from '../../people/privacy/worker-gate'
@@ -180,6 +180,7 @@ async function officeDispute(caller: CommandCaller, disputeId: string, permissio
     return row && site ? { row, site } : null
   })
   if (!found || !reaches(context, permission, { companyId: found.site.companyId, siteId: found.site.id })) throw new NotFoundError('Dispute not found.')
+  assertEveryCustomer(context, { companyId: found.site.companyId, siteId: found.site.id }) // B-PR-07
   return { context, ...found }
 }
 

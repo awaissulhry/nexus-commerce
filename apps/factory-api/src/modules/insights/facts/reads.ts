@@ -1,9 +1,9 @@
 import type { Prisma } from '@nexus/factory-db'
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
 import { eachDay } from '@nexus/factory-domain/calendars/dates'
-import { grantsFor, holds, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
+import { grantsFor, holds, reachesEveryParty, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
-import { levelFor, measureOf, type Measure } from '@nexus/factory-domain/insights/kpis/measures'
+import { levelFor, measureOf, type Measure, type MeasureSource } from '@nexus/factory-domain/insights/kpis/measures'
 import { convertMinor } from '@nexus/factory-domain/money/currency/convert'
 import { EURO } from '@nexus/factory-domain/money/currency/currencies'
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
@@ -74,6 +74,9 @@ const amountOf = (number: FactNumber | { value?: unknown; priceAmount?: number |
   return new Dec(row.priceAmount ?? row.costAmount ?? row.marginAmount ?? 0)
 }
 
+/** B-PR-07: the measures that count every customer's work orders, scans and cuts (no customer kept on their facts). */
+const MIXES_CUSTOMERS: ReadonlySet<MeasureSource> = new Set<MeasureSource>(['PRODUCTION', 'WORK_ORDERS', 'LEATHER', 'WIP'])
+
 /** A person limited to some customers for this measure's list: the facts (no customer) cannot answer for them. */
 const readsLive = (actor: Actor, measure: Measure): boolean => measure.partyScoped && grantsFor(actor, measure.permission).some((grant) => grant.parties !== 'all')
 
@@ -137,8 +140,17 @@ export async function readMeasures(caller: CommandCaller, actor: Actor, measureK
       out.set(key, empty(buckets, 'NEEDS_GRAIN'))
       continue
     }
-    const live = readsLive(actor, measure)
-    const read = (entry: Measure) => (live ? liveRows(caller, actor, entry, from, to < today ? to : today, place) : factRows(caller, actor, entry, from, to, place))
+    // B-PR-07 (production plan §2: a view that mixes brands needs access to every brand): a production measure counts every
+    // customer's work and its facts keep no customer: a person limited to some customers gets no value (NO_ACCESS), never a
+    // figure with another customer's work in it; a person of every customer at some sites reads those sites only.
+    const mixes = MIXES_CUSTOMERS.has(measure.source)
+    if (mixes && !reachesEveryParty(actor, measure.permission, { ...(place.companyId ? { companyId: place.companyId } : {}), ...(place.siteId ? { siteId: place.siteId } : {}) })) {
+      out.set(key, empty(buckets, 'NO_ACCESS'))
+      continue
+    }
+    const reader: Actor = mixes ? { ...actor, grants: actor.grants.filter((grant) => grant.parties === 'all') } : actor
+    const live = readsLive(reader, measure)
+    const read = (entry: Measure) => (live ? liveRows(caller, reader, entry, from, to < today ? to : today, place) : factRows(caller, reader, entry, from, to, place))
     const rows = await read(measure)
     const unconverted = measure.unconverted ? await read(measureOf(measure.unconverted)!) : []
     out.set(key, await sumRows(caller, measure, rows, unconverted, buckets, today, live, levelFor(measure, place) === 'LINE'))

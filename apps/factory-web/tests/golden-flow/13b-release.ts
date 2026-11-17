@@ -1,12 +1,13 @@
 import { expect, type Page } from '@playwright/test'
 import { SIZES } from './05-quote'
-import { quiet, scanUntil, signIn, tablet, tile, typePin, worker, WORKERS } from './_harness/floor'
+import { quiet, scan, scanUntil, signIn, tablet, tile, typePin, worker, WORKERS } from './_harness/floor'
+import { seen } from './_harness/flow'
 import { defineStage } from './_harness/stages'
 import { answerOf, dialog, press } from './_harness/ui'
 
-/** A floor signing act: the PIN pad opens when the 2-minute window of the last PIN has passed. */
+/** A floor signing act: the PIN pad ("Your PIN", or the plan bench's "Sign with your PIN") opens when the 2-minute window of the last PIN has passed. */
 async function signWithPin(page: Page, pin: string): Promise<void> {
-  const pad = page.getByRole('group', { name: 'Your PIN' })
+  const pad = page.getByRole('group', { name: 'Your PIN', exact: true }).or(page.getByRole('group', { name: 'Sign with your PIN', exact: true }))
   if (await pad.waitFor({ state: 'visible', timeout: 3_000 }).then(() => true, () => false)) await typePin(page, pin)
 }
 
@@ -35,18 +36,53 @@ export default defineStage({
       await flow.shot(page, 'bench-gate')
     })
 
-    await flow.step('the inspection: the whole lot, every group passes, signed PASS', async () => {
+    await flow.step('the inspection on its plan (FIN-JACKET): the whole AQL sample, every check group passes, the measure, the batch label; signed PASS', async () => {
       await signIn(flow, device, await worker(flow, 'bench'))
       await tile(page, 'Final inspection')
       await scanUntil(page, workOrder.number, page.getByText('You made none of these garments.'), { field: "Scan the work order's traveller" })
       await press(page.getByRole('button', { name: 'Start the inspection' }))
       await answerOf(page, 'POST', /^\/quality\/inspections$/, () => press(page.getByRole('button', { name: 'Open the inspection' })))
-      for (let group = 0; group < 4; group++) {
-        await answerOf(page, 'PATCH', /^\/quality\/inspections\/[0-9a-f-]+$/, () => press(page.getByRole('button', { name: 'Group passes', exact: true }).first()))
+      // The bench on the plan (B-W2b-109): one section at a time; every answer is one record sent from the tablet.
+      const record = (action: () => Promise<unknown>) => answerOf(page, 'POST', /^\/quality\/queue\/record$/, action)
+      const section = (name: string) => page.getByRole('group', { name: 'Sections of the inspection' }).getByRole('button', { name: new RegExp(`^${name}`) })
+      // The AQL sample: every piece of it looked at, no defect found.
+      const aql = await seen(page.getByRole('region', { name: /^AQL .* · sample \d+$/ }))
+      const sample = Number(/sample (\d+)/.exec(await aql.innerText())?.[1])
+      expect(sample, 'the plan’s sample size').toBeGreaterThan(0)
+      for (let piece = 0; piece < sample; piece++) await record(() => press(aql.getByRole('button', { name: '+ one piece', exact: true })))
+      await expect(aql.getByText(`${sample} of ${sample} inspected`).first()).toBeVisible()
+      // The plan's checks: every group passes.
+      await section('Checks').click()
+      const checks = page.getByRole('region', { name: "The plan's checks" })
+      const groups = checks.getByRole('button', { name: 'Group passes', exact: true })
+      await groups.first().waitFor()
+      const count = await groups.count()
+      for (let group = 0; group < count; group++) await record(() => press(groups.nth(group)))
+      await expect(checks.getByText(/^(\d+) of \1 checked$/).first()).toBeVisible()
+      // Each point of measure: a garment's size, its value on the pad (the target), saved within tolerance.
+      await section('Measurements').click()
+      const points = page.getByRole('list', { name: 'Measurements' }).getByRole('button')
+      await points.first().waitFor()
+      for (let point = 0, total = await points.count(); point < total; point++) {
+        const nominal = /(\d+(?:[.,]\d+)?) ± /.exec(await points.nth(point).innerText())?.[1]
+        expect(nominal, 'the point’s target').toBeTruthy()
+        await press(points.nth(point))
+        await press(page.getByRole('group', { name: 'Which size?' }).getByRole('button').first())
+        const pad = page.getByRole('group', { name: 'Measured' })
+        for (const key of nominal!.replace(',', '.')) await pad.getByRole('button', { name: key, exact: true }).click()
+        await record(() => press(page.getByRole('button', { name: /^Save · within/ })))
+        await expect(page.getByRole('list', { name: 'Values measured' }).getByText(new RegExp(`^Garment 1 · size \\d+: ${nominal!.replace('.', '\\.')} \\S+, within`))).toBeVisible()
+        // Back from the point (its next garment waits) to the list of points.
+        await press(page.getByRole('button', { name: 'Back', exact: true }))
+        await expect(section('Measurements')).toBeVisible()
       }
-      await expect(page.getByText(/Result now: PASS/).first()).toBeVisible()
+      // The batch label, once for the lot: its number is the work order's batch.
+      await section('Serial or batch').click()
+      await record(() => scan(page, flow.state.workOrder.batch as string, { field: `Scan the batch label (${flow.state.workOrder.batch})` }))
+      for (const name of ['AQL sample', 'Checks', 'Measurements', 'Serial or batch']) await expect(section(name)).toHaveAccessibleName(new RegExp(`^${name} Done$`))
+      await expect(page.getByText('The result as it stands: PASS.').first()).toBeVisible()
       await answerOf(page, 'POST', /\/decide$/, async () => {
-        await press(page.getByRole('button', { name: /^Sign the result: PASS/ }))
+        await press(page.getByRole('button', { name: 'Sign PASS', exact: true }))
         await signWithPin(page, bench.pin)
       })
       await expect(page.getByText(/^INS-.* · passed/).first()).toBeVisible()

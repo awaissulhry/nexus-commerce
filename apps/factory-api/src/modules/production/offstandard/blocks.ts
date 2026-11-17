@@ -33,6 +33,7 @@ import { blocksAround, BLOCK, closedDays, lockBlock, dayKey, editedBlocks, edits
 import { dayColumn, isoDay, rowFactsOf, rowOf } from './views'
 import { blockableWorkOrder } from './work-order'
 import { endBlock, insertBlock } from './writes'
+import { assertEveryParty, everyPartyActor } from '../work-orders/scope' // B-PR-07
 
 /**
  * The office's side of off-standard time (B-W2b-29; MES-156, MES-157; design production.labour "Off-standard blocks to
@@ -71,6 +72,8 @@ async function officeBlock(caller: CommandCaller, blockId: string, permission: P
   const block = await caller.withClient((db) => readBlock(db, blockId))
   if (!block || !can(actorOf(context), PRODUCTION_OFFSTANDARD_VIEW, { companyId: block.companyId, siteId: block.siteId })) throw new NotFoundError('Off-standard block not found.')
   if (permission !== PRODUCTION_OFFSTANDARD_VIEW && !can(actorOf(context), permission, { companyId: block.companyId, siteId: block.siteId })) throw new NotFoundError('Off-standard block not found.')
+  // B-PR-07 (L5 "Factory only: … labour and pay"): a block names the line's and the worker's time over every customer's work.
+  assertEveryParty(actorOf(context), PRODUCTION_OFFSTANDARD_VIEW, { companyId: block.companyId, siteId: block.siteId })
   return block
 }
 
@@ -102,7 +105,7 @@ const statusesOf = (value: string | undefined): BlockStatus[] | null =>
 
 export async function listBlocks(caller: CommandCaller, query: ListBlocksQuery) {
   const context = officeOf(caller)
-  const actor = actorOf(context)
+  const actor = everyPartyActor(actorOf(context), PRODUCTION_OFFSTANDARD_VIEW) // B-PR-07: only where every customer is reached
   const statuses = query.normal ? ['PENDING' as const] : statusesOf(query.status)
   return caller.withClient(async (db) => {
     const where: Prisma.OffStandardEntryWhereInput = {
@@ -132,7 +135,7 @@ export async function listBlocks(caller: CommandCaller, query: ListBlocksQuery) 
 /** The inbox's tiles: blocks waiting (normal and unusual) and running, of the sites in scope. Counts of blocks, never of people. */
 export async function blockCounts(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly lineId?: string | undefined }) {
   const context = officeOf(caller)
-  const actor = actorOf(context)
+  const actor = everyPartyActor(actorOf(context), PRODUCTION_OFFSTANDARD_VIEW) // B-PR-07: only where every customer is reached
   return caller.withClient(async (db) => {
     const scope: Prisma.OffStandardEntryWhereInput = {
       AND: [scopeWhere(actor, PRODUCTION_OFFSTANDARD_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.OffStandardEntryWhereInput, query.siteId ? { siteId: query.siteId } : {}, query.lineId ? { lineId: query.lineId } : {}],
@@ -257,7 +260,7 @@ export async function rejectBlock(caller: CommandCaller, blockId: string, body: 
  */
 export async function approveMany(caller: CommandCaller, body: { readonly blocks: readonly { readonly id: string; readonly version: number }[] }, idempotencyKey?: string) {
   const context = officeOf(caller)
-  const actor = actorOf(context)
+  const actor = everyPartyActor(actorOf(context), PRODUCTION_OFFSTANDARD_VIEW) // B-PR-07: a block of a site not reached with every customer is not found
   const ids = [...new Set(body.blocks.map((entry) => entry.id))]
   const { result } = await command(caller, { name: 'production.offStandardApproveMany', idempotencyKey, input: body }, async (tools) => {
     const approved: string[] = []
@@ -433,6 +436,7 @@ export async function recordBlock(caller: CommandCaller, body: RecordBlockBody, 
   const actor = actorOf(context)
   const site = await caller.withClient(async (db) => (await sitesById(db, [body.siteId])).get(body.siteId) ?? null)
   if (!site || !can(actor, PRODUCTION_OFFSTANDARD_APPROVE, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Site not found.')
+  assertEveryParty(actor, PRODUCTION_OFFSTANDARD_VIEW, { companyId: site.companyId, siteId: site.id }) // B-PR-07: as officeBlock
   const startedAt = parseInstant(body.startedAt)!
   const endedAt = parseInstant(body.endedAt)!
   const { result } = await command(caller, { name: 'production.offStandardRecord', idempotencyKey, input: body }, async (tools) => {

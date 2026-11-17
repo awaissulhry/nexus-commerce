@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { EVERY_PARTY_WORDS, NO_ROWS, type Actor, type Grant, type Permission } from '@nexus/factory-domain/core/permissions'
-import { allPartsWhere, assertEveryParty, reachesWorkOrder, viaCell, viaWorkOrder, workOrderWhere } from './scope'
+import { allPartsWhere, assertEveryParty, everyPartyActor, everyPartySites, reachesWorkOrder, viaCell, viaWorkOrder, workOrderWhere } from './scope'
 
 /*
  * B-PR-03 (production plan §2, the brand wall): which work orders an office person reaches, by customer too. Pure: the
@@ -53,5 +53,27 @@ describe('the work orders a person reaches (B-PR-03)', () => {
     expect(() => assertEveryParty(onlyP2, VIEW)).toThrow(EVERY_PARTY_WORDS.en)
     expect(() => assertEveryParty(all, VIEW, { companyId: C, siteId: S })).not.toThrow()
     expect(() => assertEveryParty(all, VIEW, { companyId: 'company-2' })).toThrow(EVERY_PARTY_WORDS.en)
+  })
+})
+
+// ── B-PR-07 ──
+describe('a view that mixes customers over several sites (B-PR-07)', () => {
+  const S2 = 'site-2'
+  const at = (sites: Grant['sites'], parties: Grant['parties']): Grant => ({ permissions: [VIEW], companies: [C], sites, parties })
+  // Every customer at site 1, one customer at site 2.
+  const split = office(at([S], 'all'), at([S2], [P2]))
+  const sites = [{ companyId: C, id: S }, { companyId: C, id: S2 }]
+
+  it('keeps the sites where every customer is reached; none left of some is refused in words that name none', () => {
+    expect(everyPartySites(all, VIEW, sites).map((site) => site.id)).toEqual([S, S2])
+    expect(everyPartySites(split, VIEW, sites).map((site) => site.id)).toEqual([S])
+    expect(() => everyPartySites(onlyP2, VIEW, sites)).toThrow(EVERY_PARTY_WORDS.en)
+    expect(everyPartySites(onlyP2, VIEW, [])).toEqual([])
+  })
+
+  it('a read that names no site counts only the grants of every customer', () => {
+    expect(everyPartyActor(split, VIEW).grants).toEqual([at([S], 'all')])
+    expect(everyPartyActor(all, VIEW)).toEqual(all)
+    expect(() => everyPartyActor(onlyP2, VIEW)).toThrow(EVERY_PARTY_WORDS.en)
   })
 })

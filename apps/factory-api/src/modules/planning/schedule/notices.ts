@@ -1,4 +1,4 @@
-import { can, holds } from '@nexus/factory-domain/core/permissions'
+import { can, holds, reachesEveryParty } from '@nexus/factory-domain/core/permissions'
 import { HOME_VIEW } from '@nexus/factory-domain/insights/permissions'
 import { events as planningEvents } from '@nexus/factory-domain/planning/events'
 import { PRODUCTION_DISPATCH_VIEW } from '@nexus/factory-domain/production/dispatch/permissions'
@@ -10,8 +10,9 @@ import type { Draft, FanOutRule, RuleContext } from '../../../platform/notificat
  * publisher left "Notify line leaders" on, each leader of a line the version covers — the current lead of an ACTIVE team of
  * that line at the site (TeamMember.isLead, no end; an ACTIVE employee) with an office account — gets a SYSTEM notification
  * in the bell, anchored to the version and the line (a replay tells nobody twice), if they still reach Home (home.view) and
- * may read the dispatch list at the site now (production.dispatch.view: where the new list shows). The line tablets get
- * the version by the live event, as before. Quiet: nobody else, and never the publisher themselves.
+ * may read the dispatch list at the site now (production.dispatch.view: where the new list shows; B-PR-07: over every customer,
+ * as the list holds every customer's work). The line tablets get the version by the live event, as before. Quiet: nobody
+ * else, and never the publisher themselves.
  */
 
 const payloadSchema = planningEvents.find((event) => event.type === 'planning.schedule_published')!.payload
@@ -41,6 +42,8 @@ export const SCHEDULE_PUBLISH_RULES: readonly FanOutRule[] = Object.freeze([
           if (userId === version.publishedById) continue
           const reader = await context.reader(userId)
           if (!reader || !holds(reader.actor, HOME_VIEW) || !can(reader.actor, PRODUCTION_DISPATCH_VIEW, scope)) continue
+          // B-PR-07: the dispatch list needs every customer at the site; a lead limited to some customers cannot open it.
+          if (!reachesEveryParty(reader.actor, PRODUCTION_DISPATCH_VIEW, scope)) continue
           drafts.push({
             userId,
             category: 'SYSTEM',

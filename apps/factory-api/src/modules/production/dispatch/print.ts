@@ -9,12 +9,12 @@ import { serverClock } from '../../../core/time'
 import { PDF_CREATOR } from '../../../platform/documents/pdf'
 // B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
 import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
-import { contextOf, may, readerOf } from './access'
+import { assertEveryCustomer, contextOf, may, readerOf } from './access'
 import { sortCards } from './board'
 import { lineMinutesOf, stationOperators } from './facts'
 import { shiftLabelAt } from '@nexus/factory-domain/production/dispatch/handover'
 import { lineRowOf, siteRowOf, stationOf, workerNames, type Reader } from './store'
-import { dispatchWorld, dueOf, materialFlags, type DayCard, type DispatchWorld } from './world'
+import { customerCodesOf, dispatchWorld, dueOf, materialFlags, type DayCard, type DispatchWorld } from './world'
 
 /**
  * The printed dispatch list (B-W2b-49; MES-032; design production.dispatch "Print dispatch list (primary)" and the new tab
@@ -25,8 +25,8 @@ import { dispatchWorld, dueOf, materialFlags, type DayCard, type DispatchWorld }
  *
  * production.dispatch.view: the office over the site, the team leader's tablet at its own. Composed by factory-domain
  * production/dispatch/paper; made on request, stored nowhere. An operator's name stands beside their station only on the
- * office's copy and only where the site's floor records name workers, as on the board; no figure per person, no customer, no
- * money.
+ * office's copy and only where the site's floor records name workers, as on the board; no figure per person, no money; the
+ * customer by its CODE only (B-PR-11, L13), never its name.
  */
 
 export interface PrintQuery {
@@ -46,10 +46,12 @@ async function paperFacts(caller: CommandCaller, query: PrintQuery): Promise<Pap
     const siteId = line?.siteId ?? station?.siteId
     const site = siteId ? await siteRowOf(db, siteId) : null
     if (!site || !may(context, PRODUCTION_DISPATCH_VIEW, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError(query.lineId ? 'Line not found.' : 'Station not found.')
+    assertEveryCustomer(context, PRODUCTION_DISPATCH_VIEW, { companyId: site.companyId, siteId: site.id }) // B-PR-07
     const day = query.date ?? businessDate(now, site.timezone)
     const world = await dispatchWorld(db, site, day, now)
     const stations = station ? [station] : world.stations.filter((row) => row.lineId === line!.id)
     const flags = await materialFlags(db, site, world.cards.map((card) => card.workOrder.id))
+    const codes = await customerCodesOf(db, world.cards.map((card) => card.workOrder.id)) // B-PR-11: the code, never the name
     // The floor's copy names nobody (Owner answer F2: per station only calls, machine down and nobody signed in).
     const namesWorkers = world.subject === 'WORKER' && context.audience === 'office'
     const names = await workerNames(db, namesWorkers ? world.rows.map((row) => row.workerId) : [])
@@ -57,6 +59,7 @@ async function paperFacts(caller: CommandCaller, query: PrintQuery): Promise<Pap
       order: index + 1,
       rush: card.workOrder.rush,
       workOrder: card.workOrder.number,
+      customer: codes.get(card.workOrder.id) ?? null,
       style: `${card.workOrder.style.code} ${card.workOrder.style.name}`,
       operation: { seq: card.operation.seq, name: card.operation.name },
       bundles: card.bundleIds.map((id) => world.bundles.get(id)?.code ?? ''),
@@ -92,8 +95,8 @@ const MUTED = '#555555'
 const RULE = '#9a9a9a'
 const SHADE = '#ececec'
 const RUSH = '#b00020'
-/** Column widths, shares of the page's width (they follow the paper's ten columns). */
-const SHARES = [0.04, 0.13, 0.17, 0.17, 0.17, 0.06, 0.07, 0.08, 0.07, 0.04] as const
+/** Column widths, shares of the page's width (they follow the paper's eleven columns; B-PR-11: the customer's code third). */
+const SHARES = [0.04, 0.12, 0.08, 0.14, 0.15, 0.15, 0.06, 0.07, 0.08, 0.07, 0.04] as const
 
 /** GET …/print: the PDF, one table per station, starting a new page when a row would not fit. */
 export async function printedPdf(caller: CommandCaller, query: PrintQuery): Promise<{ pdf: Buffer; fileName: string }> {

@@ -50,9 +50,16 @@ export default defineStage({
         await tile(page, 'Operation')
         const finish = page.getByRole('button', { name: /^Finish · \d+ good/ })
         if (offline) {
-          // Each bundle read online first (its card stays on this tablet for the visit), then reported offline.
+          // Each bundle read online first (its card stays on this tablet for the visit), then reported offline. A read counts
+          // once the card's answer is in and the card is open: the screen names the code while it reads, and a read cut short
+          // by the next scan is not kept.
           const card = (code: string) => page.getByText(code, { exact: true })
-          for (const code of bundles) await scanUntil(page, code, card(code), { field: 'Scan the bundle ticket', orWedge: true })
+          for (const code of bundles) {
+            const answered = page.waitForResponse((response) => new URL(response.url()).pathname === '/api/production/scans/card' && new URL(response.url()).searchParams.get('code') === code, { timeout: 60_000 })
+            await scanUntil(page, code, card(code), { field: 'Scan the bundle ticket', orWedge: true })
+            expect((await answered).ok(), `the card of ${code}`).toBe(true)
+            await expect(finish).toBeVisible()
+          }
           await context.setOffline(true)
           for (const code of [...bundles].reverse()) {
             if (!(await card(code).isVisible())) await scanUntil(page, code, card(code), { field: 'Scan the bundle ticket', orWedge: true })

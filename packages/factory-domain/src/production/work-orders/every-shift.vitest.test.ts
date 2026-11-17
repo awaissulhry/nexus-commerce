@@ -120,6 +120,7 @@ describe('the traveller (MES-014)', () => {
     style: { code: 'JKT-DEMO', name: 'Demo jacket' },
     revision: 3,
     orders: ['SO-DEMO-1', 'SO-DEMO-2'],
+    customer: 'C-DEMO', // B-PR-11: the customer's code
     splitFrom: 'WO-00041',
     note: 'Pack in pairs',
     holdReason: null,
@@ -154,6 +155,7 @@ describe('the traveller (MES-014)', () => {
       ['Capi', '6'],
       ['Varianti colore', 'BLK · Black, RED · Red'],
       ['Ordini', 'SO-DEMO-1, SO-DEMO-2'],
+      ['Cliente', 'C-DEMO'],
       ['Diviso da', 'WO-00041'],
       ['Rilasciato il', '02/11/2026 10:30'],
     ])

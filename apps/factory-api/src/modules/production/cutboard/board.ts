@@ -11,7 +11,7 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import type { Reader } from '../cutorders/store'
-import { officeContextOf, siteFor, sitesFor } from '../reports/daily'
+import { mixedReportSites, officeContextOf } from '../reports/daily'
 import { liveEntries, yieldEntries, type EntryRow } from '../yield/views'
 
 /**
@@ -91,8 +91,7 @@ export async function cuttingBoard(caller: CommandCaller, query: { readonly site
   const actor = actorOf(context)
   const now = serverClock.now()
   return caller.withClient(async (db) => {
-    const sites = await sitesFor(db, actor, PRODUCTION_CUTTING_VIEW, context.companyId)
-    const site = query.siteId ? await siteFor(db, actor, PRODUCTION_CUTTING_VIEW, query.siteId, context.companyId) : sites[0]
+    const { sites, site } = await mixedReportSites(db, actor, PRODUCTION_CUTTING_VIEW, query.siteId, context.companyId) // B-PR-07: mixes customers
     if (!site) throw new NotFoundError('No site where you may read the cutting room.')
     const today = businessDate(now, site.timezone)
     const day = query.date ?? today

@@ -16,6 +16,8 @@ import { effectiveOf, readLanes } from '../../planning/settings/lanes'
 import { readSettings } from '../../planning/settings/store'
 import type { Reader } from '../../planning/store'
 import type { DailyQuery } from './contract'
+// B-PR-07: a report that mixes customers needs every customer.
+import { assertEveryParty, everyPartySites } from '../work-orders/scope'
 
 /**
  * The daily production report (B-W2a-38; MES-301; design production.reports "Daily production"): one site, one day, per
@@ -90,6 +92,21 @@ export async function siteFor(db: Reader, actor: Actor, permission: Permission, 
   if (!site || (companyId && site.companyId !== companyId) || !can(actor, permission, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Site not found.')
   return site
 }
+
+// ── B-PR-07 ──
+/**
+ * B-PR-07 (production plan §2: "A view that mixes brands (capacity, Line TV, daily report, board line totals) needs access to
+ * every brand"): the sites of a report that counts every customer's work (the daily report, the cutting room board, the yield
+ * report) — those where the actor reaches every customer — and the one it shows (the one asked, else the first). A person
+ * limited to some customers gets 403 in words that name none; a site not reached at all stays not found.
+ */
+export async function mixedReportSites(db: Reader, actor: Actor, permission: Permission, siteId: string | undefined, companyId?: string): Promise<{ sites: ReportSite[]; site: ReportSite | undefined }> {
+  const sites = everyPartySites(actor, permission, await sitesFor(db, actor, permission, companyId))
+  const site = siteId ? await siteFor(db, actor, permission, siteId, companyId) : sites[0]
+  if (site) assertEveryParty(actor, permission, { companyId: site.companyId, siteId: site.id })
+  return { sites, site }
+}
+// ── end B-PR-07 ──
 
 /** Every scan the day's report needs (see the module comment). */
 async function scansOfDay(db: Reader, siteId: string, range: { readonly start: Date; readonly end: Date }): Promise<DailyScan[]> {
@@ -269,8 +286,7 @@ export async function dailyAnswer(caller: CommandCaller, query: DailyQuery) {
   const actor = actorOf(context)
   const now = serverClock.now()
   return caller.withClient(async (db) => {
-    const sites = await sitesFor(db, actor, PRODUCTION_REPORTS_VIEW, context.companyId)
-    const site = query.siteId ? await siteFor(db, actor, PRODUCTION_REPORTS_VIEW, query.siteId, context.companyId) : sites[0]
+    const { sites, site } = await mixedReportSites(db, actor, PRODUCTION_REPORTS_VIEW, query.siteId, context.companyId) // B-PR-07
     if (!site) throw new NotFoundError('No site where you may read the production reports.')
     const today = businessDate(now, site.timezone)
     const day = query.date ?? today

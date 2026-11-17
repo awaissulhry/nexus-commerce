@@ -2,6 +2,11 @@ import { expect } from '@playwright/test'
 import { scan, scanUntil, signIn, tablet, tile, worker } from './_harness/floor'
 import { defineStage } from './_harness/stages'
 import { answerOf, press } from './_harness/ui'
+import { startsWith, words } from './_harness/words'
+
+const I = words('floor-issue')
+/** The tablet's record of the last issue ("Last issue: <code> · <quantity>", with its Undo), whichever way it was taken. */
+const lastIssue = (code: string) => startsWith(I('undo.text', { code, quantity: '' }))
 
 export default defineStage({
   proves: 'hides issued to the work order on the floor (Pick & issue on the warehouse tablet: a hide by its tag, 0 taps), the lining and the protectors by their lots',
@@ -30,7 +35,7 @@ export default defineStage({
       await open()
       for (const code of hides) {
         await answerOf(page, 'POST', /^\/inventory\/picking\/work-orders\/[0-9a-f-]+\/issue$/, () => scan(page, code, { field: 'Scan to issue' }))
-        await expect(page.getByText(new RegExp(`Issued ${code} · `)).first()).toBeVisible()
+        await expect(page.getByText(lastIssue(code)).first()).toBeVisible()
       }
     })
 
@@ -40,7 +45,7 @@ export default defineStage({
         await scan(page, code, { field: 'Scan to issue' })
         await expect(page.getByText(`How much of ${code}?`).first()).toBeVisible()
         await answerOf(page, 'POST', /^\/inventory\/picking\/work-orders\/[0-9a-f-]+\/issue$/, () => press(page.getByRole('button', { name: /^Issue \d/ }).last()))
-        await expect(page.getByText(new RegExp(`Issued ${code} · `)).first()).toBeVisible()
+        await expect(page.getByText(lastIssue(code)).first()).toBeVisible()
       }
       await expect(page.getByText('3 of 3 covered').first()).toBeVisible()
       await flow.shot(page, 'pick-covered')

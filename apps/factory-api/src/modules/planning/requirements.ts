@@ -1,4 +1,4 @@
-import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
@@ -17,7 +17,9 @@ import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { command, StaleVersionError, type CommandCaller } from '../../core/command'
 import { actorOf, type OfficeContext } from '../../core/context'
 import { serverClock } from '../../core/time'
-import { assertMayAt, officeContextOf, seesCost, siteFor } from './access'
+import { assertEveryPartyAt, assertMayAt, everyPartySiteFor, officeContextOf, seesCost, siteFor } from './access'
+// B-PR-07: the runs of the sites where the caller reaches every customer.
+import { everyPartyActor } from '../production/work-orders/scope'
 import type { LineView, RunView } from './contract'
 import { stockHoldsOf, standInHideOf, type StockHoldView } from './held'
 import { readReservations, withQualityHolds } from './inputs'
@@ -116,7 +118,7 @@ async function outOfDateSince(db: Reader, companyId: string, siteId: string, sin
 /** GET /planning/runs/latest: the site's latest DONE plan. */
 export async function latestPlan(caller: CommandCaller, query: { readonly siteId: string } & LinesFilter) {
   const context = officeContextOf(caller)
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-07: the material plan mixes customers
   return caller.withClient(async (db) => {
     const run = await db.planningRun.findFirst({ where: { siteId: site.id, status: 'DONE' }, select: RUN_COLUMNS, orderBy: [{ finishedAt: 'desc' }, { id: 'desc' }] })
     return planOf(db, context, run, site.id, site.timezone, query)
@@ -127,6 +129,7 @@ async function runFor(caller: CommandCaller, db: Reader, runId: string, permissi
   const context = officeContextOf(caller)
   const run = isUuid(runId) ? await db.planningRun.findUnique({ where: { id: runId }, select: { ...RUN_COLUMNS, site: { select: { timezone: true } } } }) : null
   assertMayAt(context, permission, run ? { companyId: run.companyId, siteId: run.siteId } : null, 'Planning run')
+  assertEveryPartyAt(context, permission, run!) // B-PR-07: a run's plan mixes customers
   const { site, ...row } = run!
   return { ...row, timezone: site.timezone }
 }
@@ -143,10 +146,12 @@ export async function planOfRun(caller: CommandCaller, runId: string, filter: Li
 /** GET /planning/runs: the run history of the sites the caller may see, newest first. */
 export async function listRuns(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly limit?: number | undefined }): Promise<{ runs: RunView[] }> {
   const context = officeContextOf(caller)
-  if (query.siteId) await siteFor(caller, query.siteId, PLANNING_VIEW)
+  if (query.siteId) await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW)
+  // B-PR-07: runs mix customers: only the sites where the caller reaches every customer.
+  const actor = everyPartyActor(actorOf(context), PLANNING_VIEW)
   return caller.withClient(async (db) => {
     const rows = await db.planningRun.findMany({
-      where: { AND: [scopeWhere(actorOf(context), PLANNING_VIEW, { company: 'companyId', site: 'siteId' }) as object, query.siteId ? { siteId: query.siteId } : {}] },
+      where: { AND: [scopeWhere(actor, PLANNING_VIEW, { company: 'companyId', site: 'siteId' }) as object, query.siteId ? { siteId: query.siteId } : {}] },
       select: RUN_COLUMNS,
       orderBy: [{ startedAt: 'desc' }, { id: 'desc' }],
       take: query.limit ?? 20,
@@ -292,8 +297,9 @@ export async function explainLine(caller: CommandCaller, requirementId: string) 
   return caller.withClient(async (db) => {
     const row = isUuid(requirementId) ? await db.materialRequirement.findUnique({ where: { id: requirementId }, select: REQUIREMENT_COLUMNS }) : null
     if (!row) throw new NotFoundError('Requirement not found.')
-    const run = await runFor(caller, db, row.runId).catch(() => {
-      throw new NotFoundError('Requirement not found.')
+    // B-PR-07: a run another person may not see is an unknown line; the words of a view that mixes customers stay.
+    const run = await runFor(caller, db, row.runId).catch((error: unknown) => {
+      throw error instanceof ForbiddenError ? error : new NotFoundError('Requirement not found.')
     })
     const lineContext = await readLineContext(db, [row], withCost)
     const today = todayAt(run.timezone)

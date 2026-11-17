@@ -5,6 +5,7 @@ import { PRODUCTION_REPORTS_VIEW } from '@nexus/factory-domain/production/report
 import type { CommandCaller } from '../../../../core/command'
 import { readLeatherCuts, type LeatherCut } from '../../facts/sources/leather'
 import { asOf, drillActor, groupBy, limited, namesOf, refOf, sitesFor, spanOf } from './access'
+import { everyPartySites } from '../../../production/work-orders/scope' // B-PR-07
 
 /**
  * GET /insights/kpis/drills/leather-yield (B-W2b-429; ANA-020 "by grade, supplier lot and style"; KPI production.leather_yield):
@@ -30,7 +31,8 @@ export async function leatherDrill(caller: CommandCaller, query: LeatherDrillQue
   const actor = drillActor(caller, [kpiKey])
   const span = spanOf(kpiKey, query)
   return caller.withClient(async (db) => {
-    const sites = await sitesFor(db, actor, PRODUCTION_REPORTS_VIEW, { siteId: query.siteId })
+    // B-PR-07: a hide's yield counts every customer's cuts: only the sites where the caller reaches every customer (none: 403).
+    const sites = everyPartySites(actor, PRODUCTION_REPORTS_VIEW, await sitesFor(db, actor, PRODUCTION_REPORTS_VIEW, { siteId: query.siteId }))
     const zone = new Map(sites.map((site) => [site.id, site.timezone]))
     const cutsAll: LeatherCut[] = []
     for (const site of sites) {

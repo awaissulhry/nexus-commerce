@@ -81,3 +81,27 @@ export function reachesWorkOrder(actor: Actor, permission: Permission, row: Work
 export function assertEveryParty(actor: Actor, permission: Permission, record: { readonly companyId?: string; readonly siteId?: string } = {}): void {
   if (!reachesEveryParty(actor, permission, record)) throw new ForbiddenError(EVERY_PARTY_WORDS.en)
 }
+
+// ── B-PR-07 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * B-PR-07 (production plan §2: "A view that mixes brands (capacity, Line TV, daily report, board line totals) needs access to
+ * every brand"). Of `sites` (the sites a person reads with `permission`), the ones where it reaches every customer: a view
+ * that mixes customers over several sites reads only those. None left of some: 403 in the words of assertEveryParty (they
+ * name no customer).
+ */
+export function everyPartySites<T extends { readonly companyId: string; readonly id: string }>(actor: Actor, permission: Permission, sites: readonly T[]): T[] {
+  const kept = sites.filter((site) => reachesEveryParty(actor, permission, { companyId: site.companyId, siteId: site.id }))
+  if (sites.length > 0 && kept.length === 0) throw new ForbiddenError(EVERY_PARTY_WORDS.en)
+  return kept
+}
+
+/**
+ * The company and site scope of a view that mixes customers when it names no site: only the grants of `permission` that reach
+ * every customer count (a person of every customer at site 1 and of one customer at site 2 reads site 1 only). No such grant:
+ * 403 in the words of assertEveryParty.
+ */
+export function everyPartyActor(actor: Actor, permission: Permission): Actor {
+  assertEveryParty(actor, permission)
+  return { ...actor, grants: actor.grants.filter((grant) => grant.parties === 'all') }
+}
+// ── end B-PR-07 ──────────────────────────────────────────────────────────────────────────────────────────────────────────

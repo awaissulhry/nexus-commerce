@@ -1,6 +1,6 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { entryPattern, partOf } from '@nexus/factory-domain/production/cutting/rules'
 import { PRODUCTION_CUTTING_VIEW } from '@nexus/factory-domain/production/cutting/permissions'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
@@ -8,6 +8,7 @@ import { addTotals, netOfWastage, yieldFigures, yieldTotals, type YieldEntry, ty
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
+import { everyPartyActor, reachesWorkOrder } from '../work-orders/scope' // B-PR-07
 
 /**
  * Hide yield (B-W2a-13; MES-057, SCM-255; design production.cutting "Yield", the work order's Cutting tab "Yield"): how
@@ -124,8 +125,9 @@ export async function workOrderYieldOf(db: Reader, workOrder: { readonly id: str
 export async function workOrderYield(caller: CommandCaller, workOrderId: string) {
   const context = officeOf(caller)
   return caller.withClient(async (db) => {
-    const workOrder = await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, number: true, status: true, styleId: true, styleRevisionId: true } })
-    if (!workOrder || !can(actorOf(context), WORKORDERS_VIEW, workOrder)) throw new NotFoundError('Work order not found.')
+    const workOrder = await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, /* B-PR-07 */ partyId: true, number: true, status: true, styleId: true, styleRevisionId: true } })
+    // B-PR-07: another customer's work order is as unknown.
+    if (!workOrder || !reachesWorkOrder(actorOf(context), WORKORDERS_VIEW, workOrder)) throw new NotFoundError('Work order not found.')
     return { workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status }, ...(await workOrderYieldOf(db, workOrder)) }
   })
 }
@@ -141,9 +143,11 @@ export interface YieldQuery {
 /** GET /production/yield: the cutting room's yield per hide, per style and supplier lot, and in total. */
 export async function cuttingYield(caller: CommandCaller, query: YieldQuery) {
   const context = officeOf(caller)
+  // B-PR-07: a hide's yield counts every customer's cuts: only the sites where the caller reaches every customer.
+  const actor = everyPartyActor(actorOf(context), PRODUCTION_CUTTING_VIEW)
   return caller.withClient(async (db) => {
     const orders = await db.workOrder.findMany({
-      where: { AND: [scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput, query.siteId ? { siteId: query.siteId } : {}, query.styleId ? { styleId: query.styleId } : {}] },
+      where: { AND: [scopeWhere(actor, PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput, query.siteId ? { siteId: query.siteId } : {}, query.styleId ? { styleId: query.styleId } : {}] },
       select: { id: true, styleId: true, styleRevisionId: true },
     })
     const entries = await liveEntries(db, {

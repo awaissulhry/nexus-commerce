@@ -13,7 +13,7 @@ import { knownSite, may, officeOf } from './access'
 import { attendanceOfDay, lineLoads, lineMinutesOf, stationOperators, type AttendanceOfDay } from './facts'
 import { levelsOfBoard, type LevelsOf } from './levels'
 import { activeLinesOf, dayOf, workerNames, type AssignmentRow, type Reader, type StationRow } from './store'
-import { dispatchWorld, materialFlags, planView, type DayCard, type DispatchWorld, type MaterialFlags } from './world'
+import { customerCodesOf, dispatchWorld, materialFlags, planView, type CustomerCodes, type DayCard, type DispatchWorld, type MaterialFlags } from './world'
 
 /**
  * The dispatch board (B-W2b-49; MES-023, -026, -027, -028, -031; design production.dispatch SCR-138): GET
@@ -41,6 +41,8 @@ interface Named {
   readonly attendance: AttendanceOfDay
   readonly showStanding: boolean
   readonly namesWorkers: boolean
+  /** B-PR-11: each work order's customer code (L13: the code, never the name). */
+  readonly codes: CustomerCodes
 }
 
 function operatorView(row: AssignmentRow, operationId: string | null, lineId: string | null, named: Named) {
@@ -71,7 +73,7 @@ function cardView(card: DayCard, world: DispatchWorld, flags: MaterialFlags, nam
   return {
     id: card.id,
     key: card.key,
-    workOrder: { id: card.workOrder.id, number: card.workOrder.number, status: card.workOrder.status, priority: card.workOrder.priority, rush: card.workOrder.rush, dueDate: card.workOrder.dueDate ? dayOf(card.workOrder.dueDate) : null, style: card.workOrder.style, holdReason: card.workOrder.holdReason },
+    workOrder: { id: card.workOrder.id, number: card.workOrder.number, status: card.workOrder.status, priority: card.workOrder.priority, rush: card.workOrder.rush, dueDate: card.workOrder.dueDate ? dayOf(card.workOrder.dueDate) : null, style: card.workOrder.style, holdReason: card.workOrder.holdReason, customerCode: named.codes.get(card.workOrder.id) ?? null },
     operation: { id: card.operation.id, seq: card.operation.seq, code: card.operation.code, name: card.operation.name, workCentreId: card.operation.workCentreId },
     previous: card.previous ? { seq: card.previous.seq, code: card.previous.code, name: card.previous.name } : null,
     parallel: card.parallel ? { group: card.parallel.group, with: card.parallel.with.map((operation) => ({ id: operation.id, seq: operation.seq, code: operation.code, name: operation.name })) } : null,
@@ -125,7 +127,8 @@ export async function dispatchBoard(caller: CommandCaller, query: BoardQuery) {
     const namesWorkers = world.subject === 'WORKER'
     const names = await workerNames(db, namesWorkers ? world.rows.map((row) => row.workerId) : [])
     const levels = await levelsOfBoard(db, namesWorkers ? world.rows.map((row) => row.employeeId) : [], world.cards.map((card) => card.operation.id))
-    const named: Named = { names, levels, attendance, showStanding: mayManage, namesWorkers }
+    const codes = await customerCodesOf(db, world.cards.map((card) => card.workOrder.id)) // B-PR-11
+    const named: Named = { names, levels, attendance, showStanding: mayManage, namesWorkers, codes }
     const shown = query.lineId ? lines.filter((line) => line.id === query.lineId) : lines
     const lanes = shown.map((line) => ({
       id: line.id,

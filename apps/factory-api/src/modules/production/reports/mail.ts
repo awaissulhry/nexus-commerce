@@ -1,13 +1,11 @@
 import type { FactoryDatabase } from '@nexus/factory-db'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { can } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { escapeHtml, footerOf, privacyNoticeUrl } from '@nexus/factory-domain/email/footer'
 import { fromLine, messageIdFor } from '@nexus/factory-domain/email/headers'
 import { buildMime } from '@nexus/factory-domain/email/mime'
 import { identityReady } from '@nexus/factory-domain/email/rules'
 import { digestDue } from '@nexus/factory-domain/notifications/rules'
-import { PRODUCTION_REPORTS_VIEW } from '@nexus/factory-domain/production/reports/permissions'
 import { DAILY_REPORT_KEY, dailyReportMail, reportLocaleOf } from '@nexus/factory-domain/production/reports/subscriptions'
 import { callerFor, command, type CommandCaller } from '../../../core/command'
 import { defineCron, type CronJob } from '../../../core/cron'
@@ -18,7 +16,7 @@ import { deliverOutbound } from '../../../platform/email-out/outbound'
 import { processEmail, type EmailRuntime } from '../../../platform/email-out/service'
 import { activeTenants, asSystem, systemContext } from '../../../platform/outbox/system'
 import { dailyView, previousWorkingDayOf, readDaily } from './daily'
-import { readerOf } from './subscriptions'
+import { readerOf, readsDailyReport } from './subscriptions'
 
 /**
  * The daily production report by e-mail (B-W2a-38; MES-301 "sent each morning"; PLT-142 quiet defaults). The scheduler's
@@ -111,7 +109,7 @@ export async function sendDailyReport(caller: CommandCaller, tenantId: string, s
   const today = businessDate(now, site.timezone)
   const facts = await caller.withClient(async (client) => {
     const reader = await readerOf(client, tenantId, subscription.userId, now)
-    const allowed = can(reader, PRODUCTION_REPORTS_VIEW, { companyId: site.companyId, siteId: site.id })
+    const allowed = readsDailyReport(reader, site) // B-PR-07: the report counts every customer's work
     const user = await client.user.findUnique({ where: { id: subscription.userId }, select: { email: true, displayName: true } })
     if (!allowed || !user) return { allowed: false as const, user }
     const day: BusinessDate = await previousWorkingDayOf(client, site.id, today)
