@@ -57,11 +57,21 @@ export async function peopleTagsOf(client: Reader, record: { readonly type: stri
   return out
 }
 
+/** A person of the @ list (threads.ts mentionablePeople), with the tag when one is given. */
+export interface TaggedPerson {
+  readonly id: string
+  readonly name: string
+  readonly tag?: string
+}
+
 /** The list with its tags (a person without one carries none), the tagged people first, each group in the list's own order. Pure. */
-export function taggedFirst<P extends { readonly id: string }>(people: readonly P[], tags: ReadonlyMap<string, TagWords>, language: 'it' | 'en'): (P & { readonly tag?: string })[] {
-  const tagged = people.flatMap((person) => {
+export function taggedFirst(people: readonly { readonly id: string; readonly name: string }[], tags: ReadonlyMap<string, TagWords>, language: 'it' | 'en'): TaggedPerson[] {
+  const tagged: TaggedPerson[] = []
+  const others: TaggedPerson[] = []
+  for (const person of people) {
     const words = tags.get(person.id)
-    return words ? [{ ...person, tag: words[language] }] : []
-  })
-  return [...tagged, ...people.filter((person) => !tags.has(person.id))]
+    if (words) tagged.push({ id: person.id, name: person.name, tag: words[language] })
+    else others.push({ id: person.id, name: person.name })
+  }
+  return [...tagged, ...others]
 }

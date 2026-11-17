@@ -37,7 +37,7 @@ import { wallScopeOf, type WallScope } from './records' // B-PR-08a part 2
 import { serverClock } from '../../core/time'
 import { headOf } from './owner'
 import { readingOf, whoOf, type Reading } from './reads'
-import { peopleTagsOf, taggedFirst, tagLanguageOf } from './people-tags' // T7
+import { peopleTagsOf, taggedFirst, tagLanguageOf, type TaggedPerson } from './people-tags' // T7
 // B-TH-083: a measurement sheet on a card is locked for an office reader without sales.measurements.view.
 import { isMeasurementSheet, MEASUREMENT_SHEET_PERMISSION } from '@nexus/factory-domain/files/measurements'
 // ---- end B-TH-027 / B-TH-028
@@ -726,7 +726,7 @@ export const MAX_MENTIONABLE = 500
  * checks at write: ACTIVE people whose roles let them read the record's thread (two-factor taken as proved). Office
  * writers only (threads.post over the record); names only, never an address or a role.
  */
-export async function mentionablePeople(caller: CommandCaller, record: RecordRef, now: Date): Promise<Array<{ id: string; name: string; /* T7 */ tag?: string }>> {
+export async function mentionablePeople(caller: CommandCaller, record: RecordRef, now: Date): Promise</* T7 */ TaggedPerson[]> {
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
