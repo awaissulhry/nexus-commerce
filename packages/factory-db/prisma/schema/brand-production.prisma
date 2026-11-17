@@ -1,0 +1,225 @@
+// The customer's production state of its orders (production plan, schema wave 3/5, B-PR-15; plan §3 "Customer urgency",
+// §4 "5 plain stages", "Health", "Waiting on"; lead picks L17, L18, L20, L21, L24; review fixes R-41…R-49). Office writes it
+// through apps/factory-api's modules/production, always with command(): the keeper (B-PR-17) makes an order's row when the
+// order is CONFIRMED and keeps its stage, health and waiting-on; the customer's urgency (B-PR-22a, from the portal) and the
+// factory's set-back and lock (B-PR-22b), the supervisor per order (B-PR-42a) and the factory's raise of the health are
+// commands of the office or of the portal written in the office scope after the partner read (the portal pattern).
+//
+//   BrandOrderProduction  one row per sales order (the key `brand-production:<salesOrderId>`, unique in the tenant; the
+//                         isolation tests' copies add a `-…` suffix), of the order's own company and customer (the
+//                         foreign key). Its customer reads it through the partner role, its own rows only (the party key),
+//                         never the office's note on a raise, who raised it, who set or locked an urgency, nor the
+//                         supervisor and since when (PW-15). The old "rank" columns are not made: urgency replaces them.
+//   ProductionIssue       an issue that needs an answer (L24): a note of the office with "Needs an answer" (OFFICE) or a
+//                         customer's "Report a problem" (BRAND), on a sales order or a work order of ONE customer, with its
+//                         Task and its message (plain ids: collab.prisma and threads.prisma stay untouched); one Task per
+//                         batch (every issue of a batch names the batch's task). Office only: the customer reads "Waiting
+//                         on us since" / "Answered" through the API, never the issue, the task or who answers (R-41).
+//
+// The hand-written …_brand_production_guards hold the shape for every login, the owner included (the urgent place exactly
+// while Urgent, a locked order Regular, the supervisor with since when, an issue answered exactly when ANSWERED, its
+// escalation step 0 to 2); neither table is ever deleted from. WorkOrderHold (the plain production hold of the same wave)
+// lives in production.prisma.
+
+/// The production state of one sales order for its customer (B-PR-15): the plain stage, the health and what it waits on (the
+/// keeper's, B-PR-17), the factory's raise of the health, the customer's urgency and the factory's lock, the supervisor of
+/// the order. Made when the order is CONFIRMED; kept as history once the order leaves production (a shipped order keeps its
+/// last urgency); never deleted.
+model BrandOrderProduction {
+  id                   String        @id @db.Uuid
+  tenantId             String        @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The order's company and customer (a CUSTOMER or BRAND party): the order's own, fixed (the foreign key).
+  companyId            String        @db.Uuid
+  partyId              String        @db.Uuid
+  /// The sales order, fixed.
+  salesOrderId         String        @db.Uuid
+  /// `brand-production:<salesOrderId>`: one row per order (the unique key; the isolation tests' copies add a `-…` suffix).
+  key                  String
+  /// The plain stage the customer reads (PREPARING, CUTTING, SEWING, QUALITY, READY: its slowest unfinished line) and since
+  /// when (factory-domain production-brand/stages).
+  stage                BrandStage    @default(PREPARING)
+  stageAt              DateTime      @default(now()) @db.Timestamptz(3)
+  /// The computed health (LATE, AT_RISK, NO_DATE, ON_TRACK; null: nothing left to make) and when it last changed.
+  health               BrandHealth?
+  healthAt             DateTime?     @db.Timestamptz(3)
+  /// The factory's raise of the health (only to AT_RISK, never lower) with its curated reason code, when, by whom and the
+  /// first day it no longer stands (set day + 7): all or none.
+  healthSet            BrandHealth?
+  healthReasonCode     HealthReason?
+  /// The office's own words beside a raise (one line, at most 200): never the customer's to read.
+  /// @internal
+  healthNote           String?
+  healthSetAt          DateTime?     @db.Timestamptz(3)
+  /// @internal
+  healthSetById        String?       @db.Uuid
+  healthSetUntil       DateTime?     @db.Date
+  /// Who the order waits on (the customer, a supplier, a workshop, us; the customer reads only "You" or "Us") and since when.
+  waitingOn            WaitingOn?
+  waitingSince         DateTime?     @db.Timestamptz(3)
+  // ── the customer's urgency (L17, L18, L20; R-46, R-49) ──
+  /// URGENT or REGULAR (the default). A mark counts only while the customer's urgency switch is on (PortalSettings
+  /// .productionUrgencyOn); switched off, it stays dormant. Never written into SalesOrder.priority, priorityLevel,
+  /// backlogRank, WorkOrder.priority or rush.
+  urgency              BrandUrgency  @default(REGULAR)
+  /// Its place inside the customer's Urgent list (1 first), exactly while URGENT. No unique key: a shipped order keeps its
+  /// last urgency as history, so the command rewrites the open urgent ranks 1..n under the customer's PortalSettings row lock.
+  urgentRank           Int?
+  /// When and by whom the urgency was last set (the customer, or us: an "Urgent – asked" we accepted, a set-back); both or
+  /// neither, and an Urgent mark always has them. The customer reads ours as "Changed by us", never a name.
+  urgencySetAt         DateTime?     @db.Timestamptz(3)
+  urgencySetBy         UrgencyActor?
+  /// The person: a portal person of the customer for BRAND, an office person for FACTORY (null: the system).
+  /// @internal
+  urgencySetById       String?       @db.Uuid
+  /// The batch of the last change (R-49): its Undo reads the batch's audit `before` and skips rows whose batch changed since.
+  urgencyBatchId       String?       @db.Uuid
+  /// The factory set the order to Regular and locked it (production.brand.override), with the reason the customer reads,
+  /// when and by whom: exactly while locked; a locked order is REGULAR.
+  urgencyLocked        Boolean       @default(false)
+  urgencyLockReason    String?
+  urgencyLockedAt      DateTime?     @db.Timestamptz(3)
+  /// @internal
+  urgencyLockedById    String?       @db.Uuid
+  /// The order's own supervisor (L21; an active office person when named) and since when, both or neither; null: the
+  /// customer's default (PortalSettings.productionSupervisorId). The customer is never told who (R-41). Made inactive, never
+  /// deleted (Restrict).
+  supervisorId         String?       @db.Uuid
+  supervisorAssignedAt DateTime?     @db.Timestamptz(3)
+  version              Int           @default(1)
+  createdAt            DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime      @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById          String?       @db.Uuid
+
+  party      Party      @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The order of the same company and customer.
+  salesOrder SalesOrder @relation(fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The Inquiry assignee's pattern: a person is made inactive, never deleted (Restrict, not Prisma's SetNull default: that
+  // would also clear tenantId).
+  supervisor User?      @relation("BrandOrderProductionSupervisor", fields: [tenantId, supervisorId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One row per order.
+  @@unique([tenantId, key])
+  @@index([tenantId, salesOrderId])
+  // The customer's own list: Urgent by its place (B-PR-18, B-PR-22a).
+  @@index([tenantId, partyId, urgency, urgentRank])
+  // The Undo of an urgency batch.
+  @@index([tenantId, urgencyBatchId])
+  // "Mine": the orders a person supervises (B-PR-42a).
+  @@index([tenantId, supervisorId])
+}
+
+/// An issue that needs an answer (L24; R-42, R-43, R-44): the office's "Needs an answer" on a note (OFFICE, B-PR-43b) or a
+/// customer's "Report a problem" (BRAND, B-PR-45), on a sales order or a work order of one customer, with the Task of its
+/// batch (assigned to the supervisor, due one working day after it is raised) and its message in the record's own thread.
+/// OPEN → ANSWERED (a BRAND issue: the first shared office message in that order's thread after it was raised; an OFFICE
+/// issue: its task done) or CANCELLED; an OFFICE issue whose task reopens is OPEN again. Escalated by steps (0 none, 1 the
+/// backup or production managers, 2 Owner and Admin). Office only; never deleted.
+model ProductionIssue {
+  id             String      @id @db.Uuid
+  tenantId       String      @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The record's company, site (a work order's) and customer.
+  companyId      String      @db.Uuid
+  siteId         String?     @db.Uuid
+  partyId        String      @db.Uuid
+  /// The record it is about: a SalesOrder or a WorkOrder of that one customer.
+  recordType     String
+  recordId       String      @db.Uuid
+  /// The sales order: the record itself, or a work order's single order (null when its cells come from several orders).
+  salesOrderId   String?     @db.Uuid
+  /// The Task of its batch (a plain id: collab.prisma untouched), and the message it was raised with in the record's own
+  /// thread (a plain id: threads.prisma untouched).
+  taskId         String      @db.Uuid
+  messageId      String      @db.Uuid
+  source         IssueSource
+  /// The batch it was raised in (one Task per batch; answering closes every issue of the batch); null: alone.
+  batchId        String?     @db.Uuid
+  status         IssueStatus @default(OPEN)
+  raisedAt       DateTime    @default(now()) @db.Timestamptz(3)
+  /// The working day it is due (raise + 1 working day on the company calendar; the step falls due at 08:00 company time).
+  dueDate        DateTime    @db.Date
+  /// When it was answered: exactly while ANSWERED.
+  answeredAt     DateTime?   @db.Timestamptz(3)
+  /// 0 not escalated, 1 to the backup (else production managers), 2 to Owner and Admin; when it last went up.
+  escalationStep Int         @default(0)
+  escalatedAt    DateTime?   @db.Timestamptz(3)
+  version        Int         @default(1)
+  createdAt      DateTime    @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime    @default(now()) @updatedAt @db.Timestamptz(3)
+  /// @internal
+  createdById    String?     @db.Uuid
+
+  party      Party       @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // The order of the same company and customer (Restrict, not Prisma's SetNull default: that would also clear tenantId,
+  // companyId and partyId).
+  salesOrder SalesOrder? @relation(fields: [tenantId, companyId, partyId, salesOrderId], references: [tenantId, companyId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // An order's open issues ("Waiting on us since", B-PR-18).
+  @@index([tenantId, salesOrderId, status])
+  // The escalation scan (B-PR-45).
+  @@index([tenantId, status, dueDate])
+  // The issues of a task (the answered handler, B-PR-43b) and of a batch.
+  @@index([tenantId, taskId])
+  @@index([tenantId, batchId])
+  @@index([tenantId, recordType, recordId])
+}
+
+/// The plain stage a customer reads of its order (factory-domain production-brand/stages BRAND_STAGES), in this order.
+enum BrandStage {
+  PREPARING
+  CUTTING
+  SEWING
+  QUALITY
+  READY
+}
+
+/// The health of an order (factory-domain production-brand/health BRAND_HEALTHS), worst first.
+enum BrandHealth {
+  LATE
+  AT_RISK
+  NO_DATE
+  ON_TRACK
+}
+
+/// The curated reasons of a raise to AT_RISK (production-brand/health HEALTH_REASON_CODES: the promise's own reasons).
+enum HealthReason {
+  MATERIAL_LATE
+  CAPACITY
+  QUALITY
+  YOUR_CHANGE
+  TRANSPORT
+  PLANNING
+}
+
+/// Who an order waits on (production-brand/waiting WAITING_ON); the customer reads BRAND as "You", the others as "Us".
+enum WaitingOn {
+  BRAND
+  SUPPLIER
+  WORKSHOP
+  US
+}
+
+/// The customer's urgency of an order (production-brand/urgency BRAND_URGENCIES).
+enum BrandUrgency {
+  URGENT
+  REGULAR
+}
+
+/// Who set an order's urgency last (production-brand/urgency URGENCY_ACTORS).
+enum UrgencyActor {
+  BRAND
+  FACTORY
+}
+
+/// Who raised an issue (production-brand/issues ISSUE_SOURCES): the customer's "Report a problem", or the office's "Needs an
+/// answer".
+enum IssueSource {
+  BRAND
+  OFFICE
+}
+
+/// An issue's state (production-brand/issues ISSUE_STATUSES).
+enum IssueStatus {
+  OPEN
+  ANSWERED
+  CANCELLED
+}

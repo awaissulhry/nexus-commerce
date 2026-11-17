@@ -462,4 +462,33 @@ describe("B-PR-14 a customer's production limits card (PW-S01, PW-08b, PW-15)", 
       expect(text).not.toContain(backup.id)
     }
   })
+
+  // ---- B-PR-15 (production plan, schema wave 3/5): "n urgent now" reads the customer's marks on BrandOrderProduction.
+  it("B-PR-15: n urgent now counts the customer's own open orders marked Urgent — never a Regular one, never another customer's", async () => {
+    const iota = await party(['CUSTOMER'])
+    const kappa = await party(['CUSTOMER'])
+    const order = async (partyId: string, urgency: 'URGENT' | 'REGULAR', urgentRank: number | null) => {
+      const orderId = newId()
+      await inWorld(h, world, async (client) => {
+        await client.salesOrder.create({
+          data: { id: orderId, companyId: world.companyId, partyId, number: `T-PR15-SO-${orderId.slice(-6)}`, status: 'CONFIRMED', orderDate: new Date('2026-11-02T00:00:00.000Z'), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up customer' }, shipTo: { name: 'Made-up workshop' } },
+          select: { id: true },
+        })
+        await client.brandOrderProduction.create({
+          data: { id: newId(), companyId: world.companyId, partyId, salesOrderId: orderId, key: `brand-production:${orderId}`, urgency, urgentRank, ...(urgency === 'URGENT' ? { urgencySetAt: h.clock.now(), urgencySetBy: 'BRAND' as const } : {}) },
+          select: { id: true },
+        })
+      })
+    }
+    await order(iota, 'URGENT', 1)
+    await order(iota, 'URGENT', 2)
+    await order(iota, 'REGULAR', null)
+    await order(kappa, 'URGENT', 1)
+    const read = await owner.get(card(iota))
+    expect(read.status, JSON.stringify(read.body)).toBe(200)
+    expect(read.body.production.urgency).toMatchObject({ on: false, max: 3, now: 2 })
+    // PW-11: another customer's mark never counts in this one's card, nor the other way round.
+    expect((await owner.get(card(kappa))).body.production.urgency).toMatchObject({ now: 1 })
+  })
+  // ---- end B-PR-15
 })

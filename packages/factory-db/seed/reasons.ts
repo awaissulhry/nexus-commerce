@@ -13,6 +13,8 @@ import { seedUuid, takenBy, type SeedContext } from '../src/seeding'
  * B-W2b-GS1: also on a tenant the app has used: the API gives a list that is EMPTY its standard reasons (the worker's start
  * and a daily cron), with ids of its own, so a list may hold the seed's codes already; a code is unique in its list. Such a
  * reason is the tenant's (perhaps edited since): the seed leaves it exactly as it is and writes only its own rows.
+ * B-PR-15 (production plan, schema wave 3/5): the PRODUCTION_HOLD list (why a work order is on a plain production hold) comes
+ * with BASE_REASONS like every other list, so it is seeded here too.
  */
 
 const AT = new Date('2026-10-30T08:00:00.000Z')

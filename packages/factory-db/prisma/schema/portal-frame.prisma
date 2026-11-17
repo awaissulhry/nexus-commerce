@@ -160,6 +160,9 @@ enum PartnerEmailTopic {
   MESSAGES
   /// Reminders of what waits for them (the tasks).
   REMINDERS
+  /// B-PR-15 (production plan, schema wave 3/5; B-PR-31 sends it): their orders in production: a stage reached, at risk or
+  /// late, a hold, an urgency changed by us, a problem they reported answered. Non-essential.
+  PRODUCTION
 }
 
 /// How often (design: "As it happens" / "Once a day" / "Once a week" / Off).
