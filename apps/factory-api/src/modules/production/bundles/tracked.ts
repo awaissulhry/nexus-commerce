@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { PRINT_VIEW } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can } from '@nexus/factory-domain/core/permissions'
 import { plusDays } from '@nexus/factory-domain/calendars/dates'
 import { businessDate, businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
 import { PRODUCTION_BUNDLES_VIEW } from '@nexus/factory-domain/production/bundles/permissions'
@@ -16,6 +16,7 @@ import { shadesOf } from './matching'
 import { BUNDLE_COLUMNS, readBundle, readReprints, readTicketJobs, type BundleRow, type Reader } from './store'
 import { placeView, stationsOf, trackBundles, type Tracked } from './track'
 import { hidesOf } from './views'
+import { workOrderWhere } from '../work-orders/scope' // B-PR-04a
 
 /**
  * Where every bundle is (B-W2b-41; MES-074, MES-168; design production.bundles SCR-259: tiles, the grid, the Bundle
@@ -38,9 +39,12 @@ function officeOf(caller: CommandCaller): OfficeContext {
   return context
 }
 
-/** The bundles the caller may read with production.bundles.view, through their work orders' company and site. */
-function scopeOf(context: OfficeContext): Prisma.BundleWhereInput {
-  return { workOrder: { is: scopeWhere(actorOf(context), PRODUCTION_BUNDLES_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput } }
+/**
+ * The bundles the caller may read with production.bundles.view, through their work orders' company and site. B-PR-04a (the
+ * brand wall): and customer (../work-orders/scope); `partyId`: only that customer's.
+ */
+function scopeOf(context: OfficeContext, partyId?: string): Prisma.BundleWhereInput {
+  return { workOrder: { is: { AND: [workOrderWhere(actorOf(context), PRODUCTION_BUNDLES_VIEW), partyId ? { partyId } : {}] } } }
 }
 
 /** The grid's row: the bundle, its work order and cell, its place now, last scan, stuck wait and genealogy (MES-074). */
@@ -84,6 +88,8 @@ export interface ListQuery {
   readonly stuck?: boolean | undefined
   /** A scanned or typed ticket or coupon code, or a work order number. */
   readonly q?: string | undefined
+  /** B-PR-04a: one customer's bundles (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly cursor?: string | undefined
   readonly limit: number
 }
@@ -96,7 +102,7 @@ export async function listBundles(caller: CommandCaller, query: ListQuery) {
     const typed = query.q?.trim().toUpperCase()
     const couponBundle = typed ? (await readCouponByCode(db, typed))?.bundleId : undefined
     const filters: Prisma.BundleWhereInput[] = [
-      scopeOf(context),
+      scopeOf(context, query.partyId),
       query.siteId ? { siteId: query.siteId } : {},
       query.workOrderId ? { workOrderId: query.workOrderId } : {},
       query.status ? { status: query.status } : {},
@@ -141,9 +147,9 @@ export async function listBundles(caller: CommandCaller, query: ListQuery) {
 // ---- the tiles and the stuck list -----------------------------------------------------------------------------------------------
 
 /** The ACTIVE bundles of the caller's open work orders (at a site when named), tracked. */
-async function openTracked(db: Reader, context: OfficeContext, siteId: string | undefined, now: Date): Promise<{ rows: Tracked[]; capped: boolean }> {
+async function openTracked(db: Reader, context: OfficeContext, siteId: string | undefined, now: Date, partyId?: string): Promise<{ rows: Tracked[]; capped: boolean }> {
   const bundles = await db.bundle.findMany({
-    where: { AND: [scopeOf(context), siteId ? { siteId } : {}, { status: 'ACTIVE' }, { workOrder: { is: { status: { in: [...OPEN_WORK_ORDERS] } } } }] },
+    where: { AND: [scopeOf(context, partyId), siteId ? { siteId } : {}, { status: 'ACTIVE' }, { workOrder: { is: { status: { in: [...OPEN_WORK_ORDERS] } } } }] },
     select: BUNDLE_COLUMNS,
     orderBy: { id: 'desc' },
     take: MAX_TRACKED + 1,
@@ -152,15 +158,15 @@ async function openTracked(db: Reader, context: OfficeContext, siteId: string | 
 }
 
 /** GET /production/bundles/tiles: Active · Stuck (no scan for the site's limit) · Tickets replaced today · On hold · At a subcontractor. */
-export async function bundleTiles(caller: CommandCaller, query: { readonly siteId?: string | undefined }) {
+export async function bundleTiles(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly partyId?: string | undefined }) {
   const context = officeOf(caller)
   const now = serverClock.now()
   return caller.withClient(async (db) => {
-    const { rows, capped } = await openTracked(db, context, query.siteId, now)
+    const { rows, capped } = await openTracked(db, context, query.siteId, now, query.partyId)
     // Today: from the business day's start to the next one's (a row dated later is not today's).
     const today = businessDate(now)
     const day = { gte: businessDayStart(today), lt: businessDayStart(plusDays(today, 1)) }
-    const scope = scopeOf(context)
+    const scope = scopeOf(context, query.partyId)
     const site = query.siteId ? { siteId: query.siteId } : {}
     const reprints = await db.bundleReprint.count({ where: { createdAt: day, ...site, bundle: { is: scope } } })
     const couponReprints = await db.bundleCoupon.count({ where: { createdAt: day, replacesId: { not: null }, ...site, bundle: { is: scope } } })
@@ -180,11 +186,11 @@ export async function bundleTiles(caller: CommandCaller, query: { readonly siteI
 }
 
 /** GET /production/bundles/stuck: the bundles with no scan past their site's limit, the longest wait first (MES-168). */
-export async function stuckBundles(caller: CommandCaller, query: { readonly siteId?: string | undefined }) {
+export async function stuckBundles(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly partyId?: string | undefined }) {
   const context = officeOf(caller)
   const now = serverClock.now()
   return caller.withClient(async (db) => {
-    const { rows, capped } = await openTracked(db, context, query.siteId, now)
+    const { rows, capped } = await openTracked(db, context, query.siteId, now, query.partyId)
     const stuck = rows.filter((row) => row.stuck.stuck).sort((a, b) => b.stuck.hours - a.stuck.hours || (a.bundle.code < b.bundle.code ? -1 : 1))
     return { bundles: await rowsOf(db, stuck), capped, asOf: toUtcIso(now) }
   })

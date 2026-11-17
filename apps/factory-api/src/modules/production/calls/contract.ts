@@ -221,6 +221,8 @@ export const listCallsContract = defineContract({
     /** Sent on or after / before these days of the site (inclusive). */
     from: businessDate().optional(),
     to: businessDate().optional(),
+    /** B-PR-04a: only the calls on one customer's work orders (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
@@ -228,7 +230,8 @@ export const listCallsContract = defineContract({
 })
 
 export const countsContract = defineContract({
-  querystring: input({ siteId: id().optional(), lineId: id().optional() }),
+  // B-PR-04a: partyId = the calls on one customer's work orders (inside the caller's reach).
+  querystring: input({ siteId: id().optional(), lineId: id().optional(), partyId: id().optional() }),
   response: {
     200: output({
       tiles: output({ OPEN: z.number().int(), WAITING: z.number().int(), ANSWERED_TODAY: z.number().int() }),

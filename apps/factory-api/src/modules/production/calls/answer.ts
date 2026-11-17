@@ -4,7 +4,7 @@ import { parseInstant } from '@nexus/factory-domain/core/time'
 import { PRODUCTION_CALLS_ANSWER } from '@nexus/factory-domain/production/calls/permissions'
 import { CALL_REFUSALS, sentAtOf, stepRefusal, type CallStatus, type CallStep, type OutcomeType } from '@nexus/factory-domain/production/calls/rules'
 import { command, type CommandCaller } from '../../../core/command'
-import { assertMay, assertVersion, bodyIssue, contextOf, officeOf, refuse, type CallContext } from './access'
+import { assertMayCall, assertVersion, bodyIssue, contextOf, officeOf, refuse, type CallContext } from './access'
 import { stepInCommand } from './station'
 import { callRecord, lockCall, readCall, scopeOfCall, type CallRow, type Reader } from './store'
 
@@ -28,7 +28,8 @@ import { callRecord, lockCall, readCall, scopeOfCall, type CallRow, type Reader 
 async function knownCall(caller: CommandCaller, context: CallContext, callId: string): Promise<CallRow> {
   const call = isUuid(callId) ? await caller.withClient((db) => readCall(db, callId)) : null
   if (!call) throw new NotFoundError('Call not found.')
-  assertMay(context, PRODUCTION_CALLS_ANSWER, scopeOfCall(call), 'Call')
+  // B-PR-04a (the brand wall): a call on another customer's work order is not found.
+  assertMayCall(context, PRODUCTION_CALLS_ANSWER, call)
   return call
 }
 

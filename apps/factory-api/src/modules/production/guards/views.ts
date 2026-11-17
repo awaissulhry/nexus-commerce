@@ -23,7 +23,8 @@ import { serverClock } from '../../../core/time'
 import { workerGateFor } from '../../people/privacy/worker-gate'
 import { bundleFlowOf } from '../bundles/flow'
 import { readBundleByCode } from '../bundles/store'
-import { floorOrOffice, mayScan, officeOf, scanWorkOrder } from '../scans/access'
+import { floorOrOffice, mayScan, maySite, officeOf, scanWorkOrder } from '../scans/access'
+import { workOrderWhere } from '../work-orders/scope' // B-PR-04a
 import { deviceStationOf, readBundleScans, readHeader, readOperations, readScan, readStations, workerNames } from '../scans/store'
 import { componentFacts, FLAGGED_ACTION, guardRows, guardRowsOfScan, guardSettingsFor, lineFacts, OVERRIDDEN_ACTION, scannedLots, tracedOfLot, tracedOfWorkOrder, TRACED_ACTION, type GuardAuditRow } from './store'
 
@@ -155,7 +156,7 @@ function stillSkipped(facts: FlagFacts, standing: ReadonlyMap<string, unknown>):
   return skipped.filter((operationId) => !standing.has(standingKey(facts.bundleId, operationId))).length
 }
 
-export async function listFlags(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly date?: string | undefined; readonly kind?: 'WARNED' | 'OVERRIDDEN' | undefined; readonly guard?: GuardKind | undefined; readonly limit: number }) {
+export async function listFlags(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly date?: string | undefined; readonly kind?: 'WARNED' | 'OVERRIDDEN' | undefined; readonly guard?: GuardKind | undefined; readonly partyId?: string | undefined; readonly limit: number }) {
   const context = officeOf(caller)
   return caller.withClient(async (db) => {
     const sites = await db.site.findMany({ where: { AND: [scopeWhere(actorOf(context), PRODUCTION_SCAN_CORRECT, { company: 'companyId', site: 'id' }) as Prisma.SiteWhereInput, query.siteId ? { id: query.siteId } : {}] }, select: { id: true, timezone: true } })
@@ -169,7 +170,16 @@ export async function listFlags(caller: CommandCaller, query: { readonly siteId?
       rows.push(...(await guardRows(db, { siteIds: [site.id], from: start, to: end, actions }, query.limit)))
     }
     rows.sort((a, b) => b.at.getTime() - a.at.getTime() || (a.id < b.id ? 1 : -1))
-    const facts = rows.map((row) => ({ row, facts: flagFacts(row) })).filter((entry) => !query.guard || entry.facts.guards.some((guard) => guard.kind === query.guard)).slice(0, query.limit)
+    // B-PR-04a (the brand wall): only the flags of the work orders the caller reaches (of one customer when asked).
+    const named = [...new Set(rows.map((row) => flagFacts(row).workOrderId).filter(isUuid))]
+    const reached = new Set(
+      (named.length > 0 ? await db.workOrder.findMany({ where: { AND: [{ id: { in: named } }, workOrderWhere(actorOf(context), PRODUCTION_SCAN_CORRECT), query.partyId ? { partyId: query.partyId } : {}] }, select: { id: true } }) : []).map((row) => row.id),
+    )
+    const facts = rows
+      .map((row) => ({ row, facts: flagFacts(row) }))
+      .filter((entry) => reached.has(entry.facts.workOrderId))
+      .filter((entry) => !query.guard || entry.facts.guards.some((guard) => guard.kind === query.guard))
+      .slice(0, query.limit)
     const bundleIds = [...new Set(facts.map((entry) => entry.facts.bundleId).filter(isUuid))]
     const workOrderIds = [...new Set(facts.map((entry) => entry.facts.workOrderId).filter(isUuid))]
     const bundles = new Map((bundleIds.length > 0 ? await db.bundle.findMany({ where: { id: { in: bundleIds } }, select: { id: true, code: true } }) : []).map((row) => [row.id, row.code]))
@@ -273,10 +283,11 @@ export async function lotGarments(caller: CommandCaller, lotId: string) {
   const context = officeOf(caller)
   return caller.withClient(async (db) => {
     const lot = isUuid(lotId) ? await db.lot.findUnique({ where: { id: lotId }, select: { id: true, code: true, companyId: true, siteId: true, itemId: true } }) : null
-    if (!lot || !mayScan(context, WORKORDERS_VIEW, { companyId: lot.companyId, siteId: lot.siteId })) throw new NotFoundError('Lot not found.')
+    // A material lot names no customer: its site (B-PR-04a: each use below is walled by its work order's customer).
+    if (!lot || !maySite(context, WORKORDERS_VIEW, { companyId: lot.companyId, siteId: lot.siteId })) throw new NotFoundError('Lot not found.')
     const rows = await tracedOfLot(db, lot.id)
     const workOrderIds = [...new Set(rows.map((row) => row.recordId))]
-    const workOrders = new Map((workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true, companyId: true, siteId: true } }) : []).map((row) => [row.id, row]))
+    const workOrders = new Map((workOrderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: workOrderIds } }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true } }) : []).map((row) => [row.id, row]))
     const bundleIds = [...new Set(rows.map((row) => text(objectOf(row.after).bundleId)).filter((value): value is string => !!value && isUuid(value)))]
     const bundles = new Map((bundleIds.length > 0 ? await db.bundle.findMany({ where: { id: { in: bundleIds } }, select: { id: true, code: true } }) : []).map((row) => [row.id, row.code]))
     const operations = new Map((workOrderIds.length > 0 ? await db.workOrderOperation.findMany({ where: { workOrderId: { in: workOrderIds } }, select: { id: true, seq: true, name: true } }) : []).map((row) => [row.id, row]))

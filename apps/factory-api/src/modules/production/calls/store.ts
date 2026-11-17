@@ -51,7 +51,8 @@ export const CALL_COLUMNS = {
   type: { select: { id: true, companyId: true, code: true, kind: true, responderTeamId: true, offStandardCodeId: true, active: true } },
   station: { select: { id: true, companyId: true, code: true, name: true } },
   line: { select: { id: true, code: true, name: true } },
-  workOrder: { select: { id: true, number: true } },
+  // B-PR-04a: the work order's one customer, for the brand wall (access.ts mayCall); never in an answer.
+  workOrder: { select: { id: true, number: true, partyId: true } },
   bundle: { select: { id: true, code: true } },
 } as const satisfies Prisma.HelpCallSelect
 export type CallRow = Prisma.HelpCallGetPayload<{ select: typeof CALL_COLUMNS }>
@@ -182,13 +183,16 @@ async function responderCounts(db: Reader, types: readonly TypeRow[]): Promise<M
   return counts
 }
 
-/** The routing grid and "Who is called" (design production.settings "Help-call routing", production.calls "Who is called"). */
-export async function typeViews(db: Reader, types: readonly TypeRow[]) {
+/**
+ * The routing grid and "Who is called" (design production.settings "Help-call routing", production.calls "Who is called").
+ * B-PR-04a: `wall` (access.ts callWall) — the office's counts of a type's calls count only the calls the reader reaches.
+ */
+export async function typeViews(db: Reader, types: readonly TypeRow[], wall: Prisma.HelpCallWhereInput = {}) {
   const words = await codeWordsOf(db, types.map((type) => type.code))
   const members = await responderCounts(db, types)
   const ids = types.map((type) => type.id)
-  const used = ids.length === 0 ? [] : await db.helpCall.groupBy({ by: ['typeId'], where: { typeId: { in: ids } }, _count: { _all: true } })
-  const open = ids.length === 0 ? [] : await db.helpCall.groupBy({ by: ['typeId'], where: { typeId: { in: ids }, status: { in: ['SENT', 'SEEN', 'ON_THE_WAY'] } }, _count: { _all: true } })
+  const used = ids.length === 0 ? [] : await db.helpCall.groupBy({ by: ['typeId'], where: { AND: [{ typeId: { in: ids } }, wall] }, _count: { _all: true } })
+  const open = ids.length === 0 ? [] : await db.helpCall.groupBy({ by: ['typeId'], where: { AND: [{ typeId: { in: ids }, status: { in: ['SENT', 'SEEN', 'ON_THE_WAY'] } }, wall] }, _count: { _all: true } })
   const countOf = (rows: { typeId: string; _count: { _all: number } }[], id: string) => rows.find((row) => row.typeId === id)?._count._all ?? 0
   return types.map((type) => ({
     id: type.id,

@@ -24,6 +24,8 @@ export const BUNDLE_HEADER = {
   styleId: true,
   dueDate: true,
   priority: true,
+  // B-PR-04a: its one customer, for the brand wall (bundles.ts mayBundle).
+  partyId: true,
 } as const satisfies Prisma.WorkOrderSelect
 export type BundleHeader = Prisma.WorkOrderGetPayload<{ select: typeof BUNDLE_HEADER }>
 

@@ -105,6 +105,8 @@ export const bundleWorkOrdersContract = defineContract({
   querystring: input({
     /** A scanned or typed work order number (the traveller): that work order even when nothing waits. */
     number: z.string().trim().min(1).max(60).optional(),
+    /** B-PR-04a: one customer's (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     limit: z.coerce.number().int().min(1).max(50).default(30),
   }),
   response: {
@@ -353,13 +355,16 @@ export const listBundlesContract = defineContract({
     stuck: flag().optional(),
     /** A scanned or typed ticket or coupon code, or a work order number. */
     q: z.string().trim().min(1).max(60).optional(),
+    /** B-PR-04a: one customer's (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
   response: { 200: output({ bundles: z.array(trackedRow), nextCursor: id().nullable(), asOf: instant() }) },
 })
 
-const siteQuery = input({ siteId: id().optional() })
+// B-PR-04a: partyId = one customer's (inside the caller's reach: another customer's gives none).
+const siteQuery = input({ siteId: id().optional(), partyId: id().optional() })
 
 export const bundleTilesContract = defineContract({
   querystring: siteQuery,
@@ -529,7 +534,8 @@ const findingView = output({
 })
 
 export const findingsSummaryContract = defineContract({
-  querystring: input({ siteId: id().optional(), days: z.coerce.number().int().min(1).max(90).optional() }),
+  // B-PR-04a: partyId = one customer's (inside the caller's reach).
+  querystring: input({ siteId: id().optional(), days: z.coerce.number().int().min(1).max(90).optional(), partyId: id().optional() }),
   response: {
     200: output({
       legalNote: z.string(),
@@ -551,6 +557,8 @@ export const listFindingsContract = defineContract({
     status: z.enum(FINDING_STATUSES).optional(),
     lineId: id().optional(),
     operationCode: z.string().trim().min(1).max(60).optional(),
+    /** B-PR-04a: one customer's (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     cursor: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
