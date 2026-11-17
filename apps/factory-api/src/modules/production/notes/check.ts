@@ -3,6 +3,7 @@ import { ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { Actor } from '@nexus/factory-domain/core/permissions'
 import { NOTE_WORDS, uniqueRecords, type NoteRecordType } from '@nexus/factory-domain/production-brand/notes'
+import { ISSUE_WORDS } from '@nexus/factory-domain/production-brand/issues' // B-PR-43b
 import { effectiveSupervisor, supervisorMarkOf } from '@nexus/factory-domain/production-brand/supervisor'
 import { cleanBody, noteProblems, uniqueIds } from '@nexus/factory-domain/threads/rules'
 import type { CommandCaller } from '../../../core/command'
@@ -46,6 +47,8 @@ export interface NoteDraftInput {
   readonly mentions?: readonly string[] | undefined
   readonly askSupervisor?: boolean | undefined
   readonly namesNoOtherCustomer?: boolean | undefined
+  /** B-PR-43b: "Needs an answer". */
+  readonly needsAnswer?: boolean | undefined
 }
 
 /** A picked record the writer sees, as the check and the write read it. */
@@ -225,7 +228,9 @@ export async function checkNotes(caller: CommandCaller, draft: NoteDraftInput) {
         name: people.find((person) => person.id === userId)?.displayName ?? '',
         cannotRead: writable.filter((record) => !(plan.readers.get(userId)?.has(recordKey(record)) ?? false)).map((record) => ({ type: record.type, id: record.id, label: record.label })),
       })),
-      noSupervisor: draft.askSupervisor ? writable.filter((record) => record.supervisorId === null).map((record) => ({ type: record.type, id: record.id, label: record.label })) : [],
+      noSupervisor: draft.askSupervisor || draft.needsAnswer ? writable.filter((record) => record.supervisorId === null).map((record) => ({ type: record.type, id: record.id, label: record.label })) : [],
+      // ---- B-PR-43b: "Needs an answer" raises no issue on a work order of several customers or of none (its note is still written).
+      noIssue: draft.needsAnswer ? writable.filter((record) => record.partyId === null).map((record) => ({ type: record.type, id: record.id, label: record.label, why: ISSUE_WORDS.NO_CUSTOMER.en })) : [],
       namesOtherCustomer: namesOther.map((record) => ({ type: record.type, id: record.id, label: record.label, names: knownNames(plan.actor, record) })),
       held: namesOther.length > 0 && draft.namesNoOtherCustomer !== true,
     }

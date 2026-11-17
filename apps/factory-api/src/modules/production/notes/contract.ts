@@ -26,6 +26,11 @@ export const noteDraftShape = {
   askSupervisor: z.boolean().optional(),
   /** "This text names no other customer": the writer confirms the text, where the check found another customer's name (R-47). */
   namesNoOtherCustomer: z.boolean().optional(),
+  /**
+   * B-PR-43b "Needs an answer": an issue on each record written on (a work order of several customers or of none raises none) and
+   * ONE task per customer and supervisor, due at raise + 1 working day, 08:00 company time.
+   */
+  needsAnswer: z.boolean().optional(),
 }
 
 export const checkNotesContract = defineContract({
@@ -51,8 +56,10 @@ export const checkNotesContract = defineContract({
       customers: z.number().int(),
       /** Each person mentioned and the writable records they cannot read (not mentioned there; the note is still written). */
       people: z.array(output({ userId: id(), name: z.string(), cannotRead: z.array(recordView) })),
-      /** "Ask the supervisor": the writable records that have none. */
+      /** "Ask the supervisor" or "Needs an answer": the writable records that have none (their task goes to nobody yet). */
       noSupervisor: z.array(recordView),
+      // B-PR-43b: "Needs an answer": the writable records that raise no issue (a work order of several customers or of none).
+      noIssue: z.array(output({ type: z.enum(NOTE_RECORD_TYPES), id: id(), label: z.string(), why: z.string() })),
       /** The writable records whose text names another customer, with the names the writer may know. */
       namesOtherCustomer: z.array(output({ type: z.enum(NOTE_RECORD_TYPES), id: id(), label: z.string(), names: z.array(z.string()) })),
       /** Send is held: some text names another customer and the writer has not ticked "This text names no other customer". */
@@ -67,13 +74,21 @@ export const writeNotesContract = defineContract({
     200: output({
       /** The batch every note of this action carries (threads' bell folds it into one item per reader). */
       batchId: id(),
-      written: z.array(output({ type: z.enum(NOTE_RECORD_TYPES), id: id(), label: z.string(), messageId: id(), mentioned: z.array(id()), supervisorAsked: z.boolean() })),
+      written: z.array(output({ type: z.enum(NOTE_RECORD_TYPES), id: id(), label: z.string(), messageId: id(), mentioned: z.array(id()), supervisorAsked: z.boolean(), /* B-PR-43b */ issueId: id().nullable() })),
       /** Records the writer sees that were not written on, each with why. */
       skipped: z.array(output({ type: z.enum(NOTE_RECORD_TYPES), id: id(), label: z.string(), why: z.string() })),
       /** Each person left out of some notes (they cannot read those records). */
       notMentioned: z.array(output({ userId: id(), records: z.array(recordView) })),
       /** Records the writer does not see: counted, never named. */
       unknown: z.number().int(),
+      /**
+       * B-PR-43b "Needs an answer" (null: not asked): the tasks made (each on a sales order: one per customer and supervisor; not
+       * assigned: nobody may be given it there yet) and the records that raise no issue, with why.
+       */
+      issues: output({
+        tasks: z.array(output({ taskId: id(), type: z.string(), id: id(), label: z.string(), assigned: z.boolean(), records: z.number().int() })),
+        notRaised: z.array(output({ type: z.string(), id: id(), label: z.string(), why: z.string() })),
+      }).nullable(),
     }),
   },
 })

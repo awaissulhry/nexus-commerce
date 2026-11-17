@@ -8,6 +8,8 @@ import { serverClock } from '../../../core/time'
 import { mayOnThread, wallScopeOf } from '../../../platform/threads/records'
 import { ensureThread, mentionProblems, writeMessage } from '../../../platform/threads/threads'
 import { officeContextOf } from '../work-orders/access'
+// B-PR-43b: "Needs an answer" raises an issue per record and one task per batch and supervisor, in this same command.
+import { raiseIssuesInCommand, type Raised } from '../issues/raise'
 import { mentionsOn, planNotes, recordKey, type NoteDraftInput, type NotePlan, type SeenRecord } from './check'
 
 /**
@@ -16,7 +18,8 @@ import { mentionsOn, planNotes, recordKey, type NoteDraftInput, type NotePlan, t
  * threads.post on each record"; lead pick L23; review fixes R-47, R-48, R-58; threads agreements T5, T6; the Owner's point N4).
  *
  *   POST /production/notes {records [{type SalesOrder|WorkOrder, id}] 1-100, body, mentions ≤ 20, askSupervisor,
- *                           namesNoOtherCustomer}
+ *                           namesNoOtherCustomer, needsAnswer (B-PR-43b: ../issues/raise — an issue per record, one task per
+ *                           customer and supervisor, in this same command)}
  *
  * ONE command writes one internal office note on each picked record's OWN thread, the same text, through threads' seams only:
  * `ensureThread` (the thread made with the first note), `mayOnThread` (threads.post over the thread's own scope, a work order's
@@ -109,7 +112,7 @@ export async function writeNotesInCommand(tools: CommandTools, context: OfficeCo
 }
 
 /** The answer of a batch: one result per record the writer sees, the others counted. */
-export function notesAnswer(plan: NotePlan, batchId: string, done: { readonly written: readonly Written[]; readonly skipped: readonly ReturnType<typeof skippedOf>[] }, askSupervisor: boolean) {
+export function notesAnswer(plan: NotePlan, batchId: string, done: { readonly written: readonly Written[]; readonly skipped: readonly ReturnType<typeof skippedOf>[] }, askSupervisor: boolean, /* B-PR-43b */ raised: Raised | null = null) {
   const left = new Map<string, ReturnType<typeof ref>[]>()
   for (const entry of done.written) for (const userId of entry.left) left.set(userId, [...(left.get(userId) ?? []), ref(entry.record)])
   return {
@@ -119,10 +122,14 @@ export function notesAnswer(plan: NotePlan, batchId: string, done: { readonly wr
       messageId: entry.messageId,
       mentioned: [...entry.mentioned],
       supervisorAsked: askSupervisor && entry.record.supervisorId !== null && entry.mentioned.includes(entry.record.supervisorId),
+      // B-PR-43b: the issue "Needs an answer" raised on it (null: none asked, or a work order of no customer).
+      issueId: raised?.issues.get(recordKey(entry.record)) ?? null,
     })),
     skipped: [...plan.seen.filter((record) => !record.canPost).map((record) => skippedOf(record, 'CANNOT_POST')), ...done.skipped],
     notMentioned: [...left.entries()].map(([userId, records]) => ({ userId, records })),
     unknown: plan.unknown,
+    // ---- B-PR-43b: the tasks "Needs an answer" made (one per customer and supervisor) and the records that raise no issue.
+    issues: raised ? { tasks: raised.tasks.map((task) => ({ ...task })), notRaised: [...raised.notRaised] } : null,
   }
 }
 
@@ -136,16 +143,19 @@ export async function writeNotes(caller: CommandCaller, body: NoteDraftInput, id
   const held = heldForOtherCustomer(plan.seen.filter((record) => record.canPost), body.namesNoOtherCustomer === true)
   if (held.length > 0) throw namesOtherCustomerRefusal(held)
   const askSupervisor = body.askSupervisor === true
+  const needsAnswer = body.needsAnswer === true // B-PR-43b
   const { result } = await command(
     caller,
     {
       name: 'production.notes',
       idempotencyKey,
-      input: { records: plan.seen.map(recordKey), bodyText: plan.bodyText, mentions: plan.mentions, askSupervisor, namesNoOtherCustomer: body.namesNoOtherCustomer === true },
+      input: { records: plan.seen.map(recordKey), bodyText: plan.bodyText, mentions: plan.mentions, askSupervisor, namesNoOtherCustomer: body.namesNoOtherCustomer === true, needsAnswer },
     },
     async (tools) => {
       const batchId = newId()
       const done = await writeNotesInCommand(tools, context, plan, { askSupervisor, batchId })
+      // ---- B-PR-43b: "Needs an answer": an issue for each record written on, one task per customer and supervisor.
+      const raised = needsAnswer ? await raiseIssuesInCommand(tools, context, done.written.map((entry) => ({ record: entry.record, messageId: entry.messageId })), plan.bodyText) : null
       // R-48: one audit row per customer and company of the writable records, each naming only its own.
       for (const share of sharesOf(plan.seen.filter((record) => record.canPost))) {
         const mine = done.written.filter((entry) => share.records.includes(entry.record))
@@ -161,10 +171,11 @@ export async function writeNotes(caller: CommandCaller, body: NoteDraftInput, id
             mentioned: [...new Set(mine.flatMap((entry) => entry.mentioned))].length,
             askSupervisor,
             namesNoOtherCustomer: body.namesNoOtherCustomer === true,
+            needsAnswer, // B-PR-43b
           },
         })
       }
-      return notesAnswer(plan, batchId, done, askSupervisor)
+      return notesAnswer(plan, batchId, done, askSupervisor, raised)
     },
   )
   return result
