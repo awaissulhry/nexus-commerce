@@ -369,13 +369,13 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   const value = workOrder.status === 'ready' ? workOrder.value : null
   const orderFiles = useOrderFiles(api, value?.id ?? null)
   const choices = value ? threadChoices(value.orders, orderFiles.model.files) : []
-  const pick = pickOf(orderFiles.pick, choices)
-  const pickedOrder = choices.find((choice) => choice.orderId === pick) ?? null
+  const threadPick = pickOf(orderFiles.pick, choices) // not `pick`: that is the pick list's part
+  const pickedOrder = choices.find((choice) => choice.orderId === threadPick) ?? null
   const readsThreads = session.permissions.includes('threads.read')
   const own = value ? { type: 'WorkOrder', id: value.id, companyId: value.companyId, siteId: value.siteId } : null
   const thread =
     value && own && readsThreads ? (
-      <WorkOrderThreads choices={choices} pick={pick} onPick={orderFiles.setPick}>
+      <WorkOrderThreads choices={choices} pick={threadPick} onPick={orderFiles.setPick}>
         {pickedOrder ? (
           <OfficeRecordThread
             key={`order-${pickedOrder.orderId}`}

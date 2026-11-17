@@ -54,11 +54,13 @@ const betaThread = (over: Partial<ThreadViewModel> = {}): ThreadViewModel => ({
 
 const frame = (mode: 'docked' | 'stacked', over: { viewOpen?: boolean; newCount?: number; thread?: boolean } = {}, locale: 'it' | 'en' = 'en') =>
   render(
-    createElement(
-      PortalRecordFrame,
-      { thread: over.thread === false ? null : createElement(ThreadView, { model: betaThread() }), threadLabel: 'Messages about order #7', design: { mode, viewOpen: over.viewOpen, newCount: over.newCount } },
-      createElement('p', null, `Status of ${BRAND_BETA.customerRef}`),
-    ),
+    createElement(PortalRecordFrame, {
+      thread: over.thread === false ? null : createElement(ThreadView, { model: betaThread() }),
+      threadLabel: 'Messages about order #7',
+      design: { mode, viewOpen: over.viewOpen, newCount: over.newCount },
+      // `children` is a required prop of the frame: given in the props, not as createElement's third argument.
+      children: createElement('p', null, `Status of ${BRAND_BETA.customerRef}`),
+    }),
     locale,
   )
 

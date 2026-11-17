@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { at, canFor, COMPANY, inShell, ITEMS, LOCATIONS, named, NOW, PREFIX, SITE, TIME_ZONE, uid, WORK_ORDERS, type RoleCase } from '../../../_shared/stock/fixtures'
+import { at, canFor, inShell, ITEMS, LOCATIONS, named, NOW, PREFIX, SITE, TIME_ZONE, uid, WORK_ORDERS, type RoleCase } from '../../../_shared/stock/fixtures'
 import { CHECKLIST_DONE, CHECKLIST_OPEN, CHECKLIST_RELEASED, LOT_ROWS, lotMoves, lotRecordOf } from '../demo/fixtures'
 import { dailyFor, holdRow, HOLD_REASONS, writeOffDialog } from '../demo/daily/fixtures'
 import { LARGE_TRACE, LOT_TRACE, OPENING_TRACE, UNUSED_TRACE } from '../demo/trace/fixtures'

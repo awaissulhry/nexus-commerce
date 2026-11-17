@@ -82,7 +82,7 @@ export function acceptBodyOf(record: CatalogueRecord, draft: AcceptDraft, can: P
 /** The receipt: what was made and its number; the sizes the colourway no longer offers named by line; the API's copy warnings counted. */
 export function acceptDone(made: CatalogueAccepted['made'], number: string): { readonly phrase: Phrase; readonly lines: Phrase[] } {
   const phrase: Phrase = { key: made.as === 'ORDER' ? 'catalogue.done.order' : 'catalogue.done.quote', params: { made: made.number, number } }
-  const lines: Phrase[] = made.dropped.map((one) => (one.size ? { key: 'catalogue.done.droppedSize', params: { n: one.seq / 10, size: one.size } } : { key: 'catalogue.done.droppedLine', params: { n: one.seq / 10 } }))
+  const lines: Phrase[] = made.dropped.map((one): Phrase => (one.size ? { key: 'catalogue.done.droppedSize', params: { n: one.seq / 10, size: one.size } } : { key: 'catalogue.done.droppedLine', params: { n: one.seq / 10 } }))
   if (made.warnings.length > 0) lines.push({ key: 'catalogue.done.warnings', params: { count: made.warnings.length } })
   return { phrase, lines }
 }

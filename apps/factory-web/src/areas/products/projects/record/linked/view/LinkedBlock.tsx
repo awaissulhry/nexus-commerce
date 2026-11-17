@@ -41,7 +41,7 @@ function Block({ model, actions }: { model: LinkedBlockModel; actions?: LinkedBl
       ...(entry.href
         ? [
             { id: 'open', label: t('block.open'), href: entry.href },
-            { id: 'tab', label: t('block.openNewTab'), href: entry.href, target: '_blank' },
+            { id: 'tab', label: t('block.openNewTab'), href: entry.href, target: '_blank' as const },
           ]
         : []),
       ...(model.manage ? [{ id: 'unlink', label: t('block.unlink'), tone: 'danger' as const, disabled: held !== null || busy, ...(held ? { description: held } : {}), onSelect: () => actions?.onUnlink?.(entry) }] : []),
