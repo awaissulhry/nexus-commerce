@@ -148,6 +148,12 @@ async function signedIn(email: string): Promise<Browser> {
   return browser
 }
 
+// fix-pr-2: a refusal's words without its own request id (every answer carries a fresh requestId): "the same words".
+const refusalOf = (body: Json): Json => {
+  const { requestId: _requestId, ...error } = (body.error ?? {}) as Json
+  return error
+}
+
 async function get(who: keyof typeof people, url: string, status = 200): Promise<Json> {
   const answer = await browsers[who].get(url)
   if (who !== 'alpha') seenByB.push({ url, body: answer.response.headers['content-type']?.toString().includes('json') ? answer.body : answer.response.body })
@@ -456,7 +462,7 @@ describe('B-PR-19 Quality & photos (GET /portal/production/:orderId/quality) —
     seenByB.push({ url: 'A order quality', body: foreign.body })
     const unknown = await browsers.beta.get(quality(newId()))
     expect([foreign.status, unknown.status]).toEqual([404, 404])
-    expect(foreign.body).toEqual(unknown.body)
+    expect(refusalOf(foreign.body)).toEqual(refusalOf(unknown.body))
     await get('betaDesigner', quality(w.b.salesOrderId), 403)
     await get('betaDesigner', reportOf(w.b.salesOrderId, inspections.beta), 403)
   })
@@ -509,11 +515,11 @@ describe('B-PR-19 the inspection report PDF (GET /portal/production/:orderId/qua
       expect(answer.body.error.message).toBe(REPORT_NOT_FOUND)
       bodies.push(answer.body)
     }
-    expect(new Set(bodies.map((body) => JSON.stringify(body))).size).toBe(1)
+    expect(new Set(bodies.map((body) => JSON.stringify(refusalOf(body as Json)))).size).toBe(1)
     const foreign = await browsers.beta.get(reportOf(w.a.salesOrderId, inspections.alpha))
     seenByB.push({ url: 'report under A order', body: foreign.body })
     expect(foreign.status).toBe(404)
-    expect(foreign.body).toEqual((await browsers.beta.get(quality(newId()))).body)
+    expect(refusalOf(foreign.body)).toEqual(refusalOf((await browsers.beta.get(quality(newId()))).body))
   })
 
   it('a decided inspection of its own with no report kept yet: 404 in its own words', async () => {
