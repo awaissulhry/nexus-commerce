@@ -120,27 +120,27 @@ const TEMPLATE_WORDS: Readonly<Record<DocumentLanguage, Readonly<Record<AnswerTe
     REPAIR: {
       name: 'Riparazione',
       body: (f, day, ref) =>
-        `Gentile ${f.customer},\n\nla ringraziamo per la segnalazione del ${day}${ref}. Abbiamo esaminato il caso${f.garment ? ` (${f.garment})` : ''} e ripareremo il capo a nostre spese. Le invieremo il capo riparato appena il lavoro sarà concluso.\n\nRestiamo a disposizione per qualsiasi chiarimento.`,
+        `Gentile ${f.customer},\n\nvi ringraziamo per la segnalazione del ${day}${ref}. Abbiamo esaminato il caso${f.garment ? ` (${f.garment})` : ''} e ripareremo il capo a nostre spese. Vi invieremo il capo riparato appena il lavoro sarà concluso.\n\nRestiamo a disposizione per qualsiasi chiarimento.`,
     },
     REPLACEMENT: {
       name: 'Sostituzione',
       body: (f, day, ref) =>
-        `Gentile ${f.customer},\n\nla ringraziamo per la segnalazione del ${day}${ref}. Abbiamo esaminato il caso${f.garment ? ` (${f.garment})` : ''} e sostituiremo il capo. Le confermeremo la spedizione del nuovo capo.\n\nRestiamo a disposizione per qualsiasi chiarimento.`,
+        `Gentile ${f.customer},\n\nvi ringraziamo per la segnalazione del ${day}${ref}. Abbiamo esaminato il caso${f.garment ? ` (${f.garment})` : ''} e sostituiremo il capo. Vi confermeremo la spedizione del nuovo capo.\n\nRestiamo a disposizione per qualsiasi chiarimento.`,
     },
     CREDIT: {
       name: 'Nota di credito',
       body: (f, day, ref) =>
-        `Gentile ${f.customer},\n\nla ringraziamo per la segnalazione del ${day}${ref}. Abbiamo esaminato il caso${f.garment ? ` (${f.garment})` : ''} e riconosciamo il reclamo: emetteremo una nota di credito.\n\nRestiamo a disposizione per qualsiasi chiarimento.`,
+        `Gentile ${f.customer},\n\nvi ringraziamo per la segnalazione del ${day}${ref}. Abbiamo esaminato il caso${f.garment ? ` (${f.garment})` : ''} e riconosciamo il reclamo: emetteremo una nota di credito.\n\nRestiamo a disposizione per qualsiasi chiarimento.`,
     },
     NOT_ACCEPTED: {
       name: 'Reclamo non accolto',
       body: (f, day, ref) =>
-        `Gentile ${f.customer},\n\nla ringraziamo per la segnalazione del ${day}${ref}. Abbiamo esaminato con attenzione il caso${f.garment ? ` (${f.garment})` : ''}: il capo risulta conforme alle specifiche e il difetto segnalato non dipende dalla produzione. Per questo motivo non possiamo accogliere il reclamo.\n\nRestiamo a disposizione per qualsiasi chiarimento.`,
+        `Gentile ${f.customer},\n\nvi ringraziamo per la segnalazione del ${day}${ref}. Abbiamo esaminato con attenzione il caso${f.garment ? ` (${f.garment})` : ''}: il capo risulta conforme alle specifiche e il difetto segnalato non dipende dalla produzione. Per questo motivo non possiamo accogliere il reclamo.\n\nRestiamo a disposizione per qualsiasi chiarimento.`,
     },
     UPDATE: {
       name: 'Aggiornamento',
       body: (f, day, ref) =>
-        `Gentile ${f.customer},\n\nla ringraziamo per la segnalazione del ${day}${ref}. Stiamo ancora analizzando il caso${f.garment ? ` (${f.garment})` : ''} e le daremo una risposta definitiva appena l'analisi sarà conclusa.\n\nRestiamo a disposizione per qualsiasi chiarimento.`,
+        `Gentile ${f.customer},\n\nvi ringraziamo per la segnalazione del ${day}${ref}. Stiamo ancora analizzando il caso${f.garment ? ` (${f.garment})` : ''} e vi daremo una risposta definitiva appena l'analisi sarà conclusa.\n\nRestiamo a disposizione per qualsiasi chiarimento.`,
     },
     FREE: { name: 'Testo libero', body: (f) => `Gentile ${f.customer},\n\n` },
   },

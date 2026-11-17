@@ -13,7 +13,7 @@ import '../production-supervisor.css'
  * customer order. Only to the supervisor himself, when he muted the order's thread: "You muted this order" (a muted follow stays
  * muted). Change… opens THE assign dialog; held in words without production.brand.manage (`can`).
  */
-export function SupervisorFact(props: { fact: Fact; can: boolean; onChange?: () => void }) {
+export function SupervisorFact(props: { fact: Fact; can: boolean; onChange?: () => void; /** F-PR-22: "Ask" — the page's note dialog (its words and hold). */ ask?: AskProps }) {
   if (props.fact.kind === 'none') return null
   return (
     <WithMessages namespaces={[SUPERVISOR_NS]}>
@@ -22,7 +22,16 @@ export function SupervisorFact(props: { fact: Fact; can: boolean; onChange?: () 
   )
 }
 
-function FactLine({ fact, can, onChange }: { fact: Fact; can: boolean; onChange?: () => void }) {
+// ---- F-PR-22: the fact's "Ask" (17-web-r2 §1.1 "Supervisor Bea Esempio · this order [Change…] [Ask]"): the caller's note dialog. ----
+interface AskProps {
+  readonly label: string
+  /** Why it waits (no threads.post), in words; null: it may. */
+  readonly held: string | null
+  readonly onAsk: () => void
+}
+// ---- end F-PR-22
+
+function FactLine({ fact, can, onChange, ask }: { fact: Fact; can: boolean; onChange?: () => void; ask?: AskProps }) {
   const t = useT(SUPERVISOR_NS)
   const held = can ? null : t('held.noRight')
   if (fact.kind === 'none') return null
@@ -45,6 +54,12 @@ function FactLine({ fact, can, onChange }: { fact: Fact; can: boolean; onChange?
       <Button size="sm" variant="quiet" heldReason={held} onClick={() => onChange?.()} aria-haspopup="dialog">
         {t('fact.change')}
       </Button>
+      {/* F-PR-22 */}
+      {ask && (
+        <Button size="sm" variant="quiet" heldReason={ask.held} onClick={ask.onAsk} aria-haspopup="dialog">
+          {ask.label}
+        </Button>
+      )}
     </span>
   )
 }

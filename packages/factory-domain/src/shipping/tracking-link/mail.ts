@@ -26,20 +26,20 @@ const day = (instant: Date, locale: Locale): string => new Intl.DateTimeFormat(l
 
 const TEXT = {
   it: {
-    subject: (order: string, company: string) => `Il suo ordine ${order} — ${company}`,
+    subject: (order: string, company: string) => `Il vostro ordine ${order} — ${company}`,
     hello: 'Buongiorno,',
     where: (status: ShipmentStatus, order: string, shipment: string) =>
       status === 'PACKED'
-        ? `il suo ordine ${order} è imballato e attende il corriere (spedizione ${shipment}).`
+        ? `il vostro ordine ${order} è imballato e attende il corriere (spedizione ${shipment}).`
         : status === 'DELIVERED'
-          ? `il suo ordine ${order} è stato consegnato (spedizione ${shipment}).`
-          : `il suo ordine ${order} è in viaggio (spedizione ${shipment}).`,
-    renewal: (order: string, shipment: string) => `come richiesto, ecco un nuovo link per seguire il suo ordine ${order} (spedizione ${shipment}).`,
+          ? `il vostro ordine ${order} è stato consegnato (spedizione ${shipment}).`
+          : `il vostro ordine ${order} è in viaggio (spedizione ${shipment}).`,
+    renewal: (order: string, shipment: string) => `come richiesto, ecco un nuovo link per seguire il vostro ordine ${order} (spedizione ${shipment}).`,
     carrier: (name: string) => `Corriere: ${name}.`,
     eta: (when: string) => `Consegna prevista: ${when}.`,
-    follow: 'Lo segua da questa pagina, nella sua lingua: dove si trova, le notizie del corriere e i documenti della spedizione.',
+    follow: 'Seguitelo da questa pagina, nella vostra lingua: dove si trova, le notizie del corriere e i documenti della spedizione.',
     kept: 'Link personale inviato solo per e-mail.',
-    ends: 'La pagina resta aperta fino a 60 giorni dopo la consegna. Se qualcosa non va, dalla stessa pagina può segnalarcelo.',
+    ends: 'La pagina resta aperta fino a 60 giorni dopo la consegna. Se qualcosa non va, dalla stessa pagina potete segnalarcelo.',
   },
   en: {
     subject: (order: string, company: string) => `Your order ${order} — ${company}`,

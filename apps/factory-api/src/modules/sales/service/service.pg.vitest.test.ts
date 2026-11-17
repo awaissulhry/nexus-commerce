@@ -168,7 +168,7 @@ describe('a warranty case for a consumer: the legal guarantee against the factor
     expect(sent.to).toEqual(['rider.p4@example.com'])
     const text = textOf(sent.raw)
     expect(text).toContain('Gentile Seed Private Rider,')
-    expect(text).toContain(`la sua pratica di assistenza ${consumerCase.number} è in lavorazione.`)
+    expect(text).toContain(`la vostra pratica di assistenza ${consumerCase.number} è in lavorazione.`)
     expect(text).toContain('We will call you tomorrow about the zip.')
     expect(text).not.toContain('collar zip came off')
     const record = (await ok(browsers.desk, `/sales/service/cases/${consumerCase.id}`)).case

@@ -362,5 +362,23 @@
     "tile": "Mine",
     "assign": "Assign supervisor…",
     "cardMe": "Supervisor: me"
+  },
+  "urgency": {
+    "column": "Customer urgency",
+    "filter": "Customer urgency",
+    "choice": {
+      "URGENT": "Urgent",
+      "ASKED": "Urgent – asked",
+      "REGULAR": "Regular",
+      "SET_BACK": "Set to regular by us"
+    },
+    "cell": {
+      "URGENT": "Urgent {rank}",
+      "URGENT_SOME": "Urgent",
+      "ASKED": "Urgent – asked",
+      "REGULAR": "Regular",
+      "SET_BACK": "Set to regular by us"
+    },
+    "hint": "The customer's own mark: Urgent with its place in the customer's own urgent list (never a place in our plan). Our priority and rush stay ours."
   }
 }

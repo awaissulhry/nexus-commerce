@@ -163,7 +163,7 @@ describe('refusals, cancel, the list', () => {
 
   it('exports a view as CSV with the header in the person’s language and no price', () => {
     const csv = noticesCsv(ROWS.slice(1, 2), t('it'))
-    expect(csv.split('\r\n')[0]).toBe('Avviso di spedizione,Ordine,Il tuo riferimento,Parte il,Arriva il,Vettore,Numero di tracking,Il tuo DDT,Righe,Pelli,Stato')
+    expect(csv.split('\r\n')[0]).toBe('Avviso di spedizione,Ordine,Il vostro riferimento,Parte il,Arriva il,Vettore,Numero di tracking,Il vostro DDT,Righe,Pelli,Stato')
     expect(csv).toContain('ASN-2026-0014,PO-2026-0101')
     expect(csv).toContain('In viaggio')
     expect(csv).not.toMatch(/€|price|prezzo/i)

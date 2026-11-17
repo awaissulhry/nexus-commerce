@@ -48,7 +48,7 @@ const system = () => callerFor(h.database, systemContext(tenant.id, `test-${newI
 const admin = async (sql: string, values: unknown[] = []): Promise<Json[]> => (await h.db.admin.query(sql, values)).rows as Json[]
 
 beforeAll(async () => {
-  h = await startHarness('templates_reply_languages')
+  h = await startHarness('tpl_reply_languages')
   tenant = await addTenant(h, 'tpl-lang')
   companyId = tenant.companies[0]!.id
   await admin(`UPDATE "Company" SET "tradeName" = 'Esempio Moto', locale = 'it' WHERE id = $1`, [companyId])
@@ -170,7 +170,7 @@ describe('B-TH-279 / B-TH-098: the request mails and the new-message notice as e
   it('the receipt names the customer’s own number of the request, never the office’s series; the new-message notice is Nexus’s own', async () => {
     const receipt = await owner.post('/templates/mail/events/request.received/fill', { recordType: 'Inquiry', recordId: germanRequest, language: 'it' })
     expect(receipt.status, JSON.stringify(receipt.body)).toBe(200)
-    expect(receipt.body.subject).toBe('Abbiamo ricevuto la sua richiesta 7')
+    expect(receipt.body.subject).toBe('Abbiamo ricevuto la vostra richiesta 7')
     expect(JSON.stringify(receipt.body)).not.toContain('INQ-2026-0042')
     const notice = await owner.post('/templates/mail/events/thread.message_posted/fill', { recordType: 'Inquiry', recordId: germanRequest })
     expect(notice.status).toBe(409)

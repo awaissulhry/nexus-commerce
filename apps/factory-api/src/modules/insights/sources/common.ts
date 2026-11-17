@@ -13,6 +13,11 @@ import type { CommandCaller } from '../../../core/command'
 export interface SourceInput {
   readonly caller: CommandCaller
   readonly viewer: Viewer
+  /**
+   * B-PR-33: read every row, not only the first SOURCE_LIMIT (a source that honours it says `complete: true`). Production ›
+   * Overview counts its Customer requests tile in full from the very rows Home › Approvals shows; Today never sets it.
+   */
+  readonly all?: boolean | undefined
 }
 
 export interface SourceAnswer {

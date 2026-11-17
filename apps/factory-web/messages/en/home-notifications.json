@@ -211,6 +211,7 @@
   "w": {
     "notifications": {
       "mentioned": "{actor} mentioned you on {record}",
+      "mentionedOn": "{actor} mentioned you on {records} orders",
       "following": {
         "note": "{actor} wrote a note on {record}, which you follow",
         "mail_in": "A reply arrived on {record}, which you follow",

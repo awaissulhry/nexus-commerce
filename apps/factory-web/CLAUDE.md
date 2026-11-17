@@ -193,7 +193,20 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   hidden: no section) — waiting for you on this order, the hold banner (lib/production), the plain stage as the "In production"
   step's note, health and waiting on (StatusTab's F-PR-12a block). F-PR-12b: + Gates & dates (real gates, swatch answers as
   approvals, the published plan's days) and + Progress (lib PiecesGrid per line and size, read again every `refreshSeconds`) from
-  the same read; today's progress card only where that read does not draw (`productionOwnsProgress`).
+  the same read; today's progress card only where that read does not draw (`productionOwnsProgress`). F-PR-12c: + Quality & photos
+  (`view/QualityCard.tsx`) from `GET /portal/production/:orderId/quality`, asked only at the level QUALITY (`qualityShared`) and again
+  with every production read: released / taken back per line and size, checks, final inspections (report PDF from
+  `…/quality/report/:inspectionId` in the order's PDF viewer, saved under our own name), holds, shared photos (`GET /files/:id/preview`,
+  one at a time in `QualityPhotoDialog`). Never the inspection's number, a work order or a person of ours.
+  F-PR-13: the order's Ask dialog (`orders/ask-model.ts` pure, `view/AskDialog.tsx`, `view/AskImpact.tsx`; band "Ask us…", `?ask=<KIND>`
+  opens it at a kind): change, cancel and the production asks the customer's limits open (B-PR-25 rules `asks`); a waiting one is
+  withdrawn there, a countered one answered in Waiting for you; step 3 = `POST …/change-requests/impact` (also in the change and
+  cancel pop-ups' review steps): frozen in the API's words, cost (an amount only with prices), earliest date, our notes.
+- F-PR-14 `src/portal/customer/waiting/` — Home › Waiting for you (`/p/<party>/waiting`, catalogue `portal-waiting`, nav page
+  `home.waiting` built): `api.ts` (GET /portal/approvals?state=OPEN with `waitingFor` / `waitingForBuyer`; the answer and the
+  payments re-exported from home/ and documents/), `model.ts` (pure: groups by kind, one verb per row, the 10 s Undo window),
+  `WaitingPage.tsx` (container: Home's ApproveDialog, an answer sent after `UNDO_MS`, sent at once when the page is left),
+  `view/WaitingView.tsx` (DS ActionList). F-PR-12a/b's "See what waits for you" leads here (`waitingHrefOf`).
 - `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
   SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
   &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every
@@ -541,6 +554,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   band's `SupervisorFact` (by name inside one record; "You muted this order" for the supervisor himself). Mounted by the work order band
   (Change…) and Work orders ("Assign supervisor…", ≤ 100 orders; the Supervisor column Me / Someone else / Not set; Mine = `?supervisor=me`);
   the Customer card and the limits card mount the same dialog.
+- F-PR-18 customer urgency in the office: Work orders' Customer urgency column (Columns ▾; `list/model.ts customerUrgencyCellOf`: Urgent n ·
+  Urgent – asked · Regular · Set to regular by us, factory-domain `production-brand/urgency-state`) and filter (`?customerUrgency=`, the
+  API's computed term); the planning board's chip (`mark.customerUrgency`) and `?sort=urgency` (`model.ts urgencyFirst`: each customer's
+  urgent work orders take its own places inside our rush + priority level; a view only, nothing moves).
+- F-PR-22 `src/areas/production/_shared/notes/` (catalogue `production-notes`, CSS `fw-pnt-`) — THE note dialog of Ask the supervisor
+  (band ⋯ and the supervisor fact's Ask) and Note to N (Work orders: row ⋯, "Note to N…" ≤ 100): the threads MentionInput (people read
+  once per customer + company), `POST /production/notes/check` before Send (who cannot read, customers, the other-customer hold until
+  the tick), ONE `POST /production/notes`, one result per record (the rest counted); the bell's batch row "mentioned you on N orders".
 - The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
   problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
   What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per

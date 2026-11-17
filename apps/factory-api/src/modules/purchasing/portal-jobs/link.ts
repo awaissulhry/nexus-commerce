@@ -57,11 +57,11 @@ function jobMail(locale: Locale, input: { readonly companyName: string; readonly
       body: [
         `Buongiorno,`,
         ``,
-        `${input.companyName} ti propone la lavorazione ${input.number}: ${input.operations}, ${input.pieces} pezzi${due ? `, da rendere entro il ${due}` : ''}.`,
-        `Apri il link per vedere taglie, kit e date, e accetta, proponi un'altra data o rifiuta:`,
+        `${input.companyName} vi propone la lavorazione ${input.number}: ${input.operations}, ${input.pieces} pezzi${due ? `, da rendere entro il ${due}` : ''}.`,
+        `Aprite il link per vedere taglie, kit e date, e accettate, proponete un'altra data o rifiutate:`,
         url,
         ``,
-        `Il link vale fino al ${until} ed è solo per te: non inoltrarlo.`,
+        `Il link vale fino al ${until} ed è solo per voi: non inoltratelo.`,
       ].join('\n'),
     }
   }

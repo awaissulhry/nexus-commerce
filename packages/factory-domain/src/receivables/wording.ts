@@ -92,7 +92,7 @@ export function reminderText(template: string | null, facts: WordingFacts): Remi
 
   const opening = it
     ? key === 'BEFORE_DUE'
-      ? 'le ricordiamo che le seguenti fatture sono in scadenza:'
+      ? 'vi ricordiamo che le seguenti fatture sono in scadenza:'
       : key === 'LATE_7'
         ? 'dai nostri registri risultano scadute e non ancora pagate le seguenti fatture:'
         : 'nonostante il nostro precedente sollecito, risultano ancora non pagate le seguenti fatture:'
@@ -118,10 +118,10 @@ export function reminderText(template: string | null, facts: WordingFacts): Remi
 
   const request = it
     ? key === 'BEFORE_DUE'
-      ? 'Se il pagamento è già stato disposto, non tenga conto di questo messaggio.'
+      ? 'Se il pagamento è già stato disposto, non tenete conto di questo messaggio.'
       : key === 'LATE_7'
-        ? 'La preghiamo di provvedere al pagamento. Se lo ha già effettuato, non tenga conto di questo messaggio e ci invii, se possibile, la contabile del bonifico.'
-        : 'La preghiamo di provvedere al pagamento al più presto e di contattarci per qualsiasi chiarimento. Se lo ha già effettuato, ci invii la contabile del bonifico.'
+        ? 'Vi preghiamo di provvedere al pagamento. Se lo avete già effettuato, non tenete conto di questo messaggio e inviateci, se possibile, la contabile del bonifico.'
+        : 'Vi preghiamo di provvedere al pagamento al più presto e di contattarci per qualsiasi chiarimento. Se lo avete già effettuato, inviateci la contabile del bonifico.'
     : key === 'BEFORE_DUE'
       ? 'If the payment is already on its way, please disregard this message.'
       : key === 'LATE_7'

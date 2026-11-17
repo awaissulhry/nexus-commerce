@@ -43,6 +43,7 @@ import {
   type Sharing,
 } from '../rules'
 import type { FilesRuntime } from '../service'
+import { walledForOutside } from '../content-wall' // fix-wall-1
 import { seriesOf, supersedeEarlierVersions } from './supersede'
 
 /**
@@ -247,8 +248,10 @@ export async function listVersions(caller: CommandCaller, fileId: string): Promi
   }
   const rows = (await caller.withClient((client) => client.storedFile.findMany({ where, select, orderBy: { versionNo: 'asc' }, take: 500 }))) as Row[]
   const viewer = viewerOf(context)
+  // fix-wall-1: outside the office a version whose content is another customer's (an old copy) is left out, uncounted.
+  const walled = outside ? await walledForOutside(caller, rows.map((row) => row.id)) : new Set<string>()
   return rows
-    .filter((row) => audienceSees(viewer, row) && can(actorOf(context), FILES_READ, scopeOf(context, row)))
+    .filter((row) => !walled.has(row.id) && audienceSees(viewer, row) && can(actorOf(context), FILES_READ, scopeOf(context, row)))
     .map((row) => ({ ...viewOf(row), current: row.status === 'AVAILABLE' && (row.supersededAt ?? null) === null }))
 }
 

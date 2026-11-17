@@ -200,6 +200,9 @@ describe('B-TH-064 golden flow TH-4: the customer sheet — a column for one cus
   it('S01 Brand Alpha (P1) and Brand Beta (P3) with their portals, each with its buyer', async () => {
     alpha = await setUpBrand(w, P.sales, BRAND_ALPHA, P1(), companyA(), BUYER)
     beta = await setUpBrand(w, P.sales, BRAND_BETA, P3(), companyA(), BUYER)
+    // END CHECK (fix wave 3c): P3 is a prospect in the seed; a column of its own is made for an active customer (B-TH-056).
+    const prospect = (await ok(P.owner, 'GET', `/parties/${P3()}`)).party
+    if (prospect.status !== 'ACTIVE') expect((await ok(P.owner, 'POST', `/parties/${P3()}/activate`, { version: prospect.version })).party.status).toBe('ACTIVE')
     await settle()
     clockWithinDatabase()
   }, 900_000)

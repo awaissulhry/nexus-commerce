@@ -26,6 +26,7 @@ import { PiecesGrid } from '../../../../lib/production/view/PiecesGrid'
 import type { ProductionGates } from '../../production/api'
 import { APPROVAL_STATE_TONE, GATE_STATE_TONE, gatesEmpty, gatesWaitOnYou, piecesOf, productionOwnsProgress } from '../../production/model'
 // ---- end F-PR-12b
+import { ProductionQualityCard } from './QualityCard' // F-PR-12c: + Quality & photos
 
 /**
  * Order › Status & progress (design rec "Order" tab status): "Please re-confirm" when a revised version waits (SAL-222), where
@@ -45,6 +46,10 @@ import { APPROVAL_STATE_TONE, GATE_STATE_TONE, gatesEmpty, gatesWaitOnYou, piece
  * its own work from our PUBLISHED plan only; + Progress — the pieces per line and size of its own cells (the shared PiecesGrid:
  * "Cut and bundled", "—" where a stage is not counted, never 0), read again every `refreshSeconds` and said as such. While the
  * order's production read draws them, today's progress card (C1) is not drawn a second time.
+ *
+ * F-PR-12c, part 3, at the level Quality & photos only: the quality of its own goods (QualityCard.tsx) — pieces released by quality
+ * and taken back per line and size, first-piece / cutting / end-of-line checks and final inspections with their sampling, defects
+ * and the factory's report PDF (only of work orders made for it alone), what held its goods, and the photos shared on its order.
  */
 export function StatusTab({ model, record, actions }: { model: OrderRecordViewModel; record: OrderRecord; actions?: OrderRecordActions }) {
   const production = model.production?.state === 'ready' ? model.production.read : null // F-PR-12a
@@ -61,6 +66,10 @@ export function StatusTab({ model, record, actions }: { model: OrderRecordViewMo
       {/* F-PR-12b: gates & dates, then the pieces, each only at the level that shares it (null: not drawn). */}
       {production?.gates ? <ProductionGatesCard gates={production.gates} href={model.waitingHref ?? null} /> : null}
       {production?.progress ? <ProductionProgress progress={production.progress} offline={model.offlineSince !== null} /> : null}
+      {/* F-PR-12c: + Quality & photos, only at the level that shares it (hidden or absent: not drawn). */}
+      {production && model.quality && model.quality.state !== 'hidden' ? (
+        <ProductionQualityCard quality={{ state: model.quality.state, read: model.quality.read }} refreshSeconds={production.progress?.refreshSeconds ?? null} offline={model.offlineSince !== null} fileHeld={model.fileHeld} actions={actions} />
+      ) : null}
       {!productionOwnsProgress(model.production) && record.progressShared && model.progress.state !== 'hidden' ? <Progress model={model} actions={actions} /> : null}
       {record.deposits.length > 0 && record.seesPrices ? <Deposits model={model} deposits={record.deposits} depositRequired={record.order.depositRequired} actions={actions} /> : null}
       <Facts record={record} />

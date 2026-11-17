@@ -7,7 +7,7 @@
     "buyer": "il buyer"
   },
   "ref": {
-    "yours": "Tuo rif.",
+    "yours": "Vostro rif.",
     "ours": "Nostro ordine"
   },
   "band": {
@@ -46,7 +46,7 @@
     "delivery": "Consegna",
     "actions": "Azioni",
     "ourPo": "Nostro ordine",
-    "yourRef": "Tuo n. di conferma",
+    "yourRef": "Vostro n. di conferma",
     "line": "Riga",
     "what": "Cosa abbiamo ordinato",
     "quantity": "Quantità",
@@ -56,29 +56,29 @@
   },
   "list": {
     "title": "Ordini d'acquisto",
-    "label": "I tuoi ordini d'acquisto",
+    "label": "I vostri ordini d'acquisto",
     "fileName": "ordini-acquisto",
     "count_one": "{count} ordine",
     "count_other": "{count} ordini",
     "search": "Cerca negli ordini",
-    "searchHint": "Nostro ordine, tuo n. di conferma o tuo codice articolo",
+    "searchHint": "Nostro ordine, vostro n. di conferma o vostro codice articolo",
     "version": "Versione {version}",
     "lines_one": "{count} riga",
     "lines_other": "{count} righe",
-    "answerBy": "Rispondi entro {date}",
-    "failed": "Non siamo riusciti a leggere i tuoi ordini.",
-    "failedBody": "Non si è perso nulla: riprova tra un momento.",
+    "answerBy": "Rispondete entro {date}",
+    "failed": "Non siamo riusciti a leggere i vostri ordini.",
+    "failedBody": "Non si è perso nulla: riprovate tra un momento.",
     "none": "Nessun ordine qui",
     "noMatch": "Nessun ordine corrisponde a “{q}”.",
     "clear": "Cancella la ricerca",
     "showAll": "Mostra tutti gli ordini",
     "empty": "Ancora nessun ordine d'acquisto.",
-    "emptyBody": "Quando ti mandiamo un ordine lo trovi qui e ti scriviamo una e-mail.",
-    "capped": "Sono elencati solo i tuoi ultimi 500 ordini: cerca per trovarne uno più vecchio.",
+    "emptyBody": "Quando vi mandiamo un ordine lo trovate qui e vi scriviamo una e-mail.",
+    "capped": "Sono elencati solo i vostri ultimi 500 ordini: cercate per trovarne uno più vecchio.",
     "noneIn": {
-      "TO_CONFIRM": "Nessun ordine aspetta la tua conferma.",
+      "TO_CONFIRM": "Nessun ordine aspetta la vostra conferma.",
       "CONFIRMED": "Nessun ordine è confermato e aperto.",
-      "CHANGE_PROPOSED": "Nessun ordine aspetta la nostra risposta alle tue modifiche.",
+      "CHANGE_PROPOSED": "Nessun ordine aspetta la nostra risposta alle vostre modifiche.",
       "PARTLY_DELIVERED": "Nessun ordine è consegnato in parte.",
       "DELIVERED": "Nessun ordine è consegnato.",
       "CLOSED": "Nessun ordine è chiuso.",
@@ -106,37 +106,37 @@
   },
   "held": {
     "preview": "Un'anteprima dell'ufficio legge soltanto.",
-    "offline": "Nessuna connessione: riprova quando torni in linea.",
-    "mayAnswer": "Possono rispondere a un ordine solo i colleghi abilitati ad approvare: chiedi al tuo amministratore.",
+    "offline": "Nessuna connessione: riprovate quando tornate in linea.",
+    "mayAnswer": "Possono rispondere a un ordine solo i colleghi abilitati ad approvare: chiedete al vostro amministratore.",
     "busy": "Invio in corso…",
-    "noneToConfirm": "Nessuno degli ordini scelti aspetta la tua conferma.",
+    "noneToConfirm": "Nessuno degli ordini scelti aspetta la vostra conferma.",
     "answered": "Questo ordine ora non aspetta risposte.",
-    "incomplete": "La risposta a una riga non è completa: aprila e salvala di nuovo.",
-    "ref": "Il tuo numero ha al massimo 60 caratteri.",
+    "incomplete": "La risposta a una riga non è completa: apritela e salvatela di nuovo.",
+    "ref": "Il vostro numero ha al massimo 60 caratteri.",
     "note": "La nota ha al massimo 1000 caratteri.",
     "noRows": "Nessun ordine in questa vista.",
     "reading": "Lettura dell'ordine…"
   },
   "confirmAll": {
-    "title": "Confermi {number} come richiesto?",
-    "titleMany_one": "Confermi {count} ordine come richiesto?",
-    "titleMany_other": "Confermi {count} ordini come richiesto?",
+    "title": "Confermate {number} come richiesto?",
+    "titleMany_one": "Confermate {count} ordine come richiesto?",
+    "titleMany_other": "Confermate {count} ordini come richiesto?",
     "body": "Ogni riga con la sua data e quantità, come le abbiamo chieste:",
     "bodyMany": "Ogni riga aperta di ciascun ordine, con data e quantità, come le abbiamo chieste:",
-    "lines": "Le righe che confermi",
-    "orders": "Gli ordini che confermi",
-    "who": "Confermi come {name}.",
+    "lines": "Le righe che confermate",
+    "orders": "Gli ordini che confermate",
+    "who": "Confermate come {name}.",
     "cancel": "Annulla",
     "close": "Chiudi",
     "go_one": "Conferma {count} riga",
     "go_other": "Conferma {count} righe",
     "goMany_one": "Conferma {count} ordine",
     "goMany_other": "Conferma {count} ordini",
-    "result": "Confermati: {confirmed}. Non confermati: {refused} (apri ciascuno per vedere perché)."
+    "result": "Confermati: {confirmed}. Non confermati: {refused} (aprite ciascuno per vedere perché)."
   },
   "decline": {
     "title": "Rifiuta {number}",
-    "body": "Il buyer vede subito la tua risposta. Se puoi consegnare parte dell'ordine, rispondi invece riga per riga.",
+    "body": "Il buyer vede subito la vostra risposta. Se potete consegnare parte dell'ordine, rispondete invece riga per riga.",
     "reason": "Perché",
     "reasons": {
       "NO_CAPACITY": "Nessuna capacità per questo ordine",
@@ -145,12 +145,12 @@
       "OTHER": "Un altro motivo"
     },
     "note": "Una nota (facoltativa)",
-    "noteRequired": "Il tuo motivo",
+    "noteRequired": "Il vostro motivo",
     "held": {
-      "note": "Scrivi perché rifiuti."
+      "note": "Scrivete perché rifiutate."
     },
     "priceTalk": "Dei prezzi parliamo nei Messaggi dell'ordine, mai in questa pagina.",
-    "contact": "Ti contatteremo.",
+    "contact": "Vi contatteremo.",
     "back": "Indietro",
     "go": "Rifiuta l'ordine"
   },
@@ -171,10 +171,10 @@
   "record": {
     "title": "Ordine {number}",
     "missing": "Ordine non trovato",
-    "missingBody": "Questo ordine non è tra i tuoi, o non esiste più.",
-    "toList": "Torna ai tuoi ordini",
+    "missingBody": "Questo ordine non è tra i vostri, o non esiste più.",
+    "toList": "Torna ai vostri ordini",
     "failed": "Non siamo riusciti a leggere questo ordine.",
-    "beingChanged": "Stiamo modificando questo ordine: tu hai ancora {number}. La nuova versione ti arriva da confermare."
+    "beingChanged": "Stiamo modificando questo ordine: voi avete ancora {number}. La nuova versione vi arriva da confermare."
   },
   "tabs": {
     "label": "L'ordine",
@@ -199,7 +199,7 @@
     "line": "Riga {seq}",
     "askedBy": "{quantity} entro il {date}",
     "colour": "Colore {colour}",
-    "yourCode": "tuo codice {code}",
+    "yourCode": "vostro codice {code}",
     "grade": "scelta {grade}",
     "thickness": "{min}–{max} mm",
     "thicknessFrom": "da {min} mm",
@@ -214,7 +214,7 @@
     "was": "era {value}",
     "added": "nuova in questa versione",
     "notConfirmed": "Non ancora confermata",
-    "proposed": "La tua modifica aspetta il buyer",
+    "proposed": "La vostra modifica aspetta il buyer",
     "received": "Ricevuti {value}",
     "delivery": {
       "open": "Ancora aperta",
@@ -225,44 +225,44 @@
     }
   },
   "answer": {
-    "title": "La tua risposta",
-    "by": "Rispondi entro {date}",
-    "intro": "Conferma tutto in una volta, o rispondi riga per riga: le righe come richiesto si confermano subito, le modifiche aspettano {buyer}.",
-    "ref": "Il tuo numero d'ordine o di conferma",
+    "title": "La vostra risposta",
+    "by": "Rispondete entro {date}",
+    "intro": "Confermate tutto in una volta, o rispondete riga per riga: le righe come richiesto si confermano subito, le modifiche aspettano {buyer}.",
+    "ref": "Il vostro numero d'ordine o di conferma",
     "refHint": "Facoltativo. Lo stampiamo sui nostri documenti.",
     "note": "Una nota per {buyer} (facoltativa)",
-    "review": "La tua risposta: {summary}.",
+    "review": "La vostra risposta: {summary}.",
     "outcome": {
-      "CONFIRMED": "Inviando confermi l'ordine come richiesto.",
-      "PROPOSED": "Le righe come richiesto si confermano ora; {buyer} accetta o rifiuta le tue modifiche.",
-      "DECLINED": "Non puoi consegnare nessuna riga: inviando rifiuti l'ordine."
+      "CONFIRMED": "Inviando confermate l'ordine come richiesto.",
+      "PROPOSED": "Le righe come richiesto si confermano ora; {buyer} accetta o rifiuta le vostre modifiche.",
+      "DECLINED": "Non potete consegnare nessuna riga: inviando rifiutate l'ordine."
     },
     "confirmAll": "Conferma tutto come richiesto",
-    "sendChanges": "Invia la tua risposta",
+    "sendChanges": "Invia la vostra risposta",
     "sendDecline": "Invia: non posso consegnare",
     "decline": "Rifiuta l'ordine…",
     "noPrices": "Qui niente prezzi: questa pagina dice cosa e quando. Dei prezzi si parla nei Messaggi dell'ordine."
   },
   "answered": {
     "TO_CONFIRM": {
-      "title": "Questo ordine aspetta la tua risposta",
-      "body": "Rispondi in Conferma o proponi."
+      "title": "Questo ordine aspetta la vostra risposta",
+      "body": "Rispondete in «Conferma o proponi»."
     },
     "CONFIRMED": {
-      "title": "Hai confermato questo ordine",
-      "body": "Confermato il {date}. Le righe sono bloccate: per chiedere una modifica scrivi nei Messaggi."
+      "title": "Avete confermato questo ordine",
+      "body": "Confermato il {date}. Le righe sono bloccate: per chiedere una modifica scrivete nei Messaggi."
     },
     "CHANGE_PROPOSED": {
-      "title": "Le tue modifiche sono da {buyer}",
-      "body": "{buyer} le accetta o le rifiuta: vedi la risposta qui."
+      "title": "Le vostre modifiche sono da {buyer}",
+      "body": "{buyer} le accetta o le rifiuta: vedete la risposta qui."
     },
     "DECLINED": {
-      "title": "Hai rifiutato questo ordine",
+      "title": "Avete rifiutato questo ordine",
       "body": "Il buyer lo modifica o lo annulla."
     },
     "BEING_CHANGED": {
       "title": "Stiamo modificando questo ordine",
-      "body": "La nuova versione ti arriva da confermare."
+      "body": "La nuova versione vi arriva da confermare."
     },
     "PARTLY_DELIVERED": {
       "title": "Sono arrivate merci di questo ordine",
@@ -282,40 +282,40 @@
     }
   },
   "proposal": {
-    "title": "Cosa hai proposto",
+    "title": "Cosa avete proposto",
     "waiting": "Inviato il {at}: {buyer} non ha ancora risposto.",
     "decision": {
-      "ACCEPTED": "{buyer} ha accettato le tue modifiche.",
-      "REFUSED": "{buyer} ha rifiutato le tue modifiche: l'ordine resta come richiesto."
+      "ACCEPTED": "{buyer} ha accettato le vostre modifiche.",
+      "REFUSED": "{buyer} ha rifiutato le vostre modifiche: l'ordine resta come richiesto."
     }
   },
   "done": {
     "CONFIRMED": {
       "title": "Confermato — grazie",
       "body": "{buyer} lo vede ora.",
-      "next": "Devi cambiare qualcosa più avanti? Scrivi nei Messaggi dell'ordine."
+      "next": "Dovete cambiare qualcosa più avanti? Scrivete nei Messaggi dell'ordine."
     },
     "PROPOSED": {
       "title": "Inviato a {buyer}",
-      "body": "La tua risposta: {summary}. {buyer} accetta o rifiuta le tue modifiche.",
-      "next": "Le righe come richiesto sono confermate ora; la risposta alle tue modifiche la vedi qui."
+      "body": "La vostra risposta: {summary}. {buyer} accetta o rifiuta le vostre modifiche.",
+      "next": "Le righe come richiesto sono confermate ora; la risposta alle vostre modifiche la vedete qui."
     },
     "DECLINED": {
-      "title": "Hai rifiutato l'ordine",
+      "title": "Avete rifiutato l'ordine",
       "body": "{buyer} lo vede ora.",
-      "next": "Ti contatteremo."
+      "next": "Vi contatteremo."
     },
-    "toList": "Torna ai tuoi ordini",
+    "toList": "Torna ai vostri ordini",
     "toLines": "Vedi le righe"
   },
   "problem": {
-    "changed": "Questo ordine è cambiato poco fa: rileggilo e rispondi alla nuova versione.",
-    "invalid": "La risposta è stata rifiutata così com'è: controlla le righe e riprova.",
-    "forbidden": "Possono rispondere a un ordine solo i colleghi abilitati ad approvare: chiedi al tuo amministratore.",
-    "missing": "Questo ordine non è tra i tuoi, o non esiste più.",
-    "rateLimited": "Troppi tentativi: aspetta un minuto e riprova.",
-    "unavailable": "Non siamo riusciti a raggiungere il server: riprova.",
-    "internal": "Qualcosa non ha funzionato da parte nostra: riprova."
+    "changed": "Questo ordine è cambiato poco fa: rileggetelo e rispondete alla nuova versione.",
+    "invalid": "La risposta è stata rifiutata così com'è: controllate le righe e riprovate.",
+    "forbidden": "Possono rispondere a un ordine solo i colleghi abilitati ad approvare: chiedete al vostro amministratore.",
+    "missing": "Questo ordine non è tra i vostri, o non esiste più.",
+    "rateLimited": "Troppi tentativi: aspettate un minuto e riprovate.",
+    "unavailable": "Non siamo riusciti a raggiungere il server: riprovate.",
+    "internal": "Qualcosa non ha funzionato da parte nostra: riprovate."
   },
   "history": {
     "title": "Risposte finora",
@@ -326,31 +326,31 @@
     "proposed": "Modifiche proposte alla versione {version}",
     "proposedBy": "Modifiche proposte alla versione {version} da {name}",
     "declined": "Versione {version} rifiutata",
-    "waiting": "La versione {version} aspetta la tua risposta",
-    "yourRef": "Tuo rif. {ref}",
+    "waiting": "La versione {version} aspetta la vostra risposta",
+    "yourRef": "Vostro rif. {ref}",
     "note": "Nota: {note}",
     "reason": "Il motivo: {reason}",
     "reasonNote": "Il motivo: {reason} — {note}",
     "decision": {
-      "ACCEPTED": "Abbiamo accettato le tue modifiche alla versione {version}",
-      "REFUSED": "Abbiamo rifiutato le tue modifiche alla versione {version}",
-      "waiting": "Le tue modifiche alla versione {version} aspettano la nostra risposta"
+      "ACCEPTED": "Abbiamo accettato le vostre modifiche alla versione {version}",
+      "REFUSED": "Abbiamo rifiutato le vostre modifiche alla versione {version}",
+      "waiting": "Le vostre modifiche alla versione {version} aspettano la nostra risposta"
     }
   },
   "asn": {
     "title": "Consegne annunciate per questo ordine",
-    "failed": "Non siamo riusciti a leggere i tuoi avvisi di spedizione.",
-    "noAccess": "Gli avvisi di spedizione non fanno parte del tuo accesso: chiedi al tuo amministratore.",
+    "failed": "Non siamo riusciti a leggere i vostri avvisi di spedizione.",
+    "noAccess": "Gli avvisi di spedizione non fanno parte del vostro accesso: chiedete al vostro amministratore.",
     "empty": "Ancora nessuna consegna annunciata.",
-    "emptyBody": "Quando annunci una consegna la trovi qui con il suo ricevimento.",
+    "emptyBody": "Quando annunciate una consegna la trovate qui con il suo ricevimento.",
     "draft": "Avviso in bozza",
     "shipDate": "Spedisce il {date}",
     "lines_one": "{count} riga",
     "lines_other": "{count} righe",
     "ddt": "DDT {number}",
     "announce": "Annuncia una consegna",
-    "mayWrite": "Il tuo accesso ti fa leggere le consegne, non annunciarle: chiedi al tuo amministratore il permesso di caricare.",
-    "notConfirmed": "Prima conferma l'ordine: poi annuncia cosa spedisci."
+    "mayWrite": "Il vostro accesso vi fa leggere le consegne, non annunciarle: chiedete al vostro amministratore il permesso di caricare.",
+    "notConfirmed": "Prima confermate l'ordine: poi annunciate cosa spedite."
   },
   "docs": {
     "asSent": "{number} come inviato",
@@ -358,24 +358,24 @@
     "pdf": "PDF",
     "openPdf": "Apri il PDF di {number} (senza prezzi) in una nuova scheda",
     "noPrices": "La nostra copia dell'ordine dice cosa e quando, mai i prezzi.",
-    "requests": "Cosa ti chiediamo"
+    "requests": "Cosa vi chiediamo"
   },
   "messages": {
-    "priceTalk": "Le domande sui prezzi vanno qui: questa conversazione è solo tra te e noi."
+    "priceTalk": "Le domande sui prezzi vanno qui: questa conversazione è solo tra voi e noi."
   },
   "unsaved": {
-    "answer": "La tua risposta a questo ordine non è ancora inviata."
+    "answer": "La vostra risposta a questo ordine non è ancora inviata."
   },
   "noAccess": {
-    "title": "Questa pagina non fa parte del tuo accesso",
-    "ask": "Chiedi al tuo amministratore ({names}) se ti serve.",
-    "askAdmin": "Chiedi al tuo amministratore se ti serve.",
+    "title": "Questa pagina non fa parte del vostro accesso",
+    "ask": "Chiedete al vostro amministratore ({names}) se vi serve.",
+    "askAdmin": "Chiedete al vostro amministratore se vi serve.",
     "home": "Torna alla Home"
   },
   "home": {
     "glance": "In sintesi",
     "upcoming": "Prossime consegne",
-    "upcomingFailed": "Non siamo riusciti a leggere le tue prossime consegne.",
+    "upcomingFailed": "Non siamo riusciti a leggere le vostre prossime consegne.",
     "upcomingEmpty": "Nessuna consegna aperta.",
     "order": "{number} · riga {seq}",
     "needed": "Serve il {date}",
@@ -385,7 +385,7 @@
     "announced": "Annunciata",
     "notAnnounced": "Non annunciata",
     "messages": "Messaggi recenti",
-    "messagesFailed": "Non siamo riusciti a leggere i tuoi messaggi.",
+    "messagesFailed": "Non siamo riusciti a leggere i vostri messaggi.",
     "messagesEmpty": "Nessun messaggio.",
     "fromUs": "Da noi",
     "reply": "Rispondi",
@@ -399,7 +399,7 @@
   },
   "tiles": {
     "toConfirm": "Da confermare",
-    "toConfirmHint": "ordini che aspettano la tua risposta",
+    "toConfirmHint": "ordini che aspettano la vostra risposta",
     "dueThisWeek": "In scadenza questa settimana",
     "dueThisWeekHint": "ordini con una riga entro 7 giorni, non annunciata",
     "late": "In ritardo",
@@ -407,9 +407,9 @@
     "expiring": "Documenti in scadenza",
     "expiringHint": "entro 30 giorni",
     "onTheWay": "In arrivo",
-    "onTheWayHint": "consegne che hai annunciato",
+    "onTheWayHint": "consegne che avete annunciato",
     "toAccept": "Lavorazioni da accettare",
-    "toAcceptHint": "aspettano la tua risposta",
+    "toAcceptHint": "aspettano la vostra risposta",
     "kitToConfirm": "Kit da confermare",
     "kitToConfirmHint": "ricevuti, non confermati",
     "readyToSendBack": "Pronti da rendere",
@@ -417,7 +417,7 @@
     "lateJobs": "Lavorazioni in ritardo",
     "lateJobsHint": "data passata",
     "unknown": "non è stato possibile contarli",
-    "failed": "Non siamo riusciti a contare il tuo lavoro."
+    "failed": "Non siamo riusciti a contare il vostro lavoro."
   },
   "uom": {
     "PCS": "pz",

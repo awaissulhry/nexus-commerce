@@ -8,6 +8,11 @@ import { BRAND_SIDES } from '@nexus/factory-domain/production-brand/waiting'
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { fileNameOf } from '../orders/api'
+// ---- F-PR-12c: + Quality & photos (B-PR-19)
+import { BRAND_CHECK_KINDS, DEFECT_CLASSES, FINAL_STATES } from '@nexus/factory-domain/production-brand/quality-read'
+import { previewLink } from '../../../record-panels/files/api'
+import { readFromStore } from '../../../record-panels/store'
+// ---- end F-PR-12c
 
 /**
  * F-PR-11 / F-PR-12a — every call of the customer's own production (production plan §4, §5; the API is B-PR-18 and B-PR-22a,
@@ -18,6 +23,7 @@ import { fileNameOf } from '../orders/api'
  *                                               used" (its own open orders only), every row (no page, no cut)
  *   GET  /portal/production?format=csv          "Export": the same rows as a file the server writes in its own scope
  *   GET  /portal/production/:orderId            one order's production (order › Status & progress), by its level
+ *   GET  /portal/production/:orderId/quality    F-PR-12c: the quality of its own goods (level Quality & photos), + its report PDF
  *   POST /portal/production/urgency             Mark urgent / Mark regular (one or many of its own orders)
  *   PUT  /portal/production/urgent-order        its Urgent list in a new order (the Urgent order dialog)
  *   POST /portal/production/urgency/undo        puts one of its own batches back
@@ -229,6 +235,108 @@ export type ProductionOrder = z.infer<typeof productionOrderSchema>
 
 export const fetchProductionOrder = (api: ApiClient, orderId: string, signal?: AbortSignal): Promise<ProductionOrder> =>
   api.get(`/portal/production/${encodeURIComponent(orderId)}`, { schema: productionOrderSchema, signal })
+
+// ---- F-PR-12c: + Quality & photos (B-PR-19, modules/production/brand-portal/contract.ts `qualityContract`, `qualityReportContract`)
+//
+//   GET /portal/production/:orderId/quality                       the quality of its own goods, at the QUALITY level only (404
+//                                                                 below it, or not in production: the section is not drawn)
+//   GET /portal/production/:orderId/quality/report/:inspectionId  the inspection report PDF of a decided final inspection of a
+//                                                                 work order that is its alone (404 for any other)
+//   GET /files/:fileId/preview                                    a photo the factory shared on its order (60 seconds)
+//
+// Only what the web draws is kept: never the inspection's own number (the office's series), a work order, a lot of another's
+// goods, an inspector, a releaser, a worker, a line, a station or a note (the API sends none of them; a key it adds is dropped).
+export { BRAND_CHECK_KINDS, DEFECT_CLASSES, FINAL_STATES }
+export type FinalState = (typeof FINAL_STATES)[number]
+export type BrandCheckKind = (typeof BRAND_CHECK_KINDS)[number]
+export type DefectClass = (typeof DEFECT_CLASSES)[number]
+
+const releasedFigures = { ordered: z.number(), released: z.number(), reversed: z.number() }
+
+const qualityLine = z.object({
+  lineId: z.string(),
+  seq: z.number(),
+  style: named.nullable(),
+  colourway: named.nullable(),
+  ...releasedFigures,
+  /** Per size in the scale's order; a line without sizes reads one row (size null). Never above what it ordered. */
+  sizes: z.array(z.object({ size: z.string().nullable(), ...releasedFigures })),
+  /** Some of its goods are made on a work order that is not its alone: their results are not shared (said in the API's words). */
+  sharedWork: z.boolean(),
+  sharedWorkWords: words.nullable(),
+})
+export type QualityLine = z.infer<typeof qualityLine>
+
+const finalInspection = z.object({
+  inspectionId: z.string(),
+  state: z.enum(FINAL_STATES),
+  stateWords: words,
+  decidedOn: z.string().nullable(),
+  /** The order's lines it judges, by their number on the order. */
+  lines: z.array(z.number()),
+  /** The sampling plan over its own garments alone (ISO 2859-1). */
+  sampling: z.object({ garments: z.number(), sample: z.number(), inspectionLevel: z.string(), aqlMajor: z.string(), aqlMinor: z.string(), acceptMajor: z.number(), acceptMinor: z.number() }),
+  /** Once decided: garments with a defect per class in the sample, and each defect found. */
+  defects: z
+    .object({
+      critical: z.number(),
+      major: z.number(),
+      minor: z.number(),
+      found: z.array(z.object({ defectClass: z.enum(DEFECT_CLASSES), classWords: words, code: z.string(), words: words.nullable(), garments: z.number() })),
+    })
+    .nullable(),
+  /** The report the factory issued (opened with fetchQualityReport); null: none yet. */
+  report: z.object({ madeOn: z.string() }).nullable(),
+})
+export type FinalInspection = z.infer<typeof finalInspection>
+
+const qualityCheck = z.object({
+  kind: z.enum(BRAND_CHECK_KINDS),
+  words,
+  state: z.enum(FINAL_STATES),
+  stateWords: words,
+  countWords: words,
+  pieces: z.number(),
+  defectivePieces: z.number(),
+  lastOn: z.string().nullable(),
+})
+export type QualityCheck = z.infer<typeof qualityCheck>
+
+const qualityHold = z.object({ kind: z.enum(BRAND_HOLD_READS), words, since: z.string(), until: z.string().nullable(), active: z.boolean(), stateWords: words })
+export type QualityHold = z.infer<typeof qualityHold>
+
+const qualityPhoto = z.object({ id: z.string(), name: z.string(), contentType: z.string(), sizeBytes: z.number(), sharedOn: z.string() })
+export type QualityPhoto = z.infer<typeof qualityPhoto>
+
+export const productionQualitySchema = z.object({
+  asOf: z.string(),
+  level: z.enum(PRODUCTION_SHARE_LEVELS),
+  lines: z.array(qualityLine),
+  /** Final inspections of its single-customer work orders only. */
+  finals: z.array(finalInspection),
+  /** First-piece, cutting and end-of-line checks of its single-customer work orders, per kind. */
+  checks: z.array(qualityCheck),
+  /** What held its goods (active or ended), by reason in our words; never the note, never who. */
+  holds: z.array(qualityHold),
+  /** The photos the factory shared on its order. */
+  photos: z.array(qualityPhoto),
+  live,
+})
+export type ProductionQuality = z.infer<typeof productionQualitySchema>
+
+export const fetchProductionQuality = (api: ApiClient, orderId: string, signal?: AbortSignal): Promise<ProductionQuality> =>
+  api.get(`/portal/production/${encodeURIComponent(orderId)}/quality`, { schema: productionQualitySchema, signal })
+
+/** The inspection report PDF, read once for the viewer (inline; the server's file name is not used: it names our series). */
+export const fetchQualityReport = (api: ApiClient, orderId: string, inspectionId: string): Promise<Uint8Array> =>
+  api.bytes(`/portal/production/${encodeURIComponent(orderId)}/quality/report/${encodeURIComponent(inspectionId)}`)
+
+/** One photo shared on the order, read once through the files route (presigned for 60 seconds) for the viewer. */
+export async function qualityPhotoBytes(api: ApiClient, fileId: string): Promise<Uint8Array> {
+  const { preview } = await previewLink(api, fileId)
+  return readFromStore({ method: 'GET', url: preview.url, headers: preview.headers, expiresAt: preview.expiresAt })
+}
+// ---- end F-PR-12c
 
 // ── the customer's urgency (B-PR-22a) ────────────────────────────────────────────────────────────────────────────────
 export const urgencyResultSchema = z.object({
