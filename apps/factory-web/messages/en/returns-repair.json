@@ -109,7 +109,8 @@
       "tabs": "Sections of the repair",
       "status": "Status",
       "request": "Request",
-      "missing": "Repair not found"
+      "missing": "Repair not found",
+      "messagesLabel": "Messages: {kind} {number}"
     },
     "keys": {
       "tabs": "Move between the sections",

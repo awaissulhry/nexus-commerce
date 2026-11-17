@@ -7,9 +7,12 @@ import {
   cancelProblems,
   changeCellsOf,
   changeProblems,
+  isSalesRequestKind,
   NO_WITHDRAWAL_WORDS,
+  REQUEST_KINDS,
   rulesOf,
   VERDICT_CODES,
+  WAITING_REQUEST_STATUSES,
   type AskedCell,
   type RequestKind,
   type RuleOrder,
@@ -86,7 +89,8 @@ interface AskFacts {
 async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: string, now: Date): Promise<AskFacts> {
   const order = await partnerOrder(request, reader, orderId)
   const lines = await request.withClient((client) => readLines(client, [order.id]))
-  const open = await request.withClient((client) => client.orderChangeRequest.findFirst({ where: { orderId: order.id, status: 'OPEN' }, select: { id: true, createdAt: true }, orderBy: { createdAt: 'desc' } }))
+  // B-PR-23: the change or cancel that waits (OPEN, or COUNTERED for the customer's answer); a production ask never holds them.
+  const open = await request.withClient((client) => client.orderChangeRequest.findFirst({ where: { orderId: order.id, kind: { in: [...REQUEST_KINDS] }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, createdAt: true }, orderBy: { createdAt: 'desc' } }))
   const addresses = await request.withClient((client) => readShipTos(client, order.partyId))
   const tenant = await reader.inTenant(async (client) => ({
     settings: await readCutoffs(client, reader.session.tenantId, order.companyId),
@@ -221,7 +225,8 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
   const { tx, now } = tools
   const { order, body, cells } = input
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`factory.order-change-request|${order.id}`}::text))`
-  const open = await tx.orderChangeRequest.findFirst({ where: { orderId: order.id, status: 'OPEN' }, select: { id: true, createdAt: true } })
+  // B-PR-23: one change or cancel that waits per order (OPEN, or COUNTERED); a production ask of the order never blocks it.
+  const open = await tx.orderChangeRequest.findFirst({ where: { orderId: order.id, kind: { in: [...REQUEST_KINDS] }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, createdAt: true } })
   if (open) throw new DomainError('invalid_state', 'A request on this order waits for our answer: withdraw it first, or wait for the answer.', [{ path: 'body/OPEN_REQUEST', message: 'A request waits.' }])
   const current = await tx.salesOrder.findUnique({ where: { id: order.id }, select: { status: true } })
   if (!current || !['CONFIRMED', 'IN_PRODUCTION', 'READY'].includes(current.status)) throw new DomainError('invalid_state', 'The order can no longer be changed or cancelled from the portal.', [{ path: 'body/NOT_ASKABLE', message: 'The order moved on.' }])
@@ -315,6 +320,8 @@ export async function withdrawRequest(app: FastifyInstance, request: FastifyRequ
     await lockRequest(tx, requestId)
     const row = await tx.orderChangeRequest.findUnique({ where: { id: requestId }, select: REQUEST_COLUMNS })
     if (!row || row.orderId !== order.id) throw new NotFoundError('Request not found.')
+    // B-PR-23: a production ask is withdrawn where it was asked (B-PR-25, B-PR-46a); until then, in the order's thread.
+    if (!isSalesRequestKind(row.kind)) throw new InvalidStateError("This request cannot be withdrawn here: write to us in the order's thread.")
     if (row.status !== 'OPEN') throw new InvalidStateError(row.status === 'WITHDRAWN' ? 'This request was already withdrawn.' : 'We already answered this request: it can no longer be withdrawn.')
     if (row.version !== version) throw new ConflictError(`This request changed since you read it (now version ${row.version}). Read it again.`)
     await tx.orderChangeRequest.update({ where: { id: requestId }, data: { status: 'WITHDRAWN', withdrawnAt: now, updatedAt: now, version: { increment: 1 } }, select: { id: true } })

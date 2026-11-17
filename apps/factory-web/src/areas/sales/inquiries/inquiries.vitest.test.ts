@@ -5,6 +5,7 @@ import { DECLINE_REASONS, INQUIRY_REFUSALS, INQUIRY_SOURCES, INQUIRY_STATUSES, I
 // B-TH-235: what a request became (Sales › Reports' request figure opens this list with it).
 import { REQUEST_OUTCOMES } from '@nexus/factory-domain/sales/inquiries/rules'
 import { isFiltered, queryOf } from './model'
+import { declineHeld, emptyDecline, hasBlank } from './model' // th-backend-g step 2
 import { ApiError } from '../../../lib/api/errors'
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'
@@ -527,3 +528,27 @@ describe('B-TH-233 Incoming over every door', () => {
   })
 })
 // ---- end B-TH-233
+
+// ---- th-backend-g step 2 (B-TH-279: the dialogs' starting words come from the mail templates) ------------------------------------
+describe('th-backend-g step 2: the decline’s message starts from the mail template; the reason goes where “…” stands', () => {
+  it('a starting text with its blank holds Decline until the person writes the reason; their own text passes', () => {
+    const draft = { ...emptyDecline, reason: 'CAPACITY' as const, send: true, message: 'Dear Ann,\nthank you for your request 7.\n\n…\n\nWe hope to work together another time.' }
+    expect(hasBlank(draft.message)).toBe(true)
+    expect(declineHeld(draft, false)).toEqual({ key: 'decline.held.blank' })
+    expect(declineHeld({ ...draft, message: draft.message.replace('…', 'Our lines are full until March.') }, false)).toBeNull()
+    // An ellipsis inside a sentence is the person's own writing, not the blank.
+    expect(hasBlank('We will see… maybe in spring.')).toBe(false)
+    // Not ticked: nothing goes, nothing holds for the blank.
+    expect(declineHeld({ ...draft, send: false }, false)).toBeNull()
+  })
+
+  it('the decline words name the five languages and the blank, in Italian and English', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const words = messagesFor(locale, ['sales-inquiries'])['sales-inquiries'] as Record<string, any>
+      expect(Object.keys(words.decline.language).sort()).toEqual(['de', 'en', 'es', 'fr', 'it'])
+      expect(words.decline.held.blank).toContain('…')
+      expect(words.decline.blankHint).toContain('…')
+    }
+  })
+})
+// ---- end th-backend-g step 2

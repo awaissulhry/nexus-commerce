@@ -149,12 +149,14 @@
     "capped": "The first {shown} of {count} orders and requests."
   },
   "record": {
-    "title": "Order {number}",
     "missing": "Order not found",
     "missingBody": "It is not one of your orders, or it no longer exists.",
     "toList": "Back to your orders",
     "failed": "The order could not be read",
-    "failedBody": "Nothing changed. Try again in a moment."
+    "failedBody": "Nothing changed. Try again in a moment.",
+    "titleRef": "Your order {ref}",
+    "titleNone": "Your order",
+    "refNone": "this order"
   },
   "tabs": {
     "label": "Order",
@@ -162,11 +164,10 @@
     "lines": "Lines",
     "shipments": "Shipments & tracking",
     "documents": "Documents",
-    "messages": "Messages",
     "toConfirm": "to confirm"
   },
   "messages": {
-    "hint": "Ask us anything about this order. You can also answer our e-mails."
+    "label": "Messages: {name}"
   },
   "unsaved": {
     "change": "Your change request is not sent yet."
@@ -279,7 +280,7 @@
     "whatChanged_one": "What changed (1 change)",
     "whatChanged_other": "What changed ({count} changes)",
     "title": "Re-confirm order version {version}",
-    "due": "{number} · please answer by {date}",
+    "due": "Order {number} · please answer by {date}",
     "why": "Why it changed: {reason}",
     "choose": "Your answer",
     "approve": "Confirm version {version}",
@@ -455,7 +456,7 @@
     "go": "Discard"
   },
   "change": {
-    "title": "Ask for a change on {number}",
+    "title": "Ask for a change on order {number}",
     "editStep": "Step 1 of 2: what to change",
     "reviewStep": "Step 2 of 2: check and send",
     "failed": "What may change could not be read",
@@ -486,7 +487,7 @@
     }
   },
   "cancel": {
-    "title": "Ask to cancel {number}",
+    "title": "Ask to cancel order {number}",
     "failed": "What may be cancelled could not be read",
     "hint": "We check your request and answer here and by e-mail. Nothing is cancelled until we accept it.",
     "what": "What to cancel",
@@ -595,5 +596,13 @@
     "no": "No",
     "columnHint": "A column your supplier keeps for you",
     "downloadFailed": "The file could not be prepared. Try again."
+  },
+  "status": {
+    "confirmed": "Your order is confirmed.",
+    "waitsApproval": "We received your order: it waits for our approval.",
+    "madeFromRequest": "Made from your request {label}",
+    "madeFromRequestNone": "Made from your request",
+    "madeFromQuote": "Made from your quote {label}",
+    "madeFromQuoteNone": "Made from your quote"
   }
 }

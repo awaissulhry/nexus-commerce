@@ -1,9 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Modal } from '../../../lib/i18n/ds-parts'
+import { useEffect, useState, type ReactNode } from 'react'
 import type { Locale } from '../../../lib/i18n/locales'
-import { useLocale, useT } from '../../../lib/i18n/provider'
+import { useLocale } from '../../../lib/i18n/provider'
+// B-TH-273: a record page's body with its conversation docked (the portal record frame), drawn at a chosen width.
+import { PortalRecordFrame } from '../record/PortalRecordFrame'
+import type { PortalFrameMode } from '../record/model'
 import { EmailSettingsView, type EmailSettingsViewModel } from './EmailSettingsView'
 import { DisplayView, MyAccessView, ShortcutsView, StillThereView, UnsavedGuardView, type DisplayModel, type MyAccessModel, type ShortcutGroup, type UnsavedModel } from './FrameDialogs'
 import { NotificationsView, type NotificationsViewModel } from './NotificationsView'
@@ -15,12 +17,19 @@ import { TermsView, type TermsViewModel } from './TermsView'
 import { ThreadView, type ThreadViewModel } from './ThreadView'
 
 /**
- * SCR-027 as one case of the design review (B-W2b-173): the frame around one of its own pages (Home's task list, a record
- * with its Messages, the portal terms) and, when the case asks, one of its pop-ups open. The live frame composes the same
+ * SCR-027 as one case of the design review (B-W2b-173): the frame around one of its own pages (Home's task list, the generic
+ * record page with its summary and conversation (B-TH-274), the record-page rule with the docked conversation (B-TH-273), the
+ * portal terms) and, when the case asks, one of its pop-ups open. The live frame composes the same
  * views (PortalShell); this only puts a case's made-up models together.
  */
 
-export type PortalFramePage = { kind: 'home'; tasks: TasksViewModel } | { kind: 'record'; record: RecordViewModel; thread: ThreadViewModel } | { kind: 'terms'; terms: TermsViewModel }
+export type PortalFramePage =
+  | { kind: 'home'; tasks: TasksViewModel }
+  | { kind: 'record'; record: RecordViewModel; thread: ThreadViewModel }
+  | { kind: 'terms'; terms: TermsViewModel }
+  // ---- B-TH-273: the rule every portal record page follows — its body, the conversation docked from 1280 px or behind "Messages
+  // (2 new)" below (`mode`), the narrow page's full-width view open (`viewOpen`).
+  | { kind: 'frame'; body: ReactNode; thread: ThreadViewModel | null; threadLabel: string; mode: PortalFrameMode; viewOpen?: boolean; newCount?: number }
 
 export type PortalFramePopup =
   | { kind: 'notifications'; model: NotificationsViewModel }
@@ -31,7 +40,6 @@ export type PortalFramePopup =
   | { kind: 'access'; model: MyAccessModel }
   | { kind: 'display'; model: DisplayModel }
   | { kind: 'search'; model: SearchViewModel }
-  | { kind: 'ask'; thread: ThreadViewModel }
 
 export interface PortalFrameCaseModel {
   shell: PortalShellViewModel
@@ -43,7 +51,6 @@ export interface PortalFrameCaseModel {
 export type PortalFrameCaseBuilder = (locale: Locale) => PortalFrameCaseModel
 
 export function PortalFrameCase({ model: build }: { model: PortalFrameCaseBuilder }) {
-  const t = useT('portal')
   const model = build(useLocale())
   const [endsAt, setEndsAt] = useState<string | null>(null)
   // The countdown runs from the moment the case opens (the model is rebuilt on every render: depend on the number).
@@ -62,6 +69,10 @@ export function PortalFrameCase({ model: build }: { model: PortalFrameCaseBuilde
           <RecordView model={model.page.record}>
             <ThreadView model={model.page.thread} />
           </RecordView>
+        ) : model.page.kind === 'frame' ? (
+          <PortalRecordFrame thread={model.page.thread ? <ThreadView model={model.page.thread} /> : null} threadLabel={model.page.threadLabel} design={{ mode: model.page.mode, viewOpen: model.page.viewOpen, newCount: model.page.newCount }}>
+            {model.page.body}
+          </PortalRecordFrame>
         ) : (
           <TermsView model={model.page.terms} />
         )}
@@ -74,11 +85,6 @@ export function PortalFrameCase({ model: build }: { model: PortalFrameCaseBuilde
       {popup?.kind === 'access' ? <MyAccessView model={popup.model} onClose={close} onRetry={close} /> : null}
       {popup?.kind === 'display' ? <DisplayView model={popup.model} onClose={close} /> : null}
       {popup?.kind === 'search' ? <SearchView model={popup.model} onClose={close} onRetry={close} /> : null}
-      {popup?.kind === 'ask' ? (
-        <Modal open onClose={close} sheet size="lg" title={t('thread.accountTitle')}>
-          <ThreadView model={popup.thread} headingLevel={3} />
-        </Modal>
-      ) : null}
     </>
   )
 }

@@ -1,5 +1,5 @@
 import { Dec } from '@nexus/factory-domain/tax/decimal'
-import { recordHref } from '../orders/model'
+import { recordHref, replyToOrderHref } from '../orders/model' // B-TH-277: Reply opens the PO with its docked conversation
 import type { Conversation, HomeRead, ShippableRead } from './api'
 
 /**
@@ -116,7 +116,7 @@ export const upcomingHref = (prefix: string, line: Pick<UpcomingLine, 'orderId' 
 /** Where "Reply" on one of our messages goes: the record's Messages (a PO's own page; any other record the frame's). */
 export function replyHref(prefix: string, conversation: Pick<Conversation, 'record'>, purchaseOrderPage: boolean): string {
   const { type, id } = conversation.record
-  if (type === 'PurchaseOrder' && purchaseOrderPage) return `${recordHref(prefix, id, 'messages')}#messages`
+  if (type === 'PurchaseOrder' && purchaseOrderPage) return replyToOrderHref(prefix, id) // B-TH-277
   return `${prefix}/open/${encodeURIComponent(type)}/${encodeURIComponent(id)}#messages`
 }
 

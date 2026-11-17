@@ -120,5 +120,25 @@
     "sending": "Sending to {party}…",
     "button": "Undo ({seconds})",
     "label": "Take the mail back: {seconds} seconds left"
+  },
+  "erased": {
+    "line": "Message removed after a privacy request",
+    "short": "Message removed (privacy request)"
+  },
+  "skipped": {
+    "line_one": "{count} file in this e-mail was not kept: {files}",
+    "line_other": "{count} files in this e-mail were not kept: {files}",
+    "item": "{name} ({reason})",
+    "reason": {
+      "type_not_allowed": "type not accepted",
+      "too_large": "too large",
+      "empty": "empty file",
+      "too_many": "too many files in one e-mail",
+      "other": "not kept"
+    }
+  },
+  "filesOnly": {
+    "line_one": "{count} file",
+    "line_other": "{count} files"
   }
 }

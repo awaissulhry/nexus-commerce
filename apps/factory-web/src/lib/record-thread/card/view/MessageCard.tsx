@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { CornerDownRight, Globe, ImageIcon, Lock, Mail, MoreHorizontal, PencilLine, RotateCw, Tablet, Trash2, Undo2 } from 'lucide-react'
+// B-TH-255: the erased card and the files an e-mail did not keep.
+import { EyeOff, FileX } from 'lucide-react'
 import { Menu } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { FileRow } from '../../../i18n/ds-parts'
@@ -30,6 +32,7 @@ import {
   type CardContext,
   type CardMessage,
 } from '../model'
+import { bodyKind, skippedLine } from '../model' // B-TH-255
 import '../card.css'
 
 export interface CardActions {
@@ -75,7 +78,10 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
   const side = sideKey(message.kind)
   const sideText = side === 'side.theirs' ? party : side ? t(side) : null
   const time = timeOf(message.at, locale)
-  const { text, quoted } = splitQuoted(message.body, message.kind)
+  // B-TH-255 (T3-F14): an erased message says why its words are gone; a message that only carries files draws no empty body.
+  const body = bodyKind(message)
+  const { text, quoted } = body === 'text' ? splitQuoted(message.body, message.kind) : { text: '', quoted: null }
+  const skipped = skippedLine(message.skipped)
   const fold = longFold(text)
   const folded = fold.folds && !allShown
   const files = cardFiles(message.files, context.canReadFiles, allFiles, { hidden: message.hiddenFiles ?? 0, sheets: message.lockedSheets ?? 0 })
@@ -89,7 +95,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
   const headMarks = message.corrects ? marks.slice(0, 1) : marks
   const movedMarks = message.corrects ? marks.slice(1) : []
   const label = t('label', { author, audience: t(audienceKey(message), { party }), time })
-  const cls = ['fw-rt-msg', `is-${message.kind}`, sending ? 'is-pending' : '', failed ? 'is-failed' : '', context.anchorId === message.id ? 'is-anchor' : ''].filter(Boolean).join(' ')
+  const cls = ['fw-rt-msg', `is-${message.kind}`, sending ? 'is-pending' : '', failed ? 'is-failed' : '', context.anchorId === message.id ? 'is-anchor' : '', body === 'erased' ? 'is-erased' : ''].filter(Boolean).join(' ')
 
   return (
     <article className={cls} id={`message-${message.id}`} data-message-id={message.id} data-feed-item={message.id} tabIndex={-1} aria-label={label}>
@@ -142,8 +148,16 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
       </div>
 
       {message.replyTo && <LinkLine kind="replyTo" link={message.replyTo} />}
-      <p className={`fw-rt-body${folded ? ' is-folded' : ''}`}>{text}</p>
-      {fold.folds && !allShown && (
+      {/* B-TH-255 (T3-F14): the privacy reason in words, never an empty grey card; a message of files only shows its files. */}
+      {body === 'erased' ? (
+        <p className="fw-rt-erased">
+          <EyeOff size={13} aria-hidden />
+          <span>{t('erased.line')}</span>
+        </p>
+      ) : body === 'text' ? (
+        <p className={`fw-rt-body${folded ? ' is-folded' : ''}`}>{text}</p>
+      ) : null}
+      {body === 'text' && fold.folds && !allShown && (
         <button type="button" className="fw-rt-showall" onClick={() => setAllShown(true)}>
           {t('body.showAll', { count: fold.lines })}
         </button>
@@ -229,6 +243,14 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
             </p>
           )}
         </div>
+      )}
+
+      {/* B-TH-255 (T3-F15): what an inbound mail brought that was not kept, by name and why (office only; never a signature logo). */}
+      {skipped && (
+        <p className="fw-rt-skipped" role="note">
+          <FileX size={13} aria-hidden />
+          <span>{t('skipped.line', { count: skipped.count, files: skipped.items.map((item) => t('skipped.item', { name: item.name, reason: t(item.reasonKey) })).join(', ') })}</span>
+        </p>
       )}
 
       {message.email && message.kind === 'ours' && (

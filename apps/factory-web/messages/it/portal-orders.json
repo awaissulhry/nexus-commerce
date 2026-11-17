@@ -149,12 +149,14 @@
     "capped": "I primi {shown} di {count} ordini e richieste."
   },
   "record": {
-    "title": "Ordine {number}",
     "missing": "Ordine non trovato",
     "missingBody": "Non è uno dei tuoi ordini, o non esiste più.",
     "toList": "Torna ai tuoi ordini",
     "failed": "Non è stato possibile leggere l’ordine",
-    "failedBody": "Non è cambiato nulla. Riprova tra poco."
+    "failedBody": "Non è cambiato nulla. Riprova tra poco.",
+    "titleRef": "Il vostro ordine {ref}",
+    "titleNone": "Il vostro ordine",
+    "refNone": "questo ordine"
   },
   "tabs": {
     "label": "Ordine",
@@ -162,11 +164,10 @@
     "lines": "Righe",
     "shipments": "Spedizioni e tracciamento",
     "documents": "Documenti",
-    "messages": "Messaggi",
     "toConfirm": "da confermare"
   },
   "messages": {
-    "hint": "Chiedici qualsiasi cosa su questo ordine. Puoi anche rispondere alle nostre e-mail."
+    "label": "Messaggi: {name}"
   },
   "unsaved": {
     "change": "La tua richiesta di modifica non è ancora inviata."
@@ -279,7 +280,7 @@
     "whatChanged_one": "Cosa cambia (1 modifica)",
     "whatChanged_other": "Cosa cambia ({count} modifiche)",
     "title": "Riconferma l’ordine, versione {version}",
-    "due": "{number} · rispondi entro il {date}",
+    "due": "Ordine {number} · rispondi entro il {date}",
     "why": "Perché è cambiato: {reason}",
     "choose": "La tua risposta",
     "approve": "Conferma la versione {version}",
@@ -455,7 +456,7 @@
     "go": "Scarta"
   },
   "change": {
-    "title": "Chiedi una modifica su {number}",
+    "title": "Chiedi una modifica sull’ordine {number}",
     "editStep": "Passo 1 di 2: cosa cambiare",
     "reviewStep": "Passo 2 di 2: controlla e invia",
     "failed": "Non è stato possibile leggere cosa si può cambiare",
@@ -486,7 +487,7 @@
     }
   },
   "cancel": {
-    "title": "Chiedi di annullare {number}",
+    "title": "Chiedi di annullare l’ordine {number}",
     "failed": "Non è stato possibile leggere cosa si può annullare",
     "hint": "Controlliamo la richiesta e rispondiamo qui e via e-mail. Nulla è annullato finché non la accettiamo.",
     "what": "Cosa annullare",
@@ -595,5 +596,13 @@
     "no": "No",
     "columnHint": "Una colonna che il fornitore tiene per voi",
     "downloadFailed": "Non è stato possibile preparare il file. Riprova."
+  },
+  "status": {
+    "confirmed": "Il vostro ordine è confermato.",
+    "waitsApproval": "Abbiamo ricevuto il vostro ordine: attende la nostra approvazione.",
+    "madeFromRequest": "Nato dalla vostra richiesta {label}",
+    "madeFromRequestNone": "Nato dalla vostra richiesta",
+    "madeFromQuote": "Nato dal vostro preventivo {label}",
+    "madeFromQuoteNone": "Nato dal vostro preventivo"
   }
 }

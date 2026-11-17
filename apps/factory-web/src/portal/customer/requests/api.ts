@@ -78,7 +78,8 @@ export type RequestList = z.infer<typeof requestListSchema>
 
 export const sendAnswerSchema = z.object({
   request: requestViewSchema,
-  receipt: z.object({ number: z.string(), yourNumber, subject: z.string(), words }),
+  // th-backend-g step 2: `mailed` — the receipt mail went to the person who sent it (absent: an answer of before).
+  receipt: z.object({ number: z.string(), yourNumber, subject: z.string(), words, mailed: z.boolean().optional() }),
 })
 export type SendAnswer = z.infer<typeof sendAnswerSchema>
 

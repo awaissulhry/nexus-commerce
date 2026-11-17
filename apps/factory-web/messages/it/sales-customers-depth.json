@@ -488,7 +488,9 @@
     "SALESMAN": "Campionario",
     "PRE_PRODUCTION": "Pre-produzione",
     "CERTIFICATION": "Certificazione",
-    "BRAND": "Brand"
+    "BRAND": "Brand",
+    "SIZE_SET": "Set di taglie",
+    "TOP_OF_PRODUCTION": "Primi capi di produzione (TOP)"
   },
   "sampleStage": {
     "REQUESTED": "Richiesto",

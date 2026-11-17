@@ -3,7 +3,8 @@ import type { PortalBand } from '../../shell/frame'
 /**
  * The frame's band of the accountant's room (design portal.guest.accountant h: Pill "Read-only", "Access ends 31 Jan 2027",
  * "Download period (zip)" the primary; ⋯ "Ask finance" is the frame's "Ask a question" about the firm's account, which
- * scrolls to the page's `#messages`). One builder for the live page and its design cases.
+ * focuses the docked conversation's box — B-TH-276: the portal record frame opens it full width first below 1280 px). One
+ * builder for the live page and its design cases.
  */
 
 type Translate = (key: string, params?: Readonly<Record<string, string | number>>) => string

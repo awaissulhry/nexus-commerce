@@ -10,6 +10,9 @@ import { InviteView } from './view/InviteView'
  * with ⌘Enter, "E-mail me"; read only (writing and upload held with the reason), comment only, a closed conversation, nothing
  * shared yet, an upload on its way and refused, earlier messages, the last day, a narrowed share caught on send, loading, a
  * failed read, and the dead link (withdrawn or ended). Measure at 390 first.
+ * B-TH-274 (threads plan TH-6, PL7): the thread is the main column (files strip, conversation, Add files) and the side column (why
+ * you are here, the record, E-mail me) sits beside it from 1280 px — open the cases at 1440 and 1920 for the two columns, at 390 for
+ * the thread as the whole page with "About this invitation" ("i"); the "i" sheet and the Files view have cases of their own.
  */
 
 const HOUR = 3_600_000
@@ -63,6 +66,12 @@ function page(over: { share?: Partial<SharePage['share']>; thread?: Partial<Shar
 }
 
 const base = (over: Partial<InviteViewModel> = {}): InviteViewModel => ({ ...START, page: page(), now: NOW, timeZone: 'Europe/Rome', ...over })
+// B-TH-274: more files than the strip names (the rest one click away in the Files view).
+const MANY_FILES: SharePage['files'] = [
+  ...page().files,
+  { id: id(204), kind: 'PHOTO', originalName: 'campione-retro.jpg', contentType: 'image/jpeg', sizeBytes: 176_128, at: at(-40), mine: false },
+  { id: id(205), kind: 'DOCUMENT', originalName: 'tabella-misure-48.pdf', contentType: 'application/pdf', sizeBytes: 98_304, at: at(-30), mine: false },
+]
 const readOnly = page({ share: { permissions: ['VIEW'] }, thread: { canPost: false, held: 'NO_COMMENT' }, upload: { canUpload: false, held: 'NO_UPLOAD' } })
 
 export const designScreen = defineDesignScreen<InviteViewModel>({
@@ -70,7 +79,12 @@ export const designScreen = defineDesignScreen<InviteViewModel>({
   title: 'Join a record (links.invite)',
   view: InviteView,
   cases: [
-    { id: 'record', label: 'Read, write and upload', model: base(), note: 'Why you are here (who invited you, what you can do, until when), the order’s shared fields only, the shared files with Open (a new tab) and Add files, the thread (⌘Enter sends), E-mail me. No price anywhere.' },
+    { id: 'record', label: 'Read, write and upload', model: base(), note: 'B-TH-274: the thread as the main column — the files strip (Open = a new tab; All files), the conversation (⌘Enter sends), Add files — and from 1280 px the side column: Why you are here (who invited you, what you can do, until when), the order’s shared fields only, E-mail me. No price anywhere. At 390: the thread is the page, the rest behind “About this invitation”.' },
+    // ---- B-TH-274 (PL7): the "i" sheet, the Files view, a strip with more files than it names.
+    { id: 'phone-side', label: 'Phone: About this invitation (the “i” sheet)', model: base({ sheet: 'side' }), note: 'Open at 390: the side column (why you are here, the record, E-mail me) as a sheet over the thread. From 1280 px the same parts sit beside the thread and the button is not drawn.' },
+    { id: 'files-view', label: 'The Files view', model: base({ sheet: 'files' }), note: 'Every file shared with the person on this record, newest first, each with Open (a new tab): the old Shared files card, now one click from the thread’s strip.' },
+    { id: 'many-files', label: 'More files than the strip names', model: base({ page: page({ files: MANY_FILES }) }), note: 'The strip names the 3 newest; “+2 more · all 5 files” opens the Files view.' },
+    // ---- end B-TH-274
     { id: 'writing', label: 'A message being written', model: base({ draft: 'Va bene anche il colore della fodera.' }) },
     { id: 'posting', label: 'Sending a message', model: base({ draft: 'Va bene anche il colore della fodera.', posting: true }) },
     { id: 'attaching', label: 'A shared file goes with the message', model: base({ draft: 'Le misure sono nella scheda, pagina 2.', attached: [id(202)] }), note: 'Post, attach: only the record’s files shared with the person can be ticked.' },

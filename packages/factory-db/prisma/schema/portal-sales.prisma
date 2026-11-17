@@ -174,6 +174,11 @@ model PortalOrderRequestSize {
 /// ACCEPTED (a change through W2a's amendment command, named here; a cancel of the whole order by cancelling it) or
 /// REFUSED (in words); the customer may withdraw it while OPEN. OPEN → ACCEPTED | REFUSED | WITHDRAWN; all three final.
 /// Asked only of an order that is CONFIRMED, IN_PRODUCTION or READY. Never deleted.
+/// B-PR-23 (production plan, schema wave 4/5): the production asks (RUSH, HOLD, RESUME, SPLIT_SHIPMENT, SAMPLE_ROUND) with
+/// their own columns; a PARTLY_SHIPPED order may still ask CANCEL (of its unshipped lines), RUSH, HOLD and RESUME. The office
+/// may also counter: OPEN → COUNTERED (a COUNTER_OFFER approval request the customer answers) → ACCEPTED (the customer said
+/// yes to the counter) | REFUSED | WITHDRAWN. One OPEN or COUNTERED request per order and kind (the API's, serialised per
+/// order). A bulk ask of one customer gives its requests one batch.
 model OrderChangeRequest {
   id              String                   @id @db.Uuid
   tenantId        String                   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -187,8 +192,9 @@ model OrderChangeRequest {
   reasonCode      String?
   /// Their words: a change's note, a cancel's note.
   reason          String?
-  /// A change only: the delivery date they would like, and the address they ask the goods to go to (one of their own
-  /// addresses); null: unchanged.
+  /// A change: the delivery date they would like, and the address they ask the goods to go to (one of their own
+  /// addresses); null: unchanged. B-PR-23: the date also on a RUSH ("Urgent – asked": the need-by date, optional) and on a
+  /// SPLIT_SHIPMENT (the first part's date); the address a change only.
   requestedDate   DateTime?                @db.Date
   shipToAddressId String?                  @db.Uuid
   status          OrderChangeRequestStatus @default(OPEN)
@@ -201,6 +207,30 @@ model OrderChangeRequest {
   amendmentId     String?                  @db.Uuid
   /// Set exactly when WITHDRAWN.
   withdrawnAt     DateTime?                @db.Timestamptz(3)
+  // B-PR-23 (production plan, schema wave 4/5; lead picks L18, L26, R-50, R-65; review fixes R-09, R-14, R-35).
+  /// The office's counter-offer (COUNTERED, then kept after the answer): the COUNTER_OFFER approval request the customer
+  /// answers (links-depth.prisma ApprovalRequest, about this request, of its customer: the reference), when and by whom (an
+  /// office person), and what it offers: a date, a fee, words (at least one of the three). Written once, at OPEN → COUNTERED.
+  counterApprovalId String?                @db.Uuid
+  counteredAt       DateTime?              @db.Timestamptz(3)
+  counteredById     String?                @db.Uuid
+  counterDate       DateTime?              @db.Date
+  /// The fee the counter-offer asks, in minor units of the order's currency, 0 or more: a priced counter is answered only by
+  /// the customer's Buyer or Admin; others read "A price may apply" (the API drops the amount without the price grain).
+  /// @grain price
+  counterFee        Int?
+  counterNote       String?
+  /// What the customer was shown before Send (the frozen fields, priced yes or no, the earliest date: B-PR-24's impact),
+  /// kept as it was shown; never an amount (it holds no number). Written with the request, never changed.
+  impact            Json?
+  /// SAMPLE_ROUND only (required there): the kind of round asked (PRE_PRODUCTION, SIZE_SET, TOP_OF_PRODUCTION or BRAND).
+  sampleKind        SampleKind?
+  /// SAMPLE_ROUND, once ACCEPTED: the round it made (of the asked kind, for the request's customer, made after it was
+  /// asked: samples.prisma SampleRound); set once.
+  sampleRoundId     String?                @db.Uuid
+  /// A customer's bulk ask (lead pick L26): its requests, one per order, share one batch; a batch holds one customer's
+  /// requests of one kind (the database refuses a batch that would span two customers or two kinds). Never changes.
+  batchId           String?                @db.Uuid
   version         Int                      @default(1)
   createdAt       DateTime                 @default(now()) @db.Timestamptz(3)
   updatedAt       DateTime                 @default(now()) @updatedAt @db.Timestamptz(3)
@@ -212,14 +242,24 @@ model OrderChangeRequest {
   shipTo    PartyAddress?            @relation("OrderChangeRequestShipTo", fields: [tenantId, partyId, shipToAddressId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   amendment SalesOrderAmendment?     @relation("OrderChangeRequestAmendment", fields: [tenantId, orderId, amendmentId], references: [tenantId, orderId, id], onDelete: Restrict, onUpdate: Restrict)
   lines     OrderChangeRequestLine[]
+  // B-PR-23: the counter-offer's approval request (of the same customer), who countered, the sample round an accepted
+  // SAMPLE_ROUND made. Restrict, not Prisma's SetNull default (that would also clear tenantId and partyId).
+  counterApproval ApprovalRequest? @relation("OrderChangeRequestCounter", fields: [tenantId, partyId, counterApprovalId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  counteredBy     User?            @relation("OrderChangeRequestCounteredBy", fields: [tenantId, counteredById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  sampleRound     SampleRound?     @relation("OrderChangeRequestSampleRound", fields: [tenantId, sampleRoundId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   // The target of its rows' reference: a row of the same party.
   @@unique([tenantId, partyId, id])
   // An amendment answers one request.
   @@unique([tenantId, amendmentId])
+  // B-PR-23: a counter-offer counters one request; a sample round answers one request.
+  @@unique([tenantId, counterApprovalId])
+  @@unique([tenantId, sampleRoundId])
   // The order's requests, and the office's Approvals source (what waits).
   @@index([tenantId, orderId, status])
   @@index([tenantId, status])
+  // B-PR-23: a batch's requests (the office answers a batch as one group).
+  @@index([tenantId, batchId])
 }
 
 /// What a customer asks of an order (design portal.customer.orders).
@@ -249,12 +289,17 @@ enum OrderChangeRequestStatus {
   ACCEPTED
   REFUSED
   WITHDRAWN
+  /// B-PR-23: the office countered (a date, a fee, words) and waits for the customer's answer to its COUNTER_OFFER approval
+  /// request: → ACCEPTED (the customer said yes; the office records it) | REFUSED (the office) | WITHDRAWN.
+  COUNTERED
 }
 
 /// One cell a change or cancel request asks for: an order line, one of its sizes (or the line as a whole: a
 /// made-to-measure unit, a line cancelled whole), the pieces it held when they asked and the pieces they ask for (0
 /// removes them; a cancel asks 0). Written with the request, while it is OPEN; never changed or removed. A CANCEL with no
-/// rows asks for the whole order.
+/// rows asks for the whole order. B-PR-23: a change may also ask a line in another colourway; a SPLIT_SHIPMENT's rows are
+/// its first part (1 to the pieces before); a SAMPLE_ROUND names at most one line; a RUSH, HOLD or RESUME asks for the
+/// whole order (no rows).
 model OrderChangeRequestLine {
   id             String   @id @db.Uuid
   tenantId       String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
@@ -268,12 +313,18 @@ model OrderChangeRequestLine {
   /// The pieces as they were when asked (what the customer saw), and the pieces asked; both at least 0.
   quantityBefore Int
   quantity       Int
+  /// B-PR-23: a change's new colourway for the line (another colourway of the order line's style), with that style as the
+  /// colourway's reference key; both or neither, a change only.
+  styleId        String?  @db.Uuid
+  colourwayId    String?  @db.Uuid
   createdAt      DateTime @default(now()) @db.Timestamptz(3)
   /// The partner user who asked.
   createdById    String?  @db.Uuid
 
   request   OrderChangeRequest @relation(fields: [tenantId, partyId, requestId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
   orderLine SalesOrderLine     @relation("OrderChangeRequestLineOrderLine", fields: [tenantId, partyId, orderLineId], references: [tenantId, partyId, id], onDelete: Restrict, onUpdate: Restrict)
+  // B-PR-23. Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId.
+  colourway Colourway?         @relation("OrderChangeRequestLineColourway", fields: [tenantId, styleId, colourwayId], references: [tenantId, styleId, id], onDelete: Restrict, onUpdate: Restrict)
 
   @@unique([tenantId, requestId, orderLineId, size])
 }

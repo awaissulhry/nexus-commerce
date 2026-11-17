@@ -569,7 +569,24 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    request of that customer, PRODUCTION names none; placed ACTIVE on an open work order, read FOR SHARE, by an office person,
    or written whole as LIFTED history; ACTIVE → LIFTED once with when, by whom, why; while ACTIVE only the note and the
    customer's words change; never deleted) and `WorkOrder_production_holds` (a work order leaves ON_HOLD only when no ACTIVE
-   WorkOrderHold names it); no earlier function redefined):
+   WorkOrderHold names it); no earlier function redefined),
+   `…_brand_asks_guards` (production plan schema wave 4/5, B-PR-23, a customer's asks and our answers: it redefines portal
+   sales' `factory_order_change_request_guard` (every earlier rule kept; the production asks' own columns: a reason code only on
+   a CANCEL or a HOLD, the date on a CHANGE, a RUSH (the need-by date) or a SPLIT_SHIPMENT, the address on a CHANGE only, the kind
+   of round exactly on a SAMPLE_ROUND and the round it made only once ACCEPTED, named once; a PARTLY_SHIPPED order still asks
+   CANCEL, RUSH, HOLD, RESUME; a RESUME only after an ACCEPTED HOLD; the impact shown at Send a JSON object with no number in it,
+   never changed; a batch of ONE customer and ONE kind, never changed, read by the SECURITY DEFINER helper
+   `factory_order_change_request_batch_ok`; OPEN → COUNTERED by the office only with an OPEN COUNTER_OFFER approval about it,
+   when, an active office person and a date, a fee or words; COUNTERED → ACCEPTED exactly after the customer's yes to the
+   counter, → REFUSED or WITHDRAWN otherwise; one OPEN or COUNTERED request per order and kind stays the API's: a partial unique
+   cannot stand beside the isolation tests' copy of the first, OPEN, request) and `factory_order_change_request_line_guard`
+   (another colourway of the line's own style on a change; a SPLIT_SHIPMENT's first part; one line of a SAMPLE_ROUND; no line
+   on a RUSH, HOLD or RESUME), links in depth's `factory_approval_request_guard` (COUNTER_OFFER of an OPEN change request and
+   REPROMISE of a sales order, each of the request's company and customer; exactly one answerer of three: the portal user, the
+   link, or the active office person who decided for the party, never its asker, with why; reversed once with when, who and
+   why, only once answered; neither on a CONCESSION, REVISED_ORDER, SIGNATURE or PROOF), and samples'
+   `factory_sample_swatch_guard` (a FABRIC swatch of a textile, lining, membrane or padding, a TRIM swatch of a trim, hardware,
+   thread or label) and `factory_order_gate_guard` (a SIZE_SET gate waits for a SIZE_SET round)):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

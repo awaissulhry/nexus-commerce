@@ -356,3 +356,32 @@
   min-width: 0;
   background: var(--nds-surface);
 }
+
+/* ---- B-TH-255 (T3-F14, T3-F15): the erased card's line (the privacy reason in words, muted, italic — never an empty grey card) and
+   the files an inbound mail did not keep (a quiet note under the message, the office only). Semantic tokens only. */
+.fw-rt-erased,
+.fw-rt-skipped {
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 72ch;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.fw-rt-erased {
+  font-style: italic;
+}
+
+.fw-rt-erased svg,
+.fw-rt-skipped svg {
+  flex: none;
+  margin-top: 3px;
+}
+
+.fw-rt-skipped {
+  color: var(--nds-text-2);
+}
+/* ---- end B-TH-255 */

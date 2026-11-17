@@ -9,6 +9,15 @@ import { ORDER_CHANGE_ASKER_TEMPLATES, PORTAL_SALES_ORDERS_ASK } from './permiss
 import {
   amendmentLinesOf,
   answerProblems,
+  askedSummary,
+  isSalesRequestKind,
+  isWaitingRequest,
+  KIND_WORDS,
+  ORDER_REQUEST_KIND_WORDS,
+  ORDER_REQUEST_KINDS,
+  REQUEST_STATUS_WORDS,
+  REQUEST_STATUSES,
+  WAITING_REQUEST_STATUSES,
   cancelCellsOf,
   cancelProblems,
   changeCellsOf,
@@ -186,5 +195,37 @@ describe('the office’s answer', () => {
       changed: true,
     })
     expect(amendmentLinesOf([], lines)).toEqual({ lines: [{ id: L1 }, { id: L2 }], changed: false })
+  })
+})
+
+// ---- B-PR-23 (production plan, schema wave 4/5): every kind of request said in words, the counter-offer's state --------------
+describe('B-PR-23: every kind of request on an order, and a countered one', () => {
+  it('the kinds are the portal’s and the production asks, each said in Italian and English; Sales answers CHANGE and CANCEL', () => {
+    expect(ORDER_REQUEST_KINDS).toEqual(['CHANGE', 'CANCEL', 'RUSH', 'HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'])
+    for (const kind of ORDER_REQUEST_KINDS) {
+      const words = ORDER_REQUEST_KIND_WORDS[kind]
+      expect(words.it.trim(), kind).not.toBe('')
+      expect(words.en.trim(), kind).not.toBe('')
+      expect(words.it, kind).not.toBe(words.en)
+    }
+    expect(ORDER_REQUEST_KIND_WORDS.CHANGE).toEqual(KIND_WORDS.CHANGE)
+    expect(ORDER_REQUEST_KIND_WORDS.CANCEL).toEqual(KIND_WORDS.CANCEL)
+    // The plan's own words for a customer's urgent ask (17-web-r2 §5).
+    expect(ORDER_REQUEST_KIND_WORDS.RUSH).toEqual({ it: 'Urgente – richiesto', en: 'Urgent – asked' })
+    expect(ORDER_REQUEST_KINDS.filter((kind) => isSalesRequestKind(kind))).toEqual(['CHANGE', 'CANCEL'])
+    expect(isSalesRequestKind('RUSH')).toBe(false)
+  })
+
+  it('a countered request waits for the customer, in words that name no amount and no person', () => {
+    expect(REQUEST_STATUSES).toContain('COUNTERED')
+    for (const status of REQUEST_STATUSES) expect(REQUEST_STATUS_WORDS[status].en.trim(), status).not.toBe('')
+    expect(REQUEST_STATUS_WORDS.COUNTERED).toEqual({ it: 'Controproposta: in attesa della tua risposta', en: 'Our counter-offer: waiting for your answer' })
+    expect(WAITING_REQUEST_STATUSES).toEqual(['OPEN', 'COUNTERED'])
+    expect(REQUEST_STATUSES.filter((status) => isWaitingRequest(status))).toEqual(['OPEN', 'COUNTERED'])
+  })
+
+  it('a production ask asks no sizes and is never a whole-order cancel', () => {
+    expect(askedSummary('RUSH', [], { requestedDate: '2026-12-04', shipToAddressId: null })).toEqual({ sizes: 0, lines: 0, date: true, address: false, wholeOrder: false })
+    expect(askedSummary('CANCEL', [], { requestedDate: null, shipToAddressId: null }).wholeOrder).toBe(true)
   })
 })

@@ -8,7 +8,8 @@ import { JobsCase, type JobsCaseBuilder } from '../view/JobsCase'
 import type { JobRecordViewModel } from '../view/JobRecordView'
 
 /**
- * SCR-193 › one job (design portal.supplier.jobs rec "Job": Kit received, Progress, Send back, Documents, Messages;
+ * SCR-193 › one job (design portal.supplier.jobs rec "Job"; B-TH-277 tabs 5 → 3: Kit received with its documents, Progress,
+ * Send back; the job's conversation docked beside every tab — the portal record frame —, on a phone behind "Messages (2 new)";
  * pop:accept-job, pop:decline-job, the kit's damage photo, the send-back's review; tab:job-sheet), MADE-UP data only:
  * every tab with its states (to do, done, refused, held with the reason, offline), a New job with its answer, a proposed
  * day and our answer, an office preview and a colleague who may only read. Measure at 390 first, then 1440 and 1920.
@@ -39,7 +40,8 @@ function recordModel(job: Job | null, over: Partial<JobRecordViewModel> = {}): J
   }
 }
 
-function recordCase(job: Job | null, tab: RecordTab, over: (job: Job | null) => Partial<JobRecordViewModel> = () => ({}), shell: { preview?: boolean } = {}): JobsCaseBuilder {
+type Frame = { mode: 'docked' | 'stacked'; viewOpen?: boolean; newCount?: number }
+function recordCase(job: Job | null, tab: RecordTab, over: (job: Job | null) => Partial<JobRecordViewModel> = () => ({}), shell: { preview?: boolean; frame?: Frame } = {}): JobsCaseBuilder {
   return (locale: Locale) => {
     const t = words(locale)
     const model = recordModel(job, { tab, ...over(job) })
@@ -47,7 +49,8 @@ function recordCase(job: Job | null, tab: RecordTab, over: (job: Job | null) => 
     const held = facts.preview ? t('held.preview') : facts.mayAct.approve ? null : t('held.may.approve')
     return {
       shell: shellOf(locale, { path: '/jobs', preview: shell.preview ?? false, band: job ? jobBandOf({ t, job, tab, prefix: PREFIX, acceptHeld: held, declineHeld: held }) : { title: t('record.titleLoading') } }),
-      body: { kind: 'record', model, thread: tab === 'messages' ? threadOf(locale) : null },
+      // B-TH-277: the job's conversation docks beside every tab (no Messages tab); none while the job is not read.
+      body: { kind: 'record', model, thread: job ? threadOf(locale) : null, ...(shell.frame ? { frame: shell.frame } : {}) },
     }
   }
 }
@@ -90,9 +93,10 @@ export const designScreen = defineDesignScreen<JobsCaseBuilder>({
     { id: 'accepted', label: 'Accepted', model: recordCase(proposedJob('ACCEPTED'), 'progress', () => ({ end: { kind: 'accepted', proposedDate: null, kitDay: dayAt(1) } })), note: '“Accepted — we send the kit on … with our DDT.”' },
     { id: 'proposed', label: 'A day proposed, our answer pending', model: recordCase(proposedJob(), 'progress') },
     { id: 'proposed-refused', label: 'A day proposed, we kept ours', model: recordCase(proposedJob('REFUSED'), 'progress') },
-    // Documents and messages
-    { id: 'documents', label: 'Documents', model: recordCase(backJob(), 'documents'), note: 'The job sheet (a new tab, printed for the bench), our kit DDT, your DDTs, your photos.' },
-    { id: 'messages', label: 'Messages', model: recordCase(jobOf(), 'messages'), note: 'The job’s shared thread; “Ask a question” scrolls here.' },
+    // B-TH-277: the documents under Kit received; the conversation docked, and on a phone behind its button or open full width.
+    { id: 'kit-documents', label: 'Kit received with its documents', model: recordCase(backJob(), 'kit'), note: 'The old Documents tab, now the last card of Kit received: the job sheet (a new tab, printed for the bench), our kit DDT, your DDTs, your photos.' },
+    { id: 'phone', label: 'Phone: Progress, Messages (2 new)', model: recordCase(jobOf(), 'progress', () => ({}), { frame: { mode: 'stacked', newCount: 2 } }), note: 'Phone first: the body leads; “Messages (2 new)” opens the job’s conversation full width; Back returns to the same tab and scroll.' },
+    { id: 'phone-messages', label: 'Phone: the conversation open', model: recordCase(jobOf(), 'progress', () => ({}), { frame: { mode: 'stacked', viewOpen: true } }), note: 'The job’s shared conversation full width; “Ask a question” focuses its box.' },
     { id: 'sheet', label: 'Job sheet (new tab, for the bench)', model: (locale) => ({ shell: shellOf(locale, { path: '/jobs', band: { title: words(locale)('sheet.title', { number: 'SC-2026-0012' }) } }), body: { kind: 'sheet', model: { state: 'ready', job: jobOf() } } }) },
     // Who and what
     { id: 'preview', label: 'An office preview', model: recordCase(kitJob(), 'kit', () => ({ facts: { ...FACTS, preview: true } }), { preview: true }), note: 'Every act is held: a preview reads, it never acts.' },

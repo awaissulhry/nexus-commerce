@@ -14,6 +14,9 @@ import { RecordThread, type RecordThreadActions, type RecordThreadModel } from '
 import { doorHolds, viewsOffered, whoAnswers, type HeadAbilities, type HeadDoor, type HeadModel, type ThreadView } from '../../../lib/record-thread/head/model'
 // B-TH-229: the API's waiting and owner (B-TH-028), "Change owner…".
 import { answersOf } from '../../../lib/record-thread/head/model'
+// B-TH-255: the View sent to the API — how many new messages it hides.
+import { viewQuery } from '../../../lib/record-thread/head/model'
+import { readHiddenNew } from './api'
 import { OwnerDialog } from '../../../lib/record-thread/head/view/OwnerDialog'
 import { setThreadOwner } from './api'
 import { isApiError } from '../../../lib/api/errors'
@@ -24,6 +27,8 @@ import { FILES_NS, FileStrip } from '../../../lib/record-thread/files/view/FileS
 import { START_AUDIENCE, type MissingDocument, type UploadAsk } from '../../../lib/record-thread/files-view/model'
 import { FILES_VIEW_NS, FilesView, type BulkAction } from '../../../lib/record-thread/files-view/view/FilesView'
 import type { SavedRepliesModel, SavedReplyLine } from '../../../lib/record-thread/helpers/model'
+import { savedReplyLines } from '../../../lib/record-thread/helpers/model' // th-backend-g step 3
+import { replyAudienceOf, withSavedReply } from '../../../lib/record-thread/composer/model' // th-backend-g step 1
 import { HELPERS_NS } from '../../../lib/record-thread/helpers/view/MentionInput'
 import { SavedReplies } from '../../../lib/record-thread/helpers/view/SavedReplies'
 import type { CountPopoverModel, ViewerFile } from '../../../lib/record-thread/popups/model'
@@ -117,6 +122,28 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const kinds = feedKinds(model.feed.messages)
   const views = viewsOffered({ ...kinds, canAudit: held.has('audit.read') })
   const shown: ThreadView = views.includes(view) ? view : 'all'
+  // ---- B-TH-255 (T1-F05): a view is never remembered — another record (or a new visit) opens on All. While a view is on, the API says
+  // how many messages new to the reader it hides (the timeline read with the view's audience), read again whenever a message arrives:
+  // "1 new message hidden by this view · Show all" at the end of the feed, so a forgotten view never hides news.
+  useEffect(() => setView('all'), [key.type, key.id])
+  const [hiddenNew, setHiddenNew] = useState(0)
+  const newestId = base.server.messages[base.server.messages.length - 1]?.id ?? null
+  useEffect(() => {
+    const query = viewQuery(shown)
+    if (!query || !can.read) {
+      setHiddenNew(0)
+      return
+    }
+    const controller = new AbortController()
+    readHiddenNew(api, key, query, controller.signal)
+      .then(setHiddenNew)
+      .catch((error: unknown) => {
+        // A failed count says nothing (never a made-up number); the chip still names the view.
+        if ((error as { name?: string } | null)?.name !== 'AbortError') setHiddenNew(0)
+      })
+    return () => controller.abort()
+  }, [api, key, shown, newestId, can.read])
+  // ---- end B-TH-255
 
   // ── tasks (B-W2a-40: Home's tasks; reading them is home.view, adding tasks.manage + threads.post) ──────────────────────
   const seesTasks = held.has('home.view')
@@ -446,9 +473,10 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     const recordType = key.type
     const controller = new AbortController()
     setReplies((now) => ({ ...now, status: 'loading' }))
-    Promise.all((['it', 'en'] as const).map((language) => listReplies(api, { language, recordType, companyId: host.record.companyId }, controller.signal)))
-      .then((lists) => {
-        const lines: SavedReplyLine[] = lists.flat().flatMap((reply) => (reply.language === 'it' || reply.language === 'en' ? [{ id: reply.id, name: reply.name, language: reply.language, shared: reply.shared }] : []))
+    // th-backend-g step 3 (B-TH-098 web half): the replies of every one of the five languages, in one read.
+    listReplies(api, { recordType, companyId: host.record.companyId }, controller.signal)
+      .then((list) => {
+        const lines: SavedReplyLine[] = savedReplyLines(list)
         setReplies((now) => ({ ...now, status: 'ready', replies: lines }))
       })
       .catch(() => !controller.signal.aborted && setReplies((now) => ({ ...now, status: 'failed' })))
@@ -457,10 +485,11 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const pickReply = (replyId: string) => {
     if (!isReplyRecordType(key.type)) return
     setReplies((now) => ({ ...now, filling: true, missing: [] }))
-    fillReply(api, replyId, { recordType: key.type, recordId: key.id })
+    // th-backend-g step 1 (§0.5): an office note names the office's numbers; a text to the customer its own ("#7"). A note that later
+    // becomes a reply swaps them (the draft keeps the pairs).
+    fillReply(api, replyId, { recordType: key.type, recordId: key.id, audience: replyAudienceOf(model.composer.draft.mode) })
       .then((filled) => {
-        const before = model.composer.draft.body.trim()
-        actions.onDraft({ ...model.composer.draft, body: before ? `${model.composer.draft.body}\n\n${filled.body}` : filled.body }, model.composer.notes)
+        actions.onDraft(withSavedReply(model.composer.draft, filled), model.composer.notes)
         setReplies((now) => ({ ...now, filling: false, missing: filled.missing }))
       })
       .catch(() => {
@@ -566,11 +595,17 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   }
 
   // B-TH-231: "Use on another record…" on a message's ⋯ for a person who may add files (files.upload), online.
-  const feed = feedForView({ ...model.feed, context: { ...model.feed.context, canTask: abilities.task && !offline, canUseOn: can.upload && !offline } }, shown)
+  // B-TH-255: the line of what the View hides comes with the view's feed (0 on All).
+  const feed = { ...feedForView({ ...model.feed, context: { ...model.feed.context, canTask: abilities.task && !offline, canUseOn: can.upload && !offline } }, shown), hiddenNew: shown === 'all' ? 0 : hiddenNew }
   const shownModel: RecordThreadModel = { ...model, feed }
   const fileOf = (fileId: string) => threadFiles.find((file) => file.id === fileId)
   const threadActions: RecordThreadActions = {
     ...actions,
+    // ---- B-TH-255: "Show all" puts the View back to All. While a view is on, nothing is marked read: the read mark is one place in
+    // the conversation, so marking the newest shown message would mark the messages the view hides as read too (the news they are).
+    onShowAll: () => setView('all'),
+    onSeen: shown === 'all' ? actions.onSeen : undefined,
+    // ---- end B-TH-255
     // TH-5 follow-up (B-TH-249): a closed project's box offers no Reopen either (the API refuses it; the project's band reopens both).
     ...(host.reopenWithRecord ? { onReopen: undefined } : {}),
     onTask: (messageId) => {

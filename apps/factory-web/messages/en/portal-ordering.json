@@ -405,7 +405,8 @@
     "colour": "Colour",
     "offered": "offered",
     "notOffered": "not offered",
-    "later": "Photos, care and user information, the minimum order and the lead time are not in the portal yet: ask us."
+    "later": "Photos, care and user information, the minimum order and the lead time are not in the portal yet: ask us.",
+    "ask": "Ask about this style"
   },
   "sheet": {
     "title": "Style sheet {code}",
@@ -424,7 +425,8 @@
     "notDraft": "This request was sent already.",
     "problems_one": "{count} problem to fix — Show me",
     "problems_other": "{count} problems to fix — Show me",
-    "mayNotOrder": "Only colleagues who may order can start an order: ask your admin."
+    "mayNotOrder": "Only colleagues who may order can start an order: ask your admin.",
+    "mayNotAsk": "Only colleagues who may send requests can ask about a style here: use “Ask a question” in the ⋯ menu."
   },
   "refusal": {
     "conflict": "Someone changed this draft at the same time: read it again, then try once more.",
@@ -513,6 +515,8 @@
     "body": "Subject: {subject}",
     "next": "Someone in sales reads it and answers on the request's page and by e-mail.",
     "copy": "We send you a copy by e-mail. The request's page always shows what you sent.",
+    "copySent": "We sent you a copy by e-mail. The request’s page always shows what you sent.",
+    "copyFailed": "We could not e-mail you a copy. The request’s page always shows what you sent.",
     "sent": "What you sent",
     "subject": "Subject",
     "ref": "Your PO",

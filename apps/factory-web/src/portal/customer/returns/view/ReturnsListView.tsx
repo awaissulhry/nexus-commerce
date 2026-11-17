@@ -10,6 +10,14 @@ import { useDsWords } from '../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { CaseChip, CaseItem, CasesRead, ComplaintsRead } from '../api'
 import { answerCell, caseHref, complaintStateOfStatus, eightDProgress, itemLine, stateTone, stateWords } from '../model'
+// ---- B-TH-275 (P-CUS-RET-LIST.list): the New messages column — the person's own new messages on each case, a door to its docked
+// conversation (shown, the box focused); the row's "Messages" opens the same door.
+import { caseThreadHref } from '../model'
+import { useT } from '../../../../lib/i18n/provider'
+import { WithMessages } from '../../../../record-panels/i18n'
+import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../lib/last-message-cell/view/LastMessageCell'
+import { unreadValue, type UnreadMap } from '../../../../lib/last-message-cell/model'
+// ---- end B-TH-275
 import { useReturnWords } from '../words'
 import { Loading, OfflineBanner, ReadFailed } from './parts'
 import { StartDialog, type StartDialogActions, type StartDialogModel } from './StartDialog'
@@ -45,6 +53,8 @@ export interface ReturnsListViewModel {
   repairs?: RepairsSectionModel
   /** Design cases: the keys panel open. */
   keysOpen?: boolean
+  /** B-TH-275: the person's own new messages per case (POST /threads/unread, its party's threads only); null: no thread right (no column). */
+  unread?: UnreadMap | null
 }
 
 export interface ReturnsListActions {
@@ -69,6 +79,15 @@ const CHIP_ORDER: readonly CaseChip[] = ['OPEN', 'WAITING', 'CLOSED', 'ALL']
 const rowKey = (row: Pick<CaseItem, 'type' | 'id'>) => `${row.type}:${row.id}`
 
 export function ReturnsListView({ model, actions }: { model: ReturnsListViewModel; actions?: ReturnsListActions }) {
+  return (
+    <WithMessages namespaces={[LAST_MESSAGE_NS]}>
+      <List model={model} actions={actions} />
+    </WithMessages>
+  )
+}
+
+function List({ model, actions }: { model: ReturnsListViewModel; actions?: ReturnsListActions }) {
+  const l = useT(LAST_MESSAGE_NS) // B-TH-275
   const words = useReturnWords()
   const { t, locale, date, at } = words
   const ds = useDsWords()
@@ -127,7 +146,8 @@ export function ReturnsListView({ model, actions }: { model: ReturnsListViewMode
       const items: MenuItemDef[] = [
         { id: 'status', label: t('row.status'), href: caseHref(prefix, data.type, data.id, 'status') },
         { id: 'request', label: t('row.request'), href: caseHref(prefix, data.type, data.id, 'request') },
-        { id: 'messages', label: t('row.messages'), href: caseHref(prefix, data.type, data.id, 'messages') },
+        // B-TH-275: the case's conversation docks beside its tabs; this opens it shown, the box focused.
+        { id: 'messages', label: t('row.messages'), href: caseThreadHref(prefix, data.type, data.id) },
       ]
       return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('row.menu', { number: data.number }) }} items={items} />
     }
@@ -141,9 +161,20 @@ export function ReturnsListView({ model, actions }: { model: ReturnsListViewMode
       { ...column('status', t('col.status'), StatusCell, { flex: 0.9, minWidth: 176 }), valueGetter: ({ data }) => (data ? stateWords(t, locale, data.type, data.state, data.words) : '') },
       { ...column('next', t('col.next'), NextCell, { flex: 1.8, minWidth: 176 }), valueGetter: ({ data }) => data?.next.words[locale] ?? '' },
       { ...column('updated', t('col.updated'), UpdatedCell, { flex: 0.55, minWidth: 108 }), valueGetter: ({ data }) => (data ? date(data.lastUpdate) : '') },
+      // ---- B-TH-275: "● 2 new · 10:42" on a case with new messages for this person (empty otherwise); the cell opens its conversation.
+      ...(latest.current.model.unread
+        ? [
+            {
+              ...column('newMessages', l('column'), ({ data }: ICellRendererParams<CaseItem>) => (data ? <LastMessageCell unread={latest.current.model.unread?.[data.id]} href={caseThreadHref(latest.current.model.prefix, data.type, data.id)} record={[data.yourRef, data.number].filter(Boolean).join(' · ')} /> : null), { flex: 0.6, minWidth: 112 }),
+              headerTooltip: l('columnHint'),
+              valueGetter: ({ data }: { data?: CaseItem }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined),
+            } as ColDef<CaseItem>,
+          ]
+        : []),
+      // ---- end B-TH-275
       { ...column('actions', t('col.actions'), MoreCell, { width: 72, minWidth: 72, maxWidth: 72 }), pinned: 'right', suppressHeaderMenuButton: true },
     ]
-  }, [t, locale, date, at, ds.refPair])
+  }, [t, locale, date, at, ds.refPair, l, model.unread /* B-TH-275 */])
 
   const count = model.selected.length
   const bulk = (

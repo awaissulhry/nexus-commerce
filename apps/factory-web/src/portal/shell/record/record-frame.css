@@ -1,0 +1,95 @@
+/*
+ * B-TH-273 — the portal record frame (PL3, PL4): layout only, semantic tokens only. From 1280 px a 3 : 2 grid — the body ~60 %,
+ * the record's conversation ~40 %, sticky under the band (`--fw-prf-top`, measured), as tall as the window allows (`--fw-prf-h`),
+ * its messages scrolling inside and the box at its foot. Below 1280 px the body leads with the "Messages" button; the full-width
+ * view (`data-view="thread"`) shows the conversation alone with its Back. No page max-width (Owner rule 2026-10-29): the grid
+ * fills the main area at 1440 and 1920.
+ */
+
+.fw-prf {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-prf-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-prf-bar {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.fw-prf-dock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  scroll-margin-top: var(--fw-prf-top, var(--nds-space-24));
+}
+
+.fw-prf-thread {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+.fw-prf-back {
+  display: flex;
+}
+
+/* Narrower than 1280 px: the body, or the conversation alone (the full-width view). */
+.fw-prf[data-mode='stacked'][data-view='body'] > .fw-prf-dock {
+  display: none;
+}
+
+.fw-prf[data-mode='stacked'][data-view='thread'] > .fw-prf-body {
+  display: none;
+}
+
+/* From 1280 px: docked beside the body, sticky, its messages scrolling inside, the box at its foot. */
+.fw-prf.has-thread[data-mode='docked'] {
+  grid-template-columns: var(--fw-prf-cols, minmax(0, 3fr) minmax(0, 2fr));
+}
+
+.fw-prf[data-mode='docked'] > .fw-prf-dock {
+  position: sticky;
+  top: var(--fw-prf-top, var(--nds-space-16));
+  height: var(--fw-prf-h, calc(100vh - 160px));
+}
+
+.fw-prf[data-mode='docked'] .fw-prf-thread {
+  flex: 1 1 auto;
+}
+
+.fw-prf[data-mode='docked'] .fw-prf-thread > div,
+.fw-prf[data-mode='docked'] .fw-pthread {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.fw-prf[data-mode='docked'] .fw-pthread > .nds-pthread {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.fw-prf[data-mode='docked'] .fw-pthread .nds-pthread-list,
+.fw-prf[data-mode='docked'] .fw-pthread .nds-pthread-empty {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.fw-prf[data-mode='docked'] .fw-pthread .nds-pthread-empty {
+  align-content: flex-start;
+}

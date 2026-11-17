@@ -117,8 +117,7 @@
   "tabs": {
     "label": "Sezioni della pratica",
     "request": "Richiesta",
-    "status": "Stato",
-    "messages": "Messaggi"
+    "status": "Stato"
   },
   "record": {
     "titleReturn": "Reso {number}",
@@ -172,7 +171,8 @@
     "cancelled": "Il reso {number} è annullato. Puoi aprirne uno nuovo quando vuoi."
   },
   "messages": {
-    "hint": "Scrivici qui su questa pratica: rispondiamo nella stessa conversazione. Puoi anche rispondere alle nostre e-mail."
+    "labelReturn": "Messaggi sul reso {number}",
+    "labelComplaint": "Messaggi sul reclamo di qualità {number}"
   },
   "unsaved": {
     "start": "Il tuo reso o reclamo non è ancora stato inviato.",
@@ -230,7 +230,8 @@
     "noPhotos": "Nessuna foto per ora.",
     "photoAdded": "Aggiunta il {date}",
     "view": "Vedi",
-    "addPhotos": "Aggiungi foto"
+    "addPhotos": "Aggiungi foto",
+    "orderOpen": "Apri l’ordine"
   },
   "status": {
     "where": "A che punto è",
@@ -279,7 +280,8 @@
     "documentsNone": "Nessuna lettera o rapporto condiviso per ora.",
     "letter": "La nostra lettera di risposta",
     "letterV": "La nostra lettera di risposta (versione {version})",
-    "eightDReport": "Rapporto 8D"
+    "eightDReport": "Rapporto 8D",
+    "replacementOpen": "Apri l’ordine"
   },
   "grade": {
     "NEW": "Come nuovo",

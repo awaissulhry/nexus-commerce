@@ -21,6 +21,8 @@ import type {
 } from './api'
 // B-W2b-346 (SAL-298, RX2:02): the remake's own checks.
 import { remakeDirty, remakeStartProblems } from './remake/model'
+// B-TH-275: the portal record frame's tab rule.
+import { tabOrFirst } from '../../shell/record/model'
 
 /**
  * SCR-187 — the customer's Returns & claims (B-W2b-197; design portal.customer.returns), pure: the addresses, the tabs,
@@ -36,10 +38,13 @@ export type Translate = (key: string, params?: Readonly<Record<string, string | 
 export type Tone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'
 
 // ── addresses ────────────────────────────────────────────────────────────────────────────────────────────────────────
-export const RECORD_TABS = ['request', 'status', 'messages'] as const
+// ---- B-TH-275 (P-CUS-RET.body, P-CUS-CMP.body; tabs 3 → 2): Request and Status; the case's conversation docks beside both (the
+// portal record frame, B-TH-273). An old `?tab=messages` opens Status (the record's first stop) with the conversation shown.
+export const RECORD_TABS = ['request', 'status'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
-/** The record opens on Status (design rec meta "address: /p/<party>/returns/<id>?tab=status"). */
-export const tabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'status')
+/** The record opens on Status (design rec meta "address: /p/<party>/returns/<id>?tab=status"); an old Messages address too. */
+export const tabOf = (value: string | null | undefined): RecordTab => tabOrFirst(['status', 'request'] as const, value)
+// ---- end B-TH-275
 
 /** The list's address: the chip (OPEN is the API's default and is left out) and the search. */
 export function listQuery(chip: CaseChip | null, q: string, extra: Readonly<Record<string, string>> = {}): string {
@@ -54,8 +59,21 @@ export function listQuery(chip: CaseChip | null, q: string, extra: Readonly<Reco
 /** A case's own page: a return at `/returns/<id>`, a complaint at `/returns/complaints/<id>` (the same tabs). */
 export function caseHref(prefix: string, type: CaseType, id: string, tab: RecordTab = 'status'): string {
   const base = type === 'RETURN' ? `${prefix}/returns/${encodeURIComponent(id)}` : `${prefix}/returns/complaints/${encodeURIComponent(id)}`
-  return `${base}?tab=${tab}${tab === 'messages' ? '#messages' : ''}`
+  return `${base}?tab=${tab}`
 }
+
+// ---- B-TH-275 (P-CUS-RET-LIST.list): a row's "Messages" (and its new-messages mark) opens the case with its docked conversation
+// shown and the box focused — the frame's arrival term `tab=messages` (the page then reads Status and cleans the address).
+export function caseThreadHref(prefix: string, type: CaseType, id: string): string {
+  const base = type === 'RETURN' ? `${prefix}/returns/${encodeURIComponent(id)}` : `${prefix}/returns/complaints/${encodeURIComponent(id)}`
+  return `${base}?tab=messages`
+}
+
+/** The person's own new messages on a case (B-TH-027 reading: POST /portal/threads/unread), by its thread's record; 0: none. */
+export function newOnCase(unread: Readonly<Record<string, { newCount: number }>> | null | undefined, id: string): number {
+  return unread?.[id]?.newCount ?? 0
+}
+// ---- end B-TH-275
 
 /** The record type of a case in the API's threads (its Messages). */
 export const threadTypeOf = (type: CaseType): string => (type === 'RETURN' ? 'ReturnAuthorisation' : 'Complaint')

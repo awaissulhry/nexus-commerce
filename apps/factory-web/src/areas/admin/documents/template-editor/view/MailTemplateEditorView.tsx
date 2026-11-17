@@ -12,7 +12,10 @@ import { useLocale } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import { adminHref } from '../../../shared/model'
 import { RecordProblem } from '../../../shared/view/parts'
-import type { EmailTemplate, MailEventInfo, MailPreview } from '../../mail-templates/api'
+import type { EmailTemplate, MailEventInfo, MailEventsAnswer, MailPreview } from '../../mail-templates/api'
+// th-backend-g step 3: German, French and Spanish read Claude's drafts, "to be read once" until someone has.
+import { isDraftedLanguage } from '@nexus/factory-domain/templates/message-languages'
+import { languageUnread } from '../../mail-templates/model'
 import { MAIL_LIMITS, mailChanges, mailProblems, newVersionHeld, placeholderToken, publishHeld, saveHeld, STATUS_TONE, type MailDraft } from '../model'
 import { TEMPLATE_NAMESPACES, useKindWords, type EditorConfirm, type EditorNotice, type EditorRead } from './DocTemplateEditorView'
 import { TemplateEditor, TemplateText } from './TemplateEditor'
@@ -34,6 +37,8 @@ export interface MailEditorModel {
   read: EditorRead<EmailTemplate>
   /** The event's placeholders and the code's words (null while read). */
   event: MailEventInfo | null
+  /** th-backend-g step 3: who read each drafted language (German, French, Spanish) once; absent: not known (said as read). */
+  review?: MailEventsAnswer['review']
   versions: readonly EmailTemplate[] | null
   draft: MailDraft | null
   preview: { answer: MailPreview | null; problem: string | null }
@@ -85,7 +90,9 @@ function Editor({ model, actions }: { model: MailEditorModel; actions?: MailEdit
     )
   const { template, mayManage } = model.read
   const draft = model.draft
-  const language = template.language === 'en' ? 'en' : 'it'
+  // th-backend-g step 3 (B-TH-098): the version's own language (any of the five); German, French and Spanish read Claude's drafts.
+  const language = template.language
+  const unread = languageUnread(language, model.review)
   const changed = mailChanges(template, draft)
   const problems = mailProblems(model.event?.placeholders ?? null, draft)
   const problemCount = (problems.subject?.length ?? 0) + (problems.body?.length ?? 0)
@@ -94,7 +101,7 @@ function Editor({ model, actions }: { model: MailEditorModel; actions?: MailEdit
   const openDraft = template.status === 'DRAFT' ? null : (model.versions ?? []).find((version) => version.status === 'DRAFT') ?? null
   const title = t('tpl.mailEditor.title', { event: t(`tpl.event.${template.event}`), language: words.language(language) })
   const placeholders = model.event?.placeholders ?? []
-  const code = model.event?.words[language] ?? null
+  const code = (isDraftedLanguage(language) ? model.event?.drafts?.[language] : model.event?.words[language]) ?? null
   const save = saveHeld(state)
   const publish = publishHeld(state)
   const newHeld = newVersionHeld(state, openDraft)
@@ -145,6 +152,12 @@ function Editor({ model, actions }: { model: MailEditorModel; actions?: MailEdit
       ) : (
         <div className="fw-tpl-section">
           <p className="fw-adm-hint">{t('tpl.code.intro')}</p>
+          {/* th-backend-g step 3: the code's words in this language are Claude's draft, not read yet. */}
+          {unread && (
+            <span>
+              <Pill tone="warning">{t('tpl.mail.draftUnread')}</Pill> <span className="fw-adm-hint">{t('tpl.mail.draftUnreadHint', { language: words.language(language) })}</span>
+            </span>
+          )}
           {code ? (
             <Card padded>
               <div className="fw-tpl-mail">

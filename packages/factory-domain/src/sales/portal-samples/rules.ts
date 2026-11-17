@@ -75,7 +75,8 @@ export const safeTrackingUrl = (url: string | null): string | null => (url && /^
 // ── a style's stage ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Design sec:styles "stage (Proto / Fit / Salesman / Approved for production)": a round's kind, or approved, or in development. */
-export const STYLE_STAGES = ['IN_DEVELOPMENT', 'PROTO', 'FIT', 'SALESMAN', 'PRE_PRODUCTION', 'CERTIFICATION', 'BRAND', 'APPROVED'] as const
+// B-PR-23: every round kind is a stage (the size set and top of production rounds too).
+export const STYLE_STAGES = ['IN_DEVELOPMENT', 'PROTO', 'FIT', 'SALESMAN', 'PRE_PRODUCTION', 'CERTIFICATION', 'BRAND', 'SIZE_SET', 'TOP_OF_PRODUCTION', 'APPROVED'] as const
 export type StyleStage = (typeof STYLE_STAGES)[number]
 
 

@@ -14,6 +14,10 @@ import { takesRequests } from './open'
 import { partnerRequest, requestViewOf } from './views'
 // B-TH-092: the New order's draft goes with the request sent.
 import { clearDraftInCommand } from '../../../platform/threads/draft-keys'
+// th-backend-g step 2: the receipt mail to the person who sent the request.
+import { processEmail } from '../../../platform/email-out/service'
+import { systemCallerOf } from '../../../platform/files/files'
+import { portalRecipient, sendRequestReceipt } from '../inquiries/receipt'
 
 /**
  * The customer sends a request from the portal (B-TH-010; threads plan G1, L2-G02; design P-CUS-NEW "New order" as an e-mail,
@@ -89,9 +93,18 @@ export async function sendRequest(app: FastifyInstance, request: FastifyRequest,
   const view = await requestViewOf(reader, request, row)
   const yourNumber = customerNumberOf('REQUEST', row.customerSeq)
   const subject = subjectOf(body.subject ?? null, body.message)
+  // th-backend-g step 2 (B-TH-279; P-CUS-NEW.receipt-F02): the receipt mail to the person who sent it — them only, in their language
+  // (B-TH-098), once per request — and the answer says whether it went (the page says so when it could not).
+  const mailed = await sendRequestReceipt(systemCallerOf(request)(session.tenantId), processEmail(), { inquiryId: id, to: await portalRecipient(systemCallerOf(request)(session.tenantId), session.partyId, session.person), clock: appClock(app) })
+    .then((outcome) => outcome.sent)
+    .catch((error: unknown) => {
+      request.log.error({ err: error, inquiryId: id }, 'the receipt of a portal request could not be sent')
+      return false
+    })
   return {
     request: view,
     receipt: {
+      mailed, // th-backend-g step 2
       // th2-backend step 7 (threads plan §0.5, counts do not leak): the customer's own reference, never the office's series.
       number: customerRefOf('REQUEST', row.customerSeq) ?? '—',
       yourNumber,

@@ -36,7 +36,7 @@ function SheetContainer({ id }: { id: string }) {
   useEffect(() => {
     if (allowed) void load()
   }, [allowed, load])
-  usePortalBand({ title: job ? t('sheet.title', { number: job.number }) : t('sheet.titleLoading'), back: { href: jobHref(frame.prefix, id, 'documents'), label: job?.number ?? t('list.title') } })
+  usePortalBand({ title: job ? t('sheet.title', { number: job.number }) : t('sheet.titleLoading'), back: { href: jobHref(frame.prefix, id, 'kit') /* B-TH-277: the job's documents are on Kit received */, label: job?.number ?? t('list.title') } })
   if (!allowed) return <NotInAccessHere />
   return <SheetView model={{ state, job }} onRetry={() => void load()} />
 }

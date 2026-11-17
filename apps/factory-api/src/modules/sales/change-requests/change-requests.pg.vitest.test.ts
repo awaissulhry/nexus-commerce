@@ -410,3 +410,45 @@ describe('the cancel fee (B-W2b-F14, SalesSettings.cancelFeePct): shown, never c
     expect((await ok(browsers.buyer, `/portal/sales-orders/${so2.id}/change-requests`)).items.every((row: Json) => row.cancelFee === null)).toBe(true)
   })
 })
+
+// ── B-PR-23 (production plan, schema wave 4/5): a production ask is read in words everywhere and answered only in Approvals ────
+describe('B-PR-23: a production ask ("Urgent – asked") on the order is read in words, never answered by Sales', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('the customer and the office read it; Sales neither accepts nor refuses it; the order page does not withdraw it; it holds no change or cancel', async () => {
+    const so3 = await orderOf('SEED-SO-0003')
+    const rush = newId()
+    const at = h.clock.now()
+    const needBy = addDays(TODAY(), 14)
+    // Asked in the customer's own scope, as the portal's ask writes it (the portal route takes RUSH from B-PR-25 on).
+    await h.database.withScope({ audience: 'partner', tenantId: T, actorId: partnerIds.buyer, partyId: P1 }, (client) =>
+      client.orderChangeRequest.create({ data: { id: rush, companyId: companyA, partyId: P1, orderId: so3.id, kind: 'RUSH', reason: 'Our season opens early.', requestedDate: new Date(`${needBy}T00:00:00.000Z`), createdAt: at, updatedAt: at, createdById: partnerIds.buyer }, select: { id: true } }),
+    )
+    // The customer reads it in words (both roles), with its need-by date; no size, no fee.
+    for (const browser of [browsers.buyer, browsers.viewer]) {
+      const seen = (await ok(browser, `/portal/sales-orders/${so3.id}/change-requests`)).items.find((row: Json) => row.id === rush)
+      expect(seen).toMatchObject({ kind: 'RUSH', kindWords: { en: 'Urgent – asked', it: 'Urgente – richiesto' }, status: 'OPEN', words: { en: 'Waiting for our answer' }, cells: [], wholeOrder: false, requestedDate: needBy, cancelFee: null })
+    }
+    // The office reads it in its list and record, but answers it in Home › Approvals, not here.
+    const list = await officeList(office(), { status: 'OPEN', orderId: so3.id, limit: 50, offset: 0 }, h.clock.now())
+    expect(list.items.find((row) => row.id === rush)).toMatchObject({ kind: 'RUSH', kindWords: { en: 'Urgent – asked' }, mayAnswer: false, party: { id: P1 } })
+    expect(list.counts).toMatchObject({ OPEN: 1, COUNTERED: 0 })
+    expect((await officeRecord(office(), rush, h.clock.now())).preview).toBeNull()
+    expect((await thrown(acceptRequest(office(), rush, { version: 1 }, undefined, h.clock))).issues[0].path).toBe('request/PRODUCTION_ASK')
+    expect((await thrown(refuseRequest(office(), rush, { version: 1, answer: 'No.' }, undefined, h.clock))).issues[0].path).toBe('request/PRODUCTION_ASK')
+    expect((await admin('SELECT status::text AS status FROM "OrderChangeRequest" WHERE id = $1', [rush]))[0]).toEqual({ status: 'OPEN' })
+    // Not withdrawn from the order page (it is withdrawn where it was asked: B-PR-25, B-PR-46a), in words.
+    const withdraw = await browsers.buyer.post(`/portal/sales-orders/${so3.id}/change-requests/${rush}/withdraw`, { version: 1 })
+    expect(withdraw.status, JSON.stringify(withdraw.body)).toBe(409)
+    expect(withdraw.body.error.message).toContain("write to us in the order's thread")
+    // It holds no change or cancel of the order: the rules show none waiting, and a cancel is asked beside it…
+    expect((await ok(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/rules`)).openRequestId).toBeNull()
+    const cancel = await browsers.buyer.post(`/portal/sales-orders/${so3.id}/change-requests`, { kind: 'CANCEL', reasonCode: 'LEAD_TIME' })
+    expect(cancel.status, JSON.stringify(cancel.body)).toBe(201)
+    // … and one change or cancel still waits at a time, as before.
+    expect((await ok(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/rules`)).openRequestId).toBe(cancel.body.request.id)
+    const second = await browsers.buyer.post(`/portal/sales-orders/${so3.id}/change-requests`, { kind: 'CANCEL', reasonCode: 'LEAD_TIME' })
+    expect(second.status).toBe(409)
+    expect(second.body.error.issues[0].path).toBe('body/OPEN_REQUEST')
+    // A production ask never shows as a change request on Home › Approvals (B-PR-12's rule holds for the new kinds).
+    expect((await today(office(), { kind: 'ORDER_CHANGE_REQUEST', limit: 50 })).items.map((item: Json) => item.record.id ?? item.id)).not.toContain(rush)
+  })
+})

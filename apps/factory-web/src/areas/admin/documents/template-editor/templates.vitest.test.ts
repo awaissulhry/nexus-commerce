@@ -18,6 +18,7 @@ import { createEmailTemplate, previewEmailTemplate, saveEmailTemplate } from '..
 import { EVENTS, MAIL_TEMPLATES, mailAnswerOf, SERVICE_IT_V3 } from '../mail-templates/fixtures'
 import { designScreen as mailListScreen } from '../mail-templates/fixtures'
 import { draftsOf, mailBulkReach, mailOpenTarget, mailRowHeld, mailRowId, mailRowsOf, mailStarts } from '../mail-templates/model'
+import { languageUnread } from '../mail-templates/model' // th-backend-g step 3
 import { designScreen as editorScreen } from './fixtures'
 // B-TH-279: Saved replies (Admin › Documents › E-mail templates › Saved replies).
 import { REPLY_RECORD_TYPES } from '@nexus/factory-domain/templates/replies'
@@ -210,6 +211,23 @@ describe('the e-mail templates list', () => {
     const chosen = [row(mailRowId('service.status_changed', 'it')), tracking]
     expect(mailBulkReach(chosen, 'publish', may).applies).toHaveLength(2)
     expect(mailBulkReach(chosen, 'retire', may).left.map((entry) => entry.why)).toEqual(['tpl.bulk.left.noOwn'])
+  })
+
+  // ---- th-backend-g step 3 (B-TH-098's web half): the de / fr / es slots, Claude's drafts "to be read once" until someone has.
+  it('th-backend-g step 3: a German slot reads Claude’s draft and says "to be read once" until German is read; a person’s version needs no reading', () => {
+    const draftWords = { subject: 'Ihre Serviceanfrage {{case.number}}', body: 'Guten Tag' }
+    const events = { ...EVENTS, events: EVENTS.events.map((event) => ({ ...event, drafts: { de: draftWords, fr: draftWords, es: draftWords } })), messageLanguages: ['it', 'en', 'de', 'fr', 'es'] as ('it' | 'en' | 'de' | 'fr' | 'es')[], review: { de: { readBy: null, readOn: null }, fr: { readBy: 'Owner', readOn: '2026-11-20' }, es: { readBy: null, readOn: null } } }
+    const slot = (event: string, language: 'de' | 'fr' | 'es', inUse: 'CODE' | 'COMPANY') => ({ event: event as never, language, inUse, company: { active: inUse === 'COMPANY' ? { id: 'own-de', revision: 1, at: '2026-11-17T08:00:00.000Z' } : null, draft: null }, all: { active: null, draft: null }, lastChangedAt: null })
+    const list = { templates: [], slots: [slot('service.status_changed', 'de', 'CODE'), slot('service.status_changed', 'fr', 'CODE'), slot('shipping.tracking_link', 'de', 'COMPANY')], mayManage: { company: true, all: true } }
+    const fives = mailRowsOf({ list, events })
+    expect(fives.map((entry) => [entry.id, entry.unread, entry.subject])).toEqual([
+      ['service.status_changed:de', true, draftWords.subject],
+      ['service.status_changed:fr', false, draftWords.subject],
+      ['shipping.tracking_link:de', false, null],
+    ])
+    expect(languageUnread('de', events.review)).toBe(true)
+    expect(languageUnread('it', events.review)).toBe(false)
+    expect(languageUnread('de', undefined)).toBe(false)
   })
 })
 

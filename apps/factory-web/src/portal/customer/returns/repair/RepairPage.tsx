@@ -16,9 +16,13 @@ import { announceRepairPhoto, answerEstimate, completeRepairPhoto, fetchRepair, 
 import { repairBandOf } from './band'
 import { answerHeldKey, declineProblem, NS, photosHeldKey, repairRefusalKey, repairTabOf } from './model'
 import { RepairRecordView, type RepairDialog, type RepairRecordViewModel } from './RepairRecordView'
+// B-TH-275 (B-TH-081): the repair's OWN conversation (GET /portal/threads/RepairOrder/:id), docked by the frame.
+import { PortalThread } from '../../../shell/thread/PortalThread'
+import { REPAIR_THREAD_TYPE } from './model'
 
 /**
- * `/p/<party>/returns/repairs/<id>?tab=status|request` — a customer's repair (B-W2b-342; SCR-358): reads it (GET
+ * `/p/<party>/returns/repairs/<id>?tab=status|request` — a customer's repair (B-W2b-342; SCR-358; B-TH-275: its OWN conversation
+ * docked beside both tabs, B-TH-081's partner view): reads it (GET
  * /portal/repairs/:id), fills the band, runs the pop-ups — Accept (POST …/estimate/answer ACCEPTED with the estimate's
  * version), Decline (the same with the customer's words), Add photos (each announced, its bytes PUT to the store,
  * confirmed), a photo full size (ONE logged open) — and reads again on the live channel's hints.
@@ -245,6 +249,9 @@ function RepairContainer({ id }: { id: string }) {
           },
         },
       }}
-    />
+    >
+      {/* B-TH-275: the repair's ONE conversation, docked beside both tabs. */}
+      {repair ? <PortalThread type={REPAIR_THREAD_TYPE} id={repair.id} showRecord={false} /> : null}
+    </RepairRecordView>
   )
 }

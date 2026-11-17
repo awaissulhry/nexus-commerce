@@ -10,16 +10,21 @@ import { FileRow, useDsWords } from '../../../../lib/i18n/ds-parts'
 import type { CaseFile, CaseDocument, ComplaintRecord, ReturnRecord } from '../api'
 import { complaintSteps, disciplineSteps, lineBySeq, returnSteps, viaKey, type RecordTab } from '../model'
 import { useReturnWords } from '../words'
+// ---- B-TH-275: the case docks its conversation (the portal record frame, B-TH-273): no Messages tab, no Ask modal.
+import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
+import type { PortalFrameMode } from '../../../shell/record/model'
+// ---- end B-TH-275
 import { CancelDialog, PhotosDialog, PhotoViewer, type CancelModel, type PhotosActions, type PhotosModel, type PhotoViewerModel } from './Dialogs'
 import { Loading, OfflineBanner, RecordGone } from './parts'
 import '../returns.css'
 
 /**
- * SCR-187 › one case (design portal.customer.returns rec "Return": Request, Status, Messages; a complaint opens the same
- * tabs). The frame's band holds the title, their reference first, the state, "Add photos" while we have not decided and
- * "Print the return label" once approved, the ⋯ (the return label and credit note PDFs in a new tab, Cancel this
- * request…, Ask a question) and the three tabs; this view draws the tab and the pop-ups. No money on this page: a credit
- * note is named by its number.
+ * SCR-187 › one case (design portal.customer.returns rec "Return"; B-TH-275, picture 22: Request and Status, 3 → 2; a complaint
+ * opens the same tabs). The frame's band holds the title, their reference first, the state, "Add photos" while we have not
+ * decided and "Print the return label" once approved, the ⋯ (the return label and credit note PDFs in a new tab, Cancel this
+ * request…, Ask a question) and the two tabs; this view draws the tab and the pop-ups beside the case's ONE conversation, docked by
+ * the portal record frame (`children`: PortalThread live, ThreadView in the design). Photos keep the page's own Add photos (the DS
+ * PartnerThread takes no files yet). No money on this page: a credit note is named by its number.
  */
 
 export type CaseRecord = { type: 'RETURN'; record: ReturnRecord } | { type: 'COMPLAINT'; record: ComplaintRecord }
@@ -45,6 +50,8 @@ export interface CaseRecordViewModel {
   /** The person follows the investigation (portal.complaints.view). */
   readsComplaints: boolean
   dialog: CaseDialog | null
+  /** B-TH-275 — the design review: the frame's layout whatever the window (docked at 1440, the narrow "Messages (2 new)"). */
+  frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number }
 }
 
 export interface CaseRecordActions {
@@ -73,31 +80,27 @@ export function CaseRecordView({ model, actions, children }: { model: CaseRecord
   const current = model.case
   const dialog = model.dialog
   return (
-    <div className="fw-pret">
-      <OfflineBanner since={model.offlineSince} />
-      {model.notice ? (
-        <Banner
-          tone={model.notice.tone}
-          title={t(model.notice.key, model.notice.params)}
-          action={
-            <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
-              {t('notice.hide')}
-            </Button>
-          }
-        />
-      ) : null}
-      {model.tab === 'request' ? current.type === 'RETURN' ? <ReturnRequest model={model} record={current.record} actions={actions} /> : <ComplaintRequest model={model} record={current.record} actions={actions} /> : null}
-      {model.tab === 'status' ? current.type === 'RETURN' ? <ReturnStatus model={model} record={current.record} actions={actions} /> : <ComplaintStatus model={model} record={current.record} actions={actions} /> : null}
-      {model.tab === 'messages' ? (
-        <section id="messages" className="fw-pret-tab" aria-label={t('tabs.messages')}>
-          <p className="fw-pret-hint">{t('messages.hint')}</p>
-          {children}
-        </section>
-      ) : null}
-      {dialog?.kind === 'cancel' ? <CancelDialog model={dialog.model} onConfirm={actions?.dialog?.cancel?.onConfirm} onClose={actions?.dialog?.cancel?.onClose} /> : null}
-      {dialog?.kind === 'photos' ? <PhotosDialog model={dialog.model} actions={actions?.dialog?.photos} /> : null}
-      {dialog?.kind === 'photo' ? <PhotoViewer model={dialog.model} onIndex={actions?.dialog?.photo?.onIndex} onClose={actions?.dialog?.photo?.onClose} onRetry={actions?.dialog?.photo?.onRetry} /> : null}
-    </div>
+    <PortalRecordFrame thread={children ?? null} threadLabel={t(current.type === 'RETURN' ? 'messages.labelReturn' : 'messages.labelComplaint', { number: current.record.number })} design={model.frame}>
+      <div className="fw-pret">
+        <OfflineBanner since={model.offlineSince} />
+        {model.notice ? (
+          <Banner
+            tone={model.notice.tone}
+            title={t(model.notice.key, model.notice.params)}
+            action={
+              <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
+                {t('notice.hide')}
+              </Button>
+            }
+          />
+        ) : null}
+        {model.tab === 'request' ? current.type === 'RETURN' ? <ReturnRequest model={model} record={current.record} actions={actions} /> : <ComplaintRequest model={model} record={current.record} actions={actions} /> : null}
+        {model.tab === 'status' ? current.type === 'RETURN' ? <ReturnStatus model={model} record={current.record} actions={actions} /> : <ComplaintStatus model={model} record={current.record} actions={actions} /> : null}
+        {dialog?.kind === 'cancel' ? <CancelDialog model={dialog.model} onConfirm={actions?.dialog?.cancel?.onConfirm} onClose={actions?.dialog?.cancel?.onClose} /> : null}
+        {dialog?.kind === 'photos' ? <PhotosDialog model={dialog.model} actions={actions?.dialog?.photos} /> : null}
+        {dialog?.kind === 'photo' ? <PhotoViewer model={dialog.model} onIndex={actions?.dialog?.photo?.onIndex} onClose={actions?.dialog?.photo?.onClose} onRetry={actions?.dialog?.photo?.onRetry} /> : null}
+      </div>
+    </PortalRecordFrame>
   )
 }
 
@@ -313,7 +316,9 @@ function ReturnStatus({ model, record, actions }: { model: CaseRecordViewModel; 
         {progress.replacementOrder ? (
           <p className="fw-pret-replacement">
             <span>{t('status.replacement')}</span>{' '}
-            <a href={`${model.prefix}/open/SalesOrder/${encodeURIComponent(progress.replacementOrder.id)}`}>{progress.replacementOrder.number}</a>
+            {/* B-TH-275 (plan §0.5): the replacement order opens its page; the office's SO- number is never drawn (the returns read
+                carries no customer number for it yet). */}
+            <a href={`${model.prefix}/open/SalesOrder/${encodeURIComponent(progress.replacementOrder.id)}`}>{t('status.replacementOpen')}</a>
           </p>
         ) : null}
       </section>
@@ -346,8 +351,9 @@ function ComplaintRequest({ model, record, actions }: { model: CaseRecordViewMod
               {
                 label: t('request.order'),
                 value: request.order ? (
+                  // B-TH-275 (plan §0.5): their own PO, never the office's SO- number; with none, the order in words.
                   <a href={`${model.prefix}/open/SalesOrder/${encodeURIComponent(request.order.id)}`}>
-                    <RefPair theirs={request.order.yourRef} ours={request.order.number} theirsLabel={t('ref.yours')} oursLabel={t('ref.ours')} size="sm" copy={false} labels={ds.refPair} />
+                    {request.order.yourRef ? <RefPair theirs={request.order.yourRef} ours={null} theirsLabel={t('ref.yours')} oursLabel={t('ref.ours')} size="sm" copy={false} labels={ds.refPair} /> : t('request.orderOpen')}
                   </a>
                 ) : (
                   '—'

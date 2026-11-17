@@ -14,7 +14,11 @@ import { latestOfGroup } from '../../notifications/store'
 import { partyReaders } from '../tasks/people'
 import { logPartnerDeliveries, sendPartnerMail, unsubscribeKeyFor } from './mail'
 // B-TH-080 (threads plan TH-6, thread-G11): the mail quotes the message we shared with the customer (never a note).
-import { partnerQuotes } from '../../email-out/digest/message-text'
+// th-backend-g step 2: with who wrote it, for the new-message mail's template.
+import { partnerMessages } from '../../email-out/digest/message-text'
+import { yoursOf } from '@nexus/factory-domain/portal/notifications/messages'
+import { companyValues, fillMail, MAIL_EVENT_DEFINITIONS, type MailWords } from '@nexus/factory-domain/templates/mail'
+import { mailTemplateOf } from '../../templates/active'
 import { PARTNER_RULES } from './rules'
 import { preferencesOf } from './settings'
 
@@ -147,15 +151,22 @@ async function mailInstant(caller: CommandCaller, made: readonly Made[], options
     let outcome: { outcome: 'SENT' | 'SKIPPED' | 'FAILED'; outboundId: string | null; detail: string | null }
     if (already) {
       outcome = { outcome: 'SKIPPED', outboundId: null, detail: "the record's own mail reached this address a moment ago" }
+    } else if (row.messageKey === 'portal.request.received' && (await sentTheRequest(caller, row.record.id, row.userId))) {
+      // th-backend-g step 2: the person who sent the request gets its receipt mail (modules/sales/inquiries/receipt.ts), not this notice.
+      outcome = { outcome: 'SKIPPED', outboundId: null, detail: 'the person who sent the request gets its receipt mail' }
     } else {
       const company = await caller.withClient((client) => client.party.findUnique({ where: { id: row.partyId }, select: { code: true } }))
       const companyName = await caller.withClient((client) => client.company.findUnique({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } }))
       const sentence = partnerSentence({ messageKey: row.messageKey, recordLabel: row.record.label, params: row.params }, row.locale, companyName ? (companyName.tradeName ?? companyName.legalName) : '')
       const link = portalRecordUrl(runtime.webOrigin, company?.code ?? row.partyId, row.record.type, row.record.id, row.anchor)
       // B-TH-080: only a message shared with this person's own customer.
-      const quote = (await caller.withClient((client) => partnerQuotes(client, row.partyId, [{ id: row.id, anchor: row.anchor }]))).get(row.id) ?? null
+      const shared = (await caller.withClient((client) => partnerMessages(client, row.partyId, [{ id: row.id, anchor: row.anchor }]))).get(row.id) ?? null
+      const quote = shared?.quote ?? null
+      // th-backend-g step 2 (B-TH-279): a new message reads the e-mail template thread.message_posted (the company's version in use in
+      // the person's language, else every company's, else the code's words), filled with what the portal shows them.
+      const words = row.messageKey === 'portal.message.posted' && companyName ? await messageWords(caller, row, { link, quote, authorName: shared?.authorName ?? null, company: companyName }) : null
       try {
-        outcome = await sendPartnerMail(caller, { tenantId, companyId: row.companyId, person: { id: row.userId, email: row.email, displayName: row.displayName, locale: row.locale, partyId: row.partyId }, body: { kind: 'notification', item: { notificationId: row.id, sentence, link, quote } }, runtime, unsubscribeKey: options.unsubscribeKey, ...(options.clock ? { clock: options.clock } : {}) })
+        outcome = await sendPartnerMail(caller, { tenantId, companyId: row.companyId, person: { id: row.userId, email: row.email, displayName: row.displayName, locale: row.locale, partyId: row.partyId }, body: words ? { kind: 'templated', notificationId: row.id, words } : { kind: 'notification', item: { notificationId: row.id, sentence, link, quote } }, runtime, unsubscribeKey: options.unsubscribeKey, ...(options.clock ? { clock: options.clock } : {}) })
       } catch (error) {
         outcome = { outcome: 'FAILED', outboundId: null, detail: (error as Error).name === 'NoSenderError' ? 'the tenant has no verified sending identity' : 'the mail could not be made' }
       }
@@ -168,6 +179,34 @@ async function mailInstant(caller: CommandCaller, made: readonly Made[], options
     })
   }
 }
+
+// ---- th-backend-g step 2 (B-TH-279: the new mail templates are read; the receipt goes to the person who sent the request) -----------
+/** Whether this person sent the request from the portal (its making's audit row names them: the receipt mail is theirs). */
+async function sentTheRequest(caller: CommandCaller, inquiryId: string, userId: string): Promise<boolean> {
+  const made = await caller.withClient((client) => client.auditLog.findFirst({ where: { recordType: 'Inquiry', recordId: inquiryId, action: 'sales.inquiries.fromPortal' }, select: { actorId: true } }))
+  return made?.actorId === userId
+}
+
+/**
+ * The words of a new message's mail for one portal person: the template thread.message_posted in use in their language (the company's
+ * own, else every company's), else the code's, filled with what their portal shows — the record by its customer's own words ("your
+ * order 12", never the office's series), who wrote (the name the portal shows, else the company's), the shared message (its quote),
+ * the portal link, the person's name, the company's names. Never an office note: `quote` is cut per reader (B-TH-080).
+ */
+async function messageWords(caller: CommandCaller, row: Made, facts: { readonly link: string; readonly quote: string | null; readonly authorName: string | null; readonly company: { readonly legalName: string; readonly tradeName: string | null } }): Promise<MailWords> {
+  const template = await caller.withClient((client) => mailTemplateOf(client, caller.factoryContext, { companyId: row.companyId, event: 'thread.message_posted', language: row.locale }))
+  const company = companyValues(facts.company)
+  const { yours } = yoursOf({ messageKey: row.messageKey, recordLabel: row.record.label, params: row.params }, row.locale)
+  return fillMail(template ?? MAIL_EVENT_DEFINITIONS['thread.message_posted'].words[row.locale], {
+    ...company,
+    'record.label': yours,
+    'author.name': facts.authorName ?? company['company.name'] ?? null,
+    message: facts.quote,
+    link: facts.link,
+    'contact.name': row.displayName,
+  })
+}
+// ---- end th-backend-g step 2
 
 /** The worker's handler. `cookieSecret` is read when an event is handled (background.ts loads its env after the lists). */
 export function partnerNotificationsHandler(options: Omit<PartnerFanOutOptions, 'unsubscribeKey'> & { readonly cookieSecret: () => string }): EventHandler {

@@ -4,6 +4,9 @@ import type { Locale } from '../../../lib/i18n/locales'
 import { quantityTyped } from '../../../lib/po-answer/quantities'
 import type { HistoryEntry, NoticeState, OrderChip, OrderLine, OrderPage, OrderRow, PortalConfirmBody, PortalDeclineReason, SupplierState } from './api'
 import { DS_KIND, lineBodyOf, openLines, parseQuantityIn } from '../../../lib/po-answer/lines'
+// ---- B-TH-277: an old ?tab= of a tab that went lands on the tab that holds its work now (the portal record frame's rule).
+import { tabOrFirst } from '../../shell/record/model'
+// ---- end B-TH-277
 
 /**
  * SCR-189 — the supplier's Purchase orders (design portal.supplier.orders; B-W2b-179 on B-W2b-174's API), pure: the list's
@@ -82,9 +85,22 @@ export function ordersCsv(rows: readonly OrderRow[], t: (key: string, params?: R
 }
 
 // ── the record ───────────────────────────────────────────────────────────────────────────────────────────────────────
-export const RECORD_TABS = ['lines', 'confirm', 'asn', 'documents', 'messages'] as const
+// ---- B-TH-277 (threads plan TH-6, P-SUP-PO; tree: tabs 5 → 3): Lines · Confirm or propose · Ship notices. The Messages tab and the
+// Ask modal went: the PO's conversation docks beside every tab (the portal record frame, price talk lives there, C2). Documents
+// went: the order as sent (its price-free PDF) is on the Lines tab's facts and in the band's ⋯, its DDTs on each ship notice's row
+// (Ship notices), what we ask for about the order on Confirm or propose. An old `?tab=documents` opens Lines (the order as sent);
+// an old `?tab=messages` opens Lines and the frame shows the conversation (R-8).
+export const RECORD_TABS = ['lines', 'confirm', 'asn'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
-export const tabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'lines')
+/** Where an old tab's work went (B-TH-277). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { documents: 'lines', messages: 'lines' }
+export const tabOf = (value: string | null | undefined): RecordTab => tabOrFirst(RECORD_TABS, value, MERGED_TABS)
+/**
+ * "Reply" to our message about a PO (the supplier's Home): the order's page with its docked conversation shown and its box focused —
+ * the frame reads `?tab=messages` on arrival as "show and focus the conversation" and opens the first tab (R-8).
+ */
+export const replyToOrderHref = (prefix: string, id: string): string => `${prefix}/orders/${encodeURIComponent(id)}?tab=messages#messages`
+// ---- end B-TH-277
 
 /** The record's own address with a tab (and a line to show, from Home's next deliveries). */
 export function recordHref(prefix: string, id: string, tab: RecordTab = 'lines', line?: string | null): string {
