@@ -1055,9 +1055,8 @@
     "intro": "The orders' own files, their lines' artwork and the made-to-measure worksheets: open them here, nobody types them again.",
     "reading": "Reading the order files…",
     "failed": "Couldn't read the order files",
-    "empty": "This work order's orders have no files yet.",
-    "none": "No files on this order yet.",
-    "customerRef": "Customer PO {ref}",
+    "empty": "This order has no files yet.",
+    "none": "This order has no files yet.",
     "fromOrder": "Order",
     "fromLine": "Line {seq}",
     "fromQuoteLine": "Line {seq} · from the quote",
@@ -1070,13 +1069,25 @@
     "thread": "Open the order's thread",
     "filesLeftOut_one": "{count} file you cannot open",
     "filesLeftOut_other": "{count} files you cannot open",
-    "measurementsLeftOut_one": "{count} measurement sheet needs the right to see measurements",
-    "measurementsLeftOut_other": "{count} measurement sheets need the right to see measurements",
+    "measurementsLeftOut_one": "Measurement sheet: opens with the measurements right ({count})",
+    "measurementsLeftOut_other": "Measurement sheets: open with the measurements right ({count})",
     "ordersLeftOut_one": "{count} more order whose files you cannot see",
     "ordersLeftOut_other": "{count} more orders whose files you cannot see",
     "openFailed": "Couldn't open the file",
     "gone": "This file is no longer there, or it is not one you may open.",
-    "close": "Close"
+    "close": "Close",
+    "section": {
+      "order": "Order",
+      "lines": "Lines",
+      "measurements": "Measurements"
+    },
+    "showNamed": "Open {name} beside the list",
+    "pickHint": "Pick a file: a PDF or a picture opens here, beside the list.",
+    "showing": "Reading {name}…",
+    "showFailed": "Couldn't show {name}",
+    "noPreview": "No preview for this kind of file: download it.",
+    "back": "Back to the files",
+    "orderName": "PO {po} · {number}"
   },
   "thread": {
     "pickLabel": "Which thread",
@@ -1186,5 +1197,11 @@
     "none": "No gates on this order.",
     "gate": "Gate",
     "materials": "Materials: planned, issued and still to issue"
+  },
+  "orderThread": {
+    "button": "Order thread",
+    "menu": "Order threads ({count})",
+    "menuLabel": "Pick the thread of one of {count} orders",
+    "hint": "Shows the order's thread beside the work order: shared with {customer}."
   }
 }

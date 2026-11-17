@@ -13,7 +13,7 @@ import type { SplitModel } from '../every-shift/use-split'
 import { LEATHER_GARMENT, LEATHER_MIXED, LEATHER_NONE, LEATHER_ONE, LEATHER_OUT_OF_SHADE } from './leather/fixtures'
 // ---- B-TH-265: the work order on RecordFrame — its docked thread (its own notes, or an order's picked beside it), "Order files (n)" ----
 import { designDockedThread } from '../../../_shared/record-frame/fixtures'
-import { filesReady, leftOut, orderFilesOf, orderGroup } from './order-files/fixtures'
+import { filesReady, leftOut, orderFilesOf, orderGroup, twoGroupsOf, twoOrdersOf } from './order-files/fixtures'
 import { threadChoices, type ThreadPick } from './order-files/model'
 import { WorkOrderThreads } from './view/WorkOrderThreads'
 // ---- end B-TH-265
@@ -258,6 +258,20 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'order-files-refused', label: 'B-TH-265 · Order files: a file that could not be opened, in words', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS')), { open: true, problem: 'orderFiles.gone' }) }) },
     { id: 'order-files-failed', label: 'B-TH-265 · Order files could not be read: Try again', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: { files: { state: 'error', problem: 'error.offline' }, open: true, opening: null, problem: null } }) },
     { id: 'order-files-none', label: 'B-TH-265 · A work order of no order (stock): no Order files in the band', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS'), [])), threadChoices: [] }) },
+    // ---- F-PR-25: Order files and Order thread on the work order band ----
+    { id: 'order-files-showing', label: 'F-PR-25 · Order files: a PDF being read beside the list (the viewer takes it next)', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS')), { open: true, shown: { id: 'file-demo-3', name: 'Grafica schiena v3.pdf', look: 'pdf', state: 'loading' } }) }) },
+    { id: 'order-files-show-failed', label: 'F-PR-25 · Order files: a file that could not be shown, in words (Try again)', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS')), { open: true, shown: { id: 'file-demo-1', name: 'Conferma ordine SO-DEMO-0042.pdf', look: 'pdf', state: 'error', problem: 'orderFiles.gone' } }) }) },
+    { id: 'order-files-locked', label: 'F-PR-25 · Order files without the measurements right: "Measurement sheet: opens with the measurements right (1)"', model: recordCase('sales', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS'), [orderGroup(workOrder('IN_PROGRESS'), { worksheets: [], measurementsLeftOut: 1 })]), { open: true }) }) },
+    {
+      id: 'order-files-two-orders',
+      label: 'F-PR-25 · One customer’s two orders: two groups, their PO first; the band’s "Order thread" is a menu',
+      model: (() => {
+        const two = twoOrdersOf(workOrder('IN_PROGRESS'))
+        const read = twoGroupsOf(two)
+        return recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: two }, orderFiles: filesReady(read, { open: true }), threadChoices: threadChoices(two.orders, { state: 'ready', read }) })
+      })(),
+    },
+    // ---- end F-PR-25
     { id: 'changed', label: 'Someone changed it while the page holds an edit: Reload', model: recordCase('manager', 'IN_PROGRESS', { changed: { at: '2026-10-29T09:42:00.000Z' }, draft: { editing: true } }) },
     { id: 'notice', label: 'After a write: a notice', model: recordCase('manager', 'RELEASED', { notice: { tone: 'success', words: { key: 'notice.released', params: { batch: 'BA-00049' } } } }) },
     { id: 'owner', label: 'Owner: everything', model: recordCase('owner', 'IN_PROGRESS') },

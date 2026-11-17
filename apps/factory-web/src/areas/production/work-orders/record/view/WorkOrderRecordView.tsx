@@ -36,7 +36,7 @@ import { VarianceAtClose } from '../../labour/variance/view/VarianceAtClose'
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { hasOrderFiles } from '../order-files/model'
-import { OrderFilesButton, OrderFilesDialog } from '../order-files/view/OrderFiles'
+import { OrderFilesButton, OrderFilesDialog, OrderThreadButton } from '../order-files/view/OrderFiles'
 // ---- end B-TH-265
 // ---- F-PR-05a: the band facts (customer, sales orders and POs, % done, health, waiting on), Report finished as the main step, Preview ----
 import { finishHeld } from '../../daily/model'
@@ -313,6 +313,8 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
             <span className="fw-pr-hint">{workOrder.site.code}</span>
             {/* B-TH-265 (agreement T9): the orders' own files, read through the work order's own route. */}
             {model.orderFiles && hasOrderFiles(model.orderFiles.files) && <OrderFilesButton model={model.orderFiles} actions={actions?.orderFiles} />}
+            {/* F-PR-25: "Order thread" — the order's thread in the work order's dock (several orders: a menu, their PO first). */}
+            {model.orderFiles && <OrderThreadButton choices={model.threadChoices ?? []} actions={actions?.orderFiles} />}
           </>
         ),
         primary,

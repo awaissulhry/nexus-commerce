@@ -1055,9 +1055,8 @@
     "intro": "I file degli ordini, la grafica delle loro righe e le schede su misura: aprili qui, nessuno li ribatte.",
     "reading": "Lettura dei file dell'ordine…",
     "failed": "Impossibile leggere i file dell'ordine",
-    "empty": "Gli ordini di questo ordine di produzione non hanno ancora file.",
-    "none": "Ancora nessun file su questo ordine.",
-    "customerRef": "Ordine cliente {ref}",
+    "empty": "Questo ordine non ha ancora file.",
+    "none": "Questo ordine non ha ancora file.",
     "fromOrder": "Ordine",
     "fromLine": "Riga {seq}",
     "fromQuoteLine": "Riga {seq} · dal preventivo",
@@ -1070,13 +1069,25 @@
     "thread": "Apri la conversazione dell'ordine",
     "filesLeftOut_one": "{count} file che non puoi aprire",
     "filesLeftOut_other": "{count} file che non puoi aprire",
-    "measurementsLeftOut_one": "{count} scheda misure richiede il permesso di vedere le misure",
-    "measurementsLeftOut_other": "{count} schede misure richiedono il permesso di vedere le misure",
+    "measurementsLeftOut_one": "Scheda misure: si apre con il permesso misure ({count})",
+    "measurementsLeftOut_other": "Schede misure: si aprono con il permesso misure ({count})",
     "ordersLeftOut_one": "{count} altro ordine di cui non puoi vedere i file",
     "ordersLeftOut_other": "Altri {count} ordini di cui non puoi vedere i file",
     "openFailed": "Impossibile aprire il file",
     "gone": "Questo file non c’è più, oppure non è tra quelli che puoi aprire.",
-    "close": "Chiudi"
+    "close": "Chiudi",
+    "section": {
+      "order": "Ordine",
+      "lines": "Righe",
+      "measurements": "Misure"
+    },
+    "showNamed": "Apri {name} accanto all'elenco",
+    "pickHint": "Scegli un file: un PDF o una foto si apre qui, accanto all'elenco.",
+    "showing": "Lettura di {name}…",
+    "showFailed": "Impossibile mostrare {name}",
+    "noPreview": "Nessuna anteprima per questo tipo di file: scaricalo.",
+    "back": "Torna ai file",
+    "orderName": "Ordine cliente {po} · {number}"
   },
   "thread": {
     "pickLabel": "Quale conversazione",
@@ -1186,5 +1197,11 @@
     "none": "Nessun gate su questo ordine.",
     "gate": "Gate",
     "materials": "Materiali: pianificati, prelevati e da prelevare"
+  },
+  "orderThread": {
+    "button": "Conversazione dell'ordine",
+    "menu": "Conversazioni degli ordini ({count})",
+    "menuLabel": "Scegli la conversazione di uno dei {count} ordini",
+    "hint": "Mostra la conversazione dell'ordine accanto all'ordine di produzione: condivisa con {customer}."
   }
 }

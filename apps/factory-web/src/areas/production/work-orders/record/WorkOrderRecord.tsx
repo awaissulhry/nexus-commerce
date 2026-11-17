@@ -386,7 +386,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
           <OfficeRecordThread
             key={`order-${pickedOrder.orderId}`}
             docked
-            record={{ type: 'SalesOrder', id: pickedOrder.orderId, companyId: value.companyId, siteId: null }}
+            record={{ type: 'SalesOrder', id: pickedOrder.orderId, companyId: pickedOrder.companyId /* F-PR-25: the order's own company */, siteId: null }}
             title={`${pickedOrder.number} · ${pickedOrder.party.name}`}
             recordLabel={pickedOrder.number}
             party={pickedOrder.party}

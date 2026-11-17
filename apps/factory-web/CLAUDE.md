@@ -521,6 +521,10 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   the cost column withheld without the cost grain, ⋯ Sample order PDF in a new tab: `/api/purchasing/sample-orders/<id>/pdf`) and New
   sample order (`?new=1`: supplier, site, style and open round, lines of sample hide / swatch / colour card). A row opens W1's PO record,
   whose band tags a PO of type Sample (`order.sample`, SCR-059 case `w2b-347-sample-order`). The RFQ list and record are Later: not drawn.
+- F-PR-25 `src/areas/production/work-orders/record/order-files/` — the work order band's "Order files (n)" window (B-PR-44's walled
+  routes only: one group per order, the customer's PO first; Order · Lines · Measurements newest first; the measurement lock line counted;
+  a PDF or picture shown beside the list, Download; phone: the list, a file full screen, ‹ / Esc back) and "Order thread" (one button, or a
+  menu for several orders): the order's thread in the work order's dock, on the order's own company (`order.companyId` of the route).
 - The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
   problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
   What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per

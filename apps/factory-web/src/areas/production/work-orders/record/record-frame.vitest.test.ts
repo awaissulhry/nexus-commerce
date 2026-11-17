@@ -142,7 +142,8 @@ describe('B-TH-265 — Order files (agreement T9: their route only)', () => {
 
   it('offers an order’s thread only where the route says it may be read, with the order’s own customer; a gone pick falls back', () => {
     const ready = { state: 'ready' as const, read: orderFilesOf(WO) }
-    expect(threadChoices(WO.orders, ready)).toEqual([{ orderId: WO.orders[0]!.id, number: WO.orders[0]!.number, party: { id: WO.orders[0]!.partyId, name: WO.orders[0]!.partyName } }])
+    // F-PR-25: each choice also carries the customer's PO (the band's menu names it first) and the order's own company (the thread's scope).
+    expect(threadChoices(WO.orders, ready)).toEqual([{ orderId: WO.orders[0]!.id, number: WO.orders[0]!.number, party: { id: WO.orders[0]!.partyId, name: WO.orders[0]!.partyName }, customerRef: WO.orders[0]!.customerRef, companyId: WO.companyId }])
     expect(threadChoices(WO.orders, { state: 'ready', read: orderFilesOf(WO, [orderGroup(WO, { thread: null })]) })).toEqual([])
     expect(threadChoices([], ready)).toEqual([])
     expect(threadChoices(WO.orders, { state: 'loading' })).toEqual([])
@@ -168,7 +169,8 @@ describe('B-TH-265 — Order files (agreement T9: their route only)', () => {
     expect(leftOut(WO).ordersLeftOut).toBe(1)
     const text = body(filesReady(leftOut(WO)))
     expect(text).toContain('2 files you cannot open')
-    expect(text).toContain('1 measurement sheet needs the right to see measurements')
+    // F-PR-25: the lock line in the row's words, counted, never dropped.
+    expect(text).toContain('Measurement sheet: opens with the measurements right (1)')
     expect(text).toContain('1 more order whose files you cannot see')
     expect(body(filesReady(leftOut(WO)), 'it')).toContain('2 file che non puoi aprire')
   })
@@ -191,7 +193,7 @@ describe('B-TH-265 — Order files (agreement T9: their route only)', () => {
       expect(source).not.toContain('previewFile')
     }
     // A worksheet opens through the made-to-measure route (its opening recorded on the profile).
-    expect(hook).toContain('openWorksheet(api, profileId, documentId)')
+    expect(hook).toContain('openWorksheet(api, sheet.profileId, sheet.documentId)')
   })
 
   it('"Open the order\u2019s thread" picks that order in the dock and shows the thread through the frame (docked: shown; narrower: full width)', () => {

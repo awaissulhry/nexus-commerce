@@ -32,7 +32,8 @@ const worksheet = z.object({ documentId: z.string(), profileId: z.string(), line
 export type OrderWorksheet = z.infer<typeof worksheet>
 
 const group = z.object({
-  order: z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), orderDate: z.string() }),
+  // F-PR-25 (threads ask): the order's own company — the docked order thread opens on the order's record scope.
+  order: z.object({ id: z.string(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), orderDate: z.string(), companyId: z.string() }),
   thread: z.object({ recordType: z.literal('SalesOrder'), recordId: z.string(), threadId: z.string().nullable() }).nullable(),
   files: z.array(orderFile),
   worksheets: z.array(worksheet),
