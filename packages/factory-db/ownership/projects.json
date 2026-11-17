@@ -1,0 +1,23 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/projects.prisma (rules: src/ownership.ts; roles: src/roles.ts). TH-5 (threads plan, schema wave 8/9, B-TH-065; PROJ-G01, PROJ-G03): the office makes, edits, puts on hold, closes and reopens projects and links and unlinks their records through apps/factory-api (projects.manage, B-TH-066 / B-TH-067), always through command(). A project's outside company reads its own projects and their links through the partner role, by party (Project.partyId; a link's partyId is its project's, copied by the database), never the office's columns: the lead, the goal, the outcome and its words, who made or closed it, a link's note and who added it. Which of that company's portal people may open a project (its members: collab.prisma RecordFollower rows that name the party) is the API's check on top of this party wall (B-TH-068, B-TH-069), said plainly on the screen. The floor and link sessions read and write nothing here (a project never reaches a tablet; an invitation link to a project is B-TH-069's links adapter, by the API). A project is never deleted; a link is never changed (added, or removed while its project is not CLOSED: the …_projects_th_guards triggers). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "Project": {
+      "about": "The office makes a project (numbered from the company's PROJECT series), edits its name, goal, lead, target date and season, puts it on hold, closes it with its outcome and reopens it, and reads every project of the tenant (the API scopes it by company and customer limit). The project's outside company reads its own projects (name, number, status, target date, season), never its lead, goal, outcome, outcome words or who made or closed it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["goal", "leadId", "outcome", "outcomeNote", "closedById", "createdById"] }
+      }
+    },
+    "ProjectLink": {
+      "about": "The office links a record to a project and removes the link while the project is not CLOSED, and reads every link (a project's records; a record's projects). The project's outside company reads the links of its own projects (the API then opens each record only through its own partner view), never a link's note or who added it.",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "delete"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["note", "createdById"] }
+      }
+    }
+  }
+}

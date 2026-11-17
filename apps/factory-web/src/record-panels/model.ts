@@ -8,6 +8,7 @@
  */
 
 import type { FileDepthModel } from './files/model'
+import type { FollowReason } from '@nexus/factory-domain/threads/followers'
 import type { ApprovalsPanelModel } from './approvals/model'
 // B-W2b-307 (PLT-104): the record's approval history in the Approvals tab.
 import type { ApprovalHistoryModel } from '../shell/panels/approvals/model'
@@ -333,7 +334,8 @@ export interface PanelFollower {
   userId: string
   name: string
   me: boolean
-  reason: 'CREATOR' | 'ASSIGNEE' | 'MENTIONED' | 'CHOSE'
+  // B-TH-065: the domain's list (ADDED: a colleague added by hand).
+  reason: FollowReason
   muted: boolean
   since: string
   addedBy: string | null

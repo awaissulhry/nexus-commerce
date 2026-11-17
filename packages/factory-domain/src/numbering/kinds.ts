@@ -87,6 +87,9 @@ export const NUMBER_KINDS = [
   // W2b-6 wave 49/57 (factory-db numbering.prisma): a self-invoice TD16-TD19 (AF-…), a fiscal series of its own, an office
   // document kind.
   'SELF_INVOICE',
+  // ---- B-TH-065 (threads plan, schema wave 8/9; factory-db numbering.prisma): a project (PRJ-…), an office document kind.
+  'PROJECT',
+  // ---- end B-TH-065
   // W2b-2 wave 8 (factory-db numbering.prisma): a bundle's coupon for one operation (CP-…), a scan-id kind.
   'COUPON',
   // W2b-2 wave 12 (factory-db numbering.prisma): a fabric roll's tag (RL-…) and a remnant's tag (RM-…), scan-id kinds.
@@ -260,6 +263,8 @@ const DEFAULT_PREFIX: Readonly<Record<DocumentKind, string>> = {
   PROFORMA: 'PF',
   // AF: autofattura (the self-invoices TD16-TD19).
   SELF_INVOICE: 'AF',
+  // B-TH-065: a project (PROJ.new-F06 "PRJ-26-012").
+  PROJECT: 'PRJ',
 }
 
 /** The pattern a new series gets when the admin types none: `FT-{YYYY}-{N:5}` (yearly) or `LOT-{N:6}` (never resets). */
