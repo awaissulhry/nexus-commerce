@@ -15,6 +15,8 @@ import { designScreen as listScreen } from './fixtures'
 import {
   addressOf,
   addressText,
+  assigneePhrase,
+  bandCount,
   bulkReach,
   chipsOf,
   declineHeld,
@@ -22,7 +24,9 @@ import {
   draftFromMail,
   emptyLine,
   emptyNewDraft,
+  exportPhrases,
   fieldLines,
+  filesPhrases,
   fromMailBodyOf,
   HOME_ADDRESS,
   inquiriesCan,
@@ -34,6 +38,8 @@ import {
   newBodyOf,
   newDraftHeld,
   nextAfter,
+  noticeKey,
+  noticeLink,
   pageNotices,
   parsePrice,
   parseSizes,
@@ -246,21 +252,97 @@ describe('words and navigation', () => {
     }
   })
 
-  it('the page is built, in the navigation of the roles that read it; an inquiry opens its full page', () => {
-    expect(OFFICE_PAGES.has('/sales/inquiries')).toBe(true)
-    expect(OFFICE_PAGES.has('/sales/inquiries/[id]')).toBe(true)
-    expect(recordAddress({ type: 'Inquiry', id: 'i1' }, OFFICE_PAGES)).toBe('/sales/inquiries/i1')
-    expect(listAddress('/sales/inquiries', { tile: 'NEW' }, OFFICE_PAGES)).toBe('/sales/inquiries?tile=NEW')
+  it('the page is built (Sales › Incoming, B-TH-216), in the navigation of the roles that read it; a request opens its full page', () => {
+    expect(OFFICE_PAGES.has('/sales/incoming')).toBe(true)
+    expect(OFFICE_PAGES.has('/sales/incoming/[id]')).toBe(true)
+    expect(OFFICE_PAGES.has('/sales/inquiries')).toBe(false)
+    expect(recordAddress({ type: 'Inquiry', id: 'i1' }, OFFICE_PAGES)).toBe('/sales/incoming/i1')
+    // The API's list keeps its address; the page it opens is Incoming.
+    expect(listAddress('/sales/inquiries', { tile: 'NEW' }, OFFICE_PAGES)).toBe('/sales/incoming?tile=NEW')
     const rows = (permissions: readonly string[]) => officeNavFor(permissionCheck([...permissions])).areas.flatMap((area) => (area.sections ?? []).flatMap((section) => section.items.map((item) => item.href)))
-    expect(rows(ROLE_PERMISSIONS.sales)).toContain('/sales/inquiries')
-    expect(rows(ROLE_PERMISSIONS.reader)).toContain('/sales/inquiries')
-    expect(rows(ROLE_PERMISSIONS.warehouse)).not.toContain('/sales/inquiries')
+    expect(rows(ROLE_PERMISSIONS.sales)).toContain('/sales/incoming')
+    expect(rows(ROLE_PERMISSIONS.reader)).toContain('/sales/incoming')
+    // B-TH-014: the production manager reads it too.
+    expect(rows(ROLE_PERMISSIONS.production)).toContain('/sales/incoming')
+    expect(rows(ROLE_PERMISSIONS.warehouse)).not.toContain('/sales/incoming')
     const sales = rows(ROLE_PERMISSIONS.sales)
-    expect(sales.indexOf('/sales/inquiries')).toBe(sales.indexOf('/sales/customers') + 1)
+    expect(sales.indexOf('/sales/incoming')).toBe(sales.indexOf('/sales/customers') + 1)
   })
 })
 
-const LEFT_KEY = /\b(?:common|held|list|record|tile|new|tab|live|row|col|keys|notice|chip|status|source|waiting|time|assignee|bulk|right|refusal|problem|field|line|grid|mail|pack|files|quote|quoteStatus|leftOut|activity|dialog|assign|decline|lost|verb|done|closed|who|prospect|basis|request|noAccess)\.[a-zA-Z]+(?:\.[a-zA-Z_]+)*\b/
+// ── B-TH-216 (threads plan TH-1b): Sales › Incoming ──
+describe('Sales › Incoming (B-TH-216)', () => {
+  it('the five tiles are saved filters in the tree\'s order; a count not known is "—", never 0; the band says the Rows ▾ count in words', () => {
+    expect([...DESIGN_TILES]).toEqual(['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'MINE'])
+    for (const tile of DESIGN_TILES) expect(INQUIRY_TILES).toContain(tile)
+    const list = { rows: [...ROWS], counts: { NEW: 2, WAITING_US: null, OPEN: 41 }, complete: true }
+    expect(tileValue(list, 'NEW', false)).toBe('2')
+    expect(tileValue(list, 'WAITING_US', false)).toBe('—')
+    expect(tileValue(list, 'MINE', false)).toBe('—')
+    expect(tileValue(null, 'NEW', false)).toBe('—')
+    expect(bandCount(list, 'OPEN', false)).toEqual({ key: 'band.count.OPEN', params: { count: 41 } })
+    expect(bandCount(list, 'WAITING_US', false)).toEqual({ key: 'band.countUnknown' })
+    expect(bandCount(list, 'OPEN', true)).toEqual({ key: 'band.countUnknown' })
+    for (const locale of LOCALES) {
+      const all = words(locale)
+      for (const tile of INQUIRY_TILES) expect(all[`band.count.${tile}`], `${locale} band.count.${tile}`).toContain('{count}')
+    }
+    expect(words('en')['band.count.OPEN']).toBe('{count} open')
+    expect(words('en')['tile.WAITING_CUSTOMER']).toBe('Need info')
+  })
+
+  it('the State and Company cells narrow the list: both live in the address and as chips', () => {
+    const company = '0190f0e2-1111-7000-8000-000000000001'
+    const address = addressOf(new URLSearchParams(`tile=ALL&status=ASSIGNED&company=${company}`))
+    expect(address).toMatchObject({ tile: 'ALL', status: 'ASSIGNED', company })
+    expect(addressText(address)).toBe(`?tile=ALL&status=ASSIGNED&company=${company}`)
+    expect(addressOf(new URLSearchParams('status=NOPE&company=x'))).toMatchObject({ status: null, company: null })
+    expect(chipsOf(address, null, 'Demo Factory').map((chip) => chip.id)).toEqual(['tile', 'status', 'company'])
+    expect(chipsOf(address, null, null).find((chip) => chip.id === 'company')?.label).toEqual({ key: 'chip.companyUnknown' })
+  })
+
+  it('the Owner cell names the office person (never "A colleague" when the API names them); Files are counted, never named', () => {
+    expect(assigneePhrase({ assigneeId: 'u1', mine: false, assignee: { id: 'u1', name: 'Marco Demo' } } as never)).toEqual({ key: 'assignee.name', params: { name: 'Marco Demo' } })
+    expect(assigneePhrase({ assigneeId: 'u1', mine: true, assignee: { id: 'u1', name: 'Alex Demo' } } as never)).toEqual({ key: 'assignee.nameMe', params: { name: 'Alex Demo' } })
+    expect(assigneePhrase({ assigneeId: null, mine: false, assignee: null } as never)).toEqual({ key: 'assignee.nobody' })
+    expect(filesPhrases({ fileCounts: null })).toBeNull()
+    expect(filesPhrases({ fileCounts: { photos: 0, documents: 0 } })).toEqual([{ key: 'files.none' }])
+    expect(filesPhrases({ fileCounts: { photos: 2, documents: 1 } })).toEqual([{ key: 'files.photos', params: { count: 2 } }, { key: 'files.documents', params: { count: 1 } }])
+  })
+
+  it('the production manager reads every request and holds every sales action with the reason (B-TH-014)', () => {
+    const production = inquiriesCan(ROLE_PERMISSIONS.production)
+    expect([production.view, production.manage, production.price]).toEqual([true, false, false])
+    for (const verb of ['quote', 'assign', 'askInfo', 'decline'] as const) expect(verbHeld(ROWS[0]!, verb, production, false)).toEqual({ key: 'held.right', params: { right: 'right.sales.inquiries.manage' } })
+    expect(words('en')['held.right']).toContain('Needs the sales permission')
+  })
+
+  it('Export ▾ is honest: the first 200 rows of this view, the price left out without the grain', () => {
+    expect(exportPhrases('OPEN', 200, { price: true })).toEqual({ heading: { key: 'export.heading', params: { view: 'tile.OPEN', count: 200 } }, note: { key: 'export.note', params: { count: 200 } } })
+    expect(exportPhrases('OPEN', 200, { price: false }).note.key).toBe('export.notePrice')
+    expect(words('en')['export.note']).toContain('first {count} rows')
+  })
+
+  it('one notice at most, the most serious first: no request numbering, then the list facts, then mails to sort (each with its door)', () => {
+    const list = { rows: [...ROWS], counts: {}, complete: false }
+    const notices = pageNotices(list, 200, new Set(), { numberingMissing: ['Demo Factory'], mailToSort: { count: 4, more: false } })
+    expect(notices.map((notice) => notice.key)).toEqual(['notice.numbering', 'notice.partial', 'notice.prospects', 'notice.mail'])
+    expect(noticeLink(notices[0]!, '/w/DEMO')).toEqual({ href: '/w/DEMO/admin/documents', label: { key: 'notice.numberingOpen' } })
+    expect(noticeLink(notices[3]!, '/w/DEMO')?.href).toBe('/w/DEMO/home/mail-to-sort')
+    expect(pageNotices(list, 200, new Set([noticeKey(notices[0]!)]), { numberingMissing: ['Demo Factory'] })[0]!.key).toBe('notice.partial')
+    expect(pageNotices({ rows: [], counts: {}, complete: true }, 200, new Set(), { mailToSort: { count: 50, more: true } })).toEqual([{ key: 'notice.mailMore', params: { count: 50 }, tone: 'info', value: 'mail:50+' }])
+  })
+
+  it('a limited office person sees only what the read returned: tiles and the band count only those rows (W19, W30)', () => {
+    // The page draws the API's counts as they are (the API counts in the reader's scope); it never adds rows of its own.
+    const mine = { rows: ROWS.filter((one) => one.party?.id === ROWS[0]!.party?.id), counts: { OPEN: 1, NEW: 1 }, complete: true }
+    expect(bandCount(mine, 'OPEN', false)).toEqual({ key: 'band.count.OPEN', params: { count: 1 } })
+    expect(tileValue(mine, 'NEW', false)).toBe('1')
+  })
+})
+// ── end B-TH-216 ──
+
+const LEFT_KEY = /\b(?:common|held|list|record|tile|new|tab|live|row|col|keys|notice|chip|status|source|waiting|time|assignee|bulk|right|refusal|problem|field|line|grid|mail|pack|files|quote|quoteStatus|leftOut|activity|dialog|assign|decline|lost|verb|done|closed|who|prospect|basis|request|noAccess|page|band|door|funnel|picture|peek|export)\.[a-zA-Z]+(?:\.[a-zA-Z_]+)*\b/
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>

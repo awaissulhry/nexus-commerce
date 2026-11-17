@@ -15,7 +15,7 @@
   },
   "noAccess": {
     "title": "Non hai accesso alle richieste",
-    "body": "Le vendite vedono e rispondono alle richieste (Vendite › Richieste). Chiedi all'amministratore il ruolo vendite se ti servono."
+    "body": "Le vendite vedono e rispondono alle richieste (Vendite › In arrivo). Chiedi all'amministratore il ruolo vendite se ti servono."
   },
   "list": {
     "intro": "Nuove richieste e RFQ da e-mail, portale, telefono, fiera o visita, finché diventano un preventivo. Prima le più vecchie in attesa.",
@@ -39,8 +39,7 @@
     "noMatch": "Nessuna riga con questi filtri",
     "noMatchBody": "Cambia o togli i filtri per vedere altre richieste.",
     "empty": "Ancora nessuna richiesta",
-    "emptyBody": "Nessuna richiesta. Una mail di un cliente diventa una richiesta da Posta da smistare (\"Crea una richiesta\"); una telefonata o una visita con Nuova richiesta.",
-    "foot": "L’attesa conta il tempo lavorativo sul calendario della società; oltre un giorno lavorativo diventa rossa. Un elenco non nomina mai una persona: \"Tu\" o \"Un collega\".",
+    "emptyBody": "Nessuna richiesta. La richiesta di un cliente dal portale arriva qui da sola; una e-mail diventa richiesta da Posta da smistare (\"Crea richiesta in arrivo\"); una telefonata o una visita con Nuova richiesta.",
     "copied_one": "{count} numero copiato",
     "copied_other": "{count} numeri copiati",
     "withheldPrice": "serve il permesso sui prezzi"
@@ -58,7 +57,17 @@
     "waiting": "In attesa",
     "assignedTo": "Assegnata a",
     "status": "Stato",
-    "more": "Azioni"
+    "more": "Azioni",
+    "picture": "Immagine",
+    "customer": "Cliente",
+    "subject": "Oggetto",
+    "files": "File",
+    "quantity": "Quantità",
+    "wanted": "Richiesta per",
+    "received": "Ricevuta",
+    "owner": "Responsabile",
+    "state": "Stato",
+    "company": "Azienda"
   },
   "row": {
     "menu": "Azioni per {number}",
@@ -70,24 +79,27 @@
     "new": "Nuova richiesta",
     "quote": "Crea il preventivo (la richiesta evidenziata o selezionata, o quella aperta)",
     "assign": "Assegna",
-    "decline": "Rifiuta"
+    "decline": "Rifiuta",
+    "recordWalk": "Tra le righe; con una richiesta aperta, la successiva o la precedente",
+    "recordClose": "Chiudi la richiesta aperta"
   },
   "tile": {
     "NEW": "Nuove",
     "WAITING_US": "Ferme da noi da oltre 1 giorno lavorativo",
-    "WAITING_CUSTOMER": "In attesa del cliente",
+    "WAITING_CUSTOMER": "Servono informazioni",
     "QUOTED_THIS_WEEK": "Preventivate questa settimana",
     "MINE": "Mie",
-    "OPEN": "Aperte (tutte quelle in attesa)",
+    "OPEN": "Aperte",
     "QUOTED": "Preventivate",
     "DECLINED": "Rifiutate",
     "LOST": "Perse",
     "ALL": "Tutte",
     "hint": {
       "NEW": "Ancora di nessuno",
-      "WAITING_US": "Nuove o in lavorazione, sul calendario lavorativo",
+      "WAITING_US": "Di tutti, sul calendario lavorativo (l'avviso di Oggi conta le tue o di nessuno)",
       "WAITING_CUSTOMER": "Abbiamo chiesto più informazioni",
-      "QUOTED_THIS_WEEK": "Diventate preventivo da lunedì"
+      "QUOTED_THIS_WEEK": "Diventate preventivo da lunedì",
+      "MINE": "Le richieste aperte che tieni tu"
     },
     "failed": "Impossibile contare",
     "partial": "Contate sulle 1000 richieste aperte più vecchie"
@@ -101,7 +113,10 @@
     "partyUnknown": "Da: un cliente",
     "q": "Ricerca: “{q}”",
     "clear": "Togli il filtro {what}",
-    "clearAll": "Togli tutti"
+    "clearAll": "Togli tutti",
+    "status": "Stato: {status}",
+    "company": "Azienda: {name}",
+    "companyUnknown": "Azienda: una azienda"
   },
   "notice": {
     "label": "Avvisi",
@@ -111,7 +126,13 @@
     "partial": "Sono aperte più di 1000 richieste: \"Ferme da noi da oltre 1 giorno lavorativo\" conta solo le 1000 più vecchie.",
     "capped": "L'elenco mostra le prime {count} richieste di questi filtri: restringili per vedere le altre.",
     "prospects_one": "{count} richiesta aperta viene da un potenziale cliente: abbinala a un cliente (Richiesta) prima del preventivo.",
-    "prospects_other": "{count} richieste aperte vengono da potenziali clienti: abbina ognuna a un cliente (Richiesta) prima del preventivo."
+    "prospects_other": "{count} richieste aperte vengono da potenziali clienti: abbina ognuna a un cliente (Richiesta) prima del preventivo.",
+    "mail_one": "{count} e-mail aspetta in Posta da smistare",
+    "mail_other": "{count} e-mail aspettano in Posta da smistare",
+    "mailMore": "Più di {count} e-mail aspettano in Posta da smistare",
+    "numbering": "Le richieste dal portale e per e-mail sono ferme per {name}: manca la numerazione delle richieste",
+    "numberingOpen": "Imposta la numerazione",
+    "open": "Apri"
   },
   "status": {
     "NEW": "Nuova",
@@ -130,7 +151,7 @@
   },
   "waiting": {
     "us": "Ferma da noi",
-    "usOverdue": "Ferma da noi da oltre 1 giorno",
+    "usOverdue": "Ferma da noi da oltre 1 giorno lavorativo",
     "customer": "In attesa del cliente"
   },
   "time": {
@@ -142,7 +163,9 @@
   "assignee": {
     "me": "Tu",
     "other": "Un collega",
-    "nobody": "Nessuno"
+    "nobody": "Nessuno",
+    "name": "{name}",
+    "nameMe": "{name} (tu)"
   },
   "bulk": {
     "reach_one": "{count} richiesta aperta",
@@ -166,7 +189,7 @@
     "declined_other": "{count} richieste rifiutate ({reason})"
   },
   "held": {
-    "right": "Il tuo ruolo non lo consente ({right})",
+    "right": "Serve il permesso delle vendite ({right})",
     "offline": "Offline — aspetta che torni la connessione",
     "offlineKept": "Offline — le modifiche restano su questa pagina",
     "notNow": "Non possibile ora per questa richiesta"
@@ -249,8 +272,8 @@
     "more": "Altre azioni",
     "copyNumber": "Copia il numero",
     "copied": "{number} copiato",
-    "back": "Richieste",
-    "backToList": "Torna alle richieste",
+    "back": "In arrivo",
+    "backToList": "Torna a In arrivo",
     "notFoundTitle": "Richiesta non trovata",
     "notFoundBody": "Questa richiesta non c’è più, o è di un’altra società o di un cliente che non vedi.",
     "failedTitle": "Impossibile caricare la richiesta",
@@ -311,7 +334,9 @@
     "unknownBody": "Il preventivo si fa per un cliente: abbina questo potenziale cliente a uno (una sola volta), o crea prima il cliente in Vendite › Clienti.",
     "match": "Abbina a un cliente",
     "matchHint": "Una volta abbinato, il cliente resta: la mail entra nella sua conversazione",
-    "matchNone": "Non ancora abbinato"
+    "matchNone": "Non ancora abbinato",
+    "new": "nuovo",
+    "newHint": "Non ancora cliente: un potenziale cliente"
   },
   "prospect": {
     "name": "Nome",
@@ -445,14 +470,18 @@
   "files": {
     "fromMail": "Dalla mail",
     "added": "Aggiunto qui",
-    "none": "Ancora nessun file: aggiungili sotto, o arrivano con la mail.",
+    "none": "Nessun file",
     "download": "Scarica {name}",
     "noRight": "Il tuo ruolo non legge i file e la conversazione della richiesta",
     "problem": {
       "type": "Questo tipo di file non si può aggiungere",
       "empty": "Il file è vuoto",
       "size": "Più grande di {max} MB"
-    }
+    },
+    "photos_one": "{count} foto",
+    "photos_other": "{count} foto",
+    "documents_one": "{count} documento",
+    "documents_other": "{count} documenti"
   },
   "quote": {
     "none": "Non ancora preventivata",
@@ -600,5 +629,68 @@
     "done": "{number} creata",
     "doneFiles_one": "{number} creata; {count} file non è stato aggiunto: aggiungilo in File e specifiche",
     "doneFiles_other": "{number} creata; {count} file non sono stati aggiunti: aggiungili in File e specifiche"
+  },
+  "page": {
+    "title": "In arrivo"
+  },
+  "band": {
+    "countUnknown": "—",
+    "asOf": "alle {time}",
+    "count": {
+      "OPEN": "{count} aperte",
+      "NEW": "{count} nuove",
+      "WAITING_US": "{count} ferme da noi da oltre 1 giorno lavorativo",
+      "WAITING_CUSTOMER": "{count} servono informazioni",
+      "QUOTED_THIS_WEEK": "{count} preventivate questa settimana",
+      "MINE": "{count} tue",
+      "QUOTED": "{count} preventivate",
+      "DECLINED": "{count} rifiutate",
+      "LOST": "{count} perse",
+      "ALL": "{count} in tutto"
+    }
+  },
+  "door": {
+    "request": "Apri {number}",
+    "customer": "Apri il cliente {name}",
+    "files": "Apri i file di {number}",
+    "quote": "Apri il preventivo {number}",
+    "parties": "Serve il permesso sui clienti (parties.view)",
+    "quotes": "Serve il permesso sui preventivi (quotes.view)"
+  },
+  "funnel": {
+    "state": "Mostra solo: {status}",
+    "source": "Mostra solo: {source}",
+    "company": "Mostra solo: {name}"
+  },
+  "picture": {
+    "open": "Immagine di {style} su {number}: aprila in grande",
+    "noneOf": "{number} non indica un modello: nessuna immagine",
+    "alt": "{style}",
+    "viewerOf": "Da {number}",
+    "small": "Un'anteprima piccola: l'originale si apre dal modello.",
+    "none": "Ancora nessuna immagine di questo modello",
+    "openStyle": "Apri modello",
+    "close": "Chiudi",
+    "more": "+{count}",
+    "moreStyles_one": "{count} altro modello in questa richiesta: aprila",
+    "moreStyles_other": "{count} altri modelli in questa richiesta: aprila"
+  },
+  "peek": {
+    "title": "{number} · {customer}",
+    "received": "Ricevuta",
+    "source": "Provenienza",
+    "state": "Stato",
+    "quantity": "Quantità",
+    "wanted": "Richiesta per",
+    "open": "Apri la richiesta",
+    "code": "Codice",
+    "openCustomer": "Apri il cliente",
+    "customerTitle": "{name}",
+    "customerNote": "Tutte le richieste di questo cliente: il filtro Da qui sopra."
+  },
+  "export": {
+    "heading": "Esporta · {view}",
+    "note": "Le prime {count} righe di questa vista: l'esportazione non legge oltre finché l'elenco non legge a pagine.",
+    "notePrice": "Le prime {count} righe di questa vista; il prezzo obiettivo resta fuori (serve il permesso sui prezzi)."
   }
 }

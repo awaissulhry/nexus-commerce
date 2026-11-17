@@ -38,6 +38,8 @@ export const ROLE_PERMISSIONS = {
   sales: template('sales'),
   reader: template('read_only'),
   warehouse: template('warehouse'),
+  // B-TH-216 (B-TH-014): the production manager reads Incoming and holds none of its sales actions.
+  production: template('production_manager'),
 } as const
 export type RoleCase = keyof typeof ROLE_PERMISSIONS
 
@@ -124,19 +126,33 @@ function row(n: number, over: Partial<InquiryRow>): InquiryRow {
     wantedDate: null,
     waiting: { for: 'US', workingMinutes: 60, overdue: false },
     assigneeId: null,
+    assignee: null,
     mine: false,
     quote: null,
     declineReason: null,
     closedAt: null,
     version: 1,
+    // B-TH-216: the Picture and Files cells.
+    picture: null,
+    styleCount: 0,
+    fileCounts: { photos: 0, documents: 0 },
     ...over,
   }
 }
 
+// ---- B-TH-216 (Sales › Incoming): the people who keep requests (office names) and the style pictures of the rows ----
+const MARCO = { id: OTHER, name: 'Marco Demo' }
+const YOU = { id: ME, name: DEMO_USER.displayName }
+const picture = (style: { id: string; code: string; name: string }, n: number) => ({ styleId: style.id, styleCode: style.code, styleName: style.name, fileId: uid('5801', n), contentType: 'image/webp', small: true })
+
+/** A small made-up garment drawing as a row's picture (the page reads the store's small previews). */
+const garment = (fill: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#eef1f5"/><path fill="${fill}" d="M30 18 L42 12 Q50 19 58 12 L70 18 L85 35 L77 45 L70 40 L70 87 L30 87 L30 40 L23 45 L15 35 Z"/><path stroke="#ffffff" stroke-opacity=".5" d="M50 17 V87"/></svg>`)}`
+
 const party = (one: { id: string; code: string; name: string }) => ({ id: one.id, code: one.code, name: one.name })
 
 export const ROWS: InquiryRow[] = [
-  row(1, { source: 'PHONE', receivedAt: at(9, 14, 10), party: party(SHOP), fromWords: SHOP.name, summary: '60 rain trousers for the spring, sizes S to XL', products: [PANTS.code], pieces: 60, sizes: 'S:10 M:20 L:20 XL:10', targetUnitPrice: price('38.000000'), wantedDate: '2027-02-15', waiting: { for: 'US', workingMinutes: 620, overdue: true } }),
+  row(1, { source: 'PHONE', receivedAt: at(9, 14, 10), party: party(SHOP), fromWords: SHOP.name, summary: '60 rain trousers for the spring, sizes S to XL', products: [PANTS.code], pieces: 60, sizes: 'S:10 M:20 L:20 XL:10', targetUnitPrice: price('38.000000'), wantedDate: '2027-02-15', waiting: { for: 'US', workingMinutes: 620, overdue: true }, picture: picture(PANTS, 1), styleCount: 1 }),
   row(2, {
     source: 'MAIL',
     status: 'ASSIGNED',
@@ -151,14 +167,21 @@ export const ROWS: InquiryRow[] = [
     wantedDate: '2027-01-20',
     waiting: { for: 'US', workingMinutes: 135, overdue: false },
     assigneeId: ME,
+    assignee: YOU,
     mine: true,
     version: 3,
+    picture: picture(JACKET, 2),
+    styleCount: 2,
+    fileCounts: { photos: 1, documents: 2 },
   }),
-  row(3, { source: 'FAIR', status: 'NEED_INFO', receivedAt: at(5, 16, 0), fromWords: 'Demo Track Club', prospect: true, summary: 'Team suits for 12 riders, their own colours', products: ['One-piece track suit'], pieces: 12, waiting: { for: 'CUSTOMER', workingMinutes: 1500, overdue: false }, assigneeId: OTHER, version: 4 }),
-  row(4, { source: 'OFFICE', receivedAt: at(12, 9, 10), fromWords: 'Demo Moto Club', prospect: true, summary: 'Club jackets with an embroidered logo', products: [], pieces: 0, waiting: { for: 'US', workingMinutes: 32, overdue: false } }),
-  row(5, { source: 'PORTAL', status: 'QUOTED', receivedAt: at(3, 11, 0), party: party(BRAND), fromWords: BRAND.name, summary: 'Reorder of the AW26 jacket, 80 pieces', products: [JACKET.code], pieces: 80, sizes: '48:10 50:20 52:30 54:20', targetUnitPrice: price('139.500000'), waiting: { for: null, workingMinutes: null, overdue: false }, assigneeId: OTHER, quote: { id: uid('5501', 12), number: 'QT-DEMO-00012' }, closedAt: at(10, 15, 0), version: 6 }),
+  row(3, { source: 'FAIR', status: 'NEED_INFO', receivedAt: at(5, 16, 0), fromWords: 'Demo Track Club', prospect: true, summary: 'Team suits for 12 riders, their own colours', products: ['One-piece track suit'], pieces: 12, waiting: { for: 'CUSTOMER', workingMinutes: 1500, overdue: false }, assigneeId: OTHER, assignee: MARCO, version: 4, fileCounts: { photos: 3, documents: 0 } }),
+  row(4, { source: 'OFFICE', receivedAt: at(12, 9, 10), fromWords: 'Demo Moto Club', prospect: true, summary: 'Club jackets with an embroidered logo', products: [], pieces: 0, waiting: { for: 'US', workingMinutes: 32, overdue: false }, fileCounts: { photos: 0, documents: 1 } }),
+  row(5, { source: 'PORTAL', status: 'QUOTED', receivedAt: at(3, 11, 0), party: party(BRAND), fromWords: BRAND.name, summary: 'Reorder of the AW26 jacket, 80 pieces', products: [JACKET.code], pieces: 80, sizes: '48:10 50:20 52:30 54:20', targetUnitPrice: price('139.500000'), waiting: { for: null, workingMinutes: null, overdue: false }, assigneeId: OTHER, assignee: MARCO, quote: { id: uid('5501', 12), number: 'QT-DEMO-00012' }, closedAt: at(10, 15, 0), version: 6, picture: picture(JACKET, 3), styleCount: 1 }),
   row(6, { source: 'MAIL', status: 'DECLINED', receivedAt: at(2, 9, 0), party: party(SHOP), fromWords: SHOP.name, summary: '500 promotional caps by next week', products: ['Promotional cap'], pieces: 500, waiting: { for: null, workingMinutes: null, overdue: false }, declineReason: 'NOT_OUR_PRODUCT', closedAt: at(2, 11, 0), version: 3 }),
 ]
+
+/** B-TH-216: each row's small preview in the design cases (by row id). */
+export const DEMO_PICTURES: Readonly<Record<string, string>> = Object.fromEntries(ROWS.filter((one) => one.picture?.small).map((one, index) => [one.id, garment(['#36506b', '#8a5a2b', '#2f6b4f'][index % 3]!)]))
 
 const counts = (rows: readonly InquiryRow[]): Record<InquiryTile, number | null> => ({
   NEW: rows.filter((one) => one.status === 'NEW').length,

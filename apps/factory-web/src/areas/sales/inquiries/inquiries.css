@@ -271,3 +271,37 @@
 .fw-inq-people {
   min-height: 160px;
 }
+
+/* ── B-TH-216 (threads plan TH-1b): Sales › Incoming — the band, the Customer and Subject cells, the Picture cell's kinds ── */
+.fw-inq-band {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-inq-who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-inq-subject {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-inq-thumb-kind {
+  color: var(--nds-text-link);
+  cursor: pointer;
+}
+
+.fw-inq-thumb-none {
+  color: var(--nds-placeholder);
+}
+/* ── end B-TH-216 ── */

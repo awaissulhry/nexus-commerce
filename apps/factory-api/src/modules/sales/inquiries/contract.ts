@@ -23,6 +23,7 @@ import {
   updateInquiryBody,
   versionBody,
   askInfoBody,
+  inquiryPictureView,
 } from '@nexus/factory-domain/sales/inquiries/contracts'
 
 /** The inquiries' contracts (B-W2b-295): the bodies and answers are factory-domain's sales/inquiries/contracts. */
@@ -46,5 +47,5 @@ export const mailDraftContract = defineContract({ params: mailParams, response: 
 export const fromMailContract = defineContract({ params: mailParams, body: fromMailBody, response: { 201: inquiryAnswer } })
 export const sourceContract = defineContract({ querystring: sourceQuery, response: { 200: sourceView } })
 export const assigneesContract = defineContract({ querystring: input({ companyId: id(), partyId: id().optional() }), response: { 200: assigneesView } })
-
-
+// B-TH-216 (Sales › Incoming): the Picture cell's small preview.
+export const inquiryPictureContract = defineContract({ params: inquiryParams, response: { 200: inquiryPictureView } })

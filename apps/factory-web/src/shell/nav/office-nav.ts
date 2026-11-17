@@ -139,9 +139,10 @@ export const OFFICE_PAGES: ReadonlySet<string> = new Set([
   '/records/[type]/[id]',
   '/sales/customers',
   '/sales/customers/[partyId]',
-  // B-W2b-322: Sales › Inquiries (SCR-105) and an inquiry's full page.
-  '/sales/inquiries',
-  '/sales/inquiries/[id]',
+  // B-W2b-322: Sales › Inquiries (SCR-105) and an inquiry's full page; B-TH-216: renamed Sales › Incoming (the old addresses
+  // redirect: shell/nav/renamed.ts).
+  '/sales/incoming',
+  '/sales/incoming/[id]',
   '/sales/quotes',
   '/sales/quotes/[id]',
   '/sales/orders',

@@ -48,7 +48,7 @@ function RecordDesign({ model }: { model: RecordCase }) {
   const view = model.record.loaded.status === 'ready' ? model.record.loaded.value : null
   const panels = view && (model.record.tab === 'activity' || model.record.tab === 'files') ? createElement(RecordPanelsView, { model: panelsOf(view, model.record.tab === 'files' ? 'files' : 'conversation') }) : null
   const page = createElement(InquiryPageView, { model: model.record, asOf: NOW, slots: model.record.tab === 'activity' ? { activity: panels } : model.record.tab === 'files' ? { files: panels } : undefined })
-  return inShell('/sales/inquiries', page, model.role)
+  return inShell('/sales/incoming', page, model.role)
 }
 
 export const designScreen = defineDesignScreen<RecordCase>({

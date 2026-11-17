@@ -1,4 +1,5 @@
 import { createElement, useEffect, useState } from 'react'
+import { DEMO_COMPANIES } from '../../../shell/design-data'
 import { RecordPanelsView } from '../../../record-panels/view/RecordPanelsView'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import {
@@ -8,6 +9,7 @@ import {
   CONTACTS,
   CUSTOMERS,
   DECLINED_VIEW,
+  DEMO_PICTURES,
   inShell,
   JACKET_DETAIL,
   listOf,
@@ -94,6 +96,10 @@ function page(over: Partial<InquiriesModel> = {}, role: RoleCase = 'owner'): Des
       newInquiry: null,
       bulk: null,
       detail: null,
+      // B-TH-216: one company (no Company column), the rows' small previews.
+      companies: DEMO_COMPANIES.slice(0, 1).map((entry) => ({ id: entry.id, name: entry.name })),
+      noticeFacts: {},
+      demoPictures: DEMO_PICTURES,
       ...over,
     },
   }
@@ -167,7 +173,7 @@ function ListDesign({ model }: { model: DesignModel }) {
       onDismissPageNotice: (key) => setState((now) => ({ ...now, dismissed: [...now.dismissed, key] })),
     },
   })
-  return inShell('/sales/inquiries', view, model.role)
+  return inShell('/sales/incoming', view, model.role)
 }
 
 const OPEN_ROWS = ROWS.filter((one) => ['NEW', 'ASSIGNED', 'NEED_INFO'].includes(one.status))
@@ -175,10 +181,20 @@ const CHANGED = { ...requestDraftOf(VIEW), wantedDate: '2027-01-27', targetPrice
 
 export const designScreen = defineDesignScreen<DesignModel>({
   screen: 'SCR-105',
-  title: 'Inquiries',
+  title: 'Incoming',
   view: ListDesign,
   holdsPage: true,
   cases: [
+    // ── B-TH-216 (threads plan TH-1b): Sales › Incoming — every request of every customer on one page, every cell a door ──
+    { id: 'th-216-incoming', label: 'TH-1b · Incoming: the band (Incoming · 3 open · as of), five tiles, Picture, Customer (a prospect marked new), Subject, Files, Quantity, Wanted, Received, Waiting, Owner by name, State, Source, Number', model: page(), note: 'Every cell is a door: Customer → the customer (peek on rest), Subject / Number → the request, Picture → the picture large, Files → its files, State / Source narrow the list. The rest of a row opens the request (⌘: a new tab). Keys only in the footer icon.' },
+    { id: 'th-216-all', label: 'TH-1b · Rows ▾ All: closed requests with their quote (a door) or the decline reason', model: page({ address: at({ tile: 'ALL' }), list: listOf(ROWS) }) },
+    { id: 'th-216-state', label: 'TH-1b · The State cell narrowed the list to "In progress" (its chip)', model: page({ address: at({ tile: 'ALL', status: 'ASSIGNED' }), list: listOf(ROWS.filter((one) => one.status === 'ASSIGNED')) }) },
+    { id: 'th-216-picture', label: 'TH-1b · The picture large (the small preview, Open style, the request names 2 styles)', model: page({ viewer: ROWS[1]!.id }) },
+    { id: 'th-216-numbering', label: 'TH-1b · One notice: requests by portal and mail are off for a company (no request numbering), 2 more behind', model: page({ list: listOf(OPEN_ROWS, false), noticeFacts: { numberingMissing: [DEMO_COMPANIES[0].name], mailToSort: { count: 4, more: false } } }) },
+    { id: 'th-216-mail', label: 'TH-1b · One notice: 4 mails wait in Mail to sort (Open)', model: page({ noticeFacts: { mailToSort: { count: 4, more: false } } }) },
+    { id: 'th-216-companies', label: 'TH-1b · Two companies: the Company column (a funnel) and its chip', model: page({ companies: DEMO_COMPANIES.map((entry) => ({ id: entry.id, name: entry.name })), address: at({ company: DEMO_COMPANIES[0].id }) }) },
+    { id: 'th-216-production', label: 'TH-1b · The production manager: reads every request, no target price, every sales action held "Needs the sales permission"', model: page({ selected: [ROWS[0]!.id] }, 'production') },
+    // ── end B-TH-216 ──
     { id: 'inbox', label: 'The queue: open inquiries, the oldest waiting first; tiles, waiting in working time, "You" / "A colleague"', model: page(), note: 'Enter opens the inquiry in its DetailModal; x / Space select; ⋯ and right-click the verbs. Keys only in the footer icon.' },
     { id: 'tile-new', label: 'Tile: New (its chip in the filter row)', model: page(tile('NEW', OPEN_ROWS.filter((one) => one.status === 'NEW'))) },
     { id: 'tile-waiting-us', label: 'Tile: Waiting for us over 1 working day', model: page(tile('WAITING_US', OPEN_ROWS.filter((one) => one.waiting.overdue))) },

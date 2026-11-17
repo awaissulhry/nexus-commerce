@@ -125,7 +125,11 @@ export const DEFAULT_TILE: InquiryTile = 'OPEN'
 export interface ListAddress {
   /** A tile = a saved filter (the API's own `tile`); OPEN when the address names none. */
   readonly tile: InquiryTile
+  /** B-TH-216: one state (the State cell narrows the list to it). */
+  readonly status: InquiryStatus | null
   readonly source: InquirySource | null
+  /** B-TH-216: one company (the Company cell narrows the list, for a reader who sees more than one). */
+  readonly company: string | null
   /** One customer's inquiries. */
   readonly party: string | null
   /** From prospects only (no customer yet). */
@@ -140,7 +144,7 @@ export interface ListAddress {
   readonly mail: string | null
 }
 
-export const HOME_ADDRESS: ListAddress = { tile: DEFAULT_TILE, source: null, party: null, prospect: false, q: '', open: null, tab: 'request', isNew: false, mail: null }
+export const HOME_ADDRESS: ListAddress = { tile: DEFAULT_TILE, status: null, source: null, company: null, party: null, prospect: false, q: '', open: null, tab: 'request', isNew: false, mail: null }
 
 const oneOf = <T extends string>(values: readonly T[], value: string | null): T | null => (value !== null && (values as readonly string[]).includes(value) ? (value as T) : null)
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -150,7 +154,9 @@ export function addressOf(params: { get(name: string): string | null }): ListAdd
   const prospect = params.get('prospect') === '1'
   return {
     tile: oneOf(INQUIRY_TILES, params.get('tile')) ?? DEFAULT_TILE,
+    status: oneOf(INQUIRY_STATUSES, params.get('status')),
     source: oneOf(INQUIRY_SOURCES, params.get('source')),
+    company: idOf(params.get('company')),
     party: prospect ? null : idOf(params.get('party')),
     prospect,
     q: (params.get('q') ?? '').slice(0, 100),
@@ -164,7 +170,9 @@ export function addressOf(params: { get(name: string): string | null }): ListAdd
 export function addressText(address: ListAddress): string {
   const params = new URLSearchParams()
   if (address.tile !== DEFAULT_TILE) params.set('tile', address.tile)
+  if (address.status) params.set('status', address.status)
   if (address.source) params.set('source', address.source)
+  if (address.company) params.set('company', address.company)
   if (address.prospect) params.set('prospect', '1')
   else if (address.party) params.set('party', address.party)
   if (address.q.trim()) params.set('q', address.q.trim())
@@ -177,13 +185,16 @@ export function addressText(address: ListAddress): string {
 }
 
 /** Anything narrowing the rows beyond the default tile. */
-export const isFiltered = (address: ListAddress): boolean => address.tile !== DEFAULT_TILE || !!address.source || !!address.party || address.prospect || !!address.q.trim()
+export const isFiltered = (address: ListAddress): boolean => address.tile !== DEFAULT_TILE || !!address.status || !!address.source || !!address.company || !!address.party || address.prospect || !!address.q.trim()
 
-export const listHref = (prefix: string, address: Partial<ListAddress> = {}): string => `${prefix}/sales/inquiries${addressText({ ...HOME_ADDRESS, ...address })}`
+/** B-TH-216: Sales › Incoming (renamed from Inquiries; the old address redirects, shell/nav/renamed.ts). */
+export const PAGE_PATH = '/sales/incoming'
 
-/** The inquiry's full page (a new tab from its DetailModal; where a search result or a link opens it). */
+export const listHref = (prefix: string, address: Partial<ListAddress> = {}): string => `${prefix}${PAGE_PATH}${addressText({ ...HOME_ADDRESS, ...address })}`
+
+/** The request's full page (a new tab; where a search result, a notification or a link opens it). */
 export function recordHref(prefix: string, inquiryId: string, tab?: RecordTab): string {
-  return `${prefix}/sales/inquiries/${encodeURIComponent(inquiryId)}${tab && tab !== 'request' ? `?tab=${tab}` : ''}`
+  return `${prefix}${PAGE_PATH}/${encodeURIComponent(inquiryId)}${tab && tab !== 'request' ? `?tab=${tab}` : ''}`
 }
 
 export const recordTabOf = (params: { get(name: string): string | null }): RecordTab => oneOf(RECORD_TABS, params.get('tab')) ?? 'request'
@@ -192,7 +203,9 @@ export const recordTabOf = (params: { get(name: string): string | null }): Recor
 export function queryOf(address: ListAddress) {
   return {
     tile: address.tile,
+    status: address.status,
     source: address.source,
+    companyId: address.company,
     partyId: address.prospect ? null : address.party,
     prospect: address.prospect,
     q: address.q.trim(),
@@ -201,8 +214,8 @@ export function queryOf(address: ListAddress) {
 
 // ---- tiles, chips and notices ---------------------------------------------------------------------------------------------
 
-/** The design's tiles (saved filters), in its order. */
-export const DESIGN_TILES = ['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK'] as const satisfies readonly InquiryTile[]
+/** The tiles (saved filters), in the tree's order (B-TH-216, O-SAL-INQ-LIST.tiles): New · Waiting on us over 1 working day · Need info · Quoted this week · Mine. */
+export const DESIGN_TILES = ['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'MINE'] as const satisfies readonly InquiryTile[]
 /** Rows ▾ (the saved rows), in the design's order: Mine, New, Need info, Quoted, Declined, All, and the rest. */
 export const SAVED_ROWS = ['OPEN', 'MINE', 'NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'QUOTED', 'DECLINED', 'LOST', 'ALL'] as const satisfies readonly InquiryTile[]
 
@@ -217,16 +230,19 @@ export function tileValue(list: InquiryList | null, tile: InquiryTile, failed: b
 export const tilePartial = (list: InquiryList | null, tile: InquiryTile): boolean => tile === 'WAITING_US' && !!list && !list.complete
 
 export interface FilterChipModel {
-  readonly id: 'tile' | 'source' | 'party' | 'prospect' | 'q'
+  readonly id: 'tile' | 'status' | 'source' | 'company' | 'party' | 'prospect' | 'q'
   readonly label: Phrase
   readonly clear: Partial<ListAddress>
 }
 
 /** The filter row: each filter a chip with ✕ (a tile's chip too: one filter model). */
-export function chipsOf(address: ListAddress, partyName: string | null): FilterChipModel[] {
+export function chipsOf(address: ListAddress, partyName: string | null, companyName: string | null = null): FilterChipModel[] {
   const chips: FilterChipModel[] = []
   if (address.tile !== DEFAULT_TILE) chips.push({ id: 'tile', label: { key: 'chip.tile', params: { tile: `tile.${address.tile}` } }, clear: { tile: DEFAULT_TILE } })
+  // B-TH-216: the State and Company cells narrow the list; each narrowing is a chip.
+  if (address.status) chips.push({ id: 'status', label: { key: 'chip.status', params: { status: `status.${address.status}` } }, clear: { status: null } })
   if (address.source) chips.push({ id: 'source', label: { key: 'chip.source', params: { source: `source.${address.source}` } }, clear: { source: null } })
+  if (address.company) chips.push({ id: 'company', label: companyName ? { key: 'chip.company', params: { name: companyName } } : { key: 'chip.companyUnknown' }, clear: { company: null } })
   if (address.prospect) chips.push({ id: 'prospect', label: { key: 'chip.prospect' }, clear: { prospect: false } })
   else if (address.party) chips.push({ id: 'party', label: partyName ? { key: 'chip.party', params: { name: partyName } } : { key: 'chip.partyUnknown' }, clear: { party: null } })
   if (address.q.trim()) chips.push({ id: 'q', label: { key: 'chip.q', params: { q: address.q.trim() } }, clear: { q: '' } })
@@ -244,17 +260,42 @@ export interface PageNotice extends Phrase {
  * Data the list lacks (the waiting count partial past 1000 open inquiries, the first 200 rows only), and inquiries from
  * prospects that need a customer before a quote. Kept dismissed by value, so a new fact shows again.
  */
-export function pageNotices(list: InquiryList | null, limit: number, dismissed: ReadonlySet<string>): PageNotice[] {
+export interface NoticeFacts {
+  /** B-TH-216 (L2-G03, B-TH-012): the companies (by name) with no active request numbering — read only for numbering.view holders. */
+  readonly numberingMissing?: readonly string[] | null
+  /** B-TH-216: the mails waiting in Mail to sort (a page of 50 at most) — read only for people who sort mail. */
+  readonly mailToSort?: { readonly count: number; readonly more: boolean } | null
+}
+
+export function pageNotices(list: InquiryList | null, limit: number, dismissed: ReadonlySet<string>, facts: NoticeFacts = {}): PageNotice[] {
   if (!list) return []
   const notices: PageNotice[] = []
+  // B-TH-216: the most serious first — a company whose portal and mail doors are off (no request numbering).
+  for (const name of facts.numberingMissing ?? []) notices.push({ key: 'notice.numbering', params: { name }, tone: 'warning', value: `numbering:${name}` })
   if (!list.complete) notices.push({ key: 'notice.partial', tone: 'warning', value: 'partial' })
   if (list.rows.length >= limit) notices.push({ key: 'notice.capped', params: { count: limit }, tone: 'warning', value: `capped:${limit}` })
   const prospects = list.rows.filter((row) => row.prospect && isOpen(row.status)).length
   if (prospects > 0) notices.push({ key: 'notice.prospects', params: { count: prospects }, tone: 'info', value: `prospects:${prospects}` })
+  // B-TH-216: mails that wait in Mail to sort (only for people who sort mail).
+  const mail = facts.mailToSort
+  if (mail && mail.count > 0) notices.push({ key: mail.more ? 'notice.mailMore' : 'notice.mail', params: { count: mail.count }, tone: 'info', value: `mail:${mail.count}${mail.more ? '+' : ''}` })
   return notices.filter((notice) => !dismissed.has(`${notice.key}:${notice.value}`))
 }
 
 export const noticeKey = (notice: Pick<PageNotice, 'key' | 'value'>): string => `${notice.key}:${notice.value}`
+
+/** B-TH-216: where a notice's "Open" goes (Mail to sort; the numbering page), or null. */
+export function noticeLink(notice: Pick<PageNotice, 'key'>, prefix: string): { readonly href: string; readonly label: Phrase } | null {
+  if (notice.key === 'notice.mail' || notice.key === 'notice.mailMore') return { href: `${prefix}/home/mail-to-sort`, label: { key: 'notice.open' } }
+  if (notice.key === 'notice.numbering') return { href: `${prefix}/admin/documents`, label: { key: 'notice.numberingOpen' } }
+  return null
+}
+
+/** B-TH-216 (band-F01): the band's count, said in words for the current Rows ▾ choice ("41 open"); unknown is "—", never 0. */
+export function bandCount(list: InquiryList | null, tile: InquiryTile, failed: boolean): Phrase {
+  const value = failed || !list ? null : list.counts[tile]
+  return value === null || value === undefined ? { key: 'band.countUnknown' } : { key: `band.count.${tile}`, params: { count: value } }
+}
 
 /** Where the dismissed notices are kept on this device (by value). */
 export const DISMISSED_STORE = 'factory:sales.inquiries:dismissed'
@@ -292,8 +333,25 @@ export function waitingOf(row: Pick<InquiryRow, 'waiting'>): { readonly phrase: 
   return { phrase: { key: waiting.overdue ? 'waiting.usOverdue' : 'waiting.us' }, tone: waiting.overdue ? 'danger' : 'neutral', time }
 }
 
-/** "You" / "A colleague" / nobody: a list never names a person (Owner answer W1). */
-export const assigneePhrase = (row: Pick<InquiryRow, 'assigneeId' | 'mine'>): Phrase => ({ key: row.assigneeId === null ? 'assignee.nobody' : row.mine ? 'assignee.me' : 'assignee.other' })
+/**
+ * The Owner cell: the office person by name (B-TH-016, Owner decision 4: office people are named; floor workers never keep a
+ * request), "A colleague" only when the API could not name them, nobody when nobody keeps it.
+ */
+export const assigneePhrase = (row: Pick<InquiryRow, 'assigneeId' | 'mine'> & { readonly assignee?: { readonly name: string } | null }): Phrase =>
+  row.assigneeId === null ? { key: 'assignee.nobody' } : row.assignee?.name ? { key: row.mine ? 'assignee.nameMe' : 'assignee.name', params: { name: row.assignee.name } } : { key: row.mine ? 'assignee.me' : 'assignee.other' }
+
+/** B-TH-216 (list-F01): the Files cell — photos and documents counted, never named; null: no files.read there ("—"). */
+export function filesPhrases(row: Pick<InquiryRow, 'fileCounts'>): Phrase[] | null {
+  const files = row.fileCounts
+  if (!files) return null
+  if (files.photos === 0 && files.documents === 0) return [{ key: 'files.none' }]
+  return [...(files.photos > 0 ? [{ key: 'files.photos', params: { count: files.photos } }] : []), ...(files.documents > 0 ? [{ key: 'files.documents', params: { count: files.documents } }] : [])]
+}
+
+/** B-TH-216 (band-F03): what Export ▾ says the file holds — the view, and the first 200 rows until the list reads in pages (L2-G07). */
+export function exportPhrases(tile: InquiryTile, limit: number, can: Pick<InquiriesCan, 'price'>): { readonly heading: Phrase; readonly note: Phrase } {
+  return { heading: { key: 'export.heading', params: { view: `tile.${tile}`, count: limit } }, note: { key: can.price ? 'export.note' : 'export.notePrice', params: { count: limit } } }
+}
 
 // ---- verbs held with the reason ----------------------------------------------------------------------------------------------
 

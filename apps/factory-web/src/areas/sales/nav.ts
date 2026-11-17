@@ -28,7 +28,9 @@ export const officeArea: OfficeAreaNav = {
         items: [
           { id: 'sales-customers', label: 'shell:nav.sales.customers', href: '/sales/customers', icon: Contact, permission: 'parties.view' },
           // SCR-105 (B-W2b-322): requests and RFQs from mail, phone, a fair or the office, until they become a quote.
-          { id: 'sales-inquiries', label: 'shell:nav.sales.inquiries', href: '/sales/inquiries', icon: Inbox, permission: 'sales.inquiries.view' },
+          // B-TH-216 (threads plan TH-1b): Inquiries renamed Incoming — every request of every customer on one page, same place;
+          // the production manager reads it too (B-TH-014: sales.inquiries.view). The old address redirects (shell/nav/renamed.ts).
+          { id: 'sales-incoming', label: 'shell:nav.sales.incoming', href: '/sales/incoming', icon: Inbox, permission: 'sales.inquiries.view' },
           // SCR-034 / SCR-035 (B-W1-21, B-W1-24): quotes by style, colour and size with price, margin, approval and send.
           { id: 'sales-quotes', label: 'shell:nav.sales.quotes', href: '/sales/quotes', icon: FileText, permission: 'quotes.view' },
           // SCR-038 / SCR-039 (B-W1-25): orders from accepted quotes, the board by state, the order studio with the deposit.
