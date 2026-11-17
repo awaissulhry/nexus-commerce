@@ -52,6 +52,8 @@ let beta: BrandInWorld
 const seen: Seen[] = []
 const unexpected: ErrorReport[] = []
 const G = {} as Record<string, any>
+/** Each brand's portal person is its buyer (sends requests, orders from the catalogue) who may write in its threads. */
+const BUYER = { roleKey: 'customer-buyer', capabilities: ['comment'] } as const
 const id = (key: string) => w.id(key)
 const companyA = () => id('company:A')
 const P1 = () => id('party:P1')
@@ -112,8 +114,8 @@ describe('B-TH-037 golden flow TH-2: a request becomes an order, a style draft, 
   })
 
   it('S01 Brand Alpha (P1) and Brand Beta (P3) with their portals; Beta gets a small credit limit and the credit rule is switched on', async () => {
-    alpha = await setUpBrand(w, P.sales, BRAND_ALPHA, P1(), companyA())
-    beta = await setUpBrand(w, P.sales, BRAND_BETA, P3(), companyA())
+    alpha = await setUpBrand(w, P.sales, BRAND_ALPHA, P1(), companyA(), BUYER)
+    beta = await setUpBrand(w, P.sales, BRAND_BETA, P3(), companyA(), BUYER)
     await stepped(w, P.owner)
     const rules = (await ok(P.owner, 'GET', '/approvals/rules?kind=CREDIT_OVERRIDE')).rules as Json[]
     const rule = rules.find((entry) => entry.kind === 'CREDIT_OVERRIDE' && entry.companyId === companyA())!

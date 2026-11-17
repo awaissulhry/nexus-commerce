@@ -48,6 +48,8 @@ let beta: BrandInWorld
 const seen: Seen[] = []
 const unexpected: ErrorReport[] = []
 const G = {} as Record<string, any>
+/** Each brand's portal person is its buyer (sends requests, orders from the catalogue) who may write in its threads. */
+const BUYER = { roleKey: 'customer-buyer', capabilities: ['comment'] } as const
 const id = (key: string) => w.id(key)
 const companyA = () => id('company:A')
 const P1 = () => id('party:P1')
@@ -87,8 +89,8 @@ describe('B-TH-021 golden flow TH-1b: a request like an e-mail, from the portal 
   })
 
   it('S01 the sales office makes P1 into Brand Alpha and P3 into Brand Beta, each with its portal', async () => {
-    alpha = await setUpBrand(w, P.sales, BRAND_ALPHA, P1(), companyA())
-    beta = await setUpBrand(w, P.sales, BRAND_BETA, P3(), companyA())
+    alpha = await setUpBrand(w, P.sales, BRAND_ALPHA, P1(), companyA(), BUYER)
+    beta = await setUpBrand(w, P.sales, BRAND_BETA, P3(), companyA(), BUYER)
     await settle()
     // Each two-factor step moved the harness clock 30 s on; the requests' times are checked against the database's clock (a
     // request is closed "not in the future"): the clock goes back to now before the first request (no step-up follows).

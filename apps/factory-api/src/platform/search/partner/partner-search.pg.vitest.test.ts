@@ -58,16 +58,19 @@ describe('SAL-084: a customer finds its records by its references and ours', { t
   it('their PO number typed whole finds their order first, as theirs', async () => {
     const answer = await search(buyer, q('SEED-PO-77'))
     expect(answer.groups[0].group).toBe('orders')
-    expect(all(answer)[0]).toMatchObject({ recordType: 'SalesOrder', theirRef: 'SEED-PO-77', ourRef: 'SEED-SO-0001', group: 'orders', match: 'theirs', status: expect.any(String) })
+    // th2-backend step 7 (threads plan §0.5): "ours" is the customer's own order number ("#1"), never the office's SO-… series.
+    expect(all(answer)[0]).toMatchObject({ recordType: 'SalesOrder', theirRef: 'SEED-PO-77', ourRef: expect.stringMatching(/^#\d+$/), group: 'orders', match: 'theirs', status: expect.any(String) })
     // Part of it finds it too (every word inside the partner's fields).
-    expect(all(await search(buyer, q('po-77'))).find((result) => result.ourRef === 'SEED-SO-0001')).toMatchObject({ match: 'words' })
+    expect(all(await search(buyer, q('po-77'))).find((result) => result.theirRef === 'SEED-PO-77')).toMatchObject({ match: 'words' })
   })
 
-  it('our number finds it as ours; Enter opens the one reference typed whole', async () => {
+  it('our office number (printed on the confirmation it holds) still finds it, shown by its own number; Enter opens the one reference typed whole', async () => {
     const answer = await search(buyer, q('seed-so-0001'))
-    expect(all(answer)[0]).toMatchObject({ recordType: 'SalesOrder', ourRef: 'SEED-SO-0001', match: 'ours' })
+    expect(all(answer)[0]).toMatchObject({ recordType: 'SalesOrder', ourRef: expect.stringMatching(/^#\d+$/), match: 'words' })
+    // th2-backend step 7: the order's hit never names the office's series (a delivery note — a legal document — keeps its own).
+    expect(JSON.stringify(answer.groups.find((group: { group: string }) => group.group === 'orders'))).not.toMatch(/SEED-SO-/)
     const quote = await search(buyer, q('SEED-RFQ-12'))
-    expect(quote.single).toMatchObject({ recordType: 'Quote', ourRef: 'SEED-Q-0001', theirRef: 'SEED-RFQ-12', match: 'theirs' })
+    expect(quote.single).toMatchObject({ recordType: 'Quote', ourRef: expect.stringMatching(/^#\d+$/), theirRef: 'SEED-RFQ-12', match: 'theirs' })
   })
 
   it('finds a delivery once shipped and its documents, grouped as the portal shows them', async () => {
