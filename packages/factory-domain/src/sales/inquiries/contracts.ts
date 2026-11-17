@@ -177,10 +177,28 @@ export const askInfoBody = input({
 })
 export type AskInfoBody = z.output<typeof askInfoBody>
 
-/** "Decline inquiry": the reason (OTHER with words). */
-export const declineBody = input({ version: version(), reason: z.enum(DECLINE_REASONS), note: text(INQUIRY_LIMITS.closeNote).optional() })
+/**
+ * "Decline inquiry": the reason (OTHER with words). B-TH-043 (threads plan G6): with `message` ("Send to the customer" ticked) ONE
+ * message goes to the customer in the same command, as Ask for info's question does: on a request sent from the portal a reply the
+ * customer reads in its portal, on any other a mail on the request's thread to `to` (default: the request's contact) under the one
+ * recipient rule (B-TH-004: `sendOutside` ticked for an address of another party). Never with "Not an order" (it sends nothing),
+ * never to a prospect (made a customer first). Without `message` nothing is sent.
+ */
+export const declineBody = input({
+  version: version(),
+  reason: z.enum(DECLINE_REASONS),
+  note: text(INQUIRY_LIMITS.closeNote).optional(),
+  // ---- B-TH-043
+  message: input({
+    body: text(20_000),
+    subject: line(200).optional(),
+    to: z.array(z.string().trim().min(3).max(320)).min(1).max(20).optional(),
+    sendOutside: z.boolean().optional(),
+  }).optional(),
+  // ---- end B-TH-043
+})
 export type DeclineBody = z.output<typeof declineBody>
-/** "Decline N" on a selection: all or none. */
+/** "Decline N" on a selection: all or none. B-TH-043: it never sends anything to the customers (no message here, by design). */
 export const bulkDeclineBody = input({ items: z.array(item).min(1).max(INQUIRY_LIMITS.bulk), reason: z.enum(DECLINE_REASONS), note: text(INQUIRY_LIMITS.closeNote).optional() })
 export type BulkDeclineBody = z.output<typeof bulkDeclineBody>
 
@@ -412,6 +430,13 @@ export const inquiryView = inquiryRow.extend({
   closedBy: output({ id: id(), name: z.string() }).nullable(),
   createdBy: output({ id: id(), name: z.string() }).nullable(),
   createdAt: instant(),
+  /**
+   * B-TH-043: where a message from this request goes, so the Decline and Ask for info dialogs name it before anything is sent:
+   * PORTAL (the customer reads it in its portal), MAIL (to `to`, the request's contact by default; the person may name others),
+   * null with the refusal (a prospect: made a customer first). `language`: the customer's (its contact's, else its own). Always
+   * sent; optional for the web's typed demo data.
+   */
+  messageTo: output({ via: z.enum(['PORTAL', 'MAIL']).nullable(), to: z.array(z.string()), language: z.string().nullable(), refusal: inquiryRefusal.nullable() }).optional(),
   actions: output({
     edit: action,
     assign: action,

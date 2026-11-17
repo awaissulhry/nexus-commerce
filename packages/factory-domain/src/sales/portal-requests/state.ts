@@ -15,7 +15,8 @@ import type { Words } from './rules'
  *   ORDER_WAITING         its order waits for the office's yes (PENDING_APPROVAL): never "confirmed" (L2-G06)
  *   ORDER_CONFIRMED       its order CONFIRMED or further on
  *   DECLINED              DECLINED: we said no
- *   CLOSED                LOST, its quote DECLINED / EXPIRED / CANCELLED, or its order CANCELLED
+ *   CLOSED                LOST, its quote DECLINED / EXPIRED / CANCELLED, or its order CANCELLED; B-TH-043: DECLINED as "Not an
+ *                         order" (it asked nothing to make: the customer is not told "declined")
  *
  * OPEN (the "Open requests" tile and the default list): SENT up to ORDER_WAITING. Done: ORDER_CONFIRMED (the order carries
  * on in Orders), DECLINED and CLOSED (under "Closed", never vanished).
@@ -46,6 +47,8 @@ export interface RequestStateFacts {
   readonly quoteStatus: string | null
   /** The order made from that quote, as its status reads now; null: none yet. */
   readonly orderStatus: string | null
+  /** B-TH-043: why it was declined (the office's column, read in the tenant scope; never shown): NOT_AN_ORDER reads "Closed". */
+  readonly declineReason?: string | null
 }
 
 const QUOTE_BEING_PREPARED = ['DRAFT', 'PENDING_APPROVAL', 'APPROVED']
@@ -61,7 +64,7 @@ export function requestStateOf(facts: RequestStateFacts): PortalRequestState {
     case 'NEED_INFO':
       return 'NEED_INFO'
     case 'DECLINED':
-      return 'DECLINED'
+      return facts.declineReason === 'NOT_AN_ORDER' ? 'CLOSED' : 'DECLINED' // B-TH-043
     case 'LOST':
       return 'CLOSED'
     // TH-2 (B-TH-022): made straight into an order: the order's own state (B-TH-025 reads it into orderStatus).

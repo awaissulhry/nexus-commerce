@@ -243,6 +243,7 @@
     "CONFIRM_MATCH": "Check that {number} is from this customer, then confirm the match",
     "MATCH_FOUND": "The prospect of {number} may already be a customer: use it, or confirm a new customer",
     "CODE_TAKEN": "This code is already another party's: choose another",
+    "SENDS_NOTHING": "“Not an order” closes {number} without a word to the customer (they read “Closed”): pick another reason to send a message",
     "other": "The factory refused this change"
   },
   "problem": {
