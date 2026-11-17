@@ -1,0 +1,142 @@
+{
+  "page": {
+    "reading": "Reading the project…",
+    "notFoundTitle": "Project not found",
+    "failedTitle": "The project could not be read",
+    "toList": "To the projects"
+  },
+  "band": {
+    "back": "Projects",
+    "moreLabel": "More project actions",
+    "lead": "Lead: {name}",
+    "season": "Season {season}",
+    "more": {
+      "edit": "Edit details…",
+      "hold": "Put on hold",
+      "resume": "Resume",
+      "close": "Close project…",
+      "reopen": "Reopen",
+      "copy": "Copy link"
+    }
+  },
+  "frame": {
+    "threadLabel": "Thread of {project}",
+    "threadLabelPlain": "Thread of the project",
+    "sideLabel": "Project details",
+    "backToThread": "Back to the thread"
+  },
+  "closed": {
+    "banner": "Closed on {date} by {by} · {outcome} · {note}",
+    "bannerNoBy": "Closed on {date} · {outcome} · {note}",
+    "body": "The thread is closed and every invitation by link ended. Reopening the project opens the thread again; invitations have to be sent again.",
+    "bodyReadOnly": "The thread is closed. Someone who manages projects can reopen it."
+  },
+  "details": {
+    "title": "Details",
+    "number": "Number",
+    "partyFixed": "Only {party} and our team are in this project. The outside company is chosen when the project is made and never changes.",
+    "officeOnlyHint": "Office notes only: nobody outside the company reads this project.",
+    "made": "Made",
+    "madeBy": "{date} by {name}",
+    "lastMessage": "Last message",
+    "noGoal": "No goal written."
+  },
+  "tasks": {
+    "title": "Tasks",
+    "add": "Add task",
+    "open_one": "{count} open",
+    "open_other": "{count} open",
+    "overdue_one": "{count} overdue",
+    "overdue_other": "{count} overdue",
+    "noHome": "Tasks show in Home › My tasks, for people who open Home.",
+    "none": "No open tasks.",
+    "nobody": "Nobody’s yet",
+    "due": {
+      "on": "Due {date}",
+      "overdue": "Overdue {count} d",
+      "today": "Due today",
+      "soon": "Due in {count} d"
+    }
+  },
+  "files": {
+    "title_one": "Files ({count})",
+    "title_other": "Files ({count})",
+    "noRight": "The project’s files are in the thread for people who may read files.",
+    "problemRead": "The files could not be read.",
+    "none": "No files yet.",
+    "open": "Open {name}",
+    "shared": "Shared with {party}",
+    "office": "Office",
+    "inThread": "Every file is in the thread’s files line and its Files view."
+  },
+  "news": {
+    "title": "News of linked records",
+    "intro": "Status moves and decisions of the linked records, read when you ask: they never go into the thread.",
+    "ask": "Show news of linked records",
+    "hide": "Hide",
+    "none": "No news of linked records yet.",
+    "move": "{from} → {to}",
+    "moveTo": "Now {to}",
+    "decision": "A decision",
+    "changed": "Status changed",
+    "by": "by {name}",
+    "more_one": "+{count} more that day",
+    "more_other": "+{count} more that day",
+    "showMore": "Show more"
+  },
+  "notice": {
+    "held": "{number} is on hold.",
+    "resumed": "{number} is active again.",
+    "reopened": "{number} is open again: its thread is open again.",
+    "closed": "{number} is closed: the outcome is pinned at the top of its thread.",
+    "saved": "Details of {number} saved.",
+    "copied": "Link copied.",
+    "taskMade": "Task made.",
+    "taskFailed": "The task could not be made: try again.",
+    "fileFailed": "The file could not be opened: try again."
+  },
+  "close": {
+    "title": "Close {number}",
+    "submit": "Close project",
+    "intro": "How did it end? The outcome is posted as an office note and pinned at the top of the thread; the thread closes and every invitation by link ends.",
+    "outcomeLabel": "Outcome",
+    "outcomeHint": {
+      "DONE": "The work reached its end.",
+      "STOPPED": "The work stops here."
+    },
+    "noteLabel": "The outcome in one line",
+    "noteHint": "What was decided: whoever reads the project later finds it first.",
+    "notePlaceholder": "FW27 line approved: six styles to production in March.",
+    "tell": "Also post the outcome to {party}",
+    "endsShared": "Reopening the project opens the thread again; invitations by link have to be sent again.",
+    "endsOffice": "Reopening the project opens the thread again.",
+    "held": {
+      "outcome": "Pick Done or Stopped.",
+      "note": "Write the outcome in one line.",
+      "long": "The outcome fits in {max} characters.",
+      "line": "The outcome is one line."
+    }
+  },
+  "edit": {
+    "title": "Edit {number}",
+    "partyFixed": "Chosen when the project was made: it never changes.",
+    "seasonHint": "Optional: the season’s code (FW27).",
+    "goalHint": "Optional: one paragraph on what the project is to achieve.",
+    "stale": "Someone changed the project meanwhile.",
+    "reload": "Reload",
+    "held": {
+      "stale": "Reload first: someone changed it.",
+      "fields": "Check the fields marked.",
+      "nothing": "Nothing to save: no field changed."
+    },
+    "problem": {
+      "nameEmpty": "Write the project’s name.",
+      "nameLong": "The name is one line of at most {max} characters.",
+      "goalLong": "The goal fits in {max} characters.",
+      "lead": "Pick the lead.",
+      "target": "Pick the target date.",
+      "season": "The season fits in {max} characters.",
+      "refused": "The service refused this field: check it."
+    }
+  }
+}

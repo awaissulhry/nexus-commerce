@@ -1,0 +1,142 @@
+{
+  "page": {
+    "reading": "Lettura del progetto…",
+    "notFoundTitle": "Progetto non trovato",
+    "failedTitle": "Il progetto non si è potuto leggere",
+    "toList": "Ai progetti"
+  },
+  "band": {
+    "back": "Progetti",
+    "moreLabel": "Altre azioni del progetto",
+    "lead": "Responsabile: {name}",
+    "season": "Stagione {season}",
+    "more": {
+      "edit": "Modifica i dettagli…",
+      "hold": "Metti in pausa",
+      "resume": "Riprendi",
+      "close": "Chiudi il progetto…",
+      "reopen": "Riapri",
+      "copy": "Copia il link"
+    }
+  },
+  "frame": {
+    "threadLabel": "Thread di {project}",
+    "threadLabelPlain": "Thread del progetto",
+    "sideLabel": "Dettagli del progetto",
+    "backToThread": "Torna al thread"
+  },
+  "closed": {
+    "banner": "Chiuso il {date} da {by} · {outcome} · {note}",
+    "bannerNoBy": "Chiuso il {date} · {outcome} · {note}",
+    "body": "Il thread è chiuso e gli inviti per link sono finiti. Riaprendo il progetto il thread si riapre; gli inviti vanno rifatti.",
+    "bodyReadOnly": "Il thread è chiuso. Lo riapre chi gestisce i progetti."
+  },
+  "details": {
+    "title": "Dettagli",
+    "number": "Numero",
+    "partyFixed": "Solo {party} e il nostro team sono in questo progetto. L’azienda esterna si sceglie alla creazione e non cambia più.",
+    "officeOnlyHint": "Solo note interne: nessuno fuori dall’azienda legge questo progetto.",
+    "made": "Creato",
+    "madeBy": "{date} da {name}",
+    "lastMessage": "Ultimo messaggio",
+    "noGoal": "Nessun obiettivo scritto."
+  },
+  "tasks": {
+    "title": "Attività",
+    "add": "Aggiungi attività",
+    "open_one": "{count} aperta",
+    "open_other": "{count} aperte",
+    "overdue_one": "{count} in ritardo",
+    "overdue_other": "{count} in ritardo",
+    "noHome": "Le attività si vedono in Home › Le mie attività, con l’accesso a Home.",
+    "none": "Nessuna attività aperta.",
+    "nobody": "Ancora di nessuno",
+    "due": {
+      "on": "Entro il {date}",
+      "overdue": "In ritardo di {count} g",
+      "today": "Scade oggi",
+      "soon": "Scade tra {count} g"
+    }
+  },
+  "files": {
+    "title_one": "File ({count})",
+    "title_other": "File ({count})",
+    "noRight": "I file del progetto sono nel thread per chi può leggere i file.",
+    "problemRead": "I file non si sono potuti leggere.",
+    "none": "Ancora nessun file.",
+    "open": "Apri {name}",
+    "shared": "Condiviso con {party}",
+    "office": "Interno",
+    "inThread": "Tutti i file sono nella riga dei file del thread e nella sua vista File."
+  },
+  "news": {
+    "title": "Novità dei record collegati",
+    "intro": "Stati e decisioni dei record collegati, letti quando li chiedi: non entrano nel thread.",
+    "ask": "Mostra le novità dei record collegati",
+    "hide": "Nascondi",
+    "none": "Ancora nessuna novità dei record collegati.",
+    "move": "{from} → {to}",
+    "moveTo": "Ora {to}",
+    "decision": "Una decisione",
+    "changed": "Stato cambiato",
+    "by": "da {name}",
+    "more_one": "+{count} quel giorno",
+    "more_other": "+{count} quel giorno",
+    "showMore": "Mostra altre"
+  },
+  "notice": {
+    "held": "{number} è in pausa.",
+    "resumed": "{number} è di nuovo attivo.",
+    "reopened": "{number} è riaperto: il thread è di nuovo aperto.",
+    "closed": "{number} è chiuso: l’esito è fissato in cima al thread.",
+    "saved": "Dettagli di {number} salvati.",
+    "copied": "Link copiato.",
+    "taskMade": "Attività creata.",
+    "taskFailed": "L’attività non si è potuta creare: riprova.",
+    "fileFailed": "Il file non si è potuto aprire: riprova."
+  },
+  "close": {
+    "title": "Chiudi {number}",
+    "submit": "Chiudi il progetto",
+    "intro": "Com’è finito? L’esito viene scritto come nota interna e fissato in cima al thread; il thread si chiude e gli inviti per link finiscono.",
+    "outcomeLabel": "Esito",
+    "outcomeHint": {
+      "DONE": "Il lavoro è arrivato in fondo.",
+      "STOPPED": "Il lavoro si ferma qui."
+    },
+    "noteLabel": "L’esito in una riga",
+    "noteHint": "Dove si è deciso cosa: chi legge il progetto dopo lo trova per primo.",
+    "notePlaceholder": "Linea FW27 approvata: sei modelli in produzione a marzo.",
+    "tell": "Scrivi l’esito anche a {party}",
+    "endsShared": "Riaprendo il progetto il thread si riapre; gli inviti per link vanno rifatti.",
+    "endsOffice": "Riaprendo il progetto il thread si riapre.",
+    "held": {
+      "outcome": "Scegli Concluso o Fermato.",
+      "note": "Scrivi l’esito in una riga.",
+      "long": "L’esito sta in {max} caratteri.",
+      "line": "L’esito è una riga sola."
+    }
+  },
+  "edit": {
+    "title": "Modifica {number}",
+    "partyFixed": "Scelta quando il progetto è stato creato: non cambia più.",
+    "seasonHint": "Facoltativa: il codice della stagione (FW27).",
+    "goalHint": "Facoltativo: un paragrafo su cosa deve ottenere il progetto.",
+    "stale": "Qualcuno ha cambiato il progetto nel frattempo.",
+    "reload": "Ricarica",
+    "held": {
+      "stale": "Ricarica prima: qualcuno l’ha cambiato.",
+      "fields": "Controlla i campi segnati.",
+      "nothing": "Niente da salvare: nessun campo è cambiato."
+    },
+    "problem": {
+      "nameEmpty": "Scrivi il nome del progetto.",
+      "nameLong": "Il nome è una riga di al massimo {max} caratteri.",
+      "goalLong": "L’obiettivo sta in {max} caratteri.",
+      "lead": "Scegli il responsabile.",
+      "target": "Scegli la data obiettivo.",
+      "season": "La stagione sta in {max} caratteri.",
+      "refused": "Il servizio ha rifiutato questo campo: controllalo."
+    }
+  }
+}
