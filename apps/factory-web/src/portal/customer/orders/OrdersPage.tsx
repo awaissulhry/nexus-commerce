@@ -7,6 +7,10 @@ import { WithMessages } from '../../../record-panels/i18n'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive } from '../../shell/frame'
 import { fetchRequests, type RequestRow } from '../requests/api'
 import { fetchInTransit, fetchOrders, ORDER_CHIPS, PAGE_SIZE, type InTransitRead, type OrderRow, type OrdersRead } from './api'
+// B-TH-246: the customer's own sheet — the list's rows with the portal columns, and "Download all" written by the server.
+import { downloadSheet, fetchSheet } from './api'
+import { sheetFileName } from './model'
+import { saveBytes } from './hooks'
 import { listBandOf } from './band'
 import { CLOSED_REQUESTS, isListChip, listCsv, listQuery, listRows, NAV_KEY, NS, opens, ordersInChip, recordHref, rowHref, type ListChip } from './model'
 // B-TH-238: the tiles (We need something from you · Open requests · Open orders) and the API chip of a tile's rows.
@@ -86,7 +90,8 @@ function ListContainer() {
     reading.current = control
     try {
       // Closed requests (and the two request tiles, B-TH-238) hold no order: the orders' read only brings the chips' counts then.
-      const next = chip !== null && !ordersInChip(chip) ? await fetchOrders(api, { chip: 'OPEN', q, limit: 1 }, control.signal) : await fetchOrders(api, { chip: apiChipOf(chip), q }, control.signal)
+      // B-TH-246: the sheet's read (the list's rows and their portal columns).
+      const next = chip !== null && !ordersInChip(chip) ? await fetchOrders(api, { chip: 'OPEN', q, limit: 1 }, control.signal) : await fetchSheet(api, { chip: apiChipOf(chip), q }, control.signal)
       if (control.signal.aborted) return
       setRead(next)
       setRows(chip !== null && !ordersInChip(chip) ? [] : next.items)
@@ -155,7 +160,7 @@ function ListContainer() {
     if (!read || loadingMore || (chip !== null && !ordersInChip(chip))) return
     setLoadingMore(true)
     try {
-      const next = await fetchOrders(api, { chip: apiChipOf(chip), q, offset: rows.length })
+      const next = await fetchSheet(api, { chip: apiChipOf(chip), q, offset: rows.length }) // B-TH-246
       setRows((current) => [...current, ...next.items.filter((row) => !current.some((old) => old.id === row.id))])
     } catch {
       setState('error')
@@ -174,7 +179,23 @@ function ListContainer() {
 
   // B-W2b-194: New order (a person who may order, not in a preview).
   const newOrder = frame.me.permissions.includes('portal.orderRequests.manage') && !frame.me.preview ? `${frame.prefix}/orders/new` : null
-  usePortalBand(state === 'forbidden' ? { title: t('list.title') } : listBandOf({ words, asOf: read?.asOf ?? null, rows: shownRows.length, chip, q, prefix: frame.prefix, onExport: () => exportRows(null), newOrder }))
+  // ── B-TH-246: "Download all (Excel)" — the server writes the file in the customer's own scope (never the office's export job) ──
+  const [downloading, setDownloading] = useState(false)
+  const [downloadFailed, setDownloadFailed] = useState(false)
+  const downloadAll = async () => {
+    setDownloading(true)
+    setDownloadFailed(false)
+    try {
+      const file = await downloadSheet(api, { chip: apiChipOf(chip), q, format: 'XLSX', locale: locale === 'it' ? 'it' : 'en' })
+      saveBytes(file.fileName ?? sheetFileName(t('list.fileName'), 'XLSX'), file.bytes, file.contentType)
+    } catch {
+      setDownloadFailed(true)
+    } finally {
+      setDownloading(false)
+    }
+  }
+  // ── end B-TH-246 ──
+  usePortalBand(state === 'forbidden' ? { title: t('list.title') } : listBandOf({ words, asOf: read?.asOf ?? null, rows: shownRows.length, chip, q, prefix: frame.prefix, onExport: () => exportRows(null), newOrder, onDownloadAll: () => void downloadAll(), downloading /* B-TH-246 */ }))
 
   const [loadedAt, setLoadedAt] = useState<string | null>(null)
   useEffect(() => {
@@ -211,6 +232,7 @@ function ListContainer() {
         unread: readsThreads ? unread : null, // B-TH-230
         // B-TH-238: the tiles (the customer's own reads only; "—" while unknown).
         tiles: seesRequests ? listTiles(requests.state === 'ready' && requests.counts ? { counts: requests.counts } : null, read) : null,
+        downloadFailed, // B-TH-246
       }}
       actions={{
         onChip: (next) => go(next, q),
@@ -237,6 +259,7 @@ function ListContainer() {
           void loadTransit()
         },
         onOpenShipment: (row) => router.push(`${recordHref(frame.prefix, row.order.id, 'shipments')}#shipment-${row.shipmentId}`),
+        onDownloadAll: () => void downloadAll(), // B-TH-246: Try again
       }}
     />
   )

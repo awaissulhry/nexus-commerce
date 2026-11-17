@@ -44,7 +44,9 @@
       "documents": "Documenti",
       "returns": "Resi",
       "jobs": "Lavorazioni",
-      "pos": "Ordini d'acquisto"
+      "pos": "Ordini d'acquisto",
+      "samples": "Campioni",
+      "projects": "Progetti"
     }
   },
   "bell": {

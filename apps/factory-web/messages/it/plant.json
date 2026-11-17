@@ -377,10 +377,8 @@
     "CLOSED_THIS_WEEK": "Chiusi da lunedì."
   },
   "jobTab": {
-    "problem": "Problema",
-    "handback": "Riconsegna",
-    "activity": "Attività",
-    "photos": "Foto"
+    "problem": "Problema e foto",
+    "handback": "Riconsegna"
   },
   "move": {
     "plan": "Pianifica",
@@ -497,7 +495,10 @@
     "notStarted": "Non ancora",
     "closed": "Chiuso",
     "cancelled": "Annullato",
-    "activityLater": "L’attività si apre con la scheda."
+    "dockLabelJob": "Conversazione dell'intervento",
+    "dockLabelMachine": "Conversazione della macchina",
+    "copyNumber": "Copia il numero",
+    "offline": "Aggiornamenti in diretta in pausa: quanto vedi è stato letto alle {time}"
   },
   "handBack": {
     "title": "Riconsegna",
@@ -540,7 +541,7 @@
     "LOCKED_other": "{count} bloccate non sicure, attendono la firma."
   },
   "machineTab": {
-    "overview": "Panoramica",
+    "overview": "Panoramica e targhetta",
     "history": "Storico manutenzione"
   },
   "machines": {

@@ -1,8 +1,6 @@
 import { createElement, useEffect, useState } from 'react'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/view/RecordPanelsView'
 import { at, inShell, PREFIX, ROLE_PERMISSIONS, type RoleCase } from '../../_shared/fixtures'
 import type { CapaRecord } from '../api'
 import { ACTIONS, CUSTOMERS, ME, NOW, PEOPLE, recordOf, RECORD, REPORT_EN, REPORT_IT, ROWS, TODAY } from '../demo/fixtures'
@@ -10,12 +8,16 @@ import { capaCan, closeLinesOfRecord, emptyActionDraft, problemDraftOf, type Pro
 import type { CloseDialogModel } from '../view/CloseCapaDialog'
 import type { CapaRecordModel, DrawerModel, RecordDialog, ReportModel } from './view-model'
 import { CapaRecordView } from './view/CapaRecordView'
+// B-TH-266: the CAPA's docked thread (made-up; the page mounts the office's OfficeRecordThread docked).
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-146-record — a CAPA or an 8D (Quality › Corrective actions › a record) with made-up data only (CAPA-DEMO-…, Demo
  * people): each tab of an 8D at D3, the Problem form editing and read-only, the actions with the docked drawer, every
  * dialog, the 8D report and its versions, Share with the customer, a CAPA ready to close and its close, a closed and a
- * cancelled one, refusals, the stale banner, the page's states and the role cases.
+ * cancelled one, refusals, the stale banner, the page's states and the role cases. B-TH-266: on RecordFrame — the band in the shell's
+ * row, the CAPA's ONE thread docked beside every tab (the customer an 8D is written for its only party; an internal CAPA notes only),
+ * Activity's tools in its "⋯".
  */
 
 type RoleKey = 'owner' | 'inspector' | 'production' | 'sales' | 'noAccess'
@@ -23,26 +25,23 @@ type RoleKey = 'owner' | 'inspector' | 'production' | 'sales' | 'noAccess'
 interface RecordCase {
   readonly role: RoleKey
   readonly record: CapaRecordModel
-  readonly panels: RecordPanelsViewModel | null
 }
 
 const template = (key: string): string[] => [...(templateOf(key)?.permissions ?? []), 'home.view']
 const PERMISSIONS: Readonly<Record<RoleKey, readonly string[]>> = {
-  owner: [...ROLE_PERMISSIONS.owner, 'quality.capa.view', 'quality.capa.manage', 'quality.ncr.view', 'quality.complaints.view', 'quality.complaints.manage', 'files.manage'],
+  owner: [...ROLE_PERMISSIONS.owner, 'quality.capa.view', 'quality.capa.manage', 'quality.ncr.view', 'quality.complaints.view', 'quality.complaints.manage', 'files.manage', 'threads.read' /* B-TH-266 */],
   inspector: template('quality_inspector'),
   production: template('production_manager'),
   sales: template('sales'),
   noAccess: template('warehouse'),
 }
 const SHELL_ROLE: Readonly<Record<RoleKey, RoleCase>> = { owner: 'owner', inspector: 'inspector', production: 'production', sales: 'sales', noAccess: 'warehouse' }
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
 
 const REPORT: ReportModel = { language: 'it', pdf: REPORT_IT, problem: null, keeping: false, sharing: null }
 
 function recordCase(over: Partial<CapaRecordModel> = {}, role: RoleKey = 'owner', record: CapaRecord = RECORD): RecordCase {
   return {
     role,
-    panels: (over.tab ?? 'problem') === 'activity' ? conversation : null,
     record: {
       prefix: PREFIX,
       me: ME,
@@ -62,7 +61,6 @@ function recordCase(over: Partial<CapaRecordModel> = {}, role: RoleKey = 'owner'
       notice: null,
       stale: null,
       busy: false,
-      keysOpen: false,
       copied: false,
       drawer: null,
       report: REPORT,
@@ -82,27 +80,31 @@ const CLOSED = recordOf(ROWS.find((row) => row.status === 'CLOSED')!, { actions:
 const CANCELLED = recordOf(ROWS.find((row) => row.status === 'CANCELLED')!)
 const EDITED: ProblemDraft = { ...problemDraftOf(RECORD.capa), howMany: '6 of 120 sold; 2 more in the shop', team: [...problemDraftOf(RECORD.capa).team, { userId: PEOPLE[3]!.id, role: '' }] }
 const MY_ACTION = recordOf(ROWS[0]!, { actions: ACTIONS.map((action, index) => (index === 1 ? { ...action, ownerId: ME } : action)) })
+// B-TH-266: a CAPA written for no customer (its thread: the office's notes only).
+const INTERNAL = recordOf(ROWS.find((row) => row.customer === null && row.status !== 'CLOSED' && row.status !== 'CANCELLED') ?? { ...ROWS[0]!, customer: null })
 
-/** In the browser the drafts, dialogs, the drawer and the keys work for real (the wrapper keeps them); nothing is sent. */
+/** In the browser the drafts, dialogs and the drawer work for real (the wrapper keeps them); nothing is sent. */
 function RecordDesign({ model }: { model: RecordCase }) {
   const [dialogNow, setDialog] = useState<RecordDialog | null>(model.record.dialog)
   const [draft, setDraft] = useState<ProblemDraft | null>(model.record.draft)
-  const [keys, setKeys] = useState(model.record.keysOpen)
   const [close, setClose] = useState<CloseDialogModel | null>(model.record.close)
   const [drawer, setDrawer] = useState<DrawerModel | null>(model.record.drawer)
   const [report, setReport] = useState<ReportModel>(model.record.report)
   useEffect(() => {
     setDialog(model.record.dialog)
     setDraft(model.record.draft)
-    setKeys(model.record.keysOpen)
     setClose(model.record.close)
     setDrawer(model.record.drawer)
     setReport(model.record.report)
   }, [model])
   const value = model.record.loaded.status === 'ready' ? model.record.loaded.record : null
+  // B-TH-266: the CAPA's ONE thread docked beside every tab — its customer the only party (an internal CAPA: notes only); a role
+  // without threads.read has no thread.
+  const customer = value?.capa.customer ?? null
+  const thread = value && model.record.can.threadsRead ? designDockedThread({ recordType: 'Capa', record: value.capa.number, party: customer ? { name: customer.name, role: 'customer' } : null }) : null
   const view = createElement(CapaRecordView, {
-    model: { ...model.record, dialog: dialogNow, draft, keysOpen: keys, close, drawer, report },
-    panelsPreview: model.panels ?? undefined,
+    model: { ...model.record, dialog: dialogNow, draft, close, drawer, report },
+    thread,
     actions: {
       onDialog: setDialog,
       onDialogChange: (patch) => setDialog((now) => (now ? ({ ...now, ...patch } as RecordDialog) : now)),
@@ -110,7 +112,6 @@ function RecordDesign({ model }: { model: RecordCase }) {
       onDraft: (patch) => value && setDraft((now) => ({ ...(now ?? problemDraftOf(value.capa)), ...patch })),
       onDiscard: () => setDraft(null),
       onSave: () => setDraft(null),
-      onKeys: setKeys,
       onClose: () => value && setClose(closeOf(value)),
       close: { onNote: (note) => setClose((now) => (now ? { ...now, note } : now)), onCancel: () => setClose(null), onSubmit: () => setClose(null) },
       onOpenAction: (id) => setDrawer(id ? drawerOf(id) : null),
@@ -157,7 +158,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'report-error', label: 'Report: could not be made (Try again)', model: tab('report', { report: { ...REPORT, pdf: null, problem: 'problem.unavailable' } }) },
     { id: 'report-kept', label: 'Report: a version kept (the receipt)', model: tab('report', { notice: { say: { key: 'report.kept', params: { version: 2 } }, tone: 'success' } }) },
     { id: 'report-no-share', label: 'Report for an inspector without the complaint rights: Share held with the reason', model: tab('report', {}, 'inspector') },
-    { id: 'activity', label: 'Activity: the record panels (thread, files, history, tasks)', model: tab('activity') },
+    { id: 'thread-docked', label: 'B-TH-266: the CAPA\'s thread docked beside Problem — the 8D\'s customer its only party, Activity\'s tools in its "⋯"', model: tab('problem') },
+    { id: 'thread-internal', label: 'B-TH-266: an internal CAPA (no customer): its thread holds the office\'s notes only', model: tab('problem', {}, 'owner', INTERNAL) },
     { id: 'ready', label: 'A CAPA at Check, every action done: the primary is Close…', model: tab('actions', {}, 'owner', READY) },
     { id: 'close', label: 'Close: every check met, the closing words written', model: tab('problem', { close: closeOf(READY, { note: 'Shade checked hide by hide since; no repeat in four orders.' }) }, 'owner', READY) },
     { id: 'close-held', label: 'Close held on the 8D: not at D8, actions open (in words)', model: tab('problem', { close: closeOf(RECORD) }) },
@@ -165,7 +167,6 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'cancelled', label: 'A cancelled CAPA: read-only, its reason', model: tab('actions', {}, 'owner', CANCELLED) },
     { id: 'moved', label: 'Moved to the next stage (the receipt)', model: tab('problem', { notice: { say: { key: 'record.moved', params: { stage: 'D4' } }, tone: 'success' } }) },
     { id: 'refused', label: 'A step refused by the factory (our words for its codes)', model: tab('problem', { notice: { say: { key: 'problem.held' }, tone: 'danger', lines: [{ key: 'refused.NOT_LAST_STAGE' }, { key: 'refused.ACTIONS_OPEN' }] } }) },
-    { id: 'shortcuts', label: 'The keys dialog (?)', model: tab('actions', { keysOpen: true }) },
     { id: 'production', label: 'Production manager: follows CAPAs up', model: tab('actions', {}, 'production') },
     { id: 'offline', label: 'Offline: the last copy, every step held', model: tab('actions', { live: 'offline' }) },
     { id: 'loading', label: 'Loading', model: recordCase({ loaded: { status: 'loading' }, asOf: null, live: 'connecting' }) },

@@ -1,12 +1,15 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useLiveBus } from '../../../../shell/live/use-live'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import { fetchFollowing, followingProblem, markSeen, unfollow } from './api'
-import { rowOf, type FollowingModel, type FollowingRow } from './model'
+import { rowOf, unreadRowsOf, withUnread, type FollowingModel, type FollowingRow } from './model'
+// B-TH-239: "3 new messages" — the reader's own new messages per followed record (ONE POST /threads/unread for the lines).
+import { readUnreadWith } from '../../../../lib/last-message-cell/api'
+import { unreadAsk, unreadMapOf } from '../../../../lib/last-message-cell/model'
 import { FollowingView } from './view/FollowingView'
 
 /**
@@ -23,19 +26,34 @@ export function Following() {
   const [notice, setNotice] = useState<FollowingModel['notice']>(null)
   const [now, setNow] = useState(() => Date.now())
 
+  // B-TH-239: only a reader of threads is asked (threads.read); a failed count leaves the lines as they are (never a made-up number).
+  const readsThreads = session.permissions.includes('threads.read')
   const load = useCallback(async () => {
     try {
       const answer = await fetchFollowing(api)
-      setRows({ status: 'ready', data: { items: answer.items.map((item) => rowOf(item, prefix, OFFICE_PAGES)), complete: answer.complete, asOf: answer.asOf } })
+      const items = answer.items.map((item) => rowOf(item, prefix, OFFICE_PAGES))
+      const asked = unreadAsk(unreadRowsOf(items))
+      const counts = readsThreads && asked.length > 0 ? await readUnreadWith(api)(asked, new AbortController().signal).catch(() => null) : null
+      setRows({ status: 'ready', data: { items: counts ? withUnread(items, unreadMapOf(counts), prefix, OFFICE_PAGES) : items, complete: answer.complete, asOf: answer.asOf } })
       setNow(Date.now())
     } catch (error) {
       setRows({ status: 'error', problem: followingProblem(error) })
     }
-  }, [api, prefix])
+  }, [api, prefix, readsThreads])
   useEffect(() => {
     void load()
   }, [load])
-  const live = useLiveBus({ onChange: (change) => change.type === 'notification.created' && void load(), onReconnect: () => void load() })
+  // B-TH-239: a new message (thread.*) moves the counts too — a burst of changes is one read (half a second).
+  const again = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const loadSoon = useCallback(() => {
+    if (again.current) clearTimeout(again.current)
+    again.current = setTimeout(() => {
+      again.current = null
+      void load()
+    }, 500)
+  }, [load])
+  useEffect(() => () => (again.current ? clearTimeout(again.current) : undefined), [])
+  const live = useLiveBus({ onChange: (change) => (change.type === 'notification.created' || (readsThreads && change.type.startsWith('thread.'))) && loadSoon(), onReconnect: () => void load() })
 
   const act = (row: FollowingRow, run: () => Promise<void>, done: string) => {
     setBusy(true)

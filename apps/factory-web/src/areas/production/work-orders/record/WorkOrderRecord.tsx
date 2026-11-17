@@ -32,7 +32,7 @@ import {
   type WorkOrderBundles,
   type WorkOrderWip,
 } from '../../_shared/api'
-import { useCoalesced, useLive, useThreadDock } from '../../_shared/hooks'
+import { useCoalesced, useLive } from '../../_shared/hooks'
 import { abilitiesOf, cellsBody, liveTouches, readProblem, releaseRefusalCodes, tabOf, writeProblem, type SizeLayer } from '../../_shared/model'
 import { PART_LOADING, type Loaded, type Part, type RecordDialog, type ReprintRun, type WorkOrderRecordModel } from './record-model'
 import { newIdempotencyKey } from '../../../../lib/api/client'
@@ -54,6 +54,13 @@ import { useSubstitute } from '../../../warehouse/picking/substitute/use-substit
 // B-W2b-424: Close work order (planned against actual, a reason, Undo; Reopen) and the variance at close.
 import { useClose } from '../close/use-close'
 import { useVarianceAtClose } from '../labour/variance/use-variance'
+// ---- B-TH-265: the docked thread on the work order (RecordFrame; Activity's tools in its "⋯") and "Order files (n)" ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
+import { pickOf, threadChoices } from './order-files/model'
+import { useOrderFiles } from './order-files/use-order-files'
+import { WorkOrderThreads } from './view/WorkOrderThreads'
+// ---- end B-TH-265
 
 /**
  * `/w/<company>/production/work-orders/<id>` (SCR-070 … SCR-072): loads the work order (workorders.view; the API checks
@@ -110,7 +117,6 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   const [leather, setLeather] = useState<Part<WorkOrderLeather>>(PART_LOADING)
   const [cutPhoto, setCutPhoto] = useState<WorkOrderRecordModel['cutPhoto']>(null)
   const dirty = useRef(new Set<'details' | 'sizes'>())
-  const { dockOpen, toggleDock } = useThreadDock()
 
   // B-W2a-46: the work order every day (holds, finished to stock, yield, scrap and rework, readiness, reserve, split).
   const dcan = useMemo(() => dailyCan(session.permissions), [session.permissions])
@@ -355,6 +361,39 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   // B-W2b-245: once released, the spec against the master (read while the Overview shows); the pop-ups read their own parts.
   const spec = useWorkOrderSpec({ api, workOrder: workOrder.status === 'ready' ? workOrder.value : null, permissions: session.permissions, enabled: tab === 'overview' })
 
+  // ---- B-TH-265: the docked thread (ONE at a time, PL1): the work order's own notes — never shareable with a customer (the API's
+  // NOT_SHAREABLE), no party, a note may go to the floor with its tick — or, picked beside it, one of its orders' threads (shared with
+  // that order's customer), offered only when the order files' route says the reader may read it (agreement T9). With threads.read.
+  // The print view keeps the record panels' print form of the work order's own thread.
+  const value = workOrder.status === 'ready' ? workOrder.value : null
+  const orderFiles = useOrderFiles(api, value?.id ?? null)
+  const choices = value ? threadChoices(value.orders, orderFiles.model.files) : []
+  const pick = pickOf(orderFiles.pick, choices)
+  const pickedOrder = choices.find((choice) => choice.orderId === pick) ?? null
+  const readsThreads = session.permissions.includes('threads.read')
+  const own = value ? { type: 'WorkOrder', id: value.id, companyId: value.companyId, siteId: value.siteId } : null
+  const thread =
+    value && own && readsThreads ? (
+      <WorkOrderThreads choices={choices} pick={pick} onPick={orderFiles.setPick}>
+        {pickedOrder ? (
+          <OfficeRecordThread
+            key={`order-${pickedOrder.orderId}`}
+            docked
+            record={{ type: 'SalesOrder', id: pickedOrder.orderId, companyId: value.companyId, siteId: null }}
+            title={`${pickedOrder.number} · ${pickedOrder.party.name}`}
+            recordLabel={pickedOrder.number}
+            party={pickedOrder.party}
+            partyRole="customer"
+            recordHref={`${prefix}/sales/orders/${encodeURIComponent(pickedOrder.orderId)}`}
+          />
+        ) : (
+          <OfficeRecordThread key="work-order" docked record={own} title={`${value.number} · ${value.style.code}`} recordLabel={value.number} party={null} printHref={printHref(pathname, params?.toString() ?? '')} />
+        )}
+      </WorkOrderThreads>
+    ) : null
+  const printThread = value && own && readsThreads ? <RecordPanels record={own} title={`${value.number} · ${value.style.code}`} /> : null
+  // ---- end B-TH-265
+
   const model: WorkOrderRecordModel = {
     prefix,
     can,
@@ -368,7 +407,6 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     quality,
     printers,
     live,
-    dockOpen,
     changed,
     notice,
     busy,
@@ -392,14 +430,17 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     // B-W2b-424
     close: close.model,
     variance: variance.model,
+    // B-TH-265
+    personId: session.user.id,
+    orderFiles: orderFiles.model,
+    threadChoices: choices,
   }
-
-  const value = workOrder.status === 'ready' ? workOrder.value : null
 
   return (
     <WorkOrderRecordView
       model={model}
-      panels={value ? <RecordPanels record={{ type: 'WorkOrder', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.style.code}`} /> : null}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onRetry: () => void load(),
         onRetryLabour: labour.retry,
@@ -418,7 +459,6 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         },
         onRetryPart: () => value && void loadParts(value),
         onReload: () => void load(),
-        onDock: toggleDock,
         onDismissNotice: () => setNotice(null),
         onDialog: (next) => {
           setDialog(next)
@@ -533,6 +573,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
           onStepUp: (code) => void submitStepUp(code),
           onCancelStepUp: cancelStepUp,
         },
+        // B-TH-265
+        orderFiles: orderFiles.actions,
         onWaitingAt: (seq) => {
           const query = new URLSearchParams(params?.toString() ?? '')
           query.set('tab', 'bundles')

@@ -89,8 +89,9 @@ describe('the national list, a 409 and the holds', () => {
     expect(dayIn('UTC', new Date('2026-12-31T23:30:00Z'))).toBe('2026-12-31')
   })
 
-  it('the Calendars tab sits between Defaults and Activity', () => {
-    expect(COMPANY_TABS).toEqual(['legal', 'sites', 'defaults', 'calendars', 'activity'])
+  // B-TH-269: Activity went (the thread docks beside every tab): Calendars is the last tab.
+  it('the Calendars tab sits after Defaults, the last tab', () => {
+    expect(COMPANY_TABS).toEqual(['legal', 'sites', 'defaults', 'calendars'])
   })
 })
 

@@ -55,6 +55,8 @@ export interface ReportRecordModel {
   /** Someone changed it while a dialog held work. */
   readonly changed: boolean
   readonly offline?: boolean
+  /** B-TH-267: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  readonly personId?: string | null
 }
 
 export interface ReportRecordActions {

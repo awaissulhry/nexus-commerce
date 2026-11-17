@@ -80,6 +80,8 @@ import { shipmentsHistory } from './shipments-history'
 // B-W2b-399: the audit search and the security events.
 import { auditSearchExport } from '../../audit/search/export-source'
 import { securityEventsExport } from '../../audit/security-events/export-source'
+// B-TH-070: Products › Development › Projects.
+import { projectsExport } from '../../../modules/product/projects/export-source'
 
 /**
  * Every list with an export (B-W2a-23; PLT-179), one file per list beside this one. A step that gives its list an export
@@ -172,4 +174,6 @@ export const EXPORT_SOURCES: readonly AnyExportSource[] = Object.freeze([
   // B-W2b-399: Admin › Data › Audit log (the search) and Admin › Access › Security & health (the security events).
   auditSearchExport,
   securityEventsExport,
+  // B-TH-070: Products › Development › Projects.
+  projectsExport,
 ])

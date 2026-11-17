@@ -19,6 +19,11 @@ import { EVENTS, MAIL_TEMPLATES, mailAnswerOf, SERVICE_IT_V3 } from '../mail-tem
 import { designScreen as mailListScreen } from '../mail-templates/fixtures'
 import { draftsOf, mailBulkReach, mailOpenTarget, mailRowHeld, mailRowId, mailRowsOf, mailStarts } from '../mail-templates/model'
 import { designScreen as editorScreen } from './fixtures'
+// B-TH-279: Saved replies (Admin › Documents › E-mail templates › Saved replies).
+import { REPLY_RECORD_TYPES } from '@nexus/factory-domain/templates/replies'
+import { createSavedReply, deleteSavedReply, listSavedReplies, updateSavedReply } from '../mail-templates/replies/api'
+import { REPLIES, repliesAnswer } from '../mail-templates/replies/fixtures'
+import { deleteReach, draftBody, draftOf, draftProblems, mailPartOf, newDraft, NO_FILTER, replyPreview, replyRowHeld, replyRowsOf, saveHeld } from '../mail-templates/replies/model'
 import { designScreen as mailEditorScreen } from './mail/fixtures'
 import {
   documentChanges,
@@ -345,3 +350,91 @@ describe('SCR-630 to SCR-633 draw every case in both languages with no key left 
     expect(draw('proforma-draft', 'it')).toContain('Che non è un documento fiscale')
   })
 })
+
+// ---- B-TH-279 (threads plan TH-6, O-ADM-MAILTPL.replies-F01; back end B-W2b-422 + B-TH-046): Saved replies ------------------------------
+describe('B-TH-279 saved replies: the rows, the draft, what a save sends, what each button waits for', () => {
+  const answer = repliesAnswer()
+  const reply = (n: number) => REPLIES[n - 1]!
+
+  it('the rows of a language, a kind of record (ANY = for any record) and a search; the shared first, then by name', () => {
+    expect(replyRowsOf(answer).map((row) => row.shared)).toEqual([true, true, true, true, false, false])
+    expect(replyRowsOf(answer, { ...NO_FILTER, language: 'en' }).map((row) => row.name)).toEqual(['Sizes and quantities, please', 'Thanks, talk soon'])
+    expect(replyRowsOf(answer, { ...NO_FILTER, record: 'Inquiry' }).map((row) => row.id)).toEqual([reply(1).id, reply(2).id])
+    expect(replyRowsOf(answer, { ...NO_FILTER, record: 'ANY' }).every((row) => row.recordType === null)).toBe(true)
+    expect(replyRowsOf(answer, { ...NO_FILTER, q: 'taglie' }).map((row) => row.id)).toEqual([reply(1).id])
+    expect(replyRowsOf(null)).toEqual([])
+  })
+
+  it('requests of Sales › Incoming are a kind of record with their own placeholders (B-TH-046)', () => {
+    expect(REPLY_RECORD_TYPES).toContain('Inquiry')
+    const forRequest = { ...newDraft(NO_FILTER), name: 'Sizes', body: 'Request {{inquiry.number}} for {{contact.name}}' }
+    expect(draftProblems(forRequest)).toEqual({ name: [], body: [] })
+    expect(draftProblems({ ...forRequest, record: 'ANY' }).body).toEqual([{ key: 'tpl.problem.notOffered', params: { name: '{{inquiry.number}}' } }])
+    expect(draftProblems({ ...forRequest, body: 'Order {{order.number}}' }).body).toEqual([{ key: 'tpl.problem.notOffered', params: { name: '{{order.number}}' } }])
+  })
+
+  it('the name is one line of 1 to 120; the words are never empty', () => {
+    expect(draftProblems({ ...newDraft(), name: 'Two\nlines', body: 'x' }).name).toEqual([{ key: 'tpl.replies.problem.name', params: { limit: 120 } }])
+    expect(draftProblems({ ...newDraft(), name: ' ', body: 'x' }).name).toHaveLength(1)
+    expect(draftProblems({ ...newDraft(), name: 'ok', body: '  ' }).body).toEqual([{ key: 'tpl.replies.problem.body' }])
+  })
+
+  it('a new reply is sent whole (shared or own, the company); a change sends only what changed, else nothing', () => {
+    const draft = { ...newDraft({ language: 'en', record: 'Inquiry', q: '' }, true), name: ' Sizes ', body: 'Hello {{contact.name}}\r\n' }
+    expect(draftBody(null, draft, 'c1')).toEqual({ name: 'Sizes', language: 'en', body: 'Hello {{contact.name}}', recordType: 'Inquiry', companyId: 'c1', shared: true })
+    expect(draftBody(reply(1), draftOf(reply(1)), 'c1')).toBeNull()
+    expect(draftBody(reply(1), { ...draftOf(reply(1)), name: 'Taglie, per favore' }, 'c1')).toEqual({ name: 'Taglie, per favore' })
+    expect(draftBody(reply(5), { ...draftOf(reply(5)), record: 'Inquiry' }, 'c1')).toEqual({ recordType: 'Inquiry' })
+  })
+
+  it('Save waits: no right to send e-mail; sharing without the share right; another’s or a shared reply one may not change; busy; problems; nothing changed', () => {
+    const state = { reply: null, draft: { ...newDraft(), name: 'n', body: 'b' }, mayWrite: true, mayShare: true, busy: false, companyId: 'c1' }
+    expect(saveHeld(state)).toBeNull()
+    expect(saveHeld({ ...state, mayWrite: false })).toBe('tpl.replies.held.noRight')
+    expect(saveHeld({ ...state, draft: { ...state.draft, shared: true }, mayShare: false })).toBe('tpl.replies.held.share')
+    expect(saveHeld({ ...state, reply: reply(4), draft: draftOf(reply(4)) })).toBe('tpl.replies.held.sharedNoRight')
+    expect(saveHeld({ ...state, reply: { ...reply(5), mayChange: false }, draft: draftOf(reply(5)) })).toBe('tpl.replies.held.notYours')
+    expect(saveHeld({ ...state, busy: true })).toBe('tpl.held.busy')
+    expect(saveHeld({ ...state, draft: { ...state.draft, body: '{{nope}}' } })).toBe('tpl.held.problems')
+    expect(saveHeld({ ...state, reply: reply(1), draft: draftOf(reply(1)) })).toBe('tpl.held.nothingChanged')
+  })
+
+  it('Delete N reaches only the replies one may change; the others cannot be ticked, said why', () => {
+    expect(deleteReach([reply(1), reply(4), reply(5)])).toEqual({ applies: [reply(1), reply(5)], left: 1 })
+    expect(replyRowHeld(reply(4))).toBe('tpl.replies.held.sharedNoRight')
+    expect(replyRowHeld({ shared: false, mayChange: false })).toBe('tpl.replies.held.notYours')
+    expect(replyRowHeld(reply(1))).toBeNull()
+  })
+
+  it('the preview fills only the placeholders the record offers, with made-up values (nothing is sent, no real record)', () => {
+    const filled = replyPreview({ body: 'Gentile {{contact.name}}, richiesta {{inquiry.number}}; ordine {{order.number}}', language: 'it', record: 'Inquiry' })
+    expect(filled).toBe('Gentile Anna Esempio, richiesta INQ-2026-0007; ordine')
+    expect(replyPreview({ body: 'Dear {{contact.name}}', language: 'en', record: 'ANY' })).toBe('Dear Ann Example')
+  })
+
+  it('the section’s part from the address: the mails Nexus sends, or the saved replies', () => {
+    expect(mailPartOf(new URLSearchParams('view=mail&part=replies'))).toBe('replies')
+    expect(mailPartOf(new URLSearchParams('view=mail'))).toBe('templates')
+    expect(mailPartOf(null)).toBe('templates')
+  })
+
+  it('the calls: the list for a company, a new one with its key, a change at the version read, a delete at the version read', async () => {
+    const { api, calls } = mockApi([
+      { status: 200, body: answer },
+      { status: 201, body: { reply: reply(1) } },
+      { status: 200, body: { reply: reply(1) } },
+      { status: 200, body: { deleted: reply(1).id } },
+    ])
+    expect((await listSavedReplies(api, { companyId: 'c1' })).replies).toHaveLength(REPLIES.length)
+    await createSavedReply(api, { name: 'n', language: 'it', body: 'b', recordType: 'Inquiry', companyId: 'c1', shared: true }, 'key-r1')
+    await updateSavedReply(api, reply(1), { name: 'x' })
+    expect(await deleteSavedReply(api, reply(1))).toBe(reply(1).id)
+    expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual(['GET /api/templates/replies?companyId=c1', 'POST /api/templates/replies', `PUT /api/templates/replies/${reply(1).id}`, `DELETE /api/templates/replies/${reply(1).id}?version=${reply(1).version}`])
+    expect(calls[1]!.headers.get('idempotency-key')).toBe('key-r1')
+    expect(calls[1]!.body).toEqual({ name: 'n', language: 'it', body: 'b', recordType: 'Inquiry', companyId: 'c1', shared: true })
+    expect(calls[2]!.body).toEqual({ version: reply(1).version, name: 'x' })
+  })
+})
+
+// The design cases (with the editor drawn in place) are drawn in mail-templates/replies/replies.vitest.test.ts.
+// ---- end B-TH-279

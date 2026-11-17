@@ -221,6 +221,7 @@ export function valueProblemKey(spec: BulkFieldSpec, value: BulkValue): string |
   if (value === null) return 'edit.problem.required'
   if (spec.kind === 'date') return 'edit.problem.date'
   if (spec.kind === 'integer') return typeof value === 'number' && Number.isInteger(value) ? (spec.min !== undefined && value < spec.min ? 'edit.problem.min' : 'edit.problem.max') : 'edit.problem.integer'
+  if (spec.kind === 'number') return typeof value === 'number' ? (spec.min !== undefined && value < spec.min ? 'edit.problem.min' : 'edit.problem.max') : 'edit.problem.number' // B-TH-245
   if (spec.kind === 'text') return 'edit.problem.long'
   return 'edit.problem.choice'
 }
@@ -229,7 +230,7 @@ export function valueProblemKey(spec: BulkFieldSpec, value: BulkValue): string |
 export function valueText(spec: BulkFieldSpec & { choiceLabels?: Readonly<Record<string, string>> }, value: BulkValue, day: (iso: string) => string, number: (value: number) => string): string {
   if (value === null || value === '') return '—'
   if (spec.kind === 'date' && typeof value === 'string' && isDay(value)) return day(value)
-  if (spec.kind === 'integer' && typeof value === 'number') return number(value)
+  if ((spec.kind === 'integer' || spec.kind === 'number' /* B-TH-245 */) && typeof value === 'number') return number(value)
   if (spec.kind === 'choice' && typeof value === 'string') return spec.choiceLabels?.[value] ?? value
   return String(value)
 }

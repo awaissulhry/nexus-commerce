@@ -240,6 +240,7 @@ describe('B-TH-258: the price list on RecordFrame — tabs 5 → 4, every old ?t
     for (const tab of RECORD_TABS) expect(tabOf(tab)).toBe(tab)
     expect(tabOf('contracts')).toBe('prices')
     expect(tabOf(null)).toBe('prices')
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(tabOf(name)).toBe('prices') // TH-6 part B
   })
 
   it('ONE thread docked beside every tab, R-ACT in its "⋯"; one third on the wide grids (Prices, Breaks & surcharges)', () => {

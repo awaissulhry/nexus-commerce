@@ -380,14 +380,26 @@ export interface LotsListModel {
   readonly focusRow?: number
 }
 
-export const RECORD_TABS = ['results', 'documents', 'release', 'activity'] as const
+// ---- B-TH-267 (threads plan TH-6; 08-tabs O-CMP-TST; the rule of picture 38): tabs 4 → 2. Documents merges into Release as
+// "Documents & release" (the supplier's typed lot documents are what the release checklist counts: they keep their own route, R-2 —
+// never the generic upload —, and the checklist names what is missing right above Add document); Activity goes (R-ACT: the lot's ONE
+// thread — the same as Warehouse › Lots' — is docked beside both tabs, its tools in the thread's "⋯"). The merged tab keeps the id
+// `release`, the address every other page already links to (the warehouse's lot list and lot record).
+export const RECORD_TABS = ['results', 'release'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Documents → Documents & release; Activity → Results & limits with the thread opened. */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ documents: 'release', activity: 'results' })
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'results'
+}
+// ---- end B-TH-267
 
 export type RecordDialog =
   | { readonly kind: 'result' }
   | { readonly kind: 'document' }
   | { readonly kind: 'decide'; readonly decision: LotDecision }
-  | { readonly kind: 'shortcuts' }
 
 export interface LotRecordModel {
   readonly prefix: string
@@ -413,7 +425,8 @@ export interface LotRecordModel {
   readonly answer?: Pick<RecordAnswer, 'effect' | 'trace'> | null
   /** The work orders a block reached. */
   readonly blocked?: readonly WorkOrderUse[] | null
-  readonly dockOpen?: boolean
+  /** B-TH-267: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  readonly personId?: string | null
   /** B-W2b-288 (FU2:03): the viewer holds the cost grain (the lab's price is typed and shown). */
   readonly costGrain?: boolean
 }

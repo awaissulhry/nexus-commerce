@@ -173,8 +173,26 @@ export interface ConnectionsViewModel {
 
 // ---- the Connection record ----
 
-export const CONNECTION_TABS = ['overview', 'settings', 'calls', 'inbound', 'activity'] as const
+// ---- B-TH-269 (threads plan TH-6; 08-tabs O-ADM-CONN; the rule of picture 38): tabs 5 → 4. Activity goes (R-ACT: its tools are in the
+// docked thread's "⋯"); Overview, Settings & secrets, Calls and Received stay.
+export const CONNECTION_TABS = ['overview', 'settings', 'calls', 'inbound'] as const
 export type ConnectionTab = (typeof CONNECTION_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Overview with the thread opened (RecordFrame reads the address). */
+export const CONNECTION_MERGED_TABS: Readonly<Record<string, ConnectionTab>> = Object.freeze({ activity: 'overview' })
+export function connectionTabOf(value: string | null | undefined): ConnectionTab {
+  const asked = value ?? ''
+  if ((CONNECTION_TABS as readonly string[]).includes(asked)) return asked as ConnectionTab
+  return Object.hasOwn(CONNECTION_MERGED_TABS, asked) ? CONNECTION_MERGED_TABS[asked]! : 'overview'
+}
+/**
+ * B-TH-005 (thread-G02): an outside service's account thread is read only by whoever may view the account itself — the API asks
+ * integrations.view beside threads.read (THREAD_GATES); the page mounts the thread only when the person holds both.
+ */
+export const mayReadConnectionThread = (permissions: Iterable<string>): boolean => {
+  const held = new Set(permissions)
+  return held.has('threads.read') && held.has('integrations.view')
+}
+// ---- end B-TH-269
 
 /** A ledger read page by page (newest first): null items while loading, `more` = the next page's anchor. */
 export interface Ledger<T> extends Loaded<T> {
@@ -198,7 +216,8 @@ export interface ConnectionRecordModel {
   busy?: boolean
   dialogProblem?: string | null
   notice?: Notice | null
-  dockOpen?: boolean
+  /** B-TH-269: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
   now: string
 }
 

@@ -1,0 +1,63 @@
+/* B-TH-239 — Today › Incoming: one line per count (label, number, Open), each line a link; the lines share the row and wrap on a
+   phone. Layout only, semantic tokens. */
+.fw-today-incoming {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-today-incoming-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface);
+  color: var(--nds-text);
+  text-decoration: none;
+  min-width: 0;
+}
+
+.fw-today-incoming-row:hover {
+  border-color: var(--nds-border-strong);
+}
+
+.fw-today-incoming-row:focus-visible {
+  outline: 2px solid var(--nds-focus-ring);
+  outline-offset: 2px;
+}
+
+.fw-today-incoming-icon {
+  flex-shrink: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-today-incoming-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-today-incoming-count {
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--nds-text-2);
+}
+
+.fw-today-incoming-count.is-some {
+  color: var(--nds-text);
+}
+
+.fw-today-incoming-open {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-link);
+  font-size: var(--nds-font-size-sm);
+  white-space: nowrap;
+}

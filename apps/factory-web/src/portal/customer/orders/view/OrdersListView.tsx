@@ -13,6 +13,7 @@ import type { ListKey } from '../../../../list-frame/model'
 import type { RequestRow } from '../../requests/api'
 import type { InTransitRead, InTransitRow, OrderRow, OrdersRead } from '../api'
 import { kindKey, listChips, listRows, ownRef, recordHref, rowHref, rowState, shipmentTone, transitSteps, yoursOf, type ListChip, type ListRow } from '../model'
+import { portalCellText, portalColumnLabel, portalColumnsOf } from '../model' // B-TH-246
 // B-TH-230: the New messages column (LastMessageCell): the person's own new messages, their party's threads only.
 import { threadHref } from '../model'
 import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../lib/last-message-cell/view/LastMessageCell'
@@ -62,6 +63,8 @@ export interface OrdersListViewModel {
   unread?: UnreadMap | null
   /** B-TH-238: We need something from you · Open requests · Open orders — each filters this list; null/absent: none. */
   tiles?: readonly ListTile[] | null
+  /** B-TH-246: "Download all" could not be made (said with Try again). */
+  downloadFailed?: boolean
 }
 
 export interface OrdersListActions {
@@ -78,6 +81,8 @@ export interface OrdersListActions {
   onRetryTransit?: () => void
   onRetryRequests?: () => void
   onOpenShipment?: (row: InTransitRow) => void
+  /** B-TH-246: "Download all (Excel)" again after it failed. */
+  onDownloadAll?: () => void
 }
 
 // B-TH-223: "Next shipment" shows from 1600 px (a 1920 screen): below, "On the way" names the parcels and the other columns
@@ -253,9 +258,28 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
       { ...column('pieces', t('col.pieces'), PiecesCell, { flex: 0.8, minWidth: 104 }), valueGetter: ({ data }) => (data ? (data.kind === 'request' ? (data.request.pieces > 0 ? t('list.piecesAsked', { count: data.request.pieces }) : '') : [t('list.piecesShipped', { shipped: data.order.pieces.shipped, ordered: data.order.pieces.ordered }), data.order.pieces.open > 0 ? t('list.piecesOpen', { count: data.order.pieces.open }) : null].filter(Boolean).join(' · ')) : '') },
       ...(seesPrices ? [{ ...column('value', t('col.value'), ValueCell, { flex: 0.7, minWidth: 104 }), valueGetter: ({ data }: { data?: ListRow }) => (data?.kind === 'order' ? words.money(data.order.netAmount, data.order.currency) : '') }] : []),
       ...(wide ? [{ ...column('next', t('col.nextShipment'), NextCell, { flex: 1, minWidth: 140 }), valueGetter: ({ data }) => (data?.kind === 'order' && data.order.nextShipment ? [data.order.nextShipment.date ? day(data.order.nextShipment.date) : null, data.order.nextShipment.carrierName].filter(Boolean).join(' · ') : '') } as ColDef<ListRow>] : []),
+      // B-TH-246 (SHEET.portal-sheet, portal-sheet-F07): the columns the office ticked for this portal, read-only; each cell opens the
+      // customer's own page of the row (never an office page).
+      ...portalColumnsOf(read).map((entry): ColDef<ListRow> => {
+        const text = (data?: ListRow) => (data?.kind === 'order' ? portalCellText(entry, data.order.values?.[entry.columnId], locale, { yes: t('sheet.yes'), no: t('sheet.no'), day }) : null)
+        const Cell = ({ data }: ICellRendererParams<ListRow>) => {
+          if (!data) return null
+          const said = text(data)
+          if (said === null) return <span className="fw-pord-sub">—</span>
+          const href = rowHref(latest.current.model.prefix, data)
+          return href ? (
+            <a className="fw-pord-rowlink fw-pord-clip" href={href} title={said} onClick={(event) => { if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return; event.preventDefault(); latest.current.actions?.onOpen?.(data) }}>
+              {said}
+            </a>
+          ) : (
+            <span className="fw-pord-clip">{said}</span>
+          )
+        }
+        return { ...column(entry.columnId, portalColumnLabel(entry, locale), Cell, { flex: 0.8, minWidth: 120 }), headerTooltip: t('sheet.columnHint'), valueGetter: ({ data }: { data?: ListRow }) => text(data) ?? '' }
+      }),
       { ...column('actions', t('col.actions'), MoreCell, { width: 72, minWidth: 72, maxWidth: 72 }), pinned: 'right', suppressHeaderMenuButton: true },
     ]
-  }, [t, locale, day, words, ds.refPair, seesPrices, wide, l, model.unread /* B-TH-230 */])
+  }, [t, locale, day, words, ds.refPair, seesPrices, wide, l, model.unread /* B-TH-230 */, read?.columns /* B-TH-246 */])
 
   const count = model.selected.length
   const bulk = (
@@ -323,6 +347,8 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
         ) : null}
       </div>
       {read && !read.seesPrices ? <PricesNote /> : null}
+      {/* B-TH-246: the file could not be made — in words, with Try again. */}
+      {model.downloadFailed ? <Banner tone="danger" title={t('sheet.downloadFailed')} action={actions?.onDownloadAll ? <Button size="sm" onClick={actions.onDownloadAll}>{t('state.retry')}</Button> : undefined} /> : null}
       {model.requests.state === 'error' ? <ReadFailed title={t('list.requestsFailed')} onRetry={actions?.onRetryRequests} /> : null}
       <ListFrame<ListRow>
         label={t('list.label')}

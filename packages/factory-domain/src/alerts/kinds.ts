@@ -30,6 +30,9 @@ const MARGIN_GRAIN = 'money.margin' satisfies Permission
 /** B-W2b-24: seeing a connection (auth/permissions/catalogue INTEGRATIONS_VIEW; named here so the catalogue is not imported). */
 const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
 
+/** B-TH-071: reading a project is reading its thread (named here so the catalogue is not imported). */
+const THREADS_READ = 'threads.read' satisfies Permission
+
 /**
  * The kinds of exception rule (B-W2a-33; ANA-036 exception rules, PLT-100 time-based triggers; design home.alerts
  * "Rules": "order at risk of being late · hold longer than 24 h · material short for a released order · certificate
@@ -62,7 +65,9 @@ const INTEGRATIONS_VIEW = 'integrations.view' satisfies Permission
 // B-W2b-GB02 (G146, B-W2b-392's gap): STAMP_DUTY_DUE, a stamp duty quarter not paid N days before its F24 due day.
 // B-TH-012 (threads plan L2-G03): REQUEST_NUMBERING_MISSING, a company that receives requests (a customer portal on, or
 // inquiry addresses in force) with no active INQUIRY series: a request would wait silently.
-export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED', 'RETURN_ARRIVED_LATE', 'EXIT_PROOF_MISSING', 'MARGIN_BELOW_FLOOR', 'STAMP_DUTY_DUE', 'REQUEST_NUMBERING_MISSING'] as const
+// B-TH-071 (threads plan TH-5, PROJ-G14, PROJ.home-F04): PROJECT_STALE, an open project past its target date whose conversation
+// has had no message for 14 days: its LEAD is told "close or update it" (platform/notifications/rules/alerts.ts: the lead only).
+export const RULE_KINDS = ['ORDER_LATE_RISK', 'HOLD_TOO_LONG', 'MATERIAL_SHORT', 'APPROVAL_OVERDUE', 'PO_NOT_CONFIRMED', 'CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE', 'INTEGRATION_FAILING', 'WORKING_TIME_LIMIT', 'LOW_STOCK', 'PO_CONFIRMED_LATE', 'SUPPLIER_STATUS_CHANGED', 'RETURN_ARRIVED_LATE', 'EXIT_PROOF_MISSING', 'MARGIN_BELOW_FLOOR', 'STAMP_DUTY_DUE', 'REQUEST_NUMBERING_MISSING', /* B-TH-071 */ 'PROJECT_STALE'] as const
 export type RuleKind = (typeof RULE_KINDS)[number]
 export const isRuleKind = (value: unknown): value is RuleKind => typeof value === 'string' && (RULE_KINDS as readonly string[]).includes(value)
 
@@ -370,6 +375,25 @@ export const KINDS: Readonly<Record<RuleKind, KindSpec>> = Object.freeze({
     recheck: [],
   }),
   // ---- end B-TH-012
+  // ---- B-TH-071: a project nobody moves
+  PROJECT_STALE: spec({
+    kind: 'PROJECT_STALE',
+    trigger: 'CONDITION',
+    // One alert per open project (ACTIVE or ON_HOLD) past its target date whose thread has had no message for 14 days (none since
+    // it was made that long ago: factory-domain projects/rules isStale). It clears when the project is closed, its target date is
+    // moved, or a message is written. Told to the project's LEAD only (never the rule's whole role): it suggests Close or Update
+    // and never acts. Snoozing the alert (up to 30 days) is the "snooze 7 days". The facts name no person.
+    recordType: 'Project',
+    view: THREADS_READ,
+    threshold: z.strictObject({}),
+    builtIn: { name: { en: 'Project past its target date and quiet', it: 'Progetto oltre la data obiettivo e fermo' }, threshold: {}, severity: 'INFO', cooldownMinutes: 1440, recipientRole: 'admin' },
+    label: { en: 'Projects past their target date and quiet for 14 days', it: 'Progetti oltre la data obiettivo e senza messaggi da 14 giorni' },
+    recheck: [
+      { event: 'project.status_changed', key: 'projectId' },
+      { event: 'project.changed', key: 'projectId' },
+    ],
+  }),
+  // ---- end B-TH-071
 })
 
 /** The kinds of a trigger. */

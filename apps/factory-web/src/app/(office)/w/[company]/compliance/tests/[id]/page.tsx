@@ -4,7 +4,7 @@ import { LotRecord } from '../../../../../../../areas/compliance/tests/record/Lo
 
 export const metadata: Metadata = { title: 'Lot · Nexus Factory' }
 
-/** Compliance › Tests & substances › a lot (SCR-054: its results, documents, release; `?tab=`). */
+/** Compliance › Tests & substances › a lot (SCR-054: `?tab=results|release` — Results & limits, Documents & release; the old `documents` opens Documents & release, `activity` Results with the thread — B-TH-267). */
 export default async function LotRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (

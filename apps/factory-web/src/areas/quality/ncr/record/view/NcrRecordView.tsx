@@ -1,18 +1,15 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { CheckCheck, Lock, MoreHorizontal, ShieldCheck } from 'lucide-react'
+import { CheckCheck, Lock, ShieldCheck } from 'lucide-react'
 import { reportHref } from '../../api'
 import { EscalateDialog } from '../../view/EscalateDialog'
-import { Banner, Menu, type MenuItemDef } from '@nexus/ui/components'
-import { Button, Spinner, Tag } from '@nexus/ui/primitives'
-import { RecordPanelsView, type RecordPanelsViewModel } from '../../../../../record-panels/view/RecordPanelsView'
-import { isPageKey } from '../../../_shared/hooks'
-import { Freshness, RecordFrame, RecordProblem, RecordSkeleton } from '../../../_shared/parts'
-import type { ListKey } from '../../../../../list-frame/model'
+import { Banner, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { Freshness, RecordProblem, RecordSkeleton } from '../../../_shared/parts'
 import { bandHeld, isOpenStage, RECORD_TABS, type Say } from '../../model'
-import { KeysDialog, NcrStepUp, SeverityTag, StagePill } from '../../parts'
+import { NcrStepUp, SeverityTag, StagePill } from '../../parts'
 import { CloseNcrDialog } from '../../view/CloseNcrDialog'
 import { escalateRecordHeld, recordHref, tabHref, type NcrRecordActions, type NcrRecordModel } from '../view-model'
 import { ContainmentTab } from './ContainmentTab'
@@ -23,28 +20,33 @@ import { ProblemTab } from './ProblemTab'
 import { RecordDialogs } from './RecordDialogs'
 import { NcrRecordMessages, RecordNotice, useRecordWords } from './words'
 import '../record.css'
+// ---- B-TH-266: the NCR on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 
 export type { NcrRecordActions, NcrRecordModel } from '../view-model'
 
 /**
- * SCR-145 — the NCR record (design quality.ncr "Record: NCR", a record page; `?tab=problem|containment|disposition|
- * linked|activity`): the band (‹ Nonconformances, "<number> <title>", severity, where it came from, its stage, the
- * freshness; ONE primary next step — Mark contained, Mark decided, Close NCR… — held with what is still missing, and ⋯:
- * Copy number, Cancel NCR…, Open the PPE register entry, Keyboard shortcuts) and its sections as link tabs with counts:
- * Problem & evidence, Containment, Disposition, Linked records, Activity (the record panels: thread, files, history).
- * Closing is the closing checklist and an e-signature (the office's fresh code). B-W2b-113: the Cost tab (the cost grain
- * only; absent otherwise), the CAPA it is escalated to in the band, and ⋯ Escalate to CAPA…, NCR report (PDF) (a new tab)
- * and Keep a version of the report.
+ * SCR-145 — the NCR record (design quality.ncr "Record: NCR", a record page; `?tab=problem|containment|disposition|cost|linked`), on
+ * RecordFrame (B-TH-266; threads plan O-QA-NCR, the rule of picture 38, the tabs of picture 39): the band in the shell's band row
+ * (‹ Nonconformances, "<number> <title>", ONE pill — its stage —, its severity, where it came from, the site, the CAPA it is escalated
+ * to, the freshness; ONE primary next step — Mark contained, Mark decided, Close NCR… — held with what is still missing; ⋯ Copy
+ * number, Escalate to CAPA…, NCR report (PDF) (a new tab), Keep a version of the report, Close early, Open the PPE register entry,
+ * Cancel NCR…, then the frame's Keyboard line), the Thread button (⌘J) and the NCR's ONE thread docked beside every tab — internal,
+ * notes only (an NCR's thread is never shared) —, Activity's tools in its "⋯" (R-ACT). Tabs 6 → 5: Problem & evidence, Containment,
+ * Disposition, Cost (the cost grain only; absent otherwise), Linked records. Closing is the closing checklist and an e-signature (the
+ * office's fresh code). Every banner is in the ONE notice of the body column.
  */
-export function NcrRecordView({ model, actions, panels, panelsPreview }: { model: NcrRecordModel; actions?: NcrRecordActions; panels?: ReactNode; panelsPreview?: RecordPanelsViewModel }) {
+// B-TH-266: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
+export function NcrRecordView({ model, actions, thread, printThread }: { model: NcrRecordModel; actions?: NcrRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <NcrRecordMessages>
-      <Body model={model} actions={actions} panels={panels} panelsPreview={panelsPreview} />
+      <Body model={model} actions={actions} thread={thread} printThread={printThread} />
     </NcrRecordMessages>
   )
 }
 
-function Body({ model, actions, panels, panelsPreview }: { model: NcrRecordModel; actions?: NcrRecordActions; panels?: ReactNode; panelsPreview?: RecordPanelsViewModel }) {
+function Body({ model, actions, thread, printThread }: { model: NcrRecordModel; actions?: NcrRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const words = useRecordWords(model.people, model.timeZone)
   const { t, r, say } = words
   const listHref = `${model.prefix}/quality/ncr`
@@ -55,22 +57,31 @@ function Body({ model, actions, panels, panelsPreview }: { model: NcrRecordModel
   )
   const ready = model.loaded.status === 'ready' ? model.loaded.record : null
 
-  // `?` opens the keys (never while typing or in a dialog).
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === '?' && isPageKey(event) && !model.dialog) {
-        event.preventDefault()
-        actions?.onKeys?.(true)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [model.dialog, actions])
+  // B-TH-266: the keys are the frame's (its Keyboard line, PR-14: no "?" overlay); ⌘S shows in the edit bar.
 
-  if (!model.can.view || model.loaded.status === 'forbidden') return <RecordProblem problem="problem.forbidden" back={back} />
-  if (model.loaded.status === 'loading') return <RecordSkeleton />
-  if (model.loaded.status === 'notFound') return <RecordProblem problem="problem.notFound" back={back} />
-  if (model.loaded.status === 'error') return <RecordProblem problem={model.loaded.problem} back={back} onRetry={() => actions?.onRetry?.()} />
+  // Loading, not found, failed, no right: inside the frame (the band stays), no thread.
+  if (!model.can.view || model.loaded.status !== 'ready') {
+    const state = model.loaded.status
+    return (
+      <RecordFrame
+        recordType="Nonconformance"
+        personId={model.personId ?? null}
+        band={{ back, title: state === 'loading' && model.can.view ? <Skeleton width={260} height={22} /> : r('band.title'), moreLabel: r('band.more') }}
+        thread={null}
+        threadLabel={r('band.dockLabel')}
+      >
+        {!model.can.view || state === 'forbidden' ? (
+          <RecordProblem problem="problem.forbidden" back={back} />
+        ) : state === 'loading' ? (
+          <RecordSkeleton />
+        ) : state === 'notFound' ? (
+          <RecordProblem problem="problem.notFound" back={back} />
+        ) : (
+          <RecordProblem problem={model.loaded.status === 'error' ? model.loaded.problem : 'problem.unavailable'} back={back} onRetry={() => actions?.onRetry?.()} />
+        )}
+      </RecordFrame>
+    )
+  }
   const record = ready!
   const ncr = record.ncr
   const held = bandHeld(record)
@@ -110,7 +121,6 @@ function Body({ model, actions, panels, panelsPreview }: { model: NcrRecordModel
     ...(ncr.stage === 'OPEN' || ncr.stage === 'CONTAINED' ? [{ id: 'close', label: r('band.closeEarly'), disabled: !!closeHeld, description: closeHeld ?? undefined, onSelect: () => actions?.onClose?.() }] : []),
     ...(ncr.style?.ppe && !record.register ? [{ id: 'register', label: r('band.register'), disabled: !!registerHeld, description: registerHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'register', description: '', busy: false, notice: null }) }] : []),
     ...(isOpenStage(ncr.stage) ? [{ id: 'cancel', label: r('band.cancel'), tone: 'danger' as const, disabled: !!cancelHeld, description: cancelHeld ?? undefined, onSelect: () => actions?.onDialog?.({ kind: 'cancelNcr', reason: '', busy: false, notice: null }) }] : []),
-    { id: 'keys', label: t('keys.title'), onSelect: () => actions?.onKeys?.(true) },
   ]
 
   const source =
@@ -124,6 +134,7 @@ function Body({ model, actions, panels, panelsPreview }: { model: NcrRecordModel
   const meta = (
     <span className="fw-ncr-r-row">
       <SeverityTag severity={ncr.severity} />
+      <Freshness asOf={model.asOf} live={model.live} />
       {source}
       {model.site && <span className="fw-q-code">{model.site.code}</span>}
       {ncr.style?.ppe && <Tag tone="info">{r('band.ppe')}</Tag>}
@@ -134,49 +145,56 @@ function Body({ model, actions, panels, panelsPreview }: { model: NcrRecordModel
       )}
     </span>
   )
-  const status = (
-    <span className="fw-ncr-r-row">
-      <StagePill stage={ncr.stage} />
-      <Freshness asOf={model.asOf} live={model.live} />
-    </span>
-  )
-  const actionsNode = (
-    <>
-      {primary}
-      <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" triggerProps={{ 'aria-label': r('band.more') }} items={menu} />
-    </>
-  )
+  // B-TH-266: ONE pill in the band — the stage; the freshness travels with the identity.
+  const status = <StagePill stage={ncr.stage} />
 
   const linkedCount = record.links.length + record.holds.length
   // B-W2b-113: the Cost tab only for a reader with the cost grain (by address it says so).
-  const tabs = RECORD_TABS.filter((tab) => tab !== 'cost' || (record.may.cost && model.can.cost)).map((tab) => ({
+  // B-W2b-113: the Cost tab only for a reader with the cost grain (by address it says so).
+  const tabs: TabItem[] = RECORD_TABS.filter((tab) => tab !== 'cost' || (record.may.cost && model.can.cost)).map((tab) => ({
     id: tab,
+    href: tabHref(model.prefix, ncr.id, tab),
     label: r(`tab.${tab}`),
     count: tab === 'containment' ? record.containment.length : tab === 'disposition' ? record.decisions.length : tab === 'linked' ? linkedCount : null,
   }))
-  const ownKeys: ListKey[] = [{ keys: ['⌘', 'S'], does: r('keys.save') }]
-  const activity = panels ?? (panelsPreview ? <RecordPanelsView model={panelsPreview} /> : null)
 
   return (
     <>
-      <RecordFrame back={{ href: listHref, label: r('band.back') }} title={`${ncr.number} ${ncr.title}`} meta={meta} status={status} actions={actionsNode} tabs={tabs} active={model.tab} tabHref={(tab) => tabHref(model.prefix, ncr.id, tab as (typeof RECORD_TABS)[number])}>
-        {model.live === 'offline' && <Banner tone="warning" title={r('offline')} />}
-        {model.stale && !model.dialog && <Banner tone="warning" title={r('stale.title', { time: model.stale })} action={<Button size="sm" variant="quiet" onClick={() => actions?.onReload?.()}>{r('stale.reload')}</Button>} />}
-        {ncr.stage === 'CLOSED' && <Banner tone="success" title={r('band.closedBanner', { when: words.when(ncr.closedAt), who: words.person(ncr.closedById) })} />}
-        {ncr.stage === 'CANCELLED' && <Banner tone="info" title={r('band.cancelledBanner', { reason: ncr.cancelReason ?? '—' })} />}
-        <RecordNotice notice={model.notice} words={words} onDismiss={actions?.onDismissNotice} />
+      <RecordFrame
+        recordType="Nonconformance"
+        personId={model.personId ?? null}
+        threadLabel={r('band.dockLabel')}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back,
+          title: `${ncr.number} ${ncr.title}`,
+          status,
+          meta,
+          primary: primary ?? undefined,
+          more: menu,
+          moreLabel: r('band.more'),
+        }}
+      >
+        <Tabs ariaLabel={r('band.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+        {/* B-TH-266: the ONE notice of the body column — most serious first, the rest behind "N more". */}
+        <RecordNotices>
+          {model.notice && <RecordNotice notice={model.notice} words={words} onDismiss={actions?.onDismissNotice} />}
+          {model.stale && !model.dialog && <Banner tone="warning" title={r('stale.title', { time: model.stale })} action={<Button size="sm" variant="quiet" onClick={() => actions?.onReload?.()}>{r('stale.reload')}</Button>} />}
+          {model.live === 'offline' && <Banner tone="warning" title={r('offline')} />}
+          {ncr.stage === 'CLOSED' && <Banner tone="success" title={r('band.closedBanner', { when: words.when(ncr.closedAt), who: words.person(ncr.closedById) })} />}
+          {ncr.stage === 'CANCELLED' && <Banner tone="info" title={r('band.cancelledBanner', { reason: ncr.cancelReason ?? '—' })} />}
+        </RecordNotices>
         {model.tab === 'problem' && <ProblemTab model={model} record={record} words={words} actions={actions} />}
         {model.tab === 'containment' && <ContainmentTab model={model} record={record} words={words} actions={actions} />}
         {model.tab === 'disposition' && <DispositionTab model={model} record={record} words={words} actions={actions} />}
         {model.tab === 'cost' && <CostTab model={model} record={record} words={words} actions={actions} />}
         {model.tab === 'linked' && <LinkedTab model={model} record={record} words={words} actions={actions} />}
-        {model.tab === 'activity' && (activity ?? <p className="fw-q-hint">{r('activity.none')}</p>)}
       </RecordFrame>
       <RecordDialogs model={model} record={record} words={words} actions={actions} />
       {model.close && <CloseNcrDialog model={model.close} actions={actions?.close} />}
       {model.escalate && <EscalateDialog model={model.escalate} actions={actions?.escalate} />}
       <NcrStepUp state={model.stepUp} onSubmit={(code) => actions?.onStepUp?.(code)} onCancel={() => actions?.onStepUpCancel?.()} />
-      {model.keysOpen && <KeysDialog own={ownKeys} withSelection={false} onClose={() => actions?.onKeys?.(false)} />}
     </>
   )
 }

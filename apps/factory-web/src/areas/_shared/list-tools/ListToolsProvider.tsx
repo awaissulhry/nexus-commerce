@@ -10,6 +10,7 @@ import { ListToolsContext, ToolsError, type ListToolsTransport, type WorkingLayo
 import { isApiError } from '../../../lib/api/errors'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { applyBulk, createView, exportFileAddress, listExports, listViews, previewBulk, readExport, removeView, setPersonalDefault, startExport, updateView } from './api'
+import { listFieldRows, listFields } from './api' // B-TH-241
 // B-W2b-388: Columns ▾ › Pin to Today (the views I follow).
 import { pinnedViewIds, setViewPinned } from '../../home/today/my-views/api'
 
@@ -101,6 +102,11 @@ export function ListToolsProvider({ children }: { children?: ReactNode }) {
           setViewPinned(api, viewId, pinned).catch((error: unknown) => {
             throw new ToolsError(isApiError(error) && error.kind === 'unavailable' ? 'offline' : isApiError(error) && error.kind === 'forbidden' ? 'forbidden' : 'failed')
           }),
+      },
+      // B-TH-241: the custom fields a list frame draws as columns (a read refused or offline: no custom columns, said by the frame).
+      fields: {
+        read: (recordType, scope) => listFields(api, recordType, scope),
+        rows: (recordType, ids) => listFieldRows(api, recordType, ids),
       },
     }
   }, [api, router, pathname, search, locale])

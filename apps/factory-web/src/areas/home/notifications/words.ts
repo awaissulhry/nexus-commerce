@@ -2,7 +2,7 @@ import { isCurrencyCode, minorPlaces } from '@nexus/factory-domain/core/money'
 import { formatNumber } from '../../../lib/i18n/format'
 import type { Locale } from '../../../lib/i18n/locales'
 import type { Translate } from '../../../lib/i18n/messages'
-import type { Notification } from './model'
+import type { Notification, NotificationRow } from './model'
 
 /**
  * A notification in the person's language (PLT-152 "text built per reader"). The API keeps each notification's message
@@ -54,4 +54,9 @@ export function sentenceWords(notification: Pick<Notification, 'messageKey' | 'p
   const key = `w.${notification.messageKey}`
   const text = t(key, values)
   return text === key ? t('w.fallback', values) : text
+}
+
+/** B-TH-239: a row's words — folded new requests say "5 new requests came in" (the numbers stay on the chip), any other its sentence. */
+export function rowWords(row: Pick<NotificationRow, 'messageKey' | 'params' | 'record' | 'actor' | 'people' | 'fold'>, t: Translate, locale: Locale): string {
+  return row.fold ? t('fold.newRequests', { count: row.fold.requests }) : sentenceWords(row, t, locale)
 }

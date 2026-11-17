@@ -277,3 +277,58 @@ describe('SCR-232 — every case draws in both languages with no key left on scr
     }
   })
 })
+
+// ── B-TH-241 (threads plan TH-4, SHEET-G04; features SHEET.brand-fields-F02, -F05): custom columns are opt-in, Export writes them ──
+describe('custom columns: hidden until a view shows them, written by Export when shown (B-TH-241)', () => {
+  const WITH_CUSTOM: ColDef<Row>[] = [
+    { colId: 'number', headerName: 'Number' },
+    { colId: 'customer', headerName: 'Customer' },
+    { colId: 'cf:heat', headerName: 'Heat number', hide: true, context: { optIn: true, toolLabel: 'Heat number (custom field)' } },
+    { colId: 'cf:price:target', headerName: 'Target price', hide: true, context: { optIn: true, toolLabel: 'Target price (custom field)' } },
+    { colId: 'more', headerName: '', pinned: 'right' },
+  ]
+
+  it('the tools know a custom column as opt-in, named "(custom field)" in Customise', () => {
+    const tools = toolColumnsOf(WITH_CUSTOM as ColDef<unknown>[])
+    expect(tools.find((column) => column.id === 'cf:heat')).toEqual({ id: 'cf:heat', label: 'Heat number (custom field)', fixed: null, optIn: true })
+    expect(tools.find((column) => column.id === 'customer')?.optIn).toBeUndefined()
+  })
+
+  it('as built and with a layout that does not name it: hidden, and the export leaves it out', () => {
+    expect(applyLayout(WITH_CUSTOM, undefined).find((column) => column.colId === 'cf:heat')?.hide).toBe(true)
+    const hiddenCustomer = applyLayout(WITH_CUSTOM, { order: [], hidden: ['customer'], pinned: [] })
+    expect(hiddenCustomer.find((column) => column.colId === 'cf:heat')?.hide).toBe(true)
+    expect(exportColumnsOf(hiddenCustomer as ColDef<unknown>[]).map((column) => column.key)).toEqual(['number'])
+  })
+
+  it('shown in Customise → the layout orders it → the grid shows it and Export writes it (cf:<code>, the API\'s column id)', () => {
+    const tools = toolColumnsOf(WITH_CUSTOM as ColDef<unknown>[])
+    const value = preferencesOf(tools, undefined)
+    // As built the custom columns are not in view.
+    expect(value.visibleColumns).toEqual(['number', 'customer', 'more'])
+    const layout = layoutOfPreferences(tools, { ...value, visibleColumns: [...value.visibleColumns, 'cf:heat'] })
+    expect(layout?.order).toContain('cf:heat')
+    expect(layout?.order).not.toContain('cf:price:target')
+    expect(layout?.hidden).toEqual([])
+    const shown = applyLayout(WITH_CUSTOM, layout)
+    expect(shown.find((column) => column.colId === 'cf:heat')?.hide).toBe(false)
+    expect(shown.find((column) => column.colId === 'cf:price:target')?.hide).toBe(true)
+    expect(exportColumnsOf(shown as ColDef<unknown>[])).toEqual([
+      { key: 'number', label: 'Number' },
+      { key: 'customer', label: 'Customer' },
+      { key: 'cf:heat', label: 'Heat number' },
+    ])
+    // The dialog reads the same layout back: the custom column in view.
+    expect(preferencesOf(tools, layout).visibleColumns).toContain('cf:heat')
+    // Hidden again: it leaves the order (and so the view).
+    const back = layoutOfPreferences(tools, { ...preferencesOf(tools, layout), visibleColumns: ['number', 'customer', 'more'] })
+    expect(applyLayout(WITH_CUSTOM, back).find((column) => column.colId === 'cf:heat')?.hide).toBe(true)
+  })
+
+  it('a list without custom columns keeps its layouts exactly (a hidden column, a move)', () => {
+    const tools = toolColumnsOf(COLUMNS as ColDef<unknown>[])
+    expect(layoutOfPreferences(tools, preferencesOf(tools, { order: [], hidden: ['net'], pinned: [] }))).toEqual({ order: [], hidden: ['net'], pinned: [] })
+    expect(layoutOfPreferences(tools, preferencesOf(tools, undefined))).toBeUndefined()
+  })
+})
+// ── end B-TH-241 ──

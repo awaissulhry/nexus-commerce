@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { MapPin } from 'lucide-react'
-import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
+import { Banner, Card, Field, KeyValue, Tabs, type TabItem } from '@nexus/ui/components'
 import { Button, Input, Pill, Select, Skeleton, Tag, Toggle } from '@nexus/ui/primitives'
 import { EditModeBar, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../lib/i18n/provider'
@@ -11,8 +11,10 @@ import type { Company, Site } from '../../shared/api'
 import { adminHref, STATUS_TONE } from '../../shared/model'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import { dash, FrameState, ListKeysHelp, NoticeBanner, RecordProblem } from '../../shared/view/parts'
-import { RecordFrame } from '../../shared/view/RecordFrame'
 import { WithMessages } from '../../../../record-panels/i18n'
+// ---- B-TH-269: the company on RecordFrame (the band in the shell's row, the docked thread — notes only —, one notice) ----
+import { RecordFrame } from '../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../_shared/record-frame/RecordNotices'
 import {
   addressLine,
   changedFields,
@@ -25,7 +27,6 @@ import {
   TIME_ZONES,
   type CompanyDraft,
   type CompanyRecordModel,
-  type CompanyTab,
 } from '../model'
 import { companySiteColumns } from './columns'
 
@@ -39,108 +40,114 @@ export interface CompanyRecordActions {
   onNewSite?: () => void
   /** Enter on a site's row: open the Site record. */
   onOpen?: (href: string) => void
-  onDock?: () => void
   onRetry?: () => void
   onDismissNotice?: () => void
 }
 
 /**
- * SCR-008 — the Company record (design 02 admin.org "Record: Company"): Legal & tax (what every document and invoice
- * prints, c.c. art. 2250; what SDI needs), its Sites, its Defaults, and Activity (the record panels: thread, files,
- * history). Forms save with the DS EditModeBar (⌘S, Discard, Apply held with its reason); a person without
- * companies.manage reads the data as text. Calendars (B-W2a-59: working days and holidays) is passed in as `calendars`
- * (its own container), shown with calendars.view. Fetches nothing (CompanyRecord.tsx reads the API).
+ * SCR-008 — the Company record (design 02 admin.org "Record: Company"), on RecordFrame (B-TH-269; the rule of picture 38, the tabs of
+ * 08-tabs O-ADM-CO): the band in the shell's band row (‹ Companies, "<code> <legal name>", ONE state pill, the trade name and whether
+ * it can issue invoices, New site — held with why —; the Thread button ⌘J, the frame's; ⋯ its Keyboard line), the docked thread
+ * beside every tab (notes only: an admin record has no party, W03; Activity's tools in its "⋯", R-ACT) and the tabs 5 → 4: Legal &
+ * tax (what every document and invoice prints, c.c. art. 2250; what SDI needs), its Sites, its Defaults, and Calendars (B-W2a-59:
+ * working days and holidays, passed in as `calendars` — its own container —, shown with calendars.view). Forms save with the DS
+ * EditModeBar (⌘S, Discard, Apply held with its reason); a person without companies.manage reads the data as text. Every banner in
+ * the ONE notice of the body column. Fetches nothing (CompanyRecord.tsx reads the API).
  */
-export function CompanyRecordView({ model, actions, panels, calendars }: { model: CompanyRecordModel; actions?: CompanyRecordActions; panels?: ReactNode; calendars?: ReactNode }) {
+// B-TH-269: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows.
+export function CompanyRecordView({ model, actions, thread, printThread, calendars }: { model: CompanyRecordModel; actions?: CompanyRecordActions; thread?: ReactNode; printThread?: ReactNode; calendars?: ReactNode }) {
   return (
     // AdminMessages' catalogues and, for the Calendars tab's label (B-W2a-59), the tab's own.
     <WithMessages namespaces={['admin', 'records', 'admin-calendars']}>
-      <CompanyRecord model={model} actions={actions} panels={panels} calendars={calendars} />
+      <CompanyRecord model={model} actions={actions} thread={thread} printThread={printThread} calendars={calendars} />
     </WithMessages>
   )
 }
 
-function CompanyRecord({ model, actions, panels, calendars }: { model: CompanyRecordModel; actions?: CompanyRecordActions; panels?: ReactNode; calendars?: ReactNode }) {
+function CompanyRecord({ model, actions, thread, printThread, calendars }: { model: CompanyRecordModel; actions?: CompanyRecordActions; thread?: ReactNode; printThread?: ReactNode; calendars?: ReactNode }) {
   const t = useT('admin')
   const tc = useT('admin-calendars')
   const href = (path: string) => adminHref(model.prefix, path)
   const back = { href: href('/companies'), label: t('nav.companies') }
   const company = model.company
+  const frame = { recordType: 'Company', personId: model.personId ?? null, threadLabel: t('record.dockLabel') }
+  const backLink = <Link href={back.href}>{back.label}</Link>
 
-  if (model.problem && !company) {
-    return (
-      <div className="fw-adm">
-        <RecordProblem
-          problem={model.problem}
-          onRetry={actions?.onRetry}
-          back={
-            <Button size="sm" asChild>
-              <Link href={back.href}>{t('record.backTo', { name: back.label })}</Link>
-            </Button>
-          }
-        />
-      </div>
-    )
-  }
+  // Not found, no right, a failed read, loading: the band and its state inside the frame, no thread yet.
   if (!company) {
     return (
-      <div className="fw-adm" aria-busy="true">
-        <Skeleton height={36} width="40%" />
-        <Skeleton height={28} width="60%" />
-        <Skeleton height={220} />
-      </div>
+      <RecordFrame {...frame} thread={null} band={{ back: backLink, title: model.problem ? t('nav.companies') : <Skeleton width={260} height={22} />, moreLabel: t('common.more') }}>
+        {model.problem ? (
+          <RecordProblem
+            problem={model.problem}
+            onRetry={actions?.onRetry}
+            back={
+              <Button size="sm" asChild>
+                <Link href={back.href}>{t('record.backTo', { name: back.label })}</Link>
+              </Button>
+            }
+          />
+        ) : (
+          <div className="fw-adm" aria-busy="true">
+            <Skeleton height={28} width="60%" />
+            <Skeleton height={220} />
+          </div>
+        )}
+      </RecordFrame>
     )
   }
 
-  const tabs: Array<{ id: CompanyTab; label: string; count?: number | null }> = [
+  const tabs: TabItem[] = [
     { id: 'legal', label: t('company.tab.legal') },
     { id: 'sites', label: t('company.tab.sites'), count: model.sites.items ? model.sites.items.length : null },
     { id: 'defaults', label: t('company.tab.defaults') },
-    ...(model.can.viewCalendars ? [{ id: 'calendars' as const, label: tc('acal.tab') }] : []),
-    { id: 'activity', label: t('company.tab.activity') },
-  ]
+    ...(model.can.viewCalendars ? [{ id: 'calendars', label: tc('acal.tab') }] : []),
+  ].map((tab) => ({ ...tab, href: `${href(`/companies/${company.id}`)}?tab=${tab.id}` }))
   const archived = company.status === 'ARCHIVED'
   return (
-    <div className="fw-adm">
+    <>
       <RecordFrame
-        back={back}
-        title={
-          <>
-            <span className="fw-adm-code">{company.code}</span> {company.legalName}
-          </>
-        }
-        meta={company.tradeName ?? undefined}
-        status={
-          <span className="fw-adm-tags">
-            <Pill tone={STATUS_TONE[company.status] ?? 'neutral'}>{t(`status.${company.status}`)}</Pill>
-            {company.invoicing.ready ? <Tag tone="success">{t('org.invoicing.ready')}</Tag> : <Tag tone="warning">{t('org.invoicing.missing', { count: company.invoicing.issues.length })}</Tag>}
-          </span>
-        }
-        actions={
-          model.can.viewSites ? (
+        {...frame}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: backLink,
+          title: (
+            <>
+              <span className="fw-adm-code">{company.code}</span> {company.legalName}
+            </>
+          ),
+          status: <Pill tone={STATUS_TONE[company.status] ?? 'neutral'}>{t(`status.${company.status}`)}</Pill>,
+          meta: (
+            <span className="fw-adm-tags">
+              {company.tradeName && <span>{company.tradeName}</span>}
+              {company.invoicing.ready ? <Tag tone="success">{t('org.invoicing.ready')}</Tag> : <Tag tone="warning">{t('org.invoicing.missing', { count: company.invoicing.issues.length })}</Tag>}
+            </span>
+          ),
+          primary: model.can.viewSites ? (
             <Button size="sm" onClick={() => actions?.onNewSite?.()} heldReason={!model.can.manageSites ? t('held.needs', { right: t('right.sites_manage') }) : archived ? t('company.held.archived') : null}>
               {t('org.newSite')}
             </Button>
-          ) : undefined
-        }
-        tabs={tabs}
-        active={model.tab}
-        tabHref={(tab) => `${href(`/companies/${company.id}`)}?tab=${tab}`}
-        dock={model.tab === 'activity' ? undefined : panels}
-        dockOpen={model.dockOpen}
-        onDock={actions?.onDock}
+          ) : undefined,
+          moreLabel: t('common.moreFor', { name: company.legalName }),
+        }}
       >
-        <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-        {archived && <Banner tone="info" title={t('company.archivedBanner')} />}
-        {!model.can.manageCompanies && !archived && <Banner tone="info" title={t('record.readOnly')} />}
-        {model.tab === 'legal' && <LegalTab model={model} company={company} actions={actions} />}
-        {model.tab === 'sites' && <SitesTab model={model} company={company} actions={actions} />}
-        {model.tab === 'defaults' && <DefaultsTab model={model} company={company} actions={actions} />}
-        {model.tab === 'calendars' && model.can.viewCalendars && calendars}
-        {model.tab === 'activity' && panels}
+        <div className="fw-adm">
+          <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+          {/* B-TH-269: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+          <RecordNotices>
+            {model.notice && <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />}
+            {archived && <Banner tone="info" title={t('company.archivedBanner')} />}
+            {!model.can.manageCompanies && !archived && <Banner tone="info" title={t('record.readOnly')} />}
+          </RecordNotices>
+          {model.tab === 'legal' && <LegalTab model={model} company={company} actions={actions} />}
+          {model.tab === 'sites' && <SitesTab model={model} company={company} actions={actions} />}
+          {model.tab === 'defaults' && <DefaultsTab model={model} company={company} actions={actions} />}
+          {model.tab === 'calendars' && model.can.viewCalendars && calendars}
+        </div>
       </RecordFrame>
       <ArchiveConfirm model={model} company={company} actions={actions} />
-    </div>
+    </>
   )
 }
 

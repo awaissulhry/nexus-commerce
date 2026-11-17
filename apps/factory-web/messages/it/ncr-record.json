@@ -16,26 +16,22 @@
     "report": "Rapporto NC (PDF)",
     "reportHint": "Si apre in una nuova scheda, come anteprima",
     "keepReport": "Conserva una versione del rapporto",
-    "capa": "CAPA {number}"
+    "capa": "CAPA {number}",
+    "title": "Non conformità",
+    "dockLabel": "La discussione della non conformità",
+    "tabsLabel": "Sezioni della non conformità"
   },
   "tab": {
     "problem": "Problema ed evidenze",
     "containment": "Contenimento",
     "disposition": "Destinazione",
     "cost": "Costo",
-    "linked": "Documenti collegati",
-    "activity": "Attività"
+    "linked": "Documenti collegati"
   },
   "offline": "Offline – la pagina mostra l'ultima copia; le modifiche aspettano il ritorno della connessione.",
   "stale": {
     "title": "Questa non conformità è cambiata alle {time} mentre ci lavoravi.",
     "reload": "Rileggila"
-  },
-  "keys": {
-    "save": "Salva il problema (Problema ed evidenze)"
-  },
-  "activity": {
-    "none": "Qui si aprono la conversazione, i file e la cronologia."
   },
   "people": {
     "reading": "Lettura di chi può esserne responsabile…"

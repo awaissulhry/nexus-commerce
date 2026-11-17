@@ -4,7 +4,7 @@ import { SiteRecord } from '../../../../../../../../../areas/admin/sites/SiteRec
 
 export const metadata: Metadata = { title: 'Site · Nexus Factory' }
 
-/** Admin › Companies & sites › a company › a site (SCR-009; `?tab=structure|centres|calendars|devices|activity`). */
+/** Admin › Companies & sites › a company › a site (SCR-009; `?tab=structure|centres|calendars|devices`; the old `activity` opens Structure with the thread — B-TH-269). */
 export default async function Page({ params }: { params: Promise<{ siteId: string }> }) {
   const { siteId } = await params
   return (

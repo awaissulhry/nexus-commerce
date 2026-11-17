@@ -58,6 +58,8 @@ import { MyViews } from '../my-views/MyViews'
 // B-W2b-435: the flow's value per stage at cost (cost grain) and ⋯ Daily digest by e-mail.
 import { FlowValue } from '../flow-value/FlowValue'
 import { DigestDialog } from '../../reports/digest/DigestDialog'
+// B-TH-239: Incoming's counts, one read with Sales › Incoming (right after "Needs me now").
+import { IncomingSection } from '../incoming/view/IncomingSection'
 import { dayBeforeAt } from '../../../../shell/panels/remind-me/model'
 import '../today.css'
 
@@ -91,6 +93,8 @@ export interface TodayActions extends DecideActions {
   onRetryNumbers?: () => void
   /** B-W2b-388: Coming up's "Remind me the day before" an item's day (resolves true when set). */
   onRemindDayBefore?: (item: ComingItemView, day: string) => Promise<boolean>
+  /** B-TH-239: read Incoming's counts again. */
+  onRetryIncoming?: () => void
 }
 
 /** What a control asks to open (the container turns it into a TodayDialog with its data). */
@@ -529,7 +533,9 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   // B-W2b-388: My work after Coming up, in the design's order (only where the page has its container — it drives the tiles —:
   // these sections load themselves; the design index shows them as SCR-540 … 542).
   const myWork = actions?.onTile ? [<WaitingOn key="waiting-on" />, <Following key="following" />, <MyViews key="my-views" />] : []
-  const work = [...order.slice(at).filter((id) => id !== 'role-panels').map((id) => node[id]), numbersSection, comingSection, ...myWork]
+  // B-TH-239: "New incoming requests" (Incoming's New tile, one read) right after "Needs me now", for a reader of requests.
+  const incomingSection = model.incoming ? <IncomingSection key="incoming" state={model.incoming} now={model.now} live={model.live} onRetry={actions?.onRetryIncoming} /> : null
+  const work = [...order.slice(at).filter((id) => id !== 'role-panels').flatMap((id) => (id === 'needs-me' ? [node[id], incomingSection] : [node[id]])), numbersSection, comingSection, ...myWork]
   const side = listsFirst ? null : listsSection
   const assignItem = dialog?.kind === 'assign' ? (items.find((entry) => entry.key === dialog.key) ?? null) : null
   const resolveItem = dialog?.kind === 'resolve' ? (items.find((entry) => entry.key === dialog.key) ?? null) : null

@@ -283,15 +283,16 @@
     "reloadFailed": "Non è stato possibile rileggere la voce: mostra l'ultima copia. Riprova tra poco.",
     "closed": "Chiusa il {date}",
     "closedBody": "Una voce chiusa non cambia mai: una correzione è una nota nella sua discussione.",
-    "addNote": "Aggiungi una nota",
     "sourceRelease": "Rilascio {label}, annullato",
-    "sourceLot": "Un risultato di laboratorio del lotto di materiale (Cr VI)"
+    "sourceLot": "Un risultato di laboratorio del lotto di materiale (Cr VI)",
+    "name": "Voce del registro DPI",
+    "dockLabel": "Conversazione della voce del registro",
+    "tabsLabel": "Sezioni della voce del registro"
   },
   "tab": {
     "event": "Evento",
     "affected": "Capi interessati",
-    "actions": "Azioni",
-    "activity": "Attività"
+    "actions": "Azioni"
   },
   "action": {
     "edit": "Modifica l'evento",

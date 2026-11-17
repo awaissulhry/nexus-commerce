@@ -99,20 +99,12 @@
     "neverPerson": "Never per person: a worker's minutes live only in their own record."
   },
   "docs": {
-    "title": "Documents",
-    "traveller": "Traveller {number}",
     "travellerHint": "PDF with a QR code, the paper that travels with the work. Made on request, stored nowhere.",
     "travellerDraft": "PDF with a QR code. While it is a draft it says the sizes are not frozen.",
-    "openTraveller": "Traveller PDF",
-    "tickets": "Bundle tickets",
-    "ticketsNone": "Nothing made yet",
-    "ticketsCount_one": "{count} active bundle",
-    "ticketsCount_other": "{count} active bundles",
-    "openTickets": "Open the bundles",
+    "openTraveller": "Print traveller",
     "spec": "Style revision {revision}",
     "specFrozen": "Frozen at the release",
     "specDraft": "Not frozen yet",
-    "openSpec": "Open the style",
     "bundleFullPage": "Open full page"
   },
   "traveller": {

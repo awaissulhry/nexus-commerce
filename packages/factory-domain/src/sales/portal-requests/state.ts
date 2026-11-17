@@ -17,12 +17,15 @@ import type { Words } from './rules'
  *   DECLINED              DECLINED: we said no
  *   CLOSED                LOST, its quote DECLINED / EXPIRED / CANCELLED, or its order CANCELLED; B-TH-043: DECLINED as "Not an
  *                         order" (it asked nothing to make: the customer is not told "declined")
+ *   WITHDRAWN             B-TH-095 (N20): WITHDRAWN — the customer withdrew it before the office decided (the same word as a
+ *                         catalogue order withdrawn: "Withdrawn")
  *
  * OPEN (the "Open requests" tile and the default list): SENT up to ORDER_WAITING. Done: ORDER_CONFIRMED (the order carries
- * on in Orders), DECLINED and CLOSED (under "Closed", never vanished).
+ * on in Orders), DECLINED, CLOSED and WITHDRAWN (under "Closed", never vanished).
  */
 
-export const PORTAL_REQUEST_STATES = ['SENT', 'BEING_REVIEWED', 'NEED_INFO', 'QUOTE_BEING_PREPARED', 'QUOTE_SENT', 'QUOTE_ACCEPTED', 'ORDER_WAITING', 'ORDER_CONFIRMED', 'DECLINED', 'CLOSED'] as const
+// B-TH-095: WITHDRAWN, the customer's own withdrawal before the office decided.
+export const PORTAL_REQUEST_STATES = ['SENT', 'BEING_REVIEWED', 'NEED_INFO', 'QUOTE_BEING_PREPARED', 'QUOTE_SENT', 'QUOTE_ACCEPTED', 'ORDER_WAITING', 'ORDER_CONFIRMED', 'DECLINED', 'CLOSED', 'WITHDRAWN'] as const
 export type PortalRequestState = (typeof PORTAL_REQUEST_STATES)[number]
 
 export const OPEN_REQUEST_STATES: readonly PortalRequestState[] = Object.freeze(['SENT', 'BEING_REVIEWED', 'NEED_INFO', 'QUOTE_BEING_PREPARED', 'QUOTE_SENT', 'QUOTE_ACCEPTED', 'ORDER_WAITING'])
@@ -39,6 +42,7 @@ export const REQUEST_STATE_WORDS: Readonly<Record<PortalRequestState, Words>> = 
   ORDER_CONFIRMED: { en: 'Order confirmed', it: 'Ordine confermato' },
   DECLINED: { en: 'Declined', it: 'Rifiutata' },
   CLOSED: { en: 'Closed', it: 'Chiusa' },
+  WITHDRAWN: { en: 'Withdrawn', it: 'Ritirata' }, // B-TH-095
 })
 
 export interface RequestStateFacts {
@@ -67,9 +71,9 @@ export function requestStateOf(facts: RequestStateFacts): PortalRequestState {
       return facts.declineReason === 'NOT_AN_ORDER' ? 'CLOSED' : 'DECLINED' // B-TH-043
     case 'LOST':
       return 'CLOSED'
-    // B-TH-090 (schema wave 9/9): withdrawn by the customer reads "Closed" until B-TH-095 gives it its own word.
+    // B-TH-095 (N20): withdrawn by the customer before the office decided — its own word.
     case 'WITHDRAWN':
-      return 'CLOSED'
+      return 'WITHDRAWN'
     // TH-2 (B-TH-022): made straight into an order: the order's own state (B-TH-025 reads it into orderStatus).
     case 'ORDERED':
       if (facts.orderStatus === 'PENDING_APPROVAL') return 'ORDER_WAITING'
@@ -88,3 +92,27 @@ export function requestStateOf(facts: RequestStateFacts): PortalRequestState {
       return 'QUOTE_BEING_PREPARED'
   }
 }
+
+// ---- B-TH-095 (threads plan TH-9, N20; X-P-CUS-REQ.state-F03; wall W37) --------------------------------------------------------
+/**
+ * The customer withdraws its own request from the portal, before the office decided (NEW, ASSIGNED, NEED_INFO): WITHDRAWN, final,
+ * closed by the portal person (the database: only a portal person of the request's own customer). The words are the catalogue
+ * order's ("You already withdrew this request." / "…already decided…"), in Italian and English; never naming another customer.
+ */
+export const WITHDRAW_REFUSALS = ['ALREADY_WITHDRAWN', 'DECIDED'] as const
+export type WithdrawRefusal = (typeof WITHDRAW_REFUSALS)[number]
+
+export const WITHDRAW_WORDS: Readonly<Record<WithdrawRefusal, Words>> = Object.freeze({
+  ALREADY_WITHDRAWN: { en: 'You already withdrew this request.', it: 'Avete già ritirato questa richiesta.' },
+  DECIDED: { en: 'The factory already decided this request: ask us if something should change.', it: 'La fabbrica ha già deciso su questa richiesta: chiedeteci se qualcosa deve cambiare.' },
+})
+
+/** The request states the customer may still withdraw from (the office has not decided yet). */
+export const WITHDRAWABLE_STATUSES: readonly InquiryStatus[] = Object.freeze(['NEW', 'ASSIGNED', 'NEED_INFO'])
+
+/** Why the request cannot be withdrawn now, or null when it can. */
+export function withdrawRefusal(status: InquiryStatus): WithdrawRefusal | null {
+  if (WITHDRAWABLE_STATUSES.includes(status)) return null
+  return status === 'WITHDRAWN' ? 'ALREADY_WITHDRAWN' : 'DECIDED'
+}
+// ---- end B-TH-095

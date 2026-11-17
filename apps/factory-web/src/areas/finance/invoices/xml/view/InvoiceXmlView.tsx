@@ -50,7 +50,7 @@ export function InvoiceXmlView({ model, actions }: { model: InvoiceXmlModel; act
 function XmlPage({ model, actions }: { model: InvoiceXmlModel; actions?: InvoiceXmlActions }) {
   const t = useT('finance')
   const d = useT('finance-daily')
-  const recordHref = `${model.prefix}/finance/invoices/${model.invoiceId}?tab=documents`
+  const recordHref = `${model.prefix}/finance/invoices/${model.invoiceId}?tab=sdi` // B-TH-268: SDI & documents
   const loaded = model.invoice
   const back = <Link href={recordHref}>{d('xml.back')}</Link>
   if (loaded.status !== 'ready') {

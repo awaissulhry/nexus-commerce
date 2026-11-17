@@ -1,4 +1,3 @@
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { BundleScan, CutLog, FinalState, PickList, ReleaseCheck, TicketPrinters, WorkOrder, WorkOrderBundles, WorkOrderWip } from '../../_shared/api'
 import type { LiveState } from '../../_shared/hooks'
 import type { Phrase, ProductionCan, RecordTab, SizeLayer, StepKind } from '../../_shared/model'
@@ -15,6 +14,8 @@ import type { SpecActions, SpecModel } from '../spec/model'
 // B-W2b-424: Close work order (planned against actual, a reason, Undo; Reopen) and the variance at close.
 import type { CloseActions, CloseModel } from '../close/use-close'
 import type { VarianceModel } from '../labour/variance/model'
+// B-TH-265: the work order on RecordFrame — "Order files (n)" and the orders' threads beside the work order's own notes.
+import type { OrderFilesActions, OrderFilesModel, OrderThreadChoice } from './order-files/model'
 
 /** SCR-070 … SCR-072 — the work order studio's view model (WorkOrderRecordView draws it and fetches nothing). */
 
@@ -59,7 +60,6 @@ export interface WorkOrderRecordModel {
   /** The site's label printers for a reprint (production.bundles). */
   printers: Part<TicketPrinters> | null
   live: LiveState
-  dockOpen: boolean
   /** Someone changed the work order while this page holds unsaved work: "Changed at 10:42 · Reload". */
   changed: { at: string } | null
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
@@ -95,8 +95,14 @@ export interface WorkOrderRecordModel {
   close?: CloseModel
   /** B-W2b-424: the variance at close on the Labour & cost tab (absent: not drawn). */
   variance?: VarianceModel | null
-  /** Design cases: what the panels show (the page mounts the live panels instead). */
-  panelsPreview?: RecordPanelsViewModel
+  // ---- B-TH-265: the record frame (the band in the shell's row, the docked thread, one notice) ----
+  /** The reader (the thread's width is remembered per person and record type). */
+  personId?: string | null
+  /** "Order files (n)" in the band and its dialog (absent: not drawn). */
+  orderFiles?: OrderFilesModel
+  /** The orders whose thread the reader may read (the dialog's "Open the order's thread"; the dock's pick). */
+  threadChoices?: readonly OrderThreadChoice[]
+  // ---- end B-TH-265
   /** Design cases: a dialog's typed reason, the overview's fields in edit, a draft's grid being edited. */
   draft?: { reason?: string; override?: boolean; dueDate?: string; priority?: string; editing?: boolean; grid?: Record<string, Record<string, number>>; opsBySize?: boolean }
 }
@@ -105,7 +111,6 @@ export interface WorkOrderRecordActions {
   onRetry?: () => void
   onRetryPart?: (part: 'check' | 'wip' | 'cutLog' | 'bundles' | 'pick' | 'quality' | 'leather') => void
   onReload?: () => void
-  onDock?: () => void
   onDismissNotice?: () => void
   onDialog?: (dialog: RecordDialog | null) => void
   onRelease?: (overrideReason: string | null) => void
@@ -138,4 +143,6 @@ export interface WorkOrderRecordActions {
   close?: CloseActions
   /** B-W2b-424: read the variance at close again. */
   onRetryVariance?: () => void
+  /** B-TH-265: Order files (open, close, open a file or worksheet, show an order's thread). */
+  orderFiles?: OrderFilesActions
 }

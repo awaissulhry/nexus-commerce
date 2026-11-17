@@ -39,7 +39,23 @@ export interface ColumnsMenuInput {
   readonly asBuilt: boolean
   /** B-W2b-388: whether the active view is pinned to Today (null: not read yet; absent: no Pin to Today here). */
   readonly pinned?: boolean | null
+  /** B-TH-243 (ORD-G10): the list's own built-in views, on top of the menu (one Views menu). */
+  readonly builtIns?: ListBuiltInViews | null
 }
+
+// ── B-TH-243 (threads plan TH-4, ORD-G10; feature SHEET.brand-view-F01, -F03): one Views menu ──
+/**
+ * A list's own views — its rows views as its address terms ("Open orders", "Late", "Shipped, not invoiced") — drawn on top of
+ * Views ▾, above the saved views, so a list has ONE menu of views instead of its own Rows ▾ beside the saved ones. Picking one
+ * changes the list's terms (a saved view open on screen then reads "· changed").
+ */
+export interface ListBuiltInViews {
+  readonly items: ReadonlyArray<{ readonly id: string; readonly label: string; readonly hint?: string | null }>
+  /** The built-in view the address shows (null: none of them). */
+  readonly active: string | null
+  readonly onPick: (id: string) => void
+}
+// ── end B-TH-243 ──
 
 export interface ColumnsMenuActions {
   readonly apply: (view: SavedView | null) => void
@@ -79,7 +95,15 @@ export interface ColumnsMenuQuick {
 /** Columns ▾: views, then the active view's verbs, then Customise (pure, for the tests). */
 export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: ColumnsMenuActions, quick?: ColumnsMenuQuick): MenuItemDef[] {
   const { answer, problem, active, changed } = input
-  const items: MenuItemDef[] = [{ id: 'h-views', heading: true, label: t('tools.views') }]
+  const items: MenuItemDef[] = []
+  // B-TH-243 (ORD-G10): the list's built-in views first.
+  if (input.builtIns && input.builtIns.items.length > 0) {
+    const builtIns = input.builtIns
+    items.push({ id: 'h-builtin', heading: true, label: t('tools.builtIn') })
+    for (const view of builtIns.items) items.push({ id: `b-${view.id}`, label: view.label, checked: builtIns.active === view.id, ...(view.hint ? { description: view.hint } : {}), onSelect: () => builtIns.onPick(view.id) })
+    items.push({ id: 's-builtin', separator: true })
+  }
+  items.push({ id: 'h-views', heading: true, label: t('tools.views') })
   items.push({ id: 'built', label: t('tools.standard'), checked: active === null && input.asBuilt, description: t('tools.standardHint'), onSelect: () => act.apply(null) })
   if (answer) {
     const mine = answer.views.filter((view) => view.mine)
@@ -101,6 +125,8 @@ export function columnsMenuItems(t: Translate, input: ColumnsMenuInput, act: Col
       if (changed) items.push({ id: 'update', label: t('tools.update', { name: active.name }), description: t('tools.updateHint'), onSelect: () => act.update(active) })
       items.push({ id: 'edit', label: t('tools.edit', { name: active.name }), onSelect: () => act.edit(active) })
     } else {
+      // B-TH-243 (SHEET.brand-view-F03): someone else's view, changed on my screen — never altered; saved as my own instead.
+      if (changed && canSave) items.push({ id: 'saveOwn', label: t('tools.saveOwn', { name: active.name }), description: t('tools.saveOwnHint', { name: active.name }), onSelect: act.save })
       items.push({ id: 'edit', label: t('tools.edit', { name: active.name }), disabled: true, description: active.mine ? t('tools.held.manage') : t('tools.held.change') })
     }
     // B-W2b-24: my default view of the list (only a view of my own: the mark is its owner's).
@@ -186,7 +212,7 @@ function useReceipt(): (message: string, tone?: 'success' | 'danger') => void {
   return (message, tone = 'success') => api?.toast(message, tone)
 }
 
-export function ListToolsBar<T>({ state, withheld, about }: { state: ListToolsState<T>; withheld?: readonly WithheldColumn[]; about?: ExportAbout | null /* B-TH-225 */ }) {
+export function ListToolsBar<T>({ state, withheld, about, builtIns, suggested }: { state: ListToolsState<T>; withheld?: readonly WithheldColumn[]; about?: ExportAbout | null /* B-TH-225 */; builtIns?: ListBuiltInViews | null /* B-TH-243 */; suggested?: string | null /* B-TH-243 */ }) {
   const t = useT('lists')
   const locale = useLocale()
   const receipt = useReceipt()
@@ -307,7 +333,7 @@ export function ListToolsBar<T>({ state, withheld, about }: { state: ListToolsSt
 
   const columnsItems = columnsMenuItems(
     t,
-    { answer: state.answer, problem: state.problem, active: state.active, changed: state.changed, asBuilt: !state.layout.columns && !state.layout.density, ...(transport.pins ? { pinned: state.active && pinned ? pinned.has(state.active.id) : null } : {}) },
+    { answer: state.answer, problem: state.problem, active: state.active, changed: state.changed, asBuilt: !state.layout.columns && !state.layout.density, ...(transport.pins ? { pinned: state.active && pinned ? pinned.has(state.active.id) : null } : {}), builtIns: builtIns ?? null /* B-TH-243 */ },
     {
       apply: (view) => state.apply(view),
       reload: state.reload,
@@ -367,7 +393,9 @@ export function ListToolsBar<T>({ state, withheld, about }: { state: ListToolsSt
     },
   )
 
-  const label = state.active ? (state.changed ? t('tools.activeChanged', { name: state.active.name }) : state.active.name) : t('tools.columns')
+  // B-TH-243: with built-in views the menu is the list's Views ▾, named after the view on screen.
+  const builtIn = builtIns?.items.find((view) => view.id === builtIns.active) ?? null
+  const label = state.active ? (state.changed ? t('tools.activeChanged', { name: state.active.name }) : state.active.name) : builtIn ? t('tools.viewsTrigger', { name: builtIn.label }) : t('tools.columns')
   return (
     <>
       <Menu
@@ -407,6 +435,7 @@ export function ListToolsBar<T>({ state, withheld, about }: { state: ListToolsSt
           busy={busy}
           problem={problem}
           link={dialog.kind === 'edit' ? transport.viewLink(dialog.view.id) : null}
+          suggested={dialog.kind === 'save' ? (suggested ?? null) : null}
           onCopy={(link) => void copy(link)}
           onSave={(draft: ViewDraft) =>
             void run(async () => {

@@ -21,6 +21,7 @@ import {
   type SdiStateCode,
   type TileKey,
 } from './api'
+import { CUSTOMER_URGENCIES, INVOICED_STATES, type CustomerUrgency, type InvoicedState } from './api' // B-TH-244
 
 /**
  * The sales order screens' pure rules (SCR-038 list and board, SCR-039 the order studio; B-W1-25 part 2): what a person
@@ -49,6 +50,8 @@ export interface OrderAbilities {
   viewInvoices: boolean
   /** Issue the TD02 (with a fresh step-up) and send an invoice to SDI. */
   issueInvoices: boolean
+  /** B-TH-244: make invoice drafts (Finance's From-DDTs dialog: "Invoice shipped goods for N"). */
+  manageInvoices: boolean
   viewWorkOrders: boolean
   makeWorkOrders: boolean
   viewQuotes: boolean
@@ -71,6 +74,7 @@ export function abilitiesOf(permissions: readonly string[]): OrderAbilities {
     viewPayments: held.has('payments.view'),
     viewInvoices: held.has('invoices.view'),
     issueInvoices: held.has('invoices.issue'),
+    manageInvoices: held.has('invoices.manage'), // B-TH-244
     viewWorkOrders: held.has('workorders.view'),
     makeWorkOrders: held.has('workorders.manage'),
     viewQuotes: held.has('quotes.view'),
@@ -115,7 +119,8 @@ export const dayInstant = (day: string): string => `${day}T12:00:00Z`
 // ---- the saved rows, the address, the API query (one filter model) -------------------------------------------------------
 
 // B-W2b-323: + reaccept (a change waits for the customer to accept it: `?reaccept=true`).
-export const ROW_VIEWS = ['open', 'late', 'deposit', 'reaccept', ...ORDER_STATUSES, 'all'] as const
+// B-TH-244: + uninvoiced (the built-in view "Shipped, not invoiced": `?shippedNotInvoiced=true`, grouped by customer).
+export const ROW_VIEWS = ['open', 'late', 'deposit', 'reaccept', 'uninvoiced', ...ORDER_STATUSES, 'all'] as const
 export type RowView = (typeof ROW_VIEWS)[number]
 // B-W2b-323: + week (By promise week, `?view=week`).
 export type Layout = 'list' | 'board' | 'week'
@@ -131,6 +136,7 @@ export function rowsFromAddress(params: { get(name: string): string | null } | n
   if (params.get('late') === 'true') return 'late'
   if (params.get('deposit') === 'OPEN') return 'deposit'
   if (params.get('reaccept') === 'true') return 'reaccept' // B-W2b-323
+  if (params.get('shippedNotInvoiced') === 'true') return 'uninvoiced' // B-TH-244
   const status = params.get('status')
   if (isStatus(status)) return status
   if (params.get('rows') === 'all') return 'all'
@@ -172,6 +178,10 @@ export interface Narrowing {
   readonly cf?: string | null
   /** B-TH-057: the server sort of the address (`?sort=`); the rows read in that order (the counts do not change). */
   readonly sort?: OrderSort | null
+  /** B-TH-244: the door terms beside the rows view (a total of the overall view opened exactly its rows). */
+  readonly extra?: ExtraTerms | null
+  /** B-TH-244: count each row's production progress (the Progress column is shown). */
+  readonly progress?: boolean
 }
 // ── end B-TH-225 ──
 
@@ -225,7 +235,7 @@ export const SORT_CHOICES: ReadonlyArray<{ readonly value: OrderSort | ''; reado
 // ── end B-TH-201 ──
 
 /** The page's address for a saved rows view, a search and a layout (the defaults leave the address clean). */
-export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null /* B-TH-057 */ }): string {
+export function listAddress(path: string, next: { rows: RowView; q: string; layout: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null /* B-TH-057 */; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */ }): string {
   const query = new URLSearchParams()
   if (next.layout === 'board') query.set('view', 'board')
   if (next.layout === 'week') query.set('view', 'week') // B-W2b-323
@@ -233,7 +243,11 @@ export function listAddress(path: string, next: { rows: RowView; q: string; layo
   else if (next.rows === 'late') query.set('late', 'true')
   else if (next.rows === 'deposit') query.set('deposit', 'OPEN')
   else if (next.rows === 'reaccept') query.set('reaccept', 'true') // B-W2b-323
+  else if (next.rows === 'uninvoiced') query.set('shippedNotInvoiced', 'true') // B-TH-244
   else if (isStatus(next.rows)) query.set('status', next.rows)
+  // B-TH-244: the door terms beside the rows view, and the grouping.
+  if (next.extra) for (const [name, value] of extraEntries(next.extra, next.rows)) query.set(name, value)
+  if (next.group === 'party' && !next.party) query.set('group', 'party')
   if (next.party) query.set('party', next.party) // B-TH-201
   if (next.brand) query.set('brand', next.brand) // B-TH-225
   if (next.company) query.set('company', next.company) // B-TH-225
@@ -251,6 +265,7 @@ export function rowsQuery(rows: RowView, q: string, cursor?: string | null, part
   if (rows === 'late') return { ...base, late: true }
   if (rows === 'deposit') return { ...base, deposit: 'OPEN' }
   if (rows === 'reaccept') return { ...base, reaccept: true } // B-W2b-323
+  if (rows === 'uninvoiced') return { ...base, shippedNotInvoiced: true } // B-TH-244
   if (isStatus(rows)) return { ...base, status: rows }
   return base
 }
@@ -280,12 +295,21 @@ export function boardLanes(rows: RowView): BoardLane[] {
 
 /** The API query of one lane: its state, with the saved rows' other filter (late, deposit), the search (and the customer). */
 export function laneQuery(lane: BoardLane, rows: RowView, q: string, partyId?: string | null, narrow: Narrowing = {}): OrderQuery {
-  return { status: lane, late: rows === 'late', deposit: rows === 'deposit' ? 'OPEN' : null, reaccept: rows === 'reaccept' /* B-W2b-323 */, q, limit: 50, ...(partyId ? { partyId } : {}) /* B-TH-201 */, ...narrowingOf(narrow) /* B-TH-225 */ }
+  const own = narrowingOf(narrow) /* B-TH-225 */
+  return { ...own, status: lane, late: rows === 'late' || !!own.late, deposit: rows === 'deposit' ? 'OPEN' : (own.deposit ?? null), reaccept: rows === 'reaccept' || !!own.reaccept /* B-W2b-323 */, shippedNotInvoiced: rows === 'uninvoiced' || !!own.shippedNotInvoiced /* B-TH-244 */, q, limit: 50, ...(partyId ? { partyId } : {}) /* B-TH-201 */ }
 }
 
 // B-TH-225: only the terms that narrow (an absent one never reaches the API).
 // B-TH-057: + the custom field filter and the server sort.
-const narrowingOf = (narrow: Narrowing): Pick<OrderQuery, 'brand' | 'companyId' | 'cf' | 'sort'> => ({ ...(narrow.brand ? { brand: narrow.brand } : {}), ...(narrow.companyId ? { companyId: narrow.companyId } : {}), ...(narrow.cf ? { cf: narrow.cf } : {}), ...(narrow.sort ? { sort: narrow.sort } : {}) })
+// B-TH-244: + the door terms beside the rows view, and the Progress column's read.
+const narrowingOf = (narrow: Narrowing): OrderQuery => ({
+  ...(narrow.brand ? { brand: narrow.brand } : {}),
+  ...(narrow.companyId ? { companyId: narrow.companyId } : {}),
+  ...(narrow.cf ? { cf: narrow.cf } : {}),
+  ...(narrow.sort ? { sort: narrow.sort } : {}),
+  ...extraQueryOf(narrow.extra ?? null),
+  ...(narrow.progress ? { progress: true } : {}),
+})
 
 /**
  * B-TH-225 (band-F01: the honest count): how many orders the rows view holds, from the board's counts — the same filters
@@ -294,6 +318,7 @@ const narrowingOf = (narrow: Narrowing): Pick<OrderQuery, 'brand' | 'companyId' 
 export function viewCount(board: OrderBoard | null, rows: RowView): number | null {
   if (!board) return null
   const byStatus = (statuses: readonly string[]) => board.byStatus.filter((entry) => statuses.includes(entry.status)).reduce((sum, entry) => sum + entry.count, 0)
+  if (rows === 'uninvoiced') return null // B-TH-244: the summary counts it (the board has no such figure)
   if (rows === 'open') return byStatus(OPEN_ORDER_STATUSES)
   if (rows === 'all') return byStatus(board.byStatus.map((entry) => entry.status))
   const tile = TILES.find((entry) => entry.rows === rows)
@@ -356,7 +381,7 @@ export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { dates: 'produc
 /** The tab an address asks for: one of the five, an old one's new home, else Lines (Margin without the margin grain: Lines). */
 export function tabOf(asked: string | null | undefined, can?: Pick<OrderAbilities, 'margin'>): RecordTab {
   const value = asked ?? ''
-  const tab = (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (MERGED_TABS[value] ?? 'lines')
+  const tab = (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (Object.hasOwn(MERGED_TABS, value) ? MERGED_TABS[value]! : 'lines') // TH-6 part B: never a name of Object's own (?tab=constructor)
   return tab === 'margin' && can && !can.margin ? 'lines' : tab
 }
 
@@ -703,3 +728,119 @@ export const mayCreateShipment = (order: Pick<Order, 'status' | 'progress'>, can
 
 /** The address of Warehouse's New shipment with the order chosen. */
 export const createShipmentHref = (prefix: string, orderId: string): string => `${prefix}/warehouse/shipments?new=1&order=${encodeURIComponent(orderId)}`
+
+// ── B-TH-244 (threads plan TH-4, SHEET-G08; features SHEET.overall-F02 group by customer, -F06, -F11 every total opens its rows) ──
+/** The grouping of the address (`?group=party`: the overall view grouped by customer); a customer's sheet is never grouped. */
+export const groupFromAddress = (params: { get(name: string): string | null } | null): 'party' | null => (params?.get('group') === 'party' && !partyFromAddress(params) ? 'party' : null)
+
+/**
+ * The terms of the address beside its rows view — what a door of the overall view adds (Invoiced Part, At risk, a currency, the
+ * customer's mark) and a rows term the rows view does not already say (a door of "In production" that counts its late ones). With
+ * them the list reads exactly the rows the door counted.
+ */
+export interface ExtraTerms {
+  readonly status?: OrderStatus | null
+  readonly late?: boolean
+  readonly deposit?: boolean
+  readonly reaccept?: boolean
+  readonly shippedNotInvoiced?: boolean
+  readonly invoiced?: InvoicedState | null
+  readonly atRisk?: boolean
+  readonly currency?: string | null
+  readonly customerUrgency?: CustomerUrgency | null
+}
+
+const CURRENCY = /^[A-Z]{3}$/
+
+/** The extra terms of an address, given the rows view it shows (a term the view already says is not extra). */
+export function extraFromAddress(params: { get(name: string): string | null } | null, rows: RowView): ExtraTerms {
+  if (!params) return {}
+  const status = params.get('status')
+  const invoiced = params.get('invoiced')
+  const currency = params.get('currency')?.trim() ?? ''
+  const urgency = params.get('customerUrgency')
+  return {
+    ...(isStatus(status) && rows !== status ? { status } : {}),
+    ...(params.get('late') === 'true' && rows !== 'late' ? { late: true } : {}),
+    ...(params.get('deposit') === 'OPEN' && rows !== 'deposit' ? { deposit: true } : {}),
+    ...(params.get('reaccept') === 'true' && rows !== 'reaccept' ? { reaccept: true } : {}),
+    ...(params.get('shippedNotInvoiced') === 'true' && rows !== 'uninvoiced' ? { shippedNotInvoiced: true } : {}),
+    ...(invoiced && (INVOICED_STATES as readonly string[]).includes(invoiced) ? { invoiced: invoiced as InvoicedState } : {}),
+    ...(params.get('atRisk') === 'true' ? { atRisk: true } : {}),
+    ...(CURRENCY.test(currency) ? { currency } : {}),
+    ...(urgency && (CUSTOMER_URGENCIES as readonly string[]).includes(urgency) ? { customerUrgency: urgency as CustomerUrgency } : {}),
+  }
+}
+
+/** An extra terms object with nothing in it (no chip, no term). */
+export const noExtra = (extra: ExtraTerms | null | undefined): boolean => !extra || extraEntries(extra, 'all').length === 0
+
+/** The address terms of the extra terms (the rows view's own left out). */
+function extraEntries(extra: ExtraTerms, rows: RowView): Array<[string, string]> {
+  const out: Array<[string, string]> = []
+  if (extra.status && rows !== extra.status) out.push(['status', extra.status])
+  if (extra.late && rows !== 'late') out.push(['late', 'true'])
+  if (extra.deposit && rows !== 'deposit') out.push(['deposit', 'OPEN'])
+  if (extra.reaccept && rows !== 'reaccept') out.push(['reaccept', 'true'])
+  if (extra.shippedNotInvoiced && rows !== 'uninvoiced') out.push(['shippedNotInvoiced', 'true'])
+  if (extra.invoiced) out.push(['invoiced', extra.invoiced])
+  if (extra.atRisk) out.push(['atRisk', 'true'])
+  if (extra.currency) out.push(['currency', extra.currency])
+  if (extra.customerUrgency) out.push(['customerUrgency', extra.customerUrgency])
+  return out
+}
+
+/** The extra terms as the API reads them. */
+function extraQueryOf(extra: ExtraTerms | null): OrderQuery {
+  if (!extra) return {}
+  return {
+    ...(extra.status ? { status: extra.status } : {}),
+    ...(extra.late ? { late: true } : {}),
+    ...(extra.deposit ? { deposit: 'OPEN' as const } : {}),
+    ...(extra.reaccept ? { reaccept: true } : {}),
+    ...(extra.shippedNotInvoiced ? { shippedNotInvoiced: true } : {}),
+    ...(extra.invoiced ? { invoiced: extra.invoiced } : {}),
+    ...(extra.atRisk ? { atRisk: true } : {}),
+    ...(extra.currency ? { currency: extra.currency } : {}),
+    ...(extra.customerUrgency ? { customerUrgency: extra.customerUrgency } : {}),
+  }
+}
+
+/** One extra term less (its chip's ✕). */
+export function withoutExtra(extra: ExtraTerms, key: keyof ExtraTerms): ExtraTerms {
+  const next = { ...extra }
+  delete next[key]
+  return next
+}
+
+/**
+ * A total's door: the list's address for exactly the rows it counts, from the filter the API gave it (GET /sales/orders/summary;
+ * the API's names → the page's: partyId → party, companyId → company). The rows view is the filter's own (`late`, `deposit`,
+ * `reaccept`, `shippedNotInvoiced`, a `status`, else the open orders when it says `open`, else every order); the rest are extra.
+ */
+export function doorAddress(path: string, filter: Readonly<Record<string, string>>): string {
+  const query = new URLSearchParams()
+  const rowsTerm = filter.late === 'true' || filter.deposit === 'OPEN' || filter.reaccept === 'true' || filter.shippedNotInvoiced === 'true' || isStatus(filter.status)
+  if (filter.status && isStatus(filter.status)) query.set('status', filter.status)
+  if (filter.late === 'true') query.set('late', 'true')
+  if (filter.deposit === 'OPEN') query.set('deposit', 'OPEN')
+  if (filter.reaccept === 'true') query.set('reaccept', 'true')
+  if (filter.shippedNotInvoiced === 'true') query.set('shippedNotInvoiced', 'true')
+  // `open=true` alone is the list's default (the open orders); neither it nor a rows term: every order.
+  if (!rowsTerm && filter.open !== 'true') query.set('rows', 'all')
+  if (filter.partyId) query.set('party', filter.partyId)
+  if (filter.companyId) query.set('company', filter.companyId)
+  for (const name of ['brand', 'cf', 'invoiced', 'atRisk', 'currency', 'customerUrgency', 'q'] as const) if (filter[name] && !(name === 'atRisk' && filter[name] !== 'true')) query.set(name, filter[name]!)
+  const qs = query.toString()
+  return `${path}${qs ? `?${qs}` : ''}`
+}
+/**
+ * What narrows the board's counts and tiles: the customer's label, the company, the custom fields and the door terms that are not
+ * rows views (Invoiced, At risk, the currency, the customer's mark, "Shipped, not invoiced" beside another view). The rows view itself
+ * stays the tiles' and lanes' own, as before.
+ */
+export function boardNarrowOf(narrow: Narrowing): { brand: string | null; companyId: string | null; cf: string | null } & Pick<OrderQuery, 'invoiced' | 'atRisk' | 'currency' | 'customerUrgency' | 'shippedNotInvoiced'> {
+  const extra = narrow.extra ?? {}
+  return { brand: narrow.brand ?? null, companyId: narrow.companyId ?? null, cf: narrow.cf ?? null, invoiced: extra.invoiced ?? null, atRisk: !!extra.atRisk, currency: extra.currency ?? null, customerUrgency: extra.customerUrgency ?? null, shippedNotInvoiced: !!extra.shippedNotInvoiced }
+}
+// ── end B-TH-244 ──

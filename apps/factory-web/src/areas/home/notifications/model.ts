@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { NOTIFICATION_CATEGORIES, NOTIFICATION_STATES, NOTIFICATION_TABS, type NotificationCategory, type NotificationState, type NotificationTab } from '@nexus/factory-domain/notifications/rules'
+import { GROUP_WINDOW_MS, NOTIFICATION_CATEGORIES, NOTIFICATION_STATES, NOTIFICATION_TABS, type NotificationCategory, type NotificationState, type NotificationTab } from '@nexus/factory-domain/notifications/rules'
 import { recordAddress } from '../../../lib/records/record-links'
 import { plusDays, wallClock } from '../today/snooze'
 
@@ -38,7 +38,8 @@ export const notificationSchema = z.object({
   doneAt: z.string().nullable(),
   snoozed: z.object({ at: z.string(), until: z.string().nullable() }).nullable(),
   createdAt: z.string(),
-  group: z.object({ key: z.string(), count: z.number().int(), ids: z.array(z.string()) }),
+  // B-TH-239: `records` (B-TH-045) — how many different records the reader's group holds (a batch: "on 12 orders"; else 1).
+  group: z.object({ key: z.string(), count: z.number().int(), ids: z.array(z.string()), records: z.number().int().optional() }),
 })
 export type Notification = z.infer<typeof notificationSchema>
 
@@ -92,6 +93,8 @@ export interface NotificationRow extends Notification {
   readonly href: string
   /** The record chip: the record itself (a real link: ⌘-click opens a new tab). */
   readonly recordHref: string
+  /** B-TH-239: new-request notices that came together, folded into this row ("5 new requests came in"); absent: one notice. */
+  readonly fold?: { readonly requests: number; readonly oldest: string }
 }
 
 export interface NotificationsData {
@@ -191,12 +194,65 @@ export function openAddress(notification: Pick<Notification, 'anchor' | 'record'
 
 /** The rows of a page as the screen draws them, with where each opens. */
 export function rowsOf(items: readonly Notification[], prefix: string, built: ReadonlySet<string>): NotificationRow[] {
-  return items.map((item) => ({
+  const rows = items.map((item) => ({
     ...item,
     href: `${prefix}${openAddress(item, built)}`,
     recordHref: `${prefix}${recordAddress({ type: item.record.type, id: item.record.id, label: item.record.label, companyId: item.companyId }, built)}`,
   }))
+  return foldNewRequests(rows, prefix, built) // B-TH-239
 }
+
+// ---- B-TH-239 (threads plan TH-3; O-HOME-NOTIF.list-F01 "many at once: grouped '5 new requests'", picture 17) ---------------------
+
+/** The new-request notice (B-TH-015): one per request, to the people who answer that company's (and customer's) requests. */
+export const NEW_REQUEST_KEY = 'notifications.inquiries.newRequest'
+
+/**
+ * New-request notices that came close together fold into ONE row, "5 new requests came in", opening Sales › Incoming's New tile —
+ * the API groups only notices of one record (or one batch), and each request is its own record. Neighbours in the list fold when both
+ * are new-request notices in the same state (both read or both unread, the same tab state) and each came within the API's group window
+ * (15 minutes) of the one before — the rule the API keeps for one record. The row acts on every notice it stands for (open marks them
+ * all read; done, snooze and the ticks reach each id); its record chip still names the newest request. Nothing of a request is said
+ * beyond its number (no customer words, no price: W06, W29) — each notice was made only for a reader who may answer that request.
+ */
+export function foldNewRequests(rows: readonly NotificationRow[], prefix: string, built: ReadonlySet<string>): NotificationRow[] {
+  const out: NotificationRow[] = []
+  for (const row of rows) {
+    const last = out[out.length - 1]
+    const lastAt = last ? (last.fold?.oldest ?? last.createdAt) : null
+    const together =
+      last !== undefined &&
+      lastAt !== null &&
+      row.messageKey === NEW_REQUEST_KEY &&
+      last.messageKey === NEW_REQUEST_KEY &&
+      row.read === last.read &&
+      row.state === last.state &&
+      Date.parse(lastAt) - Date.parse(row.createdAt) <= GROUP_WINDOW_MS &&
+      Date.parse(lastAt) >= Date.parse(row.createdAt)
+    if (!together) {
+      out.push(row)
+      continue
+    }
+    const idsOfRow = (one: NotificationRow) => (one.group.ids.length > 0 ? one.group.ids : [one.id])
+    const requests = (last.fold?.requests ?? 1) + 1
+    out[out.length - 1] = {
+      ...last,
+      group: { key: last.group.key, count: last.group.count + row.group.count, ids: [...idsOfRow(last), ...idsOfRow(row)], records: requests },
+      fold: { requests, oldest: row.createdAt },
+      href: built.has('/sales/incoming') ? `${prefix}/sales/incoming?tile=NEW` : last.href,
+    }
+  }
+  return out
+}
+
+/** The "N together" under a row: one record's notices, a batch on several records ("on 12 orders"), or folded new requests. */
+export function togetherWords(row: Pick<NotificationRow, 'group' | 'fold'>): { readonly key: string; readonly count: number; readonly records?: number } | null {
+  if (row.fold) return null
+  if (row.group.count <= 1) return null
+  const records = row.group.records ?? 1
+  return records > 1 ? { key: 'togetherRecords', count: row.group.count, records } : { key: 'together', count: row.group.count }
+}
+// ---- end B-TH-239
 
 /** How many notifications of a fresh first page the screen does not show yet. */
 export function freshCount(shown: readonly { readonly id: string }[], fetched: readonly { readonly id: string }[]): number {

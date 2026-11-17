@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CircleStop } from 'lucide-react'
-import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
+import { Banner, Card, Field, KeyValue, Tabs, type TabItem } from '@nexus/ui/components'
 import { Button, Input, Pill, Select, Skeleton, Tag } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../../lib/i18n/format'
@@ -14,8 +14,10 @@ import { namesLine } from '../../../shared/reach'
 import { adminHref, EVERYWHERE, grainsOf, scopeWords, selectedAmong, STATUS_TONE } from '../../../shared/model'
 import { BulkConfirm } from '../../../shared/view/BulkConfirm'
 import { AdminMessages, BulkButton, FrameState, GrainChips, heldText, ListKeysHelp, NoticeBanner, RecordProblem, StepUp, useRoleWords } from '../../../shared/view/parts'
-import { RecordFrame } from '../../../shared/view/RecordFrame'
 import { ScopePicker } from '../../../shared/view/ScopePicker'
+// ---- B-TH-269: the person on RecordFrame (the band in the shell's row, the thread docked CLOSED — R-10 —, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { endReach, giveRoleProblems, lifecycleHeld, raises, type GiveRoleDraft, type UserDialog, type UserRecordModel, type UserTab } from '../model'
 import { assignmentColumns } from './columns'
 
@@ -30,27 +32,30 @@ export interface UserRecordActions {
   onLifecycle?: (action: 'suspend' | 'reactivate' | 'deactivate' | 'password', reason: string) => Promise<boolean>
   onStepUp?: (code: string) => void
   onStepUpClose?: () => void
-  onDock?: () => void
   onRetry?: () => void
   onDismissNotice?: () => void
 }
 
 /**
- * SCR-011 — an office person's record (design 02 admin.users "Record: User"): Profile (who, status, the danger zone:
- * suspend, reactivate, deactivate, force a new password), Roles & scope (what they can do in plain sentences with what
- * money they see, then role × where × when in the Office list frame; Give role, and End N over the ticked live roles,
- * each after a fresh code) and Activity.
- * The last administrator is held before the click. Fetches nothing (UserRecord.tsx reads the API).
+ * SCR-011 — an office person's record (design 02 admin.users "Record: User"), on RecordFrame (B-TH-269; the rule of picture 38, the
+ * tabs of 08-tabs O-ADM-USER): the band in the shell's band row (‹ Users, the person's name, ONE status pill, their e-mail and
+ * two-factor; Give role, held with why; ⋯ its Keyboard line), the thread docked CLOSED beside every tab (R-10: notes about a person,
+ * read with users.view beside threads.read; notes only — W03; Activity's tools in its "⋯", R-ACT; the band's Thread button or ⌘J shows
+ * it) and the tabs 5 → 4: Profile (who, status, the danger zone: suspend, reactivate, deactivate, force a new password), Roles & scope
+ * (what they can do in plain sentences with what money they see, then role × where × when in the Office list frame; Give role, and
+ * End N over the ticked live roles, each after a fresh code), Partner organisation (one address = one brand account, W35) and
+ * Sessions & sign-ins. The last administrator is held before the click. Fetches nothing (UserRecord.tsx reads the API).
  */
-export function UserRecordView({ model, actions, panels, partner, sessions }: { model: UserRecordModel; actions?: UserRecordActions; panels?: ReactNode; partner?: ReactNode; sessions?: ReactNode }) {
+// B-TH-269: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
+export function UserRecordView({ model, actions, thread, printThread, partner, sessions }: { model: UserRecordModel; actions?: UserRecordActions; thread?: ReactNode; printThread?: ReactNode; partner?: ReactNode; sessions?: ReactNode }) {
   return (
     <AdminMessages>
-      <UserRecord model={model} actions={actions} panels={panels} partner={partner} sessions={sessions} />
+      <UserRecord model={model} actions={actions} thread={thread} printThread={printThread} partner={partner} sessions={sessions} />
     </AdminMessages>
   )
 }
 
-function UserRecord({ model, actions, panels, partner, sessions }: { model: UserRecordModel; actions?: UserRecordActions; panels?: ReactNode; partner?: ReactNode; sessions?: ReactNode }) {
+function UserRecord({ model, actions, thread, printThread, partner, sessions }: { model: UserRecordModel; actions?: UserRecordActions; thread?: ReactNode; printThread?: ReactNode; partner?: ReactNode; sessions?: ReactNode }) {
   const t = useT('admin')
   const href = (path: string) => adminHref(model.prefix, path)
   const back = { href: href('/users'), label: t('nav.users') }
@@ -63,10 +68,13 @@ function UserRecord({ model, actions, panels, partner, sessions }: { model: User
     actions?.onDialog?.(next)
   }
   const user = model.user
+  // B-TH-269 (R-10): the person's thread docks CLOSED (the band's Thread button, ⌘J or an old ?tab=activity shows it).
+  const frame = { recordType: 'User', personId: model.personId ?? null, threadLabel: t('record.dockLabel'), closed: true }
   if (!user) {
-    if (model.problem)
-      return (
-        <div className="fw-adm">
+    // Loading, not found, no right, a failed read: the band and its state, no thread yet.
+    return (
+      <RecordFrame {...frame} thread={null} band={{ back: <Link href={back.href}>{back.label}</Link>, title: model.problem ? t('nav.users') : <Skeleton width={220} height={22} /> }}>
+        {model.problem ? (
           <RecordProblem
             problem={model.problem}
             onRetry={actions?.onRetry}
@@ -76,14 +84,13 @@ function UserRecord({ model, actions, panels, partner, sessions }: { model: User
               </Button>
             }
           />
-        </div>
-      )
-    return (
-      <div className="fw-adm" aria-busy="true">
-        <Skeleton height={36} width="40%" />
-        <Skeleton height={28} width="60%" />
-        <Skeleton height={220} />
-      </div>
+        ) : (
+          <div className="fw-adm-stack" aria-busy="true">
+            <Skeleton height={28} width="60%" />
+            <Skeleton height={220} />
+          </div>
+        )}
+      </RecordFrame>
     )
   }
   const held = lifecycleHeld(model)
@@ -91,52 +98,58 @@ function UserRecord({ model, actions, panels, partner, sessions }: { model: User
   // B-W2b-180: a person of a partner organisation has Partner organisation in place of Roles & scope (their role is a
   // fixed partner template, changed on the organisation's Portal access tab).
   const isPartner = user.audience === 'PARTNER'
-  const tabs: Array<{ id: UserTab; label: string; count?: number | null }> = [
+  const base = href(`/users/${user.id}`)
+  const entries: Array<{ id: UserTab; label: string; count?: number | null }> = [
     { id: 'profile', label: t('user.tab.profile') },
     ...(isPartner ? (partner ? [{ id: 'partner' as const, label: t('user.tab.partner') }] : []) : [{ id: 'roles' as const, label: t('user.tab.roles'), count: model.assignments.items ? live.length : null }]),
     // B-W2b-413: Sessions & sign-ins, for users.sessions.manage only (absent otherwise, never a locked tab).
     ...(sessions ? [{ id: 'sessions' as const, label: t('user.tab.sessions') }] : []),
-    { id: 'activity', label: t('user.tab.activity') },
   ]
-  const tab: UserTab = tabs.some((entry) => entry.id === model.tab) ? model.tab : 'profile'
+  const tabs: TabItem[] = entries.map((entry) => ({ ...entry, href: `${base}?tab=${entry.id}` }))
+  const tab: UserTab = entries.some((entry) => entry.id === model.tab) ? model.tab : 'profile'
 
   return (
-    <div className="fw-adm">
+    <>
       <RecordFrame
-        back={back}
-        title={user.displayName}
-        meta={user.email}
-        status={
-          <span className="fw-adm-tags">
-            <Pill tone={STATUS_TONE[user.status] ?? 'neutral'}>{t(`users.status.${user.status}`)}</Pill>
-            {/* B-W2b-180: a partner signs in with an e-mail code: no authenticator to show. */}
-            {user.status !== 'INVITED' && !isPartner && <Tag tone={user.mfaEnabled ? 'success' : 'warning'}>{t(user.mfaEnabled ? 'user.mfaOn' : 'user.mfaOff')}</Tag>}
-          </span>
-        }
-        actions={
-          <Button size="sm" variant="primary" onClick={() => open('give-role')} heldReason={isPartner ? t('user.held.partnerRole') : heldText(t, held.assign)}>
-            {t('user.giveRole')}
-          </Button>
-        }
-        tabs={tabs}
-        active={tab}
-        tabHref={(id) => `${href(`/users/${user.id}`)}?tab=${id}`}
-        dock={tab === 'activity' ? undefined : panels}
-        dockOpen={model.dockOpen}
-        onDock={actions?.onDock}
+        {...frame}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: <Link href={back.href}>{back.label}</Link>,
+          title: user.displayName,
+          // ONE status pill; the e-mail and the two-factor mark travel with the title (on a phone behind the band's "i").
+          status: <Pill tone={STATUS_TONE[user.status] ?? 'neutral'}>{t(`users.status.${user.status}`)}</Pill>,
+          meta: (
+            <span className="fw-adm-tags">
+              <span className="fw-adm-hint">{user.email}</span>
+              {/* B-W2b-180: a partner signs in with an e-mail code: no authenticator to show. */}
+              {user.status !== 'INVITED' && !isPartner && <Tag tone={user.mfaEnabled ? 'success' : 'warning'}>{t(user.mfaEnabled ? 'user.mfaOn' : 'user.mfaOff')}</Tag>}
+            </span>
+          ),
+          primary: (
+            <Button size="sm" variant="primary" onClick={() => open('give-role')} heldReason={isPartner ? t('user.held.partnerRole') : heldText(t, held.assign)}>
+              {t('user.giveRole')}
+            </Button>
+          ),
+        }}
       >
-        <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-        {tab === 'profile' && <ProfileTab model={model} open={open} partnerHref={isPartner && partner ? `${href(`/users/${user.id}`)}?tab=partner` : null} />}
-        {tab === 'roles' && <RolesTab model={model} open={open} selected={selected} onSelect={setSelected} actions={actions} />}
-        {tab === 'partner' && partner}
-        {tab === 'sessions' && sessions}
-        {tab === 'activity' && panels}
+        <div className="fw-adm-stack">
+          <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={tab} size="sm" overflow="scroll" />
+          {/* B-TH-269: ONE notice in the body column. */}
+          <RecordNotices>
+            <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
+          </RecordNotices>
+          {tab === 'profile' && <ProfileTab model={model} open={open} partnerHref={isPartner && partner ? `${base}?tab=partner` : null} />}
+          {tab === 'roles' && <RolesTab model={model} open={open} selected={selected} onSelect={setSelected} actions={actions} />}
+          {tab === 'partner' && partner}
+          {tab === 'sessions' && sessions}
+        </div>
       </RecordFrame>
       <GiveRoleModal model={model} open={dialog === 'give-role'} onClose={() => open(null)} actions={actions} />
       <EndRolesConfirm model={model} open={dialog === 'end-roles'} selected={selected} onClose={() => open(null)} onDone={() => setSelected([])} actions={actions} />
       {(dialog === 'suspend' || dialog === 'reactivate' || dialog === 'deactivate' || dialog === 'password') && <LifecycleModal model={model} action={dialog} onClose={() => open(null)} actions={actions} />}
       <StepUp model={model.stepUp} onSubmit={actions?.onStepUp} onClose={actions?.onStepUpClose} />
-    </div>
+    </>
   )
 }
 

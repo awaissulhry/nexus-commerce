@@ -40,6 +40,12 @@ const ROWS: FollowingRow[] = [
 ]
 
 const ready = (items: readonly FollowingRow[], complete = true): FollowingModel['rows'] => ({ status: 'ready', data: { items, complete, asOf: AS_OF } })
+// B-TH-239: the reader's own new messages — the line says "SO-2026-0042: 3 new messages" and opens the first unread one.
+const WITH_NEW: FollowingRow[] = [
+  { ...ROWS[0]!, newMessages: 3, href: '/w/DEMO/sales/orders/demo?thread=new' },
+  row(6, { record: { type: 'Inquiry', id: id(6), label: 'INQ-2026-0018' }, messageKey: 'notifications.following.mail_in', newMessages: 1, href: `/w/DEMO/sales/incoming?open=${id(6)}` }),
+  ...ROWS.slice(1),
+]
 const base: FollowingModel = { rows: ready(ROWS), now: NOW, held: null, notice: null }
 
 export const designScreen = defineDesignScreen<FollowingModel>({
@@ -57,6 +63,12 @@ export const designScreen = defineDesignScreen<FollowingModel>({
     { id: 'partial', label: 'More than one page', model: { ...base, rows: ready(ROWS, false) }, note: 'The footer says more changed than one page shows.' },
     { id: 'offline', label: 'Offline', model: { ...base, held: 'held.offline' }, note: 'Lines stay readable; Seen and Unfollow are held with the reason.' },
     { id: 'empty', label: 'Nothing changed', model: { ...base, rows: ready([]) }, note: '"Nothing you follow has changed since you last looked."' },
+    {
+      id: 'th3-239-new-messages',
+      label: 'TH-3 · New messages on records I follow',
+      model: { ...base, rows: ready(WITH_NEW) },
+      note: 'B-TH-239: the reader’s own new messages (one read for the lines): "SO-2026-0042: 3 new messages" opens the order with its thread at the first unread message; a request opens beside Sales › Incoming with its thread there. The news stays under it. A line without a count reads its news as before — never a made-up number.',
+    },
     { id: 'loading', label: 'Loading', model: { ...base, rows: { status: 'loading' } } },
     { id: 'error', label: 'Could not load', model: { ...base, rows: { status: 'error', problem: 'following.problem.read' } } },
   ],

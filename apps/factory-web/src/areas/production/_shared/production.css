@@ -134,12 +134,6 @@ p.fw-pr-hint[role='status'] {
   min-width: 0;
 }
 
-.fw-pr-keys {
-  display: inline-flex;
-  gap: 2px;
-  margin-left: var(--nds-space-4);
-}
-
 .fw-pr-tablabel {
   display: inline-flex;
   align-items: center;
@@ -153,25 +147,14 @@ p.fw-pr-hint[role='status'] {
   background: var(--nds-warning);
 }
 
-.fw-pr-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--nds-space-16);
+/* B-TH-265: the work order's dock picks ONE thread (its own notes, or one of its orders'), the pick above the thread (RecordFrame
+   docks the thread itself: the old narrow dock and its grid went). */
+.fw-pr-threadpick {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
   min-width: 0;
-}
-
-.fw-pr-body.has-dock {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
-}
-
-@media (max-width: 1279px) {
-  .fw-pr-body.has-dock {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .fw-pr-dock {
-    display: none;
-  }
 }
 
 .fw-pr-main,
@@ -509,8 +492,3 @@ fieldset.fw-pr-list > legend {
   flex: 1;
 }
 
-@media (max-width: 759px) {
-  .fw-pr-keys {
-    display: none;
-  }
-}

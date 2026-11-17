@@ -47,6 +47,8 @@ export const taskView = output({
   relation: z.enum(['CREATOR', 'ASSIGNEE', 'RECORD']).nullable(),
   /** Whether the reader may change it (tasks.manage, and on a record they only read: threads.post there). */
   canChange: z.boolean(),
+  /** B-TH-050 (thread-G19): the message of the record's conversation it was made from ("Make a task" on a message); null: none. */
+  messageId: id().nullable().optional(),
 })
 
 const one = output({ task: taskView })
@@ -97,6 +99,8 @@ export const createTaskContract = defineContract({
     title: z.string().max(TITLE_MAX * 2),
     /** The record it is on (a type with a thread); its company, site and customer come from it. */
     record: input({ type: z.string().regex(RECORD_TYPE), id: id() }).nullable().optional(),
+    /** B-TH-050: "Make a task" on a message — a message of the record's own conversation (needs `record`); named once, never changed. */
+    messageId: id().nullable().optional(),
     /** A task of its own: the company it is about, if any. */
     companyId: id().nullable().optional(),
     assigneeId: id().nullable().optional(),

@@ -182,7 +182,8 @@ describe('the engine (scheduler and worker)', () => {
     // B-W2b-416: + MARGIN_BELOW_FLOOR (no order of this seed is below its margin floor, so it raises nothing).
     // B-W2b-GB02 (G146): + STAMP_DUTY_DUE (this seed has no invoice, so no stamp duty quarter: it raises nothing).
     // B-TH-012: + REQUEST_NUMBERING_MISSING (every seeded company has its INQUIRY series: it raises nothing).
-    expect(run.builtIns).toBe(13)
+    // B-TH-071: + PROJECT_STALE (no project in this seed: it raises nothing).
+    expect(run.builtIns).toBe(14)
     expect((await admin(`SELECT "ruleKind" FROM "AlertRule" WHERE "tenantId" = $1 AND "builtIn" ORDER BY 1`, [T])).map((row) => row.ruleKind)).toEqual([
       'APPROVAL_OVERDUE',
       'CERTIFICATE_EXPIRING',
@@ -196,6 +197,7 @@ describe('the engine (scheduler and worker)', () => {
       'ORDER_LATE_RISK',
       'PO_CONFIRMED_LATE',
       'PO_NOT_CONFIRMED',
+      'PROJECT_STALE',
       'REQUEST_NUMBERING_MISSING',
       'RETURN_ARRIVED_LATE',
       'STAMP_DUTY_DUE',
@@ -234,13 +236,14 @@ describe('the engine (scheduler and worker)', () => {
       // B-W2b-350: + the two supply alerts' built-ins (8 made; no line of this seed is confirmed later than needed and no
       // supplier's status changed, so they raise nothing).
       // One per built-in rule made (B-W2b-385: + RETURN_ARRIVED_LATE; B-W2b-409: + EXIT_PROOF_MISSING; B-W2b-416: + MARGIN_BELOW_FLOOR).
-      // B-W2b-GB02 (G146): + STAMP_DUTY_DUE's built-in. B-TH-012: + REQUEST_NUMBERING_MISSING's.
-      { type: 'alert.rule_changed', n: 13 },
+      // B-W2b-GB02 (G146): + STAMP_DUTY_DUE's built-in. B-TH-012: + REQUEST_NUMBERING_MISSING's. B-TH-071: + PROJECT_STALE's.
+      { type: 'alert.rule_changed', n: 14 },
     ])
     // B-W2b-385: + the late return's built-in rule (12 → 13). B-W2b-409: + the missing proof of exit's (13 → 14). B-W2b-416: + the
     // low-margin built-in rule (14 → 15).
     // B-W2b-GB02 (G146): + the stamp duty reminder's built-in rule (15 → 16). B-TH-012: + the request numbering's (16 → 17).
-    expect((await one(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1`, [T])).n).toBe(before + 17)
+    // B-TH-071: + the stale project's (17 → 18).
+    expect((await one(`SELECT count(*)::int AS n FROM "OutboxEvent" WHERE "tenantId" = $1`, [T])).n).toBe(before + 18)
   })
 
   it('a second pass (a replay, the next tick) raises nothing twice and writes nothing at all', async () => {
@@ -418,7 +421,7 @@ describe('the rules and the date timers (home.alerts Rules, admin.automation Rem
     // B-W2b-24: + INTEGRATION_FAILING (a rule's sentence is no record: listed to whoever reads the rules).
     // B-W2b-350: + PO_CONFIRMED_LATE (the planner reads the rules) and SUPPLIER_STATUS_CHANGED. B-W2b-385: + RETURN_ARRIVED_LATE.
     // B-W2b-409: + EXIT_PROOF_MISSING. B-W2b-416: + MARGIN_BELOW_FLOOR. B-W2b-GB02 (G146): + STAMP_DUTY_DUE.
-    expect((list.rules as Json[]).map((rule) => rule.ruleKind).sort()).toEqual(['APPROVAL_OVERDUE', 'CERTIFICATE_EXPIRING', 'EXIT_PROOF_MISSING', 'HOLD_TOO_LONG', 'INTEGRATION_FAILING', 'INVOICE_DEADLINE', 'LOW_STOCK', 'MARGIN_BELOW_FLOOR', 'MATERIAL_SHORT', 'ORDER_LATE_RISK', 'PO_CONFIRMED_LATE', 'PO_NOT_CONFIRMED', 'REQUEST_NUMBERING_MISSING', 'RETURN_ARRIVED_LATE', 'STAMP_DUTY_DUE', 'SUPPLIER_STATUS_CHANGED', 'WORKING_TIME_LIMIT'])
+    expect((list.rules as Json[]).map((rule) => rule.ruleKind).sort()).toEqual(['APPROVAL_OVERDUE', 'CERTIFICATE_EXPIRING', 'EXIT_PROOF_MISSING', 'HOLD_TOO_LONG', 'INTEGRATION_FAILING', 'INVOICE_DEADLINE', 'LOW_STOCK', 'MARGIN_BELOW_FLOOR', 'MATERIAL_SHORT', 'ORDER_LATE_RISK', 'PO_CONFIRMED_LATE', 'PO_NOT_CONFIRMED', /* B-TH-071 */ 'PROJECT_STALE', 'REQUEST_NUMBERING_MISSING', 'RETURN_ARRIVED_LATE', 'STAMP_DUTY_DUE', 'SUPPLIER_STATUS_CHANGED', 'WORKING_TIME_LIMIT'])
     const hold = (list.rules as Json[]).find((rule) => rule.ruleKind === 'HOLD_TOO_LONG')!
     expect(hold).toMatchObject({ threshold: { hours: 24 }, recipient: { name: 'Quality inspector' }, cooldownWords: 'at most once a day', enabled: true, builtIn: true, canChange: false, timers: null })
     expect(hold.place.label).toBeTruthy()

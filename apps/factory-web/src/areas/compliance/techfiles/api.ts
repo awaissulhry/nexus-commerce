@@ -142,6 +142,9 @@ export const fileRecordSchema = z.object({
     archiveReason: z.string().nullable(),
     createdAt: z.string(),
     createdBy: person,
+    // TH-6 part B (B-TH-267): the brand its style is made for — the thread's party; null for our own collection. Optional: an
+    // older API answer has none (notes only on screen, as before).
+    brand: z.object({ id: z.string(), name: z.string() }).nullable().optional(),
   }),
   points: z.array(pointSchema),
   risk: z.object({ signed: z.object({ id: z.string(), revision: z.number(), signedAt: z.string().nullable() }).nullable(), draft: z.object({ id: z.string(), revision: z.number() }).nullable() }),

@@ -355,8 +355,7 @@
     "title": "Keyboard shortcuts",
     "add": "New technical file",
     "pack": "Build evidence pack",
-    "close": "Close the dialog",
-    "dock": "Keep the thread beside the file"
+    "close": "Close the dialog"
   },
   "pack": {
     "title": "Build evidence pack · {number}",
@@ -444,15 +443,20 @@
     "archivedSince": "Archived on {date}, kept until {until}",
     "archivedReason": "Why: {reason}",
     "archivedBody": "It stays as it was, readable by the people who keep it.",
-    "reloadFailed": "The file could not be read again: what you see is the last copy."
+    "reloadFailed": "The file could not be read again: what you see is the last copy.",
+    "name": "Technical file",
+    "dockLabel": "Thread of technical file {number}",
+    "tabsLabel": "Parts of the technical file",
+    "notFound": "Technical file not found",
+    "forbidden": "Not for your role",
+    "failed": "The technical file could not be read"
   },
   "tab": {
     "annex": "Annex III checklist",
     "risk": "Risk assessment",
     "tests": "Test reports",
     "production": "Production control",
-    "pack": "Evidence pack",
-    "activity": "Activity"
+    "pack": "Evidence pack"
   },
   "stepUp": {
     "confirm": "Confirm",

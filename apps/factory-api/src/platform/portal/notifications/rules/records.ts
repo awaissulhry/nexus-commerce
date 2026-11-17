@@ -14,6 +14,9 @@ import type { CommandTx } from '../../../../core/command'
 import type { PartnerReader } from '../../tasks/people'
 import type { PartnerDraft, PartnerRule, PartnerRuleContext } from './types'
 import { events as emailEvents } from '@nexus/factory-domain/email/events' // B-TH-048
+// B-TH-068: a project's news to its members only; a member added is told.
+import { events as projectEvents } from '@nexus/factory-domain/projects/events'
+import { PORTAL_PROJECTS_VIEW } from '@nexus/factory-domain/projects/permissions'
 // th2-backend step 7 (§0.5): a customer's order, quote or request by its own number, never the office's series.
 import { customerRefOf, type CustomerNumberKind } from '@nexus/factory-domain/sales/customer-numbers'
 
@@ -209,6 +212,26 @@ export const RECORD_RULES: readonly PartnerRule[] = Object.freeze([
     },
   },
   // ── end B-TH-048
+  // ── B-TH-068 (PROJ.members-F04, F07): a portal person the office added to a project of their company is told so, in their portal
+  // and by their mail setting — that person only (never their colleagues: a project is per member).
+  {
+    name: 'portalNews.projectAdded',
+    events: ['project.person_added'],
+    async drafts(context, raw) {
+      const event = payload<{ projectId: string; userId: string; outside: boolean }>(projectEvents, 'project.person_added', raw)
+      if (!event.outside) return []
+      const project = await context.tx.project.findUnique({ where: { id: event.projectId }, select: { id: true, companyId: true, partyId: true, number: true, name: true, status: true } })
+      if (!project?.partyId || project.status === 'CLOSED') return []
+      const scope = { companyId: project.companyId, partyId: project.partyId }
+      return [
+        draft(
+          { partyId: project.partyId, companyId: project.companyId, record: { type: 'Project', id: project.id, label: `${project.number} ${project.name}` }, messageKey: 'portal.project.added', params: {}, anchor: null },
+          (target) => (reader) => home(target)(reader) && reader.personId === event.userId && can(reader.actor, PORTAL_PROJECTS_VIEW, scope),
+        ),
+      ]
+    },
+  },
+  // ── end B-TH-068
 ])
 
 // ── B-TH-048: the mail of a message that waited in an undo window (sendAfter), if any.
@@ -232,6 +255,11 @@ async function messageDrafts(context: PartnerRuleContext, event: { readonly thre
   if (!thread.companyId && !partnerViewOf(thread.recordType)) return []
   const companies = thread.companyId ? [thread.companyId] : (await context.tx.company.findMany({ orderBy: { id: 'asc' }, take: MAX_COMPANIES, select: { id: true } })).map((row) => row.id)
   const threadScope = { companyId: thread.companyId, partyId }
+  // ── B-TH-068 (threads plan TH-5, PROJ-G06; wall W06): a project's news reaches only its MEMBERS — the portal people of its outside
+  // company the office added one by one (and who did not mute it), who may see projects in their portal; never every reader of
+  // the party. The party wall stays the database's: the thread's party is the project's own.
+  const members = thread.recordType === 'Project' ? await projectMembers(context.tx, thread.recordId, partyId) : null
+  // ── end B-TH-068
   return companies.map((companyId) => ({
     partyId,
     companyId,
@@ -241,7 +269,14 @@ async function messageDrafts(context: PartnerRuleContext, event: { readonly thre
     anchor: `message:${event.messageId}`,
     // A batch of ours (one answer to several records of the customer) is one bell item.
     batchId: event.batchId ?? null,
-    forReader: (reader: PartnerReader) => home({ companyId, partyId })(reader) && can(reader.actor, THREADS_READ, threadScope),
+    forReader: (reader: PartnerReader) =>
+      home({ companyId, partyId })(reader) && can(reader.actor, THREADS_READ, threadScope) && (members === null || (members.has(reader.personId) && can(reader.actor, PORTAL_PROJECTS_VIEW, threadScope))), // B-TH-068
   }))
   // ── end B-TH-045
+}
+
+// ── B-TH-068: a project's portal members (their rows name the project's party), muted ones left out.
+async function projectMembers(tx: CommandTx, projectId: string, partyId: string): Promise<Set<string>> {
+  const rows = await tx.recordFollower.findMany({ where: { recordType: 'Project', recordId: projectId, partyId, muted: false }, select: { userId: true } })
+  return new Set(rows.map((row) => row.userId))
 }

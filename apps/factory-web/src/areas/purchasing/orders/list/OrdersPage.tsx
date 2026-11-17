@@ -9,7 +9,7 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { findSuppliers, listSites, type SiteOption } from '../../../_shared/buying/api'
 import { downloadText, useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { buyingCan, csvOf, phrase, readProblem, writeProblem } from '../../../_shared/buying/model'
-import { createOrder, listOrders, sendChecks, sendMany, type OrderRow, type OrderSummary } from '../api'
+import { createOrder, listOrders, listSupplierReplies, sendChecks, sendMany, type OrderRow, type OrderSummary, type WaitingReply } from '../api'
 import { sendManyBody } from '../daily-model'
 import { NO_NEW_ORDER, orderQuery, orderViewOf, type NewOrderModel, type OrdersListModel, type OrderView, type SendManyModel } from '../model'
 import { OrdersListView } from './view/OrdersListView'
@@ -20,6 +20,10 @@ import { getWorklist, type WorklistRow } from '../depth/api'
 import { DEPTH, depthCanOf, type WorklistPart } from '../depth/model'
 import { DEPTH_PREFIX } from '../depth/use-order-depth'
 import { useChase } from '../depth/use-chase'
+// B-TH-240: Supplier replies (the waiting rows of the page's orders) and the New messages column (one read of the page's rows).
+import { REPLIES_PAGES, REPLIES_VIEW, repliesByOrder, showsReplies, type RepliesPart } from './supplier-replies'
+import { readUnreadWith } from '../../../../lib/last-message-cell/api'
+import { useUnread } from '../../../../lib/last-message-cell/use-unread'
 
 /**
  * `/w/<company>/purchasing/orders` (SCR-058): the orders of the saved view (`?view=`, or the API's own `?status=` and
@@ -162,15 +166,65 @@ function OrdersContainer() {
       .catch(() => undefined)
   }, 800)
   const rereadWorklist = useCoalesced(() => readWorklist(), 1500)
+  // ---- B-TH-240: the conversations that wait on us (Supplier replies) and the reader's own new messages per order -----------------
+  // Only for a reader of conversations (threads.read): the API would count 0 for anyone else. The waiting rows are read page by page
+  // (≤ 100 each, at most the API's own 1000) and joined to the orders the list gave — never a row of an order not on the page (W27).
+  const readsThreads = showsReplies(can)
+  const [waitingRows, setWaitingRows] = useState<{ status: 'loading' } | { status: 'ready'; rows: WaitingReply[]; complete: boolean } | { status: 'error'; problem: string }>({ status: 'loading' })
+  const repliesId = useRef(0)
+  const readReplies = useCallback(async () => {
+    if (!readsThreads || view !== REPLIES_VIEW) return
+    const id = ++repliesId.current
+    try {
+      const rows: WaitingReply[] = []
+      let next: string | null = null
+      let pages = 0
+      do {
+        const page = await listSupplierReplies(api, { cursor: next })
+        rows.push(...page.rows)
+        next = page.next
+        pages += 1
+      } while (next && pages < REPLIES_PAGES)
+      if (id === repliesId.current) setWaitingRows({ status: 'ready', rows, complete: next === null })
+    } catch (error) {
+      if (id === repliesId.current) setWaitingRows({ status: 'error', problem: readProblem(error) })
+    }
+  }, [api, readsThreads, view])
+  useEffect(() => {
+    setWaitingRows({ status: 'loading' })
+    void readReplies()
+  }, [readReplies])
+  const replies = useMemo<RepliesPart | null>(() => {
+    if (!readsThreads || view !== REPLIES_VIEW) return null
+    if (waitingRows.status !== 'ready') return waitingRows
+    return { status: 'ready', byOrder: repliesByOrder(waitingRows.rows, rows.items ?? []), complete: waitingRows.complete }
+  }, [readsThreads, view, waitingRows, rows.items])
+  const [unreadTick, setUnreadTick] = useState(0)
+  const unreadRows = useMemo(() => (rows.items ?? []).map((row) => ({ recordType: 'PurchaseOrder', id: row.id })), [rows.items])
+  const unread = useUnread(readsThreads ? readUnreadWith(api) : null, unreadRows, unreadTick)
+  const rereadReplies = useCoalesced(() => void readReplies(), 1500)
+  // ---- end B-TH-240
+
   const live = useLive(
     (change) => {
+      // B-TH-240: a message on any record may change what is new or what waits on us (the counts are read again, the rows wait for Show).
+      if (readsThreads && change.type.startsWith('thread.')) {
+        setUnreadTick((tick) => tick + 1)
+        recount()
+        rereadReplies()
+        return
+      }
       if (!change.type.startsWith('purchase_order.')) return
       setUpdates((count) => count + 1)
       recount()
       // B-W2b-333: a re-dated or confirmed line moves the worklist (the rows wait for Show, as the list's).
       if (change.type === 'purchase_order.date_changed' || change.type === 'purchase_order.dates_confirmed' || change.type === 'purchase_order.confirmed') rereadWorklist()
     },
-    () => void load(),
+    () => {
+      void load()
+      setUnreadTick((tick) => tick + 1) // B-TH-240
+      void readReplies() // B-TH-240
+    },
     can.poView,
   )
 
@@ -298,7 +352,11 @@ function OrdersContainer() {
     [tw],
   )
 
-  const model: OrdersListModel = { prefix, can, view, q, rows, summary, sites, asOf, live, updates, notice, newOrder: newOrder ? { ...newOrder, number: numberField.model } : null, sendMany: sendManyState, worklist, confirmedLate: view === 'confirmedLate' ? late : null, chase: chase.model, depthCan }
+  const model: OrdersListModel = {
+    prefix, can, view, q, rows, summary, sites, asOf, live, updates, notice, newOrder: newOrder ? { ...newOrder, number: numberField.model } : null, sendMany: sendManyState, worklist, confirmedLate: view === 'confirmedLate' ? late : null, chase: chase.model, depthCan,
+    replies, // B-TH-240
+    unread: readsThreads ? unread : null, // B-TH-240
+  }
 
   return (
     <OrdersListView
@@ -307,8 +365,14 @@ function OrdersContainer() {
         onView: (next) => router.replace(address({ view: next })),
         onSearch: (next) => router.replace(address({ q: next })),
         onMore: () => void more(),
-        onRetry: () => void load(),
-        onShowUpdates: () => void load(),
+        onRetry: () => {
+          void load()
+          void readReplies() // B-TH-240
+        },
+        onShowUpdates: () => {
+          void load()
+          void readReplies() // B-TH-240
+        },
         onExport: exportRows,
         onOpen: (id) => router.push(`${prefix}/purchasing/orders/${id}`),
         onDismissNotice: () => setNotice(null),

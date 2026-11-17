@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
 import { companyPrefix } from '../../../lib/session/session'
@@ -8,24 +9,29 @@ import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { RecordPanels } from '../../../record-panels/RecordPanels'
 import { editDevice, listDevices, renewEnrolment, revokeDevice, type Device } from '../shared/api'
 import { problemKey, problemNotice, type Notice } from '../shared/model'
-import { useRecordTab, useThreadDock } from '../shared/record-hooks'
 import { personChoices, siteChoices, useEnrolWatch } from './DevicesPage'
-import { bindingBody, DEVICE_TABS, type EnrolModel, type PersonChoice, type SiteChoice } from './model'
+import { bindingBody, deviceTabOf, mayReadDeviceThread, type EnrolModel, type PersonChoice, type SiteChoice } from './model'
+// ---- B-TH-269: the docked thread on the device (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../shell/print/print-model'
 import { fetchFloorVersion } from './version'
 import { DeviceRecordView } from './view/DeviceRecordView'
 
 /**
  * `/w/<company>/admin/devices/<id>` (SCR-013 Device record): the device from `GET /auth/floor/devices` (no read of one
  * device exists), its site and stations; renames it or moves it to a station (with the version read), makes a new
- * enrolment code (a lost or replaced tablet), revokes it.
+ * enrolment code (a lost or replaced tablet), revokes it. B-TH-269: the device's thread docks beside both tabs (notes only — an admin
+ * record has no party, W03), only with threads.read AND devices.view (B-TH-005: the API asks both); `?tab=binding|status`, the old
+ * `activity` lands on Station & mode with the thread opened.
  */
 export function DeviceRecord({ deviceId }: { deviceId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const held = useMemo(() => new Set(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(DEVICE_TABS)
-  const { dockOpen, toggleDock } = useThreadDock('Device')
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const tab = deviceTabOf(params?.get('tab'))
   const can = { manage: held.has('devices.manage'), revoke: held.has('devices.revoke'), viewPrinters: held.has('print.view'), managePrinters: held.has('print.manage') }
   const [device, setDevice] = useState<Device | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
@@ -71,10 +77,18 @@ export function DeviceRecord({ deviceId }: { deviceId: string }) {
   const onExpired = useCallback(() => setEnrol((current) => (current?.step === 'scan' ? { ...current, expired: true } : current)), [])
   useEnrolWatch(api, enrol, onReady, onExpired)
 
+  // B-TH-269: the device's thread docked beside both tabs (notes only: no party on an admin record, W03), with threads.read AND
+  // devices.view (B-TH-005); Activity's tools are in its "⋯" (R-ACT). The print view keeps the record panels' print form.
+  const record = device ? { type: 'Device', id: device.id, companyId: site?.companyId ?? null, siteId: device.siteId } : null
+  const mayThread = mayReadDeviceThread(held)
+  const thread = device && record && mayThread ? <OfficeRecordThread docked record={record} title={device.name} recordLabel={device.name} party={null} printHref={printHref(pathname ?? '', params?.toString() ?? '')} /> : null
+  const printThread = device && record && mayThread ? <RecordPanels record={record} title={device.name} /> : null
+
   return (
     <DeviceRecordView
-      model={{ prefix, tab, device, problem: device ? null : problem, site, can, enrol, revoking, busy, dialogProblem, notice, now, currentVersion, dockOpen, people }}
-      panels={device ? <RecordPanels record={{ type: 'Device', id: device.id, companyId: site?.companyId ?? null, siteId: device.siteId }} title={device.name} /> : null}
+      model={{ prefix, tab, device, problem: device ? null : problem, site, can, enrol, revoking, busy, dialogProblem, notice, now, currentVersion, people, personId: session.user.id /* B-TH-269 */ }}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onSave: async (draft) => {
           if (!device) return false
@@ -126,7 +140,6 @@ export function DeviceRecord({ deviceId }: { deviceId: string }) {
             setBusy(false)
           }
         },
-        onDock: toggleDock,
         onRetry: () => {
           setProblem(null)
           void load()

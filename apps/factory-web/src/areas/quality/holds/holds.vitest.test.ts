@@ -62,6 +62,9 @@ import {
   withKind,
 } from './model'
 import { officeToday, placeRefusal } from './place/PlaceHold'
+// B-TH-270: the hold's review window 4 → 3 and the thread docked in it (PL6).
+import { readFileSync } from 'node:fs'
+import { MERGED_TABS, RECORD_TABS } from './model'
 import { designScreen as tagScreen } from './tag/fixtures'
 
 const params = (query: string) => new URLSearchParams(query)
@@ -98,7 +101,7 @@ describe('Holds: views and the address (the API\'s own filters)', () => {
   it('keeps the open hold and its tab in the address; Show more grows by 50 up to 200', () => {
     expect(holdsAddress({ view: 'open', open: 'h1', tab: 'decision' })).toBe('?open=h1&tab=decision')
     expect(holdsAddress({ view: 'overdue', open: 'h1', tab: 'hold' })).toBe('?view=overdue&open=h1')
-    expect(tabFromAddress(params('tab=activity'))).toBe('activity')
+    expect(tabFromAddress(params('tab=activity'))).toBe('hold') // B-TH-270 (R-8): Activity went; the thread is docked beside Hold
     expect(tabFromAddress(params('tab=x'))).toBe('hold')
     expect([nextLimit(50), nextLimit(150), nextLimit(200)]).toEqual([100, 200, 200])
   })
@@ -348,5 +351,47 @@ describe('B-W2b-17: who releases a hold', () => {
     const answer = holdDetailSchema.parse({ ...DETAIL_READY, release: { checks: DETAIL_READY.release.checks, releasable: true, mayRelease: true } })
     expect(answer.release.placerMayRelease).toBe(false)
     expect(holdDetailSchema.parse(DETAIL_PLACER_MAY).release.placerMayRelease).toBe(true)
+  })
+})
+
+// ---- B-TH-270 (threads plan TH-6, PL6; 08-tabs O-QA-HOLD; picture 40): the hold's review window 4 → 3 -----------------------
+// The drawn window (one docked thread beside every tab, notes only, none without threads.read) is held in
+// review-window.vitest.test.ts, where the DS DetailModal draws in place.
+describe('B-TH-270: the hold’s review window — Hold · Affected · Decision, the thread docked in it', () => {
+  it('three tabs; every old ?tab= keeps working (R-8): Activity → Hold with the thread beside it', () => {
+    expect(RECORD_TABS).toEqual(['hold', 'affected', 'decision'])
+    expect(MERGED_TABS).toEqual({ activity: 'hold' })
+    expect(tabFromAddress(params('tab=activity'))).toBe('hold')
+    expect(tabFromAddress(params('tab=affected'))).toBe('affected')
+    expect(tabFromAddress(params('tab=decision'))).toBe('decision')
+    expect(tabFromAddress(params('tab=constructor'))).toBe('hold')
+    expect(tabFromAddress(params('tab=activity&open=h1'))).toBe('hold')
+    // The address the window writes never names a tab that went.
+    expect(holdsAddress({ view: 'open', open: 'h1', tab: tabFromAddress(params('tab=activity')) })).toBe('?open=h1')
+  })
+
+  it('the words: no Activity tab and no "open here later" line; the thread column is named in both languages', () => {
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale].holds ?? {}
+      expect(words['detail.tab.activity'], locale).toBeUndefined()
+      expect(words['detail.activityLater'], locale).toBeUndefined()
+      expect(words['held.noThreads'], locale).toBeUndefined()
+      expect(words['detail.threadLabel'], locale).toContain('{hold}')
+    }
+  })
+
+  it('the page mounts the hold’s thread docked, notes only (party none), only with threads.read; the record panels are gone', () => {
+    const page = readFileSync(new URL('./HoldsPage.tsx', import.meta.url), 'utf8')
+    expect(page).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(page).toContain("type: 'QualityHold'")
+    expect(page).toContain('party={null}')
+    expect(page).toContain('openHold && can.threadsRead ?')
+    expect(page).not.toContain('RecordPanels')
+    const window = readFileSync(new URL('./view/HoldDetailModal.tsx', import.meta.url), 'utf8')
+    expect(window).not.toContain("tab === 'activity'")
+    expect(window).not.toContain('panels')
+    // J / K and R are the window's keys only outside the thread (the thread keeps J / K the messages, R reply, N note).
+    expect(window).toContain("target?.closest('.fw-hd-window-thread')")
+    expect(readFileSync(new URL('./fixtures.ts', import.meta.url), 'utf8')).not.toContain('RecordPanelsView')
   })
 })

@@ -1,6 +1,7 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import type { Locale } from '../../../lib/i18n/locales'
 import type { OrderChip } from './api'
+import type { OrdersRead, PortalColumn } from './api' // B-TH-246
 import { listBandOf } from './band'
 import { at, inTransitRead, orderWords, ordersRead, PREFIX, ROWS, shellOf, words } from './design-data'
 // B-TH-223: Orders & requests read by Brand Beta (brand B), the made-up reader of every wall scan.
@@ -59,7 +60,7 @@ function betaCase(build: (locale: Locale) => Partial<OrdersListViewModel> = () =
     const model: OrdersListViewModel = { ...base, tiles: base.tiles !== undefined ? base.tiles : listTiles(base.requests.state === 'ready' ? { counts: requestCountsOf(base.requests.rows) } : null, base.read) }
     const shown = model.read ? listRows(model.chip ?? model.read.chip, model.q, model.requests.state === 'ready' ? model.requests.rows : [], model.rows, locale).length : 0
     return {
-      shell: betaShellOf(locale, listBandOf({ words: orderWords(locale), asOf: model.read?.asOf ?? null, rows: shown, chip: model.chip, q: model.q, prefix: BETA, newOrder: `${BETA}/orders/new` }), '/orders'),
+      shell: betaShellOf(locale, listBandOf({ words: orderWords(locale), asOf: model.read?.asOf ?? null, rows: shown, chip: model.chip, q: model.q, prefix: BETA, newOrder: `${BETA}/orders/new`, onDownloadAll: () => undefined /* B-TH-246 */ }), '/orders'),
       body: { kind: 'list', model },
     }
   }
@@ -70,6 +71,19 @@ export const requestCountsOf = (rows: readonly RequestRow[]) => ({ needsYou: row
 const betaTile = (chip: TileChip) => betaCase(() => (chip === OPEN_ORDERS ? { chip, read: ordersRead('OPEN'), rows: ordersRead('OPEN').items } : { chip, read: { ...ordersRead('OPEN'), items: [], count: 0 }, rows: [] }))
 const betaChip = (chip: ListChip) => betaCase(() => ({ chip, read: chip === CLOSED_REQUESTS ? { ...ordersRead('OPEN'), items: [], count: 0 } : ordersRead(chip), rows: chip === CLOSED_REQUESTS ? [] : ordersRead(chip).items }))
 const all = ordersRead('ALL')
+
+// ── B-TH-246 (threads plan TH-4, picture 28): Brand Beta's own sheet — the columns the office ticked for its portal ──
+/** Made-up portal columns: one for every customer (a list value the rows use), and Brand Beta's own (a day). */
+export const SHEET_COLUMNS: PortalColumn[] = [
+  { columnId: 'cf:box_type', code: 'box_type', type: 'SELECT', labelIt: 'Tipo di scatola', labelEn: 'Box type', unit: null, grain: null, options: [{ code: 'GIFT', labelIt: 'Scatola regalo', labelEn: 'Gift box' }] },
+  { columnId: 'cf:fair_date', code: 'fair_date', type: 'DATE', labelIt: 'Data della fiera', labelEn: 'Fair date', unit: null, grain: null, options: null },
+]
+/** A read of the sheet: every order row carries its cells (a request has none). */
+export function sheetRead(read: OrdersRead): OrdersRead {
+  return { ...read, columns: SHEET_COLUMNS, items: read.items.map((row, index) => (row.kind === 'ORDER' ? { ...row, values: { 'cf:box_type': { value: 'GIFT', wordsIt: null, wordsEn: null }, ...(index % 2 === 0 ? { 'cf:fair_date': { value: '2027-02-10', wordsIt: null, wordsEn: null } } : {}) } } : row)) }
+}
+const betaSheet = (failed = false) => betaCase(() => ({ read: sheetRead(ordersRead('OPEN')), rows: sheetRead(ordersRead('OPEN')).items, ...(failed ? { downloadFailed: true } : {}) }))
+// ── end B-TH-246 ──
 
 export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
   screen: 'SCR-184',
@@ -84,6 +98,9 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'th-238-open-requests', label: 'Tile: open requests', model: betaTile(OPEN_REQUESTS) },
     { id: 'th-238-open-orders', label: 'Tile: open orders (a catalogue order still waiting for us among them)', model: betaTile(OPEN_ORDERS) },
     { id: 'th-223-all', label: 'Everything', model: betaChip('ALL'), note: 'Every request and every order, closed ones too.' },
+    // B-TH-246: the customer's own sheet (read-only columns the office ticked; Download all in the band's ⋯).
+    { id: 'th-246-sheet', label: 'TH-4 · Brand Beta · Its own sheet: the columns ticked for its portal, read-only; Download all (Excel) in ⋯', model: betaSheet(), note: 'Every cell opens Brand Beta\'s own order page; the file is written by the server with Brand Beta\'s rows and columns only.' },
+    { id: 'th-246-download-failed', label: 'TH-4 · Brand Beta · Download all could not be prepared (Try again)', model: betaSheet(true) },
     { id: 'th-223-requested', label: 'Requested: the requests and the catalogue order still waiting for us', model: betaChip('REQUESTED') },
     { id: 'th-223-closed', label: 'Closed requests: never vanished', model: betaChip(CLOSED_REQUESTS), note: 'Declined, closed and made-into-an-order requests stay findable under their own choice.' },
     { id: 'th-223-search', label: 'A search finds a request by its subject or its number', model: betaCase(() => ({ q: 'gloves', read: ordersRead('OPEN', []), rows: [] })), note: 'Their PO, our order or a style code on the orders; the subject, their PO and their own number on the requests.' },

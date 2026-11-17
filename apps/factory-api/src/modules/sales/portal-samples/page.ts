@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { KIND_RULES, type ApprovalKind } from '@nexus/factory-domain/approvals-out/kinds'
 import { PORTAL_APPROVALS_VIEW } from '@nexus/factory-domain/approvals-out/permissions'
 import { PORTAL_APPROVE } from '@nexus/factory-domain/auth/partners/permissions'
+import { PORTAL_PROJECTS_VIEW } from '@nexus/factory-domain/projects/permissions' // B-TH-069
 import { can } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import {
@@ -23,7 +24,7 @@ import {
 import { cellsOf, piecesOf, roundLabel, type SampleKind } from '@nexus/factory-domain/sales/samples/rules'
 import { localeOf } from '../../../platform/approvals-out/store'
 import { portalReader } from '../portal-orders/access'
-import { nameIn, readBrandStyles, readRevisions, readRounds, readShipments, readStyles, readSwatches, readTechPackVersions, readWaitingRequests, type RoundRow, type ShipmentRow, type StyleRow } from './store'
+import { nameIn, readBrandStyles, readMemberProjects, readRevisions, readRounds, readShipments, readStyles, readSwatches, readTechPackVersions, readWaitingRequests, type RoundRow, type ShipmentRow, type StyleRow } from './store'
 
 /**
  * GET /portal/samples (B-W2b-262; PRD-245; design portal.customer.samples, SCR-225): the brand's page in one answer.
@@ -79,13 +80,18 @@ export async function samplesPage(app: FastifyInstance, request: FastifyRequest,
   const seesApprovals = can(actor, PORTAL_APPROVALS_VIEW, scope)
   const mayApprove = !session.preview && can(actor, PORTAL_APPROVE, scope)
 
+  // ---- B-TH-069 (threads plan TH-5, PROJ.portal-F03): the projects block — the person's own projects (the office added them),
+  // read in the partner scope; null for a role without portal.projects.view (nothing is said of them).
+  const seesProjects = can(actor, PORTAL_PROJECTS_VIEW, scope)
+  // ---- end B-TH-069
   // The partner's own rows (one connection, one query at a time).
-  const { rounds, shipments, requests, swatches } = await request.withClient(async (client) => {
+  const { rounds, shipments, requests, swatches, projects } = await request.withClient(async (client) => {
     const rounds = await readRounds(client, companyId)
     const shipments = await readShipments(client, rounds.map((round) => round.id))
     const requests = seesApprovals ? await readWaitingRequests(client, companyId) : []
     const swatches = await readSwatches(client, requests.filter((row) => row.recordType === 'SampleSwatch').map((row) => row.recordId))
-    return { rounds, shipments, requests, swatches }
+    const projects = seesProjects ? await readMemberProjects(client, companyId, session.userId) : null // B-TH-069
+    return { rounds, shipments, requests, swatches, projects }
   })
 
   // The tenant's: the styles named and the party's own, their revisions and tech pack versions.
@@ -204,5 +210,7 @@ export async function samplesPage(app: FastifyInstance, request: FastifyRequest,
     styles: styleRows,
     rounds: roundRows,
     counts: { waiting: seesApprovals ? waitingRows.length : null, styles: styleRows.length, rounds: roundRows.length, open: roundRows.filter((row) => row.stage !== 'DECIDED' && row.stage !== 'CANCELLED').length },
+    // B-TH-069: open first, then by target date.
+    projects: projects ? projects.map((row) => ({ id: row.id, number: row.number, name: row.name, status: row.status, targetDate: day(row.targetDate)! })) : null,
   }
 }

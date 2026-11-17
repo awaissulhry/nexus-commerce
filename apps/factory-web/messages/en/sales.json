@@ -277,7 +277,9 @@
       "PO_NUMBER_REQUIRED": "Order waits: this customer's terms need its PO number on every order, and the quote has none.",
       "NOT_MADE": "Order waits: the customer accepted the quote and its order is not made yet."
     },
-    "makeOrder": "Make the order now"
+    "makeOrder": "Make the order now",
+    "requestWithdrawn": "The customer withdrew the request",
+    "requestWithdrawnOn": "The customer withdrew the request on {date}"
   },
   "save": {
     "saving": "Saving…",
@@ -777,7 +779,8 @@
       "approval": "Approval",
       "validUntil": "Valid until",
       "updated": "Updated",
-      "more": "Actions"
+      "more": "Actions",
+      "picture": "Picture"
     },
     "ref": "Ref. {ref}",
     "units": "{units} · lines {lines}",
@@ -790,7 +793,20 @@
     "madeFrom": "from {number}",
     "order": "Order {number}",
     "orderCancelled": "Order {number} cancelled",
-    "orderWaits": "Order waits"
+    "orderWaits": "Order waits",
+    "picture": {
+      "open": "Picture of {style} on {number}: open it large",
+      "noneOf": "{number} has no line yet: no picture",
+      "alt": "{style}",
+      "viewerOf": "On {number}",
+      "small": "A small preview: the original opens from the style.",
+      "none": "No picture of this style yet",
+      "openStyle": "Open style",
+      "close": "Close",
+      "more": "+{count}",
+      "moreStyles_one": "{count} more style on this quote: open it",
+      "moreStyles_other": "{count} more styles on this quote: open it"
+    }
   },
   "newQuote": {
     "title": "New quote",

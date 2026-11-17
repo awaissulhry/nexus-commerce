@@ -1,7 +1,9 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import type { SiteStructure } from '../shared/api'
-import { CENTRES, COMPANIES, DEVICES, inShell, LINES, panels, PREFIX, PRINTERS, SITES, STATIONS } from '../shared/fixtures'
+import { CENTRES, COMPANIES, DEVICES, inShell, LINES, PREFIX, PRINTERS, SITES, STATIONS } from '../shared/fixtures'
+// ---- B-TH-269: the site's docked thread in the design cases (notes only: an admin record has no party, W03) ----
+import { designDockedThread } from '../../_shared/record-frame/fixtures'
 import { failed, loaded, loading } from '../shared/model'
 import type { SiteRecordModel } from './model'
 import { SiteRecordView } from './view/SiteRecordView'
@@ -26,13 +28,17 @@ const site = (over: Partial<SiteRecordModel> = {}): SiteRecordModel => ({
   ...over,
 })
 
-function SiteDesign({ model }: { model: SiteRecordModel }) {
+/** B-TH-269: a design case; `noThread` — a person without threads.read (no dock, no Thread button). */
+type SiteCase = SiteRecordModel & { readonly noThread?: boolean }
+
+function SiteDesign({ model: { noThread, ...model } }: { model: SiteCase }) {
   const record = model.structure?.site
-  const panel = record ? panels({ type: 'Site', id: record.id, companyId: record.companyId, siteId: record.id }, record.name) : null
-  return inShell(`/admin/companies/${record?.companyId ?? 'x'}/sites/${record?.id ?? 'x'}`, createElement(SiteRecordView, { model, panels: panel }))
+  // B-TH-269: the site's thread docked beside every tab (notes only), with threads.read; none without it.
+  const thread = record && !noThread ? designDockedThread({ recordType: 'Site', record: record.code, party: null }) : null
+  return inShell(`/admin/companies/${record?.companyId ?? 'x'}/sites/${record?.id ?? 'x'}`, createElement(SiteRecordView, { model, thread }))
 }
 
-export const designScreen = defineDesignScreen<SiteRecordModel>({
+export const designScreen = defineDesignScreen<SiteCase>({
   screen: 'SCR-009',
   title: 'Site record: structure, work centres, floor times, devices',
   view: SiteDesign,
@@ -55,8 +61,14 @@ export const designScreen = defineDesignScreen<SiteRecordModel>({
     { id: 'calendars-no-right', label: 'Calendars without devices rights', model: site({ tab: 'calendars', can: { ...CAN, viewDevices: false, manageDevices: false } }) },
     { id: 'devices', label: 'Devices: tablets and printers here', model: site({ tab: 'devices' }) },
     { id: 'devices-empty', label: 'Devices: none yet', model: site({ tab: 'devices', structure: bare, devices: loaded([]), printers: loaded([]) }) },
-    { id: 'activity', label: 'Activity (record panels)', model: site({ tab: 'activity' }) },
-    { id: 'dock', label: 'Thread beside the structure (≥ 1280 px)', model: site({ dockOpen: true }) },
+    // ---- B-TH-269: Activity went (its tools are in the thread's "⋯"); the thread docks beside every tab.
+    {
+      id: 'thread',
+      label: 'The thread docked beside the structure',
+      model: site(),
+      note: 'B-TH-269: notes only (an admin record has no party). The old ?tab=activity address lands here with the thread open; ⌘J hides and shows it.',
+    },
+    { id: 'no-thread', label: 'Without threads.read (no thread)', model: { ...site(), noThread: true }, note: 'No dock and no Thread button.' },
     { id: 'read-only', label: 'Read-only (no sites.manage)', model: site({ can: { ...CAN, manage: false, manageDevices: false } }) },
     { id: 'saved', label: 'Station added', model: site({ notice: { key: 'site.done.station', tone: 'success' } }) },
     { id: 'archived', label: 'An archived site', model: site({ structure: { ...structure, site: { ...structure.site, status: 'ARCHIVED' } } }) },

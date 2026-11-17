@@ -604,6 +604,7 @@
       "alerts.STAMP_DUTY_DUE": "L'imposta di bollo del {label} scade il {dueOn} (mancano {days} giorni): pagala con F24 (codice tributo {f24Code}) e registra il pagamento.",
       "alerts.STAMP_DUTY_DUE.LATE": "L'imposta di bollo del {label} scadeva il {dueOn}: {days} giorni di ritardo. Pagala con F24 (codice tributo {f24Code}) e registra il pagamento.",
       "alerts.REQUEST_NUMBERING_MISSING": "{label} riceve richieste ma non ha una numerazione delle richieste attiva (INQUIRY): il Nuovo ordine del portale è sospeso e la posta agli indirizzi delle richieste resta in attesa. Impostate la serie nella numerazione.",
+      "alerts.PROJECT_STALE": "{label} ha superato la data obiettivo ({targetDate}) e non ha messaggi da {days} giorni: chiudilo o aggiornalo.",
       "INQUIRY_WAITING.ASSIGNED": "La richiesta {number} di {from} aspetta la tua risposta da più di un giorno lavorativo.",
       "INQUIRY_WAITING.NEW": "La richiesta {number} di {from} aspetta da più di un giorno lavorativo e nessuno la segue ancora.",
       "INQUIRY_WAITING.blocks": "Il cliente aspetta una risposta.",
@@ -780,6 +781,21 @@
       "noRecord": "Questa voce non ha un record da ricordarti.",
       "already": "Promemoria impostato.",
       "passed": "Il giorno prima è già passato."
+    },
+    "incoming": {
+      "title": "In arrivo",
+      "sameAsIncoming": "Gli stessi numeri di Vendite › In arrivo",
+      "offline": "Offline: gli ultimi numeri letti",
+      "loading": "Sto contando le richieste in arrivo…",
+      "error": "Non è stato possibile contare le richieste in arrivo.",
+      "new": "Nuove richieste in arrivo",
+      "newHint": "Richieste, ordini dal catalogo e richieste di modifica che nessuno ha ancora iniziato: il riquadro Nuove di In arrivo",
+      "catalogue": "Ordini dal catalogo da decidere",
+      "catalogueHint": "Ordini che i clienti hanno inviato dal catalogo del loro portale, in attesa di Accetta o Rifiuta",
+      "waiting": "In attesa nostra da oltre un giorno lavorativo",
+      "waitingHint": "Di tutti, come li conta il riquadro di In arrivo (Aspetta me ora elenca solo le tue o di nessuno)",
+      "open": "Apri",
+      "lineLabel": "{what}: {count}. Apri in In arrivo"
     }
   },
   "mailToSort": {

@@ -19,7 +19,8 @@ export function InquiriesMessages({ children }: { children?: ReactNode }) {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 /** Parameters that are themselves keys of the catalogue (said in words first). */
-const KEY_PARAM = /^(tile|source|status|quoteStatus|orderStatus|styleStatus|decline|right|field|line\.problem|time|leftOut|refusal|prospect\.problem|request\.problem)\./
+// B-TH-233: + kind (the kind of an Incoming row, `kind.CATALOGUE_ORDER`). B-TH-234: + task.kind (what a task asks for).
+const KEY_PARAM = /^(tile|source|status|quoteStatus|orderStatus|styleStatus|decline|right|field|line\.problem|time|leftOut|refusal|prospect\.problem|request\.problem|kind|task\.kind)\./
 
 /**
  * `t` for a key, `say` for a phrase: a parameter that is itself a key of the catalogue (`tile.NEW`, `source.PHONE`,

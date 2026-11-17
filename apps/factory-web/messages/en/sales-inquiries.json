@@ -33,7 +33,6 @@
     "prospectsOnly": "Prospects only (no customer yet)",
     "count_one": "{count} request",
     "count_other": "{count} requests",
-    "countCapped": "The first {count} requests: narrow the filters to see the rest",
     "countReading": "Reading…",
     "failed": "Couldn't load requests",
     "noMatch": "No rows match these filters",
@@ -42,7 +41,13 @@
     "emptyBody": "No requests. A customer's portal request lands here by itself; a mail becomes one from Mail to sort (\"Make incoming request\"); a phone call or a visit with New request.",
     "copied_one": "{count} number copied",
     "copied_other": "{count} numbers copied",
-    "withheldPrice": "needs the price right"
+    "withheldPrice": "needs the price right",
+    "kindLabel": "Kind",
+    "allKinds": "Every kind",
+    "countMore_one": "{count} row read · more to read",
+    "countMore_other": "{count} rows read · more to read",
+    "moreReading": "Reading more…",
+    "showMore": "Show {count} more"
   },
   "col": {
     "number": "Number",
@@ -82,7 +87,8 @@
     "assign": "Assign",
     "decline": "Decline",
     "recordWalk": "Between rows; while a request is open, the next or previous request",
-    "recordClose": "Close the open request"
+    "recordClose": "Close the open request",
+    "replyOpen": "Open the record at the message that waits"
   },
   "tile": {
     "NEW": "New",
@@ -104,7 +110,10 @@
     },
     "failed": "Couldn't count",
     "partial": "Counted on the oldest 1000 open requests",
-    "label": "Saved filters"
+    "label": "Saved filters",
+    "ORDERED": "Ordered",
+    "NOT_AN_ORDER": "Not an order",
+    "CUSTOMER_REPLIES": "Customer replies"
   },
   "chip": {
     "label": "Filters",
@@ -126,8 +135,10 @@
     "outcome": {
       "ORDERED": "Became: an order (straight or from its quote)",
       "DECLINED": "Became: declined (not “Not an order”)",
-      "NOT_AN_ORDER": "Became: not an order"
-    }
+      "NOT_AN_ORDER": "Became: not an order",
+      "WITHDRAWN": "Became: withdrawn by the customer"
+    },
+    "kind": "Kind: {kind}"
   },
   "notice": {
     "label": "Notices",
@@ -135,7 +146,6 @@
     "more_other": "{count} more notices",
     "fewer": "Show one notice",
     "partial": "More than 1000 requests are open: \"Waiting for us over 1 working day\" counts only the oldest 1000.",
-    "capped": "The list shows the first {count} requests of these filters: narrow them to see the rest.",
     "prospects_one": "{count} open request is from a prospect: match it to a customer (Edit the request) before a quote.",
     "prospects_other": "{count} open requests are from prospects: match each to a customer (Edit the request) before a quote.",
     "mail_one": "{count} mail waits in Mail to sort",
@@ -199,7 +209,9 @@
     "unassigned_one": "{count} request is with nobody again",
     "unassigned_other": "{count} requests are with nobody again",
     "declined_one": "{count} request declined ({reason})",
-    "declined_other": "{count} requests declined ({reason})"
+    "declined_other": "{count} requests declined ({reason})",
+    "reachOthers": "{open} open requests · {others} of other kinds left out (each answered on its own)",
+    "noneRequests": "Assign and Decline act on requests: a catalogue order is answered in its pane, a change request in Home › Approvals"
   },
   "held": {
     "right": "Needs the sales permission ({right})",
@@ -231,6 +243,14 @@
       "styles": {
         "manage": "make styles"
       }
+    },
+    "partners": {
+      "tasks": {
+        "manage": "ask customers for things in their portal"
+      }
+    },
+    "parties": {
+      "manage": "make customers"
     }
   },
   "refusal": {
@@ -319,7 +339,6 @@
     "assignMe": "{number} is now yours",
     "decline": "{number} declined ({reason})",
     "messageSent": "The message was sent to {to} (in Activity)",
-    "messageFailed": "The message was not sent: write it again in Activity",
     "lost": "{number} marked as lost",
     "quote": "{quote} made from {number} as a draft: the customer is not told yet (they read “Quote being prepared”)",
     "quoteWarnings_one": "{quote} made from {number}: {count} thing to check on the quote",
@@ -335,7 +354,15 @@
     "filesCarried_other": "{count} files of the request went with it",
     "fileNotCarried": "{name} did not go with it: {reason}",
     "styleDraft": "Style draft {style} made from {number}; the request stays open",
-    "openStyle": "Open {style}"
+    "openStyle": "Open {style}",
+    "messagePortal": "{customer} reads your message in its portal",
+    "customerMade": "{customer} is now a customer: {number} is theirs and replies are possible",
+    "customerContact": "{number} is now from {customer} (the prospect became one of its contacts)",
+    "customerMatched": "{number} is now from {customer}: replies are possible",
+    "mailJoined": "The mail it came by joined its conversation",
+    "openCustomer": "Open {customer}",
+    "task": "{customer} was asked for: {kind} (in its portal)",
+    "taskDue": "{customer} was asked for: {kind}, by {due} (in its portal)"
   },
   "closed": {
     "quoted": "Quoted as {quote} on {when}",
@@ -356,10 +383,9 @@
     "createdByOn": "{name}, {when}",
     "erased": "Erased prospect (their personal data was removed)",
     "unknown": "Unknown sender — match to a customer",
-    "unknownBody": "A quote is made for a customer: match this prospect to one (once), or make the customer in Sales › Customers first.",
+    "unknownBody": "A quote, an order or a reply is made for a customer: match this prospect to one, or make the customer from it — the check comes first.",
     "match": "Match to a customer",
-    "matchHint": "Once matched, the customer stays: the mail joins its conversation",
-    "matchNone": "Not matched yet",
+    "matchHint": "The check lists the customers it may already be (only yours); once matched the customer stays and the mail joins its conversation",
     "new": "new",
     "newHint": "Not a customer yet: a prospect"
   },
@@ -595,18 +621,29 @@
     "noteHint": "Optional; kept on the request",
     "noteOther": "Needed when the reason is Other",
     "messageLabel": "Message to the customer (optional)",
-    "messageTo": "Sent to {to} through the request’s conversation, after the decline",
+    "messageTo": "A mail to {to}, in the same step as the decline",
     "message": {
-      "many": "A message goes to one customer at a time: write from each request’s Activity",
+      "many": "Decline N sends nothing: a message goes to one customer at a time, from its own request",
       "prospect": "A prospect has no customer conversation yet: answer their mail from Mail to sort",
-      "noEmail": "The request names no contact with an e-mail: pick one on Request first"
+      "noEmail": "The request names no contact with an e-mail: pick one on Request first",
+      "notAnOrder": "\"Not an order\" sends nothing: the customer reads \"Closed\""
     },
     "preview": "Preview — to {to}",
     "final": "A closed request changes no more (only its note).",
     "held": {
       "reason": "Pick a reason",
-      "long": "At most {max} characters"
-    }
+      "long": "At most {max} characters",
+      "message": "Write the message, or untick \"Send\""
+    },
+    "send": "Send a message to the customer with the decline",
+    "messagePortal": "The customer reads it in its portal, with the decline",
+    "messageLanguage": "Write it in {language}: the customer’s language",
+    "language": {
+      "it": "Italian",
+      "en": "English"
+    },
+    "previewPortal": "Preview — what the customer reads in its portal",
+    "finalSend": "The decline and its message go together: if one is refused, neither happens. A closed request changes no more (only its note)."
   },
   "lost": {
     "title": "Mark as lost",
@@ -638,7 +675,10 @@
       "QUOTED": "{count} quoted",
       "DECLINED": "{count} declined",
       "LOST": "{count} lost",
-      "ALL": "{count} in all"
+      "ALL": "{count} in all",
+      "ORDERED": "{count} ordered",
+      "NOT_AN_ORDER": "{count} not an order",
+      "CUSTOMER_REPLIES": "{count} customer replies waiting on us"
     }
   },
   "door": {
@@ -647,12 +687,17 @@
     "files": "Open the files of {number}",
     "quote": "Open quote {number}",
     "parties": "Needs the customers right",
-    "quotes": "Needs the quotes right"
+    "quotes": "Needs the quotes right",
+    "approvals": "Answer {number} in Home › Approvals",
+    "order": "Open order {number}",
+    "orders": "Needs the orders right",
+    "orderChanges": "Open the changes of order {number}"
   },
   "funnel": {
     "state": "Show only: {status}",
     "source": "Show only: {source}",
-    "company": "Show only: {name}"
+    "company": "Show only: {name}",
+    "kind": "Show only: {kind}"
   },
   "picture": {
     "open": "Picture of {style} on {number}: open it large",
@@ -678,12 +723,13 @@
     "code": "Code",
     "openCustomer": "Open the customer",
     "customerTitle": "{name}",
-    "customerNote": "Every request of this customer: the From filter above."
+    "customerNote": "Every request of this customer: the From filter above.",
+    "kind": "Kind"
   },
   "export": {
     "heading": "Export · {view}",
-    "note": "The first {count} rows of this view: the export reads no more until the list reads in pages.",
-    "notePrice": "The first {count} rows of this view; the target price is left out (it needs the price right)."
+    "note": "Every row of this view, page by page to the end: requests, catalogue orders and change requests you may open. Prospects’ names make it personal data.",
+    "notePrice": "Every row of this view, page by page to the end; the target price is left out (it needs the price right). Prospects’ names make it personal data."
   },
   "pane": {
     "label": "The request",
@@ -753,7 +799,11 @@
       "match": "Match to a customer…",
       "matchHint": "Pick or make the customer; then replies are possible",
       "order": "Make order",
-      "styleDraft": "Make style draft"
+      "styleDraft": "Make style draft",
+      "task": "Ask {customer} for…",
+      "taskHint": "A document, an answer or measurements, by a date: a task in their portal",
+      "notAnOrder": "Not an order",
+      "notAnOrderHint": "Spam, a wrong address, a supplier’s mail: closed without counting as declined; nothing is sent"
     },
     "held": {
       "prospect": "Make the customer first: replies need a customer record"
@@ -764,12 +814,14 @@
       "declined": "Declined · {reason}",
       "lost": "Lost: the customer went away",
       "ordered": "Ordered: made into an order",
-      "orderedStatus": "Ordered · {order} {status}"
+      "orderedStatus": "Ordered · {order} {status}",
+      "withdrawn": "Withdrawn by the customer before we answered"
     },
     "ask": {
       "portal": "Ask {customer}: your question goes to their portal (they get the portal's notice by e-mail). The request then waits for their answer.",
       "mail": "Ask {customer}: your question goes by e-mail from the request after the send check. The request then waits for their answer."
-    }
+    },
+    "atFirst": "This is the first row of this view"
   },
   "orderStatus": {
     "CONFIRMED": "Confirmed",
@@ -851,6 +903,268 @@
       "code": "Type a style code: 1 to 24 capital letters or digits",
       "type": "Choose the product type",
       "scale": "Choose the size scale"
+    }
+  },
+  "kind": {
+    "REQUEST": "Request",
+    "CATALOGUE_ORDER": "Catalogue order",
+    "CHANGE_REQUEST": "Change request",
+    "plural": {
+      "REQUEST": "Requests",
+      "CATALOGUE_ORDER": "Catalogue orders",
+      "CHANGE_REQUEST": "Change requests"
+    },
+    "hint": {
+      "REQUEST": "A request by portal, mail, phone, a fair or a visit",
+      "CATALOGUE_ORDER": "Styles the customer picked in its portal catalogue: accept it as an order or a quote, or refuse it",
+      "CHANGE_REQUEST": "The customer asks to change or cancel a confirmed order: answered in Home › Approvals"
+    }
+  },
+  "kindFacts": {
+    "catalogue_one": "{lines} line · their PO {ref}",
+    "catalogue_other": "{lines} lines · their PO {ref}",
+    "change": {
+      "CHANGE": "Changes {order}",
+      "CANCEL": "Cancels {order}"
+    }
+  },
+  "replies": {
+    "tableLabel": "Customer replies",
+    "count_one": "{count} conversation waits on us",
+    "count_other": "{count} conversations wait on us",
+    "countPartial": "More than {count} conversations wait on us: the list shows the oldest",
+    "more": "Show more conversations",
+    "open": "Open {label} at the message that waits",
+    "waitClock": "Waiting on us since {since} (clock hours: the company has no working calendar); amber after {days} working days",
+    "waitWorking": "Waiting on us since {since}, in working time; amber after {days} working days",
+    "col": {
+      "record": "Record",
+      "message": "Their last message",
+      "at": "When"
+    },
+    "empty": "No customer waits on a reply",
+    "emptyBody": "A conversation on an order, a quote, a return or another record of a customer lands here when the customer wrote last; your reply takes it off.",
+    "noRight": "Customer replies need the right to read conversations",
+    "noRightBody": "Ask an administrator for \"Read conversations\" (threads): the list shows only the conversations of records you may open."
+  },
+  "recordType": {
+    "SalesOrder": "Order",
+    "Quote": "Quote",
+    "Invoice": "Invoice",
+    "PaymentReminder": "Payment reminder",
+    "Shipment": "Shipment",
+    "Ddt": "Delivery note",
+    "ReturnAuthorisation": "Return",
+    "RepairOrder": "Repair",
+    "Complaint": "Complaint",
+    "SampleRound": "Sample round",
+    "ServiceCase": "Service case",
+    "ProductSafetyReport": "Safety report",
+    "Style": "Style",
+    "Certificate": "Certificate",
+    "Capa": "8D",
+    "MeasurementProfile": "Measurements",
+    "Party": "Customer",
+    "ChangeRequest": "Product change",
+    "ApprovalRequest": "Approval"
+  },
+  "catalogue": {
+    "reading": "Reading the catalogue order…",
+    "failed": "Couldn't load the catalogue order",
+    "noRight": "Catalogue orders need the orders right",
+    "noRightBody": "Ask an administrator for the right to see orders of this customer.",
+    "notFound": "Catalogue order not found",
+    "notFoundBody": "It is not there, or not yours to open.",
+    "title": "Catalogue order {number}",
+    "acceptOrder": "Accept as order",
+    "acceptQuote": "Accept as quote",
+    "refuse": "Refuse",
+    "handled": "Someone else changed this catalogue order at {time}",
+    "held": {
+      "DRAFT": "The customer is still writing it",
+      "ACCEPTED": "Already accepted",
+      "REFUSED": "Already refused",
+      "WITHDRAWN": "Withdrawn by the customer",
+      "right": "Only sales can accept or refuse a catalogue order ({right})"
+    },
+    "accept": {
+      "badPrice": "Line {n}: the price is not a price (e.g. 38.50)"
+    },
+    "done": {
+      "order": "{number} became order {made}",
+      "quote": "{number} became quote {made}",
+      "droppedSize": "Line {n}: size {size} is no longer offered and was left out",
+      "droppedLine": "Line {n} was left out",
+      "warnings_one": "{count} thing to check on what was made",
+      "warnings_other": "{count} things to check on what was made",
+      "open": "Open {made}",
+      "refused": "{number} refused: the customer reads your words"
+    },
+    "refuseHeld": "Say why: the customer reads it",
+    "outcome": {
+      "order": "Accepted as order {made}",
+      "quote": "Accepted as quote {made}",
+      "accepted": "Accepted",
+      "refused": "Refused: {reason}",
+      "withdrawn": "Withdrawn by the customer before we answered"
+    },
+    "facts": {
+      "sent": "Sent",
+      "sentBy": "{when} by {name}",
+      "asked": "Date asked",
+      "shipToWaitingHint": "A delivery address the customer added in its portal: accepting the order approves it",
+      "pieces_one": "{lines} line · {pieces} pieces",
+      "pieces_other": "{lines} lines · {pieces} pieces",
+      "net": "Value as shown",
+      "note": "Their note"
+    },
+    "col": {
+      "sizes": "Sizes",
+      "shown": "Price shown"
+    },
+    "lineProblem": "Line {n}: {words}",
+    "shipToWaiting": "The delivery address waits for its check: accepting approves it.",
+    "refuseTitle": "Refuse {number}",
+    "refuseReason": "Why (the customer reads it)",
+    "refuseHint": "In plain words, in the customer’s language: this is what their portal shows.",
+    "refusePreview": "{customer} reads:",
+    "acceptOrderTitle": "Accept {number} as an order",
+    "acceptQuoteTitle": "Accept {number} as a quote",
+    "acceptOrderHint": "The order is made with the customer’s terms and addresses; the customer reads \"Confirmed\" with its own number.",
+    "acceptQuoteHint": "A draft quote with these lines at today’s list prices (sizes no longer offered are left out); the customer reads it once you send it.",
+    "promise": "Promise date",
+    "promiseHint": "Starts as the date the customer asked for."
+  },
+  "customer": {
+    "title": "Make or match the customer of {number}",
+    "goMake": "Make the customer",
+    "goMatch": "Use this customer",
+    "reading": "Looking for the customer this may already be…",
+    "failed": "Couldn't check the customers",
+    "prospect": {
+      "name": "Name",
+      "company": "Company",
+      "email": "E-mail",
+      "phone": "Phone",
+      "basis": "Lawful basis"
+    },
+    "pick": "Whose request is it?",
+    "found_one": "{count} customer may be this prospect",
+    "found_other": "{count} customers may be this prospect",
+    "noneFound": "No customer of yours matches this prospect",
+    "ambiguous": "More than one customer has this address or domain: pick the right one.",
+    "by": {
+      "CONTACT": "Found by one of its contacts’ own address",
+      "DOMAIN": "Found by its company e-mail domain",
+      "NAME": "Found by its name or code"
+    },
+    "contactOf": "contact {name}",
+    "make": "A new customer from this prospect",
+    "makeHint": "Its contact gets the prospect’s name, address and phone, with the lawful basis carried",
+    "makeHeld": "Making a customer needs the right to make customers",
+    "addContact": "Add the prospect as a contact of {customer} (its lawful basis carried)",
+    "code": "Code",
+    "codeHint": "Proposed from the name; free to change (at most 24 letters and digits)",
+    "legalName": "Legal name",
+    "kind": "Kind",
+    "kindOf": {
+      "ORGANISATION": "A company",
+      "PERSON": "A person"
+    },
+    "status": "Status",
+    "statusHint": "A prospect until the customer is confirmed",
+    "statusOf": {
+      "PROSPECT": "Prospect (not confirmed yet)",
+      "ACTIVE": "Active"
+    },
+    "confirmMake_one": "I checked: this prospect is not the customer found above",
+    "confirmMake_other": "I checked: this prospect is none of the {count} customers found above",
+    "confirmMatch": "I checked: {number} is from {customer}",
+    "after": "Then the prospect’s own fields are cleared (its data lives in the contact), the request gets the customer’s own number, and the mail it came by joins its conversation, shared with this customer only.",
+    "held": {
+      "pick": "Pick a customer, or make a new one",
+      "code": "Give a code (letters and digits, at most 24)",
+      "name": "Give the legal name",
+      "confirm": "Tick that you checked it first"
+    }
+  },
+  "task": {
+    "title": "Ask {customer} for…",
+    "go": "Ask",
+    "kindLabel": "What do you need?",
+    "kind": {
+      "UPLOAD_DOCUMENT": "a document",
+      "ANSWER_MESSAGE": "an answer",
+      "SEND_MEASUREMENTS": "measurements"
+    },
+    "hint": {
+      "UPLOAD_DOCUMENT": "A file they add in their portal (a logo, a tech pack, a size chart)",
+      "ANSWER_MESSAGE": "An answer in this request’s conversation",
+      "SEND_MEASUREMENTS": "Riders’ measurements on the form in their portal"
+    },
+    "due": "By",
+    "dueHint": "Optional; reminders go before and after it",
+    "after": "{customer} sees it on its portal Home and in its list of things to do; it is done when they answer.",
+    "held": {
+      "prospect": "A prospect has no portal yet: make the customer first",
+      "closed": "This request is closed: a task here would go unanswered",
+      "kind": "Pick what you need",
+      "due": "Pick a day after today"
+    },
+    "refusal": {
+      "REQUEST_PROSPECT": "This request is from a prospect: make the customer first, then hand them a task in their portal.",
+      "REQUEST_CLOSED": "This request is closed (declined, lost or answered with a quote): ask on the quote or the order instead."
+    }
+  },
+  "addresses": {
+    "menu": "Inquiry addresses",
+    "menuHint": "The addresses whose mail becomes a request by itself",
+    "title": "Inquiry addresses",
+    "intro": "Mail sent to these addresses becomes a request in Incoming by itself — unknown senders included: they arrive as prospects. A known contact’s mail arrives as its customer’s request; a held mail (failed checks, spam) waits in Mail to sort.",
+    "close": "Close",
+    "save": "Save the addresses",
+    "saved": "The addresses are saved",
+    "failed": "Couldn't read the inquiry addresses",
+    "none": "No inquiry address yet: requests from mail are made by hand from Mail to sort.",
+    "listLabel": "Inquiry addresses",
+    "rowLabel": "Address {n}",
+    "remove": "Remove {address}",
+    "add": "Add an address",
+    "addHint": "At most {max}, at one of the company’s receiving domains ({domains})",
+    "addGo": "Add",
+    "domainsUnknown": "checked when you save",
+    "readOnly": "Changing them needs the right to change the sales settings.",
+    "belongs": "An address belongs to one company: another company’s inquiries never come to it.",
+    "reading": "Reading the addresses…",
+    "scope": {
+      "company": "This company’s own list",
+      "tenant": "The list every company without its own shares",
+      "none": "No list yet: these become the list every company without its own shares"
+    },
+    "held": {
+      "right": "Needs the right to change the sales settings",
+      "row": "Address {n} needs a look first",
+      "same": "Nothing changed",
+      "type": "Type an address"
+    },
+    "problem": {
+      "format": "Not an e-mail address",
+      "twice": "This address is in the list already",
+      "domain": "Not at a receiving domain of this company ({domains})",
+      "domainApi": "Not at a receiving domain of this company: mail there never reaches the factory",
+      "taken": "Another company’s inquiries come to this address",
+      "many": "At most {max} addresses",
+      "stale": "Someone changed the addresses meanwhile: here they are as they are now",
+      "followsTenant": "This company follows the shared list: change the shared list, or give the company sales settings of its own first",
+      "rows": "Some addresses cannot be used",
+      "at": "Address {n}: {problem}"
+    },
+    "door": {
+      "notLive_one": "Mail door not open yet · {count} address waits",
+      "notLive_other": "Mail door not open yet · {count} addresses wait",
+      "notLiveBody": "Mail to the inquiry addresses becomes a request once mail is received live (the mail provider’s receiving, a go-live step). Until then requests come by portal, phone and Mail to sort.",
+      "noDomain": "Set up the mail domain first",
+      "setUp": "Admin › Connections"
     }
   }
 }

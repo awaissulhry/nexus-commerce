@@ -4,7 +4,7 @@ import { ConnectionRecord } from '../../../../../../../areas/admin/connections/r
 
 export const metadata: Metadata = { title: 'Connection · Nexus Factory' }
 
-/** Admin › Connections & API › a connection (SCR-087 Connection record; `?tab=overview|settings|calls|inbound|activity`). */
+/** Admin › Connections & API › a connection (SCR-087 Connection record; `?tab=overview|settings|calls|inbound`; the old `activity` opens Overview with the thread — B-TH-269). */
 export default async function Page({ params }: { params: Promise<{ accountId: string }> }) {
   const { accountId } = await params
   return (

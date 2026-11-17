@@ -4,7 +4,7 @@ import { WorkerRecord } from '../../../../../../../../areas/admin/users/record/W
 
 export const metadata: Metadata = { title: 'Floor worker · Nexus Factory' }
 
-/** Admin › Users › a floor worker (SCR-011 floor; `?tab=profile|badge|activity`). */
+/** Admin › Users › a floor worker (SCR-011 floor; `?tab=profile|badge`; the old `activity` opens Profile with the thread — B-TH-269). */
 export default async function Page({ params }: { params: Promise<{ workerId: string }> }) {
   const { workerId } = await params
   return (

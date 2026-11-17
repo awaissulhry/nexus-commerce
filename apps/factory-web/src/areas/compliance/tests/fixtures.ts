@@ -155,7 +155,7 @@ export function demoChecklist(lot: Lot, open: readonly LotCheck['code'][] = [], 
       : check('PPE_CERTIFICATE', 'NOT_NEEDED', 'Not a certified PPE component.'),
     lot.item.isPpeComponent
       ? open.includes('SUPPLIER_DOCUMENTS')
-        ? check('SUPPLIER_DOCUMENTS', 'OPEN', "The supplier's PPE certificate or declaration for this lot is missing.", 'Attach it on the Documents tab.')
+        ? check('SUPPLIER_DOCUMENTS', 'OPEN', "The supplier's PPE certificate or declaration for this lot is missing.", 'Attach it under Documents & release.')
         : check('SUPPLIER_DOCUMENTS', 'OK', "The supplier's PPE certificate is attached and valid.")
       : check('SUPPLIER_DOCUMENTS', 'NOT_NEEDED', 'No supplier document is required for this material.'),
     mode === 'UNBLOCK' ? check('HOLD', 'NOT_NEEDED', 'A blocked lot has no receiver hold.') : open.includes('HOLD') ? check('HOLD', 'OPEN', `Hold by the receiver: ${lot.hold ?? ''}`, 'Another quality person checks it and clears the hold.') : check('HOLD', 'OK', 'No hold from the receiver.'),

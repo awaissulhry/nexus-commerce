@@ -125,6 +125,12 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   },
   TechnicalFile: async (client, id) => (await client.technicalFile.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   // ---- end B-TH-075
+  // ---- B-TH-066: a project by its number and name ("PRJ-26-012 FW27 airbag line": the chip, the bell, My tasks).
+  Project: async (client, id) => {
+    const project = await client.project.findUnique({ where: { id }, select: { number: true, name: true } })
+    return project ? `${project.number} ${project.name}` : null
+  },
+  // ---- end B-TH-066
 })
 
 /** B-TH-075: the record types with a label of their own (every thread type: labels-complete.pg.vitest.test.ts holds it). */

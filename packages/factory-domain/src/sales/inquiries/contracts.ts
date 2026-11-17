@@ -6,6 +6,8 @@ import { CUSTOMER_MATCHES, DECLINE_REASONS, INQUIRY_LIMITS, INQUIRY_REFUSALS, IN
 import { PPE_CATEGORIES, PRODUCT_TYPES } from '../../product/styles/rules'
 import { styleCode } from '../../product/styles/contracts'
 import { sizeCode } from '../../product/sizes/contracts'
+// B-TH-094: production's answer on a request (office only).
+import { productionActionView, productionView } from './production-answer'
 // B-TH-235: the list's door from Sales › Reports' request figure.
 import { REQUEST_OUTCOMES } from './rules'
 
@@ -342,6 +344,11 @@ export const inquiryRow = output({
   /** The request's files and its mail's kept attachments, counted by kind (null: no files.read over its company). */
   fileCounts: output({ photos: z.number().int(), documents: z.number().int() }).nullable().optional(),
   // ── end B-TH-216 ──
+  // ---- B-TH-094 (N17; O-SAL-INQ-LIST.list-F10 the Production column, .pane-head-F07 its chip): production's answer — OK, or
+  //      not before week N (null: not answered); the record adds who answered. Office only. Always sent; optional for the web's
+  //      typed demo data.
+  production: productionView.nullable().optional(),
+  // ---- end B-TH-094
 })
 
 /** B-TH-216: GET /sales/inquiries/:inquiryId/picture — a presigned GET of the small preview (60 s); null until it exists. */
@@ -441,6 +448,8 @@ export const inquiryView = inquiryRow.extend({
    * sent; optional for the web's typed demo data.
    */
   messageTo: output({ via: z.enum(['PORTAL', 'MAIL']).nullable(), to: z.array(z.string()), language: z.string().nullable(), refusal: inquiryRefusal.nullable() }).optional(),
+  /** B-TH-094: whether this reader types production's answer (planning.promise.manage over the request), else why not. Optional as messageTo. */
+  productionAction: productionActionView.optional(),
   actions: output({
     edit: action,
     assign: action,

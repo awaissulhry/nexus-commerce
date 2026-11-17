@@ -2,14 +2,12 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { CheckCheck, CreditCard, ExternalLink, FileX, MessageSquare, MoreHorizontal, ShieldOff } from 'lucide-react'
-import { Banner, Card, EmptyState, Menu, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
-import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Kbd, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { CheckCheck, CreditCard, ExternalLink, FileX, ShieldOff } from 'lucide-react'
+import { Banner, Card, EmptyState, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
-import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
 import { dayInstant } from '../../../_shared/model'
 import type { SupplierInvoice } from '../../api'
 import { actionHeld, MATCH_TONE, PAYABLES_NAMESPACE, RECORD_TABS, STATUS_TONE, xmlHref, type Phrase, type RecordTab } from '../../model'
@@ -18,43 +16,47 @@ import { RecordDialogs } from './Dialogs'
 import { approveHeldOf, ApprovalTab, LinesTab, MatchTab, PaymentTab, type SupplierInvoiceDepth } from './RecordTabs'
 import '../../payables.css'
 import '../../../_shared/finance.css'
+// ---- B-TH-268: the supplier invoice on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 
 export type { SupplierInvoiceActions, SupplierInvoiceModel } from '../record-model'
 
 /**
- * SCR-153 — a supplier invoice's record (design finance.payables "Record: Supplier invoice", `/finance/payables/<id>?tab=…`;
- * 00 §2.2: the tabs always in view). The band: ‹ Supplier invoices, "<number> · <supplier>", its state, the match in words,
- * where it came from (SDI · e-mail · typed), the next step as the primary (Approve — held with the reason in words, e.g.
- * "You entered this invoice, so someone else approves it" —; Mark paid once approved), "As received" (the XML and PDF in a
- * new tab), the thread (⌘J), ⋯ (Match again, Send to buyer, Reject with reason, Reopen, Withdraw approval, Void a typed one,
- * Copy number). Tabs: Lines (mapped to PO lines, autosave per cell), Match (MatchPanel), Approval, Payment, Activity (the
- * record panels; beside any tab on a wide screen with ⌘J). Keys: a approves (held when you entered it), ⌘J the thread.
+ * SCR-153 — a supplier invoice's record (design finance.payables "Record: Supplier invoice", `/finance/payables/<id>?tab=…`), on
+ * RecordFrame (B-TH-268; the rule of picture 38, the tabs of 08-tabs O-FIN-PAY): the band in the shell's band row (‹ Supplier
+ * invoices, "<number> · <supplier>", ONE pill — its state —, in its details the match in words, where it came from (SDI · e-mail ·
+ * typed), the dates and the company; the next step as the primary — Approve, held with the reason in words (e.g. "You entered this
+ * invoice, so someone else approves it"); Mark paid once approved — beside "As received" (the XML and PDF in a new tab); the Thread
+ * button ⌘J, the frame's; ⋯ Match again, Send to buyer, Reject with reason, Reopen, Withdraw approval, Void a typed one, the PDF,
+ * Copy number, its Keyboard line with the record's own key "a"), the docked thread beside every tab (the supplier's own; Activity's
+ * tools in its "⋯", R-ACT), the tabs 5 → 3: Lines (mapped to PO lines, autosave per cell), Match (MatchPanel), Approval & payment
+ * (who approves and why it waits, then when and how it is paid). Every banner in the ONE notice of the body column.
  */
-export function SupplierInvoiceView({ model, actions, panels, depth }: { model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; panels?: ReactNode; /** B-W2b-425: the area check, dual approval and the payment batch. */ depth?: SupplierInvoiceDepth }) {
+// B-TH-268: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
+export function SupplierInvoiceView({ model, actions, thread, printThread, depth }: { model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; thread?: ReactNode; printThread?: ReactNode; /** B-W2b-425: the area check, dual approval and the payment batch. */ depth?: SupplierInvoiceDepth }) {
   return (
     <WithMessages namespaces={[PAYABLES_NAMESPACE, 'lists', 'records']}>
-      <Record model={model} actions={actions} panels={panels} depth={depth} />
+      <Record model={model} actions={actions} thread={thread} printThread={printThread} depth={depth} />
     </WithMessages>
   )
 }
 
-function Record({ model, actions, panels, depth }: { model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; panels?: ReactNode; depth?: SupplierInvoiceDepth }) {
+function Record({ model, actions, thread, printThread, depth }: { model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; thread?: ReactNode; printThread?: ReactNode; depth?: SupplierInvoiceDepth }) {
   const t = useT(PAYABLES_NAMESPACE)
   const listHref = `${model.prefix}/finance/payables`
-  if (!model.can.view) {
-    return (
-      <div className="fw-fpy">
-        <EmptyState icon={<ShieldOff size={24} aria-hidden />} title={t('noAccess.title')} description={t('noAccess.body')} />
-      </div>
-    )
-  }
+  // B-TH-268: no right, loading, a failed read and not found inside the frame, with no thread.
+  const frame = (title: ReactNode, body: ReactNode) => (
+    <RecordFrame recordType="SupplierInvoice" personId={model.personId ?? null} band={{ back: <Link href={listHref}>{t('record.back')}</Link>, title, moreLabel: t('record.more') }} thread={null} threadLabel={t('record.dockLabel')}>
+      {body}
+    </RecordFrame>
+  )
+  if (!model.can.view) return frame(t('record.title'), <EmptyState icon={<ShieldOff size={24} aria-hidden />} title={t('noAccess.title')} description={t('noAccess.body')} />)
   const loaded = model.invoice
   if (loaded.status !== 'ready') {
-    return (
-      <div className="fw-fpy">
-        <div className="fw-fin-band">
-          <DetailHeader backAsChild backLabel={<Link href={listHref}>{t('record.back')}</Link>} title={loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('record.title')} />
-        </div>
+    return frame(
+      loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('record.title'),
+      <>
         {loaded.status === 'loading' ? (
           <Card padded aria-busy="true">
             <p className="fw-fpy-muted" role="status">
@@ -86,13 +88,13 @@ function Record({ model, actions, panels, depth }: { model: SupplierInvoiceModel
             />
           </Card>
         )}
-      </div>
+      </>,
     )
   }
-  return <Ready invoice={loaded.value} model={model} actions={actions} panels={panels} depth={depth} />
+  return <Ready invoice={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} depth={depth} />
 }
 
-function Ready({ invoice, model, actions, panels, depth }: { invoice: SupplierInvoice; model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; panels?: ReactNode; depth?: SupplierInvoiceDepth }) {
+function Ready({ invoice, model, actions, thread, printThread, depth }: { invoice: SupplierInvoice; model: SupplierInvoiceModel; actions?: SupplierInvoiceActions; thread?: ReactNode; printThread?: ReactNode; depth?: SupplierInvoiceDepth }) {
   const t = useT(PAYABLES_NAMESPACE)
   const locale = useLocale()
   const recordHref = `${model.prefix}/finance/payables/${invoice.id}`
@@ -103,17 +105,13 @@ function Ready({ invoice, model, actions, panels, depth }: { invoice: SupplierIn
   const manage = (action: 'dispute' | 'reopen' | 'void' | 'map'): Phrase | null => (!can.manage ? { key: 'held.manage' } : actionHeld(invoice, action))
   const outside = invoice.matches.some((entry) => entry.verdict !== 'WITHIN' && !entry.accepted)
 
-  // Keys: ⌘J the thread; a approves (held when you entered it; never while typing or inside a dialog).
+  // Keys: a approves (held when you entered it; never while typing, inside a dialog or a menu, nor from inside the docked thread, whose
+  // own single keys answer there); ⌘J is the frame's (the thread). "a" is listed in the frame's ONE Keyboard window (band.keys).
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null
       const typing = !!target && (!!target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') {
-        event.preventDefault()
-        actions?.onDock?.()
-        return
-      }
-      if (typing || target?.closest('[role="dialog"], [role="menu"]') || model.dialog || event.metaKey || event.ctrlKey || event.altKey) return
+      if (typing || target?.closest('[role="dialog"], [role="menu"], .fw-rcf-dock') || model.dialog || event.metaKey || event.ctrlKey || event.altKey) return
       if (event.key === 'a' && invoice.status === 'RECEIVED' && !approveHeld) {
         event.preventDefault()
         actions?.onDialog?.({ kind: 'approve', note: '' })
@@ -123,17 +121,19 @@ function Ready({ invoice, model, actions, panels, depth }: { invoice: SupplierIn
     return () => window.removeEventListener('keydown', onKey)
   })
 
+  // B-TH-268: the merged tab says both its jobs ("Approval & payment"; R-6); its address stays `approval`.
+  const tabWords = (tab: RecordTab) => t(tab === 'approval' ? 'tab.approvalPayment' : `tab.${tab}`)
   const tabs: TabItem[] = RECORD_TABS.map((tab: RecordTab) => ({
     id: tab,
     href: `${recordHref}?tab=${tab}`,
     label:
       (tab === 'match' && outside) || (tab === 'approval' && invoice.status === 'RECEIVED' && invoice.approval.ready) ? (
         <span className="fw-fin-tablabel">
-          {t(`tab.${tab}`)}
+          {tabWords(tab)}
           <span className="fw-fin-dot" aria-label={t(tab === 'match' ? 'tab.differences' : 'tab.ready')} role="img" />
         </span>
       ) : (
-        t(`tab.${tab}`)
+        tabWords(tab)
       ),
     count: tab === 'lines' ? invoice.lines.length : tab === 'match' ? invoice.matches.length : null,
   }))
@@ -178,22 +178,44 @@ function Ready({ invoice, model, actions, panels, depth }: { invoice: SupplierIn
     },
   ]
 
-  const activity = panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : null)
-  const showDock = model.dockOpen && model.tab !== 'activity' && !!activity
   const day = (value: string) => formatDate(dayInstant(value), { locale })
 
   return (
-    <div className="fw-fpy">
-      <div className="fw-fin-band">
-        <DetailHeader
-          backAsChild
-          backLabel={<Link href={`${model.prefix}/finance/payables`}>{t('record.back')}</Link>}
-          title={
+    <>
+      <RecordFrame
+        recordType="SupplierInvoice"
+        personId={model.personId ?? null}
+        threadLabel={t('record.dockLabel')}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: <Link href={`${model.prefix}/finance/payables`}>{t('record.back')}</Link>,
+          title: (
             <span className="fw-fin-title">
               {invoice.number} <span className="fw-fin-title-sub">· {invoice.supplier.name}</span>
             </span>
-          }
-          actions={
+          ),
+          // ONE pill: its state; the match in words travels with the identity (a Tag of its tone).
+          status: <Pill tone={STATUS_TONE[invoice.status]}>{t(`status.${invoice.status}`)}</Pill>,
+          meta: (
+            <>
+              <Tag tone={MATCH_TONE[invoice.matchStatus]}>{t(`match.${invoice.matchStatus}`)}</Tag>
+              <Tag tone={invoice.source === 'SDI' ? 'info' : 'neutral'}>{t(`source.${invoice.source}`)}</Tag>
+              {invoice.kind === 'CREDIT_NOTE' && <Tag tone="neutral">{t('kind.CREDIT_NOTE')}</Tag>}
+              {invoice.docType && <span className="fw-fpy-muted fw-fpy-code">{invoice.docType}</span>}
+              <span className="fw-fpy-muted">{t('record.dates', { issued: day(invoice.issueDate), received: day(invoice.receivedOn) })}</span>
+              <span className="fw-fpy-muted">{invoice.company.name}</span>
+              {invoice.creditOf && (
+                <Link className="fw-fpy-link fw-fpy-muted" href={`${model.prefix}/finance/payables/${invoice.creditOf.id}`}>
+                  {t('record.creditOf', { number: invoice.creditOf.number })}
+                </Link>
+              )}
+              <span className="fw-fin-status" role="status">
+                {t(`live.${model.live}`)}
+              </span>
+            </>
+          ),
+          primary: (
             <span className="fw-fin-actions">
               {primary}
               <Button size="sm" asChild>
@@ -201,90 +223,59 @@ function Ready({ invoice, model, actions, panels, depth }: { invoice: SupplierIn
                   <ExternalLink size={14} aria-hidden /> <span>{t('record.asReceived')}</span>
                 </Link>
               </Button>
-              {activity && (
-                <Button
-                  size="sm"
-                  variant={model.dockOpen ? 'tonal' : 'secondary'}
-                  active={model.dockOpen}
-                  aria-pressed={model.dockOpen}
-                  onClick={() => actions?.onDock?.()}
-                  title={t('record.dockHint')}
-                >
-                  <MessageSquare size={14} aria-hidden /> <span>{t('record.dock')}</span>
-                  <span className="fw-fin-keys" aria-hidden>
-                    <Kbd>⌘</Kbd>
-                    <Kbd>J</Kbd>
-                  </span>
-                </Button>
-              )}
-              <Menu label={<MoreHorizontal size={16} aria-label={t('record.more')} />} items={more} align="right" triggerProps={{ 'aria-label': t('record.more') }} />
             </span>
-          }
-        />
-        <div className="fw-fin-meta-row">
-          <span className="fw-fin-meta">
-            <Pill tone={STATUS_TONE[invoice.status]}>{t(`status.${invoice.status}`)}</Pill>
-            <Pill tone={MATCH_TONE[invoice.matchStatus]}>{t(`match.${invoice.matchStatus}`)}</Pill>
-            <Tag tone={invoice.source === 'SDI' ? 'info' : 'neutral'}>{t(`source.${invoice.source}`)}</Tag>
-            {invoice.kind === 'CREDIT_NOTE' && <Tag tone="neutral">{t('kind.CREDIT_NOTE')}</Tag>}
-            {invoice.docType && <span className="fw-fpy-muted fw-fpy-code">{invoice.docType}</span>}
-            <span className="fw-fpy-muted">{t('record.dates', { issued: day(invoice.issueDate), received: day(invoice.receivedOn) })}</span>
-            <span className="fw-fpy-muted">{invoice.company.name}</span>
-            {invoice.creditOf && (
-              <Link className="fw-fpy-link fw-fpy-muted" href={`${model.prefix}/finance/payables/${invoice.creditOf.id}`}>
-                {t('record.creditOf', { number: invoice.creditOf.number })}
-              </Link>
-            )}
-          </span>
-          <span className="fw-fin-status" role="status">
-            {t(`live.${model.live}`)}
-          </span>
-        </div>
+          ),
+          more,
+          moreLabel: t('record.more'),
+          // PR-14: the record's own key in the frame's ONE Keyboard window.
+          keys: [{ keys: ['A'], label: t('keys.approve') }],
+        }}
+      >
         <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
-      </div>
 
-      {model.changed && (
-        <Banner
-          tone="info"
-          title={t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
-          action={
-            <Button size="sm" onClick={() => actions?.onReload?.()}>
-              {t('record.reload')}
-            </Button>
-          }
-        />
-      )}
-      {model.notice && (
-        <Banner
-          tone={model.notice.tone}
-          title={model.notice.phrases.map((phrase) => t(phrase.key, phrase.params)).join(' ')}
-          action={
-            actions?.onDismissNotice ? (
-              <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
-                {t('common.dismiss')}
-              </Button>
-            ) : undefined
-          }
-        />
-      )}
-      {!can.manage && !can.approve && !can.pay && !can.accept && <Banner tone="info" title={t('record.readOnly')} />}
+        {/* B-TH-268: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+        <RecordNotices>
+          {model.changed && (
+            <Banner
+              tone="info"
+              title={t('record.changed', { time: formatTime(model.changed.at, { locale }) })}
+              action={
+                <Button size="sm" onClick={() => actions?.onReload?.()}>
+                  {t('record.reload')}
+                </Button>
+              }
+            />
+          )}
+          {model.notice && (
+            <Banner
+              tone={model.notice.tone}
+              title={model.notice.phrases.map((phrase) => t(phrase.key, phrase.params)).join(' ')}
+              action={
+                actions?.onDismissNotice ? (
+                  <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
+                    {t('common.dismiss')}
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
+          {!can.manage && !can.approve && !can.pay && !can.accept && <Banner tone="info" title={t('record.readOnly')} />}
+        </RecordNotices>
 
-      <div className={showDock ? 'fw-fin-body has-dock' : 'fw-fin-body'}>
         <div className="fw-fin-main">
           {model.tab === 'lines' && <LinesTab invoice={invoice} model={model} actions={actions} />}
           {model.tab === 'match' && <MatchTab invoice={invoice} model={model} actions={actions} depth={depth} />}
-          {model.tab === 'approval' && <ApprovalTab invoice={invoice} model={model} actions={actions} depth={depth} />}
-          {model.tab === 'payment' && <PaymentTab invoice={invoice} model={model} actions={actions} depth={depth} />}
-          {model.tab === 'activity' && (activity ?? <p className="fw-fpy-muted">{t('record.noPanels')}</p>)}
+          {/* B-TH-268: Approval & payment — who approves and why it waits, then when and how it is paid (both tabs' work, in that order). */}
+          {model.tab === 'approval' && (
+            <div className="fw-fpy-stack">
+              <ApprovalTab invoice={invoice} model={model} actions={actions} depth={depth} />
+              <PaymentTab invoice={invoice} model={model} actions={actions} depth={depth} />
+            </div>
+          )}
         </div>
-        {showDock && (
-          <aside className="fw-fin-dock" aria-label={t('record.dockLabel')}>
-            {activity}
-          </aside>
-        )}
-      </div>
+      </RecordFrame>
 
       <RecordDialogs invoice={invoice} model={model} actions={actions} />
-    </div>
+    </>
   )
 }

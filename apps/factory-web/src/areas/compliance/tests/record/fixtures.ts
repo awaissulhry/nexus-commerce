@@ -1,10 +1,9 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
-import { RecordPanelsView } from '../../../../record-panels/view/RecordPanelsView'
 import { failedRead, reading, ready } from '../../../quality/_shared/model'
-import { canFor, day, inShell, ME, NOW, PREFIX, uid, type RoleCase } from '../../../quality/_shared/fixtures'
+import { canFor, day, inShell, ME, NOW, PREFIX, ROLE_PERMISSIONS, uid, type RoleCase } from '../../../quality/_shared/fixtures'
+// B-TH-267: the lot's docked thread (made-up; the page mounts the office's OfficeRecordThread docked).
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import type { Lot } from '../../../quality/_shared/lots'
 import { demoChecklist, demoDetail, demoDocument, demoResult, lotByCode, STRICT } from '../fixtures'
 import { blankDocument, blankResult, type LotRecordModel } from '../model'
@@ -18,28 +17,37 @@ import { labCostLotCases } from '../lab-cost/fixtures'
  * it, the result dialog with a live Pass, a live Fail, a supplier's report and a detection limit that proves nothing, a
  * refused result, a later FAIL on a released lot (its work orders and the PPE register entry it opened), the documents
  * of a PPE component, every decision dialog (release with checks open, release with the code typed, reject, block,
- * release again, clear the receiver's hold), a block's answer, a rejected lot, the activity, the thread beside a tab,
+ * release again, clear the receiver's hold), a block's answer, a rejected lot, the thread docked beside both tabs (B-TH-267:
+ * RecordFrame, Activity's tools in the thread's "⋯"; the lot's supplier named for a reader of stock, the office's notes without),
  * loading, failed, not found, and the role cases.
  */
 
 const TODAY = day(29)
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
+/** A made-up supplier of the DEMO lots (the thread's only party). */
+const SUPPLIER = 'Conceria Demo S.r.l.'
 
-function panelsFor(lot: Lot): ReactNode {
-  const model: RecordPanelsViewModel = { ...conversation, record: { type: 'Lot', id: lot.id, companyId: lot.companyId, siteId: lot.siteId }, title: lot.code, party: null }
-  return createElement(RecordPanelsView, { model })
+/**
+ * B-TH-267: the lot's ONE thread as the page draws it — none without threads.read; its supplier named (the lab's read names it,
+ * TH-6 part B), the office's notes for a lot with no supplier.
+ */
+function threadFor(lot: Lot, role: RoleCase) {
+  const held = ROLE_PERMISSIONS[role] as readonly string[]
+  if (!held.includes('threads.read')) return null
+  const named = lot.supplierId !== null
+  return designDockedThread({ recordType: 'Lot', record: lot.code, party: named ? { name: SUPPLIER, role: 'supplier' } : null })
 }
 
 interface LotCase {
   readonly model: LotRecordModel
   readonly role: RoleCase
-  readonly panels: boolean
+  /** B-TH-267: draw the docked thread (false: a state without one — loading, missing, not for the role). */
+  readonly thread: boolean
 }
 
-function lotCase(lot: Lot, over: Partial<LotRecordModel> = {}, role: RoleCase = 'owner', panels = true): LotCase {
+function lotCase(lot: Lot, over: Partial<LotRecordModel> = {}, role: RoleCase = 'owner', thread = true): LotCase {
   return {
     role,
-    panels,
+    thread,
     model: {
       prefix: PREFIX,
       tab: 'results',
@@ -59,7 +67,6 @@ function lotCase(lot: Lot, over: Partial<LotRecordModel> = {}, role: RoleCase = 
       dialogLines: [],
       answer: null,
       blocked: null,
-      dockOpen: false,
       ...over,
     },
   }
@@ -67,7 +74,7 @@ function lotCase(lot: Lot, over: Partial<LotRecordModel> = {}, role: RoleCase = 
 
 function LotDesign({ model }: { model: LotCase }) {
   const lot = model.model.detail.value?.lot ?? null
-  const page = createElement(LotRecordView, { model: model.model, panels: model.panels && lot ? panelsFor(lot) : undefined })
+  const page = createElement(LotRecordView, { model: model.model, thread: model.thread && lot ? threadFor(lot, model.role) : null })
   return inShell('/compliance/tests', page, model.role)
 }
 
@@ -113,12 +120,12 @@ export const designScreen = defineDesignScreen<LotCase>({
   cases: [
     { id: 'waiting-result', label: 'In quarantine, waiting its Cr VI result', model: lotCase(pending, { detail: ready(pendingDetail) }), note: 'Release is held: the band says how many checks are open (r opens the checklist).' },
     { id: 'ready', label: 'Pass on a lab report: ready to release', model: lotCase(ready232, { detail: ready(readyDetail) }) },
-    { id: 'release-tab', label: 'Release tab: every check passes', model: lotCase(ready232, { tab: 'release', detail: ready(readyDetail) }) },
-    { id: 'release-open', label: 'Release tab: two checks open (Cr VI, the receiver’s hold)', model: lotCase(held, { tab: 'release', detail: ready(heldDetail) }) },
+    { id: 'release-tab', label: 'Documents & release: every check passes', model: lotCase(ready232, { tab: 'release', detail: ready(readyDetail) }) },
+    { id: 'release-open', label: 'Documents & release: two checks open (Cr VI, the receiver’s hold)', model: lotCase(held, { tab: 'release', detail: ready(heldDetail) }) },
     // B-W2b-GF5 (G369): quality releases only what passed its incoming inspection.
     {
       id: 'release-incoming',
-      label: 'Release tab: a hide the incoming inspection did not accept is not on hold',
+      label: 'Documents & release: a hide the incoming inspection did not accept is not on hold',
       model: lotCase(ready232, { tab: 'release', detail: ready({ ...readyDetail, checklist: demoChecklist(ready232, ['INCOMING']) }) }),
     },
     {
@@ -179,8 +186,9 @@ export const designScreen = defineDesignScreen<LotCase>({
       }),
     },
     { id: 'supplier-report', label: "A released lot on a supplier's report (article and period)", model: lotCase(releasedLot, { detail: ready(releasedDetail) }) },
-    { id: 'documents', label: 'Documents of a PPE component: the certificate missing', model: lotCase(protector, { tab: 'documents', detail: ready(protectorDetail) }) },
-    { id: 'document-dialog', label: 'Add document (kind, valid to, note, file)', model: lotCase(protector, { tab: 'documents', detail: ready(protectorDetail), dialog: { kind: 'document' }, documentDraft: { kind: 'PPE_CERTIFICATE', validTo: '2028-06-30', note: '', fileName: 'demo-ppe-declaration.pdf' } }) },
+    // B-TH-267: Documents merged into Documents & release — the checklist names the missing certificate right above Add document.
+    { id: 'documents', label: 'Documents & release of a PPE component: the certificate missing, Add document under the checklist', model: lotCase(protector, { tab: 'release', detail: ready(protectorDetail) }) },
+    { id: 'document-dialog', label: 'Add document (kind, valid to, note, file)', model: lotCase(protector, { tab: 'release', detail: ready(protectorDetail), dialog: { kind: 'document' }, documentDraft: { kind: 'PPE_CERTIFICATE', validTo: '2028-06-30', note: '', fileName: 'demo-ppe-declaration.pdf' } }) },
     { id: 'release-dialog-open', label: 'Release: checks still open (held with the reason)', model: lotCase(held, { tab: 'release', detail: ready(heldDetail), dialog: { kind: 'decide', decision: 'release' } }) },
     { id: 'release-dialog', label: 'Release: the code typed, ready', model: lotCase(ready232, { tab: 'release', detail: ready(readyDetail), dialog: { kind: 'decide', decision: 'release' }, decideDraft: { code: 'DEMO-L-0232', reason: '' } }) },
     {
@@ -201,17 +209,24 @@ export const designScreen = defineDesignScreen<LotCase>({
     { id: 'unblock-dialog', label: 'Release a blocked lot again: the checks and the reason', model: lotCase(blockedLot, { tab: 'release', detail: ready(blockedDetail), dialog: { kind: 'decide', decision: 'unblock' } }) },
     { id: 'clear-hold-dialog', label: 'Clear the receiver’s hold (what you checked)', model: lotCase(held, { tab: 'release', detail: ready(heldDetail), dialog: { kind: 'decide', decision: 'clearHold' }, decideDraft: { code: '', reason: 'Checked the 3 hides: surface scratches only, outside the cutting zones.' } }) },
     { id: 'rejected', label: 'A rejected lot: final, nothing left to decide', model: lotCase(rejected, { tab: 'release', detail: ready(rejectedDetail) }) },
-    { id: 'activity', label: 'Activity: the thread, files and history', model: lotCase(ready232, { tab: 'activity', detail: ready(readyDetail) }) },
-    { id: 'dock', label: 'The thread beside the results (wide screens, ⌘J)', model: lotCase(ready232, { detail: ready(readyDetail), dockOpen: true }), note: 'On a narrower screen the Thread button opens Activity.' },
+    // ---- B-TH-267: the lot's ONE thread docked beside both tabs (the same conversation as Warehouse › Lots)
+    {
+      id: 'thread-docked',
+      label: 'TH-6 · Results & limits with the thread docked (40 %): Activity’s tools in its "⋯"; the same conversation as Warehouse › Lots',
+      model: lotCase(ready232, { detail: ready(readyDetail) }),
+      note: 'The band sits in the shell’s band row with ONE pill; the lot’s thread is docked at 40 % (519 px at 1440, 711 px at 1920), sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me. An old ?tab=activity lands here with the thread opened. Below 1280 px the band’s Thread button opens it full width.',
+    },
+    { id: 'thread-release', label: 'TH-6 · Documents & release with the thread: the checklist, then the documents', model: lotCase(held, { tab: 'release', detail: ready(heldDetail) }) },
+    // TH-6 part B: a lot that names no supplier (read only: no stock read either, so the same-conversation line has no link).
+    { id: 'thread-notes-only', label: 'TH-6 · A lot with no supplier: the thread names no party — the office’s notes', model: lotCase({ ...ready232, supplierId: null }, { detail: ready(demoDetail({ ...ready232, supplierId: null })) }, 'readOnly') },
+    // ---- end B-TH-267
     { id: 'inspector', label: 'Quality inspector: every lot action', model: lotCase(ready232, { tab: 'release', detail: ready(readyDetail) }, 'inspector') },
-    { id: 'read-only', label: 'Read-only: sees everything, every action held with its reason', model: lotCase(pending, { detail: ready(pendingDetail) }, 'readOnly', false), note: 'No thread read either: Activity says which permission it needs.' },
-    { id: 'read-only-activity', label: 'Read-only on Activity: which permission the panels need', model: lotCase(pending, { tab: 'activity', detail: ready(pendingDetail) }, 'readOnly', false) },
+    { id: 'read-only', label: 'Read-only: sees everything, every action held with its reason', model: lotCase(pending, { detail: ready(pendingDetail) }, 'readOnly') },
     { id: 'no-permission', label: 'Production manager: not for this role', model: lotCase(pending, {}, 'production', false) },
     { id: 'sales', label: 'Sales: not for this role', model: lotCase(pending, {}, 'sales', false) },
     { id: 'loading', label: 'Loading', model: lotCase(pending, { detail: reading(), asOf: null, live: 'connecting' }, 'owner', false) },
     { id: 'error', label: "The API didn't answer", model: lotCase(pending, { detail: failedRead('problem.unavailable') }, 'owner', false) },
     { id: 'not-found', label: 'Not found (another company’s lot)', model: lotCase(pending, { detail: failedRead('problem.notFound') }, 'owner', false) },
-    { id: 'shortcuts', label: 'The keys (?)', model: lotCase(ready232, { detail: ready(readyDetail), dialog: { kind: 'shortcuts' } }) },
     // B-W2b-288 (FU2:03): the lab's price typed with a result and read back.
     ...labCostLotCases(lotCase, pending, pendingDetail, passDraft, readyDetail),
   ],

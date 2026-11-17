@@ -49,10 +49,10 @@ export type DeclineReason = (typeof DECLINE_REASONS)[number]
  * What a request became, as Sales › Reports' request figure counts it (factory-domain insights/sales-reports requestFiguresOf):
  * ORDERED — an order was made straight from it (ORDERED) or from its quote (an order of one of the quote's versions, not
  * cancelled, that the reader may see); DECLINED — declined for any reason but "Not an order"; NOT_AN_ORDER — declined as not an
- * order. The figure's other parts are the list's own tiles (ALL, OPEN, QUOTED, LOST). Sales › Incoming lists exactly the rows a
+ * order; B-TH-095: WITHDRAWN — its customer withdrew it from the portal before the office decided. The figure's other parts are the list's own tiles (ALL, OPEN, QUOTED, LOST). Sales › Incoming lists exactly the rows a
  * figure counts with `?outcome=` (and `?from=&to=` for the period).
  */
-export const REQUEST_OUTCOMES = ['ORDERED', 'DECLINED', 'NOT_AN_ORDER'] as const
+export const REQUEST_OUTCOMES = ['ORDERED', 'DECLINED', 'NOT_AN_ORDER', 'WITHDRAWN'] as const // B-TH-095: WITHDRAWN
 export type RequestOutcome = (typeof REQUEST_OUTCOMES)[number]
 // ---- end B-TH-235
 
