@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { GRAINS } from '@nexus/factory-domain/auth/grains/grains'
 import { FACTORY_PERMISSIONS } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { FIELD_AUDIENCES, FIELD_TYPES, OPTION_ICONS } from '@nexus/factory-domain/fields/rules'
@@ -41,6 +41,15 @@ import {
   withDraft,
   type DraftContext,
 } from './model'
+
+// B-TH-242: the DS Modal opens only after hydration, so the server draws no dialog: drawn in place here (as daily.vitest.test.ts does),
+// so a dialog's words are checked too.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), subtitle as never, children as never, footer as never) : null
+  return { ...actual, Modal }
+})
 
 /**
  * Admin › Fields & lists (B-W2b-431, SCR-164) and the record's custom-fields section (SCR-520): the address, the field

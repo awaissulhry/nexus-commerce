@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { LOCALES } from '../../../../lib/i18n/locales'
 import { CATALOGUE, createTranslator, messagesFor, placeholdersOf } from '../../../../lib/i18n/messages'
 import { I18nProvider } from '../../../../lib/i18n/provider'
@@ -11,6 +11,14 @@ import type { SavedView, ViewsAnswer } from '../../../../list-frame/tools/transp
 import { ROW_VIEWS } from '../model'
 import { exportAbout, NAMESPACE } from './sheet/model'
 import { builtInViewsOf } from './view/OrdersListView'
+
+// The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so the dialog's words are checked.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), createElement('p', null, subtitle as never), children as never, footer as never) : null
+  return { ...actual, Modal }
+})
 
 /**
  * B-TH-243 (threads plan TH-4, picture 25; features SHEET.brand-view-F01 … F05, ORD-G10; wall W18, W19, W30): a customer's own

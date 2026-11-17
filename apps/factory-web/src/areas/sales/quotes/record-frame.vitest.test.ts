@@ -126,7 +126,7 @@ describe('B-TH-078 on the band: where the quote came from and where it went', ()
     const waits = textOf(draw('th-257-order-waits'))
     expect(waits).toContain('Order waits: the customer accepted the quote and its order is not made yet.')
     expect(waits).toContain('Make the order now')
-    expect(draw('th-257-order-waits-held')).toContain('Making an order needs the right to manage orders (orders.manage).')
+    expect(draw('th-257-order-waits-held')).toContain('Making an order needs the right to manage orders.') // B-W2b-F51: the right in words, never its code
     const series = textOf(draw('th-257-order-waits-series'))
     expect(series).toContain('Order waits: the company has no order numbering yet.')
     expect(series).not.toContain('Make the order now')

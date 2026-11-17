@@ -401,7 +401,7 @@
   },
   "custom": {
     "reading": "Lettura del valore…",
-    "hint": "{label} — un campo personalizzato (Amministrazione › Campi ed elenchi)",
+    "hint": "{label} — un campo personalizzato (Sistema › Campi e liste)",
     "toolLabel": "{label} (campo personalizzato)",
     "yes": "Sì",
     "no": "No",

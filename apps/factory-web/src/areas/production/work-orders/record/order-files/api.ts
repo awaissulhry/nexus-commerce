@@ -8,7 +8,7 @@ import { newIdempotencyKey, type ApiClient } from '../../../../../lib/api/client
  *   whether the reader may read the order's thread, and what was left out, COUNTED and never named (files of a company the reader
  *   does not read, body data without the measurements right, whole orders of a customer the reader does not reach).
  * - `POST …/order-files/:fileId/open` (workorders.view): ONE file through that route's own wall, a 60-second address; a body-data file's
- *   opening is recorded on its order. The generic `/files/:id/preview` is never what the work order links to.
+ *   opening is recorded on its order. The generic file preview (files/:id/preview) is never what the work order links to.
  */
 
 const lineRef = z.object({ id: z.string(), seq: z.number() })

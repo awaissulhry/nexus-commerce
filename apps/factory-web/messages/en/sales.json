@@ -190,7 +190,7 @@
     "checking": "Still checking the quote.",
     "needsApproval": "Needs approval first: {reasons}",
     "cannotAsk": "Fix what stops the quote first (see the issues).",
-    "noOrders": "Making an order needs the right to manage orders (orders.manage)."
+    "noOrders": "Making an order needs the right to manage orders."
   },
   "decide": {
     "held": {

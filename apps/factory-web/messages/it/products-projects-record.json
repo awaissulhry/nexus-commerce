@@ -35,7 +35,7 @@
     "title": "Dettagli",
     "number": "Numero",
     "partyFixed": "Solo {party} e il nostro team sono in questo progetto. L’azienda esterna si sceglie alla creazione e non cambia più.",
-    "officeOnlyHint": "Solo note interne: nessuno fuori dall’azienda legge questo progetto.",
+    "officeOnlyHint": "Solo note d'ufficio: nessuno fuori dall’azienda legge questo progetto.",
     "made": "Creato",
     "madeBy": "{date} da {name}",
     "lastMessage": "Ultimo messaggio",
@@ -98,7 +98,7 @@
   "close": {
     "title": "Chiudi {number}",
     "submit": "Chiudi il progetto",
-    "intro": "Com’è finito? L’esito viene scritto come nota interna e fissato in cima al thread; il thread si chiude e gli inviti per link finiscono.",
+    "intro": "Com’è finito? L’esito viene scritto come nota d'ufficio e fissato in cima al thread; il thread si chiude e gli inviti per link finiscono.",
     "outcomeLabel": "Esito",
     "outcomeHint": {
       "DONE": "Il lavoro è arrivato in fondo.",

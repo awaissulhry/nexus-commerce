@@ -493,7 +493,8 @@ describe('B-TH-287 — Home: "Draft: … · saved 10:42 · Continue" from the se
       const saved = draw({ newOrderHref: '/p/BRAND-BETA/orders/new', buyer: true, admins: [], draft: { subject: BRAND_BETA.customerRef, at: '10:42', where: 'server' } }, locale)
       expect(saved).toContain(locale === 'en' ? 'saved 10:42' : 'salvata alle 10:42')
       expect(saved).not.toContain(locale === 'en' ? 'kept on this device' : 'tenuta su questo dispositivo')
-      expect(saved).toMatch(/href="\/p\/BRAND-BETA\/orders\/new">[^<]*(Continue|Continua)/)
+      // The DS Button (asChild) puts its class after the link's href.
+      expect(saved).toMatch(/href="\/p\/BRAND-BETA\/orders\/new"[^>]*>[^<]*(Continue|Continua)/)
       expect(saved).not.toMatch(KEY)
       expect(scanText(saved, BRAND_ALPHA)).toEqual([])
       const device = draw({ newOrderHref: '/p/BRAND-BETA/orders/new', buyer: true, admins: [], draft: { subject: BRAND_BETA.customerRef, at: '10:42', where: 'device' } }, locale)

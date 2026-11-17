@@ -1,6 +1,6 @@
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { LOCALES } from '../../../lib/i18n/locales'
@@ -34,6 +34,15 @@ import { readFileSync } from 'node:fs'
 import { MERGED_TABS, RECORD_TABS, tabOf } from './model'
 import { arrivalOf } from '../../_shared/record-frame/model'
 import { textOf } from '../../../lib/record-thread/parts/testing'
+
+// B-TH-267: the DS Modal opens only after hydration, so the server draws no dialog: drawn in place here (as daily.vitest.test.ts does),
+// so a dialog's words are checked too.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), subtitle as never, children as never, footer as never) : null
+  return { ...actual, Modal }
+})
 
 const address = (query: string) => new URLSearchParams(query)
 
