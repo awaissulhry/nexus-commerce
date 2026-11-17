@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import { FilePlus2, Gavel, Repeat, Send } from 'lucide-react'
+import { FilePlus2, Gavel, Plus, Repeat, Send } from 'lucide-react'
 import { Banner, Card, EmptyState, KeyValue, SummaryTable } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import type { ApprovalView, RoundView, SwatchView } from '../../api'
 import { approvalHeld, needsPhrase, recordHref, refusalPhrase, type Phrase } from '../../model'
+import { swatchAddHeld } from '../../model' // F-PR-19
 import { DecisionTag, useWords } from '../../parts'
 import type { SampleRecordActions, SampleRecordModel } from '../view-model'
 // B-TH-262 (R-ACT): "Ask the customer" opens the docked thread's Ask a partner to approve.
@@ -24,8 +25,8 @@ export function swatchHeld(swatch: SwatchView, step: 'send' | 'decide', offline:
  * approved with comments or rejected, by whom (the office, or the customer by link or portal), when, on which revision,
  * the comments — or "Waiting for a decision" with the request to the brand; Record decision, Ask the customer (B-TH-262: the
  * docked thread's Ask a partner to approve, where the files go with the request), after a rejection "Make the next round"
- * and "Raise a change"; the leather and colour swatches sent and decided; a CE test sample's notified body, zones, result
- * and certificate. Every step held says why (the right it needs, or the rule in our words).
+ * and "Raise a change"; the swatches (colour, leather, F-PR-19: fabric and trims) added, sent and decided; a CE test sample's
+ * notified body, zones, result and certificate. Every step held says why (the right it needs, or the rule in our words).
  */
 export function ApprovalTab({ model, round, actions }: { model: SampleRecordModel; round: RoundView; actions?: SampleRecordActions }) {
   const { t, say, locale } = useWords()
@@ -208,7 +209,13 @@ function Ready({
         )}
       </div>
       <Card padded>
-        <h2 className="fw-smp-h2">{t('approval.swatches')}</h2>
+        {/* F-PR-19: "Add a swatch" — colour, leather, fabric or trim — for the round's customer. */}
+        <div className="fw-smp-head">
+          <h2 className="fw-smp-h2">{t('approval.swatches')}</h2>
+          <Button size="sm" variant="secondary" heldReason={say(swatchAddHeld(round, model.can, offline))} onClick={() => actions?.onSwatchAdd?.()}>
+            <Plus size={14} aria-hidden /> {t('swatch.add.open')}
+          </Button>
+        </div>
         {view.swatches.length === 0 ? (
           <p className="fw-smp-hint">{t('approval.noSwatches')}</p>
         ) : (

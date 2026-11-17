@@ -306,6 +306,13 @@
   color: var(--nds-text-link);
 }
 
+/* F-PR-20: the customer's link to answer a new date, shown once (it wraps; nothing scrolls sideways). */
+.fw-pdt-url {
+  display: block;
+  font-family: var(--nds-font-mono);
+  overflow-wrap: anywhere;
+}
+
 @media print {
   .fw-pdt-head .fw-pdt-inline {
     display: none;

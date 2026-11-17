@@ -6,6 +6,7 @@ import { recordAddress } from '../../../lib/records/record-links'
 import type { ListKey } from '../../../list-frame/model'
 import { csvOf } from '../../_shared/buying/model'
 import type { AskAnswer, Atp, AtpCell, AtpSize, AtpSource, Bridge, CalculateBody, PromiseLine, PromiseTile, Proposal, ProposeBody, RepromiseDraft, RiskState, SizeAnswer } from './api'
+import type { CustomerAnswerState } from './api' // F-PR-20
 
 /**
  * Planning › Promise dates (SCR-109; design planning.promise, a workspace list), pure: the address (site, a tile, the risk,
@@ -131,6 +132,24 @@ export function decisionHolds(proposal: Pick<Proposal, 'state' | 'proposedBy' | 
   const withdraw = notWaiting ?? (!own ? 'held.notProposer' : !can.manage || !proposal.may.withdraw ? 'held.noManage' : null)
   return { accept, decline, tell, withdraw }
 }
+
+// ---- F-PR-20: "Ask the customer" when sales accepts a new date, and the customer's answer on the proposal ----------------------
+/** The accept's body: tell when chosen and allowed, and ask the customer only when the switch is on (B-PR-28 `askBrand`). */
+export const acceptBodyOf = (dialog: { readonly tell: boolean; readonly askBrand?: boolean }): { tell: boolean; askBrand?: true } => ({ tell: dialog.tell, ...(dialog.askBrand ? { askBrand: true as const } : {}) })
+
+/** The accept button's words: Accept · Accept and tell the customer · Accept and ask the customer · Accept, tell and ask. */
+export function acceptLabelKey(tell: boolean, askBrand: boolean): string {
+  if (tell && askBrand) return 'decide.acceptTellAsk'
+  if (askBrand) return 'decide.acceptAsk'
+  return tell ? 'decide.acceptTell' : 'decide.accept'
+}
+
+/** The tone of the customer's answer: waiting is news, accepted good, refused ours to follow up, the others plain. */
+export const CUSTOMER_ANSWER_TONE: Readonly<Record<CustomerAnswerState, 'info' | 'success' | 'warning' | 'neutral'>> = Object.freeze({ WAITING: 'info', ACCEPTED: 'success', REFUSED: 'warning', WITHDRAWN: 'neutral', EXPIRED: 'warning' })
+
+/** The proposal a task opened that no longer waits (its line's last word): shown with the customer's answer in the modal. */
+export const openedProposalOf = (opened: Proposal | null, lineId: string | null): Proposal | null => (opened && lineId && opened.line.id === lineId && opened.state !== 'WAITING' ? opened : null)
+// ---- end F-PR-20
 
 // ---- words -----------------------------------------------------------------------------------------------------------------
 

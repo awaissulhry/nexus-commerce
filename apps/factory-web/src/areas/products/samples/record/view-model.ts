@@ -2,6 +2,7 @@ import type { LiveState } from '../../../../shell/live/use-live'
 import type { ApprovalView, FitView, RoundView, StyleDetail, SwatchView, WorkOrderOptions } from '../api'
 import type { Grid, ManualStage, Notice, Phrase, RecordTab, RequestDraft, SamplesCan } from '../model'
 import type { DecideActions, DecideModel } from '../view/DecideDialog'
+import type { SwatchActions, SwatchModel } from '../view/SwatchDialog' // F-PR-19
 
 /** A part of the record read on its own (each tab fails alone; the rest of the record stays usable). */
 export interface Part<T> {
@@ -75,6 +76,8 @@ export interface SampleRecordModel {
   /** Cells of the Shipments grid being saved, by `<shipment>/<field>`. */
   shipmentCells: Readonly<Record<string, CellState>>
   decide: DecideModel | null
+  /** F-PR-19: "Add a swatch" (colour, leather, fabric, trim) while open. */
+  swatch?: SwatchModel | null
   dialog: RecordDialog | null
   /** Design cases: the keys panel open. */
   keysOpen?: boolean
@@ -107,6 +110,9 @@ export interface SampleRecordActions {
   onSwatchSend?: (swatch: SwatchView) => void
   onSwatchDecide?: (swatch: SwatchView) => void
   decide?: DecideActions
+  /** F-PR-19: open "Add a swatch", and its dialog's actions. */
+  onSwatchAdd?: () => void
+  swatch?: SwatchActions
   // Shipments
   onShipmentCell?: (shipmentId: string, field: 'carrierName' | 'trackingNumber' | 'trackingUrl' | 'note', value: string | null) => void
   onShipmentMark?: (shipmentId: string, field: 'sentAt' | 'receivedAt') => void

@@ -81,6 +81,7 @@ import { OrderRecordView, type OrderDialog, type OrderRecordViewModel } from './
 // ---- F-PR-12a: the order's production (B-PR-18) on Status & progress, part 1
 import { fetchProductionOrder } from '../production/api'
 import { waitingHrefOf } from '../production/model'
+import { productionOwnsProgress } from '../production/model' // F-PR-12b
 import { orderNameOf } from './model'
 // ---- end F-PR-12a
 import { useOrderWords } from './words'
@@ -212,6 +213,15 @@ function OrderContainer({ id }: { id: string }) {
     void loadProduction()
   }, [loadProduction])
   // ---- end F-PR-12a
+  // ---- F-PR-12b: while + Progress draws the pieces, the order's production is read again every `refreshSeconds` (the API keeps
+  // the counts that long), as today's progress card is.
+  const productionRefresh = production.state === 'ready' ? (production.read?.progress?.refreshSeconds ?? null) : null
+  useEffect(() => {
+    if (!productionRefresh) return
+    const timer = setInterval(() => void loadProduction(), productionRefresh * 1000)
+    return () => clearInterval(timer)
+  }, [productionRefresh, loadProduction])
+  // ---- end F-PR-12b
 
   const loadRequests = useCallback(async () => {
     try {
@@ -291,7 +301,8 @@ function OrderContainer({ id }: { id: string }) {
     if (number && reconfirmNeeded) void loadRevision(number)
   }, [number, reconfirmNeeded, loadRevision])
 
-  const shared = record?.progressShared ?? false
+  // F-PR-12b: today's progress read only where the order's production read does not draw the pieces (by level).
+  const shared = (record?.progressShared ?? false) && !productionOwnsProgress(production)
   useEffect(() => {
     if (!shared) return
     void loadProgress()
