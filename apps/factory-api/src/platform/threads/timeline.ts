@@ -17,6 +17,8 @@ import { afterCursor, contextOf, cursorOf, officeRecord, type RecordRef } from '
 import { mayOnThread } from './records'
 // B-W2b-399: the field lines of a change.
 import { fieldLinesOf } from './timeline/field-lines'
+// B-TH-072: a project's linked news.
+import { linkedNewsOf } from '../../modules/product/projects/news'
 
 /**
  * The record's timeline (feature COL-002; A2 SCR-006): one feed, newest first, of
@@ -182,6 +184,11 @@ export async function readTimeline(
         })),
       )
     }
+
+    // ---- B-TH-072 (threads plan TH-5, PROJ-G17): a project's linked news, only when asked (View ▾ Linked news), each line only of a
+    // linked record this reader may open itself (modules/product/projects/news.ts); merged here, never copied into the thread.
+    if (kinds.has('linked') && record.type === 'Project') sources.push(await linkedNewsOf(client, actor, record.id, cursor, take))
+    // ---- end B-TH-072
 
     const { items, more } = mergeNewestFirst(sources, query.limit)
     const last = items.at(-1)

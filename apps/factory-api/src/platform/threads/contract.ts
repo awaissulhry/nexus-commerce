@@ -3,7 +3,7 @@ import { defineContract, id, input, instant, output } from '@nexus/factory-domai
 import { grainedJson } from '@nexus/factory-domain/money/marked'
 import { AUTHOR_KINDS, MAX_ATTACHMENTS, MAX_BODY_LENGTH, MAX_MENTIONS, MESSAGE_AUDIENCES, MESSAGE_CHANNELS, MESSAGE_DIRECTIONS, RECORD_TYPE, THREAD_STATUSES } from '@nexus/factory-domain/threads/rules'
 import { FOLLOW_REASONS } from '@nexus/factory-domain/threads/followers'
-import { TIMELINE_KINDS } from '@nexus/factory-domain/threads/timeline'
+import { TIMELINE_ASKABLE_KINDS, TIMELINE_KINDS } from '@nexus/factory-domain/threads/timeline'
 import { WAITING_SIDES } from '@nexus/factory-domain/threads/view-gates' // B-TH-047
 // ---- B-TH-049: the typed amount (price grain). B-TH-050: messages that point at messages.
 import { currency } from '@nexus/factory-domain/core/contracts'
@@ -291,6 +291,24 @@ export const timelineEntry = z.discriminatedUnion('kind', [
     status: z.enum(FILE_STATUSES),
     visibility: z.array(z.enum(FILE_AUDIENCES)),
   }),
+  // ---- B-TH-072: a project's linked record moved or was decided (asked with kinds=linked): one line per record per day, only of a
+  // record the reader may open; its status move, the action and the office person — never a value.
+  output({
+    kind: z.literal('linked'),
+    /** The linked record's audit row. */
+    id: id(),
+    at: instant(),
+    recordType: z.string(),
+    recordId: id(),
+    /** Its number or code (SR-0042). */
+    label: z.string(),
+    action: z.string(),
+    status: output({ from: z.string().nullable(), to: z.string().nullable() }).nullable(),
+    actorName: z.string().nullable(),
+    /** How many moves of the record that day this line stands for. */
+    folded: z.number().int(),
+  }),
+  // ---- end B-TH-072
 ])
 export type TimelineEntryView = z.infer<typeof timelineEntry>
 
@@ -298,17 +316,17 @@ export const timelineContract = defineContract({
   params: recordParams,
   querystring: input({
     ...page,
-    /** Filter chips: a comma-separated list of message, change, file. Default every kind. */
+    /** Filter chips: a comma-separated list of message, change, file. Default every kind. B-TH-072: `linked` only when asked (a project). */
     kinds: z
       .string()
       .max(40)
       .optional()
       .transform((value, context) => {
-        if (value === undefined || value.trim() === '') return [...TIMELINE_KINDS]
+        if (value === undefined || value.trim() === '') return [...TIMELINE_KINDS] as (typeof TIMELINE_ASKABLE_KINDS)[number][]
         const kinds = [...new Set(value.split(',').map((kind) => kind.trim()))]
-        const unknown = kinds.filter((kind) => !(TIMELINE_KINDS as readonly string[]).includes(kind))
-        if (unknown.length > 0) context.addIssue({ code: 'custom', message: `Expected ${TIMELINE_KINDS.join(', ')}.` })
-        return kinds as (typeof TIMELINE_KINDS)[number][]
+        const unknown = kinds.filter((kind) => !(TIMELINE_ASKABLE_KINDS as readonly string[]).includes(kind))
+        if (unknown.length > 0) context.addIssue({ code: 'custom', message: `Expected ${TIMELINE_ASKABLE_KINDS.join(', ')}.` })
+        return kinds as (typeof TIMELINE_ASKABLE_KINDS)[number][]
       }),
   }),
   response: { 200: output({ entries: z.array(timelineEntry), nextCursor: z.string().nullable() }) },
@@ -327,13 +345,15 @@ const followersView = output({
       userId: id(),
       name: z.string(),
       me: z.boolean(),
-      /** Why they first followed it: made it, were given something on it, were mentioned, chose to (or were added). */
+      /** Why they first followed it: made it, were given something on it, were mentioned, chose to, were added (B-TH-068: ADDED). */
       reason: z.enum(FOLLOW_REASONS),
       /** Muted: the record's news does not reach them (a mention still does). */
       muted: z.boolean(),
       since: instant(),
       /** The colleague who added them, when someone else did. */
       addedBy: output({ id: id(), name: z.string() }).nullable(),
+      // B-TH-068: a portal person of the record's outside company (a project's brand member), not one of our colleagues.
+      outside: z.boolean(),
     }),
   ),
 })

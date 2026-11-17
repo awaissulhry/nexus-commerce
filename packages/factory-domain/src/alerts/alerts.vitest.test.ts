@@ -53,7 +53,8 @@ describe('the kinds of rule', () => {
     // B-W2b-416: + MARGIN_BELOW_FLOOR (the low-margin alert).
     // B-W2b-GB02 (G146): + STAMP_DUTY_DUE (a stamp duty quarter near its due day).
     // B-TH-012: + REQUEST_NUMBERING_MISSING (a company that receives requests with no request numbering).
-    expect(RULE_KINDS).toHaveLength(17)
+    // B-TH-071: + PROJECT_STALE (an open project past its target date and quiet for 14 days, to its lead).
+    expect(RULE_KINDS).toHaveLength(18)
     expect(kindsOf('DATE')).toEqual(['CERTIFICATE_EXPIRING', 'INVOICE_DEADLINE'])
     for (const kind of RULE_KINDS) {
       const read = readThreshold(kind, KINDS[kind].builtIn.threshold)
@@ -207,6 +208,8 @@ describe('words', () => {
     expect(phraseText(alertPhrase('STAMP_DUTY_DUE', 'Q3 2026', { dueOn: '2026-11-30', daysLeft: -2, f24Code: '2523' }), 'Q3 2026', 'it')).toBe("L'imposta di bollo del Q3 2026 scadeva il 30/11/2026: 2 giorni di ritardo. Pagala con F24 (codice tributo 2523) e registra il pagamento.")
     // B-TH-012: a company whose requests have no numbering.
     expect(phraseText(alertPhrase('REQUEST_NUMBERING_MISSING', 'Seed A', { portalOn: true, inquiryAddresses: false }), 'Seed A')).toMatch(/^Seed A receives requests but has no active request numbering/)
+    // B-TH-071
+    expect(phraseText(alertPhrase('PROJECT_STALE', 'PRJ-26-001 Made-up line', { targetDate: '2026-10-01', quietDays: 20 }), 'PRJ-26-001 Made-up line')).toMatch(/past its target date \(2026-10-01\) and has had no message for 20 days/)
     expect(phraseText(alertPhrase('INTEGRATION_FAILING', 'SES main', { hours: 5, never: true }), 'SES main', 'it')).toBe('Il collegamento SES main non ha mai funzionato: nessuna chiamata è riuscita nelle 5 ore da quando è stato impostato.')
     expect(ruleSentence({ ruleKind: 'INTEGRATION_FAILING', threshold: { hours: 1 }, channels: ['IN_APP'], cooldownMinutes: 1440 }, { place: null, recipient: 'Administrator' })).toBe('When a connection has not worked for more than 1 h, tell Administrator by the bell at most once a day.')
     expect(readThreshold('INTEGRATION_FAILING', { hours: 0 }).ok).toBe(false)

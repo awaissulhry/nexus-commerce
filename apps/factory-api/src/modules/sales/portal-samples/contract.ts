@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PROJECT_STATUSES } from '@nexus/factory-domain/projects/rules' // B-TH-069
 import { APPROVAL_KINDS } from '@nexus/factory-domain/approvals-out/kinds'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { SCAN_STATES } from '@nexus/factory-domain/product/techpack/scan'
@@ -103,6 +104,8 @@ export const samplesPageContract = defineContract({
       rounds: z.array(roundRow),
       /** The brand's own private-label styles only; a round of any style the brand asked for is in `rounds`. */
       counts: output({ waiting: z.number().int().nullable(), styles: z.number().int(), rounds: z.number().int(), open: z.number().int() }),
+      // ---- B-TH-069: the person's own projects (the office added them; open first); null without portal.projects.view.
+      projects: z.array(output({ id: id(), number: z.string(), name: z.string(), status: z.enum(PROJECT_STATUSES), targetDate: businessDate() })).nullable(),
     }),
   },
 })

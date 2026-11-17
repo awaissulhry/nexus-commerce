@@ -2,12 +2,13 @@ import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers'
 import type { InquiryStatus } from '@nexus/factory-domain/sales/inquiries/rules'
 import { subjectOf } from '@nexus/factory-domain/sales/portal-requests/rules'
 import { requestStateOf } from '@nexus/factory-domain/sales/portal-requests/state'
-import { definePartnerView, equalsTyped, holdsTyped, idsOf } from '../view'
+import { definePartnerView, equalsTyped, holdsTyped, idsOf, type PartnerReader, type PartnerRecord } from '../view'
 
 // ---- follow-up th-backend-d (Not an order → Closed): a closed request reads with the customer's own word, as the portal's request
 // page and list say it (factory-domain sales/portal-requests/state.ts requestStateOf): LOST and WITHDRAWN read CLOSED; DECLINED reads
 // DECLINED, or CLOSED when it was declined as "Not an order" (B-TH-043) — the decline reason is an office column the partner role
-// never reads, so `refine` reads it in the tenant's system scope. Every other state keeps its code as before.
+// never reads, so it is read through the reader's `inTenant` (../view PartnerReader, B-TH-073's one way to read a tenant column for a
+// portal person): only the ids the partner read gave, of the session's own party. Every other state keeps its code as before.
 const CLOSING = new Set<string>(['DECLINED', 'LOST', 'WITHDRAWN'])
 const partnerStatusOf = (status: string, declineReason: string | null = null): string => (CLOSING.has(status) ? requestStateOf({ status: status as InquiryStatus, quoteStatus: null, orderStatus: null, declineReason }) : status)
 // ---- end follow-up th-backend-d
@@ -26,21 +27,21 @@ export default definePartnerView({
   recordType: 'Inquiry',
   group: 'orders',
   kinds: ['CUSTOMER'],
-  async read(client, ids) {
+  async read(client, ids, reader?: PartnerReader): Promise<PartnerRecord[]> {
     const rows = await client.inquiry.findMany({
       where: { id: { in: [...ids] } },
       select: { id: true, companyId: true, number: true, customerRef: true, customerSeq: true, status: true, receivedAt: true, request: true },
     })
-    return rows.map((row) => ({ id: row.id, companyId: row.companyId, theirRef: row.customerRef, ourRef: customerRefOf('REQUEST', row.customerSeq), subtitle: subjectOf(null, row.request), status: partnerStatusOf(row.status), date: row.receivedAt, words: [subjectOf(null, row.request)] }))
+    // ---- follow-up th-backend-d (Not an order → Closed): the declined ones of the session's own party, read for the person in the tenant.
+    const declined = rows.filter((row) => row.status === 'DECLINED').map((row) => row.id)
+    let notAnOrder = new Set<string>()
+    if (declined.length > 0 && reader) {
+      const own = await client.party.findMany({ select: { id: true }, take: 2 })
+      if (own.length === 1) notAnOrder = new Set(idsOf(await reader.inTenant((tenant) => tenant.inquiry.findMany({ where: { id: { in: declined }, partyId: own[0]!.id, declineReason: 'NOT_AN_ORDER' }, select: { id: true } }))))
+    }
+    // ---- end follow-up th-backend-d
+    return rows.map((row) => ({ id: row.id, companyId: row.companyId, theirRef: row.customerRef, ourRef: customerRefOf('REQUEST', row.customerSeq), subtitle: subjectOf(null, row.request), status: partnerStatusOf(row.status, notAnOrder.has(row.id) ? 'NOT_AN_ORDER' : null), date: row.receivedAt, words: [subjectOf(null, row.request)] }))
   },
-  // ---- follow-up th-backend-d (Not an order → Closed): the declined ones of the person's own party, read in the system scope.
-  async refine(system, records, partyId) {
-    const declined = records.filter((record) => record.status === 'DECLINED').map((record) => record.id)
-    if (declined.length === 0) return [...records]
-    const notAnOrder = new Set(idsOf(await system.inquiry.findMany({ where: { id: { in: declined }, partyId, declineReason: 'NOT_AN_ORDER' }, select: { id: true } })))
-    return records.map((record) => (notAnOrder.has(record.id) ? { ...record, status: partnerStatusOf('DECLINED', 'NOT_AN_ORDER') } : record))
-  },
-  // ---- end follow-up th-backend-d
   async lookup(client, typed, take) {
     return idsOf(await client.inquiry.findMany({ where: { OR: [{ number: equalsTyped(typed) }, { customerRef: holdsTyped(typed) }] }, select: { id: true }, orderBy: { receivedAt: 'desc' }, take }))
   },

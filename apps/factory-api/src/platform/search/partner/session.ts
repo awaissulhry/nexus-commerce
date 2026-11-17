@@ -5,6 +5,10 @@ import { ForbiddenError } from '@nexus/factory-domain/core/errors'
 import type { Actor } from '@nexus/factory-domain/core/permissions'
 import { actorOf, type PartnerContext } from '../../../core/context'
 import { portalSessionOf, type PortalSession } from '../../auth/portal/authenticator'
+// ---- B-TH-069: the reader a partner view reads for.
+import { officeAuthOf } from '../../auth/sessions/office-auth'
+import type { PartnerReader } from './view'
+// ---- end B-TH-069
 
 /**
  * The portal session a partner route of B-W2b-168 works for: the context (audience partner, the person, the party), the
@@ -33,3 +37,12 @@ export async function kindsOfSession(client: FactoryClient, caller: PartnerCalle
   const party = await client.party.findUnique({ where: { id: caller.context.partyId }, select: { roles: true } })
   return party ? partnerKindsOf(party.roles) : []
 }
+
+// ---- B-TH-069 / B-TH-073: the portal person every partner view reads for (./view PartnerReader): the person, their actor, and a
+// read in the tenant's scope (a view uses it only for rows that name the session's own party).
+export function partnerReaderOf(request: FastifyRequest, caller: PartnerCaller): PartnerReader {
+  const auth = officeAuthOf(request.server)
+  // As the portal pages read the tenant's rows (modules/sales/portal-orders/access.ts portalReader): the office scope, as the person.
+  return { userId: caller.context.actorId, actor: caller.actor, inTenant: (work) => auth.inTenant(caller.context.tenantId, caller.context.actorId, work) }
+}
+// ---- end B-TH-069 / B-TH-073

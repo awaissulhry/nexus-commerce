@@ -279,7 +279,7 @@ describe('the real state of the request, its news and live (B-TH-011)', { timeou
 
 // ---- follow-up th-backend-d (Not an order → Closed): the customer's own search reads the word its request page reads. A request
 // declined as "Not an order" is CLOSED in the portal search too (the decline reason is an office column the partner role never reads:
-// the search reads it in the tenant's system scope); a request declined for another reason stays DECLINED; nothing of the reason leaks.
+// the view reads it through the person's reader in the tenant, B-TH-073's way); a request declined for another reason stays DECLINED; nothing leaks.
 describe('follow-up th-backend-d: the portal search says Closed for a "Not an order" request', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('Not an order → CLOSED in the search and on the request page; a capacity decline stays DECLINED; another customer finds neither', async () => {
     const notAnOrder = (await ok(browsers.buyer, 'POST', '/portal/inquiries', { message: 'Made-up: please add us to your newsletter.', customerRef: 'BA-PO-NAO-9' }, 201)).request.id as string
