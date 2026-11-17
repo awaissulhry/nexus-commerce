@@ -480,8 +480,6 @@
   "keys": {
     "title": "Keyboard shortcuts",
     "record": "Record a test result",
-    "release": "Release the lot (or release it again)",
-    "submit": "Save the open dialog",
-    "all": "All shortcuts"
+    "release": "Release the lot (or release it again)"
   }
 }

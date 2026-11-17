@@ -696,7 +696,6 @@ export type RecordDialog =
   | { kind: 'coverage' }
   | { kind: 'endCoverage'; coverageId: string }
   | { kind: 'check' }
-  | { kind: 'shortcuts' }
 
 export interface CoverageDraft {
   target: 'style' | 'item'

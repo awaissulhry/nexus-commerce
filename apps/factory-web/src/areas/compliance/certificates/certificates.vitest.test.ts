@@ -350,4 +350,14 @@ describe('B-TH-267: the certificate on RecordFrame — Coverage · Renewals · N
     const own = html('thread-docked')
     expect(textOf(own.slice(own.indexOf('class="fw-rcf-dock"')))).not.toContain('Demo Moto')
   })
+
+  // TH-6 part B (PR-14): the record's own keys (k, r on a draft) are listed in the band menu's ONE Keyboard line — no "?" overlay.
+  it('passes its own keys to the band (k, and r on a draft) and has no "?" key handler, no keys line of its own, no keys window', () => {
+    const view = source('./record/view/CertificateRecordView.tsx')
+    expect(view).toContain("const keys = [{ keys: ['k'], label: t('keys.check') }, ...(certificate.status === 'DRAFT' ? [{ keys: ['r'], label: t('keys.register') }] : [])]")
+    expect(view).toMatch(/moreLabel: t\('record\.more'\),\s*keys,/)
+    expect(view).not.toContain("event.key === '?'")
+    expect(view).not.toContain("id: 'keys'")
+    expect(view).not.toMatch(/ShortcutsDialog|kind: 'shortcuts'/)
+  })
 })

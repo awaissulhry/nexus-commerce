@@ -400,7 +400,6 @@ export type RecordDialog =
   | { readonly kind: 'result' }
   | { readonly kind: 'document' }
   | { readonly kind: 'decide'; readonly decision: LotDecision }
-  | { readonly kind: 'shortcuts' }
 
 export interface LotRecordModel {
   readonly prefix: string

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
 import { CheckCheck, FileX, PackagePlus, ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Field, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
@@ -12,7 +12,7 @@ import { evidenceAddress } from '../../../../quality/_shared/model'
 import { Freshness } from '../../../../quality/_shared/parts'
 import { archiveHeld, completeHeldWords, FILE_TONE, listAddress, reasonProblem, recordAddress, reopenHeld, valueOf, RECORD_TABS, type RecordTab } from '../../model'
 import { PackDialog } from '../../view/PackDialog'
-import { KeysModal, NoticeBanner, RECORD_KEYS, StatePill, TechfilesMessages, TechfilesStepUp, useDay, useWhen, useWords } from '../../view/parts'
+import { NoticeBanner, StatePill, TechfilesMessages, TechfilesStepUp, useDay, useWhen, useWords } from '../../view/parts'
 import type { FileDialog, RecordActions, RecordModel } from '../view-model'
 import { AnnexTab, EvidenceDialogView } from './AnnexTab'
 import { PacksTab, ShareDialog, WithdrawDialog } from './PacksTab'
@@ -31,7 +31,7 @@ const RECORD_TYPE = 'TechnicalFile'
  * (B-TH-267; the rule of picture 38, the tabs of 08-tabs O-CMP-TF): the band in the shell's band row (‹ Technical files, the file's
  * number and its style, ONE pill — its status —, the PPE category, the certificate it supports, who keeps it and the Annex III count
  * in its details; Complete — held with the open points in words — or Build evidence pack as the primary; ⋯ Edit, Reopen, Archive,
- * the evidence trail of the newest batch, the style, Copy, the page's keys; the frame's Thread button ⌘J and Keyboard line), the
+ * the evidence trail of the newest batch, the style, Copy; the frame's Thread button ⌘J and its ONE Keyboard line with the page's p), the
  * docked thread beside every tab (TechnicalFile is a thread record now, B-TH-075 / N14: Activity's tools in its "⋯", R-ACT), the
  * tabs 6 → 5: Annex III checklist · Risk assessment · Test reports · Production control · Evidence pack, each reading and failing on
  * its own; every banner in the ONE notice of the body column. Fetches nothing: TechFileRecord.tsx reads and writes; the thread comes
@@ -49,16 +49,16 @@ function RecordPage({ model, actions, thread, printThread }: { model: RecordMode
   const t = useWords()
   const day = useDay()
   const when = useWhen()
-  const [keysOpen, setKeysOpen] = useState(model.keysOpen ?? false)
   const { record, prefix, can } = model
   const file = record.file
   const tab: RecordTab = model.tab
-  const dialogOpen = !!model.fileDialog || !!model.evidence || !!model.testDialog || !!model.share || !!model.withdraw || !!model.pack || !!model.riskUi.sign || keysOpen || model.stepUp.open
+  const dialogOpen = !!model.fileDialog || !!model.evidence || !!model.testDialog || !!model.share || !!model.withdraw || !!model.pack || !!model.riskUi.sign || model.stepUp.open
   const completeWords = completeHeldWords(record, can, model.online)
   const packHeld = !can.manage ? t('held.manage') : !model.online ? t('held.offline') : null
   const trail = file.latestBatch?.batchNumber ? evidenceAddress(prefix, { batch: file.latestBatch.batchNumber }) : null
 
-  // p: Build evidence pack; ? the keys (not in a field, a menu or a dialog). ⌘J is the frame's (the thread).
+  // p: Build evidence pack (not in a field, a menu or a dialog). ⌘J is the frame's (the thread); the keys are listed in the band menu's
+  // ONE Keyboard line (band.keys; TH-6 part B, PR-14: no "?" overlay).
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (dialogOpen || event.metaKey || event.ctrlKey || event.altKey) return
@@ -67,9 +67,6 @@ function RecordPage({ model, actions, thread, printThread }: { model: RecordMode
       if (event.key === 'p' && !packHeld) {
         event.preventDefault()
         actions?.onPack?.()
-      } else if (event.key === '?') {
-        event.preventDefault()
-        setKeysOpen(true)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -105,7 +102,6 @@ function RecordPage({ model, actions, thread, printThread }: { model: RecordMode
     trail ? { id: 'trail', label: t('row.trail', { batch: file.latestBatch?.batchNumber ?? '' }), href: trail, target: '_blank' } : { id: 'trail', label: t('row.trailNone'), disabled: true, description: t('held.noBatch') },
     { id: 'style', label: t('band.style', { code: file.style.code }), href: `${prefix}${recordPage({ type: 'Style', id: file.style.id }, OFFICE_PAGES)}` },
     { id: 'copy', label: t('row.copy'), onSelect: () => void navigator.clipboard?.writeText(file.number).catch(() => undefined) },
-    { id: 'keys', label: t('keys.title'), onSelect: () => setKeysOpen(true) },
   ]
 
   const primary =
@@ -153,6 +149,8 @@ function RecordPage({ model, actions, thread, printThread }: { model: RecordMode
         primary,
         more,
         moreLabel: t('band.more'),
+        // TH-6 part B (PR-14): the record's own key, listed first in the frame's ONE Keyboard window (Esc and ⌘J are the frame's).
+        keys: [{ keys: ['p'], label: t('keys.pack') }],
       }}
     >
       <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={tab} size="sm" overflow="scroll" />
@@ -198,7 +196,6 @@ function RecordPage({ model, actions, thread, printThread }: { model: RecordMode
       {model.withdraw && <WithdrawDialog model={model} state={model.withdraw} actions={actions} />}
       {model.pack && <PackDialog model={model.pack} actions={actions?.pack} />}
       <TechfilesStepUp state={model.stepUp} confirm={t('stepUp.confirm')} onSubmit={actions?.onStepUp} onCancel={actions?.onStepUpCancel} />
-      {keysOpen && <KeysModal keys={RECORD_KEYS(t)} onClose={() => setKeysOpen(false)} />}
     </RecordFrame>
   )
 }

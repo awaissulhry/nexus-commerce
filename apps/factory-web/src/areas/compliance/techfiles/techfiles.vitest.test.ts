@@ -429,6 +429,15 @@ describe('B-TH-267: the technical file on RecordFrame — five tabs, its thread 
     expect(view).not.toMatch(/\bRecordFrame, RecordProblem|RecordSkeleton|dockOpen/)
   })
 
+  // TH-6 part B (PR-14): the record's own key (p) is listed in the band menu's ONE Keyboard line — no "?" overlay, no own keys line.
+  it('passes its own key to the band (keys: p) and has no "?" key handler, no keys line of its own, no keys window', () => {
+    const view = readFileSync(new URL('./record/view/TechFileRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("keys: [{ keys: ['p'], label: t('keys.pack') }]")
+    expect(view).not.toContain("event.key === '?'")
+    expect(view).not.toContain("id: 'keys'")
+    expect(view).not.toMatch(/KeysModal|RECORD_KEYS|keysOpen/)
+  })
+
   it('the wall (W13, W16, W34): the docked thread names no customer — the office’s notes only, no "Reply to"', () => {
     const page = html('thread-docked')
     const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))

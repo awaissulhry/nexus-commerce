@@ -28,7 +28,7 @@ import {
   type RecordTab,
   type ResultDraft,
 } from '../../model'
-import { CrViMark, LabMessages, LotStatusPill, ShortcutsDialog } from '../../view/parts'
+import { CrViMark, LabMessages, LotStatusPill } from '../../view/parts'
 import { DecideDialog, DocumentDialog, ResultDialog } from './dialogs'
 // B-W2b-288 (FU2:03): the lab's price of a result.
 import { costWords, LAB_COST_NAMESPACE } from '../../lab-cost/lab-cost'
@@ -57,8 +57,8 @@ export interface LotRecordActions {
  * record"), on RecordFrame (B-TH-267; the rule of picture 38, the tabs of 08-tabs O-CMP-TST): the band in the shell's band row (‹ Tests
  * & substances, "Lot <code>", ONE pill — its quality status —, the material, the Cr VI mark, how it came and "Same conversation as
  * Warehouse › Lots & traceability" in its details; the primary by state — Record result while its Cr VI result is awaited, else the
- * next decision —, held with why; ⋯ the other decisions, Record result, Add document, Copy, the page's keys; the frame's Thread
- * button ⌘J and Keyboard line), the docked thread beside both tabs (the lot's ONE thread, the Lot record, the same as Warehouse ›
+ * next decision —, held with why; ⋯ the other decisions, Record result, Add document, Copy; the frame's Thread button ⌘J and its
+ * ONE Keyboard line with the page's c and r), the docked thread beside both tabs (the lot's ONE thread, the Lot record, the same as Warehouse ›
  * Lots'; Activity's tools in its "⋯", R-ACT), the tabs 4 → 2: Results & limits (the Cr VI results newest first, a superseded one
  * marked; read only) and Documents & release (the checklist in words and the decisions, then the supplier's documents with Add
  * document right under the checklist that names what is missing — typed lot documents on their own route, R-2 — and what the lot
@@ -130,7 +130,8 @@ function Record({ model, actions, thread, printThread }: { model: LotRecordModel
   const open = (next: RecordDialog | null) => actions?.onDialog?.(next)
   const lot = detail?.lot ?? null
 
-  // c: record a result; r: the next decision (release, release again); ?: the keys. ⌘J is the frame's (the thread).
+  // c: record a result; r: the next decision (release, release again). ⌘J is the frame's (the thread); the keys are listed in the band
+  // menu's ONE Keyboard line (band.keys; TH-6 part B, PR-14: no "?" overlay).
   useEffect(() => {
     if (!lot || !detail) return
     const onKey = (event: KeyboardEvent) => {
@@ -144,9 +145,6 @@ function Record({ model, actions, thread, printThread }: { model: LotRecordModel
           event.preventDefault()
           actions?.onDialog?.({ kind: 'decide', decision: primary })
         }
-      } else if (event.key === '?') {
-        event.preventDefault()
-        actions?.onDialog?.({ kind: 'shortcuts' })
       }
     }
     window.addEventListener('keydown', onKey)
@@ -181,8 +179,9 @@ function Record({ model, actions, thread, printThread }: { model: LotRecordModel
     { id: 'document', label: t('document.add'), onSelect: () => open({ kind: 'document' }), disabled: docHeld !== null, description: docHeld ? t(docHeld) : undefined },
     { id: 'sep', separator: true },
     { id: 'copy', label: t('row.copy'), onSelect: () => actions?.onCopy?.(lot.code) },
-    { id: 'keys', label: t('keys.title'), onSelect: () => open({ kind: 'shortcuts' }) },
   ]
+  // TH-6 part B (PR-14): the record's own keys, listed first in the frame's ONE Keyboard window (⌘J and the thread's keys are the frame's).
+  const keys = [{ keys: ['c'], label: t('keys.record') }, { keys: ['r'], label: t('keys.release') }]
 
   // B-TH-267: the two tabs, each counting what it asks (the open checks while the lot waits a decision).
   const base = `${model.prefix}/compliance/tests/${encodeURIComponent(lot.id)}`
@@ -236,6 +235,7 @@ function Record({ model, actions, thread, printThread }: { model: LotRecordModel
           primary: bandButton,
           more: menu,
           moreLabel: t('record.more'),
+          keys,
         }}
       >
         <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
@@ -333,16 +333,6 @@ function Record({ model, actions, thread, printThread }: { model: LotRecordModel
           onClose={() => open(null)}
         />
       )}
-      <ShortcutsDialog
-        open={dialog?.kind === 'shortcuts'}
-        onClose={() => open(null)}
-        keys={[
-          { keys: ['c'], does: t('keys.record') },
-          { keys: ['r'], does: t('keys.release') },
-          { keys: ['⌘', '↵'], does: t('keys.submit') },
-          { keys: ['?'], does: t('keys.all') },
-        ]}
-      />
     </>
   )
 }

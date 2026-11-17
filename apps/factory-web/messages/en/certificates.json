@@ -602,9 +602,7 @@
     "title": "Keyboard shortcuts",
     "add": "Add certificate",
     "check": "Check a garment",
-    "register": "Register (a draft)",
-    "thread": "The thread beside the record",
-    "help": "All shortcuts"
+    "register": "Register (a draft)"
   },
   "ren": {
     "title": "Validity and renewal",

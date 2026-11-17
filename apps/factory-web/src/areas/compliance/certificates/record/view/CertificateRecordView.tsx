@@ -34,7 +34,7 @@ import {
   type RecordTab,
 } from '../../model'
 import { CertificateFields, CheckGarmentDialog } from '../../view/dialogs'
-import { CertMessages, dateLocale, LeftTag, ShortcutsDialog, StatusPill, useDay, useProblemWords } from '../../view/parts'
+import { CertMessages, dateLocale, LeftTag, StatusPill, useDay, useProblemWords } from '../../view/parts'
 import { certificateHref } from '../../view/CertificatesListView'
 import { AddCoverageDialog, EndCoverageDialog, RegisterDialog, StatusDialog, useRegisterLines } from './dialogs'
 import type { RenewalsActions } from '../../renewals/use-renewals'
@@ -170,7 +170,8 @@ function Ready({ certificate, model, actions, thread, printThread, back }: { cer
           : available,
   }))
 
-  // k: Check a garment, r: Register (a draft), ?: the keys; never while typing or in a dialog.
+  // k: Check a garment, r: Register (a draft); never while typing or in a dialog. The keys are listed in the band menu's ONE Keyboard
+  // line (band.keys; TH-6 part B, PR-14: no "?" overlay).
   const overlay = !!model.depth?.dialog || !!model.bodies?.open
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -182,9 +183,6 @@ function Ready({ certificate, model, actions, thread, printThread, back }: { cer
       } else if (event.key === 'r' && certificate.status === 'DRAFT') {
         event.preventDefault()
         actions?.onDialog?.({ kind: 'register' })
-      } else if (event.key === '?') {
-        event.preventDefault()
-        actions?.onDialog?.({ kind: 'shortcuts' })
       }
     }
     window.addEventListener('keydown', onKey)
@@ -215,8 +213,9 @@ function Ready({ certificate, model, actions, thread, printThread, back }: { cer
     // B-TH-267: the PDF and files are on Notified body & PDF.
     { id: 'files', label: t('action.files'), href: certificateHref(model.prefix, certificate.id, 'tab=body') },
     { id: 'copy', label: t('action.copyNumber'), onSelect: () => actions?.onCopy?.(certificate.number) },
-    // B-TH-267: the record's own keys (k, r) stay behind "?"; the band's Keyboard line is the frame's (⌘J and the thread's keys).
   ]
+  // TH-6 part B (PR-14): the record's own keys, listed first in the frame's ONE Keyboard window (⌘J and the thread's keys are the frame's).
+  const keys = [{ keys: ['k'], label: t('keys.check') }, ...(certificate.status === 'DRAFT' ? [{ keys: ['r'], label: t('keys.register') }] : [])]
 
   const title = (
     <span className="fw-ce-title">
@@ -272,6 +271,7 @@ function Ready({ certificate, model, actions, thread, printThread, back }: { cer
           primary,
           more,
           moreLabel: t('record.more'),
+          keys,
         }}
       >
         <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
@@ -297,16 +297,6 @@ function Ready({ certificate, model, actions, thread, printThread, back }: { cer
           actions={{ onQuery: actions?.onCheckQuery, onPickStyle: actions?.onCheckStyle, onClearStyle: actions?.onCheckClearStyle, onCheck: actions?.onCheckPatch, onRun: actions?.onCheckRun, onClose: () => actions?.onDialog?.(null) }}
         />
       )}
-      <ShortcutsDialog
-        open={dialog?.kind === 'shortcuts'}
-        onClose={() => actions?.onDialog?.(null)}
-        keys={[
-          { keys: ['k'], does: t('keys.check') },
-          { keys: ['r'], does: t('keys.register') },
-          { keys: ['⌘', 'J'], does: t('keys.thread') },
-          { keys: ['?'], does: t('keys.help') },
-        ]}
-      />
     </>
   )
 }

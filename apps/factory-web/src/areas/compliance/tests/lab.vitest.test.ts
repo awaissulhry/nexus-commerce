@@ -309,4 +309,14 @@ describe('B-TH-267: the lot on RecordFrame — Results & limits · Documents & r
     expect(container).toContain('const party = value?.supplier && value.supplier.id === lot?.supplierId ? value.supplier : null')
     expect(container).not.toContain('listStockLots')
   })
+
+  // TH-6 part B (PR-14): the record's own keys (c, r) are listed in the band menu's ONE Keyboard line — no "?" overlay.
+  it('passes its own keys to the band (c, r) and has no "?" key handler, no keys line of its own, no keys window', () => {
+    const view = readFileSync(new URL('./record/view/LotRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("const keys = [{ keys: ['c'], label: t('keys.record') }, { keys: ['r'], label: t('keys.release') }]")
+    expect(view).toMatch(/moreLabel: t\('record\.more'\),\s*keys,/)
+    expect(view).not.toContain("event.key === '?'")
+    expect(view).not.toContain("id: 'keys'")
+    expect(view).not.toMatch(/ShortcutsDialog|kind: 'shortcuts'/)
+  })
 })

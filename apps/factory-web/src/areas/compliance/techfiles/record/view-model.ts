@@ -117,7 +117,6 @@ export interface RecordModel {
   withdraw: WithdrawState | null
   pack: PackDialogModel | null
   stepUp: StepUpState
-  keysOpen?: boolean
 }
 
 export interface RecordActions {

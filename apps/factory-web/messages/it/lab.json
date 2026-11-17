@@ -480,8 +480,6 @@
   "keys": {
     "title": "Scorciatoie da tastiera",
     "record": "Registra un risultato di prova",
-    "release": "Rilascia il lotto (o rilascialo di nuovo)",
-    "submit": "Salva la finestra aperta",
-    "all": "Tutte le scorciatoie"
+    "release": "Rilascia il lotto (o rilascialo di nuovo)"
   }
 }

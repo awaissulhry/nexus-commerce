@@ -227,7 +227,6 @@ export const designScreen = defineDesignScreen<LotCase>({
     { id: 'loading', label: 'Loading', model: lotCase(pending, { detail: reading(), asOf: null, live: 'connecting' }, 'owner', false) },
     { id: 'error', label: "The API didn't answer", model: lotCase(pending, { detail: failedRead('problem.unavailable') }, 'owner', false) },
     { id: 'not-found', label: 'Not found (another company’s lot)', model: lotCase(pending, { detail: failedRead('problem.notFound') }, 'owner', false) },
-    { id: 'shortcuts', label: 'The keys (?)', model: lotCase(ready232, { detail: ready(readyDetail), dialog: { kind: 'shortcuts' } }) },
     // B-W2b-288 (FU2:03): the lab's price typed with a result and read back.
     ...labCostLotCases(lotCase, pending, pendingDetail, passDraft, readyDetail),
   ],
