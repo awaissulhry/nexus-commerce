@@ -141,8 +141,12 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // no literal emit: 966 → 970.
     // B-PR-25 + B-PR-28 (#1610): no event and two literal emits (a new promise date asked of the customer: approval_request.asked;
     // the open ask about an older date of that line: approval_request.withdrawn): 1515 → 1517.
-    // The guard counts 970 and 1517 on main c6e6ed7858; with the planted event and emit: 971, 1518.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(971 declared event version\(s\), 1518 literal emit/) })
+    // B-PR-30a + B-PR-30b (#1613): no event and two literal emits (decided for the customer: approval_request.decided_for_party;
+    // its answer reversed: approval_request.reversed): 1517 → 1519.
+    // B-PR-26 (#1615): no event and four literal emits (the factory answers a customer's ask: order_change_request.answered,
+    // .countered, .counter_answered; approval_request.asked): 1519 → 1523.
+    // The guard counts 970 and 1523 on main 368044503c; with the planted event and emit: 971, 1524.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(971 declared event version\(s\), 1524 literal emit/) })
     // ---- end END CHECK
   })
 
