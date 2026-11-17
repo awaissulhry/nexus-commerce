@@ -16,6 +16,12 @@ export const DEMO_COMPANIES = [
 
 const id = (n: number) => `0190f0e2-4310-7000-8000-${String(n).padStart(12, '0')}`
 
+/** B-TH-242: made-up customers of the "For: one customer" picker (never a real business). */
+export const DEMO_FIELD_CUSTOMERS = [
+  { id: id(901), code: 'ALPHA', legalName: 'Brand Alpha S.r.l.' },
+  { id: id(902), code: 'BETA', legalName: 'Brand Beta S.p.A.' },
+] as const
+
 const RECORD_WORDS: Readonly<Record<RecordKey, [string, string, string, string]>> = {
   CUSTOMER: ['Party', 'Cliente', 'Customer', 'sales.customers'],
   SUPPLIER: ['Party', 'Fornitore', 'Supplier', 'purchasing.suppliers'],
@@ -126,6 +132,9 @@ const field = (n: number, code: string, type: EditorField['type'], labelIt: stri
     picklist: null,
     linkTo: null,
     linkRecordType: null,
+    partyId: null, // B-TH-242
+    partyName: null,
+    portalNotice: extra.shownInPortal && !extra.partyId ? 'EVERY_CUSTOMER' : null,
     valueCount: 0,
     createdAt: '2026-10-02T08:00:00Z',
     updatedAt: '2026-11-10T15:12:00Z',
@@ -147,6 +156,10 @@ export const DEMO_ORDER_FIELDS: EditorField[] = [
   field(210, 'buyer_mobile', 'TEXT', 'Cellulare del compratore', 'Buyer mobile', 'custom', { audience: 'PERSONAL', valueCount: 2 }),
   field(211, 'old_route', 'TEXT', 'Vecchio percorso', 'Old route', 'custom', { status: 'ARCHIVED', valueCount: 14, version: 2 }),
 ]
+
+/** B-TH-242: the fields of Orders with one for one customer only (its line names the customer; it shows on that customer's orders alone). */
+export const DEMO_ALPHA_FIELD: EditorField = field(212, 'alpha_hang_tag', 'TEXT', 'Cartellino Alpha', 'Alpha hang tag', 'custom', { partyId: DEMO_FIELD_CUSTOMERS[0].id, partyName: DEMO_FIELD_CUSTOMERS[0].legalName, shownInPortal: true, valueCount: 4 })
+export const DEMO_ORDER_FIELDS_WITH_CUSTOMER: EditorField[] = [...DEMO_ORDER_FIELDS, DEMO_ALPHA_FIELD]
 
 export const DEMO_CUSTOMER_FIELDS: EditorField[] = [
   field(221, 'fair_stand', 'TEXT', 'Stand in fiera', 'Fair stand', 'custom', { valueCount: 8 }),

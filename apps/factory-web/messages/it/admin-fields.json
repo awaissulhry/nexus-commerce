@@ -97,7 +97,8 @@
     "state": "Stato",
     "used": "Compilato su",
     "usedCount_one": "{count} scheda",
-    "usedCount_other": "{count} schede"
+    "usedCount_other": "{count} schede",
+    "customer": "Per"
   },
   "section": {
     "custom": "Campi personalizzati"
@@ -352,7 +353,8 @@
     "valueCodeTaken": "La lista ha già questo codice.",
     "description": "Una descrizione ha al massimo 500 caratteri.",
     "allOn": "Tutti i valori selezionati sono già offerti.",
-    "allOff": "Nessun valore selezionato è offerto ora."
+    "allOff": "Nessun valore selezionato è offerto ora.",
+    "customer": "Scegli il cliente di questo campo."
   },
   "fault": {
     "code": "La chiave è stata rifiutata: lettere minuscole, cifre e trattini bassi, iniziando con una lettera.",
@@ -472,5 +474,30 @@
       "stale": "Qualcuno ha salvato prima.",
       "value": "Questo valore è stato rifiutato: un valore non più offerto, oppure una persona, un file o una scheda che qui non si può indicare."
     }
+  },
+  "customer": {
+    "legend": "Per",
+    "every": "Ogni cliente",
+    "everyHint": "Sui record di ogni cliente ({record}).",
+    "one": "Un solo cliente",
+    "oneHint": "Solo sui record di un cliente ({record}): il suo foglio, i suoi moduli e il suo portale. Nessun altro cliente lo vede, nemmeno il nome.",
+    "search": "Cliente",
+    "searchHint": "I clienti attivi della società del campo.",
+    "searchPlaceholder": "Nome o codice",
+    "searching": "Ricerca dei clienti…",
+    "none": "Nessun cliente attivo corrisponde.",
+    "change": "Cambia cliente",
+    "cannotSearch": "Non puoi leggere i clienti: chiedi il permesso sui clienti, oppure crea il campo per ogni cliente.",
+    "searchFailed": "Non è stato possibile leggere i clienti. Riprova.",
+    "oneFixed": "Solo per {customer} (non cambia mai).",
+    "everyFixed": "Per ogni cliente (non cambia mai).",
+    "previewEvery": "Mostrato sui record di ogni cliente ({record}).",
+    "previewOne": "Mostrato solo sui record di {customer} ({record}).",
+    "previewPick": "Scegli il cliente: il campo comparirà solo sui suoi record ({record}).",
+    "lineOne": "Solo {customer}",
+    "lineEvery": "Ogni cliente"
+  },
+  "portalLine": {
+    "every": "Ogni cliente vedrà il nome di questa colonna nel suo portale."
   }
 }
