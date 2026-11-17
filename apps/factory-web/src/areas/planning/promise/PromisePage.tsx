@@ -30,6 +30,8 @@ import {
   type StockStyle,
 } from './api'
 import { calcBodyOf, calcHeld, controlsOf, csvOfLines, EMPTY_CALC, formOf, NAMESPACE, promiseCan, proposeBodyOf, queryOf, readProblemOf, refusalOf, type CalcForm, type PromiseControls, type Words } from './model'
+import { acceptBodyOf, openedProposalOf } from './model' // F-PR-20
+import type { Proposal } from './api' // F-PR-20
 import type { CalculatorDialog, HistoryPopover, Loaded, PromiseModel, PromiseNotice, PromiseSite, RepromiseDialog } from './view-model'
 import { PromiseView } from './view/PromiseView'
 
@@ -75,6 +77,8 @@ function PromiseContainer() {
   const [atp, setAtp] = useState<Loaded<Atp> | null>(null)
   const [history, setHistory] = useState<HistoryPopover | null>(null)
   const [repromise, setRepromise] = useState<RepromiseDialog | null>(null)
+  // F-PR-20: the proposal its task opened (`?proposal=`); shown in its line's modal with the customer's answer once decided.
+  const [opened, setOpened] = useState<Proposal | null>(null)
   const [calculator, setCalculator] = useState<CalculatorDialog | null>(null)
   const [updates, setUpdates] = useState(0)
   const [notice, setNotice] = useState<PromiseNotice | null>(null)
@@ -200,7 +204,7 @@ function PromiseContainer() {
   const loadDraft = useCallback(
     async (lineId: string) => {
       const id = ++reads.current.draft
-      setRepromise((current) => ({ lineId, draft: { status: 'loading' }, form: current?.lineId === lineId ? current.form : null, tell: false, declining: false, declineReason: '', busy: null, problem: null, done: current?.lineId === lineId ? current.done : null }))
+      setRepromise((current) => ({ lineId, draft: { status: 'loading' }, form: current?.lineId === lineId ? current.form : null, tell: false, askBrand: current?.lineId === lineId ? (current.askBrand ?? false) : false /* F-PR-20 */, declining: false, declineReason: '', busy: null, problem: null, done: current?.lineId === lineId ? current.done : null }))
       try {
         const draft = await repromiseDraft(api, lineId)
         if (id !== reads.current.draft) return
@@ -221,6 +225,7 @@ function PromiseContainer() {
     if (!lineId) {
       reads.current.draft += 1
       setRepromise(null)
+      setOpened(null) // F-PR-20
       keys.current = {}
       return
     }
@@ -233,7 +238,11 @@ function PromiseContainer() {
     if (!proposalId || !can.view) return
     let gone = false
     getRepromise(api, proposalId)
-      .then((proposal) => !gone && setControls({ proposal: null, repromise: proposal.line.id, site: proposal.siteId, tile: proposal.state === 'WAITING' ? 'REPROMISE_WAITING' : controlsRef.current.tile }))
+      .then((proposal) => {
+        if (gone) return
+        setOpened(proposal.state === 'WAITING' ? null : proposal) // F-PR-20: a decided one shows its word and the customer's answer
+        setControls({ proposal: null, repromise: proposal.line.id, site: proposal.siteId, tile: proposal.state === 'WAITING' ? 'REPROMISE_WAITING' : controlsRef.current.tile })
+      })
       .catch((error: unknown) => {
         if (gone) return
         setNotice({ tone: 'danger', key: readProblemOf(error) === 'error.gone' ? 'notice.proposalGone' : readProblemOf(error) })
@@ -259,7 +268,9 @@ function PromiseContainer() {
         } else if (draft.waiting) {
           const proposalId = draft.waiting.id
           if (kind === 'accept') {
-            const answer = await acceptRepromise(api, proposalId, { tell: dialogNow.tell }, keyOf(`accept:${proposalId}`))
+            // F-PR-20: "Ask the customer" goes with the accept (one key per body: a changed switch is a new attempt).
+            const body = acceptBodyOf(dialogNow)
+            const answer = await acceptRepromise(api, proposalId, body, keyOf(`accept:${proposalId}:${body.tell}:${body.askBrand === true}`))
             setRepromise((current) => (current ? { ...current, busy: null, done: { kind: 'accepted', proposal: answer.proposal, answer } } : current))
             setNotice({ tone: 'success', key: answer.told ? 'notice.acceptedTold' : 'notice.accepted', params: { order: draft.order.number, line: draft.line.seq } })
           } else if (kind === 'decline') {
@@ -380,7 +391,9 @@ function PromiseContainer() {
     can.view,
   )
 
-  const model: PromiseModel = { prefix, can, me, sites, siteId, controls, list, history, styles, atp, repromise, calculator, live, updates, notice, dialog, built: OFFICE_PAGES }
+  // F-PR-20: the opened proposal joins its own line's modal only.
+  const repromiseView = repromise ? { ...repromise, opened: openedProposalOf(opened, repromise.lineId) } : null
+  const model: PromiseModel = { prefix, can, me, sites, siteId, controls, list, history, styles, atp, repromise: repromiseView, calculator, live, updates, notice, dialog, built: OFFICE_PAGES }
 
   return (
     <PromiseView
@@ -413,6 +426,14 @@ function PromiseContainer() {
         onDate: (key, date) => setRepromise((current) => (current?.form ? { ...current, form: { ...current.form, dates: { ...current.form.dates, [key]: date } }, problem: null } : current)),
         onPropose: () => void write('propose'),
         onTell: (tell) => setRepromise((current) => (current ? { ...current, tell } : current)),
+        // F-PR-20
+        onAskBrand: (askBrand) => setRepromise((current) => (current ? { ...current, askBrand, problem: null } : current)),
+        onCopyLink: (url) => {
+          void navigator.clipboard
+            ?.writeText(url)
+            .then(() => setNotice({ tone: 'success', key: 'notice.linkCopied' }))
+            .catch(() => undefined)
+        },
         onAccept: () => void write('accept'),
         onDeclining: (declining) => setRepromise((current) => (current ? { ...current, declining, problem: null } : current)),
         onDeclineReason: (reason) => setRepromise((current) => (current ? { ...current, declineReason: reason, problem: null } : current)),

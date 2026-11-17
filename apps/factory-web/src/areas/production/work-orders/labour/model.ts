@@ -1,7 +1,7 @@
 import type { WorkOrderCost } from '../../../finance/costing/api'
 import type { CostingCan } from '../../../finance/costing/model'
 import type { OffStandardMinutes } from './api'
-// B-W2b-GB02 (G053): the scrap and rework cost per reason.
+// B-W2b-GB02 (G053): the scrap and rework cost (F-PR-06: one scrap value line).
 import type { ScrapReworkModel } from './scrap-rework/model'
 
 /**
@@ -17,6 +17,6 @@ export interface LabourModel {
   readonly part: { readonly value: WorkOrderCost | null; readonly problem: string | null } | null
   /** Off-standard minutes (B-W2b-81). `held`: the person does not hold production.offstandard.view; null: not asked (a draft, the tab not open). */
   readonly offStandard?: { readonly value: OffStandardMinutes | null; readonly problem: string | null; readonly held?: boolean } | null
-  /** B-W2b-GB02 (G053): the scrap and rework cost per reason (null or absent: not asked, as the cost read). */
+  /** B-W2b-GB02 (G053): the scrap and rework cost, its totals for the one scrap value line (null or absent: not asked, as the cost read). */
   readonly scrapRework?: ScrapReworkModel | null
 }

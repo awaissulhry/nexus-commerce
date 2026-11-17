@@ -208,7 +208,8 @@
     "declined": "The re-promise of {order} line {line} was declined: the planner reads why.",
     "withdrawn": "The re-promise of {order} line {line} was taken back.",
     "usedOnQuote": "The suggested date is on quote {quote}.",
-    "proposalGone": "That re-promise is no longer there."
+    "proposalGone": "That re-promise is no longer there.",
+    "linkCopied": "The customer's link is copied."
   },
   "proposal": {
     "WAITING": "Waits for sales",
@@ -298,7 +299,11 @@
     "acceptTell": "Accept and tell the customer",
     "declineOpen": "Decline…",
     "decline": "Decline",
-    "withdraw": "Take it back"
+    "withdraw": "Take it back",
+    "askBrand": "Ask the customer to accept the new date",
+    "askBrandHint": "The date stands either way. The customer accepts or refuses in its portal (or by a link); a refusal puts a follow-up task on the order for us.",
+    "acceptAsk": "Accept and ask the customer",
+    "acceptTellAsk": "Accept, tell and ask the customer"
   },
   "done": {
     "proposed": "Sent to sales for acceptance",
@@ -311,7 +316,37 @@
     "notTold": "The customer was not told here.",
     "lineDate": "The order line’s date is now {day}.",
     "declinedBody": "Nothing changed; the planner reads why.",
-    "withdrawnBody": "Nothing changed; a new re-promise can be proposed."
+    "withdrawnBody": "Nothing changed; a new re-promise can be proposed.",
+    "asked": "We asked the customer to accept the new date: its answer shows on this proposal."
+  },
+  "link": {
+    "title": "The customer's link to answer",
+    "copy": "Copy link",
+    "once": "Shown once: give it to a customer who answers without the portal."
+  },
+  "answer": {
+    "title": "The customer's answer",
+    "state": {
+      "WAITING": "Waiting for the customer's answer",
+      "ACCEPTED": "The customer accepted the new date",
+      "REFUSED": "The customer did not accept the new date: it stands; the follow-up waits for us",
+      "WITHDRAWN": "No longer asked of the customer",
+      "EXPIRED": "The customer did not answer in time"
+    },
+    "at": "on {time}",
+    "words": "Their words: “{words}”",
+    "signed": "Signed {name}",
+    "followUp": {
+      "OPEN": "The follow-up task on the order is open.",
+      "DONE": "The follow-up task on the order is done.",
+      "CANCELLED": "The follow-up task on the order was cancelled."
+    }
+  },
+  "opened": {
+    "title": "{order} line {line} · last proposal: {state}",
+    "decided": "Decided {time} by {name}.",
+    "decidedNoName": "Decided {time}.",
+    "notAsked": "The customer was not asked about this date."
   },
   "state": {
     "FROM_STOCK": "From stock",

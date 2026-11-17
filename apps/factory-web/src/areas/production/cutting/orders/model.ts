@@ -6,7 +6,7 @@ import { TICKET_REFUSALS } from '@nexus/factory-domain/production/cutorders/tick
 import { CUT_VARIANCE_REASONS, RECONCILE_REFUSALS } from '@nexus/factory-domain/production/lays/reconcile'
 import { isApiError, issuePath } from '../../../../lib/api/errors'
 import type { CutLog } from '../../_shared/api'
-import type { Allocation, CutRow, CutView, WorkOrderYield } from '../api'
+import type { CutRow, CutView } from '../api'
 import { phrase, type Phrase } from '../model'
 import type {
   CreateBody,
@@ -31,8 +31,8 @@ import { rightRef } from '../../../../lib/i18n/rights'
 /**
  * Cutting in depth (B-W2b-129; design production.cutting, W2b parts): the rules without a screen for cut orders of several work
  * orders (MES-034), their lays and rolls by shade and shrinkage group (MES-037), the tickets (MES-041), Reconcile cut (MES-045),
- * the yield's issued vs used vs returned and the supplier lot feedback, the lay sheet, and the leather cut's same shade lot
- * check. Words are message keys of the `cutting-orders` catalogue with their parameters (the API's English sentences are never
+ * the yield's issued vs used vs returned and the supplier lot feedback (a work order's Cutting & bundles tab, F-PR-06), and
+ * the lay sheet (the one shade lot rule of a leather is Materials › Leather's). Words are message keys of the `cutting-orders` catalogue with their parameters (the API's English sentences are never
  * shown). Never who cut, spread or counted: tables, lays, rolls and lots only (Statuto dei Lavoratori art. 4; SCM-255). No money.
  */
 
@@ -542,7 +542,7 @@ export interface AreaBalance {
  * tab): the hides of the cut log summed per unit (areas of different units are never added); `fallbackUom` for a hide with no
  * cut entry (the work order's one leather unit, else none).
  */
-export function areaBalance(log: Pick<CutLog, 'hides' | 'entries'>, figures: Pick<WorkOrderYield, 'hides'> | null, fallbackUom = ''): AreaBalance[] {
+export function areaBalance(log: Pick<CutLog, 'hides' | 'entries'>, figures: { readonly hides: ReadonlyArray<{ readonly hide: { readonly id: string }; readonly item: { readonly uom: string } }> } | null, fallbackUom = ''): AreaBalance[] {
   const unitOf = new Map<string, string>()
   for (const entry of log.entries) unitOf.set(entry.hideId, entry.uom)
   for (const hide of figures?.hides ?? []) unitOf.set(hide.hide.id, hide.item.uom)
@@ -573,37 +573,6 @@ export function feedbackHeld(lot: { readonly supplier: string | null }, claims: 
   if (!claims) return phrase('held.permission', { right: rightRef('purchasing.claims.manage') })
   if (!lot.supplier) return phrase('feedback.held.noSupplier')
   return null
-}
-
-// ---- the leather cut's same shade lot check -----------------------------------------------------------------------------------
-
-export interface ShadeLot {
-  readonly lot: string
-  readonly shade: string | null
-  readonly hides: number
-}
-
-/**
- * The shade lots of a work order's leather (SCM-206 "one shade lot per order"): the hides cut (their lot and shade) and the hides
- * allocated and not cut yet (their lot). One lot and shade: the order is cut from one shade lot; more: the cutting table warns
- * and a lead signs Cut anyway, the reserve refuses another lot without inventory.shade.override.
- */
-export function shadeLots(hides: readonly { readonly lotCode: string; readonly shade: string | null }[], allocated: readonly Pick<Allocation, 'lot'>[]): ShadeLot[] {
-  const lots = new Map<string, ShadeLot>()
-  const add = (lot: string, shade: string | null) => {
-    const key = JSON.stringify([lot, shade])
-    const found = lots.get(key)
-    lots.set(key, { lot, shade, hides: (found?.hides ?? 0) + 1 })
-  }
-  for (const hide of hides) add(hide.lotCode, hide.shade)
-  for (const row of allocated) {
-    const code = row.lot?.code
-    if (!code) continue
-    // An allocated hide's shade is its lot's: it joins a known shade of that lot when there is one.
-    const known = [...lots.values()].find((entry) => entry.lot === code)
-    add(code, known?.shade ?? null)
-  }
-  return [...lots.values()]
 }
 
 // ---- the lay sheet (a new tab) ------------------------------------------------------------------------------------------------

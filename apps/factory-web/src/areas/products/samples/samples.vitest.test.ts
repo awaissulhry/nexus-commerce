@@ -51,6 +51,11 @@ import {
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
 import { workOrderFacts } from './record/view/RecordDialogs'
+// ---- F-PR-19
+import { SWATCH_KINDS as DOMAIN_SWATCH_KINDS, SWATCH_MATERIAL_KINDS } from '@nexus/factory-domain/sales/sample-decisions/rules'
+import { emptySwatchDraft, swatchAddHeld, swatchBodyOf, swatchDraftHeld, swatchMaterialKinds, SWATCH_KINDS } from './model'
+import { addSwatchHeld } from './view/SwatchDialog'
+// ---- end F-PR-19
 
 const owner = samplesCan(ROLE_PERMISSIONS.owner)
 
@@ -285,3 +290,78 @@ describe('B-TH-232 a sample round on another customer’s private-label style is
   })
 })
 // ── end B-TH-232 ──
+
+// ── F-PR-19 (production plan §3 "Brand alone: … size set, TOP … fabric, trims"; §5 Samples: the new kinds) ──
+/**
+ * The office makes the new kinds: a size set or a top-of-production round in "New sample request" (every kind says what it is
+ * for; TOP gates nothing), and a fabric or a trim swatch — next to colour and leather — in "Add a swatch" on the round's Approval
+ * tab, whose material picker lists only the material kinds the API takes. The swatch goes to the round's own customer (the body
+ * never names one): no other customer is ever picked (PW-06, the office side of the wall in this dialog). Made-up data.
+ */
+describe('F-PR-19: size set and TOP rounds, fabric and trim swatches in the office dialogs', () => {
+  const words = (locale: (typeof LOCALES)[number]) => CATALOGUE[locale]['products-samples'] as Record<string, string>
+
+  it('New sample request offers every kind of the domain, size set and TOP among them, each with its words and what it is for', () => {
+    expect(SAMPLE_KINDS).toContain('SIZE_SET')
+    expect(SAMPLE_KINDS).toContain('TOP_OF_PRODUCTION')
+    for (const locale of LOCALES) {
+      for (const kind of SAMPLE_KINDS) {
+        expect(words(locale)[`kind.${kind}`], `${locale} kind.${kind}`).toBeTruthy()
+        expect(words(locale)[`new.kindHint.${kind}`], `${locale} new.kindHint.${kind}`).toBeTruthy()
+      }
+    }
+    expect(words('en')['new.kindHint.TOP_OF_PRODUCTION']).toContain('gates nothing')
+    expect(words('en')['new.kindHint.SIZE_SET']).toContain('size set gate')
+  })
+
+  it('Add a swatch offers colour, leather, fabric and trim, each with its words and the materials it takes', () => {
+    expect([...SWATCH_KINDS]).toEqual([...DOMAIN_SWATCH_KINDS])
+    expect(SWATCH_KINDS).toContain('FABRIC')
+    expect(SWATCH_KINDS).toContain('TRIM')
+    for (const locale of LOCALES) for (const kind of SWATCH_KINDS) for (const key of [`swatch.${kind}`, `swatch.add.kindHint.${kind}`]) expect(words(locale)[key], `${locale} ${key}`).toBeTruthy()
+    // The picker lists only what the API takes (the database's rule): any material for a colour swatch.
+    expect(swatchMaterialKinds('COLOUR')).toBeUndefined()
+    expect(swatchMaterialKinds('LEATHER')).toEqual(['LEATHER'])
+    expect(swatchMaterialKinds('FABRIC')).toEqual(['TEXTILE', 'LINING', 'MEMBRANE', 'PADDING'])
+    expect(swatchMaterialKinds('TRIM')).toEqual(['TRIM', 'HARDWARE', 'THREAD', 'LABEL'])
+    for (const kind of SWATCH_KINDS) expect(swatchMaterialKinds(kind) ?? null).toEqual(SWATCH_MATERIAL_KINDS[kind])
+  })
+
+  it('who may open it: the manage right, the materials right, an open round, a customer to send it to; offline waits', () => {
+    expect(owner.materials).toBe(true)
+    expect(samplesCan(ROLE_PERMISSIONS.sales).materials).toBe(true)
+    expect(swatchAddHeld(ROUND, owner, false)).toBeNull()
+    expect(swatchAddHeld(ROUND, samplesCan(ROLE_PERMISSIONS.planner), false)).toEqual({ key: 'held.noManage' })
+    expect(swatchAddHeld(ROUND, { ...owner, materials: false }, false)).toEqual({ key: 'swatch.held.noMaterials' })
+    expect(swatchAddHeld({ ...ROUND, stage: 'CANCELLED' }, owner, false)).toEqual({ key: 'refusal.SWATCH_ROUND_CANCELLED' })
+    expect(swatchAddHeld({ ...ROUND, party: null, style: { ...ROUND.style, brandPartyId: null } }, owner, false)).toEqual({ key: 'swatch.held.internal' })
+    // An internal round of a customer's style: the swatch goes to the style's brand (the API's rule).
+    expect(swatchAddHeld({ ...ROUND, party: null, style: { ...ROUND.style, brandPartyId: 'f1f1f1f1-0000-4000-8000-000000000019' } }, owner, false)).toBeNull()
+    expect(swatchAddHeld(ROUND, owner, true)).toEqual({ key: 'held.offline' })
+  })
+
+  it('Add is held until the material and its colour are picked; a long note is said; busy and offline wait', () => {
+    const ready = { ...emptySwatchDraft('FABRIC'), itemId: 'f0f0f0f0-0019-4000-8000-000000000001', itemColourId: 'f0f0f0f0-0019-4000-8000-000000000011' }
+    expect(swatchDraftHeld(emptySwatchDraft('FABRIC'))).toEqual({ key: 'swatch.held.material' })
+    expect(swatchDraftHeld({ ...ready, itemColourId: '' })).toEqual({ key: 'swatch.held.colour' })
+    expect(swatchDraftHeld({ ...ready, note: 'x'.repeat(501) })).toEqual({ key: 'swatch.held.long', params: { max: 500 } })
+    expect(swatchDraftHeld(ready)).toBeNull()
+    expect(addSwatchHeld({ draft: ready, busy: true, offline: false })).toEqual({ key: 'common.working' })
+    expect(addSwatchHeld({ draft: ready, busy: false, offline: true })).toEqual({ key: 'held.offline' })
+    expect(addSwatchHeld({ draft: ready, busy: false, offline: false })).toBeNull()
+  })
+
+  it('PW-06 (dialog): the body names the round and its style, never a customer — the swatch goes to the round’s own', () => {
+    const draft = { ...emptySwatchDraft('TRIM'), itemId: 'f0f0f0f0-0019-4000-8000-000000000003', itemColourId: 'f0f0f0f0-0019-4000-8000-000000000013', note: '  Zip puller (made up)  ' }
+    const body = swatchBodyOf(ROUND, draft)
+    expect(body).toEqual({ styleId: ROUND.style.id, roundId: ROUND.id, kind: 'TRIM', itemId: draft.itemId, itemColourId: draft.itemColourId, note: 'Zip puller (made up)' })
+    expect('partyId' in body).toBe(false)
+    expect('note' in swatchBodyOf(ROUND, { ...draft, note: '   ' })).toBe(false)
+  })
+
+  it('the design cases of Add a swatch exist (fabric, trim being read, a refusal in our words)', () => {
+    for (const id of ['swatch-add-fabric', 'swatch-add-trim', 'swatch-add-refused']) expect(recordScreen.cases.some((item) => item.id === id), id).toBe(true)
+    for (const locale of LOCALES) for (const key of ['swatch.add.open', 'swatch.add.title', 'swatch.add.submit', 'swatch.add.done', 'swatch.held.internal', 'refusal.MATERIAL_KIND']) expect(words(locale)[key], `${locale} ${key}`).toBeTruthy()
+  })
+})
+// ── end F-PR-19 ──

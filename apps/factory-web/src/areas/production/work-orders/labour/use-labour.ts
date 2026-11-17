@@ -6,10 +6,8 @@ import { getWorkOrderCost, type WorkOrderCost } from '../../../finance/costing/a
 import { costingCanOf, readProblem } from '../../../finance/costing/model'
 import { getOffStandardMinutes, type OffStandardMinutes } from './api'
 import type { LabourModel } from './model'
-// B-W2b-GB02 (G053): the scrap and rework cost per reason, with the reason lists' words.
-import { pickerReasons } from '../../../_shared/reasons/api'
+// B-W2b-GB02 (G053): the scrap and rework cost (F-PR-06: its totals, the tab's one scrap value line).
 import { getScrapRework, type ScrapRework } from './scrap-rework/api'
-import type { ReasonWords } from './scrap-rework/model'
 
 /**
  * B-W2a-72 — the work order's Labour & cost tab reads its cost (`GET /costing/work-orders/:id`, costing.view) when the tab
@@ -29,7 +27,6 @@ export function useLabourCost(api: ApiClient, workOrderId: string, open: boolean
   const asksOff = open && mayOff && started
   // ---- B-W2b-GB02 (G053): the scrap and rework cost, read with the cost (the same gate), failing on its own.
   const [scrap, setScrap] = useState<{ value: ScrapRework | null; problem: string | null } | null>(null)
-  const [reasons, setReasons] = useState<ReasonWords>(new Map())
   const scrapSeq = useRef(0)
   // ---- end B-W2b-GB02
   const read = useCallback(() => {
@@ -45,13 +42,6 @@ export function useLabourCost(api: ApiClient, workOrderId: string, open: boolean
       .then((value) => mineScrap === scrapSeq.current && setScrap({ value, problem: null }))
       .catch((error: unknown) => mineScrap === scrapSeq.current && setScrap({ value: null, problem: readProblem(error) }))
   }, [api, workOrderId])
-  // B-W2b-GB02 (G053): the reasons' words once (the code shows where a list no longer keeps it).
-  useEffect(() => {
-    if (!asks) return
-    pickerReasons(api, ['SCRAP', 'REWORK', 'WRITE_OFF'])
-      .then((found) => setReasons(new Map(found.map((reason) => [reason.code, { it: reason.labelIt, en: reason.labelEn }]))))
-      .catch(() => setReasons(new Map()))
-  }, [api, asks])
   const readOff = useCallback(() => {
     const mine = ++offSeq.current
     setOff((current) => ({ value: current?.value ?? null, problem: null }))
@@ -70,5 +60,5 @@ export function useLabourCost(api: ApiClient, workOrderId: string, open: boolean
     if (asksOff) readOff()
   }, [asks, asksOff, read, readOff])
   const offStandard = !open || !started ? null : mayOff ? (off ?? { value: null, problem: null }) : { value: null, problem: null, held: true }
-  return { model: { can, part: asks ? (part ?? { value: null, problem: null }) : null, offStandard, scrapRework: asks ? { part: scrap ?? { value: null, problem: null }, reasons } : null }, retry }
+  return { model: { can, part: asks ? (part ?? { value: null, problem: null }) : null, offStandard, scrapRework: asks ? { part: scrap ?? { value: null, problem: null } } : null }, retry }
 }

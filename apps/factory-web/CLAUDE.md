@@ -115,10 +115,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   generic page (`RecordPage.tsx`, `view/RecordView.tsx`) = the summary (GET /records/:type/:id/summary, partner view) beside the
   conversation. `usePortalRecordFrame()`: PortalThread reports its new count and marks read only while on screen.
 - `src/areas/sales/customers/portal/` — Portal access in the office (B-W2b-180; SCR-033-portal, SCR-057-portal): ONE tab both party
-  records mount through the `portal` slot (`?tab=portal`; partners.view): the portal's switch, people at most, roles offered
-  and the production-progress switch (C1, customers), What they see (`POST /partners/:id/preview`, then `/p/<code>` in a new
+  records mount through the `portal` slot (`?tab=portal`; partners.view): the portal's switch, people at most, roles offered,
+  What they see (`POST /partners/:id/preview`, then `/p/<code>` in a new
   tab: `admin/users/partners/preview.ts`), People with access (list frame; invite, change, resend, revoke, suspend,
   reactivate, deactivate behind the step-up), the live line (`partner_user.signed_in`), Requests waiting for them (B-W2b-167).
+  F-PR-07 `portal/limits/` + `view/LimitsCard.tsx` (anchor `#production-limits`) — a customer's production limits card, in place of
+  the old progress switch: level, urgency + quota, production asks, named approver, second person (`PUT /partners/:id/production`,
+  step-up), freeze points (`/sales/order-freeze-rules?partyId`), the office-only supervisor + backup (`PUT /production/brands/:id/
+  supervisor`, drawn with the portal off), preset "Production partner", "Open My production as …" (`/p/<code>/production`).
   `src/areas/admin/users/partners/` — the partner client and rules every partner screen shares (`api.ts`, `model.ts`:
   the end of access as a site day, reaches, drafts, refusals in words), Admin › Users audience Partners (SCR-010-partners,
   `use-partners.ts`) and User › Partner organisation (SCR-011-partner). Catalogue `portal-access`. The order studio's ⋯
@@ -187,7 +191,9 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   cards on a phone; the Urgent order dialog on DS OrderedList). Never the office's number, a queue place or who set something.
   F-PR-12a: the order's Status & progress reads `GET /portal/production/:orderId` (OrderPage, portal.production.view; 404/403 =
   hidden: no section) — waiting for you on this order, the hold banner (lib/production), the plain stage as the "In production"
-  step's note, health and waiting on (StatusTab's F-PR-12a block).
+  step's note, health and waiting on (StatusTab's F-PR-12a block). F-PR-12b: + Gates & dates (real gates, swatch answers as
+  approvals, the published plan's days) and + Progress (lib PiecesGrid per line and size, read again every `refreshSeconds`) from
+  the same read; today's progress card only where that read does not draw (`productionOwnsProgress`).
 - `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
   SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
   &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every
@@ -498,11 +504,15 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   primary while released garments wait (`record/overview/model.ts reportFirst`; the Bundles card's button then hides), ⋯ Preview as
   <customer> (partners.preview), the Overview's `record/gates/` (GET /planning/milestones?orderId=, planning.view), ONE progress
   table (`record/overview/view/ProgressTable.tsx`, the layer switch went) and `record/health/` (GET/PUT/DELETE
-  /production/brand-orders/:orderId/health, Raise to At risk; the note office-only), `work-orders/record/` the work order studio (`?tab=overview|materials|cutting|bundles|
-  operations|quality|activity`, `?at=<seq>`; tabs in `cutting/`, `bundles/`, `progress/`), `wip/` Floor now
+  /production/brand-orders/:orderId/health, Raise to At risk; the note office-only), `work-orders/record/` the work order studio (`?tab=overview|materials|cutting|
+  operations|quality|labour`, `?at=<seq>`; F-PR-06: `cutting` = Cutting & bundles in `cutting/` — ONE cut-and-bundled table
+  (`cutting/model.ts`), the Cut record merged in (recuts + Mark cut, the cut orders of this work order, yield per lot: `use-cut-parts.ts`,
+  `view/CutParts.tsx`; `/production/cutting/<id>` redirects, `cutting/record/redirect.ts`), the bundles `bundles/view/BundlesSection`; an
+  old `?tab=bundles` opens it; Operations & WIP ONE table in `progress/` (rows open to sizes); Quality the one scrap home, Share with the
+  customer held on a mixed work order (`record/quality/model.ts`); Labour & cost one Scrap value line), `wip/` Floor now
   (`/production/floor`); `_shared/` api, rules (`model.ts`), hooks, made-up fixtures. Totals per work order, operation
   and line only: no person's output and no station anywhere (Statuto art. 4, Owner F2); worker names only inside one record.
-  `cutting/` (B-W2a-60) Production › Cutting room › Cutting (SCR-238 `/production/cutting?view=&q=&new=1&alloc=<work order>`: tiles, one cut per work order (W2a: leather by hide), New cut order → Allocate hides = the Find hides dialog over `/inventory/reservations`; the Cut record `/production/cutting/<work order>?tab=lay|pieces|yield|tickets` with the AreaBalanceBar, the pieces matrix and recuts, yield per lot, tickets reprint/void; catalogue `cutting`) and `scrap/` Floor control › Scrap & rework (SCR-140 `/production/scrap?view=&period=&kind=&by=&group=&q=&open=&replace=`: tiles, the pareto (a bar filters), rows, the DetailModal with A / R, Replace scrapped quantity; catalogue `scrap`).
+  `cutting/` (B-W2a-60) Production › Cutting room › Cutting (SCR-238 `/production/cutting?view=&q=&new=1&alloc=<work order>`: tiles, one cut per work order (W2a: leather by hide), New cut order → Allocate hides = the Find hides dialog over `/inventory/reservations`; F-PR-06: a leather cut opens its work order's Cutting & bundles tab, the old Cut record address `/production/cutting/<work order>` redirects there; catalogue `cutting`) and `scrap/` Floor control › Scrap & rework (SCR-140 `/production/scrap?view=&period=&kind=&by=&group=&q=&open=&replace=`: tiles, the pareto (a bar filters), rows, the DetailModal with A / R, Replace scrapped quantity; catalogue `scrap`).
   `wip/` W2b (B-W2b-66): `use-floor-boards.ts` (hour by hour, the heat map, stuck bundles, tiles, per site of the top bar's scope; scans re-read at most every 10 s), `api.ts`, `model.ts`, `view/HourlyPanel` (PerformanceGraph per line, "Why was 10:00–11:00 short?" = DS DetailPopover), `view/TargetsDialog` (Set targets, one PUT per day), `view/HeatPanel` (DS Heatmap; a cell's bundles in a Modal), `view/StuckPanel` (list frame); `t` / Open line TV opens `display/` = SCR-173-preview `/production/floor/display?line=` (a WINDOW page). The board itself is `src/lib/line-board/` (schema, rules, `use-line-board.ts`, `view/LineBoardView` on the display tier, catalogue `line-board`): the Floor's `floor/display/` (SCR-173, `/floor/display`, GET /production/boards/display with the device cookie; FloorApp's gate sends a device whose `rules.landing` is LINE_BOARD there, no sign-in) and the Office's preview draw the same view, as the views may share only through `src/lib`.
   B-W2b-130 (the cutting room board and yield; catalogue `production-cutboard`): `wip/cutting/` = Floor now's Cutting room (fn-cutting, last section; `use-cutting-room.ts` GET /production/cutboard per site of the scope, production.cutting.view only; live cut_order.* / cut_ticket.* / lay.* / cut_consumption.* / production.cut_logged at most every 5 s; a number opens the cut order's record, a work order its Cutting tab); `reports/yield/` = Production reports' Cutting and yield (prr-yield, `?yield=7|30|90` days ending on the report's day, read once the daily answer names the day); `work-orders/record/leather/` = Materials › Leather (the shade lots and the one shade lot rule, every state); `work-orders/cutting/{api.ts,view/HidePhoto.tsx}` = the cut log read with photoFileId / measuredThicknessMm and the entry's hide photo (GET /files/:id/preview, skipped without files.read). Never a cutter in any of them.
   `dispatch/` (B-W2b-56) Production › Dispatch (SCR-138 `/production/dispatch?site=&line=&date=`; catalogue `dispatch`, plus `board-kit`): ONE read `GET /production/dispatch/board`, a card per line (LoadBar + the design's words, its stations with who works there, Assign, Reassign, Print: the DS lane head holds text only), the DS PlanningBoard `layout="columns"` (stations = lanes, Not assigned = the tray, one bucket; the columns wrap by app CSS). A moved card keeps its board id through `aliases` (model `boardIdsOf`) so the DS's Undo finds it; the API's `undo` bodies are kept in step with the DS history and posted back as they came; a dialog's move has its Undo in the notice. A warned person or move asks the reason on 409 `refusal/OVERRIDE_REASON_NEEDED` and sends again. Words from codes and figures, never the API's `words`. `print/` = SCR-138-print `/production/dispatch/print?line=&line=&station=&date=` (a new tab; no line named: every line of the site, the band's Print). Names only beside a station or a card, as the board brings them; no figure by person.
@@ -521,6 +531,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   the cost column withheld without the cost grain, ⋯ Sample order PDF in a new tab: `/api/purchasing/sample-orders/<id>/pdf`) and New
   sample order (`?new=1`: supplier, site, style and open round, lines of sample hide / swatch / colour card). A row opens W1's PO record,
   whose band tags a PO of type Sample (`order.sample`, SCR-059 case `w2b-347-sample-order`). The RFQ list and record are Later: not drawn.
+- F-PR-25 `src/areas/production/work-orders/record/order-files/` — the work order band's "Order files (n)" window (B-PR-44's walled
+  routes only: one group per order, the customer's PO first; Order · Lines · Measurements newest first; the measurement lock line counted;
+  a PDF or picture shown beside the list, Download; phone: the list, a file full screen, ‹ / Esc back) and "Order thread" (one button, or a
+  menu for several orders): the order's thread in the work order's dock, on the order's own company (`order.companyId` of the route).
+- F-PR-21 `src/areas/_shared/production-supervisor/` (catalogue `production-supervisor`, CSS `fw-psv-`) — THE production supervisor
+  assign dialog (DS Modal sm + ListboxPanel, the Inquiries Assign pattern; `use-assign-supervisor.ts`: the pick list per customer and
+  company crossed, ONE `POST /production/orders/supervisor`, one result per order, the API's English `why` said from its code) and the
+  band's `SupervisorFact` (by name inside one record; "You muted this order" for the supervisor himself). Mounted by the work order band
+  (Change…) and Work orders ("Assign supervisor…", ≤ 100 orders; the Supervisor column Me / Someone else / Not set; Mine = `?supervisor=me`);
+  the Customer card and the limits card mount the same dialog.
 - The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
   problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
   What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per

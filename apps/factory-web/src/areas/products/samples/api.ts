@@ -142,6 +142,11 @@ export function sendSwatch(api: ApiClient, swatch: Pick<SwatchView, 'id' | 'vers
   return api.request('PATCH', `${base}/swatches/${enc(swatch.id)}`, { body: { version: swatch.version, sentAt }, schema: oneSwatch, ...key(idempotencyKey) }).then((answer) => answer.swatch)
 }
 
+/** F-PR-19: a swatch recorded for the round (colour, leather, fabric or trim; its customer is the round's), to send and decide after. */
+export function createSwatch(api: ApiClient, body: { styleId: string; roundId: string; kind: SwatchView['kind']; itemId: string; itemColourId: string; note?: string }, idempotencyKey?: string): Promise<SwatchView> {
+  return api.post(`${base}/swatches`, { body, schema: oneSwatch, ...key(idempotencyKey) }).then((answer) => answer.swatch)
+}
+
 export function decideSwatch(api: ApiClient, swatch: Pick<SwatchView, 'id' | 'version'>, body: { decision: SampleDecision; comments?: string }, idempotencyKey?: string): Promise<SwatchView> {
   return api.post(`${base}/swatches/${enc(swatch.id)}/decision`, { body: { version: swatch.version, ...body }, schema: oneSwatch, ...key(idempotencyKey) }).then((answer) => answer.swatch)
 }

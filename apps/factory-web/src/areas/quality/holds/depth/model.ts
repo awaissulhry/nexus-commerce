@@ -147,7 +147,7 @@ export function nodeRecord(node: ImpactNodeView): { type: string; id: string; ta
     case 'SERIAL':
       return node.workOrderId ? { type: 'WorkOrder', id: node.workOrderId } : null
     case 'BUNDLE':
-      return node.workOrderId ? { type: 'WorkOrder', id: node.workOrderId, tab: 'bundles' } : null
+      return node.workOrderId ? { type: 'WorkOrder', id: node.workOrderId, tab: 'cutting' } : null
     case 'SHIPMENT':
       return { type: 'Shipment', id: node.id }
     case 'SUBCONTRACT':

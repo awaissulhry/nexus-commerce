@@ -42,7 +42,8 @@ export const worksheetView = output({
 })
 
 export const orderFilesGroupView = output({
-  order: output({ id: id(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), orderDate: businessDate() }),
+  /** F-PR-25 (threads ask, T9): `companyId` = the order's own company, so the docked order thread opens on the order's record scope. */
+  order: output({ id: id(), number: z.string(), customerRef: z.string().nullable(), status: z.string(), orderDate: businessDate(), companyId: id() }),
   /** "Order thread": the sales order's thread (threadId null: none yet); null when the reader may not read it. */
   thread: output({ recordType: z.literal('SalesOrder'), recordId: id(), threadId: id().nullable() }).nullable(),
   /** Newest first. */

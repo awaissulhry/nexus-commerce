@@ -1,10 +1,11 @@
 import type { Locale } from '../../../lib/i18n/locales'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { countWords } from '@nexus/factory-domain/production-brand/portal-read' // F-PR-12a
-import type { HealthInput, HealthState, HoldInput, PlainStage, WaitingInput } from '../../../lib/production/model'
+import type { HealthInput, HealthState, HoldInput, PiecesColourway, PlainStage, WaitingInput } from '../../../lib/production/model'
 import { PORTAL_AREAS } from '../../shell/nav/portal-nav' // F-PR-12a
 import { recordHref } from '../orders/model'
 import type { BrandUrgencyCode, ProductionChip, ProductionHealth, ProductionList, ProductionOrder, ProductionRow, ProductionWaiting, Urgency, UrgencyAnswer, UrgencyOutcome, UrgentUse, Words } from './api'
+import type { ApprovalState, BrandGateState, ProductionGates } from './api' // F-PR-12b
 import { isProductionChip, URGENCY_OUTCOMES } from './api'
 
 /**
@@ -289,3 +290,36 @@ export function waitingHrefOf(prefix: string, areas = PORTAL_AREAS): string {
   return built ? `${prefix}/waiting` : `${prefix}/`
 }
 // ── end F-PR-12a
+
+// ── F-PR-12b: + Progress and + Gates & dates on the order's Status & progress ─────────────────────────────────────────────
+/**
+ * Whether the order's production read draws its progress (and its gates) by the customer's level: while it is read or being
+ * read. Otherwise (no production right, not in production, its read failed) the order keeps today's progress card (C1).
+ */
+export const productionOwnsProgress = (production: { readonly state: 'loading' | 'error' | 'ready' | 'hidden' } | null | undefined): boolean => production?.state === 'ready' || production?.state === 'loading'
+
+/**
+ * The pieces of + Progress as the shared PiecesGrid reads them: one block per order line ("Line 1 · JK-210 Black"), its sizes in the
+ * scale's order, a size-less piece (made to measure) under its own word. Its own cells only, as the API counted them (Cut = cut and
+ * bundled; a stage the site does not count stays null: "—", never 0). `t` is the order page's words (`portal-orders`).
+ */
+export function piecesOf(progress: NonNullable<ProductionOrder['progress']>, t: Translate): PiecesColourway[] {
+  return progress.lines.map((line) => ({
+    id: line.lineId,
+    label: t('progress.line', { seq: line.seq, style: line.style?.code ?? '—', colour: line.colourway?.name ?? '' }).trim(),
+    sizes: line.sizes.map((size) => ({ size: size.size ?? t('production.pieces.oneSize'), ordered: size.ordered, cut: size.cut, sewn: size.sewn, inspected: size.inspected, packed: size.packed })),
+  }))
+}
+
+/** A gate's state as a chip: the customer's turn warns, ours is plain, passed is good, started before approval warns. */
+export const GATE_STATE_TONE: Readonly<Record<BrandGateState, Tone>> = Object.freeze({ WAITING_YOU: 'warning', WAITING_US: 'neutral', PASSED: 'success', STARTED_BEFORE: 'warning' })
+
+/** A swatch answer's state as a chip. */
+export const APPROVAL_STATE_TONE: Readonly<Record<ApprovalState, Tone>> = Object.freeze({ WAITING_YOU: 'warning', APPROVED: 'success', APPROVED_WITH_COMMENTS: 'success', REFUSED: 'danger' })
+
+/** Nothing to draw in Gates & dates: no gate, no swatch answer and no day in the published plan ("No steps planned yet"). */
+export const gatesEmpty = (gates: ProductionGates): boolean => gates.gates.length === 0 && gates.approvals.length === 0 && !gates.planned.cutStart && !gates.planned.sewStart && !gates.planned.finish
+
+/** Something waits on the customer here (a gate or a swatch answer): the section offers the way to what waits. */
+export const gatesWaitOnYou = (gates: ProductionGates): boolean => gates.gates.some((gate) => gate.state === 'WAITING_YOU') || gates.approvals.some((answer) => answer.state === 'WAITING_YOU')
+// ── end F-PR-12b

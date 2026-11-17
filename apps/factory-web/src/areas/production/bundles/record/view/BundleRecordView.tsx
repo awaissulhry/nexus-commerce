@@ -96,7 +96,7 @@ function Ready({ record, model, actions }: { record: BundleRecord; model: Bundle
   const voidWait = voidHeld(record, model.can)
   const tabs: TabItem[] = BUNDLE_TABS.map((tab) => ({ id: tab, href: `${href}?tab=${tab}`, label: t(`record.tab.${tab}`), count: tab === 'scans' ? record.bundle.scans : null }))
   const more = [
-    ...(model.can.workOrders ? [{ id: 'order', label: t('list.openWorkOrder'), href: `${model.prefix}/production/work-orders/${record.workOrder.id}?tab=bundles` }] : []),
+    ...(model.can.workOrders ? [{ id: 'order', label: t('list.openWorkOrder'), href: `${model.prefix}/production/work-orders/${record.workOrder.id}?tab=cutting` }] : []),
     { id: 'ticket', label: t('ticket.pdf'), ...(model.can.printLabels ? { href: `${href}/ticket`, target: '_blank' as const } : { disabled: true, description: t('held.noPrint', { right: rightRef('print.labels') }) }) },
     { id: 'void', label: t('void.open'), tone: 'danger' as const, disabled: voidWait !== null, ...(voidWait ? { description: t(voidWait.key, voidWait.params) } : {}), onSelect: () => actions?.onVoidDialog?.(true) },
   ]

@@ -30,6 +30,8 @@ import {
   type RoleCase,
 } from '../demo/fixtures'
 import { requestDraftOf, type RecordTab } from '../model'
+import { emptySwatchDraft } from '../model' // F-PR-19
+import type { SwatchModel } from '../view/SwatchDialog' // F-PR-19
 import type { RoundView } from '../api'
 import type { RecordDialog, SampleRecordModel } from './view-model'
 import { SampleRecordView } from './view/SampleRecordView'
@@ -104,6 +106,15 @@ function RecordDesign({ model }: { model: RecordCase }) {
         onSubmit: () => setRecord((now) => ({ ...now, decide: null })),
         onDraft: (patch) => setRecord((now) => (now.decide ? { ...now, decide: { ...now.decide, draft: { ...now.decide.draft, ...patch } } } : now)),
       },
+      // F-PR-19: "Add a swatch" in the design (the kind, the material and its colour picked by hand; Add closes it).
+      onSwatchAdd: () => setRecord((now) => ({ ...now, swatch: swatchCase() })),
+      swatch: {
+        onClose: () => setRecord((now) => ({ ...now, swatch: null })),
+        onSubmit: () => setRecord((now) => ({ ...now, swatch: null, notice: { key: 'swatch.add.done', tone: 'success' } })),
+        onKind: (kind) => setRecord((now) => (now.swatch ? { ...now, swatch: { ...now.swatch, draft: { ...emptySwatchDraft(kind), q: now.swatch.draft.q } } } : now)),
+        onMaterial: (itemId) => setRecord((now) => (now.swatch ? { ...now, swatch: { ...now.swatch, draft: { ...now.swatch.draft, itemId, itemColourId: '' } } } : now)),
+        onDraft: (patch) => setRecord((now) => (now.swatch ? { ...now, swatch: { ...now.swatch, draft: { ...now.swatch.draft, ...patch } } } : now)),
+      },
     },
   })
   return inShell('/products/samples', view, model.role)
@@ -123,6 +134,31 @@ const workOrderDialog = (options = WO_OPTIONS, made: { id: string; number: strin
   made,
 })
 const NAVY = WO_OPTIONS.withoutLine.colourways[0]!.id
+
+// ---- F-PR-19: "Add a swatch" — a fabric swatch of a made-up lining for the round's customer (the picker lists only fabrics).
+const FABRICS = [
+  { id: 'f0f0f0f0-0019-4000-8000-000000000001', code: 'DEMO-LIN-200', name: 'Demo mesh lining' },
+  { id: 'f0f0f0f0-0019-4000-8000-000000000002', code: 'DEMO-TEX-310', name: 'Demo cordura 500D' },
+]
+const FABRIC_COLOURS = [
+  { id: 'f0f0f0f0-0019-4000-8000-000000000011', code: 'GRY', name: 'Grey' },
+  { id: 'f0f0f0f0-0019-4000-8000-000000000012', code: 'BLK', name: 'Black' },
+]
+function swatchCase(over: Partial<SwatchModel> = {}): SwatchModel {
+  return {
+    round: { number: ROUND.number, customer: ROUND.party?.name ?? null },
+    draft: { ...emptySwatchDraft('FABRIC'), itemId: FABRICS[0]!.id, itemColourId: FABRIC_COLOURS[0]!.id, note: 'Lining of the collar (made up).' },
+    materials: FABRICS,
+    materialsProblem: null,
+    colours: FABRIC_COLOURS,
+    coloursProblem: null,
+    busy: false,
+    notice: null,
+    offline: false,
+    ...over,
+  }
+}
+// ---- end F-PR-19
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-110-record',
@@ -163,6 +199,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'approval-ce', label: 'Approval of a CE test sample: notified body, zones, result, certificate', model: recordCase('approval', { approval: { value: APPROVAL_CE, problem: null } }, 'owner', CE_ROUND) },
     { id: 'approval-reader', label: 'Approval for a reader: each step held with the right it needs', model: recordCase('approval', { approval: { value: APPROVAL_SALES_READER, problem: null } }, 'planner') },
     { id: 'decide', label: 'Decide on the sample (d): approved with comments, on revision 1', model: recordCase('approval', { decide: { subject: 'round', id: ROUND.id, name: { key: 'decide.subject', params: { number: ROUND.number, kind: 'kind.FIT', n: 2 } }, revision: 1, blocked: null, reading: false, problem: null, draft: { decision: 'APPROVED_WITH_COMMENTS', comments: 'Approved; sleeve −1 cm in production.' }, busy: false, notice: null, offline: false } }) },
+    // F-PR-19: the office records a fabric or a trim swatch too (the kind narrows the materials to the ones the API takes).
+    { id: 'swatch-add-fabric', label: 'Add a swatch: a fabric swatch of a lining for the customer, its colour picked', model: recordCase('approval', { swatch: swatchCase() }) },
+    { id: 'swatch-add-trim', label: 'Add a swatch: a trim — the materials being read, no colour yet (Add held)', model: recordCase('approval', { swatch: swatchCase({ draft: emptySwatchDraft('TRIM'), materials: null, colours: null }) }) },
+    { id: 'swatch-add-refused', label: 'Add a swatch refused: the material is not of the swatch’s kind (said in our words)', model: recordCase('approval', { swatch: swatchCase({ notice: { key: 'refusal.MATERIAL_KIND', tone: 'danger' } }) }) },
     { id: 'decide-swatch', label: 'Decide on a leather swatch', model: recordCase('approval', { decide: { subject: 'swatch', id: APPROVAL.swatches[0]!.id, name: { key: 'decide.swatchName', params: { item: 'DEMO-COW-12 · Demo cowhide 1.2 mm', colour: 'Black' } }, revision: null, blocked: null, reading: false, problem: null, draft: { decision: 'APPROVED', comments: '' }, busy: false, notice: null, offline: false } }) },
     { id: 'next-round', label: 'Make the next round after a rejection', model: dialog({ kind: 'nextRound', dueDate: '2026-11-24', instructions: '', busy: false, notice: null }, 'approval', DECIDED_ROUND, { approval: { value: APPROVAL_REJECTED, problem: null } }) },
     { id: 'raise-change', label: 'Raise a change from the rejected round', model: dialog({ kind: 'change', title: 'Collar 52: open the neck by 1 cm', reason: DECIDED_ROUND.decisionComments ?? '', busy: false, notice: null }, 'approval', DECIDED_ROUND, { approval: { value: APPROVAL_REJECTED, problem: null } }) },

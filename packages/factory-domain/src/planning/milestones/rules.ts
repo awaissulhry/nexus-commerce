@@ -193,7 +193,7 @@ export interface GateFacts {
    * The round the gate names: its decision (null: not decided) and kind. B-PR-38: `customerDecides` — the round is a customer's
    * whose portal is on (the customer answers it; the office only through Decide for the customer).
    */
-  readonly round: { readonly number: string; readonly decision: string | null; readonly kind: string; readonly customerDecides?: boolean } | null
+  readonly round: { readonly number: string; readonly decision: string | null; readonly kind: string; readonly customerDecides?: boolean; /** B-PR-30a: the round was cancelled (it waits for nothing any more). */ readonly cancelled?: boolean } | null
 }
 
 export const orderClosedRefusal = (facts: Pick<GateFacts, 'number' | 'orderStatus'>): GateRefusal | null =>
@@ -233,12 +233,31 @@ export function passRefusal(facts: GateFacts, day: BusinessDate, today: Business
 export function handPassRefusal(facts: GateFacts, day: BusinessDate, today: BusinessDate): GateRefusal | null {
   const refused = passRefusal(facts, day, today)
   if (refused?.code !== 'ROUND_NOT_APPROVED' || !facts.round?.customerDecides) return refused
-  return refusal(
-    'CUSTOMER_DECIDES',
-    `The gate waits for the customer's answer on sample round ${facts.round.number}: it passes by itself when they approve it. To decide for them, use Decide for the customer on the round (a reason they read).`,
-  )
+  return customerDecidesRefusal(facts.round.number)
 }
+
+/** The words of every refusal of a gate that waits for the customer's own round (B-PR-38's hand pass; B-PR-30a's re-point, remove). */
+export const customerDecidesRefusal = (roundNumber: string): GateRefusal =>
+  refusal(
+    'CUSTOMER_DECIDES',
+    `The gate waits for the customer's answer on sample round ${roundNumber}: it passes by itself when they approve it. To decide for them, use Decide for the customer on the round (a reason they read).`,
+  )
 // ---- end B-PR-38
+
+// ---- B-PR-30a (lead decision on B-PR-38's open items, 2026-11-17): no way around the customer's open round ---------------------
+/**
+ * A gate that waits for a customer's own round (its portal on) while that round is still open (not decided, not cancelled) is
+ * neither re-pointed to another round (or to none) nor removed: either would let the order go on without the customer's answer,
+ * as a hand pass would. Both are refused with the hand pass's words (CUSTOMER_DECIDES). A gate that names no round stays the
+ * factory's own; once the customer decided (or the round was cancelled) the gate changes as before.
+ */
+export const waitsForCustomer = (facts: GateFacts): boolean => facts.round !== null && facts.round.customerDecides === true && facts.round.decision === null && facts.round.cancelled !== true
+
+/** Change the round the gate names (to another one, or to none): as editRefusal, and never away from the customer's open round. */
+export function roundChangeRefusal(facts: GateFacts): GateRefusal | null {
+  return editRefusal(facts) ?? (waitsForCustomer(facts) ? customerDecidesRefusal(facts.round!.number) : null)
+}
+// ---- end B-PR-30a
 
 /** Start the order's work before the gate (the override): not passed, not started before, not by its owner or maker. */
 export function startBeforeRefusal(facts: GateFacts, actorId: string): GateRefusal | null {
@@ -258,11 +277,12 @@ export function reasonOf(value: string | null | undefined): string | null {
   return reason.length >= GATE_LIMITS.reasonMin && reason.length <= GATE_LIMITS.reason ? reason : null
 }
 
-/** Remove the gate: only while neither passed nor started before. */
+/** Remove the gate: only while neither passed nor started before (B-PR-30a: nor while it waits for the customer's open round). */
 export function removeRefusal(facts: GateFacts): GateRefusal | null {
   const closed = orderClosedRefusal(facts)
   if (closed) return closed
   if (facts.passedAt != null || facts.overriddenAt != null) return refusal('KEPT', `The gate of order ${facts.number} was passed or started before: it is kept.`)
+  if (waitsForCustomer(facts)) return customerDecidesRefusal(facts.round!.number) // B-PR-30a
   return null
 }
 

@@ -92,7 +92,6 @@
     "noPlan": "no plan",
     "plan": "plan {pct}",
     "rowMenu": "Actions for {number}",
-    "workOrder": "Open the work order",
     "failed": "The cuts could not be read",
     "noMatch": {
       "title": "No rows match these filters",
@@ -120,11 +119,6 @@
     "recut": {
       "done": "This recut is not open any more.",
       "noEntry": "No cut log entry has pieces of {part} for {cell} yet: the cutting table cuts it first."
-    },
-    "ticket": {
-      "voided": "This bundle is void.",
-      "scanned_one": "Scanned once already: a bundle is voided only before its first scan.",
-      "scanned_other": "Scanned {count} times already: a bundle is voided only before its first scan."
     }
   },
   "alloc": {
@@ -166,9 +160,7 @@
   "notice": {
     "allocated_one": "{count} hide allocated to {number}.",
     "allocated_other": "{count} hides allocated to {number}.",
-    "recutDone": "The recut is marked cut.",
-    "reprinted": "The ticket was printed again with a new code; the old code scans as replaced.",
-    "voided": "The bundle is void: its ticket no longer scans."
+    "recutDone": "The recut is marked cut."
   },
   "problem": {
     "read": "The read failed. Try again.",
@@ -190,76 +182,9 @@
       "state": "This recut is not open any more."
     }
   },
-  "record": {
-    "back": "Cutting",
-    "backToList": "Back to Cutting",
-    "title": "Cut",
-    "titleOf": "Cut · {number}",
-    "tabs": "Sections of the cut",
-    "loading": "Reading the cut…",
-    "state": {
-      "forbidden": {
-        "title": "You cannot open this cut",
-        "body": "Its work order belongs to a company or site you may not see."
-      },
-      "missing": {
-        "title": "This cut does not exist",
-        "body": "Its work order was not found. It may belong to another company."
-      },
-      "error": {
-        "title": "The cut could not be read",
-        "body": "Try again in a moment."
-      }
-    },
-    "openWorkOrder": "Open the work order’s cutting",
-    "copyNumber": "Copy the number",
-    "office": "office",
-    "held": {
-      "title": "On hold: the cutting table cuts nothing for this work order",
-      "body": "Why: {reason}. A cut of it, of a held hide or of a hide of a held lot is refused at the table in these words until quality releases the hold."
-    }
-  },
-  "tab": {
-    "lay": "Lay or hides",
-    "pieces": "Pieces",
-    "yield": "Yield",
-    "tickets": "Tickets"
-  },
   "part": {
     "failed": "{part} could not be read",
     "loading": "Reading {part}…"
-  },
-  "lay": {
-    "hides": "Hides",
-    "count_one": "{count} hide",
-    "count_other": "{count} hides",
-    "col": {
-      "hide": "Hide",
-      "grade": "Grade",
-      "shade": "Shade",
-      "before": "Area before",
-      "used": "Used",
-      "remnant": "Remnant",
-      "waste": "Waste",
-      "state": "State"
-    },
-    "lot": "lot {lot}",
-    "empty": {
-      "title": "No hide cut yet",
-      "body": "The hides the cutting table cuts for this work order appear here, with their area."
-    },
-    "balance": "Area of each hide",
-    "noBalance": "Nothing was issued to this work order yet.",
-    "issued": "Lot {lot} · {area} {uom} issued",
-    "area": {
-      "cut": "Cut",
-      "waste": "Waste",
-      "returned": "Back to stock",
-      "left": "Left"
-    },
-    "allocated": "Allocated, not cut yet",
-    "noAllocated": "No hide is allocated and waiting.",
-    "allocatedHint": "Allocated hides are reserved whole for this work order; the shade lot check above counts them."
   },
   "hideState": {
     "FULL": "Whole",
@@ -268,16 +193,6 @@
     "CONSUMED": "Used up",
     "SCRAPPED": "Scrapped",
     "RETURNED": "Sent back to the supplier"
-  },
-  "pieces": {
-    "title": "Pieces by part and size",
-    "part": "Part",
-    "extraPart": "{part} (outside the BOM)",
-    "cell": "{cut} / {planned}",
-    "short": "{count} short",
-    "recut": "{count} to recut",
-    "none": "No part of this work order is cut from hides.",
-    "hint": "Cut / planned per part and size; planned is one piece of each part per garment (the BOM has no piece count per part yet)."
   },
   "recuts": {
     "title": "Recuts",
@@ -302,22 +217,6 @@
     }
   },
   "yield": {
-    "title": "Yield per hide",
-    "overall": "Yield {pct}",
-    "plan": {
-      "STYLE": "plan {pct} (the style)",
-      "BOM": "plan {pct} (the BOM’s wastage)"
-    },
-    "used": "Area used",
-    "pattern": "Pattern area",
-    "remnant": "Remnants",
-    "waste": "Waste",
-    "unmatched": "{area} cut as single parts is left out of the yield: their pattern is not known.",
-    "none": "Nothing was cut for this work order yet.",
-    "series": {
-      "yield": "Yield %",
-      "planned": "Planned %"
-    },
     "byLot": "Per lot and supplier",
     "col": {
       "lot": "Lot",
@@ -328,53 +227,5 @@
       "yield": "Yield"
     },
     "hint": "Per hide, lot and supplier; never by cutter."
-  },
-  "tickets": {
-    "title": "Bundle tickets",
-    "count_one": "{count} active bundle",
-    "count_other": "{count} active bundles",
-    "col": {
-      "code": "Ticket",
-      "cell": "Size",
-      "part": "Part",
-      "garments": "Garments",
-      "status": "State and print",
-      "reprints": "Printed again because",
-      "scans": "Scans"
-    },
-    "whole": "whole garment",
-    "replaced": "replaces {codes}",
-    "status": {
-      "ACTIVE": "Active",
-      "VOID": "Void"
-    },
-    "print": {
-      "QUEUED": "Queued",
-      "SENT": "Sent to the printer",
-      "PRINTED": "Printed",
-      "FAILED": "Print failed",
-      "PDF": "PDF label",
-      "UNKNOWN": "Print state hidden"
-    },
-    "rowMenu": "Actions for {code}",
-    "reprint": "Print again…",
-    "void": "Void…",
-    "empty": {
-      "title": "No tickets yet",
-      "body": "Bundles are made at the cutting table after the cut; their tickets appear here."
-    },
-    "hint": "A ticket printed again gets a new code and the old one scans as replaced; the reason is kept.",
-    "reprintTitle": "Print {code} again",
-    "reprintBody": "The bundle gets a new code; the old ticket will scan as replaced.",
-    "printer": "Label printer",
-    "noPrinter": "No label printer at this site",
-    "reason": "Why",
-    "reprintGo": "Print again",
-    "held": {
-      "printer": "Pick a label printer."
-    },
-    "voidTitle": "Void {code}",
-    "voidBody": "{garments} garments of {cell} go back to “cut, not bundled”; the ticket {code} no longer scans.",
-    "voidGo": "Void the bundle"
   }
 }
