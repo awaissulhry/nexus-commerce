@@ -1625,7 +1625,8 @@
     "partners": "Portali dei partner",
     "portal": "Portale (partner)",
     "approvals": "Approvazioni",
-    "currencies": "Valute e cambi"
+    "currencies": "Valute e cambi",
+    "projects": "Progetti"
   },
   "perm": {
     "fields_view": "Vedere i campi personalizzati di ogni tipo di record e le liste, anche quelli archiviati",
@@ -2139,6 +2140,7 @@
     "partners_production_manage": "Decidere cosa vede un cliente della sua produzione e cosa può fare: livello di condivisione, urgenze sì o no e quante, richieste di produzione, approvatore indicato, seconda persona per le decisioni al suo posto",
     "production_brand_manage": "Rispondere alle richieste di produzione di un cliente (Urgente – richiesto, pausa, ripresa), portare un suo ordine a A rischio con un motivo, scegliere il supervisore di produzione del cliente e dei suoi ordini",
     "production_brand_override": "Decidere al posto di un cliente o annullare ciò che ha fatto, con un motivo che legge (una seconda persona se il suo interruttore è acceso, mai chi ha chiesto); riportare un suo ordine a Normale, bloccarlo o sbloccarlo",
+    "projects_manage": "Creare progetti (lavoro su più modelli, campioni e ordini, o senza ancora un record), modificarli, metterli in pausa, chiuderli con il loro esito e riaprirli, collegarne i record e aggiungerne o toglierne le persone, comprese quelle del portale dell'azienda esterna",
     "portal_colleagues_view": "Vedere gli utenti del portale della propria organizzazione e i loro ruoli",
     "portal_colleagues_manage": "Amministratore del portale della propria organizzazione: invitare colleghi, cambiare ruoli, disattivare",
     "portal_comment": "Scrivere messaggi sui documenti che il ruolo mostra",
@@ -2180,6 +2182,7 @@
     "portal_samples_view": "Vedere i giri di campionatura dell'organizzazione con stato e spedizione, i propri modelli in sviluppo con la loro fase, e scaricare il PDF della scheda tecnica condivisa per ciascuno (mai un costo; ogni download registrato); decidere un campione richiede il diritto di approvare",
     "portal_production_view": "Vedere gli ordini in produzione dell'organizzazione: fase, data prevista, stato e a chi tocca; pezzi, tappe e date e qualità per quanto la fabbrica li condivide",
     "portal_production_urgency": "Segnare urgenti o normali gli ordini in produzione dell'organizzazione entro il numero di urgenze concesso e prima del taglio, e mettere in ordine quelli urgenti; oltre, è una richiesta a cui risponde la fabbrica",
+    "portal_projects_view": "Vedere i progetti della tua organizzazione a cui la fabbrica ti ha aggiunto: nome, stato e data obiettivo, i tuoi record collegati e i messaggi condivisi con te",
     "partners_tasks_manage": "Chiedere a un partner un documento, una risposta, le misure o l'avanzamento su un documento entro una data; spostare, annullare o riaprire la richiesta",
     "sales_measurements_view": "Vedere le misure inviate tramite link e aprire le foto del corpo (ogni apertura registrata)",
     "sales_measurements_manage": "Inviare ai piloti il link per le misure e decidere quando cancellare le foto del corpo",

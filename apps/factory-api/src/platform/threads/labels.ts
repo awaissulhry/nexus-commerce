@@ -92,6 +92,12 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   ProductSafetyReport: async (client, id) => (await client.productSafetyReport.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   // B-TH-040: a catalogue order by its number (a draft has none: it has no thread either).
   PortalOrderRequest: async (client, id) => (await client.portalOrderRequest.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  // ---- B-TH-066: a project by its number and name ("PRJ-26-012 FW27 airbag line": the chip, the bell, My tasks).
+  Project: async (client, id) => {
+    const project = await client.project.findUnique({ where: { id }, select: { number: true, name: true } })
+    return project ? `${project.number} ${project.name}` : null
+  },
+  // ---- end B-TH-066
 })
 
 /** The record's label, or null when it is not there for this caller. A type without its own labeller: its type and id end. */

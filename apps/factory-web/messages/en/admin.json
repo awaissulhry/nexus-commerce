@@ -1625,7 +1625,8 @@
     "partners": "Partner portals",
     "portal": "Portal (partners)",
     "approvals": "Approvals",
-    "currencies": "Currencies and exchange rates"
+    "currencies": "Currencies and exchange rates",
+    "projects": "Projects"
   },
   "perm": {
     "fields_view": "See the custom fields of every record type and the picklists, archived ones included",
@@ -2139,6 +2140,7 @@
     "partners_production_manage": "Set what a customer sees of its production and what it may do there: share level, urgency switch and urgent quota, production asks, named approver, second person for overrides",
     "production_brand_manage": "Answer a customer's production asks (Urgent – asked, pause, resume), raise its order to At risk with a reason, set the production supervisor of the customer and of its orders",
     "production_brand_override": "Decide for a customer or undo what it did, with a reason it reads (a second person when its switch is on, never who asked); set its order back to Regular, lock or unlock it",
+    "projects_manage": "Make projects (work on several styles, samples and orders, or with no record yet), change them, put them on hold, close them with their outcome and reopen them, link their records and add or remove their people, the outside company's portal people included",
     "portal_colleagues_view": "See your organisation's portal users and their roles",
     "portal_colleagues_manage": "Your organisation's portal admin: invite colleagues, change roles, deactivate",
     "portal_comment": "Write messages on the records the role shows",
@@ -2180,6 +2182,7 @@
     "portal_samples_view": "See your organisation's sample rounds with their status and shipment, your own styles in development and their stage, and download the tech pack PDF we shared for each (never a cost; every download recorded); deciding a sample takes the right to approve",
     "portal_production_view": "See your organisation's orders in production: stage, expected date, health and who acts next; pieces, gates and dates and quality as far as the factory shares them",
     "portal_production_urgency": "Mark your organisation's orders in production urgent or regular within the urgent quota and before cutting, and order the urgent ones; beyond that it is an ask the factory answers",
+    "portal_projects_view": "See the projects of your organisation the factory added you to: name, status and target date, your own records linked to them and the messages shared with you",
     "partners_tasks_manage": "Ask a partner for a document, an answer, measurements or progress on a record by a date; move, cancel or reopen the request",
     "sales_measurements_view": "See measurements sent by link and open the body photos (each opening recorded)",
     "sales_measurements_manage": "Send riders a measurement link and set when their body photos are deleted",

@@ -306,6 +306,14 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     return request && request.status !== 'DRAFT' ? { companyId: request.companyId, siteId: null, partyId: request.partyId } : null
   },
   // ---- end B-TH-040
+  // ---- B-TH-066 (threads plan TH-5, PROJ-G02; modules/product/projects): a project's company and its ONE outside company (none:
+  // an office-only project, internal notes only), so its shared messages reach that company only (the database's
+  // Thread_project_party holds the same).
+  Project: async (client, id) => {
+    const project = await client.project.findUnique({ where: { id }, select: { companyId: true, partyId: true } })
+    return project ? { companyId: project.companyId, siteId: null, partyId: project.partyId } : null
+  },
+  // ---- end B-TH-066
 })
 
 /**
