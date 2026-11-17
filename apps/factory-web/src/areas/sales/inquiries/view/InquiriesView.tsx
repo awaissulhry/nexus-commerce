@@ -41,6 +41,7 @@ import {
   type ListAddress,
   type Notice,
   type NoticeFacts,
+  type Phrase, // B-TH-285
   type RowVerb,
   // B-TH-233: every kind of row, Customer replies.
   CUSTOMER_REPLIES,
@@ -58,6 +59,9 @@ import {
 } from '../model'
 import type { CatalogueActions, CatalogueModel } from '../catalogue-model'
 import { CataloguePane } from './pane/catalogue/CataloguePane'
+// B-TH-285: ⋯ Inquiry addresses and the band's door line.
+import type { AddressesModel } from '../addresses/model'
+import { AddressesDialog, type AddressesActions } from '../addresses/view/AddressesDialog'
 import { InquiriesMessages, isPageKey, NoAccess, NoticeLine, SourceTag, StatusPill, useWords, WaitingTag } from '../parts'
 // B-TH-230: the New messages column (LastMessageCell) and the one waiting rule.
 import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../lib/last-message-cell/view/LastMessageCell'
@@ -115,6 +119,8 @@ export interface InquiriesModel {
   /** The catalogue order beside the list (`?catalogue=`). */
   catalogue?: CatalogueModel | null
   // ── end B-TH-233 ──
+  /** B-TH-285: ⋯ Inquiry addresses (open or not) and the band's line while the orders@ door is not open (null: nothing to say). */
+  addresses?: { readonly open: boolean; readonly model: AddressesModel; readonly door: Phrase | null }
   /** B-TH-221: New request (the portal's compose with the customer or the prospect), open on `?new=1` or `?mail=`. */
   newRequest: NewRequestModel | null
   bulk: BulkDialog | null
@@ -156,6 +162,8 @@ export interface InquiriesActions {
   onGo?: (href: string, newTab: boolean) => void
   /** B-TH-233: the catalogue order's own acts (Accept as order / quote, Refuse). */
   catalogue?: CatalogueActions
+  /** B-TH-285: the inquiry addresses' dialog. */
+  addresses?: AddressesActions & { onOpen?: () => void }
   onBulk?: (kind: 'assign' | 'decline', ids: readonly string[]) => void
   bulk?: {
     onAssign?: (assigneeId: string | null) => void
@@ -720,7 +728,22 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
           </span>
         </div>
         <span className="fw-inq-actions">
-          <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" triggerProps={{ 'aria-label': t('list.more') }} items={[{ id: 'rules', label: t('list.rulesLater'), disabled: true, description: t('list.rulesLaterHint') }]} />
+          {/* B-TH-285 (band-F05): while the orders@ door is not open the band says so (the addresses wait for live mail receiving). */}
+          {model.addresses?.door && (
+            <span title={model.addresses.door.key === 'addresses.door.notLive' ? t('addresses.door.notLiveBody') : undefined}>
+              <Tag tone="warning">{say(model.addresses.door)}</Tag>
+            </span>
+          )}
+          <Menu
+            label={<MoreHorizontal size={16} aria-hidden />}
+            align="right"
+            triggerProps={{ 'aria-label': t('list.more') }}
+            items={[
+              // B-TH-285 (band-F04): the addresses whose mail becomes a request by itself (read by every reader, changed with sales settings).
+              ...(model.addresses ? [{ id: 'addresses', label: t('addresses.menu'), description: t('addresses.menuHint'), onSelect: () => actions?.addresses?.onOpen?.() }] : []),
+              { id: 'rules', label: t('list.rulesLater'), disabled: true, description: t('list.rulesLaterHint') },
+            ]}
+          />
           {newButton}
         </span>
       </div>
@@ -894,6 +917,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
         }
       />
       {viewerRow && <ViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} />}
+      {model.addresses?.open && <AddressesDialog model={model.addresses.model} prefix={model.prefix} actions={actions?.addresses} />}
       {model.newRequest && <NewRequestDialog model={model.newRequest} me={model.me} can={model.can} prefix={model.prefix} actions={actions?.newRequest} />}
       {model.bulk?.kind === 'assign' && <AssignDialog model={model.bulk.model} actions={{ onAssign: actions?.bulk?.onAssign, onRetry: actions?.bulk?.onRetryPeople, onClose: actions?.bulk?.onClose }} />}
       {model.bulk?.kind === 'decline' && <DeclineDialog model={model.bulk.model} actions={{ onDraft: actions?.bulk?.onDecline, onSubmit: actions?.bulk?.onSubmit, onClose: actions?.bulk?.onClose }} />}

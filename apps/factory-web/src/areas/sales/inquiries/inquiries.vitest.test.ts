@@ -339,8 +339,8 @@ describe('Sales › Incoming (B-TH-216)', () => {
 })
 // ── end B-TH-216 ──
 
-// B-TH-233: + kind, kindFacts, replies, recordType, catalogue (Incoming over every door).
-const LEFT_KEY = /\b(?:common|held|list|record|tile|new|tab|live|row|col|keys|notice|chip|status|source|waiting|time|assignee|bulk|right|refusal|problem|field|line|grid|mail|pack|files|quote|quoteStatus|leftOut|activity|dialog|assign|decline|lost|verb|done|closed|who|prospect|basis|request|noAccess|page|band|door|funnel|picture|peek|export|kind|kindFacts|replies|recordType|catalogue)\.[a-zA-Z]+(?:\.[a-zA-Z_]+)*\b/
+// B-TH-233: + kind, kindFacts, replies, recordType, catalogue (Incoming over every door). B-TH-234: + customer, task. B-TH-285: + addresses.
+const LEFT_KEY = /\b(?:common|held|list|record|tile|new|tab|live|row|col|keys|notice|chip|status|source|waiting|time|assignee|bulk|right|refusal|problem|field|line|grid|mail|pack|files|quote|quoteStatus|leftOut|activity|dialog|assign|decline|lost|verb|done|closed|who|prospect|basis|request|noAccess|page|band|door|funnel|picture|peek|export|kind|kindFacts|replies|recordType|catalogue|customer|task|addresses)\.[a-zA-Z]+(?:\.[a-zA-Z_]+)*\b/
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>

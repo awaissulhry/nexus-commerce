@@ -1113,5 +1113,56 @@
       "REQUEST_PROSPECT": "This request is from a prospect: make the customer first, then hand them a task in their portal.",
       "REQUEST_CLOSED": "This request is closed (declined, lost or answered with a quote): ask on the quote or the order instead."
     }
+  },
+  "addresses": {
+    "menu": "Inquiry addresses",
+    "menuHint": "The addresses whose mail becomes a request by itself",
+    "title": "Inquiry addresses",
+    "intro": "Mail sent to these addresses becomes a request in Incoming by itself — unknown senders included: they arrive as prospects. A known contact’s mail arrives as its customer’s request; a held mail (failed checks, spam) waits in Mail to sort.",
+    "close": "Close",
+    "save": "Save the addresses",
+    "saved": "The addresses are saved",
+    "failed": "Couldn't read the inquiry addresses",
+    "none": "No inquiry address yet: requests from mail are made by hand from Mail to sort.",
+    "listLabel": "Inquiry addresses",
+    "rowLabel": "Address {n}",
+    "remove": "Remove {address}",
+    "add": "Add an address",
+    "addHint": "At most {max}, at one of the company’s receiving domains ({domains})",
+    "addGo": "Add",
+    "domainsUnknown": "checked when you save",
+    "readOnly": "Changing them needs the right to change the sales settings.",
+    "belongs": "An address belongs to one company: another company’s inquiries never come to it.",
+    "reading": "Reading the addresses…",
+    "scope": {
+      "company": "This company’s own list",
+      "tenant": "The list every company without its own shares",
+      "none": "No list yet: these become the list every company without its own shares"
+    },
+    "held": {
+      "right": "Needs the right to change the sales settings",
+      "row": "Address {n} needs a look first",
+      "same": "Nothing changed",
+      "type": "Type an address"
+    },
+    "problem": {
+      "format": "Not an e-mail address",
+      "twice": "This address is in the list already",
+      "domain": "Not at a receiving domain of this company ({domains})",
+      "domainApi": "Not at a receiving domain of this company: mail there never reaches the factory",
+      "taken": "Another company’s inquiries come to this address",
+      "many": "At most {max} addresses",
+      "stale": "Someone changed the addresses meanwhile: here they are as they are now",
+      "followsTenant": "This company follows the shared list: change the shared list, or give the company sales settings of its own first",
+      "rows": "Some addresses cannot be used",
+      "at": "Address {n}: {problem}"
+    },
+    "door": {
+      "notLive_one": "Mail door not open yet · {count} address waits",
+      "notLive_other": "Mail door not open yet · {count} addresses wait",
+      "notLiveBody": "Mail to the inquiry addresses becomes a request once mail is received live (the mail provider’s receiving, a go-live step). Until then requests come by portal, phone and Mail to sort.",
+      "noDomain": "Set up the mail domain first",
+      "setUp": "Admin › Connections"
+    }
   }
 }

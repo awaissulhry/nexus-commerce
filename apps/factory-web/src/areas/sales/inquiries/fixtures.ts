@@ -32,6 +32,7 @@ import {
 } from './demo/fixtures'
 import { emptyDecline, emptyLine, HOME_ADDRESS, requestDraftOf, type InquiryTile, type ListAddress, type RecordTab } from './model'
 import { acceptDraftOf, type CatalogueModel } from './catalogue-model'
+import type { AddressesModel } from './addresses/model' // B-TH-285
 import type { InquiryView } from './api'
 import type { InquiryRecordModel, RecordDialog } from './record-model'
 import { InquiriesView, type BulkDialog, type InquiriesModel } from './view/InquiriesView'
@@ -120,6 +121,10 @@ const tile = (id: InquiryTile, rows: typeof ROWS): Partial<InquiriesModel> => ({
 
 const assignDialog = (people: Extract<RecordDialog, { kind: 'assign' }>['people'] = { status: 'ready', value: ASSIGNEES }): RecordDialog => ({ kind: 'assign', people, busy: false, notice: null })
 // ── end B-TH-233 ──
+// ── B-TH-285: the inquiry addresses (made-up, at the demo company's receiving domain) ──
+const ADDRESSES: AddressesModel = { loaded: { status: 'ready', value: { companyId: COMPANY_ID, answer: { addresses: ['orders@demo.example.com', 'rfq@demo.example.com'], source: 'COMPANY', version: 2, hasOwnSettings: true, mayManage: true } } }, draft: ['orders@demo.example.com', 'rfq@demo.example.com'], adding: '', domains: ['demo.example.com'], live: false, busy: false, problem: null, saved: false, offline: false }
+const DOOR = { key: 'addresses.door.notLive', params: { count: 2 } }
+// ── end B-TH-285 ──
 const BULK_ASSIGN: BulkDialog = { kind: 'assign', ids: [ROWS[0]!.id, ROWS[3]!.id], model: { subject: { key: 'bulk.subject', params: { count: 2 } }, current: null, people: { status: 'ready', value: ASSIGNEES }, busy: false, notice: null, offline: false } }
 const BULK_DECLINE: BulkDialog = { kind: 'decline', ids: [ROWS[0]!.id, ROWS[3]!.id], model: { subject: { key: 'bulk.subject', params: { count: 2 } }, draft: { ...emptyDecline, reason: 'CAPACITY' }, message: { to: null, held: { key: 'decline.message.many' } }, busy: false, notice: null, offline: false } }
 
@@ -216,6 +221,13 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'th3-233-replies-partial', label: 'TH-3 · Customer replies: more than one read keeps (the count says so), Show more', model: page({ address: at({ tile: 'CUSTOMER_REPLIES' }), list: listOf([]), replies: repliesOf(undefined, false, 'next-page'), more: { next: true, busy: false, problem: null, page: 100 } }) },
     { id: 'th3-233-replies-noright', label: 'TH-3 · Customer replies without threads.read: said, nothing listed', model: page({ address: at({ tile: 'CUSTOMER_REPLIES' }), list: listOf([]), replies: null, can: { ...canFor('owner'), thread: false } }) },
     // ── end B-TH-233 ──
+    // ── B-TH-285 (TH-8): inquiry addresses in Incoming's ⋯, the band while the orders@ door is not open ──
+    { id: 'th3-285-door', label: 'TH-8 · The band says the mail door is not open yet: 2 inquiry addresses wait for live mail receiving (a go-live step)', model: page({ addresses: { open: false, model: ADDRESSES, door: DOOR } }) },
+    { id: 'th3-285-addresses', label: 'TH-8 · ⋯ Inquiry addresses: mail to them becomes a request by itself (unknown senders as prospects); at most 20, at the company\'s receiving domain', model: page({ addresses: { open: true, model: ADDRESSES, door: DOOR } }) },
+    { id: 'th3-285-addresses-problems', label: 'TH-8 · Problems in words before Save (another domain, twice); a refused save names its rows (another company\'s address)', model: page({ addresses: { open: true, model: { ...ADDRESSES, draft: ['orders@demo.example.com', 'sales@elsewhere.example.org', 'ORDERS@demo.example.com'], problem: { phrase: { key: 'addresses.problem.rows' }, rows: { 0: { key: 'addresses.problem.taken' } } } }, door: DOOR } }) },
+    { id: 'th3-285-addresses-read', label: 'TH-8 · A reader without the sales settings right: the addresses read-only, the shared list said', model: page({ addresses: { open: true, model: { ...ADDRESSES, loaded: { status: 'ready', value: { companyId: null, answer: { addresses: ['orders@demo.example.com'], source: 'TENANT', version: 4, hasOwnSettings: true, mayManage: false } } }, draft: ['orders@demo.example.com'] }, door: null } }, 'sales') },
+    { id: 'th3-285-addresses-clash', label: 'TH-8 · Someone changed the addresses meanwhile: read again, said', model: page({ addresses: { open: true, model: { ...ADDRESSES, problem: { phrase: { key: 'addresses.problem.stale' }, rows: {} } }, door: DOOR } }) },
+    // ── end B-TH-285 ──
     { id: 'inbox', label: 'The queue: open inquiries, the oldest waiting first; tiles, waiting in working time, "You" / "A colleague"', model: page(), note: 'Enter opens the inquiry in its DetailModal; x / Space select; ⋯ and right-click the verbs. Keys only in the footer icon.' },
     { id: 'tile-new', label: 'Tile: New (its chip in the filter row)', model: page(tile('NEW', OPEN_ROWS.filter((one) => one.status === 'NEW'))) },
     { id: 'tile-waiting-us', label: 'Tile: Waiting for us over 1 working day', model: page(tile('WAITING_US', OPEN_ROWS.filter((one) => one.waiting.overdue))) },

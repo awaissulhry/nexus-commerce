@@ -28,6 +28,9 @@ import {
 } from './api'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { useCatalogueOrder } from './use-catalogue-order'
+// B-TH-285: the inquiry addresses (⋯) and the band's door line.
+import { useInquiryAddresses } from './addresses/use-inquiry-addresses'
+import { doorLine } from './addresses/model'
 import {
   addressOf,
   addressText,
@@ -287,6 +290,12 @@ export function InquiriesPage() {
     [go],
   )
 
+  // ---- B-TH-285: ⋯ Inquiry addresses (the orders@ door's setting) and the band's line while that door is not open --------------
+  const [addressesOpen, setAddressesOpen] = useState(false)
+  const addresses = useInquiryAddresses({ api, companyId, open: addressesOpen, may: { view: can.view, identities: session.permissions.includes('email.send'), integrations: session.permissions.includes('integrations.view') }, offline })
+  const door = doorLine(addresses.model.loaded.status === 'ready' ? addresses.model.loaded.value.answer.addresses : null, addresses.model.live, addresses.model.domains)
+  // ---- end B-TH-285
+
   // ---- B-TH-221: New request (typed: a call, a visit, a fair, a letter), and "Make incoming request" from a mail -------------------
   const [unnumbered, setUnnumbered] = useState(false)
   const newOpen = address.isNew || !!address.mail
@@ -399,6 +408,7 @@ export function InquiriesPage() {
         built: OFFICE_PAGES,
         catalogue: address.catalogue ? catalogue.model : null,
         // ---- end B-TH-233
+        addresses: { open: addressesOpen, model: addresses.model, door }, // B-TH-285
       }}
       slots={{ thread: record.thread, catalogueThread: catalogue.thread }}
       actions={{
@@ -447,6 +457,8 @@ export function InquiriesPage() {
         newRequest: newRequest.actions, // B-TH-221
         record: record.actions,
         catalogue: catalogue.actions, // B-TH-233
+        // B-TH-285
+        addresses: { ...addresses.actions, onOpen: () => setAddressesOpen(true), onClose: () => setAddressesOpen(false) },
         onCopy: (numbers) => {
           void navigator.clipboard
             ?.writeText(numbers.join('\n'))
