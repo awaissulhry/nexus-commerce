@@ -12,7 +12,7 @@
     "loading": "Reading the cost steps…",
     "failed": "Couldn't read the cost steps",
     "noSizes": "No size to cost",
-    "noSizesBody": "The style has no size range yet: give it one on Colourways & sizes.",
+    "noSizesBody": "The style has no size range yet: give it one on Overview & variants.",
     "noGrain": "Costs are not in your role: the steps show their lines and quantities, no figure.",
     "size": "Size",
     "baseSizeOption": "{size} · base size",

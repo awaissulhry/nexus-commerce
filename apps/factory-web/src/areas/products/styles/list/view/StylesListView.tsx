@@ -169,7 +169,7 @@ function StylesList({ model, actions }: { model: StylesListViewModel; actions?: 
           items={[
             { id: 'open', label: t('list.open'), href: recordHref(data) },
             { id: 'tab', label: t('list.openNewTab'), href: recordHref(data), target: '_blank' },
-            { id: 'variants', label: t('list.openVariants'), href: `${recordHref(data)}?tab=variants` },
+            { id: 'variants', label: t('list.openVariants'), href: `${recordHref(data)}?tab=overview#style-variants` /* B-TH-261: Colourways & sizes is part of Overview & variants */ },
             { id: 'duplicate', label: t('list.duplicate'), disabled: !!duplicateHeld, description: duplicateHeld ?? undefined, onSelect: () => latest.current.actions?.onDuplicate?.(data) },
             ...(techPackHref ? [{ id: 'techpack', label: t('list.techPackPdf'), href: techPackHref(data), target: '_blank' as const }] : []),
           ]}

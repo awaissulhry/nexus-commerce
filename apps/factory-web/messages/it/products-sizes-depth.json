@@ -501,7 +501,7 @@
       "archivedSpec": "Questa scheda è archiviata: non cambia più.",
       "noManage": "Per cambiare la scheda serve il permesso di modificare una distinta base in bozza (il ruolo di chi sviluppa il prodotto).",
       "rule": "La regola di modifica del modello blocca i cambi in questo stato del ciclo di vita (Impostazioni prodotto).",
-      "noRange": "Il modello non ha ancora una gamma taglie: impostala prima nella Panoramica.",
+      "noRange": "Il modello non ha ancora una gamma taglie: impostala prima in Panoramica e varianti.",
       "noRelease": "Per approvare o riaprire serve il permesso di rilasciare una revisione.",
       "notDraft": "Si approva solo una scheda in bozza.",
       "noPoints": "Prima aggiungi i punti.",

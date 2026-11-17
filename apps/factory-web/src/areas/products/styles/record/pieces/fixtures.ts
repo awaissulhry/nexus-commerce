@@ -1,7 +1,8 @@
 import { defineDesignScreen } from '../../../../../lib/design/design-screen'
 import { demoBom, demoLines, demoStyle, newStyle, recordModel, REV, REVISIONS, SIZES, STYLE_ID } from '../../demo/fixtures'
 import type { StyleRecordViewModel } from '../record-model'
-import { StyleRecordView } from '../view/StyleRecordView'
+// B-TH-261: the studio with its docked thread (RecordFrame).
+import { StyleDesign } from '../../demo/fixtures'
 import type { Piece, PiecesView } from './api'
 import { draftOf, markKey, NO_PIECES, type PiecesModel } from './pieces-model'
 
@@ -80,13 +81,13 @@ export function demoPieces(options: { revision?: Revision; empty?: boolean; issu
 
 const ready = (view: PiecesView, extra: Partial<PiecesModel> = {}): PiecesModel => ({ ...NO_PIECES, part: { status: 'ready', value: view }, ...extra })
 
-const files = (pieces: PiecesModel, overrides: Partial<StyleRecordViewModel> = {}, role: 'owner' | 'production' | 'sales' | 'product' = 'owner') => recordModel(role, { tab: 'files', pieces, ...overrides })
+const files = (pieces: PiecesModel, overrides: Partial<StyleRecordViewModel> = {}, role: 'owner' | 'production' | 'sales' | 'product' = 'owner') => recordModel(role, { tab: 'patterns', pieces, ...overrides })
 const released = { style: { status: 'ready' as const, value: demoStyle() }, revisionId: REV.r2, bom: { status: 'ready' as const, value: demoBom({ revision: REVISIONS[1] }) } }
 
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-271',
   title: 'Style studio: Files & patterns (pattern pieces)',
-  view: StyleRecordView,
+  view: StyleDesign,
   cases: [
     { id: 'owner', label: 'Pattern pieces (draft revision 3)', model: files(ready(demoPieces())), note: 'Ten pieces, 13 per garment; each cell saves by itself; the grade only on the leather line ("Not leather: no grade" on the lining and the membrane); sizes "All sizes", "54–58", "50, 54".' },
     {
@@ -119,17 +120,17 @@ export const designScreen = defineDesignScreen<StyleRecordViewModel>({
     {
       id: 'no-permission',
       label: 'No edit right (viewer)',
-      model: recordModel('owner', { tab: 'files', pieces: ready(demoPieces()), can: { ...recordModel('owner').can, bomManage: false } }),
+      model: recordModel('owner', { tab: 'patterns', pieces: ready(demoPieces()), can: { ...recordModel('owner').can, bomManage: false } }),
       note: 'Read only: "your role can view the pattern pieces, not change them"; Add piece held with why.',
     },
-    { id: 'sales', label: '(sales has no BOM: tab absent)', model: recordModel('sales', { tab: 'files' }), note: 'Sales does not read BOMs: Files & patterns is absent, Overview opens.' },
+    { id: 'sales', label: '(sales has no BOM: tab absent)', model: recordModel('sales', { tab: 'patterns' }), note: 'Sales does not read BOMs: Files & patterns is absent, Overview opens.' },
     {
       id: 'empty',
       label: 'No pieces yet',
       model: files(ready(demoPieces({ empty: true }))),
       note: '"No pieces listed" + Add piece; the leather line no piece names is pointed out.',
     },
-    { id: 'empty-new', label: 'A new style (no pieces, revision 1)', model: recordModel('owner', { tab: 'files', style: { status: 'ready', value: newStyle() }, revisionId: REV.r1, pieces: ready(demoPieces({ revision: { ...REVISIONS[2]!, status: 'DRAFT' }, empty: true })) }) },
+    { id: 'empty-new', label: 'A new style (no pieces, revision 1)', model: recordModel('owner', { tab: 'patterns', style: { status: 'ready', value: newStyle() }, revisionId: REV.r1, pieces: ready(demoPieces({ revision: { ...REVISIONS[2]!, status: 'DRAFT' }, empty: true })) }) },
     { id: 'loading', label: 'Loading', model: files({ ...NO_PIECES, part: { status: 'loading' } }) },
     { id: 'error', label: 'Could not load', model: files({ ...NO_PIECES, part: { status: 'error', problem: 'problem.read.unavailable' } }), note: 'The rest of the record stays usable.' },
   ],

@@ -1,5 +1,7 @@
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
+import { createElement, type ReactElement } from 'react'
+// ---- B-TH-261: the style's made-up docked thread in every Style studio design case (RecordFrame beside every tab) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
+import { StyleRecordView } from '../record/view/StyleRecordView'
 import type { ImportJob, Importer, ImportRow } from '../../../admin/import/api'
 import { blankDraft, emptyWizard } from '../../../admin/import/model'
 import type { BomLine, BomView, BrandRow, ColourRow, CostDiffView, CostSheetView, DuplicatedView, DuplicateOfferView, MaterialView, OperationRow, PriceEntry, RoutingView, ScaleRow, StyleComplianceView, StyleRow, StyleTypeChanges, StyleView, WorkshopRow } from '../api'
@@ -711,12 +713,26 @@ export const MATERIAL: MaterialView = {
   createdById: uid('3333', 1),
 }
 
-// ---- the record panels (thread, files, history) of the style ----------------------------------------------------------------
+// ---- B-TH-261: the style's docked thread (the rule of picture 38; it replaces the record panels' Activity tab) ----------------------
 
-export function demoPanels(): RecordPanelsViewModel {
-  const base = panelsScreen.cases.find((entry) => entry.id === 'conversation')?.model ?? panelsScreen.cases[0]!.model
-  return { ...base, record: { type: 'Style', id: STYLE_ID, companyId: COMPANY_ID, siteId: null }, title: 'DEMO-JKT-01 · Giacca Touring Demo', party: null }
+/**
+ * The style's made-up docked thread for a design case: a private-label style's thread with its brand only (made-up, "Reply to"
+ * that brand), our own collection's notes only (no mail, no party); none before the style is read or without threads.read.
+ */
+export function styleThread(model: StyleRecordViewModel): ReactElement | null {
+  const style = model.style.status === 'ready' ? model.style.value : null
+  if (!style || !model.can.thread) return null
+  return designDockedThread({ recordType: 'Style', record: style.code, party: style.brand ? { name: style.brand.name, role: 'customer' } : null })
 }
+
+/** The design view of every Style studio screen: the studio with its docked thread. */
+export function StyleDesign({ model }: { model: StyleRecordViewModel }): ReactElement {
+  return createElement(StyleRecordView, { model, thread: styleThread(model) })
+}
+
+/** B-TH-261: a private-label style (made for a brand: its thread is that brand's only). */
+export const PRIVATE_LABEL_BRAND = { id: BRANDS[0]!.id, code: BRANDS[0]!.code, name: BRANDS[0]!.tradeName ?? BRANDS[0]!.legalName }
+// ---- end B-TH-261
 
 // ---- the studio's view model ------------------------------------------------------------------------------------------------
 
@@ -748,8 +764,8 @@ export function recordModel(role: keyof typeof GRAINS, overrides: Partial<StyleR
     busy: false,
     notice: null,
     changed: null,
-    dockOpen: false,
-    panelsPreview: can.thread ? demoPanels() : undefined,
+    // B-TH-261: the person whose thread width the frame remembers.
+    personId: uid('3333', 1),
     duplicate: null,
     bomImport: null,
     ...overrides,

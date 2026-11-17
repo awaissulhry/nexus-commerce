@@ -8,6 +8,9 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useLiveChanges } from '../../../../record-panels/live'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
+// ---- B-TH-261: the style's thread docked beside every tab (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 import { putToStore, storeUrl } from '../../../../record-panels/store'
 import { createTask, listAssignees, taskReadProblem } from '../../../../record-panels/tasks/api'
 import { checklistLines, type Assignable } from '../../../../record-panels/tasks/model'
@@ -34,6 +37,7 @@ import {
   getMaterial,
   getRouting,
   getStyle,
+  styleSource,
   listBrands,
   listColours,
   listLabelTemplates,
@@ -101,15 +105,13 @@ import { useVersions } from '../versions/use-versions'
 import { versionsCan } from '../versions/model'
 import { useReleaseGate } from '../release/use-release'
 
-const WIDE = '(min-width: 1280px)'
-const DOCK_KEY = 'fw.products.dock.Style'
-
 /**
- * `/w/<company>/products/styles/<id>` (SCR-041 … SCR-045): loads the style (product.styles.view; the API checks the
- * company) and, for the revision in view, the parts the person's role reads — the BOM (its release check), the routing,
- * the compliance tab — each failing alone; it does what the view asks, one write at a time, each with the version as
- * read (a 409 reads it again and says so, never overwrites). Live: the style's events read it again; with unsaved work
- * the page says it changed instead.
+ * `/w/<company>/products/styles/<id>?tab=overview|sizes|bom|routing|cost|techpack|compliance|patterns|versions&rev=` (SCR-041 …
+ * SCR-045): loads the style (product.styles.view; the API checks the company) and, for the revision in view, the parts the person's
+ * role reads — the BOM (its release check), the routing, the compliance tab — each failing alone; it does what the view asks, one
+ * write at a time, each with the version as read (a 409 reads it again and says so, never overwrites). Live: the style's events
+ * read it again; with unsaved work the page says it changed instead. B-TH-261: an old `?tab=variants|files|activity` lands on
+ * its tab (activity: the overview with the thread open); the style's thread is docked beside every tab.
  */
 export function StyleRecord({ styleId }: { styleId: string }) {
   return (
@@ -159,7 +161,6 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<StyleNotice | null>(null)
   const [changed, setChanged] = useState<{ at: string } | null>(null)
-  const [dockOpen, setDockOpen] = useState(false)
   const [bomView, setBomView] = useState<BomViewMode>('lines')
   const inFlight = useRef(0)
   const queue = useRef<Promise<unknown>>(Promise.resolve())
@@ -275,34 +276,20 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         .catch(() => setLibraries((current) => ({ ...current, labels: [] })))
   }, [api, companyId, can.brands, can.labels, can.complianceView])
 
-  // The thread beside the tab (Owner O1), remembered on this device (a per-viewer convenience).
+  // ---- B-TH-261: "Made from INQ-…" — the request this style draft was made from, read once per style with sales.inquiries.view
+  // (the route asks it; the style is read as its own read, so another brand's style is never answered). Null: none, or not read.
+  const readsRequests = session.permissions.includes('sales.inquiries.view')
+  const [madeFrom, setMadeFrom] = useState<{ inquiryId: string; number: string } | null>(null)
   useEffect(() => {
-    try {
-      setDockOpen(window.localStorage.getItem(DOCK_KEY) === '1' && window.matchMedia(WIDE).matches)
-    } catch {
-      setDockOpen(false)
-    }
-  }, [])
-  const toggleDock = () => {
-    let wide = false
-    try {
-      wide = window.matchMedia(WIDE).matches
-    } catch {
-      wide = false
-    }
-    if (!wide) {
-      router.push(hrefFor('activity'))
-      return
-    }
-    setDockOpen((current) => {
-      try {
-        window.localStorage.setItem(DOCK_KEY, current ? '0' : '1')
-      } catch {
-        // Not kept on this device; the dock still toggles.
-      }
-      return !current
-    })
-  }
+    setMadeFrom(null)
+    if (!readsRequests) return
+    const controller = new AbortController()
+    styleSource(api, styleId, controller.signal)
+      .then(setMadeFrom)
+      .catch(() => setMadeFrom(null))
+    return () => controller.abort()
+  }, [api, styleId, readsRequests])
+  // ---- end B-TH-261
 
   const hrefFor = (next: StyleTab, rev: string | null = askedRevision) => `${prefix}/products/styles/${styleId}?tab=${next}${rev ? `&rev=${rev}` : ''}`
 
@@ -430,7 +417,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   // revision's pattern files (the BOM's read; changes with product.bom.manage), each read while its tab is open.
   const pictureStyle = useMemo(() => (value ? { id: value.id, companyId: value.companyId } : null), [value?.id, value?.companyId])
   const gallery = useGallery({ api, style: pictureStyle, loadKey: value ? `${value.id}:${value.version}` : null, enabled: tab === 'overview' && can.view, canManage: can.manage && session.permissions.includes('files.upload'), canArrange: can.manage, write: run })
-  const patternFiles = usePatternFiles({ api, style: pictureStyle, revisionId, loadKey: versionKey, enabled: tab === 'files' && can.bomView, canManage: can.bomManage && session.permissions.includes('files.upload'), canEdit: can.bomManage, write: run })
+  const patternFiles = usePatternFiles({ api, style: pictureStyle, revisionId, loadKey: versionKey, enabled: tab === 'patterns' && can.bomView, canManage: can.bomManage && session.permissions.includes('files.upload'), canEdit: can.bomManage, write: run })
 
   // B-W2b-235: the Operations tab's routing in depth (read while the tab is open; writes through the one queue above, each
   // moving the revision's version; after one the routing and the cost are read again).
@@ -632,8 +619,10 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     busy,
     notice,
     changed,
-    dockOpen,
     refused,
+    // B-TH-261
+    personId: session.user.id,
+    madeFrom,
     duplicate: duplicate.model,
     bomImport: bomImport.model,
     exporting,
@@ -659,20 +648,32 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     release: releaseGate.model,
   }
 
-  // B-W2b-237: read while the Overview (or, for GTINs, Colourways & sizes) shows; writes through the one queue above.
+  // B-W2b-237: read while Overview & variants shows (B-TH-261: the GTINs' matrix is on it too); writes through the one queue above.
   const depth = useStyleDepth({ api, style: value, prefix, tab, permissions: session.permissions, gateKey: `${versionKey ?? ''}:${bom.status === 'ready' ? bom.value.revision.version : ''}`, write: run, reloadStyle: () => void loadStyle() })
   // B-W2b-283 (FU1:01): read while the Overview shows; saved through the one queue above.
   const markets = useStyleMarkets({ api, style: value, tab, permissions: session.permissions, write: run, reloadStyle: () => void loadStyle() })
 
+  // ---- B-TH-261: the docked thread beside every tab (its Head holds Activity's doors, R-ACT), with threads.read; the print view keeps the
+  // record panels' print form. Brand wall (W08, W12, W20, W25, W34): a private-label style's thread is its brand's only (Reply to
+  // that brand); our own collection has no party — office notes only, never shared with a customer.
+  const record = value ? { type: 'Style', id: value.id, companyId: value.companyId, siteId: null } : null
+  const title = value ? `${value.code} · ${value.name}` : ''
+  const party = value?.brand ? { id: value.brand.id, name: value.brand.name } : null
+  const thread =
+    value && record && can.thread ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.code} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = value && record && can.thread ? <RecordPanels record={record} title={title} party={party ? { ...party, emails: [] } : null} /> : null
+  // ---- end B-TH-261
+
   return (
     <StyleRecordView
       model={model}
+      thread={thread}
+      printThread={printThread}
       depth={
-        depth.model && (tab === 'overview' || tab === 'variants')
+        depth.model && tab === 'overview'
           ? { ...depthSlots(depth.model, depth.actions, value?.skus ?? []), markets: markets.model ? <MarketsCard model={markets.model} actions={markets.actions} /> : null /* B-W2b-283 */ }
           : undefined /* B-W2b-237 */
       }
-      panels={value ? <RecordPanels record={{ type: 'Style', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.code} · ${value.name}`} party={value.brand ? { id: value.brand.id, name: value.brand.name, emails: [] } : null} /> : null}
       techPack={value && tab === 'techpack' ? <TechPackTab style={value} revisionId={revisionId} prefix={prefix} /> : null}
       costSheets={value && tab === 'cost' && can.costView ? <CostSheets style={value} revisionId={revisionId} cell={costCell} /> : null /* B-W2b-430 */}
       actions={{
@@ -694,7 +695,6 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
         spec: spec.actions,
         onRetry: () => void loadStyle(),
         onReload: reloadAll,
-        onDock: toggleDock,
         onDialog: (next) => {
           // A new material search starts empty (never the last dialog's results under an empty box).
           if (next?.kind === 'bomLine' && next.lineId === null) setMaterialSearch({ query: '', results: null, problem: null })

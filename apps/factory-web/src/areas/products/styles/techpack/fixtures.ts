@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { CAN, recordModel, REV, STYLE_ID } from '../demo/fixtures'
+import { CAN, recordModel, REV, STYLE_ID, styleThread } from '../demo/fixtures'
 import { tabsFor } from '../model'
 import type { StyleRecordViewModel } from '../record/record-model'
 import { StyleRecordView } from '../record/view/StyleRecordView'
@@ -64,7 +64,7 @@ function make(draft: Partial<MakeDraft>, overrides: Partial<MakeDialogModel> = {
   }
 }
 
-const View = ({ model }: { model: Case }) => createElement(StyleRecordView, { model: model.studio, techPack: createElement(TechPackTabView, { model: model.tab }) })
+const View = ({ model }: { model: Case }) => createElement(StyleRecordView, { model: model.studio, thread: styleThread(model.studio) /* B-TH-261 */, techPack: createElement(TechPackTabView, { model: model.tab }) })
 
 const owner = tab(OWNER)
 const workshop = tab(OWNER, { audience: 'SUBCONTRACTOR', view: ready(demoTechPack({ audience: 'SUBCONTRACTOR' })) })

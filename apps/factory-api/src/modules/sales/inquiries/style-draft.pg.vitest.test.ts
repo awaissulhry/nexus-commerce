@@ -48,6 +48,9 @@ const PEOPLE = { ada: newId(), marco: newId() } as const
 const SESSIONS: Record<string, SessionContext> = {
   ada: { audience: 'office', tenantId: T, actorId: PEOPLE.ada, grants: [grant(withGrains(templateOf('sales')!))] },
   marco: { audience: 'office', tenantId: T, actorId: PEOPLE.marco, grants: [grant(withGrains(templateOf('production_manager')!))] },
+  // ---- B-TH-261: a product-office reader of styles who reads no requests, and an office person limited to the customer P3 ----
+  paola: { audience: 'office', tenantId: T, actorId: newId(), grants: [grant(['product.styles.view'] as Permission[])] },
+  limited: { audience: 'office', tenantId: T, actorId: newId(), grants: [{ permissions: ['product.styles.view', 'sales.inquiries.view'] as Permission[], companies: 'all', sites: 'all', parties: [P3] }] },
 }
 
 let h: Harness
@@ -146,3 +149,41 @@ describe('B-TH-026 Make style draft from a request', () => {
     expect((await one('SELECT "styleIds" FROM "Inquiry" WHERE id = $1', [fresh.id])).styleIds).toEqual([])
   })
 })
+
+// ---- B-TH-261 (threads plan TH-6; O-PRD-STY.band): the style page says "Made from INQ-…" for a draft a request made ------------------
+describe('B-TH-261 the request a style draft was made from (GET /sales/inquiries/source?styleId=)', () => {
+  it('the draft names its request to a reader of requests; a style made without one answers null; the same request for every draft', async () => {
+    const asked = await request(P1)
+    const seen = (await ok('marco', 'GET', `/sales/inquiries/${asked.id}`)).inquiry
+    const made = await ok('marco', 'POST', `/sales/inquiries/${asked.id}/style-draft`, draftBody(seen.version, 'MF1'), 201)
+    const second = await ok('marco', 'POST', `/sales/inquiries/${asked.id}/style-draft`, draftBody(made.inquiry.version, 'MF2'), 201)
+    for (const style of [made.style.id, second.style.id]) {
+      const source = (await ok('marco', 'GET', `/sales/inquiries/source?styleId=${style}`)).inquiry
+      expect(source).toMatchObject({ id: asked.id, number: asked.number })
+    }
+    const seeded = (await one('SELECT id FROM "Style" WHERE "tenantId" = $1 AND code = $2', [T, 'SEED-JKT-01'])).id
+    expect((await ok('marco', 'GET', `/sales/inquiries/source?styleId=${seeded}`)).inquiry).toBeNull()
+  })
+
+  it('a reader of styles who reads no requests is refused (the route asks sales.inquiries.view; the page asks only with it); the wall: another customer’s person gets 404', async () => {
+    const asked = await request(P1)
+    const seen = (await ok('marco', 'GET', `/sales/inquiries/${asked.id}`)).inquiry
+    const made = await ok('marco', 'POST', `/sales/inquiries/${asked.id}/style-draft`, draftBody(seen.version, 'MF3'), 201)
+    const quiet = await call('paola', 'GET', `/sales/inquiries/source?styleId=${made.style.id}`)
+    expect(quiet.statusCode).toBe(403)
+    expect(quiet.body).not.toContain(asked.number)
+    // W12 / W27: P1's own-label style does not exist for a person limited to P3 — the same 404 as an unknown style, no request named.
+    const walled = await call('limited', 'GET', `/sales/inquiries/source?styleId=${made.style.id}`)
+    expect(walled.statusCode).toBe(404)
+    expect(walled.body).not.toContain(asked.number)
+    expect(walled.body).not.toContain(made.style.code)
+    expect((await call('limited', 'GET', `/sales/inquiries/source?styleId=${newId()}`)).statusCode).toBe(404)
+  })
+
+  it('exactly one of quote, order or style: two named, or none, is refused in words (400)', async () => {
+    const style = (await one('SELECT id FROM "Style" WHERE "tenantId" = $1 AND code = $2', [T, 'SEED-JKT-01'])).id
+    expect(String((await no('marco', 'GET', `/sales/inquiries/source?styleId=${style}&quoteId=${newId()}`, undefined, 400)).message)).toContain('one of them')
+    await no('marco', 'GET', '/sales/inquiries/source', undefined, 400)
+  })
+})
+// ---- end B-TH-261

@@ -9,7 +9,7 @@ import { RoutingTab } from '../../routing/view/RoutingTab'
 import { PiecesTab } from '../pieces/view/PiecesTab'
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
 
-/** The studio's revision tabs: Materials (BOM, SCR-042), Operations (SCR-043), Cost (SCR-044), Compliance (SCR-045), Files & patterns (SCR-271, B-W2b-95). */
+/** The studio's revision tabs: Materials (BOM, SCR-042), Operations (SCR-043), Cost (SCR-044), Compliance (SCR-045), Patterns (SCR-271, B-W2b-95; B-TH-261: was Files & patterns). */
 export function TabBody({ tab, style, model, actions }: { tab: StyleTab; style: StyleView; model: StyleRecordViewModel; actions?: StyleRecordActions }) {
   switch (tab) {
     case 'bom':
@@ -20,7 +20,7 @@ export function TabBody({ tab, style, model, actions }: { tab: StyleTab; style: 
       return <CostTab style={style} model={model} actions={actions} />
     case 'compliance':
       return <ComplianceTab style={style} model={model} actions={actions} />
-    case 'files':
+    case 'patterns':
       return <PiecesTab style={style} model={model} actions={actions} />
     default:
       return null

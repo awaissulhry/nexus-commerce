@@ -77,17 +77,15 @@
     }
   },
   "tab": {
-    "overview": "Overview",
-    "variants": "Colourways & sizes",
+    "overview": "Overview & variants",
     "sizes": "Sizes & measurements",
     "bom": "Materials (BOM)",
     "routing": "Operations",
     "cost": "Cost",
     "techpack": "Tech pack",
     "compliance": "Compliance",
-    "files": "Files & patterns",
+    "patterns": "Patterns",
     "versions": "Versions & changes",
-    "activity": "Activity",
     "problems_one": "{count} problem before release",
     "problems_other": "{count} problems before release"
   },
@@ -118,17 +116,16 @@
     "thingsBefore_one": "{count} thing before release",
     "thingsBefore_other": "{count} things before release",
     "readyToRelease": "Ready to release",
-    "dock": "Thread",
-    "dockHint": "Show the thread beside the tab (⌘J)",
     "dockLabel": "Thread of the style",
     "more": "More actions",
-    "noPanels": "The thread opens here once the style is loaded.",
     "changed": "Someone else changed this style at {time}.",
     "reload": "Reload",
     "archivedBanner": "Archived: read only. Reactivate it (⋯) to change it.",
     "frozenReleased": "Revision {revision} is released and frozen: work orders use it exactly as it is.",
     "frozenObsolete": "Revision {revision} is obsolete: kept for the record, no longer used.",
-    "goToDraft": "Go to revision {revision} (draft)"
+    "goToDraft": "Go to revision {revision} (draft)",
+    "madeFrom": "Made from {number} — Open",
+    "variantsLabel": "Colourways & sizes"
   },
   "action": {
     "release": "Release revision {revision}",
@@ -137,7 +134,6 @@
     "archive": "Archive style…",
     "reactivate": "Reactivate style",
     "copyCode": "Copy code",
-    "keys": "Keyboard shortcuts",
     "duplicate": "Duplicate…"
   },
   "save": {
@@ -181,7 +177,7 @@
       "rate_limited": "Too many changes at once: wait a moment and do it again.",
       "unavailable": "The factory server did not answer: nothing was saved, try again.",
       "internal": "Something went wrong: nothing was saved, try again.",
-      "piecesUse": "Pattern pieces are cut from this line: change them in Files & patterns first."
+      "piecesUse": "Pattern pieces are cut from this line: change them in Patterns first."
     }
   },
   "notice": {
@@ -263,7 +259,7 @@
     "range": "Range",
     "created": "Created",
     "updated": "Updated",
-    "activity": "Thread and history",
+    "activity": "Show the thread and history",
     "release": "Release check",
     "coverage": "Certificate coverage",
     "open": "Open",
@@ -849,15 +845,13 @@
     "release": "Open the release check",
     "prevRevision": "Previous revision",
     "nextRevision": "Next revision",
-    "thread": "Thread beside the tab",
     "save": "Save the form",
     "add": "Add a BOM line or operations",
     "bomView": "Next BOM view",
     "skuCell": "Switch a SKU cell",
     "skuRow": "Switch a whole colourway",
     "moveUp": "Move up (BOM line, operation)",
-    "moveDown": "Move down (BOM line, operation)",
-    "help": "These shortcuts"
+    "moveDown": "Move down (BOM line, operation)"
   },
   "kind": {
     "LEATHER": "Leather",
@@ -1354,8 +1348,8 @@
     "always": "Always copied: identity, size range, PPE, customs data, garment tracking and the active colourways. Not copied: SKUs (made on request), names per language, pictures.",
     "linked": "The copy starts as a draft linked to its source: its revision 1 and its history say \"copied from\" it.",
     "skus": "Make its SKUs now",
-    "skusHint_one": "One SKU per size of its {count} colourway; else later from Colourways & sizes.",
-    "skusHint_other": "One SKU per size of each of its {count} colourways; else later from Colourways & sizes.",
+    "skusHint_one": "One SKU per size of its {count} colourway; else later from Overview & variants.",
+    "skusHint_other": "One SKU per size of each of its {count} colourways; else later from Overview & variants.",
     "done": "{code} is a new draft style, copied from {from}.",
     "doneRevision": "Its parts came from revision {revision} and are in its revision 1 (draft).",
     "doneNoRevision": "No part needed a revision: start revision 1 in its studio.",
@@ -1689,7 +1683,7 @@
     },
     "files": {
       "title": "Documents and files",
-      "where": "Sketches, pictures and customer pages are in the Overview’s gallery; the pattern files are above. Other files added to the style are in its Activity tab."
+      "where": "Sketches, pictures and customer pages are in the gallery of Overview & variants; the pattern files are above. Other files added to the style are in its thread’s Files view."
     }
   }
 }
