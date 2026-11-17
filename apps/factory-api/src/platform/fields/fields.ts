@@ -4,7 +4,7 @@ import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
 import { DomainError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { can, grantsFor, holds, type Actor } from '@nexus/factory-domain/core/permissions'
-import { columnIdOf } from '@nexus/factory-domain/fields/access'
+import { codesOf, columnIdOf, CUSTOMER_FIELD_RECORD_KEYS, optionsInUse, portalNoticeOf } from '@nexus/factory-domain/fields/access'
 import { FIELDS_MANAGE, FIELDS_PERSONAL_VIEW, FIELDS_VIEW } from '@nexus/factory-domain/fields/permissions'
 import { FIELD_LIMITS, factsAfter, fieldProblems, nextPlace, optionProblems, orderProblems, picklistProblems, placesOf, type FieldDraft, type FieldFacts } from '@nexus/factory-domain/fields/rules'
 import type { StoredValue } from '@nexus/factory-domain/fields/values'
@@ -54,8 +54,15 @@ function mayKeep(who: Actor, companyId: string | null): boolean {
   return companyId === null ? grantsFor(who, FIELDS_MANAGE).some((grant) => grant.companies === 'all') : can(who, FIELDS_MANAGE, { companyId })
 }
 
-function keepOrRefuse(who: Actor, companyId: string | null): void {
+// B-TH-056: a field for one customer is kept only by who reaches that customer (fields.manage over it); refused in words that
+// name no customer (an office person limited to customer A never learns of customer B's field).
+const reachesParty = (who: Actor, permission: typeof FIELDS_MANAGE | typeof FIELDS_VIEW, companyId: string | null, partyId: string | null): boolean =>
+  partyId === null ||
+  grantsFor(who, permission).some((grant) => (companyId === null || grant.companies === 'all' || grant.companies.includes(companyId)) && (grant.parties === 'all' || grant.parties.includes(partyId)))
+
+function keepOrRefuse(who: Actor, companyId: string | null, partyId: string | null = null): void {
   if (!mayKeep(who, companyId)) throw new ForbiddenError(companyId === null ? "A field or list of every company is the whole group's: keeping it needs the right to keep fields and lists over every company." : 'Keeping the fields and lists of this company needs the right to keep them over it.')
+  if (!reachesParty(who, FIELDS_MANAGE, companyId, partyId)) throw new ForbiddenError('Keeping a field for one customer needs the right to keep fields over that customer.') // B-TH-056
 }
 
 /** Changing who sees a money or personal field needs what it protects: its grain, or the personal right. */
@@ -94,6 +101,7 @@ export function fieldViewOf(field: FieldRow): FieldView {
     picklist: field.picklist ? { id: field.picklist.id, code: field.picklist.code, labelIt: field.picklist.labelIt, labelEn: field.picklist.labelEn, values: field.picklist.options.map(optionViewOf) } : null,
     linkTo: field.linkTo,
     linkRecordType: link?.key ?? null,
+    partyId: field.partyId, // B-TH-056
   }
 }
 
@@ -140,7 +148,10 @@ export async function editor(caller: CommandCaller, query: { recordType?: Custom
   const reaches = (companyId: string | null) => companyId === null || can(who, FIELDS_VIEW, { companyId })
   return caller.withClient(async (client) => {
     const counts = await client.customField.groupBy({ by: ['recordType'], where: { status: 'ACTIVE' }, _count: { _all: true } })
-    const fields = (await fieldsOfModel(client, record.model, { archived: true })).filter((field) => reaches(field.companyId))
+    // B-TH-056: a field for one customer only for who reaches that customer.
+    const fields = (await fieldsOfModel(client, record.model, { archived: true })).filter((field) => reaches(field.companyId) && reachesParty(who, FIELDS_VIEW, field.companyId, field.partyId))
+    const partyIds = [...new Set(fields.flatMap((field) => (field.partyId ? [field.partyId] : [])))]
+    const partyNames = new Map((partyIds.length > 0 ? await client.party.findMany({ where: { id: { in: partyIds } }, select: { id: true, legalName: true, tradeName: true } }) : []).map((party) => [party.id, party.tradeName?.trim() || party.legalName]))
     const used = await valueCounts(client, fields.map((field) => field.id))
     const lists = (await picklistsOf(client)).filter((list) => reaches(list.companyId))
     const picklists: PicklistView[] = []
@@ -157,7 +168,14 @@ export async function editor(caller: CommandCaller, query: { recordType?: Custom
         importer: entry.importer,
       })),
       recordType: record.key,
-      fields: fields.map((field) => ({ ...fieldViewOf(field), valueCount: used.get(field.id) ?? 0, createdAt: field.createdAt.toISOString(), updatedAt: field.updatedAt.toISOString() })),
+      fields: fields.map((field) => ({
+        ...fieldViewOf(field),
+        valueCount: used.get(field.id) ?? 0,
+        createdAt: field.createdAt.toISOString(),
+        updatedAt: field.updatedAt.toISOString(),
+        partyName: field.partyId ? (partyNames.get(field.partyId) ?? null) : null, // B-TH-056
+        portalNotice: portalNoticeOf(field), // B-TH-056
+      })),
       picklists,
       canManage: grantsFor(who, FIELDS_MANAGE).length > 0,
     }
@@ -187,6 +205,15 @@ const auditedField = (field: Pick<FieldRow, 'code' | 'type' | 'labelIt' | 'label
   status: field.status,
 })
 
+/** B-TH-056: why this party cannot have a field of its own (in words that name no other customer), or null. */
+async function customerProblem(client: Client, partyId: string, companyId: string | null): Promise<string | null> {
+  const party = await client.party.findUnique({ where: { id: partyId }, select: { roles: true, status: true, companyId: true } })
+  if (!party || !party.roles.includes('CUSTOMER')) return 'Pick one of our customers.'
+  if (party.status !== 'ACTIVE') return 'The customer is not active: a field for it is made while it is.'
+  if (companyId !== null && party.companyId !== null && party.companyId !== companyId) return "A field of one company is for a customer of that company (or of every company)."
+  return null
+}
+
 /** The list a select field picks from: active, of the field's company or every company's (a field of every company: every company's). */
 async function listProblem(client: Client, picklistId: string, companyId: string | null): Promise<string | null> {
   const list = await client.picklist.findUnique({ where: { id: picklistId }, select: { companyId: true, status: true } })
@@ -201,7 +228,11 @@ export async function createField(caller: CommandCaller, body: CreateFieldBody, 
   const who = actor(caller)
   const record = recordOf(body.recordType)
   const companyId = body.companyId ?? null
-  keepOrRefuse(who, companyId)
+  const partyId = body.partyId ?? null // B-TH-056
+  keepOrRefuse(who, companyId, partyId)
+  if (partyId !== null && !(CUSTOMER_FIELD_RECORD_KEYS as readonly string[]).includes(record.key)) {
+    throw new ValidationError('A field for one customer goes on customers, quotes or orders.', [{ path: 'body/partyId', message: `A field for one customer goes on customers, quotes or orders, not on ${aRecord(record)}.` }])
+  }
   const linkTo = body.linkTo ? recordOf(body.linkTo).model : null
   const draft: FieldDraft = { ...body, unit: body.unit ?? null, grain: body.grain ?? null, picklistId: body.picklistId ?? null, linkTo }
   const problems = fieldProblems(draft)
@@ -218,6 +249,11 @@ export async function createField(caller: CommandCaller, body: CreateFieldBody, 
         if (body.picklistId) {
           const problem = await listProblem(tools.tx, body.picklistId, companyId)
           if (problem) throw new DomainError('conflict', problem, [{ path: 'body/picklistId', message: problem }])
+        }
+        // B-TH-056: the customer, in words before the database's last word (…_config_brand_fields_th_guards).
+        if (partyId !== null) {
+          const problem = await customerProblem(tools.tx, partyId, companyId)
+          if (problem) throw new DomainError('conflict', problem, [{ path: 'body/partyId', message: problem }])
         }
         const active = await tools.tx.customField.findMany({ where: { recordType: record.model, status: 'ACTIVE' }, select: { section: true, sortOrder: true } })
         if (active.length >= FIELD_LIMITS.perRecordType) throw new DomainError('conflict', `A record type keeps at most ${FIELD_LIMITS.perRecordType} active fields: archive one first.`, [{ path: 'body/recordType', message: 'full' }])
@@ -241,11 +277,12 @@ export async function createField(caller: CommandCaller, body: CreateFieldBody, 
             shownInPortal: body.shownInPortal ?? false,
             picklistId: body.picklistId ?? null,
             linkTo,
+            ...(partyId ? { partyId } : {}), // B-TH-056
             createdById: createdBy(tools.context),
           },
         })
         const field = (await fieldById(tools.tx, row.id))!
-        tools.audit({ recordType: 'CustomField', recordId: row.id, companyId, after: { recordType: record.model, ...auditedField(field), picklistId: field.picklistId, linkTo } })
+        tools.audit({ recordType: 'CustomField', recordId: row.id, companyId, after: { recordType: record.model, ...auditedField(field), picklistId: field.picklistId, linkTo, ...(partyId ? { partyId } : {}) } })
         emitField(tools, record.model, 'CREATED', [field])
         return fieldViewOf(field)
       }),
@@ -261,8 +298,9 @@ export async function createField(caller: CommandCaller, body: CreateFieldBody, 
 export async function editField(caller: CommandCaller, fieldId: string, body: EditFieldBody, idempotencyKey?: string): Promise<FieldView> {
   const who = actor(caller)
   const found = await caller.withClient((client) => fieldById(client, fieldId))
-  if (!found) throw new NotFoundError('The field was not found.')
-  keepOrRefuse(who, found.companyId)
+  // B-TH-056: a field for a customer the person does not reach is not found (never told it exists).
+  if (!found || !reachesParty(who, FIELDS_MANAGE, found.companyId, found.partyId)) throw new NotFoundError('The field was not found.')
+  keepOrRefuse(who, found.companyId, found.partyId)
   const { version, status, ...change } = body
   const problems = fieldProblems(change, found)
   if (problems.length > 0) throw new ValidationError('The field is not valid.', prefixed(problems))
@@ -320,7 +358,7 @@ export async function orderFields(caller: CommandCaller, body: { recordType: Cus
   const { result } = await command(caller, { name: 'fields.orderFields', idempotencyKey, input: body }, async (tools) =>
     saidInWords(async () => {
       const group = (await fieldsOfModel(tools.tx, record.model)).filter((field) => field.section === body.section)
-      for (const field of group) keepOrRefuse(who, field.companyId)
+      for (const field of group) keepOrRefuse(who, field.companyId, field.partyId) // B-TH-056: its customer too
       const problems = orderProblems(group.map((field) => field.id), body.fields.map((entry) => entry.id))
       if (problems.length > 0) throw new ValidationError('The order does not name every field of the section once.', problems.map((problem) => ({ path: `body/fields${problem.path.replace(/^ids/, '')}`, message: problem.message })))
       const places = placesOf(body.fields.map((entry) => entry.id))
@@ -493,12 +531,16 @@ export async function orderOptions(caller: CommandCaller, picklistId: string, bo
 
 // ---- a record's values --------------------------------------------------------------------------------------------------
 
-/** GET /fields?recordType=ORDER[&companyId=]: the active fields this person sees on a record type (its view permission). */
-export async function fieldsFor(caller: CommandCaller, query: { recordType: CustomRecordKey; companyId?: string | undefined }) {
+/**
+ * GET /fields?recordType=ORDER[&companyId=][&partyId=]: the active fields this person sees on a record type (its view permission).
+ * B-TH-056: with partyId (one customer's sheet) the fields for every customer and that customer's own; without it every field
+ * the person sees, a customer's own with its partyId (a list across customers draws it on that customer's rows only).
+ */
+export async function fieldsFor(caller: CommandCaller, query: { recordType: CustomRecordKey; companyId?: string | undefined; partyId?: string | undefined }) {
   const who = actor(caller)
   const record = recordOf(query.recordType)
   if (!holds(who, record.view)) throw new ForbiddenError(`Reading the custom fields of ${aRecord(record)} needs the right to see such records.`)
-  return caller.withClient(async (client) => ({ recordType: record.key, fields: fieldsSeen(who, await fieldsOfModel(client, record.model), query.companyId).map(fieldViewOf) }))
+  return caller.withClient(async (client) => ({ recordType: record.key, fields: fieldsSeen(who, await fieldsOfModel(client, record.model), query.companyId, query.partyId).map(fieldViewOf) }))
 }
 
 /** The record (404 when it is not one the person may see) and the person's rights on it. */
@@ -510,7 +552,8 @@ async function recordFor(client: Client, who: Actor, record: CustomRecord, recor
 }
 
 async function recordAnswer(client: Client, who: Actor, record: CustomRecord, facts: RecordFacts) {
-  const fields = fieldsSeen(who, await fieldsOfModel(client, record.model), facts.companyId)
+  // B-TH-056: the record's customer's own fields and every customer's, never another customer's.
+  const fields = fieldsSeen(who, await fieldsOfModel(client, record.model), facts.companyId, facts.partyId ?? null)
   const values = (await valuesOfRecords(client, record.model, [facts.id], fields.map((field) => field.id))).get(facts.id) ?? new Map<string, ValueRow>()
   const references = await referenceWords(client, who, fields, values.values())
   return { recordType: record.key, recordId: facts.id, fields: fields.map(fieldViewOf), values: valueViewsOf(fields, values, references), canEdit: can(who, record.edit, facts) }
@@ -557,7 +600,8 @@ export async function rowValues(caller: CommandCaller, recordType: CustomRecordK
         .sort((a, b) => order.get(a.id)! - order.get(b.id)!)
         .map((row) => {
           const own = values.get(row.id) ?? new Map<string, ValueRow>()
-          const entries = fields.filter((field) => own.has(field.id) && (field.companyId === null || row.companyId === null || field.companyId === row.companyId)).map((field) => [field.code, { value: markedValue(field, own.get(field.id)!.value), ...wordsOf(field, own.get(field.id)!.value, references) }] as const)
+          // B-TH-056: a field for one customer only on that customer's rows.
+          const entries = fields.filter((field) => own.has(field.id) && (field.companyId === null || row.companyId === null || field.companyId === row.companyId) && (field.partyId === null || field.partyId === (row.partyId ?? null))).map((field) => [field.code, { value: markedValue(field, own.get(field.id)!.value), ...wordsOf(field, own.get(field.id)!.value, references) }] as const)
           return { id: row.id, values: Object.fromEntries(entries) }
         }),
     }
@@ -567,7 +611,9 @@ export async function rowValues(caller: CommandCaller, recordType: CustomRecordK
 /**
  * GET /fields/portal/:recordType/:recordId (a partner): the fields shown in the portal on the party's OWN record (its
  * order, quote or purchase order, or the party itself), read in the tenant's system scope — the database gives a partner
- * no grant on custom fields — and filtered for the partner (a price only with the price grain).
+ * no grant on custom fields — and filtered for the partner (a price only with the price grain). B-TH-056 (W17, T17): only the
+ * fields for every customer and the party's own (never another customer's, nor its name), and of a list only the values the
+ * record uses (a list may name other customers).
  */
 export async function portalValues(request: FastifyRequest, recordType: CustomRecordKey, recordId: string) {
   const context = contextOf(request)
@@ -579,10 +625,17 @@ export async function portalValues(request: FastifyRequest, recordType: CustomRe
   return system.withClient(async (client) => {
     const facts = (await recordFactsOf(client, record.model, [recordId])).get(recordId)
     if (!facts || facts.partyId !== context.partyId) throw new NotFoundError(`${record.labelEn} not found.`)
-    const fields = fieldsSeen(who, await fieldsOfModel(client, record.model), facts.companyId)
+    const fields = fieldsSeen(who, await fieldsOfModel(client, record.model), facts.companyId, facts.partyId ?? null)
     const values = (await valuesOfRecords(client, record.model, [facts.id], fields.map((field) => field.id))).get(facts.id) ?? new Map<string, ValueRow>()
     const references = await referenceWords(client, who, fields, values.values())
-    return { recordType: record.key, recordId: facts.id, fields: fields.map(fieldViewOf), values: valueViewsOf(fields, values, references) }
+    // B-TH-056: of a list, only the values this record uses.
+    const shown = fields.map((field) => {
+      const view = fieldViewOf(field)
+      if (!view.picklist) return view
+      const used = new Set(codesOf(values.get(field.id)?.value ?? null))
+      return { ...view, picklist: { ...view.picklist, values: optionsInUse(view.picklist.values, used) } }
+    })
+    return { recordType: record.key, recordId: facts.id, fields: shown, values: valueViewsOf(fields, values, references) }
   })
 }
 
