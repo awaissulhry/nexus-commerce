@@ -17,6 +17,11 @@ import { makeOrderInCommand } from './make'
 // B-TH-017: what each row carries beside the order (picture, labels, Invoiced, the ids its doors open).
 import { orderRowExtras } from './row-extras'
 import { orderWaitWords } from '../../parties/holds/stops'
+// B-TH-058 / B-TH-059: the later columns, the view's facts in bulk, the customer's own urgency (read-only).
+import type { InvoicedState } from '@nexus/factory-domain/sales/orders/invoiced'
+import { customerUrgencyWhere, type CustomerUrgency } from './customer-urgency'
+import { orderLaterColumns } from './later-columns'
+import { atRiskWhere, invoicedByOrder, riskRulesOf } from './view-facts'
 import { officeOrder, recordAfter } from './moves'
 import { asDay, dayOf, dayOrNull, LEFT } from './store'
 import type { OrderView } from './views'
@@ -57,6 +62,16 @@ export interface ListFilters {
   readonly brand?: string | undefined
   /** B-TH-057 (SHEET-G05): the custom fields' `cf` term (platform/fields filters), applied by the list as by its file. */
   readonly cf?: string | undefined
+  // ── B-TH-058 / B-TH-059 (threads plan TH-4): the terms the overall view's doors open, each the list's own ──
+  /** None / Part / All (the row's Invoiced, rule C8). */
+  readonly invoiced?: InvoicedState | undefined
+  /** The ORDER_LATE_RISK rule calls it at risk now (its company's threshold; the row's `atRisk`). */
+  readonly atRisk?: 'true' | 'false' | undefined
+  /** The customer's own mark, read-only (./customer-urgency). */
+  readonly customerUrgency?: CustomerUrgency | undefined
+  /** The order's currency (a money total per currency opens its own rows). */
+  readonly currency?: string | undefined
+  // ── end B-TH-058 / B-TH-059 ──
 }
 
 export interface ListQuery extends ListFilters {
@@ -65,6 +80,8 @@ export interface ListQuery extends ListFilters {
   readonly limit: number
   /** B-TH-057 (SHEET-G15): `customer`, `brand`, `promise`, `daysLate`, `ordered`; `-` in front: the other way round. */
   readonly sort?: OrderSortTerm | undefined
+  /** B-TH-059: count each row's production progress (the Progress column is shown, or the file writes it). */
+  readonly progress?: 'true' | 'false' | undefined
 }
 
 
@@ -110,6 +127,8 @@ export function whereOf(context: OfficeContext, filters: ListFilters, today: Bus
       filters.promiseTo ? { promiseDate: { lte: asDay(filters.promiseTo) } } : {},
       filters.q ? searchWhere(context, filters.q) : {}, // B-TH-057 (ORD-G07)
       filters.brand ? { lines: { some: { style: { brandPartyId: filters.brand === 'own' ? null : filters.brand } } } } : {}, // B-TH-225
+      filters.currency ? { currency: filters.currency } : {}, // B-TH-058
+      filters.customerUrgency ? customerUrgencyWhere(filters.customerUrgency) : {}, // B-TH-059 (agreement T10)
     ],
   }
 }
@@ -129,6 +148,24 @@ async function customWhere(client: Reader, context: OfficeContext, cf: string | 
   if (!match) return {}
   return { AND: [match.include ? { id: { in: [...match.include] } } : {}, match.exclude.size > 0 ? { id: { notIn: [...match.exclude] } } : {}] }
 }
+
+// ── B-TH-058 / B-TH-059 ──
+/**
+ * The whole filter of a view: the list's terms (whereOf), the custom field filter (`cf`), the ORDER_LATE_RISK reading
+ * (`atRisk=true`) and the Invoiced state (`invoiced`: computed per order by rule C8 over the orders the other terms keep, an
+ * order without lines being None). The list, the board's counts, the overall view's totals (./summary) and the file all read
+ * this one filter, so a total opens exactly the rows it counts.
+ */
+export async function viewWhere(client: Reader, context: OfficeContext, filters: ListFilters, today: BusinessDate): Promise<Prisma.SalesOrderWhereInput> {
+  const base: Prisma.SalesOrderWhereInput = {
+    AND: [whereOf(context, filters, today), await customWhere(client, context, filters.cf), filters.atRisk === 'true' ? atRiskWhere(await riskRulesOf(client), today) : {}],
+  }
+  if (!filters.invoiced) return base
+  const states = await invoicedByOrder(client, base)
+  const ids = (await client.salesOrder.findMany({ where: base, select: { id: true } })).map((row) => row.id)
+  return { AND: [base, { id: { in: ids.filter((id) => (states.get(id)?.state ?? 'NONE') === filters.invoiced) } }] }
+}
+// ── end B-TH-058 / B-TH-059 ──
 
 const collator = new Intl.Collator('it', { sensitivity: 'base', numeric: true })
 /** A sort key: a group (a value, a label of our own collection, a hidden label, nothing to sort by) and the value inside it. */
@@ -221,8 +258,9 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
   const today = todayNow()
   if (!query.sort && query.cursor !== undefined && !isUuid(query.cursor)) throw new ValidationError('This page belongs to a sorted list: read the list from its start again.', [{ path: 'query/cursor', message: 'The last id read.' }])
   return caller.withClient(async (client) => {
-    const scoped: Prisma.SalesOrderWhereInput = { AND: [whereOf(context, query, today), await customWhere(client, context, query.cf)] }
-    const select = { id: true, number: true, companyId: true, partyId: true, customerRef: true, status: true, orderDate: true, requestedDate: true, promiseDate: true, currency: true, netAmount: true, grossAmount: true, depositRequired: true, quoteVersionId: true, version: true, updatedAt: true } as const
+    const scoped = await viewWhere(client, context, query, today) // B-TH-058 / B-TH-059: the view's one filter
+    // B-TH-059: + the office's priority and the order note (the later columns).
+    const select = { id: true, number: true, companyId: true, partyId: true, customerRef: true, status: true, orderDate: true, requestedDate: true, promiseDate: true, currency: true, netAmount: true, grossAmount: true, depositRequired: true, quoteVersionId: true, version: true, updatedAt: true, priority: true, priorityLevel: true, urgentReason: true, internalNote: true } as const
     let page: Prisma.SalesOrderGetPayload<{ select: typeof select }>[]
     let nextCursor: string | null
     if (query.sort) {
@@ -263,6 +301,14 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
       const orderId = shipments.find((shipment) => shipment.id === row.shipmentId)!.salesOrderId
       shippedOf.set(orderId, (shippedOf.get(orderId) ?? 0) + (row._sum.quantity ?? 0))
     }
+    // B-TH-059: the later columns (open pieces, progress when asked, paid and balance, sites, note, priority, at risk, customer urgency).
+    const later = await orderLaterColumns(
+      client,
+      actorOf(context),
+      page.map((row) => ({ id: row.id, companyId: row.companyId, status: row.status, promiseDate: dayOrNull(row.promiseDate), grossAmount: row.grossAmount, priority: row.priority, priorityLevel: row.priorityLevel, urgentReason: row.urgentReason, internalNote: row.internalNote })),
+      shippedOf,
+      { today, progress: query.progress === 'true' },
+    )
     return {
       orders: page.map((row) => {
         const own = deposits.filter((deposit) => deposit.orderId === row.id && deposit.status !== 'CANCELLED')
@@ -296,6 +342,8 @@ export async function listOrders(caller: CommandCaller, query: ListQuery) {
           updatedAt: toUtcIso(row.updatedAt),
           // B-TH-017
           ...extras.get(row.id)!,
+          // B-TH-059
+          ...later.get(row.id)!,
         }
       }),
       nextCursor, // B-TH-057
@@ -312,12 +360,13 @@ const TILES = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'wait
  * state under the list's filters (scope, company, party, promise range, search), the board's lanes, and the tiles with
  * the filter each stands for.
  */
-export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */ | 'cf' /* B-TH-057 */>) {
+export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */ | 'cf' /* B-TH-057 */ | 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency' /* B-TH-058 / B-TH-059 */>) {
   const context = officeContextOf(caller)
   const today = todayNow()
   return caller.withClient(async (client) => {
     // B-TH-057 (SHEET-G05): the counts follow the custom field filter as the rows do.
-    const base: Prisma.SalesOrderWhereInput = { AND: [whereOf(context, filters, today), await customWhere(client, context, filters.cf)] }
+    // B-TH-058 / B-TH-059: and every other term of the view (Invoiced, At risk, customer urgency, currency).
+    const base = await viewWhere(client, context, filters, today)
     const grouped = await client.salesOrder.groupBy({ by: ['status'], where: base, _count: { _all: true } })
     const countOf = (status: SalesOrderStatus) => grouped.find((row) => row.status === status)?._count._all ?? 0
     const late = await client.salesOrder.count({ where: { AND: [base, lateWhere(today)] } })
