@@ -946,6 +946,16 @@ export interface DeclineDraft {
 
 export const emptyDecline: DeclineDraft = { reason: null, note: '', message: '', send: false }
 
+// ---- th-backend-g step 2 (B-TH-279): the decline's message starts from the mail template request.declined ------------------------
+/** The starting words' state: when the template's text in the customer's language is Claude's draft not read yet, why it is English. */
+export interface DeclineStart {
+  readonly fellBack: { readonly it: string; readonly en: string } | null
+}
+
+/** Where the person's own words still wait in a starting text: a line that holds only "…" (the API's PERSON_BLANK). */
+export const hasBlank = (text: string): boolean => /^[ \t]*…[ \t]*$/m.test(text)
+// ---- end th-backend-g step 2
+
 /** Why Decline is held: a reason; OTHER says it in words (factory-domain OTHER_NEEDS_WORDS). B-TH-234: a ticked message needs words; "Not an order" sends nothing. */
 export function declineHeld(draft: DeclineDraft, offline: boolean): Phrase | null {
   if (!draft.reason) return { key: 'decline.held.reason' }
@@ -954,6 +964,7 @@ export function declineHeld(draft: DeclineDraft, offline: boolean): Phrase | nul
   // B-TH-234
   if (draft.send && draft.reason === 'NOT_AN_ORDER') return { key: 'refusal.SENDS_NOTHING' }
   if (draft.send && blank(draft.message)) return { key: 'decline.held.message' }
+  if (draft.send && draft.reason !== 'NOT_AN_ORDER' && hasBlank(draft.message)) return { key: 'decline.held.blank' } // th-backend-g step 2
   if (offline) return { key: 'held.offline' }
   return null
 }

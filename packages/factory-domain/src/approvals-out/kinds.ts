@@ -20,9 +20,22 @@ import type { PartnerTaskKind } from '../portal/tasks/kinds'
  * the partner's words (APPROVED_WITH_CHANGES); a refusal always says why. A revised order is accepted as it stands or refused
  * (a change is a new amendment), a signature is given or refused. Only REVISED_ORDER shows money: the party's own order, the
  * price grain (the partner task's grain, the APPROVAL link's grain); never a cost or a margin.
+ *
+ * B-PR-24 (production plan §3 "Brand alone", Appendix A; 08-backend §4.3, §4.4; schema wave 4/5 B-PR-23 added the enum
+ * values): four more kinds, one rule each —
+ *   FABRIC         a fabric (textile, lining, membrane, padding) swatch or the thread records   yes   APPROVE   7 / 60 days
+ *   TRIM           a trim (trim, hardware, thread, label) swatch or the thread records          yes   APPROVE   7 / 60
+ *   REPROMISE      SalesOrder: a new promise date the customer accepts or refuses with words    no    APPROVE   5 / 60
+ *                  (the date stands either way: capacity is shared; a refusal tells us)
+ *   COUNTER_OFFER  OrderChangeRequest: our counter-offer to its ask, accepted or refused          no    APPROVE   5 / 60
+ *                  (a counter with a fee is priced per request, not per kind: sales/change-requests/counter counterPriced —
+ *                  only a role with the price grain answers it; its question never names the amount)
+ * A kind asked only by its own command (REPROMISE from the re-promise, COUNTER_OFFER from the counter) is offered on no record's
+ * "Ask for approval": the record adapters list the kinds each record offers (apps/factory-api platform/approvals-out/records).
  */
 
-export const APPROVAL_KINDS = ['CONCESSION', 'SAMPLE', 'COLOUR', 'LEATHER', 'ARTWORK', 'PROOF', 'REVISED_ORDER', 'SIGNATURE'] as const
+// B-PR-24: + FABRIC, TRIM, REPROMISE, COUNTER_OFFER (the schema's ApprovalKind, paired in factory-db domain-mirrors).
+export const APPROVAL_KINDS = ['CONCESSION', 'SAMPLE', 'COLOUR', 'LEATHER', 'ARTWORK', 'PROOF', 'REVISED_ORDER', 'SIGNATURE', 'FABRIC', 'TRIM', 'REPROMISE', 'COUNTER_OFFER'] as const
 export type ApprovalKind = (typeof APPROVAL_KINDS)[number]
 
 export const APPROVAL_STATUSES = ['OPEN', 'APPROVED', 'APPROVED_WITH_CHANGES', 'REFUSED', 'WITHDRAWN', 'EXPIRED'] as const
@@ -53,6 +66,9 @@ export const THREAD_RECORD_TYPES = ['Style', 'Quote', 'SalesOrder', 'PurchaseOrd
  */
 export const SAMPLE_ROUND_RECORD = 'SampleRound'
 export const SAMPLE_SWATCH_RECORD = 'SampleSwatch'
+/** B-PR-24: a new promise date is asked on the sales order; our counter-offer on the customer's request. */
+export const REPROMISE_RECORD = 'SalesOrder'
+export const COUNTER_OFFER_RECORD = 'OrderChangeRequest'
 
 export interface KindRule {
   readonly kind: ApprovalKind
@@ -81,6 +97,11 @@ export const KIND_RULES: Readonly<Record<ApprovalKind, KindRule>> = Object.freez
   PROOF: rule({ kind: 'PROOF', recordTypes: ['SalesOrderLine'], withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 5, max: 60 }, needsFiles: true, name: { it: 'Bozza del design', en: 'Design proof' } }),
   REVISED_ORDER: rule({ kind: 'REVISED_ORDER', recordTypes: ['SalesOrderAmendment'], withChanges: false, task: 'RECONFIRM_ORDER', price: true, dueDays: { default: 5, max: 60 }, needsFiles: false, name: { it: 'Ordine modificato', en: 'Revised order' } }),
   SIGNATURE: rule({ kind: 'SIGNATURE', recordTypes: ['RiskAssessmentVersion'], withChanges: false, task: 'APPROVE', price: false, dueDays: { default: 14, max: 60 }, needsFiles: false, name: { it: 'Firma', en: 'Signature' } }),
+  // B-PR-24
+  FABRIC: rule({ kind: 'FABRIC', recordTypes: [...THREAD_RECORD_TYPES, SAMPLE_SWATCH_RECORD], withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 7, max: 60 }, needsFiles: true, name: { it: 'Tessuto', en: 'Fabric' } }),
+  TRIM: rule({ kind: 'TRIM', recordTypes: [...THREAD_RECORD_TYPES, SAMPLE_SWATCH_RECORD], withChanges: true, task: 'APPROVE', price: false, dueDays: { default: 7, max: 60 }, needsFiles: true, name: { it: 'Accessorio', en: 'Trim' } }),
+  REPROMISE: rule({ kind: 'REPROMISE', recordTypes: [REPROMISE_RECORD], withChanges: false, task: 'APPROVE', price: false, dueDays: { default: 5, max: 60 }, needsFiles: false, name: { it: 'Nuova data', en: 'New date' } }),
+  COUNTER_OFFER: rule({ kind: 'COUNTER_OFFER', recordTypes: [COUNTER_OFFER_RECORD], withChanges: false, task: 'APPROVE', price: false, dueDays: { default: 5, max: 60 }, needsFiles: false, name: { it: 'Controproposta', en: 'Counter-offer' } }),
 })
 
 /** The kinds a record type is asked with. */

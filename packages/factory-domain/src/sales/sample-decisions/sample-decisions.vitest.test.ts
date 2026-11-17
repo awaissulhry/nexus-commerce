@@ -64,9 +64,9 @@ describe('the decision of a round (SAL-312)', () => {
     expect(answerHeldWords({ stage: 'UNDER_REVIEW', approvalRequestId: null }, 'r1', 'en')).toBeNull()
     expect(answerHeldWords({ stage: 'DECIDED', approvalRequestId: 'r1' }, 'r1', 'it')).toBe('Questo campione è già stato deciso.')
     expect(answerHeldWords({ stage: 'SENT', approvalRequestId: 'r2' }, 'r1', 'en')).toBe('We sent you a newer request for this sample.')
-    // A sample round is asked as a SAMPLE, a swatch as its own COLOUR or LEATHER.
+    // A sample round is asked as a SAMPLE, a swatch as its own COLOUR or LEATHER (B-PR-24: or FABRIC or TRIM).
     expect(kindsFor('SampleRound')).toEqual(['SAMPLE'])
-    expect(kindsFor('SampleSwatch')).toEqual(['COLOUR', 'LEATHER'])
+    expect(kindsFor('SampleSwatch')).toEqual(['COLOUR', 'LEATHER', 'FABRIC', 'TRIM'])
   })
 })
 
@@ -117,6 +117,10 @@ describe('swatches (SAL-314)', () => {
     expect(swatchDecisionRefusal({ ...sent, decision: 'APPROVED' }, null)?.code).toBe('SWATCH_DECIDED')
     expect(swatchAskRefusal(sent, 'COLOUR', null)).toMatchObject({ code: 'SWATCH_KIND', message: 'This is a leather swatch: ask with Leather.' })
     expect(swatchAskRefusal(sent, 'LEATHER', null)).toBeNull()
+    // B-PR-23: a fabric or a trim swatch is asked with its own kind, named on the office's button.
+    expect(swatchAskRefusal({ ...sent, kind: 'FABRIC' }, 'COLOUR', null)).toMatchObject({ code: 'SWATCH_KIND', message: 'This is a fabric swatch: ask with Fabric.' })
+    expect(swatchAskRefusal({ ...sent, kind: 'TRIM' }, 'LEATHER', null)).toMatchObject({ code: 'SWATCH_KIND', message: 'This is a trim swatch: ask with Trim.' })
+    expect(swatchAskRefusal({ ...sent, kind: 'FABRIC' }, 'FABRIC', null)).toBeNull()
     expect(swatchAskRefusal(swatch, 'LEATHER', null)?.code).toBe('SWATCH_NOT_SENT')
     expect(swatchRoundRefusal({ number: 'SR-1', stage: 'CANCELLED', partyId: 'p' }, 'p')?.code).toBe('SWATCH_ROUND_CANCELLED')
     expect(swatchRoundRefusal({ number: 'SR-1', stage: 'SENT', partyId: 'p' }, 'q')?.code).toBe('NOT_THE_ROUNDS_PARTY')

@@ -1,6 +1,6 @@
 import type { DraftAudience, DraftFile } from '../attachments/model'
 import type { Recipient } from '../send-check/model'
-import type { ComposerDraft, ComposerMode, DraftLink } from './model'
+import type { ComposerDraft, ComposerMode, DraftLink, NumberSwap } from './model'
 
 /**
  * B-TH-287 — the composer's draft on the server (threads plan TH-9, N6 on B-TH-092; T5-F10, T8-F07 "Drafts kept"): ONE draft per
@@ -50,6 +50,9 @@ export function draftToSave(parts: DraftParts): DraftSave | null {
   }
   if (parts.draft.link) fields.link = { kind: parts.draft.link.kind, messageId: parts.draft.link.messageId, who: parts.draft.link.who, at: parts.draft.link.at, ...(parts.draft.link.way ? { way: parts.draft.link.way } : {}) }
   if (files.length > 0) fields.fileAudiences = Object.fromEntries(files.map((file) => [file.fileId as string, file.audience]))
+  // th-backend-g step 1 (§0.5): the office numbers a saved reply put in a note go with the draft, so a later switch to the customer
+  // still swaps them for the customer's own (a restored draft never sends an office number to a customer).
+  if (parts.draft.numbers && parts.draft.numbers.length > 0) fields.numbers = parts.draft.numbers.map((pair) => ({ office: pair.office, customer: pair.customer }))
   return { audience: parts.draft.mode === 'note' ? 'OFFICE' : 'PARTNER', body: parts.draft.body, fields, attachments: files.map((file) => file.fileId as string) }
 }
 
@@ -66,6 +69,16 @@ export interface ServerDraftIn {
 const text = (value: unknown): string => (typeof value === 'string' ? value : '')
 const addresses = (value: unknown): Recipient[] =>
   Array.isArray(value) ? value.flatMap((item) => (typeof item === 'string' && item.trim() !== '' ? [{ address: item.trim().toLowerCase(), name: null, kind: null, organisation: null } satisfies Recipient] : [])) : []
+
+/** The number pairs kept with a draft (th-backend-g step 1), each an office number and the customer's own (or null). */
+function numbersOf(value: unknown): NumberSwap[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((item) => {
+    if (typeof item !== 'object' || item === null) return []
+    const pair = item as Record<string, unknown>
+    return typeof pair.office === 'string' && pair.office !== '' && (typeof pair.customer === 'string' || pair.customer === null) ? [{ office: pair.office, customer: pair.customer as string | null }] : []
+  })
+}
 
 function linkOf(value: unknown): DraftLink | undefined {
   if (typeof value !== 'object' || value === null) return undefined
@@ -100,9 +113,10 @@ export function draftFromServer(server: ServerDraftIn, can: { readonly reply: bo
       fileId: file.id,
       audience: (audiences[file.id] === 'PARTY' ? 'PARTY' : 'OFFICE') as DraftAudience,
     }))
+  const numbers = numbersOf(server.fields.numbers)
   return {
     mode,
-    draft: { mode, body: server.body, forFloor: mode === 'note' && server.fields.forFloor === true, ...(keptLink ? { link: keptLink } : {}) },
+    draft: { mode, body: server.body, forFloor: mode === 'note' && server.fields.forFloor === true, ...(keptLink ? { link: keptLink } : {}), ...(numbers.length > 0 ? { numbers } : {}) },
     to: mode === 'reply' ? addresses(server.fields.to) : [],
     cc: mode === 'reply' ? addresses(server.fields.cc) : [],
     subject: mode === 'reply' ? text(server.fields.subject) : '',

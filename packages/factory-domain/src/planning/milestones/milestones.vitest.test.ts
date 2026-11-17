@@ -5,8 +5,10 @@ import { EVENT_CATALOGUE } from '../../events/catalogue'
 import { SCHEDULE_REFUSALS, SKIP_CODES } from '../schedule/refusals'
 import { PLANNING_MILESTONES_MANAGE, PLANNING_MILESTONES_OVERRIDE } from './permissions'
 import {
+  GATE_KINDS,
   gateStateOf,
   holdWords,
+  isSampleGate,
   lateDays,
   leatherStateOf,
   milestoneOrder,
@@ -61,6 +63,13 @@ describe('gates', () => {
     expect(shapeRefusal('LAB_PASSED', null, { number: 'SR-1', decision: null, kind: 'FIT' })?.code).toBe('ROUND_ONLY_SAMPLE')
     expect(shapeRefusal('PP_SAMPLE', null, { number: 'SR-1', decision: null, kind: 'FIT' })?.code).toBe('ROUND_KIND')
     expect(shapeRefusal('SAMPLE_APPROVED', null, { number: 'SR-1', decision: null, kind: 'FIT' })).toBeNull()
+    // B-PR-23: the size set gate names a size set round (the database's rule), and passes by it as a sample gate.
+    expect(shapeRefusal('SIZE_SET', null, { number: 'SR-2', decision: null, kind: 'PRE_PRODUCTION' })).toMatchObject({ code: 'ROUND_KIND', message: 'A size set gate waits for a size set round; SR-2 is a pre production round.' })
+    expect(shapeRefusal('SIZE_SET', null, { number: 'SR-3', decision: null, kind: 'SIZE_SET' })).toBeNull()
+    expect(shapeRefusal('SIZE_SET', null, null)).toBeNull()
+    expect(shapeRefusal('PP_SAMPLE', null, { number: 'SR-3', decision: null, kind: 'SIZE_SET' })?.code).toBe('ROUND_KIND')
+    expect(isSampleGate('SIZE_SET')).toBe(true)
+    expect(GATE_KINDS).toContain('SIZE_SET')
   })
 
   it('a passed or started-before gate is kept', () => {

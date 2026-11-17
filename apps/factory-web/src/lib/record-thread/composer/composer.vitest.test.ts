@@ -8,6 +8,7 @@ import { designScreen } from './fixtures'
 import { boxState, composerModes, floorOffered, floorTooLong, heldReason, keyMode, mentionsOf, startDraft, switchMode, type ComposerContext, type ComposerDraft } from './model'
 // B-TH-236 / B-TH-237
 import { floorLocked, sendKey, toCustomer } from './model'
+import { replyAudienceOf, swapNumbers, withSavedReply } from './model' // th-backend-g step 1
 import { Composer } from './view/Composer'
 
 /** B-TH-205 — the composer's audience switch (T5): starts on Office note, the switch keeps the text, the floor tick, every state. */
@@ -274,6 +275,15 @@ describe('B-TH-287 — the draft on the server', () => {
     expect(draftFromServer(server({ audience: 'PARTNER', fields: { mode: 'reply', link } }), { reply: false }).draft.link).toBeUndefined()
   })
 
+  it('keeps the office numbers a saved reply put in a note, so a switch to the customer still swaps them (§0.5)', () => {
+    const numbers = [{ office: 'INQ-2026-0042', customer: '#7' }]
+    const save = draftToSave(parts({ draft: { mode: 'note', body: 'About INQ-2026-0042', forFloor: false, numbers } }))!
+    expect(save.fields.numbers).toEqual(numbers)
+    const read = draftFromServer(server({ body: 'About INQ-2026-0042', fields: { mode: 'note', numbers: [...numbers, { office: '', customer: null }, 'junk'] } }), { reply: true })
+    expect(read.draft.numbers).toEqual(numbers)
+    expect(switchMode(read.draft, 'reply', []).draft.body).toBe('About #7')
+  })
+
   it('on arrival the newer of the device copy and the server’s goes in the box', () => {
     expect(newerCopy(null, null)).toBeNull()
     expect(newerCopy({ savedAt: 1 }, null)).toBe('local')
@@ -290,3 +300,34 @@ describe('B-TH-287 — the draft on the server', () => {
   })
 })
 // ---- end B-TH-287
+
+// ---- th-backend-g step 1 (threads plan §0.5, counts do not leak; lead's decision) ------------------------------------------------
+describe('th-backend-g step 1: a saved reply names the office’s numbers in a note, the customer’s own once it goes to the customer', () => {
+  it('fills for who reads it: the office in a note, the customer in a reply or the portal', () => {
+    expect(replyAudienceOf('note')).toBe('OFFICE')
+    expect(replyAudienceOf('reply')).toBe('CUSTOMER')
+    expect(replyAudienceOf('portal')).toBe('CUSTOMER')
+  })
+
+  it('a reply filled for a note keeps its numbers; filled for the customer it keeps none (nothing to swap)', () => {
+    const numbers = [{ placeholder: 'inquiry.number', office: 'INQ-2026-0042', customer: '#7' }]
+    const note = withSavedReply(draft({ body: 'Typed first' }), { body: 'Thank you for INQ-2026-0042.', audience: 'OFFICE', numbers })
+    expect(note).toEqual({ mode: 'note', body: 'Typed first\n\nThank you for INQ-2026-0042.', forFloor: false, numbers: [{ office: 'INQ-2026-0042', customer: '#7' }] })
+    expect(withSavedReply(draft({ mode: 'reply' }), { body: 'Thank you for #7.', audience: 'CUSTOMER', numbers }).numbers).toBeUndefined()
+    // A prospect's number is the same in both forms: nothing to keep.
+    expect(withSavedReply(draft(), { body: 'INQ-2026-0043', audience: 'OFFICE', numbers: [{ placeholder: 'inquiry.number', office: 'INQ-2026-0043', customer: 'INQ-2026-0043' }] }).numbers).toBeUndefined()
+  })
+
+  it('switching the note to the customer swaps the office’s numbers for its own and says so; a number it has none for goes', () => {
+    const filled = draft({ body: 'Order SO-2026-0101 and request INQ-2026-0042 (not XSO-2026-01011).', numbers: [{ office: 'SO-2026-0101', customer: '#12' }, { office: 'INQ-2026-0042', customer: null }] })
+    const { draft: reply, notes } = switchMode(filled, 'reply', OFFICE_PEOPLE)
+    expect(reply.body).toBe('Order #12 and request  (not XSO-2026-01011).')
+    expect(reply.numbers).toBeUndefined()
+    expect(notes).toEqual([{ key: 'switch.numbers', params: { numbers: 'SO-2026-0101 → #12, INQ-2026-0042' } }])
+    expect(JSON.stringify(reply)).not.toMatch(/INQ-2026-0042|(?<![A-Z])SO-2026-0101(?!\d)/)
+    // Back to a note: nothing is swapped back (the office reads every number).
+    expect(switchMode(reply, 'note', OFFICE_PEOPLE).draft.body).toBe(reply.body)
+    expect(swapNumbers('No numbers here', [{ office: 'SO-1', customer: '#1' }])).toEqual({ body: 'No numbers here', swapped: [] })
+  })
+})
+// ---- end th-backend-g step 1

@@ -4,7 +4,7 @@ import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { AmendLineInput } from '@nexus/factory-domain/sales/amendments/amendments'
 import { cancelFeeFor, type CancelFee } from '@nexus/factory-domain/sales/change-requests/fee'
-import { amendmentLinesOf, answerProblems, rulesOf, type AskedCell } from '@nexus/factory-domain/sales/change-requests/rules'
+import { amendmentLinesOf, answerProblems, isSalesRequestKind, ORDER_REQUEST_KIND_WORDS, rulesOf, type AskedCell, type OrderRequestKind } from '@nexus/factory-domain/sales/change-requests/rules'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { cancelImpact, closeShortPlan } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON } from '@nexus/factory-domain/sales/orders/orders'
@@ -114,13 +114,14 @@ async function officeViews(db: Reader, context: ReturnType<typeof officeContextO
       askedBy: row.createdById ? (names.get(row.createdById) ?? null) : null,
       answeredBy: row.answeredById ? (names.get(row.answeredById) ?? null) : null,
       amendment: row.amendmentId ? (amendments.get(row.amendmentId) ?? null) : null,
-      mayAnswer: row.status === 'OPEN' && mayOn(context, ORDERS_MANAGE, { companyId: row.companyId, partyId: row.partyId }),
+      // B-PR-23: Sales answers CHANGE and CANCEL; a production ask is read here and answered in Home › Approvals (B-PR-26).
+      mayAnswer: row.status === 'OPEN' && isSalesRequestKind(row.kind) && mayOn(context, ORDERS_MANAGE, { companyId: row.companyId, partyId: row.partyId }),
     }
   })
 }
 
 export interface ListQuery {
-  readonly status: 'OPEN' | 'ACCEPTED' | 'REFUSED' | 'WITHDRAWN' | 'ALL'
+  readonly status: 'OPEN' | 'ACCEPTED' | 'REFUSED' | 'WITHDRAWN' | 'COUNTERED' | 'ALL'
   readonly orderId?: string | undefined
   readonly partyId?: string | undefined
   readonly companyId?: string | undefined
@@ -147,7 +148,7 @@ export async function officeList(caller: CommandCaller, query: ListQuery, now: D
       asOf: toUtcIso(now),
       items: await officeViews(client, context, rows),
       count,
-      counts: { OPEN: countOf('OPEN'), ACCEPTED: countOf('ACCEPTED'), REFUSED: countOf('REFUSED'), WITHDRAWN: countOf('WITHDRAWN') },
+      counts: { OPEN: countOf('OPEN'), ACCEPTED: countOf('ACCEPTED'), REFUSED: countOf('REFUSED'), WITHDRAWN: countOf('WITHDRAWN'), COUNTERED: countOf('COUNTERED') },
       live: { events: [...LIVE_EVENTS] },
     }
   })
@@ -249,6 +250,11 @@ async function openRequestIn(tools: CommandTools, requestId: string, version: nu
   await lockRequest(tools.tx, requestId)
   const row = await tools.tx.orderChangeRequest.findUnique({ where: { id: requestId }, select: OFFICE_REQUEST_COLUMNS })
   if (!row) throw new NotFoundError('Change request not found.')
+  // B-PR-23: a production ask is answered in Home › Approvals (B-PR-26, B-PR-27a/b), never through Sales' accept or refuse.
+  if (!isSalesRequestKind(row.kind)) {
+    const words = ORDER_REQUEST_KIND_WORDS[row.kind as OrderRequestKind]
+    throw new DomainError('invalid_state', `This is a production ask ("${words.en}"): it is answered in Home › Approvals, not here.`, [{ path: 'request/PRODUCTION_ASK', message: 'A production ask is answered in Home › Approvals.' }])
+  }
   if (row.status !== 'OPEN') throw new DomainError('invalid_state', row.status === 'WITHDRAWN' ? 'The customer withdrew this request.' : 'This request is already answered.', [{ path: `request/${row.status}`, message: `The request is ${row.status}.` }])
   if (row.version !== version) throw new StaleVersionError('OrderChangeRequest', requestId, row.version, version)
   return row

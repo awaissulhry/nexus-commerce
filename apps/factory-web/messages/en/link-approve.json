@@ -25,7 +25,11 @@
     "ARTWORK": "Artwork",
     "PROOF": "Design proof",
     "REVISED_ORDER": "Revised order",
-    "SIGNATURE": "Signature"
+    "SIGNATURE": "Signature",
+    "FABRIC": "Fabric",
+    "TRIM": "Trim",
+    "REPROMISE": "New date",
+    "COUNTER_OFFER": "Counter-offer"
   },
   "state": {
     "OPEN": "Waiting for the answer",
@@ -53,7 +57,11 @@
         "SAMPLE": "Sample",
         "COLOUR": "Colour",
         "LEATHER": "Leather",
-        "ARTWORK": "Artwork"
+        "ARTWORK": "Artwork",
+        "FABRIC": "Fabric",
+        "TRIM": "Trim",
+        "REPROMISE": "New date",
+        "COUNTER_OFFER": "Counter-offer"
       },
       "hint": "The photos and the spec of what {company} asks you to approve. Open a photo full size; mark it to show us a spot."
     },

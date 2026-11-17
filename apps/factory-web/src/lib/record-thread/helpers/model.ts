@@ -1,8 +1,7 @@
-import { isMessageLanguage, type MessageLanguage } from '@nexus/factory-domain/templates/message-languages'
 /**
  * B-TH-208 — the composer's helpers (threads plan T8; features T8-F01, F02, F07): write faster and safer. The pure part of
  * MentionInput (the @ suggestions, the "cannot read this record" warning, tagged people first), the Saved replies menu
- * (the existing replies of GET /templates/replies, Italian · English, shared and mine apart) and the draft kept on this
+ * (the existing replies of GET /templates/replies, in the five message languages since th-backend-g step 3, shared and mine apart) and the draft kept on this
  * device until drafts live on the server (N6). No React, no API.
  *
  * B-TH-236: the amount field (B-TH-049) is helpers/amount.ts and view/AmountField.tsx. B-TH-287: drafts on the server (B-TH-092) are
@@ -13,6 +12,8 @@ import { isMessageLanguage, type MessageLanguage } from '@nexus/factory-domain/t
  * the floor; a saved reply is filled by the API from THIS record (the view sends only the reply's id), so its placeholders
  * never carry another customer's values.
  */
+
+import { isMessageLanguage, MESSAGE_LANGUAGES, type MessageLanguage } from '@nexus/factory-domain/templates/message-languages' // th-backend-g step 3
 
 // ── @mentions ───────────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -128,13 +129,19 @@ function mentionsInAll(text: string, people: readonly MentionPerson[]): string[]
 // ── saved replies ───────────────────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * The languages saved replies are written in — B-TH-287 (B-TH-098): the five written to a customer (factory-domain templates
- * MESSAGE_LANGUAGES: Italian, English, German, French, Spanish; written by people, never machine-translated).
+ * The languages saved replies are written in. th-backend-g step 3 (B-TH-098 web half): the five message languages — Italian, English,
+ * German, French, Spanish (factory-domain templates/message-languages MESSAGE_LANGUAGES); a person writes them (never translated).
  */
+export const REPLY_LANGUAGES = MESSAGE_LANGUAGES
 export type ReplyLanguage = MessageLanguage
-export { MESSAGE_LANGUAGES as REPLY_LANGUAGES } from '@nexus/factory-domain/templates/message-languages'
-/** A language code as the API answers it: one of the five, else null (the line is not listed). */
-export const replyLanguageOf = (value: string | null | undefined): ReplyLanguage | null => (isMessageLanguage(value) ? value : null)
+export const isReplyLanguage = isMessageLanguage
+
+/** th-backend-g step 3: the menu's lines of the replies read (GET /templates/replies), in the five languages (any other is left out). */
+export function savedReplyLines(replies: readonly { id: string; name: string; language: string; shared: boolean }[]): SavedReplyLine[] {
+  return replies.flatMap((reply) => (isReplyLanguage(reply.language) ? [{ id: reply.id, name: reply.name, language: reply.language, shared: reply.shared }] : []))
+}
+/** B-TH-287: a language code as the API answers it — one of the five, else null (a line in another language is not listed). */
+export const replyLanguageOf = (value: string | null | undefined): ReplyLanguage | null => (isReplyLanguage(value) ? value : null)
 
 /** A saved reply as the menu lists it (GET /templates/replies: name, language, shared or mine). Never its text. */
 export interface SavedReplyLine {

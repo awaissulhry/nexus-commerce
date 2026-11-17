@@ -211,7 +211,8 @@ function Requests({ model, actions }: { model: OrderRecordViewModel; actions?: O
                 <strong>{request.kindWords[locale]}</strong>
                 <Pill tone={requestTone(request.status)}>{request.words[locale]}</Pill>
                 <span className="fw-pord-sub">{t(request.mine ? 'requests.askedByYou' : 'requests.asked', { when: at(request.askedAt) })}</span>
-                {request.status === 'OPEN' ? (
+                {/* B-PR-23: the customer withdraws a change or a cancel here; a production ask is withdrawn where it was asked. */}
+                {request.status === 'OPEN' && (request.kind === 'CHANGE' || request.kind === 'CANCEL') ? (
                   <Button size="sm" variant="quiet" className="fw-pord-push" heldReason={model.withdrawHeld} onClick={() => actions?.onWithdraw?.(request)}>
                     {t('requests.withdraw')}
                   </Button>

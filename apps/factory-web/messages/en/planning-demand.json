@@ -203,7 +203,9 @@
     "SALESMAN": "Salesman",
     "PRE_PRODUCTION": "Pre-production",
     "CERTIFICATION": "CE test sample",
-    "BRAND": "Brand sample"
+    "BRAND": "Brand sample",
+    "SIZE_SET": "Size set",
+    "TOP_OF_PRODUCTION": "Top of production"
   },
   "status": {
     "CONFIRMED": "Confirmed",

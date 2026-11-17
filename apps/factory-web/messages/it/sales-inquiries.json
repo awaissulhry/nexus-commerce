@@ -633,14 +633,19 @@
     "held": {
       "reason": "Scegli un motivo",
       "long": "Al massimo {max} caratteri",
-      "message": "Scrivi il messaggio, oppure togli la spunta «Invia»"
+      "message": "Scrivi il messaggio, oppure togli la spunta «Invia»",
+      "blank": "Scrivi il motivo dove c’è «…»"
     },
     "send": "Invia un messaggio al cliente con il rifiuto",
     "messagePortal": "Il cliente lo legge nel suo portale, con il rifiuto",
     "messageLanguage": "Scrivilo in {language}: la lingua del cliente",
+    "blankHint": "Il messaggio parte dal modello di e-mail dell’azienda: scrivi il motivo dove c’è «…».",
     "language": {
       "it": "italiano",
-      "en": "inglese"
+      "en": "inglese",
+      "de": "tedesco",
+      "fr": "francese",
+      "es": "spagnolo"
     },
     "previewPortal": "Anteprima — quello che il cliente legge nel suo portale",
     "finalSend": "Il rifiuto e il suo messaggio vanno insieme: se uno è rifiutato, non succede nessuno dei due. Una richiesta chiusa non cambia più (solo la sua nota)."

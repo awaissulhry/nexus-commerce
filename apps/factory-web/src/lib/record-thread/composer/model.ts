@@ -82,6 +82,34 @@ export interface ComposerDraft {
   currency?: string
   link?: DraftLink
   // ---- end B-TH-236
+  // ---- th-backend-g step 1 (threads plan §0.5, counts do not leak): a saved reply filled for an office note names the office's numbers
+  // (INQ-…, SO-…); these are the pairs it named (POST …/fill `numbers`), swapped for the customer's own ("#7") when the note becomes a
+  // text to the customer.
+  numbers?: readonly NumberSwap[]
+}
+
+/** th-backend-g step 1: one record number as the office writes it and as its customer reads it (null: none of its own yet). */
+export interface NumberSwap {
+  office: string
+  customer: string | null
+}
+
+/**
+ * th-backend-g step 1: the office's numbers in a text swapped for the customer's own ("INQ-2026-0042" → "#7"; one the customer has no
+ * number for is taken out), and the swaps made, for the switch note. Only whole numbers are swapped (never inside a longer word).
+ */
+export function swapNumbers(body: string, numbers: readonly NumberSwap[]): { body: string; swapped: string[] } {
+  let text = body
+  const swapped: string[] = []
+  for (const pair of numbers) {
+    if (!pair.office) continue
+    const pattern = new RegExp(`(^|[^\\p{L}\\p{N}-])${escape(pair.office)}(?![\\p{L}\\p{N}])`, 'gu')
+    const next = text.replace(pattern, (_all, before: string) => `${before}${pair.customer ?? ''}`)
+    if (next === text) continue
+    text = next
+    swapped.push(pair.customer ? `${pair.office} → ${pair.customer}` : pair.office)
+  }
+  return { body: text, swapped }
 }
 
 /** The longest text (the API's own: threads rules MAX_BODY_LENGTH). */
@@ -105,6 +133,21 @@ export function composerModes(context: Pick<ComposerContext, 'can' | 'party' | '
 
 /** B-TH-237: the modes that reach the customer (a reply by e-mail, a message in the portal). */
 export const toCustomer = (mode: ComposerMode): boolean => mode === 'reply' || mode === 'portal'
+
+// ---- th-backend-g step 1 (threads plan §0.5, counts do not leak) ------------------------------------------------------------
+/** The reader a saved reply is filled for (POST …/fill `audience`): the office in an office note, else the customer (its own numbers). */
+export const replyAudienceOf = (mode: ComposerMode): 'CUSTOMER' | 'OFFICE' => (toCustomer(mode) ? 'CUSTOMER' : 'OFFICE')
+
+/**
+ * A saved reply's filled text added to the draft (after what is typed, a blank line between). Filled for an office note, the office's
+ * numbers it named are kept with the draft, so a switch to the customer swaps them for the customer's own (switchMode).
+ */
+export function withSavedReply(draft: ComposerDraft, filled: { body: string; audience?: 'CUSTOMER' | 'OFFICE' | undefined; numbers?: readonly { office: string; customer: string | null }[] | undefined }): ComposerDraft {
+  const body = draft.body.trim() ? `${draft.body}\n\n${filled.body}` : filled.body
+  const named = filled.audience === 'OFFICE' ? (filled.numbers ?? []).filter((pair) => pair.office !== pair.customer) : []
+  return { ...draft, body, ...(named.length > 0 ? { numbers: [...(draft.numbers ?? []), ...named.map(({ office, customer }) => ({ office, customer }))] } : {}) }
+}
+// ---- end th-backend-g step 1
 
 /** Every visit starts on Office note (P3); a person who may only send mail starts on the reply. */
 export function startDraft(context: Pick<ComposerContext, 'can' | 'party' | 'prospect'>): ComposerDraft {
@@ -159,6 +202,12 @@ export function switchMode(draft: ComposerDraft, to: ComposerMode, people: reado
   const notes: SwitchNote[] = mentioned.length > 0 ? [{ key: 'switch.mentions', params: { names: mentioned.map((person) => `@${person.name}`).join(', ') } }] : []
   // B-TH-236: an amount stays on office notes: leaving the note takes it off (said).
   if (draft.amount !== undefined && draft.amount.trim() !== '') notes.push({ key: 'switch.amount' })
+  // th-backend-g step 1 (§0.5): the office's numbers a saved reply put in the note become the customer's own (said).
+  if (draft.numbers && draft.numbers.length > 0) {
+    const swapped = swapNumbers(body, draft.numbers)
+    body = swapped.body
+    if (swapped.swapped.length > 0) notes.push({ key: 'switch.numbers', params: { numbers: swapped.swapped.join(', ') } })
+  }
   return { draft: { mode: to, body, forFloor: false, ...keptLink }, notes: [...notes, ...linkNotes] }
 }
 

@@ -202,3 +202,75 @@ export const approvalMailUrl = (webOrigin: string, key: string): string => `${we
 
 /** The office notification keys that ask for a decision (an approval waiting, a nudge), not a decision taken. */
 export const asksForDecision = (messageKey: string): boolean => messageKey.startsWith('notifications.approval.') && !messageKey.endsWith('_decided')
+
+// ---- B-PR-24 (production plan §3 "No silent decisions", "Full control"; 08-backend §4.6; lead pick L6; Owner answer 11-10
+// Q3): which kinds the office may decide for the party or put back, and the words the party reads -----------------------------
+
+/**
+ * Decided for the party, and reversed (the database's factory_approval_request_guard holds the same):
+ *
+ *   decide for   an OPEN request the party has not answered, decided by an office person who did not ask it, with why (1 to
+ *                1000) the party reads ("Decided by us for you: <why>"), signed with the person's typed name; the decision as
+ *                the kind allows (approve with changes only where it may, words for a change or a refusal)
+ *   reverse      an answered request, once, with why (1 to 1000) the party reads ("Put back by us: <why>"); the answer itself
+ *                never changes — the reversal is written beside it, and each record's own effect is put back where it still
+ *                can be (production-brand/override reverseVerdict)
+ *   never        a concession (QHS-085: the customer's acceptance of a deviation), a revised order (the customer re-confirms
+ *                its own order and its price), a signature (the law) or a design proof (the consumer's own sign-off): only
+ *                the party's own word counts, so nobody decides them for it or puts its answer back
+ */
+export const OWN_WORD_KINDS = ['CONCESSION', 'REVISED_ORDER', 'SIGNATURE', 'PROOF'] as const satisfies readonly ApprovalKind[]
+
+/** May the office decide this kind for the party (never one of OWN_WORD_KINDS)? */
+export const mayDecideForParty = (kind: ApprovalKind): boolean => !(OWN_WORD_KINDS as readonly string[]).includes(kind)
+/** May the office put the party's answer of this kind back (never one of OWN_WORD_KINDS)? */
+export const mayReverse = (kind: ApprovalKind): boolean => !(OWN_WORD_KINDS as readonly string[]).includes(kind)
+
+export const OVERRIDE_LIMITS = Object.freeze({ reason: 1000 })
+
+const ownWordWords = (kind: ApprovalKind): string => `A ${KIND_RULES[kind].name.en.toLowerCase()} is the customer's own word: nobody decides it for them or puts their answer back.`
+
+function reasonIssue(reason: string | null | undefined, path = 'body/reason'): Issue | null {
+  const words = clean(reason)
+  if (words === '') return { path, message: 'Say why, in words the customer reads.' }
+  if (words.length > OVERRIDE_LIMITS.reason) return { path, message: `At most ${OVERRIDE_LIMITS.reason} characters.` }
+  return null
+}
+
+/** The decision as the office person signs it for the party (the request's own kind is read from the request). */
+export interface DecideForDraft extends Omit<AnswerDraft, 'kind' | 'markup'> {
+  /** Why we decide for the party (it reads it). */
+  readonly reason: string | null | undefined
+}
+
+/** The problems of deciding a request for its party (the request as read, the office person deciding), in words. */
+export function decideForPartyProblems(request: { readonly kind: ApprovalKind; readonly status: ApprovalStatus; readonly askedById: string | null }, draft: DecideForDraft, deciderId: string): Issue[] {
+  if (!mayDecideForParty(request.kind)) return [{ path: 'body', message: ownWordWords(request.kind) }]
+  if (request.status !== 'OPEN') {
+    return [{ path: 'body', message: isAnswered(request.status) ? 'This request is answered already: put the answer back instead.' : `This request is ${request.status.toLowerCase()}: only an open request is decided.` }]
+  }
+  if (request.askedById !== null && request.askedById === deciderId) return [{ path: 'body', message: 'You asked for this approval: someone else decides it for the customer.' }]
+  const issues = answerProblems({ kind: request.kind, decision: draft.decision, answer: draft.answer, typedName: draft.typedName })
+  const reason = reasonIssue(draft.reason)
+  if (reason) issues.push(reason)
+  return issues
+}
+
+/** The problems of putting a party's answer back (the request as read), in words. */
+export function reverseProblems(request: { readonly kind: ApprovalKind; readonly status: ApprovalStatus; readonly reversedAt: Date | null }, reason: string | null | undefined): Issue[] {
+  if (!mayReverse(request.kind)) return [{ path: 'body', message: ownWordWords(request.kind) }]
+  if (request.reversedAt !== null) return [{ path: 'body', message: 'This answer was put back already.' }]
+  if (!isAnswered(request.status)) return [{ path: 'body', message: 'This request has no answer to put back.' }]
+  const issue = reasonIssue(reason)
+  return issue ? [issue] : []
+}
+
+/** "Decided by us for you: the colour matches the approved lab dip." — what the party reads (never who of us). */
+export function decidedForPartyWords(reason: string, locale: ApprovalLocale): string {
+  return locale === 'it' ? `Deciso da noi per voi: ${clean(reason)}` : `Decided by us for you: ${clean(reason)}`
+}
+
+/** "Put back by us: …" — what the party reads of a reversal (never who of us). */
+export function reversedWords(reason: string, locale: ApprovalLocale): string {
+  return locale === 'it' ? `Revocato da noi: ${clean(reason)}` : `Put back by us: ${clean(reason)}`
+}

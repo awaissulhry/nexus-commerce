@@ -173,7 +173,11 @@
     "ARTWORK": "Artwork",
     "PROOF": "Design proof",
     "REVISED_ORDER": "Revised order",
-    "SIGNATURE": "Document to sign"
+    "SIGNATURE": "Document to sign",
+    "FABRIC": "Fabric",
+    "TRIM": "Trim",
+    "REPROMISE": "New date",
+    "COUNTER_OFFER": "Counter-offer"
   },
   "status": {
     "OPEN": "Waiting for your answer",

@@ -236,7 +236,8 @@ export const sampleRoundInvoiceContract = defineContract({
   response: { 201: output({ invoice: invoiceView }) },
 })
 
-const SAMPLE_KIND_IT: Readonly<Record<string, string>> = { PROTO: 'prototipo', FIT: 'prova taglia', SALESMAN: 'campionario venditori', PRE_PRODUCTION: 'preserie', CERTIFICATION: 'certificazione', BRAND: 'campione del marchio' }
+// B-PR-23: the size set and top of production rounds too.
+const SAMPLE_KIND_IT: Readonly<Record<string, string>> = { PROTO: 'prototipo', FIT: 'prova taglia', SALESMAN: 'campionario venditori', PRE_PRODUCTION: 'preserie', CERTIFICATION: 'certificazione', BRAND: 'campione del marchio', SIZE_SET: 'set di taglie', TOP_OF_PRODUCTION: 'primi capi di produzione' }
 
 /** invoices.manage: the TD01 draft of a sample round's charge (once). */
 export async function invoiceSampleRound(caller: CommandCaller, body: { sampleRoundId: string }, idempotencyKey?: string) {

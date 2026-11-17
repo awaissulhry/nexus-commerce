@@ -27,6 +27,8 @@ import { FILES_NS, FileStrip } from '../../../lib/record-thread/files/view/FileS
 import { START_AUDIENCE, type MissingDocument, type UploadAsk } from '../../../lib/record-thread/files-view/model'
 import { FILES_VIEW_NS, FilesView, type BulkAction } from '../../../lib/record-thread/files-view/view/FilesView'
 import type { SavedRepliesModel, SavedReplyLine } from '../../../lib/record-thread/helpers/model'
+import { savedReplyLines } from '../../../lib/record-thread/helpers/model' // th-backend-g step 3
+import { replyAudienceOf, withSavedReply } from '../../../lib/record-thread/composer/model' // th-backend-g step 1
 import { HELPERS_NS } from '../../../lib/record-thread/helpers/view/MentionInput'
 import { SavedReplies } from '../../../lib/record-thread/helpers/view/SavedReplies'
 import type { CountPopoverModel, ViewerFile } from '../../../lib/record-thread/popups/model'
@@ -53,6 +55,7 @@ import { addTaskHeld, createBody, followersChangeFor, followReasonKey, taskChang
 import type { PanelRead } from '../../../record-panels/model'
 import { FollowersControl } from '../../../record-panels/view/FollowersControl'
 import { TaskNewDialog } from '../../../record-panels/view/TaskNewDialog'
+import { fillReply, listReplies } from '../document-send/template/api'
 import { useRecordFrame } from '../record-frame/RecordFrame'
 import { askedFiles } from '../record-frame/model' // B-TH-264 follow-up
 import { officeOnly, removeFile, shareWithParty } from './api'
@@ -66,9 +69,9 @@ import { useInProject } from '../../products/projects/record/linked/use-in-proje
 import { companyPrefix } from '../../../lib/session/session'
 // B-TH-286: the pins on the files line (B-TH-091).
 import { lineShown, pinLinesOf } from '../../../lib/record-thread/files/model'
-// B-TH-287: saved replies in the five languages written to a customer (B-TH-098), in the customer's language first.
-import { fillThreadReply, listThreadReplies, readMessageLanguage } from './api'
-import { REPLY_LANGUAGES, replyLanguageOf, type ReplyLanguage } from '../../../lib/record-thread/helpers/model'
+// B-TH-287 (B-TH-098): saved replies in the customer's language first (th-backend-g step 3 reads the five languages).
+import { readMessageLanguage } from './api'
+import { replyLanguageOf } from '../../../lib/record-thread/helpers/model'
 // B-TH-288: Done (B-TH-093) and search in the thread (B-TH-097), office only.
 import { searchThread, setThreadDone } from './api'
 import { searchReady, type ThreadSearchModel } from '../../../lib/record-thread/head/model'
@@ -494,15 +497,10 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     const recordType = key.type
     const controller = new AbortController()
     setReplies((now) => ({ ...now, status: 'loading' }))
-    Promise.all(REPLY_LANGUAGES.map((language: ReplyLanguage) => listThreadReplies(api, { language, recordType, companyId: host.record.companyId }, controller.signal)))
-      .then((lists) => {
-        const seen = new Set<string>()
-        const lines: SavedReplyLine[] = lists.flat().flatMap((reply) => {
-          const language = replyLanguageOf(reply.language)
-          if (!language || seen.has(reply.id)) return []
-          seen.add(reply.id)
-          return [{ id: reply.id, name: reply.name, language, shared: reply.shared }]
-        })
+    // th-backend-g step 3 (B-TH-098 web half): the replies of every one of the five languages, in one read.
+    listReplies(api, { recordType, companyId: host.record.companyId }, controller.signal)
+      .then((list) => {
+        const lines: SavedReplyLine[] = savedReplyLines(list)
         setReplies((now) => ({ ...now, status: 'ready', replies: lines }))
       })
       .catch(() => !controller.signal.aborted && setReplies((now) => ({ ...now, status: 'failed' })))
@@ -512,10 +510,11 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const pickReply = (replyId: string) => {
     if (!isReplyRecordType(key.type)) return
     setReplies((now) => ({ ...now, filling: true, missing: [] }))
-    fillThreadReply(api, replyId, key) // B-TH-287: a reply in any of the five languages
+    // th-backend-g step 1 (§0.5): an office note names the office's numbers; a text to the customer its own ("#7"). A note that later
+    // becomes a reply swaps them (the draft keeps the pairs).
+    fillReply(api, replyId, { recordType: key.type, recordId: key.id, audience: replyAudienceOf(model.composer.draft.mode) })
       .then((filled) => {
-        const before = model.composer.draft.body.trim()
-        actions.onDraft({ ...model.composer.draft, body: before ? `${model.composer.draft.body}\n\n${filled.body}` : filled.body }, model.composer.notes)
+        actions.onDraft(withSavedReply(model.composer.draft, filled), model.composer.notes)
         setReplies((now) => ({ ...now, filling: false, missing: filled.missing }))
       })
       .catch(() => {

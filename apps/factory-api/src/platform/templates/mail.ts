@@ -13,6 +13,8 @@ import { missingValues } from '@nexus/factory-domain/templates/placeholders'
 // ---- B-TH-098: each event's German, French and Spanish drafts and each drafted language's reading.
 import { MAIL_DRAFTS } from '@nexus/factory-domain/templates/mail'
 import { LANGUAGE_REVIEW, MESSAGE_LANGUAGES } from '@nexus/factory-domain/templates/message-languages'
+// ---- th-backend-g step 3 (B-TH-098's web half): a company keeps its mail words in any of the five message languages.
+import { isDraftedLanguage, isMessageLanguage, type MessageLanguage } from '@nexus/factory-domain/templates/message-languages'
 import { command, type CommandCaller, type CommandTools } from '../../core/command'
 import { actorOf } from '../../core/context'
 import type { EmailTemplateView } from './contract'
@@ -134,13 +136,14 @@ export function mailEvents() {
 }
 
 /** GET /templates/mail */
-export async function listEmailTemplates(caller: CommandCaller, query: { readonly companyId: string; readonly event?: MailEvent | undefined; readonly language?: TemplateLanguage | undefined; readonly status?: Row['status'] | undefined }) {
+export async function listEmailTemplates(caller: CommandCaller, query: { readonly companyId: string; readonly event?: MailEvent | undefined; readonly language?: MessageLanguage | undefined; readonly status?: Row['status'] | undefined }) {
   const actor = actorOf(officeOf(caller))
   if (!mayRead(actor, query.companyId)) throw new NotFoundError('Company not found.')
   return caller.withClient(async (db) => {
     const scope = { OR: [{ companyId: query.companyId }, { companyId: null }] }
     const rows = await db.emailTemplate.findMany({
-      where: { ...scope, event: query.event ?? { in: [...MAIL_EVENTS] }, language: query.language ?? { in: [...TEMPLATE_LANGUAGES] }, ...(query.status ? { status: query.status } : {}) },
+      // th-backend-g step 3: the five message languages (Italian, English, German, French, Spanish).
+      where: { ...scope, event: query.event ?? { in: [...MAIL_EVENTS] }, language: query.language ?? { in: [...MESSAGE_LANGUAGES] }, ...(query.status ? { status: query.status } : {}) },
       orderBy: [{ event: 'asc' }, { language: 'asc' }, { revision: 'desc' }],
       select: COLUMNS,
       take: 500,
@@ -155,8 +158,9 @@ export async function listEmailTemplates(caller: CommandCaller, query: { readonl
         draft: draft ? { id: draft.id, revision: draft.revision, at: toUtcIso(draft.updatedAt) } : null,
       }
     }
+    // th-backend-g step 3: one slot per event and message language (German, French and Spanish start from Claude's drafts).
     const slots = MAIL_EVENTS.flatMap((event) =>
-      TEMPLATE_LANGUAGES.map((language) => {
+      MESSAGE_LANGUAGES.map((language) => {
         const versions = every.filter((row) => row.event === event && row.language === language)
         const company = pick(versions.filter((row) => row.companyId === query.companyId))
         const all = pick(versions.filter((row) => row.companyId === null))
@@ -184,7 +188,7 @@ function checkedWords(event: string, language: string, words: MailWords): MailWo
 /** POST /templates/mail */
 export async function createEmailTemplate(
   caller: CommandCaller,
-  body: { readonly companyId: string | null; readonly event: MailEvent; readonly language: TemplateLanguage; readonly from?: string | undefined; readonly subject?: string | undefined; readonly body?: string | undefined },
+  body: { readonly companyId: string | null; readonly event: MailEvent; readonly language: MessageLanguage /* th-backend-g step 3 */; readonly from?: string | undefined; readonly subject?: string | undefined; readonly body?: string | undefined },
   idempotencyKey?: string,
 ) {
   const context = officeOf(caller)
@@ -196,7 +200,8 @@ export async function createEmailTemplate(
     if (body.companyId && !(await db.company.findUnique({ where: { id: body.companyId }, select: { id: true } }))) throw new NotFoundError('Company not found.')
     const source = body.from ? await db.emailTemplate.findFirst({ where: { id: body.from, ...series }, select: COLUMNS }) : await db.emailTemplate.findFirst({ where: { ...series, status: 'ACTIVE' }, select: COLUMNS })
     if (body.from && !source) refuseProblems([{ path: 'body/from', message: 'Start from a version of the same mail, company and language.' }], '')
-    return source ? { id: source.id, words: { subject: source.subject, body: source.body } } : { id: null, words: MAIL_EVENT_DEFINITIONS[body.event].words[body.language] }
+    // th-backend-g step 3: a German, French or Spanish version starts from Claude's draft of the code's words (the person reads it).
+    return source ? { id: source.id, words: { subject: source.subject, body: source.body } } : { id: null, words: isDraftedLanguage(body.language) ? MAIL_DRAFTS[body.event][body.language] : MAIL_EVENT_DEFINITIONS[body.event].words[body.language] }
   })
   const words = checkedWords(body.event, body.language, { subject: body.subject ?? start.words.subject, body: body.body ?? start.words.body })
   const { result } = await command(caller, { name: 'templates.createMail', idempotencyKey, input: body }, async (tools) => {
@@ -301,8 +306,9 @@ export async function deleteEmailTemplate(caller: CommandCaller, templateId: str
 export async function previewEmailTemplate(caller: CommandCaller, templateId: string, body: { readonly companyId?: string | undefined }) {
   const actor = actorOf(officeOf(caller))
   const row = await readable(caller, templateId)
-  if (!known(row) || !isTemplateLanguage(row.language)) throw refused('NOT_OFFERED')
-  const language = row.language
+  // th-backend-g step 3: a version in any of the five languages previews; German, French and Spanish with the English made-up sample.
+  if (!known(row) || !isMessageLanguage(row.language)) throw refused('NOT_OFFERED')
+  const language: TemplateLanguage = isTemplateLanguage(row.language) ? row.language : 'en'
   const event = row.event
   const company = await caller.withClient(async (db) => {
     const asked = row.companyId ?? body.companyId ?? null

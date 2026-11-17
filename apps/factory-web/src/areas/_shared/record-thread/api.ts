@@ -329,17 +329,8 @@ export async function discardServerDraft(api: ApiClient, record: RecordKey): Pro
   await api.request('DELETE', `${threadPath(record)}/draft`, { schema: z.object({ draft: z.null() }), idempotencyKey: globalThis.crypto.randomUUID() })
 }
 
-// B-TH-287 (B-TH-098): saved replies in the five languages written to a customer (it, en, de, fr, es) and the customer's own language
-// (`message`: what is written to them — their language when it is one of the five, else English).
-const threadReplySchema = z.object({ id: z.string(), name: z.string(), language: z.string(), shared: z.boolean() }).passthrough()
-export async function listThreadReplies(api: ApiClient, query: { language: string; recordType: string; companyId: string | null }, signal?: AbortSignal): Promise<Array<{ id: string; name: string; language: string; shared: boolean }>> {
-  const answer = await api.get('/templates/replies', { query: { language: query.language, recordType: query.recordType, companyId: query.companyId ?? undefined }, schema: z.object({ replies: z.array(threadReplySchema) }).passthrough(), signal })
-  return answer.replies.map((reply) => ({ id: reply.id, name: reply.name, language: reply.language, shared: reply.shared }))
-}
-export async function fillThreadReply(api: ApiClient, replyId: string, record: RecordKey): Promise<{ body: string; missing: string[] }> {
-  const answer = await api.post(`/templates/replies/${enc(replyId)}/fill`, { body: { recordType: record.type, recordId: record.id }, schema: z.object({ body: z.string(), language: z.string(), missing: z.array(z.string()) }) })
-  return { body: answer.body, missing: answer.missing }
-}
+// B-TH-287 (B-TH-098): the customer's own language for what is written to them (`message`: their language when it is one of the five,
+// else English) — the docked thread's Saved replies put it first.
 export async function readMessageLanguage(api: ApiClient, partyId: string, signal?: AbortSignal): Promise<string | null> {
   const answer = await api.get('/templates/language', { query: { partyId }, schema: z.object({ message: z.object({ language: z.string() }).passthrough().optional() }).passthrough(), signal })
   return answer.message?.language ?? null

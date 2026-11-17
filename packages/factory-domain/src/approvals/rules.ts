@@ -38,6 +38,9 @@ export const APPROVAL_TASK_KINDS = [
   'RECEIPT_OVER_TOLERANCE',
   // B-W2b-420 (B-W2b-378's database value): a cost sheet version, approved and locked before prices are released from it.
   'COST_SHEET',
+  // B-PR-23 (production plan, schema wave 4/5; review fix R-36): a decision taken for a customer, or its undo, that a second
+  // person grants while the customer's switch is on (B-PR-38 adds its kind file; until then it is listed as not registered).
+  'BRAND_OVERRIDE',
 ] as const
 export type ApprovalTaskKind = (typeof APPROVAL_TASK_KINDS)[number]
 export const isApprovalTaskKind = (value: unknown): value is ApprovalTaskKind => typeof value === 'string' && (APPROVAL_TASK_KINDS as readonly string[]).includes(value)
@@ -62,6 +65,8 @@ export const APPROVAL_KIND_WORDS: Readonly<Record<ApprovalTaskKind, Words>> = Ob
   PURCHASE_ORDER_COMPLIANCE: { en: 'Send without a valid document', it: 'Invio senza un documento valido' },
   RECEIPT_OVER_TOLERANCE: { en: 'Receipt beyond its tolerance', it: 'Ricevimento oltre la tolleranza' },
   COST_SHEET: { en: 'Cost sheet', it: 'Scheda costo' },
+  // B-PR-23
+  BRAND_OVERRIDE: { en: 'Decision for a customer', it: 'Decisione per conto di un cliente' },
 })
 
 /** What a signature means (PLT-105). */
