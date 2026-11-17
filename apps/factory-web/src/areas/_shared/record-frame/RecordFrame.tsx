@@ -90,6 +90,10 @@ export interface RecordFrameState {
   readonly filesAsk?: FrameFilesAsk | null
   readonly clearFiles?: () => void
   // ---- end B-TH-264 follow-up
+  // ---- B-TH-268 (a body part's way to the thread: the invoice's Send copy): show the docked thread, or open it full width below
+  // 1280 px (Back returns to the tab) — there only where the page has a thread.
+  readonly showThread?: () => void
+  // ---- end B-TH-268
 }
 
 const FrameContext = createContext<RecordFrameState | null>(null)
@@ -344,9 +348,14 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
   // B-TH-264 follow-up: the body's files in the thread's viewer (a window over the page: the dock need not be shown for it).
   const openFiles = useCallback((ask: FrameFilesAsk) => setFilesAsk(ask), [])
   const clearFiles = useCallback(() => setFilesAsk(null), [])
+  // B-TH-268: a body part shows the thread (no door, no width remembered).
+  const showThread = useCallback(() => {
+    if (mode === 'docked') sizes.show()
+    else if (!viewOpen) openView()
+  }, [mode, sizes, viewOpen, openView])
   const state = useMemo<RecordFrameState>(
-    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh, openDoor /* B-TH-262 */, ...(hasThread ? { openFiles, filesAsk, clearFiles } : {}) /* B-TH-264 follow-up */ }),
-    [mode, width, phone, choose, closeView, door, openDoor, hasThread, openFiles, filesAsk, clearFiles],
+    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh, openDoor /* B-TH-262 */, ...(hasThread ? { openFiles, filesAsk, clearFiles, showThread } : {}) /* B-TH-264 follow-up, B-TH-268 */ }),
+    [mode, width, phone, choose, closeView, door, openDoor, hasThread, openFiles, filesAsk, clearFiles, showThread],
   )
 
   const buttonWords = threadButtonWords(fresh) // B-TH-229

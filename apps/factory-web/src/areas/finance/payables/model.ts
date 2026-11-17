@@ -173,9 +173,19 @@ export const unmappedLines = (invoice: Pick<SupplierInvoice, 'lines'>): number =
 
 // ---- the record ----------------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['lines', 'match', 'approval', 'payment', 'activity'] as const
+// ---- B-TH-268 (threads plan TH-6; 08-tabs O-FIN-PAY; the rule of picture 38): tabs 5 → 3. Approval and Payment merge into
+// "Approval & payment" (R-5: one reader, one question — may it be paid, and was it; R-6: every action of both kept; the address keeps
+// `approval`); Activity goes (R-ACT: its tools are in the docked thread's "⋯").
+export const RECORD_TABS = ['lines', 'match', 'approval'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
-export const tabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'lines')
+/** Every old `?tab=` keeps working (R-8): Payment → Approval & payment; Activity → Lines with the thread opened (RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ payment: 'approval', activity: 'lines' })
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'lines'
+}
+// ---- end B-TH-268
 
 /** The approval's problems, every code the API answers (factory-domain payables/rules approvalProblems). */
 // B-W2b-425: OWN_ACCEPTANCE (factory-domain payables/rules.ts, #1015) was never worded on screen.
