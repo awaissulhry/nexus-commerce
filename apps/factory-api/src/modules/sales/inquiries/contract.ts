@@ -22,6 +22,7 @@ import {
   sourceView,
   updateInquiryBody,
   versionBody,
+  askInfoBody,
 } from '@nexus/factory-domain/sales/inquiries/contracts'
 
 /** The inquiries' contracts (B-W2b-295): the bodies and answers are factory-domain's sales/inquiries/contracts. */
@@ -34,7 +35,8 @@ export const createInquiryContract = defineContract({ body: createInquiryBody, r
 export const updateInquiryContract = defineContract({ params: inquiryParams, body: updateInquiryBody, response: answer })
 export const assignInquiryContract = defineContract({ params: inquiryParams, body: assignBody, response: answer })
 export const bulkAssignContract = defineContract({ body: bulkAssignBody, response: { 200: bulkAnswer } })
-export const askInfoContract = defineContract({ params: inquiryParams, body: versionBody, response: answer })
+// B-TH-013: the question travels with the move to NEED_INFO.
+export const askInfoContract = defineContract({ params: inquiryParams, body: askInfoBody, response: answer })
 export const resumeContract = defineContract({ params: inquiryParams, body: versionBody, response: answer })
 export const declineInquiryContract = defineContract({ params: inquiryParams, body: declineBody, response: answer })
 export const bulkDeclineContract = defineContract({ body: bulkDeclineBody, response: { 200: bulkAnswer } })

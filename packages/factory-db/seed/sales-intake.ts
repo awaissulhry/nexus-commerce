@@ -36,7 +36,7 @@ import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with the
  *   inquiries     company A: SEED-INQ-0001 typed in the office from a prospect not yet a party (NEW, the first row, with a line
  *                 for a jacket in words by size and a line in words: the first line); 0002 by phone from P3, ASSIGNED to the
  *                 member; 0003 made from the mail an unknown sender wrote (MAIL, NEED_INFO), the tech pack attached to the mail
- *                 named; 0004 P1's request (SEED-RFQ-12, its PO; TH-1b: a line for its own private-label jacket at the price
+ *                 named; 0004 P1's request (SEED-RFQ-12, its PO SEED-BA-PO-12; TH-1b: a line for its own private-label jacket at the price
  *                 shown, the line P1's partner people read) that became SEED-Q-0001 (QUOTED); 0005 DECLINED (price); 0006 LOST,
  *                 its prospect erased. SEED-JKT-01 is P1's private label: no other party's line names it (B-TH-009, PR-05).
  *   requirements  P1: packing for company A (the first row), a document rule for every company (its routing guide a file of
@@ -276,7 +276,7 @@ export async function seed(context: SeedContext): Promise<SalesIntakeSeed> {
             partyId: P1,
             contactId: contacts.p1Buyer,
             request: 'RFQ SEED-RFQ-12: the touring jacket in black and red, sizes 50 to 54.',
-            customerRef: 'SEED-RFQ-12',
+            customerRef: 'SEED-BA-PO-12',
             ...stamp(T.setup),
           }),
           inquiry('declined', 'SEED-INQ-0005', {

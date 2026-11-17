@@ -50,6 +50,8 @@ export const THRESHOLD_FIELDS: Readonly<Record<RuleKind, { readonly numbers: rea
   MARGIN_BELOW_FLOOR: { numbers: [], workingDays: false },
   // B-W2b-GB02 (G146): this many days before a stamp duty quarter's due day.
   STAMP_DUTY_DUE: { numbers: [{ key: 'daysBefore', min: 0, max: 60, unit: 'days' }], workingDays: false },
+  // B-TH-012: no numbers (a company with no request numbering).
+  REQUEST_NUMBERING_MISSING: { numbers: [], workingDays: false },
 })
 
 /** The kind's one number edited in the rules list itself (inline), or null (none, as "Material short"). */

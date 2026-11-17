@@ -231,10 +231,14 @@ export const REQUEST_STATUS_WORDS: Readonly<Record<RequestStatus, Words>> = Obje
   WITHDRAWN: { it: 'Ritirata', en: 'Withdrawn' },
 })
 
-/** The design's summary line (SAL-074): what happens after the send. */
+/**
+ * The design's summary line (SAL-074): what happens after the send. B-TH-041 (Owner decision 3, threads plan): no answer-time
+ * promise on either door — the words say what we confirm, never by when (the office's own 1-day alert on a request that waits
+ * stays, inside).
+ */
 export const REQUEST_NOTICE: Words = Object.freeze({
-  it: 'Questa è una richiesta. Confermiamo prezzo, quantità e data entro 1 giorno lavorativo; la vedrete negli Ordini.',
-  en: 'This is a request. We confirm price, quantities and date within 1 working day; you will see it under Orders.',
+  it: 'Questa è una richiesta. Vi confermiamo prezzo, quantità e data; la vedrete negli Ordini.',
+  en: 'This is a request. We confirm price, quantities and date with you; you will see it under Orders.',
 })
 
 export const SOURCES = ['PICKER', 'REORDER', 'UPLOAD'] as const

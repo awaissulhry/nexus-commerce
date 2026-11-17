@@ -1,0 +1,38 @@
+{
+  "loading": "Reading the record's files…",
+  "chip": {
+    "label": "Files ({count})",
+    "loading": "Files"
+  },
+  "strip": {
+    "label": "{count} files of this record, newest first",
+    "all": "All files",
+    "heldNote": "A file with a lock is held: open it to see why."
+  },
+  "kind": {
+    "ATTACHMENT": "File",
+    "DOCUMENT": "Document",
+    "PHOTO": "Photo",
+    "CERTIFICATE": "Certificate",
+    "FISCAL_ARCHIVE": "Fiscal copy",
+    "AUDIO": "Voice note"
+  },
+  "version": "v{n}",
+  "held": "held",
+  "audience": {
+    "office": "Office only",
+    "floor": "Floor",
+    "customer": "Customer",
+    "supplier": "Supplier",
+    "partner": "Partner",
+    "link": "Link",
+    "otherParty": "Another party",
+    "more": "{count} more"
+  },
+  "design": {
+    "frame519": "Dock at 1440, 519 px",
+    "frame711": "Dock at 1920, 711 px",
+    "frame375": "Phone, 375 px",
+    "frameLabel": "Thread column {width} px wide"
+  }
+}

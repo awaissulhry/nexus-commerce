@@ -335,7 +335,8 @@
       "RETURN_ARRIVED_LATE": "Resi arrivati in ritardo",
       "EXIT_PROOF_MISSING": "Esportazioni senza prova dell'uscita",
       "MARGIN_BELOW_FLOOR": "Ordini sotto il margine minimo",
-      "STAMP_DUTY_DUE": "Imposta di bollo in scadenza"
+      "STAMP_DUTY_DUE": "Imposta di bollo in scadenza",
+      "REQUEST_NUMBERING_MISSING": "Le richieste non hanno numerazione"
     }
   },
   "history": {
