@@ -328,6 +328,8 @@ export interface AskedCell {
   readonly size: string | null
   readonly quantityBefore: number
   readonly quantity: number
+  /** B-PR-27a: a change's new colourway for the line (another of its style's; undefined or null: the line keeps its own). */
+  readonly colourwayId?: string | null | undefined
 }
 
 export interface ChangeAsk {
@@ -338,6 +340,8 @@ export interface ChangeAsk {
   /** One of their own delivery addresses (null or absent: unchanged). */
   readonly shipToAddressId?: string | null | undefined
   readonly note?: string | null | undefined
+  /** B-PR-27a: a line in another colourway of its style (its sizes as the cells ask, else as they are). */
+  readonly colourways?: readonly ColourAsk[] | undefined
 }
 
 export interface ChangeFacts {
@@ -350,6 +354,8 @@ export interface ChangeFacts {
   readonly offered: ReadonlyMap<string, ReadonlySet<string>>
   /** The address asked is an ACTIVE delivery address of theirs (null: none asked). */
   readonly addressOk: boolean | null
+  /** B-PR-27a: per line, the OTHER colourways of its style with the sizes each is made in (an active SKU); none: no other. */
+  readonly colourways?: ReadonlyMap<string, ReadonlyMap<string, ReadonlySet<string>>> | undefined
 }
 
 const noteProblem = (note: string | null | undefined): Issue | null =>
@@ -361,6 +367,8 @@ export function changeProblems(ask: ChangeAsk, facts: ChangeFacts): Issue[] {
   if (!whole.possible) return [refusalOf('body', whole)]
   const issues: Issue[] = []
   const lines = new Map(facts.order.lines.map((line) => [line.id, line]))
+  // B-PR-27a: the lines asked in another colourway (their sizes are checked against that colourway's).
+  const colourOf = new Map((ask.colourways ?? []).map((entry) => [entry.lineId, entry.colourwayId]))
   const seen = new Set<string>()
   ask.cells.forEach((cell, index) => {
     const at = `body/cells/${index}`
@@ -378,7 +386,9 @@ export function changeProblems(ask: ChangeAsk, facts: ChangeFacts): Issue[] {
     if (seen.has(key)) issues.push({ path: `${at}/size`, message: `Size ${cell.size} of line ${line.seq} is asked twice.` })
     seen.add(key)
     const before = line.sizes.find((entry) => entry.size === cell.size)?.quantity ?? 0
-    if (!line.sizes.some((entry) => entry.size === cell.size) && !(facts.offered.get(line.id)?.has(cell.size) ?? false)) {
+    // B-PR-27a: a line asked in another colourway takes the sizes made in that colourway (checked with the colourway below).
+    const colourSizes = colourOf.has(line.id) ? facts.colourways?.get(line.id)?.get(colourOf.get(line.id)!) : undefined
+    if (!line.sizes.some((entry) => entry.size === cell.size) && !(facts.offered.get(line.id)?.has(cell.size) ?? false) && !(colourSizes?.has(cell.size) ?? false)) {
       issues.push({ path: `${at}/size`, message: `Size ${cell.size} is not made for line ${line.seq}.` })
     } else if (!Number.isInteger(cell.quantity) || cell.quantity < 0 || cell.quantity > MAX_SIZE_QUANTITY) {
       issues.push({ path: `${at}/quantity`, message: `Whole pieces from 0 to ${MAX_SIZE_QUANTITY}.` })
@@ -386,6 +396,7 @@ export function changeProblems(ask: ChangeAsk, facts: ChangeFacts): Issue[] {
       issues.push({ path: `${at}/quantity`, message: `Size ${cell.size} of line ${line.seq} already has ${before} piece(s).` })
     }
   })
+  issues.push(...colourProblems(ask, facts, lines))
   if (issues.length > 0) return issues
   // Every piece of a line asked away is a cancel of that line, not a change (a cancelled line is closed, never removed: the
   // request keeps naming it).
@@ -406,15 +417,116 @@ export function changeProblems(ask: ChangeAsk, facts: ChangeFacts): Issue[] {
   if (facts.addressOk === false) issues.push({ path: 'body/shipToAddressId', message: 'One of your delivery addresses, still in use.' })
   const note = noteProblem(ask.note)
   if (note) issues.push(note)
-  if (ask.cells.length === 0 && date === null && (ask.shipToAddressId ?? null) === null) issues.push({ path: 'body', message: 'Say what should change: sizes, the date or the delivery address.' })
+  if (ask.cells.length === 0 && (ask.colourways ?? []).length === 0 /* B-PR-27a */ && date === null && (ask.shipToAddressId ?? null) === null) issues.push({ path: 'body', message: 'Say what should change: sizes, a colour, the date or the delivery address.' })
   return issues
 }
 
 /** The cells a change stores: the pieces before, read from the order now. */
 export function changeCellsOf(ask: ChangeAsk, order: RuleOrder): AskedCell[] {
   const lines = new Map(order.lines.map((line) => [line.id, line]))
-  return ask.cells.map((cell) => ({ orderLineId: cell.lineId, size: cell.size, quantityBefore: lines.get(cell.lineId)?.sizes.find((entry) => entry.size === cell.size)?.quantity ?? 0, quantity: cell.quantity }))
+  // B-PR-27a: a line asked in another colourway is stored size by size, each with the colourway (its every size after the change).
+  const colourOf = new Map((ask.colourways ?? []).map((entry) => [entry.lineId, entry.colourwayId]))
+  const plain = ask.cells.filter((cell) => !colourOf.has(cell.lineId)).map((cell) => ({ orderLineId: cell.lineId, size: cell.size, quantityBefore: lines.get(cell.lineId)?.sizes.find((entry) => entry.size === cell.size)?.quantity ?? 0, quantity: cell.quantity }))
+  const coloured = [...colourOf].flatMap(([lineId, colourwayId]) => {
+    const line = lines.get(lineId)
+    if (!line) return []
+    return sizesAfter(line, ask.cells).map(({ size, before, quantity }) => ({ orderLineId: lineId, size, quantityBefore: before, quantity, colourwayId }))
+  })
+  return [...plain, ...coloured]
 }
+
+// ---- B-PR-27a (production plan §3 "Brand asks, we decide": change … colour; 08-backend §4.2 "CHANGE (exists) + colour"; the
+// pr3e note): another colourway of a line ---------------------------------------------------------------------------------------
+
+/**
+ * A change asks a line in another colourway of its own style. Asked from the portal while the line may change (the cut-offs,
+ * as any change), and only into a colourway made in every size the line keeps (an active SKU of each). Stored size by size
+ * (OrderChangeRequestLine.styleId + colourwayId: the database refuses another style or the line's own colourway). Accepted (Sales,
+ * orders.manage) while no work order makes the line yet: a NEW line of the same style in the asked colourway with the sizes asked,
+ * at the old line's prices (the customer asked a colour, not a price), and the old line closed short — a line a request names is
+ * never removed (the amendment refuses it). Once a work order makes the line it is cancel-and-remake: answered by hand.
+ */
+export interface ColourAsk {
+  readonly lineId: string
+  readonly colourwayId: string
+}
+
+/** A line's sizes after a change: its own, each as the cells ask (0 drops a size), and the sizes the cells add. */
+export function sizesAfter(line: Pick<RuleLine, 'id' | 'sizes'>, cells: readonly { readonly lineId: string; readonly size: string; readonly quantity: number }[]): { readonly size: string; readonly before: number; readonly quantity: number }[] {
+  const out = new Map(line.sizes.map((entry) => [entry.size, { size: entry.size, before: entry.quantity, quantity: entry.quantity }]))
+  for (const cell of cells) {
+    if (cell.lineId !== line.id) continue
+    const known = out.get(cell.size)
+    out.set(cell.size, { size: cell.size, before: known?.before ?? 0, quantity: cell.quantity })
+  }
+  return [...out.values()].filter((entry) => entry.before > 0 || entry.quantity > 0)
+}
+
+/** The problems of the colourways asked, in words, by path (body/colourways/<i>/…). */
+function colourProblems(ask: ChangeAsk, facts: ChangeFacts, lines: ReadonlyMap<string, RuleLine>): Issue[] {
+  const issues: Issue[] = []
+  const seen = new Set<string>()
+  ;(ask.colourways ?? []).forEach((entry, index) => {
+    const at = `body/colourways/${index}`
+    const line = lines.get(entry.lineId)
+    if (!line) {
+      issues.push({ path: `${at}/lineId`, message: 'Not a line of this order.' })
+      return
+    }
+    const found = lineVerdict('CHANGE', line, facts.order, facts.cutoffs, facts.today)
+    if (!found.possible) {
+      issues.push(refusalOf(at, found))
+      return
+    }
+    if (seen.has(entry.lineId)) issues.push({ path: `${at}/lineId`, message: `Line ${line.seq} is asked in another colourway twice.` })
+    seen.add(entry.lineId)
+    if (line.kind !== 'SIZE_GRID') {
+      issues.push({ path: `${at}/lineId`, message: `Line ${line.seq} is made to measure: its colour is changed with us in the order's thread.` })
+      return
+    }
+    const made = facts.colourways?.get(line.id)?.get(entry.colourwayId)
+    if (!made) {
+      issues.push({ path: `${at}/colourwayId`, message: `Not another colourway of line ${line.seq}'s style.` })
+      return
+    }
+    const missing = sizesAfter(line, ask.cells).filter((size) => size.quantity > 0 && !made.has(size.size)).map((size) => size.size)
+    if (missing.length > 0) issues.push({ path: `${at}/colourwayId`, message: `Line ${line.seq}: ${missing.length === 1 ? `size ${missing[0]} is` : `sizes ${missing.join(', ')} are`} not made in this colourway.` })
+    if (sizesAfter(line, ask.cells).every((size) => size.quantity === 0)) issues.push({ path: `${at}/lineId`, message: `Every piece of line ${line.seq} is asked away: ask to cancel that line instead.` })
+  })
+  return issues
+}
+
+/** What accepting a change's colourways does: per line, the new line (same style, the colourway, the sizes asked) and the old one closed short. */
+export interface ColourLine {
+  readonly fromLineId: string
+  readonly colourwayId: string
+  readonly sizes: readonly { readonly size: string; readonly quantity: number }[]
+}
+
+/** The new lines a change's coloured cells make (a size at 0 dropped), one per line asked in another colourway. */
+export function colourLinesOf(cells: readonly AskedCell[]): ColourLine[] {
+  const byLine = new Map<string, { colourwayId: string; sizes: { size: string; quantity: number }[] }>()
+  for (const cell of cells) {
+    if (!cell.colourwayId || cell.size === null) continue
+    const entry = byLine.get(cell.orderLineId) ?? { colourwayId: cell.colourwayId, sizes: [] }
+    if (cell.quantity > 0) entry.sizes.push({ size: cell.size, quantity: cell.quantity })
+    byLine.set(cell.orderLineId, entry)
+  }
+  return [...byLine].map(([fromLineId, entry]) => ({ fromLineId, colourwayId: entry.colourwayId, sizes: entry.sizes }))
+}
+
+/** A colour change moves no money when it asks the same pieces of every size (the new line takes the old line's prices). */
+export const colourKeepsTotal = (cells: readonly AskedCell[]): boolean => cells.length > 0 && cells.every((cell) => (cell.colourwayId ?? null) !== null && cell.quantity === cell.quantityBefore)
+
+/** "Line 10 is on work order WO-1 already": a colour change is then cancel-and-remake, answered by hand (the office's words). */
+export function colourInWorkWords(seq: number, numbers: readonly string[]): Words {
+  const named = numbers.join(', ')
+  return {
+    it: `La riga ${seq} è già in ${numbers.length === 1 ? "un ordine di lavoro" : 'ordini di lavoro'} (${named}): un cambio di colore si fa solo annullando e rifacendo. Rispondi a mano: rifiuta con un motivo, o annulla e rifai la riga.`,
+    en: `Line ${seq} is on ${numbers.length === 1 ? 'a work order' : 'work orders'} already (${named}): a colour change is then cancel-and-remake. Answer by hand: refuse with words, or cancel and remake the line.`,
+  }
+}
+// ---- end B-PR-27a ----
 
 export interface CancelAsk {
   /** The lines to cancel; none (or every line): the whole order. */
@@ -493,7 +605,8 @@ export function answerProblems(answer: 'ACCEPTED' | 'REFUSED', words: string | n
  */
 export function amendmentLinesOf(cells: readonly AskedCell[], lines: readonly Pick<RuleLine, 'id' | 'sizes'>[]): { readonly lines: AmendLineInput[]; readonly changed: boolean } {
   const byLine = new Map<string, AskedCell[]>()
-  for (const cell of cells) byLine.set(cell.orderLineId, [...(byLine.get(cell.orderLineId) ?? []), cell])
+  // B-PR-27a: a coloured cell is the NEW line's (colourLinesOf); the old line stays as it is until it is closed short.
+  for (const cell of cells) if ((cell.colourwayId ?? null) === null) byLine.set(cell.orderLineId, [...(byLine.get(cell.orderLineId) ?? []), cell])
   const out: AmendLineInput[] = lines.map((line) => {
     const asked = byLine.get(line.id)
     if (!asked) return { id: line.id }

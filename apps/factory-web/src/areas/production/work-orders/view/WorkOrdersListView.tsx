@@ -71,7 +71,8 @@ export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
  * Done (finished, bar and words one figure) · Due · Health (late, at risk, blocked, on track) · Waiting on · Blocked by · ⋯, with
  * Pieces, Readiness, Priority and Site under Columns ▾; the customer filter and the quick filters Waiting on, Health, Blocked by
  * (each a chip); Group ▾ By customer (each header the server's figures for that customer); the tiles At risk and Waiting on
- * customer; board cards with the customer code, the health and who the work waits on. Hold N as before. Key hints only in the
+ * customer; board cards with the customer code, the health and who the work waits on. Hold N opens THE one "Put on hold" dialog
+ * (F-PR-05b: the picked reason decides a quality hold or a plain production hold, each with its own right). Key hints only in the
  * footer's information icon (the frame's).
  *
  * SCR-069 — Work orders (Production; design production.workorders, 00 §2.1 list frame): the tiles (each a saved view),

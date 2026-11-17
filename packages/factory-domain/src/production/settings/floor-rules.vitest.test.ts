@@ -103,8 +103,9 @@ describe('scrap above the limit (MES-128)', () => {
 })
 
 describe('the floor’s full reason lists (MES-293)', () => {
-  it('cover the eight lists of Floor rules & codes and keep every standard code with its words', () => {
-    expect([...FLOOR_REASON_LISTS]).toEqual(['PAUSE', 'SCRAP', 'REWORK', 'DOWNTIME', 'HELP_CALL', 'ADJUSTMENT', 'HOLD', 'CANCEL'])
+  // F-PR-05b: the production hold's reasons joined Floor rules & codes beside HOLD (B-PR-21's open point).
+  it('cover the nine lists of Floor rules & codes and keep every standard code with its words', () => {
+    expect([...FLOOR_REASON_LISTS]).toEqual(['PAUSE', 'SCRAP', 'REWORK', 'DOWNTIME', 'HELP_CALL', 'ADJUSTMENT', 'HOLD', 'PRODUCTION_HOLD', 'CANCEL'])
     for (const list of FLOOR_REASON_LISTS) {
       const full = FULL_FLOOR_REASONS[list]
       for (const standard of standardReasonsOf(list)) expect(full.find((reason) => reason.code === standard.code), `${list} ${standard.code}`).toEqual(standard)

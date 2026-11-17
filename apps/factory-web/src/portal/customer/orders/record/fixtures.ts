@@ -29,6 +29,11 @@ import { orderRefOf } from '../model'
 import { CUSTOMER_STATUS_WORDS } from '@nexus/factory-domain/sales/portal-orders/status'
 import { CustomerCase, type CustomerCaseBuilder } from '../view/CustomerCase'
 import type { OrderDialog, OrderRecordViewModel } from '../view/OrderRecordView'
+// ---- F-PR-13: the Ask dialog's cases (made-up limits: urgency on; pause, resume, ship what is ready, another sample open)
+import type { AskImpact, AskVerdict, ChangeRules } from '../api'
+import { askChoicesOf, askHeld, EMPTY_ASK, impactViewOf, type AskDraft, type AskKind } from '../ask-model'
+import type { AskDialogModel } from '../view/AskDialog'
+// ---- end F-PR-13
 
 /**
  * SCR-184 › one order (design portal.customer.orders rec "Order"; B-W2b-191; B-TH-275, picture 22), MADE-UP data only: the four
@@ -121,6 +126,53 @@ function cancelDialog(draft: Partial<CancelDraft> = {}, rules = rulesOf(), numbe
   return { kind: 'cancel', model: { state: 'ready', number, rules, draft: full, held: cancelHeld(rules, full, FACTS), busy: false, problem: null } }
 }
 
+// ---- F-PR-13 ----
+const say = (en: string, it: string) => ({ en, it })
+const FREE: AskVerdict = { possible: true, code: 'FREE', day: null, words: say('You can ask: we decide and answer you', 'Potete chiederlo: decidiamo noi e vi rispondiamo') }
+function askRules(): ChangeRules {
+  const base = rulesOf()
+  return {
+    ...base,
+    lines: base.lines.map((line, index) => ({
+      ...line,
+      split: FREE,
+      samples: [
+        { sampleKind: 'PRE_PRODUCTION' as const, verdict: index === 0 ? { possible: false, code: 'LEATHER_CUT' as const, day: dayAt(-4), words: say('Not possible: the leather was cut', 'Non possibile: la pelle è stata tagliata') } : FREE },
+        { sampleKind: 'SIZE_SET' as const, verdict: FREE },
+        { sampleKind: 'TOP_OF_PRODUCTION' as const, verdict: FREE },
+      ],
+    })),
+    asks: [
+      { kind: 'RUSH', words: say('Urgent – asked', 'Urgente – richiesto'), open: true, verdict: FREE, waitingRequestId: null },
+      { kind: 'HOLD', words: say('Pause', 'Pausa'), open: true, verdict: FREE, waitingRequestId: null },
+      { kind: 'RESUME', words: say('Resume', 'Ripresa'), open: true, verdict: { possible: false, code: 'NOT_PAUSED', day: null, words: say('The order is not paused', "L'ordine non è in pausa") }, waitingRequestId: null },
+      { kind: 'SPLIT_SHIPMENT', words: say('Ship what is ready', 'Spedire ciò che è pronto'), open: true, verdict: FREE, waitingRequestId: null },
+      { kind: 'SAMPLE_ROUND', words: say('Another sample', 'Un altro campione'), open: true, verdict: FREE, waitingRequestId: null },
+    ],
+    frozen: { deliveryDate: { state: 'OPEN', words: say('Still open', 'Ancora modificabile') }, shipTo: { state: 'OPEN', words: say('Still open', 'Ancora modificabile') } },
+  }
+}
+const RUSH_IMPACT: AskImpact = { kind: 'RUSH', frozen: [], blocked: false, priced: false, earliest: { date: dayAt(12), partial: false, meetsWanted: true }, notes: [say('We look at the date again', 'Rivediamo la data')] }
+function askDialog(over: { step?: AskDialogModel['step']; kind?: AskKind | null; draft?: Partial<AskDraft>; impact?: AskImpact | null; problem?: string | null } = {}): OrderDialog {
+  const rules = askRules()
+  const choices = askChoicesOf(rules, requestsOf())
+  const kind = over.kind ?? null
+  const impact = over.impact ? { state: 'ready' as const, view: impactViewOf(kind ?? 'RUSH', over.impact, { seesPrices: true, fee: null, money: String, sizesAsked: false }) } : null
+  return {
+    kind: 'ask',
+    model: { state: 'ready', number: own(RECORD), rules, step: over.step ?? 'what', kind, choices, draft: { ...EMPTY_ASK, ...over.draft }, held: askHeld(kind, rules, choices, FACTS), impact, busy: false, problem: over.problem ?? null, waitingHref: `${PREFIX}/waiting`, withdrawHeld: null, withdrawing: null, today: TODAY },
+  }
+}
+const CHANGE_IMPACT: AskImpact = {
+  kind: 'CHANGE',
+  frozen: [{ field: 'SIZE_QUANTITY', lineId: rulesOf().lines[1]!.lineId, line: '2', size: '52', state: 'CHANGE_REQUEST', words: say('Line 2, size 52: Cutting started — size frozen: a change is a priced change request the customer accepts', 'Riga 2, taglia 52: Taglio iniziato — taglia bloccata: una modifica è una richiesta di modifica con prezzo che il cliente accetta') }],
+  blocked: false,
+  priced: true,
+  earliest: { date: dayAt(14), partial: false, meetsWanted: false },
+  notes: [],
+}
+// ---- end F-PR-13
+
 const REVISED = orderRecord({ reconfirmNeeded: true })
 const reconfirm = (over: Partial<Extract<OrderDialog, { kind: 'reconfirm' }>['model']> = {}): OrderDialog => ({
   kind: 'reconfirm',
@@ -212,6 +264,20 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'cancel-tried', label: 'Ask to cancel: Send with nothing chosen', model: recordCase({ model: () => ({ dialog: cancelDialog({ scope: 'LINES', tried: true }) }) }), note: 'Held with its reason, under the field.' },
     { id: 'cancel-mtm', label: 'Ask to cancel: made to measure for a consumer', model: recordCase({ record: MTM, model: () => ({ requests: NO_REQUESTS, dialog: cancelDialog({}, rulesOf({ cancel: { possible: true, code: 'FREE', day: null, words: { it: 'Libero', en: 'Free' } }, noWithdrawal: NO_WITHDRAWAL_WORDS, cancelFee: { pct: null, words: { it: 'Nessuna penale', en: 'No fee' }, currency: 'EUR', wholeOrderFee: 0 } }), own(MTM)) }) }), note: '“No right of withdrawal applies (Codice del Consumo art. 59)”.' },
     // ── pop:reconfirm ──
+    // ---- F-PR-13: the Ask dialog — what, the details of a production ask, what it means before Send
+    { id: 'ask', label: 'Ask us: what you would like (step 1)', model: recordCase({ model: () => ({ dialog: askDialog() }), facts: () => ({ ask: { held: null } }) }), note: 'Change and cancel, then the asks this customer’s limits open; Resume is held with its reason; a closed ask is not drawn.' },
+    { id: 'ask-rush', label: 'Ask us: make it urgent, the need-by date (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'RUSH', draft: { requestedDate: dayAt(9) } }) }), facts: () => ({ ask: { held: null } }) }) },
+    { id: 'ask-split', label: 'Ask us: ship what is ready, the first part (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'SPLIT_SHIPMENT', draft: { cells: { [rulesOf().lines[1]!.lineId]: { '50': 4 } } } }) }), facts: () => ({ ask: { held: null } }) }) },
+    { id: 'ask-sample', label: 'Ask us: another sample (step 2)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'details', kind: 'SAMPLE_ROUND', draft: { lineId: rulesOf().lines[0]!.lineId } }) }), facts: () => ({ ask: { held: null } }) }), note: 'A pre-production sample is held after the leather was cut; the top of production stays open.' },
+    { id: 'ask-impact', label: 'Ask us: what it means before Send (step 3)', model: recordCase({ model: () => ({ dialog: askDialog({ step: 'impact', kind: 'RUSH', draft: { requestedDate: dayAt(9) }, impact: RUSH_IMPACT }) }), facts: () => ({ ask: { held: null } }) }), note: 'Nothing frozen, no price, the earliest date (an estimate, a date only).' },
+    {
+      id: 'change-impact',
+      label: 'Ask for a change: what it means (frozen, a price may apply, after release)',
+      model: recordCase({ model: () => ({ dialog: (() => { const dialog = changeDialog({ ...EDITED, step: 'review' }); return dialog.kind === 'change' ? { ...dialog, model: { ...dialog.model, impact: { state: 'ready' as const, view: impactViewOf('CHANGE', CHANGE_IMPACT, { seesPrices: false, fee: null, money: String, sizesAsked: true }) } } } : dialog })() }) }),
+      note: 'A role without prices reads “A price may apply”; after release a size change means cancel and remake.',
+    },
+    { id: 'cancel-review', label: 'Ask to cancel: what it means before Send', model: recordCase({ model: () => ({ dialog: (() => { const dialog = cancelDialog({ scope: 'LINES', lineIds: [rulesOf().lines[1]!.lineId], reasonCode: 'NOT_NEEDED', step: 'review' }); return dialog.kind === 'cancel' ? { ...dialog, model: { ...dialog.model, impact: { state: 'ready' as const, view: impactViewOf('CANCEL', { kind: 'CANCEL', frozen: [], blocked: false, priced: true, earliest: null, notes: [] }, { seesPrices: true, fee: 29550, money: (minor) => `€ ${(minor / 100).toFixed(2)}`, sizesAsked: false }) } } } : dialog })() }) }) },
+    // ---- end F-PR-13
     { id: 'reconfirm', label: 'pop:reconfirm — Re-confirm order version 2', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'ready', page: approvalPage() }, dialog: reconfirm() }) }), note: 'Our message; why it changed; line by line old → new and the totals; Confirm or Decline; the typed name signs.' },
     { id: 'reconfirm-decline', label: 'Re-confirm: decline without a reason', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'ready', page: approvalPage() }, dialog: reconfirm({ decision: 'REFUSED', problem: 'reconfirm.problem.why' }) }) }) },
     { id: 'reconfirm-done', label: 'Re-confirm: signed', model: recordCase({ record: REVISED, model: () => ({ revision: { state: 'ready', page: approvalPage() }, dialog: reconfirm({ done: { decision: 'APPROVED', name: 'Anna Esempio', at: at(0) } }) }) }) },

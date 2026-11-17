@@ -301,7 +301,8 @@
         "HELP_CALL": "Help calls",
         "ADJUSTMENT": "Adjustments",
         "HOLD": "Holds",
-        "CANCEL": "Cancellations"
+        "CANCEL": "Cancellations",
+        "PRODUCTION_HOLD": "Production holds"
       }
     },
     "refusal": {

@@ -1,6 +1,8 @@
 import { ADDRESS_RULES } from './addresses'
 import { CHANGE_REQUEST_RULES } from './change-requests'
 import { RECORD_RULES } from './records'
+// B-PR-31: a customer's own production (stage, health, hold, our urgency acts, a problem it reported answered).
+import { PRODUCTION_RULES } from './production'
 // B-TH-011: a customer's requests (received, a question from us, declined; a catalogue order not accepted).
 import { REQUEST_NEWS_RULES } from './requests'
 import { TASK_RULES } from './tasks'
@@ -21,4 +23,6 @@ export const PARTNER_RULES: readonly PartnerRule[] = Object.freeze([
   ...ADDRESS_RULES,
   // B-TH-011
   ...REQUEST_NEWS_RULES,
+  // B-PR-31
+  ...PRODUCTION_RULES,
 ])

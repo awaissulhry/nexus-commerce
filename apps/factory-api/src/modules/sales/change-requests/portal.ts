@@ -69,6 +69,9 @@ import {
   readCounterStates,
   ruleLinesOf,
   feeLinesOf,
+  askedColourwayNames, // B-PR-27a
+  readOtherColourways, // B-PR-27a
+  type OtherColourway, // B-PR-27a
   type AddressRow,
   type CancelReason,
   type LineCatalogue,
@@ -126,6 +129,8 @@ interface AskFacts {
   readonly today: BusinessDate
   /** B-PR-25: what the production asks are read against. */
   readonly production: ProductionFacts
+  /** B-PR-27a: per line, the other colourways of its style a change may ask it in (with the sizes each is made in). */
+  readonly colourways: ReadonlyMap<string, readonly OtherColourway[]>
 }
 
 /** B-PR-25: the facts of the production asks of one order (factory-domain sales/change-requests/rules AskFacts). */
@@ -178,6 +183,8 @@ async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: 
     // B-PR-25: the customer's limits (office-only settings, its own row) and whether a pause holds its work.
     limits: await client.portalSettings.findUnique({ where: { id: order.partyId }, select: { partyId: true, productionUrgencyOn: true, productionAskKinds: true } }),
     work: await readWork(client, order.partyId, lines, { words: false }),
+    // B-PR-27a: the other colourways of each line's style (the catalogue is the tenant's).
+    colourways: await readOtherColourways(client, lines),
   }))
   const rule: RuleOrder = {
     status: order.status,
@@ -197,7 +204,7 @@ async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: 
     urgency: own.production ? { urgency: own.production.urgency as BrandUrgency, locked: own.production.urgencyLocked, lockReason: own.production.urgencyLockReason } : null,
     shipComplete: own.shipping?.shipComplete ?? false,
   }
-  return { order, lines, rule, cutoffs: tenant.settings.cutoffs, cancelFeePct: tenant.settings.cancelFeePct, catalogue: tenant.catalogue, reasons: tenant.reasons, addresses, openRequestId: open?.id ?? null, today: businessDate(now), production }
+  return { order, lines, rule, cutoffs: tenant.settings.cutoffs, cancelFeePct: tenant.settings.cancelFeePct, catalogue: tenant.catalogue, reasons: tenant.reasons, addresses, openRequestId: open?.id ?? null, today: businessDate(now), production, colourways: tenant.colourways }
 }
 
 /** B-PR-25: a production kind's facts as the domain's rules read them. */
@@ -264,6 +271,8 @@ export async function portalRules(app: FastifyInstance, request: FastifyRequest,
         frozen: line.sizes.map((size) => ({ size: size.size, freeze: freezeOf(freeze.rules, 'SIZE_QUANTITY', sizeStage(size.size)) })),
         split: askLineVerdict('SPLIT_SHIPMENT', ruleLine, verdictFactsOf(facts, 'SPLIT_SHIPMENT')),
         samples: ASK_SAMPLE_KINDS.map((sampleKind) => ({ sampleKind, verdict: askLineVerdict('SAMPLE_ROUND', ruleLine, verdictFactsOf(facts, 'SAMPLE_ROUND'), sampleKind) })),
+        // B-PR-27a: the other colourways of its style a change may ask it in (a made-to-measure line: none).
+        colourways: line.kind === 'SIZE_GRID' ? (facts.colourways.get(line.id) ?? []).map((entry) => ({ id: entry.id, code: entry.code, name: entry.name, sizes: [...entry.sizes] })) : [],
       }
     }),
     // B-PR-25: no fee at all for a reader without prices (the Production role): neither the amounts nor the percent.
@@ -291,6 +300,8 @@ export interface AskBody {
   /** B-PR-25: a sample round's line and kind. */
   readonly lineId?: string | null | undefined
   readonly sampleKind?: AskSampleKind | null | undefined
+  /** B-PR-27a: a change: lines in another colourway of their style. */
+  readonly colourways?: readonly { readonly lineId: string; readonly colourwayId: string }[] | undefined
 }
 
 // B-PR-25: a production ask's refusal by the order's state names its code too (body/NOT_OPEN, body/WAITING, …).
@@ -309,6 +320,8 @@ const blankToNull = (value: string | null | undefined): string | null => (typeof
 function shapeProblems(body: AskBody): Issue[] {
   const issues: Issue[] = []
   // B-PR-25: a production ask names no lines to cancel and no address (its own fields are its rules': productionAskProblems).
+  // B-PR-27a: another colourway only on a change.
+  if (body.kind !== 'CHANGE' && (body.colourways ?? []).length > 0) issues.push({ path: 'body/colourways', message: 'Only a change asks another colourway.' })
   if (isProductionKind(body.kind)) {
     if (body.lineIds !== undefined) issues.push({ path: 'body/lineIds', message: 'Only a cancel names lines to cancel.' })
     if ((body.shipToAddressId ?? null) !== null) issues.push({ path: 'body/shipToAddressId', message: 'Only a change asks another delivery address.' })
@@ -377,10 +390,12 @@ async function impactOfAsk(reader: PortalReader, facts: AskFacts, kind: OrderReq
 /** The cells asked, once the cut-off rules let them through (else the refusal in words). */
 function askedCells(body: AskBody & { readonly kind: RequestKind }, facts: AskFacts): AskedCell[] {
   if (body.kind === 'CHANGE') {
-    const ask = { cells: body.cells ?? [], requestedDate: body.requestedDate ?? null, shipToAddressId: body.shipToAddressId ?? null, note: body.note }
+    // B-PR-27a: and the lines asked in another colourway (checked against the other colourways of their style).
+    const ask = { cells: body.cells ?? [], requestedDate: body.requestedDate ?? null, shipToAddressId: body.shipToAddressId ?? null, note: body.note, colourways: body.colourways ?? [] }
     const offered = new Map([...facts.catalogue.entries()].map(([lineId, entry]) => [lineId, entry.offered]))
+    const colourways = new Map([...facts.colourways].map(([lineId, entries]) => [lineId, new Map(entries.map((entry) => [entry.id, entry.sizes]))]))
     const addressOk = ask.shipToAddressId === null ? null : facts.addresses.some((row) => row.id === ask.shipToAddressId)
-    const problems = changeProblems(ask, { order: facts.rule, cutoffs: facts.cutoffs, today: facts.today, requestedDate: dayOrNull(facts.order.requestedDate), offered, addressOk })
+    const problems = changeProblems(ask, { order: facts.rule, cutoffs: facts.cutoffs, today: facts.today, requestedDate: dayOrNull(facts.order.requestedDate), offered, addressOk, colourways })
     if (problems.length > 0) throw refused(problems)
     return changeCellsOf(ask, facts.rule)
   }
@@ -457,14 +472,27 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
     select: { id: true },
   })
   if (cells.length > 0) {
+    // B-PR-27a: a cell of a line asked in another colourway names that colourway with the line's style (its reference key).
+    const styleOf = new Map((await tx.salesOrderLine.findMany({ where: { orderId: order.id }, select: { id: true, styleId: true } })).map((line) => [line.id, line.styleId]))
     await tx.orderChangeRequestLine.createMany({
-      data: cells.map((cell) => ({ id: newId(), partyId: order.partyId, requestId: input.requestId, orderLineId: cell.orderLineId, size: cell.size, quantityBefore: cell.quantityBefore, quantity: cell.quantity, createdAt: now, createdById: input.partnerUserId })),
+      data: cells.map((cell) => ({
+        id: newId(),
+        partyId: order.partyId,
+        requestId: input.requestId,
+        orderLineId: cell.orderLineId,
+        size: cell.size,
+        quantityBefore: cell.quantityBefore,
+        quantity: cell.quantity,
+        ...(cell.colourwayId ? { styleId: styleOf.get(cell.orderLineId) ?? null, colourwayId: cell.colourwayId } : {}),
+        createdAt: now,
+        createdById: input.partnerUserId,
+      })),
     })
   }
   const whole = askedSummary(body.kind, cells, { requestedDate: prepared.requestedDate, shipToAddressId: prepared.shipToAddressId }).wholeOrder
   const asked = {
     kind: body.kind,
-    cells: cells.map((cell) => ({ lineId: cell.orderLineId, size: cell.size, before: cell.quantityBefore, asked: cell.quantity })),
+    cells: cells.map((cell) => ({ lineId: cell.orderLineId, size: cell.size, before: cell.quantityBefore, asked: cell.quantity, ...(cell.colourwayId ? { colourwayId: cell.colourwayId } : {}) /* B-PR-27a */ })),
     wholeOrder: whole,
     requestedDate: prepared.requestedDate,
     shipToAddressId: prepared.shipToAddressId,
@@ -520,6 +548,8 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
     if (entry?.style) styles.set(line.styleId, entry.style)
     if (entry?.colourway) colourways.set(line.colourwayId, entry.colourway)
   }
+  // B-PR-27a: the colourways its changes ask (of its own lines' styles), by name.
+  for (const [colourwayId, name] of await reader.inTenant((client) => askedColourwayNames(client, cells.values()))) colourways.set(colourwayId, name)
   return {
     cells,
     facts: {
