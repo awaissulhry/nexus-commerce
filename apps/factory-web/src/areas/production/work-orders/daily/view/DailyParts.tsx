@@ -164,7 +164,9 @@ export function HoldsCard({ workOrder, daily, actions }: { workOrder: WorkOrder;
 
 // ---- report finished to stock (wo-finish; wo-bundles "W2a Report finished to stock") ---------------------------------------------
 
-export function FinishedCard({ workOrder, daily, actions }: { workOrder: WorkOrder; daily: DailyModel; actions?: DailyActions }) {
+// F-PR-05a: `inBand` — Report finished is the work order band's primary while garments wait (it moved out of the Bundles tab): the
+// card keeps its figures and says where the button is.
+export function FinishedCard({ workOrder, daily, actions, inBand = false }: { workOrder: WorkOrder; daily: DailyModel; actions?: DailyActions; inBand?: boolean }) {
   const t = useT(DAILY_NAMESPACE)
   const locale = useLocale()
   const part = daily.finished
@@ -176,10 +178,13 @@ export function FinishedCard({ workOrder, daily, actions }: { workOrder: WorkOrd
     <Card padded className="fw-pr-card">
       <div className="fw-pr-card-head">
         <h2 className="fw-pr-h2">{t('finished.title')}</h2>
-        <Button size="sm" variant="primary" heldReason={heldWords} onClick={() => actions?.onDialog?.({ kind: 'finish' })}>
-          <PackageCheck size={14} aria-hidden /> {finished && finished.garments.canReport > 0 ? t('finished.report', { count: finished.garments.canReport }) : t('finished.reportNone')}
-        </Button>
+        {!inBand && (
+          <Button size="sm" variant="primary" heldReason={heldWords} onClick={() => actions?.onDialog?.({ kind: 'finish' })}>
+            <PackageCheck size={14} aria-hidden /> {finished && finished.garments.canReport > 0 ? t('finished.report', { count: finished.garments.canReport }) : t('finished.reportNone')}
+          </Button>
+        )}
       </div>
+      {inBand && <p className="fw-pr-hint">{t('finished.inBand')}</p>}
       {!finished ? (
         <PartLine part={part} label={t('finished.title')} onRetry={() => actions?.onRetry?.('finished')} />
       ) : (

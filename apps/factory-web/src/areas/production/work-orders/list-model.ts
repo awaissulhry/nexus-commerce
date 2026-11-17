@@ -7,6 +7,10 @@ import type { BulkValue } from '@nexus/factory-domain/views/bulk/rules'
 import type { RelativeDay } from '@nexus/factory-domain/views/quick/relative'
 import type { ListMode } from '../../../list-frame/w2b/model'
 import type { BulkReleaseModel } from './every-shift/model'
+// F-PR-03: the list by risk — its sort, computed filters, customer filter and grouping.
+import type { BlockedBy, ListSort, WaitingOn, WorkOrderRisk } from '../_shared/api'
+import type { CustomerFilterState } from '../_shared/customer/model'
+import type { ListTerms } from './list/model'
 
 /** SCR-069 — the work orders list's view model (WorkOrdersListView draws it and fetches nothing). */
 export interface WorkOrdersListModel {
@@ -41,6 +45,24 @@ export interface WorkOrdersListModel {
   selected?: string[]
   focusRow?: number
   helpOpen?: boolean
+  // ── F-PR-03 (the list by risk) ──
+  /** The order of the rows (`?sort=`; default risk). */
+  sort?: ListSort
+  /** The computed filters (`?waitingOn=`, `?risk=`, `?blockedBy=`): the API's, inside the person's customers. */
+  waitingOn?: WaitingOn | null
+  risk?: WorkOrderRisk | null
+  blockedBy?: BlockedBy | null
+  /** The one customer filter of the Production pages (`?party=`), its options read for this page. */
+  customers?: CustomerFilterState | null
+  /** Grouped by customer (`?group=party`). */
+  group?: 'party' | null
+  /** Each group's figures from the server (by customer id): the counts of its whole production, 'reading' or 'failed'. */
+  groupCounts?: Readonly<Record<string, WorkOrderCounts | 'reading' | 'failed'>>
+  /** The groups folded shut. */
+  collapsed?: readonly string[]
+  /** The clock the waiting ages count from (ms): the read's, so the cells do not move between renders. */
+  now?: number
+  // ── end F-PR-03
 }
 
 export interface WorkOrdersListActions {
@@ -64,6 +86,18 @@ export interface WorkOrdersListActions {
   newOrder?: NewWorkOrderActions
   /** B-W2a-46: Hold N and its dialog. */
   daily?: DailyActions
+  // ── F-PR-03 ──
+  /** Any of the list's terms changed (sort, a computed filter, the grouping); the page writes the address. */
+  onTerms?: (next: Partial<ListTerms>) => void
+  /** The customer filter picked (null: every customer). */
+  onParty?: (party: string | null) => void
+  /** A group folded or opened. */
+  onToggleGroup?: (key: string) => void
+  /** Read a group's figures again. */
+  onRetryGroup?: (partyId: string) => void
+  /** The columns on screen (a costly column is read only while shown: the readiness word). */
+  onShownColumns?: (ids: readonly string[]) => void
+  // ── end F-PR-03
 }
 
 export type { BulkReleaseModel }

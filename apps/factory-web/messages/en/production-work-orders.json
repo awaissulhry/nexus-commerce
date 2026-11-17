@@ -150,7 +150,8 @@
     "open_other": "{count} still in stock",
     "noReports": "Nothing reported to finished goods yet.",
     "hint": "Only garments quality released go into stock, per size, under the batch number.",
-    "hintSerial": "Only garments quality released go into stock, per size; each keeps its serial."
+    "hintSerial": "Only garments quality released go into stock, per size; each keeps its serial.",
+    "inBand": "Report finished is the main button at the top of the work order while released garments wait."
   },
   "finish": {
     "title": "Report {number} finished to stock",
