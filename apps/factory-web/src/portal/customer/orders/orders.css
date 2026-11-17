@@ -473,3 +473,33 @@
 .fw-pord-tiles {
   min-width: 0;
 }
+
+/* ---- B-TH-275 (P-CUS-ORD.body): the one state line above the tracker and "Made from your request". */
+.fw-pord-stateline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pord-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-pord-state.is-confirmed {
+  color: var(--nds-success-text);
+}
+
+.fw-pord-made {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  overflow-wrap: anywhere;
+}
+/* ---- end B-TH-275 */

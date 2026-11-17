@@ -7,6 +7,11 @@ import { Button } from '@nexus/ui/primitives'
 import type { ApprovalPage, ChangeRequest, DocumentsRead, OrderRecord, ProgressRead, ShipmentsRead } from '../api'
 import type { RecordTab } from '../model'
 import { useOrderWords } from '../words'
+// ---- B-TH-275: the order docks its conversation (the portal record frame, B-TH-273): no Messages tab, no Ask modal.
+import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
+import type { PortalFrameMode } from '../../../shell/record/model'
+import { orderNameOf } from '../model'
+// ---- end B-TH-275
 import { CancelDialog, ChangeDialog, PayDialog, PreviewDialog, ReconfirmDialog, type CancelDialogActions, type CancelDialogModel, type ChangeDialogActions, type ChangeDialogModel, type PayDialogActions, type PayDialogModel, type PreviewModel, type ReconfirmDialogActions, type ReconfirmDialogModel } from './Dialogs'
 import { DocumentsTab } from './DocumentsTab'
 import { LinesTab } from './LinesTab'
@@ -16,11 +21,13 @@ import { StatusTab } from './StatusTab'
 import '../orders.css'
 
 /**
- * SCR-184 › one order (design portal.customer.orders rec "Order": Status & progress, Lines, Shipments & tracking, Documents,
- * Messages). The frame's band holds the title, their PO first, the status, "Ask for a change" (and "Re-confirm version N"
- * while a revised version waits), the ⋯ (Ask to cancel, Pay the deposit, Promise date history, the order confirmation PDF,
- * Ask a question) and the five tabs; this view draws the tab and the pop-ups. Each part reads on its own: a part that failed
- * says so with Try again, never as an empty part.
+ * SCR-184 › one order (design portal.customer.orders rec "Order"; B-TH-275, picture 22: Status & progress, Lines, Shipments &
+ * tracking, Documents — 5 → 4 tabs). The frame's band holds the title ("Your order 12": the customer's own number), their PO, the
+ * status, "Ask for a change" (and "Re-confirm version N" while a revised version waits), the ⋯ (Ask to cancel, Pay the deposit,
+ * Promise date history, the order confirmation PDF, Ask a question) and the four tabs; this view draws the tab and the pop-ups
+ * beside the order's ONE conversation, docked by the portal record frame (`children`: PortalThread live, ThreadView in the design;
+ * from 1280 px ~40 % on the right, narrower behind "Messages (2 new)"). Each part reads on its own: a part that failed says so with
+ * Try again, never as an empty part. Loading, a failed read and a missing order draw no conversation.
  */
 
 type Part<T> = { state: 'loading' | 'error' | 'ready'; read: T | null }
@@ -70,6 +77,12 @@ export interface OrderRecordViewModel {
   dialog: OrderDialog | null
   /** B-W2b-194: "Reorder this line" (New order's reorder of this order; a person who may order), else null. */
   reorderHref?: string | null
+  // ---- B-TH-275
+  /** "Made from your request #7" (its page) or "your quote #3" (its conversation page), from the summary read; null: none. */
+  madeFrom?: { kind: 'request' | 'quote'; href: string; label: string | null } | null
+  /** The design review: the frame's layout whatever the window (docked at 1440, the narrow "Messages (2 new)"). */
+  frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number }
+  // ---- end B-TH-275
 }
 
 export interface OrderRecordActions {
@@ -101,7 +114,7 @@ export interface OrderRecordActions {
 }
 
 export function OrderRecordView({ model, actions, children }: { model: OrderRecordViewModel; actions?: OrderRecordActions; children?: ReactNode }) {
-  const { t, time } = useOrderWords()
+  const { t, time, locale } = useOrderWords()
   if (model.state === 'loading') return <Loading rows={4} height={80} />
   if (model.state === 'missing') {
     return (
@@ -129,34 +142,30 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
   const record = model.record
   const dialog = model.dialog
   return (
-    <div className="fw-pord">
-      {model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: time(model.offlineSince) })} /> : null}
-      {model.notice ? (
-        <Banner
-          tone={model.notice.tone}
-          title={t(model.notice.key, model.notice.params)}
-          action={
-            <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
-              {t('notice.hide')}
-            </Button>
-          }
-        />
-      ) : null}
-      {model.tab === 'status' ? <StatusTab model={model} record={record} actions={actions} /> : null}
-      {model.tab === 'lines' ? <LinesTab model={model} record={record} actions={actions} /> : null}
-      {model.tab === 'shipments' ? <ShipmentsTab model={model} actions={actions} /> : null}
-      {model.tab === 'documents' ? <DocumentsTab model={model} actions={actions} /> : null}
-      {model.tab === 'messages' ? (
-        <section id="messages" className="fw-pord-tab" aria-label={t('tabs.messages')}>
-          <p className="fw-pord-hint">{t('messages.hint')}</p>
-          {children}
-        </section>
-      ) : null}
-      {dialog?.kind === 'change' ? <ChangeDialog model={dialog.model} actions={actions?.dialog?.change} /> : null}
-      {dialog?.kind === 'cancel' ? <CancelDialog model={dialog.model} actions={actions?.dialog?.cancel} /> : null}
-      {dialog?.kind === 'reconfirm' ? <ReconfirmDialog model={dialog.model} actions={actions?.dialog?.reconfirm} /> : null}
-      {dialog?.kind === 'pay' ? <PayDialog model={dialog.model} actions={actions?.dialog?.pay} /> : null}
-      {dialog?.kind === 'preview' ? <PreviewDialog model={dialog.model} onClose={actions?.dialog?.preview?.onClose} onDownload={actions?.dialog?.preview?.onDownload} onRetry={actions?.dialog?.preview?.onRetry} /> : null}
-    </div>
+    <PortalRecordFrame thread={children ?? null} threadLabel={t('messages.label', { name: orderNameOf(record.order, locale, t) })} design={model.frame}>
+      <div className="fw-pord">
+        {model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: time(model.offlineSince) })} /> : null}
+        {model.notice ? (
+          <Banner
+            tone={model.notice.tone}
+            title={t(model.notice.key, model.notice.params)}
+            action={
+              <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
+                {t('notice.hide')}
+              </Button>
+            }
+          />
+        ) : null}
+        {model.tab === 'status' ? <StatusTab model={model} record={record} actions={actions} /> : null}
+        {model.tab === 'lines' ? <LinesTab model={model} record={record} actions={actions} /> : null}
+        {model.tab === 'shipments' ? <ShipmentsTab model={model} actions={actions} /> : null}
+        {model.tab === 'documents' ? <DocumentsTab model={model} actions={actions} /> : null}
+        {dialog?.kind === 'change' ? <ChangeDialog model={dialog.model} actions={actions?.dialog?.change} /> : null}
+        {dialog?.kind === 'cancel' ? <CancelDialog model={dialog.model} actions={actions?.dialog?.cancel} /> : null}
+        {dialog?.kind === 'reconfirm' ? <ReconfirmDialog model={dialog.model} actions={actions?.dialog?.reconfirm} /> : null}
+        {dialog?.kind === 'pay' ? <PayDialog model={dialog.model} actions={actions?.dialog?.pay} /> : null}
+        {dialog?.kind === 'preview' ? <PreviewDialog model={dialog.model} onClose={actions?.dialog?.preview?.onClose} onDownload={actions?.dialog?.preview?.onDownload} onRetry={actions?.dialog?.preview?.onRetry} /> : null}
+      </div>
+    </PortalRecordFrame>
   )
 }

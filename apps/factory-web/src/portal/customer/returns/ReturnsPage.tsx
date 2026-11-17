@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
@@ -22,6 +22,12 @@ import { requestRemake } from './remake/api'
 import { remakeBodyOf } from './remake/model'
 // B-W2b-357 (SAL-414, GP2:02): Report a safety incident (the band's ⋯ and the start's card).
 import { usePortalSafety } from './safety/use-safety'
+// ---- B-TH-275 (P-CUS-RET-LIST.list): the New messages column — ONE read of the cases shown (the portal's own client: its party's
+// shared messages only, B-TH-230's read).
+import { readUnreadWith } from '../../../lib/last-message-cell/api'
+import { useUnread } from '../../../lib/last-message-cell/use-unread'
+import { threadTypeOf } from './model'
+// ---- end B-TH-275
 
 /**
  * `/p/<party>/returns` for a customer (B-W2b-197; design portal.customer.returns, SCR-187): reads the cases (GET
@@ -151,6 +157,14 @@ function ListContainer() {
     onReconnect: () => setUpdates((count) => count + 1),
   })
 
+  // ---- B-TH-275: the person's own new messages on the cases shown (threads.read; ONE POST /threads/unread of ≤ 200), again live.
+  const readsThreads = frame.me.permissions.includes('threads.read')
+  const [unreadTick, setUnreadTick] = useState(0)
+  usePortalLive({ onChange: (change) => (change.type.startsWith('thread.') || change.type === 'partner_notification.created' ? setUnreadTick((tick) => tick + 1) : undefined), onReconnect: () => setUnreadTick((tick) => tick + 1) }, readsThreads)
+  const unreadRows = useMemo(() => (read?.items ?? []).map((item) => ({ recordType: threadTypeOf(item.type), id: item.id })), [read])
+  const unread = useUnread(readsThreads ? readUnreadWith(api) : null, unreadRows, unreadTick)
+  // ---- end B-TH-275
+
   // ── Start a return or claim ────────────────────────────────────────────────────────────────────────────────────────
   const loadReturnable = useCallback(
     async (order: string | null) => {
@@ -277,6 +291,7 @@ function ListContainer() {
         repairs,
         startHeld: startHeldKey ? t(startHeldKey) : null,
         start: startModel,
+        unread: readsThreads ? unread : null, // B-TH-275
       }}
       actions={{
         onChip: (next) => go(next, q),

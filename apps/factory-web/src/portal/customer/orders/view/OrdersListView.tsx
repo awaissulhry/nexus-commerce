@@ -16,6 +16,7 @@ import { kindKey, listChips, listRows, ownRef, recordHref, rowHref, rowState, sh
 import { portalCellText, portalColumnLabel, portalColumnsOf } from '../model' // B-TH-246
 // B-TH-230: the New messages column (LastMessageCell): the person's own new messages, their party's threads only.
 import { threadHref } from '../model'
+import { orderThreadHref } from '../model' // B-TH-275
 import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../lib/last-message-cell/view/LastMessageCell'
 import { unreadValue, type UnreadMap } from '../../../../lib/last-message-cell/model'
 import { useT } from '../../../../lib/i18n/provider'
@@ -235,7 +236,8 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
         { id: 'open', label: t('row.open'), href: recordHref(prefix, id) },
         { id: 'lines', label: t('row.lines'), href: recordHref(prefix, id, 'lines') },
         { id: 'shipments', label: t('row.shipments'), href: recordHref(prefix, id, 'shipments') },
-        { id: 'messages', label: t('row.messages'), href: recordHref(prefix, id, 'messages') },
+        // B-TH-275: the order's conversation docks beside its tabs; this opens it shown, the box focused.
+        { id: 'messages', label: t('row.messages'), href: orderThreadHref(prefix, id) },
       ]
       // B-TH-303: the menu names the customer's own number, never the office's.
       return <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('row.requestMenu', { name }) }} items={items} />

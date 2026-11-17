@@ -14,6 +14,13 @@ import { garmentLine, LIMITS, moneyText, NS, repairSteps, unitPriceText, type Re
 import '../returns.css'
 import './repair.css'
 
+// ---- B-TH-275 (P-CUS-REP.thread; B-TH-081): the repair docks its OWN conversation (the portal record frame, B-TH-273) — no longer
+// the account conversation behind "Ask".
+import type { ReactNode } from 'react'
+import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
+import type { PortalFrameMode } from '../../../shell/record/model'
+// ---- end B-TH-275
+
 /**
  * SCR-358 — a customer's repair in the portal (B-W2b-342; SAL-384, SAL-385, SAL-387; RR1:02; design portal.customer.returns
  * rec "Return" › Request / Status, the same tabs for a repair; repair.estimate "Parts and labour, approved by the customer
@@ -52,6 +59,8 @@ export interface RepairRecordViewModel {
   /** A photo cannot open now (offline, a preview): why (words), or null. */
   fileHeld: string | null
   dialog: RepairDialog | null
+  /** B-TH-275 — the design review: the frame's layout whatever the window (docked at 1440, the narrow "Messages (2 new)"). */
+  frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number }
 }
 
 export interface RepairRecordActions {
@@ -69,7 +78,7 @@ export interface RepairRecordActions {
   }
 }
 
-export function RepairRecordView({ model, actions }: { model: RepairRecordViewModel; actions?: RepairRecordActions }) {
+export function RepairRecordView({ model, actions, children }: { model: RepairRecordViewModel; actions?: RepairRecordActions; children?: ReactNode }) {
   const r = useT(NS)
   const listHref = `${model.prefix}/returns`
   if (model.state === 'loading') return <Loading rows={4} height={80} />
@@ -78,25 +87,27 @@ export function RepairRecordView({ model, actions }: { model: RepairRecordViewMo
   const repair = model.repair
   const dialog = model.dialog
   return (
-    <div className="fw-pret">
-      <OfflineBanner since={model.offlineSince} />
-      {model.notice ? (
-        <Banner
-          tone={model.notice.tone}
-          title={r(model.notice.key, model.notice.params)}
-          action={
-            <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
-              {r('portal.notice.hide')}
-            </Button>
-          }
-        />
-      ) : null}
-      {model.tab === 'status' ? <Status model={model} repair={repair} actions={actions} /> : <Request model={model} repair={repair} actions={actions} />}
-      {dialog?.kind === 'accept' ? <AcceptDialog repair={repair} model={model} busy={dialog.busy} problem={dialog.problem} onConfirm={actions?.dialog?.accept?.onConfirm} onClose={actions?.dialog?.accept?.onClose} /> : null}
-      {dialog?.kind === 'decline' ? <DeclineDialog repair={repair} dialog={dialog} actions={actions?.dialog?.decline} /> : null}
-      {dialog?.kind === 'photos' ? <PhotosDialog model={dialog.model} actions={actions?.dialog?.photos} /> : null}
-      {dialog?.kind === 'photo' ? <PhotoViewer model={dialog.model} onIndex={actions?.dialog?.photo?.onIndex} onClose={actions?.dialog?.photo?.onClose} onRetry={actions?.dialog?.photo?.onRetry} /> : null}
-    </div>
+    <PortalRecordFrame thread={children ?? null} threadLabel={r('portal.record.messagesLabel', { kind: r(`common.kind.${repair.kind}`), number: repair.number })} design={model.frame}>
+      <div className="fw-pret">
+        <OfflineBanner since={model.offlineSince} />
+        {model.notice ? (
+          <Banner
+            tone={model.notice.tone}
+            title={r(model.notice.key, model.notice.params)}
+            action={
+              <Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>
+                {r('portal.notice.hide')}
+              </Button>
+            }
+          />
+        ) : null}
+        {model.tab === 'status' ? <Status model={model} repair={repair} actions={actions} /> : <Request model={model} repair={repair} actions={actions} />}
+        {dialog?.kind === 'accept' ? <AcceptDialog repair={repair} model={model} busy={dialog.busy} problem={dialog.problem} onConfirm={actions?.dialog?.accept?.onConfirm} onClose={actions?.dialog?.accept?.onClose} /> : null}
+        {dialog?.kind === 'decline' ? <DeclineDialog repair={repair} dialog={dialog} actions={actions?.dialog?.decline} /> : null}
+        {dialog?.kind === 'photos' ? <PhotosDialog model={dialog.model} actions={actions?.dialog?.photos} /> : null}
+        {dialog?.kind === 'photo' ? <PhotoViewer model={dialog.model} onIndex={actions?.dialog?.photo?.onIndex} onClose={actions?.dialog?.photo?.onClose} onRetry={actions?.dialog?.photo?.onRetry} /> : null}
+      </div>
+    </PortalRecordFrame>
   )
 }
 

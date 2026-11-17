@@ -19,12 +19,13 @@ import type { PhotoTarget } from './view/Dialogs'
 import { useReturnWords } from './words'
 
 /**
- * `/p/<party>/returns/<id>?tab=request|status|messages` (a return) and `/p/<party>/returns/complaints/<id>?tab=…` (a
- * complaint) for a customer (B-W2b-197; design portal.customer.returns rec "Return"): reads the case (GET
+ * `/p/<party>/returns/<id>?tab=request|status` (a return) and `/p/<party>/returns/complaints/<id>?tab=…` (a complaint) for a
+ * customer (B-W2b-197; design portal.customer.returns rec "Return"; B-TH-275: the case's conversation docks beside its two tabs —
+ * an old `?tab=messages` opens Status with it shown and focused): reads the case (GET
  * /portal/returns/:id or /portal/complaints/:id), fills the band, runs the pop-ups — Cancel this request? (POST …/cancel
  * with the version read), Add photos (each photo announced, its bytes PUT to the store, confirmed), a photo full size and a
- * document or credit note in a new tab (each ONE logged open) — reads again on the live channel's hints, and draws the
- * case's Messages (its thread, B-W2b-197's partner views).
+ * document or credit note in a new tab (each ONE logged open) — reads again on the live channel's hints, and docks the
+ * case's conversation (its thread, B-W2b-197's partner views).
  */
 export function CustomerCasePage({ type, id }: { type: CaseType; id: string }) {
   return (
@@ -323,7 +324,8 @@ function CaseContainer({ type, id }: { type: CaseType; id: string }) {
         },
       }}
     >
-      {tab === 'messages' && record ? <PortalThread type={threadTypeOf(type)} id={record.id} showRecord={false} /> : null}
+      {/* B-TH-275: the case's ONE conversation, docked by the frame beside both tabs. */}
+      {record ? <PortalThread type={threadTypeOf(type)} id={record.id} showRecord={false} /> : null}
     </CaseRecordView>
   )
 }

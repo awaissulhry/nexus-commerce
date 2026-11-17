@@ -6,7 +6,8 @@ import { LIMITS, repairHref, stageTone, type RepairTab } from './model'
 /**
  * The frame's band of a repair's page (SCR-358; design portal.customer.returns rec "Return", the same for a repair): the
  * title, the stage, "Add photos" while the work has not started (held with why), the link tabs Status · Request (its
- * photos counted). One builder for the live page and its design cases.
+ * photos counted), "Ask a question" about the repair itself (B-TH-275: its own docked conversation). One builder for the live page
+ * and its design cases.
  */
 export function repairBandOf(input: { t: Translate; listTitle: string; repair: Repair; tab: RepairTab; prefix: string; photosHeld: string | null; onPhotos?: () => void }): PortalBand {
   const { t, repair } = input
@@ -25,6 +26,8 @@ export function repairBandOf(input: { t: Translate; listTitle: string; repair: R
         { id: 'request', label: t('portal.record.request'), href: repairHref(input.prefix, repair.id, 'request'), ...(repair.photos.length > 0 ? { count: repair.photos.length } : {}) },
       ],
     },
+    // B-TH-275 (B-TH-081): "Ask a question" focuses the repair's OWN docked conversation (no longer the account's).
+    ask: { type: 'RepairOrder', id: repair.id, label: repair.number },
     keys: [
       { keys: ['←', '→'], words: t('portal.keys.tabs') },
       { keys: ['Esc'], words: t('portal.keys.close') },

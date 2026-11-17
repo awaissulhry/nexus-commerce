@@ -1,13 +1,15 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { History } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, Clock, History } from 'lucide-react'
 import { Banner, Card, ChangeReview, DetailPopover, Disclosure, KeyValue, ProgressBar, type KeyValueItem } from '@nexus/ui/components'
 import { MilestoneTracker } from '@nexus/ui/components/MilestoneTracker/index'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { useDsWords } from '../../../../lib/i18n/ds-parts'
 import type { ApprovalPage, ChangeRequest, DepositRead, OrderRecord, ProgressRead } from '../api'
 import { milestoneSteps, movesOf, netMoved, openDeposits, promiseMoves, promiseOf, requestTone, shipToLines, sizeMoves } from '../model'
+// B-TH-275: the state line (confirmed only when confirmed), "Made from your request", the customer's own reference.
+import { orderRefOf, stateLineKey } from '../model'
 import { useOrderWords, type OrderWords } from '../words'
 import { Loading, ReadFailed, SizeRunTable } from './parts'
 import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView'
@@ -22,6 +24,8 @@ export function StatusTab({ model, record, actions }: { model: OrderRecordViewMo
   return (
     <div className="fw-pord-tab">
       {record.order.reconfirmNeeded ? <ReconfirmPanel model={model} actions={actions} /> : null}
+      {/* B-TH-275 */}
+      <StateLine model={model} record={record} />
       <Tracker model={model} record={record} actions={actions} />
       <Requests model={model} actions={actions} />
       {record.progressShared && model.progress.state !== 'hidden' ? <Progress model={model} actions={actions} /> : null}
@@ -30,6 +34,33 @@ export function StatusTab({ model, record, actions }: { model: OrderRecordViewMo
     </div>
   )
 }
+
+// ---- B-TH-275 (P-CUS-ORD.body; L2-G06, B-TH-006): ONE line above the tracker — "Your order is confirmed" only for a confirmed order,
+// "We received your order: it waits for our approval" while it waits for the office's yes, nothing for a later state — and, when the
+// order came from one, "Made from your request #7" (its page) or "Made from your quote #3" (its conversation page). Both are the
+// customer's own numbers (the summary's label), never the office's series.
+function StateLine({ model, record }: { model: OrderRecordViewModel; record: OrderRecord }) {
+  const { t } = useOrderWords()
+  const key = stateLineKey(record.order.status)
+  const made = model.madeFrom ?? null
+  if (!key && !made) return null
+  return (
+    <div className="fw-pord-stateline">
+      {key ? (
+        <p className={key === 'status.confirmed' ? 'fw-pord-state is-confirmed' : 'fw-pord-state'} role="status">
+          {key === 'status.confirmed' ? <CheckCircle2 size={16} aria-hidden /> : <Clock size={16} aria-hidden />} <span>{t(key)}</span>
+        </p>
+      ) : null}
+      {made ? (
+        <a className="fw-pord-made" href={made.href}>
+          {t(made.kind === 'request' ? (made.label ? 'status.madeFromRequest' : 'status.madeFromRequestNone') : made.label ? 'status.madeFromQuote' : 'status.madeFromQuoteNone', made.label ? { label: made.label } : undefined)}
+          <ArrowUpRight size={14} aria-hidden />
+        </a>
+      ) : null}
+    </div>
+  )
+}
+// ---- end B-TH-275
 
 /** The revised order's changes line by line, old → new (ChangeReview without ticks: they all go together). */
 export function RevisionReview({ page, words }: { page: ApprovalPage; words: OrderWords }) {
@@ -115,7 +146,7 @@ function Tracker({ model, record, actions }: { model: OrderRecordViewModel; reco
   return (
     <Card header={t('tracker.title')} headingLevel={2}>
       <div className="fw-pord-tracker">
-        <MilestoneTracker steps={milestoneSteps(record.milestones, locale, day)} label={t('tracker.label', { number: order.number })} labels={ds.milestoneTracker} />
+        <MilestoneTracker steps={milestoneSteps(record.milestones, locale, day)} label={t('tracker.label', { number: orderRefOf(order, t) /* B-TH-275 */ })} labels={ds.milestoneTracker} />
         <div className="fw-pord-promise">
           {order.status === 'CANCELLED' ? (
             <p className="fw-pord-promise-date">{order.cancelledOn ? t('tracker.cancelledOn', { date: day(order.cancelledOn) }) : t('tracker.cancelled')}</p>
