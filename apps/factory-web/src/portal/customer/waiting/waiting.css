@@ -1,0 +1,28 @@
+/*
+ * F-PR-14 — Home › Waiting for you: layout only, semantic tokens only. The page fills the portal's main area (no page max-width:
+ * Owner rule 2026-10-29); from 1600 px the groups stand in two columns side by side (09-design (f) at 1920), each row one line.
+ */
+
+.fw-pwait,
+.fw-pwait-loading {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.fw-pwait {
+  gap: var(--nds-space-16);
+}
+
+.fw-pwait-loading {
+  gap: var(--nds-space-8);
+}
+
+@media (min-width: 1600px) {
+  .fw-pwait-groups > .nds-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: var(--nds-space-24);
+    align-items: start;
+  }
+}

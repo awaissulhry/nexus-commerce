@@ -490,6 +490,13 @@ function OrderContainer({ id }: { id: string }) {
       })
   }
   const askFacts = (busy: boolean) => ({ ...facts, busy })
+  /** The cancel's own hold, then — on its review step — what it means (read, nothing blocked). */
+  const cancelHeldWithImpact = (state: CancelState): { key: string; field: 'scope' | 'reason' | 'note' | null } | null => {
+    const own = cancelHeld(rules.read, state.draft, { ...facts, busy: state.busy })
+    if (own || state.draft.step !== 'review') return own
+    const impact = impactHeld(state.impact ?? null)
+    return impact ? { key: impact, field: null } : null
+  }
   const askNextHeld = (state: AskState): string | null => {
     const held = askHeld(state.ask, rules.read, choices, askFacts(state.busy))
     if (held || !rules.read || !state.ask || !isProductionKind(state.ask) || state.step === 'what') return held
@@ -858,12 +865,11 @@ function OrderContainer({ id }: { id: string }) {
           },
         }
       : dialog.kind === 'cancel'
-        ? (() => {
+        ? {
+            kind: 'cancel',
             // F-PR-13: Send waits for what it means (read, nothing blocked).
-            const own = cancelHeld(rules.read, dialog.draft, { ...facts, busy: dialog.busy })
-            const impact = dialog.draft.step === 'review' ? impactHeld(dialog.impact ?? null) : null
-            return { kind: 'cancel' as const, model: { state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading', number: orderRefOf(record.order, t), rules: rules.read, draft: dialog.draft, held: own ?? (impact ? { key: impact, field: null } : null), busy: dialog.busy, problem: dialog.problem, impact: dialog.draft.step === 'review' ? (dialog.impact ?? null) : null } }
-          })()
+            model: { state: rules.read ? 'ready' : rules.state === 'error' ? 'error' : 'loading', number: orderRefOf(record.order, t), rules: rules.read, draft: dialog.draft, held: cancelHeldWithImpact(dialog), busy: dialog.busy, problem: dialog.problem, impact: dialog.draft.step === 'review' ? (dialog.impact ?? null) : null },
+          }
         : dialog.kind === 'ask' // F-PR-13
           ? {
               kind: 'ask',

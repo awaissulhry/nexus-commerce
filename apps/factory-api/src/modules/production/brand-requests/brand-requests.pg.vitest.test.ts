@@ -195,6 +195,11 @@ describe('B-PR-26: the factory answers its customers’ requests', { timeout: SL
     expect(JSON.stringify(page)).not.toMatch(/2500|25[.,]00/)
     const refusedAnswer = await send(productionA, 'POST', `/portal/approvals/${approvalId}/answer`, { decision: 'APPROVED', typedName: 'Paolo Production', version: page.request.version })
     expect(refusedAnswer.status).toBe(403)
+    // F-PR-14: the list says so too ("Waiting for your buyer" in Waiting for you); the buyer's list does not; never the amount.
+    const productionList = await ok(productionA, '/portal/approvals')
+    expect((productionList.items as Json[]).find((item) => item.id === approvalId)).toMatchObject({ kind: 'COUNTER_OFFER', waitingFor: null, waitingForBuyer: true })
+    expect(JSON.stringify(productionList)).not.toMatch(/2500|25[.,]00/)
+    expect(((await ok(buyerA, '/portal/approvals')).items as Json[]).find((item) => item.id === approvalId)).toMatchObject({ waitingForBuyer: false })
     const productionView = ((await ok(productionA, `/portal/sales-orders/${orders.so1.orderId}/change-requests`)).items as Json[]).find((item) => item.id === change.id)!
     expect(productionView.counter).toMatchObject({ priced: true, state: 'WAITING', date: offered })
     expect('fee' in productionView.counter).toBe(false)
@@ -228,6 +233,8 @@ describe('B-PR-26: the factory answers its customers’ requests', { timeout: SL
     const approvalId = countered.body.approvalRequestId as string
     const page = await ok(productionA, `/portal/approvals/${approvalId}`)
     expect(page.may.answer).toBe(true)
+    // F-PR-14: an unpriced counter waits for nobody in particular: the Production role answers it from Waiting for you.
+    expect(((await ok(productionA, '/portal/approvals')).items as Json[]).find((item) => item.id === approvalId)).toMatchObject({ kind: 'COUNTER_OFFER', waitingForBuyer: false })
     const no = await send(productionA, 'POST', `/portal/approvals/${approvalId}/answer`, { decision: 'REFUSED', answer: 'Made-up: we need the whole order cancelled.', typedName: 'Paolo Production', version: page.request.version })
     expect(no.status, JSON.stringify(no.body)).toBe(200)
     expect((await requestRow(cancel.id)).status).toBe('WITHDRAWN')

@@ -268,7 +268,11 @@ export async function portalApprovals(app: FastifyInstance, request: FastifyRequ
     const page = await partnerPage(system, row, who.locale, now)
     // B-PR-29: an open production approval another colleague answers reads "Waiting for <name>" (F-PR-14).
     const named = row.status === 'OPEN' ? await system.withClient((client) => approverVerdict(client, row, who, who.locale, now)) : null
-    items.push({ id: row.id, kind: page.request.kind, words: page.request.words, question: row.question, dueAt: page.request.dueAt, status: page.request.status, decided: page.request.decided, waitingFor: named && !named.may ? named.name : null })
+    // ---- F-PR-14: a priced counter-offer the reader may not answer (no prices) reads "Waiting for your buyer" in Waiting for you;
+    // the same rule as the page's and the answer's (B-PR-26 answererHeldOf). Never the amount: yes or no only.
+    const waitingForBuyer = row.status === 'OPEN' && (named === null || named.may) ? (await answererHeldOf(system, row, who, seesPricesOf(request, who), who.locale)) !== null : false
+    // ---- end F-PR-14
+    items.push({ id: row.id, kind: page.request.kind, words: page.request.words, question: row.question, dueAt: page.request.dueAt, status: page.request.status, decided: page.request.decided, waitingFor: named && !named.may ? named.name : null, waitingForBuyer })
   }
   return { state, items }
 }

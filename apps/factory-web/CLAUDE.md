@@ -202,6 +202,11 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   opens it at a kind): change, cancel and the production asks the customer's limits open (B-PR-25 rules `asks`); a waiting one is
   withdrawn there, a countered one answered in Waiting for you; step 3 = `POST …/change-requests/impact` (also in the change and
   cancel pop-ups' review steps): frozen in the API's words, cost (an amount only with prices), earliest date, our notes.
+- F-PR-14 `src/portal/customer/waiting/` — Home › Waiting for you (`/p/<party>/waiting`, catalogue `portal-waiting`, nav page
+  `home.waiting` built): `api.ts` (GET /portal/approvals?state=OPEN with `waitingFor` / `waitingForBuyer`; the answer and the
+  payments re-exported from home/ and documents/), `model.ts` (pure: groups by kind, one verb per row, the 10 s Undo window),
+  `WaitingPage.tsx` (container: Home's ApproveDialog, an answer sent after `UNDO_MS`, sent at once when the page is left),
+  `view/WaitingView.tsx` (DS ActionList). F-PR-12a/b's "See what waits for you" leads here (`waitingHrefOf`).
 - `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
   SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
   &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every
