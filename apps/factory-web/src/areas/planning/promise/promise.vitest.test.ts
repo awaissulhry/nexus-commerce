@@ -11,6 +11,11 @@ import { LIST_PAGES } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { acceptRepromise, calculatePromise, CERTIFICATE_STATES, declineRepromise, listPromises, promiseOnQuote, proposeRepromise, repromiseDraft, withdrawRepromise } from './api'
 import { designScreen, FIXTURES } from './fixtures'
+// ---- F-PR-20
+import { CUSTOMER_ANSWERS, proposalSchema } from './api'
+import { acceptBodyOf, acceptLabelKey, CUSTOMER_ANSWER_TONE, openedProposalOf } from './model'
+import { CATALOGUE } from '../../../lib/i18n/messages'
+// ---- end F-PR-20
 import {
   atpRows,
   bridgeSetter,
@@ -282,5 +287,69 @@ describe('every design case draws in both languages with no key left on screen',
         expect(html.match(LEFT_PLACEHOLDER)?.[0] ?? null, `${screen.screen}/${item.id} (${locale}) placeholder`).toBeNull()
       }
     }
+  })
+})
+
+// ---- F-PR-20 -------------------------------------------------------------------------------------------------------------------
+/**
+ * F-PR-20 (production plan §3 "Brand alone: accept or refuse a new date"; §5 Promises: "Ask the brand" on a new date; B-PR-28):
+ * sales' accept may ask the customer (`askBrand`, off by default; the date stands either way), the customer's link is shown once
+ * and copied, and the proposal shows the customer's answer — also when its task opens a proposal decided since. The proposals'
+ * shape stays B-PR-28's (threads B-TH-077 reads the same ones on the order). Made-up data.
+ */
+describe('F-PR-20: Ask the customer when accepting a new date, and the customer’s answer on the proposal', () => {
+  const { ASKED_PROPOSAL, REFUSED_PROPOSAL, ASK_LINK } = FIXTURES
+
+  it('the accept asks the customer only when the switch is on; tell stays as chosen', () => {
+    expect(acceptBodyOf({ tell: true })).toEqual({ tell: true })
+    expect(acceptBodyOf({ tell: true, askBrand: false })).toEqual({ tell: true })
+    expect(acceptBodyOf({ tell: false, askBrand: true })).toEqual({ tell: false, askBrand: true })
+  })
+
+  it('the accept button says what it does', () => {
+    expect(acceptLabelKey(false, false)).toBe('decide.accept')
+    expect(acceptLabelKey(true, false)).toBe('decide.acceptTell')
+    expect(acceptLabelKey(false, true)).toBe('decide.acceptAsk')
+    expect(acceptLabelKey(true, true)).toBe('decide.acceptTellAsk')
+  })
+
+  it('the call carries askBrand as B-PR-28 takes it, and reads the link once and the customer’s answer', async () => {
+    const { api, calls } = mockApi([{ told: false, outboundId: null, lineDate: null, replayed: false, proposal: ASKED_PROPOSAL, brandAsk: { requestId: 'r1', url: ASK_LINK } }])
+    const answer = await acceptRepromise(api, 'p1', acceptBodyOf({ tell: false, askBrand: true }), 'k9')
+    expect(calls[0]).toMatchObject({ method: 'POST', url: '/api/planning/promises/re-promises/p1/accept', body: { tell: false, askBrand: true }, key: 'k9' })
+    // PW-P05 (office side): the ask names no customer — the API asks the order's own; nothing but the switch is sent.
+    expect(Object.keys(calls[0]!.body as object).sort()).toEqual(['askBrand', 'tell'])
+    expect(answer.brandAsk?.url).toBe(ASK_LINK)
+    expect(answer.proposal.customerAnswer?.state).toBe('WAITING')
+  })
+
+  it('a proposal without the customer’s answer (not asked, or an older answer) still parses', () => {
+    const older = { ...REFUSED_PROPOSAL, customerAnswer: undefined }
+    expect(proposalSchema.parse(older).customerAnswer).toBeUndefined()
+    expect(proposalSchema.parse({ ...older, customerAnswer: null }).customerAnswer).toBeNull()
+    expect(proposalSchema.parse(REFUSED_PROPOSAL).customerAnswer?.followUp?.status).toBe('OPEN')
+  })
+
+  it('the proposal its task opened joins its own line only, and only once decided', () => {
+    expect(openedProposalOf(REFUSED_PROPOSAL, REFUSED_PROPOSAL.line.id)).toBe(REFUSED_PROPOSAL)
+    expect(openedProposalOf(REFUSED_PROPOSAL, 'another-line')).toBeNull()
+    expect(openedProposalOf({ ...REFUSED_PROPOSAL, state: 'WAITING' }, REFUSED_PROPOSAL.line.id)).toBeNull()
+    expect(openedProposalOf(null, REFUSED_PROPOSAL.line.id)).toBeNull()
+    expect(openedProposalOf(REFUSED_PROPOSAL, null)).toBeNull()
+  })
+
+  it('every answer state has a tone and words in both languages; the switch, the link and the answer have their words', () => {
+    expect(Object.keys(CUSTOMER_ANSWER_TONE).sort()).toEqual([...CUSTOMER_ANSWERS].sort())
+    for (const locale of LOCALES) {
+      const catalogue = CATALOGUE[locale][NAMESPACE] as Record<string, string>
+      for (const state of CUSTOMER_ANSWERS) expect(catalogue[`answer.state.${state}`], `${locale} ${state}`).toBeTruthy()
+      for (const status of ['OPEN', 'DONE', 'CANCELLED']) expect(catalogue[`answer.followUp.${status}`], `${locale} ${status}`).toBeTruthy()
+      for (const key of ['decide.askBrand', 'decide.askBrandHint', 'decide.acceptAsk', 'decide.acceptTellAsk', 'done.asked', 'link.title', 'link.copy', 'link.once', 'answer.title', 'answer.at', 'answer.words', 'answer.signed', 'opened.title', 'opened.decided', 'opened.decidedNoName', 'opened.notAsked', 'notice.linkCopied']) expect(catalogue[key], `${locale} ${key}`).toBeTruthy()
+    }
+    expect(words('it').t('answer.words', { words: 'troppo tardi' })).toContain('troppo tardi')
+  })
+
+  it('the design cases exist: sales asking, the link once, the refused answer from its task', () => {
+    for (const id of ['decide-ask', 'accepted-asked', 'opened-refused']) expect(designScreen.cases.some((item) => item.id === id), id).toBe(true)
   })
 })

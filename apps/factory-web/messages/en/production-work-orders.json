@@ -133,7 +133,6 @@
     "title": "Finished to stock",
     "report_one": "Report {count} finished",
     "report_other": "Report {count} finished",
-    "reportNone": "Report finished",
     "pieces": "Garments",
     "released": "Released by quality",
     "inStock": "In finished goods",
@@ -224,17 +223,6 @@
     "hint": "Counted from the floor’s scans and the rework orders; per operation, never per person."
   },
   "flow": {
-    "title": "Operation flow",
-    "hint": "The pile waiting before each operation.",
-    "waiting": "waiting",
-    "waitingLabel_one": "{count} garment waiting before {code}",
-    "waitingLabel_other": "{count} garments waiting before {code}",
-    "good_one": "{count} good",
-    "good_other": "{count} good",
-    "scrap_one": "{count} scrap",
-    "scrap_other": "{count} scrap",
-    "rework_one": "{count} rework",
-    "rework_other": "{count} rework",
     "bottleneck": "Biggest pile"
   },
   "reserve": {
@@ -368,5 +356,11 @@
     "write": "It could not be saved: try again.",
     "read": "It could not be read: try again.",
     "forbiddenRead": "You may not see this."
+  },
+  "supervisor": {
+    "column": "Supervisor",
+    "tile": "Mine",
+    "assign": "Assign supervisor…",
+    "cardMe": "Supervisor: me"
   }
 }

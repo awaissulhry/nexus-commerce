@@ -13,7 +13,9 @@ import type { SplitModel } from '../every-shift/use-split'
 import { LEATHER_GARMENT, LEATHER_MIXED, LEATHER_NONE, LEATHER_ONE, LEATHER_OUT_OF_SHADE } from './leather/fixtures'
 // ---- B-TH-265: the work order on RecordFrame — its docked thread (its own notes, or an order's picked beside it), "Order files (n)" ----
 import { designDockedThread } from '../../../_shared/record-frame/fixtures'
-import { filesReady, leftOut, orderFilesOf, orderGroup } from './order-files/fixtures'
+import { filesReady, leftOut, orderFilesOf, orderGroup, twoGroupsOf, twoOrdersOf } from './order-files/fixtures'
+// F-PR-21
+import { targetsOfRecord } from '../../../_shared/production-supervisor/model'
 import { threadChoices, type ThreadPick } from './order-files/model'
 import { WorkOrderThreads } from './view/WorkOrderThreads'
 // ---- end B-TH-265
@@ -31,7 +33,7 @@ import type { HealthModel } from './health/model'
  * the docked thread beside every tab (B-TH-265: the work order's own notes, or an order's thread picked beside it; Activity went,
  * its tools in the thread's "⋯"), Order files (agreement T9), a change while editing, and the states (loading, error, not found, no
  * permission). Roles: Owner, Production manager, Team leader (floor supervisor in the Office), Sales (read-only).
- * Cutting is SCR-071, Bundles and Operations SCR-072. B-W2b-130: Materials › Leather — each leather's shade lots with the hides
+ * Cutting & bundles is SCR-071, Operations & WIP SCR-072 (F-PR-06: Cutting and Bundles are one tab). B-W2b-130: Materials › Leather — each leather's shade lots with the hides
  * held, reserved and cut, and the one shade lot rule in words (one lot, none yet, mixed against the rule, mixed where the rule is
  * per garment, out of shade), with its states.
  */
@@ -165,6 +167,8 @@ export function recordCase(role: Role, status: WorkOrderStatus, over: Partial<Wo
       gates: null,
       preview: { can: role === 'owner' || role === 'manager', busy: false },
       partiesView: (ROLES[role] as readonly string[]).includes('parties.view'),
+      // F-PR-21: the supervisor fact (drawn when the work order carries one); Change… only with production.brand.manage.
+      supervisor: { can: role === 'owner' || role === 'manager', assign: null },
       ...over,
     },
   }
@@ -240,7 +244,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     // ---- B-TH-265: the docked thread (the rule of picture 38) and the order files (agreement T9) ----
     {
       id: 'thread-docked',
-      label: 'B-TH-265 · The work order’s notes docked beside Overview (40 %; one third on Cutting and Bundles under 1600 px)',
+      label: 'B-TH-265 · The work order’s notes docked beside Overview (40 %; one third on Cutting & bundles under 1600 px)',
       model: recordCase('manager', 'IN_PROGRESS'),
       note: 'The band sits in the shell’s band row with ONE status pill; the thread is docked, sticky, ⌘J hides it. The work order’s own thread has no party: Office notes only (never shared with a customer), a note may go to the tablets with its “For the floor” tick. Its “⋯” holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me). An old ?tab=activity opens Overview with the thread; ?tab=documents opens Overview (the traveller and the style revision are in the band’s ⋯).',
     },
@@ -258,6 +262,35 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'order-files-refused', label: 'B-TH-265 · Order files: a file that could not be opened, in words', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS')), { open: true, problem: 'orderFiles.gone' }) }) },
     { id: 'order-files-failed', label: 'B-TH-265 · Order files could not be read: Try again', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: { files: { state: 'error', problem: 'error.offline' }, open: true, opening: null, problem: null } }) },
     { id: 'order-files-none', label: 'B-TH-265 · A work order of no order (stock): no Order files in the band', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS'), [])), threadChoices: [] }) },
+    // ---- F-PR-25: Order files and Order thread on the work order band ----
+    { id: 'order-files-showing', label: 'F-PR-25 · Order files: a PDF being read beside the list (the viewer takes it next)', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS')), { open: true, shown: { id: 'file-demo-3', name: 'Grafica schiena v3.pdf', look: 'pdf', state: 'loading' } }) }) },
+    { id: 'order-files-show-failed', label: 'F-PR-25 · Order files: a file that could not be shown, in words (Try again)', model: recordCase('manager', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS')), { open: true, shown: { id: 'file-demo-1', name: 'Conferma ordine SO-DEMO-0042.pdf', look: 'pdf', state: 'error', problem: 'orderFiles.gone' } }) }) },
+    { id: 'order-files-locked', label: 'F-PR-25 · Order files without the measurements right: "Measurement sheet: opens with the measurements right (1)"', model: recordCase('sales', 'IN_PROGRESS', { orderFiles: filesReady(orderFilesOf(workOrder('IN_PROGRESS'), [orderGroup(workOrder('IN_PROGRESS'), { worksheets: [], measurementsLeftOut: 1 })]), { open: true }) }) },
+    {
+      id: 'order-files-two-orders',
+      label: 'F-PR-25 · One customer’s two orders: two groups, their PO first; the band’s "Order thread" is a menu',
+      model: (() => {
+        const two = twoOrdersOf(workOrder('IN_PROGRESS'))
+        const read = twoGroupsOf(two)
+        return recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: two }, orderFiles: filesReady(read, { open: true }), threadChoices: threadChoices(two.orders, { state: 'ready', read }) })
+      })(),
+    },
+    // ---- end F-PR-25
+    // ---- F-PR-21: the supervisor fact in the band (by name inside this one record) and its Change… ----
+    { id: 'supervisor-order', label: 'F-PR-21 · "Supervisor Bea Esempio · this order" with Change…', model: recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-bea', name: 'Bea Esempio', active: true, from: 'ORDER', me: false }, youMuted: null }) } }) },
+    { id: 'supervisor-default', label: 'F-PR-21 · "· customer default" (no supervisor of its own); held Change… without the right', model: recordCase('sales', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-bea', name: 'Bea Esempio', active: true, from: 'BRAND', me: false }, youMuted: null }) } }) },
+    { id: 'supervisor-muted', label: 'F-PR-21 · To the supervisor himself, who muted the order: "You muted this order"', model: recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-me', name: 'Alex Demo', active: true, from: 'ORDER', me: true }, youMuted: true }) } }) },
+    { id: 'supervisor-inactive', label: 'F-PR-21 · A supervisor no longer active, said in words', model: recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-old', name: 'Dora Campione', active: false, from: 'BRAND', me: false }, youMuted: null }) } }) },
+    { id: 'supervisor-not-set', label: 'F-PR-21 · "Supervisor: not set" with Change…', model: recordCase('manager', 'IN_PROGRESS', { workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: null, youMuted: null }) } }) },
+    {
+      id: 'supervisor-change',
+      label: 'F-PR-21 · Change… opens THE assign dialog over the work order’s order',
+      model: recordCase('manager', 'IN_PROGRESS', {
+        workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { supervisor: { id: 'user-demo-bea', name: 'Bea Esempio', active: true, from: 'BRAND', me: false }, youMuted: null }) },
+        supervisor: { can: true, assign: { targets: targetsOfRecord(workOrder('IN_PROGRESS')), leftOut: 0, current: { name: 'Bea Esempio', from: 'BRAND' }, people: { status: 'ready', people: [{ id: 'user-demo-me', name: 'Alex Demo', me: true }, { id: 'user-demo-bea', name: 'Bea Esempio', me: false }], complete: true }, busy: false, problem: null, result: null } },
+      }),
+    },
+    // ---- end F-PR-21
     { id: 'changed', label: 'Someone changed it while the page holds an edit: Reload', model: recordCase('manager', 'IN_PROGRESS', { changed: { at: '2026-10-29T09:42:00.000Z' }, draft: { editing: true } }) },
     { id: 'notice', label: 'After a write: a notice', model: recordCase('manager', 'RELEASED', { notice: { tone: 'success', words: { key: 'notice.released', params: { batch: 'BA-00049' } } } }) },
     { id: 'owner', label: 'Owner: everything', model: recordCase('owner', 'IN_PROGRESS') },
@@ -294,6 +327,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2a-scrap-none', label: 'W2a · Quality: no scrap and no rework yet', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', daily: dailyFor('manager', 'IN_PROGRESS', { scrap: { value: [], problem: null } }) }) },
     { id: 'w2a-scrap-loading', label: 'W2a · Quality: scrap and rework loading', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', daily: dailyFor('manager', 'IN_PROGRESS', { scrap: { value: null, problem: null } }) }) },
     { id: 'w2a-scrap-error', label: 'W2a · Quality: scrap and rework could not be read (Try again)', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', daily: dailyFor('manager', 'IN_PROGRESS', { scrap: { value: null, problem: 'problem.read' } }) }) },
+    // ---- F-PR-06: Quality is the one scrap home; Share with the customer held on a mixed work order ----
+    { id: 'quality-share', label: 'F-PR-06 · Quality: a final inspection’s report — Share with the customer… (its window, a new tab); the scrap home with its door to Scrap & rework', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', shareReports: true }) },
+    { id: 'quality-share-mixed', label: 'F-PR-06 · A work order of several customers (made before the rule): Share held — “Mixed work order: not for a customer”', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', shareReports: true, workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { partyId: null, customer: null, mixedCustomers: true }) } }) },
+    { id: 'quality-share-no-right', label: 'F-PR-06 · Without quality.documents.share: Share held, said in words', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality' }) },
+    // ---- end F-PR-06
     // ---- B-W2a-72: Labour & cost (the work order's cost from the ledger; the cost grain only; never per person) ----
     { id: 'w2a-labour', label: 'W2a · Labour & cost: planned · actual · variance · per garment, the bridge, materials per lot, labour per operation', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR) }), note: 'Standard 4,600.00, actual so far 5,028.00 (+428.00): material +508.00 (price +196.00, usage +312.00), labour −80.00 (3,680 of 4,000 standard minutes earned).' },
     { id: 'w2a-labour-no-cost', label: 'W2a · Labour & cost · Production manager (no cost grain): the whole section needs money.cost, said in words', model: recordCase('manager', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('manager', null) }) },

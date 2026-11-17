@@ -3,20 +3,21 @@
 import { CheckCheck, Save } from 'lucide-react'
 import { Banner, Field } from '@nexus/ui/components'
 import { Button, Input, Select, Skeleton, Spinner } from '@nexus/ui/primitives'
-import { GATE_KINDS, GATE_LIMITS, isSampleGate, type GateKind } from '@nexus/factory-domain/planning/milestones/rules'
+import { GATE_LIMITS, isSampleGate, type GateKind } from '@nexus/factory-domain/planning/milestones/rules'
 import { INTL_LOCALE } from '../../../../lib/i18n/locales'
 import { useT } from '../../../../lib/i18n/provider'
 import { ActionConfirm, DateField, Modal } from '../../../../lib/i18n/ds-parts'
 import { listKeys, type ListKey } from '../../../../list-frame/model'
 import type { Gate, Order } from '../api'
 import { dayText, draftHeld, gateName, heldOf, kindsLeft, reasonHeld, type GateDraft, type Words } from '../model'
+import { GATE_PICKER_KINDS, roundsForGate } from '../model' // F-PR-19
 import type { MilestonesActions, MilestonesModel } from '../view-model'
 import { StartBeforeDialog } from './StartBeforeDialog'
 
 /**
- * The page's dialogs: Add a gate / Change the gate (the order, the kind — one per kind and order, Other as many as needed —,
- * what it is in words, the target date, the sample round it waits for (a pre-production sample: a pre-production round), its
- * planner), Mark done on a day (today or a day before; one gate or the ticked ones), Start before the gate? (the shared
+ * The page's dialogs: Add a gate / Change the gate (the order, the kind — one per kind and order, Other as many as needed and
+ * last —, what it is in words, the target date, the sample round it waits for (a pre-production sample: a pre-production round;
+ * F-PR-19: a size set: a size set round; never a top-of-production round, which gates nothing), its planner), Mark done on a day (today or a day before; one gate or the ticked ones), Start before the gate? (the shared
  * dialog), Remove the gate (a confirm: only while neither passed nor started before), and the keyboard keys.
  */
 export function GateDialogs({ model, actions, words }: { model: MilestonesModel; actions?: MilestonesActions; words: Words }) {
@@ -35,10 +36,12 @@ export function GateDialogs({ model, actions, words }: { model: MilestonesModel;
     const draft = dialog.draft
     const set = (next: Partial<GateDraft>) => actions?.onDraft?.({ ...draft, ...next })
     const choices = dialog.choices?.status === 'ready' ? dialog.choices.value : null
-    const kinds: readonly GateKind[] = dialog.kind === 'edit' ? [draft.kind] : order ? kindsLeft(order) : GATE_KINDS
-    const rounds = (choices?.rounds ?? []).filter((round) => draft.kind !== 'PP_SAMPLE' || round.kind === 'PRE_PRODUCTION')
+    // F-PR-19: Other last in the picker; only the rounds the gate's kind accepts (size set → size set rounds; a TOP round gates nothing).
+    const kinds: readonly GateKind[] = dialog.kind === 'edit' ? [draft.kind] : order ? kindsLeft(order) : GATE_PICKER_KINDS
+    const rounds = roundsForGate(draft.kind, choices?.rounds ?? [])
+    const roundHint = draft.kind === 'PP_SAMPLE' ? t('form.roundHintPp') : draft.kind === 'SIZE_SET' ? t('form.roundHintSizeSet') : t('form.roundHint')
     const openOrders = (world?.orders ?? []).filter((entry) => entry.mayAddGate.allowed)
-    const held = dialog.busy ? t('held.busy') : !order ? t('held.pickOrder') : draftHeld(draft, t)
+    const held = dialog.busy ? t('held.busy') : !order ? t('held.pickOrder') : draftHeld(draft, t, choices?.rounds ?? [])
     return (
       <Modal
         open
@@ -92,7 +95,7 @@ export function GateDialogs({ model, actions, words }: { model: MilestonesModel;
             <DateField value={draft.targetDate} onChange={(value) => set({ targetDate: value })} ariaLabel={t('form.target')} locale={INTL_LOCALE[locale]} />
           </Field>
           {isSampleGate(draft.kind) && (
-            <Field label={t('form.round')} hint={draft.kind === 'PP_SAMPLE' ? t('form.roundHintPp') : t('form.roundHint')}>
+            <Field label={t('form.round')} hint={roundHint}>
               {dialog.choices?.status === 'loading' ? (
                 <Skeleton height={32} />
               ) : (
