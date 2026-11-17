@@ -24,6 +24,7 @@ import {
   staying,
   taskGroupsOf,
   withNonEssential,
+  backOnFrequency,
 } from './model'
 import { recordTypeKey, THREAD_BODY_LIMIT, threadHeldKey } from './thread-model'
 
@@ -176,11 +177,18 @@ describe('E-mail settings (COL-063): the draft and what a save sends', () => {
     expect(emailChanges(SETTINGS, emailDraftOf(SETTINGS))).toEqual([])
   })
 
-  it('the one switch turns every non-essential topic off, and back to a daily summary', () => {
+  it('the one switch turns every non-essential topic off, and back on to the API’s defaults: messages as it happens (B-TH-045), the rest daily', () => {
     const off = withNonEssential(SETTINGS, emailDraftOf(SETTINGS), true)
     expect(off).toEqual({ ORDERS: 'INSTANT', DATES: 'OFF', MESSAGES: 'OFF' })
     expect(allNonEssentialOff(SETTINGS, off)).toBe(true)
-    expect(withNonEssential(SETTINGS, off, false)).toEqual({ ORDERS: 'INSTANT', DATES: 'DAILY', MESSAGES: 'DAILY' })
+    expect(withNonEssential(SETTINGS, off, false)).toEqual({ ORDERS: 'INSTANT', DATES: 'DAILY', MESSAGES: 'INSTANT' })
+    expect(backOnFrequency('MESSAGES')).toBe('INSTANT')
+    for (const topic of ['DATES', 'CLAIMS', 'DOCUMENTS', 'REMINDERS']) expect(backOnFrequency(topic)).toBe('DAILY')
+    // Turning it back on sends what changed: messages as it happens, dates in the daily summary.
+    expect(emailChanges({ ...SETTINGS, topics: SETTINGS.topics.map((topic) => (topic.locked ? topic : { ...topic, frequency: 'OFF' as const })) }, withNonEssential(SETTINGS, off, false))).toEqual([
+      { topic: 'DATES', frequency: 'DAILY' },
+      { topic: 'MESSAGES', frequency: 'INSTANT' },
+    ])
   })
 })
 
