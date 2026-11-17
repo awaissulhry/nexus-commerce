@@ -178,3 +178,21 @@ export function overrideOrderOf(changes: readonly OverrideChange[]): OverrideOrd
 export function overrideGrantProblem(override: { readonly requestedById: string; readonly askedById: string | null }, granterId: string): string | null {
   return grantProblem(override, granterId) ?? (override.askedById !== null && override.askedById === granterId ? 'You asked the customer for this approval: someone else grants what we do for them.' : null)
 }
+
+/**
+ * B-PR-30b, what is NOT built (it needs a schema change: the database keeps a decided sample round, a decided swatch and a passed
+ * gate as they are — factory_sample_round_guard, factory_sample_swatch_guard, factory_order_gate_guard): putting back the
+ * customer's decision on a sample round or a material swatch. Until those guards let a reversal through, the office reads why
+ * (code KEPT) and makes a new round or swatch to ask again; nothing is marked put back that still holds.
+ */
+export const RECORD_KEPT_WORDS: Readonly<Record<'SampleRound' | 'SampleSwatch', Words>> = Object.freeze({
+  SampleRound: {
+    it: "La decisione del cliente su un giro di campionatura resta com'è: per cambiarla fate un nuovo giro e chiedetelo di nuovo al cliente.",
+    en: "The customer's decision on a sample round stays as it is: to change it, make a new round and ask them again.",
+  },
+  SampleSwatch: {
+    it: "La decisione del cliente su un campione di materiale resta com'è: per cambiarla inviate un nuovo campione e chiedetelo di nuovo.",
+    en: "The customer's decision on a material swatch stays as it is: to change it, send a new swatch and ask them again.",
+  },
+})
+

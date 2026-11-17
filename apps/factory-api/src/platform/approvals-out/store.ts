@@ -8,8 +8,8 @@ import type { RequestRef } from './adapter'
 
 /**
  * Every read and write of ApprovalRequest outside the adapters (B-W2b-184; links-depth.prisma, B-W2b-154). The partner role
- * reads its own party's requests but never `createdById`, `withdrawnById` (hidden columns) or, B-PR-30a, who of us
- * decided for it (`decidedForPartyById`): PARTNER_COLUMNS leaves them out. Its files are StoredFiles of record type ApprovalRequest (copies of the record's, shared with the party).
+ * reads its own party's requests but never `createdById`, `withdrawnById` (hidden columns) or, B-PR-30a/30b, who of us
+ * decided for it or put its answer back (`decidedForPartyById`, `reversedById`): PARTNER_COLUMNS leaves them out. Its files are StoredFiles of record type ApprovalRequest (copies of the record's, shared with the party).
  */
 
 type Client = FactoryClient | CommandTx
@@ -37,15 +37,17 @@ export const PARTNER_COLUMNS = {
   answeredViaLinkId: true,
   withdrawnAt: true,
   withdrawReason: true,
-  // B-PR-30a: why we decided it for the party (the party reads it; never who of us — decidedForPartyById is the office's: the
-  // partner role holds no grant on it).
+  // B-PR-30a/30b: why we decided it for the party, and why its answer was put back (the party reads both; never who of us —
+  // decidedForPartyById and reversedById are the office's: the partner role holds no grant on them).
   decidedForPartyReason: true,
+  reversedAt: true,
+  reverseReason: true,
   version: true,
   createdAt: true,
   updatedAt: true,
 } as const satisfies Prisma.ApprovalRequestSelect
 
-export const OFFICE_COLUMNS = { ...PARTNER_COLUMNS, createdById: true, withdrawnById: true, decidedForPartyById: true } as const satisfies Prisma.ApprovalRequestSelect
+export const OFFICE_COLUMNS = { ...PARTNER_COLUMNS, createdById: true, withdrawnById: true, decidedForPartyById: true, reversedById: true } as const satisfies Prisma.ApprovalRequestSelect
 
 export type PartnerRow = Prisma.ApprovalRequestGetPayload<{ select: typeof PARTNER_COLUMNS }>
 export type OfficeRow = Prisma.ApprovalRequestGetPayload<{ select: typeof OFFICE_COLUMNS }>

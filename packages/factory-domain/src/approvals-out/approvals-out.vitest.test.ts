@@ -12,8 +12,8 @@ import { grantProblem, OVERRIDE_TASK_KIND, overridePlan, REVERSE_EFFECTS, revers
 import { APPROVAL_TASK_KINDS } from '../approvals/rules'
 import { decidedForPartyWords, decideForPartyProblems, mayDecideForParty, mayReverse, OVERRIDE_LIMITS, OWN_WORD_KINDS, reversedWords, reverseProblems } from './rules'
 // B-PR-30a / B-PR-30b
-import { decidedForPartyPageWords, decideForRefusal, OVERRIDE_REFUSALS } from './rules'
-import { overrideChanges, overrideGrantProblem, overrideOrderOf } from '../production-brand/override'
+import { decidedForPartyPageWords, decideForRefusal, OVERRIDE_REFUSALS, reverseRefusal, withReversalWords } from './rules'
+import { overrideChanges, overrideGrantProblem, overrideOrderOf, RECORD_KEPT_WORDS } from '../production-brand/override'
 
 const NOW = new Date('2026-11-07T09:00:00.000Z')
 const DAY = 86_400_000
@@ -226,31 +226,41 @@ describe('B-PR-24: the new kinds, deciding for a customer and putting its answer
   })
 })
 
-// ---- B-PR-30a: the refusals with their codes, the words the customer reads, the act a second person grants ------------------
-describe('decide for the party (B-PR-30a)', () => {
+// ---- B-PR-30a / B-PR-30b: the refusals with their codes, the words the customer reads, the act a second person grants ----------
+describe('decide for the party and put its answer back (B-PR-30a, B-PR-30b)', () => {
   const ASKER = '00000000-0000-4000-8000-0000000000b1'
   const OTHER = '00000000-0000-4000-8000-0000000000b2'
   const GRANTER = '00000000-0000-4000-8000-0000000000b3'
 
   it('each refusal has its code and the same words as the problems', () => {
     expect(OVERRIDE_REFUSALS).toEqual(['OWN_WORD', 'NOT_OPEN', 'ANSWERED', 'OWN_ASK', 'NOT_ANSWERED', 'REVERSED'])
-    for (const kind of OWN_WORD_KINDS) expect(decideForRefusal({ kind, status: 'OPEN', askedById: ASKER }, OTHER)?.code, kind).toBe('OWN_WORD')
+    for (const kind of OWN_WORD_KINDS) {
+      expect(decideForRefusal({ kind, status: 'OPEN', askedById: ASKER }, OTHER)?.code, kind).toBe('OWN_WORD')
+      expect(reverseRefusal({ kind, status: 'APPROVED', reversedAt: null })?.code, kind).toBe('OWN_WORD')
+    }
     expect(decideForRefusal({ kind: 'SAMPLE', status: 'OPEN', askedById: ASKER }, OTHER)).toBeNull()
     expect(decideForRefusal({ kind: 'SAMPLE', status: 'OPEN', askedById: ASKER }, ASKER)).toMatchObject({ code: 'OWN_ASK', message: 'You asked for this approval: someone else decides it for the customer.' })
     expect(decideForRefusal({ kind: 'SAMPLE', status: 'REFUSED', askedById: ASKER }, OTHER)?.code).toBe('ANSWERED')
     expect(decideForRefusal({ kind: 'SAMPLE', status: 'WITHDRAWN', askedById: ASKER }, OTHER)?.code).toBe('NOT_OPEN')
     // A request a job made (nobody asked it) may be decided by any office person with the right.
     expect(decideForRefusal({ kind: 'REPROMISE', status: 'OPEN', askedById: null }, OTHER)).toBeNull()
+    expect(reverseRefusal({ kind: 'SAMPLE', status: 'OPEN', reversedAt: null })?.code).toBe('NOT_ANSWERED')
+    expect(reverseRefusal({ kind: 'SAMPLE', status: 'APPROVED', reversedAt: NOW })?.code).toBe('REVERSED')
+    expect(reverseRefusal({ kind: 'ARTWORK', status: 'REFUSED', reversedAt: null })).toBeNull()
     const decided = { decision: 'APPROVED' as const, answer: null, typedName: 'Otto Office', reason: 'Said yes on the phone.' }
     expect(decideForPartyProblems({ kind: 'SAMPLE', status: 'OPEN', askedById: ASKER }, decided, ASKER)[0]?.message).toBe(decideForRefusal({ kind: 'SAMPLE', status: 'OPEN', askedById: ASKER }, ASKER)?.message)
+    expect(reverseProblems({ kind: 'SAMPLE', status: 'APPROVED', reversedAt: NOW }, 'x')[0]?.message).toBe(reverseRefusal({ kind: 'SAMPLE', status: 'APPROVED', reversedAt: NOW })?.message)
   })
 
-  it('wall (pure): the customer reads why we decided, never who of us', () => {
+  it('wall (pure): the customer reads why we decided or put its answer back, never who of us', () => {
     const en = decidedForPartyPageWords('SAMPLE', 'APPROVED', 'The fit matches the approved size set.', 'en')
     expect(en).toBe('Approved — Decided by us for you: The fit matches the approved size set. We go ahead with what you approved.')
     expect(decidedForPartyPageWords('FABRIC', 'REFUSED', 'Colour too dark!', 'it')).toBe('Rifiutato — Deciso da noi per voi: Colour too dark. Vi ricontattiamo per decidere insieme come procedere.')
     expect(decidedForPartyPageWords('SAMPLE', 'OPEN', 'x', 'en')).toBe('Waiting for the answer')
     expect(en).not.toMatch(/signed by/)
+    expect(withReversalWords(en, null, 'en')).toBe(en)
+    expect(withReversalWords('Approved.', 'Wrong photos sent.', 'en')).toBe('Approved. Put back by us: Wrong photos sent.')
+    expect(withReversalWords('Approvato.', 'Foto sbagliate.', 'it')).toBe('Approvato. Revocato da noi: Foto sbagliate.')
   })
 
   it('the act a second person grants rides the task preview, and comes back exactly; anything else carries out nothing', () => {
@@ -272,5 +282,10 @@ describe('decide for the party (B-PR-30a)', () => {
     expect(overrideGrantProblem({ requestedById: OTHER, askedById: ASKER }, OTHER)).toMatch(/second person/)
     expect(overrideGrantProblem({ requestedById: OTHER, askedById: ASKER }, ASKER)).toMatch(/You asked the customer for this approval/)
     expect(overrideGrantProblem({ requestedById: OTHER, askedById: null }, ASKER)).toBeNull()
+  })
+
+  it('what is not built yet says so in words (KEPT): a decided sample round or swatch stays as the customer decided it', () => {
+    expect(RECORD_KEPT_WORDS.SampleRound.en).toMatch(/^The customer's decision on a sample round stays as it is/)
+    expect(RECORD_KEPT_WORDS.SampleSwatch.it).toMatch(/campione di materiale/)
   })
 })

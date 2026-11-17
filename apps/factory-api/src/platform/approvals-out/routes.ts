@@ -15,19 +15,20 @@ import {
   portalListContract,
   portalPageContract,
   recordRequestsContract,
+  reverseContract, // B-PR-30b
   setMailContract,
   withdrawContract,
 } from './contract'
 import { manifest } from './manifest'
 import { askApproval, officeRequest, recordRequests, withdrawApproval } from './office'
-// B-PR-30a: decide for the customer.
-import { decideForParty } from './override'
+// B-PR-30a/30b: decide for the customer, and put its answer back.
+import { decideForParty, reverseAnswer } from './override'
 
 /**
  * Approval requests to partners (B-W2b-184): the office asks and withdraws (./office.ts), the partner answers by link or in
  * its portal (./answer.ts), the office's side settles each answer (./settle.ts); the sweep (./sweep.ts) expires what nobody
  * answered; Home › Approvals by e-mail (modules/insights/sources/approvals-mail.ts, PLT-089). The screens are B-W2b-188's.
- * B-PR-30a: the office decides for the customer (./override.ts).
+ * B-PR-30a/30b: the office decides for the customer and puts its answer back (./override.ts).
  */
 export default defineRoutes('approvals-out', manifest, async (app) => {
   app.post('/approvals-out', { schema: askContract }, async (request, reply) => {
@@ -43,6 +44,9 @@ export default defineRoutes('approvals-out', manifest, async (app) => {
 
   // B-PR-30a: decide an open request for the customer (a reason it reads; step-up; a second person when its switch is on).
   app.post('/approvals-out/:requestId/decide-for-party', { schema: decideForPartyContract }, async (request) => decideForParty(request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
+
+  // B-PR-30b: put the customer's answer back, once (a reason it reads; refused in words when the effect cannot be undone).
+  app.post('/approvals-out/:requestId/reverse', { schema: reverseContract }, async (request) => reverseAnswer(request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
 
   app.get('/link/approval', { schema: linkPageContract }, async (request) => linkApproval(app, request, request.query.language))
 

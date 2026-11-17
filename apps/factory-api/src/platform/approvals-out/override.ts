@@ -1,13 +1,14 @@
 import type { FastifyRequest } from 'fastify'
 import type { ApprovalDecision, ApprovalKind, ApprovalStatus } from '@nexus/factory-domain/approvals-out/kinds'
 import { PARTNERS_APPROVALS_VIEW } from '@nexus/factory-domain/approvals-out/permissions'
-import { answerWords, decideForPartyProblems, decideForRefusal, typedNameOf } from '@nexus/factory-domain/approvals-out/rules'
+import { answerWords, decideForPartyProblems, decideForRefusal, reverseProblems, reverseRefusal, typedNameOf } from '@nexus/factory-domain/approvals-out/rules'
 import { APPROVALS_DECIDE } from '@nexus/factory-domain/approvals/permissions'
 import { ConflictError, DomainError, ForbiddenError, NotFoundError } from '@nexus/factory-domain/core/errors'
-import { isUuid } from '@nexus/factory-domain/core/ids'
+import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { userAgentOf } from '@nexus/factory-domain/links/evidence'
-import { OVERRIDE_TASK_KIND, overrideChanges, overridePlan, SECOND_PERSON_WORDS, type OverrideOrder } from '@nexus/factory-domain/production-brand/override'
+import { linkTokenHash, mintLinkToken } from '@nexus/factory-domain/links/token'
+import { OVERRIDE_TASK_KIND, overrideChanges, overridePlan, SECOND_PERSON_WORDS, type OverrideOrder, type ReverseEffect } from '@nexus/factory-domain/production-brand/override'
 import { PRODUCTION_BRAND_OVERRIDE } from '@nexus/factory-domain/production-brand/permissions'
 import type { FactoryClient } from '@nexus/factory-db'
 import { clientAddressOf } from '../../core/client-address'
@@ -20,12 +21,12 @@ import { requireStepUp } from '../auth/office/account'
 import { officeAuthOf } from '../auth/sessions/office-auth'
 import type { RecordAdapter } from './adapter'
 import { pendingOverrideOf, viewAfterOverride } from './office'
-import { decideForPartyInCommand, fail, refuse, type DecideForOrder } from './override-acts'
+import { decideForPartyInCommand, fail, refuse, reverseCheckOf, reverseInCommand, type DecideForOrder } from './override-acts'
 import { adapterOf } from './records'
 import { readOfficeRow, refOf, type OfficeRow } from './store'
 
 /**
- * Decide for the customer (B-PR-30a; production plan §3 "Decide for a brand, undo —
+ * Decide for the customer, and put its answer back (B-PR-30a, B-PR-30b; production plan §3 "Decide for a brand, undo —
  * production.brand.override, step-up; a second person when the brand's switch is on", "No silent decisions … Undo is refused in
  * words when the effect cannot be undone (for example a PP approval after cutting). Not for concessions, revised orders,
  * signatures, proofs."; 08-backend §4.6; lead pick L6; review fixes R-06, R-36; the Owner rule 2026-11-16: "One brand must not be
@@ -33,6 +34,7 @@ import { readOfficeRow, refOf, type OfficeRow } from './store'
  * all as well."):
  *
  *   POST /approvals-out/:requestId/decide-for-party {version, decision, answer?, typedName, reason}
+ *   POST /approvals-out/:requestId/reverse          {version, reason}
  *        production.brand.override over the request's company AND customer (another customer's request: 404, the words of an
  *        unknown id — the brand wall; a person who sees it without the right: 403), then a fresh step-up (action
  *        production.override), then the refusals in words with their codes (./override-acts.ts), all before anything is written.
@@ -40,8 +42,9 @@ import { readOfficeRow, refOf, type OfficeRow } from './store'
  *        approval is asked (the act on its preview, a role that may override and decide approvals, a fresh step-up for the yes;
  *        never granted by the person who asked for it nor by the person who asked the customer), and the second person's yes
  *        carries it out (platform/approvals/kinds/brand-override.ts). Without it, the act runs at once in this command.
- *   The answer: the request as the office reads it (./office.ts: who decided for the customer, the override waiting), the
- *   outcome (DONE, or SECOND_PERSON with its task and words).
+ *   The answer: the request as the office reads it (./office.ts: who decided for the customer, the reversal, the override
+ *   waiting), the outcome (DONE, or SECOND_PERSON with its task and words), for a reversal what it did and, when a new date is
+ *   asked again, its link ONCE (a customer without a portal answers by it).
  */
 
 type Client = FactoryClient | CommandTx
@@ -54,7 +57,12 @@ export interface DecideForBody {
   readonly reason: string
 }
 
-const NO_RIGHT_WORDS = "Deciding for a customer needs the right to override for customers (a production manager's or an admin's)."
+export interface ReverseBody {
+  readonly version: number
+  readonly reason: string
+}
+
+const NO_RIGHT_WORDS = "Deciding for a customer, or putting its answer back, needs the right to override for customers (a production manager's or an admin's)."
 const PENDING_WORDS = 'What we do for the customer on this request waits for a second person already: see it in Home › Approvals.'
 const NO_GRANTER_WORDS =
   "This customer needs a second person for what we do for them, and no office role may grant it: give a role the right to override for customers and the right to decide approvals (Admin › Roles), or switch the customer's second person off on its limits card."
@@ -143,4 +151,38 @@ export async function decideForParty(request: FastifyRequest, requestId: string,
     return { outcome: 'DONE' as const, taskId: null }
   }).catch(databaseRefusal)
   return { ...(await viewAfterOverride(request, requestId)), override: overrideOf(result.outcome, result.taskId) }
+}
+
+// ---- B-PR-30b: put the customer's answer back -------------------------------------------------------------------------------
+
+/** POST /approvals-out/:requestId/reverse. */
+export async function reverseAnswer(request: FastifyRequest, requestId: string, body: ReverseBody, idempotencyKey?: string) {
+  const { context, row, adapter } = await reach(request, requestId)
+  const auth = officeAuthOf(request.server)
+  requireStepUp(auth, request)
+  const kind = row.kind as ApprovalKind
+  const status = row.status as ApprovalStatus
+  const refusal = reverseRefusal({ kind, status, reversedAt: row.reversedAt })
+  if (refusal) refuse(refusal)
+  const problems = reverseProblems({ kind, status, reversedAt: row.reversedAt }, body.reason)
+  if (problems.length > 0) throw fail(problems, 'Say why the answer is put back.')
+  await notWaiting(request, row, body.version)
+  // What it would do to the record, or why it cannot be put back any more (a cut, a counter carried out, the record keeps it).
+  const check = await request.withClient((client) => reverseCheckOf(client, adapter, row))
+  if (!check.ok) refuse({ code: check.code, message: check.words.en })
+
+  const order: OverrideOrder = { act: 'REVERSE', reason: body.reason.trim() }
+  const plan = overridePlan('REVERSE', await request.withClient((client) => fourEyesOf(client, row.partyId)))
+  // A new date asked again: its link's token minted here, outside the command (its URL handed once, never kept in the receipt).
+  const askAgain = plan.outcome === 'AT_ONCE' && check.effects.includes('ASK_AGAIN')
+  const linkId = newId()
+  const token = askAgain ? mintLinkToken({ tenantId: context.tenantId, partyId: row.partyId, linkId }) : null
+  const ask = token ? { requestId: newId(), linkId, tokenHash: linkTokenHash(token.value) } : null
+  const { result, replayed } = await command(request, { name: 'approvalsOut.reverse', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
+    if (plan.outcome === 'SECOND_PERSON') return { outcome: 'SECOND_PERSON' as const, taskId: await askSecondPerson(tools, row, context.actorId, order), effects: [] as ReverseEffect[], askedAgain: null }
+    const done = await reverseInCommand(tools, { requestId, version: body.version, reverserId: context.actorId, reason: order.reason, grantedById: null, ask })
+    return { outcome: 'DONE' as const, taskId: null, effects: [...done.effects], askedAgain: done.askedAgain }
+  }).catch(databaseRefusal)
+  const asked = result.askedAgain ? { requestId: result.askedAgain, url: !replayed && token && ask?.requestId === result.askedAgain ? auth.link('/l', token.value) : null } : null
+  return { ...(await viewAfterOverride(request, requestId)), override: overrideOf(result.outcome, result.taskId), effects: result.effects, asked }
 }

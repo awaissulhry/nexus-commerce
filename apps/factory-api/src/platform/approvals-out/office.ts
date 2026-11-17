@@ -2,7 +2,7 @@ import type { FastifyRequest } from 'fastify'
 import { APPROVAL_MAIL_TEMPLATES, requestMail } from '@nexus/factory-domain/approvals-out/mail'
 import { KIND_RULES, type ApprovalKind, type ApprovalLocale, type ApprovalStatus } from '@nexus/factory-domain/approvals-out/kinds'
 import { PARTNERS_APPROVALS_ASK, PARTNERS_APPROVALS_VIEW } from '@nexus/factory-domain/approvals-out/permissions'
-import { askProblems, decideForRefusal, dueAtFor, reasonProblems, withdrawProblem } from '@nexus/factory-domain/approvals-out/rules'
+import { askProblems, decideForRefusal, dueAtFor, reasonProblems, reverseRefusal, withdrawProblem } from '@nexus/factory-domain/approvals-out/rules'
 import { parsePreview } from '@nexus/factory-domain/approvals/rules'
 import { OVERRIDE_TASK_KIND, overrideOrderOf } from '@nexus/factory-domain/production-brand/override'
 import { PRODUCTION_BRAND_OVERRIDE } from '@nexus/factory-domain/production-brand/permissions'
@@ -43,9 +43,9 @@ import { filesOf, localeOf, lockRequest, OFFICE_COLUMNS, RECORD, readOfficeRow, 
  *   POST /approvals-out/:requestId/withdraw {version, reason?}   an OPEN request: WITHDRAWN, its live links revoked, its
  *                        task cancelled, in one command.
  *   GET  /approvals-out?recordType&recordId · GET /approvals-out/:requestId   partners.approvals.view + the record's view.
- *   B-PR-30a: POST /approvals-out/:requestId/decide-for-party (production.brand.override, step-up) is ./override.ts; the
- *                        views here say who decided for the customer, an override waiting for a second person, and whether
- *                        the reader may decide for the customer (`may`).
+ *   B-PR-30a/30b: POST /approvals-out/:requestId/decide-for-party and …/reverse (production.brand.override, step-up) are
+ *                        ./override.ts; the views here say who decided for the customer, the reversal, an override waiting
+ *                        for a second person, and whether the reader may do either (`may`).
  */
 
 type Client = FactoryClient | CommandTx
@@ -66,13 +66,13 @@ function needs(actor: Actor, adapter: RecordAdapter, scope: ReturnType<typeof sc
 
 // ---- what the office reads ----------------------------------------------------------------------------------------------
 
-/** The reader of an office view: their rights decide what `may` says (B-PR-30a). */
+/** The reader of an office view: their rights decide what `may` says (B-PR-30a/30b). */
 export interface OfficeViewer {
   readonly actor: Actor
   readonly actorId: string
 }
 
-/** B-PR-30a: the override of this request that waits for a second person (a BRAND_OVERRIDE task), if any. */
+/** B-PR-30a/30b: the override of this request that waits for a second person (a BRAND_OVERRIDE task), if any. */
 export async function pendingOverrideOf(client: Client, requestId: string): Promise<{ readonly taskId: string; readonly act: 'DECIDE_FOR' | 'REVERSE' } | null> {
   const task = await client.approvalTask.findFirst({ where: { kind: OVERRIDE_TASK_KIND, recordType: RECORD, recordId: requestId, status: 'PENDING' }, orderBy: [{ requestedAt: 'desc' }, { id: 'desc' }], select: { id: true, preview: true } })
   if (!task) return null
@@ -88,15 +88,16 @@ async function officeView(client: Client, row: OfficeRow, viewer: OfficeViewer |
   const record = adapter ? await adapter.read(client, row.recordId, kind, { partyId: row.partyId, now: new Date() }) : null
   const party = await client.party.findUnique({ where: { id: row.partyId }, select: { legalName: true } })
   const links = await client.oneOffLink.findMany({ where: { purpose: 'APPROVAL', recordType: RECORD, recordId: row.id }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { id: true, email: true, expiresAt: true, uses: true, maxUses: true, revokedAt: true, lastUsedAt: true } })
-  // B-PR-30a: + who decided for the party.
-  const people = [row.createdById, row.withdrawnById, row.answeredByUserId, row.decidedForPartyById].filter((id): id is string => id !== null)
+  // B-PR-30a/30b: + who decided for the party and who put its answer back.
+  const people = [row.createdById, row.withdrawnById, row.answeredByUserId, row.decidedForPartyById, row.reversedById].filter((id): id is string => id !== null)
   const names = new Map((await client.user.findMany({ where: { id: { in: people } }, select: { id: true, displayName: true } })).map((user) => [user.id, user.displayName]))
   const markup = row.markupFileId ? await client.fileMarkup.findFirst({ where: { fileId: row.markupFileId, partyId: row.partyId }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], select: { page: true, shapes: true, note: true, createdAt: true } }) : null
   const status = row.status as ApprovalStatus
-  // B-PR-30a: what the reader may do for the party (production.brand.override over its company and customer; never the
+  // B-PR-30a/30b: what the reader may do for the party (production.brand.override over its company and customer; never the
   // person who asked; not while an override waits for a second person). The record's own hold is said by the route, in words.
   const pending = await pendingOverrideOf(client, row.id)
   const overrides = viewer !== null && can(viewer.actor, PRODUCTION_BRAND_OVERRIDE, { companyId: row.companyId, partyId: row.partyId }) && pending === null
+  const reversedReason = row.reversedAt ? row.reverseReason : null
   return {
     id: row.id,
     companyId: row.companyId,
@@ -120,6 +121,7 @@ async function officeView(client: Client, row: OfficeRow, viewer: OfficeViewer |
           },
     withdrawn: row.withdrawnAt ? { at: toUtcIso(row.withdrawnAt), byName: row.withdrawnById ? (names.get(row.withdrawnById) ?? null) : null, reason: row.withdrawReason } : null,
     decidedForParty: row.decidedForPartyReason !== null ? { byName: row.decidedForPartyById ? (names.get(row.decidedForPartyById) ?? null) : null, reason: row.decidedForPartyReason } : null,
+    reversed: row.reversedAt && reversedReason !== null ? { at: toUtcIso(row.reversedAt), byName: row.reversedById ? (names.get(row.reversedById) ?? null) : null, reason: reversedReason } : null,
     override: pending,
     askedBy: row.createdById ? (names.get(row.createdById) ?? null) : null,
     createdAt: toUtcIso(row.createdAt),
@@ -128,6 +130,7 @@ async function officeView(client: Client, row: OfficeRow, viewer: OfficeViewer |
     may: {
       withdraw: status === 'OPEN',
       decideForParty: overrides && decideForRefusal({ kind, status, askedById: row.createdById }, viewer!.actorId) === null,
+      reverse: overrides && reverseRefusal({ kind, status, reversedAt: row.reversedAt }) === null,
     },
     version: row.version,
   }
@@ -144,7 +147,8 @@ export async function officeRequest(request: FastifyRequest, requestId: string) 
 }
 
 /**
- * B-PR-30a: the request as the office person who decided it for the customer (or asked a second person to) reads it afterwards — their override right over the request's company and customer was checked first
+ * B-PR-30a/30b: the request as the office person who decided it for the customer (or put its answer back, or asked a second
+ * person to) reads it afterwards — their override right over the request's company and customer was checked first
  * (./override.ts), which is all it takes to read what they did.
  */
 export async function viewAfterOverride(request: FastifyRequest, requestId: string) {

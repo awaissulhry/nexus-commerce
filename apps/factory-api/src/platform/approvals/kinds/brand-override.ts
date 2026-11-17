@@ -5,7 +5,7 @@ import { DomainError } from '@nexus/factory-domain/core/errors'
 import { OVERRIDE_TASK_KIND, overrideGrantProblem, overrideOrderOf } from '@nexus/factory-domain/production-brand/override'
 import { PRODUCTION_BRAND_OVERRIDE } from '@nexus/factory-domain/production-brand/permissions'
 import type { CommandTools, CommandTx } from '../../../core/command'
-import { decideForPartyInCommand } from '../../approvals-out/override-acts'
+import { decideForPartyInCommand, reverseInCommand } from '../../approvals-out/override-acts'
 import { adapterOf } from '../../approvals-out/records'
 import type { ApprovalKindDefinition, ApprovalSubject, Reader, TaskRef } from './kind'
 
@@ -20,8 +20,9 @@ import type { ApprovalKindDefinition, ApprovalSubject, Reader, TaskRef } from '.
  * route), the engine never lets the asker grant it (engine.ts), and B-PR-30a/b carry the act out on the yes (onApproved) from
  * the act the asker named in the task's preview.
  *
- *   on the yes B-PR-30a: in the second person's own command (its fresh step-up asked by the engine), the act read back from
- *              the preview (factory-domain production-brand/override overrideOrderOf: decide for the customer), never granted by the person who asked the customer either (overrideGrantProblem); then carried
+ *   on the yes B-PR-30a/30b: in the second person's own command (its fresh step-up asked by the engine), the act read back from
+ *              the preview (factory-domain production-brand/override overrideOrderOf: decide for the customer, or put its
+ *              answer back), never granted by the person who asked the customer either (overrideGrantProblem); then carried
  *              out as the person who asked for it (platform/approvals-out/override-acts.ts: the request re-read under its lock
  *              and every refusal checked again — the record moved on, cut meanwhile: the yes is refused in words and nothing
  *              is written). A no, a withdrawal or a stale request write nothing: nothing was written before the yes.
@@ -98,7 +99,7 @@ const DECIDABLE_KINDS = APPROVAL_KINDS.filter((kind) => !(OWN_WORD_KINDS as read
 
 const NO_ACT_WORDS = 'This request names nothing to do for the customer: ask again from the approval request.'
 
-/** B-PR-30a: the yes carries out the act the asker named (decided for the customer). */
+/** B-PR-30a/30b: the yes carries out the act the asker named (decided for the customer, or its answer put back). */
 async function onApproved(tools: CommandTools, task: TaskRef): Promise<void> {
   const row = await tools.tx.approvalTask.findUnique({ where: { id: task.id }, select: { preview: true } })
   const order = row ? overrideOrderOf(parsePreview(row.preview).changes) : null
@@ -106,8 +107,8 @@ async function onApproved(tools: CommandTools, task: TaskRef): Promise<void> {
   const asked = await tools.tx.approvalRequest.findUnique({ where: { id: task.recordId }, select: { createdById: true } })
   const problem = overrideGrantProblem({ requestedById: task.requestedById, askedById: asked?.createdById ?? null }, task.decidedById)
   if (problem) throw new DomainError('forbidden', problem, [{ path: 'refusal/OWN_ASK', message: problem }])
-  if (order.act !== 'DECIDE_FOR') throw new DomainError('conflict', NO_ACT_WORDS, [{ path: 'refusal/NO_ACT', message: NO_ACT_WORDS }])
-  await decideForPartyInCommand(tools, { requestId: task.recordId, deciderId: task.requestedById, order, evidence: null, grantedById: task.decidedById })
+  if (order.act === 'DECIDE_FOR') await decideForPartyInCommand(tools, { requestId: task.recordId, deciderId: task.requestedById, order, evidence: null, grantedById: task.decidedById })
+  else await reverseInCommand(tools, { requestId: task.recordId, reverserId: task.requestedById, reason: order.reason, grantedById: task.decidedById, ask: null })
 }
 
 export const BRAND_OVERRIDE_KIND: ApprovalKindDefinition = Object.freeze({
@@ -136,6 +137,6 @@ export const BRAND_OVERRIDE_KIND: ApprovalKindDefinition = Object.freeze({
     const request = await client.approvalRequest.findUnique({ where: { id: recordId }, select: { recordType: true, recordId: true } })
     return request ? { type: request.recordType, id: request.recordId } : null
   },
-  // B-PR-30a: the act on the second person's yes.
+  // B-PR-30a/30b: the act on the second person's yes.
   onApproved,
 })

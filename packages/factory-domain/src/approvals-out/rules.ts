@@ -256,9 +256,9 @@ export function decideForPartyProblems(request: { readonly kind: ApprovalKind; r
 
 /** The problems of putting a party's answer back (the request as read), in words. */
 export function reverseProblems(request: { readonly kind: ApprovalKind; readonly status: ApprovalStatus; readonly reversedAt: Date | null }, reason: string | null | undefined): Issue[] {
-  if (!mayReverse(request.kind)) return [{ path: 'body', message: ownWordWords(request.kind) }]
-  if (request.reversedAt !== null) return [{ path: 'body', message: 'This answer was put back already.' }]
-  if (!isAnswered(request.status)) return [{ path: 'body', message: 'This request has no answer to put back.' }]
+  // B-PR-30b: the request's own refusal first (its code: reverseRefusal), then the reason.
+  const refused = reverseRefusal(request)
+  if (refused) return [{ path: 'body', message: refused.message }]
   const issue = reasonIssue(reason)
   return issue ? [issue] : []
 }
@@ -307,6 +307,14 @@ export function decideForRefusal(request: { readonly kind: ApprovalKind; readonl
   return null
 }
 
+/** Why the party's answer may not be put back now (null: it may, as far as the request goes; the record says the rest). */
+export function reverseRefusal(request: { readonly kind: ApprovalKind; readonly status: ApprovalStatus; readonly reversedAt: Date | null }): OverrideRefusal | null {
+  if (!mayReverse(request.kind)) return { code: 'OWN_WORD', message: ownWordWords(request.kind) }
+  if (request.reversedAt !== null) return { code: 'REVERSED', message: 'This answer was put back already.' }
+  if (!isAnswered(request.status)) return { code: 'NOT_ANSWERED', message: 'This request has no answer to put back.' }
+  return null
+}
+
 /**
  * The answer as the party reads it when we decided it for them: "Approved — Decided by us for you: <why>. We go ahead with what
  * you approved." — never who of us (no typed name, no time of a person).
@@ -316,4 +324,7 @@ export function decidedForPartyPageWords(kind: ApprovalKind, status: ApprovalSta
   // One full stop after the reason, whatever it ends with.
   return `${stateWords(status, locale)} — ${decidedForPartyWords(clean(reason).replace(/[.!?…\s]+$/u, ''), locale)}. ${nextWords(kind, status !== 'REFUSED', locale)}`
 }
+
+/** The decided words with a reversal after them: "… Put back by us: <why>" (the answer itself is kept, as the party gave it). */
+export const withReversalWords = (decided: string, reason: string | null, locale: ApprovalLocale): string => (reason === null ? decided : `${decided} ${reversedWords(reason, locale)}`)
 

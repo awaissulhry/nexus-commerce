@@ -1,17 +1,21 @@
-import type { FactoryClient } from '@nexus/factory-db'
-import type { ApprovalKind, ApprovalStatus } from '@nexus/factory-domain/approvals-out/kinds'
-import { decideForPartyProblems, decideForRefusal } from '@nexus/factory-domain/approvals-out/rules'
+import type { FactoryClient, Prisma } from '@nexus/factory-db'
+import { KIND_RULES, type ApprovalKind, type ApprovalStatus, type Words } from '@nexus/factory-domain/approvals-out/kinds'
+import { decideForPartyProblems, decideForRefusal, reversedWords, reverseProblems, reverseRefusal } from '@nexus/factory-domain/approvals-out/rules'
 import { DomainError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
-import type { OverrideOrder } from '@nexus/factory-domain/production-brand/override'
+import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { REVERSE_EFFECT_WORDS, reverseVerdict, type OverrideOrder, type ReverseEffect } from '@nexus/factory-domain/production-brand/override'
+import { cleanBody } from '@nexus/factory-domain/threads/rules'
 import type { CommandTools, CommandTx } from '../../core/command'
+import { counterReverseFacts } from '../../modules/sales/change-requests/counter-reverse'
 import { closeTasksInCommand } from '../portal/tasks/store'
-import type { RecordAdapter } from './adapter'
+import { ensureThread, writeMessage } from '../threads/threads'
+import type { RecordAdapter, RecordReverseFacts, ReverseInput } from './adapter'
 import { adapterOf } from './records'
-import { settleInCommand } from './settle'
-import { lockRequest, RECORD, refOf, revokeLinksInCommand, sourceKeyOf, type PartnerRow } from './store'
+import { partyLocaleOf, settleInCommand } from './settle'
+import { localeOf, lockRequest, RECORD, refOf, revokeLinksInCommand, sourceKeyOf, type PartnerRow } from './store'
 
 /**
- * B-PR-30a (production plan §3 "Full control: decide for a brand or undo, always with a reason it reads", "No silent
+ * B-PR-30a / B-PR-30b (production plan §3 "Full control: decide for a brand or undo, always with a reason it reads", "No silent
  * decisions"; 08-backend §4.6; lead pick L6; Owner answer 11-10 Q3; rules factory-domain approvals-out/rules and
  * production-brand/override): what the office does FOR a customer on one of its approval requests, inside ONE command — the
  * route's own (./override.ts, at once) or the second person's yes (platform/approvals/kinds/brand-override.ts onApproved, while
@@ -25,6 +29,10 @@ import { lockRequest, RECORD, refOf, revokeLinksInCommand, sourceKeyOf, type Par
  *                the record's consequence — a sample round or swatch decided as OFFICE by that person, so its gate passes by
  *                the round's event —, OUR message on the record's thread "Decided by us for you: …", the settle's marker);
  *                approval_request.decided_for_party
+ *   reverse      an answered request, once, while the record's effect can still be put back (reverseVerdictOf: the domain's
+ *                verdict on the live facts, then the record's own hold): the record's hook first (a new date asked again),
+ *                then the reversal written beside the answer (the answer itself never changes), OUR message on the record's
+ *                thread "Put back by us: …" with what it did; approval_request.reversed
  * Each refusal is said in words with its code (409 `refusal/<CODE>`, 403 for the person who asked).
  */
 
@@ -117,4 +125,76 @@ export async function decideForPartyInCommand(
   tools.emit({ type: 'approval_request.decided_for_party', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, kind, recordType: current.recordType, recordId: current.recordId, partyId: current.partyId, decision: order.decision } })
   const settled = await settleInCommand(tools, current.id)
   return { settled: settled.settled }
+}
+
+// ---- put the party's answer back -------------------------------------------------------------------------------------------
+
+export type ReverseCheck =
+  | { readonly ok: true; readonly effects: readonly ReverseEffect[]; readonly words: Words }
+  | { readonly ok: false; readonly code: string; readonly words: Words }
+
+const NO_FACTS: RecordReverseFacts = Object.freeze({ sampleKind: null, cut: null, passedGate: false, applied: false, held: null })
+
+/**
+ * Whether the party's answer can be put back now and what that does (the record's live facts through its adapter; a
+ * counter-offer's from its change request when its adapter says nothing): the domain's verdict first (the party's own word, a
+ * cut, a counter carried out), then the record's own hold.
+ */
+export async function reverseCheckOf(client: Client, adapter: RecordAdapter, row: PartnerRow): Promise<ReverseCheck> {
+  const ref = refOf(row)
+  const facts = adapter.reverseFacts ? await adapter.reverseFacts(client, ref) : row.kind === 'COUNTER_OFFER' ? await counterReverseFacts(client, row.id) : NO_FACTS
+  const verdict = reverseVerdict({ kind: row.kind as ApprovalKind, recordType: row.recordType, sampleKind: facts.sampleKind ?? null, cut: facts.cut, passedGate: facts.passedGate, applied: facts.applied })
+  if (!verdict.possible) return { ok: false, code: verdict.code, words: verdict.words }
+  if (facts.held) return { ok: false, code: facts.held.code, words: facts.held.words }
+  return { ok: true, effects: verdict.effects, words: verdict.words }
+}
+
+/** Puts the party's answer back, in the command (the route's at once, or the second person's yes). */
+export async function reverseInCommand(
+  tools: CommandTools,
+  input: { readonly requestId: string; readonly version?: number | undefined; readonly reverserId: string; readonly reason: string; readonly grantedById: string | null; readonly ask: ReverseInput['ask'] },
+): Promise<{ readonly effects: readonly ReverseEffect[]; readonly askedAgain: string | null }> {
+  const { tx, now } = tools
+  const current = await lockRequest(tx, input.requestId, input.version)
+  const kind = current.kind as ApprovalKind
+  const status = current.status as ApprovalStatus
+  const refusal = reverseRefusal({ kind, status, reversedAt: current.reversedAt })
+  if (refusal) refuse(refusal)
+  const problems = reverseProblems({ kind, status, reversedAt: current.reversedAt }, input.reason)
+  if (problems.length > 0) throw fail(problems, 'Say why the answer is put back.')
+  const adapter = adapterFor(current)
+  const check = await reverseCheckOf(tx, adapter, current)
+  if (!check.ok) refuse({ code: check.code, message: check.words.en })
+  const reason = input.reason.trim()
+
+  // The record's own effect first (a new date asked again), then the reversal beside the answer.
+  const done = adapter.reverse ? await adapter.reverse(tools, refOf(current), { effects: check.effects, actorId: input.reverserId, ask: input.ask }) : null
+  const { count } = await tx.approvalRequest.updateMany({
+    where: { id: current.id, reversedAt: null, version: current.version },
+    data: { reversedAt: now, reversedById: input.reverserId, reverseReason: reason, version: current.version + 1, updatedAt: now },
+  })
+  if (count !== 1) throw new InvalidStateError('This request changed meanwhile: read it again.')
+
+  // OUR message on the record's thread, in the party's language (never who of us): why, and what it did.
+  const record = await adapter.read(tx, current.recordId, kind, { partyId: current.partyId, now })
+  const where = record?.thread ?? { type: RECORD, id: current.id }
+  const { thread } = await ensureThread(tools, where, null)
+  const locale = localeOf(await partyLocaleOf(tx, current))
+  const shared = thread.partyId === current.partyId
+  const company = shared ? await tx.company.findUnique({ where: { id: current.companyId }, select: { legalName: true, tradeName: true } }) : null
+  const text = [`${KIND_RULES[kind].name[locale]} · ${record?.label[locale] ?? ''}`, reversedWords(reason, locale), check.effects.map((effect) => REVERSE_EFFECT_WORDS[effect][locale]).join(' ')].join('\n')
+  await writeMessage(tools, thread, { direction: shared ? 'OUTBOUND' : 'INTERNAL_NOTE', channel: shared ? 'PORTAL' : 'APP', author: { kind: 'SYSTEM', id: null, name: company ? (company.tradeName ?? company.legalName) : null }, bodyText: cleanBody(text) })
+
+  const askedAgain = typeof done?.askedAgain === 'string' ? done.askedAgain : null
+  tools.audit({
+    action: 'approvalsOut.reverse',
+    recordType: RECORD,
+    recordId: current.id,
+    companyId: current.companyId,
+    reason,
+    before: { status, reversedAt: null },
+    after: { status, reversedAt: toUtcIso(now), reversedById: input.reverserId, grantedById: input.grantedById, effects: [...check.effects], thread: { type: where.type, id: where.id }, shared, ...(done ? { done: done as Prisma.InputJsonObject } : {}) },
+  })
+  tools.emit({ type: 'approval_request.reversed', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, kind, recordType: current.recordType, recordId: current.recordId, partyId: current.partyId } })
+  return { effects: check.effects, askedAgain }
 }
