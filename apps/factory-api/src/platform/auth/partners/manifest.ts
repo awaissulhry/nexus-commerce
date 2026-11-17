@@ -9,6 +9,9 @@ export const manifest = defineManifest({
   'GET /partners': { audiences: ['office'], permission: 'partners.view', scope: 'record' },
   'GET /partners/:partyId': { audiences: ['office'], permission: 'partners.view', scope: 'record' },
   'POST /partners/:partyId/settings': { audiences: ['office'], permission: 'partners.manage', scope: 'record' },
+  // B-PR-14: the customer's production limits (read with partners.view; written with partners.production.manage + step-up).
+  'GET /partners/:partyId/production': { audiences: ['office'], permission: 'partners.view', scope: 'record' },
+  'PUT /partners/:partyId/production': { audiences: ['office'], permission: 'partners.production.manage', scope: 'record' },
   'POST /partners/:partyId/people': { audiences: ['office'], permission: 'partners.invite', scope: 'record' },
   'POST /partners/:partyId/people/:userId/invitation': { audiences: ['office'], permission: 'partners.invite', scope: 'record' },
   'POST /partners/:partyId/people/:userId/invitation/revoke': { audiences: ['office'], permission: 'partners.invite', scope: 'record' },

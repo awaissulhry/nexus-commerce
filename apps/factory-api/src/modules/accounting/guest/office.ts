@@ -12,7 +12,7 @@ import { eventFor } from '@nexus/factory-domain/events/define'
 import { events as partnerEvents } from '@nexus/factory-domain/partners/events'
 import { actorOf, requireContext, type OfficeContext } from '../../../core/context'
 import { requireStepUp } from '../../../platform/auth/office/account'
-import { mailInvitation } from '../../../platform/auth/partners/office'
+import { mailInvitation, settingsEventFields } from '../../../platform/auth/partners/office'
 import { changeInCommand, inviteInCommand, revokeInCommand, statusInCommand, STATUS_TARGET } from '../../../platform/auth/partners/people'
 import { lockParty, partyById, peopleOf, personOf, settingsOf, type PartnerParty } from '../../../platform/auth/partners/store'
 import { officeAuthOf } from '../../../platform/auth/sessions/office-auth'
@@ -164,7 +164,8 @@ export async function inviteAccountant(app: FastifyInstance, request: FastifyReq
         if (before.exists) await tools.tx.portalSettings.update({ where: { id: party.id }, data: { portalOn: true, version: { increment: 1 } }, select: { id: true } })
         else await tools.tx.portalSettings.create({ data: { id: party.id, partyId: party.id, portalOn: true, createdAt: tools.now, createdById: context.actorId }, select: { id: true } })
         tools.audit({ recordType: 'PortalSettings', recordId: party.id, companyId: party.companyId, before: before.exists ? { portalOn: false } : null, after: { portalOn: true, for: 'accountant access' } })
-        tools.emit(eventFor(settingsChanged, { subject: party.id, companyId: party.companyId, payload: { partyId: party.id, fields: ['portalOn'], portalOn: true, progressShared: before.progressShared } }))
+        // B-PR-14: the event carries the production limits too (an adviser's firm: the defaults; never a supervisor).
+        tools.emit(eventFor(settingsChanged, { subject: party.id, companyId: party.companyId, payload: { partyId: party.id, fields: ['portalOn'], ...settingsEventFields({ ...before, portalOn: true }) } }))
         portalSwitchedOn = true
       }
       const invited = await inviteInCommand(tools, { partyId: party.id, companyId: body.companyId, email, displayName: body.displayName, locale: body.locale, choice }, { actorId: context.actorId, byPartner: false })

@@ -13,13 +13,15 @@ import {
   organisationsContract,
   portalAccessContract,
   previewContract,
+  productionChangeContract,
+  productionContract,
   resendContract,
   revokeContract,
   settingsContract,
   statusContract,
 } from './contract'
 import { manifest } from './manifest'
-import { changePerson, changeSettings, changeStatus, invitePerson, organisations, portalAccess, preview, resendInvitation, revokeInvitation } from './office'
+import { changePerson, changeProduction, changeSettings, changeStatus, invitePerson, organisations, portalAccess, preview, productionLimits, resendInvitation, revokeInvitation } from './office'
 
 /**
  * Partner organisations, their people and roles (B-W2b-162; PLT-006, PLT-021, PLT-022, SAL-060, SCM-092):
@@ -27,6 +29,8 @@ import { changePerson, changeSettings, changeStatus, invitePerson, organisations
  * GET   /partners                                              the partner organisations (Admin › Users "Partners")
  * GET   /partners/:partyId                                     a party's Portal access: switch, limits, roles, people
  * POST  /partners/:partyId/settings                            portal on/off, people and roles allowed, production progress (C1)
+ * GET   /partners/:partyId/production                          B-PR-14: the customer's production limits (the limits card)
+ * PUT   /partners/:partyId/production                          B-PR-14: level, urgency switch and quota, asks, approver, second person
  * POST  /partners/:partyId/people                              invite a person (role, capabilities, end of access)
  * POST  /partners/:partyId/people/:userId/invitation           the invitation again
  * POST  /partners/:partyId/people/:userId/invitation/revoke    the open invitation stops
@@ -45,6 +49,9 @@ export default defineRoutes('auth-partners', manifest, async (app) => {
   app.get('/partners', { schema: organisationsContract }, (request) => organisations(auth(), request))
   app.get('/partners/:partyId', { schema: portalAccessContract }, (request) => portalAccess(auth(), request, request.params.partyId))
   app.post('/partners/:partyId/settings', { schema: settingsContract }, (request) => changeSettings(auth(), request, request.params.partyId, request.body, idempotencyKeyFrom(request)))
+  // B-PR-14
+  app.get('/partners/:partyId/production', { schema: productionContract }, (request) => productionLimits(request, request.params.partyId))
+  app.put('/partners/:partyId/production', { schema: productionChangeContract }, (request) => changeProduction(auth(), request, request.params.partyId, request.body, idempotencyKeyFrom(request)))
   app.post('/partners/:partyId/people', { schema: inviteContract }, (request) => invitePerson(auth(), request, request.params.partyId, request.body, idempotencyKeyFrom(request)))
   app.post('/partners/:partyId/people/:userId/invitation', { schema: resendContract }, (request) => resendInvitation(auth(), request, request.params.partyId, request.params.userId, request.body))
   app.post('/partners/:partyId/people/:userId/invitation/revoke', { schema: revokeContract }, (request) => revokeInvitation(auth(), request, request.params.partyId, request.params.userId, request.body))
