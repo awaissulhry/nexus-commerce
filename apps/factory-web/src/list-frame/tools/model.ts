@@ -20,7 +20,19 @@ export interface ToolColumn {
   readonly label: string
   /** `first`: the row's name, always shown (it may move); `end`: a trailing ⋯ column pinned right, never moved or exported. */
   readonly fixed: 'first' | 'end' | null
+  /**
+   * B-TH-241 (SHEET-G04): a column hidden until a layout shows it (a custom field's `cf:` column, ColDef `context.optIn`): it is
+   * shown only while the layout names it in its order and does not hide it, so a list as built and every view saved before it
+   * existed keep their columns.
+   */
+  readonly optIn?: boolean
 }
+
+// ── B-TH-241: a column's tools facts from its ColDef context (opt-in, and its name in Customise) ──
+const contextOf = (column: ColDef<unknown>): { optIn?: unknown; toolLabel?: unknown } => (column.context as { optIn?: unknown; toolLabel?: unknown } | undefined) ?? {}
+/** An opt-in column (hidden until a layout shows it). */
+export const isOptIn = (column: ColDef<unknown>): boolean => contextOf(column).optIn === true
+// ── end B-TH-241 ──
 
 /** A column's id as AG reads it: its colId, else its field. Null: the tools leave it alone. */
 export function columnIdOf(column: ColDef<unknown>): string | null {
@@ -36,9 +48,11 @@ export function toolColumnsOf(columns: readonly ColDef<unknown>[]): ToolColumn[]
   })
   return known.map((column, index) => {
     const id = columnIdOf(column)!
-    const label = typeof column.headerName === 'string' && column.headerName.trim() !== '' ? column.headerName : id
+    // B-TH-241: a column may name itself apart in Customise ("Heat number (custom field)").
+    const toolLabel = contextOf(column).toolLabel
+    const label = typeof toolLabel === 'string' && toolLabel.trim() !== '' ? toolLabel : typeof column.headerName === 'string' && column.headerName.trim() !== '' ? column.headerName : id
     const fixed = column.pinned === 'right' && index === known.length - 1 ? 'end' : index === 0 ? 'first' : null
-    return { id, label, fixed }
+    return { id, label, fixed, ...(isOptIn(column) && fixed === null ? { optIn: true } : {}) }
   })
 }
 
@@ -72,10 +86,13 @@ export function applyLayout<T>(columns: readonly ColDef<T>[], layout: ColumnLayo
     const pb = b.id !== null && position.has(b.id) ? position.get(b.id)! : clean.order.length + b.index
     return pa - pb
   })
+  // B-TH-241: an opt-in column shows only while the layout orders it and does not hide it.
+  const inOrder = new Set(clean.order)
   return ordered.map(({ column, id }) => {
     if (id === null || column.pinned === 'right') return column
     const next: ColDef<T> = { ...column }
-    if (hidden.has(id)) next.hide = true
+    if (isOptIn(column as ColDef<unknown>)) next.hide = !inOrder.has(id) || hidden.has(id)
+    else if (hidden.has(id)) next.hide = true
     if (pinned.has(id)) next.pinned = 'left'
     else if (column.pinned === 'left' && clean.pinned.length > 0) next.pinned = null
     return next
@@ -97,6 +114,9 @@ export function preferencesOf(tools: readonly ToolColumn[], layout: ColumnLayout
   const clean = cleanLayout(layout, tools)
   const order = clean ? [...clean.order, ...tools.map((column) => column.id).filter((id) => !clean.order.includes(id))] : tools.map((column) => column.id)
   const hidden = new Set(clean?.hidden ?? [])
+  // B-TH-241: an opt-in column is in view only while the layout orders it.
+  const ordered = new Set(clean?.order ?? [])
+  for (const column of tools) if (column.optIn && !ordered.has(column.id)) hidden.add(column.id)
   return {
     visibleColumns: order.filter((id) => !hidden.has(id)),
     lockedColumns: [...(clean?.pinned ?? [])],
@@ -115,10 +135,13 @@ export function layoutOfPreferences(tools: readonly ToolColumn[], value: Prefere
   const visible = new Set(value.visibleColumns)
   const order = (value.columnOrder ?? value.visibleColumns).filter((id) => all.includes(id))
   const fullOrder = [...order, ...all.filter((id) => !order.includes(id))]
-  const sameOrder = fullOrder.every((id, index) => id === all[index])
+  // B-TH-241: an opt-in column in view is kept by naming it in the order (one not in view is simply left out of it).
+  const optIn = new Set(tools.filter((column) => column.optIn).map((column) => column.id))
+  const optInShown = [...optIn].some((id) => visible.has(id))
+  const sameOrder = !optInShown && fullOrder.filter((id) => !optIn.has(id)).every((id, index) => id === all.filter((entry) => !optIn.has(entry))[index])
   const layout: ColumnLayout = {
-    order: sameOrder ? [] : fullOrder.filter((id) => tools.find((column) => column.id === id)?.fixed !== 'end'),
-    hidden: tools.filter((column) => column.fixed === null && !visible.has(column.id)).map((column) => column.id),
+    order: sameOrder ? [] : fullOrder.filter((id) => tools.find((column) => column.id === id)?.fixed !== 'end' && (!optIn.has(id) || visible.has(id))),
+    hidden: tools.filter((column) => column.fixed === null && !column.optIn && !visible.has(column.id)).map((column) => column.id),
     pinned: (value.lockedColumns ?? []).filter((id) => all.includes(id) && visible.has(id)),
   }
   return cleanLayout(layout, tools)

@@ -146,3 +146,111 @@ describe('the grid takes its rows\' height up to one page (no dead space under a
     expect(ids).toEqual(expect.arrayContaining(['short', 'long']))
   })
 })
+
+// ── B-TH-241 (threads plan TH-4, SHEET-G04, SHEET-G08; wall W17): custom columns and group rows ─────────────────────────────
+import { readFileSync } from 'node:fs'
+import { cellWords, CUSTOM_BATCH, fieldOnRow, idsToRead, isCustomColumnId, shownCustomIds, withCustomColumns } from './custom/model'
+import { groupedRows, initiallyCollapsed, isGroupMarker, markerId, toggleGroup, type GroupMarker } from './groups/model'
+import type { ListField } from './tools/transport'
+
+const FIELD = (over: Partial<ListField> = {}): ListField => ({ code: 'heat', columnId: 'cf:heat', type: 'TEXT', labelIt: 'Colata', labelEn: 'Heat number', unit: null, companyId: null, partyId: null, options: [], ...over })
+const ALPHA = '0190f0e2-aaaa-7000-8000-000000000001'
+const BETA = '0190f0e2-bbbb-7000-8000-000000000002'
+
+describe('custom columns (B-TH-241)', () => {
+  it('a custom column is known by the API\'s column id (cf:<code>, cf:<grain>:<code>)', () => {
+    expect(isCustomColumnId('cf:heat')).toBe(true)
+    expect(isCustomColumnId('cf:price:target')).toBe(true)
+    expect(isCustomColumnId('number')).toBe(false)
+  })
+
+  it('W17: a field for one customer shows its value only on that customer\'s rows; a field for every customer on all', () => {
+    expect(fieldOnRow(FIELD({ partyId: ALPHA }), ALPHA)).toBe(true)
+    expect(fieldOnRow(FIELD({ partyId: ALPHA }), BETA)).toBe(false)
+    expect(fieldOnRow(FIELD({ partyId: ALPHA }), null)).toBe(false)
+    expect(fieldOnRow(FIELD(), BETA)).toBe(true)
+    // Without the row's customer, the API's answer stands (it sends a customer's values on its records only).
+    expect(fieldOnRow(FIELD({ partyId: ALPHA }), undefined)).toBe(true)
+  })
+
+  it('a value in words: a select\'s label, a number with its unit, yes / no said by the frame, nothing as nothing', () => {
+    const select = FIELD({ type: 'SELECT', options: [{ code: 'RUSH', labelIt: 'Urgente', labelEn: 'Rush', active: true }] })
+    expect(cellWords(select, { value: 'RUSH', wordsIt: null, wordsEn: null }, 'en').text).toBe('Rush')
+    expect(cellWords(select, { value: 'RUSH', wordsIt: null, wordsEn: null }, 'it').text).toBe('Urgente')
+    expect(cellWords(FIELD({ type: 'NUMBER', unit: 'mm' }), { value: 12, wordsIt: null, wordsEn: null }, 'en').text).toBe('12 mm')
+    expect(cellWords(FIELD({ type: 'YES_NO' }), { value: true, wordsIt: null, wordsEn: null }, 'en')).toEqual({ text: null, yesNo: 'yes' })
+    expect(cellWords(FIELD(), undefined, 'en').text).toBeNull()
+    expect(cellWords(FIELD({ type: 'LINK' }), { value: 'x', wordsIt: null, wordsEn: null }, 'en').text).toBeNull()
+  })
+
+  it('the values are read for the loaded rows not yet read, 200 ids a read', () => {
+    const ids = Array.from({ length: 450 }, (_, index) => `r${index}`)
+    const chunks = idsToRead(ids, new Set(['r0']), new Set(['r1']))
+    expect(CUSTOM_BATCH).toBe(200)
+    expect(chunks.map((chunk) => chunk.length)).toEqual([200, 200, 48])
+    expect(chunks.flat()).not.toContain('r0')
+    expect(chunks.flat()).not.toContain('r1')
+    expect(idsToRead(['a', 'a'], new Set(), new Set())).toEqual([['a']])
+  })
+
+  it('custom columns go before the trailing ⋯ (it stays last); only shown ones count as wanted', () => {
+    const own = [{ colId: 'number' }, { colId: 'more', pinned: 'right' as const }]
+    const custom = [{ colId: 'cf:heat', hide: true }]
+    expect(withCustomColumns(own, custom).map((column) => column.colId)).toEqual(['number', 'cf:heat', 'more'])
+    expect(withCustomColumns([{ colId: 'a' }], custom).map((column) => column.colId)).toEqual(['a', 'cf:heat'])
+    expect(withCustomColumns(own, []).map((column) => column.colId)).toEqual(['number', 'more'])
+    expect(shownCustomIds([{ colId: 'cf:heat', hide: true }, { colId: 'cf:lot', hide: false }, { colId: 'number' }])).toEqual(['cf:lot'])
+  })
+})
+
+describe('group rows (B-TH-241)', () => {
+  type Row = { id: string; party: string }
+  const rows: Row[] = [
+    { id: '1', party: 'A' },
+    { id: '2', party: 'B' },
+    { id: '3', party: 'A' },
+    { id: '4', party: 'Z' },
+  ]
+  const group = (key: string, over: Record<string, unknown> = {}) => ({ key, name: key, label: key, summary: null, ...over })
+  const shape = (out: Array<Row | GroupMarker>) => out.map((entry) => (isGroupMarker(entry) ? `${entry.fwGroup}:${entry.key}` : entry.id))
+
+  it('a header per group, its rows under it in the list\'s order, its more / reading line; a row of no group last', () => {
+    const out = groupedRows(rows, { keyOf: (row) => row.party, groups: [group('A', { more: { label: 'Show more of A', onMore: () => undefined } }), group('B', { state: { kind: 'reading' } }), group('C')], collapsed: [] })
+    expect(shape(out)).toEqual(['header:A', '1', '3', 'more:A', 'header:B', '2', 'state:B', 'header:C', '4'])
+  })
+
+  it('a folded group shows its header only; groups fold all when there are more than ten', () => {
+    const out = groupedRows(rows, { keyOf: (row) => row.party, groups: [group('A'), group('B')], collapsed: ['A'] })
+    expect(shape(out)).toEqual(['header:A', 'header:B', '2', '4'])
+    expect(initiallyCollapsed(['a', 'b'])).toEqual([])
+    const eleven = Array.from({ length: 11 }, (_, index) => `g${index}`)
+    expect(initiallyCollapsed(eleven)).toEqual(eleven)
+    expect(toggleGroup(['a'], 'a')).toEqual([])
+    expect(toggleGroup([], 'a')).toEqual(['a'])
+  })
+
+  it('a group\'s line has an id of its own, never one of the list\'s rows', () => {
+    expect(markerId({ fwGroup: 'header', key: 'A' })).toBe('fw-group:header:A')
+    expect(isGroupMarker({ id: '1' })).toBe(false)
+    expect(isGroupMarker({ fwGroup: 'more', key: 'A' })).toBe(true)
+  })
+
+  it('the totals are never the frame\'s: a header\'s figures are what the list gives (the server\'s), not a count of loaded rows', () => {
+    const source = readFileSync(new URL('./groups/model.ts', import.meta.url), 'utf8') + readFileSync(new URL('./groups/GroupLine.tsx', import.meta.url), 'utf8')
+    // The group parts read no row's value and sum nothing: no reduce, no length of a group's rows drawn as its count.
+    expect(source).not.toMatch(/\.reduce\(/)
+    expect(source).not.toMatch(/rows\.length/)
+  })
+
+  it('groups draw only when a list asks: the lab\'s plain cases have no group line, the grouped case has its total', () => {
+    for (const locale of LOCALES) {
+      const View = designScreen.view as ComponentType<{ model: unknown }>
+      const plain = designScreen.cases.find((item) => item.id === 'none-selected')!
+      const grouped = designScreen.cases.find((item) => item.id === 'th4-grouped')!
+      const render = (model: unknown) => renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'lists']) }, createElement(View, { model })))
+      expect(render(plain.model)).not.toContain('fw-list-total')
+      expect(render(grouped.model)).toContain('fw-list-total')
+    }
+  })
+})
+// ── end B-TH-241 ──

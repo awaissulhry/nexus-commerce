@@ -6,6 +6,7 @@ import { BULK_REFUSALS } from '@nexus/factory-domain/views/bulk/rules'
 import type { ApiClient } from '../../../lib/api/client'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { ToolsError, type BulkApplyAsk, type BulkPreviewAsk, type ExportAsk, type ExportJob, type SavedView, type ToolsProblem, type ViewDraft, type ViewsAnswer } from '../../../list-frame/tools/transport'
+import type { ListField, ListFieldScope, ListFieldValue } from '../../../list-frame/tools/transport' // B-TH-241
 
 /**
  * Every call of the list tools (B-W2a-23; apps/factory-api platform/views and platform/exports), with the answer's shape
@@ -163,3 +164,36 @@ export async function exportFileAddress(api: ApiClient, jobId: string): Promise<
   const url = answer.download.url
   return url.startsWith('/') && !url.startsWith('//') ? `/api${url}` : url
 }
+
+// ── B-TH-241 (threads plan TH-4, SHEET-G04): the custom fields a list frame draws as columns (apps/factory-api platform/fields) ──
+const listOption = z.object({ code: z.string(), labelIt: z.string(), labelEn: z.string(), active: z.boolean() })
+const listFieldSchema = z.object({
+  code: z.string(),
+  columnId: z.string(),
+  type: z.string(),
+  labelIt: z.string(),
+  labelEn: z.string(),
+  unit: z.string().nullable(),
+  companyId: z.string().nullable(),
+  status: z.string().optional(),
+  /** B-TH-056: the one customer the field is for (null: every customer). */
+  partyId: z.string().nullable().default(null),
+  picklist: z.object({ values: z.array(listOption) }).nullable(),
+})
+const listFieldValue = z.object({ value: z.unknown(), wordsIt: z.string().nullable(), wordsEn: z.string().nullable() })
+
+/** The fields this person sees of a record type (active only), in the list's scope: GET /fields?recordType=&companyId=&partyId=. */
+export async function listFields(api: ApiClient, recordType: string, scope: ListFieldScope): Promise<readonly ListField[]> {
+  const answer = await api.get('/fields', { query: { recordType, companyId: scope.companyId ?? undefined, partyId: scope.partyId ?? undefined }, schema: z.object({ fields: z.array(listFieldSchema) }) })
+  return answer.fields
+    .filter((field) => field.status === undefined || field.status === 'ACTIVE')
+    .map((field) => ({ code: field.code, columnId: field.columnId, type: field.type, labelIt: field.labelIt, labelEn: field.labelEn, unit: field.unit, companyId: field.companyId, partyId: field.partyId, options: field.picklist?.values ?? [] }))
+}
+
+/** The values of up to 200 records, by record id then field code: POST /fields/rows/:recordType (records the person may not see are left out). */
+export async function listFieldRows(api: ApiClient, recordType: string, ids: readonly string[]): Promise<ReadonlyMap<string, Readonly<Record<string, ListFieldValue>>>> {
+  if (ids.length === 0) return new Map()
+  const answer = await api.post(`/fields/rows/${seg(recordType)}`, { body: { ids: [...ids] }, schema: z.object({ rows: z.array(z.object({ id: z.string(), values: z.record(z.string(), listFieldValue) })) }) })
+  return new Map(answer.rows.map((row) => [row.id, row.values as Record<string, ListFieldValue>]))
+}
+// ── end B-TH-241 ──

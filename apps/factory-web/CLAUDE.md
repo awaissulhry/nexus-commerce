@@ -282,6 +282,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   The transport gained `bulkPreview` / `bulkApply`. First list on it: Production › Work orders (due date, priority).
   B-W2b-18: the phone card list is ON for every list (leave `cards` out for the defaults; `cards={null}` keeps a table on a
   phone); an `endless` list gets "Show more" on its cards.
+  B-TH-241 (threads plan TH-4), two more opt-ins: `custom` { recordType, companyId?, partyId?, partyOf? } (`list-frame/custom/`)
+  draws the record type's custom fields as columns `cf:<code>` read through the transport's `fields` seam (`GET /fields` in the
+  list's scope, `POST /fields/rows/:type` for the loaded rows, 200 ids a read, only while one is in view): OPT-IN columns
+  (`ColDef.context.optIn`: hidden until a layout orders them — tools/model.ts — so lists and views saved before keep theirs),
+  "… (custom field)" in Customise, written by Export when shown; a field for one customer shows only on that customer's rows.
+  `groups` { keyOf, groups: [{ key, name, label, summary, state?, more? }], collapsed, onToggle, total? } (`list-frame/groups/`):
+  full-width group lines (header with the fold toggle, its name a door, the LIST's figures — never summed from loaded rows —,
+  "Show more of …", reading / failed), the grand total pinned under the grid (sticky), a section per group on a phone.
 - `src/areas/search/` — global search (B-W2a-32): All results (SCR-248, `/w/<company>/search?q=&type=`, a frame page
   with no navigation row) and the shared parts of the palette's record groups (`model.ts`: where a result opens —
   its company's Office, `recordAddress`, a supplier on the buying side —, the type/status words of `search.json`;

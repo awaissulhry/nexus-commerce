@@ -49,7 +49,11 @@
     "empty": "Ancora niente qui",
     "noMatch": "Nessuna riga corrisponde a questi filtri",
     "clearFilters": "Togli i filtri",
-    "blockedReason": "Bloccato: sbloccalo prima di agire"
+    "blockedReason": "Bloccato: sbloccalo prima di agire",
+    "groupFigure_one": "{count} record in tutto",
+    "groupFigure_other": "{count} record in tutto",
+    "groupTotal_one": "Tutti i paesi · {count} record",
+    "groupTotal_other": "Tutti i paesi · {count} record"
   },
   "tools": {
     "columns": "Colonne",
@@ -389,5 +393,19 @@
     "move": "Sposta",
     "moving": "Spostamento…",
     "pickDay": "Scegli prima un altro giorno"
+  },
+  "custom": {
+    "reading": "Lettura del valore…",
+    "hint": "{label} — un campo personalizzato (Amministrazione › Campi ed elenchi)",
+    "toolLabel": "{label} (campo personalizzato)",
+    "yes": "Sì",
+    "no": "No"
+  },
+  "groups": {
+    "show": "Mostra le righe di {name}",
+    "hide": "Nascondi le righe di {name}",
+    "reading": "Lettura delle righe di {name}…",
+    "retry": "Riprova",
+    "counting": "Conteggio…"
   }
 }
