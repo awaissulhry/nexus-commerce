@@ -130,6 +130,7 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
       '/products/sizes': 'product.styles.view', // GET /product/size-scales
       '/products/samples': 'sales.samples.view', // GET /sales/samples/rounds (B-W2b-261)
       '/products/changes': 'product.changes.view', // GET /product/change-requests (B-W2b-244)
+      '/products/projects': 'threads.read', // GET /projects (B-TH-248: every office person who reads threads)
       '/products/colours': 'product.styles.view', // GET /product/colours/library (B-W2b-247)
       '/products/options': 'product.styles.view', // GET /product/option-groups (B-W2b-242)
       '/products/settings': 'product.styles.view', // GET /product/settings (B-W2b-239)
@@ -330,18 +331,19 @@ describe('the Office map is the approved tree (rail, overlays, words, order)', (
   it('the W2b-4 rows per role: Products, Compliance, Work instructions, Time & action', () => {
     const P = (...pages: string[]) => pages.map((page) => `/products/${page}`)
     const C = (...pages: string[]) => pages.map((page) => `/compliance/${page}`)
-    const allProducts = P('styles', 'materials', 'samples', 'changes', 'operations', 'sizes', 'colours', 'options', 'settings')
+    // B-TH-248: Development › Projects after Changes, for every role (GET /projects reads with threads.read, which every office role holds).
+    const allProducts = P('styles', 'materials', 'samples', 'changes', 'projects', 'operations', 'sizes', 'colours', 'options', 'settings')
     const allCompliance = C('status', 'certificates', 'declarations', 'techfiles', 'labels', 'tests', 'register', 'sourcing', 'reports', 'settings')
     const expected: Record<string, { products: string[]; compliance: string[]; instructions: boolean; milestones: boolean }> = {
       owner: { products: allProducts, compliance: allCompliance, instructions: true, milestones: true },
       production_manager: { products: allProducts, compliance: C('status', 'certificates', 'declarations', 'techfiles', 'labels', 'register', 'sourcing', 'reports', 'settings'), instructions: true, milestones: true },
       quality_inspector: { products: allProducts, compliance: allCompliance, instructions: true, milestones: false },
       planner: { products: allProducts, compliance: C('status', 'certificates', 'declarations', 'techfiles', 'labels', 'sourcing', 'settings'), instructions: false, milestones: true },
-      sales: { products: P('styles', 'materials', 'samples', 'changes', 'sizes', 'colours', 'options', 'settings'), compliance: [], instructions: false, milestones: false },
-      buyer: { products: P('styles', 'materials', 'changes', 'sizes', 'colours', 'options', 'settings'), compliance: C('tests'), instructions: false, milestones: true },
-      warehouse: { products: P('styles', 'materials', 'sizes', 'colours', 'options', 'settings'), compliance: C('tests'), instructions: false, milestones: false },
-      floor_supervisor: { products: P('styles', 'materials', 'changes', 'operations', 'sizes', 'colours', 'options', 'settings'), compliance: [], instructions: true, milestones: false },
-      finance: { products: P('styles', 'materials', 'operations', 'sizes', 'colours', 'options', 'settings'), compliance: [], instructions: false, milestones: false },
+      sales: { products: P('styles', 'materials', 'samples', 'changes', 'projects', 'sizes', 'colours', 'options', 'settings'), compliance: [], instructions: false, milestones: false },
+      buyer: { products: P('styles', 'materials', 'changes', 'projects', 'sizes', 'colours', 'options', 'settings'), compliance: C('tests'), instructions: false, milestones: true },
+      warehouse: { products: P('styles', 'materials', 'projects', 'sizes', 'colours', 'options', 'settings'), compliance: C('tests'), instructions: false, milestones: false },
+      floor_supervisor: { products: P('styles', 'materials', 'changes', 'projects', 'operations', 'sizes', 'colours', 'options', 'settings'), compliance: [], instructions: true, milestones: false },
+      finance: { products: P('styles', 'materials', 'projects', 'operations', 'sizes', 'colours', 'options', 'settings'), compliance: [], instructions: false, milestones: false },
       read_only: { products: allProducts, compliance: allCompliance, instructions: true, milestones: true },
     }
     for (const [role, want] of Object.entries(expected)) {
