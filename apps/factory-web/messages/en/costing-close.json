@@ -338,27 +338,6 @@
       "reversed": "The variance of {material} on {document} was taken back."
     }
   },
-  "scrapRework": {
-    "title": "Scrap and rework cost",
-    "hint": "Per reason: the garments scrapped at an operation or in a rework and their value, the material scrapped from stock for this work order, and the garments reworked at their standard minutes.",
-    "loading": "Reading the scrap and rework cost…",
-    "failed": "Couldn't load the scrap and rework cost",
-    "none": "Nothing was scrapped or reworked on this work order.",
-    "noReason": "No reason given",
-    "reworked_one": "{count} garment · {minutes} min",
-    "reworked_other": "{count} garments · {minutes} min",
-    "noRate": "No cost per minute in force",
-    "totalUnknown": "Not known: a rework has no cost per minute",
-    "total": "Total",
-    "never": "Per work order and reason: never per person.",
-    "col": {
-      "reason": "Reason",
-      "scrapped": "Garments scrapped",
-      "stock": "Material scrapped from stock",
-      "rework": "Reworked",
-      "total": "Cost"
-    }
-  },
   "variancesList": {
     "title": "Variances by work order",
     "hint": "The variance lines of the closes made {from} – {to} that still stand.",

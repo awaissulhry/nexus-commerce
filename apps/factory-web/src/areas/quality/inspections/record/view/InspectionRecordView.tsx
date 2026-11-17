@@ -529,7 +529,7 @@ function ChecksTab({ model, actions, recordHeld, signHeld, planHolds }: { model:
             />
           )}
         </Section>
-        <IdentitySection sheet={onPlan ? sheet : null} workOrderHref={model.can.workOrdersView ? `${model.prefix}/production/work-orders/${encodeURIComponent(inspection.workOrderId)}?tab=bundles` : null} />
+        <IdentitySection sheet={onPlan ? sheet : null} workOrderHref={model.can.workOrdersView ? `${model.prefix}/production/work-orders/${encodeURIComponent(inspection.workOrderId)}?tab=cutting` : null} />
       </div>
       <Section id="now" title={t('result.heading')}>
         {onPlan && sheet?.value && inspection.status === 'OPEN' ? (

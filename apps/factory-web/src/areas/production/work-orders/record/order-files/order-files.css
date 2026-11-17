@@ -1,0 +1,84 @@
+/* F-PR-25 — Order files: the list and, beside it, the shown file (17-web-r2 §1.3). Layout only, semantic tokens. */
+.fw-pr-of {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+@media (min-width: 900px) {
+  .fw-pr-of {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    align-items: start;
+  }
+
+  .fw-pr-of-viewer {
+    position: sticky;
+    top: 0;
+  }
+}
+
+.fw-pr-of-list,
+.fw-pr-of-viewer {
+  min-width: 0;
+}
+
+.fw-pr-of-viewer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-pr-of-viewer.is-empty {
+  justify-content: center;
+  min-height: 160px;
+  padding: var(--nds-space-12);
+  border: 1px dashed var(--nds-border-subtle);
+  border-radius: var(--nds-radius-md);
+}
+
+/* Phone: the list alone; a shown file takes the window (‹ or Esc back to the list). */
+@media (max-width: 899px) {
+  .fw-pr-of-viewer.is-empty {
+    display: none;
+  }
+
+  .fw-pr-of.is-showing > .fw-pr-of-list {
+    display: none;
+  }
+}
+
+.fw-pr-of-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-pr-of-part {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-muted);
+}
+
+.fw-pr-of-locked {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-muted);
+}
+
+.fw-pr-of-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-pr-of-picture {
+  display: block;
+  max-width: 100%;
+  max-height: min(64vh, 720px);
+  object-fit: contain;
+  border-radius: var(--nds-radius-md);
+}

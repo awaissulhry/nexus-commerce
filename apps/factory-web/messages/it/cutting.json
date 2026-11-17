@@ -92,7 +92,6 @@
     "noPlan": "nessun piano",
     "plan": "piano {pct}",
     "rowMenu": "Azioni per {number}",
-    "workOrder": "Apri l’ordine di produzione",
     "failed": "Non è stato possibile leggere i tagli",
     "noMatch": {
       "title": "Nessuna riga corrisponde a questi filtri",
@@ -120,11 +119,6 @@
     "recut": {
       "done": "Questo ritaglio non è più aperto.",
       "noEntry": "Nessuna registrazione di taglio ha ancora pezzi di {part} per {cell}: prima lo taglia il tavolo di taglio."
-    },
-    "ticket": {
-      "voided": "Questo fascio è annullato.",
-      "scanned_one": "Già scansionato una volta: un fascio si annulla solo prima della prima scansione.",
-      "scanned_other": "Già scansionato {count} volte: un fascio si annulla solo prima della prima scansione."
     }
   },
   "alloc": {
@@ -166,9 +160,7 @@
   "notice": {
     "allocated_one": "{count} pelle assegnata a {number}.",
     "allocated_other": "{count} pelli assegnate a {number}.",
-    "recutDone": "Il ritaglio risulta tagliato.",
-    "reprinted": "Il cartellino è stato ristampato con un nuovo codice; il vecchio codice risulta sostituito.",
-    "voided": "Il fascio è annullato: il suo cartellino non si scansiona più."
+    "recutDone": "Il ritaglio risulta tagliato."
   },
   "problem": {
     "read": "La lettura non è riuscita. Riprova.",
@@ -190,76 +182,9 @@
       "state": "Questo ritaglio non è più aperto."
     }
   },
-  "record": {
-    "back": "Taglio",
-    "backToList": "Torna a Taglio",
-    "title": "Taglio",
-    "titleOf": "Taglio · {number}",
-    "tabs": "Sezioni del taglio",
-    "loading": "Lettura del taglio…",
-    "state": {
-      "forbidden": {
-        "title": "Non puoi aprire questo taglio",
-        "body": "Il suo ordine appartiene a una società o a uno stabilimento che non puoi vedere."
-      },
-      "missing": {
-        "title": "Questo taglio non esiste",
-        "body": "Il suo ordine di produzione non è stato trovato. Forse appartiene a un’altra società."
-      },
-      "error": {
-        "title": "Non è stato possibile leggere il taglio",
-        "body": "Riprova tra un momento."
-      }
-    },
-    "openWorkOrder": "Apri il taglio dell’ordine di produzione",
-    "copyNumber": "Copia il numero",
-    "office": "ufficio",
-    "held": {
-      "title": "Bloccato: il tavolo di taglio non taglia nulla per questo ordine",
-      "body": "Motivo: {reason}. Un taglio dell’ordine, di una pelle bloccata o di una pelle di un lotto bloccato viene rifiutato al tavolo con queste parole finché la qualità non toglie il blocco."
-    }
-  },
-  "tab": {
-    "lay": "Stesa o pelli",
-    "pieces": "Pezzi",
-    "yield": "Resa",
-    "tickets": "Cartellini"
-  },
   "part": {
     "failed": "Non è stato possibile leggere {part}",
     "loading": "Lettura di {part}…"
-  },
-  "lay": {
-    "hides": "Pelli",
-    "count_one": "{count} pelle",
-    "count_other": "{count} pelli",
-    "col": {
-      "hide": "Pelle",
-      "grade": "Scelta",
-      "shade": "Tonalità",
-      "before": "Area iniziale",
-      "used": "Usata",
-      "remnant": "Ritaglio",
-      "waste": "Scarto",
-      "state": "Stato"
-    },
-    "lot": "lotto {lot}",
-    "empty": {
-      "title": "Ancora nessuna pelle tagliata",
-      "body": "Qui compaiono le pelli che il tavolo di taglio taglia per questo ordine, con la loro area."
-    },
-    "balance": "Area di ogni pelle",
-    "noBalance": "Ancora nulla prelevato per questo ordine.",
-    "issued": "Lotto {lot} · {area} {uom} prelevati",
-    "area": {
-      "cut": "Tagliata",
-      "waste": "Scarto",
-      "returned": "Tornata a magazzino",
-      "left": "Rimasta"
-    },
-    "allocated": "Assegnate, non ancora tagliate",
-    "noAllocated": "Nessuna pelle assegnata in attesa.",
-    "allocatedHint": "Le pelli assegnate sono riservate intere per questo ordine di lavoro; il controllo del lotto di tonalità qui sopra le conta."
   },
   "hideState": {
     "FULL": "Intera",
@@ -268,16 +193,6 @@
     "CONSUMED": "Esaurita",
     "SCRAPPED": "Scartata",
     "RETURNED": "Resa al fornitore"
-  },
-  "pieces": {
-    "title": "Pezzi per parte e taglia",
-    "part": "Parte",
-    "extraPart": "{part} (fuori distinta)",
-    "cell": "{cut} / {planned}",
-    "short": "{count} mancanti",
-    "recut": "{count} da ritagliare",
-    "none": "Nessuna parte di questo ordine si taglia dalle pelli.",
-    "hint": "Tagliati / previsti per parte e taglia; previsto è un pezzo di ogni parte per capo (la distinta non ha ancora il numero di pezzi per parte)."
   },
   "recuts": {
     "title": "Ritagli",
@@ -302,22 +217,6 @@
     }
   },
   "yield": {
-    "title": "Resa per pelle",
-    "overall": "Resa {pct}",
-    "plan": {
-      "STYLE": "piano {pct} (del modello)",
-      "BOM": "piano {pct} (dallo sfrido della distinta)"
-    },
-    "used": "Area usata",
-    "pattern": "Area del modello",
-    "remnant": "Ritagli",
-    "waste": "Scarto",
-    "unmatched": "{area} tagliati come parti singole restano fuori dalla resa: il loro modello non è noto.",
-    "none": "Ancora nulla tagliato per questo ordine.",
-    "series": {
-      "yield": "Resa %",
-      "planned": "Piano %"
-    },
     "byLot": "Per lotto e fornitore",
     "col": {
       "lot": "Lotto",
@@ -328,53 +227,5 @@
       "yield": "Resa"
     },
     "hint": "Per pelle, lotto e fornitore; mai per tagliatore."
-  },
-  "tickets": {
-    "title": "Cartellini dei fasci",
-    "count_one": "{count} fascio attivo",
-    "count_other": "{count} fasci attivi",
-    "col": {
-      "code": "Cartellino",
-      "cell": "Taglia",
-      "part": "Parte",
-      "garments": "Capi",
-      "status": "Stato e stampa",
-      "reprints": "Ristampato perché",
-      "scans": "Scansioni"
-    },
-    "whole": "capo intero",
-    "replaced": "sostituisce {codes}",
-    "status": {
-      "ACTIVE": "Attivo",
-      "VOID": "Annullato"
-    },
-    "print": {
-      "QUEUED": "In coda",
-      "SENT": "Inviato alla stampante",
-      "PRINTED": "Stampato",
-      "FAILED": "Stampa non riuscita",
-      "PDF": "Etichetta PDF",
-      "UNKNOWN": "Stato di stampa nascosto"
-    },
-    "rowMenu": "Azioni per {code}",
-    "reprint": "Ristampa…",
-    "void": "Annulla…",
-    "empty": {
-      "title": "Ancora nessun cartellino",
-      "body": "I fasci si fanno al tavolo di taglio dopo il taglio; qui compaiono i loro cartellini."
-    },
-    "hint": "Un cartellino ristampato ha un nuovo codice e il vecchio risulta sostituito; il motivo resta.",
-    "reprintTitle": "Ristampa {code}",
-    "reprintBody": "Il fascio prende un nuovo codice; il vecchio cartellino risulterà sostituito.",
-    "printer": "Stampante di etichette",
-    "noPrinter": "Nessuna stampante di etichette in questo stabilimento",
-    "reason": "Motivo",
-    "reprintGo": "Ristampa",
-    "held": {
-      "printer": "Scegli una stampante di etichette."
-    },
-    "voidTitle": "Annulla {code}",
-    "voidBody": "{garments} capi di {cell} tornano a «tagliati, non in fascio»; il cartellino {code} non si scansiona più.",
-    "voidGo": "Annulla il fascio"
   }
 }

@@ -12,8 +12,8 @@ import type { LabourModel } from '../model'
 import type { Minutes } from '../../every-shift/model'
 import { MinutesCard } from '../../every-shift/view/MinutesCard'
 import { OffStandardCard } from './OffStandardCard'
-// B-W2b-GB02 (G053): the scrap and rework cost per reason.
-import { ScrapReworkCard } from '../scrap-rework/view/ScrapReworkCard'
+// B-W2b-GB02 (G053). F-PR-06: one scrap value line (Quality is the scrap home).
+import { ScrapValueLine } from '../scrap-rework/view/ScrapValueLine'
 import '../../../../finance/costing/costing.css'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
 import { rightRef } from '../../../../../lib/i18n/rights'
@@ -26,22 +26,23 @@ import { rightRef } from '../../../../../lib/i18n/rights'
  * without it the tab says why and shows no figure; without costing.view it says which permission. Never wages, never a
  * person. Before the release a work order has no cost yet. B-W2b-59: the Minutes section above it (no money, no grain).
  * B-W2b-81: the off-standard minutes below the Minutes (no money, no grain, never per person).
- * B-W2b-424: the variance at close at the end of the cost section (`variance`, labour/variance).
+ * B-W2b-424: the variance at close at the end of the cost section (`variance`, labour/variance). F-PR-06 (06-tree A.4 Tab 6): the
+ * second scrap card went — one Scrap value line in the cost section, its door to Quality (`qualityHref`), the scrap home.
  */
-export function LabourTab({ labour, prefix, workOrderId, draft, onRetry, minutes, labourHref = null, variance = null }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void; minutes?: Minutes; labourHref?: string | null; variance?: ReactNode }) {
+export function LabourTab({ labour, prefix, workOrderId, draft, onRetry, minutes, labourHref = null, variance = null, qualityHref }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void; minutes?: Minutes; labourHref?: string | null; variance?: ReactNode; /** F-PR-06: the work order's Quality tab (the scrap home). */ qualityHref: string }) {
   return (
     <WithMessages namespaces={[COSTING_NAMESPACE]}>
       {/* B-W2b-59 (wo-minutes): standard minutes, no money: open to whoever reads the work order, above the cost and its grain. */}
       <div className="fw-pr-stack">
         {minutes && <MinutesCard minutes={minutes} />}
         {labour?.offStandard && <OffStandardCard part={labour.offStandard} labourHref={labourHref} onRetry={onRetry} />}
-        <Labour labour={labour} prefix={prefix} workOrderId={workOrderId} draft={draft} onRetry={onRetry} variance={variance} />
+        <Labour labour={labour} prefix={prefix} workOrderId={workOrderId} draft={draft} onRetry={onRetry} variance={variance} qualityHref={qualityHref} />
       </div>
     </WithMessages>
   )
 }
 
-function Labour({ labour, prefix, workOrderId, draft, onRetry, variance }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void; variance: ReactNode }) {
+function Labour({ labour, prefix, workOrderId, draft, onRetry, variance, qualityHref }: { labour: LabourModel | undefined; prefix: string; workOrderId: string; draft: boolean; onRetry?: () => void; variance: ReactNode; qualityHref: string }) {
   const t = useT(COSTING_NAMESPACE)
   const can = labour?.can
   if (!can?.view) {
@@ -118,8 +119,8 @@ function Labour({ labour, prefix, workOrderId, draft, onRetry, variance }: { lab
         <p className="fw-fco-muted">{t('labourTab.wagesNever')}</p>
       </Card>
       <CostScrapAndWaiting detail={detail} can={can} />
-      {/* B-W2b-GB02 (G053; B-W2b-424's gap 5): the scrap and rework cost per reason, inside the cost section. */}
-      {labour?.scrapRework && <ScrapReworkCard model={labour.scrapRework} onRetry={onRetry} />}
+      {/* B-W2b-GB02 (G053). F-PR-06: ONE scrap value line inside the cost section; the scrap and its reasons are on Quality. */}
+      {labour?.scrapRework && <ScrapValueLine model={labour.scrapRework} qualityHref={qualityHref} onRetry={onRetry} />}
       {/* B-W2b-424 (wo-cost "W2b variance at close"): inside the cost section, with its grain. */}
       {variance}
     </div>

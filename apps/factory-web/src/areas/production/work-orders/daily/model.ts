@@ -1,15 +1,15 @@
 import type { PickerReason } from '../../../_shared/reasons/api'
 import { wordsIn } from '../../../_shared/reasons/model'
 import type { StepUpState } from '../../../quality/_shared/hooks'
-import type { BundleRow, PickList, ReadinessWord, WorkOrder, WorkOrderBundles, WorkOrderStatus, WorkOrderWip } from '../../_shared/api'
+import type { BundleRow, PickList, ReadinessWord, WorkOrder, WorkOrderBundles, WorkOrderStatus } from '../../_shared/api'
 import type { Phrase } from '../../_shared/model'
 import type { Availability, Finished, Hold, HoldRecord, ReadinessRow, ScrapRow, SplitReason, Yield } from './api'
 
 /**
  * The work order every day (B-W2a-46), pure: who may do the W2a parts, why a button waits (held with its reason, in this
  * app's words: never the API's English), and how the parts read — the readiness word, holds, report finished to stock,
- * yield, scrap and rework grouped by operation and reason, the hides a reserve may take, the operation flow with the pile
- * waiting before each operation, and the pick list and cutting list to print. No money (no grain is read), no worker.
+ * yield, scrap and rework grouped by operation and reason, the hides a reserve may take, and the pick list and cutting list
+ * to print (F-PR-06: the operation flow's pile is a column of Operations & WIP's one table, `progress/model.ts`). No money (no grain is read), no worker.
  * Words are keys of `messages/<locale>/production-work-orders.json` (DAILY_NAMESPACE).
  */
 
@@ -313,31 +313,6 @@ export function splitAskHeld(quantity: number, bundle: Pick<BundleRow, 'quantity
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > bundle.quantity - 1) return phrase('split.held.quantity', { max: bundle.quantity - 1 })
   if (!reason) return phrase('split.held.reason')
   return null
-}
-
-// ---- the operation flow --------------------------------------------------------------------------------------------------------------
-
-export interface FlowStep {
-  readonly seq: number
-  readonly code: string
-  readonly name: string
-  /** Garments that arrived and wait before this operation (the pile). */
-  readonly waiting: number
-  readonly good: number
-  readonly scrap: number
-  readonly rework: number
-  readonly final: boolean
-  /** The operation with the biggest pile (more than 0). */
-  readonly bottleneck: boolean
-}
-
-/** Operations as a row with the pile waiting before each (design wo-flow "W2a OperationFlow"). Totals only, no person. */
-export function flowSteps(wip: WorkOrderWip | null): FlowStep[] {
-  if (!wip) return []
-  // B-W2b-82: the flow is the routing's: nothing waits for an unplanned operation.
-  const operations = wip.operations.filter((op) => !op.unplanned)
-  const most = Math.max(0, ...operations.map((op) => op.waiting))
-  return operations.map((op) => ({ seq: op.seq, code: op.code, name: op.name, waiting: op.waiting, good: op.good, scrap: op.scrap, rework: op.rework, final: op.final, bottleneck: most > 0 && op.waiting === most }))
 }
 
 // ---- documents to print -------------------------------------------------------------------------------------------------------------

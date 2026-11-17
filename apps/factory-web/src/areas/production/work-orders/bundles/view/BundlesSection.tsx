@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ExternalLink, MoreHorizontal, Printer } from 'lucide-react'
-import { Card, KeyValue, Menu, SummaryTable } from '@nexus/ui/components'
+import { KeyValue, Menu, SummaryTable } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Pill, Select, Spinner, Tag, TokenChip } from '@nexus/ui/primitives'
 import { Modal } from '../../../../../lib/i18n/ds-parts'
@@ -13,53 +13,24 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { BundleRow, WorkOrder, WorkOrderBundles } from '../../../_shared/api'
 import { reprintHold, waitingAt } from '../../../_shared/model'
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../../record/record-model'
-import { NotReleased, PartState } from '../../record/view/WorkOrderRecordView'
 import { bundlesOnHold, DAILY_NAMESPACE, splitHeld } from '../../daily/model'
-import { FinishedCard, say } from '../../daily/view/DailyParts'
+import { say } from '../../daily/view/DailyParts'
 import { SHIFT_NAMESPACE } from '../../every-shift/model'
-// F-PR-05a: one Report finished button on the page — the band's while released garments wait, else this card's.
-import { reportFirst } from '../../record/overview/model'
 
 /**
- * SCR-072 — Bundles (design wo-bundles; MES-065, MES-068, MES-073): per cell what is cut, bundled and still to bundle;
- * every bundle of the work order with where it waits (the first scanned operation it is not done at), its last scan
- * (time, operation, station — never who), its hides and lots (genealogy) and its ticket; a bundle's scans per operation
- * in its detail. Reprint N tickets (production.bundles): a new code each, the old one refused at a scan, with the reason
- * kept on the bundle. Making bundles is the cutting table's (the floor).
+ * SCR-071 — the Bundles section of the work order's Cutting & bundles tab (F-PR-06: Cutting and Bundles are one tab; design
+ * wo-bundles; MES-065, MES-068, MES-073): every bundle of the work order with where it waits (the first scanned operation it is
+ * not done at), its last scan (time, operation, station — never who), its hides and lots (genealogy) and its ticket; a bundle's
+ * scans per operation in its detail. Reprint N tickets (production.bundles): a new code each, the old one refused at a scan, with
+ * the reason kept on the bundle; Split bundle from its ⋯. A void is done on the bundle's own record (Open full page). Making
+ * bundles is the cutting table's (the floor). The per-cell figures are the tab's one cut-and-bundled table.
  */
-export function BundlesTab({ workOrder, model, actions }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
-  const t = useT('production')
-  if (workOrder.status === 'DRAFT') return <NotReleased what={t('bundles.what')} />
-  const data = model.bundles.value
-  if (!data) return <PartState label={t('tab.bundles')} problem={model.bundles.problem} onRetry={() => actions?.onRetryPart?.('bundles')} />
+export function BundlesSection({ workOrder, data, model, actions }: { workOrder: WorkOrder; data: WorkOrderBundles; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions }) {
   return (
-    <div className="fw-pr-stack">
-      {/* B-W2a-46 (wo-bundles "W2a Report finished to stock"; wo-finish). F-PR-05a: its button is the band's primary now. */}
-      {model.daily && <FinishedCard workOrder={workOrder} daily={model.daily} actions={actions?.daily} inBand={reportFirst(workOrder, model.daily.finished?.value ?? null)} />}
-      <CellsCard data={data} />
+    <>
       <BundleList workOrder={workOrder} data={data} model={model} actions={actions} />
       {model.bundleOpen && <BundleDetail data={data} workOrder={workOrder} model={model} actions={actions} />}
-    </div>
-  )
-}
-
-function CellsCard({ data }: { data: WorkOrderBundles }) {
-  const t = useT('production')
-  return (
-    <Card padded className="fw-pr-card">
-      <h2 className="fw-pr-h2">{t('bundles.cells')}</h2>
-      <SummaryTable
-        label={t('bundles.cells')}
-        stackOnPhone
-        columns={[t('cutting.col.cell'), t('cutting.col.quantity'), t('cutting.col.cut'), t('bundles.col.bundled'), t('bundles.col.toBundle')]}
-        align={[undefined, 'right', 'right', 'right', 'right']}
-        rows={data.cells.map((cell) => ({
-          id: cell.workOrderSizeId,
-          cells: [`${cell.colourwayCode} ${cell.size}`, String(cell.quantity), cell.cut === null ? '—' : String(cell.cut), String(cell.bundled), String(cell.toBundle)],
-        }))}
-      />
-      <p className="fw-pr-hint">{t('bundles.cellsHint')}</p>
-    </Card>
+    </>
   )
 }
 

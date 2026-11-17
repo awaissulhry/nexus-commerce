@@ -14,7 +14,7 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { LiveState } from '../../_shared/hooks'
 import { CUT_VIEWS, type CutTiles, type CutView, type YieldFigures } from '../api'
-import { CUTTING_NAMESPACE, lotLine, materialLine, percent, STATE_TONE, TILES, tileValue, ticketsHeld, usedText, varianceTone, type CutAddress, type CuttingCan, type Phrase } from '../model'
+import { cutHref as workOrderCutHref, CUTTING_NAMESPACE, lotLine, materialLine, percent, STATE_TONE, TILES, tileValue, ticketsHeld, usedText, varianceTone, type CutAddress, type CuttingCan, type Phrase } from '../model'
 import type { CutOrderTiles } from '../orders/api'
 import { fabricTiles, ORDER_TONE, orderDate, orderHref, orderMaterial, ORDERS_NAMESPACE, planPhrase, sheetHref, type ListRow, type OrdersCan } from '../orders/model'
 import { NewCutOrderDialog, type NewOrderActions, type NewOrderModel } from '../orders/view/NewCutOrderDialog'
@@ -255,7 +255,8 @@ function CutsList({
       const count = row.order.customers?.length ?? 0
       return { text: count > 1 ? words.t('customer.several', { count }) : (all ?? '—'), all: count > 1 ? all : null }
     }
-    const cutHref = (workOrderId: string) => `${model.prefix}/production/cutting/${workOrderId}`
+    // F-PR-06: a leather cut opens its work order's Cutting & bundles tab (the Cut record merged there).
+    const cutHref = (workOrderId: string) => workOrderCutHref(model.prefix, workOrderId)
     const CutCell = ({ data }: ICellRendererParams<ListRow>) => {
       if (!data) return null
       if (data.order) {
@@ -408,8 +409,6 @@ function CutsList({
               ? [
                   { id: 'open', label: t('common.open'), href: cutHref(cut.workOrder.id) },
                   { id: 'tab', label: t('common.openNewTab'), href: cutHref(cut.workOrder.id), target: '_blank' as const },
-                  { id: 'tickets', label: t('tab.tickets'), href: `${cutHref(cut.workOrder.id)}?tab=tickets` },
-                  { id: 'workOrder', label: t('list.workOrder'), href: `${model.prefix}/production/work-orders/${cut.workOrder.id}?tab=cutting` },
                 ]
               : []),
             { id: 'alloc', label: t('alloc.open'), onSelect: () => actions?.onAllocate?.(cut.workOrder.id) },
