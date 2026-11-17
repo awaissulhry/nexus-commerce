@@ -436,4 +436,15 @@ describe('B-TH-267: the technical file on RecordFrame — five tabs, its thread 
     expect(dock).not.toMatch(/@[a-z0-9-]+\.example/)
     expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
   })
+
+  // ---- TH-6 part B: the record read names the style's brand (B-TH-075's thread party) ----
+  it('a private-label style’s file: the thread is its brand’s (Reply to it), never another customer; our own collection: notes only', () => {
+    const page = html('thread-brand')
+    const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
+    expect(dock).toContain('Moto Esempio S.r.l.')
+    expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
+    const container = readFileSync(new URL('./record/TechFileRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('const brand = current.file.brand ?? null')
+    expect(container).toContain('party={brand ? { id: brand.id, name: brand.name } : null} partyRole="customer"')
+  })
 })

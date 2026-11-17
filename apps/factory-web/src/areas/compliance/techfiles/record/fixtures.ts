@@ -27,9 +27,12 @@ export interface RecordDesignModel {
   readonly record?: RecordModel
 }
 
-/** B-TH-267: the file's thread as the page draws it — the office's notes (the file's read names no party: the API keeps the style's
- * brand as the thread's party, never shown here); none for a role that does not read threads. */
-const threadOf = (role: RoleCase, record: FileRecord) => ((ROLE_PERMISSIONS[role] as readonly string[]).includes('threads.read') ? designDockedThread({ recordType: 'TechnicalFile', record: record.file.number, party: null }) : null)
+/** B-TH-267: the file's thread as the page draws it — with the brand its style is made for (TH-6 part B: the record read names it), or
+ * the office's notes for our own collection; none for a role that does not read threads. */
+const threadOf = (role: RoleCase, record: FileRecord) =>
+  (ROLE_PERMISSIONS[role] as readonly string[]).includes('threads.read') ? designDockedThread({ recordType: 'TechnicalFile', record: record.file.number, party: record.file.brand ? { name: record.file.brand.name, role: 'customer' } : null }) : null
+/** TH-6 part B: a private-label style's file — its brand is the thread's party (made-up). */
+const BRAND_RECORD: FileRecord = { ...OPEN_RECORD, file: { ...OPEN_RECORD.file, brand: { id: '0190f0e2-6666-7000-8000-0000000000b1', name: 'Moto Esempio S.r.l.' } } }
 
 function base(role: RoleCase, record: FileRecord, over: Partial<RecordModel> = {}): RecordDesignModel {
   return {
@@ -142,6 +145,7 @@ export const designScreen = defineDesignScreen<RecordDesignModel>({
     },
     { id: 'thread-risk', label: 'TH-6 · Risk assessment with the thread: one third under 1600 px (the grid needs the room)', model: tab('owner', 'risk') },
     { id: 'thread-production', label: 'TH-6 · Production control with the thread: one third under 1600 px', model: tab('owner', 'production') },
+    { id: 'thread-brand', label: 'TH-6 · A private-label style’s file: its brand in the thread (Reply to it)', model: tab('owner', 'annex', {}, BRAND_RECORD), note: 'The file’s thread party is the brand its style is made for (B-TH-075): "Reply to Moto Esempio S.r.l."; our own collection’s file has the office’s notes only.' },
     // ---- end B-TH-267
     { id: 'changed', label: 'Changed by someone else while a pop-up was open: Read it again', model: tab('owner', 'annex', { changedAt: NOW }) },
     { id: 'offline', label: 'Offline: every write held with the reason', model: tab('owner', 'annex', { online: false, live: 'offline' }) },

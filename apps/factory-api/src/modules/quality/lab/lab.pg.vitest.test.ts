@@ -207,6 +207,10 @@ describe('a leather lot from quarantine to usable stock (PLAN §4.7 09b-cr6)', (
     const record = await ok('inspector', 'GET', `/quality/lots/${lotId}`)
     expect(record.rule).toEqual({ crViEvidenceRule: 'SUPPLIER_REPORT_ACCEPTED', source: 'DEFAULT', words: 'A supplier report that covers the article and the period counts as chromium VI evidence, as does a lab report on the lot.' })
     expect(record.lot).toMatchObject({ qualityStatus: 'QUARANTINE', receivedById: receiverId, crVi: { required: true, status: 'PENDING', limitMgKg: '3.000', valueMgKg: null } })
+    // TH-6 part B (B-TH-267): the lot's supplier by name (its Lot thread's party), or none when the lot names none.
+    const supplierRow = (await admin<{ supplierId: string | null }>('SELECT "supplierId" FROM "Lot" WHERE id = $1', [lotId]))[0]!
+    if (supplierRow.supplierId) expect(record.supplier).toEqual({ id: supplierRow.supplierId, name: (await admin<{ legalName: string }>('SELECT "legalName" FROM "Party" WHERE id = $1', [supplierRow.supplierId]))[0]!.legalName })
+    else expect(record.supplier).toBeNull()
     expect(record.checklist.checks.map((check: Json) => [check.code, check.state])).toEqual([
       ['STATE', 'OK'],
       ['RECEIPT', 'OK'],

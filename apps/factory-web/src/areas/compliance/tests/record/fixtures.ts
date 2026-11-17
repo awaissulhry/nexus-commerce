@@ -27,13 +27,13 @@ const TODAY = day(29)
 const SUPPLIER = 'Conceria Demo S.r.l.'
 
 /**
- * B-TH-267: the lot's ONE thread as the page draws it — none without threads.read; its supplier named for a reader of stock (the
- * page reads the name from the stock read of the lot), the office's notes otherwise or for a lot with no supplier.
+ * B-TH-267: the lot's ONE thread as the page draws it — none without threads.read; its supplier named (the lab's read names it,
+ * TH-6 part B), the office's notes for a lot with no supplier.
  */
 function threadFor(lot: Lot, role: RoleCase) {
   const held = ROLE_PERMISSIONS[role] as readonly string[]
   if (!held.includes('threads.read')) return null
-  const named = lot.supplierId !== null && held.includes('inventory.stock.view')
+  const named = lot.supplierId !== null
   return designDockedThread({ recordType: 'Lot', record: lot.code, party: named ? { name: SUPPLIER, role: 'supplier' } : null })
 }
 
@@ -217,7 +217,8 @@ export const designScreen = defineDesignScreen<LotCase>({
       note: 'The band sits in the shell’s band row with ONE pill; the lot’s thread is docked at 40 % (519 px at 1440, 711 px at 1920), sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me. An old ?tab=activity lands here with the thread opened. Below 1280 px the band’s Thread button opens it full width.',
     },
     { id: 'thread-release', label: 'TH-6 · Documents & release with the thread: the checklist, then the documents', model: lotCase(held, { tab: 'release', detail: ready(heldDetail) }) },
-    { id: 'thread-notes-only', label: 'TH-6 · Read-only (no stock read): the thread names no supplier — the office’s notes, a reply from Warehouse › Lots', model: lotCase(ready232, { detail: ready(readyDetail) }, 'readOnly') },
+    // TH-6 part B: a lot that names no supplier (read only: no stock read either, so the same-conversation line has no link).
+    { id: 'thread-notes-only', label: 'TH-6 · A lot with no supplier: the thread names no party — the office’s notes', model: lotCase({ ...ready232, supplierId: null }, { detail: ready(demoDetail({ ...ready232, supplierId: null })) }, 'readOnly') },
     // ---- end B-TH-267
     { id: 'inspector', label: 'Quality inspector: every lot action', model: lotCase(ready232, { tab: 'release', detail: ready(readyDetail) }, 'inspector') },
     { id: 'read-only', label: 'Read-only: sees everything, every action held with its reason', model: lotCase(pending, { detail: ready(pendingDetail) }, 'readOnly') },

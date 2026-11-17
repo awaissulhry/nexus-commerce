@@ -18,7 +18,6 @@ import { holdsCostGrain, labCostBody } from '../lab-cost/lab-cost'
 // ---- B-TH-267: the lot on RecordFrame (its ONE thread docked beside both tabs — the same as Warehouse › Lots'; Activity's tools in its "⋯") ----
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
 import { printHref } from '../../../../shell/print/print-model'
-import { listLots as listStockLots } from '../../../_shared/stock/api'
 
 /**
  * The lot record container (`/w/<company>/compliance/tests/<lotId>?tab=results|release`, SCR-054; B-TH-267: an old `?tab=documents`
@@ -64,8 +63,6 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
   const [dialogLines, setDialogLines] = useState<readonly string[]>([])
   const [answer, setAnswer] = useState<Pick<RecordAnswer, 'effect' | 'trace'> | null>(null)
   const [blocked, setBlocked] = useState<readonly WorkOrderUse[] | null>(null)
-  // B-TH-267: the lot's supplier as the thread names it (the lab's read carries its id only).
-  const [supplier, setSupplier] = useState<{ id: string; name: string } | null>(null)
   const resultFile = useRef<PickedFile | null>(null)
   const documentFile = useRef<PickedFile | null>(null)
   const acted = useRef(false)
@@ -252,28 +249,10 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
   const lot = value?.lot ?? null
 
   // ---- B-TH-267: the lot's ONE thread, docked beside both tabs — the same conversation as Warehouse › Lots (the Lot record), whose
-  // supplier is the only party it may reach. The lab's lot read carries the supplier's id only: its name (the thread's "Reply to …")
-  // comes from the stock read of the same lot, for a person who reads stock; without it the thread still opens — the office's notes,
-  // and a reply from Warehouse › Lots. The print view keeps the record panels' print form.
-  const supplierId = lot?.supplierId ?? null
-  const lotCode = lot?.code ?? null
-  const siteId = lot?.siteId ?? null
-  useEffect(() => {
-    if (!lotCode || !supplierId || !can.stockView || !can.threadsRead) return
-    if (supplier?.id === supplierId) return
-    let current = true
-    listStockLots(api, { q: lotCode, supplierId, siteId, limit: 5 })
-      .then((page) => {
-        const row = page.lots.find((entry) => entry.id === lotId)
-        if (current && row?.supplier) setSupplier({ id: row.supplier.id, name: row.supplier.name })
-      })
-      .catch(() => undefined) // Only the thread's party name: the notes still work without it.
-    return () => {
-      current = false
-    }
-  }, [api, can.stockView, can.threadsRead, lotCode, lotId, siteId, supplier?.id, supplierId])
+  // supplier is the only party it may reach; the lab's lot read names it (TH-6 part B), a lot without a supplier has the office's
+  // notes only. The print view keeps the record panels' print form.
   const lotRef = lot ? { type: 'Lot', id: lot.id, companyId: lot.companyId, siteId: lot.siteId } : null
-  const party = supplier && supplier.id === supplierId ? supplier : null
+  const party = value?.supplier && value.supplier.id === lot?.supplierId ? value.supplier : null
   const thread =
     lot && lotRef && can.threadsRead ? (
       <OfficeRecordThread

@@ -295,7 +295,7 @@ describe('B-TH-267: the lot on RecordFrame — Results & limits · Documents & r
     expect(words).not.toMatch(/\/warehouse\/lots\/[^"?]+"/)
   })
 
-  it('the wall (W13, W16, W34): the lot’s thread reaches its own supplier only — never a customer; without the stock read, notes only', () => {
+  it('the wall (W13, W16, W34): the lot’s thread reaches its own supplier only — never a customer; a lot without one: notes only', () => {
     const page = html('thread-docked')
     const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
     expect(dock).toContain('Conceria Demo S.r.l.')
@@ -304,5 +304,9 @@ describe('B-TH-267: the lot on RecordFrame — Results & limits · Documents & r
     const notesDock = textOf(notes.slice(notes.indexOf('class="fw-rcf-dock"')))
     expect(notesDock).not.toMatch(/Reply to (?!the customer)/)
     expect(notesDock).not.toContain('Conceria Demo S.r.l.')
+    // TH-6 part B: the supplier comes from the lab's own lot read (no stock read needed, no second call).
+    const container = readFileSync(new URL('./record/LotRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('const party = value?.supplier && value.supplier.id === lot?.supplierId ? value.supplier : null')
+    expect(container).not.toContain('listStockLots')
   })
 })
