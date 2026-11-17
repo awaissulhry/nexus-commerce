@@ -15,7 +15,8 @@
     "RETURN_ARRIVED_LATE": "Returns that arrived after their deadline",
     "EXIT_PROOF_MISSING": "Exports without their proof of exit",
     "MARGIN_BELOW_FLOOR": "Orders below their margin floor",
-    "STAMP_DUTY_DUE": "Stamp duty quarters near their due day"
+    "STAMP_DUTY_DUE": "Stamp duty quarters near their due day",
+    "REQUEST_NUMBERING_MISSING": "Companies whose requests have no numbering"
   },
   "when": {
     "ORDER_LATE_RISK": "When an order is promised within {daysBeforePromise} and is not ready, or is late",
@@ -33,7 +34,8 @@
     "RETURN_ARRIVED_LATE": "When the goods of a return arrive after their deadline",
     "EXIT_PROOF_MISSING": "When an export's proof of exit is still missing after its declaration's days",
     "MARGIN_BELOW_FLOOR": "When an order's margin, as estimated now or final, falls below its margin floor",
-    "STAMP_DUTY_DUE": "{daysBefore} before a quarter's stamp duty is due and not paid yet"
+    "STAMP_DUTY_DUE": "{daysBefore} before a quarter's stamp duty is due and not paid yet",
+    "REQUEST_NUMBERING_MISSING": "When a company receives requests (a portal or inquiry addresses) without an active request numbering"
   },
   "sentence": {
     "full": "{when} {place}, tell {recipient} by {channels} {cooldown}.",

@@ -209,10 +209,12 @@ function SendDialog({ order, model, actions, prefix }: { order: Order; model: Or
         problem: model.problem ? d(model.problem.key, model.problem.params) : null,
         result: send?.result ? { delivery: 'sent', to: send.result.to, at: send.result.at, linkUntil: null } : null,
         canSend: model.can.manage,
+        outside: send?.outside ?? null, // TH-0 follow-up (B-TH-004): "Send outside this customer"
       }}
       actions={{
         onField: (field, value) => actions?.onDialog?.({ ...dialog, [field]: value }),
         onSend: () => actions?.onSend?.(),
+        onSendOutside: (checked) => actions?.onSendOutside?.(checked), // TH-0 follow-up (B-TH-004)
         onClose: closeOf(actions),
       }}
     />

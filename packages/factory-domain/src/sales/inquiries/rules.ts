@@ -116,6 +116,8 @@ export const INQUIRY_REFUSALS = [
   'MAIL_TAKEN',
   'QUOTE_TAKEN',
   'MAIL_NOT_WAITING',
+  // B-TH-014: the reader's role reads requests and answers none (the production manager).
+  'READ_ONLY',
 ] as const
 export type InquiryRefusalCode = (typeof INQUIRY_REFUSALS)[number]
 export interface InquiryRefusal {
@@ -168,6 +170,9 @@ export const loseRefusal = (facts: InquiryFacts): InquiryRefusal | null => close
 export function quoteRefusal(facts: InquiryFacts): InquiryRefusal | null {
   return closed(facts) ?? (facts.partyId === null ? refusal('NEEDS_CUSTOMER', `${facts.number} is from a prospect: match it to a customer (or make the customer) first; a quote is made for a customer.`) : null)
 }
+
+/** B-TH-014: an action the reader's role does not take (it reads requests; sales answers them), said instead of hiding it. */
+export const readOnlyRefusal = (): InquiryRefusal => refusal('READ_ONLY', 'Your role reads requests; answering them (a quote, a question, a decline, who keeps it) is for sales.')
 
 /** A mail already made into an inquiry (one inquiry per mail). */
 export const mailTakenRefusal = (number: string | null): InquiryRefusal => refusal('MAIL_TAKEN', number ? `This mail was already made into ${number}.` : 'This mail was already made into an inquiry.')

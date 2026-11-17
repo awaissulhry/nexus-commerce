@@ -10,8 +10,8 @@ import type { RowView } from './views'
  * the module's own listInquiries (sales.inquiries.view over each inquiry's company and customer; the queue's order). The address
  * is the page's: `?tile=` (the API's saved filters), `?status=`, `?source=`, `?party=` / `?prospect=1`, `?q=`. The columns are
  * the list's (number, from, summary, source, products asked, quantity by size, target price, wanted date, received, waiting,
- * assigned to, status); the assignee is said as the list says it ("You" / "A colleague": no name in a list); the target price
- * only with the price grain.
+ * assigned to, status); the assignee by name, as the list says it (B-TH-016, Owner decision 4: office people are named); the
+ * target price only with the price grain.
  *
  * REGISTERED BY B-W2b-322 with its page (platform/exports/sources/index.ts, one line: the export test holds that every source
  * has its page under apps/factory-web); until then the list has no Export ▾.
@@ -56,11 +56,12 @@ export const inquiries = defineExportSource<InquiryListQuery, RowView>({
     wantedDate: { value: (row) => row.wantedDate },
     received: { value: (row) => row.receivedAt },
     waitingHours: { value: (row) => hours(row.waiting.workingMinutes) },
-    assignedTo: { value: (row, words) => (row.assigneeId === null ? null : words(row.mine ? 'assignee.me' : 'assignee.other')) },
+    // B-TH-016 (Owner decision 4): the assignee by name, as the list says it.
+    assignedTo: { value: (row) => row.assignee?.name ?? null },
     status: { value: (row, words) => (row.declineReason ? `${words(`status.${row.status}`)} · ${words(`decline.${row.declineReason}`)}` : words(`status.${row.status}`)) },
   },
   words: {
-    it: { ...prefixed('status', STATUS_WORDS, 'it'), ...prefixed('source', SOURCE_WORDS, 'it'), ...prefixed('decline', DECLINE_WORDS, 'it'), 'assignee.me': 'Tu', 'assignee.other': 'Un collega' },
-    en: { ...prefixed('status', STATUS_WORDS, 'en'), ...prefixed('source', SOURCE_WORDS, 'en'), ...prefixed('decline', DECLINE_WORDS, 'en'), 'assignee.me': 'You', 'assignee.other': 'A colleague' },
+    it: { ...prefixed('status', STATUS_WORDS, 'it'), ...prefixed('source', SOURCE_WORDS, 'it'), ...prefixed('decline', DECLINE_WORDS, 'it') },
+    en: { ...prefixed('status', STATUS_WORDS, 'en'), ...prefixed('source', SOURCE_WORDS, 'en'), ...prefixed('decline', DECLINE_WORDS, 'en') },
   },
 })

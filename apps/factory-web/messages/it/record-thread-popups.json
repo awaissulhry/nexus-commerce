@@ -1,0 +1,124 @@
+{
+  "kind": {
+    "ATTACHMENT": "File",
+    "DOCUMENT": "Documento",
+    "PHOTO": "Foto",
+    "CERTIFICATE": "Certificato",
+    "FISCAL_ARCHIVE": "Copia fiscale",
+    "AUDIO": "Nota vocale"
+  },
+  "viewer": {
+    "counter": "{n} di {count}",
+    "previous": "File precedente",
+    "next": "File successivo",
+    "first": "Questo è il primo file.",
+    "last": "Questo è l'ultimo file.",
+    "goToMessage": "Vai al messaggio",
+    "download": "Scarica",
+    "preparing": "Il link per scaricare è in preparazione.",
+    "opening": "Apertura del file…",
+    "cannotOpen_one": "Un file che non puoi aprire",
+    "cannotOpen_other": "{count} file che non puoi aprire",
+    "held": {
+      "title": "Questo file è trattenuto",
+      "scanPending": "Trattenuto per l'antivirus: si apre quando la scansione dice che è pulito.",
+      "infected": "L'antivirus ha trovato qualcosa in questo file: non si può aprire né scaricare.",
+      "scanFailed": "L'antivirus non è riuscito a controllare questo file: resta chiuso finché non viene ricontrollato.",
+      "checks": "I controlli dell'archivio hanno rifiutato questo file (dimensione, tipo o contenuto non corrispondono): non si può aprire."
+    },
+    "card": {
+      "heic": "Foto HEIC: questo browser non la mostra qui. Scaricala per aprirla.",
+      "audio": "Nota vocale: scaricala per ascoltarla.",
+      "office": "File Office: scaricalo per aprirlo nel suo programma.",
+      "other": "Questo file non si può mostrare qui. Scaricalo per aprirlo."
+    }
+  },
+  "original": {
+    "title": "E-mail originale",
+    "noSubject": "(senza oggetto)",
+    "from": "Da",
+    "to": "A",
+    "cc": "Cc",
+    "received": "Ricevuta",
+    "checks": "Controlli sul mittente",
+    "failedTitle": "Un controllo sul mittente non è riuscito: la mail potrebbe non venire da chi dice.",
+    "check": {
+      "spf": {
+        "pass": "SPF: il server di invio può spedire per questo dominio.",
+        "fail": "SPF non riuscito: il server di invio non può spedire per questo dominio."
+      },
+      "dkim": {
+        "pass": "DKIM: la firma corrisponde, la mail non è stata cambiata durante il viaggio.",
+        "fail": "DKIM non riuscito: la firma non corrisponde."
+      },
+      "dmarc": {
+        "pass": "DMARC: il dominio del mittente garantisce questa mail.",
+        "fail": "DMARC non riuscito: il dominio del mittente non garantisce questa mail."
+      },
+      "gray": "{name}: non deciso.",
+      "notChecked": "{name}: non controllato."
+    },
+    "picturesBlocked_one": "Un'immagine da internet non è mostrata, così il mittente non può vedere che la mail è stata aperta.",
+    "picturesBlocked_other": "{count} immagini da internet non sono mostrate, così il mittente non può vedere che la mail è stata aperta.",
+    "showPictures": "Mostra le immagini",
+    "frame": "La e-mail come è arrivata (link mostrati come testo, non si esegue nulla)",
+    "empty": "Questa mail non ha testo."
+  },
+  "leave": {
+    "title": "Uscire con un testo non inviato?",
+    "stay": "Resta",
+    "discard": "Scarta",
+    "lost": "Quello che hai scritto nella casella va perso.",
+    "files_one": "Il file in attesa nella casella non viene inviato.",
+    "files_other": "I {count} file in attesa nella casella non vengono inviati."
+  },
+  "close": {
+    "title": "Chiudere il thread di {record}?",
+    "confirm": "Chiudi thread",
+    "party": "{party} non potrà più scrivere qui.",
+    "noParty": "Nessuno potrà scrivere qui finché il thread non viene riaperto.",
+    "mail": "Le sue e-mail aspetteranno in Posta da smistare.",
+    "office": "Chi poteva leggerlo continua a poterlo leggere.",
+    "reopen": "Riapri",
+    "conflict": "Qualcuno ha cambiato il thread nel frattempo. Ricaricalo e riprova."
+  },
+  "send": {
+    "title": "Controlla prima di inviare",
+    "party": "A {party}",
+    "to": "A",
+    "cc": "Cc",
+    "nobody": "Ancora nessuno",
+    "found": "Cosa ha trovato il controllo",
+    "allClear": "Niente da controllare: ogni indirizzo appartiene a questo cliente.",
+    "back": "Torna al messaggio",
+    "heldDanger": "Prima correggi quello che ha trovato il controllo.",
+    "heldOutside": "Spunta “Invia fuori da questo cliente”, oppure togli l'indirizzo.",
+    "outsideTitle": "Un indirizzo non appartiene a questo cliente.",
+    "outsideTick": "Invia fuori da questo cliente",
+    "outsideRecorded": "La spunta viene registrata con il tuo nome e gli indirizzi."
+  },
+  "count": {
+    "title": {
+      "tasks": "Attività ({count})",
+      "approvals": "Approvazioni ({count})",
+      "partners": "Partner ({count})",
+      "followers": "Chi segue ({count})"
+    },
+    "none": {
+      "tasks": "Nessuna attività aperta.",
+      "approvals": "Nessuna richiesta aspetta una risposta.",
+      "partners": "Nessun partner invitato.",
+      "followers": "Nessuno segue questo record."
+    },
+    "action": {
+      "tasks": "Aggiungi attività",
+      "approvals": "Chiedi a un partner di approvare",
+      "partners": "Condividi con un partner",
+      "followers": "Aggiungi un collega"
+    },
+    "more": "e altri {count}"
+  },
+  "design": {
+    "openAgain": "Apri di nuovo"
+  }
+}

@@ -420,3 +420,19 @@ describe('SCR-038 and SCR-039: the B-W2b-323 cases draw with no depth key left o
     })
   }
 })
+
+// ── TH-0 follow-up (B-TH-004 on screen): the order confirmation's "Send outside this customer" tick ──
+describe('the confirmation’s send carries the outside tick only when ticked (the quote’s send does the same)', () => {
+  it('sendOutside only after the person ticked it; copies split, empty words null', async () => {
+    const { confirmationSendBody } = await import('./model')
+    const base = { to: 'buyer@brand-beta.example', cc: 'a@brand-beta.example; b@brand-beta.example', subject: ' Conferma ', message: '', language: 'it' as const }
+    expect(confirmationSendBody({ ...base, outsideTicked: false })).toEqual({ to: ['buyer@brand-beta.example'], cc: ['a@brand-beta.example', 'b@brand-beta.example'], subject: 'Conferma', message: null, language: 'it' })
+    expect(confirmationSendBody({ ...base, cc: '', outsideTicked: true })).toEqual({ to: ['buyer@brand-beta.example'], subject: 'Conferma', message: null, language: 'it', sendOutside: true })
+  })
+  it('the API’s refusal of an address of another customer opens the tick; a hidden one (the reader may not know it) does not', async () => {
+    const { outsideRefusalOf } = await import('../../../_shared/document-send/model')
+    const other = new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal.OTHER_PARTY', message: 'x' }, { path: 'to.0', message: 'buyer@brand-alpha.example belongs to another customer' }])
+    expect(outsideRefusalOf(other)).toEqual({ lines: ['buyer@brand-alpha.example belongs to another customer'], hidden: false })
+    expect(outsideRefusalOf(new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: 'refusal.HIDDEN_OUTSIDE', message: 'x' }]))?.hidden).toBe(true)
+  })
+})

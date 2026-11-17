@@ -1,0 +1,124 @@
+{
+  "kind": {
+    "ATTACHMENT": "File",
+    "DOCUMENT": "Document",
+    "PHOTO": "Photo",
+    "CERTIFICATE": "Certificate",
+    "FISCAL_ARCHIVE": "Fiscal copy",
+    "AUDIO": "Voice note"
+  },
+  "viewer": {
+    "counter": "{n} of {count}",
+    "previous": "Previous file",
+    "next": "Next file",
+    "first": "This is the first file.",
+    "last": "This is the last file.",
+    "goToMessage": "Go to message",
+    "download": "Download",
+    "preparing": "The download link is being prepared.",
+    "opening": "Opening the file…",
+    "cannotOpen_one": "One file you cannot open",
+    "cannotOpen_other": "{count} files you cannot open",
+    "held": {
+      "title": "This file is held",
+      "scanPending": "Held for the virus scan: it opens once the scan says it is clean.",
+      "infected": "The virus scan found something in this file: it cannot be opened or downloaded.",
+      "scanFailed": "The virus scan could not check this file: it stays closed until it is checked again.",
+      "checks": "The store's checks refused this file (its size, type or contents did not match): it cannot be opened."
+    },
+    "card": {
+      "heic": "HEIC photo: this browser cannot show it here. Download it to open it.",
+      "audio": "Voice note: download it to listen to it.",
+      "office": "Office file: download it to open it in its program.",
+      "other": "This file cannot be shown here. Download it to open it."
+    }
+  },
+  "original": {
+    "title": "Original e-mail",
+    "noSubject": "(no subject)",
+    "from": "From",
+    "to": "To",
+    "cc": "Cc",
+    "received": "Received",
+    "checks": "Sender checks",
+    "failedTitle": "A sender check failed: the mail may not come from who it says.",
+    "check": {
+      "spf": {
+        "pass": "SPF: the sending server may send for this domain.",
+        "fail": "SPF failed: the sending server may not send for this domain."
+      },
+      "dkim": {
+        "pass": "DKIM: the signature matches, the mail was not changed on the way.",
+        "fail": "DKIM failed: the signature does not match."
+      },
+      "dmarc": {
+        "pass": "DMARC: the sender's domain vouches for this mail.",
+        "fail": "DMARC failed: the sender's domain does not vouch for this mail."
+      },
+      "gray": "{name}: not decided.",
+      "notChecked": "{name}: not checked."
+    },
+    "picturesBlocked_one": "One picture from the internet is not shown, so the sender cannot see that the mail was opened.",
+    "picturesBlocked_other": "{count} pictures from the internet are not shown, so the sender cannot see that the mail was opened.",
+    "showPictures": "Show pictures",
+    "frame": "The e-mail as it arrived (links shown as text, nothing runs)",
+    "empty": "This mail has no text."
+  },
+  "leave": {
+    "title": "Leave with unsent text?",
+    "stay": "Stay",
+    "discard": "Discard",
+    "lost": "What you wrote in the box is lost.",
+    "files_one": "The file waiting in the box is not sent.",
+    "files_other": "The {count} files waiting in the box are not sent."
+  },
+  "close": {
+    "title": "Close the thread of {record}?",
+    "confirm": "Close thread",
+    "party": "{party} can no longer write here.",
+    "noParty": "Nobody can write here until the thread is reopened.",
+    "mail": "Their e-mails will wait in Mail to sort.",
+    "office": "Everyone who could read it still can.",
+    "reopen": "Reopen",
+    "conflict": "Someone changed the thread meanwhile. Reload it and try again."
+  },
+  "send": {
+    "title": "Check before sending",
+    "party": "To {party}",
+    "to": "To",
+    "cc": "Cc",
+    "nobody": "Nobody yet",
+    "found": "What the check found",
+    "allClear": "Nothing to check: every address belongs to this customer.",
+    "back": "Back to the message",
+    "heldDanger": "Fix what the check found first.",
+    "heldOutside": "Tick “Send outside this customer”, or take the address off.",
+    "outsideTitle": "An address does not belong to this customer.",
+    "outsideTick": "Send outside this customer",
+    "outsideRecorded": "The tick is recorded with your name and the addresses."
+  },
+  "count": {
+    "title": {
+      "tasks": "Tasks ({count})",
+      "approvals": "Approvals ({count})",
+      "partners": "Partners ({count})",
+      "followers": "Followers ({count})"
+    },
+    "none": {
+      "tasks": "No open task.",
+      "approvals": "No request waits for an answer.",
+      "partners": "No partner is invited.",
+      "followers": "Nobody follows this record."
+    },
+    "action": {
+      "tasks": "Add task",
+      "approvals": "Ask a partner to approve",
+      "partners": "Share with a partner",
+      "followers": "Add a colleague"
+    },
+    "more": "and {count} more"
+  },
+  "design": {
+    "openAgain": "Open again"
+  }
+}

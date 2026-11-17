@@ -1,0 +1,45 @@
+{
+  "mention": {
+    "list": "Colleagues who may read this record",
+    "button": "Mention a colleague",
+    "cannotReadShort": "cannot read this record",
+    "cannotRead": "{name} cannot read this record: they would not see the note and are not told.",
+    "nobody": "Nobody called “{name}” can read this record: nobody is told.",
+    "tooMany": "A note tells at most {max} people: the others are not told."
+  },
+  "replies": {
+    "label": "Saved replies",
+    "menu": "Saved replies, the customer reads {language}",
+    "shared": "Shared with the office",
+    "mine": "Mine",
+    "languageTheirs": "{language} · the customer's language",
+    "loading": "Reading the saved replies…",
+    "loadingHint": "A moment.",
+    "failed": "Could not read the saved replies",
+    "retry": "Try again",
+    "none": "No saved replies yet",
+    "noneHint": "Saved replies written in Italian or English show here.",
+    "notForThis": "No saved replies for this kind of record yet",
+    "notForThisHint": "Saved replies are for orders, quotes, purchase orders, service cases, shipments and customers or suppliers.",
+    "filling": "Filling it with this record's details…",
+    "missing_one": "One blank this record could not fill:",
+    "missing_other": "{count} blanks this record could not fill:"
+  },
+  "language": {
+    "it": "Italian",
+    "en": "English"
+  },
+  "draft": {
+    "kept": "Draft kept on this device · saved {time}"
+  },
+  "design": {
+    "noteMark": "Office note · only your colleagues read it",
+    "replyMark": "Reply to the customer",
+    "noteLabel": "Office note",
+    "replyLabel": "Reply to the customer",
+    "notePlaceholder": "Write an office note for your colleagues · @ mentions a colleague",
+    "replyPlaceholder": "Write to the customer",
+    "addNote": "Add note",
+    "send": "Send"
+  }
+}

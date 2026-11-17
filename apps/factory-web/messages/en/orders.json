@@ -151,10 +151,6 @@
       "body": "Change the search or the rows, or clear the filters."
     },
     "clearFilters": "Clear filters",
-    "activeFilters": "Active filters",
-    "customerChip": "Customer: {name}",
-    "customerHidden": "A customer you cannot open",
-    "removeCustomer": "Remove the filter {name}",
     "empty": {
       "title": "No orders yet",
       "body": "Orders appear here when a customer accepts a quote, or when the office types one with New order.",
@@ -178,28 +174,6 @@
     "marginHint": "As estimated now",
     "quote": "From quote",
     "more": "More"
-  },
-  "bulk": {
-    "export_one": "Export {count} (CSV)",
-    "export_other": "Export {count} (CSV)"
-  },
-  "csv": {
-    "number": "Number",
-    "customer": "Customer",
-    "customerRef": "Customer PO",
-    "status": "Status",
-    "deposit": "Deposit",
-    "depositDue": "Deposit due",
-    "lines": "Lines",
-    "units": "Pieces",
-    "shipped": "Shipped",
-    "orderDate": "Ordered",
-    "requested": "Requested",
-    "promised": "Promised",
-    "daysLate": "Days late",
-    "net": "Net",
-    "gross": "Gross",
-    "quote": "Quote"
   },
   "board": {
     "label": "Orders by state",
@@ -460,8 +434,7 @@
     "uncovered_one": "{count} line not fully in production",
     "uncovered_other": "{count} lines not fully in production",
     "noProgressRight": "Floor progress is shown to people who follow production.",
-    "progressLabel": "Finished pieces of {number}",
-    "progress": "Cut {cut} · sewn {sewn} · finished {finished} of {pieces}",
+    "progressLabel": "Progress of {number}: {figure}",
     "notReleased": "Not released yet",
     "col": {
       "number": "Work order",
@@ -472,6 +445,16 @@
       "due": "Due",
       "site": "Site",
       "released": "Released"
+    },
+    "notCounted": {
+      "cut": "Cutting not counted here",
+      "sewn": "Sewing not counted here",
+      "finished": "Finishing not counted here"
+    },
+    "step": {
+      "cut": "Cut",
+      "sewn": "Sewn",
+      "finished": "Finished"
     }
   },
   "woStatus": {

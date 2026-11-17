@@ -1,3 +1,4 @@
+import { costingHandlers } from '../../../../factory-api/src/modules/costing/actual/handlers'
 import { startOnIssueHandler } from '../../../../factory-api/src/modules/inventory/issue/start'
 import { floorMoveValuationHandler } from '../../../../factory-api/src/modules/inventory/ledger/valuation'
 import { invoiceFilesHandler } from '../../../../factory-api/src/modules/invoicing/invoice-files'
@@ -11,6 +12,7 @@ import { shipDocumentsHandler } from '../../../../factory-api/src/modules/shippi
 import { trackingPollHandler } from '../../../../factory-api/src/modules/shipping/labels/poll'
 import { emailInHandlers } from '../../../../factory-api/src/platform/email-in/handlers'
 import { emailSendHandler } from '../../../../factory-api/src/platform/email-out/outbound'
+import { exportHandlers } from '../../../../factory-api/src/platform/exports/worker'
 import { importHandlers } from '../../../../factory-api/src/platform/imports/worker'
 import { inboundHandler } from '../../../../factory-api/src/platform/inbound/process'
 import type { EventHandler } from '../../../../factory-api/src/platform/outbox/dispatch'
@@ -22,7 +24,7 @@ import { printDispatchHandler } from '../../../../factory-api/src/platform/print
  * browser golden flow until it is added here too.
  */
 export function handlers(): readonly EventHandler[] {
-  return [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler()]
+  return [inboundHandler(), ...importHandlers(), printDispatchHandler(), emailSendHandler(), ...emailInHandlers(), floorMoveValuationHandler(), startOnIssueHandler(), invoiceFilesHandler(), sdiPollHandler(), sdiArchiveHandler(), sdiCourtesyCopyHandler(), trackingPollHandler(), afterAcceptanceHandler(), shipDocumentsHandler(), ...orderHandlers(), tellBuyerHandler(), ...costingHandlers(), ...exportHandlers()]
 }
 
-export const HANDLER_FACTORIES = ['inboundHandler', 'importHandlers', 'printDispatchHandler', 'emailSendHandler', 'emailInHandlers', 'floorMoveValuationHandler', 'startOnIssueHandler', 'invoiceFilesHandler', 'sdiPollHandler', 'sdiArchiveHandler', 'sdiCourtesyCopyHandler', 'trackingPollHandler', 'afterAcceptanceHandler', 'shipDocumentsHandler', 'orderHandlers', 'tellBuyerHandler']
+export const HANDLER_FACTORIES = ['inboundHandler', 'importHandlers', 'printDispatchHandler', 'emailSendHandler', 'emailInHandlers', 'floorMoveValuationHandler', 'startOnIssueHandler', 'invoiceFilesHandler', 'sdiPollHandler', 'sdiArchiveHandler', 'sdiCourtesyCopyHandler', 'trackingPollHandler', 'afterAcceptanceHandler', 'shipDocumentsHandler', 'orderHandlers', 'tellBuyerHandler', 'costingHandlers', 'exportHandlers']

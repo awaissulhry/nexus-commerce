@@ -123,6 +123,8 @@ export const MESSAGE_TEMPLATES = {
   'notifications.purchasing.requestOrdered': { en: 'Your request to buy {record} was put on purchase order {title}', it: 'La tua richiesta di acquisto {record} è stata messa nell’ordine di acquisto {title}' },
   'notifications.purchasing.requestRefused': { en: '{actor} refused your request to buy {record}', it: '{actor} ha rifiutato la tua richiesta di acquisto {record}' },
   'notifications.inquiries.assigned': { en: '{actor} gave you inquiry {record}', it: '{actor} ti ha affidato la richiesta {record}' },
+  // B-TH-015: a new request, to the people who answer requests (its company and customer), not to who made it.
+  'notifications.inquiries.newRequest': { en: 'New request {record} came in: take it or give it to someone', it: 'È arrivata la nuova richiesta {record}: prendila o affidala a qualcuno' },
   'notifications.safety.productReport': { en: 'Product-safety report {record} came in: assess it', it: 'È arrivata la segnalazione di sicurezza {record}: valutala' },
   'notifications.safety.productAccident': { en: 'Product-safety report {record} came in with an accident: assess it and see whether the authority must be told', it: 'È arrivata la segnalazione di sicurezza {record} con un incidente: valutala e verifica se va informata l’autorità' },
   // B-W2b-394 (COL-027): a team-inbox mail given to a person ({record}: its subject, {title}: the inbox), and its follow-up that came

@@ -50,6 +50,20 @@ for (const name of stageNames()) {
   })
 }
 
+// ── B-TH-302 (threads plan TH-1a): the Orders sheet of two customers and the brand wall's DOM scan, on the W1 world ──
+test('th1a-sheet', async () => {
+  test.skip(only.size > 0 && !only.has('th1a-sheet'), 'not in --stages')
+  const { default: stage } = (await import('./golden-flow/th1a-sheet')) as { default: { proves: string; run: (flow: Flow) => Promise<void> } }
+  test.info().annotations.push({ type: 'extra', description: 'TH-1a: not a stage of PLAN §4.7' }, { type: 'proves', description: stage.proves })
+  flow.stage = 'th1a-sheet'
+  try {
+    await stage.run(flow)
+  } finally {
+    flow.save()
+  }
+})
+// ── end B-TH-302 ──
+
 test('end checks', async () => {
   test.skip(only.size > 0 && !only.has('end-checks'), 'not in --stages')
   flow.stage = 'end-checks'

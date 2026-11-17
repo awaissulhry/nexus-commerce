@@ -14,6 +14,9 @@ import { DECLINE_REASONS, INQUIRY_SOURCES, INQUIRY_STATUSES } from '../sales/inq
  *   inquiry.closed     it became a quote (QUOTED, with the quote), was declined (with the reason) or was lost
  *
  * Live on the inquiries screens for sales.inquiries.view. Ids, numbers and states only: no person, no money, no words asked.
+ * B-TH-015 (PR-19): each live message names its customer (`partyId`, null for a prospect): the live filter (events/live.ts,
+ * B-W2b-GF1) lets an office person limited to some customers receive only their requests, and the screen places the row
+ * under its customer.
  */
 export const INQUIRY_CHANGES = ['UPDATED', 'MATCHED', 'ASSIGNED', 'UNASSIGNED', 'NEED_INFO', 'RESUMED'] as const
 
@@ -25,20 +28,20 @@ export const events = [
     context: 'sales-inquiries',
     description: 'An inquiry or request for quotation was typed by the office (a visit, a phone call, a fair, a portal request) or made from a received mail.',
     payload: z.strictObject({ inquiryId: z.uuid(), number: z.string(), source: z.enum(INQUIRY_SOURCES), status: z.enum(INQUIRY_STATUSES), partyId: z.uuid().nullable(), sourceEmailId: z.uuid().nullable() }),
-    live: { ...live, fields: ['inquiryId', 'number', 'source', 'status'] },
+    live: { ...live, fields: ['inquiryId', 'number', 'source', 'status', 'partyId'] },
   }),
   defineEvent({
     type: 'inquiry.changed',
     context: 'sales-inquiries',
     description: 'An inquiry changed while open: what is asked, the customer it is from (a prospect matched), who answers it, or whether it waits for the customer.',
     payload: z.strictObject({ inquiryId: z.uuid(), number: z.string(), status: z.enum(INQUIRY_STATUSES), previousStatus: z.enum(INQUIRY_STATUSES), change: z.enum(INQUIRY_CHANGES), partyId: z.uuid().nullable(), assigneeId: z.uuid().nullable() }),
-    live: { ...live, fields: ['inquiryId', 'number', 'status', 'change'] },
+    live: { ...live, fields: ['inquiryId', 'number', 'status', 'change', 'partyId'] },
   }),
   defineEvent({
     type: 'inquiry.closed',
     context: 'sales-inquiries',
     description: 'An inquiry ended: it became a quote, it was declined (with the reason) or the customer went away (lost).',
     payload: z.strictObject({ inquiryId: z.uuid(), number: z.string(), status: z.enum(['QUOTED', 'DECLINED', 'LOST']), previousStatus: z.enum(INQUIRY_STATUSES), quoteId: z.uuid().nullable(), declineReason: z.enum(DECLINE_REASONS).nullable(), partyId: z.uuid().nullable() }),
-    live: { ...live, fields: ['inquiryId', 'number', 'status', 'quoteId'] },
+    live: { ...live, fields: ['inquiryId', 'number', 'status', 'quoteId', 'partyId'] },
   }),
 ] as const

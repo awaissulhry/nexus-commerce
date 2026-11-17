@@ -60,6 +60,9 @@ export type LineChange = (typeof LINE_CHANGES)[number]
 // B-W2b-323: + waitingForCustomer (a change the customer must accept: the order's reapprovalNeededAt).
 export const TILE_KEYS = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'waitingForCustomer'] as const
 export type TileKey = (typeof TILE_KEYS)[number]
+// B-TH-225: the Invoiced column (factory-domain sales/orders/invoiced.ts INVOICED_STATES).
+export const INVOICED_STATES = ['NONE', 'PART', 'ALL'] as const
+export type InvoicedState = (typeof INVOICED_STATES)[number]
 export const SDI_STATE_CODES = ['DRAFT', 'NOT_SENT', 'SENDING', 'AT_SDI', 'DELIVERED', 'NOT_DELIVERED', 'REJECTED', 'ERROR'] as const
 export type SdiStateCode = (typeof SDI_STATE_CODES)[number]
 export const SDI_NEXT_ACTIONS = ['ISSUE', 'SEND', 'WAIT', 'FIX_AND_RESEND', 'SEND_AGAIN', 'CHECK_COPY', 'NONE'] as const
@@ -99,6 +102,24 @@ export const orderRowSchema = z.object({
   quote: quoteRef.nullable(),
   version: z.number(),
   updatedAt: instant,
+  // ── B-TH-225 (TH-1a, picture 23): the sheet's Picture, Brand and Invoiced, and the ids each cell opens (B-TH-017) ──
+  /** The first line's style and its main picture (fileId null: the placeholder; `small`: its ~320 px preview exists). */
+  picture: z.object({ styleId: z.string(), styleCode: z.string(), styleName: z.string(), fileId: z.string().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable().default(null),
+  styleCount: z.number().default(0),
+  /** The label on the garment: `own` = our own collection; a label the reader may not see has neither id nor name. */
+  brands: z.array(z.object({ partyId: z.string().nullable(), name: z.string().nullable(), own: z.boolean() })).default([]),
+  /** None / Part / All by pieces on issued invoices less issued credit notes; the amount only with the price grain. */
+  invoiced: z.object({ state: z.enum(INVOICED_STATES), pieces: z.string(), toInvoice: z.number(), amount: z.number().optional() }).nullable().default(null),
+  /** Only the doors the reader may open (null: no right, or nothing to open). */
+  doors: z
+    .object({
+      quote: z.object({ id: z.string(), versionId: z.string() }).nullable(),
+      depositInvoice: z.object({ id: z.string(), number: z.string().nullable() }).nullable(),
+      deliveryNotes: z.object({ count: z.number(), only: z.object({ id: z.string(), number: z.string() }).nullable(), shipmentId: z.string().nullable() }).nullable(),
+      invoices: z.object({ count: z.number(), only: z.object({ id: z.string(), number: z.string().nullable(), docType: z.string() }).nullable() }).nullable(),
+    })
+    .default({ quote: null, depositInvoice: null, deliveryNotes: null, invoices: null }),
+  // ── end B-TH-225 ──
 })
 export type OrderRow = z.infer<typeof orderRowSchema>
 
@@ -115,6 +136,9 @@ export interface OrderQuery {
   reaccept?: boolean
   /** B-TH-201: one customer's orders (`?party=` on the page). */
   partyId?: string | null
+  /** B-TH-225: the label on the garment (a brand party's id, or `own`), and one company (`?brand=`, `?company=`). */
+  brand?: string | null
+  companyId?: string | null
   q?: string
   cursor?: string | null
   limit?: number
@@ -129,6 +153,8 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       deposit: query.deposit ?? undefined,
       reaccept: query.reaccept ? 'true' : undefined, // B-W2b-323
       partyId: query.partyId ?? undefined, // B-TH-201
+      brand: query.brand ?? undefined, // B-TH-225
+      companyId: query.companyId ?? undefined, // B-TH-225
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
@@ -147,9 +173,36 @@ export const boardSchema = z.object({
 export type OrderBoard = z.infer<typeof boardSchema>
 
 /** The counts by state and the tiles (each the list's total under its filter), under the search. */
-export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null): Promise<OrderBoard> {
-  return api.get('/sales/orders/board', { query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */ }, schema: boardSchema, signal })
+export function getBoard(api: ApiClient, q: string, signal?: AbortSignal, partyId?: string | null, narrow: { brand?: string | null; companyId?: string | null } = {}): Promise<OrderBoard> {
+  return api.get('/sales/orders/board', {
+    query: { q: q.trim() || undefined, partyId: partyId ?? undefined /* B-TH-201 */, brand: narrow.brand ?? undefined, companyId: narrow.companyId ?? undefined /* B-TH-225 */ },
+    schema: boardSchema,
+    signal,
+  })
 }
+
+// ── B-TH-226 (TH-1a, picture 24): the Customer switcher's customers (GET /sales/orders/customers, B-TH-019) ──
+export const orderCustomerSchema = z.object({ id: z.string(), code: z.string(), name: z.string(), archived: z.boolean(), orders: z.number(), open: z.number(), late: z.number(), lastOrderDate: z.string().nullable() })
+export type OrderCustomer = z.infer<typeof orderCustomerSchema>
+const customersSchema = z.object({ customers: z.array(orderCustomerSchema), total: z.number(), limited: z.boolean().default(false), asOf: instant })
+export type OrderCustomers = z.infer<typeof customersSchema>
+
+/** The customers with orders the reader may see, most recent order first, with their open and late orders. */
+export function listOrderCustomers(api: ApiClient, query: { q?: string; companyId?: string | null; limit?: number }, signal?: AbortSignal): Promise<OrderCustomers> {
+  return api.get('/sales/orders/customers', { query: { q: query.q?.trim() || undefined, companyId: query.companyId ?? undefined, limit: query.limit ?? 50 }, schema: customersSchema, signal })
+}
+// ── end B-TH-226 ──
+
+// ── B-TH-225: the Picture cell's small preview (GET /sales/orders/:orderId/picture, B-TH-017 / B-TH-063) ──
+const pictureSchema = z.object({
+  picture: z.object({ fileId: z.string(), styleId: z.string(), contentType: z.string(), small: z.object({ url: z.string(), expiresAt: instant }).nullable() }),
+})
+export type OrderPicture = z.infer<typeof pictureSchema>['picture']
+
+export async function getOrderPicture(api: ApiClient, orderId: string, signal?: AbortSignal): Promise<OrderPicture> {
+  return (await api.get(`/sales/orders/${encodeURIComponent(orderId)}/picture`, { schema: pictureSchema, signal })).picture
+}
+// ── end B-TH-225 ──
 
 // ---- the record ----------------------------------------------------------------------------------------------------------
 

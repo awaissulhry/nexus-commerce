@@ -1,0 +1,38 @@
+{
+  "loading": "Lettura dei file del record…",
+  "chip": {
+    "label": "File ({count})",
+    "loading": "File"
+  },
+  "strip": {
+    "label": "{count} file di questo record, dal più recente",
+    "all": "Tutti i file",
+    "heldNote": "Un file con il lucchetto è trattenuto: aprilo per vedere perché."
+  },
+  "kind": {
+    "ATTACHMENT": "File",
+    "DOCUMENT": "Documento",
+    "PHOTO": "Foto",
+    "CERTIFICATE": "Certificato",
+    "FISCAL_ARCHIVE": "Copia fiscale",
+    "AUDIO": "Nota vocale"
+  },
+  "version": "v{n}",
+  "held": "trattenuto",
+  "audience": {
+    "office": "Solo ufficio",
+    "floor": "Reparto",
+    "customer": "Cliente",
+    "supplier": "Fornitore",
+    "partner": "Partner",
+    "link": "Link",
+    "otherParty": "Un'altra parte",
+    "more": "altri {count}"
+  },
+  "design": {
+    "frame519": "Dock a 1440, 519 px",
+    "frame711": "Dock a 1920, 711 px",
+    "frame375": "Telefono, 375 px",
+    "frameLabel": "Colonna del thread larga {width} px"
+  }
+}

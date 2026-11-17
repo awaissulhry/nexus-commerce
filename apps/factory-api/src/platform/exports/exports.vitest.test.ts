@@ -142,3 +142,34 @@ describe('the orders file reads every term the screen reads (B-TH-008)', () => {
   })
 })
 // ── end B-TH-008 ──
+
+// ── B-TH-018 (ORD-G01, N22): the file writes what the sheet shows ─────────────────────────────────────────────────────────
+describe('the orders file writes the sheet’s columns and reads its Brand term (B-TH-018)', () => {
+  const B = '0190a1b2-0000-7000-8000-0000000000b1'
+  const query = (address: string) => salesOrders.query(new URLSearchParams(address)) as Record<string, unknown>
+
+  it('keeps the brand (a party or our own collection) with every rows view; a malformed one is refused', () => {
+    expect(query(`brand=${B}`)).toEqual({ brand: B, open: 'true', q: undefined })
+    expect(query('brand=own&rows=all')).toEqual({ brand: 'own', q: undefined })
+    expect(query(`brand=${B}&status=READY`)).toEqual({ brand: B, status: 'READY', q: undefined })
+    expect(() => query('brand=OWN')).toThrow(/Not a brand/)
+    expect(() => query('brand=Brand Alpha')).toThrow(/Not a brand/)
+  })
+
+  it('has a column for every column of the sheet, money only with the price grain', () => {
+    for (const key of ['picture', 'customerRef', 'company', 'brand', 'invoiced', 'invoicedAmount', 'requested', 'gross', 'daysLate', 'priority', 'season']) expect(salesOrders.columns[key], key).toBeDefined()
+    expect(salesOrders.columns.invoicedAmount!.grain).toBe('price')
+    expect(salesOrders.columns.gross!.grain).toBe('price')
+    expect(salesOrders.columns.invoiced!.grain).toBeUndefined()
+  })
+
+  it('says Invoiced, the label words and every priority in both languages', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const words = salesOrders.words![locale]
+      for (const code of ['invoiced.NONE', 'invoiced.PART', 'invoiced.ALL', 'brand.own', 'brand.hidden', 'priority.LOW', 'priority.NORMAL', 'priority.HIGH', 'priority.URGENT']) expect(words[code], `${locale} ${code}`).toBeTruthy()
+    }
+    expect(salesOrders.words!.it['invoiced.PART']).toBe('In parte')
+    expect(salesOrders.words!.en['brand.own']).toBe('Own collection')
+  })
+})
+// ── end B-TH-018 ──

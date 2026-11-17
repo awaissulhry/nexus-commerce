@@ -325,6 +325,9 @@ function whenWords(kind: RuleKind, threshold: Record<string, number | boolean>, 
     // B-W2b-GB02 (G146)
     case 'STAMP_DUTY_DUE':
       return it ? `${days(n('daysBefore'))} prima della scadenza dell'imposta di bollo di un trimestre non ancora pagata` : `${days(n('daysBefore'))} before a quarter's stamp duty is due and not paid yet`
+    // B-TH-012
+    case 'REQUEST_NUMBERING_MISSING':
+      return it ? 'Quando un\'azienda riceve richieste (portale o indirizzi delle richieste) senza una numerazione delle richieste attiva' : 'When a company receives requests (a portal or inquiry addresses) without an active request numbering'
   }
 }
 
@@ -400,6 +403,8 @@ export const ALERT_TEMPLATES = {
   // B-W2b-GB02 (G146): {label} the quarter ("Q3 2026"), {dueOn} its F24 due day, {days} left (or late), {f24Code} its tax code.
   'alerts.STAMP_DUTY_DUE': { en: 'The stamp duty of {label} is due by {dueOn} ({days} days left): pay it by F24 (tax code {f24Code}) and record the payment.', it: "L'imposta di bollo del {label} scade il {dueOn} (mancano {days} giorni): pagala con F24 (codice tributo {f24Code}) e registra il pagamento." },
   'alerts.STAMP_DUTY_DUE.LATE': { en: 'The stamp duty of {label} was due by {dueOn}: {days} days late. Pay it by F24 (tax code {f24Code}) and record the payment.', it: "L'imposta di bollo del {label} scadeva il {dueOn}: {days} giorni di ritardo. Pagala con F24 (codice tributo {f24Code}) e registra il pagamento." },
+  // B-TH-012: {label} the company; the portal's New order is held and a mail to an inquiry address waits until a series is active.
+  'alerts.REQUEST_NUMBERING_MISSING': { en: '{label} receives requests but has no active request numbering (INQUIRY): New order in the portal is held and mail to its inquiry addresses waits. Set up the series under numbering.', it: '{label} riceve richieste ma non ha una numerazione delle richieste attiva (INQUIRY): il Nuovo ordine del portale è sospeso e la posta agli indirizzi delle richieste resta in attesa. Impostate la serie nella numerazione.' },
 } as const satisfies Record<string, Words>
 export type AlertTemplateKey = keyof typeof ALERT_TEMPLATES
 
@@ -463,6 +468,9 @@ export function alertPhrase(kind: string, label: string, facts: unknown): AlertP
       return num('daysLeft') < 0
         ? { key: 'alerts.STAMP_DUTY_DUE.LATE', params: { label, dueOn: text('dueOn'), days: Math.abs(num('daysLeft')), f24Code: text('f24Code') } }
         : { key: 'alerts.STAMP_DUTY_DUE', params: { label, dueOn: text('dueOn'), days: num('daysLeft'), f24Code: text('f24Code') } }
+    // B-TH-012
+    case 'REQUEST_NUMBERING_MISSING':
+      return { key: 'alerts.REQUEST_NUMBERING_MISSING', params: { label } }
     case 'WORKING_TIME_LIMIT':
       // B-W2b-GF2: WEEKLY_REST and NIGHT_AVERAGE have their own words too.
       return { key: (['OVERTIME_YEARLY_CAP', 'DAILY_REST', 'WEEKLY_AVERAGE', 'WEEKLY_REST', 'NIGHT_AVERAGE'] as const).includes(text('limit') as 'DAILY_REST') ? `alerts.WORKING_TIME_LIMIT.${text('limit') as 'DAILY_REST'}` : 'alerts.WORKING_TIME_LIMIT', params: { label } }

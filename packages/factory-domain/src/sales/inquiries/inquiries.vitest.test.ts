@@ -18,6 +18,7 @@ import {
   quantityOf,
   quotableLines,
   quoteRefusal,
+  readOnlyRefusal,
   requestFromMail,
   resumeRefusal,
   sizesShort,
@@ -129,6 +130,11 @@ describe('the catalogues', () => {
     expect(FACTORY_PERMISSIONS.get(SALES_INQUIRIES_MANAGE)?.risk).toBe('write')
     expect(templateOf('sales')!.permissions).toEqual(expect.arrayContaining([SALES_INQUIRIES_VIEW, SALES_INQUIRIES_MANAGE]))
     expect(templateOf('planner')!.permissions).not.toContain(SALES_INQUIRIES_VIEW)
+    // B-TH-014 (Owner ask P7): the production manager reads Incoming, keeps none, and has no price grain (no target price).
+    expect(templateOf('production_manager')!.permissions).toContain(SALES_INQUIRIES_VIEW)
+    expect(templateOf('production_manager')!.permissions).not.toContain(SALES_INQUIRIES_MANAGE)
+    expect(templateOf('production_manager')!.grains).not.toContain('price')
+    expect(readOnlyRefusal()).toMatchObject({ code: 'READ_ONLY', message: expect.stringMatching(/is for sales/) })
     for (const type of ['inquiry.received', 'inquiry.changed', 'inquiry.closed']) expect(EVENT_CATALOGUE.get(type, 1)?.live?.permission, type).toBe(SALES_INQUIRIES_VIEW)
   })
 

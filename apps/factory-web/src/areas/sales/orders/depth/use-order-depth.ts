@@ -43,7 +43,8 @@ import {
   type Season,
   type TechPack,
 } from './api'
-import { confirmationRecipient, depthCanOf, forecastSites, forecastsOf, PRICED_EMPTY, pricedBodyOf, pricedProblems, priorityBody, readProblemOf, writeProblemOf, type DepthCan, type Forecast, type PricedDraft } from './model'
+import { outsideRefusalOf } from '../../../_shared/document-send/model'
+import { confirmationRecipient, confirmationSendBody, depthCanOf, forecastSites, forecastsOf, PRICED_EMPTY, pricedBodyOf, pricedProblems, priorityBody, readProblemOf, writeProblemOf, type DepthCan, type Forecast, type PricedDraft } from './model'
 import type { Phrase } from '../model'
 
 /** One part the depth reads: null value while it loads; a problem when the read failed (never drawn as empty). */
@@ -73,6 +74,8 @@ export interface SendState {
   recipient: { name: string; email: string } | null | undefined
   pdf: string | null
   result: { to: string; at: string } | null
+  /** TH-0 follow-up (B-TH-004): the API named an address of another customer — its lines and the person's tick. */
+  outside?: { lines: string[]; checked: boolean } | null
 }
 
 export interface OrderDepthModel {
@@ -110,6 +113,8 @@ export interface OrderDepthActions {
   onWithdraw?: () => void
   onMakeConfirmation?: () => void
   onSend?: () => void
+  /** TH-0 follow-up (B-TH-004): the "Send outside this customer" tick. */
+  onSendOutside?: (checked: boolean) => void
   onPlan?: () => void
   onPutBack?: () => void
   onPricedStart?: (amendment: PricedState['amendment']) => void
@@ -329,10 +334,18 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
       const now = dialogRef.current
       const recipient = send?.recipient
       if (now?.kind !== 'send' || !order || !recipient) return
-      const cc = now.cc.split(/[;,\s]+/).map((part) => part.trim()).filter(Boolean)
       void write(
         async (key) => {
-          const answer = await sendConfirmation(api, order.id, { to: [recipient.email], ...(cc.length > 0 ? { cc } : {}), subject: now.subject.trim() || null, message: now.message.trim() || null, language: input.language }, key)
+          // TH-0 follow-up (B-TH-004): an address of another customer is refused until the person ticks "Send outside this customer".
+          const body = confirmationSendBody({ to: recipient.email, cc: now.cc, subject: now.subject, message: now.message, language: input.language, outsideTicked: send?.outside?.checked === true })
+          const answer = await sendConfirmation(api, order.id, body, key).catch((error: unknown) => {
+            const outside = outsideRefusalOf(error)
+            if (!outside || outside.hidden) throw error
+            keyRef.current = null
+            setSend((known) => (known ? { ...known, outside: { lines: outside.lines, checked: false } } : known))
+            return null
+          })
+          if (!answer) return
           putConfirmation(answer.confirmation)
           setSend((known) => (known ? { ...known, result: { to: recipient.email, at: answer.confirmation.sentAt ?? new Date().toISOString() } } : known))
           againDepth()
@@ -341,6 +354,7 @@ export function useOrderDepth(input: { api: ApiClient; session: OfficeSession; o
         true,
       )
     },
+    onSendOutside: (checked) => setSend((known) => (known?.outside ? { ...known, outside: { ...known.outside, checked } } : known)),
     onPlan: () => {
       if (!order) return
       void write(async (key) => {

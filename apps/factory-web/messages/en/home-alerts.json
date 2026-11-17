@@ -33,7 +33,8 @@
     "alerts.MARGIN_BELOW_FLOOR.FINAL": "The final margin of order {label} is below its margin floor.",
     "alerts.MARGIN_BELOW_FLOOR.QUOTED": "The margin of order {label} is below its margin floor: its quote was approved below it.",
     "alerts.STAMP_DUTY_DUE": "The stamp duty of {label} is due by {dueOn} ({days} days left): pay it by F24 (tax code {f24Code}) and record the payment.",
-    "alerts.STAMP_DUTY_DUE.LATE": "The stamp duty of {label} was due by {dueOn}: {days} days late. Pay it by F24 (tax code {f24Code}) and record the payment."
+    "alerts.STAMP_DUTY_DUE.LATE": "The stamp duty of {label} was due by {dueOn}: {days} days late. Pay it by F24 (tax code {f24Code}) and record the payment.",
+    "alerts.REQUEST_NUMBERING_MISSING": "{label} receives requests but has no active request numbering (INQUIRY): New order in the portal is held and mail to its inquiry addresses waits. Set up the series under numbering."
   },
   "refused": {
     "title": "Not yours to open",
@@ -186,7 +187,8 @@
       "RETURN_ARRIVED_LATE": "{record} arrived after its deadline",
       "EXIT_PROOF_MISSING": "{record}: proof of exit missing",
       "MARGIN_BELOW_FLOOR": "{record} below its margin floor",
-      "STAMP_DUTY_DUE": "{record}: stamp duty due"
+      "STAMP_DUTY_DUE": "{record}: stamp duty due",
+      "REQUEST_NUMBERING_MISSING": "{record}: requests have no numbering"
     },
     "snooze": "Snooze",
     "assign": "Assign",
