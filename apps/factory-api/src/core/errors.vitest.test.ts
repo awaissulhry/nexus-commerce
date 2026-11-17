@@ -242,21 +242,23 @@ describe('mapError()', () => {
   })
 
   // TH-0A Open 3 ----------------------------------------------------------------------------------------------------------
-  it("TH-0A Open 3: answers any other rule of the database as a 409 in the rule's words, ids taken out, for every audience", () => {
+  it("TH-0A Open 3: answers any other rule of the database as a 409 in the rule's words, ids taken out, for every office-side audience", () => {
     const id = '0190f1f2-0000-7000-8000-00000000abcd'
     const rule = prismaError('P2039', 'Database error. Code: `23514`.', {
       driverAdapterError: { cause: { kind: 'postgres', originalCode: '23514', originalMessage: `service: safety report ${id} reached us at a time not in the future, and what it tells happened by then` } },
     })
     const words = 'Safety report reached us at a time not in the future, and what it tells happened by then.'
     const expected = { status: 409, code: 'conflict', message: words, issues: [{ path: DATABASE_RULE_ISSUE, message: words }], unexpected: false, guard: expect.stringContaining(id) }
-    for (const audience of [undefined, 'office', 'floor', 'partner', 'link', 'platform', 'system']) expect(mapError(rule, audience), String(audience)).toEqual(expected)
+    for (const audience of [undefined, 'office', 'floor', 'platform', 'system']) expect(mapError(rule, audience), String(audience)).toEqual(expected)
+    // Toward a customer: never the rule's text (it can carry another record's number or code), one neutral sentence.
+    for (const audience of ['partner', 'link']) expect(mapError(rule, audience), audience).toEqual({ ...expected, message: DATABASE_RULE_NEUTRAL, issues: [{ path: DATABASE_RULE_ISSUE, message: DATABASE_RULE_NEUTRAL }] })
     // A restrict_violation rule ("never deleted", "never changes") too, with a record type and id in brackets.
     const restrict = prismaError('P2014', 'x', { driverAdapterError: { cause: { originalCode: '23001', originalMessage: `threads: thread ${id} is never deleted; it is the record's history (SalesOrder:${id})` } } })
     expect(mapError(restrict, 'office')).toMatchObject({ status: 409, message: "Thread is never deleted; it is the record's history (SalesOrder)." })
     expect(JSON.stringify(mapError(restrict, 'office').issues)).not.toContain(id)
   })
 
-  it('TH-0A Open 3: toward a customer, a rule that speaks of another party is one neutral sentence; the office keeps the words', () => {
+  it('TH-0A Open 3: toward a customer every rule is one neutral sentence, also one that names another record; the office keeps the words', () => {
     const rule = prismaError('P2039', 'x', {
       driverAdapterError: { cause: { originalCode: '23514', originalMessage: 'portal follow-ups: supplier upload 0190f1f2-0000-7000-8000-00000000abcd names a record of another party' } },
     })

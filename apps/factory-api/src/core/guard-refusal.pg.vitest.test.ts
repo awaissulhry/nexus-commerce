@@ -8,7 +8,7 @@ import { LOCAL_COOKIE_SECRET } from '../env'
 import { buildApp } from './app'
 import { command, idempotencyKeyFrom } from './command'
 import { testAuthenticator, type SessionContext } from './context'
-import { DATABASE_RULE_ISSUE } from './errors'
+import { DATABASE_RULE_ISSUE, DATABASE_RULE_NEUTRAL } from './errors'
 import { defineManifest, defineRoutes } from './manifest'
 
 /**
@@ -123,11 +123,11 @@ const WORDS = 'Message has neither text nor attachments.'
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i
 
 describe('TH-0A Open 3: a rule of the database answers 409 in words for every audience', () => {
-  it.each(['portal', 'link', 'office'])('through a %s command: 409 conflict with the rule in words, no record id, nothing written', async (session) => {
+  it.each([['portal', DATABASE_RULE_NEUTRAL], ['link', DATABASE_RULE_NEUTRAL], ['office', WORDS]])('through a %s command: 409 conflict in words (a customer gets the neutral sentence), no record id, nothing written', async (session, words) => {
     const answer = await call(session, '/test-rule/message')
     expect(answer.statusCode, answer.body).toBe(409)
     const body = answer.json()
-    expect(body.error).toMatchObject({ code: 'conflict', message: WORDS, issues: [{ path: DATABASE_RULE_ISSUE, message: WORDS }] })
+    expect(body.error).toMatchObject({ code: 'conflict', message: words, issues: [{ path: DATABASE_RULE_ISSUE, message: words }] })
     // No record id, no area prefix, no SQL or Prisma words reach the caller (the request id is the only id in the answer).
     expect(JSON.stringify(body.error.issues)).not.toMatch(UUID)
     expect(body.error.message).not.toMatch(UUID)

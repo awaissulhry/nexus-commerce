@@ -362,8 +362,9 @@ function digestRefusal(error: unknown): MappedError | null {
  * forgot it, a clock ahead of the database's), was a 500 for every audience (TH-0A found it through a portal command). It is a
  * 409 `conflict` in the rule's own words (issue `refusal/DATABASE_RULE`), for every audience: the area taken off, every record id
  * taken out (an id is no word a person can use, and it could name another customer's record), the first letter a capital.
- * Toward a customer (a portal or link session) a rule's words that speak of another party are one neutral sentence (§0 the
- * brand wall: a refusal never says another customer exists); the office keeps the words. A PostgreSQL CHECK constraint's own
+ * Toward a customer (a portal or link session) every rule's refusal is one neutral sentence (§0 the brand wall, lead 11-17: a
+ * rule's text can carry another record's number or code, e.g. 'transfer %', 'lot %', so no rule text ever reaches a customer); the
+ * office keeps the words, and the log keeps the rule's own text. A PostgreSQL CHECK constraint's own
  * message ('new row for relation … violates check constraint …'), any other SQLSTATE and an unknown error stay a logged 500.
  */
 export const DATABASE_RULE_ISSUE = 'refusal/DATABASE_RULE'
@@ -371,7 +372,6 @@ export const DATABASE_RULE_NEUTRAL = 'This cannot be saved as it is.'
 const RULE_FORM = /^([a-z][a-z0-9 -]{0,59}): (\S[\s\S]*)$/
 const RULE_CODES: ReadonlySet<string> = new Set(['23514', '23001'])
 const RECORD_ID = /:?\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi
-const OTHER_PARTY = /\b(?:another|other|different)\s+(?:party|parties|customers?|brands?|organi[sz]ations?|suppliers?|subcontractors?)\b|\bparty\s+of\s+another\b/i
 const CUSTOMER_AUDIENCES: ReadonlySet<string> = new Set(['partner', 'link'])
 
 /** A rule's text in words (null: not a rule's refusal): the area off, every record id out, tidy spaces, a capital and a full stop. */
@@ -396,7 +396,7 @@ function databaseRuleRefusal(error: unknown, audience: string | undefined): Mapp
   if (typeof cause?.originalCode !== 'string' || !RULE_CODES.has(cause.originalCode) || typeof cause.originalMessage !== 'string') return null
   const words = databaseRuleWords(cause.originalMessage)
   if (!words) return null
-  const message = audience !== undefined && CUSTOMER_AUDIENCES.has(audience) && OTHER_PARTY.test(words) ? DATABASE_RULE_NEUTRAL : words
+  const message = audience !== undefined && CUSTOMER_AUDIENCES.has(audience) ? DATABASE_RULE_NEUTRAL : words
   return { status: STATUS_OF.conflict, code: 'conflict', message, issues: [{ path: DATABASE_RULE_ISSUE, message }], unexpected: false, guard: cause.originalMessage }
 }
 // ---- end TH-0A Open 3
