@@ -35,7 +35,7 @@
       }
     },
     "Task": {
-      "about": "The office makes, assigns, completes, reopens, snoozes and cancels tasks on records or of their own, and reads them (My tasks, a record's side panel, Today).",
+      "about": "The office makes, assigns, completes, reopens, snoozes and cancels tasks on records or of their own, and reads them (My tasks, a record's side panel, Today). TH-3 (B-TH-038, PR-03): a task made from a message names it (messageId: a message of the thread of the task's own record, set when the task is made, never changed; the …_threads_composer_th_guards trigger); office only, like the rest of the task.",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {

@@ -8,7 +8,8 @@ import { defineMachine } from '../state/machine'
  * moves for every login.
  */
 
-export const OUTBOUND_STATUSES = ['QUEUED', 'SENDING', 'SENT', 'DELIVERED', 'BOUNCED', 'COMPLAINED', 'FAILED'] as const
+// B-TH-038 (TH schema wave 5/9): WITHDRAWN, a thread mail taken back in its 10-second undo window (the database's status).
+export const OUTBOUND_STATUSES = ['QUEUED', 'SENDING', 'SENT', 'DELIVERED', 'BOUNCED', 'COMPLAINED', 'FAILED', 'WITHDRAWN'] as const
 export type OutboundStatus = (typeof OUTBOUND_STATUSES)[number]
 export const IDENTITY_KINDS = ['CONVERSATION', 'NOTIFICATION'] as const
 export type IdentityKind = (typeof IDENTITY_KINDS)[number]
@@ -24,19 +25,22 @@ export type SuppressionReason = (typeof SUPPRESSION_REASONS)[number]
 /**
  * Where a mail is. QUEUED → SENDING → SENT → DELIVERED; a bounce or a complaint after it was sent (a later notification
  * may only make it worse: SENT → DELIVERED → BOUNCED → COMPLAINED); a failed try goes back to QUEUED for the next one;
- * a refusal (suppressed, no verified identity, out of tries) is FAILED. COMPLAINED and FAILED are final.
+ * a refusal (suppressed, no verified identity, out of tries) is FAILED. COMPLAINED and FAILED are final. B-TH-038: a mail that
+ * waits in its undo window and was never claimed may be taken back (QUEUED → WITHDRAWN, final; the …_threads_composer_th_guards
+ * trigger holds the rest).
  */
 export const outboundMachine = defineMachine({
   name: 'emailOutbound',
   states: OUTBOUND_STATUSES,
   transitions: {
-    QUEUED: ['SENDING', 'FAILED'],
+    QUEUED: ['SENDING', 'FAILED', 'WITHDRAWN'], // B-TH-038: WITHDRAWN
     SENDING: ['QUEUED', 'SENT', 'FAILED'],
     SENT: ['DELIVERED', 'BOUNCED', 'COMPLAINED'],
     DELIVERED: ['BOUNCED', 'COMPLAINED'],
     BOUNCED: ['COMPLAINED'],
     COMPLAINED: [],
     FAILED: [],
+    WITHDRAWN: [], // B-TH-038
   },
 })
 
