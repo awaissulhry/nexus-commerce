@@ -774,7 +774,9 @@
       "waiting": "Pezzi in attesa",
       "waitingHint": "tra le fasi",
       "scrap": "Scarti",
-      "scrapHint": "sugli ordini aperti"
+      "scrapHint": "sugli ordini aperti",
+      "onHold": "Ordini in sospeso",
+      "shownOnly": "sui {count} mostrati"
     },
     "wip": "Lavoro in corso per fase",
     "wipHint": "Pezzi in attesa · fatti a ogni fase; una fase apre i suoi fasci.",
@@ -796,7 +798,13 @@
     "mostWaiting": "Più in attesa",
     "opLink": "{seq} {code}: {waiting} in attesa, {good} fatti — apri i fasci in attesa qui",
     "late": "Ordini in ritardo",
-    "noLate": "Nessun ordine in ritardo."
+    "noLate": "Nessun ordine in ritardo.",
+    "held": "In sospeso",
+    "heldWhy": "In sospeso · {reason}",
+    "shownOf": "{shown} di {total}",
+    "showMore": "Mostra altri",
+    "showAll": "Mostra tutti in Ordini di produzione",
+    "lineTotals": "Totali per linea"
   },
   "w2b": {
     "heldFinal": "Gli ordini di lavoro chiusi o annullati tengono data di consegna e priorità",

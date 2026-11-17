@@ -22,6 +22,8 @@ export const PARTY_KEY = 'party'
  * when its list reads `?party=` (F-PR-03): its export already does, so carrying it there first would narrow the file only.
  */
 export const CUSTOMER_PAGES = [
+  // F-PR-17: Floor now reads it too.
+  '/production/floor',
   '/production/cutting',
   '/production/bundles',
   '/production/scrap',

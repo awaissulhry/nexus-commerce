@@ -9,7 +9,7 @@ import { abilitiesOf, liveTouches, readProblem } from '../_shared/model'
 import { getLines, type LinesOverview } from '../reports/api'
 import { lineScopeOf, stepLine } from '../reports/model'
 import type { LineHours } from './api'
-import { bundleHref, floorBoardsCan, lineTvHref, stuckCsv, targetDraft, tvLine } from './model'
+import { bundleHref, floorBoardsCan, lineTvHref, mixedSectionsCan, stuckCsv, targetDraft, tvLine, withNextPage } from './model'
 import { useFloorBoards } from './use-floor-boards'
 import type { HeatCellPick, HeatPanelModel } from './view/HeatPanel'
 import { FloorNowView, type FloorNowModel } from './view/FloorNowView'
@@ -17,6 +17,9 @@ import type { TargetsDialogModel } from './view/TargetsDialog'
 // B-W2b-130: the Cutting room.
 import { cuttingPageHref, cuttingRoomCan } from './cutting/model'
 import { useCuttingRoom } from './cutting/use-cutting-room'
+// F-PR-17: Floor now's customer filter (the Production pages' one filter).
+import { useProductionCustomers } from '../_shared/customer/use-customers'
+import { withParty } from '../_shared/customer/model'
 
 /**
  * `/w/<company>/production/floor` (SCR-073): reads the open work orders' WIP at the person's sites (GET
@@ -36,41 +39,60 @@ export function FloorNowPage() {
   const prefix = pathname.replace(/\/production\/floor\/?$/, '')
   const can = useMemo(() => abilitiesOf(session.permissions), [session.permissions])
   const lineScope = useMemo(() => lineScopeOf(params), [params])
+  // F-PR-17: the customer filter narrows the work in progress, the tiles, the late work orders and the stuck bundles; the
+  // sections that add up every customer (line totals) open only for a person who reaches every customer.
+  const customers = useProductionCustomers('floor')
+  const partyId = customers.partyId
+  const everyCustomer = customers.state.everyCustomer
   const [wip, setWip] = useState<{ value: SiteWip | null; problem: string | null }>({ value: null, problem: null })
+  const [moreWip, setMoreWip] = useState(false)
   const [counts, setCounts] = useState<WorkOrderCounts | null>(null)
   const [late, setLate] = useState<{ items: WorkOrderRow[] | null; problem: string | null }>({ items: null, problem: null })
   const [lines, setLines] = useState<{ value: LinesOverview | null; problem: string | null }>({ value: null, problem: null })
   const [asOf, setAsOf] = useState<string | null>(null)
   // B-W2b-66.
-  const boardsCan = useMemo(() => floorBoardsCan(session.permissions), [session.permissions])
-  const boards = useFloorBoards(api, boardsCan)
+  const boardsCan = useMemo(() => mixedSectionsCan(floorBoardsCan(session.permissions), everyCustomer), [session.permissions, everyCustomer])
+  const boards = useFloorBoards(api, boardsCan, partyId)
   const [cell, setCell] = useState<HeatPanelModel['cell']>(null)
   const [targets, setTargets] = useState<(TargetsDialogModel & { lineId: string; day: string }) | null>(null)
   // B-W2b-130.
   const cuttingCan = useMemo(() => cuttingRoomCan(session.permissions), [session.permissions])
-  const cutting = useCuttingRoom(api, cuttingCan.view)
+  const cutting = useCuttingRoom(api, cuttingCan.view && everyCustomer === true)
 
   const loadLines = useCallback(() => {
+    // F-PR-17: each line at a glance adds up every customer (B-PR-07): read only by a person who reaches them all.
+    if (everyCustomer !== true) return
     getLines(api)
       .then((value) => setLines({ value, problem: null }))
       .catch((error: unknown) => setLines({ value: null, problem: readProblem(error) }))
-  }, [api])
+  }, [api, everyCustomer])
 
   const load = useCallback(async () => {
-    getSiteWip(api)
+    getSiteWip(api, { partyId })
       .then((value) => {
         setWip({ value, problem: null })
         setAsOf(new Date().toISOString())
       })
       .catch((error: unknown) => setWip({ value: null, problem: readProblem(error) }))
-    countWorkOrders(api)
+    countWorkOrders(api, undefined, partyId)
       .then(setCounts)
       .catch(() => setCounts(null))
-    listWorkOrders(api, { late: true, limit: 20 })
+    listWorkOrders(api, { late: true, limit: 20, partyId })
       .then((page) => setLate({ items: page.workOrders, problem: null }))
       .catch((error: unknown) => setLate({ items: null, problem: readProblem(error) }))
     loadLines()
-  }, [api, loadLines])
+  }, [api, loadLines, partyId])
+
+  /** F-PR-17: Show more — the next 100 work orders on the floor, after those shown (no silent cap). */
+  const loadMoreWip = useCallback(() => {
+    const shown = wip.value
+    if (!shown || moreWip) return
+    setMoreWip(true)
+    getSiteWip(api, { partyId, offset: shown.workOrders.length })
+      .then((next) => setWip((current) => (current.value ? { value: { workOrders: withNextPage(current.value.workOrders, next.workOrders), total: next.total ?? current.value.total }, problem: null } : current)))
+      .catch((error: unknown) => setWip((current) => ({ ...current, problem: readProblem(error) })))
+      .finally(() => setMoreWip(false))
+  }, [api, partyId, wip.value, moreWip])
 
   useEffect(() => {
     void load()
@@ -91,8 +113,9 @@ export function FloorNowPage() {
   )
 
   const setScope = useCallback(
-    (lineId: string | null) => router.replace(`${prefix}/production/floor${lineId ? `?line=${encodeURIComponent(lineId)}` : ''}`, { scroll: false }),
-    [router, prefix],
+    // F-PR-17: a line picked keeps the customer filter.
+    (lineId: string | null) => router.replace(withParty(`${prefix}/production/floor${lineId ? `?line=${encodeURIComponent(lineId)}` : ''}`, partyId ?? null), { scroll: false }),
+    [router, prefix, partyId],
   )
 
   // [ and ] (design production.floor keyboard): the previous / next line; t (B-W2b-66) the line TV; not while typing.
@@ -146,7 +169,11 @@ export function FloorNowPage() {
     late,
     asOf,
     live,
-    lines,
+    // F-PR-17: line totals only for a person who reaches every customer (the others read why, once).
+    ...(everyCustomer === true ? { lines } : {}),
+    mixedWithheld: everyCustomer === false,
+    customers: customers.state,
+    moreWip,
     lineScope,
     boards: { ...boards.state, can: boardsCan, cell, targets },
     ...(cuttingCan.view ? { cutting: { prefix, read: cutting.state, cuttingHref: cuttingPageHref(prefix) } } : {}),
@@ -156,6 +183,8 @@ export function FloorNowPage() {
       model={model}
       actions={{
         onRetry: () => void load(),
+        onCustomer: customers.onPick,
+        onMoreWip: loadMoreWip,
         onLine: setScope,
         onRetryLines: loadLines,
         onRetryBoards: boards.load,
