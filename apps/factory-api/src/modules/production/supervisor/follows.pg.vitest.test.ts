@@ -42,7 +42,7 @@ import { chunksOf, FOLLOW_CHUNK, supervisorFollows, supervisorFollowsHandler, SU
  *   - an order's own: he follows the order and its work order of that one order; the one replaced stops — not where he muted his
  *     follow, not where he holds an open task (threads' unfollowInCommand); back to the default the other way round;
  *   - a new open order and a new work order follow at once; a later status move never follows again (a person's own unfollow
- *     lasts); a draft order, a work order of no customer take none;
+ *     lasts); an order waiting for its approval, a work order of no customer take none;
  *   - PW-14: never a follow where the person does not read the record (limited to the other customer, or his read taken away);
  *   - the bell: ONE ASSIGNMENT per change and person ("You are the production supervisor of 9 orders of <customer>"), never per
  *     order; the backup when newly named (R-60); a person who does not read the orders is not told; who made the change is never
@@ -119,7 +119,7 @@ const workOrdersOf = async (orderIds: readonly string[]) =>
 const settingsVersion = async (partyId: string) => (await one<{ version: number }>(`SELECT version FROM "PortalSettings" WHERE "partyId" = $1`, [partyId]))?.version ?? 0
 
 /** A made-up order of a customer in a status, written in the office scope. */
-async function salesOrder(partyId: string, status: 'DRAFT' | 'CONFIRMED' | 'PENDING_APPROVAL'): Promise<string> {
+async function salesOrder(partyId: string, status: 'CONFIRMED' | 'PENDING_APPROVAL'): Promise<string> {
   const id = newId()
   await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId }, (client) =>
     client.salesOrder.create({
@@ -242,7 +242,7 @@ describe('B-PR-42b the supervisor follows (through threads’ followInCommand / 
     expect(await followOf('WorkOrder', w.a.workOrderId, people.supervisorA)).toEqual({ reason: 'ASSIGNEE', muted: true })
   })
 
-  it('a new open order and a new work order follow at once; a later status move never follows again (his own unfollow lasts); a draft order takes none', async () => {
+  it('a new open order and a new work order follow at once; a later status move never follows again (his own unfollow lasts); an order waiting for its approval takes none', async () => {
     const fresh = await salesOrder(ids.a, 'CONFIRMED')
     expect(await supervisorFollows(system, eventOf('sales_order.created', { orderId: fresh, number: 'X', quoteId: null, versionId: null, partyId: ids.a, depositRequestIds: [] }))).toEqual({ followed: 1, unfollowed: 0 })
     expect(await followOf('SalesOrder', fresh, people.supervisorA)).toEqual({ reason: 'ASSIGNEE', muted: false })
@@ -257,9 +257,7 @@ describe('B-PR-42b the supervisor follows (through threads’ followInCommand / 
     const approved = await salesOrder(ids.a, 'CONFIRMED')
     expect(await supervisorFollows(system, eventOf('sales_order.status_changed', { orderId: approved, number: 'Y', from: 'PENDING_APPROVAL', to: 'CONFIRMED', by: 'person' }))).toEqual({ followed: 1, unfollowed: 0 })
     expect(await followOf('SalesOrder', approved, people.supervisorA)).toEqual({ reason: 'ASSIGNEE', muted: false })
-    // A draft order takes none; a work order of no customer takes none.
-    const draft = await salesOrder(ids.a, 'DRAFT')
-    expect(await supervisorFollows(system, eventOf('sales_order.created', { orderId: draft, number: 'Z', quoteId: null, versionId: null, partyId: ids.a, depositRequestIds: [] }))).toEqual({ followed: 0, unfollowed: 0 })
+    // A work order of no customer takes none.
     expect(await supervisorFollows(system, eventOf('workorder.created', { workOrderId: w.mixed.workOrderId, number: w.mixed.number, partyId: null, siteId: w.siteId, styleId: w.styleId, salesOrderIds: [], cells: 1, pieces: 1 }))).toEqual({ followed: 0, unfollowed: 0 })
     // A new work order of B: B's supervisor (none yet) — nobody; with one, he follows at once.
     expect(await supervisorFollows(system, eventOf('workorder.created', { workOrderId: w.b.workOrderId, number: w.b.workOrderNumber, partyId: ids.b, siteId: w.siteId, styleId: w.styleId, salesOrderIds: [w.b.salesOrderId], cells: 1, pieces: 1 }))).toEqual({ followed: 0, unfollowed: 0 })
