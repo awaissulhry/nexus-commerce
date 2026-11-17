@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, currency, id, input, instant, output, unitPrice } from '../../core/contracts'
-import { money } from '../../money/marked'
+import { money, notMoney } from '../../money/marked'
 import { DECLINE_REASONS, INQUIRY_LIMITS, INQUIRY_REFUSALS, INQUIRY_SOURCES, INQUIRY_STATUSES, INQUIRY_TILES, LAWFUL_BASES, SIZE_CODE, TYPED_SOURCES } from './rules'
 
 /**
@@ -413,7 +413,8 @@ export const inquiryCustomersQuery = input({
 export type InquiryCustomersQuery = z.output<typeof inquiryCustomersQuery>
 export const inquiryCustomersView = output({
   customers: z.array(output({ id: id(), code: z.string(), legalName: z.string(), tradeName: z.string().nullable() })),
-  total: z.number().int(),
+  /** How many customers match (a count, not money). */
+  total: notMoney(z.number().int()),
   limited: z.boolean(),
 })
 // ---- end B-TH-221
