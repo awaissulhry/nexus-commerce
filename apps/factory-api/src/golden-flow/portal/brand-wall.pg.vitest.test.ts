@@ -360,6 +360,24 @@ describe('B-TH-002 the brand wall: two brands in one factory, every partner and 
     expect((home.counts as Json[]).some((count) => typeof count.value === 'number' && count.value > 0)).toBe(true)
   })
 
+  // ---- B-PR-08a (production plan PW-05, §2 "work order, hold and NCR threads stay internal"): a work order's thread is never shared.
+  it('PW-05 (B-PR-08a) a work order of Brand Alpha’s order: the production manager writes a note on it; Brand Alpha’s own portal, and Brand Beta’s, read its thread empty; the office’s mail from it is refused in words (409 refusal/NOT_SHAREABLE), nothing is mailed', async () => {
+    const [workOrder] = await admin<{ id: string }>(w, `SELECT DISTINCT "workOrderId"::text AS id FROM "WorkOrderSize" WHERE "partyId" = $1 ORDER BY 1 LIMIT 1`, [P1()])
+    expect(workOrder, 'the seeds hold a work order of P1’s order').toBeDefined()
+    const url = `/threads/WorkOrder/${workOrder!.id}`
+    const words = 'Made-up floor note: check the collar piping of AX-100 before sewing.'
+    await ok(P.manager, 'POST', `${url}/notes`, { body: words }, 201)
+    for (const brand of [alpha, beta]) expect(await asBrand(brand, seen, 'GET', url), brand.fixture.key).toEqual({ thread: null, messages: [], nextCursor: null })
+    const mailsBefore = w.h.ses.mails.length
+    const refused = await ok(P.owner, 'POST', `${url}/emails`, { to: [BRAND_ALPHA.contact.email], subject: 'Your work order', body: 'Made-up words about the work order.' }, 409)
+    expect(refused.error.issues).toEqual([expect.objectContaining({ path: 'refusal/NOT_SHAREABLE' })])
+    await settle()
+    expect(w.h.ses.mails.length).toBe(mailsBefore)
+    // The control: the office reads the note (the wall stands in front of the brands, never in front of the factory).
+    expect(JSON.stringify(await ok(P.manager, 'GET', url))).toContain(words)
+  })
+  // ---- end B-PR-08a
+
   it('T31 Brand Beta never receives a document of Brand Alpha: not in its documents, not by mail, not by link; Alpha’s own reaches Alpha', async () => {
     const alphaMarkers = await markersOf(w, BRAND_ALPHA, P1())
     for (const url of ['/portal/customer-documents', '/portal/customer-documents/conformity', '/portal/threads', '/portal/tasks', `/files?recordType=Quote&recordId=${G.betaQuote.id}`]) {
