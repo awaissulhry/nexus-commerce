@@ -126,7 +126,19 @@
     "account": "La vostra conversazione con {company}",
     "accountLabel": "La vostra conversazione con {company}",
     "accountEmpty": "Chiedeteci qualsiasi cosa qui: rispondiamo nel portale.",
-    "write": "Scriveteci"
+    "write": "Scriveteci",
+    "projects": "Progetti",
+    "projectsLabel": "Progetti a cui ti abbiamo aggiunto",
+    "projectTag": "Progetto",
+    "projectStatus": {
+      "ON_HOLD": "In pausa",
+      "CLOSED": "Chiuso"
+    },
+    "projectTarget": "Data obiettivo {date}",
+    "projectNone": "Nessun messaggio ancora",
+    "openProject": "Apri il progetto {name}",
+    "projectsMore_one": "E ancora {count} progetto a cui ti abbiamo aggiunto.",
+    "projectsMore_other": "E ancora {count} progetti a cui ti abbiamo aggiunto."
   },
   "welcome": {
     "title": "Ti diamo il benvenuto, {name}.",

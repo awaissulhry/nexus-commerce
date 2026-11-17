@@ -100,6 +100,7 @@
     "ServiceCase": "Service case",
     "ProductSafetyReport": "Product-safety report",
     "TransferOrder": "Transfer",
+    "Project": "Project",
     "other": "Record"
   },
   "chip": {
@@ -150,6 +151,7 @@
     "ServiceCase": "Service cases",
     "ProductSafetyReport": "Product-safety reports",
     "TransferOrder": "Transfers",
+    "Project": "Projects",
     "other": "Other records"
   },
   "status": {

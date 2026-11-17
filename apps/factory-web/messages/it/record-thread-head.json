@@ -142,5 +142,12 @@
     "amber_one": "Diventa ambra dopo {count} giorno lavorativo che tocca a noi.",
     "amber_other": "Diventa ambra dopo {count} giorni lavorativi che tocca a noi.",
     "notAmber": "Mai ambra quando tocca all'altra parte."
+  },
+  "project": {
+    "in": "Nel progetto: {name}",
+    "more": "+{count}",
+    "all": "Nei progetti: {names}",
+    "labelMore_one": "Nel progetto: {name} e in {count} altro",
+    "labelMore_other": "Nel progetto: {name} e in altri {count}"
   }
 }

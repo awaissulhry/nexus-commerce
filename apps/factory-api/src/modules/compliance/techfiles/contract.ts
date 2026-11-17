@@ -125,6 +125,11 @@ const fileRecord = output({
     archiveReason: z.string().nullable(),
     createdAt: instant(),
     createdBy: person,
+    // ---- TH-6 part B (B-TH-267; B-TH-075's TechnicalFile thread, party = its style's brand): the brand a private-label style is made
+    // for — the record's thread party ("Reply to <brand>"); null for our own collection. Office only: the record is read with
+    // techfiles.view, and a brand-limited reader reaches only its own brand's files (B-PR-10).
+    brand: output({ id: id(), name: z.string() }).nullable(),
+    // ---- end TH-6 part B
   }),
   points: z.array(
     output({

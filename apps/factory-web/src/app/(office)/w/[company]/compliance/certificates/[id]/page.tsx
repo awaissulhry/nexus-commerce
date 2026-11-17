@@ -4,7 +4,7 @@ import { CertificateRecord } from '../../../../../../../areas/compliance/certifi
 
 export const metadata: Metadata = { title: 'Certificate · Nexus Factory' }
 
-/** Compliance › Certificates › a certificate (SCR-051; `?tab=coverage|body|files|activity`). */
+/** Compliance › Certificates › a certificate (SCR-051; `?tab=coverage|renewals|body`; the old `files` opens Notified body & PDF, `activity` Coverage with the thread — B-TH-267). */
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (

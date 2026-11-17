@@ -277,7 +277,9 @@
       "PO_NUMBER_REQUIRED": "L'ordine aspetta: le condizioni di questo cliente chiedono il suo numero d'ordine su ogni ordine, e il preventivo non lo ha.",
       "NOT_MADE": "L'ordine aspetta: il cliente ha accettato il preventivo e il suo ordine non è ancora stato creato."
     },
-    "makeOrder": "Crea l'ordine ora"
+    "makeOrder": "Crea l'ordine ora",
+    "requestWithdrawn": "Il cliente ha ritirato la richiesta",
+    "requestWithdrawnOn": "Il cliente ha ritirato la richiesta il {date}"
   },
   "save": {
     "saving": "Salvataggio…",
@@ -777,7 +779,8 @@
       "approval": "Approvazione",
       "validUntil": "Valido fino al",
       "updated": "Aggiornato",
-      "more": "Azioni"
+      "more": "Azioni",
+      "picture": "Immagine"
     },
     "ref": "Rif. {ref}",
     "units": "{units} · righe {lines}",
@@ -790,7 +793,20 @@
     "madeFrom": "da {number}",
     "order": "Ordine {number}",
     "orderCancelled": "Ordine {number} annullato",
-    "orderWaits": "L'ordine aspetta"
+    "orderWaits": "L'ordine aspetta",
+    "picture": {
+      "open": "Immagine di {style} su {number}: aprila in grande",
+      "noneOf": "{number} non ha ancora righe: nessuna immagine",
+      "alt": "{style}",
+      "viewerOf": "Su {number}",
+      "small": "Un'anteprima piccola: l'originale si apre dal modello.",
+      "none": "Ancora nessuna immagine di questo modello",
+      "openStyle": "Apri modello",
+      "close": "Chiudi",
+      "more": "+{count}",
+      "moreStyles_one": "{count} altro modello in questo preventivo: aprilo",
+      "moreStyles_other": "{count} altri modelli in questo preventivo: aprilo"
+    }
   },
   "newQuote": {
     "title": "Nuovo preventivo",

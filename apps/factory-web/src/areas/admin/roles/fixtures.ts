@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { CATALOGUE, COMPANIES, inShell, NOW, panels, PREFIX, ROLES, USERS } from '../shared/fixtures'
+import { CATALOGUE, COMPANIES, inShell, NOW, PREFIX, ROLES, USERS } from '../shared/fixtures'
+// ---- B-TH-269: the role's docked thread in the design cases (notes only — W03: no outside party on an admin thread) ----
+import { designDockedThread } from '../../_shared/record-frame/fixtures'
 import { failed, loaded, loading } from '../shared/model'
 import type { RoleRecordModel, RolesViewModel } from './model'
 import type { TwoFactorRole } from '../security/api'
@@ -12,15 +14,17 @@ import type { NewRoleModel } from './new-role/view/NewRoleDialog'
 import { draftOf, toggled, type RoleReview } from './save-role/model'
 import type { SaveReview } from './save-role/view/RoleEditor'
 
-/** SCR-012 Roles & permissions with the ready-made roles and one made-up custom copy; a short made-up catalogue. */
+/**
+ * SCR-012 Roles & permissions with the ready-made roles and one made-up custom copy; a short made-up catalogue. B-TH-269: the role's
+ * thread docked beside every tab (notes only); `thread: false` — a person without roles.view beside threads.read: no thread.
+ */
 
-type Case = { page: 'list'; model: RolesViewModel } | { page: 'role'; model: RoleRecordModel; dock?: boolean }
+type Case = { page: 'list'; model: RolesViewModel } | { page: 'role'; model: RoleRecordModel; thread?: false }
 
 const companies = COMPANIES.map((company) => ({ id: company.id, name: company.legalName, sites: company.sites.map((site) => ({ id: site.id, name: site.name })) }))
 const list = (over: Partial<RolesViewModel> = {}): Case => ({ page: 'list', model: { prefix: PREFIX, roles: loaded(ROLES), catalogue: CATALOGUE, asOf: NOW, query: '', audience: 'all', pages: 1, ...over } })
-const role = (index: number, over: Partial<RoleRecordModel> = {}, dock = false): Case => ({
+const role = (index: number, over: Partial<RoleRecordModel> = {}): Case => ({
   page: 'role',
-  dock,
   model: { prefix: PREFIX, tab: 'permissions', role: ROLES[index]!, catalogue: CATALOGUE, holders: loaded(USERS), companies, ...over },
 })
 
@@ -85,8 +89,9 @@ const STEP_UP_OPEN = { open: true, busy: false, sentence: 'saveRole.freshSentenc
 function RolesDesign({ model }: { model: Case }) {
   if (model.page === 'list') return inShell('/admin/roles', createElement(RolesView, { model: model.model }))
   const record = model.model.role
-  const panel = record ? panels({ type: 'Role', id: record.id, companyId: null }, record.name, 'history') : null
-  return inShell(`/admin/roles/${record?.id ?? 'x'}`, createElement(RoleRecordView, { model: { ...model.model, dockOpen: model.dock }, panels: panel }))
+  // B-TH-269: the role's thread, notes only (no party), with threads.read and roles.view.
+  const thread = record && model.thread !== false ? designDockedThread({ recordType: 'Role', record: record.name, party: null }) : null
+  return inShell(`/admin/roles/${record?.id ?? 'x'}`, createElement(RoleRecordView, { model: model.model, thread }))
 }
 
 export const designScreen = defineDesignScreen<Case>({
@@ -126,8 +131,9 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'role-users', label: 'Role: who has it', model: role(2, { tab: 'users' }) },
     { id: 'role-users-none', label: 'Role: nobody has it', model: role(3, { tab: 'users', holders: loaded([]) }) },
     { id: 'role-floor', label: 'Role: a floor role', model: role(9, { tab: 'users' }) },
-    { id: 'role-activity', label: 'Role: activity', model: role(4, { tab: 'activity' }) },
-    { id: 'role-dock', label: 'Role: history beside the permissions (≥ 1280 px)', model: role(3, {}, true) },
+    // B-TH-269: Activity went (its tools in the thread's "⋯", its history in View › Changes); the thread docks beside every tab.
+    { id: 'role-thread', label: 'Role: the thread docked beside the permissions', model: role(3), note: 'Notes only (no outside party); Activity’s tools in the thread’s ⋯.' },
+    { id: 'role-no-thread', label: 'Role: without roles.view, no thread', model: { ...role(3), thread: false } as Case, note: 'B-TH-005: no thread and no Thread button.' },
     { id: 'w2b-413-new-role-button', label: 'New role in the band', model: list({ newRole: { canCreate: true, dialog: null } }), note: 'B-W2b-413: a copy of a ready-made role.' },
     { id: 'w2b-413-new-role-held', label: 'New role held: no right', model: list({ newRole: { canCreate: false, dialog: null } }), note: 'Held with why (roles.manage), never a dead button.' },
     { id: 'w2b-413-new-role', label: 'New role: start from a ready-made role', model: list(newRole()), note: "Cards with their plain line and money; the owner's and Finance (holds more than you) held with why." },

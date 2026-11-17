@@ -136,7 +136,6 @@
     "whoTitle": "Who decides"
   },
   "detail": {
-    "activityLater": "The thread, files and history of this hold open here.",
     "blocks": "What it blocks",
     "closed": "Closed in its NCR",
     "evidence": "Evidence trail",
@@ -160,12 +159,12 @@
     "source": "Source",
     "subtitle": "{reason} · since {date}",
     "tab": {
-      "activity": "Activity",
       "decision": "Decision",
       "hold": "Hold",
       "affected": "Affected"
     },
     "tabsLabel": "Parts of the hold",
+    "threadLabel": "Thread of {hold}",
     "tag": "Print hold tag",
     "title": "Hold",
     "trace": "Trace",
@@ -215,7 +214,6 @@
     "noRelease": "Only quality releases a hold: ask a quality inspector.",
     "noReleaseHere": "You do not release holds at this site.",
     "noRows": "No hold in this view.",
-    "noThreads": "You do not read threads and history.",
     "notActive": "This hold is not active any more: it never changes.",
     "pickFirst": "Select the holds first.",
     "traceKind": "The trace starts from a lot or a hide: trace this from its lots on Lots & traceability.",

@@ -111,3 +111,19 @@ export const piecesText = (pieces: number): string | null => (pieces > 0 ? Strin
 export function shipToText(shipTo: NonNullable<RequestView['shipTo']>): string {
   return [shipTo.name, shipTo.line1, [shipTo.postalCode, shipTo.city].filter(Boolean).join(' '), shipTo.country].filter((part) => part && part.trim() !== '').join(', ')
 }
+
+// ---- B-TH-282 (B-TH-085): the door a customer's file goes through on its request page ---------------------------------------------
+/** While the office has not decided (Sent, Being reviewed, We need something from you) a file goes onto the request; after, through its thread. */
+export const UNDECIDED_STATES: readonly RequestStateCode[] = ['SENT', 'BEING_REVIEWED', 'NEED_INFO']
+export const filesDoorOf = (code: RequestStateCode): 'request' | 'thread' => (UNDECIDED_STATES.includes(code) ? 'request' : 'thread')
+// ---- end B-TH-282
+
+// ---- B-TH-291 (B-TH-095): why a withdrawal did not go when the API gave no words of its own (a key of this catalogue) ------------
+export function withdrawProblemKey(kind: string | null): string {
+  if (kind === 'conflict') return 'withdraw.problem.changed'
+  if (kind === 'not_found') return 'withdraw.problem.missing'
+  if (kind === 'forbidden' || kind === 'step_up') return 'withdraw.problem.forbidden'
+  if (kind === 'unavailable' || kind === null) return 'withdraw.problem.network'
+  return 'withdraw.problem.failed'
+}
+// ---- end B-TH-291

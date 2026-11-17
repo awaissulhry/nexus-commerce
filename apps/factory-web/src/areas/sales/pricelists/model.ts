@@ -211,7 +211,7 @@ export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { activity: 'pri
 /** The tab an address asks for: one of the four, an old one's new home, else Prices. */
 export function tabOf(asked: string | null | undefined): RecordTab {
   const value = asked ?? ''
-  return (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (MERGED_TABS[value] ?? 'prices')
+  return (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (Object.hasOwn(MERGED_TABS, value) ? MERGED_TABS[value]! : 'prices') // TH-6 part B: never a name of Object's own (?tab=constructor)
 }
 
 /** B-TH-258: a tab whose body is a wide grid (the prices, the size surcharges): the docked thread takes one third under 1600 px (PL1, R-18). */

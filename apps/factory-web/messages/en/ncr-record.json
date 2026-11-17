@@ -16,26 +16,22 @@
     "report": "NCR report (PDF)",
     "reportHint": "Opens in a new tab, as a preview",
     "keepReport": "Keep a version of the report",
-    "capa": "CAPA {number}"
+    "capa": "CAPA {number}",
+    "title": "Nonconformance",
+    "dockLabel": "The NCR’s thread",
+    "tabsLabel": "Sections of the NCR"
   },
   "tab": {
     "problem": "Problem & evidence",
     "containment": "Containment",
     "disposition": "Disposition",
     "cost": "Cost",
-    "linked": "Linked records",
-    "activity": "Activity"
+    "linked": "Linked records"
   },
   "offline": "Offline – the page shows its last copy; changes wait until the connection is back.",
   "stale": {
     "title": "This NCR changed at {time} while you were working on it.",
     "reload": "Read it again"
-  },
-  "keys": {
-    "save": "Save the problem (Problem & evidence)"
-  },
-  "activity": {
-    "none": "The thread, files and history open here."
   },
   "people": {
     "reading": "Reading who may own it…"

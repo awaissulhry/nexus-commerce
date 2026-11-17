@@ -1,9 +1,12 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { AlertCircle, ArrowLeft, FileSearch, MessageSquareReply, WifiOff } from 'lucide-react'
+import { AlertCircle, ArrowLeft, FileSearch, MessageSquareReply, Undo2, WifiOff } from 'lucide-react'
 import { Banner, Card, EmptyState } from '@nexus/ui/components'
 import { Button, Pill, Skeleton } from '@nexus/ui/primitives'
+// B-TH-282: "Add files" beside the thread; B-TH-291: Withdraw (a DS Modal through the page's words).
+import { Modal } from '../../../../lib/i18n/ds-parts'
+import { ComposeFiles, type ComposeFilesActions, type ComposeFilesModel } from '../../../../lib/request-compose/view/ComposeFiles'
 import type { RequestView as RequestRead } from '../api'
 import { quoteText, shipToText, stateTone, type StateLinks } from '../model'
 import { useRequestWords } from '../words'
@@ -30,11 +33,22 @@ export interface RequestRecordModel {
   offlineSince: string | null
   /** Orders & requests (the way back). */
   backHref: string
+  // ---- B-TH-282: "Add files" (the request's door while undecided, its thread's after); null: not offered to this person.
+  files?: ComposeFilesModel | null
+  // ---- B-TH-291: Withdraw before the office decided (the API says when it is not allowed), and its question.
+  withdraw?: { allowed: boolean; words: string | null } | null
+  withdrawing?: { busy: boolean; problem: string | null } | null
+  // ---- end B-TH-282 / B-TH-291
 }
 
 export interface RequestRecordActions {
   onAnswer?: () => void
   onRetry?: () => void
+  // ---- B-TH-282 / B-TH-291
+  files?: ComposeFilesActions
+  onWithdraw?: () => void
+  onWithdrawConfirm?: () => void
+  onWithdrawCancel?: () => void
 }
 
 export function RequestRecordView({ model, actions, thread }: { model: RequestRecordModel; actions?: RequestRecordActions; thread: ReactNode }) {
@@ -129,12 +143,29 @@ export function RequestRecordView({ model, actions, thread }: { model: RequestRe
             </Button>
           </div>
         ) : null}
+        {/* B-TH-291 (B-TH-095): Withdraw while the office has not decided; once it has, the API's words say why not. */}
+        {model.withdraw?.allowed ? (
+          <p className="fw-preq-withdraw">
+            <Button size="sm" variant="quiet" onClick={() => actions?.onWithdraw?.()}>
+              <Undo2 size={14} aria-hidden /> {t('withdraw.action')}
+            </Button>
+            <span className="fw-preq-when">{t('withdraw.hint')}</span>
+          </p>
+        ) : model.withdraw?.words && request.state.open ? (
+          <p className="fw-preq-when">{model.withdraw.words}</p>
+        ) : null}
       </Card>
       <div className="fw-preq-layout">
         <section className="fw-preq-main" aria-label={t('thread.title')}>
           {thread}
         </section>
         <aside className="fw-preq-side">
+          {model.files ? (
+            <Card padded className="fw-preq-files">
+              <h2 className="fw-preq-h2">{t('files.title')}</h2>
+              <ComposeFiles model={model.files} actions={actions?.files} title={false} />
+            </Card>
+          ) : null}
           <Card padded className="fw-preq-details">
             <h2 className="fw-preq-h2">{t('details.title')}</h2>
             <dl className="fw-preq-facts">
@@ -190,6 +221,30 @@ export function RequestRecordView({ model, actions, thread }: { model: RequestRe
           </Card>
         </aside>
       </div>
+      {model.withdrawing ? (
+        <Modal
+          open
+          onClose={() => actions?.onWithdrawCancel?.()}
+          title={request.yourNumber ? t('withdraw.title', { seq: request.yourNumber.seq }) : t('withdraw.titleNone')}
+          size="sm"
+          footer={
+            <>
+              <span className="grow" />
+              <Button onClick={() => actions?.onWithdrawCancel?.()}>{t('withdraw.keep')}</Button>
+              <Button variant="primary" tone="danger" heldReason={model.withdrawing.busy ? t('withdraw.busy') : null} onClick={() => actions?.onWithdrawConfirm?.()}>
+                {t('withdraw.confirm')}
+              </Button>
+            </>
+          }
+        >
+          <p className="fw-preq-dialog-text">{t('withdraw.body')}</p>
+          {model.withdrawing.problem ? (
+            <p className="fw-preq-problem" role="alert">
+              {model.withdrawing.problem}
+            </p>
+          ) : null}
+        </Modal>
+      ) : null}
     </div>
   )
 }

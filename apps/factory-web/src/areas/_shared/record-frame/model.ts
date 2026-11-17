@@ -1,4 +1,5 @@
 import type { DockWidth } from '../../../lib/record-thread/head/model'
+import type { ThreadFile } from '../../../lib/record-thread/files/model' // B-TH-264 follow-up
 
 /**
  * B-TH-213 — RecordFrame, one place for the thread on a record page (threads plan PL1, PL4; design kit §2; lead pick P2). The pure
@@ -89,3 +90,54 @@ export const FRAME_KEYS: readonly { readonly keys: readonly string[]; readonly w
   { keys: ['N'], words: 'keys.note' },
   { keys: ['Esc'], words: 'keys.esc' },
 ]
+
+// ---- B-TH-264 follow-up (TH-6 part B): a body part opens ITS files in the docked thread's ONE file viewer (the shipment's Documents:
+// the travelling documents and the packing lists) — the files it lists, the one clicked first; the viewer walks them with ← / →.
+/** A file a body part lists (its id, the name it shows, its type when known: the viewer draws a PDF or a photo, else a card). */
+export interface FrameFile {
+  readonly id: string
+  readonly name: string
+  readonly contentType?: string | null
+  readonly sizeBytes?: number | null
+}
+/** What the body asks the thread's viewer: the files it lists (in its order) and the one to show first. */
+export interface FrameFilesAsk {
+  readonly files: readonly FrameFile[]
+  readonly fileId: string
+  readonly returnTo?: HTMLElement | null
+}
+
+/**
+ * The files the thread's viewer walks for a body's ask: each listed file as the thread knows it (one of the record's own files: its
+ * kind, size, state, version), else as the body names it — a file of another record the body lists (a certificate travelling with a
+ * shipment): its address is asked by its id, and the file store's answer decides whether this reader may open it (a refusal says
+ * so in the viewer, never another record's details). The body's order is kept; the first file asked shows first.
+ */
+export function askedFiles(ask: FrameFilesAsk, known: readonly ThreadFile[], record: { readonly type: string; readonly id: string }): { readonly files: readonly ThreadFile[]; readonly index: number } {
+  const seen = new Set<string>()
+  const files: ThreadFile[] = []
+  for (const file of ask.files) {
+    if (seen.has(file.id)) continue
+    seen.add(file.id)
+    const own = known.find((candidate) => candidate.id === file.id)
+    files.push(
+      own ?? {
+        id: file.id,
+        recordType: record.type,
+        recordId: record.id,
+        name: file.name,
+        contentType: file.contentType ?? 'application/octet-stream',
+        kind: (file.contentType ?? '').toLowerCase().startsWith('image/') ? 'PHOTO' : 'DOCUMENT',
+        sizeBytes: file.sizeBytes ?? 0,
+        status: 'AVAILABLE',
+        quarantineReason: null,
+        visibility: [],
+        partyId: null,
+        createdAt: '',
+        previewUrl: null,
+      },
+    )
+  }
+  return { files, index: Math.max(0, files.findIndex((file) => file.id === ask.fileId)) }
+}
+// ---- end B-TH-264 follow-up

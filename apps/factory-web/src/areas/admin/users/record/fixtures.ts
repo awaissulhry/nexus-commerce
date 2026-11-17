@@ -1,7 +1,9 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { DEMO_USER } from '../../../../shell/design-data'
-import { ASSIGNMENTS, COMPANIES, inShell, panels, PREFIX, ROLES, SITES, USERS, WORKERS } from '../../shared/fixtures'
+import { ASSIGNMENTS, COMPANIES, inShell, PREFIX, ROLES, SITES, USERS, WORKERS } from '../../shared/fixtures'
+// ---- B-TH-269: the person's docked thread in the design cases (notes only — W03; docked CLOSED by the view — R-10) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import { failed, loaded, loading, STEP_UP_CLOSED } from '../../shared/model'
 import type { UserRecordModel, WorkerRecordModel } from './model'
 import { UserRecordView } from './view/UserRecordView'
@@ -9,9 +11,13 @@ import { DEMO_PERSON_SESSIONS } from '../../../me/sessions/fixtures'
 import { UserSessionsTab, type UserSessionsModel } from './sessions/view/UserSessionsTab'
 import { WorkerRecordView } from './view/WorkerRecordView'
 
-/** SCR-011 a person's record: an office person (made-up, example.com) and a floor worker (invented name and badge). */
+/**
+ * SCR-011 a person's record: an office person (made-up, example.com) and a floor worker (invented name and badge). B-TH-269: each
+ * with its thread docked CLOSED beside the tabs (notes only; the band's Thread button shows it); `thread: false` — a person without
+ * users.view / workers.view beside threads.read: no thread, no Thread button.
+ */
 
-type Case = { kind: 'user'; model: UserRecordModel; sessions?: UserSessionsModel | null } | { kind: 'worker'; model: WorkerRecordModel }
+type Case = { kind: 'user'; model: UserRecordModel; sessions?: UserSessionsModel | null; thread?: false } | { kind: 'worker'; model: WorkerRecordModel; thread?: false }
 
 const companies = COMPANIES.map((company) => ({ id: company.id, name: company.legalName, sites: company.sites.map((site) => ({ id: site.id, name: site.name })) }))
 const CAN = { suspend: true, reactivate: true, deactivate: true, resetPassword: true, assign: true }
@@ -31,14 +37,16 @@ const worker = (over: Partial<WorkerRecordModel> = {}): Case => ({
 function RecordDesign({ model }: { model: Case }) {
   if (model.kind === 'user') {
     const person = model.model.user
-    const panel = person ? panels({ type: 'User', id: person.id, companyId: null }, person.displayName) : null
+    // B-TH-269: the person's thread, notes only (no party), with threads.read and users.view.
+    const thread = person && model.thread !== false ? designDockedThread({ recordType: 'User', record: person.displayName, party: null }) : null
     // B-W2b-413: Sessions & sign-ins (users.sessions.manage): null = the person may not see them (no tab).
     const sessions = model.sessions === null ? null : createElement(UserSessionsTab, { model: model.sessions ?? SESSIONS })
-    return inShell(`/admin/users/${person?.id ?? 'x'}`, createElement(UserRecordView, { model: model.model, panels: panel, sessions }))
+    return inShell(`/admin/users/${person?.id ?? 'x'}`, createElement(UserRecordView, { model: model.model, thread, sessions }))
   }
   const person = model.model.worker
-  const panel = person ? panels({ type: 'Worker', id: person.id, companyId: SITES[0]!.companyId, siteId: person.siteId }, person.displayName) : null
-  return inShell(`/admin/users/floor/${person?.id ?? 'x'}`, createElement(WorkerRecordView, { model: model.model, panels: panel }))
+  // B-TH-269: the worker's thread, notes only (no party), with threads.read and workers.view.
+  const thread = person && model.thread !== false ? designDockedThread({ recordType: 'Worker', record: person.displayName, party: null }) : null
+  return inShell(`/admin/users/floor/${person?.id ?? 'x'}`, createElement(WorkerRecordView, { model: model.model, thread }))
 }
 
 export const designScreen = defineDesignScreen<Case>({
@@ -62,7 +70,9 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'suspended', label: 'Office: a suspended person', model: user({ tab: 'profile', user: USERS[5]! }) },
     { id: 'invited', label: 'Office: invited, not joined', model: user({ tab: 'profile', user: USERS[4]!, assignments: loaded([]) }) },
     { id: 'no-role', label: 'Office: no role', model: user({ user: USERS[6]!, assignments: loaded([]) }) },
-    { id: 'activity', label: 'Office: activity', model: user({ tab: 'activity' }) },
+    // B-TH-269: Activity went (its tools in the thread's "⋯"); the thread docks closed (R-10), the band's Thread button shows it.
+    { id: 'thread-closed', label: 'Office: the thread docked closed', model: user({ tab: 'profile' }), note: 'R-10: notes about a person dock closed; Thread or ⌘J shows them (users.view beside threads.read).' },
+    { id: 'no-thread', label: 'Office: without users.view, no thread', model: { ...user({ tab: 'profile' }), thread: false } as Case, note: 'B-TH-005: no thread and no Thread button without the right to view the person.' },
     { id: 'given', label: 'Office: role given', model: user({ notice: { key: 'user.done.given', tone: 'success', params: { role: 'Planner' } } }) },
     { id: 'not-found', label: 'Office: not found', model: user({ user: null, problem: 'problem.notFound', assignments: failed('problem.notFound') }) },
     { id: 'loading', label: 'Office: loading', model: user({ user: null, assignments: loading() }) },
@@ -85,5 +95,9 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'worker-no-rights', label: 'Floor: without credentials rights', model: worker({ can: { manage: false, credentials: false, roles: false } }) },
     { id: 'worker-own', label: 'Floor: my own worker', model: worker({ worker: { ...anna, userId: DEMO_USER.id } }) },
     { id: 'worker-inactive', label: 'Floor: an inactive worker', model: worker({ tab: 'profile', worker: WORKERS[5]! }) },
+    // B-TH-269: the worker's thread docks closed (R-10, art. 4); none without workers.view.
+    { id: 'worker-thread-closed', label: 'Floor: the thread docked closed', model: worker({ tab: 'profile' }), note: 'R-10, art. 4: notes about a worker dock closed; Thread or ⌘J shows them (workers.view beside threads.read).' },
+    { id: 'worker-no-thread', label: 'Floor: without workers.view, no thread', model: { ...worker({ tab: 'profile' }), thread: false } as Case },
+    { id: 'worker-not-found', label: 'Floor: not found', model: worker({ worker: null, problem: 'problem.notFound' }) },
   ],
 })

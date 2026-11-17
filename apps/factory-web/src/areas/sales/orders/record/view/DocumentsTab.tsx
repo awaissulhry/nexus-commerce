@@ -40,7 +40,7 @@ export function DocumentsTab({ order, model, actions }: { order: Order; model: O
           </h2>
           {quote && model.can.viewQuotes && (
             <Button size="sm" asChild>
-              <Link href={`${model.prefix}/sales/quotes/${quote.id}?tab=documents`}>{t('docs.openQuote', { number: quote.number })}</Link>
+              <Link href={`${model.prefix}/sales/quotes/${quote.id}?tab=approval`}>{/* TH-6 part B: the quote's Documents live in Approval & sending (B-TH-257) */}{t('docs.openQuote', { number: quote.number })}</Link>
             </Button>
           )}
         </div>

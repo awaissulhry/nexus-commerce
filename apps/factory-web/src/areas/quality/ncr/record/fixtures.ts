@@ -1,8 +1,6 @@
 import { createElement, useEffect, useState } from 'react'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/view/RecordPanelsView'
 import { STEP_UP_CLOSED, type StepUpState } from '../../_shared/hooks'
 import { at, inShell, ME, NOW, PREFIX, ROLE_PERMISSIONS, uid, type RoleCase } from '../../_shared/fixtures'
 import type { Concession, CostSheet, Decision, EscalatePreview, NcrRecord } from '../api'
@@ -12,13 +10,16 @@ import type { CloseDialogModel } from '../view/CloseNcrDialog'
 import type { EscalateModel } from '../view/EscalateDialog'
 import { choicesOf, draftOf, EMPTY_CARRY, EMPTY_HOLD, NEW_ACTION, NEW_CONCESSION, NO_CHOICES, NO_COST, stockLinesOf, TIME_ZONE, type CostModel, type Loaded, type NcrRecordModel, type ProblemDraft, type RecordChoices, type RecordDialog } from './view-model'
 import { NcrRecordView } from './view/NcrRecordView'
+// B-TH-266: the NCR's docked thread (made-up; the page mounts the office's OfficeRecordThread docked) — internal, notes only.
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-145 — the NCR record (Quality › Nonconformances › an NCR) with made-up data only (NCR-DEMO-…, Demo people, made-up
  * quantities): each tab of a contained NCR, the Problem tab editing and read-only, a fresh NCR whose "Mark contained" is
  * held with what is missing, every dialog (an action with its hold, done with evidence, decide, carry out by stock lines,
  * the held SCRAP of garments still in work, the rework order, a repair, a supplier claim, link, close with the checklist
- * and the code), a closed and a cancelled NCR, refusals, the stale banner, the page's states and the role cases.
+ * and the code), a closed and a cancelled NCR, refusals, the stale banner, the page's states and the role cases. B-TH-266: on RecordFrame
+ * — the band in the shell's row, the NCR's ONE thread docked beside every tab (internal: notes only), Activity's tools in its "⋯".
  */
 
 type RoleKey = 'owner' | 'inspector' | 'production' | 'sales' | 'viewOnly' | 'noAccess'
@@ -26,7 +27,6 @@ type RoleKey = 'owner' | 'inspector' | 'production' | 'sales' | 'viewOnly' | 'no
 interface RecordCase {
   readonly role: RoleKey
   readonly record: NcrRecordModel
-  readonly panels: RecordPanelsViewModel | null
 }
 
 const templatePermissions = (key: string): string[] => [...(templateOf(key)?.permissions ?? []), 'home.view']
@@ -41,8 +41,6 @@ const PERMISSIONS: Readonly<Record<RoleKey, readonly string[]>> = {
 }
 const SHELL_ROLE: Readonly<Record<RoleKey, RoleCase>> = { owner: 'owner', inspector: 'inspector', production: 'production', sales: 'sales', viewOnly: 'readOnly', noAccess: 'readOnly' }
 const PERSON_OF: Readonly<Partial<Record<RoleKey, string>>> = { inspector: uid('5201', 1), production: uid('5201', 2) }
-
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
 
 const CHOICES: RecordChoices = {
   ...NO_CHOICES,
@@ -205,7 +203,6 @@ function record(role: RoleKey, tab: RecordTab, value: NcrRecord | null, over: Pa
   const loaded: Loaded = value ? { status: 'ready', record: value } : { status: 'loading' }
   return {
     role,
-    panels: tab === 'activity' && value ? { ...conversation, record: { type: 'Nonconformance', id: value.ncr.id, companyId: value.ncr.companyId, siteId: value.ncr.siteId }, title: `${value.ncr.number} · ${value.ncr.title}`, party: null } : null,
     record: {
       prefix: PREFIX,
       me,
@@ -235,29 +232,29 @@ function record(role: RoleKey, tab: RecordTab, value: NcrRecord | null, over: Pa
   }
 }
 
-/** In the browser the drafts, dialogs and keys work for real (the wrapper keeps them); nothing is sent. */
+/** In the browser the drafts and dialogs work for real (the wrapper keeps them); nothing is sent. */
 function RecordDesign({ model }: { model: RecordCase }) {
   const [dialog, setDialog] = useState<RecordDialog | null>(model.record.dialog)
   const [draft, setDraft] = useState<ProblemDraft | null>(model.record.draft)
-  const [keys, setKeys] = useState(!!model.record.keysOpen)
   const [close, setClose] = useState<CloseDialogModel | null>(model.record.close)
   const [stepUp, setStepUp] = useState<StepUpState>(model.record.stepUp)
   useEffect(() => {
     setDialog(model.record.dialog)
     setDraft(model.record.draft)
-    setKeys(!!model.record.keysOpen)
     setClose(model.record.close)
     setStepUp(model.record.stepUp)
   }, [model])
   const value = model.record.loaded.status === 'ready' ? model.record.loaded.record : null
+  // B-TH-266: the NCR's ONE thread docked beside every tab, with the office's notes only (an NCR's thread is never shared); a role
+  // without threads.read has no thread.
+  const thread = value && model.record.can.threadsRead ? designDockedThread({ recordType: 'Nonconformance', record: value.ncr.number, party: null }) : null
   const view = createElement(NcrRecordView, {
-    model: { ...model.record, dialog, draft, keysOpen: keys, close, stepUp },
-    panelsPreview: model.panels ?? undefined,
+    model: { ...model.record, dialog, draft, close, stepUp },
+    thread,
     actions: {
       onDialog: setDialog,
       onDraft: (patch) => value && setDraft((now) => ({ ...(now ?? draftOf(value.ncr, TIME_ZONE)), ...patch })),
       onDiscard: () => setDraft(null),
-      onKeys: setKeys,
       onClose: () => value && setClose({ ...closeDialog(''), ncrId: value.ncr.id, number: value.ncr.number, checks: checksSay(value.closing.checks, factsOfRecord(value), 'CLOSED'), ready: value.closing.ready }),
       close: { onNote: (note) => setClose((now) => (now ? { ...now, note } : now)), onCancel: () => setClose(null), onSubmit: () => setStepUp({ open: true, busy: false, sentence: 'close.stepUp', problem: null }) },
       onStepUpCancel: () => setStepUp(STEP_UP_CLOSED),
@@ -279,7 +276,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'containment', label: 'Containment: two actions done, a hold placed with the NCR', model: record('owner', 'containment', RECORD) },
     { id: 'disposition', label: 'Disposition: 28 of 40 decided; a rework carried out, a scrap waiting approval', model: record('owner', 'disposition', RECORD) },
     { id: 'linked', label: 'Linked records: source, holds, follow-ups, others, the PPE register entry', model: record('owner', 'linked', RECORD) },
-    { id: 'activity', label: 'Activity: the record panels (thread, files, history)', model: record('owner', 'activity', RECORD) },
+    { id: 'thread-docked', label: 'B-TH-266: the NCR\'s thread docked beside Problem & evidence — notes only, Activity\'s tools in its "⋯"', model: record('owner', 'problem', RECORD) },
     { id: 'open-fresh', label: 'A fresh NCR: an open action, "Mark contained" held with what is missing', model: record('inspector', 'problem', RECORD_OPEN) },
     { id: 'open-containment', label: 'A fresh NCR: its open action with owner and due time to set (autosave per cell)', model: record('inspector', 'containment', RECORD_OPEN, { cells: { [`${RECORD_OPEN.containment[0]!.id}:due`]: { state: 'saved' } } }) },
     { id: 'add-action-hold', label: 'Add action: Hold stock, placing the hold here (what, why, note)', model: record('inspector', 'containment', RECORD_OPEN, { dialog: { kind: 'addAction', draft: { ...NEW_ACTION, kind: 'HOLD_STOCK', ownerId: uid('5201', 1), hold: { ...EMPTY_HOLD, subject: `WorkOrder:${RECORD_OPEN.ncr.workOrder!.id}`, reasonCode: 'NCR' } }, busy: false, notice: null } }) },
@@ -304,7 +301,6 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'offline', label: 'Offline: the last copy with its time', model: record('owner', 'problem', RECORD, { live: 'offline' }) },
     { id: 'sales', label: 'Sales: sees it and links records; follows nothing up (held with the reason)', model: record('sales', 'linked', RECORD) },
     { id: 'view-only', label: 'A role that only sees NCRs: every action held with its reason', model: record('viewOnly', 'disposition', RECORD) },
-    { id: 'keys', label: 'The keys (?)', model: record('owner', 'problem', RECORD, { keysOpen: true }) },
     { id: 'loading', label: 'Loading', model: record('owner', 'problem', null, { asOf: null, live: 'connecting' }) },
     { id: 'error', label: "Couldn't be read (Try again)", model: record('owner', 'problem', null, { loaded: { status: 'error', problem: 'problem.unavailable' } }) },
     { id: 'not-found', label: 'Not found', model: record('owner', 'problem', null, { loaded: { status: 'notFound' } }) },

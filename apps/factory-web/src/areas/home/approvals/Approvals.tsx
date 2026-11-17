@@ -22,7 +22,8 @@ import { InboxView } from './view/InboxView'
 import { MailMeSwitch } from '../../../record-panels/approvals/mail-me/MailMeSwitch'
 // B-W2b-382 (XF7:01, XF7:02): the request in words from its codes; its record's page (its parent's) also for the review alone.
 import { subjectAddress } from './subject-links/subject-link'
-import { RequestPanels } from './words/RequestPanels'
+// B-TH-270 (PL6): the request's thread docked in the review window (its Conversation tab went).
+import { RequestThread } from './words/RequestThread'
 
 const isApprovalChange = (type: string) => type.startsWith('approval.') || type.startsWith('quote.') || type === 'change_order.changed' || type === 'smv_version.changed' || type.startsWith('inspection_plan.')
 
@@ -325,7 +326,7 @@ export function Approvals() {
     <InboxView
       model={model}
       mailSwitch={<MailMeSwitch api={api} />}
-      conversation={task ? <RequestPanels task={task} /> : undefined}
+      thread={task && held.has('threads.read') ? <RequestThread task={task} /> : undefined}
       actions={{
         onControls: (next) => go(next),
         onRetry: () => {

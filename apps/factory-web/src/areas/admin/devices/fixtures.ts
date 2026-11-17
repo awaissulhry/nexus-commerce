@@ -1,6 +1,8 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
-import { at, DEVICES, inShell, LINES, NOW, panels, PREFIX, PRINTERS, SITES, STATIONS } from '../shared/fixtures'
+import { at, DEVICES, inShell, LINES, NOW, PREFIX, PRINTERS, SITES, STATIONS } from '../shared/fixtures'
+// ---- B-TH-269: the device's docked thread in the design cases (notes only: an admin record has no party, W03) ----
+import { designDockedThread } from '../../_shared/record-frame/fixtures'
 import { failed, loaded, loading } from '../shared/model'
 import type { Device } from '../shared/api'
 import type { DeviceRecordModel, DevicesViewModel, SiteChoice } from './model'
@@ -12,7 +14,8 @@ import { DevicesView } from './view/DevicesView'
  * invented printer targets.
  */
 
-type Case = { page: 'list'; model: DevicesViewModel } | { page: 'device'; model: DeviceRecordModel; dock?: boolean }
+// B-TH-269: `noThread` — a person without threads.read or devices.view (B-TH-005): no dock, no Thread button.
+type Case = { page: 'list'; model: DevicesViewModel } | { page: 'device'; model: DeviceRecordModel; noThread?: boolean }
 
 /**
  * B-W2a-42: what each tablet last said of itself (app version, battery, actions waiting to sync), and the version the
@@ -41,17 +44,18 @@ const list = (over: Partial<DevicesViewModel> = {}): Case => ({
   page: 'list',
   model: { prefix: PREFIX, mode: 'devices', devices: loaded(STATEFUL), printers: loaded(PRINTERS), failedPrinters: 1, sites, tile: null, query: '', pages: 1, asOf: NOW, now: NOW, currentVersion: CURRENT_VERSION, can: CAN, ...over },
 })
-const device = (index: number, over: Partial<DeviceRecordModel> = {}, dock = false): Case => ({
+const device = (index: number, over: Partial<DeviceRecordModel> = {}, noThread = false): Case => ({
   page: 'device',
-  dock,
+  noThread,
   model: { prefix: PREFIX, tab: 'binding', device: STATEFUL[index]!, site: sites.find((site) => site.id === DEVICES[index]!.siteId) ?? null, can: CAN, now: NOW, currentVersion: CURRENT_VERSION, ...over },
 })
 
 function DevicesDesign({ model }: { model: Case }) {
   if (model.page === 'list') return inShell('/admin/devices', createElement(DevicesView, { model: model.model }))
   const record = model.model.device
-  const panel = record ? panels({ type: 'Device', id: record.id, companyId: SITES[0]!.companyId, siteId: record.siteId }, record.name, 'history') : null
-  return inShell(`/admin/devices/${record?.id ?? 'x'}`, createElement(DeviceRecordView, { model: { ...model.model, dockOpen: model.dock }, panels: panel }))
+  // B-TH-269: the device's thread docked beside both tabs (notes only), with threads.read and devices.view; none without them.
+  const thread = record && !model.noThread ? designDockedThread({ recordType: 'Device', record: record.name, party: null }) : null
+  return inShell(`/admin/devices/${record?.id ?? 'x'}`, createElement(DeviceRecordView, { model: model.model, thread }))
 }
 
 export const designScreen = defineDesignScreen<Case>({
@@ -115,8 +119,14 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'device-new-code', label: 'Device: a new enrolment code', model: device(1, { enrol: { step: 'scan', device: DEVICES[1]!, enrolment: ENROLMENT } }) },
     { id: 'device-revoke', label: 'Device: revoke', model: device(0, { tab: 'status', revoking: true }) },
     { id: 'device-revoked', label: 'Device: revoked', model: device(4, { tab: 'status' }) },
-    { id: 'device-activity', label: 'Device: activity', model: device(0, { tab: 'activity' }) },
-    { id: 'device-dock', label: 'Device: history beside the binding (≥ 1280 px)', model: device(0, {}, true) },
+    // ---- B-TH-269: Activity went (its tools are in the thread's "⋯"); the thread docks beside both tabs.
+    {
+      id: 'device-thread',
+      label: 'Device: the thread docked beside Station & mode',
+      model: device(0),
+      note: 'B-TH-269: notes only (an admin record has no party), read only with devices.view beside threads.read (B-TH-005). The old ?tab=activity address lands here with the thread open.',
+    },
+    { id: 'device-no-thread', label: 'Device: without devices.view or threads.read (no thread)', model: device(0, {}, true), note: 'No dock and no Thread button: notes about who uses a device stay with who may see the device.' },
     { id: 'device-not-found', label: 'Device: not found', model: { page: 'device', model: { prefix: PREFIX, tab: 'binding', device: null, problem: 'problem.notFound', site: null, can: CAN, now: NOW } } },
   ],
 })

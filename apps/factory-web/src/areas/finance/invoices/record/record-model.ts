@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
 import type { MenuItemDef } from '@nexus/ui/components'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { Checks, CreditAsk, CreditReason, Invoice, Related, Sdi } from '../../_shared/api'
 import type { LiveState, StepUpState } from '../../_shared/hooks'
 import type { FinanceAbilities, LineDraft, Phrase } from '../../_shared/model'
@@ -18,10 +17,21 @@ export interface Part<T> {
 
 export const PART_LOADING = { value: null, problem: null } as const
 
-export const RECORD_TABS = ['lines', 'money', 'sdi', 'documents', 'activity'] as const
+// ---- B-TH-268 (threads plan TH-6; 08-tabs O-FIN-INV; the rule of picture 38): tabs 5 → 3. SDI status and Documents merge into
+// "SDI & documents" (R-1: Documents finishes the SDI work — Make the files, the FatturaPA XML, the courtesy PDF; R-6: every action of
+// both kept; the address keeps `sdi`); Activity goes (R-ACT: its tools are in the docked thread's "⋯").
+export const RECORD_TABS = ['lines', 'money', 'sdi'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
-export const tabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'lines')
+/** Every old `?tab=` keeps working (R-8): Documents → SDI & documents; Activity → Lines & VAT with the thread opened (RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ documents: 'sdi', activity: 'lines' })
+
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'lines'
+}
+// ---- end B-TH-268
 
 export type RecordDialog =
   /** Check and issue (P1: a confirm dialog after the checks pass), then send to SDI. */
@@ -57,7 +67,8 @@ export interface InvoiceRecordModel {
   /** The courtesy PDF in the viewer (Documents), read once from the store. */
   pdf: { status: 'idle' | 'loading' | 'ready' | 'error'; src: Uint8Array | null }
   live: LiveState
-  dockOpen: boolean
+  /** B-TH-268: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
   /** Someone changed the invoice while a dialog holds typed work: "Changed at 10:42 · Reload". */
   changed: { at: string } | null
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null
@@ -68,8 +79,6 @@ export interface InvoiceRecordModel {
   /** The checks of a resend after a correction (they did not pass: said in the dialog). */
   resendProblems: Array<{ code: string; path: string }> | null
   stepUp: StepUpState
-  /** Design cases: what the panels show (the page mounts the live panels instead). */
-  panelsPreview?: RecordPanelsViewModel
   /** Design cases: what a dialog holds typed. */
   draft?: { mode?: 'full' | 'lines' | 'amount'; reason?: CreditReason; text?: string; amount?: string; lines?: LineDraft[]; causale?: string; dueDate?: string; charge?: Partial<ChargeDraft>; note?: string }
 }
@@ -78,7 +87,6 @@ export interface InvoiceRecordActions {
   onRetry?: () => void
   onRetryPart?: (part: 'checks' | 'related' | 'sdi') => void
   onReload?: () => void
-  onDock?: () => void
   onDismissNotice?: () => void
   onDialog?: (dialog: RecordDialog | null) => void
   onIssue?: (input: { send: boolean }) => void

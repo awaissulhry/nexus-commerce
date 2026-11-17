@@ -4,7 +4,7 @@ import { SampleRecord } from '../../../../../../../areas/products/samples/record
 
 export const metadata: Metadata = { title: 'Sample round · Nexus Factory' }
 
-/** Products › Samples & prototypes › a round (SCR-110-record; `?tab=request|sample|fit|approval|shipments|activity&panel=`). */
+/** Products › Samples & prototypes › a round (SCR-110-record; `?tab=request|sample|fit|approval|shipments`; the old `activity` (and `&panel=approvals`) opens the thread — B-TH-262). */
 export default async function SampleRoundRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (

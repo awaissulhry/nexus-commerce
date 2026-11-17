@@ -319,14 +319,13 @@
     "more": "Altre azioni",
     "bodyMeta": "organismo notificato {number} {name}",
     "modelMeta": "modello {model}",
-    "noPanels": "Qui compaiono conversazione, file e storico.",
-    "panelsHeld": "Conversazione, file e storico richiedono il permesso di leggere le conversazioni."
+    "name": "Certificato",
+    "dockLabel": "Conversazione del certificato",
+    "tabsLabel": "Sezioni del certificato"
   },
   "tab": {
     "coverage": "Copertura",
-    "body": "Organismo notificato",
-    "files": "File",
-    "activity": "Attività",
+    "body": "Organismo notificato e PDF",
     "renewals": "Rinnovi"
   },
   "action": {
@@ -603,9 +602,7 @@
     "title": "Scorciatoie da tastiera",
     "add": "Aggiungi certificato",
     "check": "Verifica un capo",
-    "register": "Registra (una bozza)",
-    "thread": "La conversazione accanto alla scheda",
-    "help": "Tutte le scorciatoie"
+    "register": "Registra (una bozza)"
   },
   "ren": {
     "title": "Validità e rinnovo",

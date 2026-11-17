@@ -10,9 +10,14 @@ import { useDsWords } from '../../../../lib/i18n/ds-parts'
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { RoundRead, StyleRead, WaitingRead } from '../api'
 import { decisionWhat, dueStateOf, roundTone, techPackTone, trackingText } from '../model'
+// B-TH-253: the Projects block and "Discuss" on a style and a round (B-TH-073).
+import { CalendarClock, FolderKanban, MessageSquare } from 'lucide-react'
+import { discussHref, type ProjectBlockRow } from '../model'
+import { STATUS_TONE as PROJECT_TONE } from '../../projects/model'
 import { useSamplesWords } from '../words'
 import { DecisionDialog, type DecisionActions, type DecisionDialogModel } from './DecisionDialog'
 import '../samples.css'
+import '../../projects/projects.css' // B-TH-253: the Projects block's rows
 
 /**
  * SCR-225 — the brand's Samples & tech packs (design portal.customer.samples; PRD-245, Owner answer T3): Waiting for your
@@ -53,6 +58,10 @@ export interface SamplesViewModel {
   decision: DecisionDialogModel | null
   /** Design cases: a list's keys panel open. */
   keysOpen?: 'styles' | 'rounds' | null
+  /** B-TH-253 (PROJ.portal-F03): the person's own projects still going; null or absent: no block (no right, or none). */
+  projects?: readonly ProjectBlockRow[] | null
+  /** B-TH-073: the person reads conversations — each style and round offers "Discuss" on its own page. */
+  discuss?: boolean
 }
 
 export interface SamplesViewActions {
@@ -89,6 +98,7 @@ export function SamplesView({ model, actions }: { model: SamplesViewModel; actio
         </div>
       ) : null}
       <WaitingSection model={model} actions={actions} />
+      {model.projects && model.projects.length > 0 ? <ProjectsSection rows={model.projects} /> : null}
       <StylesSection model={model} actions={actions} />
       <RoundsSection model={model} actions={actions} />
       {model.decision ? <DecisionDialog model={model.decision} actions={actions?.decision} /> : null}
@@ -161,11 +171,40 @@ function WaitingSection({ model, actions }: { model: SamplesViewModel; actions?:
   )
 }
 
+// ── B-TH-253 (PROJ.portal-F03): the projects the person was added to — development in one place ─────────────────────────
+function ProjectsSection({ rows }: { rows: readonly ProjectBlockRow[] }) {
+  const { t, day } = useSamplesWords()
+  return (
+    <section className="fw-psmp-section" aria-labelledby="fw-psmp-projects">
+      <SectionHead id="fw-psmp-projects" title={t('projects.title')} hint={t('projects.hint')} icon={<FolderKanban size={18} />} />
+      <ul className="fw-pprj-block" aria-label={t('projects.title')}>
+        {rows.map((row) => (
+          <li key={row.id} className="fw-pprj-block-row">
+            <span className="fw-pprj-block-main">
+              <strong>{row.name}</strong>
+              <Pill tone={PROJECT_TONE[row.status]}>{t(`projects.status.${row.status}`)}</Pill>
+              <span className="fw-psmp-sub">
+                <CalendarClock size={14} aria-hidden /> {t('projects.target', { date: day(row.targetDate) })}
+              </span>
+            </span>
+            <Button size="sm" asChild>
+              <a href={row.href} aria-label={t('projects.openOf', { name: row.name })}>
+                {t('projects.open')}
+              </a>
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  )
+}
+
 // ── Your styles in development ────────────────────────────────────────────────────────────────────────────────────────
 function StylesSection({ model, actions }: { model: SamplesViewModel; actions?: SamplesViewActions }) {
   const { t, day } = useSamplesWords()
   const latest = useRef({ model, actions })
   latest.current = { model, actions }
+  const discussOn = model.discuss ?? false // B-TH-073
 
   const columns = useMemo((): ColDef<StyleRead>[] => {
     const StyleCell = ({ data }: ICellRendererParams<StyleRead>) =>
@@ -210,6 +249,14 @@ function StylesSection({ model, actions }: { model: SamplesViewModel; actions?: 
       )
     }
     const column = (colId: string, header: string, cellRenderer: ColDef<StyleRead>['cellRenderer'], size: { flex?: number; minWidth?: number; width?: number }): ColDef<StyleRead> => ({ colId, headerName: header, cellRenderer, sortable: false, ...size })
+    // B-TH-073: the style's own conversation page (only for a person who reads conversations).
+    const DiscussCell = ({ data }: ICellRendererParams<StyleRead>) =>
+      data ? (
+        <a className="fw-psmp-nowrap" href={discussHref(latest.current.model.prefix, 'Style', data.id)} aria-label={t('discuss.styleOf', { code: data.code })}>
+          <MessageSquare size={14} aria-hidden /> {t('discuss.label')}
+        </a>
+      ) : null
+    const discuss: ColDef<StyleRead>[] = discussOn ? [{ ...column('discuss', t('discuss.col'), DiscussCell, { flex: 0.5, minWidth: 120 }), valueGetter: () => t('discuss.label') }] : []
     return [
       { ...column('style', t('styles.col.style'), StyleCell, { flex: 1.3, minWidth: 200 }), valueGetter: ({ data }) => (data ? `${data.code} ${data.name}` : '') },
       { ...column('season', t('styles.col.season'), undefined, { flex: 0.4, minWidth: 100 }), valueGetter: ({ data }) => data?.season ?? '—' },
@@ -217,8 +264,9 @@ function StylesSection({ model, actions }: { model: SamplesViewModel; actions?: 
       { ...column('round', t('styles.col.round'), RoundCell, { flex: 1, minWidth: 160 }), valueGetter: ({ data }) => (data?.latestRound ? t('round.label', { kind: t(`kind.${data.latestRound.kind}`), n: data.latestRound.roundNo }) : '') },
       { ...column('next', t('styles.col.next'), undefined, { flex: 0.5, minWidth: 130 }), valueGetter: ({ data }) => (data?.nextDate ? day(data.nextDate) : '—') },
       { ...column('pack', t('styles.col.pack'), PackCell, { flex: 1.1, minWidth: 250 }), valueGetter: ({ data }) => (data?.techPack ? t('pack.version', { revision: data.techPack.revision, version: data.techPack.version, language: data.techPack.language.toUpperCase() }) : t('pack.none')) },
+      ...discuss,
     ]
-  }, [t, day])
+  }, [t, day, discussOn])
 
   const selected = model.selectedStyles
   const withPack = selected.filter((id) => model.styles.some((style) => style.id === id && style.techPack))
@@ -258,6 +306,7 @@ function RoundsSection({ model, actions }: { model: SamplesViewModel; actions?: 
   const { t, day } = useSamplesWords()
   const latest = useRef({ model, actions })
   latest.current = { model, actions }
+  const discussOn = model.discuss ?? false // B-TH-073
 
   const columns = useMemo((): ColDef<RoundRead>[] => {
     const RoundCell = ({ data }: ICellRendererParams<RoundRead>) =>
@@ -297,6 +346,14 @@ function RoundsSection({ model, actions }: { model: SamplesViewModel; actions?: 
         </span>
       ) : null
     const column = (colId: string, header: string, cellRenderer: ColDef<RoundRead>['cellRenderer'], size: { flex?: number; minWidth?: number; width?: number }): ColDef<RoundRead> => ({ colId, headerName: header, cellRenderer, sortable: false, ...size })
+    // B-TH-073: the round's own conversation page (only for a person who reads conversations).
+    const DiscussCell = ({ data }: ICellRendererParams<RoundRead>) =>
+      data ? (
+        <a className="fw-psmp-nowrap" href={discussHref(latest.current.model.prefix, 'SampleRound', data.id)} aria-label={t('discuss.roundOf', { round: t('round.label', { kind: t(`kind.${data.kind}`), n: data.roundNo }) })}>
+          <MessageSquare size={14} aria-hidden /> {t('discuss.label')}
+        </a>
+      ) : null
+    const discuss: ColDef<RoundRead>[] = discussOn ? [{ ...column('discuss', t('discuss.col'), DiscussCell, { flex: 0.5, minWidth: 120 }), valueGetter: () => t('discuss.label') }] : []
     return [
       { ...column('round', t('rounds.col.round'), RoundCell, { flex: 1.1, minWidth: 190 }), valueGetter: ({ data }) => (data ? `${t('round.label', { kind: t(`kind.${data.kind}`), n: data.roundNo })} · ${data.number}` : '') },
       { ...column('style', t('rounds.col.style'), StyleCell, { flex: 1, minWidth: 170 }), valueGetter: ({ data }) => (data ? `${data.style.code} ${data.style.name}` : '') },
@@ -305,8 +362,9 @@ function RoundsSection({ model, actions }: { model: SamplesViewModel; actions?: 
       { ...column('received', t('rounds.col.received'), undefined, { flex: 0.6, minWidth: 110 }), valueGetter: ({ data }) => (data?.shipment?.receivedAt ? day(data.shipment.receivedAt) : '—') },
       { ...column('tracking', t('rounds.col.tracking'), TrackingCell, { flex: 1, minWidth: 170 }), valueGetter: ({ data }) => (data ? (trackingText(data.shipment) ?? '—') : '') },
       { ...column('status', t('rounds.col.status'), StatusCell, { flex: 1, minWidth: 190 }), valueGetter: ({ data }) => (data ? t(`status.${data.status}`) : '') },
+      ...discuss,
     ]
-  }, [t, day])
+  }, [t, day, discussOn])
 
   const selected = model.selectedRounds
   const waitingIds = selected.flatMap((id) => model.rounds.find((round) => round.id === id && round.waitingRequestId)?.waitingRequestId ?? [])

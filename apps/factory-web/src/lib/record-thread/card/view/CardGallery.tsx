@@ -24,7 +24,7 @@ function Gallery({ model }: { model: CardGalleryModel }) {
   return (
     <div className="fw-rt-card-gallery" role="feed" aria-label={t('feed.label')}>
       {model.messages.map((message) => (
-        <MessageCard key={message.id} message={message} context={model.context} actions={{}} />
+        <MessageCard key={message.id} message={message} context={model.context} actions={{ onUndo: () => undefined }} />
       ))}
     </div>
   )

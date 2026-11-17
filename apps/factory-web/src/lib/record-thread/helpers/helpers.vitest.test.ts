@@ -6,6 +6,9 @@ import { messagesFor } from '../../i18n/messages'
 import { I18nProvider } from '../../i18n/provider'
 import { BRAND_BETA } from '../../testing/two-brands'
 import { designScreen } from './fixtures'
+// B-TH-236
+import { AMOUNT_CURRENCIES, amountBody, amountMinor, amountOffered, amountProblem, floorPriceFound } from './amount'
+import { AmountField } from './view/AmountField'
 import {
   completeMention,
   DRAFT_DAYS,
@@ -174,3 +177,60 @@ describe('the words', () => {
     expect(html).toContain('aria-disabled="true"')
   })
 })
+
+// ---- B-TH-236 (B-TH-049): the amount field by grain, and the floor's price check (W08, W34: money never in a floor note's words).
+describe('B-TH-236: the amount field and the floor’s price check', () => {
+  it('the field is offered on an office note to a price reader only (money.price)', () => {
+    expect(amountOffered('note', true)).toBe(true)
+    expect(amountOffered('note', false)).toBe(false)
+    expect(amountOffered('note', undefined)).toBe(false)
+    expect(amountOffered('reply', true)).toBe(false)
+    expect(amountOffered('portal', true)).toBe(false)
+  })
+
+  it('reads the amount in Italian and English numbers, in minor units; anything else is held', () => {
+    expect(amountMinor('1.250,00')).toBe(125_000)
+    expect(amountMinor('1,250.00')).toBe(125_000)
+    expect(amountMinor('1250.5')).toBe(125_050)
+    expect(amountMinor('12,5')).toBe(1_250)
+    expect(amountMinor('1 250')).toBe(125_000)
+    expect(amountMinor('€ 18.450')).toBe(1_845_000)
+    expect(amountMinor('')).toBeNull()
+    expect(amountMinor('twelve')).toBeNaN()
+    expect(amountMinor('12.5.5,1x')).toBeNaN()
+    expect(amountProblem('twelve', { forFloor: false })).toEqual({ key: 'amount.invalid' })
+    expect(amountProblem('99999999999', { forFloor: false })).toEqual({ key: 'amount.tooLarge' })
+    expect(amountProblem('10', { forFloor: true })).toEqual({ key: 'amount.floor' })
+    expect(amountProblem('', { forFloor: true })).toBeNull()
+    expect(amountProblem(undefined, { forFloor: false })).toBeNull()
+  })
+
+  it('what POST …/notes takes: minor units and the currency, or nothing', () => {
+    expect(amountBody('1.250,00', 'EUR')).toEqual({ value: 125_000, currency: 'EUR' })
+    expect(amountBody('10', undefined)).toEqual({ value: 1_000, currency: 'EUR' })
+    expect(amountBody('10', 'eur')).toEqual({ value: 1_000, currency: 'EUR' })
+    expect(amountBody('', 'EUR')).toBeNull()
+    expect(amountBody('ten', 'EUR')).toBeNull()
+    expect(amountBody(undefined, 'EUR')).toBeNull()
+    expect(AMOUNT_CURRENCIES[0]).toBe('EUR')
+  })
+
+  it('a floor note whose words look like a price is found; an office note is never checked', () => {
+    expect(floorPriceFound('Lining at € 4,50 a metre.', true)).toBe('€ 4,50')
+    expect(floorPriceFound('costo 12 al pezzo', true)).toBe('costo 12')
+    expect(floorPriceFound('Cut 40 pieces, total 120.', true)).toBeNull()
+    expect(floorPriceFound('Lining at € 4,50 a metre.', false)).toBeNull()
+  })
+
+  it('the field draws its words in it and en, with the hint or the problem', () => {
+    for (const locale of LOCALES) {
+      const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(AmountField, { value: '12,50', currency: 'EUR', forFloor: false, onChange: () => undefined, onRemove: () => undefined })))
+      expect(html).not.toMatch(/\bamount\.[a-zA-Z]/)
+      expect(html).toMatch(/inputmode="decimal"/i)
+    }
+    const bad = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(AmountField, { value: 'ten', currency: 'EUR', forFloor: false, onChange: () => undefined, onRemove: () => undefined })))
+    expect(bad).toContain('Write a number with at most two decimals')
+    expect(bad).toContain('aria-invalid="true"')
+  })
+})
+// ---- end B-TH-236

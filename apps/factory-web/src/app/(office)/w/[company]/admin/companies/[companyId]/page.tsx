@@ -4,7 +4,7 @@ import { CompanyRecord } from '../../../../../../../areas/admin/companies/Compan
 
 export const metadata: Metadata = { title: 'Company · Nexus Factory' }
 
-/** Admin › Companies & sites › a company (SCR-008 Company record; `?tab=legal|sites|defaults|activity`). */
+/** Admin › Companies & sites › a company (SCR-008 Company record; `?tab=legal|sites|defaults|calendars`; the old `activity` opens Legal & tax with the thread — B-TH-269). */
 export default async function Page({ params }: { params: Promise<{ companyId: string }> }) {
   const { companyId } = await params
   return (

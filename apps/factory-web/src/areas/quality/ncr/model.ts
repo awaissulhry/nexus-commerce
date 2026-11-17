@@ -311,8 +311,18 @@ export const cardHeld = (card: Pick<NcrSummary, 'stage'>, moving: boolean): Say 
 // ---- the record -----------------------------------------------------------------------------------------------------------
 
 /** B-W2b-113: Cost (design rec NCR › cost) after Disposition; absent without the cost grain. */
-export const RECORD_TABS = ['problem', 'containment', 'disposition', 'cost', 'linked', 'activity'] as const
+// ---- B-TH-266 (threads plan TH-6; 08-tabs O-QA-NCR; the rule of picture 38): tabs 6 → 5. Activity goes (R-ACT: its tools are in the
+// docked thread's "⋯"; the thread is the NCR's own, internal — notes only, never shared: the API's NOT_SHAREABLE).
+export const RECORD_TABS = ['problem', 'containment', 'disposition', 'cost', 'linked'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Problem & evidence with the thread opened (RecordFrame reads the address). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ activity: 'problem' })
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'problem'
+}
+// ---- end B-TH-266
 
 /** The band's actions: null = allowed, words = why not (our words for the API's `actions`). */
 export interface BandHeld {

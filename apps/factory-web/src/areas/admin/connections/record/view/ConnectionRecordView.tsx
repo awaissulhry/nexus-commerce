@@ -2,7 +2,7 @@
 
 import { useMemo, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Banner, Card, EmptyState, KeyValue } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, KeyValue, Tabs, type TabItem } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Pill, SegmentedControl, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDateTime, formatNumber } from '../../../../../lib/i18n/format'
@@ -11,9 +11,11 @@ import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { useKeysHelp } from '../../../kit/list'
 import { adminHref } from '../../../shared/model'
 import { FrameState, RecordProblem } from '../../../shared/view/parts'
-import { RecordFrame } from '../../../shared/view/RecordFrame'
 import { INBOUND_STATUSES, type InboundDelivery, type IntegrationAccount, type IntegrationCall } from '../../api'
-import { CALL_TONE, FAILED_CALL, INBOUND_TONE, KNOWN_REASONS, KNOWN_SETTINGS, MODE_TONE, isTestMode, nextSwitch, type ConnectionRecordModel, type ConnectionTab, type PauseConfirm } from '../../model'
+import { CALL_TONE, CONNECTION_TABS, FAILED_CALL, INBOUND_TONE, KNOWN_REASONS, KNOWN_SETTINGS, MODE_TONE, isTestMode, nextSwitch, type ConnectionRecordModel, type PauseConfirm } from '../../model'
+// ---- B-TH-269: the connection on RecordFrame (the band in the shell's row, the docked thread — notes only —, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { SwitchConfirm, useStateWords } from '../../view/ConnectionsView'
 import { ConnectionsMessages, ConnNotice, SecretField } from '../../view/parts'
 
@@ -26,7 +28,6 @@ export interface ConnectionRecordActions {
   onMoreCalls?: () => void
   onInboundStatus?: (status: ConnectionRecordModel['inboundStatus']) => void
   onMoreInbound?: () => void
-  onDock?: () => void
   onRetry?: () => void
   onRetryCalls?: () => void
   onRetryInbound?: () => void
@@ -34,31 +35,39 @@ export interface ConnectionRecordActions {
 }
 
 /**
- * SCR-087 — a Connection record (design 02 admin.connections "Record: Connection"): Overview (is it working, and what
- * does it do: mode, state, last OK and error, calls 24 h, limits and the circuit in words; Test held — no ping on the
- * adapters yet; Pause / Resume), Settings & secrets (read only; secrets write-only — saved or not, never shown; Replace
- * held — no route replaces one yet), Calls (the gateway's ledger), Inbound (received webhooks, never a body) and
- * Activity (the record panels). Fetches nothing (ConnectionRecord.tsx).
+ * SCR-087 — a Connection record (design 02 admin.connections "Record: Connection"), on RecordFrame (B-TH-269; the rule of picture 38,
+ * the tabs of 08-tabs O-ADM-CONN): the band in the shell's band row (‹ Connections & API, the service's name, ONE state pill, its mode,
+ * label and company; Test and Pause / Resume, held with why; the Thread button ⌘J, the frame's; ⋯ its Keyboard line), the docked
+ * thread beside every tab (notes only: an admin record has no party, W03; with threads.read and integrations.view, B-TH-005;
+ * Activity's tools in its "⋯", R-ACT) and the tabs 5 → 4: Overview (is it working, and what does it do: mode, state, last OK and
+ * error, calls 24 h, limits and the circuit in words), Settings & secrets (read only; secrets write-only — saved or not, never shown;
+ * Replace held — no route replaces one yet), Calls (the gateway's ledger) and Received (received webhooks, never a body). Every banner
+ * in the ONE notice of the body column. Fetches nothing (ConnectionRecord.tsx).
  */
-export function ConnectionRecordView({ model, actions, panels, test, testCard }: { model: ConnectionRecordModel; actions?: ConnectionRecordActions; panels?: ReactNode; test?: ReactNode; testCard?: ReactNode }) {
+// B-TH-269: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows.
+export function ConnectionRecordView({ model, actions, thread, printThread, test, testCard }: { model: ConnectionRecordModel; actions?: ConnectionRecordActions; thread?: ReactNode; printThread?: ReactNode; test?: ReactNode; testCard?: ReactNode }) {
   return (
     <ConnectionsMessages>
-      <ConnectionRecord model={model} actions={actions} panels={panels} test={test} testCard={testCard} />
+      <ConnectionRecord model={model} actions={actions} thread={thread} printThread={printThread} test={test} testCard={testCard} />
     </ConnectionsMessages>
   )
 }
 
-function ConnectionRecord({ model, actions, panels, test, testCard }: { model: ConnectionRecordModel; actions?: ConnectionRecordActions; panels?: ReactNode; test?: ReactNode; testCard?: ReactNode }) {
+function ConnectionRecord({ model, actions, thread, printThread, test, testCard }: { model: ConnectionRecordModel; actions?: ConnectionRecordActions; thread?: ReactNode; printThread?: ReactNode; test?: ReactNode; testCard?: ReactNode }) {
   const t = useT('admin-connections')
   const tAdmin = useT('admin')
   const href = (path: string) => adminHref(model.prefix, path)
   const back = { href: href('/connections'), label: t('conn.title') }
   const stateWords = useStateWords(model.now)
   const account = model.account
+  const frame = { recordType: 'IntegrationAccount', personId: model.personId ?? null, threadLabel: tAdmin('record.dockLabel') }
+  const backLink = <Link href={back.href}>{back.label}</Link>
+
+  // Not found, no right, a failed read, loading: the band and its state inside the frame, no thread yet.
   if (!account) {
-    if (model.problem)
-      return (
-        <div className="fw-adm">
+    return (
+      <RecordFrame {...frame} thread={null} band={{ back: backLink, title: model.problem ? t('conn.title') : <Skeleton width={260} height={22} />, moreLabel: tAdmin('common.more') }}>
+        {model.problem ? (
           <RecordProblem
             problem={model.problem}
             onRetry={actions?.onRetry}
@@ -68,70 +77,69 @@ function ConnectionRecord({ model, actions, panels, test, testCard }: { model: C
               </Button>
             }
           />
-        </div>
-      )
-    return (
-      <div className="fw-adm" aria-busy="true">
-        <Skeleton height={36} width="40%" />
-        <Skeleton height={220} />
-      </div>
+        ) : (
+          <div className="fw-adm" aria-busy="true">
+            <Skeleton height={220} />
+          </div>
+        )}
+      </RecordFrame>
     )
   }
-  const tabs: Array<{ id: ConnectionTab; label: string }> = [
-    { id: 'overview', label: t('conn.tab.overview') },
-    { id: 'settings', label: t('conn.tab.settings') },
-    { id: 'calls', label: t('conn.tab.calls') },
-    { id: 'inbound', label: t('conn.tab.inbound') },
-    { id: 'activity', label: t('conn.tab.activity') },
-  ]
+  const tabs: TabItem[] = CONNECTION_TABS.map((tab) => ({ id: tab, label: t(`conn.tab.${tab}`), href: `${href(`/connections/${account.id}`)}?tab=${tab}` }))
   const verb = nextSwitch(account.status)
   const state = stateWords(account)
   return (
-    <div className="fw-adm">
+    <>
       <RecordFrame
-        back={back}
-        title={t(`conn.provider.${account.provider}.name`)}
-        meta={[account.label, model.companyName ?? t('conn.everyCompany')].join(' · ')}
-        status={
-          <span className="fw-adm-tags">
-            <Pill tone={MODE_TONE[account.mode]}>{t(`conn.mode.${account.mode}`)}</Pill>
-            <Pill tone={state.tone}>{state.words}</Pill>
-          </span>
-        }
-        actions={
-          <>
-            {/* B-W2b-415: Test and Reconnect (connections/errors/view/ConnectionTest); held in the old words without it. */}
-            {test ?? (
-              <Button size="sm" heldReason={t('conn.test.held')}>
-                {t('conn.test.action')}
-              </Button>
-            )}
-            {verb && (
-              <Button size="sm" variant={verb === 'pause' ? 'danger-outline' : 'primary'} onClick={() => actions?.onConfirm?.({ accountId: account.id, pause: verb === 'pause' })} heldReason={model.can.manage ? null : tAdmin('held.needs', { right: t('conn.right.manage') })}>
-                {t(`conn.${verb}.action`)}
-              </Button>
-            )}
-          </>
-        }
-        tabs={tabs}
-        active={model.tab}
-        tabHref={(tab) => `${href(`/connections/${account.id}`)}?tab=${tab}`}
-        dock={model.tab === 'activity' ? undefined : panels}
-        dockOpen={model.dockOpen}
-        onDock={actions?.onDock}
+        {...frame}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: backLink,
+          title: t(`conn.provider.${account.provider}.name`),
+          // ONE state pill; the mode travels with the identity (label · company).
+          status: <Pill tone={state.tone}>{state.words}</Pill>,
+          meta: (
+            <span className="fw-adm-tags">
+              <Tag tone={MODE_TONE[account.mode]}>{t(`conn.mode.${account.mode}`)}</Tag>
+              <span>{[account.label, model.companyName ?? t('conn.everyCompany')].join(' · ')}</span>
+            </span>
+          ),
+          primary: (
+            <span className="fw-adm-actions">
+              {/* B-W2b-415: Test and Reconnect (connections/errors/view/ConnectionTest); held in the old words without it. */}
+              {test ?? (
+                <Button size="sm" heldReason={t('conn.test.held')}>
+                  {t('conn.test.action')}
+                </Button>
+              )}
+              {verb && (
+                <Button size="sm" variant={verb === 'pause' ? 'danger-outline' : 'primary'} onClick={() => actions?.onConfirm?.({ accountId: account.id, pause: verb === 'pause' })} heldReason={model.can.manage ? null : tAdmin('held.needs', { right: t('conn.right.manage') })}>
+                  {t(`conn.${verb}.action`)}
+                </Button>
+              )}
+            </span>
+          ),
+          moreLabel: tAdmin('common.moreFor', { name: account.label }),
+        }}
       >
-        <ConnNotice notice={model.notice} onDismiss={actions?.onDismissNotice} />
-        {account.status === 'PAUSED' && <Banner tone="warning" title={t('conn.pausedBanner')} />}
-        {account.status === 'DISABLED' && <Banner tone="neutral" title={t('conn.disabledBanner')} />}
-        {isTestMode(account.mode) && account.status !== 'DISABLED' && <Banner tone="info" title={t(`conn.modeBanner.${account.mode}`)} />}
-        {model.tab === 'overview' && <OverviewTab model={model} account={account} testCard={testCard} />}
-        {model.tab === 'settings' && <SettingsTab model={model} account={account} />}
-        {model.tab === 'calls' && <CallsTab model={model} actions={actions} />}
-        {model.tab === 'inbound' && <InboundTab model={model} account={account} actions={actions} />}
-        {model.tab === 'activity' && panels}
+        <div className="fw-adm">
+          <Tabs ariaLabel={tAdmin('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+          {/* B-TH-269: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+          <RecordNotices>
+            {model.notice && <ConnNotice notice={model.notice} onDismiss={actions?.onDismissNotice} />}
+            {account.status === 'PAUSED' && <Banner tone="warning" title={t('conn.pausedBanner')} />}
+            {account.status === 'DISABLED' && <Banner tone="neutral" title={t('conn.disabledBanner')} />}
+            {isTestMode(account.mode) && account.status !== 'DISABLED' && <Banner tone="info" title={t(`conn.modeBanner.${account.mode}`)} />}
+          </RecordNotices>
+          {model.tab === 'overview' && <OverviewTab model={model} account={account} testCard={testCard} />}
+          {model.tab === 'settings' && <SettingsTab model={model} account={account} />}
+          {model.tab === 'calls' && <CallsTab model={model} actions={actions} />}
+          {model.tab === 'inbound' && <InboundTab model={model} account={account} actions={actions} />}
+        </div>
       </RecordFrame>
       <SwitchConfirm confirm={model.confirm ?? null} account={model.confirm ? account : null} busy={!!model.busy} problem={model.dialogProblem ?? null} onClose={() => actions?.onConfirm?.(null)} onSwitch={actions?.onSwitch} />
-    </div>
+    </>
   )
 }
 

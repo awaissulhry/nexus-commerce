@@ -1,0 +1,169 @@
+/*
+ * SCR-702 — a project in the portal (B-TH-253): layout only, semantic tokens only. The summary spans the page; below it the
+ * conversation is the main column and "News of your records" sits beside it from 1280 px (about a third), so a 1920 screen has
+ * no dead space; on a phone the summary, then the conversation, then the news. No page max-width (Owner rule 2026-10-29).
+ */
+
+.fw-pprj,
+.fw-pprj-main,
+.fw-pprj-side,
+.fw-pprj-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-pprj-stack {
+  gap: var(--nds-space-8);
+}
+
+.fw-pprj-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .fw-pprj-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  }
+  .fw-pprj-side {
+    position: sticky;
+    top: var(--nds-space-16);
+  }
+}
+
+.fw-pprj-summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  border-left: 3px solid var(--nds-info);
+}
+
+.fw-pprj-summary.is-held {
+  border-left-color: var(--nds-warning);
+}
+
+.fw-pprj-summary.is-closed {
+  border-left-color: var(--nds-border-strong);
+}
+
+.fw-pprj-kind {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.fw-pprj-name {
+  margin: 0;
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-pprj-facts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-16);
+}
+
+.fw-pprj-fact {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-text-2);
+}
+
+.fw-pprj-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-pprj-news {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-pprj-h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin: 0;
+  font-size: var(--nds-font-size-md);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-pprj-sub {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.fw-pprj-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  color: var(--nds-text-2);
+}
+
+.fw-pprj-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pprj-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-pprj-rowlink {
+  overflow-wrap: anywhere;
+}
+
+/* B-TH-253: the Projects block on Samples & tech packs (the samples page's own section frame). */
+.fw-pprj-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pprj-block-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8) var(--nds-space-16);
+  padding: var(--nds-space-12) var(--nds-space-16);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface);
+}
+
+.fw-pprj-block-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8) var(--nds-space-12);
+  min-width: 0;
+}

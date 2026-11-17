@@ -1,49 +1,76 @@
 'use client'
 
+import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { ExternalLink, MoreHorizontal } from 'lucide-react'
-import { Banner, Card, EmptyState, KeyValue, Menu, type MenuItemDef } from '@nexus/ui/components'
+import { ExternalLink } from 'lucide-react'
+import { Banner, Card, EmptyState, KeyValue, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { LawRef } from '@nexus/ui/components/LawRef/index'
 import { PrivacyNote } from '@nexus/ui/components/PrivacyNote/index'
 import { ProtectedValue } from '@nexus/ui/components/ProtectedValue/index'
-import { Button, Pill, Spinner, Tag } from '@nexus/ui/primitives'
+import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { FileRow, useDsWords } from '../../../../../../lib/i18n/ds-parts'
 import { SafetyPhotos } from '../../../../../../lib/safety-reports/view/SafetyPhotos'
-import { RecordFrame, RecordProblem, RecordSkeleton, Section } from '../../../../../quality/_shared/parts'
+import { RecordProblem, RecordSkeleton, Section } from '../../../../../quality/_shared/parts'
 import type { Report, Revision } from '../../api'
-import { actionHeld, garmentOf, nameOf, primaryOf, REPORTS_PATH, LOG_PATH, type RecordTab } from '../../model'
+import { actionHeld, garmentOf, nameOf, primaryOf, RECORD_TABS, reportHref, REPORTS_PATH, LOG_PATH, type RecordTab } from '../../model'
 import { AuthorityCell, OutcomeTag, SafetyMessages, SourceTag, StatusPill, useWords } from '../../parts'
 import { toldDialogFor, dialogFor } from '../dialogs'
 import type { ReportRecordActions, ReportRecordModel } from '../view-model'
 import { RecordDialogs } from './RecordDialogs'
+// ---- B-TH-267: the safety report on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../../_shared/record-frame/RecordNotices'
 
 /**
- * SCR-421-record — a product-safety report in the office (B-W2b-357 on B-W2b-351's API; SAL-414, SAL-415, SAL-423): the record
- * frame (‹ Product-safety reports, the number and where it came from, the status and "not seen yet", ONE primary — Mark seen ·
- * Start assessing · Close… — and ⋯ every other verb, each held with why), then three tabs:
- *   Report     what happened and the garment (ours or as typed), who reported (the reporter's data only for those who manage
+ * SCR-421-record — a product-safety report in the office (B-W2b-357 on B-W2b-351's API; SAL-414, SAL-415, SAL-423), on RecordFrame
+ * (B-TH-267; the rule of picture 38, the tabs of 08-tabs O-CMP-SAFE): the band in the shell's band row (‹ Product-safety reports, the
+ * number, ONE status pill; where it came from, "not seen yet", the authority to tell and the customer in its details; ONE primary —
+ * Mark seen · Start assessing · Close… —; the Thread button ⌘J, the frame's; ⋯ every other verb, each held with why, and its Keyboard
+ * line), the docked thread beside both tabs (the report's customer its only party, none: notes only; Activity's tools in its "⋯"),
+ * then two tabs:
+ *   Report & photos  what happened and the garment (ours or as typed), who reported (the reporter's data only for those who manage
  *              reports; erased on request), whether someone was hurt — a ProtectedValue behind a recorded opening, read only by
- *              the product-safety role (GDPR art. 9), never in a list —, and where it went (its SAFETY case, the PPE register).
- *   Accident   the accident log's revisions with what the log says (the authority to tell, told, or nothing to tell) and the
+ *              the product-safety role (GDPR art. 9), never in a list —, where it went (its SAFETY case, the PPE register), then the
+ *              photos: each opening recorded through the report's own route (R-4: never the thread's Files view or a generic
+ *              viewer), Add a photo by the camera.
+ *   Accident log  the accident log's revisions with what the log says (the authority to tell, told, or nothing to tell) and the
  *              law (GPSR art. 20, the Owner's open question Q37); Record in the accident log / a revision / the authority told.
- *   Photos     the photos (each opening recorded), Add a photo by the camera.
  * Fetches nothing: ReportRecord.tsx reads and writes.
  */
-export function ReportRecordView({ model, actions }: { model: ReportRecordModel; actions?: ReportRecordActions }) {
+// B-TH-267: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
+export function ReportRecordView({ model, actions, thread, printThread }: { model: ReportRecordModel; actions?: ReportRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <SafetyMessages>
-      <RecordBody model={model} actions={actions} />
+      <RecordBody model={model} actions={actions} thread={thread} printThread={printThread} />
     </SafetyMessages>
   )
 }
 
-function RecordBody({ model, actions }: { model: ReportRecordModel; actions?: ReportRecordActions }) {
+function RecordBody({ model, actions, thread, printThread }: { model: ReportRecordModel; actions?: ReportRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const { t, when } = useWords()
   const back = { href: `${model.prefix}${REPORTS_PATH}`, label: t('record.back') }
-  if (!model.can.view) return <RecordProblem problem="problem.forbidden" back={<Link href={back.href}>{back.label}</Link>} />
-  if (model.problem) return <RecordProblem problem={model.problem === 'read.notFound' ? 'problem.notFound' : model.problem === 'read.forbidden' ? 'problem.forbidden' : 'problem.unavailable'} back={<Link href={back.href}>{back.label}</Link>} onRetry={actions?.onRetry} />
-  const report = model.report
-  if (!report) return <RecordSkeleton />
+  const report = model.can.view && !model.problem ? model.report : null
+  if (!report) {
+    // B-TH-267: loading, failed, not found and not for this role draw inside the frame — the band stays, no thread.
+    const backLink = <Link href={back.href}>{back.label}</Link>
+    return (
+      <RecordFrame
+        recordType="ProductSafetyReport"
+        personId={model.personId ?? null}
+        band={{ back: backLink, title: model.can.view && !model.problem ? <Skeleton width={220} height={22} /> : t('record.name'), moreLabel: t('record.more') }}
+        thread={null}
+        threadLabel={t('record.dockLabel')}
+      >
+        {!model.can.view ? (
+          <RecordProblem problem="problem.forbidden" back={backLink} />
+        ) : model.problem ? (
+          <RecordProblem problem={model.problem === 'read.notFound' ? 'problem.notFound' : model.problem === 'read.forbidden' ? 'problem.forbidden' : 'problem.unavailable'} back={backLink} onRetry={actions?.onRetry} />
+        ) : (
+          <RecordSkeleton />
+        )}
+      </RecordFrame>
+    )
+  }
 
   const held = (action: Parameters<typeof actionHeld>[1]) => actionHeld(report, action, model.offline)
   const heldText = (action: Parameters<typeof actionHeld>[1]) => {
@@ -81,43 +108,44 @@ function RecordBody({ model, actions }: { model: ReportRecordModel; actions?: Re
     { id: 'sep', separator: true } as MenuItemDef,
     { id: 'copy', label: t('row.copy'), onSelect: () => actions?.onCopy?.(report.number) },
   ]
-  const tabs = [
-    { id: 'report', label: t('record.tab.report') },
-    { id: 'accident', label: t('record.tab.accident'), count: report.accidentLog.revisions },
-    { id: 'photos', label: t('record.tab.photos'), count: report.photos.length },
-  ]
-  const tabHref = (tab: string) => `${model.prefix}${REPORTS_PATH}/${encodeURIComponent(report.id)}${tab === 'report' ? '' : `?tab=${tab}`}`
+  // B-TH-267: the two tabs — Report & photos counts the photos, Accident log its revisions.
+  const tabs: TabItem[] = RECORD_TABS.map((tab) => ({
+    id: tab,
+    href: reportHref(model.prefix, report.id, tab),
+    label: t(`record.tab.${tab}`),
+    count: tab === 'accident' ? report.accidentLog.revisions : report.photos.length,
+  }))
 
   return (
     <>
       <RecordFrame
-        back={back}
-        title={<span className="fw-acc-mono">{report.number}</span>}
-        meta={
-          <span className="fw-acc-actions">
-            <SourceTag source={report.source} />
-            <span className="fw-acc-hint">{t('record.received', { when: when(report.receivedAt) })}</span>
-            {report.party && <span className="fw-acc-hint">{report.party.legalName}</span>}
-          </span>
-        }
-        status={
-          <span className="fw-acc-actions">
-            <StatusPill status={report.status} />
-            {!report.seen && report.status !== 'CLOSED' && <Tag tone="warning">{t('list.notSeen')}</Tag>}
-            {report.accidentLog.state.mustTell && <Pill tone="danger">{t('authority.toTell')}</Pill>}
-          </span>
-        }
-        actions={
-          <>
-            {primaryButton}
-            <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('record.more') }} items={more} />
-          </>
-        }
-        tabs={tabs}
-        active={model.tab}
-        tabHref={tabHref}
+        recordType="ProductSafetyReport"
+        personId={model.personId ?? null}
+        threadLabel={t('record.dockLabel')}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: <Link href={back.href}>{back.label}</Link>,
+          title: <span className="fw-acc-mono">{report.number}</span>,
+          // ONE status pill; where it came from, "not seen yet", the authority to tell and the customer in the band's details.
+          status: <StatusPill status={report.status} />,
+          meta: (
+            <span className="fw-acc-actions">
+              {!report.seen && report.status !== 'CLOSED' && <Tag tone="warning">{t('list.notSeen')}</Tag>}
+              {report.accidentLog.state.mustTell && <Pill tone="danger">{t('authority.toTell')}</Pill>}
+              <SourceTag source={report.source} />
+              <span className="fw-acc-hint">{t('record.received', { when: when(report.receivedAt) })}</span>
+              {report.party && <span className="fw-acc-hint">{report.party.legalName}</span>}
+            </span>
+          ),
+          primary: primaryButton ?? undefined,
+          more,
+          moreLabel: t('record.more'),
+        }}
       >
-        <div className="fw-acc-stack">
+        <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+        {/* B-TH-267: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+        <RecordNotices>
           {model.changed && (
             <Banner tone="warning" title={t('record.changedTitle')} action={<Button size="sm" onClick={() => actions?.onReload?.()}>{t('record.reload')}</Button>}>
               {t('record.changedBody')}
@@ -126,7 +154,17 @@ function RecordBody({ model, actions }: { model: ReportRecordModel; actions?: Re
           {model.notice && (
             <Banner tone={model.notice.tone} title={t(model.notice.key, model.notice.params)} action={<Button size="sm" variant="quiet" onClick={() => actions?.onDismissNotice?.()}>{t('common.dismiss')}</Button>} />
           )}
-          {model.tab === 'report' ? <ReportTab model={model} report={report} actions={actions} /> : model.tab === 'accident' ? <AccidentTab model={model} report={report} actions={actions} /> : <PhotosTab model={model} report={report} actions={actions} />}
+        </RecordNotices>
+        <div className="fw-acc-stack">
+          {model.tab === 'accident' ? (
+            <AccidentTab model={model} report={report} actions={actions} />
+          ) : (
+            // B-TH-267: Report & photos — the report, then its photos (each opening recorded: R-4).
+            <>
+              <ReportTab model={model} report={report} actions={actions} />
+              <PhotosTab model={model} report={report} actions={actions} />
+            </>
+          )}
         </div>
       </RecordFrame>
       {model.dialog && <RecordDialogs model={model} report={report} state={model.dialog} actions={actions} />}
@@ -377,11 +415,16 @@ function RevisionCard({ revision, report, when, day }: { revision: Revision; rep
   )
 }
 
+/**
+ * The report's photos, under the report (B-TH-267: Photos merged into Report & photos). A photo opens ONLY through the report's own
+ * recorded opening (`onOpenPhoto` → POST …/photos/:fileId/open, read into a new tab): never the thread's Files view, never the frame's
+ * file viewer (R-4; GDPR art. 9 — a photo may show an injury).
+ */
 function PhotosTab({ model, report, actions }: { model: ReportRecordModel; report: Report; actions?: ReportRecordActions }) {
   const { t, when } = useWords()
   return (
     <div className="fw-acc-stack">
-      <Section id="fw-acc-photos" title={t('record.tab.photos')} sub={t('record.photosHint')}>
+      <Section id="fw-acc-photos" title={t('record.photos')} sub={t('record.photosHint')}>
         {report.photos.length === 0 ? (
           <p className="fw-acc-hint">{t('record.noPhotos')}</p>
         ) : (

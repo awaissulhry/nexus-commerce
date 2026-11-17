@@ -1,3 +1,5 @@
+// B-TH-268: the supplier invoice on RecordFrame (source checks).
+import { readFileSync } from 'node:fs'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -34,6 +36,9 @@ import {
   refusalsOf,
   rowHeld,
   tabOf,
+  // B-TH-268
+  MERGED_TABS,
+  RECORD_TABS,
   tilesOf,
   unmappedLines,
   writeProblem,
@@ -117,8 +122,8 @@ describe('the address and the tiles', () => {
   it('the record’s tabs; the PO studio has Invoices after Receipts (the design’s order)', () => {
     expect(tabOf('match')).toBe('match')
     expect(tabOf('nope')).toBe('lines')
-    // B-W2b-333: Delivery schedule after Lines.
-    expect(PO_TABS).toEqual(['lines', 'schedule', 'answer', 'receipts', 'invoices', 'documents', 'activity'])
+    // B-W2b-333: Delivery schedule after Lines. B-TH-263 (part A): the PO's Documents and Activity went (5 tabs).
+    expect(PO_TABS).toEqual(['lines', 'schedule', 'answer', 'receipts', 'invoices'])
   })
 })
 
@@ -274,7 +279,8 @@ describe('every design case draws in both languages with no key, placeholder or 
       for (const verdict of VERDICTS) has(`verdict.${verdict}`)
       for (const code of [...REFUSAL_CODES, 'other']) has(`refusal.${code}`)
       for (const action of ['edit', 'editSdi', 'map', 'dispute', 'reopen', 'withdraw', 'pay', 'void', 'voidSdi']) has(`held.${action}`)
-      for (const tab of ['lines', 'match', 'approval', 'payment', 'activity']) has(`tab.${tab}`)
+      for (const tab of ['lines', 'match', 'approvalPayment']) has(`tab.${tab}`) // B-TH-268
+      has('keys.approve') // B-TH-268: the record's own key in the frame's Keyboard window
       for (const state of ['connecting', 'live', 'offline']) has(`live.${state}`)
       for (const kind of ['signed_out', 'forbidden', 'not_found', 'unavailable', 'rate_limited', 'internal']) has(`problem.read.${kind}`)
       for (const kind of ['moved', 'state', 'invalid', 'paidOn', 'mapping', 'lines', 'signed_out', 'forbidden', 'not_found', 'rate_limited', 'unavailable', 'internal']) has(`problem.write.${kind}`)
@@ -284,3 +290,84 @@ describe('every design case draws in both languages with no key, placeholder or 
     }
   })
 })
+
+// ---- B-TH-268: the supplier invoice on RecordFrame (O-FIN-PAY; the rule of picture 38, the tabs of 08-tabs) ----
+describe('B-TH-268: the supplier invoice on RecordFrame — Lines · Match · Approval & payment, the supplier’s thread docked', () => {
+  const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const found = recordScreen.cases.find((item) => item.id === id)
+    if (!found) throw new Error(`no case ${id}`)
+    return render(recordScreen as unknown as DesignScreen<unknown>, found.model, locale)
+  }
+  const text = (markup: string) => markup.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+  const dockOf = (markup: string) => markup.slice(markup.indexOf('class="fw-rcf-dock"'))
+
+  it('three tabs; every old ?tab= keeps working (R-8): Payment → Approval & payment, Activity → Lines with the thread opened', () => {
+    expect(RECORD_TABS).toEqual(['lines', 'match', 'approval'])
+    expect(MERGED_TABS).toEqual({ payment: 'approval', activity: 'lines' })
+    expect(tabOf('payment')).toBe('approval')
+    expect(tabOf('approval')).toBe('approval')
+    expect(tabOf('activity')).toBe('lines')
+    for (const tab of RECORD_TABS) expect(tabOf(tab)).toBe(tab)
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(tabOf(name)).toBe('lines')
+    expect(tabOf(null)).toBe('lines')
+    const words = text(html('thread-docked'))
+    for (const tab of ['Lines', 'Match', 'Approval & payment']) expect(words).toContain(tab)
+    expect(words).not.toMatch(/\bActivity\b/)
+    expect(text(html('thread-docked', 'it'))).toContain('Approvazione e pagamento')
+  })
+
+  it('Approval & payment keeps both tabs’ work: who approves and why it waits, then Mark paid (held until approved) and the paid reference', () => {
+    const approved = text(html('approval-approved'))
+    expect(approved).toContain('Approval & payment')
+    const held = html('payment-held')
+    expect(held).toContain('Approval & payment')
+    const paid = text(html('payment-paid'))
+    expect(paid.length).toBeGreaterThan(200)
+    // The payment batch reads in the merged tab; the old ?tab=payment links land there.
+    const container = readFileSync(new URL('./record/SupplierInvoiceRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain("payment: tab === 'approval' ? <PaymentBatch")
+    expect(container).not.toContain("tab === 'payment'")
+  })
+
+  it('ONE thread docked beside every tab, its "⋯" (R-ACT) on each; no Activity tab, no record panels, no dock hook', () => {
+    for (const id of ['lines', 'match', 'approval-ready', 'payment-held', 'thread-docked']) {
+      const page = html(id)
+      expect(page.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(page, id).toContain('aria-label="Thread tools"')
+      expect(page, id).not.toContain('fw-rp-tabs')
+      expect(page, id).not.toContain('?tab=activity')
+      expect(page, id).not.toContain('fw-fin-dock')
+    }
+    const container = readFileSync(new URL('./record/SupplierInvoiceRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain('party={{ id: value.supplier.id, name: value.supplier.name }} partyRole="supplier"')
+    expect(container).toContain("session.permissions.includes('threads.read')")
+    expect(container).not.toContain('useThreadDock')
+    const view = readFileSync(new URL('./record/view/SupplierInvoiceView.tsx', import.meta.url), 'utf8')
+    expect(view).not.toContain('RecordPanelsView')
+    expect(view).toContain("keys: [{ keys: ['A'], label: t('keys.approve') }]")
+  })
+
+  it('no thread without threads.read, and none while the invoice is read or out of reach', () => {
+    for (const id of ['thread-none', 'loading', 'error', 'not-found', 'no-permission']) {
+      const page = html(id)
+      expect(page, id).not.toContain('class="fw-rcf-dock"')
+      expect(page, id).not.toContain('aria-keyshortcuts="Meta+J Control+J"')
+    }
+  })
+
+  it('the wall (W08, W25, W36): the docked thread speaks of this invoice’s supplier only, never a customer’s name', () => {
+    const page = html('thread-docked')
+    const dock = text(dockOf(page))
+    expect(dock).toContain(DETAIL_0412.supplier.name)
+    expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
+  })
+
+  it('one notice in the body column, never above the thread', () => {
+    const page = html('notice')
+    const dockAt = page.indexOf('class="fw-rcf-dock"')
+    expect(page.indexOf('class="fw-rcf-notices"')).toBeGreaterThan(-1)
+    expect(page.indexOf('class="fw-rcf-notices"')).toBeLessThan(dockAt)
+  })
+})
+// ---- end B-TH-268

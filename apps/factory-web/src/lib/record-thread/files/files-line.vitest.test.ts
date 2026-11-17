@@ -8,6 +8,7 @@ import { BRAND_ALPHA, BRAND_BETA } from '../../testing/two-brands'
 import { scanText } from '../../testing/brand-scan'
 import { designScreen } from './fixtures'
 import { audienceMarks, fileSeries, filesChip, recordFiles, toViewerFile, versionMark, type ThreadFile } from './model'
+import { fromApiFile } from './model' // B-TH-283
 import { readStripOpen, writeStripOpen } from './use-strip-open'
 import { FileStrip } from './view/FileStrip'
 
@@ -125,3 +126,24 @@ describe('the words', () => {
     }
   })
 })
+
+// ---- B-TH-283 (B-TH-083): the files line marks a measurement sheet — locked (no name) for who may not open it, named for who may.
+describe('B-TH-283: measurement sheets on the files line', () => {
+  it('a locked sheet shows the lock and its words, never its name; an opened one says it is a measurement sheet', () => {
+    const locked = draw('en', [file({ id: 'l', name: '', locked: 'MEASUREMENTS' })])
+    expect(locked).toContain('Measurement sheet — you cannot open it')
+    const opened = draw('en', [file({ id: 'o', name: 'Measurements Anna.pdf', sheet: true })])
+    expect(opened).toContain('Measurements Anna.pdf · Measurement sheet')
+    expect(draw('it', [file({ id: 'o', name: 'Misure.pdf', sheet: true })])).toContain('Misure.pdf · Scheda misure')
+    expect(opened).not.toMatch(KEY_ON_SCREEN)
+    expect(scanText(opened, BRAND_ALPHA)).toEqual([])
+  })
+
+  it('the API’s category reaches the file only for who opens it: MEASUREMENTS marks it, a locked one stays locked', () => {
+    const base = { id: 'a', companyId: null, recordType: 'SalesOrder', recordId: 'so-beta', kind: 'ATTACHMENT' as const, originalName: 'Misure.pdf', contentType: 'application/pdf', sizeBytes: 1, status: 'AVAILABLE' as const, visibility: ['OFFICE' as const], retainUntil: null, quarantineReason: null, availableAt: null, createdAt: '2026-11-10T09:00:00.000Z', version: 1 }
+    expect(fromApiFile({ ...base, category: 'MEASUREMENTS' }).sheet).toBe(true)
+    expect(fromApiFile({ ...base, category: 'MEASUREMENTS', locked: 'MEASUREMENTS', originalName: '' }).sheet).toBeUndefined()
+    expect(fromApiFile({ ...base, category: null }).sheet).toBeUndefined()
+  })
+})
+// ---- end B-TH-283

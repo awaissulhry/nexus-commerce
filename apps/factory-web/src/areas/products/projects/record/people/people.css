@@ -1,0 +1,125 @@
+/*
+ * B-TH-250 — the project's People (the project page's side column): layout only, semantic tokens. The section fills its column; a
+ * long name or company ends in an ellipsis instead of widening it.
+ */
+
+.fw-prjp {
+  min-width: 0;
+}
+
+.fw-prjp-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.fw-prjp-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-prjp-group + .fw-prjp-group {
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-prjp-group-title {
+  margin: 0;
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text);
+}
+
+.fw-prjp-list,
+.fw-prjp-choices {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-prjp-person,
+.fw-prjp-choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+  padding: var(--nds-space-4) 0;
+}
+
+.fw-prjp-who {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-prjp-name-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-prjp-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-prjp-meta,
+.fw-prjp-hint,
+.fw-prjp-text {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.5;
+}
+
+.fw-prjp-text {
+  color: var(--nds-text);
+}
+
+.fw-prjp-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-4);
+}
+
+.fw-prjp-foot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}
+
+.fw-prjp-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-prjp-choices {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+/* A narrow column (the side column at 1440 is ~430 px): the out button keeps its icon, its words go. */
+@container (max-width: 360px) {
+  .fw-prjp-out-words {
+    display: none;
+  }
+}

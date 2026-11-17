@@ -38,7 +38,7 @@ import type { CloseDialogModel } from '../view/CloseNcrDialog'
 import type { EscalateActions, EscalateModel } from '../view/EscalateDialog'
 
 /**
- * The NCR record's view model (SCR-145; `?tab=problem|containment|disposition|linked|activity`) and its pure rules: the
+ * The NCR record's view model (SCR-145; `?tab=problem|containment|disposition|cost|linked`, B-TH-266) and its pure rules: the
  * Problem tab's draft ⇄ the PATCH body, the containment and decision dialogs' drafts and the bodies they send, what a
  * carry-out needs per disposition code (and the held SCRAP of garments still in work, B-W2a-47 gap), the linked records
  * in groups, a record's address. No React, no API client.
@@ -453,7 +453,8 @@ export interface NcrRecordModel {
   readonly busy: boolean
   readonly close: CloseDialogModel | null
   readonly stepUp: StepUpState
-  readonly keysOpen?: boolean
+  /** B-TH-266: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  readonly personId?: string | null
   /** The menu's "Copy number" just copied. */
   readonly copied?: boolean
   /** B-W2b-113: the Cost tab (read when it opens, the cost grain only). */
@@ -472,7 +473,6 @@ export interface NcrRecordActions {
   onMove?: (to: 'CONTAINED' | 'DECIDED') => void
   onClose?: () => void
   onCopy?: () => void
-  onKeys?: (open: boolean) => void
   onDialog?: (dialog: RecordDialog | null) => void
   onSubmitDialog?: () => void
   onNeed?: (choice: keyof RecordChoices) => void

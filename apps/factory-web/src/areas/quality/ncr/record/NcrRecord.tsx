@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { formatTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
@@ -8,7 +9,7 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { downloadLink } from '../../../../record-panels/api'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
-import { useLive, useRecordTab } from '../../_shared/hooks'
+import { useLive } from '../../_shared/hooks'
 import {
   addCostLine,
   answerConcession,
@@ -61,7 +62,7 @@ import {
 } from '../api'
 import { useCloseFlow } from '../close'
 import { useEscalate } from '../escalate'
-import { instantOf, ncrCan, readProblem, RECORD_TABS, refusalOf, type Say } from '../model'
+import { instantOf, ncrCan, readProblem, refusalOf, tabOf, type Say } from '../model'
 import type { NcrNotice } from '../parts'
 import {
   changesOf,
@@ -88,9 +89,13 @@ import {
   type RecordDialog,
 } from './view-model'
 import { NcrRecordView } from './view/NcrRecordView'
+// ---- B-TH-266: the docked thread on the NCR (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 /**
- * `/w/<company>/quality/ncr/<id>` (SCR-145; `?tab=problem|containment|disposition|linked|activity`): the NCR read once
+ * `/w/<company>/quality/ncr/<id>` (SCR-145; `?tab=problem|containment|disposition|cost|linked` — the old activity lands on Problem &
+ * evidence with the thread open, B-TH-266 —; the NCR's own thread docked beside every tab, internal notes only): the NCR read once
  * and again on its live changes (any `ncr.` event that names it; while a dialog holds work, a banner says it changed
  * instead); the people who may own it; its site and photos; the pickers each dialog needs, read when it opens. Every write
  * is one call with its own Idempotency-Key and the version read (the NCR's; an action's or a decision's for theirs); the
@@ -103,7 +108,9 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
   const locale = useLocale()
   const prefix = companyPrefix(session.company?.code ?? '')
   const can = useMemo(() => ncrCan(session.permissions), [session.permissions])
-  const tab = useRecordTab(RECORD_TABS)
+  const pathname = usePathname()
+  const params = useSearchParams()
+  const tab = tabOf(params?.get('tab'))
 
   const [loaded, setLoaded] = useState<Loaded>({ status: 'loading' })
   const [asOf, setAsOf] = useState<string | null>(null)
@@ -120,7 +127,6 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
   const [notice, setNotice] = useState<NcrNotice | null>(null)
   const [stale, setStale] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [keysOpen, setKeysOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   // B-W2b-113: the Cost tab (read when it opens), a report version being kept, the concession answer's file.
   const [cost, setCost] = useState<CostModel>(NO_COST)
@@ -606,7 +612,6 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
         })
         .catch(() => undefined)
     },
-    onKeys: setKeysOpen,
     onDialog: openDialog,
     onSubmitDialog: () => void submit(),
     onNeed: need,
@@ -769,13 +774,19 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
     busy,
     close: closeFlow.dialog,
     stepUp: closeFlow.stepUp,
-    keysOpen,
     copied,
     cost,
     escalate: escalate.model,
     keepingReport,
+    personId: session.user.id, // B-TH-266
   }
 
-  const panels = record && tab === 'activity' ? <RecordPanels record={{ type: 'Nonconformance', id: record.ncr.id, companyId: record.ncr.companyId, siteId: record.ncr.siteId }} title={`${record.ncr.number} · ${record.ncr.title}`} /> : null
-  return <NcrRecordView model={model} actions={actions} panels={panels} />
+  // B-TH-266: the NCR's ONE thread docked beside every tab (Head with Activity's doors, files line, Files view, feed, box) — internal:
+  // no party (the API never shares an NCR's thread, NOT_SHAREABLE; the supplier hears through the claim). Only with threads.read; the
+  // print view keeps the record panels' print form.
+  const ref = record ? { type: 'Nonconformance', id: record.ncr.id, companyId: record.ncr.companyId, siteId: record.ncr.siteId } : null
+  const title = record ? `${record.ncr.number} · ${record.ncr.title}` : ''
+  const thread = record && ref && can.threadsRead ? <OfficeRecordThread docked record={ref} title={title} recordLabel={record.ncr.number} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = record && ref && can.threadsRead ? <RecordPanels record={ref} title={title} /> : null
+  return <NcrRecordView model={model} actions={actions} thread={thread} printThread={printThread} />
 }

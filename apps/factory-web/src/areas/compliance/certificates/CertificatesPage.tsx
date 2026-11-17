@@ -175,7 +175,7 @@ function CertificatesContainer() {
         try {
           await uploadPdf(api, created.id, file.current)
         } catch {
-          tab = 'files&pdf=failed'
+          tab = 'body&pdf=failed' // B-TH-267: the PDF is on Notified body & PDF
         }
       }
       router.push(certificateHref(prefix, created.id, `tab=${tab}`))

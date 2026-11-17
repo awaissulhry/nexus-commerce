@@ -1,20 +1,20 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
-import { useT } from '../../../../lib/i18n/provider'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
-import { liveMatches, useLive, useRecordTab } from '../../../quality/_shared/hooks'
+import { liveMatches, useLive } from '../../../quality/_shared/hooks'
 import { problemKey, qualityCan, refusalLines, type Notice } from '../../../quality/_shared/model'
-import { RecordProblem, RecordSkeleton } from '../../../quality/_shared/parts'
 import { closeEntry, completeAction, getEntry, informDistributors, listReporters, listReversedReleases, notifyAuthority, updateEntry, type EntryDetail, type PartyOption, type ReversedRelease } from '../api'
-import { dayInstant, RECORD_TABS, romeToday, type EntryAction } from '../model'
+import { dayInstant, romeToday, tabOf, type EntryAction } from '../model'
 import { RegisterMessages } from '../view/parts'
-import { EntryRecordView, type EntryDepth } from './view/EntryRecordView'
+import { EntryRecordState, EntryRecordView, type EntryDepth } from './view/EntryRecordView'
+// ---- B-TH-267: the docked thread on the register entry (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 // B-W2b-271: the entry's W2b parts (Authority notices, recall progress, the distributor log) on B-W2b-260's API.
 import type { ReactNode } from 'react'
 import { useLocale } from '../../../../lib/i18n/provider'
@@ -26,7 +26,8 @@ import { useDepth } from '../depth/use-depth'
  * (to link its release; needs quality.inspections.view), and the reporters when the event is edited; runs ONE write at
  * a time with the version read (a 409 version → read again + a notice; a 409 `problem/<CODE>` → our title with the
  * API's lines); live register events read the entry again — or, while a dialog is open, say it changed with Reload.
- * The thread dock (O1, ⌘J, 1280 px and wider) and the Activity tab mount the record panels.
+ * B-TH-267: the thread docked beside every tab (RecordFrame; the reporting party its only party, none: notes only), mounted only with
+ * threads.read; an old Activity address lands on Event with the thread open (model tabOf, RecordFrame).
  */
 export function EntryRecord({ entryId }: { entryId: string }) {
   return (
@@ -36,20 +37,17 @@ export function EntryRecord({ entryId }: { entryId: string }) {
   )
 }
 
-const WIDE = '(min-width: 1280px)'
-const DOCK_KEY = 'fw.register.dock'
-
 function EntryContainer({ entryId }: { entryId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
-  const t = useT('register')
   const can = useMemo(() => qualityCan(session.permissions), [session.permissions])
   const threads = session.permissions.includes('threads.read')
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(RECORD_TABS)
+  // B-TH-267: every old ?tab= lands (activity → Event with the thread open).
+  const tab = tabOf(params?.get('tab'))
   const [entry, setEntry] = useState<EntryDetail | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [releases, setReleases] = useState<readonly ReversedRelease[] | null>(null)
@@ -60,7 +58,6 @@ function EntryContainer({ entryId }: { entryId: string }) {
   const [busy, setBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<{ key: string; lines: readonly string[] } | null>(null)
   const [changedAt, setChangedAt] = useState<string | null>(null)
-  const [dockOpen, setDockOpen] = useState(false)
   const dialogRef = useRef(dialog)
   dialogRef.current = dialog
 
@@ -99,14 +96,6 @@ function EntryContainer({ entryId }: { entryId: string }) {
       .then(setParties)
       .catch(() => setParties([]))
   }, [api, can.partiesView, dialog, parties])
-
-  useEffect(() => {
-    try {
-      setDockOpen(window.localStorage.getItem(DOCK_KEY) === '1' && window.matchMedia(WIDE).matches)
-    } catch {
-      setDockOpen(false)
-    }
-  }, [])
 
   const live = useLive(
     (change) => {
@@ -154,28 +143,25 @@ function EntryContainer({ entryId }: { entryId: string }) {
   const today = romeToday()
   const instant = (day: string) => dayInstant(day, today)
 
-  if (problem && !entry)
-    return (
-      <RecordProblem
-        problem={problem}
-        back={
-          <Link className="fw-q-link" href={`${prefix}/compliance/register`}>
-            {t('record.back')}
-          </Link>
-        }
-        onRetry={() => void load()}
-      />
-    )
-  if (!entry) return <RecordSkeleton />
+  // B-TH-267: while it is read, or when it cannot be: inside the frame (the band stays, no thread).
+  if (!entry) return <EntryRecordState prefix={prefix} problem={problem} personId={session.user.id} onRetry={() => void load()} />
 
-  const panels = threads ? <RecordPanels record={{ type: 'PpeRegisterEntry', id: entry.id, companyId: entry.companyId, siteId: null }} title={entry.reference} party={entry.party ? { id: entry.party.id, name: entry.party.name, emails: [] } : null} /> : undefined
+  // B-TH-267: the docked thread (Head with Activity's doors, files line, Files view, feed, box), mounted only with threads.read — its
+  // only party is the one that reported the entry (none: office notes only); the print view keeps the panels' print form.
+  const record = { type: 'PpeRegisterEntry', id: entry.id, companyId: entry.companyId, siteId: null }
+  const party = entry.party ? { id: entry.party.id, name: entry.party.name } : null
+  const thread = threads ? (
+    <OfficeRecordThread docked record={record} title={party ? `${entry.reference} · ${party.name}` : entry.reference} recordLabel={entry.reference} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
+  ) : null
+  const printThread = threads ? <RecordPanels record={record} title={entry.reference} party={party ? { ...party, emails: [] } : null} /> : null
 
   return (
     <WithDepth entry={entry} prefix={prefix} onEntryChanged={() => void load()}>
       {(depth) => (
     <EntryRecordView
-      model={{ prefix, can, tab, entry, releases, asOf, live, notice, dialog, busy, dialogProblem, changedAt, dockOpen, today }}
-      panels={panels}
+      model={{ prefix, can, tab, entry, releases, asOf, live, notice, dialog, busy, dialogProblem, changedAt, personId: session.user.id, today }}
+      thread={thread}
+      printThread={printThread}
       parties={can.partiesView ? (parties ?? []) : null}
       depth={depth}
       actions={{
@@ -195,27 +181,6 @@ function EntryContainer({ entryId }: { entryId: string }) {
         },
         onReload: () => void load(),
         onDismissNotice: () => setNotice(null),
-        onDock: () => {
-          let wide = false
-          try {
-            wide = window.matchMedia(WIDE).matches
-          } catch {
-            wide = false
-          }
-          if (!wide) {
-            router.push(`${pathname}?tab=activity`)
-            return
-          }
-          setDockOpen((current) => {
-            const next = !current
-            try {
-              window.localStorage.setItem(DOCK_KEY, next ? '1' : '0')
-            } catch {
-              // Not kept on this device; the dock still toggles.
-            }
-            return next
-          })
-        },
         onEditEvent: (patch) => void write((current) => updateEntry(api, current.id, current.version, patch), 'done.saved'),
         onAssess: (patch) => void write((current) => updateEntry(api, current.id, current.version, patch), 'done.assessed'),
         onAction: (input) =>

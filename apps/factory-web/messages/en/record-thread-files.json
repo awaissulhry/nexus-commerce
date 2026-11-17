@@ -36,7 +36,8 @@
     "frameLabel": "Thread column {width} px wide"
   },
   "locked": {
-    "sheet": "Measurement sheet — you cannot open it"
+    "sheet": "Measurement sheet — you cannot open it",
+    "sheetWhy": "It opens with the right to read measurements (sales.measurements.view); each opening is recorded."
   },
   "useOn": {
     "action": "Use on another record…",
@@ -82,5 +83,9 @@
       "hidden": "A copy: its source is on a record out of your reach.",
       "locked": "A copy of a measurement sheet."
     }
+  },
+  "sheet": {
+    "open": "Measurement sheet",
+    "recorded": "Measurement sheet: body data — each opening is recorded."
   }
 }

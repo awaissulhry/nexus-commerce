@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
+import { Banner, Card, Field, KeyValue, Tabs, type TabItem } from '@nexus/ui/components'
 import { Button, Input, Pill, Select, Skeleton, Tag } from '@nexus/ui/primitives'
 import { EditModeBar } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../lib/i18n/format'
@@ -10,8 +10,10 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { FLOOR_DEVICE_MODES, type Device, type FloorDeviceMode } from '../../shared/api'
 import { adminHref, STATUS_TONE } from '../../shared/model'
 import { AdminMessages, dash, NoticeBanner, RecordProblem } from '../../shared/view/parts'
-import { RecordFrame } from '../../shared/view/RecordFrame'
-import { batteryOf, bindingOf, bindingProblem, deviceTileMatch, isOutdated, networkKey, showsLine, type BindingDraft, type DeviceRecordModel, type DeviceTab } from '../model'
+import { batteryOf, bindingOf, bindingProblem, DEVICE_TABS, deviceTileMatch, isOutdated, networkKey, showsLine, type BindingDraft, type DeviceRecordModel } from '../model'
+// ---- B-TH-269: the device on RecordFrame (the band in the shell's row, the docked thread — notes only —, one notice) ----
+import { RecordFrame } from '../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../_shared/record-frame/RecordNotices'
 import { inUseSinceWords } from './columns'
 import { EnrolWizard, RevokeConfirm } from './DeviceDialogs'
 
@@ -23,34 +25,42 @@ export interface DeviceRecordActions {
   onEnrolClose?: () => void
   onRevoke?: (open: boolean) => void
   onRevokeConfirm?: (device: Device) => Promise<boolean>
-  onDock?: () => void
   onRetry?: () => void
   onDismissNotice?: () => void
 }
 
 /**
- * SCR-013 — a Device record (design 02 admin.devices "Record: Device"): Station & mode (its name and station; moving to
- * another site needs a new enrolment; B-W2b-67: the mode, its line or person, changed while nobody is signed in), Status (last seen, app version, "in use" —
- * never who — a new enrolment code for a replaced tablet, Revoke in the danger zone) and Activity. The Printer tab is W1.
+ * SCR-013 — a Device record (design 02 admin.devices "Record: Device"), on RecordFrame (B-TH-269; the rule of picture 38, the tabs of
+ * 08-tabs O-ADM-DEV): the band in the shell's band row (‹ Devices, its name, ONE state pill, its kind and site and "in use" — never
+ * who —; New enrolment code, held with why; the Thread button ⌘J, the frame's; ⋯ its Keyboard line), the docked thread beside both
+ * tabs (notes only: an admin record has no party, W03; with threads.read and devices.view, B-TH-005; Activity's tools in its "⋯",
+ * R-ACT) and the tabs 3 → 2: Station & mode (its name and station; moving to another site needs a new enrolment; B-W2b-67: the mode,
+ * its line or person, changed while nobody is signed in) and Status (last seen, app version, "in use" — never who — a new enrolment
+ * code for a replaced tablet, Revoke in the danger zone). Every banner in the ONE notice of the body column. The Printer tab is W1.
  */
-export function DeviceRecordView({ model, actions, panels }: { model: DeviceRecordModel; actions?: DeviceRecordActions; panels?: ReactNode }) {
+// B-TH-269: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows.
+export function DeviceRecordView({ model, actions, thread, printThread }: { model: DeviceRecordModel; actions?: DeviceRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <AdminMessages>
-      <DeviceRecord model={model} actions={actions} panels={panels} />
+      <DeviceRecord model={model} actions={actions} thread={thread} printThread={printThread} />
     </AdminMessages>
   )
 }
 
-function DeviceRecord({ model, actions, panels }: { model: DeviceRecordModel; actions?: DeviceRecordActions; panels?: ReactNode }) {
+function DeviceRecord({ model, actions, thread, printThread }: { model: DeviceRecordModel; actions?: DeviceRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useT('admin')
   const locale = useLocale()
   const href = (path: string) => adminHref(model.prefix, path)
   const back = { href: href('/devices'), label: t('nav.devices') }
   const device = model.device
+  const frame = { recordType: 'Device', personId: model.personId ?? null, threadLabel: t('record.dockLabel') }
+  const backLink = <Link href={back.href}>{back.label}</Link>
+
+  // Not found, no right, a failed read, loading: the band and its state inside the frame, no thread yet.
   if (!device) {
-    if (model.problem)
-      return (
-        <div className="fw-adm">
+    return (
+      <RecordFrame {...frame} thread={null} band={{ back: backLink, title: model.problem ? t('nav.devices') : <Skeleton width={260} height={22} />, moreLabel: t('common.more') }}>
+        {model.problem ? (
           <RecordProblem
             problem={model.problem}
             onRetry={actions?.onRetry}
@@ -60,55 +70,55 @@ function DeviceRecord({ model, actions, panels }: { model: DeviceRecordModel; ac
               </Button>
             }
           />
-        </div>
-      )
-    return (
-      <div className="fw-adm" aria-busy="true">
-        <Skeleton height={36} width="40%" />
-        <Skeleton height={220} />
-      </div>
+        ) : (
+          <div className="fw-adm" aria-busy="true">
+            <Skeleton height={220} />
+          </div>
+        )}
+      </RecordFrame>
     )
   }
   const revoked = device.status === 'REVOKED'
-  const tabs: Array<{ id: DeviceTab; label: string }> = [
-    { id: 'binding', label: t('device.tab.binding') },
-    { id: 'status', label: t('device.tab.status') },
-    { id: 'activity', label: t('device.tab.activity') },
-  ]
+  const tabs: TabItem[] = DEVICE_TABS.map((tab) => ({ id: tab, label: t(`device.tab.${tab}`), href: `${href(`/devices/${device.id}`)}?tab=${tab}` }))
   return (
-    <div className="fw-adm">
+    <>
       <RecordFrame
-        back={back}
-        title={device.name}
-        meta={[t(`devices.kind.${device.kind}`), model.site?.name].filter(Boolean).join(' · ')}
-        status={
-          <span className="fw-adm-tags">
-            <Pill tone={STATUS_TONE[device.status] ?? 'neutral'}>{t(`devices.status.${device.status}`)}</Pill>
-            {device.inUse && <Tag tone="info">{inUseSinceWords(device, { t, locale, now: new Date(model.now).getTime() }) ?? t('devices.inUse')}</Tag>}
-          </span>
-        }
-        actions={
-          <Button size="sm" onClick={() => actions?.onRenew?.(device)} heldReason={!model.can.manage ? t('held.needs', { right: t('right.devices_manage') }) : revoked ? t('device.held.revoked') : null}>
-            {t('devices.newCode')}
-          </Button>
-        }
-        tabs={tabs}
-        active={model.tab}
-        tabHref={(tab) => `${href(`/devices/${device.id}`)}?tab=${tab}`}
-        dock={model.tab === 'activity' ? undefined : panels}
-        dockOpen={model.dockOpen}
-        onDock={actions?.onDock}
+        {...frame}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: backLink,
+          title: device.name,
+          status: <Pill tone={STATUS_TONE[device.status] ?? 'neutral'}>{t(`devices.status.${device.status}`)}</Pill>,
+          meta: (
+            <span className="fw-adm-tags">
+              <span>{[t(`devices.kind.${device.kind}`), model.site?.name].filter(Boolean).join(' · ')}</span>
+              {device.inUse && <Tag tone="info">{inUseSinceWords(device, { t, locale, now: new Date(model.now).getTime() }) ?? t('devices.inUse')}</Tag>}
+            </span>
+          ),
+          primary: (
+            <Button size="sm" onClick={() => actions?.onRenew?.(device)} heldReason={!model.can.manage ? t('held.needs', { right: t('right.devices_manage') }) : revoked ? t('device.held.revoked') : null}>
+              {t('devices.newCode')}
+            </Button>
+          ),
+          moreLabel: t('common.moreFor', { name: device.name }),
+        }}
       >
-        <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-        {revoked && <Banner tone="info" title={t('device.revokedBanner')} />}
-        {device.status === 'PENDING' && <Banner tone="info" title={t('device.pendingBanner')} />}
-        {model.tab === 'binding' && <BindingTab model={model} actions={actions} />}
-        {model.tab === 'status' && <StatusTab model={model} actions={actions} />}
-        {model.tab === 'activity' && panels}
+        <div className="fw-adm">
+          <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+          {/* B-TH-269: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+          <RecordNotices>
+            {model.notice && <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />}
+            {revoked && <Banner tone="info" title={t('device.revokedBanner')} />}
+            {device.status === 'PENDING' && <Banner tone="info" title={t('device.pendingBanner')} />}
+          </RecordNotices>
+          {model.tab === 'binding' && <BindingTab model={model} actions={actions} />}
+          {model.tab === 'status' && <StatusTab model={model} actions={actions} />}
+        </div>
       </RecordFrame>
       <EnrolWizard model={model.enrol} sites={model.site ? [model.site] : []} busy={!!model.busy} problem={model.dialogProblem ?? null} onClose={() => actions?.onEnrolClose?.()} onRenew={actions?.onRenew} />
       <RevokeConfirm device={model.revoking ? device : null} busy={!!model.busy} problem={model.dialogProblem ?? null} onClose={() => actions?.onRevoke?.(false)} onRevoke={actions?.onRevokeConfirm} />
-    </div>
+    </>
   )
 }
 

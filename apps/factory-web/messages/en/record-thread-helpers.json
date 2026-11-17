@@ -41,5 +41,15 @@
     "replyPlaceholder": "Write to the customer",
     "addNote": "Add note",
     "send": "Send"
+  },
+  "amount": {
+    "label": "Amount",
+    "placeholder": "e.g. 1,250.00",
+    "currency": "Currency",
+    "remove": "Take the amount off",
+    "hint": "Only colleagues who see prices read it — never the customer, a link or the floor.",
+    "invalid": "Write a number with at most two decimals, e.g. 1,250.00.",
+    "tooLarge": "That amount is too large for one message.",
+    "floor": "A note for the floor never carries an amount: untick “For the floor” or take the amount off."
   }
 }

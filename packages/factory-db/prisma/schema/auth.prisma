@@ -153,6 +153,8 @@ model User {
   supervisedPortalSettings PortalSettings[] @relation("PortalSettingsSupervisor")
   backupPortalSettings     PortalSettings[] @relation("PortalSettingsBackup")
   approverPortalSettings   PortalSettings[] @relation("PortalSettingsApprover")
+  // B-PR-15 brand-production.prisma (production plan, schema wave 3/5): the orders they supervise themselves (an office person).
+  supervisedOrders         BrandOrderProduction[] @relation("BrandOrderProductionSupervisor")
   // TH-5 projects.prisma (threads plan, schema wave 8/9, B-TH-065): the projects they lead (an office person).
   ledProjects              Project[]        @relation("ProjectLead")
   // TH-9 threads.prisma, collab.prisma (threads plan, schema wave 9/9, B-TH-090): the conversations they marked done and the

@@ -9,6 +9,7 @@ import { scanText } from '../../testing/brand-scan'
 import type { ThreadFile } from '../files/model'
 import { designScreen } from './fixtures'
 import { bulkReach, filesGroups, keepLines, rangeOf, START_AUDIENCE } from './model'
+import { uploadAskHeld } from './model' // B-TH-283
 
 /**
  * B-TH-299 — the Files view (T9): groups (by kind until the origin is known, then by origin), versions as one document, the
@@ -130,3 +131,42 @@ describe('the words', () => {
     }
   })
 })
+
+// ---- B-TH-283 (B-TH-083): measurement sheets in the Files view — the lock by right, the recorded opening, the tick at upload.
+describe('B-TH-283: measurement sheets are body data in the Files view', () => {
+  const draw = (locale: 'it' | 'en', id: string) => {
+    const item = designScreen.cases.find((one) => one.id === id)!
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: item.model })))
+  }
+
+  it('who may not open a sheet reads the lock and why, never its name; who may, that each opening is recorded (W25, W26)', () => {
+    const html = draw('en', 'sheets')
+    expect(html).toContain('Measurement sheet — you cannot open it')
+    expect(html).toContain('It opens with the right to read measurements (sales.measurements.view); each opening is recorded.')
+    expect(html).toContain('Measurement sheet: body data — each opening is recorded.')
+    expect(draw('it', 'sheets')).toContain('ogni apertura viene registrata')
+    expect(scanText(html, BRAND_BETA)).toEqual([])
+  })
+
+  it('a locked sheet is neither downloaded nor shared by who may not open it; an opened sheet may be', () => {
+    const locked = file({ id: 'l', name: '', locked: 'MEASUREMENTS' })
+    const open = file({ id: 'o', name: 'Measurements.pdf', sheet: true })
+    expect(bulkReach([locked, open], PARTY, ALL).download).toEqual(['o'])
+  })
+
+  it('the upload asks “This is a measurement sheet”; a sheet never goes to the floor (Add held with why)', () => {
+    expect(uploadAskHeld({ sheet: true, audience: 'FLOOR' })).toBe('upload.sheetFloor')
+    expect(uploadAskHeld({ sheet: true, audience: 'OFFICE' })).toBeNull()
+    expect(uploadAskHeld({ sheet: false, audience: 'FLOOR' })).toBeNull()
+    // The upload window is a DS Modal (drawn after hydration only): its words are checked in the catalogue, in it and en.
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, messagesFor(locale, ['record-thread-files-view'])['record-thread-files-view'] ?? {})
+      for (const key of ['upload.sheet', 'upload.sheetHint', 'upload.sheetFloor', 'upload.sheetType']) expect(t(key), `${locale} ${key}`).not.toBe(key)
+    }
+    const en = createTranslator('en', messagesFor('en', ['record-thread-files-view'])['record-thread-files-view'] ?? {})
+    expect(en('upload.sheet')).toBe('This is a measurement sheet')
+    expect(en('upload.sheetFloor')).toContain('never goes to the floor')
+    expect(draw('en', 'upload-sheet')).not.toMatch(KEY_ON_SCREEN)
+  })
+})
+// ---- end B-TH-283

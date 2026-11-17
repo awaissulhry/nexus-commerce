@@ -4,7 +4,7 @@ import { SupplierInvoiceRecord } from '../../../../../../../areas/finance/payabl
 
 export const metadata: Metadata = { title: 'Supplier invoice · Nexus Factory' }
 
-/** Finance › a supplier invoice (SCR-153 record; `?tab=lines|match|approval|payment|activity`). */
+/** Finance › a supplier invoice (SCR-153 record; `?tab=lines|match|approval`; the old `payment` opens Approval & payment, `activity` Lines with the thread — B-TH-268). */
 export default async function FinanceSupplierInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (

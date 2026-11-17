@@ -4,7 +4,7 @@ import { TechFileRecord } from '../../../../../../../areas/compliance/techfiles/
 
 export const metadata: Metadata = { title: 'Technical file · Nexus Factory' }
 
-/** Compliance › Technical files › a technical file (SCR-120-file; `?tab=annex|risk|tests|production|pack|activity`, `?rev=`, `?share=`). */
+/** Compliance › Technical files › a technical file (SCR-120-file; `?tab=annex|risk|tests|production|pack`; the old `activity` opens the Annex III checklist with the thread — B-TH-267, `?rev=`, `?share=`). */
 export default async function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (

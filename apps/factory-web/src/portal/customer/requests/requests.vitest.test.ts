@@ -13,6 +13,11 @@ import { PORTAL_REQUEST_STATES } from './api'
 import { REQUESTS, requestRow, requestView } from './design-data'
 import { designScreen } from './fixtures'
 import { matchesSearch, NS, questionOf, quoteText, requestHref, requestOrder, stateLinks, stateTone, yourNumberText, type ThreadLine } from './model'
+// B-TH-282 / B-TH-291
+import type { ApiClient } from '../../../lib/api/client'
+import { withdrawRequest } from './api'
+import { filesDoorOf, withdrawProblemKey } from './model'
+import { partnerThreadSchema } from '../../shell/api' // B-TH-236
 
 /**
  * B-TH-222, B-TH-303 — the customer's request page: true states only (the API's words; "Quote being prepared" for a quote not
@@ -143,3 +148,80 @@ describe('SCR-185-request design cases (read by Brand Beta)', () => {
     }
   })
 })
+
+// ---- B-TH-282 (B-TH-085): "Add files" on the request page; B-TH-291 (B-TH-095): Withdraw before the office decided.
+describe('B-TH-282 / B-TH-291 — Add files and Withdraw on the customer’s request page', () => {
+  const screen = designScreen as unknown as DesignScreen<unknown>
+  const draw = (locale: 'it' | 'en', id: string) => renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(screen.view, { model: screen.cases.find((entry) => entry.id === id)!.model })))
+
+  it('a file goes onto the request while the office has not decided, through its thread after', () => {
+    expect(filesDoorOf('SENT')).toBe('request')
+    expect(filesDoorOf('BEING_REVIEWED')).toBe('request')
+    expect(filesDoorOf('NEED_INFO')).toBe('request')
+    for (const code of ['QUOTE_BEING_PREPARED', 'QUOTE_SENT', 'ORDER_WAITING', 'ORDER_CONFIRMED', 'DECLINED', 'CLOSED', 'WITHDRAWN'] as const) expect(filesDoorOf(code), code).toBe('thread')
+  })
+
+  it('Add files: a sheet ticked, a photo sent, a design file held for the virus scan, the API’s own words, a refused SVG — Brand Beta only (W25)', () => {
+    const html = draw('en', 'th-282-files')
+    expect(html).toContain('Add files')
+    expect(html).toContain('This is a measurement sheet')
+    expect(html).toContain('Held for the virus scan: it reaches us once the scan says it is clean')
+    expect(html).toContain('Kept as it is: download only')
+    expect(html).toContain('Did not go: This already holds 50 of your files: write to us in the messages for the rest.')
+    expect(html).toContain('an SVG, HTML or script file is never accepted: send a PDF or PNG')
+    expect(html).toContain('Send the file')
+    expect(scanText(html, BRAND_ALPHA)).toEqual([])
+    expect(html.match(OFFICE_SERIES)?.[0] ?? null).toBeNull()
+    expect(draw('it', 'th-282-files')).toContain('Trattenuto per il controllo antivirus')
+    // Closed until the virus scanner runs: the API's sentence, nothing taken.
+    const closed = draw('en', 'th-282-files-closed')
+    expect(closed).toContain('Uploads from outside are closed for now')
+    expect(closed).toContain('Nothing can be added here for now.')
+  })
+
+  it('Withdraw only before the office decided; after, the API’s words say why; withdrawn reads “Withdrawn”', () => {
+    const open = draw('en', 'th-291-withdraw')
+    expect(open).toContain('Withdraw this request')
+    expect(open).toContain('Possible until we decide on it.')
+    const decided = draw('en', 'th-291-decided')
+    expect(decided).not.toContain('Withdraw this request')
+    expect(decided).toContain('The factory already decided this request: ask us if something should change.')
+    const withdrawn = draw('en', 'th-291-withdrawn')
+    expect(withdrawn).toContain('Withdrawn')
+    expect(withdrawn).toContain('You withdrew this request.')
+    expect(withdrawn).not.toContain('Withdraw this request')
+    for (const locale of ['it', 'en'] as const) for (const id of ['th-291-withdraw', 'th-291-withdraw-ask', 'th-291-decided', 'th-291-withdrawn']) expect(scanText(draw(locale, id), BRAND_ALPHA), `${id} ${locale}`).toEqual([])
+  })
+
+  it('W37: a withdrawal names the request and the version read — never a party or a company; a refusal without words is said in ours', async () => {
+    const calls: { path: string; body: unknown; key?: string }[] = []
+    const api = { post: async (path: string, options: { body?: unknown; idempotencyKey?: string }) => {
+      calls.push({ path, body: options.body, key: options.idempotencyKey })
+      return { request: requestView('WITHDRAWN') }
+    } } as unknown as ApiClient
+    const answer = await withdrawRequest(api, 'inq-7', 3, 'key-w')
+    expect(answer.state.code).toBe('WITHDRAWN')
+    expect(calls).toEqual([{ path: '/portal/inquiries/inq-7/withdraw', body: { version: 3 }, key: 'key-w' }])
+    expect(withdrawProblemKey('conflict')).toBe('withdraw.problem.changed')
+    expect(withdrawProblemKey('not_found')).toBe('withdraw.problem.missing')
+    expect(withdrawProblemKey(null)).toBe('withdraw.problem.network')
+    for (const locale of ['it', 'en'] as const) for (const key of ['withdraw.action', 'withdraw.title', 'withdraw.body', 'withdraw.keep', 'withdraw.confirm', 'withdraw.problem.changed', 'withdraw.problem.failed', 'files.title', 'files.offline']) expect(t(locale)(key, { seq: 7 }), `${locale} ${key}`).not.toBe(key)
+  })
+})
+// ---- end B-TH-282 / B-TH-291
+
+// ---- B-TH-236 (B-TH-049; W08, W34): an amount never reaches the portal — the portal's read of a thread keeps no amount even if one came.
+describe('B-TH-236 — the portal reads no amount and no office link', () => {
+  it('the partner thread’s message shape drops an amount (defence in depth: the API never selects it for a partner)', () => {
+    const read = partnerThreadSchema.parse({
+      record: { type: 'Inquiry', id: 'i1', theirRef: null, ourRef: '#7', subtitle: null, status: 'SENT' },
+      thread: { id: 't1', status: 'OPEN' },
+      messages: [{ id: 'm1', side: 'COMPANY', channel: 'PORTAL', author: { name: 'Alex Demo', mine: false }, body: 'Yes, both sizes.', attachments: [], at: '2026-11-17T10:00:00.000Z', amount: { value: 125_000, currency: 'EUR' }, replyTo: { id: 'x' } }],
+      nextCursor: null,
+      composer: { canPost: true, reason: null, words: null, replyByEmail: false, hint: null },
+    })
+    expect(Object.keys(read.messages[0]!)).not.toContain('amount')
+    expect(JSON.stringify(read)).not.toContain('125000')
+  })
+})
+// ---- end B-TH-236

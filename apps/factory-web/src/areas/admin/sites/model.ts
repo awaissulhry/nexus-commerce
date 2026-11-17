@@ -6,12 +6,22 @@ import type { Loaded, Notice } from '../shared/model'
 /**
  * SCR-009 a site's structure (design 02 admin.org "Record: Site"; PLT-004, PLT-005, MES-292): Structure (lines and the
  * stations on them, and the stations that stand alone), Work centres, Calendars (when shifts end and how long a tablet
- * waits before signing a worker out), Devices (the site's tablets and printers), Activity. Pure: the groups of the
+ * waits before signing a worker out), Devices (the site's tablets and printers); the thread docked beside them (B-TH-269). Pure: the groups of the
  * structure, what an archive waits for, the form checks.
  */
 
-export const SITE_TABS = ['structure', 'centres', 'calendars', 'devices', 'activity'] as const
+// ---- B-TH-269 (threads plan TH-6; 08-tabs O-ADM-SITE; the rule of picture 38): tabs 5 → 4. Activity goes (R-ACT: its tools are in
+// the docked thread's "⋯"); Structure, Work centres, Calendars and Devices stay.
+export const SITE_TABS = ['structure', 'centres', 'calendars', 'devices'] as const
 export type SiteTab = (typeof SITE_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Structure with the thread opened (RecordFrame reads the address). */
+export const SITE_MERGED_TABS: Readonly<Record<string, SiteTab>> = Object.freeze({ activity: 'structure' })
+export function siteTabOf(value: string | null | undefined): SiteTab {
+  const asked = value ?? ''
+  if ((SITE_TABS as readonly string[]).includes(asked)) return asked as SiteTab
+  return Object.hasOwn(SITE_MERGED_TABS, asked) ? SITE_MERGED_TABS[asked]! : 'structure'
+}
+// ---- end B-TH-269
 
 export type SiteDialog =
   | { kind: 'line' }
@@ -45,7 +55,8 @@ export interface SiteRecordModel {
   busy?: boolean
   dialogProblem?: string | null
   notice?: Notice | null
-  dockOpen?: boolean
+  /** B-TH-269: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
   /** A floor-times draft being edited (a fixture shows one). */
   floorDraft?: FloorDraft | null
 }

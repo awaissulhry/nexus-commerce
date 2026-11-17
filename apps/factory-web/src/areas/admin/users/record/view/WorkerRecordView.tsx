@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Banner, Card, Field, KeyValue } from '@nexus/ui/components'
+import { Banner, Card, Field, KeyValue, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button, CheckboxCard, Input, Pill, Select, Skeleton, Tag } from '@nexus/ui/primitives'
 import { EditModeBar, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
@@ -10,8 +10,10 @@ import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { adminHref, STATUS_TONE } from '../../../shared/model'
 import { OneTimeReveal } from '../../../shared/view/OneTimeReveal'
 import { AdminMessages, GrainChips, NoticeBanner, RecordProblem, StepUp, useRoleWords } from '../../../shared/view/parts'
-import { RecordFrame } from '../../../shared/view/RecordFrame'
 import { FLOOR_LOCALES } from '../../model'
+// ---- B-TH-269: the worker on RecordFrame (the band in the shell's row, the thread docked CLOSED — R-10, art. 4 —, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { ownWorker, workerDraft, workerProfileProblems, type WorkerDialog, type WorkerProfileDraft, type WorkerRecordModel, type WorkerTab } from '../model'
 
 export type { WorkerRecordModel } from '../model'
@@ -27,26 +29,30 @@ export interface WorkerRecordActions {
   onRevealClose?: () => void
   onStepUp?: (code: string) => void
   onStepUpClose?: () => void
-  onDock?: () => void
   onRetry?: () => void
   onDismissNotice?: () => void
 }
 
 /**
- * SCR-011 — a floor worker's record (design 02 admin.users "Record: User", floor): Profile (the least data the work needs,
- * GDPR art. 5(1)(c)), Badge & PIN (the badge's last 4, issue a new one, mark it lost; the PIN's state and reset; floor
- * roles) and Activity. A badge code and a reset PIN are shown ONCE (the API keeps hashes). Badge, PIN and roles ask for a
- * fresh code; nobody manages their own. Fetches nothing (WorkerRecord.tsx reads the API).
+ * SCR-011 — a floor worker's record (design 02 admin.users "Record: User", floor), on RecordFrame (B-TH-269; the rule of picture 38,
+ * the tabs of 08-tabs O-ADM-WRK): the band in the shell's band row (‹ Users, the worker's name, ONE status pill, the site, employee
+ * number and a lock; Issue / Reissue badge, held with why; ⋯ Reset PIN held with why, its Keyboard line), the thread docked CLOSED
+ * beside both tabs (R-10, GDPR art. 4: notes about a worker, read with workers.view beside threads.read; notes only — W03; Activity's
+ * tools in its "⋯", R-ACT; the band's Thread button or ⌘J shows it) and the tabs 3 → 2: Profile (the least data the work needs,
+ * GDPR art. 5(1)(c)) and Badge & PIN (the badge's last 4, issue a new one, mark it lost; the PIN's state and reset; floor roles). A
+ * badge code and a reset PIN are shown ONCE (the API keeps hashes). Badge, PIN and roles ask for a fresh code; nobody manages their
+ * own. Fetches nothing (WorkerRecord.tsx reads the API).
  */
-export function WorkerRecordView({ model, actions, panels }: { model: WorkerRecordModel; actions?: WorkerRecordActions; panels?: ReactNode }) {
+// B-TH-269: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
+export function WorkerRecordView({ model, actions, thread, printThread }: { model: WorkerRecordModel; actions?: WorkerRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <AdminMessages>
-      <WorkerRecord model={model} actions={actions} panels={panels} />
+      <WorkerRecord model={model} actions={actions} thread={thread} printThread={printThread} />
     </AdminMessages>
   )
 }
 
-function WorkerRecord({ model, actions, panels }: { model: WorkerRecordModel; actions?: WorkerRecordActions; panels?: ReactNode }) {
+function WorkerRecord({ model, actions, thread, printThread }: { model: WorkerRecordModel; actions?: WorkerRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useT('admin')
   const href = (path: string) => adminHref(model.prefix, path)
   const back = { href: `${href('/users')}?audience=floor`, label: t('nav.users') }
@@ -57,10 +63,13 @@ function WorkerRecord({ model, actions, panels }: { model: WorkerRecordModel; ac
     actions?.onDialog?.(next)
   }
   const worker = model.worker
+  // B-TH-269 (R-10): the worker's thread docks CLOSED (the band's Thread button, ⌘J or an old ?tab=activity shows it).
+  const frame = { recordType: 'Worker', personId: model.personId ?? null, threadLabel: t('record.dockLabel'), closed: true }
   if (!worker) {
-    if (model.problem)
-      return (
-        <div className="fw-adm">
+    // Loading, not found, no right, a failed read: the band and its state, no thread yet.
+    return (
+      <RecordFrame {...frame} thread={null} band={{ back: <Link href={back.href}>{back.label}</Link>, title: model.problem ? t('nav.users') : <Skeleton width={220} height={22} /> }}>
+        {model.problem ? (
           <RecordProblem
             problem={model.problem}
             onRetry={actions?.onRetry}
@@ -70,56 +79,65 @@ function WorkerRecord({ model, actions, panels }: { model: WorkerRecordModel; ac
               </Button>
             }
           />
-        </div>
-      )
-    return (
-      <div className="fw-adm" aria-busy="true">
-        <Skeleton height={36} width="40%" />
-        <Skeleton height={220} />
-      </div>
+        ) : (
+          <div className="fw-adm-stack" aria-busy="true">
+            <Skeleton height={220} />
+          </div>
+        )}
+      </RecordFrame>
     )
   }
   const own = ownWorker(worker, model.me)
   const credentialsHeld = !model.can.credentials ? t('held.needs', { right: t('right.workers_credentials') }) : own ? t('worker.held.own') : worker.status !== 'ACTIVE' ? t('worker.held.inactive') : null
-  const tabs: Array<{ id: WorkerTab; label: string; count?: number | null }> = [
-    { id: 'profile', label: t('worker.tab.profile') },
-    { id: 'badge', label: t('worker.tab.badge') },
-    { id: 'activity', label: t('worker.tab.activity') },
-  ]
+  const base = href(`/users/floor/${worker.id}`)
+  const tabs: TabItem[] = (
+    [
+      { id: 'profile', label: t('worker.tab.profile') },
+      { id: 'badge', label: t('worker.tab.badge') },
+    ] satisfies Array<{ id: WorkerTab; label: string }>
+  ).map((tab) => ({ ...tab, href: `${base}?tab=${tab.id}` }))
+  const identity = [model.siteName, worker.employeeCode ? t('users.employeeNo', { code: worker.employeeCode }) : null].filter(Boolean).join(' · ')
+  // Reset PIN sits in ⋯ beside the badge (the band's one primary), held with the same reason in words.
+  const more: MenuItemDef[] = [{ id: 'pin', label: t('worker.pin.reset'), disabled: credentialsHeld !== null, ...(credentialsHeld ? { description: credentialsHeld } : {}), onSelect: () => open('pin') }]
   return (
-    <div className="fw-adm">
+    <>
       <RecordFrame
-        back={back}
-        title={worker.displayName}
-        meta={[model.siteName, worker.employeeCode ? t('users.employeeNo', { code: worker.employeeCode }) : null].filter(Boolean).join(' · ') || undefined}
-        status={
-          <span className="fw-adm-tags">
-            <Pill tone={STATUS_TONE[worker.status] ?? 'neutral'}>{t(`users.workerStatus.${worker.status}`)}</Pill>
-            {worker.locked && <Tag tone="warning">{t('users.locked')}</Tag>}
-          </span>
-        }
-        actions={
-          <>
-            <Button size="sm" onClick={() => open('pin')} heldReason={credentialsHeld}>
-              {t('worker.pin.reset')}
-            </Button>
+        {...frame}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: <Link href={back.href}>{back.label}</Link>,
+          title: worker.displayName,
+          // ONE status pill; the site, the employee number and a lock travel with the title (on a phone behind the band's "i").
+          status: <Pill tone={STATUS_TONE[worker.status] ?? 'neutral'}>{t(`users.workerStatus.${worker.status}`)}</Pill>,
+          ...(identity || worker.locked
+            ? {
+                meta: (
+                  <span className="fw-adm-tags">
+                    {identity && <span className="fw-adm-hint">{identity}</span>}
+                    {worker.locked && <Tag tone="warning">{t('users.locked')}</Tag>}
+                  </span>
+                ),
+              }
+            : {}),
+          primary: (
             <Button size="sm" variant="primary" onClick={() => open('badge')} heldReason={credentialsHeld}>
               {t(worker.badge ? 'worker.badge.reissue' : 'worker.badge.issue')}
             </Button>
-          </>
-        }
-        tabs={tabs}
-        active={model.tab}
-        tabHref={(tab) => `${href(`/users/floor/${worker.id}`)}?tab=${tab}`}
-        dock={model.tab === 'activity' ? undefined : panels}
-        dockOpen={model.dockOpen}
-        onDock={actions?.onDock}
+          ),
+          more,
+        }}
       >
-        <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-        {own && <Banner tone="info" title={t('worker.ownBanner')} />}
-        {model.tab === 'profile' && <ProfileTab model={model} actions={actions} open={open} />}
-        {model.tab === 'badge' && <BadgeTab model={model} open={open} credentialsHeld={credentialsHeld} />}
-        {model.tab === 'activity' && panels}
+        <div className="fw-adm-stack">
+          <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+          {/* B-TH-269: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+          <RecordNotices>
+            <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
+            {own && <Banner tone="info" title={t('worker.ownBanner')} />}
+          </RecordNotices>
+          {model.tab === 'profile' && <ProfileTab model={model} actions={actions} open={open} />}
+          {model.tab === 'badge' && <BadgeTab model={model} open={open} credentialsHeld={credentialsHeld} />}
+        </div>
       </RecordFrame>
       <Confirm model={model} dialog={dialog} onClose={() => open(null)} actions={actions} />
       <RolesModal model={model} open={dialog === 'roles'} onClose={() => open(null)} actions={actions} />
@@ -129,7 +147,7 @@ function WorkerRecord({ model, actions, panels }: { model: WorkerRecordModel; ac
         extra={model.reveal?.kind === 'badge' ? <p className="fw-adm-hint">{t('reveal.badge.printHint')}</p> : undefined}
       />
       <StepUp model={model.stepUp} onSubmit={actions?.onStepUp} onClose={actions?.onStepUpClose} />
-    </div>
+    </>
   )
 }
 

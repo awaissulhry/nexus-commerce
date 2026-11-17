@@ -3,7 +3,7 @@ import { approvalRow, CAN, GRAINS, PEOPLE, PREFIX, pending } from '../../../sale
 import type { TodayItem } from '../../today/model'
 import type { TaskDetail, TaskRow } from '../api'
 import { rowsOf, type InboxRow } from '../inbox'
-import type { BulkLine, InboxViewModel } from '../model'
+import type { BulkLine, InboxViewModel, ReviewTab } from '../model'
 import type { HistoryLine } from '../../../../shell/panels/approvals/api'
 
 /**
@@ -83,6 +83,8 @@ const HISTORY: HistoryLine[] = [
   { id: id(301), source: 'ApprovalEvent', action: 'REQUESTED', at: at(10, 15, 30), by: BRUNO, words: 'Lines updated after the call with the tannery.', reasonCode: null, meaning: null, taskId: PO.id },
   { id: id(300), source: 'ApprovalEvent', action: 'STALE', at: at(10, 14, 2), by: { kind: 'SYSTEM', id: null, name: 'System', me: false }, words: null, reasonCode: null, meaning: null, taskId: id(399) },
   { id: id(299), source: 'ApprovalEvent', action: 'REQUESTED', at: at(10, 9, 10), by: BRUNO, words: null, reasonCode: null, meaning: null, taskId: id(399) },
+  // B-TH-270 (R1-G05): an earlier decision on the record with its signature's meaning — Context & history keeps both.
+  { id: id(298), source: 'ApprovalEvent', action: 'APPROVED', at: at(9, 11, 40), by: { kind: 'PERSON', id: id(902), name: 'Marco Demo', me: false }, words: 'Prices checked against the tannery list.', reasonCode: null, meaning: 'REVIEWED', taskId: id(398) },
 ]
 
 export const PO_DETAIL: TaskDetail = {
@@ -167,7 +169,7 @@ export function depthModel(overrides: Partial<InboxViewModel> = {}): InboxViewMo
   }
 }
 
-const review = (tab: 'change' | 'context' | 'conversation' | 'history' = 'change', detail: TaskDetail = PO_DETAIL): InboxViewModel['taskReview'] => ({
+const review = (tab: ReviewTab = 'change', detail: TaskDetail = PO_DETAIL): InboxViewModel['taskReview'] => ({
   id: detail.id,
   detail: { status: 'ready', value: detail },
   history: { allowed: true, now: Date.parse(NOW), read: { status: 'ready', lines: HISTORY, more: false } },
@@ -201,9 +203,20 @@ export const DEPTH_CASES: readonly { id: string; label: string; model: InboxView
   { id: 'w2b-307-bulk', label: 'B-W2b-307 · Approve 3 price changes: each re-read, one left out', model: depthModel({ selected: PRICE_KEYS, dialog: { kind: 'bulk', keys: PRICE_KEYS, lines: BULK_LINES, state: { phase: 'ready' } } }), note: 'Two still current are approved together; the third changed since it was asked and is left out with the reason.' },
   { id: 'w2b-307-bulk-done', label: 'B-W2b-307 · Approve 2: what became of each', model: depthModel({ dialog: { kind: 'bulk', keys: PRICE_KEYS, lines: BULK_LINES, state: { phase: 'done', results: { [PRICE_KEYS[0]!]: { ok: true, words: 'approved' }, [PRICE_KEYS[1]!]: { ok: false, words: 'refusal.STALE' } } } } }) },
   { id: 'w2b-307-review', label: 'B-W2b-307 · the review of a purchase order (Change)', model: depthModel({ controls: { view: 'waiting', kind: null, q: '', changed: false, open: PO.id }, taskReview: review('change') }), note: "Still current · checked 10:42; status DRAFT → SENT and a quantity; the rule that asked; who can decide; Approve as 'Released' (A) and Reject (R)." },
-  { id: 'w2b-307-review-context', label: 'B-W2b-307 · the review: Context', model: depthModel({ controls: { view: 'waiting', kind: null, q: '', changed: false, open: PO.id }, taskReview: review('context') }) },
-  { id: 'w2b-307-review-conversation', label: 'B-W2b-307 · the review: Conversation', model: depthModel({ controls: { view: 'waiting', kind: null, q: '', changed: false, open: PO.id }, taskReview: review('conversation') }), note: 'In the Office this is the request’s own thread (the record panels of the request).' },
-  { id: 'w2b-307-review-history', label: 'B-W2b-307 · the review: History', model: depthModel({ controls: { view: 'waiting', kind: null, q: '', changed: false, open: PO.id }, taskReview: review('history') }) },
+  // ---- B-TH-270 (PL6, picture 40): the window's tabs 4 → 2 (Change · Context & history), the request's thread docked in its right column.
+  {
+    id: 'w2b-307-review-context',
+    label: 'B-TH-270 · the review: Context & history (the approval history with its signature meanings)',
+    model: depthModel({ controls: { view: 'waiting', kind: null, q: '', changed: false, open: PO.id }, taskReview: review('context') }),
+    note: 'The record’s facts and Open full page, then every approval of its record: who did what and when, the meaning of each signature ("Marco Demo approved as ‘Reviewed’"), the words of a no. Its own read, never the thread’s Changes view.',
+  },
+  {
+    id: 'th-270-review-thread',
+    label: 'B-TH-270 · the review window: the request’s thread docked on the right (PL6)',
+    model: depthModel({ controls: { view: 'waiting', kind: null, q: '', changed: false, open: PO.id }, taskReview: review('change') }),
+    note: 'The old Conversation tab is the thread docked in the window’s right column (~40 % of the 1160 px window), beside Change and Context & history. Office notes only (an approval has no party): no "Reply to", no customer files. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Remind me). A / R stay the window’s keys outside the thread.',
+  },
+  // ---- end B-TH-270
   { id: 'w2b-307-sign', label: "B-W2b-307 · Approve as 'Released' (a fresh code)", model: depthModel({ controls: { view: 'waiting', kind: null, q: '', changed: false, open: PO.id }, taskReview: review(), dialog: { kind: 'sign', busy: false, problem: null } }), note: 'The meaning, the version it binds to, a fresh authenticator code.' },
   { id: 'w2b-307-sign-wrong', label: 'B-W2b-307 · the signature: a wrong code', model: depthModel({ controls: { view: 'waiting', kind: null, q: '', changed: false, open: PO.id }, taskReview: review(), dialog: { kind: 'sign', busy: false, problem: 'sign.codeWrong' } }) },
   { id: 'w2b-307-reject', label: 'B-W2b-307 · Reject — a reason and words', model: depthModel({ controls: { view: 'waiting', kind: null, q: '', changed: false, open: PO.id }, taskReview: review(), dialog: { kind: 'reject', busy: false, reasons: { status: 'ready', value: [{ code: 'OVER_BUDGET', labelEn: 'Over budget', labelIt: 'Oltre il budget', needsDetail: false }, { code: 'WRONG_SUPPLIER', labelEn: 'Wrong supplier', labelIt: 'Fornitore sbagliato', needsDetail: false }] } } }) },

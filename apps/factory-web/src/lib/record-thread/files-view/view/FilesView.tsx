@@ -14,6 +14,8 @@ import type { FileAudience, FileKind } from '../../../../record-panels/model'
 import { sizeWords } from '../../popups/view/FileViewer'
 import { audienceMarks, versionMark, type FileSeries, type FilesParty, type ThreadFile } from '../../files/model'
 import { bulkReach, filesGroups, keepLines, rangeOf, type FilesAbilities, type MissingDocument, type UploadAsk } from '../model'
+// B-TH-283: the measurement-sheet tick holds an upload meant for the floor.
+import { uploadAskHeld } from '../model'
 // B-TH-231: "Use on another record…" and the copy's source line.
 import { carriable, sourceLine } from '../../files/use-on'
 import { typeKey } from '../../../../areas/search/model'
@@ -57,7 +59,7 @@ export interface FilesViewActions {
   onBulk?: (action: BulkAction, fileIds: readonly string[]) => void
   /** Files dropped or browsed: the container asks their kind and audience (`upload`). */
   onDrop?: (files: File[]) => void
-  onUploadChange?: (change: Partial<Pick<UploadAsk, 'kind' | 'audience'>>) => void
+  onUploadChange?: (change: Partial<Pick<UploadAsk, 'kind' | 'audience' | 'sheet'>>) => void
   onUploadConfirm?: () => void
   onUploadCancel?: () => void
   onDismissRefused?: () => void
@@ -290,6 +292,9 @@ function Row({ series, model, actions, place, chosen, onChoose }: { series: File
           {version && <> · {t('version.inForce', { n: version })}</>}
         </span>
         {source && <span className="fw-rtv-meta">{fileWords(source.key, source.params ? { ...source.params, type: file.source ? searchWords(typeKey(file.source.recordType)) : '' } : undefined)}</span>}
+        {/* B-TH-283 (B-TH-083): a measurement sheet — who may not open it reads why; who may, that each opening is recorded. */}
+        {file.locked && <span className="fw-rtv-meta">{fileWords('locked.sheetWhy')}</span>}
+        {file.sheet && <span className="fw-rtv-meta">{fileWords('sheet.recorded')}</span>}
         <span className="fw-rtv-marks">
           {marks.map((mark) => (
             <Tag key={mark} tone={mark === 'otherParty' ? 'danger' : mark === 'office' ? 'neutral' : mark === 'floor' ? 'warning' : 'info'}>
@@ -356,7 +361,7 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
       footer={
         <>
           <Button onClick={() => actions?.onUploadCancel?.()}>{t('upload.cancel')}</Button>
-          <Button variant="primary" heldReason={busy ? t('upload.busy') : null} onClick={() => actions?.onUploadConfirm?.()}>
+          <Button variant="primary" heldReason={busy ? t('upload.busy') : uploadAskHeld(ask) ? t(uploadAskHeld(ask)!) : null} onClick={() => actions?.onUploadConfirm?.()}>
             {t('upload.confirm', { count: ask.files.length })}
           </Button>
         </>
@@ -379,6 +384,16 @@ function UploadDialog({ ask, party, busy, actions }: { ask: UploadAsk; party: Fi
             ))}
           </Select>
         </Field>
+        {/* B-TH-283 (B-TH-083): the measurement-sheet tick, at upload. */}
+        <Checkbox
+          label={
+            <span>
+              {t('upload.sheet')} <span className="fw-rtv-muted">· {t('upload.sheetHint')}</span>
+            </span>
+          }
+          checked={ask.sheet ?? false}
+          onChange={(event) => actions?.onUploadChange?.({ sheet: event.target.checked })}
+        />
         <fieldset className="fw-rtv-fieldset">
           <legend className="fw-rtv-legend">{t('upload.who')}</legend>
           {audiences.map((audience) => (

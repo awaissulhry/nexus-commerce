@@ -498,10 +498,11 @@ export async function takeBackEmail(caller: CommandCaller, record: RecordRef, em
       before: { status: row.status },
       after: { status: 'WITHDRAWN', messageId: row.messageId, ...(row.status === 'WITHDRAWN' ? { unchanged: true } : {}) },
     })
-    const message = await tools.tx.message.findUniqueOrThrow({ where: { id: row.messageId }, select: { bodyText: true, attachmentFileIds: true } })
+    // th3-web-c follow-up (B-TH-236): the message it answered or corrected comes back too, so the composer reopens "Replying to …".
+    const message = await tools.tx.message.findUniqueOrThrow({ where: { id: row.messageId }, select: { bodyText: true, attachmentFileIds: true, replyToMessageId: true, correctsMessageId: true } })
     return {
       email: emailViewOf(current, tools.now),
-      text: { to: current.to, cc: current.cc, bcc: current.bcc, subject: current.subject, body: message.bodyText, attachments: message.attachmentFileIds },
+      text: { to: current.to, cc: current.cc, bcc: current.bcc, subject: current.subject, body: message.bodyText, attachments: message.attachmentFileIds, replyToMessageId: message.replyToMessageId, correctsMessageId: message.correctsMessageId },
     }
   })
   return result
