@@ -1,4 +1,5 @@
 import { FISCAL_TYPES } from './fiscal'
+import { INQUIRY_TYPES } from './inquiries'
 import { PLATFORM_TYPES } from './platform'
 import type { RetentionType } from './type'
 
@@ -10,6 +11,8 @@ import type { RetentionType } from './type'
 export const RETENTION_TYPES: readonly RetentionType[] = [
   ...PLATFORM_TYPES,
   ...FISCAL_TYPES,
+  // B-TH-053: the prospects of closed requests.
+  ...INQUIRY_TYPES,
 ]
 
 const BY_TYPE = new Map(RETENTION_TYPES.map((type) => [type.recordType, type]))
