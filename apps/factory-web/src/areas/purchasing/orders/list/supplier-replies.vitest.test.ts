@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -187,9 +188,12 @@ describe('the Supplier replies design cases draw in both languages with no key l
   it('the view says what waits and who wrote, in both languages', () => {
     const screen = designScreen as unknown as DesignScreen<unknown>
     const html = (id: string, locale: 'it' | 'en') => render(screen, screen.cases.find((item) => item.id === id)!.model, locale)
-    expect(html('th3-240-replies', 'en')).toContain('Supplier wrote')
-    expect(html('th3-240-replies', 'en')).toContain('3 conversations wait on us')
-    expect(html('th3-240-replies', 'it')).toContain('Ha scritto il fornitore')
+    // AG Grid draws its column headers ("Supplier wrote") in a browser only: the server draws the view's own words, and the column
+    // is held by its definition (its header is the catalogue's `replies.col`, checked in both languages below).
+    expect(html('th3-240-replies', 'en')).toContain('3 conversations wait on us: the supplier wrote last')
+    expect(html('th3-240-replies', 'it')).toContain('3 conversazioni attendono una nostra risposta: ha scritto per ultimo il fornitore')
+    const view = readFileSync(new URL('./view/OrdersListView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("{ colId: 'reply', headerName: td('replies.col')")
     expect(html('th3-240-empty', 'en')).toContain('No supplier waits for an answer')
     expect(html('th3-240-no-threads', 'en')).not.toContain('Supplier replies')
   })

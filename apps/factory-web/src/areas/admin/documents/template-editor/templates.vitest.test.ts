@@ -426,7 +426,9 @@ describe('B-TH-279 saved replies: the rows, the draft, what a save sends, what e
 
   it('the preview fills only the placeholders the record offers, with made-up values (nothing is sent, no real record)', () => {
     const filled = replyPreview({ body: 'Gentile {{contact.name}}, richiesta {{inquiry.number}}; ordine {{order.number}}', language: 'it', record: 'Inquiry' })
-    expect(filled).toBe('Gentile Anna Esempio, richiesta INQ-2026-0007; ordine')
+    // B-TH-303 (#1591): a customer reads its own number in a reply ("#7"), never the office's INQ- series.
+    expect(filled).toBe('Gentile Anna Esempio, richiesta #7; ordine')
+    expect(filled).not.toMatch(/\bINQ-\d{4}-\d+/)
     expect(replyPreview({ body: 'Dear {{contact.name}}', language: 'en', record: 'ANY' })).toBe('Dear Ann Example')
   })
 

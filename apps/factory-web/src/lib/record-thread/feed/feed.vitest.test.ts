@@ -277,7 +277,10 @@ describe('B-TH-255 — the held-mail line by right, the hidden-new line, folded 
     expect(text).toContain('A reply waits for a colleague to check it')
     for (const reason of ['sender not a contact', 'failed its check', 'Mail to sort', 'Review']) expect(text).not.toContain(reason)
     expect(rendered).not.toContain('mail-to-sort')
-    expect(text).not.toMatch(/@/)
+    // The design feed's own messages carry @mentions and addresses: the line alone (an empty feed) adds no sender.
+    const alone = textOf(html({ ...base, messages: [], events: [], more: false, waitingMail: { count: 1, reasons: ['UNKNOWN_SENDER', 'DMARC_FAIL'], mayReview: false, reviewHref: REVIEW } }))
+    expect(alone).toContain('A reply waits for a colleague to check it')
+    expect(alone).not.toMatch(/@/)
     expect(textOf(html({ ...base, waitingMail: { count: 3, reasons: ['SPAM'], mayReview: false, reviewHref: null } }))).toContain('3 replies wait for a colleague to check them')
   })
 

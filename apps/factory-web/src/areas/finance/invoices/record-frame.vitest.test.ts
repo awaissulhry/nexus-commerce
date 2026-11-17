@@ -6,6 +6,7 @@ import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
+import { textOf } from '../../../lib/record-thread/parts/testing'
 import { invoice } from '../_demo/fixtures'
 import { designScreen as invoiceScreen } from './record/fixtures'
 import { MERGED_TABS, RECORD_TABS, tabOf } from './record/record-model'
@@ -24,7 +25,8 @@ function render(id: string, locale: (typeof LOCALES)[number] = 'en'): string {
   const View = screen.view as ComponentType<{ model: unknown }>
   return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: found.model })))
 }
-const text = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+// The words a reader sees: renderToString writes `&` as `&amp;` ("Lines &amp; VAT"), so the entities come back (textOf).
+const text = (html: string) => textOf(html)
 const dockOf = (html: string) => html.slice(html.indexOf('class="fw-rcf-dock"'))
 
 describe('B-TH-268: the invoice on RecordFrame — Lines & VAT · Deposits & payments · SDI & documents', () => {

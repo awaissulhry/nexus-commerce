@@ -37,7 +37,7 @@
   },
   "locked": {
     "sheet": "Measurement sheet — you cannot open it",
-    "sheetWhy": "It opens with the right to read measurements (sales.measurements.view); each opening is recorded."
+    "sheetWhy": "It opens with the right to read measurements; each opening is recorded."
   },
   "useOn": {
     "action": "Use on another record…",

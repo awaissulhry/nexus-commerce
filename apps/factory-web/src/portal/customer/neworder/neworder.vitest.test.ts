@@ -33,6 +33,7 @@ import { CATALOGUE_DOOR_OPEN, closedRefusal, failedKey, goesToOf, openItems, ope
 import { catalogueDoorOf, catalogueStartHref } from './request-model'
 import { fromOrderText, orderLinesLabel, ownOrderRef } from './model'
 import { orderingWordsFor } from './words'
+import type { OrderingCaseBuilder } from './view/OrderingCase'
 import {
   cellsOf,
   columnsOf,
@@ -448,8 +449,16 @@ describe('B-TH-304 — the catalogue door is open again: New order offers it, wi
     expect(renderCase('it', 'th-304-draft')).toContain(`dal vostro ordine 12 (tuo numero ${BRAND_BETA.customerRef})`)
     expect(renderCase('en', 'th-304-reorder-order')).toContain('Lines of your order 12')
     const reorder = renderCase('en', 'th-304-reorder')
-    expect(reorder).toContain('Your order')
-    expect(reorder).toContain(BRAND_BETA.customerRef)
+    expect(reorder).toContain('id="reorder"')
+    // The past orders are a grid: its rows draw in the browser only. The Order cell's RefPair says each row's own number
+    // (ownOrderRef: "Your order" · 12) beside their PO, from the rows this case hands the grid — never the office's series.
+    const reorderCase = ((newOrderScreen as unknown as DesignScreen<unknown>).cases.find((item) => item.id === 'th-304-reorder')!.model as OrderingCaseBuilder)('en')
+    const pastRows = reorderCase.body.kind === 'neworder' ? (reorderCase.body.model.reorder?.orders.rows ?? []) : []
+    expect(pastRows.length).toBeGreaterThan(0)
+    expect(pastRows.map((row) => ownOrderRef(row.yourNumber, 'en')?.label ?? null)).toContain('Your order')
+    expect(pastRows.map((row) => row.customerRef)).toContain(BRAND_BETA.customerRef)
+    expect(JSON.stringify(pastRows.map((row) => [row.customerRef, row.yourNumber]))).not.toMatch(OFFICE)
+    expect(scanText(JSON.stringify(pastRows.map((row) => [row.customerRef, row.yourNumber])), BRAND_ALPHA)).toEqual([])
     const sent = renderCase('en', 'th-304-sent')
     expect(sent).toContain(`Your PO ${BRAND_BETA.customerRef}: you find it under Orders &amp; requests as a catalogue order.`)
     expect(renderCase('en', 'th-304-accepted')).toContain('We confirmed this request as an order: open it to follow it.')

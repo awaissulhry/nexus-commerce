@@ -39,7 +39,11 @@ describe("the supplier's Questionnaire tab (B-W2b-172)", () => {
     for (const locale of ['it', 'en'] as const) {
       const words = CATALOGUE[locale]['purchasing-questionnaire'] ?? {}
       for (const key of ['title', 'state.WAITING', 'linkState.OPEN', 'review.check.questions', 'held.noVersion', 'section.labour']) expect(words[key], `${locale} ${key}`).toBeTruthy()
-      expect(CATALOGUE[locale].parties?.['suppliers.tab.questionnaire']).toBeTruthy()
+      // B-TH-260: the Questionnaire tab merged with Documents & qualification into "Documents & questionnaire" (one onboarding place);
+      // the questionnaire is its own named section there.
+      expect(CATALOGUE[locale].parties?.['suppliers.tab.questionnaire']).toBeUndefined()
+      expect(CATALOGUE[locale].parties?.['suppliers.tab.documents']).toBe(locale === 'en' ? 'Documents & questionnaire' : 'Documenti e questionario')
+      expect(CATALOGUE[locale].parties?.['suppliers.questionnaireLabel']).toBeTruthy()
     }
     expect(designScreen.cases.map((entry) => entry.id)).toEqual(expect.arrayContaining(['to-review', 'answer', 'review', 'send', 'send-given', 'no-version', 'read-only', 'loading', 'error']))
   })

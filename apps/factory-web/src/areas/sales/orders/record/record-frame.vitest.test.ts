@@ -1,10 +1,18 @@
 import { readFileSync } from 'node:fs'
-import { describe, expect, it } from 'vitest'
-import type { ComponentType } from 'react'
+import { describe, expect, it, vi } from 'vitest'
+import { createElement, type ComponentType } from 'react'
 import { renderView, textOf } from '../../../../lib/record-thread/parts/testing'
 import { canOf } from '../_demo/fixtures'
 import { MERGED_TABS, recordTabs, tabOf } from '../model'
 import { designScreen } from './fixtures'
+
+// The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so a dialog's words are checked.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), createElement('p', null, subtitle as never), children as never, footer as never) : null
+  return { ...actual, Modal }
+})
 
 /**
  * B-TH-214 — the docked thread on the sales order (O-SAL-ORD-REC; picture 29): the band in the area row, ONE thread docked beside the
