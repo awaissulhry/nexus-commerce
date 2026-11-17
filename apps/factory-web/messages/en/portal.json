@@ -1,9 +1,11 @@
 {
   "nav": {
     "home": "Home",
+    "waiting": "Waiting for you",
     "orders": "Orders",
     "ordersRequests": "Orders & requests",
     "newOrder": "New order",
+    "production": "Production",
     "quotesSamples": "Quotes & samples",
     "quotes": "Quotes & requests",
     "catalogue": "Catalogue",
