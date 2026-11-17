@@ -201,5 +201,11 @@ describe('TH-6 part B: a request the customer withdrew is never "Quote being pre
     expect(it).toContain('Il cliente ha ritirato la richiesta il')
     expect(textOf(draw('th-257-made-from'))).not.toContain('withdrew')
   })
+
+  it('the order’s link to its accepted quote opens Approval & sending (where the quote’s Documents went), not an old tab', () => {
+    const orderDocs = readFileSync(new URL('../orders/record/view/DocumentsTab.tsx', import.meta.url), 'utf8')
+    expect(orderDocs).toContain('/sales/quotes/${quote.id}?tab=approval')
+    expect(orderDocs).not.toContain('?tab=documents')
+  })
 })
 // ---- end TH-6 part B
