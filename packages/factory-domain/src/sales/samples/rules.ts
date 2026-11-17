@@ -300,7 +300,9 @@ export const WITHOUT_LINE_KINDS = ['PROTO', 'FIT', 'SALESMAN'] as const satisfie
 /** Why the round's samples cannot be made without an order line (null: they can). */
 export function withoutLineRefusal(round: RoundFacts & { readonly kind: SampleKind; readonly charged: boolean }): SampleRefusal | null {
   if (!(WITHOUT_LINE_KINDS as readonly string[]).includes(round.kind)) {
-    const what = round.kind === 'PRE_PRODUCTION' ? 'A pre-production sample' : round.kind === 'CERTIFICATION' ? 'A CE test sample' : 'A brand sample'
+    // B-PR-29: a size set and a top-of-production sample belong to their order line too.
+    const what =
+      round.kind === 'PRE_PRODUCTION' ? 'A pre-production sample' : round.kind === 'SIZE_SET' ? 'A size set' : round.kind === 'TOP_OF_PRODUCTION' ? 'A top-of-production sample' : round.kind === 'CERTIFICATION' ? 'A CE test sample' : 'A brand sample'
     return refusal('ORDER_LINE_NEEDED', `${what} is made on the order line it belongs to: pick an order line (only a proto, fit or salesman round that charges nobody is made without one).`)
   }
   if (round.charged) return refusal('ORDER_LINE_NEEDED', `Sample round ${round.number} is charged to its customer: its samples are made on the order that charges them (pick an order line).`)

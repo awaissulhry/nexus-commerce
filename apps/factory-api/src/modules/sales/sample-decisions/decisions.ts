@@ -21,6 +21,8 @@ import type { OfficeContext } from '../../../core/context'
 import { createRound } from '../samples/rounds'
 import { databaseRefusal, officeRound, readRoundRow, type Reader, type RoundData } from '../samples/store'
 import { action, lacking, namesOf, refuse, requireOn, stale, SWATCH_COLUMNS, swatchViewsOf, waitingRequest } from './store'
+// B-PR-38: a round of a customer whose portal is on is the customer's to decide.
+import { customerDecides } from './owner'
 
 /**
  * The decision of a sample round (B-W2b-252; SAL-312 "approved, approved with comments, rejected, by whom and on which
@@ -33,7 +35,9 @@ import { action, lacking, namesOf, refuse, requireOn, stale, SWATCH_COLUMNS, swa
  *                                                    change requests it raised, and what may happen now (each action allowed
  *                                                    or refused in words, with the permission it needs)
  *   POST /sales/samples/rounds/:roundId/decision     sales.samples.decide: the office records it (the brand's word by mail or
- *                                                    phone, or our own on an internal round); not while the brand is asked
+ *                                                    phone, or our own on an internal round); not while the brand is asked;
+ *                                                    B-PR-38: never on a round of a customer whose portal is on (./owner.ts:
+ *                                                    the customer answers it, or the office uses Decide for the customer)
  *   POST /sales/samples/rounds/:roundId/next-round   sales.samples.manage: after a rejection, round N+1 of the same kind for the
  *                                                    same brand with the same cells (B-W2b-246's create)
  *   POST /sales/samples/rounds/:roundId/test-result  compliance.certificates.manage: a CE test sample's result at the notified
@@ -54,12 +58,13 @@ async function latestRequest(db: Reader, roundId: string) {
 
 async function approvalViewOf(db: Reader, context: OfficeContext, round: RoundData): Promise<ApprovalView> {
   const scope = { companyId: round.companyId, partyId: round.partyId }
-  const [revision, request, waiting, swatchRows, answer] = await Promise.all([
+  const [revision, request, waiting, swatchRows, answer, theirs] = await Promise.all([
     db.styleRevision.findUniqueOrThrow({ where: { id: round.revisionId }, select: { id: true, revision: true, status: true } }),
     latestRequest(db, round.id),
     waitingRequest(db, 'SampleRound', round.id),
     db.sampleSwatch.findMany({ where: { roundId: round.id }, select: SWATCH_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
     round.approvalRequestId && round.decidedVia !== 'OFFICE' ? db.approvalRequest.findUnique({ where: { id: round.approvalRequestId }, select: { typedName: true } }) : Promise.resolve(null),
+    customerDecides(db, round.partyId), // B-PR-38
   ])
   const names = await namesOf(db, [round.decidedById])
   const kind = round.kind as SampleKind
@@ -106,7 +111,7 @@ async function approvalViewOf(db: Reader, context: OfficeContext, round: RoundDa
     certification,
     changeRequests,
     actions: {
-      decide: action(lacking(context, [SALES_SAMPLES_DECIDE], scope), decisionRefusal(facts, waiting)),
+      decide: action(lacking(context, [SALES_SAMPLES_DECIDE], scope), decisionRefusal(facts, waiting, theirs)), // B-PR-38
       askBrand: action(lacking(context, [SALES_SAMPLES_DECIDE, PARTNERS_APPROVALS_ASK], scope), askRefusal(facts, waiting)),
       nextRound: action(lacking(context, [SALES_SAMPLES_MANAGE], scope), nextRoundRefusal({ number: round.number, decision })),
       testResult: action(
@@ -132,11 +137,12 @@ export async function decideRound(caller: CommandCaller, roundId: string, body: 
   const problems = decisionProblems(body.decision, body.comments)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
   const waiting = await caller.withClient((db) => waitingRequest(db, 'SampleRound', roundId))
-  refuse(decisionRefusal({ number: seen.number, stage: seen.stage as SampleStage, partyId: seen.partyId }, waiting))
+  // B-PR-38: never a silent office decision on a customer's own round (portal on): refused in words, pointing to Decide for the customer.
+  refuse(decisionRefusal({ number: seen.number, stage: seen.stage as SampleStage, partyId: seen.partyId }, waiting, await caller.withClient((db) => customerDecides(db, seen.partyId))))
   await command(caller, { name: 'sales.samples.decide', idempotencyKey, input: { roundId, ...body }, record: { type: 'SampleRound', id: roundId, expectedVersion: body.version } }, async (tools) => {
     const { tx, now } = tools
     const row = (await readRoundRow(tx, roundId))!
-    refuse(decisionRefusal({ number: row.number, stage: row.stage as SampleStage, partyId: row.partyId }, await waitingRequest(tx, 'SampleRound', roundId)))
+    refuse(decisionRefusal({ number: row.number, stage: row.stage as SampleStage, partyId: row.partyId }, await waitingRequest(tx, 'SampleRound', roundId), await customerDecides(tx, row.partyId)))
     const comments = body.comments ?? null
     await tx.sampleRound.update({ where: { id: roundId }, data: { stage: 'DECIDED', decision: body.decision, decisionComments: comments, decidedAt: now, decidedVia: 'OFFICE', decidedById: context.actorId, updatedAt: now }, select: { id: true } })
     const revision = await tx.styleRevision.findUniqueOrThrow({ where: { id: row.revisionId }, select: { revision: true } })

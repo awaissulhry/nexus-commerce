@@ -10,7 +10,10 @@ import { boughtLeatherLotsOf, orderFactsOf } from './world' // B-W2b-GB29 (G221)
  * system scope; its key the event's id, so a repeat answers from the receipt):
  *
  *   planning.gatesOnSampleDecided   `sample_round.decided` APPROVED or APPROVED_WITH_COMMENTS → every WAITING sample gate
- *                                   (SAMPLE_APPROVED, PP_SAMPLE) of an open order that names the round passes
+ *                                   (SAMPLE_APPROVED, PP_SAMPLE, B-PR-29 SIZE_SET: SAMPLE_GATE_KINDS) of an open order that
+ *                                   names the round passes — a size set gate by its SIZE_SET round, as a PP gate by its
+ *                                   PRE_PRODUCTION round (the brand's answer, its named approver's when one is set); a
+ *                                   top-of-production round names no gate (it gates nothing)
  *   planning.gatesOnLotReleased     `lot.released` of a LEATHER item → for each open order the lot is reserved for (through its
  *                                   work orders or its lines), its WAITING LEATHER_APPROVED gate passes once every leather lot
  *                                   reserved for the order is released

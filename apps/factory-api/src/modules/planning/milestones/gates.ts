@@ -9,6 +9,7 @@ import {
   existsRefusal,
   GATE_LIMITS,
   gateStateOf,
+  handPassRefusal,
   orderClosedRefusal,
   passesGate,
   passRefusal,
@@ -63,7 +64,8 @@ import { readGateView, type WorldContext } from './world'
  *                                                       passed
  *   POST  /planning/milestones/gates/:gateId/remove     planning.milestones.manage: only while neither passed nor started before
  *   POST  /planning/milestones/gates/pass               planning.milestones.manage: mark done on a day (today or before); a gate
- *                                                       that names a round only once the round is approved
+ *                                                       that names a round only once the round is approved (B-PR-38: a round of a
+ *                                                       customer whose portal is on: refused in words, CUSTOMER_DECIDES)
  *   POST  /planning/milestones/gates/:gateId/start-before   planning.milestones.override: someone who is neither the gate's
  *                                                       planner nor its maker, with a reason (3 to 1000 characters)
  */
@@ -262,7 +264,8 @@ export async function passGates(caller: CommandCaller, body: { readonly gates: r
       if (!row || !mayOn(actor, 'planning.view', row.order)) throw new NotFoundError('Gate not found.')
       if (!mayOn(actor, PLANNING_MILESTONES_MANAGE, row.order)) throw new ForbiddenError("Your role does not keep the gates of this order's company or customer.")
       if (row.gate.version !== entry.version) throw new ConflictError(`The gate of order ${row.order.number} changed since you read it (now version ${row.gate.version}): read it again.`)
-      const refusal = passRefusal(await gateFacts(db, row.gate, row.order), on, today)
+      // B-PR-38: a gate waiting for a customer's own round is passed by the customer's answer (or Decide for the customer), never by hand.
+      const refusal = handPassRefusal(await gateFacts(db, row.gate, row.order), on, today)
       if (refusal) {
         first ??= refusal
         refused.push({ path: `gates/${index}/${refusal.code}`, message: refusal.message })
