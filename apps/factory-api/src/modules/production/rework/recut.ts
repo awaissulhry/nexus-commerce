@@ -31,7 +31,7 @@ import { assertFloorReady } from '../bundles/bundles'
 import { asTenantSystem } from '../bundles/codes'
 import type { BundleRow } from '../bundles/store'
 import { floorOf, may, officeOf, ofWorkOrder, refuse, seen, workerOf, workOrderParties } from '../cutissue/access'
-import { ticketParties } from '../cutorders/access' // B-PR-04b
+import { ticketParties, ticketWall } from '../cutorders/access' // B-PR-04b, B-PR-05
 import { emitRecut } from '../cutissue/emit'
 import { cellCutFacts, cellText, findBundle, liveOf, readBundles, readCells, readLot, readLots, readOrder, readOrders, readStyles, shadeLotsOf, type OrderRow, type Reader } from '../cutissue/store'
 import { jobKey, labelTarget, queueLabel } from '../cutorders/printing'
@@ -159,6 +159,8 @@ export interface RecutListQuery {
   readonly workOrderId?: string | undefined
   readonly bundleId?: string | undefined
   readonly q?: string | undefined
+  /** B-PR-05: one customer's recuts (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly cursor?: string | undefined
   readonly limit?: number | undefined
 }
@@ -166,7 +168,14 @@ export interface RecutListQuery {
 /** GET /production/recut-tickets: the office's list, newest first, with a tile per status. */
 export async function listRecuts(caller: CommandCaller, query: RecutListQuery) {
   const context = officeOf(caller)
-  const scope = scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.CutTicketWhereInput
+  // B-PR-05 (the brand wall): a recut through its cell's work order (company, site and customer), of one customer when asked.
+  const scope: Prisma.CutTicketWhereInput = {
+    AND: [
+      scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.CutTicketWhereInput,
+      ticketWall(context, PRODUCTION_CUTTING_VIEW),
+      query.partyId ? { workOrderSize: { is: { workOrder: { is: { partyId: query.partyId } } } } } : {},
+    ],
+  }
   const limit = Math.min(query.limit ?? 50, RECUT_LIMITS.rows)
   const q = query.q?.trim()
   const base: Prisma.CutTicketWhereInput[] = [
@@ -199,7 +208,8 @@ export async function listRecuts(caller: CommandCaller, query: RecutListQuery) {
 /** GET /production/recut-tickets/waiting: the site's recuts to cut (floor: its own site), started first, then due, then oldest. */
 export async function waitingRecuts(caller: CommandCaller, query: { readonly siteId?: string | undefined }) {
   const context = workerOf(caller)
-  const scope = scopeWhere(actorOf(context), PRODUCTION_CUT, { company: 'companyId', site: 'siteId' }) as Prisma.CutTicketWhereInput
+  // B-PR-05 (the brand wall): the recuts of the work orders the caller reaches.
+  const scope: Prisma.CutTicketWhereInput = { AND: [scopeWhere(actorOf(context), PRODUCTION_CUT, { company: 'companyId', site: 'siteId' }) as Prisma.CutTicketWhereInput, ticketWall(context, PRODUCTION_CUT)] }
   const siteId = context.audience === 'floor' ? context.siteId : query.siteId
   return caller.withClient(async (db) => {
     const rows = await db.cutTicket.findMany({ where: { AND: [scope, siteId ? { siteId } : {}, { kind: 'RECUT', status: { in: ['OPEN', 'STARTED'] } }] }, select: RECUT_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: RECUT_LIMITS.rows })

@@ -6,7 +6,7 @@ import { command, type CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { lockWorkOrderIssues } from '../../inventory/issue/store'
 import { assertFloorReady } from '../bundles/bundles'
-import { assertMay, floorOf, may, refuse } from './access'
+import { assertMay, floorOf, may, refuse, repairReach } from './access'
 import { deviceStationOf, lockRepair, readOrder, readRepair, REPAIR_COLUMNS, repairFacts, type Reader, type RepairRow } from './store'
 
 /**
@@ -97,7 +97,7 @@ export async function stationQueue(caller: CommandCaller) {
     const station = await deviceStationOf(db, context.deviceId)
     const where: Prisma.ReworkOrderWhereInput = { siteId: context.siteId, status: { in: ['OPEN', 'IN_PROGRESS'] }, repairOutAt: null }
     // A tablet reads only what its grants reach (its site, by can()).
-    const rows = (await db.reworkOrder.findMany({ where, select: REPAIR_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: REPAIR_LIMITS.rows })).filter((row) => may(context, PRODUCTION_REPAIR, row))
+    const rows = (await db.reworkOrder.findMany({ where, select: REPAIR_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: REPAIR_LIMITS.rows })).filter((row) => may(context, PRODUCTION_REPAIR, repairReach(row)))
     const views = await queueRows(db, rows, station)
     return {
       asOf: toUtcIso(now),
@@ -112,7 +112,7 @@ export async function stationQueue(caller: CommandCaller) {
 export async function scanRepair(caller: CommandCaller, reworkId: string, step: RepairStep, body: ScanBody, idempotencyKey?: string) {
   const context = floorOf(caller)
   const known = await caller.withClient((db) => readRepair(db, reworkId))
-  assertMay(context, PRODUCTION_REPAIR, known, 'Rework')
+  assertMay(context, PRODUCTION_REPAIR, known ? repairReach(known) : null, 'Rework')
   // The floor's work needs its site's floor ready (the privacy gate), as every rework move from a tablet.
   await assertFloorReady(caller, context, known!.siteId)
   const deviceTime = body.occurredAt ? new Date(body.occurredAt) : undefined

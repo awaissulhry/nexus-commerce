@@ -13,10 +13,11 @@ import { serverClock } from '../../../core/time'
 import { SITE_COLUMNS, type SiteRow } from '../../planning/store'
 import { livePlanOf, readinessFor, type LivePlan } from '../../planning/readiness/service'
 import { mayAt, stockContextOf, type StockContext } from '../ledger/access'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-05
 import { reserve, type ReserveLineInput } from '../reservations/reserve'
 import { demandOpen, orderLinesOf, readDemands, RESERVATION_COLUMNS } from '../reservations/store'
 import { byCutDate, inView, kitOf, MAX_PICK_LISTS, MAX_SHEETS, proposePicks, type KitStatus, type OpenReservation, type PickView, type ProposedPick } from './kit-rules'
-import { pickListView } from './picking'
+import { mayPick, pickListView } from './picking' // B-PR-05: mayPick
 // B-W2b-15: the kit record of each work order (its place, the check).
 import { kitViewOf, readKits } from '../kits/store'
 import { readPickHeader, type PickHeader, type Reader } from './store'
@@ -191,6 +192,8 @@ export interface PickListsQuery {
   readonly siteId?: string | undefined
   readonly view: PickView
   readonly q?: string | undefined
+  /** B-PR-05: one customer's work orders (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly limit: number
   readonly cursor?: string | undefined
 }
@@ -205,8 +208,10 @@ export async function listPickLists(caller: CommandCaller, query: PickListsQuery
     const workOrders = await db.workOrder.findMany({
       where: {
         AND: [
-          scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
+          // B-PR-05 (the brand wall): the work orders the caller reaches, by company, site and customer (the tiles count the same).
+          workOrderWhere(actorOf(context), INVENTORY_STOCK_VIEW),
           { status: { in: [...LISTED] }, siteId: { in: sites.map((site) => site.id) } },
+          query.partyId ? { partyId: query.partyId } : {},
         ],
       },
       select: WORK_ORDER_COLUMNS,
@@ -318,7 +323,7 @@ export async function pickListSheets(caller: CommandCaller, query: { readonly wo
     const headers: PickHeader[] = []
     for (const id of ids) {
       const header = await readPickHeader(db, id)
-      if (!header || !mayAt(context, INVENTORY_STOCK_VIEW, header)) throw new NotFoundError('Work order not found.')
+      if (!header || !mayPick(context, INVENTORY_STOCK_VIEW, header)) throw new NotFoundError('Work order not found.')
       headers.push(header)
     }
     const sites = await sitesOf(db, context, [...new Set(headers.map((header) => header.siteId))])
@@ -388,7 +393,7 @@ export async function createPickLists(caller: CommandCaller, body: CreatePickLis
   const results: CreateResult[] = []
   for (const [index, workOrderId] of ids.entries()) {
     const header = await caller.withClient((db) => readPickHeader(db, workOrderId))
-    if (!header || header.siteId !== site.id || !mayAt(context, INVENTORY_RESERVE, header)) {
+    if (!header || header.siteId !== site.id || !mayPick(context, INVENTORY_RESERVE, header)) {
       results.push({ workOrderId, number: null, outcome: 'REFUSED', reserved: [], short: [], refusal: { code: 'NOT_FOUND', message: 'Not a work order of this site.' } })
       continue
     }
