@@ -201,6 +201,9 @@
     "QUOTE_TAKEN": "This quote was already made from another inquiry",
     "MAIL_NOT_WAITING": "Only a mail that was read (in Mail to sort, or in a thread) becomes an inquiry",
     "READ_ONLY": "Your role reads requests; sales answers them",
+    "NO_LINES": "{number} names nothing to make yet: add its lines (style, colourway, sizes) first",
+    "LINES_NOT_READY": "{number} has lines that are not ready to order: each needs a style, its colourway and pieces by size (make the style draft first)",
+    "STYLE_DRAFTS_FULL": "{number} already names the most style drafts one request holds",
     "other": "The factory refused this change"
   },
   "problem": {

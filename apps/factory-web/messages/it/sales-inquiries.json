@@ -201,6 +201,9 @@
     "QUOTE_TAKEN": "Questo preventivo è già stato creato da un’altra richiesta",
     "MAIL_NOT_WAITING": "Solo una mail già letta (in Posta da smistare o in una conversazione) diventa una richiesta",
     "READ_ONLY": "Il tuo ruolo legge le richieste; le gestisce l’ufficio vendite",
+    "NO_LINES": "{number} non indica ancora cosa produrre: aggiungi prima le righe (modello, variante colore, taglie)",
+    "LINES_NOT_READY": "{number} ha righe non pronte per un ordine: ognuna vuole un modello, la sua variante colore e i pezzi per taglia (crea prima la bozza del modello)",
+    "STYLE_DRAFTS_FULL": "{number} ha già il numero massimo di bozze di modello per una richiesta",
     "other": "La fabbrica ha rifiutato questa modifica"
   },
   "problem": {

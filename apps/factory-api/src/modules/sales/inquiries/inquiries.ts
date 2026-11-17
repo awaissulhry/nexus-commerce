@@ -680,8 +680,9 @@ export async function resumeInquiry(caller: CommandCaller, inquiryId: string, bo
 
 // ---- closing -----------------------------------------------------------------------------------------------------------
 
-export function emitClosed(tools: CommandTools, row: InquiryData, status: 'QUOTED' | 'DECLINED' | 'LOST', quoteId: string | null, declineReason: DeclineReason | null): void {
-  tools.emit({ type: 'inquiry.closed', subject: row.id, companyId: row.companyId, payload: { inquiryId: row.id, number: row.number, status, previousStatus: row.status, quoteId, declineReason, partyId: row.partyId } })
+// B-TH-025: ORDERED names the order made from it (salesOrderId); every other end names none.
+export function emitClosed(tools: CommandTools, row: InquiryData, status: 'QUOTED' | 'DECLINED' | 'LOST' | 'ORDERED', quoteId: string | null, declineReason: DeclineReason | null, salesOrderId: string | null = null): void {
+  tools.emit({ type: 'inquiry.closed', subject: row.id, companyId: row.companyId, payload: { inquiryId: row.id, number: row.number, status, previousStatus: row.status, quoteId, salesOrderId, declineReason, partyId: row.partyId } })
 }
 
 async function declineInCommand(tools: CommandTools, context: OfficeContext, row: InquiryData, reason: DeclineReason, note: string | null): Promise<InquiryStatus> {

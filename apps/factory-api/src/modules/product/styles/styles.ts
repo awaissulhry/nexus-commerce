@@ -20,7 +20,7 @@ import {
   type StyleInput,
   type StylePatch,
 } from '@nexus/factory-domain/product/styles/rules'
-import { command, type CommandCaller, type CommandTx } from '../../../core/command'
+import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 // B-W2b-221: the edit rule per lifecycle state, the database's style rules said in words, a new style's type defaults.
 import { editKindOfFields } from '@nexus/factory-domain/product/lifecycle/rules'
@@ -154,6 +154,28 @@ function styleInputOf(body: CreateStyleBody & { readonly sizeScaleId: string }):
 
 /** product.styles.create: a style with its colourways and range (and, when asked, its SKU matrix at once). */
 export async function createStyle(caller: CommandCaller, body: CreateStyleBody, idempotencyKey?: string): Promise<StyleView> {
+  const prepared = await prepareStyle(caller, body)
+  const { result } = await command(caller, { name: 'product.styles.create', idempotencyKey, input: body }, (tools) => makeStyleInCommand(tools, body, prepared)).catch((error: unknown) => {
+    if (isUniqueViolation(error)) throw codeConflict(prepared.code)
+    throw error
+  })
+  return result
+}
+
+// ---- B-TH-026 (threads plan L2-G18): the style's making, also inside another command (Make style draft from a request) ----
+
+/** What createStyle checked before its command: the type's defaults filled in, the scale, the style's input and colourways. */
+export interface PreparedStyle {
+  readonly companyId: string | null
+  readonly typeId: string | null
+  readonly sizeScaleId: string
+  readonly input: StyleInput
+  readonly colourways: ReturnType<typeof normaliseColourway>[]
+  readonly code: string
+}
+
+/** The checks before any lock (refused in words): product.styles.manage over the company, the type's defaults, the range. */
+export async function prepareStyle(caller: CommandCaller, body: CreateStyleBody): Promise<PreparedStyle> {
   const context = contextOf(caller)
   const companyId = body.companyId ?? null
   assertMayWrite(context, PRODUCT_STYLES_MANAGE, companyId)
@@ -168,51 +190,50 @@ export async function createStyle(caller: CommandCaller, body: CreateStyleBody, 
   const preview = newStyle(input, await caller.withClient((client) => readScaleSizes(client, sizeScaleId)))
   const issues = [...(preview.ok ? [] : prefixed(preview.issues)), ...prefixed(colourwayListProblems(colourways))]
   if (issues.length > 0 || !preview.ok) throw invalid(issues)
-  const code = preview.style.code
-
-  const { result } = await command(caller, { name: 'product.styles.create', idempotencyKey, input: body }, async (tools) => {
-    const { tx, now } = tools
-    if (companyId !== null && !(await tx.company.findUnique({ where: { id: companyId }, select: { id: true } }))) {
-      throw invalid([{ path: 'body/companyId', message: 'No such company.' }])
-    }
-    const scale = await scaleProblems(tx, sizeScaleId, companyId, true)
-    if (scale.length > 0) throw invalid(scale)
-    // B-W2b-221: the type checked again in the transaction (archived meanwhile: refused in words before the database).
-    if (typeId !== null) await typeDefaultsForNewStyle(tx, typeId, { productType: body.productType, companyId })
-    const outcome = newStyle(input, await readScaleSizes(tx, sizeScaleId))
-    if (!outcome.ok) throw invalid(prefixed(outcome.issues))
-    const style = outcome.style
-    const problems: Issue[] = [
-      ...(await brandProblems(tx, style.brandPartyId, companyId)),
-      ...(await templateProblems(tx, style.measurementTemplateId, style, companyId)),
-    ]
-    for (const [index, colourway] of colourways.entries()) problems.push(...(await colourProblems(tx, colourway.colourId, companyId, `body/colourways/${index}/colourId`)))
-    if (problems.length > 0) throw invalid(problems)
-    if (await codeTaken(tx, style.code)) throw codeConflict(style.code)
-
-    const id = newId()
-    const createdById = tools.context.audience === 'office' ? tools.context.actorId : null
-    await tx.style.create({
-      data: { ...(columnsOf(style) as Prisma.StyleUncheckedCreateInput), id, companyId, productTypeProfileId: typeId, createdAt: now, updatedAt: now, createdById },
-      select: { id: true },
-    })
-    if (colourways.length > 0) {
-      await tx.colourway.createMany({ data: colourways.map((colourway) => ({ id: newId(), styleId: id, ...colourway, createdAt: now, updatedAt: now, createdById })) })
-    }
-    tools.audit({ recordType: 'Style', recordId: id, companyId, after: { ...style, status: 'DRAFT', productTypeProfileId: typeId, colourways: colourways.map((colourway) => ({ ...colourway })) } })
-    tools.emit({ type: 'style.created', subject: id, companyId, payload: { styleId: id, code: style.code } })
-    if (body.generateSkus) {
-      const rows = await tx.colourway.findMany({ where: { styleId: id }, select: COLOURWAY_COLUMNS, orderBy: [{ createdAt: 'asc' }, { code: 'asc' }] })
-      const target = { id, code: style.code, companyId }
-      emitSkus(tools, target, await applyMatrixPlan(tools, target, generatePlan(style.code, offerOf(style.sizes, rows), [])))
-    }
-    return styleViewInTx(tx, id)
-  }).catch((error: unknown) => {
-    if (isUniqueViolation(error)) throw codeConflict(code)
-    throw error
-  })
-  return result
+  return { companyId, typeId, sizeScaleId, input, colourways, code: preview.style.code }
 }
+
+/** The style made inside the caller's command (createStyle's, or Make style draft's): checked again, written, audited, its event. */
+export async function makeStyleInCommand(tools: CommandTools, body: CreateStyleBody, prepared: PreparedStyle): Promise<StyleView> {
+  const { tx, now } = tools
+  const { companyId, typeId, sizeScaleId, input, colourways } = prepared
+  if (companyId !== null && !(await tx.company.findUnique({ where: { id: companyId }, select: { id: true } }))) {
+    throw invalid([{ path: 'body/companyId', message: 'No such company.' }])
+  }
+  const scale = await scaleProblems(tx, sizeScaleId, companyId, true)
+  if (scale.length > 0) throw invalid(scale)
+  // B-W2b-221: the type checked again in the transaction (archived meanwhile: refused in words before the database).
+  if (typeId !== null) await typeDefaultsForNewStyle(tx, typeId, { productType: body.productType, companyId })
+  const outcome = newStyle(input, await readScaleSizes(tx, sizeScaleId))
+  if (!outcome.ok) throw invalid(prefixed(outcome.issues))
+  const style = outcome.style
+  const problems: Issue[] = [
+    ...(await brandProblems(tx, style.brandPartyId, companyId)),
+    ...(await templateProblems(tx, style.measurementTemplateId, style, companyId)),
+  ]
+  for (const [index, colourway] of colourways.entries()) problems.push(...(await colourProblems(tx, colourway.colourId, companyId, `body/colourways/${index}/colourId`)))
+  if (problems.length > 0) throw invalid(problems)
+  if (await codeTaken(tx, style.code)) throw codeConflict(style.code)
+
+  const id = newId()
+  const createdById = tools.context.audience === 'office' ? tools.context.actorId : null
+  await tx.style.create({
+    data: { ...(columnsOf(style) as Prisma.StyleUncheckedCreateInput), id, companyId, productTypeProfileId: typeId, createdAt: now, updatedAt: now, createdById },
+    select: { id: true },
+  })
+  if (colourways.length > 0) {
+    await tx.colourway.createMany({ data: colourways.map((colourway) => ({ id: newId(), styleId: id, ...colourway, createdAt: now, updatedAt: now, createdById })) })
+  }
+  tools.audit({ recordType: 'Style', recordId: id, companyId, after: { ...style, status: 'DRAFT', productTypeProfileId: typeId, colourways: colourways.map((colourway) => ({ ...colourway })) } })
+  tools.emit({ type: 'style.created', subject: id, companyId, payload: { styleId: id, code: style.code } })
+  if (body.generateSkus) {
+    const rows = await tx.colourway.findMany({ where: { styleId: id }, select: COLOURWAY_COLUMNS, orderBy: [{ createdAt: 'asc' }, { code: 'asc' }] })
+    const target = { id, code: style.code, companyId }
+    emitSkus(tools, target, await applyMatrixPlan(tools, target, generatePlan(style.code, offerOf(style.sizes, rows), [])))
+  }
+  return styleViewInTx(tx, id)
+}
+// ---- end B-TH-026
 
 // ---- update ------------------------------------------------------------------------------------------------------------
 

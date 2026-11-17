@@ -44,6 +44,8 @@ const PARTNER_INQUIRY = {
   receivedAt: true,
   wantedDate: true,
   quoteId: true,
+  // B-TH-025: the order made straight from it (partner-readable since the TH-2 schema wave).
+  salesOrderId: true,
   closedAt: true,
   updatedAt: true,
 } as const satisfies Prisma.InquirySelect
@@ -69,15 +71,25 @@ async function partnerInquiries(client: FactoryClient, companyId: string, where:
 /** What became of each inquiry (tenant scope as the person; ids from the party's own inquiries; the party checked again). */
 async function madeOf(reader: PortalReader, rows: readonly InquiryRow[]): Promise<Map<string, Made>> {
   const quoteIds = ids(rows.map((row) => row.quoteId))
+  // B-TH-025: the orders made straight from requests (no quote between): the customer reads the order's own state.
+  const orderIds = ids(rows.map((row) => row.salesOrderId))
   const made = new Map<string, Made>()
-  if (quoteIds.length === 0) return made
+  if (quoteIds.length === 0 && orderIds.length === 0) return made
   const partyId = reader.session.partyId
-  const { quotes, orders } = await reader.inTenant(async (client) => {
-    const quotes = await client.quote.findMany({ where: { id: { in: quoteIds }, partyId }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true, versions: { where: { sentAt: { not: null } }, select: { id: true }, take: 1 } } })
-    const orders = await client.salesOrder.findMany({ where: { partyId, quoteVersion: { quoteId: { in: quoteIds } } }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true, createdAt: true, quoteVersion: { select: { quoteId: true } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
-    return { quotes, orders }
+  const { quotes, orders, direct } = await reader.inTenant(async (client) => {
+    const quotes = quoteIds.length === 0 ? [] : await client.quote.findMany({ where: { id: { in: quoteIds }, partyId }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true, versions: { where: { sentAt: { not: null } }, select: { id: true }, take: 1 } } })
+    const orders = quoteIds.length === 0 ? [] : await client.salesOrder.findMany({ where: { partyId, quoteVersion: { quoteId: { in: quoteIds } } }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true, createdAt: true, quoteVersion: { select: { quoteId: true } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
+    const direct = orderIds.length === 0 ? [] : await client.salesOrder.findMany({ where: { id: { in: orderIds }, partyId }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true } })
+    return { quotes, orders, direct }
   })
   for (const row of rows) {
+    // ---- B-TH-025: ORDERED, the order named on the request (the party checked again in the tenant read).
+    const straight = row.salesOrderId ? direct.find((entry) => entry.id === row.salesOrderId) : undefined
+    if (straight) {
+      made.set(row.id, { quote: null, order: { id: straight.id, number: straight.number, status: straight.status, customerSeq: straight.customerSeq, updatedAt: straight.updatedAt } })
+      continue
+    }
+    // ---- end B-TH-025
     if (!row.quoteId) continue
     const quote = quotes.find((entry) => entry.id === row.quoteId)
     if (!quote) continue
