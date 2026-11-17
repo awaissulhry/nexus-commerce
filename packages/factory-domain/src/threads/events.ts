@@ -24,6 +24,9 @@ export const events = [
       recordId: z.uuid(),
       direction: z.enum(MESSAGE_DIRECTIONS),
       audience: z.enum(MESSAGE_AUDIENCES),
+      // B-TH-045 (production lane T6): the batch one action wrote several messages in (a note to N records, the answer to N
+      // orders of one customer): their notifications fold into ONE bell item per reader. Absent: a message of its own.
+      batchId: z.uuid().optional(),
     }),
     live: { permission: 'threads.read', fields: ['threadId', 'messageId', 'recordType', 'recordId'] },
   }),
@@ -38,6 +41,8 @@ export const events = [
       recordId: z.uuid(),
       userId: z.uuid(),
       authorId: z.uuid().nullable(),
+      // B-TH-045: as thread.message_posted's batchId ("mentioned you on 12 orders" is one bell item).
+      batchId: z.uuid().optional(),
     }),
   }),
   // B-W2a-20 (COL-011): someone followed, unfollowed or muted a record, or was added as its follower. The record's side

@@ -226,6 +226,16 @@ export function groupKeyFor(previous: { readonly groupKey: string | null; readon
   return ownId
 }
 
+// ---- B-TH-045 (threads plan TH-3; production lane T6): one action that writes on several records at once (a note to N records, the
+// answer to N orders of one customer) names a batch; each reader's notifications of that batch and category are ONE group, whatever
+// their records — "mentioned you on 12 orders" is one bell item. Rows are per reader and made only for the records that reader may
+// read, so the group's count and newest record are that reader's own. The office bell (office) and the portal bell (partner) alike.
+export const batchGroupKey = (batchId: string, category: string): string => `batch:${batchId}:${category}`
+
+/** The number of different records among a group's rows (a batch group spans several; a record group one). */
+export const recordsInGroup = (rows: readonly { readonly recordType: string; readonly recordId: string }[]): number => new Set(rows.map((row) => `${row.recordType}:${row.recordId}`)).size
+// ---- end B-TH-045
+
 // ---- snooze (H: "until a time or new activity") ---------------------------------------------------------------------------
 
 export const SNOOZE_MAX_DAYS = 90
