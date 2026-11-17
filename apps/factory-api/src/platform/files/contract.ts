@@ -45,8 +45,25 @@ export const fileView = output({
   supersededAt: instant().nullable().optional(),
   seriesId: id().nullable().optional(),
   sourceFileId: id().nullable().optional(),
+  /**
+   * B-TH-024: on a copy, where it came from — its source file's record, name and version (the office's list, when the person
+   * may open that record; null: not a copy, or a record out of reach).
+   */
+  origin: output({ fileId: id(), recordType: z.string(), recordId: id(), originalName: z.string(), versionNo: z.number().int() }).nullable().optional(),
 })
 export type FileView = z.infer<typeof fileView>
+
+/** B-TH-024: POST /files/:fileId/use-on — carry a file to another record (./use-on.ts). */
+export const useOnContract = defineContract({
+  params: input({ fileId: id() }),
+  body: input({
+    recordType: z.string().regex(RECORD_TYPE),
+    recordId: id(),
+    /** Default office only. Shared outside: only with the target record's own customer or supplier. */
+    visibility: z.array(z.enum(FILE_AUDIENCES)).max(FILE_AUDIENCES.length).optional(),
+  }),
+  response: { 201: output({ file: fileView }) },
+})
 
 /** A request to make straight to the store: send exactly these headers (they are signed) before `expiresAt`. */
 export const presignedView = output({

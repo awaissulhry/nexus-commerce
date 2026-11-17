@@ -189,11 +189,21 @@ export type CertificateRow = Prisma.CertificateGetPayload<{ select: typeof CERTI
 export const readCertificates = (db: Reader, ids: readonly string[]): Promise<CertificateRow[]> =>
   ids.length === 0 ? Promise.resolve([]) : db.certificate.findMany({ where: { id: { in: [...ids] } }, select: CERTIFICATE_SELECT })
 
-/** The certificates covering each style (ACTIVE coverage rows). */
-export async function coveringCertificates(db: Reader, styleIds: readonly string[]): Promise<Map<string, CertificateRow[]>> {
+/**
+ * B-TH-035 (WALL-G16, W13; the brand wall): a certificate a customer may read — one the company holds, or one this customer
+ * holds; never one held by another brand (holderPartyId: PLAN §2.8, a brand label's own certificate).
+ */
+export const heldByCompanyOr = (partyId: string): Prisma.CertificateWhereInput => ({ OR: [{ holderPartyId: null }, { holderPartyId: partyId }] })
+
+/**
+ * The certificates covering each style (ACTIVE coverage rows). `forParty` (a customer's read: the portal's conformity per style)
+ * leaves out a certificate another brand holds (B-TH-035).
+ */
+export async function coveringCertificates(db: Reader, styleIds: readonly string[], forParty?: string): Promise<Map<string, CertificateRow[]>> {
   if (styleIds.length === 0) return new Map()
   const coverage = await db.certificateCoverage.findMany({ where: { styleId: { in: [...styleIds] }, status: 'ACTIVE' }, select: { styleId: true, certificateId: true } })
-  const certificates = await readCertificates(db, [...new Set(coverage.map((row) => row.certificateId))])
+  const ids = [...new Set(coverage.map((row) => row.certificateId))]
+  const certificates = forParty === undefined ? await readCertificates(db, ids) : ids.length === 0 ? [] : await db.certificate.findMany({ where: { AND: [{ id: { in: ids } }, heldByCompanyOr(forParty)] }, select: CERTIFICATE_SELECT })
   const byId = new Map(certificates.map((row) => [row.id, row]))
   const result = new Map<string, CertificateRow[]>()
   for (const row of coverage) {

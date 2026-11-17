@@ -59,7 +59,9 @@ async function reportInputOf(db: Reader, capa: CapaRow, company: CompanyLegal, o
   const ncrIds = sources.filter((source) => source.recordType === 'Nonconformance').map((source) => source.recordId)
   const complaintIds = sources.filter((source) => source.recordType === 'Complaint').map((source) => source.recordId)
   const ncrs = ncrIds.length === 0 ? [] : await db.nonconformance.findMany({ where: { id: { in: ncrIds } }, select: { id: true, number: true, causeCodeId: true }, orderBy: [{ number: 'asc' }] })
-  const complaints = complaintIds.length === 0 ? [] : await db.complaint.findMany({ where: { id: { in: complaintIds } }, select: { id: true, number: true, customerRef: true }, orderBy: [{ number: 'asc' }] })
+  // B-TH-031 (WALL-G06, W15): an 8D written for a customer prints that customer's complaints only — it is the paper that customer
+  // gets; a complaint of another customer linked to the same CAPA stays on the CAPA's page, for the office.
+  const complaints = complaintIds.length === 0 ? [] : await db.complaint.findMany({ where: { id: { in: complaintIds }, ...(capa.customerId ? { partyId: capa.customerId } : {}) }, select: { id: true, number: true, customerRef: true }, orderBy: [{ number: 'asc' }] })
   const containment = ncrs.length === 0 ? [] : await db.ncrContainmentAction.findMany({ where: { ncrId: { in: ncrs.map((ncr) => ncr.id) }, status: { not: 'CANCELLED' } }, select: { ncrId: true, kind: true, description: true, status: true, doneAt: true }, orderBy: [{ ncrId: 'asc' }, { seq: 'asc' }] })
   const causeIds = [...new Set(ncrs.flatMap((ncr) => (ncr.causeCodeId ? [ncr.causeCodeId] : [])))]
   const causes = causeIds.length === 0 ? [] : await db.causeCode.findMany({ where: { id: { in: causeIds } }, select: { code: true, labelIt: true, labelEn: true }, orderBy: [{ sortOrder: 'asc' }, { code: 'asc' }] })

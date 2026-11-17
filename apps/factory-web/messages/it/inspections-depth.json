@@ -260,7 +260,8 @@
       "NOT_ON_SHIPMENT": "Questa spedizione non porta capi di questo ordine di produzione.",
       "NO_VERSION": "Nessuna versione tenuta: tienine prima una.",
       "NO_SUCH_VERSION": "Quella versione non esiste più: rileggi le versioni.",
-      "NO_SHIPMENT": "Spedizione non trovata."
+      "NO_SHIPMENT": "Spedizione non trovata.",
+      "SHARED_PRODUCTION": "Questo ordine di produzione fa capi anche per un altro cliente: il suo rapporto non va a un solo cliente. Condividi invece il certificato di conformità di questa spedizione."
     }
   },
   "checks": {

@@ -31,7 +31,7 @@ export default defineIndexer({
         title: true,
         serial: true,
         stage: true,
-        style: { select: { code: true, name: true } },
+        style: { select: { code: true, name: true, brandPartyId: true } },
         workOrder: { select: { number: true } },
         item: { select: { code: true, name: true } },
         lot: { select: { code: true } },
@@ -42,7 +42,8 @@ export default defineIndexer({
       recordId: row.id,
       companyId: row.companyId,
       siteId: row.siteId,
-      partyId: null,
+      // B-TH-030 (WALL-G12): an NCR about a private-label style is its brand's (a supplier is never a brand).
+      partyId: row.style?.brandPartyId ?? null,
       number: row.number,
       title: row.title,
       // What it is about: its work order, else its lot, else the garment's serial.

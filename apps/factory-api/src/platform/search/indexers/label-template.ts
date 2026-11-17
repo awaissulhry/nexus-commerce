@@ -21,13 +21,14 @@ export default defineIndexer({
       where: idWhere(filter),
       orderBy: { id: 'asc' },
       take,
-      select: { id: true, companyId: true, code: true, revision: true, name: true, status: true, style: { select: { code: true, name: true } } },
+      select: { id: true, companyId: true, code: true, revision: true, name: true, status: true, style: { select: { code: true, name: true, brandPartyId: true } } },
     })
     return rows.map((row) => ({
       recordId: row.id,
       companyId: row.companyId,
       siteId: null,
-      partyId: null,
+      // B-TH-030 (WALL-G12): a label made for a private-label style is its brand's.
+      partyId: row.style?.brandPartyId ?? null,
       number: row.code,
       title: row.name,
       // Its revision ("Rev. 2", read alike in Italian and English), then the style it is made for.

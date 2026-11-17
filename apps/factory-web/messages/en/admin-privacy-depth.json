@@ -565,6 +565,15 @@
             "ANONYMISE": "An invoice is never anonymised: the law keeps it as issued."
           }
         },
+        "Inquiry": {
+          "name": "Prospects of closed requests",
+          "countsFrom": "From when the request was closed (an open request, a customer's request or an erased prospect is never due). Suggested: 24 months, until the privacy consultant confirms.",
+          "does": {
+            "ANONYMISE": "Erases the prospect of a closed request: name, company, e-mail and phone blank for good, with when and by whom; the request, its lines, its thread and the lawful basis stay.",
+            "DELETE": "A request is never deleted by a sweep: only its prospect is erased.",
+            "ARCHIVE": "A request cannot be archived by a sweep: only its prospect is erased."
+          }
+        },
         "other": {
           "name": "Other records",
           "countsFrom": "The sweep knows nothing of this record type.",
