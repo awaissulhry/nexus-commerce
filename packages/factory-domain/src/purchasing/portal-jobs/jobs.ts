@@ -63,10 +63,10 @@ export const JOB_CHIP_WORDS: Readonly<Record<JobChip, Words>> = Object.freeze({
 export const JOB_STATES = ['TO_ANSWER', 'DECLINED', 'WAITING_KIT', 'IN_WORK', 'PARTLY_BACK', 'BACK', 'CLOSED', 'CANCELLED'] as const
 export type JobState = (typeof JOB_STATES)[number]
 export const JOB_STATE_WORDS: Readonly<Record<JobState, Words>> = Object.freeze({
-  TO_ANSWER: w('Aspetta la tua risposta', 'Waiting for your answer'),
+  TO_ANSWER: w('Aspetta la vostra risposta', 'Waiting for your answer'),
   DECLINED: w('Rifiutata', 'Declined'),
   WAITING_KIT: w('Il kit è in arrivo', 'Kit on its way'),
-  IN_WORK: w('Nel tuo laboratorio', 'In your workshop'),
+  IN_WORK: w('Nel vostro laboratorio', 'In your workshop'),
   PARTLY_BACK: w('In parte rientrata', 'Partly back'),
   BACK: w('Tutto rientrato', 'All back'),
   CLOSED: w('Chiusa', 'Closed'),
@@ -154,22 +154,22 @@ export interface JobActs {
 
 export function jobActsOf(facts: JobFacts): JobActs {
   const ended = ENDED.includes(facts.status) ? w('Questa lavorazione è conclusa.', 'This job has ended.') : null
-  const declined = facts.declined ? w('Hai rifiutato questa lavorazione.', 'You declined this job.') : null
-  const answered = facts.accepted ? w('Hai già accettato questa lavorazione.', 'You accepted this job already.') : declined
-  const notAccepted = facts.accepted ? null : (declined ?? w('Prima accetta la lavorazione.', 'Accept the job first.'))
-  const accept = ended ?? answered ?? (OUT.includes(facts.status) ? null : w('Questa lavorazione non ti è ancora stata inviata.', 'This job was not sent to you yet.'))
+  const declined = facts.declined ? w('Avete rifiutato questa lavorazione.', 'You declined this job.') : null
+  const answered = facts.accepted ? w('Avete già accettato questa lavorazione.', 'You accepted this job already.') : declined
+  const notAccepted = facts.accepted ? null : (declined ?? w('Prima accettate la lavorazione.', 'Accept the job first.'))
+  const accept = ended ?? answered ?? (OUT.includes(facts.status) ? null : w('Questa lavorazione non vi è ancora stata inviata.', 'This job was not sent to you yet.'))
   const decline =
     ended ??
     answered ??
-    (facts.status === 'PARTLY_RECEIVED' ? w('Parte del lavoro è già rientrata: scrivici nei messaggi.', 'Some of the work came back already: write to us in the messages.') : null) ??
-    (OUT.includes(facts.status) ? null : w('Questa lavorazione non ti è ancora stata inviata.', 'This job was not sent to you yet.'))
+    (facts.status === 'PARTLY_RECEIVED' ? w('Parte del lavoro è già rientrata: scriveteci nei messaggi.', 'Some of the work came back already: write to us in the messages.') : null) ??
+    (OUT.includes(facts.status) ? null : w('Questa lavorazione non vi è ancora stata inviata.', 'This job was not sent to you yet.'))
   const kit = ended ?? notAccepted ?? (kitToConfirm(facts) > 0 ? null : w('Nessun kit da confermare.', 'No kit to confirm.'))
   const progress = ended ?? notAccepted
   const sendBack =
     ended ??
     notAccepted ??
     (AT_WORKSHOP.includes(facts.status) ? null : w('Il kit non è ancora partito: niente da rendere.', 'The kit has not left yet: nothing to send back.')) ??
-    (facts.operations.some((operation) => announceableOf(operation) > 0) ? null : w('Tutto quello che hai è già annunciato o rientrato.', 'Everything you hold is announced or back already.'))
+    (facts.operations.some((operation) => announceableOf(operation) > 0) ? null : w('Tutto quello che avete è già annunciato o rientrato.', 'Everything you hold is announced or back already.'))
   return { accept, decline, kit, progress, sendBack }
 }
 
@@ -686,11 +686,11 @@ export function shortDay(day: BusinessDate, locale: Locale): string {
 export function acceptedWords(plan: AcceptPlan, kitDay: BusinessDate | null, locale: Locale): string {
   if (plan.proposedDate) {
     return locale === 'it'
-      ? `Accettata — hai proposto il ${shortDay(plan.proposedDate, 'it')}: ti diciamo se va bene.`
+      ? `Accettata — avete proposto il ${shortDay(plan.proposedDate, 'it')}: vi diciamo se va bene.`
       : `Accepted — you proposed ${shortDay(plan.proposedDate, 'en')}: we will tell you if it works.`
   }
   if (kitDay) return locale === 'it' ? `Accettata — il kit parte il ${shortDay(kitDay, 'it')} con il nostro DDT.` : `Accepted — we send the kit on ${shortDay(kitDay, 'en')} with our DDT.`
-  return locale === 'it' ? 'Accettata — ti avvisiamo quando parte il kit.' : 'Accepted — we tell you when the kit leaves.'
+  return locale === 'it' ? 'Accettata — vi avvisiamo quando parte il kit.' : 'Accepted — we tell you when the kit leaves.'
 }
 
 export const declinedWords = (locale: Locale): string => (locale === 'it' ? 'Rifiutata — grazie di averci avvisato.' : 'Declined — thank you for telling us.')

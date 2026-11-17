@@ -56,6 +56,8 @@ import { erasedAmong, erasedForOutside, feedAudienceWhere, skippedPartsOf, waiti
 import { clearDraftInCommand } from './draft-keys'
 // ---- B-TH-093: Done, a work state apart from Close (the office's head; a new shared message reopens it).
 import { doneOf, reopenOnSharedMessage, type DoneView } from './work-state'
+// ---- fix-wall-1: a file whose content is another customer's (an old copy of a mixed lot's photo) never reaches a portal or a link.
+import { contentWalledFor, walledForOutside } from '../files/content-wall'
 
 /**
  * Record threads (plan A1 §2.3, §3.7; features COL-001, COL-003, COL-020):
@@ -483,8 +485,12 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
   })
   // ---- B-TH-079: a portal or link reader is told an erased message too (read in the tenant's scope for the messages it holds).
   if (office || read.messages.length === 0) return read
-  const erased = await erasedForOutside(caller, context.tenantId, read.messages.map((message) => ({ id: message.id, bodyText: message.body, authorName: message.author.name })))
-  return erased.size === 0 ? read : { ...read, messages: read.messages.map((message) => (erased.has(message.id) ? { ...message, erased: true } : message)) }
+  // ---- fix-wall-1: a walled file is left out of its message's files and out of its count (as if it were never attached).
+  const walled = await walledForOutside(caller, read.messages.flatMap((message) => message.attachments.map((file) => file.id)))
+  const unwalled = walled.size === 0 ? read : { ...read, messages: read.messages.map((message) => ({ ...message, attachments: message.attachments.filter((file) => !walled.has(file.id)) })) }
+  // ---- end fix-wall-1
+  const erased = await erasedForOutside(caller, context.tenantId, unwalled.messages.map((message) => ({ id: message.id, bodyText: message.body, authorName: message.author.name })))
+  return erased.size === 0 ? unwalled : { ...unwalled, messages: unwalled.messages.map((message) => (erased.has(message.id) ? { ...message, erased: true } : message)) }
   // ---- end B-TH-079
 }
 
@@ -687,6 +693,9 @@ export async function attachmentProblems(tx: CommandTx, context: RequestContext,
   const problems: Issue[] = []
   // B-TH-083: a measurement sheet goes with a message only from a writer who may open it (sales.measurements.view over the record).
   const opensSheets = !isOffice(context) || !rows.some(isMeasurementSheet) || mayOnThread(actor, MEASUREMENT_SHEET_PERMISSION, thread.recordType, (await resolveRecord(tx, thread.recordType, thread.recordId)) ?? scopeOfThread(thread))
+  // fix-wall-1: a shared message (a portal reply, a mail) never carries a file whose content is another customer's (the writer's
+  // own transaction reads every file of the tenant: the office or the system).
+  const walled = audience === 'PARTNER' && thread.partyId ? await contentWalledFor(tx, thread.partyId, rows.map((row) => row.id)) : new Set<string>()
   fileIds.forEach((fileId, index) => {
     const path = `body/attachments/${index}`
     const row = byId.get(fileId)
@@ -694,9 +703,14 @@ export async function attachmentProblems(tx: CommandTx, context: RequestContext,
     else if (row.recordType !== thread.recordType || row.recordId !== thread.recordId) problems.push({ path, message: 'Only a file of this record can be attached.' })
     else if (row.status !== 'AVAILABLE') problems.push({ path, message: `This file is ${row.status}; only an available file can be attached.` })
     else if (audience === 'PARTNER' && row.partyId !== thread.partyId) problems.push({ path, message: "Share the file with the record's party first." })
+    else if (audience === 'PARTNER' && walled.has(fileId)) problems.push({ path, message: CONTENT_WALL_WORDS })
   })
   return problems
 }
+
+// ---- fix-wall-1: the office's words (only the office and the system write these messages): why, never which other customer.
+export const CONTENT_WALL_WORDS = "This file shows goods of another customer, or of several customers (it is a copy of such a record's file): it is never sent to this customer. Attach a file of this customer's own goods instead."
+// ---- end fix-wall-1
 
 /** What is wrong with the people a note mentions (empty: none): each an ACTIVE person whose roles let them read the thread. */
 export async function mentionProblems(tx: CommandTx, context: RequestContext, thread: ThreadRow, userIds: readonly string[], now: Date): Promise<Issue[]> {

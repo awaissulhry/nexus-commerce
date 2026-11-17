@@ -149,9 +149,9 @@ const MAIL = {
   it: {
     hello: (name: string | null) => (name ? `Gentile ${name},` : 'Buongiorno,'),
     cancelSubject: (number: string) => `Ordine di acquisto ${number}: righe annullate`,
-    cancelled: (number: string) => `queste righe del nostro ordine di acquisto ${number} sono annullate: la preghiamo di non evaderle.`,
+    cancelled: (number: string) => `queste righe del nostro ordine di acquisto ${number} sono annullate: vi preghiamo di non evaderle.`,
     shortSubject: (number: string) => `Ordine di acquisto ${number}: righe chiuse`,
-    closedShort: (number: string) => `queste righe del nostro ordine di acquisto ${number} sono chiuse con quanto già ricevuto: la preghiamo di non inviare il resto.`,
+    closedShort: (number: string) => `queste righe del nostro ordine di acquisto ${number} sono chiuse con quanto già ricevuto: vi preghiamo di non inviare il resto.`,
     rest: 'Il resto dell’ordine non cambia.',
   },
   en: {

@@ -6,7 +6,7 @@
     "emailSettings": "Impostazioni e-mail"
   },
   "keys": {
-    "todo": "Scorri Cosa ti aspetta",
+    "todo": "Scorri Cosa vi aspetta",
     "runVerb": "Esegui l'azione della riga",
     "goOrders": "Vai agli Ordini",
     "nextApproval": "Approvazione in attesa successiva o precedente",
@@ -21,19 +21,19 @@
   },
   "search": {
     "title": "Trova qualsiasi cosa",
-    "label": "Cerca nei tuoi ordini e documenti",
-    "placeholder": "Il tuo numero d'ordine, il nostro numero o un modello",
+    "label": "Cerca nei vostri ordini e documenti",
+    "placeholder": "Il vostro numero d'ordine, il nostro numero o un modello",
     "go": "Cerca",
     "hint": "Invio apre l'unico risultato; se sono più d'uno li elenchiamo per tipo.",
     "recent": "Ricerche recenti",
     "recentHint": "Conservate solo su questo dispositivo.",
     "clear": "Cancella le ricerche recenti",
     "again": "Cerca di nuovo {query}",
-    "tooShort": "Scrivi ancora qualcosa per cercare.",
+    "tooShort": "Scrivete ancora qualcosa per cercare.",
     "searching": "Ricerca in corso…",
-    "none": "Nessun risultato per «{query}». Prova il tuo riferimento o il nostro.",
-    "failed": "La ricerca non risponde. Riprova.",
-    "capped": "Molti risultati: scrivi più caratteri del riferimento per restringere.",
+    "none": "Nessun risultato per «{query}». Provate il vostro riferimento o il nostro.",
+    "failed": "La ricerca non risponde. Riprovate.",
+    "capped": "Molti risultati: scrivete più caratteri del riferimento per restringere.",
     "found_one": "{count} trovato",
     "found_other": "{count} trovati",
     "yours": "Vostro",
@@ -60,7 +60,7 @@
     "failed": "Non è stato possibile leggere i numeri."
   },
   "orders": {
-    "title": "Le tue prossime consegne",
+    "title": "Le vostre prossime consegne",
     "failed": "Non è stato possibile leggere le prossime consegne.",
     "empty": "Nessun ordine aperto.",
     "seeAll_one": "Vedi l'ordine aperto",
@@ -100,7 +100,7 @@
     "previewOf": "Anteprima di {title}",
     "downloadOf": "Scarica {title}",
     "opening": "Preparazione…",
-    "openFailed": "Non è stato possibile aprire il documento. Riprova."
+    "openFailed": "Non è stato possibile aprire il documento. Riprovate."
   },
   "messages": {
     "title": "Messaggi",
@@ -128,7 +128,7 @@
     "accountEmpty": "Chiedeteci qualsiasi cosa qui: rispondiamo nel portale.",
     "write": "Scriveteci",
     "projects": "Progetti",
-    "projectsLabel": "Progetti a cui ti abbiamo aggiunto",
+    "projectsLabel": "Progetti a cui vi abbiamo aggiunti",
     "projectTag": "Progetto",
     "projectStatus": {
       "ON_HOLD": "In pausa",
@@ -137,19 +137,19 @@
     "projectTarget": "Data obiettivo {date}",
     "projectNone": "Nessun messaggio ancora",
     "openProject": "Apri il progetto {name}",
-    "projectsMore_one": "E ancora {count} progetto a cui ti abbiamo aggiunto.",
-    "projectsMore_other": "E ancora {count} progetti a cui ti abbiamo aggiunto."
+    "projectsMore_one": "E ancora {count} progetto a cui vi abbiamo aggiunti.",
+    "projectsMore_other": "E ancora {count} progetti a cui vi abbiamo aggiunti."
   },
   "welcome": {
-    "title": "Ti diamo il benvenuto, {name}.",
-    "body": "Qui segui i tuoi ordini con {company}: a che punto è ciascuno, i documenti che ti inviamo e cosa ti chiediamo.",
-    "buyerBody": "Il primo passo: dicci di cosa hai bisogno.",
-    "firstOrder": "Inizia il tuo primo ordine",
-    "catalogue": "Sfoglia il tuo catalogo",
+    "title": "Vi diamo il benvenuto, {name}.",
+    "body": "Qui seguite i vostri ordini con {company}: a che punto è ciascuno, i documenti che vi inviamo e cosa vi chiediamo.",
+    "buyerBody": "Il primo passo: diteci di cosa avete bisogno.",
+    "firstOrder": "Inizia il vostro primo ordine",
+    "catalogue": "Sfoglia il vostro catalogo",
     "ask": "Scrivici una domanda",
-    "askHint": "Gli ordini dal portale non sono ancora aperti: scrivici e ti rispondiamo qui.",
-    "other": "Per avere più accesso puoi chiedere a {admins}.",
-    "otherNoAdmin": "L'amministratore della tua organizzazione può darti più accesso."
+    "askHint": "Gli ordini dal portale non sono ancora aperti: scriveteci e vi rispondiamo qui.",
+    "other": "Per avere più accesso potete chiedere a {admins}.",
+    "otherNoAdmin": "L'amministratore della vostra organizzazione può darvi più accesso."
   },
   "verb": {
     "APPROVE": "Approva",
@@ -158,8 +158,8 @@
   "held": {
     "preview": "Questa è un'anteprima: si può solo leggere.",
     "mayApprove": "Solo i colleghi che possono approvare possono rispondere.",
-    "mayApproveAsk": "Solo i colleghi che possono approvare possono rispondere. Chiedi a {admins}.",
-    "offline": "Nessuna connessione: riprova quando torni online.",
+    "mayApproveAsk": "Solo i colleghi che possono approvare possono rispondere. Chiedete a {admins}.",
+    "offline": "Nessuna connessione: riprovate quando tornate online.",
     "busy": "Invio in corso…",
     "reading": "Lettura della richiesta in corso…",
     "closed": "Questa richiesta non accetta più risposte.",
@@ -180,7 +180,7 @@
     "COUNTER_OFFER": "Controproposta"
   },
   "status": {
-    "OPEN": "In attesa della tua risposta",
+    "OPEN": "In attesa della vostra risposta",
     "APPROVED": "Approvato",
     "APPROVED_WITH_CHANGES": "Approvato con modifiche",
     "REFUSED": "Rifiutato",
@@ -192,8 +192,8 @@
     "loading": "Lettura della richiesta…",
     "failed": "Non è stato possibile leggere la richiesta.",
     "gone": "Questa richiesta non c'è più: è stata ritirata o ha già una risposta.",
-    "what": "Cosa ti chiediamo",
-    "due": "Rispondi entro",
+    "what": "Cosa vi chiediamo",
+    "due": "Rispondete entro",
     "dueIn": "mancano {left}",
     "dueNow": "Scade ora",
     "from": "Chiesto da",
@@ -226,50 +226,50 @@
     "lineNet": "Importo della riga",
     "net": "Valore netto",
     "gross": "Totale IVA inclusa",
-    "netMoved": "Il valore dell'ordine è cambiato: la tua accettazione precedente non lo copre più.",
-    "noPrices": "I prezzi non fanno parte del tuo accesso.",
-    "decision": "La tua decisione",
-    "legend": "Scegli la tua risposta",
+    "netMoved": "Il valore dell'ordine è cambiato: la vostra accettazione precedente non lo copre più.",
+    "noPrices": "I prezzi non fanno parte del vostro accesso.",
+    "decision": "La vostra decisione",
+    "legend": "Scegliete la vostra risposta",
     "option": {
       "APPROVED": "Approva",
       "APPROVED_body": "Così com'è, nulla da cambiare.",
       "APPROVED_WITH_CHANGES": "Approva con modifiche",
-      "APPROVED_WITH_CHANGES_body": "Sì, se si fanno le modifiche che scrivi.",
+      "APPROVED_WITH_CHANGES_body": "Sì, se si fanno le modifiche che scrivete.",
       "REFUSED": "Rifiuta",
-      "REFUSED_body": "No: dicci perché."
+      "REFUSED_body": "No: diteci perché."
     },
     "comment": {
       "optional": "Commento (facoltativo)",
       "what": "Cosa va cambiato",
-      "why": "Perché rifiuti",
+      "why": "Perché rifiutate",
       "needed": "Serve per questa risposta.",
-      "hint": "Lo leggiamo insieme alla tua risposta."
+      "hint": "Lo leggiamo insieme alla vostra risposta."
     },
     "problem": {
-      "choose": "Scegli prima la tua risposta.",
-      "what": "Scrivi cosa va cambiato.",
-      "why": "Scrivi perché rifiuti.",
+      "choose": "Scegliete prima la vostra risposta.",
+      "what": "Scrivete cosa va cambiato.",
+      "why": "Scrivete perché rifiutate.",
       "long": "Il commento è troppo lungo.",
-      "changed": "La richiesta è cambiata nel frattempo: rileggila.",
+      "changed": "La richiesta è cambiata nel frattempo: rileggetela.",
       "gone": "Questa richiesta non accetta più risposte.",
-      "forbidden": "Non puoi rispondere a questa richiesta.",
-      "invalid": "La risposta non è stata accettata: controlla il nome e il commento.",
-      "unavailable": "Non è stato possibile inviarla ora. Riprova.",
-      "internal": "Qualcosa non ha funzionato. Riprova."
+      "forbidden": "Non potete rispondere a questa richiesta.",
+      "invalid": "La risposta non è stata accettata: controllate il nome e il commento.",
+      "unavailable": "Non è stato possibile inviarla ora. Riprovate.",
+      "internal": "Qualcosa non ha funzionato. Riprovate."
     },
     "sign": {
-      "title": "Firma la tua risposta",
+      "title": "Firmate la vostra risposta",
       "summary": {
-        "none": "Scegli la tua risposta, poi firmala con il tuo nome.",
-        "APPROVED": "Approvi {label} per {company}.",
-        "APPROVED_WITH_CHANGES": "Approvi {label} con le modifiche che hai scritto.",
-        "REFUSED": "Rifiuti {label}."
+        "none": "Scegliete la vostra risposta, poi firmatela con il vostro nome.",
+        "APPROVED": "Approvate {label} per {company}.",
+        "APPROVED_WITH_CHANGES": "Approvate {label} con le modifiche che avete scritto.",
+        "REFUSED": "Rifiutate {label}."
       },
-      "legal": "Il nome che scrivi firma questa risposta; {company} la conserva con data e ora.",
-      "name": "Il tuo nome e cognome",
-      "nameHint": "Come firmi i tuoi documenti.",
-      "nameEmpty": "Scrivi il tuo nome per firmare.",
-      "choose": "Scegli la tua risposta",
+      "legal": "Il nome che scrivete firma questa risposta; {company} la conserva con data e ora.",
+      "name": "Il vostro nome e cognome",
+      "nameHint": "Come firmate i vostri documenti.",
+      "nameEmpty": "Scrivete il vostro nome per firmare.",
+      "choose": "Scegliete la vostra risposta",
       "go": {
         "APPROVED": "Approva e firma",
         "APPROVED_WITH_CHANGES": "Approva con modifiche e firma",
@@ -278,14 +278,14 @@
       "busy": "Invio in corso…"
     },
     "done": {
-      "body": "Abbiamo la tua risposta. Esce da Cosa ti aspetta.",
+      "body": "Abbiamo la vostra risposta. Esce da Cosa vi aspetta.",
       "name": "Firmato da",
       "at": "Il",
-      "words": "Il tuo commento",
+      "words": "Il vostro commento",
       "reference": "Riferimento",
-      "contact": "Scrivici nei messaggi della pratica se qualcosa non va.",
-      "receiptSent": "Ti abbiamo inviato una ricevuta per e-mail.",
-      "receiptFailed": "Non è stato possibile inviare la ricevuta per e-mail; la tua risposta è registrata.",
+      "contact": "Scriveteci nei messaggi della pratica se qualcosa non va.",
+      "receiptSent": "Vi abbiamo inviato una ricevuta per e-mail.",
+      "receiptFailed": "Non è stato possibile inviare la ricevuta per e-mail; la vostra risposta è registrata.",
       "next": "Prossima approvazione in attesa",
       "close": "Chiudi"
     },
@@ -323,15 +323,15 @@
   "start": {
     "label": "Inizia",
     "newOrder": "Nuovo ordine",
-    "newOrderHint": "Scrivi di cosa hai bisogno, come in una e-mail.",
+    "newOrderHint": "Scrivete di cosa avete bisogno, come in una e-mail.",
     "ask": "Fai una domanda",
     "askHint": "Una domanda per noi che non riguarda un ordine.",
     "draft": "Bozza: {subject}",
     "draftKept": "tenuta su questo dispositivo · {time}",
     "draftSaved": "salvata alle {time}",
     "continue": "Continua",
-    "noRight": "Solo i buyer della tua azienda inviano ordini.",
-    "noRightAsk": "Il tuo amministratore può darti il permesso: {names}.",
-    "noRightAskUs": "Chiedici di aggiungere un buyer per la tua azienda."
+    "noRight": "Solo i buyer della vostra azienda inviano ordini.",
+    "noRightAsk": "Il vostro amministratore può darvi il permesso: {names}.",
+    "noRightAskUs": "Chiedeteci di aggiungere un buyer per la vostra azienda."
   }
 }

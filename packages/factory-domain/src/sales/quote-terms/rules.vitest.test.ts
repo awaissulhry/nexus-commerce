@@ -102,7 +102,7 @@ describe('validity: the reminder before the end, EXPIRED after (SAL-145)', () =>
     expect(it.subject).toBe('Promemoria: il preventivo Q-0004 v1 scade presto')
     expect(it.stored).toContain('valido fino al 20/11/2026')
     expect(it.stored).not.toContain('irrevocabile')
-    expect(it.withLink('https://x.example.com/l#token=t')).toContain('apra questo link personale (valido fino al 27/11/2026)')
+    expect(it.withLink('https://x.example.com/l#token=t')).toContain('aprite questo link personale (valido fino al 27/11/2026)')
   })
 
   it('declares its events for the quote screens', () => {

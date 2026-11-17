@@ -57,7 +57,7 @@ describe('SCR-027 design cases', () => {
   it('the Italian frame speaks Italian (no English of the frame on an Italian page)', () => {
     const entry = designScreen.cases.find((item) => item.id === 'customer')!
     const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'it', messages: messagesFor('it', ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
-    expect(html).toContain('Cosa ti aspetta')
+    expect(html).toContain('Cosa vi aspetta')
     expect(html).toContain('Ordini, 2 da confermare')
     expect(html).not.toContain('What waits for you')
     expect(html).not.toContain('Ask a question')

@@ -467,6 +467,8 @@ export const siteWipContract = defineContract({
       ),
       /** F-PR-17: how many work orders the floor holds in all (released, in progress, on hold), not only this page (a count). */
       total: notMoney(z.number().int()),
+      /** B-PR-33: of them, how many are on hold (held work orders are WIP too; the Overview's On hold, the floor's tile). */
+      held: z.number().int(),
     }),
   },
 })

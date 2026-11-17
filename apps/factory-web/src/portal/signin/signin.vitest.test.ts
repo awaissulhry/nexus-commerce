@@ -233,7 +233,7 @@ describe('SCR-026 draws every case in both languages with no key left on screen'
   it('the access words name the company and whom to ask, in the reader\'s language', () => {
     const paused = designScreen.cases.find((item) => item.id === 'paused')!
     const it = renderToString(createElement(I18nProvider, { locale: 'it', messages: messagesFor('it', ['portal-signin', 'ds-words']) }, createElement(View, { model: paused.model })))
-    expect(it).toContain('Il tuo accesso al portale Officina Demo è sospeso. Contatta ordini@officina-demo.example.com.')
+    expect(it).toContain('Il vostro accesso al portale Officina Demo è sospeso. Contattate ordini@officina-demo.example.com.')
     expect(it).toContain('href="mailto:ordini@officina-demo.example.com"')
     const code = designScreen.cases.find((item) => item.id === 'code')!
     const en = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['portal-signin', 'ds-words']) }, createElement(View, { model: code.model })))

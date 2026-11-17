@@ -8,7 +8,7 @@
   },
   "error": {
     "title": "La dichiarazione non si è aperta",
-    "body": "Non riusciamo a raggiungere il server. Controlla la connessione e riprova.",
+    "body": "Non riusciamo a raggiungere il server. Controllate la connessione e riprovate.",
     "retry": "Riprova"
   },
   "standing": {
@@ -17,7 +17,7 @@
   },
   "product": {
     "heading": "Questo prodotto",
-    "scannedBatch": "Hai inquadrato l'etichetta del lotto {batch}.",
+    "scannedBatch": "Avete inquadrato l'etichetta del lotto {batch}.",
     "scannedStyle": "Questo indirizzo è del modello {code}: mostra la sua dichiarazione in vigore.",
     "style": "Modello",
     "styleValue": "{name} · {code}",
@@ -26,7 +26,7 @@
     "maker": "Fabbricante",
     "makerBrand": "Il marchio è il fabbricante legale di questo prodotto.",
     "importer": "Importatore",
-    "noMaker": "Non indicato qui: vedi la dichiarazione."
+    "noMaker": "Non indicato qui: vedete la dichiarazione."
   },
   "declaration": {
     "heading": "Dichiarazione di conformità",
@@ -43,8 +43,8 @@
     "openTab": "Apri il PDF in una nuova scheda",
     "notPublished": {
       "title": "Non ancora pubblicata qui",
-      "body": "La dichiarazione di conformità di questo lotto non è ancora su questa pagina. {sender} la invia con la merce; chiedine una copia.",
-      "bodyNoSender": "La dichiarazione di conformità di questo lotto non è ancora su questa pagina. Chiedine una copia al venditore."
+      "body": "La dichiarazione di conformità di questo lotto non è ancora su questa pagina. {sender} la invia con la merce; chiedetene una copia.",
+      "bodyNoSender": "La dichiarazione di conformità di questo lotto non è ancora su questa pagina. Chiedetene una copia al venditore."
     },
     "notPpe": {
       "title": "Nessuna dichiarazione richiesta",
@@ -53,7 +53,7 @@
     "pdf": {
       "loading": "Apertura del PDF…",
       "failedTitle": "Il PDF non si è aperto",
-      "failedBody": "Il file non è arrivato a questa pagina. Riprova, oppure scaricalo.",
+      "failedBody": "Il file non è arrivato a questa pagina. Riprovate, oppure scaricatelo.",
       "retry": "Riprova"
     }
   },
@@ -79,8 +79,8 @@
     "notValidOnBatch": "Non valido il {day}, quando questo lotto è stato rilasciato",
     "notValidToday": "Non valido oggi ({day})",
     "selfCertified": "Categoria I: il fabbricante la certifica da sé, senza organismo notificato (Regolamento (UE) 2016/425, allegato IV).",
-    "none": "Nessun certificato è indicato qui. Chiedilo a {sender}.",
-    "noneNoSender": "Nessun certificato è indicato qui. Chiedilo al venditore."
+    "none": "Nessun certificato è indicato qui. Chiedetelo a {sender}.",
+    "noneNoSender": "Nessun certificato è indicato qui. Chiedetelo al venditore."
   },
   "instructions": {
     "heading": "Istruzioni e informazioni di sicurezza",
@@ -107,27 +107,27 @@
   },
   "others": {
     "title": "Questo codice vale anche per un altro prodotto",
-    "body": "Scegli quello della tua etichetta:",
+    "body": "Scegliete quello della vostra etichetta:",
     "batch": "{style} · lotto {batch}",
     "style": "{style}",
     "open": "Apri"
   },
   "lookup": {
-    "heading": "Digita il codice",
-    "hint": "Se il QR è rovinato: digita il codice di 8 caratteri stampato sotto.",
-    "label": "Digita il codice di 8 caratteri sotto il QR",
+    "heading": "Digitate il codice",
+    "hint": "Se il QR è rovinato: digitate il codice di 8 caratteri stampato sotto.",
+    "label": "Digitate il codice di 8 caratteri sotto il QR",
     "placeholder": "es. 7K3Q-M2XA",
     "open": "Apri",
     "opening": "Apertura…",
-    "required": "Digita il codice stampato sotto il QR.",
+    "required": "Digitate il codice stampato sotto il QR.",
     "format": "Un codice ha 8 lettere e cifre, come 7K3Q-M2XA.",
-    "unknown": "Non troviamo questo codice. Controllalo sull'etichetta.",
-    "wait": "Attendi {count} minuti prima di chiedere di nuovo.",
-    "waitOne": "Attendi 1 minuto prima di chiedere di nuovo.",
-    "waitSeconds": "Attendi {count} secondi prima di chiedere di nuovo.",
-    "checking": "Dopo molte richieste dalla tua rete, sul tuo dispositivo gira un breve controllo…",
-    "checkFailed": "Il controllo non è terminato. Riprova tra un momento.",
-    "held": "Attendi che passi il tempo indicato sopra."
+    "unknown": "Non troviamo questo codice. Controllatelo sull'etichetta.",
+    "wait": "Attendete {count} minuti prima di chiedere di nuovo.",
+    "waitOne": "Attendete 1 minuto prima di chiedere di nuovo.",
+    "waitSeconds": "Attendete {count} secondi prima di chiedere di nuovo.",
+    "checking": "Dopo molte richieste dalla vostra rete, sul vostro dispositivo gira un breve controllo…",
+    "checkFailed": "Il controllo non è terminato. Riprovate tra un momento.",
+    "held": "Attendete che passi il tempo indicato sopra."
   },
   "language": {
     "only": "Pubblicata solo in {language}."

@@ -21,26 +21,26 @@
   },
   "held": {
     "preview": "Questa è un’anteprima: è in sola lettura.",
-    "offline": "Nessuna connessione: riprova quando sei di nuovo in linea.",
-    "mayPay": "Solo l’amministrazione o il tuo amministratore possono pagare online.",
-    "mayPayAsk": "Solo l’amministrazione o il tuo amministratore possono pagare online. Chiedi a {names}.",
+    "offline": "Nessuna connessione: riprovate quando siete di nuovo in linea.",
+    "mayPay": "Solo l’amministrazione o il vostro amministratore possono pagare online.",
+    "mayPayAsk": "Solo l’amministrazione o il vostro amministratore possono pagare online. Chiedete a {names}.",
     "nothingOpen": "Non resta nulla da pagare.",
-    "currency": "Il pagamento online è solo in euro: paga con bonifico.",
-    "notPayable": "Non si paga online: paga con bonifico.",
-    "provider": "Questo servizio di pagamento non è ancora pronto nel portale: paga con bonifico."
+    "currency": "Il pagamento online è solo in euro: pagate con bonifico.",
+    "notPayable": "Non si paga online: pagate con bonifico.",
+    "provider": "Questo servizio di pagamento non è ancora pronto nel portale: pagate con bonifico."
   },
   "unavailable": {
-    "NO_ACCOUNT": "Il pagamento con carta non è disponibile: paga con bonifico.",
-    "NOT_A_PAYMENT_ACCOUNT": "Il pagamento con carta non è disponibile: paga con bonifico.",
-    "NOT_ACTIVE": "Il pagamento con carta è sospeso: paga con bonifico.",
-    "GATE_SPEND": "Il pagamento con carta non è ancora attivo: paga con bonifico.",
-    "FAKE_IN_PRODUCTION": "Il pagamento con carta non è disponibile: paga con bonifico.",
-    "FAKE_PROVIDER_LIVE": "Il pagamento con carta non è disponibile: paga con bonifico."
+    "NO_ACCOUNT": "Il pagamento con carta non è disponibile: pagate con bonifico.",
+    "NOT_A_PAYMENT_ACCOUNT": "Il pagamento con carta non è disponibile: pagate con bonifico.",
+    "NOT_ACTIVE": "Il pagamento con carta è sospeso: pagate con bonifico.",
+    "GATE_SPEND": "Il pagamento con carta non è ancora attivo: pagate con bonifico.",
+    "FAKE_IN_PRODUCTION": "Il pagamento con carta non è disponibile: pagate con bonifico.",
+    "FAKE_PROVIDER_LIVE": "Il pagamento con carta non è disponibile: pagate con bonifico."
   },
   "noAccess": {
-    "title": "Questa pagina non fa parte del tuo accesso",
-    "ask": "Se ti serve, chiedi a {names}.",
-    "askAdmin": "Se ti serve, chiedi al tuo amministratore.",
+    "title": "Questa pagina non fa parte del vostro accesso",
+    "ask": "Se vi serve, chiedete a {names}.",
+    "askAdmin": "Se vi serve, chiedete al vostro amministratore.",
     "home": "Vai alla Home"
   },
   "chips": {
@@ -48,7 +48,7 @@
     "label": "Tipi di documento",
     "chip": "{name}, {count}",
     "failed": "Non è stato possibile leggere i tipi di documento.",
-    "noPrices": "I prezzi non fanno parte del tuo accesso: fatture, estratti conto, preventivi e conferme d’ordine non sono mostrati."
+    "noPrices": "I prezzi non fanno parte del vostro accesso: fatture, estratti conto, preventivi e conferme d’ordine non sono mostrati."
   },
   "group": {
     "ALL": "Tutti",
@@ -98,18 +98,18 @@
   },
   "library": {
     "title": "Tutti i documenti",
-    "hint": "Ogni documento che ti abbiamo emesso, nella sua versione fissa: un documento corretto è una nuova versione, mai una modifica.",
+    "hint": "Ogni documento che vi abbiamo emesso, nella sua versione fissa: un documento corretto è una nuova versione, mai una modifica.",
     "label": "Documenti",
     "count_one": "{count} documento",
     "count_other": "{count} documenti",
     "countOf_one": "{count} di {total} documento",
     "countOf_other": "{count} di {total} documenti",
     "search": "Cerca nei documenti",
-    "searchHint": "Titolo, numero, il tuo ordine, modello, file…",
+    "searchHint": "Titolo, numero, il vostro ordine, modello, file…",
     "earlier": "Anche le versioni precedenti",
     "more": "Mostra altri",
     "failed": "Non è stato possibile leggere i documenti.",
-    "failedBody": "Non è un elenco vuoto: riprova tra un momento.",
+    "failedBody": "Non è un elenco vuoto: riprovate tra un momento.",
     "none": "Nessun documento qui.",
     "noMatch": "Nessun documento corrisponde a “{q}”.",
     "clear": "Cancella la ricerca",
@@ -153,13 +153,13 @@
     "invoice": "Fattura {label}",
     "quote": "Preventivo {label}",
     "style": "Modello {label}",
-    "account": "Il tuo account",
+    "account": "Il vostro account",
     "record": "{label}"
   },
   "bulk": {
     "download_one": "Scarica {count}",
     "download_other": "Scarica {count}",
-    "tooMany": "Al massimo {max} alla volta: selezionane meno."
+    "tooMany": "Al massimo {max} alla volta: selezionatene meno."
   },
   "docType": {
     "TD01": "Fattura",
@@ -172,7 +172,7 @@
     "ISSUED": "Emessa",
     "SENT": "Inviata allo SDI",
     "DELIVERED": "Consegnata",
-    "NOT_DELIVERABLE": "Nel tuo cassetto fiscale",
+    "NOT_DELIVERABLE": "Nel vostro cassetto fiscale",
     "ERROR": "In correzione",
     "OTHER": "Emessa"
   },
@@ -186,7 +186,7 @@
   },
   "pay": {
     "title": "Da pagare",
-    "hint": "Le tue fatture e gli acconti aperti, dalla scadenza più vecchia.",
+    "hint": "Le vostre fatture e gli acconti aperti, dalla scadenza più vecchia.",
     "total": "{open} da pagare",
     "totalOverdue": "{open} da pagare, di cui {overdue} scaduti",
     "label": "Fatture da pagare",
@@ -197,7 +197,7 @@
     "empty": "Niente da pagare.",
     "emptyBody": "Ogni fattura è pagata. Grazie.",
     "failed": "Non è stato possibile leggere cosa c’è da pagare.",
-    "failedBody": "Non è un elenco vuoto: riprova tra un momento.",
+    "failedBody": "Non è un elenco vuoto: riprovate tra un momento.",
     "deposit": "Acconto",
     "depositFor": "Acconto per l’ordine {number}",
     "underWay": "pagamento in corso",
@@ -230,15 +230,15 @@
       "due": "Scadenza",
       "total": "Totale",
       "paidSoFar": "{paid} già pagati",
-      "resumed": "Avevi già iniziato questo pagamento: riprende da dove era.",
+      "resumed": "Avevate già iniziato questo pagamento: riprende da dove era.",
       "sending": "Invio in corso…",
-      "closeHeld": "Attendi: il pagamento è in invio.",
+      "closeHeld": "Attendete: il pagamento è in invio.",
       "close": "Chiudi",
       "done": "Fatto",
       "paid": "Pagato. Grazie.",
-      "receipt": "Ti inviamo la ricevuta per e-mail.",
-      "transfer": "Puoi sempre pagare con bonifico: le nostre coordinate bancarie sono sulla fattura.",
-      "transferDeposit": "Puoi sempre pagare con bonifico: le nostre coordinate bancarie sono sul preventivo."
+      "receipt": "Vi inviamo la ricevuta per e-mail.",
+      "transfer": "Potete sempre pagare con bonifico: le nostre coordinate bancarie sono sulla fattura.",
+      "transferDeposit": "Potete sempre pagare con bonifico: le nostre coordinate bancarie sono sul preventivo."
     },
     "ask": "Fai una domanda",
     "askOf": "Chiedi della fattura {number}"
@@ -247,16 +247,16 @@
     "CARD": "Carta",
     "CARD_hint": "Visa, Mastercard e altre",
     "SEPA_DEBIT": "Addebito diretto SEPA",
-    "SEPA_DEBIT_hint": "Dal tuo conto; la banca conferma in qualche giorno"
+    "SEPA_DEBIT_hint": "Dal vostro conto; la banca conferma in qualche giorno"
   },
   "fake": {
     "provider": "un servizio di pagamento di prova",
     "label": "Cosa risponde la banca",
     "note": "Un servizio di pagamento di prova: non si muove denaro e non serve una carta.",
     "stage": {
-      "CARD": "Scegli cosa risponde la banca per la carta.",
+      "CARD": "Scegliete cosa risponde la banca per la carta.",
       "CARD_CONFIRM": "La banca chiede di confermare il pagamento.",
-      "SEPA_DEBIT": "Dai il mandato per l’addebito.",
+      "SEPA_DEBIT": "Date il mandato per l’addebito.",
       "SEPA_WAITING": "La banca decide sull’addebito."
     },
     "succeed": "Approva",
@@ -268,42 +268,42 @@
     "return": "Respingi l’addebito"
   },
   "failure": {
-    "card_declined": "La banca ha rifiutato la carta. Prova con un’altra carta o paga con bonifico.",
-    "insufficient_funds": "La carta non ha fondi sufficienti. Prova con un’altra carta o paga con bonifico.",
-    "expired_card": "La carta è scaduta. Prova con un’altra carta o paga con bonifico.",
-    "incorrect_cvc": "Il codice di sicurezza non è corretto. Riprova.",
-    "authentication_failed": "La banca non ha confermato il pagamento. Riprova o paga con bonifico.",
-    "payment_intent_authentication_failure": "La banca non ha confermato il pagamento. Riprova o paga con bonifico.",
-    "debit_not_authorized": "La banca non ha autorizzato l’addebito SEPA. Paga con bonifico o con carta.",
-    "insufficient_funds_sepa": "L’addebito SEPA è stato respinto. Paga con bonifico o con carta.",
-    "provider_unavailable": "Il servizio di pagamento non risponde. Riprova tra poco o paga con bonifico.",
-    "provider_refused": "Il servizio di pagamento ha rifiutato la richiesta. Paga con bonifico.",
-    "default": "Il pagamento non è andato a buon fine. Riprova o paga con bonifico."
+    "card_declined": "La banca ha rifiutato la carta. Provate con un’altra carta o pagate con bonifico.",
+    "insufficient_funds": "La carta non ha fondi sufficienti. Provate con un’altra carta o pagate con bonifico.",
+    "expired_card": "La carta è scaduta. Provate con un’altra carta o pagate con bonifico.",
+    "incorrect_cvc": "Il codice di sicurezza non è corretto. Riprovate.",
+    "authentication_failed": "La banca non ha confermato il pagamento. Riprovate o pagate con bonifico.",
+    "payment_intent_authentication_failure": "La banca non ha confermato il pagamento. Riprovate o pagate con bonifico.",
+    "debit_not_authorized": "La banca non ha autorizzato l’addebito SEPA. Pagate con bonifico o con carta.",
+    "insufficient_funds_sepa": "L’addebito SEPA è stato respinto. Pagate con bonifico o con carta.",
+    "provider_unavailable": "Il servizio di pagamento non risponde. Riprovate tra poco o pagate con bonifico.",
+    "provider_refused": "Il servizio di pagamento ha rifiutato la richiesta. Pagate con bonifico.",
+    "default": "Il pagamento non è andato a buon fine. Riprovate o pagate con bonifico."
   },
   "refusal": {
     "NOT_OPEN": "Non resta nulla da pagare.",
-    "NO_PROVIDER": "I pagamenti con carta e SEPA non sono disponibili: paga con bonifico.",
-    "CURRENCY": "I pagamenti con carta e SEPA sono solo in euro: paga con bonifico.",
-    "NOT_PAYABLE": "Non si paga online: paga con bonifico.",
-    "PROVIDER": "Il servizio di pagamento non ha risposto: riprova tra un momento o paga con bonifico.",
-    "IN_PROGRESS": "Un pagamento è già in corso: attendi l’esito o paga con bonifico.",
-    "forbidden": "Pagare non fa parte del tuo accesso.",
-    "gone": "Non è più qui: ricarica la pagina.",
-    "unavailable": "Il servizio non risponde: riprova tra un momento.",
-    "failed": "Qualcosa non è andato: riprova o paga con bonifico."
+    "NO_PROVIDER": "I pagamenti con carta e SEPA non sono disponibili: pagate con bonifico.",
+    "CURRENCY": "I pagamenti con carta e SEPA sono solo in euro: pagate con bonifico.",
+    "NOT_PAYABLE": "Non si paga online: pagate con bonifico.",
+    "PROVIDER": "Il servizio di pagamento non ha risposto: riprovate tra un momento o pagate con bonifico.",
+    "IN_PROGRESS": "Un pagamento è già in corso: attendete l’esito o pagate con bonifico.",
+    "forbidden": "Pagare non fa parte del vostro accesso.",
+    "gone": "Non è più qui: ricaricate la pagina.",
+    "unavailable": "Il servizio non risponde: riprovate tra un momento.",
+    "failed": "Qualcosa non è andato: riprovate o pagate con bonifico."
   },
   "invoice": {
-    "notYours": "Le fatture non fanno parte del tuo accesso: chiedi al tuo amministratore.",
-    "notYoursAsk": "Le fatture non fanno parte del tuo accesso: chiedi a {names}.",
+    "notYours": "Le fatture non fanno parte del vostro accesso: chiedete al vostro amministratore.",
+    "notYoursAsk": "Le fatture non fanno parte del vostro accesso: chiedete a {names}.",
     "nothingOpen": "Su questa fattura non resta nulla da pagare. Resta in Tutti i documenti.",
-    "unread": "Non è stato possibile leggere cosa c’è da pagare: riprova tra un momento."
+    "unread": "Non è stato possibile leggere cosa c’è da pagare: riprovate tra un momento."
   },
   "conformity": {
     "title": "Conformità per modello ricevuto",
-    "hint": "Per ogni modello che ti abbiamo spedito: la dichiarazione e la nota informativa che hanno viaggiato, e il certificato valido alla data di spedizione.",
+    "hint": "Per ogni modello che vi abbiamo spedito: la dichiarazione e la nota informativa che hanno viaggiato, e il certificato valido alla data di spedizione.",
     "failed": "Non è stato possibile leggere la conformità.",
     "empty": "Ancora nessuna spedizione.",
-    "emptyBody": "Ogni modello compare qui con i suoi documenti appena te lo spediamo.",
+    "emptyBody": "Ogni modello compare qui con i suoi documenti appena ve lo spediamo.",
     "style": "{code} {name}",
     "ppe": "Dispositivo di protezione individuale",
     "ppeClass": "Classe {class}",
@@ -321,7 +321,7 @@
     "revision": "revisione {revision}",
     "declaration": "Dichiarazione di conformità UE",
     "userInformation": "Nota informativa del fabbricante",
-    "notShared": "Non ancora condiviso con te: chiedicelo."
+    "notShared": "Non ancora condiviso con voi: chiedetecelo."
   },
   "received": {
     "COMPLETE": "Completa",
@@ -333,7 +333,7 @@
   "certificate": {
     "label": "Certificato di esame UE del tipo",
     "notNeeded": "Non serve per la categoria I: la dichiarazione è solo nostra.",
-    "none": "Nessun certificato valido alla data di spedizione: chiedicelo.",
+    "none": "Nessun certificato valido alla data di spedizione: chiedetecelo.",
     "line": "N. {number} · {body} (organismo notificato {nb}) · {standard}",
     "valid": "Valido alla data di spedizione ({from} – {to})",
     "notValid": "Non valido alla data di spedizione ({from} – {to})"
@@ -341,7 +341,7 @@
   "preview": {
     "loading": "Apertura del documento…",
     "failed": "Non è stato possibile aprire il documento.",
-    "noPreview": "Questo file non si può mostrare qui: scaricalo.",
+    "noPreview": "Questo file non si può mostrare qui: scaricatelo.",
     "versions": "Versioni",
     "replaced": "v{version} ha sostituito la v{previous} il {date}",
     "first": "v{version} del {date}",
@@ -359,16 +359,16 @@
     "earlier": "Questa è la v{version}, una versione precedente: la v{newer} l’ha sostituita.",
     "openVersion": "Apri la v{version}",
     "withdrawn": "Questa versione è stata ritirata: la sostituisce {title} v{version}.",
-    "withdrawnAsk": "Questa versione è stata ritirata: chiedici quella in vigore.",
+    "withdrawnAsk": "Questa versione è stata ritirata: chiedeteci quella in vigore.",
     "withdrawnHeld": "Una versione ritirata non si scarica.",
     "problem": {
-      "failed": "Non è stato possibile aprire il documento. Riprova.",
-      "openFailed": "Non è stato possibile aprire il documento. Riprova.",
-      "withdrawn": "Questa versione è stata ritirata: apri quella in vigore.",
+      "failed": "Non è stato possibile aprire il documento. Riprovate.",
+      "openFailed": "Non è stato possibile aprire il documento. Riprovate.",
+      "withdrawn": "Questa versione è stata ritirata: aprite quella in vigore.",
       "gone": "Questo documento non è più qui.",
-      "forbidden": "Questo documento non fa parte del tuo accesso.",
-      "notReady": "Questo documento non si può aprire ora: riprova più tardi.",
-      "unavailable": "Il servizio non risponde: riprova tra un momento."
+      "forbidden": "Questo documento non fa parte del vostro accesso.",
+      "notReady": "Questo documento non si può aprire ora: riprovate più tardi.",
+      "unavailable": "Il servizio non risponde: riprovate tra un momento."
     }
   }
 }

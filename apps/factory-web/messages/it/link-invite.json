@@ -9,12 +9,12 @@
   },
   "problem": {
     "read": "Non siamo riusciti a leggere il record.",
-    "readBody": "Controlla la connessione e riprova. Non è stato cambiato nulla.",
-    "internal": "Qualcosa non ha funzionato da parte nostra. Riprova tra poco.",
+    "readBody": "Controllate la connessione e riprovate. Non è stato cambiato nulla.",
+    "internal": "Qualcosa non ha funzionato da parte nostra. Riprovate tra poco.",
     "gone": "Questo invito è scaduto o è stato ritirato.",
-    "changed": "Il tuo invito è cambiato poco fa: la pagina lo mostra com'è ora.",
-    "invalid": "Non è stato possibile inviarlo così. Controlla e riprova.",
-    "rateLimited": "Troppi tentativi in poco tempo. Aspetta un minuto e riprova."
+    "changed": "Il vostro invito è cambiato poco fa: la pagina lo mostra com'è ora.",
+    "invalid": "Non è stato possibile inviarlo così. Controllate e riprovate.",
+    "rateLimited": "Troppi tentativi in poco tempo. Aspettate un minuto e riprovate."
   },
   "type": {
     "Style": "Modello",
@@ -34,17 +34,17 @@
     "UPLOAD": "caricare file"
   },
   "why": {
-    "title": "Perché sei qui",
-    "by": "{name} di {company} ti ha aggiunto a {record}.",
-    "byCompany": "{company} ti ha aggiunto a {record}.",
-    "may": "Cosa puoi fare",
+    "title": "Perché siete qui",
+    "by": "{name} di {company} vi ha aggiunto a {record}.",
+    "byCompany": "{company} vi ha aggiunto a {record}.",
+    "may": "Cosa potete fare",
     "until": "Fino al",
     "lastDay": "ultimo giorno",
     "daysLeft_one": "manca {count} giorno",
     "daysLeft_other": "mancano {count} giorni",
     "invitedOn": "Invitato il",
-    "only": "Cosa vedi",
-    "onlyBody": "Solo quello che condividiamo con te su questo record. Non serve un account: questo link è la tua chiave, tienilo per te."
+    "only": "Cosa vedete",
+    "onlyBody": "Solo quello che condividiamo con voi su questo record. Non serve un account: questo link è la vostra chiave, tenetelo per voi."
   },
   "summary": {
     "title": "Il record",
@@ -61,7 +61,7 @@
     "productType": "Tipo",
     "status": "Stato",
     "number": "Nostro numero",
-    "theirRef": "Tuo riferimento",
+    "theirRef": "Vostro riferimento",
     "revision": "Revisione",
     "orderDate": "Data ordine",
     "requestedDate": "Richiesto per",
@@ -143,10 +143,10 @@
   "files": {
     "title": "File",
     "empty": "Nessun file condiviso per ora.",
-    "emptyBody": "Qui compaiono i file che condividiamo con te su questo record.",
+    "emptyBody": "Qui compaiono i file che condividiamo con voi su questo record.",
     "open": "Apri",
     "openNamed": "Apri {name} in una nuova scheda",
-    "yours": "Aggiunto da te · {at}",
+    "yours": "Aggiunto da voi · {at}",
     "held": {
       "opening": "Si sta aprendo un altro file."
     },
@@ -160,8 +160,8 @@
       "sizeAny": "Il file è troppo grande.",
       "type": "Questo tipo di file non si può aggiungere qui: un PDF, un'immagine, un documento Office, un CSV o un file di testo.",
       "empty": "Il file è vuoto.",
-      "closed": "Per ora non si possono caricare file. Mandalo per e-mail al tuo contatto.",
-      "open": "Non siamo riusciti ad aprire il file. Riprova."
+      "closed": "Per ora non si possono caricare file. Mandatelo per e-mail al vostro contatto.",
+      "open": "Non siamo riusciti ad aprire il file. Riprovate."
     },
     "all_one": "Tutti i file ({count})",
     "all_other": "Tutti i file ({count})",
@@ -170,14 +170,14 @@
   },
   "thread": {
     "title": "Messaggi",
-    "empty": "Nessun messaggio per ora. Scrivi il primo qui sotto.",
-    "replyByEmail": "Puoi anche rispondere alle nostre e-mail: la risposta arriva qui."
+    "empty": "Nessun messaggio per ora. Scrivete il primo qui sotto.",
+    "replyByEmail": "Potete anche rispondere alle nostre e-mail: la risposta arriva qui."
   },
   "held": {
-    "NO_COMMENT": "Il tuo invito permette di leggere questo record, non di scrivere. Chiedi a chi ti ha invitato.",
-    "NO_UPLOAD": "Il tuo invito non permette di aggiungere file. Chiedi a chi ti ha invitato.",
+    "NO_COMMENT": "Il vostro invito permette di leggere questo record, non di scrivere. Chiedete a chi vi ha invitato.",
+    "NO_UPLOAD": "Il vostro invito non permette di aggiungere file. Chiedete a chi vi ha invitato.",
     "CLOSED": "Questa conversazione è stata chiusa: non si possono aggiungere messaggi.",
-    "OTHER_PARTY": "Questo record non ha una conversazione a cui puoi partecipare.",
+    "OTHER_PARTY": "Questo record non ha una conversazione a cui potete partecipare.",
     "REVOKED": "Questo invito è stato ritirato.",
     "EXPIRED": "Questo invito è scaduto."
   },
@@ -185,7 +185,7 @@
     "title": "Avvisami per e-mail",
     "label": "Avvisami per e-mail dei nuovi messaggi su questo record",
     "on": "Attivo: i nuovi messaggi su questo record arrivano per e-mail",
-    "off": "Spento: vedi i nuovi messaggi solo in questa pagina",
-    "hint": "L'e-mail dice chi ha scritto e le prime righe. Per rispondere torna su questa pagina."
+    "off": "Spento: vedete i nuovi messaggi solo in questa pagina",
+    "hint": "L'e-mail dice chi ha scritto e le prime righe. Per rispondere tornate su questa pagina."
   }
 }

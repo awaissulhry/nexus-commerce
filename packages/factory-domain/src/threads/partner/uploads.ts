@@ -34,7 +34,7 @@ export type PortalUploadRefusal = (typeof PORTAL_UPLOAD_REFUSALS)[number]
 /** The portal's words for a refused upload, in Italian and English (`{max}`: PORTAL_FILES_PER_RECORD). Never naming another customer. */
 export const PORTAL_UPLOAD_WORDS = Object.freeze({
   NO_UPLOAD: {
-    it: 'Il tuo accesso non permette di inviare file. Il tuo amministratore può cambiarlo.',
+    it: 'Il vostro accesso non permette di inviare file. Il vostro amministratore può cambiarlo.',
     en: 'Your access does not let you send files. Your admin can change that.',
   },
   TOO_MANY_FILES: {

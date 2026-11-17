@@ -120,8 +120,8 @@ describe('SCR-225 design cases', () => {
   it('the Italian page speaks Italian', () => {
     const entry = designScreen.cases.find((item) => item.id === 'buyer')!
     const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'it', messages: messagesFor('it', ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
-    expect(html).toContain('In attesa della tua decisione')
-    expect(html).toContain('I tuoi modelli in sviluppo')
+    expect(html).toContain('In attesa della vostra decisione')
+    expect(html).toContain('I vostri modelli in sviluppo')
     expect(html).toContain('Giri di campionatura')
     expect(html).not.toContain('Waiting for your decision')
     expect(html).not.toContain('Sample rounds')

@@ -8,6 +8,7 @@ import { linkSessionOf, linkUnavailable, type LinkSession } from '../../../platf
 import { useLink } from '../../../platform/links/use'
 import { readShipment } from '../store'
 import { documentsCommand, readDocuments, sharedFilesOf } from './read'
+import { walledForOutside } from '../../../platform/files/content-wall' // fix-wall-1
 
 /**
  * A party's link session on its shipment's documents (B-W1-49; A2 SCR-101; SAL-099, PLT-007). The link authenticator has
@@ -31,11 +32,15 @@ function shipmentLinkOf(request: FastifyRequest): LinkSession {
 
 /** The link's shipment and its shared files, read in the link's own scope; null when its wall hides the shipment. */
 async function seenByLink(request: FastifyRequest, link: LinkSession) {
-  return request.withClient(async (client) => {
+  const seen = await request.withClient(async (client) => {
     const shipment = await client.shipment.findUnique({ where: { id: link.record.id }, select: { id: true, number: true, status: true, shippedAt: true, deliveredAt: true } })
     if (!shipment) return null
     return { shipment, shared: await sharedFilesOf(client, { id: shipment.id, partyId: link.partyId }) }
   })
+  if (!seen) return null
+  // fix-wall-1: a file whose content is another customer's (an old copy of a mixed lot's photo) is neither listed nor downloaded.
+  const walled = await walledForOutside(request, seen.shared.map((file) => file.id))
+  return walled.size === 0 ? seen : { ...seen, shared: seen.shared.filter((file) => !walled.has(file.id)) }
 }
 
 /** GET /shipping/link/documents: the shipment's documents the link shows. */

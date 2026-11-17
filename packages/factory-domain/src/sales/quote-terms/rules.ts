@@ -253,10 +253,10 @@ const REMINDER_WORDS = {
   it: {
     subject: (number: string) => `Promemoria: il preventivo ${number} scade presto`,
     hello: 'Buongiorno,',
-    body: (number: string, until: string, sent: string) => `le ricordiamo che il nostro preventivo ${number}, inviato il ${sent}, è valido fino al ${until} compreso.`,
+    body: (number: string, until: string, sent: string) => `vi ricordiamo che il nostro preventivo ${number}, inviato il ${sent}, è valido fino al ${until} compreso.`,
     // B-W2b-385 (NT1:05): the reminder carries its own accept link (a new one, to the same address, until the same day).
-    linkStored: (until: string) => `Per accettarlo o rifiutarlo usi il link personale di questa email (valido fino al ${until}).`,
-    link: (until: string) => `Per accettarlo o rifiutarlo apra questo link personale (valido fino al ${until}); le chiederemo di scrivere nome e cognome:`,
+    linkStored: (until: string) => `Per accettarlo o rifiutarlo usate il link personale di questa email (valido fino al ${until}).`,
+    link: (until: string) => `Per accettarlo o rifiutarlo aprite questo link personale (valido fino al ${until}); vi chiederemo di scrivere nome e cognome:`,
     firm: 'Fino a quel giorno l’offerta è irrevocabile (art. 1329 c.c.).',
     close: 'Restiamo a disposizione per qualsiasi domanda.',
   },

@@ -1,5 +1,7 @@
 import type { FactoryClient } from '@nexus/factory-db'
 import { KIND_RULES as APPROVAL_KINDS, type ApprovalKind, type ApprovalLocale } from '@nexus/factory-domain/approvals-out/kinds'
+// B-PR-31: a counter-offer's task (its approval is about the customer's request) names the request's order.
+import { COUNTER_OFFER_RECORD } from '@nexus/factory-domain/approvals-out/kinds'
 import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers'
 import type { CommandTx } from '../../../core/command'
 import type { TaskRow } from './store'
@@ -52,6 +54,14 @@ export async function partnerLabelsOf(client: Client, partyId: string, tasks: re
   const lines = await found('SalesOrderLine', (ids) => client.salesOrderLine.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, seq: true, order: { select: { customerSeq: true } } } }))
   const amendments = await found('SalesOrderAmendment', (ids) => client.salesOrderAmendment.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, revision: true, order: { select: { customerSeq: true } } } }))
   const concessions = await found('NcrConcession', (ids) => client.ncrConcession.findMany({ where: { id: { in: ids }, partyId }, select: { id: true, seq: true } }))
+  // ---- B-PR-31 (threads plan §0.5; production plan B-PR-26's counter-offer, "waiting on you"): a counter-offer's approval is about
+  // the customer's request (OrderChangeRequest), whose order the customer reads by its own number: "Counter-offer · #12", never the
+  // label it was asked with ("Counter-offer · SO-2026-0042"). Its own party's requests only.
+  const counterIds = [...new Set(approvals.filter((row) => row.recordType === COUNTER_OFFER_RECORD).map((row) => row.recordId))]
+  const counterOrders = new Map(
+    (counterIds.length === 0 ? [] : await client.orderChangeRequest.findMany({ where: { id: { in: counterIds }, partyId }, select: { id: true, order: { select: { customerSeq: true } } } })).map((row) => [row.id, row.order.customerSeq] as const),
+  )
+  // ---- end B-PR-31
 
   /** A customer record's label in a language; null: not one whose label changes (or it is no longer found). */
   const labelOf = (type: string, id: string, locale: ApprovalLocale): string | null => {
@@ -87,10 +97,12 @@ export async function partnerLabelsOf(client: Client, partyId: string, tasks: re
     if (task.recordType === APPROVAL_RECORD) {
       // approvals-out wrote "<kind's name> · <the record>" in the language it asked in: the same language, the partner's record.
       const approval = approvalOf.get(task.recordId)
-      if (!approval || !CUSTOMER_RECORDS.has(approval.recordType)) continue
+      // B-PR-31: a counter-offer reads its request's order (or the kind's name alone), never the office's label.
+      const counter = approval?.recordType === COUNTER_OFFER_RECORD
+      if (!approval || (!counter && !CUSTOMER_RECORDS.has(approval.recordType))) continue
       const name = APPROVAL_KINDS[approval.kind as ApprovalKind].name
       const locale: ApprovalLocale = task.recordLabel.startsWith(`${name.it} · `) && !task.recordLabel.startsWith(`${name.en} · `) ? 'it' : 'en'
-      const record = labelOf(approval.recordType, approval.recordId, locale)
+      const record = counter ? (counterOrders.has(approval.recordId) ? ref('ORDER', counterOrders.get(approval.recordId)) : null) : labelOf(approval.recordType, approval.recordId, locale)
       labels.set(task.id, record ? `${name[locale]} · ${record}` : name[locale])
     } else if (CUSTOMER_RECORDS.has(task.recordType)) {
       labels.set(task.id, labelOf(task.recordType, task.recordId, 'en') ?? NO_NUMBER)

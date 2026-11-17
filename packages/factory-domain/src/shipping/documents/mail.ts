@@ -26,12 +26,12 @@ const TEXT = {
   it: {
     subject: (shipment: string) => `Spedizione ${shipment}: documenti e dichiarazione di conformità`,
     hello: 'Buongiorno,',
-    left: (shipment: string, order: string) => `ecco i documenti della spedizione ${shipment}${order}. Li può leggere e scaricare da questa pagina:`,
+    left: (shipment: string, order: string) => `ecco i documenti della spedizione ${shipment}${order}. Potete leggerli e scaricarli da questa pagina:`,
     renewal: (shipment: string, order: string) => `come richiesto, ecco un nuovo link ai documenti della spedizione ${shipment}${order}:`,
     order: (number: string | null, ref: string | null) => (ref ? ` (vostro ordine ${ref})` : number ? ` (ordine ${number})` : ''),
     kept: 'Link personale inviato solo per e-mail: non è conservato qui.',
     list: 'Documenti:',
-    expires: (when: string) => `Il link funziona fino al ${when}. Quando non si apre più, dalla stessa pagina può chiederne uno nuovo: lo inviamo a questo indirizzo.`,
+    expires: (when: string) => `Il link funziona fino al ${when}. Quando non si apre più, dalla stessa pagina potete chiederne uno nuovo: lo inviamo a questo indirizzo.`,
   },
   en: {
     subject: (shipment: string) => `Shipment ${shipment}: documents and declaration of conformity`,
