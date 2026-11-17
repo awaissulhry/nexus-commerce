@@ -85,7 +85,7 @@ export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { activity: 'mea
 /** The tab an address asks for: one of the five, an old one's new home, else Measurements. */
 export function tabOf(asked: string | null | undefined): RecordTab {
   const value = asked ?? ''
-  return (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (MERGED_TABS[value] ?? 'measurements')
+  return (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (Object.hasOwn(MERGED_TABS, value) ? MERGED_TABS[value]! : 'measurements') // TH-6 part B: never a name of Object's own (?tab=constructor)
 }
 
 /**

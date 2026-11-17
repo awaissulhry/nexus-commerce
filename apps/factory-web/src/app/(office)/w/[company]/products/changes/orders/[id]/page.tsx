@@ -4,7 +4,7 @@ import { ChangeRecord } from '../../../../../../../../areas/products/changes/rec
 
 export const metadata: Metadata = { title: 'Change order · Nexus Factory' }
 
-/** Products › Changes & versions › a change order (SCR-117-record; `?tab=change|impact|approvals|affected|activity`). */
+/** Products › Changes & versions › a change order (SCR-117-record; `?tab=change|impact|approvals|affected`; the old `activity` opens Change with the thread — B-TH-262). */
 export default async function ChangeOrderRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (

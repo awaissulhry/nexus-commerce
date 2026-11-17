@@ -205,6 +205,7 @@ describe('the record: the next step by state, held with its reason', () => {
     // B-TH-214: an old tab lands on the tab it merged into (?tab=activity opens the thread beside Lines); the five stay as they are.
     expect(tabOf('money')).toBe('shipments')
     expect(tabOf('activity')).toBe('lines')
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty']) expect(tabOf(name)).toBe('lines') // TH-6 part B: never a name of Object's own
     for (const tab of ['lines', 'production', 'shipments', 'changes', 'margin'] as const) expect(tabOf(tab)).toBe(tab)
     expect(tabOf('nope')).toBe('lines')
     // B-TH-301 (the 9 → 5 merge, done with B-TH-214): every address the old nine tabs had lands on its merged tab.

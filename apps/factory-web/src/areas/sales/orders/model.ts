@@ -356,7 +356,7 @@ export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { dates: 'produc
 /** The tab an address asks for: one of the five, an old one's new home, else Lines (Margin without the margin grain: Lines). */
 export function tabOf(asked: string | null | undefined, can?: Pick<OrderAbilities, 'margin'>): RecordTab {
   const value = asked ?? ''
-  const tab = (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (MERGED_TABS[value] ?? 'lines')
+  const tab = (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (Object.hasOwn(MERGED_TABS, value) ? MERGED_TABS[value]! : 'lines') // TH-6 part B: never a name of Object's own (?tab=constructor)
   return tab === 'margin' && can && !can.margin ? 'lines' : tab
 }
 
