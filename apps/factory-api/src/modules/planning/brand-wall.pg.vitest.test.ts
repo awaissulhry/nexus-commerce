@@ -155,9 +155,16 @@ describe('PW-06: a view that mixes customers needs every customer', { timeout: 1
     expect(all.loadWithheld).toBeNull()
     expect((all.lanes as Json[]).filter((lane) => lane.kind !== 'WORKSHOP').every((lane) => Array.isArray(lane.cells))).toBe(true)
 
+    // The tray holds work orders with work left to place: the seeds' P1 work orders (brand A). The harness's draft work orders
+    // have no operations yet (the board calls them done), so they are in no one's tray.
+    const trayOfAll = (all.tray as Json[]).map((row) => row.workOrderId as string)
+    expect(trayOfAll.length).toBeGreaterThan(0)
+
     const b = await ok('office.p2', `/planning/schedule?siteId=${site}`)
     expect((b.workOrders as Json[]).map((row) => row.id)).toEqual([w.b.workOrderId])
-    expect((b.tray as Json[]).map((row) => row.workOrderId)).toEqual([w.b.workOrderId])
+    const trayOfB = (b.tray as Json[]).map((row) => row.workOrderId as string)
+    expect(trayOfB.every((id) => id === w.b.workOrderId), JSON.stringify(trayOfB)).toBe(true)
+    expect(trayOfAll.filter((id) => id !== w.b.workOrderId).some((id) => trayOfB.includes(id))).toBe(false)
     expect(b.loadWithheld).toBe(EVERY_PARTY_WORDS.en)
     expect((b.lanes as Json[]).length).toBeGreaterThan(0)
     expect((b.lanes as Json[]).every((lane) => lane.cells === null)).toBe(true)
@@ -227,6 +234,7 @@ describe('PW-06: a view that mixes customers needs every customer', { timeout: 1
 
   it('no answer brand B’s person got names anything of brand A', () => {
     expect(seenByB.length).toBeGreaterThan(MIXED.length)
-    expect(findMarkers(seenByB, aMarkers)).toEqual([])
+    // The answers only: the test itself puts A's ids in some of the addresses B asks (and gets 404 or nothing for).
+    expect(seenByB.flatMap((seen) => findMarkers(seen.body, aMarkers).map((hit) => `${seen.url} → ${hit}`))).toEqual([])
   })
 })
