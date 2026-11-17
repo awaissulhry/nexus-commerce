@@ -3,12 +3,14 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { isBusinessDate } from '@nexus/factory-domain/core/time'
 import { SALES_ORDER_STATUSES, type SalesOrderStatus } from '@nexus/factory-domain/sales/orders/orders'
+import { PRIORITY_WORDS, SALES_ORDER_PRIORITY_LEVELS } from '@nexus/factory-domain/sales/orders-depth/rules' // B-TH-018
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import type { ExportLocale } from '@nexus/factory-domain/views/exports'
 import type { Prisma } from '@nexus/factory-db'
 import { actorOf } from '../../../core/context'
 import { officeContextOf } from '../../../modules/sales/orders/access'
 import { listOrders, type ListFilters, type ListQuery } from '../../../modules/sales/orders/orders'
+import { ordersDepth } from '../../../modules/sales/orders-depth/depth' // B-TH-018
 import { defineExportSource } from '../source'
 
 /**
@@ -22,9 +24,19 @@ import { defineExportSource } from '../source'
  * narrow the file as they narrow the screen; a malformed one is refused, never dropped (a file of every customer for a
  * customer's sheet). The file and its Excel tab are named after the saved view, else "Orders - <customer>" for a
  * customer's sheet, with the rows they hold; a customer the person may not see is never named.
+ *
+ * B-TH-018 (ORD-G01, N22; threads plan TH-1a, picture 23): the file writes what the sheet shows — Picture (the first line's
+ * style, "+N" more styles), the customer PO, the company, Brand (the label on the garment: its name, our own collection, or
+ * "label not shown" for a label the person may not see), Invoiced (None / Part / All) and its amount (price grain), the
+ * requested date, the gross (price grain), the days late, the priority and the season; `?brand=<party>|own` narrows the file
+ * as it narrows the screen (malformed: refused). Priority, season and the company's name are read per page beside the list
+ * (the list's own W2b read, GET /sales/orders/depth's ordersDepth; one query of the companies). The Margin % column stays out
+ * of the file: its read (costing/margins) computes every order in scope, not a page.
  */
 
-type Row = Awaited<ReturnType<typeof listOrders>>['orders'][number]
+// B-TH-018: a list row with what the sheet reads beside it (priority and season, the company's name).
+type ListRow = Awaited<ReturnType<typeof listOrders>>['orders'][number]
+type Row = ListRow & { readonly beside: { readonly priority: string | null; readonly season: string | null; readonly company: string | null } }
 type Query = Omit<ListQuery, 'cursor' | 'limit'>
 
 const isStatus = (value: string | null): value is SalesOrderStatus => value !== null && (SALES_ORDER_STATUSES as readonly string[]).includes(value)
@@ -49,15 +61,54 @@ function dayTerm(address: URLSearchParams, name: string): string | undefined {
   return value
 }
 
-/** The terms every rows view keeps: the customer, the company, the promise range (the list's own filters). */
-function narrowing(address: URLSearchParams): Pick<ListFilters, 'partyId' | 'companyId' | 'promiseFrom' | 'promiseTo'> {
+/** The terms every rows view keeps: the customer, the company, the promise range, the brand (the list's own filters). */
+function narrowing(address: URLSearchParams): Pick<ListFilters, 'partyId' | 'companyId' | 'promiseFrom' | 'promiseTo' | 'brand'> {
+  const brand = brandTerm(address) // B-TH-018
   const partyId = idTerm(address, ['party', 'partyId'], 'customer')
   const companyId = idTerm(address, ['company', 'companyId'], 'company')
   const promiseFrom = dayTerm(address, 'promiseFrom')
   const promiseTo = dayTerm(address, 'promiseTo')
   if (promiseFrom && promiseTo && promiseFrom > promiseTo) throw new ValidationError('The promise range ends before it starts.', [{ path: 'query/promiseTo', message: 'On or after promiseFrom.' }])
-  return { ...(partyId ? { partyId } : {}), ...(companyId ? { companyId } : {}), ...(promiseFrom ? { promiseFrom } : {}), ...(promiseTo ? { promiseTo } : {}) }
+  return { ...(partyId ? { partyId } : {}), ...(companyId ? { companyId } : {}), ...(promiseFrom ? { promiseFrom } : {}), ...(promiseTo ? { promiseTo } : {}), ...(brand ? { brand } : {}) }
 }
+
+// ── B-TH-018 ──
+/** The brand term of the address (the label on the garment): a party id or `own`; a malformed one is refused. */
+function brandTerm(address: URLSearchParams): string | undefined {
+  const value = address.get('brand')?.trim()
+  if (!value) return undefined
+  if (value === 'own') return value
+  if (!isUuid(value)) throw new ValidationError('Not a brand: the file would hold more than the screen.', [{ path: 'query/brand', message: 'A party id or own.' }])
+  return value
+}
+
+/** What the sheet reads beside a page of the list: each order's priority and season (ordersDepth), its company's name (as the office's company switcher names it). */
+async function besides(caller: Parameters<typeof listOrders>[0], rows: readonly ListRow[]): Promise<Row[]> {
+  if (rows.length === 0) return []
+  const depth = new Map((await ordersDepth(caller, { orderIds: rows.map((row) => row.id).join(',') })).orders.map((entry) => [entry.orderId, entry]))
+  const companyIds = [...new Set(rows.map((row) => row.companyId))]
+  const companies = new Map((await caller.withClient((client) => client.company.findMany({ where: { id: { in: companyIds } }, select: { id: true, legalName: true, tradeName: true } }))).map((company) => [company.id, company.tradeName ?? company.legalName]))
+  return rows.map((row) => {
+    const found = depth.get(row.id)
+    return { ...row, beside: { priority: found?.priority.level ?? null, season: found?.season?.code || null, company: companies.get(row.companyId) ?? null } }
+  })
+}
+
+/** The Brand cell: each label's name, our own collection or "label not shown", in the sheet's order. */
+function brandText(row: Row, words: (code: string) => string): string | null {
+  if (row.brands.length === 0) return null
+  return row.brands.map((brand) => (brand.own ? words('brand.own') : (brand.name ?? words('brand.hidden')))).join(', ')
+}
+
+/** The Picture cell in a file: the first line's style ("CODE Name") and how many styles more ("(+2)"). */
+function pictureText(row: Row): string | null {
+  if (!row.picture) return null
+  const more = row.styleCount > 1 ? ` (+${row.styleCount - 1})` : ''
+  return `${row.picture.styleCode} ${row.picture.styleName}${more}`
+}
+
+const priorityWords = (locale: ExportLocale): Record<string, string> => Object.fromEntries(SALES_ORDER_PRIORITY_LEVELS.map((level) => [`priority.${level}`, PRIORITY_WORDS[level][locale]]))
+// ── end B-TH-018 ──
 
 const NAMES: Readonly<Record<ExportLocale, { orders: string; rows: (count: number) => string }>> = {
   it: { orders: 'Ordini', rows: (count) => (count === 1 ? '1 ordine' : `${count} ordini`) },
@@ -81,7 +132,7 @@ export const salesOrders = defineExportSource<Query, Row>({
   },
   async read(caller, query, cursor, limit) {
     const page = await listOrders(caller, { ...query, cursor: cursor ?? undefined, limit })
-    return { rows: page.orders, next: page.nextCursor }
+    return { rows: await besides(caller, page.orders) /* B-TH-018 */, next: page.nextCursor }
   },
   // ── B-TH-008: the saved view's name, else "Orders - <customer>" for a customer's sheet; the rows it holds. ──
   async title(caller, query, facts) {
@@ -107,6 +158,19 @@ export const salesOrders = defineExportSource<Query, Row>({
     shipped: { value: (row) => row.shippedUnits },
     net: { grain: 'price', value: (row) => ({ minor: Number(row.netAmount), currency: row.currency }) },
     quote: { value: (row) => (row.quote ? `${row.quote.number} r${row.quote.revision}` : null) },
+    // ── B-TH-018: the sheet's other columns ──
+    picture: { value: (row) => pictureText(row) },
+    customerRef: { value: (row) => row.customerRef },
+    company: { value: (row) => row.beside.company },
+    brand: { value: (row, words) => brandText(row, words) },
+    invoiced: { value: (row, words) => words(`invoiced.${row.invoiced.state}`) },
+    invoicedAmount: { grain: 'price', value: (row) => ({ minor: Number(row.invoiced.amount), currency: row.currency }) },
+    requested: { value: (row) => (row.requestedDate ? { day: row.requestedDate } : null) },
+    gross: { grain: 'price', value: (row) => ({ minor: Number(row.grossAmount), currency: row.currency }) },
+    daysLate: { value: (row) => (row.daysLate !== null && row.daysLate > 0 ? row.daysLate : null) },
+    priority: { value: (row, words) => (row.beside.priority ? words(`priority.${row.beside.priority}`) : null) },
+    season: { value: (row) => row.beside.season },
+    // ── end B-TH-018 ──
   },
   words: {
     it: {
@@ -124,6 +188,13 @@ export const salesOrders = defineExportSource<Query, Row>({
       'deposit.OPEN': 'Aperto',
       'deposit.PAID': 'Pagato',
       'deposit.WAIVED': 'Rinunciato',
+      // ── B-TH-018 ──
+      'invoiced.NONE': 'Nessuno',
+      'invoiced.PART': 'In parte',
+      'invoiced.ALL': 'Tutto',
+      'brand.own': 'Collezione propria',
+      'brand.hidden': 'Etichetta non visibile',
+      ...priorityWords('it'),
     },
     en: {
       'status.PENDING_APPROVAL': 'Waiting for approval', // B-TH-008
@@ -140,6 +211,13 @@ export const salesOrders = defineExportSource<Query, Row>({
       'deposit.OPEN': 'Open',
       'deposit.PAID': 'Paid',
       'deposit.WAIVED': 'Waived',
+      // ── B-TH-018 ──
+      'invoiced.NONE': 'None',
+      'invoiced.PART': 'Part',
+      'invoiced.ALL': 'All',
+      'brand.own': 'Own collection',
+      'brand.hidden': 'Label not shown',
+      ...priorityWords('en'),
     },
   },
 })

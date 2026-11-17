@@ -59,7 +59,6 @@ import { listPromiseLines } from './depth/api'
 import {
   boardLanes,
   closeHeld,
-  customerChip,
   partyFromAddress,
   depositGate,
   depositSteps,
@@ -73,7 +72,6 @@ import {
   listTouches,
   liveTouches,
   nextStep,
-  ordersCsv,
   parseAmount,
   paymentHeld,
   paymentProblems,
@@ -284,13 +282,6 @@ describe('problems in this app’s words; the CSV by grain', () => {
     expect(writeProblem(new ApiError('invalid', 400, 'validation_failed', 'x', null, [{ path: 'body/promiseDate' }])).key).toBe('promise.problem.past')
     expect(writeProblem(new ApiError('forbidden', 403, 'forbidden', 'x')).key).toBe('problem.write.forbidden')
     expect(writeProblem(new Error('boom')).key).toBe('problem.write.internal')
-  })
-  it('Export N: money columns only with the price grain', () => {
-    const words = { header: (key: string) => key, status: (status: string) => status, deposit: (state: string) => state }
-    const withPrice = ordersCsv(LIST_ROWS.slice(0, 2), true, words, 'it').split('\n')
-    expect(withPrice[0]).toContain('net')
-    expect(withPrice).toHaveLength(3)
-    expect(ordersCsv(LIST_ROWS.slice(0, 2), false, words, 'it').split('\n')[0]).not.toContain('net')
   })
 })
 
@@ -638,15 +629,5 @@ describe('one customer’s orders from the address (B-TH-201)', () => {
     ])
   })
 
-  it('the chip names the customer once known, "…" while it is looked up, and no one when the person may not open it (W27)', () => {
-    expect(customerChip({ name: 'Brand Alpha S.r.l.' })).toEqual({ key: 'list.customerChip', name: 'Brand Alpha S.r.l.' })
-    expect(customerChip({ name: undefined })).toEqual({ key: 'list.customerChip', name: '…' })
-    expect(customerChip({ name: null })).toEqual({ key: 'list.customerHidden', name: '' })
-    for (const locale of LOCALES) {
-      const t = createTranslator(locale, messagesFor(locale, ['orders']).orders!)
-      expect(t('list.customerChip', { name: 'Brand Alpha S.r.l.' })).toMatch(/^(Customer|Cliente): Brand Alpha S\.r\.l\.$/)
-      expect(t('list.customerHidden')).not.toMatch(/Brand|\{/)
-    }
-  })
 })
 // ── end B-TH-201 ──

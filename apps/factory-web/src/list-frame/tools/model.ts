@@ -139,7 +139,11 @@ export function termCount(state: ViewState): number {
   return state.query === '' ? 0 : new URLSearchParams(state.query).size
 }
 
-/** The columns an export writes: the visible ones, left to right, as the screen names them (no ⋯, no checkbox). */
+/**
+ * The columns an export writes: the visible ones, left to right, as the screen names them (no ⋯, no checkbox). B-TH-225: a
+ * cell that shows two facts (an order's number and its customer PO under it) names its second one in
+ * `context.exportWith` ([{ key, label }]): the file writes it right after the column, so the file holds what the cell shows.
+ */
 export function exportColumnsOf(columns: readonly ColDef<unknown>[]): ExportColumn[] {
   const tools = toolColumnsOf(columns)
   const end = new Set(tools.filter((column) => column.fixed === 'end').map((column) => column.id))
@@ -147,8 +151,15 @@ export function exportColumnsOf(columns: readonly ColDef<unknown>[]): ExportColu
     const id = columnIdOf(column)
     if (id === null || id === SELECTION_COLUMN || column.hide || end.has(id)) return []
     const label = typeof column.headerName === 'string' && column.headerName.trim() !== '' ? column.headerName : id
-    return [{ key: id, label }]
+    return [{ key: id, label }, ...exportWithOf(column)]
   })
+}
+
+// B-TH-225: the second facts a cell shows (ColDef.context.exportWith).
+function exportWithOf(column: ColDef<unknown>): ExportColumn[] {
+  const extra = (column.context as { exportWith?: unknown } | undefined)?.exportWith
+  if (!Array.isArray(extra)) return []
+  return extra.filter((entry): entry is ExportColumn => typeof entry?.key === 'string' && typeof entry?.label === 'string' && entry.key !== '' && entry.label.trim() !== '')
 }
 
 /** The grid's density name (the DS's), from a view's. */

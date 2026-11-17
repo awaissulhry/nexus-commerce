@@ -31,7 +31,7 @@ import { WithMessages } from '../record-panels/i18n'
 import { usePrintMode } from '../shell/print/print-mode'
 import { ListKeysInfo } from './ListKeysInfo'
 import { FIT_ROWS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
-import { ListToolsBar, type WithheldColumn } from './tools/ListToolsBar'
+import { ListToolsBar, type ExportAbout, type WithheldColumn } from './tools/ListToolsBar'
 import { useListTools } from './tools/useListTools'
 import { BulkEditButton, BulkEditFlow, ExportSelected } from './w2b/bulk'
 import { useInlineEdit } from './w2b/edit'
@@ -141,6 +141,15 @@ export interface ListFrameProps<T> {
   today?: string
   /** Design cases: the calendar's day open, the bulk edit open at a step with its values. */
   design?: { day?: string | null; bulk?: { values?: Record<string, BulkValue>; review?: boolean } }
+  // ── B-TH-225 (threads plan TH-1a: the Orders sheet), each opt-in ──
+  /** What Export ▾ says the file holds (whose rows, which view, how many), in the list's words. */
+  exportAbout?: ExportAbout | null
+  /**
+   * A click on a row outside its links, buttons and fields (the rest of the row opens the record, grid-F29); the event says
+   * whether ⌘ / Ctrl was held (a new tab). Absent: a click on a row does nothing (Enter opens it, as before).
+   */
+  onRowClick?: (row: T, event: MouseEvent) => void
+  // ── end B-TH-225 ──
 }
 
 /** Today in the site's zone (YYYY-MM-DD). */
@@ -174,7 +183,7 @@ export function ListFrame<T>(props: ListFrameProps<T>) {
   )
 }
 
-function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design }: ListFrameProps<T>) {
+function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick }: ListFrameProps<T>) {
   const t = useT('lists')
   const locale = useLocale()
   const ds = useDsLabels()
@@ -306,6 +315,17 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
 
   const getRowId = useCallback((params: { data: T }) => rowId(params.data), [rowId])
 
+  // B-TH-225: the rest of the row opens the record; a link, a button, a box or a field in the cell keeps its own click.
+  const rowClickRef = useRef(onRowClick)
+  rowClickRef.current = onRowClick
+  const onRowClicked = useCallback((event: { data?: T; event?: Event | null }) => {
+    const click = event.event as MouseEvent | null | undefined
+    const target = click?.target as HTMLElement | null | undefined
+    if (!event.data || !click || !rowClickRef.current) return
+    if (target?.closest('a, button, input, select, textarea, label, [role="button"], [role="checkbox"], .ag-selection-checkbox, [contenteditable="true"]')) return
+    rowClickRef.current(event.data, click)
+  }, [])
+
   // The long grid asks for its next page when the last rows come into view (once per page: `loading` holds it).
   const endlessRef = useRef(endless)
   endlessRef.current = endless
@@ -365,7 +385,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
   const frameTools = printing ? null : (
     <>
       {quick && quick.filters.length > 0 && <QuickMenu quick={quick} t={t} />}
-      {listTools.transport && <ListToolsBar state={listTools} withheld={withheld} />}
+      {listTools.transport && <ListToolsBar state={listTools} withheld={withheld} about={exportAbout} />}
       {modes && <ModeSwitch modes={offered} mode={mode} onMode={modes.onMode} t={t} />}
     </>
   )
@@ -481,6 +501,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
           selectionColumnDef={selection && !printing ? selectionColumnDef : undefined}
           onSelectionChanged={onSelectionChanged}
           onCellKeyDown={onCellKeyDown}
+          {...(onRowClick ? { onRowClicked } : {}) /* B-TH-225 */}
           suppressCellFocus={false}
           {...(inline.active ? { readOnlyEdit: true, onCellEditRequest: inline.onCellEditRequest, cellSelection: true } : {})}
         />

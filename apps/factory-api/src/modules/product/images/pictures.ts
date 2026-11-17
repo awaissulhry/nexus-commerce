@@ -204,7 +204,11 @@ export async function setMainPicture(request: FastifyRequest, styleId: string, p
     const { tx, now } = tools
     const style = await lockAndAsk(tools, styleId, 'DETAILS')
     const row = await pictureOf(tools, styleId, pictureId, version)
-    if (row.isMain) return
+    // B-TH-102 (found by golden flow TH-1a): the main picture asked again is already so — said, never a 500 for a missing audit row.
+    if (row.isMain) {
+      tools.audit({ recordType: 'StyleImage', recordId: pictureId, companyId: style.companyId, after: { isMain: true, unchanged: true } })
+      return
+    }
     // The old main mark first: one main picture per style (a partial unique index, checked row by row).
     const old = await tx.styleImage.findFirst({ where: { styleId, isMain: true }, select: { id: true, version: true } })
     if (old) await tx.styleImage.update({ where: { id: old.id }, data: { isMain: false, version: old.version + 1, updatedAt: now }, select: { id: true } })
@@ -236,7 +240,11 @@ export async function orderPictures(request: FastifyRequest, styleId: string, bo
       await tx.styleImage.update({ where: { id }, data: { seq, version: picture.version + 1, updatedAt: now }, select: { id: true } })
       moved.push(id)
     }
-    if (moved.length === 0) return
+    // B-TH-102: the same order again moves nothing — said, never a 500 for a missing audit row.
+    if (moved.length === 0) {
+      tools.audit({ recordType: 'Style', recordId: styleId, companyId: style.companyId, after: { pictures: [...body.ids], unchanged: true } })
+      return
+    }
     tools.audit({ recordType: 'Style', recordId: styleId, companyId: style.companyId, before: { pictures: pictures.map((picture) => picture.id) }, after: { pictures: [...body.ids] } })
     tools.emit({ type: 'style.pictures_changed', subject: styleId, companyId: style.companyId, payload: { styleId, code: style.code, change: 'ORDER', pictureIds: moved } })
   })
