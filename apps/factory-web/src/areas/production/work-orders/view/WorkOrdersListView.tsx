@@ -57,6 +57,10 @@ import {
   // F-PR-18: the Customer urgency column (under Columns ▾) and its filter.
   customerUrgencyCellOf,
 } from '../list/model'
+// F-PR-22: "Note to N…" on a selection and a row's "Office note…" (THE note dialog).
+import { MessageSquareLock } from 'lucide-react'
+import { NOTES_NS, openHeld } from '../../_shared/notes/model'
+import { NoteDialog } from '../../_shared/notes/view/NoteDialog'
 // ---- end F-PR-03
 
 export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
@@ -81,7 +85,7 @@ export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
  */
 export function WorkOrdersListView({ model, actions }: { model: WorkOrdersListModel; actions?: WorkOrdersListActions }) {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', /* F-PR-21 */ SUPERVISOR_NS]}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', /* F-PR-21 */ SUPERVISOR_NS, /* F-PR-22 */ NOTES_NS]}>
       <WorkOrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -145,6 +149,13 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
   const assignWaitWords = assignWait ? tsv(assignWait.key, assignWait.params) : null
   // F-PR-03: a customer cell names the customer with parties.view, else its code (06-tree A.0).
   const names = model.customers?.names ?? false
+  // F-PR-22: why "Note to N…" / a row's "Office note…" waits (no threads.post, over 100 work orders).
+  const tn = useT(NOTES_NS)
+  const noteCan = model.noteCan ?? false
+  const noteWait = openHeld(noteCan, picked.length)
+  const noteWaitWords = noteWait ? tn(noteWait.key, noteWait.params) : null
+  const rowNoteWait = openHeld(noteCan, 1)
+  const rowNoteWaitWords = rowNoteWait ? tn(rowNoteWait.key, rowNoteWait.params) : null
 
   const columns = useMemo<ColDef<WorkOrderRow>[]>(() => {
     const href = (row: WorkOrderRow) => `${model.prefix}/production/work-orders/${row.id}`
@@ -293,6 +304,8 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
             { id: 'tab', label: t('list.openNewTab'), href: href(data), target: '_blank' },
             { id: 'cutting', label: t('tab.cutting'), href: `${href(data)}?tab=cutting` },
             { id: 'traveller', label: ts('docs.openTraveller'), href: travellersHref(model.prefix, [data.id]), target: '_blank' },
+            // F-PR-22: an office note on this work order (or its sales orders), with @ and its supervisor asked.
+            { id: 'note', label: tn('open.row'), ...(rowNoteWaitWords ? { disabled: true, description: rowNoteWaitWords } : { onSelect: () => latest.current.actions?.onNote?.([data.id], 'row') }) },
           ]}
         />
       ) : null
@@ -318,7 +331,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       later({ colId: 'customerUrgency', headerName: tw('urgency.column'), headerTooltip: tw('urgency.hint'), minWidth: 150, flex: 0.9, sortable: false, cellRenderer: UrgencyCell }),
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, tw, ts, tsv, locale, model.prefix, model.can.orders, model.now, names, readiness])
+  }, [t, tw, ts, tsv, locale, model.prefix, model.can.orders, model.now, names, readiness, /* F-PR-22 */ tn, rowNoteWaitWords])
 
   // B-W2b-13 — the W2b list frame: board by state, calendar by due date, cards, the due quick filter, inline and bulk edit.
   const final = (row: WorkOrderRow) => (row.status === 'CLOSED' || row.status === 'CANCELLED' ? t('w2b.heldFinal') : null)
@@ -544,6 +557,10 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
               <Button size="sm" aria-label={tw('supervisor.assign')} heldReason={assignWaitWords} onClick={() => actions?.onAssignSupervisor?.(picked.map((row) => row.id))}>
                 <UserCog size={13} aria-hidden /> <SelectionLabel>{tw('supervisor.assign')}</SelectionLabel>
               </Button>
+              {/* F-PR-22: one office note on each picked work order (or their sales orders), up to 100; held in words. */}
+              <Button size="sm" aria-label={tn('open.selection', { count: picked.length })} heldReason={noteWaitWords} onClick={() => actions?.onNote?.(picked.map((row) => row.id), 'selection')}>
+                <MessageSquareLock size={13} aria-hidden /> <SelectionLabel>{tn('open.selection', { count: picked.length })}</SelectionLabel>
+              </Button>
               {travellerWaitWords ? (
                 <Button size="sm" aria-label={ts('travellers.printSelected', { count: picked.length })} heldReason={travellerWaitWords}>
                   <Printer size={13} aria-hidden /> <SelectionLabel>{ts('travellers.printSelected', { count: picked.length })}</SelectionLabel>
@@ -618,6 +635,8 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       {daily?.dialog?.kind === 'hold' && <HoldDialog numbers={daily.dialog.numbers} workOrderIds={daily.dialog.workOrderIds} daily={daily} actions={actions?.daily} />}
       {/* F-PR-21 */}
       {model.assign && <AssignSupervisorDialog model={model.assign} actions={actions?.supervisor} />}
+      {/* F-PR-22 */}
+      {model.note && <NoteDialog model={model.note} actions={actions?.note} />}
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('list.keysTitle')} size="sm">
           <ul className="fw-pr-list">

@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import type { OpenLines, OrderOption, WorkOrderRow } from '../_shared/api'
-import { at, canOf, COUNTS, inShell, LIST_ROWS, OPEN_ROWS, PREFIX, type Role } from '../_shared/fixtures'
+import { at, canOf, COUNTS, inShell, LIST_ROWS, OPEN_ROWS, PREFIX, /* F-PR-22 */ ROLES, type Role } from '../_shared/fixtures'
 import { NO_NEW_ORDER, type NewWorkOrderModel, type WorkOrdersListModel } from './list-model'
 import { WorkOrdersListView } from './view/WorkOrdersListView'
 import { DAILY_ROLE_OF, dailyDemo } from './daily/demo/fixtures'
@@ -11,6 +11,8 @@ import type { ReleasePreviewRow } from './every-shift/api'
 import type { CustomerFilterState } from '../_shared/customer/model'
 // F-PR-21
 import { targetsOfRows, type AssignSupervisorModel } from '../../_shared/production-supervisor/model'
+// F-PR-22: THE note dialog (made-up records, people, check answers and a result).
+import { NOTE_CHECK_HOLD, NOTE_RESULT, noteModel } from '../_shared/notes/fixtures'
 
 /**
  * SCR-069 — Work orders (design production.workorders) with made-up data only: every state of the list (loading, error,
@@ -74,6 +76,8 @@ const base = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => 
     // B-W2a-46: the readiness word per row, Hold N.
     readiness: READINESS_ROWS,
     daily: dailyDemo(DAILY_ROLE_OF[role]),
+    // F-PR-22: "Note to N…" and a row's "Office note…" (threads.post).
+    noteCan: (ROLES[role] as readonly string[]).includes('threads.post'),
     ...over,
   },
 })
@@ -269,5 +273,18 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'urgency-filter', label: 'F-PR-18 · The Customer urgency filter “Urgent – asked” as a chip (`?customerUrgency=ASKED`)', model: risky('manager', { customerUrgency: 'ASKED', rows: { items: URGENCY_ROWS.filter((row) => row.urgencyState === 'ASKED'), more: false, problem: null } }) },
     { id: 'urgency-none', label: 'F-PR-18 · The Customer urgency filter matching nothing: Clear filters', model: risky('manager', { customerUrgency: 'SET_BACK', rows: { items: [], more: false, problem: null } }) },
     // ---- end F-PR-18
+    // ---- F-PR-22 ----
+    { id: 'note-selection', label: 'F-PR-22 · Two customers’ work orders selected: Note to 2… in the bar (a row’s ⋯ has Office note…)', model: supervised('manager', { selected: PICKED.map((row) => row.id) }) },
+    { id: 'note-held', label: 'F-PR-22 · Without threads.post: Note to N… held in words', model: supervised('manager', { selected: PICKED.map((row) => row.id), noteCan: false }) },
+    { id: 'note-dialog', label: 'F-PR-22 · Office note on 12 work orders: Dora Campione cannot read 2 of 12, 2 customers, the supervisor tagged first in @', model: risky('manager', { note: noteModel() }), note: 'Write on each work order or their sales orders; the yellow Office note, never shown to a customer; Each record’s supervisor ticked; Needs an answer.' },
+    { id: 'note-needs-answer', label: 'F-PR-22 · Needs an answer ticked: a task for each record’s supervisor; the two with none said', model: risky('manager', { note: noteModel({ draft: { needsAnswer: true } }) }) },
+    { id: 'note-hold', label: 'F-PR-22 · The text names another customer: those records named, Send held until the text changes or the tick', model: risky('manager', { note: noteModel({ answer: NOTE_CHECK_HOLD }) }) },
+    { id: 'note-hold-ticked', label: 'F-PR-22 · “This text names no other customer” ticked: checked again, then Send may go', model: risky('manager', { note: noteModel({ answer: { ...NOTE_CHECK_HOLD, held: false }, draft: { namesNoOtherCustomer: true } }) }) },
+    { id: 'note-checking', label: 'F-PR-22 · The draft being checked: Send waits with words', model: risky('manager', { note: noteModel({ answer: null }) }) },
+    { id: 'note-check-failed', label: 'F-PR-22 · The check failed: Try again; Send held', model: risky('manager', { note: { ...noteModel(), check: { status: 'failed', key: 'x' } } }) },
+    { id: 'note-offline', label: 'F-PR-22 · Offline: the note waits in the dialog, Send held in words', model: risky('manager', { note: noteModel({ offline: true }) }) },
+    { id: 'note-problem', label: 'F-PR-22 · Send refused (the network went): the text kept, Try again', model: risky('manager', { note: noteModel({ problem: 'problem.offline' }) }) },
+    { id: 'note-result', label: 'F-PR-22 · After Send: one result per record; a refused one named, 2 counted, never named', model: risky('manager', { note: noteModel({ result: NOTE_RESULT }) }) },
+    // ---- end F-PR-22
   ],
 })

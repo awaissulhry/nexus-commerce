@@ -15,6 +15,8 @@ import type { ListTerms } from './list/model'
 import type { AssignSupervisorActions, AssignSupervisorModel } from '../../_shared/production-supervisor/model'
 // F-PR-18: the Customer urgency filter.
 import type { CustomerUrgencyState } from '../_shared/api'
+// F-PR-22: "Note to N…" and a row's "Office note…" (THE note dialog, areas/production/_shared/notes).
+import type { NoteDialogActions, NoteDialogModel, NoteFrom } from '../_shared/notes/model'
 
 /** SCR-069 — the work orders list's view model (WorkOrdersListView draws it and fetches nothing). */
 export interface WorkOrdersListModel {
@@ -77,6 +79,12 @@ export interface WorkOrdersListModel {
   // ── end F-PR-21
   /** F-PR-18: the Customer urgency filter (`?customerUrgency=`). */
   customerUrgency?: CustomerUrgencyState | null
+  // ── F-PR-22 ──
+  /** threads.post: "Note to N…" and a row's "Office note…" (held in words without it). */
+  noteCan?: boolean
+  /** THE note dialog while open. */
+  note?: NoteDialogModel | null
+  // ── end F-PR-22
 }
 
 export interface WorkOrdersListActions {
@@ -117,6 +125,11 @@ export interface WorkOrdersListActions {
   onAssignSupervisor?: (ids: readonly string[]) => void
   supervisor?: AssignSupervisorActions
   // ── end F-PR-21
+  // ── F-PR-22 ──
+  /** "Note to N…" on a selection, or a row's "Office note…" (at most NOTE_RECORDS_MAX work orders). */
+  onNote?: (ids: readonly string[], from: Exclude<NoteFrom, 'band'>) => void
+  note?: NoteDialogActions
+  // ── end F-PR-22
 }
 
 export type { BulkReleaseModel }

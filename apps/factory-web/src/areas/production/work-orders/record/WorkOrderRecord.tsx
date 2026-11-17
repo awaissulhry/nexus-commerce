@@ -72,6 +72,9 @@ import { openPreview } from '../../../admin/users/partners/preview'
 // F-PR-21: the band's supervisor fact and its Change… (THE assign dialog over the work order's orders).
 import { targetsOfRecord } from '../../../_shared/production-supervisor/model'
 import { useAssignSupervisor } from '../../../_shared/production-supervisor/use-assign-supervisor'
+// F-PR-22: Ask the supervisor — THE note dialog over this work order (or its sales orders).
+import { targetsOfRecord as noteTargetsOfRecord } from '../../_shared/notes/model'
+import { useNoteDialog } from '../../_shared/notes/use-note-dialog'
 // ---- F-PR-06: Cutting & bundles — the Cut record's recuts (Mark cut) and the cut orders of this work order ----
 import { useCutParts } from '../cutting/use-cut-parts'
 // ---- end F-PR-06
@@ -430,6 +433,15 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     assign.open(targets, { current: value.supervisor ? { name: value.supervisor.name, from: value.supervisor.from } : null })
   }, [value, session.permissions, assign.open])
   // ---- end F-PR-21
+  // ---- F-PR-22: Ask the supervisor writes an office note on this work order (or its sales orders) with each one's supervisor
+  // mentioned; threads.post (every office person who may read it), else held in words. ----
+  const noteCan = session.permissions.includes('threads.post')
+  const note = useNoteDialog(api, { can: noteCan })
+  const openNote = useCallback(() => {
+    if (!value || !noteCan) return
+    note.open(noteTargetsOfRecord(value, session.permissions.includes('parties.view')), 'band')
+  }, [value, noteCan, session.permissions, note.open])
+  // ---- end F-PR-22
   // ---- B-TH-280: the work order's custom fields at the end of its first tab (Overview & release), as the old panels drew them above
   // theirs: the record frame's slot (the tab bodies stay the production lane's).
   const fields = value && tab === 'overview' ? <RecordCustomFields record={{ type: 'WorkOrder', id: value.id }} title={value.number} /> : null
@@ -488,6 +500,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     partiesView: session.permissions.includes('parties.view'),
     // F-PR-21
     supervisor: { can: session.permissions.includes('production.brand.manage'), assign: assign.model },
+    // F-PR-22
+    note: { can: noteCan, dialog: note.model },
     // F-PR-06
     cut: cutParts.model,
     shareReports: session.permissions.includes('quality.documents.share'),
@@ -638,6 +652,8 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         onPreview: preview,
         // F-PR-21
         supervisor: { ...assign.actions, onOpen: openAssign },
+        // F-PR-22
+        note: { ...note.actions, onOpen: openNote },
         // ---- F-PR-06: the recuts' Mark cut; the bundles waiting at an operation are on Cutting & bundles (was ?tab=bundles) ----
         cut: cutParts.actions,
         onWaitingAt: (seq) => {
