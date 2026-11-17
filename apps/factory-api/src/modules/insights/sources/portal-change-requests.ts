@@ -25,16 +25,17 @@ import { capped, partyNames, SOURCE_LIMIT, type Source } from './common'
  * out) or our counter lapsed (answer it). Read through orders.view in the viewer's own customer scope: a person limited to some
  * customers sees only theirs (PW-H01).
  */
-export const portalChangeRequests: Source = async ({ caller, viewer }) => {
+export const portalChangeRequests: Source = async ({ caller, viewer, all }) => {
   const scope = scopeWhere(viewer.actor, ORDERS_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.OrderChangeRequestWhereInput
   return caller.withClient(async (db) => {
     const found = await db.orderChangeRequest.findMany({
       where: { AND: [scope, { status: { in: ['OPEN', 'COUNTERED'] } }] },
       orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-      take: SOURCE_LIMIT + 1,
+      // B-PR-33: Production › Overview reads every row (its Customer requests tile counts in full); Today stops at the limit.
+      ...(all ? {} : { take: SOURCE_LIMIT + 1 }),
       select: { id: true, companyId: true, partyId: true, orderId: true, kind: true, status: true, batchId: true, requestedDate: true, counterApprovalId: true, createdAt: true, counteredAt: true },
     })
-    const { rows: read, complete } = capped(found, SOURCE_LIMIT)
+    const { rows: read, complete } = capped(found, all ? found.length : SOURCE_LIMIT)
     // A countered request waits on the customer while its counter is open; it waits on us again once they said yes or it lapsed.
     const counterIds = read.flatMap((row) => (row.counterApprovalId ? [row.counterApprovalId] : []))
     const counters = new Map((counterIds.length > 0 ? await db.approvalRequest.findMany({ where: { id: { in: counterIds } }, select: { id: true, status: true, answeredAt: true, updatedAt: true } }) : []).map((row) => [row.id, row]))

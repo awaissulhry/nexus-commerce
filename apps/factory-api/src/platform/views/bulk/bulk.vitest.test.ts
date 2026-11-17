@@ -43,7 +43,12 @@ describe('the registry', () => {
     expect(workOrders.fields.due!.held!({ status: 'CLOSED' })).toEqual({ code: 'held', status: 'CLOSED' })
     expect(workOrders.fields.priority!.held!({ status: 'CANCELLED' })).toEqual({ code: 'held', status: 'CANCELLED' })
     expect(workOrders.fields.due!.held!({ status: 'ON_HOLD' })).toBeNull()
-    expect(bulkTargetOf('sales.orders')).toBeUndefined()
+    // B-TH-060 (#1568): Sales › Orders is edited cell by cell too (the office note, the custom values; orders.manage); a list
+    // without a target is still not edited in bulk.
+    expect(bulkTargetOf('sales.orders')).toMatchObject({ listKey: 'sales.orders', permission: 'orders.manage' })
+    expect(Object.keys(bulkTargetOf('sales.orders')!.fields)).toEqual(['note'])
+    expect(bulkTargetOf('sales.quotes')).toBeUndefined()
+    // ---- end B-TH-060
     // B-W2b-51: "Release N work orders" (workorders.release, status → RELEASED, at most 50 rows).
     const release = bulkTargetOf('production.work-orders.release')!
     expect(release).toMatchObject({ permission: 'workorders.release', maxRows: 50 })

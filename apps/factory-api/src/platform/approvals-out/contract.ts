@@ -239,6 +239,8 @@ export const portalListContract = defineContract({
           decided: z.string().nullable(),
           /** B-PR-29: an open production approval its customer's named approver answers, and the reader is not that person: their name ("Waiting for Anna"); else null. */
           waitingFor: z.string().nullable(),
+          /** F-PR-14: an open priced counter-offer the reader may not answer (no prices): "Waiting for your buyer" (B-PR-26's rule). */
+          waitingForBuyer: notMoney(z.boolean()),
         }),
       ),
     }),

@@ -50,8 +50,8 @@ const TEXT = {
   it: (number: string, date: string, fileName: string) => ({
     subject: `Fattura n. ${number} del ${date}: copia di cortesia`,
     body:
-      `Gentile cliente,\n\nil Sistema di Interscambio (SDI) dell'Agenzia delle Entrate non ha potuto recapitare la fattura n. ${number} del ${date} (file ${fileName}) al Suo indirizzo telematico.\n\n` +
-      "La fattura è comunque emessa ed è a Sua disposizione nella Sua area riservata del sito dell'Agenzia delle Entrate (Fatture e Corrispettivi).\n\n" +
+      `Gentile cliente,\n\nil Sistema di Interscambio (SDI) dell'Agenzia delle Entrate non ha potuto recapitare la fattura n. ${number} del ${date} (file ${fileName}) al vostro indirizzo telematico.\n\n` +
+      "La fattura è comunque emessa ed è a vostra disposizione nella vostra area riservata del sito dell'Agenzia delle Entrate (Fatture e Corrispettivi).\n\n" +
       'In allegato una copia di cortesia in PDF, che non sostituisce la fattura elettronica.',
   }),
   en: (number: string, date: string, fileName: string) => ({

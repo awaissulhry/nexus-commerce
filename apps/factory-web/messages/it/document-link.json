@@ -8,7 +8,7 @@
   "list": {
     "title_one": "{count} documento per questa spedizione",
     "title_other": "{count} documenti per questa spedizione",
-    "for": "Spedizione {number} · {sent}. Scegli un documento per leggerlo qui."
+    "for": "Spedizione {number} · {sent}. Scegliete un documento per leggerlo qui."
   },
   "shipment": {
     "shipped": "spedita il {date}",
@@ -46,9 +46,9 @@
     "loading": "Apertura del documento…",
     "failed": {
       "title": "Non è stato possibile mostrare il documento",
-      "body": "Qualcosa non è andato durante la lettura. Riprova, oppure scaricalo."
+      "body": "Qualcosa non è andato durante la lettura. Riprovate, oppure scaricatelo."
     },
-    "notPdf": "Questo file non si può mostrare nella pagina: scaricalo per aprirlo."
+    "notPdf": "Questo file non si può mostrare nella pagina: scaricatelo per aprirlo."
   },
   "empty": {
     "title": "Nessun documento condiviso",
@@ -61,16 +61,16 @@
   "state": {
     "expired": {
       "title": "Questo link è scaduto",
-      "body": "Questo link è scaduto il {time}. Puoi chiederne uno nuovo.",
-      "bodyNoTime": "Questo link è scaduto. Puoi chiederne uno nuovo."
+      "body": "Questo link è scaduto il {time}. Potete chiederne uno nuovo.",
+      "bodyNoTime": "Questo link è scaduto. Potete chiederne uno nuovo."
     },
     "withdrawn": {
       "title": "Questo link non si apre più",
-      "body": "Il mittente potrebbe averlo ritirato, oppure le aperture sono esaurite. Puoi chiederne uno nuovo."
+      "body": "Il mittente potrebbe averlo ritirato, oppure le aperture sono esaurite. Potete chiederne uno nuovo."
     },
     "error": {
       "title": "Si è verificato un problema da parte nostra",
-      "body": "Non è stato possibile leggere i documenti. Riprova."
+      "body": "Non è stato possibile leggere i documenti. Riprovate."
     }
   },
   "ask": {
@@ -79,7 +79,7 @@
     "busy": "Invio della richiesta…",
     "held": "Richiesto: lo abbiamo inoltrato",
     "done": "Abbiamo inoltrato la richiesta. Se il link era nostro, il mittente scriverà all'indirizzo a cui era stato inviato.",
-    "failed": "La richiesta non ci è arrivata. Controlla la connessione e chiedi di nuovo.",
+    "failed": "La richiesta non ci è arrivata. Controllate la connessione e chiedete di nuovo.",
     "onlyOnFile": "Un nuovo link va solo all'indirizzo a cui erano stati inviati i documenti, mai a uno scritto qui."
   },
   "retry": "Riprova"

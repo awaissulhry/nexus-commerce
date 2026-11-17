@@ -13,7 +13,10 @@ import type { Issue } from '../../core/errors'
  * every mail) turns all of it off (GDPR). Notifications stay in the portal's bell whatever the e-mail settings say.
  */
 
-export const PARTNER_EMAIL_TOPICS = ['ORDERS', 'DATES', 'SHIPPED', 'INVOICES', 'CLAIMS', 'DOCUMENTS', 'MESSAGES', 'REMINDERS'] as const
+// B-PR-31 (production plan §5 "bell and mail (topic PRODUCTION, daily mail by default)"; the schema's PartnerEmailTopic has it
+// since B-PR-15): + PRODUCTION — a customer's orders in production: a stage reached, at risk or late, a hold, an urgency changed
+// by us, the answer to a production ask, a problem it reported answered. Non-essential: a daily summary until changed.
+export const PARTNER_EMAIL_TOPICS = ['ORDERS', 'DATES', 'SHIPPED', 'INVOICES', 'CLAIMS', 'DOCUMENTS', 'MESSAGES', 'REMINDERS', /* B-PR-31 */ 'PRODUCTION'] as const
 export type PartnerEmailTopic = (typeof PARTNER_EMAIL_TOPICS)[number]
 export const PARTNER_EMAIL_FREQUENCIES = ['INSTANT', 'DAILY', 'WEEKLY', 'OFF'] as const
 export type PartnerEmailFrequency = (typeof PARTNER_EMAIL_FREQUENCIES)[number]
@@ -35,7 +38,7 @@ export const DEFAULT_FREQUENCIES: Readonly<Partial<Record<PartnerEmailTopic, Par
 export const defaultFrequencyOf = (topic: PartnerEmailTopic): PartnerEmailFrequency => DEFAULT_FREQUENCIES[topic] ?? DEFAULT_FREQUENCY
 // ---- end B-TH-045
 
-export const LOCKED_REASON = { it: 'Servono per gestire i tuoi ordini.', en: 'Needed to run your orders.' } as const
+export const LOCKED_REASON = { it: 'Servono per gestire i vostri ordini.', en: 'Needed to run your orders.' } as const
 
 export const TOPIC_WORDS: Readonly<Record<PartnerEmailTopic, { readonly it: string; readonly en: string }>> = Object.freeze({
   ORDERS: { it: 'Ordini confermati', en: 'Orders confirmed' },
@@ -46,6 +49,8 @@ export const TOPIC_WORDS: Readonly<Record<PartnerEmailTopic, { readonly it: stri
   DOCUMENTS: { it: 'Documenti pronti', en: 'Documents ready' },
   MESSAGES: { it: 'Messaggi', en: 'Messages' },
   REMINDERS: { it: 'Promemoria', en: 'Reminders' },
+  // B-PR-31
+  PRODUCTION: { it: 'Produzione', en: 'Production' },
 })
 
 export const isTopic = (value: unknown): value is PartnerEmailTopic => typeof value === 'string' && (PARTNER_EMAIL_TOPICS as readonly string[]).includes(value)

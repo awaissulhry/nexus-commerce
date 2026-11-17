@@ -1,19 +1,19 @@
 {
-  "title": "Il tuo ordine {order}",
+  "title": "Il vostro ordine {order}",
   "retry": "Riprova",
   "carrierSite": "Segui sul sito del corriere",
   "loading": {
-    "label": "Carichiamo dove si trova il tuo ordine…",
+    "label": "Carichiamo dove si trova il vostro ordine…",
     "slow": "Ancora un momento…"
   },
   "state": {
     "error": {
-      "title": "Non siamo riusciti a leggere dove si trova il tuo ordine",
-      "body": "La connessione o il nostro servizio non hanno risposto. Non si è perso nulla: riprova."
+      "title": "Non siamo riusciti a leggere dove si trova il vostro ordine",
+      "body": "La connessione o il nostro servizio non hanno risposto. Non si è perso nulla: riprovate."
     },
     "dead": {
       "title": "Questo link di tracciamento non funziona più",
-      "body": "È stato ritirato, oppure la pagina si è chiusa 60 giorni dopo la consegna. Chiedi un nuovo link: lo inviamo all'indirizzo a cui era stato mandato."
+      "body": "È stato ritirato, oppure la pagina si è chiusa 60 giorni dopo la consegna. Chiedete un nuovo link: lo inviamo all'indirizzo a cui era stato mandato."
     }
   },
   "ask": {
@@ -21,9 +21,9 @@
     "again": "Chiedi di nuovo",
     "busy": "Richiesta in corso…",
     "asked": "Richiesto — l'abbiamo inoltrato",
-    "held": "Già richiesto: guarda nella casella a cui era arrivato il link.",
+    "held": "Già richiesto: guardate nella casella a cui era arrivato il link.",
     "done": "L'abbiamo inoltrato. Se il link era nostro, ne arriva uno nuovo all'indirizzo a cui era stato mandato.",
-    "failed": "La richiesta non ci è arrivata. Controlla la connessione e chiedi di nuovo.",
+    "failed": "La richiesta non ci è arrivata. Controllate la connessione e chiedete di nuovo.",
     "onlyOnFile": "Un nuovo link va sempre e solo all'indirizzo che abbiamo, mai a uno scritto qui."
   },
   "pill": {
@@ -37,7 +37,7 @@
   "now": {
     "PACKED": "Imballato, attende il corriere.",
     "COLLECTED": "Il corriere l'ha ritirato.",
-    "IN_TRANSIT": "In viaggio verso di te.",
+    "IN_TRANSIT": "In viaggio verso di voi.",
     "OUT_FOR_DELIVERY": "In consegna oggi.",
     "DELIVERED": "Consegnato.",
     "PROBLEM": "Qualcosa non va come previsto."
@@ -45,7 +45,7 @@
   "problem": {
     "DELAYED": "Il corriere segnala un ritardo o una consegna mancata.",
     "RETURNING": "Il corriere lo sta riportando a noi.",
-    "RETURNED": "La merce è tornata a noi. Ti scriveremo."
+    "RETURNED": "La merce è tornata a noi. Vi scriveremo."
   },
   "step": {
     "PACKED": "Imballato",
@@ -65,7 +65,7 @@
   "by": {
     "CARRIER": "Un corriere",
     "SENDER": "Il nostro furgone",
-    "RECIPIENT": "Ritiri tu da noi"
+    "RECIPIENT": "Ritirate voi da noi"
   },
   "fact": {
     "expected": "Consegna prevista",
@@ -78,7 +78,7 @@
   },
   "where": {
     "title": "Dove si trova",
-    "sub": "Le ultime notizie della tua spedizione, nella tua lingua.",
+    "sub": "Le ultime notizie della vostra spedizione, nella vostra lingua.",
     "steps": "Dove si trova la spedizione {number}"
   },
   "parcels": {
@@ -94,14 +94,14 @@
   },
   "events": {
     "title": "Notizie del corriere",
-    "sub": "Cosa ha segnalato il corriere, nella tua lingua.",
+    "sub": "Cosa ha segnalato il corriere, nella vostra lingua.",
     "ofParcel": "{event} · collo {seq}",
     "none": {
       "packed": "Ancora nessuna scansione del corriere: attende il ritiro.",
       "packedEta": "Ancora nessuna scansione del corriere: attende il ritiro. Consegna prevista: {date}.",
       "left": "Ancora nessuna scansione del corriere. Compaiono qui appena il corriere le invia.",
       "SENDER": "Questa spedizione viaggia con il nostro furgone: non ci sono scansioni del corriere.",
-      "RECIPIENT": "Ritiri tu questa spedizione da noi: non ci sono scansioni del corriere."
+      "RECIPIENT": "Ritirate voi questa spedizione da noi: non ci sono scansioni del corriere."
     }
   },
   "delivery": {
@@ -123,28 +123,28 @@
   "papers": {
     "title": "Documenti",
     "sub": "La packing list e le dichiarazioni di questa spedizione. Senza prezzi.",
-    "search": "I documenti arrivano con il link della nostra e-mail: aprilo per scaricarli.",
+    "search": "I documenti arrivano con il link della nostra e-mail: apritelo per scaricarli.",
     "none": "Ancora nessun documento per questa spedizione.",
     "download": "Scarica",
     "again": "Riprova",
     "busy": "Download in corso…",
-    "failed": "Il download non è finito. Riprova.",
+    "failed": "Il download non è finito. Riprovate.",
     "language": "In {language} · senza prezzi",
     "noPrice": "Senza prezzi",
     "downloadOf": "Scarica {name}"
   },
   "claim": {
     "title": "Qualcosa non va?",
-    "sub": "Merce danneggiata, mancante o diversa dall'ordine: dillo a noi da qui.",
+    "sub": "Merce danneggiata, mancante o diversa dall'ordine: ditelo a noi da qui.",
     "button": "Segnala un problema con questa consegna",
     "busy": "Apriamo il modulo…",
     "opened": "Il modulo si è aperto in una nuova scheda.",
-    "failed": "Il modulo non si è aperto. Controlla la connessione e riprova.",
-    "tooMany": "I moduli per questa spedizione sono già stati aperti: usa quello che hai aperto, oppure scrivici.",
+    "failed": "Il modulo non si è aperto. Controllate la connessione e riprovate.",
+    "tooMany": "I moduli per questa spedizione sono già stati aperti: usate quello che avete aperto, oppure scriveteci.",
     "held": {
-      "SEARCH": "Per segnalare un problema apri il link della nostra e-mail, oppure scrivici.",
-      "NOT_LEFT": "Non è ancora partito: scrivici per cambiarlo.",
-      "RETURNED": "La merce è tornata a noi: ti scriveremo."
+      "SEARCH": "Per segnalare un problema aprite il link della nostra e-mail, oppure scriveteci.",
+      "NOT_LEFT": "Non è ancora partito: scriveteci per cambiarlo.",
+      "RETURNED": "La merce è tornata a noi: vi scriveremo."
     }
   },
   "foot": {
@@ -153,35 +153,35 @@
   },
   "search": {
     "title": "Traccia la spedizione",
-    "cardTitle": "Trova il tuo ordine",
-    "sub": "Non hai il link? Scrivi il riferimento del tuo ordine e il CAP di consegna.",
-    "reference": "Riferimento del tuo ordine",
-    "referenceHint": "Come sul tuo ordine o sulla nostra conferma.",
+    "cardTitle": "Trova il vostro ordine",
+    "sub": "Non avete il link? Scrivete il riferimento del vostro ordine e il CAP di consegna.",
+    "reference": "Riferimento del vostro ordine",
+    "referenceHint": "Come sul vostro ordine o sulla nostra conferma.",
     "postcode": "CAP di consegna",
     "postcodeHint": "Il CAP dell'indirizzo a cui va.",
     "button": "Trova la mia spedizione",
-    "enter": "Puoi cercare anche con Invio.",
+    "enter": "Potete cercare anche con Invio.",
     "again": "Cerca un altro ordine",
     "foundLabel": "Spedizioni di questo ordine",
-    "several_one": "Questo ordine è partito in {count} spedizione. Sceglila:",
-    "several_other": "Questo ordine è partito in {count} spedizioni. Scegline una:",
+    "several_one": "Questo ordine è partito in {count} spedizione. Sceglietela:",
+    "several_other": "Questo ordine è partito in {count} spedizioni. Sceglietene una:",
     "pickLeft": "Spedizione {number} · partita il {date}",
     "pickPacked": "Spedizione {number} · imballata",
     "checking": "Un rapido controllo di questo browser, poi cerchiamo…",
-    "error": "La ricerca non ci è arrivata. Controlla la connessione e riprova.",
-    "wait_one": "Troppe ricerche: attendi {count} minuto, poi riprova.",
-    "wait_other": "Troppe ricerche: attendi {count} minuti, poi riprova.",
+    "error": "La ricerca non ci è arrivata. Controllate la connessione e riprovate.",
+    "wait_one": "Troppe ricerche: attendete {count} minuto, poi riprovate.",
+    "wait_other": "Troppe ricerche: attendete {count} minuti, poi riprovate.",
     "miss": {
       "title": "Nessuna spedizione trovata con questi dati.",
-      "body": "Controlla il riferimento dell'ordine e il CAP dell'indirizzo di consegna. Un ordine compare qui quando è stato imballato."
+      "body": "Controllate il riferimento dell'ordine e il CAP dell'indirizzo di consegna. Un ordine compare qui quando è stato imballato."
     },
     "ended": {
       "title": "Questa spedizione non si può più seguire qui",
-      "body": "Cerca di nuovo, oppure scrivici."
+      "body": "Cercate di nuovo, oppure scriveteci."
     },
     "missing": {
       "title": "In questo indirizzo manca di chi è l'ordine",
-      "body": "Apri il link di tracciamento della nostra e-mail, oppure chiedicelo."
+      "body": "Aprite il link di tracciamento della nostra e-mail, oppure chiedetecelo."
     },
     "held": {
       "loading": "Carichiamo la pagina…",
@@ -190,14 +190,14 @@
     },
     "problem": {
       "reference": {
-        "empty": "Scrivi il riferimento del tuo ordine.",
+        "empty": "Scrivete il riferimento del vostro ordine.",
         "long": "Un riferimento d'ordine ha al massimo 60 caratteri.",
-        "format": "Scrivi il riferimento come sul tuo ordine."
+        "format": "Scrivete il riferimento come sul vostro ordine."
       },
       "postcode": {
-        "empty": "Scrivi il CAP di consegna.",
-        "long": "Scrivi il CAP come nell'indirizzo di consegna.",
-        "format": "Scrivi il CAP come nell'indirizzo di consegna: lettere e cifre."
+        "empty": "Scrivete il CAP di consegna.",
+        "long": "Scrivete il CAP come nell'indirizzo di consegna.",
+        "format": "Scrivete il CAP come nell'indirizzo di consegna: lettere e cifre."
       }
     }
   }

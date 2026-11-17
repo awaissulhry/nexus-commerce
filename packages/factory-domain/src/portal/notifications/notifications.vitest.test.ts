@@ -102,7 +102,7 @@ describe('partner notifications (B-W2b-167, PLT-148)', () => {
     expect(one.html).toContain('&lt;Factory&gt;')
     expect(one.html).not.toContain('<Factory>')
     const digest = composeDigestMail({ recipientName: 'Anna', company: 'Factory Spa', weekly: false, items: [item, item], more: 3, links, footer, locale: 'it' })
-    expect(digest.subject).toBe('Il tuo riepilogo giornaliero da Factory Spa: 5 novità')
+    expect(digest.subject).toBe('Il vostro riepilogo giornaliero da Factory Spa: 5 novità')
     expect(digest.text).toContain('e altre 3 nel portale.')
     expect(digest.text).toContain('Disiscriviti dalle e-mail non essenziali')
     expect(() => composeNotificationMail({ recipientName: 'Anna', item: { ...item, link: 'javascript:alert(1)' }, links, footer, locale: 'en' })).toThrow()
@@ -164,10 +164,10 @@ describe('our check of a delivery address the person added (B-W2b-F15)', () => {
 
   it('says the decision in Italian and English with the address in short, a refusal with the reason; orders mail it at once', () => {
     expect(partnerSentence({ messageKey: 'portal.address.approved', recordLabel: label, params: {} }, 'en', 'Factory Spa')).toBe(`Your delivery address ${label} was checked: your orders can use it`)
-    expect(partnerSentence({ messageKey: 'portal.address.approved', recordLabel: label, params: {} }, 'it', 'Factory Spa')).toBe(`Il tuo indirizzo di consegna ${label} è stato verificato: i tuoi ordini possono usarlo`)
+    expect(partnerSentence({ messageKey: 'portal.address.approved', recordLabel: label, params: {} }, 'it', 'Factory Spa')).toBe(`Il vostro indirizzo di consegna ${label} è stato verificato: i vostri ordini possono usarlo`)
     const refused = { messageKey: 'portal.address.refused', recordLabel: label, params: { reason: ' We do not deliver to private garages. ' } }
     expect(partnerSentence(refused, 'en', 'Factory Spa')).toBe(`Your delivery address ${label} was not accepted: We do not deliver to private garages.`)
-    expect(partnerSentence(refused, 'it', 'Factory Spa')).toBe(`Il tuo indirizzo di consegna ${label} non è stato accettato: We do not deliver to private garages.`)
+    expect(partnerSentence(refused, 'it', 'Factory Spa')).toBe(`Il vostro indirizzo di consegna ${label} non è stato accettato: We do not deliver to private garages.`)
     expect(partnerSentence({ ...refused, params: {} }, 'en', 'Factory Spa')).toBe(`Your delivery address ${label} was not accepted`)
     const kindTopic = () => null
     expect(topicOfNotice({ messageKey: 'portal.address.approved', recordLabel: label, params: {} }, kindTopic)).toBe('ORDERS')

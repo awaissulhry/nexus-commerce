@@ -56,8 +56,8 @@ export function brokerPackMail(facts: BrokerMailFacts, url: string | null): { re
       body: [
         'Buongiorno,',
         '',
-        `${facts.companyName} le invia i documenti per la dichiarazione di esportazione della spedizione ${facts.shipmentNumber} (destinazione ${facts.destination}): fattura commerciale, distinta colli, documenti di origine e dichiarazioni di conformità.`,
-        `Il link è valido fino al ${until}. Dopo aver presentato la dichiarazione, inserisca l'MRN nella stessa pagina.`,
+        `${facts.companyName} vi invia i documenti per la dichiarazione di esportazione della spedizione ${facts.shipmentNumber} (destinazione ${facts.destination}): fattura commerciale, distinta colli, documenti di origine e dichiarazioni di conformità.`,
+        `Il link è valido fino al ${until}. Dopo aver presentato la dichiarazione, inserite l'MRN nella stessa pagina.`,
         ...(url ? ['', url] : []),
         '',
         'Grazie.',

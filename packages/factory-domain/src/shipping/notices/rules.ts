@@ -100,9 +100,9 @@ const WORDS = {
     thanks: 'Thank you.',
   },
   it: {
-    subject: (reference: string, company: string) => `Il Suo ordine ${reference} è in viaggio - ${company}`,
+    subject: (reference: string, company: string) => `Il vostro ordine ${reference} è in viaggio - ${company}`,
     hello: 'Gentile cliente,',
-    left: (reference: string) => `il Suo ordine ${reference} è partito.`,
+    left: (reference: string) => `il vostro ordine ${reference} è partito.`,
     carrier: (name: string) => `Vettore: ${name}`,
     expected: (day: string) => `Consegna prevista: ${day}`,
     tracking: 'Numero di tracciamento',

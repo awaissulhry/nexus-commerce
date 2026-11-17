@@ -29,14 +29,14 @@ const TEXT = {
   it: {
     subject: (month: string, number: string, revision: number) => `Paghe ${month}: file per il consulente del lavoro (${number}${revision > 1 ? `, v${revision}` : ''})`,
     hello: 'Buongiorno,',
-    left: (company: string, month: string) => `${company} le invia il file paghe di ${month}. Lo può scaricare da questa pagina:`,
+    left: (company: string, month: string) => `${company} vi invia il file paghe di ${month}. Potete scaricarlo da questa pagina:`,
     replaced: (revision: number) => `Questa versione (v${revision}) sostituisce quella precedente.`,
     terms: (when: string, uses: number) => `Il link funziona fino al ${when} e per ${uses} scaricamenti. Ogni scaricamento viene registrato.`,
     // B-W2b-GF1 (G212): a secure file — the password apart, the receipt on the page.
-    password: 'Per aprirlo serve la password che le diamo a parte: non la inviamo mai insieme al link.',
-    receipt: 'Sulla pagina può confermare di aver ricevuto il file.',
-    check: 'Il tracciato è da confermare: ci dica se va bene per il suo programma.',
-    private: 'Contiene dati personali: non inoltri questo messaggio.',
+    password: 'Per aprirlo serve la password che vi diamo a parte: non la inviamo mai insieme al link.',
+    receipt: 'Sulla pagina potete confermare di aver ricevuto il file.',
+    check: 'Il tracciato è da confermare: diteci se va bene per il vostro programma.',
+    private: 'Contiene dati personali: non inoltrate questo messaggio.',
   },
   en: {
     subject: (month: string, number: string, revision: number) => `Payroll ${month}: file for the labour consultant (${number}${revision > 1 ? `, v${revision}` : ''})`,

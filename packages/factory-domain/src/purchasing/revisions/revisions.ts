@@ -370,7 +370,7 @@ export function changeWords(diff: RevisionDiff, language: DocumentLanguage, labe
 const MAIL = {
   it: {
     hello: (name: string | null) => (name ? `Gentile ${name},` : 'Buongiorno,'),
-    intro: (number: string, previous: string) => `le inviamo la revisione ${number} del nostro ordine di acquisto, che sostituisce ${previous}: il documento è in allegato. La preghiamo di confermarla di nuovo.`,
+    intro: (number: string, previous: string) => `vi inviamo la revisione ${number} del nostro ordine di acquisto, che sostituisce ${previous}: il documento è in allegato. Vi preghiamo di confermarla di nuovo.`,
     changed: 'Cosa cambia:',
     unchanged: 'Le quantità e le date non cambiano.',
     why: (note: string) => `Il motivo: ${note}`,

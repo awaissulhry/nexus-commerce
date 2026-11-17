@@ -39,7 +39,7 @@ describe('the booking', () => {
 
   it('mails the link in the customer language, with the day it stops opening', () => {
     const mail = returnLabelMail({ locale: 'it', companyName: 'Demo', returnNumber: 'RMA-0007', customerRef: 'RESO-1', openUntil: '2026-12-14' }, 'https://factory.example/l#token=made-up')
-    expect(mail.subject).toBe('Il Suo reso RESO-1: l’etichetta del vettore - Demo')
+    expect(mail.subject).toBe('Il vostro reso RESO-1: l’etichetta del vettore - Demo')
     expect(mail.body).toContain('https://factory.example/l#token=made-up')
     expect(mail.body).toContain('fino al 14/12/2026')
     expect(returnLabelMail({ locale: 'en', companyName: 'Demo', returnNumber: 'RMA-0007', customerRef: null, openUntil: '2026-12-14' }, null).body).toContain('The link is in the mail we sent you.')

@@ -597,7 +597,7 @@ describe('the export (MES-267)', () => {
     await w.no('payroll', 'POST', `/people/payroll/exports/${sentId}/send`, { email: 'locked.studio@example.com', password: 'abc' }, 400)
     const sent = await sendAs(sentId, 'locked.studio@example.com', { password: PASSWORD })
     const mail = mailsTo('locked.studio@example.com').at(-1)!
-    expect(textOf(mail.raw)).toContain('serve la password che le diamo a parte')
+    expect(textOf(mail.raw)).toContain('serve la password che vi diamo a parte')
     expect(mail.raw).not.toContain(PASSWORD)
     const row = (await w.admin(`SELECT "passwordHash" FROM "OneOffLink" WHERE id = $1`, [sent.link.id]))[0]!
     expect(String(row.passwordHash)).toMatch(/^\$scrypt\$/)

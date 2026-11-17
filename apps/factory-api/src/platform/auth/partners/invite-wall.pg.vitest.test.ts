@@ -95,7 +95,7 @@ describe('B-TH-007 portal invitations never reveal another organisation (T04)', 
     }
     expect(answers[0]).toEqual(answers[1])
     expect(await users()).toBe(before)
-    expect(NOT_INVITABLE.it).toBe('Non abbiamo potuto invitare questo indirizzo. Chiedi a noi.')
+    expect(NOT_INVITABLE.it).toBe('Non abbiamo potuto invitare questo indirizzo. Chiedete a noi.')
   })
 
   it('the office, inviting the same addresses to Brand Alpha’s portal, reads the real reason', async () => {

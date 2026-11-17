@@ -131,7 +131,7 @@ describe('reminders', () => {
     expect(mail.subject).toBe('Reminder: please confirm purchase order PO-7 rev. 2')
     expect(mail.body).toMatch(/^Dear Mario Rossi,\n\na reminder of our purchase order PO-7 rev. 2, sent on 6 Nov 2026: we asked you to confirm it by 8 Nov 2026, 10:30\. The document is attached again\./)
     expect(mail.body).not.toMatch(/https?:|#token=/)
-    expect(confirmationReminderMail({ language: 'it', number: 'PO-7', recipientName: null, sentOn: '2026-11-06', confirmBy, timeZone: 'Europe/Rome', message: 'Grazie.' }).body).toMatch(/^Buongiorno,\n\nle ricordiamo il nostro ordine di acquisto PO-7, inviato il 06\/11\/2026/)
+    expect(confirmationReminderMail({ language: 'it', number: 'PO-7', recipientName: null, sentOn: '2026-11-06', confirmBy, timeZone: 'Europe/Rome', message: 'Grazie.' }).body).toMatch(/^Buongiorno,\n\nvi ricordiamo il nostro ordine di acquisto PO-7, inviato il 06\/11\/2026/)
   })
 })
 

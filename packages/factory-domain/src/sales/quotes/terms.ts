@@ -94,7 +94,7 @@ const WORDS = {
       "Caparra confirmatoria ai sensi dell'art. 1385 c.c.: in caso di recesso ingiustificato del cliente la caparra è trattenuta; in caso di inadempimento del venditore, il cliente ha diritto al doppio della caparra.",
     noWithdrawal: 'Diritto di recesso escluso ai sensi dell\'art. 59, c. 1, lett. c) del D.Lgs. 206/2005: beni confezionati su misura.',
     duties: 'Dazi, imposte e oneri doganali del paese di destinazione esclusi.',
-    acceptance: "Per accettare l'offerta apra il link personale ricevuto per e-mail e digiti nome e cognome, oppure ci restituisca una copia firmata.",
+    acceptance: "Per accettare l'offerta aprite il link personale ricevuto per e-mail e digitate nome e cognome, oppure restituiteci una copia firmata.",
     terms: (version: string) => `Condizioni generali di vendita (versione ${version}):`,
   },
   en: {

@@ -324,9 +324,9 @@ describe('send: the PDF, the confirm link and the mail (SCM-054, SCM-055)', () =
     // The thread keeps the mail without the link; it left (in this process) with the link and the PDF.
     const mail = await one('SELECT o.status, o.to, o.subject, m."bodyText", m."attachmentFileIds" FROM "EmailOutbound" o JOIN "Message" m ON m.id = o."messageId" WHERE o.id = $1', [sent.sent.emailId])
     expect(mail).toMatchObject({ status: 'SENT', to: [ORDERS_P2], subject: `Ordine di acquisto ${order.number}`, attachmentFileIds: [sent.sent.documentFileId] })
-    expect(mail.bodyText).toContain("usi il link personale contenuto nell'e-mail inviata")
+    expect(mail.bodyText).toContain("usate il link personale contenuto nell'e-mail inviata")
     const raw = h.ses.mails.find((entry) => entry.outboundId === sent.sent.emailId)!.raw
-    expect(textOf(raw)).toContain('usi questo link personale')
+    expect(textOf(raw)).toContain('usate questo link personale')
     expect(raw).toContain(`filename="Ordine di acquisto ${order.number}.pdf"`)
     // The token (its secret part) is in no stored row: only the mail carried it.
     const secret = token.split('.').at(-1)!
@@ -371,7 +371,7 @@ describe('send: the PDF, the confirm link and the mail (SCM-054, SCM-055)', () =
     expect(order.confirmLinks.map((link: Json) => link.state)).toEqual(['REVOKED', 'LIVE'])
     expect((await viaLink(token, 'POST', '/link/open')).statusCode).toBe(404)
     const raw = h.ses.mails.find((entry) => entry.outboundId === answer.link.emailId)!.raw
-    expect(textOf(raw)).toContain('le inviamo un nuovo link')
+    expect(textOf(raw)).toContain('vi inviamo un nuovo link')
     expect(raw).toContain(`filename="Ordine di acquisto ${order.number}.pdf"`)
     const documents = await as('GET', `${orderUrl(order.id)}/documents`)
     expect(documents).toMatchObject({ revision: 1, status: 'SENT', documents: [{ fileId: sent.sent.documentFileId, sha256: sent.sent.documentSha256 }] })

@@ -44,6 +44,11 @@ export interface ApproveDialogModel {
   file: { id: string; name: string; state: 'loading' | 'error' | 'ready'; src: Uint8Array | string | null; pdf: boolean } | null
   /** The page's clock for the countdown (design cases). */
   now?: number
+  /**
+   * F-PR-14 (Waiting for you): the signed answer waits on the page before it goes to us — when it goes (epoch ms) and what was
+   * decided; Undo takes it back until then. Absent (Home): the answer goes at once.
+   */
+  pending?: { until: number; decision: ApprovalDecision } | null
 }
 
 export interface ApproveActions {
@@ -54,7 +59,13 @@ export interface ApproveActions {
   onSign?: (typedName: string) => void
   onStep?: (step: 1 | -1) => void
   onOpenFile?: (fileId: string | null) => void
+  /** F-PR-14: takes back a signed answer that has not gone yet. */
+  onUndo?: () => void
 }
+
+/** F-PR-14: a new date and our counter-offer are accepted or refused in their own words; every other kind says Approve / Refuse. */
+const OWN_OPTION_KINDS: ReadonlySet<string> = new Set(['REPROMISE', 'COUNTER_OFFER'])
+export const optionKey = (kind: string, decision: ApprovalDecision): string => (OWN_OPTION_KINDS.has(kind) ? `approve.optionFor.${kind}.${decision}` : `approve.option.${decision}`)
 
 export function ApproveDialog({ model, actions }: { model: ApproveDialogModel; actions?: ApproveActions }) {
   const words = useHomeWords()
@@ -136,6 +147,8 @@ export function ApproveDialog({ model, actions }: { model: ApproveDialogModel; a
           </div>
         ) : model.state === 'gone' || !page ? (
           <Banner tone="info" title={t('approve.gone')} />
+        ) : model.pending && model.answer !== 'done' ? (
+          <PendingAnswer page={page} model={model} pending={model.pending} actions={actions} />
         ) : model.answer === 'done' ? (
           <EndState
             tone={decidedTone(page.request.status)}
@@ -160,6 +173,29 @@ export function ApproveDialog({ model, actions }: { model: ApproveDialogModel; a
         )}
       </div>
     </Modal>
+  )
+}
+
+/** F-PR-14: "Approved — it goes to us in 8 s · Undo": nothing is sent until then; closing the pop-up lets it go. */
+export function PendingAnswer({ page, model, pending, actions }: { page: ApprovalRead; model: ApproveDialogModel; pending: { until: number; decision: ApprovalDecision }; actions?: ApproveActions }) {
+  const { t } = useHomeWords()
+  return (
+    <section className="fw-pch-dsection" aria-live="polite">
+      <Banner
+        tone="info"
+        title={t(`approve.pending.title.${pending.decision}`, { label: referenceOf(page.request.label) })}
+        action={
+          <Button size="sm" variant="primary" heldReason={model.answer === 'busy' ? t('approve.pending.going') : null} onClick={() => actions?.onUndo?.()}>
+            {t('approve.pending.undo')}
+          </Button>
+        }
+      >
+        <span className="fw-pch-due">
+          <Countdown to={new Date(pending.until).toISOString()} now={model.now} label={(left) => t('approve.pending.in', { left })} doneLabel={t('approve.pending.now')} />
+        </span>
+      </Banner>
+      <p className="fw-pch-sub">{t('approve.pending.hint')}</p>
+    </section>
   )
 }
 
@@ -345,8 +381,8 @@ function Decision({ page, model, actions }: { page: ApprovalRead; model: Approve
               selected={model.decision === decision}
               readOnly={!!held}
               onChange={() => !held && actions?.onDecision?.(decision)}
-              title={t(`approve.option.${decision}`)}
-              description={t(`approve.option.${decision}_body`)}
+              title={t(optionKey(page.request.kind, decision))}
+              description={t(`${optionKey(page.request.kind, decision)}_body`)}
             />
           ))}
         </div>

@@ -84,13 +84,13 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
     built: true,
     // ── F-PR-10 (production plan §5; 06-tree B.0) ──
     // Home gains Waiting for you, the one place a customer answers. It sits under Home, not Production: a Designer answers
-    // sample and artwork approvals but does not see Production. F-PR-14 builds /waiting and sets its `built`; until then no
-    // door is drawn (the portal has no "Coming soon": it fails closed). Its count of everything waiting comes with
-    // B-PR-20 / F-PR-15; until then no number, never a made-up one. Home's own page keeps Home's name, so a person left with
-    // that one page (a supplier, a role without approvals) sees Home as before.
+    // sample and artwork approvals but does not see Production. F-PR-14 built /waiting (`app/(portal)/p/[party]/waiting`): its
+    // door is drawn now. Its count of everything waiting comes with B-PR-20 / F-PR-15; until then no number, never a made-up
+    // one. Home's own page keeps Home's name, so a person left with that one page (a supplier, a role without approvals) sees
+    // Home as before.
     pages: [
       { id: 'home.overview', label: 'nav.home', href: '/', permission: 'portal.home.view', built: true },
-      { id: 'home.waiting', label: 'nav.waiting', href: '/waiting', permission: 'portal.approvals.view', kinds: ['CUSTOMER'], built: false },
+      { id: 'home.waiting', label: 'nav.waiting', href: '/waiting', permission: 'portal.approvals.view', kinds: ['CUSTOMER'], built: true /* F-PR-14 */ },
     ],
     // ── end F-PR-10 ──
   },

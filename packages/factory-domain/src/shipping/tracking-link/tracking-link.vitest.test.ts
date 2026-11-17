@@ -152,7 +152,7 @@ describe('the mail (it/en), never stored with its link', () => {
 
   it('in Italian, and without the link when none is given', () => {
     const mail = trackingLinkMail({ ...input, locale: 'it', status: 'PACKED', expectedDeliveryAt: null }, null)
-    expect(mail.subject).toBe('Il suo ordine 4500-1234 — Officina Demo')
+    expect(mail.subject).toBe('Il vostro ordine 4500-1234 — Officina Demo')
     expect(mail.body).toContain('è imballato e attende il corriere')
     expect(mail.body).not.toContain('token=')
     expect(mail.body).not.toContain('Consegna prevista')
