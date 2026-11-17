@@ -34,6 +34,9 @@ import {
   makeCustomerAnswer,
   makeCustomerBody,
 } from '@nexus/factory-domain/sales/inquiries/contracts'
+// ---- B-TH-094
+import { productionAnswerBody, productionSuggestionQuery, productionSuggestionView } from '@nexus/factory-domain/sales/inquiries/production-answer'
+// ---- end B-TH-094
 
 /** The inquiries' contracts (B-W2b-295): the bodies and answers are factory-domain's sales/inquiries/contracts. */
 
@@ -64,3 +67,7 @@ export const inquiryPictureContract = defineContract({ params: inquiryParams, re
 // B-TH-042: answer a new customer — the check, and the customer made or matched.
 export const customerCheckContract = defineContract({ params: inquiryParams, response: { 200: customerCheckView } })
 export const makeCustomerContract = defineContract({ params: inquiryParams, body: makeCustomerBody, response: { 200: makeCustomerAnswer } })
+// ---- B-TH-094: production's answer on a request (the request as answered), and planning's suggestion (nothing written).
+export const productionAnswerContract = defineContract({ params: inquiryParams, body: productionAnswerBody, response: answer })
+export const productionSuggestionContract = defineContract({ params: inquiryParams, querystring: productionSuggestionQuery, response: { 200: productionSuggestionView } })
+// ---- end B-TH-094

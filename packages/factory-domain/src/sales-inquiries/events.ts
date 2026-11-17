@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
 import { DECLINE_REASONS, INQUIRY_SOURCES, INQUIRY_STATUSES } from '../sales/inquiries/rules'
+import { PRODUCTION_ANSWERS } from '../sales/inquiries/production-answer' // B-TH-094
 
 /**
  * Inquiries and requests for quotation (B-W2b-295; SAL-032, SAL-033, SAL-305; the code is factory-domain sales/inquiries). A
@@ -46,4 +47,15 @@ export const events = [
     payload: z.strictObject({ inquiryId: z.uuid(), number: z.string(), status: z.enum(['QUOTED', 'DECLINED', 'LOST', 'ORDERED']), previousStatus: z.enum(INQUIRY_STATUSES), quoteId: z.uuid().nullable(), salesOrderId: z.uuid().nullable(), declineReason: z.enum(DECLINE_REASONS).nullable(), partyId: z.uuid().nullable() }),
     live: { ...live, fields: ['inquiryId', 'number', 'status', 'quoteId', 'salesOrderId', 'partyId'] },
   }),
+  // ---- B-TH-094 (threads plan TH-9, N17): production's answer on a request — office only. Its own event (not inquiry.changed,
+  // which the customer's portal session also receives as a refresh): the answer never reaches a portal, not even as a signal.
+  // `notBefore`: the Monday of the week (NOT_BEFORE); answer null: taken back.
+  defineEvent({
+    type: 'inquiry.production_answered',
+    context: 'sales-inquiries',
+    description: 'Production answered a request (OK, or not before a week), changed its answer or took it back (B-TH-094). Office only.',
+    payload: z.strictObject({ inquiryId: z.uuid(), number: z.string(), answer: z.enum(PRODUCTION_ANSWERS).nullable(), notBefore: z.iso.date().nullable(), partyId: z.uuid().nullable() }),
+    live: { ...live, fields: ['inquiryId', 'number', 'answer', 'notBefore', 'partyId'] },
+  }),
+  // ---- end B-TH-094
 ] as const
