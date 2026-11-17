@@ -262,6 +262,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // B-W2b-322 Sales › Inquiries (SCR-105): an inquiry opens its full page (the list opens it in its DetailModal, `?open=`).
   // B-TH-216: Sales › Incoming (renamed; the old address redirects).
   Inquiry: '/sales/incoming/[id]',
+  // B-TH-233 (B-TH-040): a catalogue order a customer sent from its portal opens beside the Incoming list, with its thread.
+  PortalOrderRequest: '/sales/incoming?tile=ALL&kind=CATALOGUE_ORDER&catalogue=[id]',
   // B-W2b-354 Purchasing › Settings (SCR-256): a delivery tolerance opens in its dialog.
   DeliveryTolerance: '/purchasing/settings?tolerance=[id]',
 })

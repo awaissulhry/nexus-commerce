@@ -9,6 +9,7 @@ import type { Assignees, InquiryFile, InquiryLine, ScaleOption } from '../api'
 // B-TH-228: Make order, Make style draft.
 import type { OrderDraft, StyleDraftDraft } from '../model'
 import { DECLINE_REASONS, declineHeld, lostHeld, type DeclineDraft, type DeclineReason, type Loaded, type Notice, type Phrase, type QuotePreview } from '../model'
+import type { MessageReach } from '../model' // B-TH-234
 import { NoticeLine, useWords } from '../parts'
 import { ListboxPanel } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
@@ -118,8 +119,8 @@ export function AssignDialog({ model, actions }: { model: AssignModel; actions?:
 export interface DeclineModel {
   readonly subject: Phrase
   readonly draft: DeclineDraft
-  /** Who the optional message reaches, or why it is held (a selection, a prospect, no e-mail, no right). */
-  readonly message: { readonly to: string | null; readonly held: Phrase | null }
+  /** Who the optional message reaches, or why it is held (a selection, a prospect, no e-mail, no right). B-TH-234: how (portal or mail) and in which language. */
+  readonly message: Pick<MessageReach, 'to' | 'held'> & Partial<Pick<MessageReach, 'via' | 'language'>>
   readonly busy: boolean
   readonly notice: Notice | null
   readonly offline: boolean
@@ -171,15 +172,31 @@ export function DeclineDialog({ model, actions }: { model: DeclineModel; actions
         <Field label={t('decline.note')} hint={model.draft.reason === 'OTHER' ? t('decline.noteOther') : t('decline.noteHint')}>
           <Textarea value={model.draft.note} rows={3} honourRows maxLength={2000} onChange={(event) => actions?.onDraft?.({ note: event.target.value })} />
         </Field>
-        <Field label={t('decline.messageLabel')} hint={model.message.held ? (say(model.message.held) ?? undefined) : t('decline.messageTo', { to: model.message.to ?? '' })}>
-          <Textarea value={model.draft.message} rows={4} honourRows maxLength={4000} disabled={!!model.message.held} onChange={(event) => actions?.onDraft?.({ message: event.target.value })} />
-        </Field>
-        {model.draft.message.trim() && model.message.to && (
-          <Banner tone="info" title={t('decline.preview', { to: model.message.to })}>
-            <p className="fw-inq-text">{model.draft.message.trim()}</p>
-          </Banner>
-        )}
-        <p className="fw-inq-hint">{t('decline.final')}</p>
+        {/* B-TH-234 (B-TH-043): ONE message in the decline's own command, only when "Send to the customer" is ticked (off); "Not an
+            order" sends nothing; a selection never sends (one customer at a time); the confirm names who reads it, and how. */}
+        {(() => {
+          const notAnOrder = model.draft.reason === 'NOT_AN_ORDER'
+          const held = notAnOrder ? { key: 'decline.message.notAnOrder' } : model.message.held
+          const portal = model.message.via === 'PORTAL'
+          const reader = portal ? t('decline.messagePortal') : t('decline.messageTo', { to: model.message.to ?? '' })
+          return (
+            <>
+              <Checkbox checked={!!model.draft.send && !held} disabled={!!held} onChange={(event) => actions?.onDraft?.({ send: event.target.checked })} label={t('decline.send')} />
+              <p className="fw-inq-hint">{held ? say(held) : reader}</p>
+              {model.draft.send && !held && (
+                <Field label={t('decline.messageLabel')} hint={model.message.language ? t('decline.messageLanguage', { language: model.message.language === 'it' ? t('decline.language.it') : model.message.language === 'en' ? t('decline.language.en') : model.message.language.toUpperCase() }) : reader}>
+                  <Textarea value={model.draft.message} rows={4} honourRows maxLength={4000} onChange={(event) => actions?.onDraft?.({ message: event.target.value })} />
+                </Field>
+              )}
+              {model.draft.send && !held && model.draft.message.trim() && (
+                <Banner tone="info" title={portal ? t('decline.previewPortal') : t('decline.preview', { to: model.message.to ?? '' })}>
+                  <p className="fw-inq-text">{model.draft.message.trim()}</p>
+                </Banner>
+              )}
+              <p className="fw-inq-hint">{model.draft.send && !held ? t('decline.finalSend') : t('decline.final')}</p>
+            </>
+          )
+        })()}
       </div>
     </Modal>
   )

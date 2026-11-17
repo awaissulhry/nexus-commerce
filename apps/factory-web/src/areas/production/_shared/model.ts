@@ -153,14 +153,26 @@ export function progressPhrase(row: Pick<WorkOrderRow, 'progress' | 'pieces' | '
 
 // ---- the record --------------------------------------------------------------------------------------------------------------
 
-// B-W2a-72: 'labour' = Labour & cost (design production.workorders rec:labour), between Quality and Activity.
-// B-W2b-59: 'documents' (design rec:documents wo-docs), the traveller and the tickets.
-export const RECORD_TABS = ['overview', 'materials', 'cutting', 'bundles', 'operations', 'quality', 'labour', 'documents', 'activity'] as const
+// B-W2a-72: 'labour' = Labour & cost (design production.workorders rec:labour), after Quality.
+// ---- B-TH-265 (threads plan, the rule of picture 38; 08-tabs O-PRO-WO): tabs 9 → 7 — Documents and Activity go. The traveller and the
+// frozen style revision are in the band's ⋯ (R-7: the traveller is made on request and stored nowhere, so it never moves to the Files
+// view); the work order's thread is docked beside every tab, Activity's tools in its "⋯" (R-ACT). Cutting + Bundles merge in the
+// production lane's own step (agreement T1: they own the tab bodies).
+export const RECORD_TABS = ['overview', 'materials', 'cutting', 'bundles', 'operations', 'quality', 'labour'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
+/** Every old `?tab=` keeps working (R-8): Documents lands on Overview (its doors are in the band's ⋯), Activity on Overview with the thread open. */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { documents: 'overview', activity: 'overview' }
+
 export function tabOf(value: string | null | undefined): RecordTab {
-  return (RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'overview'
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'overview'
 }
+
+/** A tab whose body is a wide grid (the cut plan per cell, the bundles per cell): the docked thread takes one third under 1600 px (PL1, R-18). */
+export const isWideTab = (tab: RecordTab): boolean => tab === 'cutting' || tab === 'bundles'
+// ---- end B-TH-265
 
 export type StepKind = 'release' | 'start' | 'complete' | 'close'
 

@@ -10,8 +10,8 @@ import { BRAND_ALPHA } from '../../../../lib/testing/two-brands'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../../shell/design-data'
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
-import type { Assignees, InquiryList, InquiryRow, InquiryView, MailDraft, PartyOption, StyleDetail, StyleOption } from '../api'
-import { inquiriesCan, type InquiriesCan, type InquiryTile } from '../model'
+import type { Assignees, CatalogueRecord, IncomingList, IncomingRow, InquiryRow, InquiryView, MailDraft, PartyOption, StyleDetail, StyleOption, WaitingPage } from '../api'
+import { incomingRowOf, inquiriesCan, type InquiriesCan, type ListTile } from '../model'
 
 /**
  * Design-only made-up data of Sales › Inquiries (SCR-105 and the inquiry's full page): "Demo" customers, prospects, styles and
@@ -187,23 +187,154 @@ export const ROWS: InquiryRow[] = [
 /** B-TH-216: each row's small preview in the design cases (by row id). */
 export const DEMO_PICTURES: Readonly<Record<string, string>> = Object.fromEntries(ROWS.filter((one) => one.picture?.small).map((one, index) => [one.id, garment(['#36506b', '#8a5a2b', '#2f6b4f'][index % 3]!)]))
 
-const counts = (rows: readonly InquiryRow[]): Record<InquiryTile, number | null> => ({
-  NEW: rows.filter((one) => one.status === 'NEW').length,
+// ---- B-TH-233 (Incoming over every door): a catalogue order and a change request beside the requests, the Customer replies ----
+
+const CATALOGUE_ID = uid('5402', 1)
+const CHANGE_ID = uid('5403', 1)
+const ORDER = { id: uid('5502', 7), number: 'SO-DEMO-00007' }
+
+/** A catalogue order Demo Rider Shop sent from its portal (made-up lines), waiting for the office's answer. */
+export const CATALOGUE_ROW: IncomingRow = {
+  key: `CATALOGUE_ORDER:${CATALOGUE_ID}`,
+  kind: 'CATALOGUE_ORDER',
+  id: CATALOGUE_ID,
+  number: 'POR-DEMO-0003',
+  companyId: COMPANY_ID,
+  receivedAt: at(11, 16, 20),
+  party: party(SHOP),
+  fromWords: SHOP.name,
+  prospect: false,
+  summary: 'Reorder from the catalogue: rain trousers and touring jackets',
+  pieces: 34,
+  wantedDate: '2027-01-29',
+  state: 'SENT',
+  stateWords: { it: 'Richiesta inviata', en: 'Request sent' },
+  open: true,
+  waiting: { for: 'US', workingMinutes: 540, overdue: true },
+  version: 2,
+  opens: { place: 'INCOMING', id: CATALOGUE_ID },
+  request: null,
+  catalogueOrder: { status: 'SENT', source: 'REORDER', customerRef: 'SHOP-PO-118', lines: 2, styles: [PANTS.code, JACKET.code], requestedDate: '2027-01-29', decidedAt: null, salesOrder: null, quote: null },
+  changeRequest: null,
+}
+
+/** A change request Demo Moto Brand asked on one of its confirmed orders: answered in Home › Approvals (agreement T3). */
+export const CHANGE_ROW: IncomingRow = {
+  key: `CHANGE_REQUEST:${CHANGE_ID}`,
+  kind: 'CHANGE_REQUEST',
+  id: CHANGE_ID,
+  number: ORDER.number,
+  companyId: COMPANY_ID,
+  receivedAt: at(12, 8, 50),
+  party: party(BRAND),
+  fromWords: BRAND.name,
+  prospect: false,
+  summary: `Change · ${ORDER.number} · 1 line, 2 sizes`,
+  pieces: null,
+  wantedDate: '2027-02-10',
+  state: 'OPEN',
+  stateWords: { it: 'Modifica · Aperta', en: 'Change · Open' },
+  open: true,
+  waiting: { for: 'US', workingMinutes: 75, overdue: false },
+  version: 1,
+  opens: { place: 'APPROVALS', id: CHANGE_ID },
+  request: null,
+  catalogueOrder: null,
+  changeRequest: { kind: 'CHANGE', status: 'OPEN', order: ORDER, reasonCode: null, requestedDate: '2027-02-10', lines: 1, sizes: 2, answeredAt: null },
+}
+
+/** Every row of every kind (the requests as Incoming reads them). */
+export const INCOMING_ROWS: IncomingRow[] = [...ROWS.map(incomingRowOf), CATALOGUE_ROW, CHANGE_ROW]
+const OPEN_KEYS = new Set(INCOMING_ROWS.filter((one) => one.open).map((one) => one.key))
+
+const counts = (rows: readonly IncomingRow[]): Record<ListTile, number | null> => ({
+  NEW: rows.filter((one) => one.state === 'NEW' || one.state === 'SENT' || one.state === 'OPEN').length,
   WAITING_US: rows.filter((one) => one.waiting.overdue).length,
-  WAITING_CUSTOMER: rows.filter((one) => one.status === 'NEED_INFO').length,
+  WAITING_CUSTOMER: rows.filter((one) => one.state === 'NEED_INFO').length,
   QUOTED_THIS_WEEK: 1,
-  MINE: rows.filter((one) => one.mine && ['NEW', 'ASSIGNED', 'NEED_INFO'].includes(one.status)).length,
-  OPEN: rows.filter((one) => ['NEW', 'ASSIGNED', 'NEED_INFO'].includes(one.status)).length,
-  QUOTED: rows.filter((one) => one.status === 'QUOTED').length,
-  DECLINED: rows.filter((one) => one.status === 'DECLINED').length,
+  MINE: rows.filter((one) => one.request?.mine && one.open).length,
+  OPEN: rows.filter((one) => one.open).length,
+  QUOTED: rows.filter((one) => one.state === 'QUOTED').length,
+  ORDERED: rows.filter((one) => one.state === 'ORDERED').length,
+  DECLINED: rows.filter((one) => one.state === 'DECLINED' && one.request?.declineReason !== 'NOT_AN_ORDER').length,
+  NOT_AN_ORDER: rows.filter((one) => one.request?.declineReason === 'NOT_AN_ORDER').length,
   LOST: 0,
   ALL: rows.length,
+  CUSTOMER_REPLIES: REPLIES.length,
 })
 
-/** The list as the API answers it: the rows of a tile, the counts of every tile. */
-export function listOf(rows: readonly InquiryRow[] = ROWS.filter((one) => ['NEW', 'ASSIGNED', 'NEED_INFO'].includes(one.status)), complete = true): InquiryList {
-  return { rows: [...rows], counts: counts(ROWS), complete }
+/** The list as the API answers it: the rows of a tile (requests given as their own rows are read as Incoming rows), the counts of every tile. */
+export function listOf(rows: ReadonlyArray<InquiryRow | IncomingRow> = INCOMING_ROWS.filter((one) => OPEN_KEYS.has(one.key)), complete = true, next: string | null = null): IncomingList {
+  const read = rows.map((one) => ('kind' in one ? one : incomingRowOf(one)))
+  const kinds = { REQUEST: read.filter((one) => one.kind === 'REQUEST').length, CATALOGUE_ORDER: read.filter((one) => one.kind === 'CATALOGUE_ORDER').length, CHANGE_REQUEST: read.filter((one) => one.kind === 'CHANGE_REQUEST').length }
+  return { rows: read, counts: counts(INCOMING_ROWS), kinds, next, complete }
 }
+
+/** "Customer replies": conversations on the customers' other records whose last shared message is theirs (made-up words). */
+const REPLIES: WaitingPage['rows'] = [
+  {
+    recordType: 'SalesOrder',
+    recordId: ORDER.id,
+    label: ORDER.number,
+    companyId: COMPANY_ID,
+    party: party(BRAND),
+    lastMessage: { id: uid('5901', 1), at: at(11, 17, 5), channel: 'PORTAL', authorName: 'Bea Esempio', excerpt: 'Could the sand jackets ship a week earlier? Our launch moved to 3 February.' },
+    waiting: { since: at(11, 17, 5), workingMinutes: 610, calendar: true, amber: false, thresholdDays: 3 },
+  },
+  {
+    recordType: 'Quote',
+    recordId: uid('5501', 12),
+    label: 'QT-DEMO-00012',
+    companyId: COMPANY_ID,
+    party: party(BRAND),
+    lastMessage: { id: uid('5901', 2), at: at(5, 10, 0), channel: 'EMAIL', authorName: 'Bea Esempio', excerpt: 'Thanks for the quote. Is the price with or without the embroidered logo?' },
+    waiting: { since: at(5, 10, 0), workingMinutes: 2400, calendar: true, amber: true, thresholdDays: 3 },
+  },
+  {
+    recordType: 'ReturnAuthorisation',
+    recordId: uid('5903', 1),
+    label: 'RMA-DEMO-0002',
+    companyId: COMPANY_ID,
+    party: party(SHOP),
+    lastMessage: { id: uid('5901', 3), at: at(12, 8, 15), channel: 'PORTAL', authorName: null, excerpt: 'Photos of the torn seam attached.' },
+    waiting: { since: at(12, 8, 15), workingMinutes: 85, calendar: true, amber: false, thresholdDays: 3 },
+  },
+]
+
+export const repliesOf = (rows: WaitingPage['rows'] = REPLIES, complete = true, next: string | null = null): WaitingPage => ({ rows: [...rows], count: rows.length, complete, next })
+
+/** The catalogue order as GET /sales/order-requests/:id answers it (price grain: the shown prices). */
+export const CATALOGUE_RECORD: CatalogueRecord = {
+  request: {
+    id: CATALOGUE_ID,
+    number: CATALOGUE_ROW.number,
+    status: 'SENT',
+    words: { it: 'Richiesta inviata', en: 'Request sent' },
+    source: 'REORDER',
+    party: party(SHOP),
+    customerRef: 'SHOP-PO-118',
+    requestedDate: '2027-01-29',
+    note: 'Same as last spring, please keep the navy trousers.',
+    currency: 'EUR',
+    shipTo: { id: uid('5904', 1), name: 'Demo Rider Shop · warehouse', line1: 'Via Esempio 12', line2: null, postalCode: '20100', city: 'Milano', province: 'MI', country: 'IT', status: 'ACTIVE', approvalStatus: 'WAITING' },
+    sentAt: at(11, 16, 20),
+    sentBy: 'Carlo Prova',
+    decidedAt: null,
+    decidedBy: null,
+    refuseReason: null,
+    withdrawnAt: null,
+    salesOrder: null,
+    quote: null,
+    version: 2,
+    lines: [
+      { id: uid('5905', 1), seq: 10, style: PANTS, colourway: { id: uid('5301', 3), code: 'NVY', name: 'Navy' }, sizes: [{ size: 'S', quantity: 4 }, { size: 'M', quantity: 8 }, { size: 'L', quantity: 6 }, { size: 'XL', quantity: 2 }], pieces: 20, unitPriceShown: '38.000000', listPriceNow: '39.500000', amountShown: '760.000000', note: null, problems: [] },
+      { id: uid('5905', 2), seq: 20, style: JACKET, colourway: SAND, sizes: [{ size: '50', quantity: 6 }, { size: '52', quantity: 8 }], pieces: 14, unitPriceShown: '145.000000', listPriceNow: '145.000000', amountShown: '2030.000000', note: null, problems: [{ code: 'SIZE_NOT_OFFERED', size: '56', words: { it: 'La taglia 56 non è più offerta in Sand', en: 'Size 56 is no longer offered in Sand' } }] },
+    ],
+    summary: { lines: 2, pieces: 34, netShown: '2790.000000' },
+  },
+  may: { order: true, quote: true, refuse: true },
+}
+// ---- end B-TH-233
 
 // ---- one inquiry --------------------------------------------------------------------------------------------------------------
 

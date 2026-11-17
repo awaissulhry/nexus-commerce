@@ -77,6 +77,8 @@
   },
   "together_one": "{count} together",
   "together_other": "{count} together",
+  "togetherRecords_one": "{count} together, on {records} records",
+  "togetherRecords_other": "{count} together, on {records} records",
   "openRecord": "Open {record}",
   "when": {
     "TODAY": "Today",
@@ -300,6 +302,11 @@
         "assigned": "{actor} gave you request {record}",
         "newRequest": "New request {record} came in: take it or give it to someone"
       },
+      "projects": {
+        "addedYou": "{actor} added you to {record}",
+        "removedYou": "{actor} took you out of {record}",
+        "stale": "{record} is past its target date and quiet for 14 days: close or update it"
+      },
       "mail": {
         "assigned": "{actor} gave you a mail of {title}: {record}",
         "followUpDue": "No answer yet to {record} ({title}): it is back in your queue"
@@ -314,5 +321,9 @@
     },
     "margin": "margin {value} %",
     "figure": " ({parts})"
+  },
+  "fold": {
+    "newRequests_one": "{count} new request came in: take it or give it to someone",
+    "newRequests_other": "{count} new requests came in: take them or give them to someone"
   }
 }

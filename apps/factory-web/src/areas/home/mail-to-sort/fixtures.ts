@@ -1,6 +1,7 @@
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import type { MailDetail, MailSummary, MailToSortViewModel, RecordCandidate, Verdicts } from './model'
 import { MailToSortView } from './view/MailToSortView'
+import type { TeamInboxModel } from '../mail/team-inbox/model' // B-TH-239
 
 /**
  * SCR-019 Mail to sort — made-up mail only (PLAN §3.1): invented senders at example.com domains, invented records. Each
@@ -134,6 +135,39 @@ const base: MailToSortViewModel = {
   assign: { candidates: CANDIDATES },
 }
 
+// ── B-TH-239 (threads plan TH-3, picture 17): the tiles — Mail to sort first, then each team inbox — and the tile's own count ──
+const INBOXES: TeamInboxModel = {
+  inboxes: {
+    status: 'ready',
+    data: {
+      inboxes: [
+        { id: '0190f0e2-4391-7000-8000-000000000001', companyId: '0190f0e2-4391-7000-8000-000000000800', name: 'Ordini', localPart: 'ordini', address: null, active: true, members: [], member: true, counts: { open: 5, unassigned: 2, mine: 1, snoozed: 1, followUp: 1 }, version: 1 },
+        { id: '0190f0e2-4391-7000-8000-000000000002', companyId: '0190f0e2-4391-7000-8000-000000000800', name: 'Offerte', localPart: 'offerte', address: null, active: true, members: [], member: true, counts: { open: 3, unassigned: 3, mine: 0, snoozed: 0, followUp: 0 }, version: 1 },
+      ],
+      mayManage: false,
+    },
+  },
+  queue: null,
+  me: '0190f0e2-4391-7000-8000-000000000901',
+  prefix: '/w/DEMO',
+  busy: false,
+  notice: null,
+  dialog: null,
+  now: Date.UTC(2026, 10, 14, 9),
+  canInquiry: true,
+}
+const TILES_CASES = [
+  {
+    id: 'th3-239-tiles',
+    label: 'TH-3 · Tiles: Mail to sort counts what waits, whatever the list shows',
+    model: { ...base, prefix: '/w/DEMO', inboxes: INBOXES, filter: 'HELD' as const, mails: { items: MAILS.filter((mail) => mail.status === 'HELD'), more: false }, toSort: { count: 12, more: false } },
+    note: 'B-TH-239: the Held filter lists 2 mails, the Mail to sort tile still says 12 — the first page of what waits, the same number Sales › Incoming’s notice says; it never grows with "Show more". Then one tile per team inbox (open, nobody’s and mine under it); a tile opens its views Open · Mine · Nobody’s · Snoozed · Follow-up · Closed · All.',
+  },
+  { id: 'th3-239-tiles-more', label: 'TH-3 · Tiles: more than one page waits', model: { ...base, prefix: '/w/DEMO', inboxes: INBOXES, toSort: { count: 50, more: true } }, note: '"50+": more wait than one page.' },
+  { id: 'th3-239-tiles-reading', label: 'TH-3 · Tiles: not counted yet', model: { ...base, prefix: '/w/DEMO', inboxes: { ...INBOXES, inboxes: { status: 'loading' as const } }, toSort: { count: null, more: false } }, note: '"—" while it is read, never 0.' },
+] satisfies Array<{ id: string; label: string; model: MailToSortViewModel; note?: string }>
+// ── end B-TH-239 ──
+
 export const designScreen = defineDesignScreen<MailToSortViewModel>({
   screen: 'SCR-019',
   title: 'Mail to sort',
@@ -185,6 +219,7 @@ export const designScreen = defineDesignScreen<MailToSortViewModel>({
     { id: 'th-224-open', label: 'TH-1b · The mail became a request: "Open INQ-… in Incoming" (answered there, never here)', model: { ...base, prefix: '/w/DEMO', canInquiry: true, open: { id: TRIAGE_DETAIL.id, detail: { ...TRIAGE_DETAIL, inquiry: { id: '0190f0e2-5401-7000-8000-000000000003', number: 'INQ-DEMO-0003' } } } } },
     { id: 'th-224-held', label: 'TH-1b · Make incoming request held: the person does not answer requests (the right named)', model: { ...base, prefix: '/w/DEMO', canInquiry: false, open: { id: TRIAGE_DETAIL.id, detail: TRIAGE_DETAIL } } },
     // ── end B-TH-224 ──
+    ...TILES_CASES, // B-TH-239
     { id: 'loading', label: 'Loading', model: { ...base, mails: { items: null, more: false } } },
     { id: 'error', label: 'Could not be read', model: { ...base, mails: { items: null, more: false, problem: 'mailToSort.problem.unavailable' } } },
   ],

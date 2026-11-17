@@ -131,6 +131,8 @@ async function alphaIds(): Promise<Record<string, string[]>> {
     period: [today().slice(0, 7), today().slice(0, 4)],
     // B-TH-103: Brand Alpha's requests (GET /portal/inquiries/:inquiryId).
     inquiryId: await ids(`SELECT id::text AS id FROM "Inquiry" WHERE "partyId" = $1 ORDER BY id LIMIT 4`),
+    // B-TH-069 / B-TH-072: Brand Alpha's projects (GET /portal/projects/:projectId/news; the seed's SEED-PRJ-001 and -003).
+    projectId: await ids(`SELECT id::text AS id FROM "Project" WHERE "partyId" = $1 ORDER BY id LIMIT 3`),
   }
 }
 
@@ -141,8 +143,11 @@ async function alphaRecords(orders: readonly string[]): Promise<[string, string]
   const inquiries = (await admin<{ id: string }>(w, `SELECT id::text AS id FROM "Inquiry" WHERE "partyId" = $1 ORDER BY id LIMIT 4`, [P1()])).map((row) => row.id)
   // B-TH-040: Brand Alpha's catalogue orders too (their partner view opens their thread).
   const catalogueOrders = (await admin<{ id: string }>(w, `SELECT id::text AS id FROM "PortalOrderRequest" WHERE "partyId" = $1 ORDER BY id LIMIT 4`, [P1()])).map((row) => row.id)
+  // B-TH-069: Brand Alpha's projects too (their partner view, members only, opens their thread).
+  const projects = (await admin<{ id: string }>(w, `SELECT id::text AS id FROM "Project" WHERE "partyId" = $1 ORDER BY id LIMIT 3`, [P1()])).map((row) => row.id)
   const pairs: [string, string][] = [
     ...threads.map((row): [string, string] => [row.type, row.id]),
+    ...projects.map((project): [string, string] => ['Project', project]),
     ...orders.map((order): [string, string] => ['SalesOrder', order]),
     ...inquiries.map((inquiry): [string, string] => ['Inquiry', inquiry]),
     ...catalogueOrders.map((request): [string, string] => ['PortalOrderRequest', request]),

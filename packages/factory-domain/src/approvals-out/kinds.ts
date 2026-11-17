@@ -44,7 +44,9 @@ export interface Words {
 }
 
 /** The records a sample, a colour, a leather or an artwork is asked on: records with a thread whose party is the partner. */
-export const THREAD_RECORD_TYPES = ['Style', 'Quote', 'SalesOrder', 'PurchaseOrder', 'SubcontractOrder'] as const
+// B-TH-071 (threads plan TH-5, PROJ-G15): a project shared with an outside company too (an artwork, a colour, a leather asked of
+// its brand on the project's thread; an office-only project is held: nobody outside to ask).
+export const THREAD_RECORD_TYPES = ['Style', 'Quote', 'SalesOrder', 'PurchaseOrder', 'SubcontractOrder', 'Project'] as const
 /**
  * B-W2b-252 (sample decisions): a sample round is asked as a SAMPLE (its brand decides the round), a leather or colour swatch
  * as a COLOUR or LEATHER (its own kind); the brand's answer becomes the round's or swatch's decision.

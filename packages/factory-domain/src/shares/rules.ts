@@ -127,6 +127,8 @@ export const SHARE_FIELDS: Readonly<Record<string, ReadonlyArray<readonly [key: 
   Complaint: [['number', 'text'], ['theirRef', 'text'], ['status', 'code'], ['category', 'code'], ['receivedAt', 'instant'], ['answerDueOn', 'date']],
   ReturnAuthorisation: [['number', 'text'], ['theirRef', 'text'], ['status', 'code'], ['requestedAt', 'instant'], ['goodsDueBy', 'date']],
   SupplierClaim: [['number', 'text'], ['kind', 'code'], ['status', 'code'], ['remedy', 'code'], ['sentAt', 'instant']],
+  // B-TH-069: a project by its number, name, status and target date — never its lead, goal, outcome or people.
+  Project: [['number', 'text'], ['name', 'text'], ['status', 'code'], ['targetDate', 'date']],
 })
 
 /** Words that never name a shared field (money, cost, margin, pay, an office person or note). */

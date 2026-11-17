@@ -92,7 +92,6 @@ function NewDesign({ model }: { model: NewCase }) {
     updates: 0,
     notice: null,
     dismissed: [],
-    limit: 200,
     newRequest: dialog,
     bulk: null,
     detail: null,

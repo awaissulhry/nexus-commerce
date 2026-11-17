@@ -42,6 +42,8 @@ import { actorOf, type OfficeContext } from '../../../core/context'
 import { dayOrNull, factsOf, LINE_COLUMNS, may, type InquiryData, type LineData, type Reader } from './store'
 // B-TH-216 (Sales › Incoming): the Picture and Files cells.
 import { inquiryRowExtras, type InquiryRowExtras } from './row-extras'
+// B-TH-094 (N17): production's answer on the row and the record.
+import { productionActionOf, productionInRecord, productionOf } from './production-view'
 
 /**
  * How inquiry rows become the contracts' views (B-W2b-295): the list's rows (their customer or prospect, what is asked in
@@ -110,6 +112,9 @@ export interface RowView {
   readonly styleCount: number
   readonly fileCounts: InquiryRowExtras['files']
   // ── end B-TH-216 ──
+  // ---- B-TH-094 (N17; O-SAL-INQ-LIST.list-F10 the Production column, .pane-head-F07 its chip): production's answer, office only.
+  readonly production: ReturnType<typeof productionOf>
+  // ---- end B-TH-094
 }
 
 /**
@@ -191,6 +196,7 @@ export async function rowsOf(db: Reader, context: OfficeContext, rows: readonly 
       picture: extras.get(row.id)?.picture ?? null,
       styleCount: extras.get(row.id)?.styleCount ?? 0,
       fileCounts: extras.get(row.id)?.files ?? null,
+      production: productionOf(row, businessDate(now)), // B-TH-094
     }
   })
 }
@@ -324,6 +330,10 @@ export async function inquiryViewOf(db: Reader, context: OfficeContext, row: Inq
     createdBy: person(row.createdById),
     createdAt: toUtcIso(row.createdAt as Date),
     messageTo: await messageToOf(db, row, contact), // B-TH-043
+    // ---- B-TH-094: the answer with who gave it (the record names people), and whether this reader types it.
+    production: await productionInRecord(db, row, businessDate(now)),
+    productionAction: productionActionOf(context, row),
+    // ---- end B-TH-094
     actions: {
       edit: action(manage, editRefusal(facts), !manage),
       assign: action(manage, editRefusal(facts), !manage),

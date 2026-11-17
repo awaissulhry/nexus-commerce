@@ -1,7 +1,8 @@
+import { existsSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { abilitiesOf, RECORD_TABS, tabOf } from '../../_shared/model'
+import { abilitiesOf, MERGED_TABS, RECORD_TABS, tabOf } from '../../_shared/model'
 import { canOf, OPEN_ROWS, wipOf, workOrder } from '../../_shared/fixtures'
-import { minutesOf, overCells, priorityBad, refusedWords, releaseHeld, RELEASE_BULK_LIMIT, splitAskHeld, splitAskOf, splitHeld, splitProblem, TRAVELLER_BULK_LIMIT, travellerIdsOf, travellersHeld, travellersHref } from './model'
+import { documentDoors, minutesOf, overCells, priorityBad, refusedWords, releaseHeld, RELEASE_BULK_LIMIT, splitAskHeld, splitAskOf, splitHeld, splitProblem, TRAVELLER_BULK_LIMIT, travellerIdsOf, travellersHeld, travellersHref } from './model'
 
 const manager = canOf('manager')
 const sales = canOf('sales')
@@ -126,9 +127,30 @@ describe('minutes', () => {
 })
 
 describe('the record', () => {
-  it('has a Documents tab between Labour & cost and Activity', () => {
-    expect(RECORD_TABS.slice(-3)).toEqual(['labour', 'documents', 'activity'])
-    expect(tabOf('documents')).toBe('documents')
+  // ---- B-TH-265 (R-7): the Documents tab went; the traveller is printed from the band's ⋯ (made on request, stored nowhere) ----
+  it('B-TH-265: no Documents tab any more — Labour & cost is the last tab, an old ?tab=documents lands on Overview', () => {
+    expect(RECORD_TABS).not.toContain('documents')
+    expect(RECORD_TABS[RECORD_TABS.length - 1]).toBe('labour')
+    expect(MERGED_TABS.documents).toBe('overview')
+    expect(tabOf('documents')).toBe('overview')
+  })
+
+  it('B-TH-265: the traveller from the band — its own new tab, a draft says its sizes are not frozen; the style revision beside it', () => {
+    const released = documentDoors(workOrder('IN_PROGRESS'), '/w/A')
+    expect(released.map((door) => door.id)).toEqual(['traveller', 'spec'])
+    expect(released[0]).toEqual({ id: 'traveller', href: travellersHref('/w/A', [workOrder('IN_PROGRESS').id]), label: { key: 'docs.openTraveller' }, description: { key: 'docs.travellerHint' } })
+    expect(released[1]!.href).toBe(`/w/A/products/styles/${workOrder('IN_PROGRESS').style.id}`)
+    expect(released[1]!.label).toEqual({ key: 'docs.spec', params: { revision: workOrder('IN_PROGRESS').revision!.revision } })
+    expect(documentDoors(workOrder('DRAFT'), '/w/A')[0]!.description).toEqual({ key: 'docs.travellerDraft' })
+    // A work order whose style has no released revision: the traveller only.
+    expect(documentDoors(workOrder('DRAFT', { revision: null }), '/w/A').map((door) => door.id)).toEqual(['traveller'])
+  })
+
+  it('B-TH-265: the record view puts the traveller in the band’s ⋯ and draws no Documents tab', () => {
+    const view = readFileSync(new URL('../record/view/WorkOrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('documentDoors(workOrder, model.prefix)')
+    expect(view).not.toContain('DocumentsTab')
+    expect(existsSync(new URL('./view/DocumentsTab.tsx', import.meta.url))).toBe(false)
   })
 
   it('a bundle\'s full page needs production.bundles.view', () => {

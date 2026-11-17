@@ -18,10 +18,12 @@ import {
   findStyles,
   listAssignees,
   listContacts,
-  listCustomers,
   loseInquiry,
-  messageCustomer,
   quoteInquiry,
+  // B-TH-234
+  askRequestTask,
+  checkCustomer,
+  makeCustomer,
   // B-TH-228
   listScales,
   orderInquiry,
@@ -32,7 +34,6 @@ import {
   updateInquiry,
   type ContactOption,
   type InquiryView,
-  type PartyOption,
   type StyleOption,
 } from './api'
 import {
@@ -48,6 +49,14 @@ import {
   leftOutPhrases,
   messageReach,
   quotePreview,
+  // B-TH-234
+  customerBodyOf,
+  customerChoiceOf,
+  customerDone,
+  declineBodyOf,
+  emptyTask,
+  refusalCode,
+  taskRefusal,
   readProblem,
   requestChanges,
   requestDraftOf,
@@ -60,6 +69,7 @@ import {
 } from './model'
 import type { InquiryRecordActions, InquiryRecordModel, RecordDialog, RecordVerb } from './record-model'
 import type { StyleRead } from './view/LinesEditor'
+import { endOfDay } from '../../admin/users/partners/model' // B-TH-234: a task's due day ends at the site's midnight
 // B-TH-217 / B-TH-218: the request's thread (RecordThread v1) with Ask for info.
 import { RequestThread, type AskInfo, type AskSend } from './pane/RequestThread'
 
@@ -180,19 +190,8 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
 
   // ---- the pickers: customers (a prospect's match), contacts, styles and their sizes -------------------------------------------
   const editable = !!view && can.manage && view.actions.edit.allowed
-  const [customers, setCustomers] = useState<{ items: PartyOption[] | null; problem: string | null } | null>(null)
-  const needCustomers = editable && !!view?.prospect && can.parties
-  useEffect(() => {
-    if (!needCustomers) return setCustomers(null)
-    const controller = new AbortController()
-    setCustomers({ items: null, problem: null })
-    listCustomers(api, session.company?.id ?? null, controller.signal)
-      .then((items) => setCustomers({ items, problem: null }))
-      .catch((error: unknown) => !controller.signal.aborted && setCustomers({ items: null, problem: readProblem(error) }))
-    return () => controller.abort()
-  }, [api, needCustomers, session.company?.id])
-
-  const contactParty = view?.party?.id ?? draft?.matchPartyId ?? null
+  // B-TH-234: a prospect's customer is chosen in "Make or match the customer" (the check first), so no customer picker is read here.
+  const contactParty = view?.party?.id ?? null
   const [contacts, setContacts] = useState<{ items: ContactOption[] | null; problem: string | null } | null>(null)
   useEffect(() => {
     if (!contactParty || !can.parties || !can.manage) return setContacts(null)
@@ -294,6 +293,17 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     [api],
   )
 
+  // ---- B-TH-234 (B-TH-042): the check before a prospect's request gets its customer (only customers the reader may see) ----
+  const readCheck = useCallback(
+    (now: InquiryView) => {
+      setDialog({ kind: 'customer', check: { status: 'loading' }, choice: null, confirmed: false, busy: false, notice: null })
+      checkCustomer(api, now.id)
+        .then((value) => setDialog((open) => (open?.kind === 'customer' ? { ...open, check: { status: 'ready', value }, choice: customerChoiceOf(value) } : open)))
+        .catch((error: unknown) => setDialog((open) => (open?.kind === 'customer' ? { ...open, check: isApiError(error) && error.kind === 'not_found' ? { status: 'notFound' } : { status: 'error', problem: readProblem(error) } } : open)))
+    },
+    [api],
+  )
+
   const runSimple = useCallback(
     async (verb: 'resume' | 'unassign') => {
       const now = viewRef.current
@@ -353,6 +363,11 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
       setNotice(null)
       if (verb === 'assign') readPeople(now)
       else if (verb === 'decline') setDialog({ kind: 'decline', draft: emptyDecline, busy: false, notice: null })
+      // ---- B-TH-234: "Not an order" (closed without counting as declined; nothing is sent), make or match the customer, a task
+      else if (verb === 'notAnOrder') setDialog({ kind: 'decline', draft: { ...emptyDecline, reason: 'NOT_AN_ORDER' }, busy: false, notice: null })
+      else if (verb === 'customer') readCheck(now)
+      else if (verb === 'task') setDialog({ kind: 'task', draft: emptyTask, busy: false, notice: null })
+      // ---- end B-TH-234
       else if (verb === 'lost') setDialog({ kind: 'lost', note: '', busy: false, notice: null })
       else if (verb === 'quote') setDialog({ kind: 'quote', customerRef: '', busy: false, notice: null })
       // ---- B-TH-228: Make order (the request's lines, prices, date and PO), Make style draft (the scales of the request's company)
@@ -371,7 +386,7 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
       }
       else void runSimple(verb)
     },
-    [readPeople, runSimple, can, api],
+    [readPeople, runSimple, can, api, readCheck],
   )
 
   // A row's verb from the list, once the inquiry is read.
@@ -411,21 +426,27 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     verbKey.current ??= newIdempotencyKey()
     try {
       if (dialog.kind === 'decline') {
-        if (!dialog.draft.reason) return
-        const note = dialog.draft.note.trim()
-        const value = await declineInquiry(api, now.id, { version: now.version, reason: dialog.draft.reason, ...(note ? { note } : {}) }, verbKey.current)
-        const message = dialog.draft.message.trim()
+        // B-TH-234 (B-TH-043): the decline and its one message are ONE command (nothing goes unless ticked; "Not an order" sends nothing).
+        const body = declineBodyOf(now, dialog.draft, can)
+        if (!body) return
         const reach = messageReach(now, can)
-        let sent: 'none' | 'sent' | 'failed' = 'none'
-        if (message && reach.to) {
-          try {
-            await messageCustomer(api, now.id, { to: reach.to, subject: `${now.number}`, body: message })
-            sent = 'sent'
-          } catch {
-            sent = 'failed'
-          }
-        }
-        after(value, { key: 'done.decline', params: { number: value.number, reason: `decline.${dialog.draft.reason}` }, tone: sent === 'failed' ? 'warning' : 'success', lines: sent === 'sent' ? [{ key: 'done.messageSent', params: { to: reach.to ?? '' } }] : sent === 'failed' ? [{ key: 'done.messageFailed' }] : [] }, true)
+        const value = await declineInquiry(api, now.id, body, verbKey.current)
+        const customer = now.party?.name ?? now.fromWords
+        after(value, { key: 'done.decline', params: { number: value.number, reason: `decline.${body.reason}` }, tone: 'success', lines: body.message ? [reach.via === 'PORTAL' ? { key: 'done.messagePortal', params: { customer } } : { key: 'done.messageSent', params: { to: reach.to ?? '' } }] : [] }, true)
+      } else if (dialog.kind === 'customer') {
+        // ---- B-TH-234 (B-TH-042): match or make the customer in ONE command; the "new" mark goes, replies become possible.
+        if (dialog.check.status !== 'ready' || !dialog.choice) return
+        const made = await makeCustomer(api, now.id, customerBodyOf(now, dialog.check.value, dialog.choice, dialog.confirmed), verbKey.current)
+        const done = customerDone(made, made.inquiry.number)
+        after(made.inquiry, { ...done.phrase, tone: 'success', link: can.parties ? { href: `${prefix}/sales/customers/${encodeURIComponent(made.party.id)}`, label: { key: 'done.openCustomer', params: { customer: made.party.name } } } : null, lines: done.lines }, false)
+      } else if (dialog.kind === 'task') {
+        // ---- B-TH-234 (B-TH-051): "Ask <customer> for…" — a task in the customer's portal, on its own open request.
+        if (!dialog.draft.kind || !now.party) return
+        await askRequestTask(api, now.party.id, { kind: dialog.draft.kind, recordId: now.id, dueAt: dialog.draft.due ? endOfDay(dialog.draft.due) : null, companyId: now.companyId }, verbKey.current)
+        verbKey.current = null
+        setDialog(null)
+        setNotice({ key: dialog.draft.due ? 'done.taskDue' : 'done.task', params: { customer: now.party.name, kind: `task.kind.${dialog.draft.kind}`, due: dialog.draft.due ?? '' }, tone: 'success' })
+        // ---- end B-TH-234
       } else if (dialog.kind === 'lost') {
         const value = await loseInquiry(api, now.id, { version: now.version, note: dialog.note.trim() }, verbKey.current)
         after(value, { key: 'done.lost', params: { number: value.number }, tone: 'success' }, true)
@@ -478,8 +499,10 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     } catch (error) {
       verbKey.current = null
       const problem = writeProblem(error, now.number)
-      setDialog((open) => (open && open.kind !== 'assign' ? { ...open, busy: false, notice: { key: problem.key, params: problem.params, tone: 'danger', lines: fieldLines(problem.paths) } } : open))
-      if (problem.stale) void load(true)
+      // B-TH-234: a task's refusal in the page's words (a prospect, a closed request); a check that asks first ticks its box.
+      const task = dialog.kind === 'task' ? taskRefusal(refusalCode(error)) : null
+      setDialog((open) => (open && open.kind !== 'assign' ? { ...open, busy: false, notice: { key: task?.key ?? problem.key, params: task ? undefined : problem.params, tone: 'danger', lines: task ? [] : fieldLines(problem.paths) } } : open))
+      if (problem.stale && !task) void load(true)
     }
   }, [api, dialog, after, can, prefix, load])
 
@@ -493,7 +516,6 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     draft,
     saving,
     busy,
-    customers,
     contacts,
     styles,
     details,
@@ -515,7 +537,6 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     onDraft: (patch) => withDraft((now) => ({ ...now, ...patch })),
     onLines: (lines) => withDraft((now) => ({ ...now, lines })),
     onStyle: readDetail,
-    onMatch: (partyId) => withDraft((now) => ({ ...now, matchPartyId: partyId, contactId: null })),
     onTechPack: (fileId, on) => withDraft((now) => toggleTechPack(now, fileId, on)),
     onSave: () => void save(),
     onDiscard: () => setDraft(null),
@@ -549,6 +570,10 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
       // B-TH-228
       onOrderDraft: (patch) => setDialog((open) => (open?.kind === 'order' ? { ...open, draft: { ...open.draft, ...patch } } : open)),
       onStyleDraft: (patch) => setDialog((open) => (open?.kind === 'styleDraft' ? { ...open, draft: { ...open.draft, ...patch } } : open)),
+      // B-TH-234
+      onCustomer: (patch) => setDialog((open) => (open?.kind === 'customer' ? { ...open, ...(patch.choice !== undefined ? { choice: patch.choice, confirmed: false } : {}), ...(patch.confirmed !== undefined ? { confirmed: patch.confirmed } : {}) } : open)),
+      onTask: (patch) => setDialog((open) => (open?.kind === 'task' ? { ...open, draft: { ...open.draft, ...patch } } : open)),
+      onRetryCheck: () => viewRef.current && readCheck(viewRef.current),
       onSubmit: () => void submitDialog(),
       onClose: () => {
         verbKey.current = null
@@ -570,9 +595,13 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
             party: view.party ? { id: view.party.id, name: view.party.name } : null,
             prospect: view.party ? null : { name: view.fromWords },
             recordHref: `${prefix}/sales/incoming/${encodeURIComponent(view.id)}`,
+            // B-TH-234 (pane-thread-F02): the reply held for a prospect offers "Make the customer" — the check, then match or make.
+            onMakeCustomer: view.party || view.prospectDetails?.erased || !can.manage ? undefined : () => onVerb('customer'),
           },
           ask,
           onAsk: sendAsk,
+          // B-TH-234 (B-TH-046): saved replies for requests, the customer's language first.
+          replyLanguage: view.messageTo?.language ?? null,
         })
       : null
 

@@ -135,6 +135,9 @@
       "body": "Segui un record (Segui, su qualsiasi record) o fissa una vista salvata: ciò che cambia compare qui, una riga ciascuno."
     },
     "notBuilt": "Questo elenco non ha ancora una sua pagina.",
+    "newMessages_one": "{record}: {count} nuovo messaggio",
+    "newMessages_other": "{record}: {count} nuovi messaggi",
+    "newMessagesHint": "Apre il primo messaggio che non hai ancora letto.",
     "more_one": "e {count} altra",
     "more_other": "e altre {count}",
     "seen": "Visto",
@@ -281,7 +284,7 @@
     },
     "event": {
       "MENTIONED": { "label": "Menzionato", "hint": "qualcuno ti ha @menzionato" },
-      "ASSIGNED": { "label": "Assegnato", "hint": "un'attività o una riga di Oggi data a te" },
+      "ASSIGNED": { "label": "Assegnato", "hint": "un'attività, una riga di Oggi o una richiesta data a te, e ogni nuova richiesta di un cliente di cui rispondi alle richieste" },
       "APPROVAL_WAITING": { "label": "Approvazione in attesa", "hint": "una richiesta aspetta il tuo sì" },
       "APPROVAL_DECIDED": { "label": "Approvazione decisa", "hint": "una richiesta che hai fatto è stata decisa" },
       "FOLLOWING_CHANGED": { "label": "Record che seguo cambiato", "hint": "un record o una vista salvata che segui è cambiato" },

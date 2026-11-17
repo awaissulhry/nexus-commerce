@@ -52,6 +52,10 @@ import {
   writeProblem,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
+// B-TH-233: Incoming over every door.
+import { CATALOGUE_RECORD, CATALOGUE_ROW, CHANGE_ROW, INCOMING_ROWS, listOf, repliesOf } from './demo/fixtures'
+import { acceptBodyOf, acceptDraftOf, acceptHeld, catalogueHeld, catalogueMain, catalogueOutcome, refuseHeld } from './catalogue-model'
+import { approvalsHref, CUSTOMER_REPLIES, incomingRowOf, LIST_TILES, mergePages, navIdsOf, numberWithCompany, placeOf, replyHref, replyWaiting, rowHref, THREAD_TYPE } from './model'
 import { designScreen as paneScreen } from './view/pane/fixtures'
 
 const owner = inquiriesCan(ROLE_PERMISSIONS.owner)
@@ -79,16 +83,17 @@ describe('the address: the API’s own filters, the inquiry open in its DetailMo
   })
 
   it('the tiles and saved rows are the API’s own; a chip per filter, the tile’s too', () => {
-    for (const tile of [...DESIGN_TILES, ...SAVED_ROWS]) expect(INQUIRY_TILES).toContain(tile)
+    // B-TH-233: the saved rows are Incoming's own tiles (B-TH-039) and "Customer replies".
+    for (const tile of [...DESIGN_TILES, ...SAVED_ROWS]) expect(LIST_TILES).toContain(tile)
     expect(chipsOf({ ...HOME_ADDRESS, tile: 'NEW', source: 'MAIL', q: 'x' }, null).map((chip) => chip.id)).toEqual(['tile', 'source', 'q'])
     expect(chipsOf(HOME_ADDRESS, null)).toEqual([])
   })
 
   it('an unknown count is "—", never 0', () => {
     expect(tileValue(null, 'NEW', false)).toBe('—')
-    expect(tileValue({ rows: [], counts: { NEW: null }, complete: true }, 'NEW', false)).toBe('—')
-    expect(tileValue({ rows: [], counts: { NEW: 3 }, complete: true }, 'NEW', true)).toBe('—')
-    expect(tileValue({ rows: [], counts: { NEW: 0 }, complete: true }, 'NEW', false)).toBe('0')
+    expect(tileValue({ counts: { NEW: null }, complete: true }, 'NEW', false)).toBe('—')
+    expect(tileValue({ counts: { NEW: 3 }, complete: true }, 'NEW', true)).toBe('—')
+    expect(tileValue({ counts: { NEW: 0 }, complete: true }, 'NEW', false)).toBe('0')
   })
 })
 
@@ -117,11 +122,13 @@ describe('the queue', () => {
   })
 
   it('a selection reaches its open inquiries; closed ones are left out; more than 100 is held', () => {
-    const reach = bulkReach(ROWS, [ROWS[0]!.id, ROWS[4]!.id, ROWS[5]!.id])
-    expect([reach.open.map((row) => row.id), reach.closed, reach.held]).toEqual([[ROWS[0]!.id], 2, null])
-    expect(bulkReach(ROWS, [ROWS[4]!.id]).held?.key).toBe('bulk.noneOpen')
-    const many = Array.from({ length: 101 }, (_, n) => ({ ...ROWS[0]!, id: `r${n}` }))
-    expect(bulkReach(many, many.map((row) => row.id)).held?.key).toBe('bulk.tooMany')
+    // B-TH-233: the selection holds the rows' keys (`<kind>:<id>`), over Incoming rows.
+    const rows = ROWS.map(incomingRowOf)
+    const reach = bulkReach(rows, [rows[0]!.key, rows[4]!.key, rows[5]!.key])
+    expect([reach.open.map((row) => row.id), reach.closed, reach.others, reach.held]).toEqual([[ROWS[0]!.id], 2, 0, null])
+    expect(bulkReach(rows, [rows[4]!.key]).held?.key).toBe('bulk.noneOpen')
+    const many = Array.from({ length: 101 }, (_, n) => incomingRowOf({ ...ROWS[0]!, id: `r${n}` }))
+    expect(bulkReach(many, many.map((row) => row.key)).held?.key).toBe('bulk.tooMany')
   })
 
   it('after a decision the next inquiry opens (or the one before at the end)', () => {
@@ -131,10 +138,11 @@ describe('the queue', () => {
   })
 
   it('the notices: the partial count first, prospects to match; a dismissed one stays away until its value changes', () => {
-    const list = { rows: ROWS, counts: {}, complete: false }
-    expect(pageNotices(list, 200, new Set()).map((notice) => notice.key)).toEqual(['notice.partial', 'notice.prospects'])
-    expect(pageNotices(list, 200, new Set(['notice.partial:partial', 'notice.prospects:prospects:2'])).map((notice) => notice.key)).toEqual([])
-    expect(pageNotices(list, 6, new Set(['notice.partial:partial'])).map((notice) => notice.key)).toEqual(['notice.capped', 'notice.prospects'])
+    const list = { rows: ROWS.map(incomingRowOf), complete: false }
+    expect(pageNotices(list, new Set()).map((notice) => notice.key)).toEqual(['notice.partial', 'notice.prospects'])
+    expect(pageNotices(list, new Set(['notice.partial:partial', 'notice.prospects:prospects:2'])).map((notice) => notice.key)).toEqual([])
+    // B-TH-233: the list reads in pages: no "first 200 rows" notice any more, whatever the number of rows.
+    expect(pageNotices({ rows: Array.from({ length: 250 }, (_, n) => incomingRowOf({ ...ROWS[4]!, id: `r${n}` })), complete: true }, new Set()).map((notice) => notice.key)).toEqual([])
   })
 })
 
@@ -191,9 +199,10 @@ describe('the Request’s Apply sends only what changed', () => {
     expect(parsePrice('12.5')).toBe('12.5')
   })
 
-  it('a prospect matched to a customer sends the party once and clears the prospect; a closed inquiry only its note', () => {
-    const match = requestChanges(PROSPECT_VIEW, { ...requestDraftOf(PROSPECT_VIEW), matchPartyId: 'p1', contactId: 'c1' }, owner)
-    expect(match.body).toEqual({ version: PROSPECT_VIEW.version, partyId: 'p1', prospect: null, contactId: 'c1' })
+  it('a prospect never gets its customer by Apply (B-TH-234: Make or match the customer, the check first); a closed inquiry only its note', () => {
+    const typed = requestChanges(PROSPECT_VIEW, { ...requestDraftOf(PROSPECT_VIEW), contactId: 'c1' }, owner)
+    expect(typed.body).toBeNull()
+    expect('matchPartyId' in requestDraftOf(PROSPECT_VIEW)).toBe(false)
     const closed = requestChanges(QUOTED_VIEW, { ...requestDraftOf(QUOTED_VIEW), request: 'changed', note: 'A note' }, owner)
     expect(closed.body).toEqual({ version: QUOTED_VIEW.version, note: 'A note' })
   })
@@ -204,7 +213,7 @@ describe('Decline and refusals', () => {
     expect(declineHeld({ reason: null, note: '', message: '' }, false)?.key).toBe('decline.held.reason')
     expect(declineHeld({ reason: 'OTHER', note: ' ', message: '' }, false)?.key).toBe('refusal.OTHER_NEEDS_WORDS')
     expect(declineHeld({ reason: 'PRICE', note: '', message: '' }, false)).toBeNull()
-    expect(messageReach(VIEW, owner)).toEqual({ to: VIEW.contact!.email, held: null })
+    expect(messageReach(VIEW, owner)).toMatchObject({ to: VIEW.contact!.email, via: 'MAIL', held: null })
     expect(messageReach(PROSPECT_VIEW, owner).held?.key).toBe('decline.message.prospect')
     expect(messageReach(VIEW, inquiriesCan(ROLE_PERMISSIONS.reader)).held?.key).toBe('held.right')
   })
@@ -226,7 +235,7 @@ describe('words and navigation', () => {
       for (const code of INQUIRY_REFUSALS) expect(all[`refusal.${code}`], `${locale} refusal.${code}`).toBeTruthy()
       for (const status of INQUIRY_STATUSES) expect(all[`status.${status}`], `${locale} status.${status}`).toBeTruthy()
       for (const source of INQUIRY_SOURCES) expect(all[`source.${source}`], `${locale} source.${source}`).toBeTruthy()
-      for (const tile of INQUIRY_TILES) expect(all[`tile.${tile}`], `${locale} tile.${tile}`).toBeTruthy()
+      for (const tile of LIST_TILES) expect(all[`tile.${tile}`], `${locale} tile.${tile}`).toBeTruthy() // B-TH-233: every saved row
       for (const tile of DESIGN_TILES) expect(all[`tile.hint.${tile}`], `${locale} tile.hint.${tile}`).toBeTruthy()
       for (const reason of DECLINE_REASONS) expect([all[`decline.${reason}`], all[`decline.hint.${reason}`]].every(Boolean), `${locale} decline.${reason}`).toBe(true)
       for (const basis of LAWFUL_BASES) expect(all[`basis.${basis}`], `${locale} basis.${basis}`).toBeTruthy()
@@ -259,7 +268,7 @@ describe('Sales › Incoming (B-TH-216)', () => {
   it('the five tiles are saved filters in the tree\'s order; a count not known is "—", never 0; the band says the Rows ▾ count in words', () => {
     expect([...DESIGN_TILES]).toEqual(['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'MINE'])
     for (const tile of DESIGN_TILES) expect(INQUIRY_TILES).toContain(tile)
-    const list = { rows: [...ROWS], counts: { NEW: 2, WAITING_US: null, OPEN: 41 }, complete: true }
+    const list = { counts: { NEW: 2, WAITING_US: null, OPEN: 41 }, complete: true }
     expect(tileValue(list, 'NEW', false)).toBe('2')
     expect(tileValue(list, 'WAITING_US', false)).toBe('—')
     expect(tileValue(list, 'MINE', false)).toBe('—')
@@ -269,7 +278,7 @@ describe('Sales › Incoming (B-TH-216)', () => {
     expect(bandCount(list, 'OPEN', true)).toEqual({ key: 'band.countUnknown' })
     for (const locale of LOCALES) {
       const all = words(locale)
-      for (const tile of INQUIRY_TILES) expect(all[`band.count.${tile}`], `${locale} band.count.${tile}`).toContain('{count}')
+      for (const tile of LIST_TILES) expect(all[`band.count.${tile}`], `${locale} band.count.${tile}`).toContain('{count}')
     }
     expect(words('en')['band.count.OPEN']).toBe('{count} open')
     expect(words('en')['tile.WAITING_CUSTOMER']).toBe('Need info')
@@ -301,32 +310,37 @@ describe('Sales › Incoming (B-TH-216)', () => {
     expect(words('en')['held.right']).toContain('Needs the sales permission')
   })
 
-  it('Export ▾ is honest: the first 200 rows of this view, the price left out without the grain', () => {
-    expect(exportPhrases('OPEN', 200, { price: true })).toEqual({ heading: { key: 'export.heading', params: { view: 'tile.OPEN', count: 200 } }, note: { key: 'export.note', params: { count: 200 } } })
-    expect(exportPhrases('OPEN', 200, { price: false }).note.key).toBe('export.notePrice')
-    expect(words('en')['export.note']).toContain('first {count} rows')
+  it('Export ▾ is honest: every row of this view page by page (B-TH-233: no "first 200 rows"), the price left out without the grain', () => {
+    expect(exportPhrases('OPEN', { price: true })).toEqual({ heading: { key: 'export.heading', params: { view: 'tile.OPEN' } }, note: { key: 'export.note' } })
+    expect(exportPhrases('OPEN', { price: false }).note.key).toBe('export.notePrice')
+    for (const locale of LOCALES) {
+      expect(words(locale)['export.note'], locale).not.toContain('{count}')
+      expect(words(locale)['notice.capped'], locale).toBeUndefined()
+    }
+    expect(words('en')['export.note']).toContain('page by page')
   })
 
   it('one notice at most, the most serious first: no request numbering, then the list facts, then mails to sort (each with its door)', () => {
-    const list = { rows: [...ROWS], counts: {}, complete: false }
-    const notices = pageNotices(list, 200, new Set(), { numberingMissing: ['Demo Factory'], mailToSort: { count: 4, more: false } })
+    const list = { rows: ROWS.map(incomingRowOf), complete: false }
+    const notices = pageNotices(list, new Set(), { numberingMissing: ['Demo Factory'], mailToSort: { count: 4, more: false } })
     expect(notices.map((notice) => notice.key)).toEqual(['notice.numbering', 'notice.partial', 'notice.prospects', 'notice.mail'])
     expect(noticeLink(notices[0]!, '/w/DEMO')).toEqual({ href: '/w/DEMO/admin/documents', label: { key: 'notice.numberingOpen' } })
     expect(noticeLink(notices[3]!, '/w/DEMO')?.href).toBe('/w/DEMO/home/mail-to-sort')
-    expect(pageNotices(list, 200, new Set([noticeKey(notices[0]!)]), { numberingMissing: ['Demo Factory'] })[0]!.key).toBe('notice.partial')
-    expect(pageNotices({ rows: [], counts: {}, complete: true }, 200, new Set(), { mailToSort: { count: 50, more: true } })).toEqual([{ key: 'notice.mailMore', params: { count: 50 }, tone: 'info', value: 'mail:50+' }])
+    expect(pageNotices(list, new Set([noticeKey(notices[0]!)]), { numberingMissing: ['Demo Factory'] })[0]!.key).toBe('notice.partial')
+    expect(pageNotices({ rows: [], complete: true }, new Set(), { mailToSort: { count: 50, more: true } })).toEqual([{ key: 'notice.mailMore', params: { count: 50 }, tone: 'info', value: 'mail:50+' }])
   })
 
   it('a limited office person sees only what the read returned: tiles and the band count only those rows (W19, W30)', () => {
     // The page draws the API's counts as they are (the API counts in the reader's scope); it never adds rows of its own.
-    const mine = { rows: ROWS.filter((one) => one.party?.id === ROWS[0]!.party?.id), counts: { OPEN: 1, NEW: 1 }, complete: true }
+    const mine = { counts: { OPEN: 1, NEW: 1 }, complete: true }
     expect(bandCount(mine, 'OPEN', false)).toEqual({ key: 'band.count.OPEN', params: { count: 1 } })
     expect(tileValue(mine, 'NEW', false)).toBe('1')
   })
 })
 // ── end B-TH-216 ──
 
-const LEFT_KEY = /\b(?:common|held|list|record|tile|new|tab|live|row|col|keys|notice|chip|status|source|waiting|time|assignee|bulk|right|refusal|problem|field|line|grid|mail|pack|files|quote|quoteStatus|leftOut|activity|dialog|assign|decline|lost|verb|done|closed|who|prospect|basis|request|noAccess|page|band|door|funnel|picture|peek|export)\.[a-zA-Z]+(?:\.[a-zA-Z_]+)*\b/
+// B-TH-233: + kind, kindFacts, replies, recordType, catalogue (Incoming over every door). B-TH-234: + customer, task. B-TH-285: + addresses.
+const LEFT_KEY = /\b(?:common|held|list|record|tile|new|tab|live|row|col|keys|notice|chip|status|source|waiting|time|assignee|bulk|right|refusal|problem|field|line|grid|mail|pack|files|quote|quoteStatus|leftOut|activity|dialog|assign|decline|lost|verb|done|closed|who|prospect|basis|request|noAccess|page|band|door|funnel|picture|peek|export|kind|kindFacts|replies|recordType|catalogue|customer|task|addresses)\.[a-zA-Z]+(?:\.[a-zA-Z_]+)*\b/
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>
@@ -369,11 +383,147 @@ describe('B-TH-235 the list reads the request figure’s doors: the days, what a
     expect(chips[1]).toMatchObject({ label: { key: 'chip.received', params: { from: '2026-11-09', to: '2026-11-15' } }, clear: { from: null, to: null } })
     expect(chipsOf({ ...HOME_ADDRESS, from: '2026-11-09', to: '2026-11-09' }, null)[0]!.label).toEqual({ key: 'chip.receivedOn', params: { day: '2026-11-09' } })
     expect(chips[2]).toMatchObject({ label: { key: 'chip.outcome.NOT_AN_ORDER' }, clear: { outcome: null } })
+    // B-TH-233: the catalogue is read flat (lib/i18n/messages flattenMessages): `chip.outcome.ORDERED`, never `chip.outcome` as an object.
     for (const locale of LOCALES) {
-      const words = CATALOGUE[locale]['sales-inquiries'] as { chip: Record<string, unknown> & { outcome: Record<string, string> } }
-      for (const key of ['received', 'receivedOn', 'receivedFrom', 'receivedTo']) expect(typeof words.chip[key], `${locale} ${key}`).toBe('string')
-      for (const outcome of REQUEST_OUTCOMES) expect(typeof words.chip.outcome[outcome], `${locale} ${outcome}`).toBe('string')
+      const all = words(locale)
+      for (const key of ['received', 'receivedOn', 'receivedFrom', 'receivedTo']) expect(typeof all[`chip.${key}`], `${locale} ${key}`).toBe('string')
+      for (const outcome of REQUEST_OUTCOMES) expect(typeof all[`chip.outcome.${outcome}`], `${locale} ${outcome}`).toBe('string')
     }
   })
 })
 // ---- end B-TH-235
+
+// ---- B-TH-233 (threads plan TH-3): Incoming over every door — row kinds, tiles from the one read, Customer replies -------------
+describe('B-TH-233 Incoming over every door', () => {
+  const ALEPH = '0190f0e2-aaaa-7000-8000-000000000001'
+
+  it('each kind opens in its own place: a request and a catalogue order beside the list, a change request in Home › Approvals (W19, W27)', () => {
+    const request = incomingRowOf(ROWS[0]!)
+    expect([placeOf(request), placeOf(CATALOGUE_ROW), placeOf(CHANGE_ROW)]).toEqual(['request', 'catalogue', 'approvals'])
+    expect(rowHref('/w/DEMO', HOME_ADDRESS, request)).toBe(`/w/DEMO/sales/incoming?open=${request.id}`)
+    expect(rowHref('/w/DEMO', HOME_ADDRESS, CATALOGUE_ROW)).toBe(`/w/DEMO/sales/incoming?catalogue=${CATALOGUE_ROW.id}`)
+    // Approvals' review window reads approval tasks only: the door opens the waiting change requests (never a "not found" window).
+    expect(rowHref('/w/DEMO', HOME_ADDRESS, CHANGE_ROW)).toBe(approvalsHref('/w/DEMO'))
+    expect(approvalsHref('/w/DEMO')).toBe('/w/DEMO/home/approvals?kind=ORDER_CHANGE_REQUEST')
+    // J / K and "after a decision, the next" walk only what opens beside the list.
+    expect(navIdsOf(listOf(INCOMING_ROWS))).toEqual(INCOMING_ROWS.filter((row) => row.kind !== 'CHANGE_REQUEST').map((row) => row.id))
+    // Each kind's own thread for its New messages.
+    expect(THREAD_TYPE).toEqual({ REQUEST: 'Inquiry', CATALOGUE_ORDER: 'PortalOrderRequest', CHANGE_REQUEST: 'OrderChangeRequest' })
+  })
+
+  it('the address keeps the kind and the catalogue order open; a request wins over a catalogue order; a kind-named link opens it too', () => {
+    const address = addressOf(new URLSearchParams(`tile=ALL&kind=CATALOGUE_ORDER&catalogue=${CATALOGUE_ROW.id}`))
+    expect(address).toMatchObject({ tile: 'ALL', kind: 'CATALOGUE_ORDER', catalogue: CATALOGUE_ROW.id, open: null })
+    expect(addressOf(new URLSearchParams(addressText(address).slice(1)))).toEqual(address)
+    expect(addressOf(new URLSearchParams(`open=${VIEW.id}&catalogue=${CATALOGUE_ROW.id}`))).toMatchObject({ open: VIEW.id, catalogue: null })
+    expect(addressOf(new URLSearchParams(`kind=CATALOGUE_ORDER&open=${CATALOGUE_ROW.id}`))).toMatchObject({ open: null, catalogue: CATALOGUE_ROW.id })
+    expect(addressOf(new URLSearchParams('kind=NOPE&catalogue=x'))).toMatchObject({ kind: null, catalogue: null })
+    expect(addressOf(new URLSearchParams('tile=CUSTOMER_REPLIES')).tile).toBe(CUSTOMER_REPLIES)
+    expect(chipsOf({ ...HOME_ADDRESS, kind: 'CHANGE_REQUEST' }, null)).toEqual([{ id: 'kind', label: { key: 'chip.kind', params: { kind: 'kind.CHANGE_REQUEST' } }, clear: { kind: null } }])
+    expect(isFiltered({ ...HOME_ADDRESS, kind: 'REQUEST' })).toBe(true)
+    // The one read's query: the kind goes to the API; "Customer replies" reads Incoming's counts as Open does (its rows are conversations).
+    expect(queryOf({ ...HOME_ADDRESS, kind: 'CATALOGUE_ORDER' })).toMatchObject({ tile: 'OPEN', kind: 'CATALOGUE_ORDER' })
+    expect(queryOf({ ...HOME_ADDRESS, tile: CUSTOMER_REPLIES }).tile).toBe('OPEN')
+    // B-TH-235's terms keep working on the one read.
+    expect(queryOf({ ...HOME_ADDRESS, from: '2026-11-09', to: '2026-11-15', outcome: 'ORDERED' })).toMatchObject({ receivedFrom: '2026-11-09', receivedTo: '2026-11-15', outcome: 'ORDERED' })
+  })
+
+  it('the tiles and the band count from the one read, every kind the reader may see; Customer replies has its count (W27, W30)', () => {
+    const list = listOf(INCOMING_ROWS)
+    expect(tileValue(list, 'NEW', false)).toBe(String(list.counts.NEW))
+    expect(list.counts.NEW).toBe(INCOMING_ROWS.filter((row) => ['NEW', 'SENT', 'OPEN'].includes(row.state)).length)
+    expect(bandCount(list, CUSTOMER_REPLIES, false)).toEqual({ key: 'band.count.CUSTOMER_REPLIES', params: { count: list.counts.CUSTOMER_REPLIES! } })
+    expect(bandCount({ counts: { CUSTOMER_REPLIES: null }, complete: true }, CUSTOMER_REPLIES, false)).toEqual({ key: 'band.countUnknown' })
+    // A kind the reader may not see is counted by nobody here: the page draws the API's counts as they came.
+    expect(tileValue({ counts: { NEW: 1 }, complete: true }, 'NEW', false)).toBe('1')
+  })
+
+  it('a request read as an Incoming row keeps its whole row; "Show more" adds pages, each row once', () => {
+    const row = incomingRowOf(ROWS[4]!)
+    expect(row).toMatchObject({ key: `REQUEST:${ROWS[4]!.id}`, kind: 'REQUEST', state: 'QUOTED', open: false, opens: { place: 'INCOMING', id: ROWS[4]!.id }, request: ROWS[4] })
+    expect(row.stateWords.en).toBe('Quoted')
+    const first = listOf(INCOMING_ROWS.slice(0, 4), true, 'c1')
+    const second = listOf(INCOMING_ROWS.slice(3), true, null)
+    expect(mergePages([first, second]).map((one) => one.key)).toEqual(INCOMING_ROWS.map((one) => one.key))
+  })
+
+  it('a selection over every kind: Assign and Decline reach the requests only, the others are counted and said', () => {
+    const reach = bulkReach(INCOMING_ROWS, [INCOMING_ROWS[0]!.key, CATALOGUE_ROW.key, CHANGE_ROW.key])
+    expect([reach.open.map((one) => one.id), reach.others]).toEqual([[ROWS[0]!.id], 2])
+    expect(bulkReach(INCOMING_ROWS, [CATALOGUE_ROW.key, CHANGE_ROW.key]).held?.key).toBe('bulk.noneRequests')
+    for (const locale of LOCALES) for (const key of ['bulk.reachOthers', 'bulk.noneRequests']) expect(words(locale)[key], `${locale} ${key}`).toBeTruthy()
+  })
+
+  it('list-F12: a reader of several companies reads the company code beside a number; one company the number alone', () => {
+    expect(numberWithCompany('INQ-0042', 'CO2', true)).toBe('INQ-0042 · CO2')
+    expect(numberWithCompany('INQ-0042', 'CO2', false)).toBe('INQ-0042')
+    expect(numberWithCompany('INQ-0042', null, true)).toBe('INQ-0042')
+  })
+
+  it('Customer replies: each row opens its record at the message that waits; the page lists only what the read returned (W27, W30, W37)', () => {
+    const page = repliesOf()
+    const built = new Set(OFFICE_PAGES)
+    const order = page.rows[0]!
+    expect(replyHref('/w/DEMO', order, built)).toBe(`/w/DEMO/sales/orders/${order.recordId}?message=${order.lastMessage.id}`)
+    // A record type without a page of its own opens its panels, still at the message.
+    expect(replyHref('/w/DEMO', { ...order, recordType: 'DepositRequest', label: 'DR-1' }, built)).toBe(`/w/DEMO/records/DepositRequest/${order.recordId}?label=DR-1&company=${order.companyId}&message=${order.lastMessage.id}`)
+    // The one waiting rule (amber past the rule's days) comes from the API; clock time is said when the company has no calendar.
+    expect(replyWaiting(page.rows[1]!)).toEqual({ time: { key: 'time.days', params: { d: 5 } }, amber: true, clock: false })
+    expect(replyWaiting({ waiting: { ...page.rows[2]!.waiting, calendar: false } }).clock).toBe(true)
+    // Nothing of another customer is added by the page: it draws the rows and the count the API returned for this reader.
+    const limited = repliesOf(page.rows.filter((row) => row.party.id === page.rows[2]!.party.id))
+    expect(limited.rows.every((row) => row.party.id === page.rows[2]!.party.id)).toBe(true)
+    expect(limited.count).toBe(limited.rows.length)
+    for (const locale of LOCALES) for (const key of ['replies.tableLabel', 'replies.empty', 'replies.noRight', 'tile.CUSTOMER_REPLIES']) expect(words(locale)[key], `${locale} ${key}`).toBeTruthy()
+  })
+
+  it('a catalogue order: Accept as order is the main button; each action held in words; the production manager holds all (W08, W09)', () => {
+    const owner233 = inquiriesCan(ROLE_PERMISSIONS.owner)
+    expect(catalogueMain(CATALOGUE_RECORD, owner233)).toBe('order')
+    expect(catalogueHeld(CATALOGUE_RECORD, 'order', owner233, false)).toBeNull()
+    expect(catalogueHeld(CATALOGUE_RECORD, 'refuse', owner233, true)).toEqual({ key: 'held.offline' })
+    const production = inquiriesCan(ROLE_PERMISSIONS.production)
+    for (const action of ['order', 'quote', 'refuse'] as const) expect(catalogueHeld(CATALOGUE_RECORD, action, production, false)).toEqual({ key: 'catalogue.held.right', params: { right: 'right.orders.manage' } })
+    expect(words('en')['catalogue.held.right']).toContain('Only sales can accept or refuse a catalogue order')
+    expect(catalogueHeld(CATALOGUE_RECORD, 'quote', { orders: true, quotes: false }, false)).toEqual({ key: 'held.needs', params: { right: 'right.quotes.manage' } })
+    expect(catalogueHeld({ ...CATALOGUE_RECORD, may: { order: false, quote: true, refuse: true } }, 'order', owner233, false)).toEqual({ key: 'held.notNow' })
+    const withdrawn = { ...CATALOGUE_RECORD, request: { ...CATALOGUE_RECORD.request, status: 'WITHDRAWN' as const } }
+    expect(catalogueHeld(withdrawn, 'order', owner233, false)).toEqual({ key: 'catalogue.held.WITHDRAWN' })
+    expect(catalogueMain(withdrawn, owner233)).toBeNull()
+    expect(catalogueOutcome(withdrawn)).toEqual({ key: 'catalogue.outcome.withdrawn' })
+  })
+
+  it('Accept as order sends the prices typed only with the price grain, the promise date only when changed; Refuse needs words', () => {
+    const owner233 = inquiriesCan(ROLE_PERMISSIONS.owner)
+    const draft = acceptDraftOf(CATALOGUE_RECORD, 'ORDER', owner233)
+    expect(draft.prices[CATALOGUE_RECORD.request.lines[0]!.id]).toBe('38.000000')
+    expect(acceptBodyOf(CATALOGUE_RECORD, draft, owner233)).toEqual({ version: 2, as: 'ORDER', lines: CATALOGUE_RECORD.request.lines.map((line) => ({ lineId: line.id, unitPrice: line.unitPriceShown })) })
+    const noPrice = inquiriesCan(ROLE_PERMISSIONS.production)
+    expect(acceptDraftOf(CATALOGUE_RECORD, 'ORDER', noPrice).prices[CATALOGUE_RECORD.request.lines[0]!.id]).toBe('')
+    expect(acceptBodyOf(CATALOGUE_RECORD, { ...draft, promiseDate: '2027-02-05' }, noPrice)).toEqual({ version: 2, as: 'ORDER', promiseDate: '2027-02-05' })
+    expect(acceptBodyOf(CATALOGUE_RECORD, { ...draft, as: 'QUOTE' }, owner233)).toEqual({ version: 2, as: 'QUOTE' })
+    expect(acceptHeld(CATALOGUE_RECORD, { ...draft, prices: { [CATALOGUE_RECORD.request.lines[1]!.id]: 'abc' } }, owner233, false)).toEqual({ key: 'catalogue.accept.badPrice', params: { n: 2 } })
+    expect(refuseHeld('  ', false)).toEqual({ key: 'catalogue.refuseHeld' })
+    expect(refuseHeld('x'.repeat(1001), false)?.key).toBe('decline.held.long')
+    expect(refuseHeld('We cannot make it before March.', false)).toBeNull()
+  })
+
+  it('a catalogue order this reader may not open reads "not found" in neutral words, never that it exists (W37)', () => {
+    for (const locale of LOCALES) {
+      const all = words(locale)
+      for (const key of ['catalogue.notFound', 'catalogue.notFoundBody']) expect(all[key], `${locale} ${key}`).toBeTruthy()
+      expect(`${all['catalogue.notFound']} ${all['catalogue.notFoundBody']}`).not.toMatch(/customer|brand|cliente|marchio/i)
+    }
+  })
+
+  it('every kind, record type and catalogue state has words in both languages', () => {
+    for (const locale of LOCALES) {
+      const all = words(locale)
+      for (const kind of ['REQUEST', 'CATALOGUE_ORDER', 'CHANGE_REQUEST']) for (const key of [`kind.${kind}`, `kind.plural.${kind}`, `kind.hint.${kind}`]) expect(all[key], `${locale} ${key}`).toBeTruthy()
+      for (const state of ['DRAFT', 'ACCEPTED', 'REFUSED', 'WITHDRAWN']) expect(all[`catalogue.held.${state}`], `${locale} ${state}`).toBeTruthy()
+      for (const kind of ['CHANGE', 'CANCEL']) expect(all[`kindFacts.change.${kind}`], `${locale} ${kind}`).toBeTruthy()
+    }
+    void ALEPH
+  })
+})
+// ---- end B-TH-233

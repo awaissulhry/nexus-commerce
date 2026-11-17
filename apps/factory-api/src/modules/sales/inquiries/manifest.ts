@@ -43,4 +43,14 @@ export const manifest = defineManifest({
   // rights); making a customer also parties.manage over the request's company (checked in the handler).
   'GET /sales/inquiries/:inquiryId/customer': manage,
   'POST /sales/inquiries/:inquiryId/customer': manage,
+  // ---- B-TH-094 (N17): production's answer — typed by whoever records promise dates (planning.promise.manage: the planner, the
+  // production manager) over the request's company and customer, and who reads the request (sales.inquiries.view, checked in the
+  // handler: else 404); planning's suggestion with planning.promise.view at the site. Office only (never a portal or link route).
+  'PUT /sales/inquiries/:inquiryId/production-answer': { audiences: ['office'], permission: 'planning.promise.manage', scope: 'record' },
+  'GET /sales/inquiries/:inquiryId/production-answer/suggestion': { audiences: ['office'], permission: 'planning.promise.view', scope: 'record' },
+  // ---- end B-TH-094
+  // ---- B-TH-071 (PROJ-G20): Start a project — who reads the request (sales.inquiries.view, checked in the handler) and keeps
+  // projects (projects.manage over its company and customer: createProject).
+  'POST /sales/inquiries/:inquiryId/project': { audiences: ['office'], permission: 'projects.manage', scope: 'record' },
+  // ---- end B-TH-071
 })

@@ -437,6 +437,102 @@
         "noRight": "You may not write to this record's thread.",
         "gone": "This template is no longer there."
       }
+    },
+    "replies": {
+      "intro": "Messages people write again and again — a delay notice, a question about a request, a certificate sent — per language and kind of record. Picking one in a message fills it with the record's values; the person reads it, changes it and sends.",
+      "label": "Saved replies",
+      "count_one": "1 saved reply · {shared} shared with the office",
+      "count_other": "{count} saved replies · {shared} shared with the office",
+      "search": "Search name or words",
+      "new": "New saved reply",
+      "edit": "Edit",
+      "part": {
+        "label": "Which mails",
+        "templates": "Mails Nexus sends",
+        "replies": "Saved replies"
+      },
+      "col": {
+        "name": "Saved reply",
+        "record": "For",
+        "words": "Words"
+      },
+      "whose": {
+        "shared": "Shared with the office",
+        "own": "Yours"
+      },
+      "record": {
+        "SalesOrder": "An order",
+        "Quote": "A quote",
+        "PurchaseOrder": "A purchase order",
+        "ServiceCase": "A service case",
+        "Shipment": "A shipment",
+        "Party": "A customer or supplier",
+        "Inquiry": "A request (Sales › Incoming)",
+        "ANY": "Any record"
+      },
+      "filter": {
+        "language": "Language",
+        "anyLanguage": "Italian and English",
+        "record": "For",
+        "anyRecord": "Every kind of record"
+      },
+      "held": {
+        "noRight": "Keeping saved replies needs the right to send e-mail.",
+        "sharedNoRight": "A shared reply is changed only by those who keep the shared replies.",
+        "notYours": "Another person's own reply: only they change it.",
+        "share": "Sharing with the office needs the right to keep the shared replies.",
+        "noneYours": "None of the selected replies is yours to delete."
+      },
+      "empty": {
+        "title": "No saved reply yet",
+        "body": "Write the messages you send again and again once: they then fill a message in one click, in Italian or English."
+      },
+      "delete_one": "Delete 1",
+      "delete_other": "Delete {count}",
+      "deleteTitle_one": "Delete 1 saved reply?",
+      "deleteTitle_other": "Delete {count} saved replies?",
+      "deleteKept": "Messages already sent with them stay as they were sent.",
+      "deleteLeft_one": "1 selected reply is not yours to delete: it stays.",
+      "deleteLeft_other": "{count} selected replies are not yours to delete: they stay.",
+      "deleteSharedAck": "I understand the office loses the shared ones too",
+      "languages": "Saved replies are written in Italian or English. A contact who reads another language is offered the English one.",
+      "sendsNothing": "A saved reply sends nothing by itself: it only fills the message a person then reads, changes and sends.",
+      "newTitle": "New saved reply",
+      "editTitle": "Saved reply: {name}",
+      "cancel": "Cancel",
+      "save": "Save",
+      "field": {
+        "name": "Name",
+        "nameHint": "How it is found in the message box, e.g. \"Delay of a few days\".",
+        "language": "Language",
+        "languageHint": "Italian or English: the message box offers it in that language.",
+        "record": "For",
+        "recordHint": "The kind of record it is offered on, and so which values it can fill.",
+        "shared": "Share with the office",
+        "sharedHint": "Everyone who writes mail for this company can pick it; only those who keep the shared replies change it.",
+        "isShared": "Shared with the office.",
+        "isOwn": "Yours only: nobody else sees it.",
+        "body": "Words",
+        "bodyHint": "Placeholders are filled with the record's values when the reply is picked; a value the record lacks stays empty."
+      },
+      "preview": {
+        "label": "Preview on a made-up record",
+        "title": "Preview",
+        "hint": "A made-up record fills the placeholders. Nothing is sent.",
+        "empty": "Write the words to see them filled."
+      },
+      "problem": {
+        "name": "One line of 1 to {limit} characters.",
+        "body": "Write the words of the reply."
+      },
+      "done": {
+        "created": "Saved reply \"{name}\" saved.",
+        "changed": "Saved reply \"{name}\" changed.",
+        "deleted_one": "1 saved reply deleted.",
+        "deleted_other": "{count} saved replies deleted.",
+        "deleteFailed": "No saved reply was deleted ({refused} refused): read them again and retry.",
+        "deletePartial": "{count} deleted, {refused} refused: read them again and retry."
+      }
     }
   }
 }

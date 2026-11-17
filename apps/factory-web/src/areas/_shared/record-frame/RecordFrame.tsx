@@ -90,10 +90,10 @@ export interface RecordFrameState {
   readonly filesAsk?: FrameFilesAsk | null
   readonly clearFiles?: () => void
   // ---- end B-TH-264 follow-up
-  // ---- B-TH-268 (a body part's way to the thread: the invoice's Send copy): show the docked thread, or open it full width below
-  // 1280 px (Back returns to the tab) — there only where the page has a thread.
+  // ---- B-TH-265: a part of the band or body shows the thread with no door (the work order's "Open the order's thread" in Order files):
+  // docked, it shows (if hidden); narrower, the full-width thread opens. (TH-6 part B's invoice Send copy uses it too, B-TH-268.)
   readonly showThread?: () => void
-  // ---- end B-TH-268
+  // ---- end B-TH-265
 }
 
 const FrameContext = createContext<RecordFrameState | null>(null)
@@ -348,14 +348,15 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
   // B-TH-264 follow-up: the body's files in the thread's viewer (a window over the page: the dock need not be shown for it).
   const openFiles = useCallback((ask: FrameFilesAsk) => setFilesAsk(ask), [])
   const clearFiles = useCallback(() => setFilesAsk(null), [])
-  // B-TH-268: a body part shows the thread (no door, no width remembered).
+  // ---- B-TH-265: show the thread (no door).
   const showThread = useCallback(() => {
     if (mode === 'docked') sizes.show()
     else if (!viewOpen) openView()
   }, [mode, sizes, viewOpen, openView])
+  // ---- end B-TH-265
   const state = useMemo<RecordFrameState>(
-    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh, openDoor /* B-TH-262 */, ...(hasThread ? { openFiles, filesAsk, clearFiles, showThread } : {}) /* B-TH-264 follow-up, B-TH-268 */ }),
-    [mode, width, phone, choose, closeView, door, openDoor, hasThread, openFiles, filesAsk, clearFiles, showThread],
+    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh, openDoor /* B-TH-262 */, showThread /* B-TH-265 */, ...(hasThread ? { openFiles, filesAsk, clearFiles } : {}) /* B-TH-264 follow-up */ }),
+    [mode, width, phone, choose, closeView, door, openDoor, showThread, hasThread, openFiles, filesAsk, clearFiles],
   )
 
   const buttonWords = threadButtonWords(fresh) // B-TH-229

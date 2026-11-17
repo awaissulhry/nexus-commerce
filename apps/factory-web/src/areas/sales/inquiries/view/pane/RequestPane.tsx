@@ -309,7 +309,7 @@ function PaneHead({ model, view, nav, index, picture, onClose, rights, onErase, 
       </span>
       {nav && index >= 0 && nav.ids.length > 1 && (
         <span className="fw-rp-nav">
-          <Button size="sm" variant="quiet" aria-label={t('pane.prev')} aria-keyshortcuts="k" heldReason={index === 0 ? t('pane.first') : null} onClick={() => nav.ids[index - 1] && nav.onGo(nav.ids[index - 1]!)}>
+          <Button size="sm" variant="quiet" aria-label={t('pane.prev')} aria-keyshortcuts="k" heldReason={index === 0 ? t('pane.atFirst') : null} onClick={() => nav.ids[index - 1] && nav.onGo(nav.ids[index - 1]!)}>
             <ChevronLeft size={14} aria-hidden />
           </Button>
           <span className="fw-rp-of">{t('pane.of', { n: index + 1, total: nav.ids.length })}</span>
@@ -416,7 +416,7 @@ function Details({ model, view, companyName, onEdit }: { model: InquiryRecordMod
     ...(model.can.price ? [{ label: t('pane.facts.target'), value: target ? priceText(target, view.currency, INTL[locale]) : '—' }] : []),
     ...(view.party ? [{ label: t('pane.facts.contact'), value: view.contact ? (view.contact.email ? `${view.contact.name} · ${view.contact.email}` : view.contact.name) : '—' }] : []),
   ]
-  const draft = { request: view.request, wantedDate: view.wantedDate, targetPrice: '', currency: view.currency, note: view.note ?? '', contactId: view.contact?.id ?? null, matchPartyId: null, prospect: { name: '', company: '', email: '', phone: '' }, lines: [], techPackFileIds: [], techPackVersion: '' }
+  const draft = { request: view.request, wantedDate: view.wantedDate, targetPrice: '', currency: view.currency, note: view.note ?? '', contactId: view.contact?.id ?? null, prospect: { name: '', company: '', email: '', phone: '' }, lines: [], techPackFileIds: [], techPackVersion: '' }
   return (
     <div className="fw-rp-facts">
       <section className="fw-rp-sec">

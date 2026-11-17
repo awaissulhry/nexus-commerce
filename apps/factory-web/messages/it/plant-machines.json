@@ -12,8 +12,7 @@
   },
   "tab": {
     "docs": "Documenti e CE",
-    "status": "Stato e fermi",
-    "tag": "Targhetta"
+    "status": "Stato e fermi"
   },
   "tile": {
     "checks": "Verifiche scadute",

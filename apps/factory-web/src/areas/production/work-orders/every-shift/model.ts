@@ -51,6 +51,27 @@ export function refusedWords(refusal: NonNullable<ReleasePreviewRow['refusal']>)
 /** The new tab of one work order's traveller, or of several in one PDF. */
 export const travellersHref = (prefix: string, ids: readonly string[]): string => (ids.length === 1 ? `${prefix}/production/work-orders/${ids[0]}/traveller` : `${prefix}/production/work-orders/travellers?ids=${ids.join(',')}`)
 
+// ---- B-TH-265 (threads plan R-7, 08-tabs O-PRO-WO Documents): the Documents tab went; its doors are lines of the record band's ⋯ —
+// the traveller (a PDF with its QR, made on request and stored nowhere, so it can never move to the thread's Files view; a draft's says
+// its sizes are not frozen) and the style revision the work order is made to. The bundle tickets live on the Bundles tab.
+export interface DocumentDoor {
+  readonly id: 'traveller' | 'spec'
+  readonly href: string
+  /** Keys of `production-every-shift`. */
+  readonly label: Phrase
+  readonly description: Phrase
+}
+
+export function documentDoors(workOrder: Pick<WorkOrder, 'id' | 'status' | 'revision' | 'style' | 'spec'>, prefix: string): DocumentDoor[] {
+  return [
+    { id: 'traveller', href: travellersHref(prefix, [workOrder.id]), label: { key: 'docs.openTraveller' }, description: { key: workOrder.status === 'DRAFT' ? 'docs.travellerDraft' : 'docs.travellerHint' } },
+    ...(workOrder.revision
+      ? [{ id: 'spec' as const, href: `${prefix}/products/styles/${workOrder.style.id}`, label: { key: 'docs.spec', params: { revision: workOrder.revision.revision } }, description: { key: workOrder.spec.frozen ? 'docs.specFrozen' : 'docs.specDraft' } }]
+      : []),
+  ]
+}
+// ---- end B-TH-265
+
 /** Why "Print travellers" waits, or null. */
 export function travellersHeld(ids: readonly string[]): Phrase | null {
   if (ids.length === 0) return shift('travellers.none')

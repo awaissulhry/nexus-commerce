@@ -120,8 +120,20 @@ export interface JobsListActions {
 
 // ---- the record ---------------------------------------------------------------------------------------------------------------
 
-export const JOB_TABS = ['problem', 'photos', 'handback', 'activity'] as const
+// ---- B-TH-265 (threads plan, the rule of picture 38; 08-tabs O-PLT-JOB): tabs 4 → 2 — "Problem & photos" (the Problem body, then the
+// Photos body as they are: before / after is a category the thread's Files view does not show, and the requests' photos live on other
+// records) and Hand-back. Activity went: the job's thread is docked beside both tabs (notes only: a job has no party), its tools in the
+// thread's "⋯" (R-ACT).
+export const JOB_TABS = ['problem', 'handback'] as const
 export type JobTab = (typeof JOB_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Photos lands on Problem & photos, Activity too (the record frame opens the thread). */
+export const MERGED_JOB_TABS: Readonly<Record<string, JobTab>> = { photos: 'problem', activity: 'problem' }
+export function jobTabOf(value: string | null | undefined): JobTab {
+  const asked = value ?? ''
+  if ((JOB_TABS as readonly string[]).includes(asked)) return asked as JobTab
+  return Object.hasOwn(MERGED_JOB_TABS, asked) ? MERGED_JOB_TABS[asked]! : 'problem'
+}
+// ---- end B-TH-265
 
 export interface JobEditDraft {
   type: JobType
@@ -168,8 +180,8 @@ export interface JobRecordModel {
   lightbox: number | null
   capture: Capture | null
   stepUp: StepUpState
-  /** Design cases: the record panels' view (the live page mounts the real panels). */
-  dockOpen?: boolean
+  /** B-TH-265: the reader (the docked thread's width is remembered per person and record type). */
+  personId?: string | null
 }
 
 export interface JobRecordActions {

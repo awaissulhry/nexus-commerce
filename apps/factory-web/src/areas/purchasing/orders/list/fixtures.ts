@@ -9,6 +9,9 @@ import { chaseModel, CONFIRMED_LATE_ROWS, WORKLIST_ROWS } from '../depth/demo/fi
 import { lateRowId } from '../depth/view/ListDepth'
 import { depthCanOf } from '../depth/model'
 import { OrdersListView } from './view/OrdersListView'
+// B-TH-240: Supplier replies and the New messages column (made-up conversations).
+import type { WaitingReply } from '../api'
+import { repliesByOrder } from './supplier-replies'
 
 /** B-W2b-24: a made-up next purchase order number (the series' next, not reserved). */
 const NUMBER_PREVIEW = { companyId: '0190f0e2-6161-7000-8000-000000000001', kind: 'PURCHASE_ORDER' as const, date: '2026-10-31', code: 'MAIN', scopeKey: '2026', number: 'PO-2026-00018', fiscal: false, newPeriod: false, held: null }
@@ -68,6 +71,52 @@ const DEPTH_CASES = [
   { id: 'w2b-333-planner', label: 'Planner: What it blocks read only, no money, Chase and Duplicate absent', model: depthListCase('planner') },
   { id: 'w2b-333-offline', label: 'Offline: Chase held “Offline”', model: depthListCase('buyer', { live: 'offline', chase: chaseModel(CHASED) }) },
 ]
+
+// ---- B-TH-240: Supplier replies — the purchase orders whose supplier wrote last (made-up messages; the one waiting rule) ----------------
+const byNumber = (number: string) => ORDER_ROWS.find((row) => row.number === number)!
+function reply(number: string, over: { author?: string | null; excerpt: string; at: string; minutes: number; amber?: boolean; calendar?: boolean }): WaitingReply {
+  const order = byNumber(number)
+  return {
+    recordType: 'PurchaseOrder',
+    recordId: order.id,
+    label: order.number,
+    companyId: order.companyId,
+    party: { id: order.partyId, code: 'SUP', name: order.supplierName },
+    lastMessage: { id: `${order.id.slice(0, -4)}9${number.slice(-3)}`, at: over.at, channel: 'EMAIL', authorName: over.author === undefined ? 'Marta Demo' : over.author, excerpt: over.excerpt },
+    waiting: { since: over.at, workingMinutes: over.minutes, calendar: over.calendar ?? true, amber: over.amber ?? false, thresholdDays: 3 },
+  }
+}
+const REPLIES: WaitingReply[] = [
+  reply('PO-2026-0006', { excerpt: 'Possiamo consegnare il 10 dicembre invece del 3: va bene lo stesso?', at: at(24, 9, 15), minutes: 4 * 480 + 120, amber: true }),
+  reply('PO-2026-0005', { author: null, excerpt: 'In allegato la nuova proposta di quantità per la riga 20.', at: at(29, 10, 5), minutes: 55 }),
+  reply('PO-2026-0003', { author: 'Ufficio ordini', excerpt: 'Il secondo collo parte domani mattina.', at: at(28, 16, 40), minutes: 3 * 60 }),
+]
+const REPLY_ROWS = ORDER_ROWS.filter((row) => REPLIES.some((one) => one.recordId === row.id))
+const UNREAD = { [byNumber('PO-2026-0006').id]: { newCount: 2, lastAt: at(24, 9, 15) }, [byNumber('PO-2026-0005').id]: { newCount: 1, lastAt: at(29, 10, 5) }, [byNumber('PO-2026-0003').id]: { newCount: 120, lastAt: at(28, 16, 40) } }
+const repliesView = (over: Partial<OrdersListModel> = {}): Partial<OrdersListModel> => ({
+  view: 'supplierReplies',
+  rows: { items: REPLY_ROWS, more: false, problem: null },
+  summary: { ...ORDER_SUMMARY, supplierReplies: REPLIES.length },
+  replies: { status: 'ready', byOrder: repliesByOrder(REPLIES, REPLY_ROWS), complete: true },
+  unread: UNREAD,
+  ...over,
+})
+
+const TH3_240_CASES = [
+  { id: 'th3-240-replies', label: 'Supplier replies: the orders whose supplier wrote last — who, the first words, when, waiting on us (amber past 3 working days), New messages', model: listCase('buyer', repliesView()), note: 'Each excerpt opens the order’s conversation at that message; the New messages cell at the first new one. No customer or brand on a supplier row.' },
+  { id: 'th3-240-tile', label: 'The Supplier replies tile and the New messages column on every order', model: listCase('buyer', { summary: { ...ORDER_SUMMARY, supplierReplies: 3 }, unread: UNREAD }) },
+  { id: 'th3-240-reading', label: 'Supplier replies: the orders are read, the messages are being read', model: listCase('buyer', repliesView({ replies: { status: 'loading' } })) },
+  { id: 'th3-240-empty', label: 'Supplier replies: nothing waits on us (its own words, not an error)', model: listCase('buyer', repliesView({ rows: { items: [], more: false, problem: null }, summary: { ...ORDER_SUMMARY, supplierReplies: 0 }, replies: { status: 'ready', byOrder: {}, complete: true } })) },
+  { id: 'th3-240-filtered-empty', label: 'Supplier replies with a search that matches nothing: Clear filters', model: listCase('buyer', repliesView({ q: 'zzz', rows: { items: [], more: false, problem: null } })) },
+  { id: 'th3-240-messages-failed', label: 'Supplier replies: the orders are listed, the messages could not be read (“—”, never empty words)', model: listCase('buyer', repliesView({ replies: { status: 'error', problem: 'problem.offline' } })) },
+  { id: 'th3-240-partial', label: 'Supplier replies: more than 1000 conversations wait (the line says only the first are in words)', model: listCase('buyer', repliesView({ summary: { ...ORDER_SUMMARY, supplierReplies: 1240 }, replies: { status: 'ready', byOrder: repliesByOrder(REPLIES, REPLY_ROWS), complete: false } })) },
+  { id: 'th3-240-error', label: "Supplier replies: the list couldn't be read (Try again)", model: listCase('buyer', repliesView({ rows: { items: null, more: false, problem: 'problem.offline' }, summary: null, replies: { status: 'loading' }, asOf: null, live: 'offline' })) },
+  { id: 'th3-240-offline', label: 'Supplier replies offline: the last rows with As of', model: listCase('buyer', repliesView({ live: 'offline' })) },
+  { id: 'th3-240-loading', label: 'Supplier replies: loading', model: listCase('buyer', repliesView({ rows: { items: null, more: false, problem: null }, summary: null, replies: { status: 'loading' }, asOf: null, live: 'connecting' })) },
+  { id: 'th3-240-no-threads', label: 'A reader without conversations (no threads.read): no tile, no view, no New messages column — never “0”', model: listCase('buyer', { can: { ...canOf('buyer'), threads: false }, summary: { ...ORDER_SUMMARY, supplierReplies: 0 } }) },
+  { id: 'th3-240-planner', label: 'Planner (reads, no money): Supplier replies read only', model: listCase('planner', repliesView()) },
+]
+// ---- end B-TH-240
 
 export const designScreen = defineDesignScreen<OrdersCase>({
   screen: 'SCR-058',
@@ -131,5 +180,6 @@ export const designScreen = defineDesignScreen<OrdersCase>({
     { id: 'w2a-send-many-offline', label: 'Send n held: offline', model: listCase('buyer', { live: 'offline', sendMany: sendMany() }) },
     { id: 'w2a-send-many-no-right', label: 'Send n held: no purchasing.send (planner)', model: listCase('planner', { sendMany: sendMany() }) },
     ...DEPTH_CASES,
+    ...TH3_240_CASES, // B-TH-240
   ],
 })

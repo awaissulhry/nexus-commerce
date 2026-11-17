@@ -99,20 +99,12 @@
     "neverPerson": "Mai per persona: i minuti di un lavoratore stanno solo nella sua scheda."
   },
   "docs": {
-    "title": "Documenti",
-    "traveller": "Foglio di lavorazione {number}",
     "travellerHint": "PDF con codice QR, la carta che viaggia con il lavoro. Creato su richiesta, non conservato.",
     "travellerDraft": "PDF con codice QR. Finché è bozza dice che le taglie non sono congelate.",
-    "openTraveller": "PDF del foglio di lavorazione",
-    "tickets": "Cartellini dei fasci",
-    "ticketsNone": "Ancora nulla",
-    "ticketsCount_one": "{count} fascio attivo",
-    "ticketsCount_other": "{count} fasci attivi",
-    "openTickets": "Apri i fasci",
+    "openTraveller": "Stampa il foglio di lavorazione",
     "spec": "Revisione {revision} del modello",
     "specFrozen": "Congelata al rilascio",
     "specDraft": "Non ancora congelata",
-    "openSpec": "Apri il modello",
     "bundleFullPage": "Apri la pagina intera"
   },
   "traveller": {

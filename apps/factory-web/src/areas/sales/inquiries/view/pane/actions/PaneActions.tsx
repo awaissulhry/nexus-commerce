@@ -16,7 +16,8 @@ const KEY = { quote: 'q', askInfo: undefined, decline: 'd', order: undefined, st
  * the API allows now (each held with its reason: never hidden, never a dead button), ⋯ Assign / Take off, Match to a customer,
  * Mark lost; a closed request says what it became instead.
  */
-export function PaneActions({ model, view, actions, onEdit }: { model: InquiryRecordModel; view: InquiryView; actions?: InquiryRecordActions; onEdit?: () => void }) {
+// B-TH-234: Match to a customer opens the check (Make or match the customer), no longer the editor: `onEdit` stays for the callers.
+export function PaneActions({ model, view, actions }: { model: InquiryRecordModel; view: InquiryView; actions?: InquiryRecordActions; onEdit?: () => void }) {
   const { t, say } = useWords()
   const offline = model.live === 'offline'
   const row = paneActions(view, model.can, offline)
@@ -39,7 +40,10 @@ export function PaneActions({ model, view, actions, onEdit }: { model: InquiryRe
   }
   const items: MenuItemDef[] = row.menu.map(({ id, held }) => {
     const words = say(held) ?? undefined
-    if (id === 'match') return { id, label: t('pane.action.match'), disabled: !!held, description: words ?? t('pane.action.matchHint'), onSelect: () => onEdit?.() }
+    // B-TH-234: Make or match the customer (the check first), "Ask <customer> for…", Not an order.
+    if (id === 'match') return { id, label: t('pane.action.match'), disabled: !!held, description: words ?? t('pane.action.matchHint'), onSelect: () => actions?.onVerb?.('customer') }
+    if (id === 'task') return { id, label: t('pane.action.task', { customer: view.party?.name ?? view.fromWords }), disabled: !!held, description: words ?? t('pane.action.taskHint'), onSelect: () => actions?.onVerb?.('task') }
+    if (id === 'notAnOrder') return { id, label: t('pane.action.notAnOrder'), disabled: !!held, description: words ?? t('pane.action.notAnOrderHint'), onSelect: () => actions?.onVerb?.('notAnOrder') }
     const verb = id === 'lost' ? 'lost' : id
     return { id, label: t(id === 'assign' ? 'verb.assignKey' : id === 'unassign' ? 'verb.unassign' : 'verb.lost'), disabled: !!held, description: words, tone: id === 'lost' ? ('danger' as const) : undefined, onSelect: () => actions?.onVerb?.(verb) }
   })

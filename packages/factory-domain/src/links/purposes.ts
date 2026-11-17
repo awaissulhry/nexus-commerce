@@ -343,7 +343,8 @@ export const PURPOSE_RULES: Readonly<Record<LinkPurpose, PurposeRule>> = Object.
   RECORD_INVITE: rule({
     purpose: 'RECORD_INVITE',
     description: 'An invited partner joins one shared record: reads its shared fields and files, and posts or uploads when the share allows it.',
-    recordTypes: ['Style', 'Quote', 'SalesOrder', 'PurchaseOrder', 'SubcontractOrder', 'Shipment', 'Complaint', 'ReturnAuthorisation', 'SupplierClaim'],
+    // B-TH-069 (threads plan TH-5, PROJ-G09): a project too (its name, status and target date; ended when it closes).
+    recordTypes: ['Style', 'Quote', 'SalesOrder', 'PurchaseOrder', 'SubcontractOrder', 'Shipment', 'Complaint', 'ReturnAuthorisation', 'SupplierClaim', 'Project'],
     // Unlimited opens, posts and uploads until the share ends (links-depth.prisma RecordShare); each one is evidence.
     actions: { open: notCounted, post: notCounted, upload: notCounted },
     grains: [],

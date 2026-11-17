@@ -181,16 +181,16 @@ describe('B-TH-264 follow-up — a body part’s files open in the docked thread
 
   it('the frame offers the door only where the page has a thread; the docked thread reads it once and opens its viewer', () => {
     const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
-    expect(frame).toContain('...(hasThread ? { openFiles, filesAsk, clearFiles, showThread } : {})')
+    expect(frame).toContain('...(hasThread ? { openFiles, filesAsk, clearFiles } : {})')
     const docked = readFileSync(new URL('../record-thread/DockedOfficeThread.tsx', import.meta.url), 'utf8')
     expect(docked).toMatch(/const \{ files, index \} = askedFiles\(filesAsk, threadFiles, key\)\s*clearFilesAsk\?\.\(\)/)
     expect(docked).toContain('setViewer({ files, index, returnTo:')
   })
 
-  it('B-TH-268: showThread — a body part shows the thread (docked: un-hides it; narrower: the full-width view), only with a thread', () => {
+  it('showThread (B-TH-265, used by B-TH-268’s Send copy) — a body part shows the thread: docked un-hides it, narrower the full-width view', () => {
     const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
     expect(frame).toMatch(/const showThread = useCallback\(\(\) => \{\s*if \(mode === 'docked'\) sizes\.show\(\)\s*else if \(!viewOpen\) openView\(\)/)
-    expect(frame).toContain('...(hasThread ? { openFiles, filesAsk, clearFiles, showThread } : {})')
+    expect(frame.match(/readonly showThread\?: \(\) => void/g)?.length).toBe(1)
   })
 })
 

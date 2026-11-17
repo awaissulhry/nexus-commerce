@@ -377,10 +377,8 @@
     "CLOSED_THIS_WEEK": "Closed since Monday."
   },
   "jobTab": {
-    "problem": "Problem",
-    "handback": "Hand-back",
-    "activity": "Activity",
-    "photos": "Photos"
+    "problem": "Problem & photos",
+    "handback": "Hand-back"
   },
   "move": {
     "plan": "Plan",
@@ -497,7 +495,10 @@
     "notStarted": "Not yet",
     "closed": "Closed",
     "cancelled": "Cancelled",
-    "activityLater": "The activity opens with the record."
+    "dockLabelJob": "The job's thread",
+    "dockLabelMachine": "The machine's thread",
+    "copyNumber": "Copy the number",
+    "offline": "Live updates paused: what you see was read at {time}"
   },
   "handBack": {
     "title": "Hand back",
@@ -540,7 +541,7 @@
     "LOCKED_other": "{count} locked as unsafe, waiting for a sign-safe."
   },
   "machineTab": {
-    "overview": "Overview",
+    "overview": "Overview & tag",
     "history": "Maintenance history"
   },
   "machines": {

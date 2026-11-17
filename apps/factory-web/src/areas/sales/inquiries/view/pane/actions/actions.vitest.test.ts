@@ -138,3 +138,59 @@ describe('B-TH-228 — Make order and Make style draft from a request', () => {
     expect(JSON.stringify(body)).not.toMatch(/brand|party|company/i)
   })
 })
+
+// ---- B-TH-234 (threads plan TH-3; pane-actions-F06/F08/F11, on B-TH-043, B-TH-042, B-TH-051; wall W20, W23, W37) ------------------
+import { declineBodyOf, declineHeld, emptyDecline, messageReach, taskHeld, taskRefusal } from '../../../model'
+
+describe('B-TH-234 — decline in words, Not an order, Ask the customer for…', () => {
+  const portal = { ...VIEW, messageTo: { via: 'PORTAL' as const, to: [], language: 'en', refusal: null } }
+  const mail = { ...VIEW, messageTo: { via: 'MAIL' as const, to: ['buyer@brand-demo.example.com'], language: 'it', refusal: null } }
+
+  it('the decline\'s message goes only to the request\'s own customer, as the request says (portal or its contact), and only when ticked', () => {
+    expect(messageReach(portal, owner)).toEqual({ to: null, via: 'PORTAL', language: 'en', held: null })
+    expect(messageReach(mail, owner)).toEqual({ to: 'buyer@brand-demo.example.com', via: 'MAIL', language: 'it', held: null })
+    // A prospect has no customer to write to: the request's own refusal, in words (W20).
+    const prospect = { ...PROSPECT_VIEW, messageTo: { via: null, to: [], language: null, refusal: { code: 'NEEDS_CUSTOMER' as const, message: 'x' } } }
+    expect(messageReach(prospect, owner).held?.key).toBe('refusal.NEEDS_CUSTOMER')
+    // Not ticked: nothing goes, whatever is typed.
+    const typed = { ...emptyDecline, reason: 'CAPACITY' as const, message: 'We cannot make it in time.' }
+    expect(declineBodyOf(mail, typed, owner)).toEqual({ version: VIEW.version, reason: 'CAPACITY' })
+    expect(declineBodyOf(mail, { ...typed, send: true }, owner)).toEqual({ version: VIEW.version, reason: 'CAPACITY', message: { body: 'We cannot make it in time.' } })
+    // A mail needs email.send; the portal reply does not.
+    expect(messageReach(mail, { email: false, thread: true }).held).toEqual({ key: 'held.right', params: { right: 'right.email.send' } })
+    expect(messageReach(portal, { email: false, thread: true }).held).toBeNull()
+  })
+
+  it('"Not an order" sends nothing (held if ticked; the body never carries a message); a ticked message needs words', () => {
+    const notAnOrder = { ...emptyDecline, reason: 'NOT_AN_ORDER' as const, message: 'x', send: true }
+    expect(declineHeld(notAnOrder, false)).toEqual({ key: 'refusal.SENDS_NOTHING' })
+    expect(declineBodyOf(portal, notAnOrder, owner)).toEqual({ version: VIEW.version, reason: 'NOT_AN_ORDER' })
+    expect(declineHeld({ ...emptyDecline, reason: 'PRICE', send: true, message: '  ' }, false)).toEqual({ key: 'decline.held.message' })
+    expect(words['decline.message.notAnOrder']).toBeTruthy()
+  })
+
+  it('a selection never sends: Decline N says so (one customer at a time)', () => {
+    expect(messageReach(null, owner)).toEqual({ to: null, via: null, language: null, held: { key: 'decline.message.many' } })
+    expect(words['decline.message.many']).toContain('sends nothing')
+  })
+
+  it('⋯ holds Make or match the customer for a prospect, Ask <customer> for…, Not an order — each held with its reason', () => {
+    const menu = paneActions(PROSPECT_VIEW, owner, false).menu.map((item) => item.id)
+    expect(menu).toEqual(expect.arrayContaining(['match', 'task', 'notAnOrder', 'lost']))
+    expect(paneActions(VIEW, owner, false).menu.map((item) => item.id)).not.toContain('match')
+    const withTasks = { ...owner, tasks: true }
+    expect(taskHeld(PROSPECT_VIEW, null, withTasks, false, '2026-11-12')).toEqual({ key: 'task.held.prospect' })
+    expect(taskHeld(QUOTED_VIEW, null, withTasks, false, '2026-11-12')).toEqual({ key: 'task.held.closed' })
+    expect(taskHeld(VIEW, null, { ...owner, tasks: false }, false, '2026-11-12')).toEqual({ key: 'held.needs', params: { right: 'right.partners.tasks.manage' } })
+    expect(taskHeld(VIEW, { kind: null, due: null }, withTasks, false, '2026-11-12')).toEqual({ key: 'task.held.kind' })
+    expect(taskHeld(VIEW, { kind: 'UPLOAD_DOCUMENT', due: '2026-11-12' }, withTasks, false, '2026-11-12')).toEqual({ key: 'task.held.due' })
+    expect(taskHeld(VIEW, { kind: 'UPLOAD_DOCUMENT', due: '2026-11-20' }, withTasks, false, '2026-11-12')).toBeNull()
+    // The API's refusals in the page's words; anything else stays the general refusal (another customer's request names nobody).
+    expect(taskRefusal('REQUEST_CLOSED')).toEqual({ key: 'task.refusal.REQUEST_CLOSED' })
+    expect(taskRefusal('SOMETHING')).toBeNull()
+    for (const key of ['task.refusal.REQUEST_PROSPECT', 'task.refusal.REQUEST_CLOSED', 'pane.action.task', 'pane.action.notAnOrder', 'task.kind.SEND_MEASUREMENTS']) expect(words[key], key).toBeTruthy()
+    // A request its customer withdrew says so (never "lost" by us).
+    expect(paneActions({ ...VIEW, status: 'WITHDRAWN' }, owner, false).outcome).toEqual({ key: 'pane.outcome.withdrawn' })
+  })
+})
+// ---- end B-TH-234

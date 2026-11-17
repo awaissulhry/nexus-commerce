@@ -6,17 +6,21 @@ import { STEP_UP_CLOSED } from '../../_shared/parts'
 import { DOCUMENTS, FACTS, HISTORY, recordDepth, tagJob, tagsState } from '../depth/fixtures'
 import type { MachineRecordModel, MachineTab, RecordDepth } from '../view-model'
 import { MachineRecordView } from './view/MachineRecordView'
+// ---- B-TH-265: the machine's docked thread in the design cases (notes only: a machine has no party) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-150-record — a machine (Plant › Machines & tools › a machine) with made-up data only: Overview (the facts, the Now
  * panel with its open job and requests; the explicit edit; the cost only with the cost grain), a machine locked as unsafe,
- * a stopped machine with the third-failure hint, a retired one, Maintenance history, Retire with its reason, and the
- * page's states.
+ * a stopped machine with the third-failure hint, a retired one, Maintenance history, Retire with its reason, the docked thread
+ * beside every tab (B-TH-265: new — notes only; Overview and Tag are one tab, Documents & CE kept), and the page's states.
  */
 
 interface MachineCase {
   role: PlantRole
   record: MachineRecordModel
+  /** B-TH-265: no thread here (without threads.read): no dock, no Thread button. */
+  noThread?: boolean
 }
 
 const SEW2: MachineRecord = { card: CARDS.sew2, openRequests: [], history: [JOBS.safety, JOBS.closed], canManage: true, canReport: true }
@@ -55,15 +59,18 @@ const deep = (role: PlantRole, tab: MachineTab, value: MachineRecord | null, dep
 const docs = (over: Partial<RecordDepth['documents']>): RecordDepth['documents'] => ({ ...recordDepth().documents, ...over })
 
 function MachineDesign({ model }: { model: MachineCase }) {
-  const id = model.record.loaded.status === 'ready' ? model.record.loaded.value.card.machine.id : 'x'
-  return inShell(`/plant/machines/${id}`, createElement(MachineRecordView, { model: model.record }), model.role)
+  const loaded = model.record.loaded
+  const id = loaded.status === 'ready' ? loaded.value.card.machine.id : 'x'
+  // B-TH-265: the machine's thread (notes only) beside every tab; none without threads.read.
+  const thread = loaded.status === 'ready' && !model.noThread ? designDockedThread({ recordType: 'Machine', record: loaded.value.card.machine.assetNumber, party: null }) : null
+  return inShell(`/plant/machines/${id}`, createElement(MachineRecordView, { model: model.record, thread }), model.role)
 }
 
 const edit = { siteId: MACHINES.sew1.siteId, assetNumber: MACHINES.sew1.assetNumber, classId: MACHINES.sew1.class.id, make: 'Cuciture Demo', modelName: 'CD-8700', serialNumber: 'SN-D-1001', year: '2019', stationId: SITES[0]!.stations[0]!.id, workCentreId: SITES[0]!.workCentres[0]!.id, supplier: null, cost: '1850,00', note: '' }
 
 export const designScreen = defineDesignScreen<MachineCase>({
   screen: 'SCR-150-record',
-  title: 'Machine (Overview, Documents & CE, Maintenance history, Status & downtime, Tag)',
+  title: 'Machine (Overview & tag, Documents & CE, Maintenance history, Status & downtime, the docked thread)',
   view: MachineDesign,
   cases: [
     { id: 'overview', label: 'Overview: a running machine (maintenance lead, no money)', model: record('maintenance', 'overview', SEW1) },
@@ -81,6 +88,15 @@ export const designScreen = defineDesignScreen<MachineCase>({
     { id: 'not-found', label: 'Not found', model: record('maintenance', 'overview', null, { loaded: { status: 'notFound' } }) },
     { id: 'error', label: "Couldn't be read", model: record('maintenance', 'overview', null, { loaded: { status: 'error', problem: 'problem.unavailable' } }) },
     { id: 'sales', label: 'Sales: no plant.view', model: record('sales', 'overview', null, { loaded: { status: 'forbidden' } }) },
+    // ---- B-TH-265: the docked thread (the rule of picture 38) ----
+    {
+      id: 'thread-docked',
+      label: 'B-TH-265 · The machine’s thread docked beside Overview & tag (40 %, notes only)',
+      model: record('maintenance', 'overview', SEW3),
+      note: 'New: the API had this thread, the page showed none. The band sits in the shell’s band row with ONE live status pill; the thread is docked, sticky, ⌘J hides it. A machine has no party: Office notes only, no “Reply to”. Its “⋯” holds the record tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me). An old ?tab=tag opens Overview & tag.',
+    },
+    { id: 'thread-docs', label: 'B-TH-265 · The thread beside Documents & CE (kept as its own tab)', model: record('maintenance', 'docs', SEW1) },
+    { id: 'thread-no-right', label: 'B-TH-265 · Without threads.read: no thread beside the tabs (no Thread button)', model: { ...record('supervisor', 'overview', { ...SEW1, canManage: false }), noThread: true } },
     // B-W2b-136: Documents & CE, Status & downtime, Tag, Change status.
     { id: 'w2a-only', label: 'The W2a record without the depth (as before B-W2b-136)', model: record('maintenance', 'overview', SEW1, { depth: undefined }) },
     { id: 'now-check', label: 'Now panel: the next statutory check overdue, CE on file', model: record('maintenance', 'overview', { ...SEW1, card: card(MACHINES.press) }) },
@@ -118,11 +134,11 @@ export const designScreen = defineDesignScreen<MachineCase>({
       model: deep('maintenance', 'overview', { ...SEW1, card: card({ ...MACHINES.sew1, status: 'DO_NOT_USE', statusReason: 'Protezione incrinata' }) }, { status: { draft: { to: 'RUNNING', reason: 'Ricambio montato' }, busy: true, problem: null }, stepUp: { ...STEP_UP_CLOSED, open: true, sentence: 'stepUp.release' } }),
     },
     { id: 'change-refused', label: 'Change status refused: locked as unsafe (in words)', model: deep('maintenance', 'overview', SEW2, { status: { draft: { to: 'UNDER_MAINTENANCE', reason: 'Prova' }, busy: false, problem: { key: 'depth:refusal.LOCKED_UNSAFE' } } }) },
-    { id: 'tag', label: 'Tag: the tag to scale with its QR, printed on a day', model: record('maintenance', 'tag', SEW1) },
-    { id: 'tag-failed', label: 'Tag: the last print failed (Retry)', model: deep('maintenance', 'tag', SEW1, { tagJob: { status: 'ready', value: tagJob(MACHINES.sew1.id, 'FAILED') } }) },
-    { id: 'tag-never', label: 'Tag: never sent to a label printer', model: deep('maintenance', 'tag', SEW1, { tagJob: { status: 'ready', value: null } }) },
-    { id: 'tag-print', label: 'Tag: Print QR tags for this machine', model: deep('maintenance', 'tag', SEW1, { tags: tagsState({ machines: [tagsState().machines[0]!] }) }) },
-    { id: 'tag-retired', label: 'Tag of a retired machine: nothing to print', model: deep('maintenance', 'tag', RETIRED, { tagJob: { status: 'ready', value: null } }) },
-    { id: 'tag-no-right', label: 'Tag: print held without print.labels (production manager)', model: deep('production', 'tag', SEW1, { canPrint: false }) },
+    { id: 'tag', label: 'Overview & tag: the tag to scale with its QR under the facts, printed on a day', model: record('maintenance', 'overview', SEW1) },
+    { id: 'tag-failed', label: 'Tag: the last print failed (Retry)', model: deep('maintenance', 'overview', SEW1, { tagJob: { status: 'ready', value: tagJob(MACHINES.sew1.id, 'FAILED') } }) },
+    { id: 'tag-never', label: 'Tag: never sent to a label printer', model: deep('maintenance', 'overview', SEW1, { tagJob: { status: 'ready', value: null } }) },
+    { id: 'tag-print', label: 'Tag: Print QR tags for this machine', model: deep('maintenance', 'overview', SEW1, { tags: tagsState({ machines: [tagsState().machines[0]!] }) }) },
+    { id: 'tag-retired', label: 'Tag of a retired machine: nothing to print', model: deep('maintenance', 'overview', RETIRED, { tagJob: { status: 'ready', value: null } }) },
+    { id: 'tag-no-right', label: 'Tag: print held without print.labels (production manager)', model: deep('production', 'overview', SEW1, { canPrint: false }) },
   ],
 })

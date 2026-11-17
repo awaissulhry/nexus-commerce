@@ -50,6 +50,14 @@ import { inquiryCustomers, inquiryCustomersContract } from './customers'
 // B-TH-042: answer a new customer.
 import { customerCheckContract, makeCustomerContract } from './contract'
 import { customerCheck, makeCustomer } from './make-customer'
+// ---- B-TH-094: production's answer on a request.
+import { productionAnswerContract, productionSuggestionContract } from './contract'
+import { productionSuggestion, setProductionAnswer } from './production-answer'
+// ---- end B-TH-094
+// ---- B-TH-071: Start a project from a request.
+import { startProjectContract } from './contract'
+import { startProjectFromRequest } from './project'
+// ---- end B-TH-071
 
 /**
  * Inquiries and requests for quotation (B-W2b-295): ./inquiries.ts (the list, the record, new, change, assign, ask for more
@@ -86,4 +94,11 @@ export default defineRoutes('sales.inquiries', manifest, async (app) => {
   // B-TH-042
   app.get('/sales/inquiries/:inquiryId/customer', { schema: customerCheckContract }, async (request) => customerCheck(request, request.params.inquiryId))
   app.post('/sales/inquiries/:inquiryId/customer', { schema: makeCustomerContract }, async (request) => makeCustomer(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
+  // ---- B-TH-094
+  app.put('/sales/inquiries/:inquiryId/production-answer', { schema: productionAnswerContract }, async (request) => setProductionAnswer(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
+  app.get('/sales/inquiries/:inquiryId/production-answer/suggestion', { schema: productionSuggestionContract }, async (request) => productionSuggestion(request, request.params.inquiryId, request.query))
+  // ---- end B-TH-094
+  // ---- B-TH-071
+  app.post('/sales/inquiries/:inquiryId/project', { schema: startProjectContract }, async (request, reply) => reply.code(201).send(await startProjectFromRequest(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request))))
+  // ---- end B-TH-071
 })

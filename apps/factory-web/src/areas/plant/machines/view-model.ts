@@ -121,8 +121,21 @@ export interface MachinesListActions {
 // ---- the record -------------------------------------------------------------------------------------------------------------
 
 /** B-W2b-136 adds Documents & CE, Status & downtime and Tag (design order; Spare parts is Later). */
-export const MACHINE_TABS = ['overview', 'docs', 'history', 'status', 'tag'] as const
+// ---- B-TH-265 (threads plan, the rule of picture 38; 08-tabs O-PLT-MAC): tabs 5 → 4 — "Overview & tag" (the Overview body, then the
+// Tag body as they are: the band already prints its tag), Documents & CE KEPT (its own API: groups, on the tablets, CE on file, remove
+// with a reason — D.Lgs. 81/2008 art. 71 — none of which the thread's Files view has), Maintenance history, Status & downtime. The
+// machine's thread (the API had it, the page showed none) is docked beside every tab: notes only (a machine's supplier is no party of
+// its maintenance), its tools in the thread's "⋯" (R-ACT).
+export const MACHINE_TABS = ['overview', 'docs', 'history', 'status'] as const
 export type MachineTab = (typeof MACHINE_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Tag lands on Overview & tag; Activity (never a tab here) on Overview with the thread open. */
+export const MERGED_MACHINE_TABS: Readonly<Record<string, MachineTab>> = { tag: 'overview', activity: 'overview' }
+export function machineTabOf(value: string | null | undefined): MachineTab {
+  const asked = value ?? ''
+  if ((MACHINE_TABS as readonly string[]).includes(asked)) return asked as MachineTab
+  return Object.hasOwn(MERGED_MACHINE_TABS, asked) ? MERGED_MACHINE_TABS[asked]! : 'overview'
+}
+// ---- end B-TH-265
 
 export interface MachineRecordModel {
   prefix: string
@@ -144,6 +157,8 @@ export interface MachineRecordModel {
   notice: Notice | null
   /** B-W2b-136: machines in depth (absent: the W2a record alone). */
   depth?: RecordDepth
+  /** B-TH-265: the reader (the docked thread's width is remembered per person and record type). */
+  personId?: string | null
 }
 
 /** B-W2b-136 on a machine's record. */

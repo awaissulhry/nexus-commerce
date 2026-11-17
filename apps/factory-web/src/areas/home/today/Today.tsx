@@ -67,6 +67,10 @@ import { TodayView, type DialogRequest } from './view/TodayView'
 // B-W2b-388: reminders that came back (Done, Put off) and Coming up's "Remind me the day before".
 import { putOffReminderById, reminderDoneById, setReminder } from '../../../shell/panels/remind-me/api'
 import { dayBeforeAt } from '../../../shell/panels/remind-me/model'
+// B-TH-239: Incoming's counts on Today (one read with Sales › Incoming's tiles).
+import { useLiveBus } from '../../../shell/live/use-live'
+import { fetchIncomingCounts } from './incoming/api'
+import { incomingLinesOf, incomingWants, mayReadIncoming, type IncomingToday } from './incoming/model'
 
 interface QueueState {
   readonly answer: TodayAnswer
@@ -119,6 +123,9 @@ export function Today() {
   const numbersReadAt = useRef(0)
   const [comingEvents, setComingEvents] = useState<readonly string[]>([])
   const [alertRecords, setAlertRecords] = useState<Readonly<Record<string, Loaded<string>>>>({})
+  // B-TH-239: Incoming's counts — only for a reader of requests once Incoming is built (else no section).
+  const readsIncoming = allowed && mayReadIncoming(permissions, OFFICE_PAGES)
+  const [incoming, setIncoming] = useState<Loaded<IncomingToday>>({ status: 'loading' })
   const layoutRef = useRef(layout)
   layoutRef.current = layout
 
@@ -292,6 +299,31 @@ export function Today() {
   useEffect(() => {
     if (allowed) void loadPanels()
   }, [allowed, loadPanels])
+
+  // ---- B-TH-239: Incoming's counts (GET /sales/incoming, the New tile, one row): read on open, after a request, catalogue order or
+  // change request changed (one read for a burst), and after a break in the live channel. A failed read says so; never a "0".
+  const loadIncoming = useCallback(async () => {
+    try {
+      const answer = await fetchIncomingCounts(api)
+      setIncoming({ status: 'ready', data: { lines: incomingLinesOf(answer, prefix), asOf: new Date().toISOString() } })
+    } catch (error) {
+      setIncoming((current) => (current.status === 'ready' ? current : { status: 'error', problem: readProblem(error) }))
+    }
+  }, [api, prefix])
+  useEffect(() => {
+    if (readsIncoming) void loadIncoming()
+  }, [readsIncoming, loadIncoming])
+  const incomingTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const incomingAgain = useCallback(() => {
+    if (incomingTimer.current) clearTimeout(incomingTimer.current)
+    incomingTimer.current = setTimeout(() => {
+      incomingTimer.current = null
+      void loadIncoming()
+    }, 500)
+  }, [loadIncoming])
+  useEffect(() => () => (incomingTimer.current ? clearTimeout(incomingTimer.current) : undefined), [])
+  useLiveBus({ onChange: (change) => incomingWants(change.type) && incomingAgain(), onReconnect: incomingAgain }, readsIncoming)
+  // ---- end B-TH-239
 
   const loadLayout = useCallback(async () => {
     try {
@@ -478,6 +510,7 @@ export function Today() {
     tileSet: W2A_TILES,
     comingUp: coming,
     numbers: { ...numbers, prefix },
+    incoming: readsIncoming ? incoming : null, // B-TH-239
     alertRecords,
     now,
     live,
@@ -596,6 +629,11 @@ export function Today() {
           }
         },
         onRetryNumbers: () => void loadNumbers(),
+        // B-TH-239
+        onRetryIncoming: () => {
+          setIncoming({ status: 'loading' })
+          void loadIncoming()
+        },
         onRetryComing: () => {
           setComing({ status: 'loading' })
           void loadComing()
