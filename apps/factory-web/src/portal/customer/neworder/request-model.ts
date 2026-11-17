@@ -109,6 +109,7 @@ export function receiptOf(answer: SendAnswer, draft: ComposeDraft, choices: read
     shipTo,
     at: at(view.receivedAt),
     requestHref: requestHref(prefix, view.id),
+    mailed: answer.receipt.mailed ?? null, // th-backend-g step 2: no fake "sent"
   }
 }
 

@@ -1,6 +1,7 @@
 import { reachOf, type Reach } from '../../kit/bulk-model'
 import type { CompanyChoice, ListNotice, ListRead } from '../doc-templates/model'
-import type { TemplateLanguage } from '../doc-templates/api'
+// th-backend-g step 3 (B-TH-098's web half): a row per event and message language (it, en, de, fr, es).
+import { isDraftedLanguage, type MessageLanguage } from '@nexus/factory-domain/templates/message-languages'
 import type { EmailTemplate, EmailTemplatesAnswer, MailEvent, MailEventsAnswer, MailSlot } from './api'
 
 /**
@@ -14,7 +15,7 @@ export interface MailRow {
   /** `service.status_changed:it`. */
   id: string
   event: MailEvent
-  language: TemplateLanguage
+  language: MessageLanguage
   slot: MailSlot
   companyActive: EmailTemplate | null
   companyDraft: EmailTemplate | null
@@ -22,7 +23,15 @@ export interface MailRow {
   allDraft: EmailTemplate | null
   /** The subject the mail goes out with now (the version in use, else the code's words). */
   subject: string | null
+  /**
+   * th-backend-g step 3: the mail goes with the code's German, French or Spanish words — Claude's draft — and nobody has read that
+   * language once yet ("Draft — to be read once"): until then a mail Nexus sends by itself goes in English.
+   */
+  unread: boolean
 }
+
+/** th-backend-g step 3: a drafted language nobody read yet (the events answer's `review`; absent: read, as an answer of before). */
+export const languageUnread = (language: string, review: MailEventsAnswer['review']): boolean => isDraftedLanguage(language) && review !== undefined && review[language].readBy === null
 
 export type MailBulk = 'publish' | 'retire' | 'delete'
 
@@ -48,9 +57,12 @@ export function mailRowsOf(answer: { list: EmailTemplatesAnswer; events: MailEve
   return answer.list.slots.map((slot) => {
     const companyActive = pick(slot.company.active)
     const allActive = pick(slot.all.active)
-    const code = answer.events.events.find((event) => event.event === slot.event)?.words[slot.language] ?? null
+    const event = answer.events.events.find((one) => one.event === slot.event)
+    // th-backend-g step 3: German, French and Spanish read the code's drafts.
+    const code = (isDraftedLanguage(slot.language) ? event?.drafts?.[slot.language] : event?.words[slot.language]) ?? null
     const subject = slot.inUse === 'COMPANY' ? (companyActive?.subject ?? null) : slot.inUse === 'ALL' ? (allActive?.subject ?? null) : (code?.subject ?? null)
-    return { id: mailRowId(slot.event, slot.language), event: slot.event, language: slot.language, slot, companyActive, companyDraft: pick(slot.company.draft), allActive, allDraft: pick(slot.all.draft), subject }
+    const unread = slot.inUse === 'CODE' && languageUnread(slot.language, answer.events.review)
+    return { id: mailRowId(slot.event, slot.language), event: slot.event, language: slot.language, slot, companyActive, companyDraft: pick(slot.company.draft), allActive, allDraft: pick(slot.all.draft), subject, unread }
   })
 }
 

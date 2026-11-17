@@ -50,7 +50,8 @@
   "switch": {
     "mentions": "Le menzioni restano nelle note d'ufficio: tolte da questo messaggio: {names}.",
     "amount": "Un importo resta nelle note d'ufficio: tolto da questo messaggio.",
-    "correction": "Una correzione segue la strada del suo messaggio: ora è un messaggio nuovo, non una correzione."
+    "correction": "Una correzione segue la strada del suo messaggio: ora è un messaggio nuovo, non una correzione.",
+    "numbers": "Il cliente legge i suoi numeri, mai quelli dell’ufficio: cambiati in questo messaggio: {numbers}."
   },
   "floor": {
     "label": "Per il reparto",

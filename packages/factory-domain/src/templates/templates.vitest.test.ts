@@ -13,6 +13,10 @@ import { cleanDocumentWords, DOCUMENT_PLACEHOLDERS, DOCUMENT_TEMPLATE_KINDS, doc
 import { recipientLanguageOf } from './language'
 import { companyValues, emailTemplateProblems, fillMail, MAIL_EVENT_DEFINITIONS, MAIL_EVENTS } from './mail'
 import { TEMPLATES_ADDS, TEMPLATES_PERMISSIONS } from './permissions'
+// th-backend-g: the numbers a customer reads, a template's words as a mail, the record a notice names.
+import { NUMBER_PLACEHOLDERS, numberFor, REPLY_AUDIENCES } from './replies'
+import { composeWordsMail, wordsHtml } from './compose'
+import { yoursOf } from '../portal/notifications/messages'
 import { fillPlaceholders, missingValues, placeholderProblems, placeholdersIn, placeholderSyntaxOk } from './placeholders'
 import { databaseTemplateRefusal } from './refusals'
 import { replyPlaceholdersOf, replyProblems } from './replies'
@@ -243,3 +247,32 @@ describe('the catalogues', () => {
     expect(databaseTemplateRefusal('23514', 'fields: something else')).toBeNull()
   })
 })
+
+// ---- th-backend-g (threads plan §0.5; B-TH-279 "the new mail templates are read") ----------------------------------------------
+describe('th-backend-g: the record numbers a customer reads, a template’s words as a mail, the record a notice names', () => {
+  it('step 1: a number placeholder is the office’s series in office text, the customer’s own in text to a customer', () => {
+    const pair = { office: 'INQ-2026-0042', customer: '#7' }
+    expect(numberFor('OFFICE', pair)).toBe('INQ-2026-0042')
+    expect(numberFor('CUSTOMER', pair)).toBe('#7')
+    expect(numberFor('CUSTOMER', { office: 'SO-2026-0101', customer: null })).toBeNull()
+    expect(REPLY_AUDIENCES).toEqual(['CUSTOMER', 'OFFICE'])
+    // Only customer records carry a customer number: a supplier's order and a service case keep theirs.
+    expect(Object.keys(NUMBER_PLACEHOLDERS).sort()).toEqual(['Inquiry', 'Quote', 'SalesOrder', 'Shipment'])
+  })
+
+  it('step 2: a template’s filled words become a mail — the subject on one line, paragraphs, every character escaped, the sender’s end', () => {
+    const mail = composeWordsMail({ subject: 'We received\nyour request 7', body: 'Dear Ann <b>,\nthank you.\n\n\n{{x}} & more' }, { text: ['', 'Footer'], html: '<p>Footer</p>' })
+    expect(mail.subject).toBe('We received your request 7')
+    expect(mail.text).toBe('Dear Ann <b>,\nthank you.\n\n\n{{x}} & more\n\nFooter')
+    expect(mail.html).toBe('<p>Dear Ann &lt;b&gt;,<br>thank you.</p><p>{{x}} &amp; more</p><p>Footer</p>')
+    expect(wordsHtml('')).toBe('')
+    expect(composeWordsMail({ subject: 'x'.repeat(300), body: 'b' }, { text: [], html: '' }).subject).toHaveLength(200)
+  })
+
+  it('step 2: a notice names the customer’s own record in the reader’s language, else the record’s label', () => {
+    expect(yoursOf({ messageKey: 'portal.message.posted', recordLabel: '#12', params: { yourKind: 'ORDER', yourSeq: 12 } }, 'en')).toEqual({ yours: 'your order 12', Yours: 'Your order 12' })
+    expect(yoursOf({ messageKey: 'portal.message.posted', recordLabel: '#12', params: { yourKind: 'ORDER', yourSeq: 12 } }, 'it')).toEqual({ yours: 'il vostro ordine 12', Yours: 'Il vostro ordine 12' })
+    expect(yoursOf({ messageKey: 'portal.message.posted', recordLabel: 'PO-2026-0007', params: {} }, 'en')).toEqual({ yours: 'PO-2026-0007', Yours: 'PO-2026-0007' })
+  })
+})
+// ---- end th-backend-g

@@ -3,10 +3,14 @@ import { FACTORY_PERMISSIONS } from '../auth/permissions/catalogue'
 import { PARTNER_ROLE_TEMPLATES, templateOf } from '../auth/roles/templates'
 import { EVENT_CATALOGUE } from '../events/catalogue'
 import { linkPermissions } from '../links/purposes'
-import { APPROVAL_KINDS, APPROVAL_RECORD_TYPES, KIND_RULES, kindsFor } from './kinds'
+import { APPROVAL_KINDS, APPROVAL_RECORD_TYPES, COUNTER_OFFER_RECORD, KIND_RULES, kindsFor, REPROMISE_RECORD, SAMPLE_ROUND_RECORD, SAMPLE_SWATCH_RECORD, type ApprovalKind } from './kinds'
 import { APPROVAL_MAIL_TEMPLATES, officeApprovalsMail, receiptMail, requestMail } from './mail'
 import { PARTNERS_APPROVALS_PERMISSIONS, PORTAL_APPROVALS_PERMISSIONS } from './permissions'
 import { answerHeld, answerProblems, approvalMailKey, askProblems, asksForDecision, decidedWords, dueAtFor, expiryDue, markupDraftProblems, readApprovalMailKey, withdrawProblem } from './rules'
+// B-PR-24
+import { grantProblem, OVERRIDE_TASK_KIND, overridePlan, REVERSE_EFFECTS, reverseVerdict, type ReverseFacts } from '../production-brand/override'
+import { APPROVAL_TASK_KINDS } from '../approvals/rules'
+import { decidedForPartyWords, decideForPartyProblems, mayDecideForParty, mayReverse, OVERRIDE_LIMITS, OWN_WORD_KINDS, reversedWords, reverseProblems } from './rules'
 
 const NOW = new Date('2026-11-07T09:00:00.000Z')
 const DAY = 86_400_000
@@ -15,16 +19,17 @@ const IDS = { tenant: '00000000-0000-4000-8000-000000000001', user: '00000000-00
 
 describe('approval requests to partners (B-W2b-184)', () => {
   it('ask each kind on its own records, with a revised order\'s grain and task, and approve-with-changes only where the kind allows', () => {
-    expect(APPROVAL_KINDS).toHaveLength(8)
+    // B-PR-24: + FABRIC, TRIM, REPROMISE, COUNTER_OFFER.
+    expect(APPROVAL_KINDS).toHaveLength(12)
     expect(kindsFor('NcrConcession')).toEqual(['CONCESSION'])
     expect(kindsFor('SalesOrderAmendment')).toEqual(['REVISED_ORDER'])
     expect(kindsFor('SalesOrderLine')).toEqual(['PROOF'])
     expect(kindsFor('RiskAssessmentVersion')).toEqual(['SIGNATURE'])
-    expect(kindsFor('Style')).toEqual(['SAMPLE', 'COLOUR', 'LEATHER', 'ARTWORK'])
+    expect(kindsFor('Style')).toEqual(['SAMPLE', 'COLOUR', 'LEATHER', 'ARTWORK', 'FABRIC', 'TRIM'])
     expect(APPROVAL_RECORD_TYPES).not.toContain('PayrollExport')
     expect(KIND_RULES.REVISED_ORDER).toMatchObject({ task: 'RECONFIRM_ORDER', price: true, withChanges: false })
     expect(APPROVAL_KINDS.filter((kind) => KIND_RULES[kind].price)).toEqual(['REVISED_ORDER'])
-    expect(APPROVAL_KINDS.filter((kind) => !KIND_RULES[kind].withChanges)).toEqual(['REVISED_ORDER', 'SIGNATURE'])
+    expect(APPROVAL_KINDS.filter((kind) => !KIND_RULES[kind].withChanges)).toEqual(['REVISED_ORDER', 'SIGNATURE', 'REPROMISE', 'COUNTER_OFFER'])
     // The APPROVAL link carries the price grain for a revised order of the party's own (links/purposes, B-W2b-184).
     expect(linkPermissions('APPROVAL')).toEqual(['files.read', 'links.approve', 'links.open', 'links.refuse', 'money.price'])
   })
@@ -110,5 +115,110 @@ describe('approval requests to partners (B-W2b-184)', () => {
     expect(readers).toEqual(expect.arrayContaining(['customer-buyer', 'customer-designer', 'supplier-quality', 'subcontractor-jobs']))
     expect(readers).not.toContain('customer-finance')
     for (const type of ['approval_request.asked', 'approval_request.answered', 'approval_request.withdrawn', 'approval_request.expired']) expect(EVENT_CATALOGUE.get(type, 1)?.type, type).toBe(type)
+  })
+})
+
+// ---- B-PR-24 (production plan §3 "Brand alone", "Full control", "No silent decisions"; 08-backend §4.3, §4.4, §4.6) ------------
+describe('B-PR-24: the new kinds, deciding for a customer and putting its answer back', () => {
+  const ASKER = '00000000-0000-4000-8000-0000000000a1'
+  const OTHER = '00000000-0000-4000-8000-0000000000a2'
+  const decided = { decision: 'APPROVED' as const, answer: null, typedName: 'Otto Office', reason: 'The customer said yes on the phone.' }
+
+  it('FABRIC and TRIM are asked like a colour (a swatch or the thread records, with photos); a new date on the order; a counter on the request', () => {
+    expect(APPROVAL_KINDS.slice(-4)).toEqual(['FABRIC', 'TRIM', 'REPROMISE', 'COUNTER_OFFER'])
+    for (const kind of ['FABRIC', 'TRIM'] as const) {
+      expect(KIND_RULES[kind]).toMatchObject({ task: 'APPROVE', withChanges: true, price: false, needsFiles: true, dueDays: KIND_RULES.COLOUR.dueDays })
+      expect(KIND_RULES[kind].recordTypes).toEqual(KIND_RULES.COLOUR.recordTypes)
+    }
+    expect(kindsFor(SAMPLE_SWATCH_RECORD)).toEqual(['COLOUR', 'LEATHER', 'FABRIC', 'TRIM'])
+    expect(KIND_RULES.REPROMISE).toMatchObject({ recordTypes: [REPROMISE_RECORD], withChanges: false, price: false, needsFiles: false })
+    expect(KIND_RULES.COUNTER_OFFER).toMatchObject({ recordTypes: [COUNTER_OFFER_RECORD], withChanges: false, needsFiles: false })
+    // A counter with a fee is priced per request (sales/change-requests/counter), never by its kind: the kind shows no money.
+    expect(KIND_RULES.COUNTER_OFFER.price).toBe(false)
+    expect(APPROVAL_RECORD_TYPES).toEqual(expect.arrayContaining(['SalesOrder', 'OrderChangeRequest']))
+    // Italian and English for each, as the portal and the link name them.
+    expect(KIND_RULES.FABRIC.name).toEqual({ it: 'Tessuto', en: 'Fabric' })
+    expect(KIND_RULES.TRIM.name).toEqual({ it: 'Accessorio', en: 'Trim' })
+    expect(KIND_RULES.REPROMISE.name).toEqual({ it: 'Nuova data', en: 'New date' })
+    expect(KIND_RULES.COUNTER_OFFER.name).toEqual({ it: 'Controproposta', en: 'Counter-offer' })
+    // A new date or a counter is accepted or refused (with words): never "with changes".
+    expect(answerProblems({ kind: 'REPROMISE', decision: 'APPROVED_WITH_CHANGES', answer: 'later', typedName: 'Anna Rossi' }).map((issue) => issue.path)).toEqual(['body/decision'])
+    expect(answerProblems({ kind: 'COUNTER_OFFER', decision: 'REFUSED', answer: '', typedName: 'Anna Rossi' }).map((issue) => issue.path)).toEqual(['body/answer'])
+    expect(askProblems({ kind: 'COUNTER_OFFER', recordType: 'OrderChangeRequest', question: 'Our counter-offer.', dueAt: dueAtFor('COUNTER_OFFER', null, NOW), fileCount: 0 }, NOW)).toEqual([])
+  })
+
+  it('wall (pure): a concession, a revised order, a signature or a proof is never decided for a party, nor its answer put back', () => {
+    expect(OWN_WORD_KINDS).toEqual(['CONCESSION', 'REVISED_ORDER', 'SIGNATURE', 'PROOF'])
+    for (const kind of APPROVAL_KINDS) {
+      const own = (OWN_WORD_KINDS as readonly ApprovalKind[]).includes(kind)
+      expect(mayDecideForParty(kind), kind).toBe(!own)
+      expect(mayReverse(kind), kind).toBe(!own)
+      if (!own) continue
+      expect(decideForPartyProblems({ kind, status: 'OPEN', askedById: ASKER }, decided, OTHER)[0]?.message, kind).toMatch(/own word/)
+      expect(reverseProblems({ kind, status: 'APPROVED', reversedAt: null }, 'A reason.')[0]?.message, kind).toMatch(/own word/)
+      expect(reverseVerdict({ kind, recordType: KIND_RULES[kind].recordTypes[0]!, cut: null, passedGate: false, applied: false })).toMatchObject({ possible: false, code: 'OWN_WORD' })
+    }
+  })
+
+  it('decide for the party: an open request, never by the person who asked it, with why and a typed name', () => {
+    expect(decideForPartyProblems({ kind: 'SAMPLE', status: 'OPEN', askedById: ASKER }, decided, OTHER)).toEqual([])
+    expect(decideForPartyProblems({ kind: 'SAMPLE', status: 'OPEN', askedById: ASKER }, decided, ASKER)[0]?.message).toMatch(/someone else decides/)
+    expect(decideForPartyProblems({ kind: 'SAMPLE', status: 'APPROVED', askedById: ASKER }, decided, OTHER)[0]?.message).toMatch(/answered already/)
+    expect(decideForPartyProblems({ kind: 'SAMPLE', status: 'EXPIRED', askedById: ASKER }, decided, OTHER)[0]?.message).toMatch(/expired/)
+    expect(decideForPartyProblems({ kind: 'FABRIC', status: 'OPEN', askedById: ASKER }, { ...decided, reason: '  ' }, OTHER).map((issue) => issue.path)).toEqual(['body/reason'])
+    expect(decideForPartyProblems({ kind: 'FABRIC', status: 'OPEN', askedById: ASKER }, { ...decided, reason: 'x'.repeat(OVERRIDE_LIMITS.reason + 1) }, OTHER).map((issue) => issue.path)).toEqual(['body/reason'])
+    expect(decideForPartyProblems({ kind: 'TRIM', status: 'OPEN', askedById: ASKER }, { ...decided, decision: 'REFUSED', typedName: 'O' }, OTHER).map((issue) => issue.path)).toEqual(['body/answer', 'body/typedName'])
+    expect(decidedForPartyWords(' Matches the lab dip. ', 'en')).toBe('Decided by us for you: Matches the lab dip.')
+    expect(decidedForPartyWords('Come il campione.', 'it')).toBe('Deciso da noi per voi: Come il campione.')
+  })
+
+  it('put an answer back: once, only an answered request, with why; the customer reads why, never who', () => {
+    expect(reverseProblems({ kind: 'SAMPLE', status: 'APPROVED', reversedAt: null }, 'Wrong photos sent.')).toEqual([])
+    expect(reverseProblems({ kind: 'SAMPLE', status: 'OPEN', reversedAt: null }, 'x')[0]?.message).toMatch(/no answer/)
+    expect(reverseProblems({ kind: 'SAMPLE', status: 'REFUSED', reversedAt: NOW }, 'x')[0]?.message).toMatch(/already/)
+    expect(reverseProblems({ kind: 'COLOUR', status: 'APPROVED_WITH_CHANGES', reversedAt: null }, '').map((issue) => issue.path)).toEqual(['body/reason'])
+    expect(reversedWords('Wrong photos sent.', 'en')).toBe('Put back by us: Wrong photos sent.')
+    expect(reversedWords('Foto sbagliate.', 'it')).toBe('Revocato da noi: Foto sbagliate.')
+  })
+
+  it('a second person grants an override while the customer\'s switch is on (never the one who asked); the urgency never needs one', () => {
+    expect(overridePlan('DECIDE_FOR', false)).toEqual({ outcome: 'AT_ONCE' })
+    expect(overridePlan('DECIDE_FOR', true)).toMatchObject({ outcome: 'SECOND_PERSON', taskKind: 'BRAND_OVERRIDE' })
+    expect(overridePlan('REVERSE', true)).toMatchObject({ outcome: 'SECOND_PERSON' })
+    expect(overridePlan('URGENCY', true)).toEqual({ outcome: 'AT_ONCE' })
+    expect(APPROVAL_TASK_KINDS).toContain(OVERRIDE_TASK_KIND)
+    expect(grantProblem({ requestedById: ASKER }, ASKER)).toMatch(/second person/)
+    expect(grantProblem({ requestedById: ASKER }, OTHER)).toBeNull()
+  })
+
+  it('a reversal puts the record back while it still can: never a PP or size set approval, or a material, after cutting; never a counter carried out', () => {
+    const facts = (over: Partial<ReverseFacts>): ReverseFacts => ({ kind: 'SAMPLE', recordType: SAMPLE_ROUND_RECORD, sampleKind: 'PRE_PRODUCTION', cut: null, passedGate: true, applied: false, ...over })
+    expect(reverseVerdict(facts({}))).toMatchObject({ possible: true, effects: ['ROUND_UNDER_REVIEW', 'GATE_WAITING'] })
+    expect(reverseVerdict(facts({ cut: { day: '2026-10-12', leather: true } }))).toMatchObject({ possible: false, code: 'LEATHER_CUT', words: { en: 'The leather was cut on 12 Oct: the approval of this sample can no longer be put back.' } })
+    expect(reverseVerdict(facts({ sampleKind: 'SIZE_SET', passedGate: false, cut: { day: '2026-10-12', leather: false } }))).toMatchObject({ possible: false, code: 'CUT' })
+    // A top-of-production round gates nothing: put back even after cutting.
+    expect(reverseVerdict(facts({ sampleKind: 'TOP_OF_PRODUCTION', passedGate: false, cut: { day: '2026-10-12', leather: false } }))).toMatchObject({ possible: true, effects: ['ROUND_UNDER_REVIEW'] })
+    for (const kind of ['COLOUR', 'LEATHER', 'FABRIC', 'TRIM'] as const) {
+      expect(reverseVerdict(facts({ kind, recordType: SAMPLE_SWATCH_RECORD, sampleKind: null, passedGate: false }))).toMatchObject({ possible: true, effects: ['SWATCH_UNDECIDED'] })
+      expect(reverseVerdict(facts({ kind, recordType: SAMPLE_SWATCH_RECORD, sampleKind: null, passedGate: false, cut: { day: '2026-10-12', leather: false } }))).toMatchObject({ possible: false, code: 'CUT' })
+    }
+    expect(reverseVerdict(facts({ kind: 'REPROMISE', recordType: REPROMISE_RECORD, sampleKind: null, passedGate: false, cut: { day: '2026-10-12', leather: true } }))).toMatchObject({ possible: true, effects: ['ASK_AGAIN'] })
+    expect(reverseVerdict(facts({ kind: 'COUNTER_OFFER', recordType: COUNTER_OFFER_RECORD, sampleKind: null, passedGate: false, applied: true }))).toMatchObject({ possible: false, code: 'APPLIED' })
+    expect(reverseVerdict(facts({ kind: 'COUNTER_OFFER', recordType: COUNTER_OFFER_RECORD, sampleKind: null, passedGate: false, applied: false }))).toMatchObject({ possible: true, effects: ['MARK_ONLY'] })
+    expect(reverseVerdict(facts({ kind: 'ARTWORK', recordType: 'Style', sampleKind: null, passedGate: false }))).toMatchObject({ possible: true, effects: ['MARK_ONLY'] })
+    expect(REVERSE_EFFECTS).toHaveLength(5)
+  })
+
+  it('declares decided_for_party and reversed: ids, kinds and the decision only — never the reason, the typed name or a person', () => {
+    const about = { requestId: IDS.note, kind: 'FABRIC', recordType: 'SampleSwatch', recordId: IDS.user, partyId: IDS.tenant }
+    expect(() => EVENT_CATALOGUE.parse('approval_request.decided_for_party', 1, { ...about, decision: 'APPROVED' })).not.toThrow()
+    expect(() => EVENT_CATALOGUE.parse('approval_request.reversed', 1, about)).not.toThrow()
+    expect(() => EVENT_CATALOGUE.parse('approval_request.reversed', 1, { ...about, reason: 'Wrong photos sent.' })).toThrow()
+    expect(() => EVENT_CATALOGUE.parse('approval_request.decided_for_party', 1, { ...about, decision: 'APPROVED', decidedForPartyById: IDS.user })).toThrow()
+    for (const type of ['approval_request.decided_for_party', 'approval_request.reversed']) {
+      expect(EVENT_CATALOGUE.get(type, 1).context, type).toBe('approvals-out')
+      expect(EVENT_CATALOGUE.get(type, 1).live?.permission, type).toBe('partners.approvals.view')
+      expect(EVENT_CATALOGUE.get(type, 1).live?.fields, type).toContain('partyId')
+    }
   })
 })

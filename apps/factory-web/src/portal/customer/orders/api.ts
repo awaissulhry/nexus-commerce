@@ -337,15 +337,18 @@ export type RuleLine = ChangeRules['lines'][number]
 export const fetchRules = (api: ApiClient, orderId: string, signal?: AbortSignal): Promise<ChangeRules> =>
   api.get(`/portal/sales-orders/${encodeURIComponent(orderId)}/change-requests/rules`, { schema: rulesSchema, signal })
 
-export const REQUEST_STATUSES = ['OPEN', 'ACCEPTED', 'REFUSED', 'WITHDRAWN'] as const
+// B-PR-23 (production plan, schema wave 4/5): COUNTERED (our counter-offer waits for the customer), and every kind of request on
+// the order (the production asks beside CHANGE and CANCEL; the domain's ORDER_REQUEST_KINDS, kept equal by orders.vitest).
+export const REQUEST_STATUSES = ['OPEN', 'ACCEPTED', 'REFUSED', 'WITHDRAWN', 'COUNTERED'] as const
 export type RequestStatus = (typeof REQUEST_STATUSES)[number]
+export const REQUEST_KINDS = ['CHANGE', 'CANCEL', 'RUSH', 'HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'] as const
 
 export const changeRequestSchema = z.object({
   id: z.string(),
   orderId: z.string(),
   orderNumber: z.string(),
   customerRef: z.string().nullable(),
-  kind: z.enum(['CHANGE', 'CANCEL']),
+  kind: z.enum(REQUEST_KINDS),
   kindWords: words,
   status: z.enum(REQUEST_STATUSES),
   words,

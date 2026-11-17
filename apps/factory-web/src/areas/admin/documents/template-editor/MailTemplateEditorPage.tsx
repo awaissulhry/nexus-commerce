@@ -18,7 +18,11 @@ import {
   saveEmailTemplate,
   type EmailTemplate,
   type MailEventInfo,
+  type MailEventsAnswer,
 } from '../mail-templates/api'
+// th-backend-g step 3 (B-TH-098's web half): a version keeps its own language (any of the five), never turned into Italian.
+import { isMessageLanguage, type MessageLanguage } from '@nexus/factory-domain/templates/message-languages'
+const messageLanguageOf = (language: string): MessageLanguage => (isMessageLanguage(language) ? language : 'it')
 import { mailChanges, mailDraftOf, mailProblems, refusalOf, refusalReloads, type MailDraft } from './model'
 import type { EditorConfirm, EditorNotice, EditorRead } from './view/DocTemplateEditorView'
 import { mailEditorHref, MailTemplateEditorView, type MailEditorModel } from './view/MailTemplateEditorView'
@@ -41,6 +45,7 @@ export function MailTemplateEditorPage({ templateId }: { templateId: string }) {
   const officeCompany = session.company?.id ?? null
   const [read, setRead] = useState<EditorRead<EmailTemplate>>({ status: 'loading' })
   const [events, setEvents] = useState<readonly MailEventInfo[] | null>(null)
+  const [review, setReview] = useState<MailEventsAnswer['review']>(undefined) // th-backend-g step 3: who read each drafted language once
   const [versions, setVersions] = useState<readonly EmailTemplate[] | null>(null)
   const [draft, setDraft] = useState<MailDraft | null>(null)
   const [preview, setPreview] = useState<MailEditorModel['preview']>({ answer: null, problem: null })
@@ -70,7 +75,7 @@ export function MailTemplateEditorPage({ templateId }: { templateId: string }) {
       const companyId = template.companyId ?? officeCompany
       if (!companyId) return setVersions([])
       try {
-        const answer = await listEmailTemplates(api, { companyId, event: template.event, language: template.language === 'en' ? 'en' : 'it' })
+        const answer = await listEmailTemplates(api, { companyId, event: template.event, language: messageLanguageOf(template.language) }) // th-backend-g step 3
         setVersions(answer.templates.filter((version) => version.companyId === template.companyId && version.event === template.event && version.language === template.language))
       } catch {
         setVersions([])
@@ -100,7 +105,11 @@ export function MailTemplateEditorPage({ templateId }: { templateId: string }) {
   useEffect(() => {
     let live = true
     mailEvents(api).then(
-      (answer) => live && setEvents(answer.events),
+      (answer) => {
+        if (!live) return
+        setEvents(answer.events)
+        setReview(answer.review)
+      },
       () => live && setEvents([]),
     )
     return () => {
@@ -147,6 +156,7 @@ export function MailTemplateEditorPage({ templateId }: { templateId: string }) {
     companyName: template?.companyId ? (session.companies.find((company) => company.id === template.companyId)?.name ?? null) : null,
     read,
     event,
+    review, // th-backend-g step 3
     versions,
     draft,
     preview,
@@ -205,7 +215,7 @@ export function MailTemplateEditorPage({ templateId }: { templateId: string }) {
         onNewVersion: () => {
           if (!template) return
           void write(async () => {
-            const created = await createEmailTemplate(api, { companyId: template.companyId, event: template.event, language: template.language === 'en' ? 'en' : 'it', from: template.id })
+            const created = await createEmailTemplate(api, { companyId: template.companyId, event: template.event, language: messageLanguageOf(template.language), from: template.id }) // th-backend-g step 3
             router.push(mailEditorHref(prefix, created.id))
           })
         },

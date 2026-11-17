@@ -79,6 +79,21 @@ export function topicOfNotice(notice: PartnerNotice, kindTopic: (kind: string) =
   return typeof kind === 'string' ? kindTopic(kind) : null
 }
 
+// ---- th-backend-g step 2 (B-TH-279: the portal's new-message mail reads its template) --------------------------------------------
+/**
+ * The record a notice names, as its customer reads it (th2-backend step 7, §0.5): its own words of its request, quote or order ("your
+ * order 12" / "Your order 12", in the reader's language), else the record's label (a supplier's PO keeps its number). A request notice
+ * made before step 7 named only yourSeq (REQUEST).
+ */
+export function yoursOf(notice: PartnerNotice, locale: PortalLocale): { readonly yours: string; readonly Yours: string } {
+  const params = paramsOf(notice.params)
+  const yourKind: CustomerNumberKind = typeof params.yourKind === 'string' && (CUSTOMER_NUMBER_KINDS as readonly string[]).includes(params.yourKind) ? (params.yourKind as CustomerNumberKind) : 'REQUEST'
+  const yourNumber = customerNumberOf(yourKind, typeof params.yourSeq === 'number' ? params.yourSeq : null)
+  const own = yourNumber ? yourNumber.words[locale] : null
+  return { yours: own ? `${own.charAt(0).toLowerCase()}${own.slice(1)}` : notice.recordLabel, Yours: own ?? notice.recordLabel }
+}
+// ---- end th-backend-g step 2
+
 /** The sentence in the reader's language; `company` is the factory's name as the portal shows it. */
 export function partnerSentence(notice: PartnerNotice, locale: PortalLocale, company: string): string {
   if (!isPartnerMessageKey(notice.messageKey)) return notice.recordLabel
@@ -93,11 +108,7 @@ export function partnerSentence(notice: PartnerNotice, locale: PortalLocale, com
   // B-TH-011/105 and th2-backend step 7 (§0.5): the customer's own words of its request, quote or order ("your request 7", "il
   // vostro ordine 12"), in the reader's language; a notice of no such record (a supplier's PO) reads its label instead. A request
   // notice made before step 7 named only yourSeq (REQUEST).
-  const yourKind: CustomerNumberKind = typeof params.yourKind === 'string' && (CUSTOMER_NUMBER_KINDS as readonly string[]).includes(params.yourKind) ? (params.yourKind as CustomerNumberKind) : 'REQUEST'
-  const yourNumber = customerNumberOf(yourKind, typeof params.yourSeq === 'number' ? params.yourSeq : null)
-  const own = yourNumber ? yourNumber.words[locale] : null
-  const yours = own ? `${own.charAt(0).toLowerCase()}${own.slice(1)}` : notice.recordLabel
-  const Yours = own ?? notice.recordLabel
+  const { yours, Yours } = yoursOf(notice, locale) // th-backend-g step 2: one rule, shared with the new-message mail's template
   return PARTNER_MESSAGE_TEMPLATES[notice.messageKey][locale]
     .replace('{yours}', () => yours)
     .replace('{Yours}', () => Yours)

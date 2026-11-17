@@ -83,7 +83,8 @@
     "TRIMS_IN": "Accessori arrivati",
     "PP_SAMPLE": "Campione di pre-produzione approvato",
     "LAB_PASSED": "Laboratorio superato",
-    "OTHER": "Altro"
+    "OTHER": "Altro",
+    "SIZE_SET": "Set di taglie approvato"
   },
   "kindHint": {
     "SAMPLE_APPROVED": "Si supera da solo quando il giro campione che indica è approvato.",
@@ -91,7 +92,8 @@
     "TRIMS_IN": "Si segna fatto quando gli accessori sono arrivati.",
     "PP_SAMPLE": "Si supera da solo quando il giro di pre-produzione che indica è approvato.",
     "LAB_PASSED": "Si segna fatto quando i risultati del laboratorio sono arrivati e superati.",
-    "OTHER": "Di' cos'è: si segna fatto a mano."
+    "OTHER": "Di' cos'è: si segna fatto a mano.",
+    "SIZE_SET": "Si supera da solo quando il giro del set di taglie che indica è approvato."
   },
   "milestone": {
     "START": "Inizio produzione",
@@ -244,7 +246,9 @@
     "SALESMAN": "Campionario, giro {no}",
     "PRE_PRODUCTION": "Pre-produzione, giro {no}",
     "CERTIFICATION": "Certificazione, giro {no}",
-    "BRAND": "Campione del marchio, giro {no}"
+    "BRAND": "Campione del marchio, giro {no}",
+    "SIZE_SET": "Set di taglie, giro {no}",
+    "TOP_OF_PRODUCTION": "Primi capi di produzione, giro {no}"
   },
   "form": {
     "addTitle": "Aggiungi un gate",

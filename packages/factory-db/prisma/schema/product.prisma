@@ -731,6 +731,8 @@ model Colourway {
   salesOrderLines SalesOrderLine[]
   // W2b portal-sales.prisma (wave 21/22): the portal order request lines that ask for it.
   portalRequestLines PortalOrderRequestLine[] @relation("PortalOrderRequestLineColourway")
+  // B-PR-23 portal-sales.prisma (production plan, schema wave 4/5): the change request lines that ask a line in it.
+  changeRequestLines OrderChangeRequestLine[] @relation("OrderChangeRequestLineColourway")
   // W2b-5 sales-intake.prisma (wave 37/44): the inquiry lines that ask for it.
   inquiryLines       InquiryLine[]            @relation("InquiryLineColourway")
   // production.prisma: the work order cells made in it.

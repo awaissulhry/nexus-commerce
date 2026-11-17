@@ -50,7 +50,8 @@
   "switch": {
     "mentions": "Mentions stay in office notes: taken out of this message: {names}.",
     "amount": "An amount stays on office notes: taken off this message.",
-    "correction": "A correction goes the way its message went: this is a new message now, not a correction."
+    "correction": "A correction goes the way its message went: this is a new message now, not a correction.",
+    "numbers": "The customer reads its own numbers, never the office’s: changed in this message: {numbers}."
   },
   "floor": {
     "label": "For the floor",

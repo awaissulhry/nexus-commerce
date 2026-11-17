@@ -12,8 +12,8 @@ import '../helpers.css'
 
 /**
  * Saved replies ▾ (B-TH-208, T8-F02; picture 6): the existing saved replies (GET /templates/replies) in two labelled groups
- * — shared with the office, then mine — each line with its language, the customer's language first (Italian · English
- * only, C17). Picking one only fills the box: the container asks the API to fill it from THIS record (POST …/fill) and the
+ * — shared with the office, then mine — each line with its language, the customer's language first (th-backend-g step 3: the five
+ * message languages, it · en · de · fr · es). Picking one only fills the box: the container asks the API to fill it from THIS record (POST …/fill) and the
  * person reads and changes it; nothing is sent by picking. The blanks the record could not fill are said under the box.
  */
 export function SavedReplies({ model, onPick, onRetry }: { model: SavedRepliesModel; onPick?: (replyId: string) => void; onRetry?: () => void }) {

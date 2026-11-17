@@ -1,6 +1,9 @@
 import { createHmac, timingSafeEqual } from 'node:crypto'
 import { escapeHtml, safeUrl, type Footer } from '../../email/footer'
 import type { PortalLocale } from '../tasks/kinds'
+// th-backend-g step 2: the new-message mail in its template's words.
+import { composeWordsMail } from '../../templates/compose'
+import type { MailWords } from '../../templates/mail'
 
 /**
  * The e-mails a partner person gets from the portal (B-W2b-167; PLT-148, COL-063; design portal.frame E-mail settings "also
@@ -100,6 +103,18 @@ export function composeNotificationMail(input: { readonly recipientName: string;
     end.html
   return { subject: input.item.sentence.slice(0, 200), text, html }
 }
+
+// ---- th-backend-g step 2 (B-TH-279: the new mail templates are read) -----------------------------------------------------------
+/**
+ * A new message for the customer, in the words of the e-mail template `thread.message_posted` (the company's version in use, else the
+ * code's: factory-domain templates/mail.ts), already filled — who wrote, on which of its records, the shared message, the portal link —
+ * ended like every partner mail: "Manage e-mails", the unsubscribe link, the legal footer.
+ */
+export function composeTemplatedNotificationMail(input: { readonly words: MailWords; readonly links: MailLinks; readonly footer: Footer; readonly locale: PortalLocale }): ComposedMail {
+  const end = closing(input.links, input.footer, input.locale)
+  return composeWordsMail(input.words, { text: end.text, html: end.html })
+}
+// ---- end th-backend-g step 2
 
 /** The daily or weekly summary: at most 50 items listed, "and N more in the portal". */
 export function composeDigestMail(input: {

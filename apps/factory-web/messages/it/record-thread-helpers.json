@@ -18,7 +18,7 @@
     "failed": "Impossibile leggere le risposte salvate",
     "retry": "Riprova",
     "none": "Ancora nessuna risposta salvata",
-    "noneHint": "Qui compaiono le risposte salvate scritte in italiano o in inglese.",
+    "noneHint": "Qui compaiono le risposte salvate scritte in italiano, inglese, tedesco, francese o spagnolo.",
     "notForThis": "Ancora nessuna risposta salvata per questo tipo di record",
     "notForThisHint": "Le risposte salvate sono per ordini, offerte, ordini d'acquisto, pratiche di assistenza, spedizioni e clienti o fornitori.",
     "filling": "La compilo con i dati di questo record…",
@@ -27,7 +27,10 @@
   },
   "language": {
     "it": "italiano",
-    "en": "inglese"
+    "en": "inglese",
+    "de": "tedesco",
+    "fr": "francese",
+    "es": "spagnolo"
   },
   "draft": {
     "kept": "Bozza tenuta su questo dispositivo · salvata alle {time}"
