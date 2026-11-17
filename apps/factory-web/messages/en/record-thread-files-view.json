@@ -1,0 +1,117 @@
+{
+  "title": "Files of {record}",
+  "subtitle_one": "One file you can see",
+  "subtitle_other": "{count} files you can see",
+  "close": "Close",
+  "loading": "Reading the record's files…",
+  "keys": {
+    "move": "Move between files",
+    "choose": "Choose or unchoose the file",
+    "range": "Choose every file up to this one",
+    "open": "Open the file in the viewer"
+  },
+  "missing": {
+    "warn": "Missing before {status}: {document}. The move is still allowed.",
+    "block": "Missing before {status}: {document}. The move is refused until it is here."
+  },
+  "refused": {
+    "title_one": "One file was not added",
+    "title_other": "{count} files were not added",
+    "dismiss": "Dismiss"
+  },
+  "forbidden": {
+    "title": "You cannot see this record's files",
+    "body": "Your role does not let you read the files of this record. Ask an administrator if you need them."
+  },
+  "problem": {
+    "read": "Could not load the files",
+    "retry": "Try again"
+  },
+  "empty": {
+    "title": "No files yet",
+    "bodyUpload": "Drop files above, or browse: you choose their kind and who sees them.",
+    "body": "Files added to this record show here."
+  },
+  "upload": {
+    "hint": "Drop files here or browse. You choose their kind and who sees them; they start office only.",
+    "noRight": "You cannot add files here: your role does not allow uploads.",
+    "title_one": "Add one file",
+    "title_other": "Add {count} files",
+    "kind": "What it is",
+    "who": "Who sees it",
+    "audience": {
+      "OFFICE": "Office only",
+      "OFFICEBody": "Only colleagues who may read this record.",
+      "FLOOR": "Office and floor",
+      "FLOORBody": "Also the tablets on the floor of this record's site.",
+      "PARTNER": "Office and {party}",
+      "PARTNERBody": "{party} sees it in its portal. Only this record's customer or supplier.",
+      "LINK": "Office and link",
+      "LINKBody": "Also people this record was shared with by a link."
+    },
+    "cancel": "Cancel",
+    "confirm_one": "Add the file",
+    "confirm_other": "Add {count} files",
+    "busy": "The files are being added."
+  },
+  "select": {
+    "all": "Choose all {count}",
+    "none": "All {count} chosen: clear",
+    "one": "Choose {name}"
+  },
+  "bulk": {
+    "noun": "files",
+    "download": "Download {count}",
+    "share": "Share with {party} ({count})",
+    "officeOnly": "Make office only ({count})",
+    "remove": "Delete {count}",
+    "onHold_one": "One chosen file is under a legal hold: Delete leaves it.",
+    "onHold_other": "{count} chosen files are under a legal hold: Delete leaves them.",
+    "noneDownload": "None of the chosen files can be downloaded yet.",
+    "noShareRight": "Changing who sees a file needs the right to share files outside the office.",
+    "allShared": "{party} already sees every chosen file.",
+    "allOffice": "Every chosen file is office only already.",
+    "noDeleteRight": "Deleting files needs the right to delete a file.",
+    "allHeld": "A legal hold keeps every chosen file."
+  },
+  "group": {
+    "kind": {
+      "PHOTO": "Photos",
+      "DOCUMENT": "Documents",
+      "CERTIFICATE": "Certificates",
+      "ATTACHMENT": "Files",
+      "AUDIO": "Voice notes",
+      "FISCAL_ARCHIVE": "Fiscal copies"
+    },
+    "origin": {
+      "party": {
+        "customer": "From the customer",
+        "supplier": "From the supplier",
+        "partner": "From the partner"
+      },
+      "ours": "Ours",
+      "made": "Made by us",
+      "floor": "Floor"
+    }
+  },
+  "version": {
+    "inForce": "v{n} in force",
+    "earlier_one": "One earlier version",
+    "earlier_other": "{count} earlier versions",
+    "line": "v{n} · {date}",
+    "replaced": "replaced {date}",
+    "open": "Open",
+    "restore": "Restore"
+  },
+  "keep": {
+    "scanPending": "Held for the virus scan: it opens once the scan says it is clean.",
+    "infected": "The virus scan found something: it cannot be opened.",
+    "held": "Held by the store's checks.",
+    "legalHold": "Legal hold: it cannot be deleted.",
+    "until": "Kept until {date}",
+    "due": "Due for removal"
+  },
+  "design": {
+    "openAgain": "Open the Files view"
+  }
+}

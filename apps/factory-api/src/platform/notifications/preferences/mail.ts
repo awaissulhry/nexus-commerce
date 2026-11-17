@@ -34,6 +34,8 @@ export interface InstantMail {
   readonly sentence: string
   /** The notification's page (absolute). */
   readonly link: string
+  /** B-TH-080: the message it is about, cut for this reader (email-out/digest/message-text); null or left out: none. */
+  readonly quote?: string | null
 }
 
 /** Sends one instant mail; never throws for a refused send (FAILED with why), so the caller logs what happened. */
@@ -45,8 +47,10 @@ export async function sendInstantMail(caller: CommandCaller, runtime: EmailRunti
   const words = WORDS[mail.person.locale]
   const legal = await companyLegalOf(caller, identity.companyId)
   const footer = footerOf(legal, privacyNoticeUrl(runtime.webOrigin, identity.companyId), mail.person.locale)
-  const text = [words.hello(mail.person.displayName), '', mail.sentence, '', `${words.open} ${mail.link}`, '', words.why, '', footer.text].join('\n')
-  const html = `<p>${escapeHtml(words.hello(mail.person.displayName))}</p><p>${escapeHtml(mail.sentence)}</p><p>${escapeHtml(words.open)} <a href="${escapeHtml(mail.link)}">${escapeHtml(mail.link)}</a></p><p>${escapeHtml(words.why)}</p>${footer.html}`
+  // B-TH-080: the message quoted under the sentence.
+  const quote = mail.quote ? [`“${mail.quote}”`, ''] : []
+  const text = [words.hello(mail.person.displayName), '', mail.sentence, '', ...quote, `${words.open} ${mail.link}`, '', words.why, '', footer.text].join('\n')
+  const html = `<p>${escapeHtml(words.hello(mail.person.displayName))}</p><p>${escapeHtml(mail.sentence)}</p>${mail.quote ? `<blockquote>${escapeHtml(mail.quote)}</blockquote>` : ''}<p>${escapeHtml(words.open)} <a href="${escapeHtml(mail.link)}">${escapeHtml(mail.link)}</a></p><p>${escapeHtml(words.why)}</p>${footer.html}`
   const from = fromLine(identity, null)
   const outboundId = newId()
   const emailMessageId = messageIdFor(outboundId, identity.domain)

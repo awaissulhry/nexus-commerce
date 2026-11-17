@@ -34,10 +34,11 @@ import { seedFile } from '../src/seed-files' // B-W2b-F59: seeded files with the
  *   seasons       company A: FW27 (OPEN, the code the seeded styles carry: the first row), SS28 (OPEN, order book closing),
  *                 FW26 (CLOSED); company B: FW27 (OPEN).
  *   inquiries     company A: SEED-INQ-0001 typed in the office from a prospect not yet a party (NEW, the first row, with a line
- *                 for the jacket by size and a line in words: the first line); 0002 by phone from P3, ASSIGNED to the member;
- *                 0003 made from the mail an unknown sender wrote (MAIL, NEED_INFO), the tech pack attached to the mail named;
- *                 0004 P1's request (SEED-RFQ-12) that became SEED-Q-0001 (QUOTED); 0005 DECLINED (price); 0006 LOST, its
- *                 prospect erased.
+ *                 for a jacket in words by size and a line in words: the first line); 0002 by phone from P3, ASSIGNED to the
+ *                 member; 0003 made from the mail an unknown sender wrote (MAIL, NEED_INFO), the tech pack attached to the mail
+ *                 named; 0004 P1's request (SEED-RFQ-12, its PO; TH-1b: a line for its own private-label jacket at the price
+ *                 shown, the line P1's partner people read) that became SEED-Q-0001 (QUOTED); 0005 DECLINED (price); 0006 LOST,
+ *                 its prospect erased. SEED-JKT-01 is P1's private label: no other party's line names it (B-TH-009, PR-05).
  *   requirements  P1: packing for company A (the first row), a document rule for every company (its routing guide a file of
  *                 P1), an old care-label rule ended and the rule that superseded it for the jacket; P3: a delivery window.
  *   holds         P3: a credit hold placed and released (the first row); a rider of the team (SEED-R2): data missing, in force.
@@ -87,7 +88,7 @@ const DAY = {
 export interface SalesIntakeSeed {
   readonly seasonIds: { readonly fw27: string; readonly ss28: string; readonly fw26: string; readonly fw27B: string }
   readonly inquiryIds: { readonly prospect: string; readonly assigned: string; readonly mail: string; readonly quoted: string; readonly declined: string; readonly lost: string }
-  readonly inquiryLineIds: readonly [string, string, string]
+  readonly inquiryLineIds: readonly [string, string, string, string]
   readonly requirementIds: { readonly packing: string; readonly documents: string; readonly oldLabel: string; readonly label: string; readonly delivery: string }
   readonly holdIds: { readonly released: string; readonly inForce: string }
   readonly termsIds: { readonly ended: string; readonly p3A: string; readonly p1A: string; readonly p1B: string }
@@ -152,7 +153,7 @@ export async function seed(context: SeedContext): Promise<SalesIntakeSeed> {
       declined: id('intake:inquiry:0005'),
       lost: id('intake:inquiry:0006'),
     },
-    inquiryLineIds: [firstId('intake:inquiry:0001:10'), id('intake:inquiry:0001:20'), id('intake:inquiry:0002:10')],
+    inquiryLineIds: [firstId('intake:inquiry:0001:10'), id('intake:inquiry:0001:20'), id('intake:inquiry:0002:10'), id('intake:inquiry:0004:10')],
     requirementIds: {
       packing: firstId('intake:requirement:P1:packing'),
       documents: id('intake:requirement:P1:documents'),
@@ -275,6 +276,7 @@ export async function seed(context: SeedContext): Promise<SalesIntakeSeed> {
             partyId: P1,
             contactId: contacts.p1Buyer,
             request: 'RFQ SEED-RFQ-12: the touring jacket in black and red, sizes 50 to 54.',
+            customerRef: 'SEED-RFQ-12',
             ...stamp(T.setup),
           }),
           inquiry('declined', 'SEED-INQ-0005', {
@@ -298,9 +300,12 @@ export async function seed(context: SeedContext): Promise<SalesIntakeSeed> {
       })
       await tx.inquiryLine.createMany({
         data: [
-          { id: result.inquiryLineIds[0], inquiryId: I.prospect, seq: 10, styleId: product.styleId, colourwayId: colourBLK, sizes: { '50': 5, '52': 10, '54': 5 }, quantity: 20, note: 'Club logo on the back.', ...stamp(T.typed) },
+          // TH-1b (B-TH-009, PR-05): SEED-JKT-01 is P1's private label, so a prospect's or P3's line asks in words only.
+          { id: result.inquiryLineIds[0], inquiryId: I.prospect, seq: 10, description: 'Touring jacket for the club', colourText: 'black', sizes: { '50': 5, '52': 10, '54': 5 }, quantity: 20, note: 'Club logo on the back.', ...stamp(T.typed) },
           { id: result.inquiryLineIds[1], inquiryId: I.prospect, seq: 20, description: 'Matching gloves', colourText: 'black', quantity: 20, ...stamp(T.typed) },
-          { id: result.inquiryLineIds[2], inquiryId: I.assigned, seq: 10, styleId: product.styleId, description: 'Last season jacket, black and red', quantity: 60, ...stamp(T.phoned) },
+          { id: result.inquiryLineIds[2], inquiryId: I.assigned, seq: 10, description: 'Last season jacket, black and red', quantity: 60, ...stamp(T.phoned) },
+          // P1 asks for its own private-label jacket, at the price its portal showed (the line its partner people read).
+          { id: result.inquiryLineIds[3], inquiryId: I.quoted, seq: 10, styleId: product.styleId, colourwayId: colourBLK, sizes: { '50': 4, '52': 6, '54': 2 }, quantity: 12, unitPriceShown: '420.000000', ...stamp(T.setup) },
         ],
       })
       // The tech pack the sender attached: a file of the mail (kept from it), named as the brand's tech pack in force.

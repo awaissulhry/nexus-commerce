@@ -13,6 +13,8 @@ import { processEmail, type EmailRuntime } from '../../email-out/service'
 import { latestOfGroup } from '../../notifications/store'
 import { partyReaders } from '../tasks/people'
 import { logPartnerDeliveries, sendPartnerMail, unsubscribeKeyFor } from './mail'
+// B-TH-080 (threads plan TH-6, thread-G11): the mail quotes the message we shared with the customer (never a note).
+import { partnerQuotes } from '../../email-out/digest/message-text'
 import { PARTNER_RULES } from './rules'
 import { preferencesOf } from './settings'
 
@@ -148,8 +150,10 @@ async function mailInstant(caller: CommandCaller, made: readonly Made[], options
       const companyName = await caller.withClient((client) => client.company.findUnique({ where: { id: row.companyId }, select: { legalName: true, tradeName: true } }))
       const sentence = partnerSentence({ messageKey: row.messageKey, recordLabel: row.record.label, params: row.params }, row.locale, companyName ? (companyName.tradeName ?? companyName.legalName) : '')
       const link = portalRecordUrl(runtime.webOrigin, company?.code ?? row.partyId, row.record.type, row.record.id, row.anchor)
+      // B-TH-080: only a message shared with this person's own customer.
+      const quote = (await caller.withClient((client) => partnerQuotes(client, row.partyId, [{ id: row.id, anchor: row.anchor }]))).get(row.id) ?? null
       try {
-        outcome = await sendPartnerMail(caller, { tenantId, companyId: row.companyId, person: { id: row.userId, email: row.email, displayName: row.displayName, locale: row.locale, partyId: row.partyId }, body: { kind: 'notification', item: { notificationId: row.id, sentence, link } }, runtime, unsubscribeKey: options.unsubscribeKey, ...(options.clock ? { clock: options.clock } : {}) })
+        outcome = await sendPartnerMail(caller, { tenantId, companyId: row.companyId, person: { id: row.userId, email: row.email, displayName: row.displayName, locale: row.locale, partyId: row.partyId }, body: { kind: 'notification', item: { notificationId: row.id, sentence, link, quote } }, runtime, unsubscribeKey: options.unsubscribeKey, ...(options.clock ? { clock: options.clock } : {}) })
       } catch (error) {
         outcome = { outcome: 'FAILED', outboundId: null, detail: (error as Error).name === 'NoSenderError' ? 'the tenant has no verified sending identity' : 'the mail could not be made' }
       }
