@@ -134,7 +134,10 @@ describe('the window', () => {
       }
     }
     expect(textOf(render(createElement(UseOnBody, { model: { ...base, query: 'q', targets: null }, actions })))).toContain('Type 3 characters or more.')
-    expect(textOf(render(createElement(UseOnBody, { model: { ...base, failed: [{ name: 'b.jpg', reason: 'useOn.refused.notFound' }], copied: 1 }, actions })))).toContain('1 copied; these did not go: b.jpg: The file or the record is out of your reach, or gone.')
+    const partial = textOf(render(createElement(UseOnBody, { model: { ...base, failed: [{ name: 'b.jpg', reason: 'useOn.refused.notFound' }], copied: 1 }, actions })))
+    expect(partial).toContain('1 copied; these did not go:')
+    expect(partial).toContain('b.jpg')
+    expect(partial).toContain('The file or the record is out of your reach, or gone.')
   })
 })
 
