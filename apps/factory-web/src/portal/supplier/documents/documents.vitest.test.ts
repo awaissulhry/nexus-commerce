@@ -134,8 +134,8 @@ describe('SCR-190 design cases', () => {
   it('the Italian page speaks Italian', () => {
     const entry = designScreen.cases.find((item) => item.id === 'normal')!
     const html = renderToStaticMarkup(createElement(I18nProvider, { locale: 'it', messages: messagesFor('it', ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
-    expect(html).toContain('Ti chiediamo')
-    expect(html).toContain('I tuoi documenti')
+    expect(html).toContain('Vi chiediamo')
+    expect(html).toContain('I vostri documenti')
     expect(html).not.toContain('Your documents')
     expect(html).not.toContain('We ask for')
   })

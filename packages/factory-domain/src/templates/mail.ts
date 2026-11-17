@@ -64,7 +64,7 @@ export const MAIL_EVENT_DEFINITIONS: Readonly<Record<MailEvent, MailEventDefinit
     words: {
       it: {
         subject: 'Pratica di assistenza {{case.number}}: {{case.status}}',
-        body: 'Gentile {{contact.name}},\nla sua pratica di assistenza {{case.number}} è {{case.status}}.\n\n{{case.sentence}}\n\n{{message}}\n\nPer qualsiasi domanda può rispondere a questa e-mail.\n\n{{company.name}}',
+        body: 'Gentile {{contact.name}},\nla vostra pratica di assistenza {{case.number}} è {{case.status}}.\n\n{{case.sentence}}\n\n{{message}}\n\nPer qualsiasi domanda potete rispondere a questa e-mail.\n\n{{company.name}}',
       },
       en: {
         subject: 'Service case {{case.number}}: {{case.status}}',
@@ -72,7 +72,7 @@ export const MAIL_EVENT_DEFINITIONS: Readonly<Record<MailEvent, MailEventDefinit
       },
     },
     sample: {
-      it: { 'case.number': 'SVC-2026-0042', 'case.status': 'in lavorazione', 'case.sentence': 'Abbiamo preso in carico la sua richiesta e la stiamo esaminando.', 'contact.name': 'Anna Esempio', message: 'Il tecnico la chiamerà domani in mattinata.' },
+      it: { 'case.number': 'SVC-2026-0042', 'case.status': 'in lavorazione', 'case.sentence': 'Abbiamo preso in carico la vostra richiesta e la stiamo esaminando.', 'contact.name': 'Anna Esempio', message: 'Il tecnico vi chiamerà domani in mattinata.' },
       en: { 'case.number': 'SVC-2026-0042', 'case.status': 'in progress', 'case.sentence': 'We have taken your request on and are looking into it.', 'contact.name': 'Ann Example', message: 'The technician will call you tomorrow morning.' },
     },
   },
@@ -82,8 +82,8 @@ export const MAIL_EVENT_DEFINITIONS: Readonly<Record<MailEvent, MailEventDefinit
     placeholders: ['order.number', 'shipment.number', 'shipment.where', 'shipment.facts', 'carrier.name', 'delivery.expected', 'trackingUrl', 'contact.name', ...COMPANY_PLACEHOLDERS],
     words: {
       it: {
-        subject: 'Il suo ordine {{order.number}} — {{company.name}}',
-        body: 'Buongiorno,\n\n{{shipment.where}}\n\n{{shipment.facts}}\n\nLo segua da questa pagina, nella sua lingua: dove si trova, le notizie del corriere e i documenti della spedizione.\n{{trackingUrl}}\n\nLa pagina resta aperta fino a 60 giorni dopo la consegna. Se qualcosa non va, dalla stessa pagina può segnalarcelo.',
+        subject: 'Il vostro ordine {{order.number}} — {{company.name}}',
+        body: 'Buongiorno,\n\n{{shipment.where}}\n\n{{shipment.facts}}\n\nSeguitelo da questa pagina, nella vostra lingua: dove si trova, le notizie del corriere e i documenti della spedizione.\n{{trackingUrl}}\n\nLa pagina resta aperta fino a 60 giorni dopo la consegna. Se qualcosa non va, dalla stessa pagina potete segnalarcelo.',
       },
       en: {
         subject: 'Your order {{order.number}} — {{company.name}}',
@@ -94,7 +94,7 @@ export const MAIL_EVENT_DEFINITIONS: Readonly<Record<MailEvent, MailEventDefinit
       it: {
         'order.number': 'SO-2026-0101',
         'shipment.number': 'SH-2026-0077',
-        'shipment.where': 'il suo ordine SO-2026-0101 è in viaggio (spedizione SH-2026-0077).',
+        'shipment.where': 'il vostro ordine SO-2026-0101 è in viaggio (spedizione SH-2026-0077).',
         'shipment.facts': 'Corriere: Corriere Esempio.\nConsegna prevista: 20 novembre 2026.',
         'carrier.name': 'Corriere Esempio',
         'delivery.expected': '20 novembre 2026',
@@ -121,8 +121,8 @@ export const MAIL_EVENT_DEFINITIONS: Readonly<Record<MailEvent, MailEventDefinit
     placeholders: REQUEST_PLACEHOLDERS,
     words: {
       it: {
-        subject: 'Abbiamo ricevuto la sua richiesta {{inquiry.yourNumber}}',
-        body: 'Gentile {{contact.name}},\nabbiamo ricevuto la sua richiesta {{inquiry.yourNumber}}: {{inquiry.subject}}.\n\nLa leggiamo e le rispondiamo al più presto. Per aggiungere qualcosa può rispondere a questa e-mail.\n\n{{company.name}}',
+        subject: 'Abbiamo ricevuto la vostra richiesta {{inquiry.yourNumber}}',
+        body: 'Gentile {{contact.name}},\nabbiamo ricevuto la vostra richiesta {{inquiry.yourNumber}}: {{inquiry.subject}}.\n\nLa leggiamo e vi rispondiamo al più presto. Per aggiungere qualcosa potete rispondere a questa e-mail.\n\n{{company.name}}',
       },
       en: {
         subject: 'We received your request {{inquiry.yourNumber}}',
@@ -137,8 +137,8 @@ export const MAIL_EVENT_DEFINITIONS: Readonly<Record<MailEvent, MailEventDefinit
     placeholders: [...REQUEST_PLACEHOLDERS, 'question'],
     words: {
       it: {
-        subject: 'La sua richiesta {{inquiry.yourNumber}}: ci serve ancora qualcosa',
-        body: 'Gentile {{contact.name}},\nper andare avanti con la sua richiesta {{inquiry.yourNumber}} ({{inquiry.subject}}) ci serve ancora:\n\n{{question}}\n\nPuò rispondere a questa e-mail o scriverci nel portale.\n\n{{company.name}}',
+        subject: 'La vostra richiesta {{inquiry.yourNumber}}: ci serve ancora qualcosa',
+        body: 'Gentile {{contact.name}},\nper andare avanti con la vostra richiesta {{inquiry.yourNumber}} ({{inquiry.subject}}) ci serve ancora:\n\n{{question}}\n\nPotete rispondere a questa e-mail o scriverci nel portale.\n\n{{company.name}}',
       },
       en: {
         subject: 'Your request {{inquiry.yourNumber}}: we need one more thing',
@@ -153,8 +153,8 @@ export const MAIL_EVENT_DEFINITIONS: Readonly<Record<MailEvent, MailEventDefinit
     placeholders: [...REQUEST_PLACEHOLDERS, 'reason'],
     words: {
       it: {
-        subject: 'La sua richiesta {{inquiry.yourNumber}}',
-        body: 'Gentile {{contact.name}},\ngrazie per la sua richiesta {{inquiry.yourNumber}} ({{inquiry.subject}}). Questa volta purtroppo non possiamo accettarla.\n\n{{reason}}\n\nSperiamo di lavorare insieme in un\'altra occasione.\n\n{{company.name}}',
+        subject: 'La vostra richiesta {{inquiry.yourNumber}}',
+        body: 'Gentile {{contact.name}},\ngrazie per la vostra richiesta {{inquiry.yourNumber}} ({{inquiry.subject}}). Questa volta purtroppo non possiamo accettarla.\n\n{{reason}}\n\nSperiamo di lavorare insieme in un\'altra occasione.\n\n{{company.name}}',
       },
       en: {
         subject: 'Your request {{inquiry.yourNumber}}',
@@ -170,7 +170,7 @@ export const MAIL_EVENT_DEFINITIONS: Readonly<Record<MailEvent, MailEventDefinit
     words: {
       it: {
         subject: 'Nuovo messaggio da {{company.name}} per {{record.label}}',
-        body: 'Ciao {{contact.name}},\n{{author.name}} ha scritto per {{record.label}}:\n\n{{message}}\n\nRispondi nel portale: {{link}}\n\n{{company.name}}',
+        body: 'Buongiorno {{contact.name}},\n{{author.name}} ha scritto per {{record.label}}:\n\n{{message}}\n\nRispondete nel portale: {{link}}\n\n{{company.name}}',
       },
       en: {
         subject: 'New message from {{company.name}} on {{record.label}}',

@@ -4,6 +4,8 @@ import type { OrderChip } from './api'
 import type { OrdersRead, PortalColumn } from './api' // B-TH-246
 import { listBandOf } from './band'
 import { at, inTransitRead, orderWords, ordersRead, PREFIX, ROWS, shellOf, words } from './design-data'
+// B-TH-223 (fix-portal-1): Brand Beta's cases list Brand Beta's own rows, never the rows above (BA-PO-…).
+import { BETA_ROWS, betaInTransitRead, betaOrdersRead } from './design-data'
 // B-TH-223: Orders & requests read by Brand Beta (brand B), the made-up reader of every wall scan.
 import { betaShellOf, PREFIX as BETA, REQUESTS } from '../requests/design-data'
 import { CLOSED_REQUESTS, listRows } from './model'
@@ -55,7 +57,7 @@ const chipCase = (chip: OrderChip) => listCase(() => ({ chip, read: ordersRead(c
 // ── B-TH-223: Orders & requests, read by Brand Beta ─────────────────────────────────────────────────────────────────
 function betaCase(build: (locale: Locale) => Partial<OrdersListViewModel> = () => ({})): CustomerCaseBuilder {
   return (locale) => {
-    const base = listModel({ prefix: BETA, requests: { state: 'ready', rows: REQUESTS, complete: true }, newOrderHref: `${BETA}/orders/new`, ...build(locale) })
+    const base = listModel({ prefix: BETA, read: betaOrdersRead(), transit: { state: 'ready', read: betaInTransitRead() }, requests: { state: 'ready', rows: REQUESTS, complete: true }, newOrderHref: `${BETA}/orders/new`, ...build(locale) })
     // B-TH-238: the tiles from Beta's own reads (the requests' counts as the API counts them, the orders' Open chip).
     const model: OrdersListViewModel = { ...base, tiles: base.tiles !== undefined ? base.tiles : listTiles(base.requests.state === 'ready' ? { counts: requestCountsOf(base.requests.rows) } : null, base.read) }
     const shown = model.read ? listRows(model.chip ?? model.read.chip, model.q, model.requests.state === 'ready' ? model.requests.rows : [], model.rows, locale).length : 0
@@ -68,8 +70,8 @@ function betaCase(build: (locale: Locale) => Partial<OrdersListViewModel> = () =
 /** B-TH-238: the requests' counts as GET /portal/inquiries says them (what needs the customer, the open ones). */
 export const requestCountsOf = (rows: readonly RequestRow[]) => ({ needsYou: rows.filter((row) => row.state.needsYou).length, open: rows.filter((row) => row.state.open).length })
 /** B-TH-238: a tile's own rows (the two request tiles read no order; "Open orders" reads the API's Open). */
-const betaTile = (chip: TileChip) => betaCase(() => (chip === OPEN_ORDERS ? { chip, read: ordersRead('OPEN'), rows: ordersRead('OPEN').items } : { chip, read: { ...ordersRead('OPEN'), items: [], count: 0 }, rows: [] }))
-const betaChip = (chip: OrderChip | typeof CLOSED_REQUESTS) => betaCase(() => ({ chip, read: chip === CLOSED_REQUESTS ? { ...ordersRead('OPEN'), items: [], count: 0 } : ordersRead(chip), rows: chip === CLOSED_REQUESTS ? [] : ordersRead(chip).items }))
+const betaTile = (chip: TileChip) => betaCase(() => (chip === OPEN_ORDERS ? { chip, read: betaOrdersRead('OPEN'), rows: betaOrdersRead('OPEN').items } : { chip, read: { ...betaOrdersRead('OPEN'), items: [], count: 0 }, rows: [] }))
+const betaChip = (chip: OrderChip | typeof CLOSED_REQUESTS) => betaCase(() => ({ chip, read: chip === CLOSED_REQUESTS ? { ...betaOrdersRead('OPEN'), items: [], count: 0 } : betaOrdersRead(chip), rows: chip === CLOSED_REQUESTS ? [] : betaOrdersRead(chip).items }))
 const all = ordersRead('ALL')
 
 // ── B-TH-246 (threads plan TH-4, picture 28): Brand Beta's own sheet — the columns the office ticked for its portal ──
@@ -82,7 +84,7 @@ export const SHEET_COLUMNS: PortalColumn[] = [
 export function sheetRead(read: OrdersRead): OrdersRead {
   return { ...read, columns: SHEET_COLUMNS, items: read.items.map((row, index) => (row.kind === 'ORDER' ? { ...row, values: { 'cf:box_type': { value: 'GIFT', wordsIt: null, wordsEn: null }, ...(index % 2 === 0 ? { 'cf:fair_date': { value: '2027-02-10', wordsIt: null, wordsEn: null } } : {}) } } : row)) }
 }
-const betaSheet = (failed = false) => betaCase(() => ({ read: sheetRead(ordersRead('OPEN')), rows: sheetRead(ordersRead('OPEN')).items, ...(failed ? { downloadFailed: true } : {}) }))
+const betaSheet = (failed = false) => betaCase(() => ({ read: sheetRead(betaOrdersRead('OPEN')), rows: sheetRead(betaOrdersRead('OPEN')).items, ...(failed ? { downloadFailed: true } : {}) }))
 // ── end B-TH-246 ──
 
 export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
@@ -92,7 +94,7 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
   cases: [
     { id: 'th-223-list', label: 'Orders & requests: the open ones (requests first)', model: betaCase(), note: 'One list: Number (their PO, then the customer’s own number: “Your request 7”, “Your order 11” — never INQ-, SO-, RQ-), Kind, Subject, Date, State (true states), Wanted or promised, Pieces, Value (price roles), Next shipment. The request that needs them on top. New order is the band’s primary.' },
     // B-TH-230 (TH-2): New messages — the person's own, on their own requests and orders only; a door to the conversation.
-    { id: 'th-230-new-messages', label: 'New messages: "● 2 new" on a request and an order of this customer', model: betaCase(() => ({ unread: { [REQUESTS[0]!.id]: { newCount: 2, lastAt: '2026-11-17T09:42:00.000Z' }, [ROWS[0]!.id]: { newCount: 1, lastAt: '2026-11-16T15:10:00.000Z' } } })), note: 'One read for the rows shown: the count holds only messages shared with this customer (never an office note) and only its own requests and orders. The cell opens the request’s page or the order with its docked conversation shown (B-TH-275).' },
+    { id: 'th-230-new-messages', label: 'New messages: "● 2 new" on a request and an order of this customer', model: betaCase(() => ({ unread: { [REQUESTS[0]!.id]: { newCount: 2, lastAt: '2026-11-17T09:42:00.000Z' }, [BETA_ROWS[0]!.id]: { newCount: 1, lastAt: '2026-11-16T15:10:00.000Z' } } })), note: 'One read for the rows shown: the count holds only messages shared with this customer (never an office note) and only its own requests and orders. The cell opens the request’s page or the order with its docked conversation shown (B-TH-275).' },
     // B-TH-238 (P-CUS-ORD-LIST.tiles): We need something from you · Open requests · Open orders — each filters the list.
     { id: 'th-238-needs-you', label: 'Tile: we need something from you (the same number as Home’s Messages card)', model: betaTile(NEEDS_YOU), note: 'Only the requests we asked something about; the tile is pressed; Clear brings the open list back.' },
     { id: 'th-238-open-requests', label: 'Tile: open requests', model: betaTile(OPEN_REQUESTS) },
@@ -103,14 +105,14 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
     { id: 'th-246-download-failed', label: 'TH-4 · Brand Beta · Download all could not be prepared (Try again)', model: betaSheet(true) },
     { id: 'th-223-requested', label: 'Requested: the requests and the catalogue order still waiting for us', model: betaChip('REQUESTED') },
     { id: 'th-223-closed', label: 'Closed requests: never vanished', model: betaChip(CLOSED_REQUESTS), note: 'Declined, closed and made-into-an-order requests stay findable under their own choice.' },
-    { id: 'th-223-search', label: 'A search finds a request by its subject or its number', model: betaCase(() => ({ q: 'gloves', read: ordersRead('OPEN', []), rows: [] })), note: 'Their PO, our order or a style code on the orders; the subject, their PO and their own number on the requests.' },
+    { id: 'th-223-search', label: 'A search finds a request by its subject or its number', model: betaCase(() => ({ q: 'gloves', read: betaOrdersRead('OPEN', []), rows: [] })), note: 'Their PO, our order or a style code on the orders; the subject, their PO and their own number on the requests.' },
     { id: 'th-223-requests-failed', label: 'The requests could not be read', model: betaCase(() => ({ requests: { state: 'error', rows: [], complete: true } })), note: 'Said in words with Try again; the orders still show (never drawn as “no requests”).' },
     {
       id: 'th-223-empty',
       label: 'Nothing yet: New order',
       model: betaCase(() => {
-        const read = { ...ordersRead('OPEN', []), chips: ordersRead('OPEN', []).chips.map((chip) => ({ ...chip, count: 0 })) }
-        return { read, rows: [], requests: { state: 'ready', rows: [], complete: true }, transit: { state: 'ready', read: inTransitRead({ items: [] }) } }
+        const read = { ...betaOrdersRead('OPEN', []), chips: betaOrdersRead('OPEN', []).chips.map((chip) => ({ ...chip, count: 0 })) }
+        return { read, rows: [], requests: { state: 'ready', rows: [], complete: true }, transit: { state: 'ready', read: betaInTransitRead({ items: [] }) } }
       }),
       note: 'What lands here and the first action.',
     },
@@ -118,7 +120,7 @@ export const designScreen = defineDesignScreen<CustomerCaseBuilder>({
       id: 'th-223-no-prices',
       label: 'A colleague without prices',
       model: betaCase(() => {
-        const read = ordersRead('OPEN', null, { seesPrices: false })
+        const read = betaOrdersRead('OPEN', null, { seesPrices: false })
         return { read, rows: read.items }
       }),
     },

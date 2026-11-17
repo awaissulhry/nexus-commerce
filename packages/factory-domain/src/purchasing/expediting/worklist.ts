@@ -124,11 +124,11 @@ const CHASE = {
   it: {
     subject: (number: string) => `Sollecito: ordine di acquisto ${number}`,
     hello: (name: string | null) => (name ? `Gentile ${name},` : 'Buongiorno,'),
-    intro: (number: string) => `le scriviamo per le righe del nostro ordine di acquisto ${number} qui sotto:`,
+    intro: (number: string) => `vi scriviamo per le righe del nostro ordine di acquisto ${number} qui sotto:`,
     late: (day: string) => `in ritardo: attesa per il ${day}`,
     unconfirmed: 'non ancora confermata',
     later: (asked: string, confirmed: string) => `confermata per il ${confirmed}, richiesta per il ${asked}`,
-    ask: "Ci può dire quando arriveranno? Se le date confermate non sono più valide, risponda a questa e-mail con le nuove date. Per l'ordine non ancora confermato, usi il link personale dell'e-mail con cui le abbiamo inviato l'ordine.",
+    ask: "Potete dirci quando arriveranno? Se le date confermate non sono più valide, rispondete a questa e-mail con le nuove date. Per l'ordine non ancora confermato, usate il link personale dell'e-mail con cui vi abbiamo inviato l'ordine.",
     asked: (day: string) => `richiesta per il ${day}`,
   },
   en: {

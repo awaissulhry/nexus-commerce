@@ -35,7 +35,7 @@ export const DEFAULT_FREQUENCIES: Readonly<Partial<Record<PartnerEmailTopic, Par
 export const defaultFrequencyOf = (topic: PartnerEmailTopic): PartnerEmailFrequency => DEFAULT_FREQUENCIES[topic] ?? DEFAULT_FREQUENCY
 // ---- end B-TH-045
 
-export const LOCKED_REASON = { it: 'Servono per gestire i tuoi ordini.', en: 'Needed to run your orders.' } as const
+export const LOCKED_REASON = { it: 'Servono per gestire i vostri ordini.', en: 'Needed to run your orders.' } as const
 
 export const TOPIC_WORDS: Readonly<Record<PartnerEmailTopic, { readonly it: string; readonly en: string }>> = Object.freeze({
   ORDERS: { it: 'Ordini confermati', en: 'Orders confirmed' },

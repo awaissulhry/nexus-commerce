@@ -3,7 +3,7 @@
     "title": "Progetto"
   },
   "loading": "Lettura del progetto…",
-  "offline": "Nessuna connessione. Quello che vedi è stato letto alle {time}.",
+  "offline": "Nessuna connessione. Quello che vedete è stato letto alle {time}.",
   "status": {
     "ACTIVE": "Attivo",
     "ON_HOLD": "In pausa",
@@ -63,7 +63,7 @@
   },
   "failed": {
     "title": "Il progetto non si può leggere",
-    "body": "Riprova tra poco.",
+    "body": "Riprovate tra poco.",
     "retry": "Riprova"
   }
 }
