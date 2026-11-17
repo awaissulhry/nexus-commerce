@@ -47,6 +47,8 @@ describe('B-PR-25 what planning is asked (a date only)', () => {
 describe('B-PR-25 what the freeze rules read', () => {
   it('a change reads only the cells that move, its date and its address; a rush and a split their date; the rest nothing', () => {
     expect(impactAskOf('CHANGE', [cell(L10, '50', 2, 4), cell(L10, '52', 3, 3), cell(L20, null, 1, 0)], { requestedDate: '2026-12-20', shipToAddressId: 'addr' })).toEqual({ kind: 'CHANGE', cells: [{ lineId: L10, size: '50' }], requestedDate: '2026-12-20', shipTo: true })
+    // B-PR-27a: a line asked in another colourway reads its colour freeze (and a size's, when that size's pieces change too).
+    expect(impactAskOf('CHANGE', [{ ...cell(L10, '50', 2, 2), colourwayId: 'red' }, { ...cell(L10, '52', 3, 1), colourwayId: 'red' }], { requestedDate: null, shipToAddressId: null })).toEqual({ kind: 'CHANGE', cells: [{ lineId: L10, size: null, colourway: true }, { lineId: L10, size: '52', colourway: true }], requestedDate: null, shipTo: false })
     expect(impactAskOf('RUSH', [], { requestedDate: '2026-12-01', shipToAddressId: null })).toEqual({ kind: 'RUSH', requestedDate: '2026-12-01' })
     expect(impactAskOf('HOLD', [], { requestedDate: '2026-12-01', shipToAddressId: null })).toEqual({ kind: 'HOLD', requestedDate: null })
   })
