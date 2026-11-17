@@ -13,6 +13,8 @@ import { normaliseVisibility, type FileAudience, type FileKind } from './rules'
 import type { FilesRuntime } from './service'
 // B-TH-231: the records a file may be carried to, found as global search finds them.
 import { MESSAGE_TYPE, searchRecords } from '../search/search'
+import { SEARCH_LIMITS } from '@nexus/factory-domain/search/text'
+import { THREAD_RECORDS } from '../threads/records'
 
 /**
  * B-TH-024 (threads plan TH-2, N8; sections T9, the record threads' "Use on…"; wall test T25 extended): carry a file to another
@@ -115,7 +117,9 @@ export async function useOnTargets(caller: CommandCaller, fileId: string, query:
   const source = await readVisible(caller, fileId)
   const kind: FileKind = source.kind === 'FISCAL_ARCHIVE' ? 'DOCUMENT' : (source.kind as FileKind)
   if (query.type === MESSAGE_TYPE) return { tooShort: false, targets: [] }
-  const found = await searchRecords(caller, { q: query.q, type: query.type, limit: 50, offset: 0 })
+  // Among the record types a thread resolver knows (a file's record always has one): the first page is then the records it may go to.
+  const types = Object.keys(THREAD_RECORDS).filter((type) => type !== MESSAGE_TYPE && !readsThroughModule(type) && !ownerOf(type, kind))
+  const found = await searchRecords(caller, { q: query.q, type: query.type, types, limit: SEARCH_LIMITS.maxPage, offset: 0 })
   if (found.tooShort) return { tooShort: true, targets: [] }
   return caller.withClient(async (client) => {
     const from = await resolveRecord(client, source.recordType, source.recordId)
