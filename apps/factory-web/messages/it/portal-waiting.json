@@ -1,0 +1,74 @@
+{
+  "page": {
+    "title": "Cosa vi aspetta",
+    "updated": "Aggiornato alle {time}"
+  },
+  "loading": "Stiamo leggendo cosa vi aspetta…",
+  "failed": "Non siamo riusciti a leggere cosa vi aspetta.",
+  "retry": "Riprovate",
+  "empty": "Non vi aspetta nulla.",
+  "notice": {
+    "hide": "Nascondi",
+    "undone": "La vostra risposta è stata ritirata: non è stato inviato nulla."
+  },
+  "group": {
+    "production": "Approvazioni di produzione",
+    "order": "Ordine",
+    "quality": "Qualità",
+    "mtm": "Su misura",
+    "payment": "Pagamenti",
+    "other": "Altre approvazioni"
+  },
+  "row": {
+    "SAMPLE": "Approvate il campione {label}",
+    "FABRIC": "Approvate il tessuto {label}",
+    "TRIM": "Approvate l'accessorio {label}",
+    "COLOUR": "Approvate il colore {label}",
+    "LEATHER": "Approvate la pelle {label}",
+    "ARTWORK": "Approvate la grafica {label}",
+    "REVISED_ORDER": "Riconfermate l'ordine modificato {label}",
+    "REPROMISE": "Rispondete sulla nuova data {label}",
+    "COUNTER_OFFER": "Rispondete alla nostra proposta {label}",
+    "CONCESSION": "Rispondete sulla concessione {label}",
+    "PROOF": "Approvate la bozza del design {label}",
+    "SIGNATURE": "Firmate {label}",
+    "PAY_DEPOSIT": "Pagate l'acconto per {label}",
+    "PAY_INVOICE": "Pagate la fattura {label}"
+  },
+  "verb": {
+    "review": "Esaminate",
+    "reconfirm": "Riconfermate",
+    "answerDate": "Rispondete",
+    "answerCounter": "Rispondete",
+    "sign": "Firmate",
+    "view": "Vedete",
+    "pay": "Pagate"
+  },
+  "heldFor": {
+    "person": "In attesa di {name}",
+    "buyer": "In attesa del vostro buyer"
+  },
+  "askedBy": "Chiesto da {name}",
+  "amount": "{amount} da pagare",
+  "done": {
+    "pending": {
+      "APPROVED": "Approvato: ci arriva tra pochi secondi",
+      "APPROVED_WITH_CHANGES": "Approvato con modifiche: ci arriva tra pochi secondi",
+      "REFUSED": "Rifiutato: ci arriva tra pochi secondi"
+    },
+    "sent": {
+      "APPROVED": "Approvato: inviato a noi",
+      "APPROVED_WITH_CHANGES": "Approvato con modifiche: inviato a noi",
+      "REFUSED": "Rifiutato: inviato a noi"
+    },
+    "sending": "Invio in corso…"
+  },
+  "problem": {
+    "gone": "Questa richiesta non attende più una risposta.",
+    "forbidden": "Il vostro accesso non vi consente di rispondere a questa richiesta.",
+    "changed": "Nel frattempo questa richiesta è cambiata: apritela di nuovo.",
+    "invalid": "La vostra risposta non è completa: apritela di nuovo.",
+    "unavailable": "Non siamo riusciti a raggiungere il server: la vostra risposta non è stata inviata. Riprovate.",
+    "internal": "Qualcosa è andato storto: la vostra risposta non è stata inviata. Riprovate."
+  }
+}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, type KeyboardEvent } from 'react'
-import { Banner, ChangeReview, Field, type KeyValueItem } from '@nexus/ui/components'
+import { Banner, ChangeReview, Field, KeyValue, type KeyValueItem } from '@nexus/ui/components'
 import { EndState } from '@nexus/ui/components/EndState/index'
 import { PaymentPanel, type PaymentState } from '@nexus/ui/components/PaymentPanel/index'
 import { PdfViewer } from '@nexus/ui/components/PdfViewer/index'
@@ -17,6 +17,8 @@ import { cancelFeeOf, changedCells, MAX_NOTE, wantedSizes, type CancelDraft, typ
 import { useOrderWords, type OrderWords } from '../words'
 import { RevisionReview } from './StatusTab'
 import { Loading, ReadFailed } from './parts'
+// F-PR-13: what the ask means, before Send (frozen, cost, earliest date), in the change and the cancel pop-ups too.
+import { AskImpact, type AskImpactModel } from './AskImpact'
 
 /**
  * The pop-ups of Orders & tracking (design portal.customer.orders pop:change-request, pop:cancel-request, pop:reconfirm,
@@ -65,6 +67,8 @@ export interface ChangeDialogModel {
   shipTo: readonly string[]
   /** Today (Europe/Rome): the earliest day to ask for. */
   today: string
+  /** F-PR-13: the impact read for the review step (null / absent: not read). */
+  impact?: AskImpactModel | null
 }
 
 export interface ChangeDialogActions {
@@ -79,6 +83,8 @@ export interface ChangeDialogActions {
   onDiscard?: () => void
   onStay?: () => void
   onRetry?: () => void
+  /** F-PR-13: read the impact again. */
+  onRetryImpact?: () => void
 }
 
 export function ChangeDialog({ model, actions }: { model: ChangeDialogModel; actions?: ChangeDialogActions }) {
@@ -125,7 +131,7 @@ export function ChangeDialog({ model, actions }: { model: ChangeDialogModel; act
           ) : !rules.change.possible ? (
             <Banner tone="warning" title={rules.change.words[locale]} />
           ) : review ? (
-            <ChangeReviewStep model={model} rules={rules} words={words} />
+            <ChangeReviewStep model={model} rules={rules} words={words} onRetryImpact={actions?.onRetryImpact} />
           ) : (
             <>
               <p className="fw-pord-hint">{t('change.hint')}</p>
@@ -196,7 +202,8 @@ export function ChangeDialog({ model, actions }: { model: ChangeDialogModel; act
   )
 }
 
-function ChangeReviewStep({ model, rules, words }: { model: ChangeDialogModel; rules: ChangeRules; words: OrderWords }) {
+// F-PR-13: exported for the tests (the Modal draws only in a browser); the impact under what is asked.
+export function ChangeReviewStep({ model, rules, words, onRetryImpact }: { model: ChangeDialogModel; rules: ChangeRules; words: OrderWords; onRetryImpact?: () => void }) {
   const { t, day } = words
   const cells = changedCells(rules, model.draft)
   const items = rules.lines
@@ -220,6 +227,8 @@ function ChangeReviewStep({ model, rules, words }: { model: ChangeDialogModel; r
       <p className="fw-pord-hint">{t('change.reviewHint')}</p>
       <ChangeReview label={t('change.reviewLabel')} items={[...items, ...extra]} selectedIds={[]} onSelectionChange={() => undefined} tick={false} />
       {model.draft.note.trim() ? <p className="fw-pord-sub">{t('requests.note', { note: model.draft.note.trim() })}</p> : null}
+      {/* F-PR-13 */}
+      {model.impact ? <AskImpact model={model.impact} onRetry={onRetryImpact} /> : null}
       <p className="fw-pord-sub">{t('change.sendKeys')}</p>
     </div>
   )
@@ -234,6 +243,8 @@ export interface CancelDialogModel {
   held: { key: string; field: 'scope' | 'reason' | 'note' | null } | null
   busy: boolean
   problem: string | null
+  /** F-PR-13: the impact read for the review step (null / absent: not read). */
+  impact?: AskImpactModel | null
 }
 
 export interface CancelDialogActions {
@@ -241,6 +252,10 @@ export interface CancelDialogActions {
   onSend?: () => void
   onClose?: () => void
   onRetry?: () => void
+  // F-PR-13: edit → review (what it means) → Send.
+  onReview?: () => void
+  onBack?: () => void
+  onRetryImpact?: () => void
 }
 
 export function CancelDialog({ model, actions }: { model: CancelDialogModel; actions?: CancelDialogActions }) {
@@ -253,6 +268,9 @@ export function CancelDialog({ model, actions }: { model: CancelDialogModel; act
   const fieldError = (field: 'scope' | 'reason' | 'note') => (draft.tried && model.held?.field === field ? heldWords : undefined)
   const fee = rules ? cancelFeeOf(rules, draft) : null
   const reason = rules?.reasons.find((entry) => entry.code === draft.reasonCode) ?? null
+  // F-PR-13: edit → review (what it means, before Send) → Send.
+  const review = draft.step === 'review'
+  const sendHeld = model.held && (model.held.field === null || draft.tried) ? heldWords : null
   return (
     <Modal
       open
@@ -260,15 +278,25 @@ export function CancelDialog({ model, actions }: { model: CancelDialogModel; act
       size="md"
       onClose={() => actions?.onClose?.()}
       title={t('cancel.title', { number: model.number })}
+      subtitle={review ? t('change.reviewStep') : undefined}
       closeHeld={model.busy ? t('held.busy') : null}
       footer={
         model.state !== 'ready' || !rules ? (
           <Button onClick={() => actions?.onClose?.()}>{t('dialog.close')}</Button>
+        ) : review ? (
+          <>
+            <Button onClick={() => actions?.onBack?.()} heldReason={model.busy ? t('held.busy') : null}>
+              {t('change.back')}
+            </Button>
+            <Button variant="danger" heldReason={sendHeld} onClick={() => actions?.onSend?.()}>
+              {model.busy ? <Spinner size={14} /> : null} {t('cancel.send')}
+            </Button>
+          </>
         ) : (
           <>
             <Button onClick={() => actions?.onClose?.()}>{t('dialog.cancel')}</Button>
-            <Button variant="danger" heldReason={model.held && (model.held.field === null || draft.tried) ? heldWords : null} onClick={() => actions?.onSend?.()}>
-              {model.busy ? <Spinner size={14} /> : null} {t('cancel.send')}
+            <Button variant="primary" heldReason={sendHeld} onClick={() => (actions?.onReview ? actions.onReview() : actions?.onSend?.())}>
+              {actions?.onReview ? t('ask.review.go') : t('cancel.send')}
             </Button>
           </>
         )
@@ -279,6 +307,8 @@ export function CancelDialog({ model, actions }: { model: CancelDialogModel; act
           <Loading rows={3} height={48} />
         ) : model.state === 'error' || !rules ? (
           <ReadFailed title={t('cancel.failed')} onRetry={actions?.onRetry} />
+        ) : review ? (
+          <CancelReviewStep model={model} rules={rules} words={words} onRetryImpact={actions?.onRetryImpact} />
         ) : (
           <>
             <p className="fw-pord-hint">{t('cancel.hint')}</p>
@@ -339,6 +369,27 @@ export function CancelDialog({ model, actions }: { model: CancelDialogModel; act
     </Modal>
   )
 }
+
+// ── F-PR-13: the cancel asked, and what it means, before Send ──────────────────────────────────────────────────────
+export function CancelReviewStep({ model, rules, words, onRetryImpact }: { model: CancelDialogModel; rules: ChangeRules; words: OrderWords; onRetryImpact?: () => void }) {
+  const { t, locale } = words
+  const draft = model.draft
+  const reason = rules.reasons.find((entry) => entry.code === draft.reasonCode) ?? null
+  const lines = rules.lines.filter((line) => draft.scope === 'LINES' && draft.lineIds.includes(line.lineId) && line.cancel.possible)
+  const items: KeyValueItem[] = [
+    { label: t('cancel.what'), value: draft.scope === 'ORDER' ? t('cancel.whole') : lines.map((line) => lineTitle(line, t)).join(' · ') },
+    ...(reason ? [{ label: t('cancel.reason'), value: reason.words[locale] }] : []),
+    ...(draft.note.trim() ? [{ label: t('cancel.note'), value: draft.note.trim() }] : []),
+  ]
+  return (
+    <div className="fw-pord-stack">
+      <p className="fw-pord-hint">{t('ask.review.hint')}</p>
+      <KeyValue labelCase="sentence" items={items} />
+      {model.impact ? <AskImpact model={model.impact} onRetry={onRetryImpact} /> : null}
+    </div>
+  )
+}
+// ── end F-PR-13
 
 // ── Re-confirm order version N ───────────────────────────────────────────────────────────────────────────────────────
 export interface ReconfirmDialogModel {
