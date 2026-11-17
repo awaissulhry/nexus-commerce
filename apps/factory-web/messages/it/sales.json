@@ -190,7 +190,7 @@
     "checking": "Verifica del preventivo in corso.",
     "needsApproval": "Serve prima l'approvazione: {reasons}",
     "cannotAsk": "Prima risolvi ciò che blocca il preventivo (vedi i problemi).",
-    "noOrders": "Per creare un ordine serve il permesso di gestire gli ordini (orders.manage)."
+    "noOrders": "Per creare un ordine serve il permesso di gestire gli ordini."
   },
   "decide": {
     "held": {

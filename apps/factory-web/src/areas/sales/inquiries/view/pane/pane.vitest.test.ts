@@ -345,7 +345,7 @@ describe('B-TH-286 — "Move to the thread as a pinned note"', () => {
     for (const locale of ['en', 'it'] as const) {
       const html = render({ model: record(noted, 'owner', { pinNote: { busy: false, held: null } }), actions: { onPinNote: () => undefined } }, locale)
       expect(html).toContain(locale === 'en' ? 'Move to the thread as a pinned note' : 'Sposta nella conversazione come nota fissata')
-      expect(html).toContain(locale === 'en' ? 'One place for office notes' : 'Un solo posto per le note interne')
+      expect(html).toContain(locale === 'en' ? 'One place for office notes' : 'Un solo posto per le note d&#x27;ufficio') // B-TH-215: one word (the apostrophe as the markup escapes it)
       expect(html).not.toMatch(/pane\.pinNote\./)
     }
   })

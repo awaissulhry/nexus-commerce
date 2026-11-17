@@ -25,7 +25,8 @@
     "Shipment": "Spedizione",
     "Complaint": "Reclamo",
     "ReturnAuthorisation": "Reso",
-    "SupplierClaim": "Contestazione"
+    "SupplierClaim": "Contestazione",
+    "Project": "Progetto"
   },
   "may": {
     "VIEW": "leggere",
@@ -77,7 +78,8 @@
     "goodsDueBy": "Merce entro",
     "kind": "Tipo",
     "remedy": "Rimedio chiesto",
-    "sentAt": "Inviata"
+    "sentAt": "Inviata",
+    "targetDate": "Data obiettivo"
   },
   "code": {
     "status": {
@@ -112,7 +114,8 @@
       "REQUESTED": "Richiesto",
       "AUTHORISED": "Autorizzato",
       "INSPECTED": "Controllato",
-      "REJECTED": "Respinto"
+      "REJECTED": "Respinto",
+      "ON_HOLD": "In pausa"
     },
     "productType": {
       "JACKET": "Giacca",
