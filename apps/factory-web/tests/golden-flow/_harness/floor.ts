@@ -171,9 +171,15 @@ export async function tile(page: Page, label: string): Promise<void> {
   const wanted = tiles.getByRole('button', { name: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) }).first()
   // More than six tiles: the More tile opens the next page of them (B-W2b-73); a tile may sit on a later page.
   const more = tiles.getByRole('button', { name: startsWith(words('floor')('tile.more')) })
-  for (let turn = 0; turn < 5 && !(await wanted.isVisible()) && (await more.isVisible()); turn++) await more.click()
-  await press(wanted)
-  await page.waitForURL((url) => url.pathname !== '/floor')
+  // A move the server does not answer in time is taken back (FloorMoves: the frame says the page opens when the network is
+  // back): the worker taps the tile again, as here.
+  await expect(async () => {
+    if (new URL(page.url()).pathname === '/floor') {
+      for (let turn = 0; turn < 5 && !(await wanted.isVisible()) && (await more.isVisible()); turn++) await more.click()
+      await press(wanted, 5_000)
+    }
+    await page.waitForURL((url) => url.pathname !== '/floor', { timeout: 15_000 })
+  }).toPass({ timeout: 120_000 })
   await page.locator('input.nds-floor-scan-input:visible').first().waitFor()
   await quiet(page)
 }

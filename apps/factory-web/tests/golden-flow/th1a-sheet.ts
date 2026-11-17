@@ -16,7 +16,8 @@ import { words } from './_harness/words'
  *   2. a person limited to Brand Beta (a sales role over that customer only) opens the sheet: the switcher is a fixed label,
  *      every row is Brand Beta's, and the DOM name scan finds nothing of Brand Alpha (no name, PO, order number); the same
  *      person's address naming Brand Alpha shows "not available" and no row.
- * Writes outside the screens (only the renames and the limited person's role, as the admin) go through flow.write.
+ * Writes outside the screens (only the renames, as sales — the admin template reads no customer — and the limited person's
+ * role, as the admin) go through flow.write.
  */
 
 const S = words('orders-sheet')
@@ -28,7 +29,7 @@ async function limitedDesk(flow: Flow, from: Desk, party: string): Promise<Desk>
   const roles = await flow.read(admin.page, `/auth/users/${made.id}/roles`)
   const live = (roles.assignments as Array<{ id: string; roleId: string; version: number; live: boolean }>).filter((entry) => entry.live)
   await flow.write(admin.page, 'POST', '/auth/office/step-up', { code: await flow.code(admin.person) })
-  await flow.write(admin.page, 'POST', `/auth/users/${made.id}/roles`, { roleId: live[0]!.roleId, allCompanies: true, partyIds: [party] }, 201)
+  await flow.write(admin.page, 'POST', `/auth/users/${made.id}/roles`, { roleId: live[0]!.roleId, allCompanies: true, partyIds: [party] })
   for (const entry of live) await flow.write(admin.page, 'POST', `/auth/role-assignments/${entry.id}/end`, { version: entry.version })
   // Its own browser context (the same browser and web as the flow's desks), signed in through the sign-in screen.
   const context = await from.context.browser()!.newContext({ baseURL: new URL(from.page.url()).origin, viewport: { width: 1440, height: 900 }, locale: 'en-GB' })
@@ -44,7 +45,6 @@ export default defineStage({
   proves: 'the Orders sheet switched to customer A shows and exports customer A only (Picture, Brand, Invoiced); a person limited to customer B passes the DOM name scan (no row, count or file name of customer A)',
   async run(flow) {
     const sales = await flow.desk('sales')
-    const admin = await flow.desk('admin')
     const { page } = sales
     const alphaId = flow.state.party.id as string
     const betaId = await flow.seedId('party:P1')
@@ -52,8 +52,8 @@ export default defineStage({
 
     await flow.step('the two customers become Brand Alpha and Brand Beta (made-up names)', async () => {
       for (const [id, brand] of [[alphaId, BRAND_ALPHA], [betaId, BRAND_BETA]] as const) {
-        const party = (await flow.read(admin.page, `/parties/${id}`)).party
-        await flow.write(admin.page, 'PATCH', `/parties/${id}`, { version: party.version, legalName: brand.legalName, tradeName: brand.tradeName })
+        const party = (await flow.read(page, `/parties/${id}`)).party
+        await flow.write(page, 'PATCH', `/parties/${id}`, { version: party.version, legalName: brand.legalName, tradeName: brand.tradeName })
       }
     })
 
