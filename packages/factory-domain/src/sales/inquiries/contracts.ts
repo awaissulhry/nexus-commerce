@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { businessDate, currency, id, input, instant, output, unitPrice } from '../../core/contracts'
 import { money, notMoney } from '../../money/marked'
-import { DECLINE_REASONS, INQUIRY_LIMITS, INQUIRY_REFUSALS, INQUIRY_SOURCES, INQUIRY_STATUSES, INQUIRY_TILES, LAWFUL_BASES, SIZE_CODE, STYLE_DRAFTS_MAX, TYPED_SOURCES } from './rules'
+import { CUSTOMER_MATCHES, DECLINE_REASONS, INQUIRY_LIMITS, INQUIRY_REFUSALS, INQUIRY_SOURCES, INQUIRY_STATUSES, INQUIRY_TILES, LAWFUL_BASES, SIZE_CODE, STYLE_DRAFTS_MAX, TYPED_SOURCES } from './rules'
 // B-TH-026: a style draft's fields are the style library's.
 import { PPE_CATEGORIES, PRODUCT_TYPES } from '../../product/styles/rules'
 import { styleCode } from '../../product/styles/contracts'
@@ -515,3 +515,74 @@ export const sourceView = output({
     techPack: techPackView,
   }).nullable(),
 })
+
+// ---- B-TH-042 (threads plan G5; O-SAL-INQ-LIST.pane-actions-F08, wall W23): answer a new customer ------------------------------
+
+/**
+ * GET /sales/inquiries/:inquiryId/customer — the check before a prospect's request gets its customer: the customers it may already be
+ * (among those the reader may make a request for: never a customer the reader may not see), each found by the address of one of its
+ * contacts, its contacts' company e-mail domain (never a shared mail provider's) or its name; what a new customer would be called.
+ */
+export const customerCheckView = output({
+  prospect: output({ name: z.string().nullable(), company: z.string().nullable(), email: z.string().nullable(), phone: z.string().nullable(), lawfulBasis: z.enum(LAWFUL_BASES).nullable(), erased: z.boolean() }),
+  candidates: z.array(
+    output({
+      party: partyRef,
+      /** The contact whose address is the prospect's (CONTACT), else null. */
+      contact: output({ id: id(), name: z.string() }).nullable(),
+      matchedBy: z.enum(CUSTOMER_MATCHES),
+    }),
+  ),
+  /** More than one customer is found by the same address or domain: the person picks (W23). */
+  ambiguous: z.boolean(),
+  /** A new customer as it would be made (the code proposed, free; the name from the prospect). */
+  suggestion: output({ code: z.string(), legalName: z.string(), kind: z.enum(['ORGANISATION', 'PERSON']) }),
+  /** Making a customer needs parties.manage over the request's company; matching, the request's own rights. */
+  make: action,
+  match: action,
+})
+
+/**
+ * POST /sales/inquiries/:inquiryId/customer — the prospect's request gets its customer in ONE command: `match` an existing customer
+ * (the reader may make requests for it; its contact, or the prospect added as a new contact with `addContact`), or `make` a new one
+ * from the prospect (its contact with the prospect's name, address and phone and the lawful basis carried). A match the check did
+ * not find by one of the customer's own contact addresses, or a new customer while the check found one, asks first: `confirmed`.
+ * Then the prospect's columns are cleared (its data lives in the contact), the customer's own number is given, and the mail the
+ * request came from, while it waits in Mail to sort, joins the request's thread — shared with that customer only.
+ */
+export const makeCustomerBody = input({
+  version: version(),
+  match: input({
+    partyId: id(),
+    /** One of its active contacts (default: the contact the check found by the prospect's address). */
+    contactId: id().nullable().optional(),
+    /** Add the prospect as a new contact of the customer (parties.manage), when no contact has its address. */
+    addContact: z.boolean().optional(),
+  }).optional(),
+  make: input({
+    /** Default: the check's suggestion. */
+    code: z.string().trim().min(1).max(24).optional(),
+    legalName: line(200).optional(),
+    kind: z.enum(['ORGANISATION', 'PERSON']).optional(),
+    country: z.string().trim().length(2).optional(),
+    language: z.string().trim().min(2).max(5).optional(),
+    /** PROSPECT (default: a customer not confirmed yet) or ACTIVE. */
+    status: z.enum(['PROSPECT', 'ACTIVE']).optional(),
+    /** A customer of every company (default: of the request's company only). */
+    everyCompany: z.boolean().optional(),
+  }).optional(),
+  /** The person's yes to what the check asked first (W23). */
+  confirmed: z.boolean().optional(),
+})
+export type MakeCustomerBody = z.output<typeof makeCustomerBody>
+
+export const makeCustomerAnswer = output({
+  inquiry: inquiryView,
+  party: partyRef,
+  contactId: id().nullable(),
+  /** What was made: the customer and its contact, a contact of an existing customer, or nothing (a match). */
+  made: z.enum(['CUSTOMER', 'CONTACT']).nullable(),
+  /** The mail the request came from joined its thread now. */
+  mailJoined: z.boolean(),
+})
+// ---- end B-TH-042

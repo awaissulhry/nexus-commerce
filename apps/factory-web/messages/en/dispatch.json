@@ -20,7 +20,8 @@
     "write": "It could not be saved. Try again.",
     "changed": "Someone changed this since you read it: the board was read again.",
     "stale": "The board could not be read again: what you see may be out of date.",
-    "noTarget": "This site has no line to print."
+    "noTarget": "This site has no line to print.",
+    "everyCustomer": "This view adds up every customer; it needs access to all customers."
   },
   "live": {
     "connecting": "Connecting",

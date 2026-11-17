@@ -10,6 +10,8 @@ import { downloadText, useCoalesced, useLive } from '../_shared/hooks'
 import type { Replacement } from '../cutting/api'
 import { romeDayStart } from '../cutting/model'
 import { approveReduction, askReplacement, getScrap, openReductions, refuseReduction, type ScrapRow, type ScrapTiles } from './api'
+// F-PR-02: the customer filter.
+import { useProductionCustomers } from '../_shared/customer/use-customers'
 import { addressOf, addressText, csvOf, leftToReplace, periodFrom, phrase, readProblem, replaceBody, replaceHeld, SCRAP_NAMESPACE, scrapCanOf, writeProblem, type ScrapAddress } from './model'
 import type { ReplaceDraftModel } from './view/ScrapDialogs'
 // B-W2b-126: second quality (MES-133) and a rework's repair (MES-132).
@@ -47,6 +49,9 @@ function Container() {
   const prefix = pathname.replace(/\/production\/scrap\/?$/, '')
   const can = useMemo(() => scrapCanOf(session.permissions), [session.permissions])
   const address = addressOf(params)
+  // F-PR-02: the customer filter (the rows, the tiles and the downgrades follow it).
+  const customers = useProductionCustomers('scrap')
+  const partyId = customers.partyId
 
   const [rows, setRows] = useState<ScrapModel['rows']>({ items: null, problem: null })
   const [tiles, setTiles] = useState<ScrapTiles | null>(null)
@@ -75,7 +80,7 @@ function Container() {
     try {
       const from = periodFrom(address.period, Date.now())
       // B-W2b-126: the downgrades are their own read; a failed one leaves the scrap rows (its tile says "—").
-      const [page, open, downgrades] = await Promise.all([getScrap(api, { from }), openReductions(api).catch(() => [] as Replacement[]), getDowngrades(api, { from }).catch(() => null)])
+      const [page, open, downgrades] = await Promise.all([getScrap(api, { from, partyId }), openReductions(api).catch(() => [] as Replacement[]), getDowngrades(api, { from, partyId }).catch(() => null)])
       if (id !== readId.current) return
       setRows({ items: withDowngrades(page.rows, downgrades?.downgrades ?? null), problem: null })
       setTiles(page.tiles)
@@ -87,7 +92,7 @@ function Container() {
       if (id !== readId.current) return
       setRows({ items: null, problem: readProblem(error) })
     }
-  }, [api, can.view, address.period])
+  }, [api, can.view, address.period, partyId])
 
   useEffect(() => {
     void load()
@@ -144,7 +149,7 @@ function Container() {
   }, [address.open, rows.items])
 
   const recount = useCoalesced(() => {
-    getScrap(api, { from: periodFrom(address.period, Date.now()) })
+    getScrap(api, { from: periodFrom(address.period, Date.now()), partyId })
       .then((page) => setTiles(page.tiles))
       .catch(() => undefined)
   }, 1200)
@@ -257,6 +262,7 @@ function Container() {
     can,
     me: session.user.id,
     address,
+    customers: customers.state,
     timeZone: TIME_ZONE,
     todayStart,
     rows,

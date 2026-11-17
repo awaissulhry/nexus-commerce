@@ -529,7 +529,8 @@
     "forbidden": "Il tuo ruolo non può farlo.",
     "gone": "Non c'è più, o è di una sede che non puoi raggiungere.",
     "invalid": "Qualcosa non è valido: controlla e riprova.",
-    "offline": "Nessuna connessione: non è stato inviato nulla."
+    "offline": "Nessuna connessione: non è stato inviato nulla.",
+    "everyCustomer": "Questa vista somma tutti i clienti: serve l'accesso a tutti i clienti."
   },
   "notice": {
     "corrected": "Rettifica approvata: è stata aggiunta una riga di rettifica, niente è stato sovrascritto.",

@@ -35,7 +35,9 @@ import { activeHoldsOf } from './checks'
 import { placerMayReleaseOf } from './settings'
 import { holdReasonWords, HOLD_COLUMNS, holdView, readHold, readSubjects, viewFactsOf, type HoldRow, type Reader, type Subject } from './store'
 // B-PR-06 (the brand wall): a hold names the customers of the goods it holds.
-import { customersOf, NO_CUSTOMER, reachesCustomers, reachesHold } from '../wall'
+import { customersOf, /* B-PR-09 */ holdCustomersOf, NO_CUSTOMER, reachesCustomers, reachesHold } from '../wall'
+// B-PR-09: the customers a hold's events name (the office's live wall).
+import { partyIdsOf } from '@nexus/factory-domain/events/live'
 // B-W2b-289 (SCM-179): the site's default quality place when none is named.
 import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
 
@@ -116,8 +118,8 @@ async function bumpWorkOrder(tools: CommandTools, workOrderId: string): Promise<
   if (count !== 1) throw new StaleVersionError('WorkOrder', workOrderId, row.version + 1, row.version)
 }
 
-function emitWorkOrderMove(tools: CommandTools, workOrder: { readonly companyId: string; readonly siteId: string }, move: WorkOrderMove): void {
-  tools.emit({ type: 'workorder.status_changed', subject: move.id, companyId: workOrder.companyId, siteId: workOrder.siteId, payload: { workOrderId: move.id, number: move.number, from: move.from, to: move.to } })
+function emitWorkOrderMove(tools: CommandTools, workOrder: { readonly companyId: string; readonly siteId: string; /* B-PR-09 */ readonly partyId: string | null }, move: WorkOrderMove): void {
+  tools.emit({ type: 'workorder.status_changed', subject: move.id, companyId: workOrder.companyId, siteId: workOrder.siteId, payload: { workOrderId: move.id, number: move.number, partyId: workOrder.partyId /* B-PR-09 */, from: move.from, to: move.to } })
 }
 
 /**
@@ -132,7 +134,7 @@ async function holdWorkOrders(tools: CommandTools, ids: readonly string[], hold:
   for (const id of order) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(concat_ws('|', 'factory.work-order-gate', ${tenantId}::uuid, ${id}::uuid), 0))`
   const moved: WorkOrderMove[] = []
   for (const id of order) {
-    const row = await tx.workOrder.findUnique({ where: { id }, select: { id: true, number: true, status: true, companyId: true, siteId: true } })
+    const row = await tx.workOrder.findUnique({ where: { id }, select: { id: true, number: true, status: true, companyId: true, siteId: true, /* B-PR-09 */ partyId: true } })
     if (!row) throw new NotFoundError('Work order not found.')
     const move = workOrderHoldMove(row.status as WorkOrderStatus)
     if (move === 'REFUSED') throw new InvalidStateError(unholdableWords('WorkOrder', { label: row.number, state: row.status })!)
@@ -162,7 +164,7 @@ async function liftWorkOrders(tools: CommandTools, hold: HoldRow, why: string): 
   if (hold.subjectType !== 'WorkOrder') return lifted
   const reasons = await holdReasonWords(tx)
   for (const id of sortedIds(hold.subjectIds)) {
-    const row = await tx.workOrder.findUnique({ where: { id }, select: { id: true, number: true, status: true, heldFromStatus: true, holdRecordType: true, holdRecordId: true, companyId: true, siteId: true } })
+    const row = await tx.workOrder.findUnique({ where: { id }, select: { id: true, number: true, status: true, heldFromStatus: true, holdRecordType: true, holdRecordId: true, companyId: true, siteId: true, /* B-PR-09 */ partyId: true } })
     if (!row || row.status !== 'ON_HOLD') continue
     const others = (await activeHoldsOf(tx, 'WorkOrder', [row.id])).filter((other) => other.id !== hold.id)
     if (others.length > 0) {
@@ -345,6 +347,7 @@ export async function placeHoldInCommand(tools: CommandTools, input: PlaceHoldIn
     siteId,
     payload: {
       holdId: hold.id,
+      partyIds: await holdPartyIds(tx, hold), // B-PR-09: the customers of the goods held
       subjectType: input.subjectType,
       subjectIds: [...hold.subjectIds],
       reasonCode: hold.reasonCode,
@@ -380,10 +383,22 @@ export async function lockActiveHold(tools: CommandTools, holdId: string, expect
   return (await readHold(tools.tx, holdId))!
 }
 
+// ── B-PR-09 ──
+/**
+ * B-PR-09 (the brand wall): the `partyIds` of a hold's events — the customers of the goods it holds, each once; [] when the
+ * goods name none (a lot, a hide) or one of them names no customer — so the office's live screens send them only to people who
+ * reach every one of them (factory-domain events/live.ts), as the hold itself is found (../wall reachesHold).
+ */
+export async function holdPartyIds(db: Reader, hold: Pick<HoldRow, 'id' | 'subjectType' | 'subjectIds'>): Promise<string[]> {
+  const customers = (await holdCustomersOf(db, [hold])).get(hold.id) ?? NO_CUSTOMER
+  return customers.unnamed ? [] : partyIdsOf(customers.parties)
+}
+// ── end B-PR-09 ──
+
 /** `quality.hold_changed` with the fields that changed (none: no event). B-W2b-114's board and quarantine moves use it too. */
-export function emitHoldChanged(tools: Pick<CommandTools, 'emit'>, hold: Pick<HoldRow, 'id' | 'companyId' | 'siteId'>, fields: readonly HoldChangedField[]): void {
+export async function emitHoldChanged(tools: Pick<CommandTools, 'emit' | 'tx'>, hold: Pick<HoldRow, 'id' | 'companyId' | 'siteId' | /* B-PR-09 */ 'subjectType' | 'subjectIds'>, fields: readonly HoldChangedField[]): Promise<void> {
   if (fields.length === 0) return
-  tools.emit({ type: 'quality.hold_changed', subject: hold.id, companyId: hold.companyId, siteId: hold.siteId, payload: { holdId: hold.id, fields: [...new Set(fields)] } })
+  tools.emit({ type: 'quality.hold_changed', subject: hold.id, companyId: hold.companyId, siteId: hold.siteId, payload: { holdId: hold.id, partyIds: await holdPartyIds(tools.tx, hold) /* B-PR-09 */, fields: [...new Set(fields)] } })
 }
 
 // ---- change ---------------------------------------------------------------------------------------------------------
@@ -422,7 +437,7 @@ export async function editHold(caller: CommandCaller, holdId: string, body: Edit
     const after = await tx.qualityHold.update({ where: { id: current.id }, data, select: HOLD_COLUMNS })
     const pick = (hold: HoldRow) => Object.fromEntries(fields.map((field) => [field, field === 'expectedReleaseOn' ? (hold.expectedReleaseOn?.toISOString().slice(0, 10) ?? null) : hold[field]]))
     tools.audit({ recordType: 'QualityHold', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: pick(current), after: pick(after) })
-    emitHoldChanged(tools, current, fields)
+    await emitHoldChanged(tools, current, fields)
     return { hold: await detailOf(tx, after, now) }
   })
   return result
@@ -509,7 +524,7 @@ export async function releaseHold(caller: CommandCaller, holdId: string, body: R
     })
     tools.audit({ recordType: 'QualityHold', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: 'ACTIVE' }, after: { status: 'RELEASED', releaseSignatureSha256: signature, checks: checks.map((check) => check.words) }, ...(note ? { reason: note } : {}) })
     const lifted = await liftWorkOrders(tools, after, note ?? 'Hold released.')
-    tools.emit({ type: 'quality.hold_released', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { holdId: current.id, subjectType: current.subjectType as HoldSubjectType, subjectIds: [...current.subjectIds], workOrdersLifted: lifted.map((entry) => entry.id) } })
+    tools.emit({ type: 'quality.hold_released', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { holdId: current.id, partyIds: await holdPartyIds(tx, current) /* B-PR-09 */, subjectType: current.subjectType as HoldSubjectType, subjectIds: [...current.subjectIds], workOrdersLifted: lifted.map((entry) => entry.id) } })
     return { hold: await detailOf(tx, after, now), workOrdersLifted: lifted.map((entry) => ({ id: entry.id, number: entry.number, to: entry.to })), checks }
   })
   return result

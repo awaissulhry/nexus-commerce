@@ -48,6 +48,9 @@ import { CallDetail } from './CallDetail'
 import { CallDialogs } from './CallDialogs'
 import { Duration, kindColour, OpenFor, say, StatusPill, TypeCell, useCallsT, WaitingTag } from './parts'
 import '../calls.css'
+// F-PR-02: the customer filter (filter only on Help calls).
+import type { CustomerFilterState } from '../../_shared/customer/model'
+import { CustomerFilter } from '../../_shared/customer/view/CustomerFilter'
 
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string }
 
@@ -62,6 +65,8 @@ export interface CallsModel {
   prefix: string
   can: CallsCan
   address: CallsAddress
+  /** F-PR-02: the customer filter (`?party=`, set through onAddress; filter only: a call is about a station, 06-tree pick 1). */
+  customers?: CustomerFilterState
   timeZone: string
   rows: { items: readonly Call[] | null; problem: string | null }
   /** More calls behind "Show more" (the API's cursor). */
@@ -465,7 +470,7 @@ function CallsList({
     ]
   }, [t, locale, model.timeZone, waitingMinutes])
 
-  const narrowed = model.address.q.trim() !== '' || model.address.tile !== null || model.address.kind !== null || model.address.view !== 'open'
+  const narrowed = model.address.q.trim() !== '' || model.address.tile !== null || model.address.kind !== null || model.address.view !== 'open' || !!model.address.party
   const state = model.rows.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
   ) : filtered && filtered.length === 0 ? (
@@ -478,7 +483,7 @@ function CallsList({
             size="sm"
             onClick={() => {
               setQuery('')
-              actions?.onAddress?.({ q: '', tile: null, kind: null, view: 'open' })
+              actions?.onAddress?.({ q: '', tile: null, kind: null, view: 'open', party: null })
             }}
           >
             {t('common.clearFilters')}
@@ -536,6 +541,7 @@ function CallsList({
                 </option>
               ))}
             </Select>
+            {model.customers && <CustomerFilter state={model.customers} onPick={(party) => actions?.onAddress?.({ party })} />}
           </span>
         }
         selection={

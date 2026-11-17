@@ -242,7 +242,7 @@ export async function createRepairWorkOrder(caller: CommandCaller, body: RepairI
       subject: id,
       companyId: site.companyId,
       siteId: site.id,
-      payload: { workOrderId: id, number: number.formatted, siteId: site.id, styleId: style.id, salesOrderIds: [line.orderId], cells: 1, pieces: 1, repairOrderId: current.id },
+      payload: { workOrderId: id, number: number.formatted, partyId: line.partyId /* B-PR-09 */, siteId: site.id, styleId: style.id, salesOrderIds: [line.orderId], cells: 1, pieces: 1, repairOrderId: current.id },
     })
     return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, id))!, todayOfCommand(tools)) }
   })
@@ -270,7 +270,7 @@ export async function setRepairSteps(caller: CommandCaller, workOrderId: string,
       published: 'keep those steps on the repair',
     })
     tools.audit({ recordType: 'WorkOrder', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { steps: before.map((op) => op.routingSeq) }, after: { steps: operations.map((op) => op.routingSeq) } })
-    tools.emit({ type: 'workorder.changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { workOrderId: current.id, number: current.number, changes: ['steps'], cells: 1, pieces: 1 } })
+    tools.emit({ type: 'workorder.changed', subject: current.id, companyId: current.companyId, siteId: current.siteId, payload: { workOrderId: current.id, number: current.number, partyId: current.partyId /* B-PR-09 */, changes: ['steps'], cells: 1, pieces: 1 } })
     return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools)) }
   })
 }

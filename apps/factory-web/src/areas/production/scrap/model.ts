@@ -1,4 +1,6 @@
 import type { Tone } from '@nexus/ui/primitives'
+// F-PR-02: the production pages' one customer filter.
+import { PARTY_KEY, partyTerm } from '../_shared/customer/model'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Replacement } from '../cutting/api'
 import { DOWNGRADE_REASON_WORDS, isDowngradeReason } from '@nexus/factory-domain/production/repair/rules'
@@ -78,6 +80,8 @@ export interface ScrapAddress {
   readonly replace: string | null
   /** B-W2b-126: Downgrade to second quality for this row (`?downgrade=`). */
   readonly downgrade: string | null
+  /** F-PR-02: the customer filter (`?party=`); absent or null: every customer. */
+  readonly party?: string | null
 }
 
 const pick = <T extends string>(values: readonly T[], value: string | null | undefined, fallback: T): T => ((values as readonly string[]).includes(value ?? '') ? (value as T) : fallback)
@@ -96,6 +100,7 @@ export function addressOf(params: { get(name: string): string | null } | null): 
     open: rowId(params?.get('open')),
     replace: rowId(params?.get('replace')),
     downgrade: rowId(params?.get('downgrade')),
+    ...partyTerm(params),
   }
 }
 
@@ -110,6 +115,7 @@ export function addressText(address: ScrapAddress): string {
   if (address.open) query.set('open', address.open)
   if (address.replace) query.set('replace', address.replace)
   if (address.downgrade) query.set('downgrade', address.downgrade)
+  if (address.party) query.set(PARTY_KEY, address.party)
   const text = query.toString()
   return text ? `?${text}` : ''
 }
@@ -399,6 +405,9 @@ export function downgradeRow(downgrade: Downgrade): ScrapRow {
     materials: [],
     replacements: [],
     downgrade,
+    // F-PR-02: the customer of the work order it came from.
+    customer: downgrade.customer,
+    mixedCustomers: downgrade.mixedCustomers,
   }
 }
 

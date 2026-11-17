@@ -87,13 +87,15 @@ async function stateAfter(tx: CommandTx, row: Pick<InspectionRow, 'id' | 'sample
   return { inspected, verdict: rejected ? ('reject' as const) : inspected >= row.sampleSize ? ('accept' as const) : ('open' as const) }
 }
 
-function emitRecorded(tools: CommandTools, row: InspectionRow, what: RecordedWhat, state: { inspected: number; verdict: 'open' | 'accept' | 'reject' }) {
+async function emitRecorded(tools: CommandTools, row: InspectionRow, what: RecordedWhat, state: { inspected: number; verdict: 'open' | 'accept' | 'reject' }) {
+  // B-PR-09 (the brand wall): its work order's one customer, so the office's live screens send it only to people who reach it.
+  const workOrder = await tools.tx.workOrder.findUnique({ where: { id: row.workOrderId }, select: { partyId: true } })
   tools.emit({
     type: 'final_inspection.recorded',
     subject: row.id,
     companyId: row.companyId,
     siteId: row.siteId,
-    payload: { inspectionId: row.id, workOrderId: row.workOrderId, what, inspected: state.inspected, sampleSize: row.sampleSize, verdict: state.verdict },
+    payload: { inspectionId: row.id, workOrderId: row.workOrderId, partyId: workOrder?.partyId ?? null /* B-PR-09 */, what, inspected: state.inspected, sampleSize: row.sampleSize, verdict: state.verdict },
   })
 }
 
@@ -137,7 +139,7 @@ export async function recordResults(caller: CommandCaller, inspectionId: string,
     }
     await bump(tx, context, row, now)
     tools.audit({ recordType: 'Inspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { results: before.length }, after: { results: changes } })
-    emitRecorded(tools, row, 'RESULTS', await stateAfter(tx, row, inspectedNow(row), binding))
+    await emitRecorded(tools, row, 'RESULTS', await stateAfter(tx, row, inspectedNow(row), binding))
     return { id: row.id }
   })
   return sheetOf(caller, inspection.id)
@@ -187,7 +189,7 @@ export async function recordMeasurements(caller: CommandCaller, inspectionId: st
     }
     await bump(tx, context, row, now)
     tools.audit({ recordType: 'Inspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { measurements: before.length }, after: { measurements: changes, ...(mtm ? { profileRevision: mtm.profile.revision } : {}) } })
-    emitRecorded(tools, row, 'MEASUREMENTS', await stateAfter(tx, row, inspectedNow(row), binding))
+    await emitRecorded(tools, row, 'MEASUREMENTS', await stateAfter(tx, row, inspectedNow(row), binding))
     return { id: row.id }
   })
   return sheetOf(caller, inspection.id)
@@ -220,7 +222,7 @@ export async function setCount(caller: CommandCaller, inspectionId: string, body
     const copied = row.inspectedCount === null && keepsSampleEntry(row.checklist)
     await bump(tx, context, row, now, { inspectedCount: inspected, ...(copied ? { checklist: withoutEntry(row.checklist, SAMPLE_ENTRY) } : {}) })
     tools.audit({ recordType: 'Inspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { inspected: was }, after: { inspected, ...(copied ? { copiedFrom: SAMPLE_ENTRY } : {}) } })
-    emitRecorded(tools, row, 'COUNT', await stateAfter(tx, row, inspected, binding))
+    await emitRecorded(tools, row, 'COUNT', await stateAfter(tx, row, inspected, binding))
     return { id: row.id }
   })
   return sheetOf(caller, inspection.id)
@@ -244,7 +246,7 @@ export async function changeIdentity(caller: CommandCaller, inspectionId: string
     const summary = identitySummary({ mode: facts.mode, expected: facts.expected.map((serial) => serial.serial), batchNumber: header.batchNumber, lotSize: row.lotSize, scans: changed.scans })
     await bump(tx, context, row, now, { checklist: withEntry(row.checklist, identityEntry(facts.mode, changed.scans, summary)) })
     tools.audit({ recordType: 'Inspection', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { identity: facts.summary.words }, after: { identity: summary.words, added: body.add ?? [], removed: body.remove ?? [], duplicates: changed.duplicates } })
-    emitRecorded(tools, row, 'IDENTITY', await stateAfter(tx, row, inspectedNow(row), binding))
+    await emitRecorded(tools, row, 'IDENTITY', await stateAfter(tx, row, inspectedNow(row), binding))
     return { id: row.id }
   })
   return sheetOf(caller, inspection.id)
@@ -321,7 +323,7 @@ export async function completeResultPhoto(request: FastifyRequest, inspectionId:
     await tx.$queryRaw`SELECT "id" FROM "Inspection" WHERE "id" = ${inspection.id}::uuid FOR UPDATE`
     const row = (await tx.inspection.findUnique({ where: { id: inspection.id }, select: { id: true, status: true, checklist: true, inspectedCount: true } }))!
     tools.audit({ recordType: 'Inspection', recordId: inspection.id, companyId: inspection.companyId, siteId: inspection.siteId, after: { photo: fileId, result: result.id, sampleIndex: result.sampleIndex, status: stored.status, by: context.audience === 'floor' ? 'FLOOR' : 'OFFICE' } })
-    if (row.status === 'OPEN') emitRecorded(tools, inspection, 'PHOTO', await stateAfter(tx, inspection, inspectedNow(row), binding))
+    if (row.status === 'OPEN') await emitRecorded(tools, inspection, 'PHOTO', await stateAfter(tx, inspection, inspectedNow(row), binding))
     return { id: inspection.id }
   })
   return { file: stored }

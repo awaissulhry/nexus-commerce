@@ -270,7 +270,7 @@ export async function allocateRolls(caller: CommandCaller, cutOrderId: string, l
       siteId: current.siteId,
       after: { cutOrder: current.number, lay: lay.seq, rolls: added.map((entry) => ({ rollId: entry.rollId, code: entry.roll.code, plies: entry.plies })), allocated: total },
     })
-    emitOrder(tools, current, 'ROLLS_ALLOCATED', [...new Set((await readLines(tx, [cutOrderId])).map((line) => line.workOrderId))], { layId, rollIds: added.map((entry) => entry.rollId) })
+    await emitOrder(tools, current, 'ROLLS_ALLOCATED', [...new Set((await readLines(tx, [cutOrderId])).map((line) => line.workOrderId))], { layId, rollIds: added.map((entry) => entry.rollId) })
     const record = await recordOf(tx, context, current)
     const unique = new Map(warnings.map((warning) => [`${warning.code}|${warning.message}`, warning]))
     return { ...record, allocation: { layId, allocated: total, warnings: [...unique.values(), ...record.warnings] } }
@@ -288,7 +288,7 @@ export async function removeRoll(caller: CommandCaller, cutOrderId: string, layI
     if (!row) return notFound('Roll of the lay')
     await tx.layRoll.delete({ where: { id: layRollId }, select: { id: true } })
     tools.audit({ action: 'production.removeLayRoll', recordType: 'Lay', recordId: layId, companyId: current.companyId, siteId: current.siteId, before: { cutOrder: current.number, lay: lay.seq, rollId: row!.rollId, code: row!.roll.code, plies: row!.plies } })
-    emitOrder(tools, current, 'ROLLS_REMOVED', [...new Set((await readLines(tx, [cutOrderId])).map((line) => line.workOrderId))], { layId, rollIds: [row!.rollId] })
+    await emitOrder(tools, current, 'ROLLS_REMOVED', [...new Set((await readLines(tx, [cutOrderId])).map((line) => line.workOrderId))], { layId, rollIds: [row!.rollId] })
     return recordOf(tx, context, current)
   })
   return result

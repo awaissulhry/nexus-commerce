@@ -4,7 +4,7 @@ import { officeContextOf } from '../../../modules/planning/access'
 import { capacity } from '../../../modules/planning/capacity/capacity'
 import type { CapacityLaneView, CapacityQuery } from '../../../modules/planning/capacity/contract'
 import { listSettings } from '../../../modules/planning/settings/settings'
-import { defineExportSource, type ExportColumn } from '../source'
+import { defineExportSource, /* B-PR-09 */ everyCustomerRefusal, type ExportColumn } from '../source'
 
 /**
  * Planning › Capacity & load (SCR-123, `/planning/capacity`): the export of the list as the screen shows it, one row per
@@ -120,6 +120,8 @@ const COLUMNS = new Proxy(FIXED, {
 export const capacityLoad = defineExportSource<Query, Lane>({
   listKey: 'planning.capacity',
   permission: PLANNING_VIEW,
+  // B-PR-09 (the brand wall): it adds up every customer's work: the production unit's file alone (403 in words otherwise).
+  refusal: everyCustomerRefusal(PLANNING_VIEW),
   query(address) {
     const day = (name: string) => {
       const value = address.get(name) ?? ''

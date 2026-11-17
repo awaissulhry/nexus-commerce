@@ -27,7 +27,8 @@ import { customerRefOf, type CustomerNumberKind } from '@nexus/factory-domain/sa
  *   sales_order.status_changed  ORDERS    "Your order SO-… is confirmed"       B-TH-006: when a waiting order is let go on
  *                                         (PENDING_APPROVAL → CONFIRMED)
  *   sales_order.promise_changed DATES     "The delivery date of SO-… changed (by 12 Dec)"
- *   shipment.status_changed     SHIPPED   "SH-… has shipped" (to SHIPPED only)
+ *   shipment.status_changed     SHIPPED   "A delivery of your order 12 has shipped" (to SHIPPED only; th3b follow-up 5: the
+ *                                         customer's own order number, never the office's SH-… series)
  *   invoice.issued              INVOICES  "Invoice FT-… was issued"            only to people whose role sees prices
  *   supplier_claim.sent         CLAIMS    "New claim SC-…"                     to the supplier's people
  *   thread.message_posted       MESSAGES  "New message from <Company> on …"   our OUTBOUND message to the partner, to the
@@ -152,9 +153,13 @@ export const RECORD_RULES: readonly PartnerRule[] = Object.freeze([
     async drafts(context, raw) {
       const event = payload<{ shipmentId: string; to: string }>(shippingEvents, 'shipment.status_changed', raw)
       if (event.to !== 'SHIPPED') return []
-      const shipment = await context.tx.shipment.findUnique({ where: { id: event.shipmentId }, select: { id: true, number: true, companyId: true, partyId: true } })
+      // ── th3b follow-up 5 (threads plan §0.5, counts do not leak): the customer reads its own order's number ("A delivery of your
+      // order 12 has shipped", chip "#12"), never the office's shipment series (SH-…); the link stays the shipment's.
+      const shipment = await context.tx.shipment.findUnique({ where: { id: event.shipmentId }, select: { id: true, companyId: true, partyId: true, salesOrder: { select: { id: true, customerSeq: true } } } })
       if (!shipment) return []
-      return [draft({ partyId: shipment.partyId, companyId: shipment.companyId, record: { type: 'Shipment', id: shipment.id, label: shipment.number }, messageKey: 'portal.shipment.shipped', params: {}, anchor: null })]
+      const named = orderNamed(shipment.salesOrder)
+      return [draft({ partyId: shipment.partyId, companyId: shipment.companyId, record: { type: 'Shipment', id: shipment.id, label: named.record.label }, messageKey: 'portal.shipment.shipped', params: named.params, anchor: null })]
+      // ── end th3b follow-up 5
     },
   },
   {

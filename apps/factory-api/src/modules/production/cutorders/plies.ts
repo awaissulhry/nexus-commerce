@@ -96,7 +96,7 @@ export async function makePlyRun(caller: CommandCaller, layId: string, body: Mak
     await tx.plyRun.create({ data: { id, siteId: order.siteId, layId, seq: Math.max(0, ...runs.map((run) => run.seq)) + 1, firstPly, lastPly, parts, labelCount, createdAt: now, updatedAt: now, createdById: context.audience === 'office' ? context.actorId : null }, select: { id: true } })
     const run = await tx.plyRun.findUniqueOrThrow({ where: { id }, select: PLY_RUN_COLUMNS })
     tools.audit({ action: 'production.makePlyRun', recordType: 'PlyRun', recordId: id, companyId: order.companyId, siteId: order.siteId, after: { cutOrder: order.number, lay: current.seq, firstPly, lastPly, parts, labelCount } })
-    emitPlyRun(tools, order, run, 'MADE')
+    await emitPlyRun(tools, order, run, 'MADE')
     return { run: plyRunView(run), stickersPerPly: perPly, preview: runPreview(lines, run, header, language) }
   })
   const printed = await printRun(caller, context, order, lay.seq, result.run.id, body.printerId, language, idempotencyKey)
@@ -123,7 +123,7 @@ async function printRun(caller: CommandCaller, context: OfficeContext | FloorCon
     await tx.plyRun.update({ where: { id: run.id }, data: { status: 'PRINTED', printedAt: now, updatedAt: now }, select: { id: true } })
     const after = await tx.plyRun.findUniqueOrThrow({ where: { id: run.id }, select: PLY_RUN_COLUMNS })
     tools.audit({ action: 'production.printPlyRun', recordType: 'PlyRun', recordId: run.id, companyId: order.companyId, siteId: order.siteId, before: { status: current.status }, after: { status: 'PRINTED', jobId: queued.job!.id, labelCount: after.labelCount } })
-    emitPlyRun(tools, order, after, 'PRINTED')
+    await emitPlyRun(tools, order, after, 'PRINTED')
     return plyRunView(after)
   })
   return { run: result, job: queued.job, problem: null }
@@ -162,7 +162,7 @@ export async function voidPlyRun(caller: CommandCaller, runId: string, body: { r
     await tx.plyRun.update({ where: { id: runId }, data: { status: 'VOID', voidedAt: now, voidReason: reason, updatedAt: now }, select: { id: true } })
     const after = await tx.plyRun.findUniqueOrThrow({ where: { id: runId }, select: PLY_RUN_COLUMNS })
     tools.audit({ action: 'production.voidPlyRun', recordType: 'PlyRun', recordId: runId, companyId: order.companyId, siteId: order.siteId, before: { status: current.status }, after: { status: 'VOID' }, reason })
-    emitPlyRun(tools, order, after, 'VOIDED')
+    await emitPlyRun(tools, order, after, 'VOIDED')
     return plyRunView(after)
   })
   return { run: result }

@@ -14,6 +14,7 @@ import { workOrderYieldOf } from '../yield/views'
 import type { CUT_STATES, CUT_VIEWS } from './contract'
 import { liveOf, readCells, readEntries, readPieces, readPlannedParts, readStations, type CellRow, type EntryRow, type Reader } from './store'
 import { workOrderWhere } from '../work-orders/scope' // B-PR-04b
+import { customerOfRow, workOrderCustomers } from '../work-orders/customers' // F-PR-02
 
 /**
  * The cutting office (B-W2a-60; design production.cutting, SCR-238; MES-056, MES-057): one cut per work order whose parts
@@ -163,6 +164,7 @@ async function rowsOf(db: Reader, page: readonly Weighed[]) {
   const allocatedOf = new Map(allocated.map((row) => [row.workOrderId!, row._count._all]))
   const recuts = await db.replacementRequest.groupBy({ by: ['workOrderId'], where: { workOrderId: { in: workOrderIds }, kind: 'RECUT', status: 'OPEN' }, _count: { _all: true } })
   const recutsOf = new Map(recuts.map((row) => [row.workOrderId, row._count._all]))
+  const customers = await workOrderCustomers(db, workOrderIds) // F-PR-02: the Customer column
   const rows = []
   for (const row of page) {
     const { workOrder } = row
@@ -198,6 +200,7 @@ async function rowsOf(db: Reader, page: readonly Weighed[]) {
       stations: unique(row.live.map((entry) => entry.stationId)).map((stationId) => ({ id: stationId, code: stations.get(stationId)?.code ?? '' })),
       lastCutAt: last ? toUtcIso(last) : null,
       recutsOpen: recutsOf.get(workOrder.id) ?? 0,
+      ...customerOfRow(customers, workOrder.id), // F-PR-02
     })
   }
   return rows

@@ -97,6 +97,7 @@ export async function takeOutOnReleaseReversal(tools: CommandTools, input: { rea
       payload: {
         workOrderId: workOrder.id,
         number: workOrder.number,
+        partyId: workOrder.partyId, // B-PR-09
         siteId: workOrder.siteId,
         reportId: report.id,
         moveIds: mine.map((entry) => mirrors[originals.findIndex((move) => move.id === entry.move.id)]!.id),
@@ -114,6 +115,7 @@ export async function takeOutOnReleaseReversal(tools: CommandTools, input: { rea
       payload: {
         workOrderId: workOrder.id,
         number: workOrder.number,
+        partyId: workOrder.partyId, // B-PR-09
         siteId: workOrder.siteId,
         reportId: back[0]!.id,
         locationId: plan.putBackPlaceId!,

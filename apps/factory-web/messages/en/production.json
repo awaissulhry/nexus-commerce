@@ -774,7 +774,9 @@
       "waiting": "Pieces waiting",
       "waitingHint": "between operations",
       "scrap": "Scrap",
-      "scrapHint": "on open work orders"
+      "scrapHint": "on open work orders",
+      "onHold": "Work orders on hold",
+      "shownOnly": "over the {count} shown"
     },
     "wip": "Work in progress per operation",
     "wipHint": "Pieces waiting · done at each operation; an operation opens its bundles.",
@@ -796,7 +798,13 @@
     "mostWaiting": "Most waiting",
     "opLink": "{seq} {code}: {waiting} waiting, {good} done — open the bundles waiting here",
     "late": "Late work orders",
-    "noLate": "No late work orders."
+    "noLate": "No late work orders.",
+    "held": "On hold",
+    "heldWhy": "On hold · {reason}",
+    "shownOf": "{shown} of {total}",
+    "showMore": "Show more",
+    "showAll": "Show all in Work orders",
+    "lineTotals": "Line totals"
   },
   "w2b": {
     "heldFinal": "Closed and cancelled work orders keep their due date and priority",
@@ -1017,5 +1025,19 @@
       "connecting": "Connecting…",
       "never": "Not read yet"
     }
+  },
+  "customer": {
+    "filter": "Customer",
+    "all": "All customers",
+    "allMine": "All my customers",
+    "unknown": "Not in your customers",
+    "mixed": "Mixed customers (made before the rule)",
+    "everyTitle": "Needs every customer",
+    "every": "This view adds up every customer; it needs access to all customers.",
+    "column": "Customer",
+    "several_one": "{count} customer",
+    "several_other": "{count} customers",
+    "facts": "Customers: {names}",
+    "narrowedTables": "Style and size tables: {name} only. The line figures are for every customer."
   }
 }

@@ -176,3 +176,22 @@ export function eventFor<Definition extends EventDefinition>(
 ): EmittedEvent<Definition> {
   return { type: definition.type, version: definition.version, ...event }
 }
+
+// ── B-PR-09 ──
+/**
+ * B-PR-09 (production plan §2, the brand wall: "One brand must not be able to see anything related to any other brand. But we,
+ * as the production unit, should be able to see it all."): the customer a record of customer work is for, in its event's
+ * payload, so the office's live screens (events/live.ts) send the message only to people who reach that customer — a person
+ * limited to brand B never receives a message about brand A's work order, cut, bundle, rework, scrap, hold or inspection.
+ *
+ *   livePartyId()   the work order's one customer; null: a work order of no customer (stock, a sample of none, one mixed
+ *                   before the one-customer rule), so only people of every customer receive it
+ *   livePartyIds()  the customers of the work orders a shared record serves (a cut order, a hold), each once; [] when one of
+ *                   them names no customer (events/live.ts partyIdsOf), so only people of every customer receive it
+ *
+ * Optional, so an event written before B-PR-09 still parses (it names no customer: every-customer viewers only). Ids only,
+ * never a name or a code.
+ */
+export const livePartyId = () => z.uuid().nullable().optional()
+export const livePartyIds = () => z.array(z.uuid()).optional()
+// ── end B-PR-09 ──

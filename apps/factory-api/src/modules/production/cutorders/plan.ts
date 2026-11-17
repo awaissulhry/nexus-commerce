@@ -197,7 +197,7 @@ export async function createCutOrder(caller: CommandCaller, body: CreateBody, id
       siteId: material.siteId,
       after: { number: order.number, kind: order.kind, itemId: order.itemId, itemColourId: order.itemColourId, marker: order.markerName, plies: body.plies ?? null, lays, lines: lines.map((line) => ({ workOrderSizeId: line.workOrderSizeId, quantity: line.quantity, ratio: line.ratio })) },
     })
-    emitOrder(tools, order, 'PLANNED', lines.map((line) => line.workOrderId))
+    await emitOrder(tools, order, 'PLANNED', lines.map((line) => line.workOrderId))
     return recordOf(tx, context, order)
   })
   return result
@@ -265,7 +265,7 @@ export async function replanCutOrder(caller: CommandCaller, cutOrderId: string, 
       before: { marker: before.markerName, lines: oldLines.map((line) => ({ workOrderSizeId: line.workOrderSizeId, quantity: line.quantity, ratio: line.ratio, plies: line.plies })) },
       after: { marker: after.markerName, plies: body.plies ?? null, lays: kind === 'FABRIC' ? (body.lays ?? [body.plies!]) : [], lines: lines.map((line) => ({ workOrderSizeId: line.workOrderSizeId, quantity: line.quantity, ratio: line.ratio, plies: line.plies })) },
     })
-    emitOrder(tools, after, 'PLAN_CHANGED', lines.map((line) => line.workOrderId))
+    await emitOrder(tools, after, 'PLAN_CHANGED', lines.map((line) => line.workOrderId))
     return recordOf(tx, context, after)
   })
   return result
@@ -321,8 +321,8 @@ export async function releaseCutOrder(caller: CommandCaller, cutOrderId: string,
       after: { status: 'RELEASED', tickets: tickets.map((ticket) => ticket.number) },
     })
     const workOrderIds = [...new Set(lines.map((line) => line.workOrderId))]
-    emitOrder(tools, released, 'RELEASED', workOrderIds)
-    for (const ticket of tickets) emitTicket(tools, released, ticket, 'MADE', null)
+    await emitOrder(tools, released, 'RELEASED', workOrderIds)
+    for (const ticket of tickets) await emitTicket(tools, released, ticket, 'MADE', null)
     return recordOf(tx, context, released)
   })
   return result
@@ -335,7 +335,7 @@ async function voidOpenTickets(tools: CommandTools, order: CutOrderRow, reason: 
   const open = (await readTickets(tools.tx, [order.id])).filter((ticket) => ticket.status === 'OPEN')
   for (const ticket of open) {
     await tools.tx.cutTicket.update({ where: { id: ticket.id }, data: { status: 'VOID', voidedAt: tools.now, voidReason: reason, updatedAt: tools.now }, select: { id: true } })
-    emitTicket(tools, order, { ...ticket, status: 'VOID' }, 'VOIDED', null)
+    await emitTicket(tools, order, { ...ticket, status: 'VOID' }, 'VOIDED', null)
   }
   return open.map((ticket) => ticket.number)
 }
@@ -370,7 +370,7 @@ export async function unreleaseCutOrder(caller: CommandCaller, cutOrderId: strin
     await tx.cutOrder.update({ where: { id: cutOrderId }, data: { status: 'PLANNED', releasedAt: null, releasedById: null, updatedAt: now }, select: { id: true } })
     const after = await currentOrder(tx, cutOrderId)
     tools.audit({ action: 'production.unreleaseCutOrder', recordType: 'CutOrder', recordId: cutOrderId, companyId: order.companyId, siteId: order.siteId, before: { status: 'RELEASED' }, after: { status: 'PLANNED', voided, rollsRemoved: removed }, reason })
-    emitOrder(tools, after, 'BACK_TO_PLANNING', [...new Set((await readLines(tx, [cutOrderId])).map((line) => line.workOrderId))])
+    await emitOrder(tools, after, 'BACK_TO_PLANNING', [...new Set((await readLines(tx, [cutOrderId])).map((line) => line.workOrderId))])
     return recordOf(tx, context, after)
   })
   return result
@@ -394,7 +394,7 @@ export async function cancelCutOrder(caller: CommandCaller, cutOrderId: string, 
     await tx.cutOrder.update({ where: { id: cutOrderId }, data: { status: 'CANCELLED', cancelledAt: now, cancelReason: reason, updatedAt: now }, select: { id: true } })
     const after = await currentOrder(tx, cutOrderId)
     tools.audit({ action: 'production.cancelCutOrder', recordType: 'CutOrder', recordId: cutOrderId, companyId: order.companyId, siteId: order.siteId, before: { status: current.status }, after: { status: 'CANCELLED', voided, laysCancelled: lays.length, rollsRemoved: removed }, reason })
-    emitOrder(tools, after, 'CANCELLED', [...new Set((await readLines(tx, [cutOrderId])).map((line) => line.workOrderId))])
+    await emitOrder(tools, after, 'CANCELLED', [...new Set((await readLines(tx, [cutOrderId])).map((line) => line.workOrderId))])
     return recordOf(tx, context, after)
   })
   return result

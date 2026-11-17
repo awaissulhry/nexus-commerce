@@ -115,18 +115,20 @@ export interface ListAsk {
   readonly kind: CallKind | null
   readonly cursor?: string | null
   readonly limit?: number
+  /** F-PR-02: the customer filter (`?party=`): the calls on that customer's work orders. */
+  readonly partyId?: string | undefined
 }
 
 /** The inbox: the open calls oldest first (`view=open`), or the closed / every call newest first; 50 a page. */
 export const listCalls = (api: ApiClient, ask: ListAsk, signal?: AbortSignal) =>
   api.get('/production/calls', {
-    query: { siteId: ask.siteId ?? undefined, view: ask.view, tile: ask.tile ?? undefined, kind: ask.kind ?? undefined, cursor: ask.cursor ?? undefined, limit: ask.limit ?? 50 },
+    query: { siteId: ask.siteId ?? undefined, view: ask.view, tile: ask.tile ?? undefined, kind: ask.kind ?? undefined, cursor: ask.cursor ?? undefined, limit: ask.limit ?? 50, partyId: ask.partyId },
     schema: z.object({ calls: z.array(callSchema), nextCursor: z.string().nullable() }),
     signal,
   })
 
 /** The tiles: open, waiting over 5 minutes, answered today, and today's median response time (per site; never per person). */
-export const callCounts = (api: ApiClient, siteId: string | null, signal?: AbortSignal) => api.get('/production/calls/counts', { query: { siteId: siteId ?? undefined }, schema: countsSchema, signal })
+export const callCounts = (api: ApiClient, siteId: string | null, signal?: AbortSignal, partyId?: string) => api.get('/production/calls/counts', { query: { siteId: siteId ?? undefined, partyId }, schema: countsSchema, signal })
 
 /** One site's day: calls per hour by kind and line, each kind's median response time. */
 export const callsByHour = (api: ApiClient, siteId: string, date?: string, signal?: AbortSignal) => api.get('/production/calls/by-hour', { query: { siteId, date: date ?? undefined }, schema: byHourSchema, signal })

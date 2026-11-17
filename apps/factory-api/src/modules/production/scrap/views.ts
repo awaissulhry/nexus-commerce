@@ -12,6 +12,7 @@ import { readCellLabels, scrapFactsOf, scrapMaterials, type Reader, type ScrapFa
 // B-W2b-53 (MES-128): each scan's scrap approval, the waiting filter and tile.
 import { approvalsOf, officeWaiting, type ApprovalView } from './over-limit'
 import { workOrderWhere } from '../work-orders/scope' // B-PR-05
+import { customerOfRow, workOrderCustomers } from '../work-orders/customers' // F-PR-02
 
 /**
  * Scrap & rework, the office's read (B-W2a-13; MES-129, MES-130, MES-126; design production.scrap "Scrap tiles" and the
@@ -139,6 +140,7 @@ async function rowViews(db: Reader, rows: readonly Row[], withCost: boolean) {
     where: { OR: [{ sourceScanId: { in: unique(rows.filter((row) => row.source.type === 'SCAN').map((row) => row.source.id)) } }, { reworkOrderId: { in: unique(rows.filter((row) => row.source.type === 'REWORK').map((row) => row.source.id)) } }] },
     select: { id: true, kind: true, status: true, quantity: true, sourceScanId: true, reworkOrderId: true },
   })
+  const customers = await workOrderCustomers(db, rows.map((row) => row.workOrderId)) // F-PR-02: the Customer column
   // The leather each scrapped row held: the facts once per work order.
   const facts = new Map<string, ScrapFacts>()
   for (const workOrderId of unique(rows.filter((row) => row.kind === 'SCRAP' && row.bundleId).map((row) => row.workOrderId))) {
@@ -172,6 +174,7 @@ async function rowViews(db: Reader, rows: readonly Row[], withCost: boolean) {
         .map((request) => ({ id: request.id, kind: request.kind, status: request.status, quantity: request.quantity })),
       ...(withCost ? { value: asMoney('cost', value), currency: asMoney('cost', materials.find((material) => material.currency)?.currency ?? null) } : {}),
       approval: row.approval,
+      ...customerOfRow(customers, row.workOrderId), // F-PR-02
     }
   })
 }

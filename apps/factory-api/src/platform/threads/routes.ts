@@ -12,6 +12,9 @@ import { markThreadRead, markThreadUnread, unreadCounts } from './reads'
 // B-TH-028: who answers the conversation.
 import { setOwnerContract } from './contract'
 import { setThreadOwner } from './owner'
+// B-TH-044: a reply the record's party reads in its portal (no mail).
+import { postReplyContract } from './contract'
+import { postPortalReply } from './replies'
 
 /**
  * Record threads and the record timeline (platform part; plan A1 §2.3, §3.7; features COL-001, COL-002, COL-003): read
@@ -43,6 +46,10 @@ export default defineRoutes('threads', manifest, async (app) => {
     const { recordType, recordId } = request.params
     return reply.code(201).send(await postNote(request, { type: recordType, id: recordId }, request.body, idempotencyKeyFrom(request)))
   })
+
+  // ---- B-TH-044
+  app.post('/threads/:recordType/:recordId/replies', { schema: postReplyContract }, async (request, reply) => reply.code(201).send(await postPortalReply(request, { type: request.params.recordType, id: request.params.recordId }, request.body, idempotencyKeyFrom(request))))
+  // ---- end B-TH-044
 
   app.get('/threads/:recordType/:recordId/people', { schema: mentionablePeopleContract }, async (request) => {
     const { recordType, recordId } = request.params

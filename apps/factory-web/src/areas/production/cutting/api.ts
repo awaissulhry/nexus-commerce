@@ -47,6 +47,9 @@ export const cutRowSchema = z.object({
   stations: z.array(z.object({ id: z.string(), code: z.string() })),
   lastCutAt: z.string().nullable(),
   recutsOpen: z.number(),
+  // F-PR-02: its work order's one customer (null: none), or one made before the one-customer rule with several.
+  customer: named.nullable().optional(),
+  mixedCustomers: z.boolean().optional(),
 })
 export type CutRow = z.infer<typeof cutRowSchema>
 
@@ -56,8 +59,9 @@ export type CutTiles = z.infer<typeof cutTilesSchema>
 const cutsSchema = z.object({ cuts: z.array(cutRowSchema), more: z.boolean(), tiles: cutTilesSchema, asOf: z.string() })
 export type CutsPage = z.infer<typeof cutsSchema>
 
-export function listCuts(api: ApiClient, query: { view: CutView; q: string; limit: number }, signal?: AbortSignal): Promise<CutsPage> {
-  return api.get('/production/cutting/cuts', { query: { view: query.view, q: query.q.trim() || undefined, limit: query.limit }, schema: cutsSchema, signal })
+export function listCuts(api: ApiClient, query: { view: CutView; q: string; limit: number; partyId?: string | undefined }, signal?: AbortSignal): Promise<CutsPage> {
+  // F-PR-02: partyId = the customer filter (`?party=`).
+  return api.get('/production/cutting/cuts', { query: { view: query.view, q: query.q.trim() || undefined, limit: query.limit, partyId: query.partyId }, schema: cutsSchema, signal })
 }
 
 // ---- yield ------------------------------------------------------------------------------------------------------------------

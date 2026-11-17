@@ -196,7 +196,7 @@ export async function releaseGarments(caller: CommandCaller, body: ReleaseBody, 
       subject: id,
       companyId: header.companyId,
       siteId: header.siteId,
-      payload: { releaseId: id, releaseNumber: number, inspectionId: current.id, workOrderId: header.id, number: header.number, workOrderSizeId: body.workOrderSizeId, quantity: body.quantity, serialIds, secondPersonReasons: reasons, postedBy: postedBy(context) },
+      payload: { releaseId: id, releaseNumber: number, inspectionId: current.id, workOrderId: header.id, number: header.number, partyId: header.partyId /* B-PR-09 */, workOrderSizeId: body.workOrderSizeId, quantity: body.quantity, serialIds, secondPersonReasons: reasons, postedBy: postedBy(context) },
     })
     return { id, number, cell: cellText(gate.cell) }
   })

@@ -1,5 +1,8 @@
 import type { Grain } from '@nexus/factory-domain/auth/grains/grains'
-import type { Actor, Permission } from '@nexus/factory-domain/core/permissions'
+// B-PR-09: the customer term of a list's address, and the refusal of a view that mixes customers.
+import { ValidationError } from '@nexus/factory-domain/core/errors'
+import { isUuid } from '@nexus/factory-domain/core/ids'
+import { EVERY_PARTY_WORDS, reachesEveryParty, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import type { CellValue } from '@nexus/factory-domain/imports/cells'
 import type { ExportCell, ExportFormat, ExportLocale } from '@nexus/factory-domain/views/exports'
 import { LIST_KEY } from '@nexus/factory-domain/views/state'
@@ -104,6 +107,34 @@ export interface ExportSource<Query, Row> {
   /** B-TH-008: the file's title from what it holds (see above); null: the screen's title. */
   title?(caller: CommandCaller, query: Query, facts: ExportTitleFacts): Promise<ExportTitle | null>
 }
+
+// ── B-PR-09 ──
+/**
+ * B-PR-09 (production plan §2, the brand wall): the screen's customer filter in the address (`?party=`, else the API's own
+ * `partyId`; B-PR-03's word, as Sales › Orders' file): one customer's id, or undefined (none). A malformed one is refused in
+ * words, never dropped: a file of every customer for one customer's screen. The list's own read walls it (a customer the person
+ * does not reach gives no row).
+ */
+export function partyTerm(address: URLSearchParams): string | undefined {
+  for (const name of ['party', 'partyId']) {
+    const value = address.get(name)?.trim()
+    if (!value) continue
+    if (!isUuid(value)) throw new ValidationError('Not a customer: the file would hold more than the screen.', [{ path: `query/${name}`, message: 'An id.' }])
+    return value
+  }
+  return undefined
+}
+
+/**
+ * B-PR-09: the `refusal` of a list that adds up every customer's work (capacity, the material plan, the master schedule, a report
+ * of line totals): a person whose grants of the list's permission reach every customer nowhere may not export it — the words name
+ * no customer (B-PR-07's screens answer the same 403).
+ */
+export const everyCustomerRefusal =
+  (permission: Permission) =>
+  (actor: Actor): string | null =>
+    reachesEveryParty(actor, permission) ? null : EVERY_PARTY_WORDS.en
+// ── end B-PR-09 ──
 
 /** A source with its types erased, as the registry and the worker hold it. */
 export type AnyExportSource = ExportSource<unknown, unknown>
