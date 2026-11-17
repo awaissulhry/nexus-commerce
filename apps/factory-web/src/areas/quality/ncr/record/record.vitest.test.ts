@@ -314,7 +314,9 @@ describe('B-TH-266: the NCR on RecordFrame — five tabs, its own thread docked 
   it('the wall (W08, W25, W34): the NCR\'s thread is internal — no party, no "Reply to", no customer or supplier named in it', () => {
     const page = html('thread-docked')
     const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
-    expect(dock).toContain('NCR-DEMO-0031')
+    // The docked thread is the NCR's own (the band names NCR-DEMO-0031; the dock reads its notes) and says it has no outside party.
+    expect(page).toContain('aria-label="The NCR’s thread"')
+    expect(dock).toContain('This record has no customer: notes only.')
     expect(dock).not.toMatch(/Reply to/)
     expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
     expect(textOf(html('thread-docked', 'it'))).toContain('Problema ed evidenze')

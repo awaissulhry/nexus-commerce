@@ -292,7 +292,7 @@
     "noDeliveries": "None to this customer",
     "notOurs": "{label} is not a garment or batch of ours.",
     "none": "No garment named: type its serial or batch on the form.",
-    "photos": "Photos: post them on the case's conversation (Activity)."
+    "photos": "Photos: post them in the case's thread beside this page."
   },
   "form": {
     "title": "Case",

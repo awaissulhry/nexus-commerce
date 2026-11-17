@@ -49,7 +49,11 @@ describe('the return on RecordFrame', () => {
     const band = bandOf(draw('rma-lines'))
     expect(band.match(/class="nds-pill /g)?.length).toBe(1)
     expect(textOf(band)).toContain('Thread')
-    expect(band).not.toContain('<kbd')
+    // The one key hint is the record frame's own ⌘J on its Thread button (TH-1c, the frame's rule on every record page);
+    // Receive goods, the primary, carries none — and nothing else in the band does.
+    const receive = band.indexOf('Receive goods')
+    expect(band.slice(band.lastIndexOf('<button', receive), band.indexOf('</button>', receive))).not.toContain('<kbd')
+    expect(band.replace(/<span class="fw-rcf-keys"[^>]*>(?:<kbd[^>]*>[^<]*<\/kbd>)+<\/span>/g, '')).not.toContain('<kbd')
   })
 
   it('the wall: the return’s thread names its own customer only (W08, W14, W20, W25, W34)', () => {

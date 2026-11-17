@@ -17,6 +17,9 @@ import type { SalesLineKind } from '@nexus/factory-domain/sales/quotes/quotes'
 import { cancelFeeFor, cancelFeePctOf, type CancelFee, type FeeLine } from '@nexus/factory-domain/sales/change-requests/fee'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import type { CommandTx } from '../../../core/command'
+// B-PR-25: the impact kept at Send, a sample round's kind.
+import { impactKeepable, type Impact } from '@nexus/factory-domain/sales/change-requests/impact'
+import type { AskSampleKind } from '@nexus/factory-domain/sales/change-requests/rules'
 
 /**
  * The reads of change and cancel requests (B-W2b-183). Two kinds, never mixed in one query:
@@ -152,6 +155,9 @@ export const REQUEST_COLUMNS = {
   version: true,
   createdAt: true,
   createdById: true,
+  // B-PR-25: the impact kept at Send (never an amount) and a sample round's kind (both partner-readable).
+  impact: true,
+  sampleKind: true,
 } as const satisfies Prisma.OrderChangeRequestSelect
 export type RequestRow = Prisma.OrderChangeRequestGetPayload<{ select: typeof REQUEST_COLUMNS }>
 
@@ -269,10 +275,33 @@ export function requestView(row: RequestRow, cells: readonly AskedCell[], facts:
     answer: row.answer,
     answeredAt: row.answeredAt ? toUtcIso(row.answeredAt) : null,
     withdrawnAt: row.withdrawnAt ? toUtcIso(row.withdrawnAt) : null,
-    // B-W2b-F14: a waiting cancel's fee as the settings say it now (not stored on the request: shown while it waits).
+    // B-W2b-F14: a waiting cancel's fee as the settings say it now (not stored on the request: shown while it waits). B-PR-25:
+    // a reader without prices gets no fee facts (the caller leaves them out), so no fee at all.
     cancelFee: kind === 'CANCEL' && status === 'OPEN' && facts.fee ? feeView(cancelFeeFor(facts.fee.lines, cells.map((cell) => cell.orderLineId), facts.fee.pct, facts.fee.currency)) : null,
+    // B-PR-25: the impact the customer saw at Send, as kept (the database holds its shape: words, codes, dates, yes or no).
+    impact: keptImpactOf(row.impact),
+    sampleKind: (row.sampleKind as AskSampleKind | null) ?? null,
     version: row.version,
   }
+}
+
+/** B-PR-25: an impact as the answers carry it (plain copies: the contract's arrays). */
+export const impactOut = (impact: Impact) => ({
+  kind: impact.kind,
+  frozen: impact.frozen.map((item) => ({ field: item.field, lineId: item.lineId, line: item.line, size: item.size, state: item.state, words: { it: item.words.it, en: item.words.en } })),
+  blocked: impact.blocked,
+  priced: impact.priced,
+  pricedWords: impact.pricedWords ? { it: impact.pricedWords.it, en: impact.pricedWords.en } : null,
+  earliest: impact.earliest ? { date: impact.earliest.date, partial: impact.earliest.partial, meetsWanted: impact.earliest.meetsWanted, words: { it: impact.earliest.words.it, en: impact.earliest.words.en } } : null,
+  notes: impact.notes.map((note) => ({ it: note.it, en: note.en })),
+  words: { it: impact.words.it, en: impact.words.en },
+})
+
+/** B-PR-25: the impact kept on a request (an object the database checked at Send), or null (none kept). */
+export function keptImpactOf(value: Prisma.JsonValue | null) {
+  if (!impactKeepable(value)) return null
+  const kept = value as unknown as Partial<Impact>
+  return Array.isArray(kept.frozen) && Array.isArray(kept.notes) && typeof kept.words === 'object' && kept.words !== null ? impactOut(kept as Impact) : null
 }
 
 /** A cancel fee as the answers carry it: the amounts are prices (dropped for a reader without the grain). */

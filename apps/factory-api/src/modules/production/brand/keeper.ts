@@ -94,6 +94,10 @@ export const ORDER_EVENTS = [
   'deposit_request.waived',
   'production_issue.raised',
   'production_issue.answered',
+  // B-PR-28: the follow-up task of a new date the customer did not accept (only such a task names orders: ordersOfEvent).
+  'task.created',
+  'task.completed',
+  'task.changed',
 ] as const
 export const KEEPER_EVENTS: readonly string[] = Object.freeze([...ORDER_EVENTS, ...STAGE_EVENTS, ...HOLD_EVENTS])
 
@@ -394,6 +398,15 @@ export async function ordersOfEvent(db: Reader, event: Pick<EventEnvelope, 'type
       return { orderIds: asStrings([text('salesOrderId')]), hold: null }
     case 'production_issue.answered':
       return { orderIds: asStrings([text('salesOrderId')]), hold: null }
+    // B-PR-28: a task on a sales order counts only as the follow-up of a refused new date (its id is the REPROMISE request's).
+    case 'task.created':
+    case 'task.completed':
+    case 'task.changed': {
+      const taskId = text('taskId')
+      if (text('recordType') !== 'SalesOrder' || !taskId) return { orderIds: [], hold: null }
+      const asked = await db.approvalRequest.findFirst({ where: { id: taskId, kind: 'REPROMISE', recordType: 'SalesOrder' }, select: { recordId: true } })
+      return { orderIds: asked ? [asked.recordId] : [], hold: null }
+    }
     case 'production_issue.raised':
     case 'approval_request.asked':
     case 'approval_request.answered':

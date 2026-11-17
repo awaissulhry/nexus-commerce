@@ -21,6 +21,8 @@ import { unsubscribeKeyOf } from '../../../platform/portal/notifications/mail'
 import { today } from '../../insights/today'
 import { acceptRequest, officeList, officeRecord, refuseRequest } from './office'
 import { getCutoffs, saveCutoffs } from './settings'
+// B-PR-25: the customer's own freeze rule (B-PR-14).
+import { createFreezeRule } from '../order-changes/freeze'
 
 /**
  * Change and cancel requests from the portal on the local stack (B-W2b-183; SAL-077, SAL-078), the customer through the real
@@ -435,10 +437,6 @@ describe('B-PR-23: a production ask ("Urgent – asked") on the order is read in
     expect((await thrown(acceptRequest(office(), rush, { version: 1 }, undefined, h.clock))).issues[0].path).toBe('request/PRODUCTION_ASK')
     expect((await thrown(refuseRequest(office(), rush, { version: 1, answer: 'No.' }, undefined, h.clock))).issues[0].path).toBe('request/PRODUCTION_ASK')
     expect((await admin('SELECT status::text AS status FROM "OrderChangeRequest" WHERE id = $1', [rush]))[0]).toEqual({ status: 'OPEN' })
-    // Not withdrawn from the order page (it is withdrawn where it was asked: B-PR-25, B-PR-46a), in words.
-    const withdraw = await browsers.buyer.post(`/portal/sales-orders/${so3.id}/change-requests/${rush}/withdraw`, { version: 1 })
-    expect(withdraw.status, JSON.stringify(withdraw.body)).toBe(409)
-    expect(withdraw.body.error.message).toContain("write to us in the order's thread")
     // It holds no change or cancel of the order: the rules show none waiting, and a cancel is asked beside it…
     expect((await ok(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/rules`)).openRequestId).toBeNull()
     const cancel = await browsers.buyer.post(`/portal/sales-orders/${so3.id}/change-requests`, { kind: 'CANCEL', reasonCode: 'LEAD_TIME' })
@@ -450,5 +448,172 @@ describe('B-PR-23: a production ask ("Urgent – asked") on the order is read in
     expect(second.body.error.issues[0].path).toBe('body/OPEN_REQUEST')
     // A production ask never shows as a change request on Home › Approvals (B-PR-12's rule holds for the new kinds).
     expect((await today(office(), { kind: 'ORDER_CHANGE_REQUEST', limit: 50 })).items.map((item: Json) => item.record.id ?? item.id)).not.toContain(rush)
+    // B-PR-25: a production ask is withdrawn from the order page too while it waits (B-PR-23 sent it to the thread until then).
+    const withdraw = await browsers.buyer.post(`/portal/sales-orders/${so3.id}/change-requests/${rush}/withdraw`, { version: 1 })
+    expect(withdraw.status, JSON.stringify(withdraw.body)).toBe(200)
+    expect(withdraw.body.request).toMatchObject({ id: rush, kind: 'RUSH', status: 'WITHDRAWN' })
+    expect((await outbox('order_change_request.withdrawn')).map((row) => row.payload).find((payload) => payload.requestId === rush)).toEqual({ requestId: rush, orderId: so3.id, partyId: P1, kind: 'RUSH' })
   })
 })
+
+// ── B-PR-25 (production plan §3 "Brand asks, we decide", "Money"; lead picks L4, L18; review fixes R-09, R-14, R-50; wall test
+// PW-P06; the Owner rule 2026-11-16: "One brand must not be able to see anything related to any other brand. But we, as the
+// production unit, should be able to see it all. And manage it all as well."): the customer asks the kinds its limits open,
+// reads the impact before Send (kept on the request at Send), and the Production role reads no fee. ─────────────────────────
+describe('B-PR-25: the asks its limits open, the impact before Send, kept at Send; no fee for the Production role', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const PRODUCTION = 'pia.production@seed-racing.example'
+  let production: Browser
+  /** Every number anywhere in a value (the impact holds none: never an amount, never a load). */
+  const numbersIn = (value: unknown): unknown[] => (typeof value === 'number' ? [value] : Array.isArray(value) ? value.flatMap(numbersIn) : value !== null && typeof value === 'object' ? Object.values(value).flatMap(numbersIn) : [])
+  const post = (browser: Browser, url: string, body: unknown) => browser.post(url, body, { headers: { 'idempotency-key': `pr3e-${newId()}` } })
+  const replica = async (sql: string, values: unknown[]) => {
+    await h.db.admin.query('BEGIN')
+    try {
+      await h.db.admin.query("SET LOCAL session_replication_role = 'replica'")
+      await h.db.admin.query(sql, values)
+      await h.db.admin.query('COMMIT')
+    } catch (error) {
+      await h.db.admin.query('ROLLBACK')
+      throw error
+    }
+  }
+
+  beforeAll(async () => {
+    await partnerPerson(PRODUCTION, P1, ['customer-production', 'partner-approve'])
+    production = await signedIn(PRODUCTION)
+  }, 120_000)
+
+  it('RUSH is refused while the urgency switch is off, in neutral words; the list of asks never opens it (R-50); the switch does', async () => {
+    const so3 = await orderOf('SEED-SO-0003')
+    const closed = await ok(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/rules`)
+    expect(closed.asks.map((ask: Json) => [ask.kind, ask.open, ask.verdict.code])).toEqual([
+      ['RUSH', false, 'NOT_OPEN'],
+      ['HOLD', false, 'NOT_OPEN'],
+      ['RESUME', false, 'NOT_OPEN'],
+      ['SPLIT_SHIPMENT', false, 'NOT_OPEN'],
+      ['SAMPLE_ROUND', false, 'NOT_OPEN'],
+    ])
+    const words = { en: "This ask is not open for your orders. Write to us in the order's thread.", it: "Questa richiesta non è disponibile per i tuoi ordini. Scrivici nella conversazione dell'ordine." }
+    expect(closed.asks[0].verdict.words).toEqual(words)
+    const refused = await post(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests`, { kind: 'RUSH', note: 'Our season opens early.' })
+    expect(refused.status, JSON.stringify(refused.body)).toBe(409)
+    expect(refused.body.error.issues).toEqual([{ path: 'body/NOT_OPEN', message: `${words.en}.` }])
+    // The asks the limits list are open; RUSH still is not (it follows the urgency switch only).
+    await admin(`UPDATE "PortalSettings" SET "productionAskKinds" = '{HOLD,RESUME,SPLIT_SHIPMENT,SAMPLE_ROUND}', version = version + 1 WHERE id = $1`, [P1])
+    const listed = await ok(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/rules`)
+    expect(listed.asks.map((ask: Json) => [ask.kind, ask.open])).toEqual([['RUSH', false], ['HOLD', true], ['RESUME', true], ['SPLIT_SHIPMENT', true], ['SAMPLE_ROUND', true]])
+    expect((await post(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/impact`, { kind: 'RUSH' })).status).toBe(409)
+    await admin(`UPDATE "PortalSettings" SET "productionUrgencyOn" = true, version = version + 1 WHERE id = $1`, [P1])
+    const open = await ok(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/rules`)
+    expect(open.asks.map((ask: Json) => [ask.kind, ask.open])).toEqual([['RUSH', true], ['HOLD', true], ['RESUME', true], ['SPLIT_SHIPMENT', true], ['SAMPLE_ROUND', true]])
+    // What each kind's own state says: a resume needs a pause; ship what is ready needs an order that ships complete.
+    expect(Object.fromEntries(open.asks.map((ask: Json) => [ask.kind, ask.verdict.code]))).toMatchObject({ RUSH: 'FREE', HOLD: 'FREE', RESUME: 'NOT_PAUSED', SAMPLE_ROUND: 'FREE' })
+    // Every line says whether it ships first and takes each kind of sample round; every size what its freeze says.
+    for (const line of open.lines as Json[]) {
+      expect(line.samples.map((entry: Json) => entry.sampleKind)).toEqual(['PRE_PRODUCTION', 'SIZE_SET', 'TOP_OF_PRODUCTION', 'BRAND'])
+      for (const entry of line.frozen as Json[]) {
+        expect(line.sizes.map((size: Json) => size.size)).toContain(entry.size)
+        expect(['OPEN', 'CHANGE_REQUEST', 'BLOCKED']).toContain(entry.freeze.state)
+      }
+    }
+    expect(open.frozen).toMatchObject({ deliveryDate: { state: expect.any(String) }, shipTo: { state: expect.any(String) } })
+  })
+
+  it('the impact before Send (PW-P06): the customer’s own freeze rule, priced yes or no, a date only; kept at Send as shown; one per kind', async () => {
+    const so3 = await orderOf('SEED-SO-0003')
+    // The seeds' WO-0003 makes SEED-SO-0003 and is released: the order's date is past RELEASED.
+    expect((await one<{ released: boolean }>(`SELECT bool_or(w."releasedAt" IS NOT NULL) AS released FROM "WorkOrderSize" c JOIN "WorkOrder" w ON w.id = c."workOrderId" JOIN "SalesOrderLine" l ON l.id = c."salesOrderLineId" WHERE l."orderId" = $1 AND w.status <> 'CANCELLED' AND w.kind <> 'REPAIR'`, [so3.id])).released).toBe(true)
+    // The customer's own rule (B-PR-14): its delivery date frozen from release as a priced change request.
+    await createFreezeRule(office(), { companyId: companyA, partyId: P1, field: 'DELIVERY_DATE', frozenFrom: 'RELEASED', action: 'CHANGE_REQUEST', note: 'Made-up: our own rule for this customer.' })
+    // A promise well ahead, so a need-by date can be earlier (planted: the promise route is planning's).
+    const promise = addDays(TODAY(), 90)
+    await replica('UPDATE "SalesOrder" SET "promiseDate" = $2::date WHERE id = $1', [so3.id, promise])
+    const needBy = addDays(TODAY(), 30)
+    const asked = { kind: 'RUSH', requestedDate: needBy, note: 'Our season opens early.' }
+    const read = await post(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/impact`, asked)
+    expect(read.status, JSON.stringify(read.body)).toBe(200)
+    const impact = read.body.impact
+    expect(impact).toMatchObject({ kind: 'RUSH', blocked: false, priced: false, pricedWords: null, notes: [{ en: 'We look at the date again and confirm it to you' }] })
+    expect(impact.frozen).toEqual([{ field: 'DELIVERY_DATE', lineId: null, line: null, size: null, state: 'CHANGE_REQUEST', words: expect.objectContaining({ en: expect.any(String), it: expect.any(String) }) }])
+    // The wall: a date only (its three facts and their words), nothing of planning's load; no number anywhere; no cancel fee.
+    expect(Object.keys(impact.earliest).sort()).toEqual(['date', 'meetsWanted', 'partial', 'words'])
+    expect(numbersIn(impact)).toEqual([])
+    expect('cancelFee' in read.body).toBe(false)
+    expect(JSON.stringify(read.body)).not.toMatch(/\bminutes\b|\blanes?\b|\bload\b|capacity|workOrder|\bWO-|oli\.buyer|Brand Alpha/i)
+
+    // Sent: the impact kept as shown (never an amount: the database checks it), the order's event names the kind.
+    const sent = await post(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests`, asked)
+    expect(sent.status, JSON.stringify(sent.body)).toBe(201)
+    expect(sent.body.request).toMatchObject({ kind: 'RUSH', kindWords: { en: 'Urgent – asked' }, status: 'OPEN', requestedDate: needBy, note: 'Our season opens early.', cells: [], sampleKind: null })
+    expect(sent.body.request.impact).toMatchObject({ kind: 'RUSH', frozen: impact.frozen, priced: false, notes: impact.notes, words: impact.words })
+    const kept = await one<{ impact: Json; numbers: boolean }>(`SELECT impact, jsonb_path_exists(impact, 'strict $.** ? (@.type() == "number")') AS numbers FROM "OrderChangeRequest" WHERE id = $1`, [sent.body.request.id])
+    expect(kept.numbers).toBe(false)
+    expect(kept.impact.frozen).toEqual(impact.frozen)
+    expect((await outbox('order_change_request.asked')).map((row) => row.payload).find((payload) => payload.requestId === sent.body.request.id)).toEqual({ requestId: sent.body.request.id, orderId: so3.id, partyId: P1, kind: 'RUSH', lines: 0, wholeOrder: false })
+    // One that waits per order and kind (R-14): a second rush waits; a pause beside it is asked; the open cancel stays.
+    const again = await post(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests`, { kind: 'RUSH' })
+    expect(again.status).toBe(409)
+    expect(again.body.error.issues[0].path).toBe('body/WAITING')
+    const rules = await ok(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/rules`)
+    expect(rules.asks.find((ask: Json) => ask.kind === 'RUSH')).toMatchObject({ waitingRequestId: sent.body.request.id, verdict: { code: 'WAITING' } })
+    // The Production role asks too (every kind its limits open): a pause says why; it withdraws its pause while it waits.
+    const noWhy = await post(production, `/portal/sales-orders/${so3.id}/change-requests`, { kind: 'HOLD' })
+    expect(noWhy.status, JSON.stringify(noWhy.body)).toBe(400)
+    expect(noWhy.body.error.issues).toEqual([{ path: 'body/note', message: 'Say why you want to pause, in a few words.' }])
+    const pause = await post(production, `/portal/sales-orders/${so3.id}/change-requests`, { kind: 'HOLD', note: 'Our store opening moved.' })
+    expect(pause.status, JSON.stringify(pause.body)).toBe(201)
+    expect(pause.body.request).toMatchObject({ kind: 'HOLD', status: 'OPEN', note: 'Our store opening moved.', requestedDate: null, mine: true })
+    const withdrawn = await post(production, `/portal/sales-orders/${so3.id}/change-requests/${pause.body.request.id}/withdraw`, { version: 1 })
+    expect(withdrawn.status, JSON.stringify(withdrawn.body)).toBe(200)
+    expect(withdrawn.body.request.status).toBe('WITHDRAWN')
+    // A pause asks no date, a rush no sizes; a sample round names a line of THIS order (a foreign one is not named).
+    expect((await post(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/impact`, { kind: 'HOLD', note: 'x', requestedDate: needBy })).body.error.issues[0].path).toBe('body/requestedDate')
+    const foreign = await post(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests/impact`, { kind: 'SAMPLE_ROUND', lineId: newId(), sampleKind: 'BRAND' })
+    expect(foreign.status).toBe(400)
+    expect(foreign.body.error.issues).toEqual([{ path: 'body/lineId', message: 'Pick the line of this order the sample is of.' }])
+  })
+
+  it('wall (PW-P06): another customer reads neither the rules, the impact nor the asks of the order (404), and asks nothing on it', async () => {
+    const so3 = await orderOf('SEED-SO-0003')
+    expect((await browsers.other.get(`/portal/sales-orders/${so3.id}/change-requests/rules`)).status).toBe(404)
+    expect((await post(browsers.other, `/portal/sales-orders/${so3.id}/change-requests/impact`, { kind: 'RUSH' })).status).toBe(404)
+    expect((await post(browsers.other, `/portal/sales-orders/${so3.id}/change-requests`, { kind: 'RUSH' })).status).toBe(404)
+    expect((await browsers.other.get(`/portal/sales-orders/${so3.id}/change-requests`)).status).toBe(404)
+    // The viewer reads the asks but asks nothing (no portal.salesOrders.ask): the impact is an ask's read.
+    expect((await post(browsers.viewer, `/portal/sales-orders/${so3.id}/change-requests/impact`, { kind: 'RUSH' })).status).toBe(403)
+  })
+
+  it('a change that adds pieces asks planning for a date only; the Production role reads no cancel fee in the rules, the impact or a request', async () => {
+    const so1 = await orderOf('SEED-SO-0001')
+    const [blk] = await linesOf(so1.id)
+    const change = await post(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/impact`, { kind: 'CHANGE', cells: [{ lineId: blk!.id, size: '50', quantity: 3 }], requestedDate: addDays(TODAY(), 40) })
+    expect(change.status, JSON.stringify(change.body)).toBe(200)
+    // Nothing of the order is in production: nothing frozen, not priced; the earliest date a date only.
+    expect(change.body.impact).toMatchObject({ kind: 'CHANGE', frozen: [], blocked: false, priced: false, pricedWords: null })
+    expect(Object.keys(change.body.impact.earliest).sort()).toEqual(['date', 'meetsWanted', 'partial', 'words'])
+    expect(numbersIn(change.body.impact)).toEqual([])
+
+    // The cancel fee (15 %, the settings of the fee tests): the buyer reads it (prices); the Production role reads that a price
+    // may apply, never the fee — neither the amounts nor the percent — in the rules, the impact or a request.
+    const cancel = { kind: 'CANCEL', reasonCode: 'PRICE', lineIds: [blk!.id] }
+    const buyerRead = await post(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/impact`, cancel)
+    expect(buyerRead.status, JSON.stringify(buyerRead.body)).toBe(200)
+    expect(buyerRead.body.impact).toMatchObject({ kind: 'CANCEL', priced: true, pricedWords: { en: 'A price may apply: we will tell you' } })
+    expect(buyerRead.body.cancelFee).toMatchObject({ pct: '15', currency: 'EUR', lines: [{ lineId: blk!.id, seq: 10, fee: expect.any(Number) }] })
+    const productionRead = await post(production, `/portal/sales-orders/${so1.id}/change-requests/impact`, cancel)
+    expect(productionRead.status, JSON.stringify(productionRead.body)).toBe(200)
+    expect(productionRead.body.impact).toMatchObject({ kind: 'CANCEL', priced: true, pricedWords: { en: 'A price may apply: we will tell you', it: 'Può essere previsto un costo: te lo diciamo noi' } })
+    expect('cancelFee' in productionRead.body).toBe(false)
+    const productionRules = await ok(production, `/portal/sales-orders/${so1.id}/change-requests/rules`)
+    expect('cancelFee' in productionRules).toBe(false)
+    expect((productionRules.lines as Json[]).every((line) => !('cancelFee' in line))).toBe(true)
+    expect('cancelFee' in (await ok(browsers.buyer, `/portal/sales-orders/${so1.id}/change-requests/rules`))).toBe(true)
+    // A waiting cancel (SEED-SO-0003's, asked in the B-PR-23 block): the buyer reads its fee, the Production role none.
+    const so3 = await orderOf('SEED-SO-0003')
+    const waiting = (rows: Json) => (rows.items as Json[]).find((row) => row.kind === 'CANCEL' && row.status === 'OPEN')!
+    expect(waiting(await ok(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests`)).cancelFee).toMatchObject({ pct: '15' })
+    expect(waiting(await ok(production, `/portal/sales-orders/${so3.id}/change-requests`)).cancelFee).toBeNull()
+    expect(JSON.stringify(await ok(production, `/portal/sales-orders/${so3.id}/change-requests`))).not.toMatch(/"pct"|totalFee|"fee"/)
+  })
+})
+// ── end B-PR-25

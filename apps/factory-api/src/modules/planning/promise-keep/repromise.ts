@@ -35,6 +35,10 @@ import { orderLinePromise } from '../promise/order-lines'
 import { whereOf } from '../promise/read'
 import { mayPromiseAt, promiseSite, readPromiseRows } from '../promise/store'
 import { dayOf, type Reader, type SiteRow } from '../store'
+// B-PR-28: the customer answers the new date (a REPROMISE approval asked with the accept).
+import { dueAtFor } from '@nexus/factory-domain/approvals-out/rules'
+import { linkTokenHash, mintLinkToken } from '@nexus/factory-domain/links/token'
+import { askCustomerInCommand, customerAnswersOf, withdrawOlderInCommand, type CustomerAnswerView } from './brand-answer'
 import {
   customerOf,
   keepLineFor,
@@ -72,6 +76,13 @@ import {
  * command; the order's row first (when the line's date follows), then the line's promise lock (B-W2b-301's key), the
  * proposal and the rows read again inside: a size whose promise changed since makes it STALE (409; propose again).
  * Nothing is sent by a rule: the message goes only when a person accepts with `tell`.
+ *
+ * B-PR-28 (production plan §3 "accept or refuse a new date"; 08-backend §4.3): sales may accept asking the customer
+ * (`askBrand`): the promise is given as always (the date stands either way: capacity is shared) and, in the same command, a
+ * REPROMISE approval is asked of the customer on the order (./brand-answer: its question, its APPROVAL link handed once in the
+ * answer, the partner's task); the customer accepts or refuses with words in its portal (POST /portal/approvals/:id/answer) or
+ * by the link; a refusal leaves the date and opens a follow-up task for us (the order waits on us while it is open). Every
+ * accept withdraws an older open question about the same line. The proposal shows the customer's answer (`customerAnswer`).
  */
 
 const [taskCreated, taskAssigned, taskCompleted, taskChanged] = taskEvents
@@ -109,7 +120,7 @@ async function certificateRefusals(db: Reader, line: KeepLine, site: SiteRow, as
   return refused
 }
 
-function proposalView(proposal: ProposalRecord, context: OfficeContext, line: KeepLine, today: BusinessDate, names: ReadonlyMap<string, string>) {
+function proposalView(proposal: ProposalRecord, context: OfficeContext, line: KeepLine, today: BusinessDate, names: ReadonlyMap<string, string>, /* B-PR-28 */ customer: CustomerAnswerView | null = null) {
   const person = (id: string | null | undefined) => (id && names.has(id) ? { id, name: names.get(id)! } : null)
   const actor = actorOf(context)
   const scope = { companyId: line.companyId, partyId: line.partyId }
@@ -134,6 +145,8 @@ function proposalView(proposal: ProposalRecord, context: OfficeContext, line: Ke
       : null,
     task: { id: proposal.id, status: proposal.taskStatus, assignee: person(proposal.taskAssigneeId) },
     words: `Re-promise of ${line.order.number} line ${line.seq}: ${proposalWords(proposal.sizes, (date) => dayWords(date, today))}.`,
+    // B-PR-28: the customer's answer to the new date, when sales asked it (null: not asked).
+    customerAnswer: customer,
     may: {
       accept: waiting && !own && can(actor, ORDERS_MANAGE, scope),
       tell: waiting && !own && can(actor, ORDERS_MANAGE, scope) && can(actor, EMAIL_SEND, { companyId: line.companyId }),
@@ -310,7 +323,9 @@ async function proposalFor(caller: CommandCaller, db: Reader, proposalId: string
 async function proposalAfter(caller: CommandCaller, proposalId: string) {
   return caller.withClient(async (db) => {
     const { context, line, site, proposal } = await proposalFor(caller, db, proposalId)
-    return proposalView(proposal, context, line, businessDate(serverClock.now(), site.timezone), await namesOf(db, [proposal]))
+    // B-PR-28
+    const customer = (await customerAnswersOf(db, [proposal])).get(proposal.id) ?? null
+    return proposalView(proposal, context, line, businessDate(serverClock.now(), site.timezone), await namesOf(db, [proposal]), customer)
   })
 }
 
@@ -329,11 +344,12 @@ export async function listRepromises(caller: CommandCaller, query: { readonly si
     const orders = await db.salesOrder.findMany({ where: { companyId: site.companyId, status: { in: [...KEEP_ORDER_STATUSES] } }, select: { id: true }, take: 2000 })
     const proposals = (await readProposals(db, orders.map((order) => order.id))).filter((proposal) => proposal.siteId === site.id && (query.state === 'ALL' || proposal.state === (query.state ?? 'WAITING')))
     const names = await namesOf(db, proposals)
+    const answers = await customerAnswersOf(db, proposals) // B-PR-28
     const views = []
     for (const proposal of proposals) {
       const line = await readKeepLine(db, proposal.orderLineId)
       if (!line || !can(actorOf(context), ORDERS_VIEW, { companyId: line.companyId, partyId: line.partyId })) continue
-      views.push(proposalView(proposal, context, line, today, names))
+      views.push(proposalView(proposal, context, line, today, names, answers.get(proposal.id) ?? null))
     }
     return { site: { id: site.id, code: site.code, name: site.name }, today, asOf: toUtcIso(now), proposals: views }
   })
@@ -379,14 +395,21 @@ async function closeTask(tools: CommandTools, context: OfficeContext, proposal: 
 export interface AcceptBody {
   /** Send the message to the customer on the order's thread (by e-mail). */
   readonly tell: boolean
+  /** B-PR-28: ask the customer to accept or refuse the new date (a REPROMISE approval; the date stands either way). */
+  readonly askBrand?: boolean | undefined
   /** Other addresses than the proposal's (the order's buyer). */
   readonly to?: readonly string[] | undefined
   readonly subject?: string | undefined
   readonly body?: string | undefined
 }
 
+/** B-PR-28: how the APPROVAL link of the customer's question becomes its address (the office sign-in's link builder). */
+export interface LinkBuilder {
+  link(path: string, token: string): string
+}
+
 /** POST /planning/promises/re-promises/:proposalId/accept — sales gives the word. */
-export async function acceptRepromise(caller: CommandCaller, proposalId: string, body: AcceptBody, idempotencyKey?: string) {
+export async function acceptRepromise(caller: CommandCaller, proposalId: string, body: AcceptBody, idempotencyKey?: string, /* B-PR-28 */ links?: LinkBuilder) {
   const checked = await decisionChecks(caller, proposalId, 'SALES')
   const { context, line, site, proposal } = checked
   if (body.tell && !can(actorOf(context), EMAIL_SEND, { companyId: line.companyId })) throw new ForbiddenError()
@@ -400,6 +423,13 @@ export async function acceptRepromise(caller: CommandCaller, proposalId: string,
   if (refused.length > 0) throw new DomainError('conflict', `Only sizes a valid certificate covers through their date are promised: ${refused[0]!.message}`, refused)
   const sender = await caller.withClient((db) => db.user.findUnique({ where: { id: context.actorId }, select: { id: true, displayName: true, email: true } }))
   if (body.tell && !sender) throw new ForbiddenError()
+  // B-PR-28: the customer's question, its id and its link's token made outside the command (the engine's own ask does the same).
+  const brandAsk = body.askBrand === true ? (() => {
+    const requestId = newId()
+    const linkId = newId()
+    const token = mintLinkToken({ tenantId: context.tenantId, partyId: line.partyId, linkId })
+    return { requestId, linkId, token, dueAt: dueAtFor('REPROMISE', null, now) }
+  })() : null
   const outcome = await command(caller, { name: DECISION_ACTIONS.ACCEPTED, idempotencyKey, input: { proposalId, ...body } }, async (tools) => {
     const { tx, now: at } = tools
     // The order's row first (W1's lock order: the line's date follows its latest size through W1's change), then the line's.
@@ -470,6 +500,23 @@ export async function acceptRepromise(caller: CommandCaller, proposalId: string,
       outboundId = sent.outbound.id
     }
     await closeTask(tools, context, fresh, 'DONE')
+    // B-PR-28: an older open question about this line's date is withdrawn (the date moved again); then, when sales says so, the
+    // customer is asked about this one (the date stands either way).
+    await withdrawOlderInCommand(tools, { orderId: line.orderId, orderLineId: line.id, actorId: context.actorId })
+    const asked = brandAsk
+      ? await askCustomerInCommand(tools, {
+          context,
+          line: current,
+          proposal: fresh,
+          sizes: fresh.sizes,
+          requestId: brandAsk.requestId,
+          linkId: brandAsk.linkId,
+          tokenHash: linkTokenHash(brandAsk.token.value),
+          dueAt: brandAsk.dueAt,
+          locale: fresh.message.language,
+          askedBy: sender ? { id: sender.id, name: sender.displayName } : null,
+        })
+      : null
     tools.audit({
       action: DECISION_ACTIONS.ACCEPTED,
       recordType: 'SalesOrder',
@@ -477,12 +524,15 @@ export async function acceptRepromise(caller: CommandCaller, proposalId: string,
       companyId: line.companyId,
       siteId: site.id,
       before: { sizes: fresh.sizes.map((entry) => ({ size: entry.size, current: entry.from })) },
-      after: { proposalId: fresh.id, decision: 'ACCEPTED', told: body.tell, outboundId, rows: written.length, lineDate: followed },
+      after: { proposalId: fresh.id, decision: 'ACCEPTED', told: body.tell, outboundId, rows: written.length, lineDate: followed, /* B-PR-28 */ askedCustomer: asked?.requestId ?? null },
     })
     tools.emit({ type: 'order_promise.decided', subject: line.orderId, companyId: line.companyId, siteId: site.id, payload: { orderId: line.orderId, orderLineId: line.id, proposalId: fresh.id, decision: 'ACCEPTED', told: body.tell } })
-    return { written, told: body.tell, outboundId, lineDate: followed }
+    return { written, told: body.tell, outboundId, lineDate: followed, brandRequestId: asked?.requestId ?? null }
   })
-  return { ...outcome.result, replayed: outcome.replayed, proposal: await proposalAfter(caller, proposalId) }
+  // B-PR-28: the link of the customer's question, once (a replay never hands it again: the token is not kept).
+  const brandRequestId = outcome.result.brandRequestId ?? null
+  const url = brandRequestId && brandAsk && !outcome.replayed && links ? links.link('/l', brandAsk.token.value) : null
+  return { ...outcome.result, replayed: outcome.replayed, proposal: await proposalAfter(caller, proposalId), brandAsk: brandRequestId ? { requestId: brandRequestId, url } : null }
 }
 
 /** POST /planning/promises/re-promises/:proposalId/decline — sales says no, with its words. */

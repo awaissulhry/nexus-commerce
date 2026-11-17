@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CATALOGUE, messagesFor } from '../../../../../../lib/i18n/messages'
 import { I18nProvider } from '../../../../../../lib/i18n/provider'
 import { PROSPECT_VIEW, VIEW } from '../../../demo/fixtures'
@@ -8,6 +8,14 @@ import { NAMESPACES } from '../../../model'
 import { carriableFiles, startBodyOf, startDraftOf, startProblems, startProjectHeld, startRefusalKey, type StartProjectModel } from '../../../start-project'
 import { paneMenu } from '../RequestPane'
 import { StartProjectDialog } from './StartProjectDialog'
+
+// The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so the dialog's words are checked.
+vi.mock('@nexus/ui/components', async (original) => {
+  const actual = await original<typeof import('@nexus/ui/components')>()
+  const Modal = ({ open, title, subtitle, children, footer }: { open: boolean; title?: unknown; subtitle?: unknown; children?: unknown; footer?: unknown }) =>
+    open ? createElement('section', { role: 'dialog' }, createElement('h2', null, title as never), createElement('p', null, subtitle as never), children as never, footer as never) : null
+  return { ...actual, Modal }
+})
 
 /**
  * B-TH-252 — "Start a project…" from an Incoming request (PROJ.new-F07; O-SAL-INQ-LIST.pane-actions; wall W38): in ⋯, never a sixth

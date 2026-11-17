@@ -96,7 +96,7 @@
         "declined": "Quando l’ufficio rifiuta una richiesta (Rifiuta): le parole da cui parte, con il motivo."
       },
       "thread": {
-        "message_posted": "Un nuovo messaggio per il cliente su un suo documento, con il testo del messaggio (solo un messaggio condiviso con quel cliente, mai una nota interna)."
+        "message_posted": "Un nuovo messaggio per il cliente su un suo documento, con il testo del messaggio (solo un messaggio condiviso con quel cliente, mai una nota d'ufficio)."
       }
     },
     "inUse": {

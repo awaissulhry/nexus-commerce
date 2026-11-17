@@ -85,6 +85,11 @@ export interface RequestRef {
 export interface RecordAdapter {
   readonly recordType: string
   readonly kinds: readonly ApprovalKind[]
+  /**
+   * B-PR-28: kinds the record carries that only their own command asks (REPROMISE: sales accepting a re-promise): never offered
+   * by "Ask for approval" (the record's `kinds`), yet read, answered and settled through this adapter.
+   */
+  readonly commandKinds?: readonly ApprovalKind[]
   /** Seeing the record's requests (beyond partners.approvals.view). */
   readonly view: Permission
   /** Asking on it and withdrawing (beyond partners.approvals.ask). */

@@ -68,10 +68,11 @@ const reasons = new Map([
 ])
 
 describe('the permission and its roles (B-W2b-183)', () => {
-  it('is a partner write held by the customer Buyer and the customer Admin only', () => {
+  // B-PR-25: and the customer Production role (production plan §5 Roles: it asks every kind its limits open).
+  it('is a partner write held by the customer Buyer, Admin and Production roles only', () => {
     expect(FACTORY_PERMISSIONS.get(PORTAL_SALES_ORDERS_ASK)).toMatchObject({ partner: true, risk: 'write' })
     expect(ORDER_CHANGE_ASKER_TEMPLATES).toEqual(['customer-buyer'])
-    for (const key of ['customer-buyer', 'customer-admin']) expect(partnerTemplateOf(key)?.permissions).toContain(PORTAL_SALES_ORDERS_ASK)
+    for (const key of ['customer-buyer', 'customer-admin', 'customer-production']) expect(partnerTemplateOf(key)?.permissions).toContain(PORTAL_SALES_ORDERS_ASK)
     for (const key of ['customer-finance', 'customer-quality', 'customer-designer', 'customer-viewer', 'supplier-orders', 'supplier-admin', 'subcontractor-jobs', 'guest-accountant', 'partner-approve']) expect(partnerTemplateOf(key)?.permissions).not.toContain(PORTAL_SALES_ORDERS_ASK)
     for (const template of ROLE_TEMPLATES) expect(template.permissions).not.toContain(PORTAL_SALES_ORDERS_ASK)
   })

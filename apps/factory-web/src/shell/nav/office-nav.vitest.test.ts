@@ -55,7 +55,11 @@ describe('navigation filtered by permission (areaNavForPerson, fail closed per r
   })
 
   it('a sales person sees Home › Today and Mail to sort, and no Admin at all', () => {
-    expect(ids(officeNavFor(permissionCheck(SALES_PERMISSIONS)))).toEqual([['home', ['home-today', 'home-approvals', 'home-tasks', 'home-notifications', 'home-mail-to-sort']]])
+    // B-TH-248: Products › Projects opens with threads.read (a project is its conversation), which the sales person holds.
+    expect(ids(officeNavFor(permissionCheck(SALES_PERMISSIONS)))).toEqual([
+      ['home', ['home-today', 'home-approvals', 'home-tasks', 'home-notifications', 'home-mail-to-sort']],
+      ['products', ['products-projects']],
+    ])
   })
 
   it('the administrator template today: every Admin row (B-W0-28 declared integrations.view)', () => {
@@ -157,7 +161,7 @@ describe('labels, crumbs, palette pages and the phone bar come from the same man
 
   it('the palette jumps to every page the person may open', () => {
     // B-W2b-307: Home › Approvals is every request's inbox (home.view).
-    expect(navPages(officeNavFor(permissionCheck(SALES_PERMISSIONS))).map((page) => page.href)).toEqual(['/home/today', '/home/approvals', '/home/tasks', '/home/notifications', '/home/mail-to-sort'])
+    expect(navPages(officeNavFor(permissionCheck(SALES_PERMISSIONS))).map((page) => page.href)).toEqual(['/home/today', '/home/approvals', '/home/tasks', '/home/notifications', '/home/mail-to-sort', /* B-TH-248 */ '/products/projects'])
     expect(navPages(nav)).toHaveLength(17)
   })
 

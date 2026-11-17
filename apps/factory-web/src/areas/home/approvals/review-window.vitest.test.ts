@@ -90,7 +90,7 @@ describe('B-TH-270: the review window — Change · Context & history, the reque
   it('without threads.read the page passes no thread: the window is the tabs alone, no empty column, no locked box', () => {
     const found = DEPTH_CASES.find((entry) => entry.id === 'th-270-review-thread')!
     const html = render(createElement(InboxView, { model: found.model }))
-    expect(html).toContain('Context & history')
+    expect(textOf(html)).toContain('Context & history')
     expect(html).not.toContain('fw-apv-window')
     expect(html).not.toContain('aria-label="Thread tools"')
   })

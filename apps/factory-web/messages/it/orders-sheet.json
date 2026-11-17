@@ -25,7 +25,7 @@
     "balanceHint": "Ancora da pagare: il lordo meno note di credito e quanto pagato",
     "site": "Sede",
     "note": "Nota d’ordine",
-    "noteHint": "La nota interna dell’ufficio: il cliente non la vede mai",
+    "noteHint": "La nota d'ufficio: il cliente non la vede mai",
     "atRisk": "A rischio",
     "atRiskHint": "La promessa è vicina e l’ordine è ancora in lavorazione (i giorni della regola di avviso)",
     "customerUrgency": "Segno del cliente",

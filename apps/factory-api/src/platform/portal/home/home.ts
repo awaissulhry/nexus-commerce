@@ -21,9 +21,11 @@ export async function home(app: FastifyInstance, request: FastifyRequest, now: D
   const kind = isPartnerKind(session.person.partnerKind) ? session.person.partnerKind : null
   const tasks = await myTasks(request, 'OPEN', now)
   const counts: { key: string; area: string; words: { it: string; en: string }; value: number | null }[] = []
+  const live = new Set<string>() // B-PR-20: the events after which a shown source's counts read again
   for (const source of HOME_SOURCES) {
     const shown = source.counts.filter((count) => (kind === null ? PARTNER_KINDS : [kind]).some((entry) => count.kinds.includes(entry)))
     if (shown.length === 0) continue
+    for (const event of source.live ?? []) live.add(event) // B-PR-20
     let values: Readonly<Record<string, number | null>> = {}
     try {
       values = await source.read(app, request, now)
@@ -38,6 +40,6 @@ export async function home(app: FastifyInstance, request: FastifyRequest, now: D
     waiting: tasks.items.slice(0, WAITING_SHOWN),
     badges: tasks.badges,
     counts,
-    live: { events: [...tasks.live.events, 'partner_notification.created'] },
+    live: { events: [...new Set([...tasks.live.events, 'partner_notification.created', /* B-PR-20 */ ...live])] },
   }
 }
