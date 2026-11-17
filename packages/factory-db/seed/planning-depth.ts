@@ -41,6 +41,9 @@ import { seedAt, seedDay } from '../src/seed-calendar' // B-W2b-F53: the seeds' 
  *   what-if      the planner's DRAFT what-if moving WO-0002's sewing a day later (the first row), and one DISCARDED.
  *   capacity     the workshop P2: 2400 sewing minutes a week from 1 Nov (the first row), 60 garments a week of any work
  *                from 1 Nov to 23 Dec.
+ *   cutting loss B-W2b-GB29 (G226): SEED-JKT-02's cutting loss of 14 % over 12 cuts, accepted for planning on 1 Nov — before
+ *                its revision 1 was released (10 Nov), so the plan reads that revision as it is (planning-loss.ts: only a
+ *                revision released BEFORE a decision takes it) and no seeded figure moves.
  *   more         SEED-SC-0001 (DRAFT): its kit leaves on 17 Nov at 08:00; run 1's red leather (OPEN, firm) hard-pegged to
  *                SEED-SO-0001's RED line; the backlog ranked: SEED-SO-0002 first, SEED-SO-0001 second; the finished item
  *                SEED-JKT-02-BLK-52 at A1: made to stock, planned per style and colour, in fixed lots of 6 with 2 %
@@ -71,6 +74,7 @@ const T = {
   told: new Date('2026-11-09T11:00:00.000Z'),
   setup: new Date('2026-11-05T08:00:00.000Z'),
   kit: seedAt('2026-11-17T07:00:00.000Z'),
+  lossDecided: new Date('2026-11-01T08:00:00.000Z'),
   kitPlanned: seedAt('2026-11-27T07:00:00.000Z'),
 } as const
 const DAY = (iso: string): Date => new Date(`${iso}T00:00:00.000Z`)
@@ -85,6 +89,8 @@ export interface PlanningDepthSeed {
   readonly whatIfIds: { readonly draft: string; readonly discarded: string }
   readonly capacityIds: readonly [string, string]
   readonly itemPlanningId: string
+  /** B-W2b-GB29 (G226): the style's cutting loss accepted for planning. */
+  readonly cuttingLossId: string
 }
 
 export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
@@ -124,6 +130,7 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
     whatIfIds: { draft: firstId('planning-depth:what-if:A1:1'), discarded: id('planning-depth:what-if:A1:2') },
     capacityIds: [firstId('planning-depth:capacity:P2:SEWING'), id('planning-depth:capacity:P2:ANY')],
     itemPlanningId: id('planning-depth:item-planning:A1:SEED-JKT-02-BLK-52'),
+    cuttingLossId: firstId('planning-depth:cutting-loss:JKT-02'),
   }
   const select = { id: true } as const
 
@@ -407,6 +414,14 @@ export async function seed(context: SeedContext): Promise<PlanningDepthSeed> {
           { id: K[1], ...stamp, unit: SubcontractCapacityUnit.PIECES, perWeek: 60, validFrom: DAY('2026-11-01'), validTo: DAY(seedDay('2026-12-23')), note: 'Closed for the holidays from 24 Dec (made-up).' },
         ],
       })
+    }),
+  )
+
+  // --- a style's cutting loss accepted for planning (B-W2b-GB29, G226), decided before its revision's release -----------------
+  await db.withScope(office, (client) =>
+    client.$transaction(async (tx) => {
+      if (await tx.styleCuttingLoss.findUnique({ where: { id: result.cuttingLossId }, select })) return
+      await tx.styleCuttingLoss.create({ data: { id: result.cuttingLossId, styleId: production.styleId, lossPct: '14.00', basedOnCuts: 12, decidedAt: T.lossDecided, createdAt: T.lossDecided, createdById: actorId }, select })
     }),
   )
   return result

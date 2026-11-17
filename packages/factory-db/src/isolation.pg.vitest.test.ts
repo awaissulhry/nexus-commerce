@@ -1057,6 +1057,7 @@ it('covers every classified table and every runtime role', () => {
     'StockValuation',
     'StoredFile',
     'Style',
+    'StyleCuttingLoss',
     'StyleImage',
     'StyleOptionGroup',
     'StyleRevision',
