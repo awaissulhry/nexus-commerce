@@ -88,7 +88,7 @@ let alphaSheet: Json
 let betaSheet: Json
 
 beforeAll(async () => {
-  h = await startHarness('files_measurement_sheets')
+  h = await startHarness('files_th7_sheets')
   h.clock.set(new Date())
   for (const seed of [seedCore, seedNumbering, seedParties, seedFiles, seedProduct, seedSales]) await seed({ db: h.database, namespace: NS })
   second = await seedSecondBrand({ db: h.database, namespace: NS })

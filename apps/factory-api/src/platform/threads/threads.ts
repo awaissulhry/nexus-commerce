@@ -238,7 +238,10 @@ async function visibleAttachments(client: FactoryClient | CommandTx, context: Re
   const opensSheetsOf = async (row: { recordType: string; recordId: string; companyId: string | null }): Promise<boolean> => {
     if (!isOffice(context)) return true
     const key = `${row.recordType}:${row.recordId}`
-    if (!opens.has(key)) opens.set(key, can(actor, MEASUREMENT_SHEET_PERMISSION, (await resolveRecord(client, row.recordType, row.recordId)) ?? { companyId: row.companyId }))
+    if (!opens.has(key)) {
+      const scope = await resolveRecord(client, row.recordType, row.recordId)
+      opens.set(key, scope ? mayOnThread(actor, MEASUREMENT_SHEET_PERMISSION, row.recordType, scope) : can(actor, MEASUREMENT_SHEET_PERMISSION, { companyId: row.companyId }))
+    }
     return opens.get(key)!
   }
   for (const row of rows) {
@@ -483,7 +486,7 @@ export async function attachmentProblems(tx: CommandTx, context: RequestContext,
   const actor = actorOf(context)
   const problems: Issue[] = []
   // B-TH-083: a measurement sheet goes with a message only from a writer who may open it (sales.measurements.view over the record).
-  const opensSheets = !isOffice(context) || !rows.some(isMeasurementSheet) || can(actor, MEASUREMENT_SHEET_PERMISSION, (await resolveRecord(tx, thread.recordType, thread.recordId)) ?? scopeOfThread(thread))
+  const opensSheets = !isOffice(context) || !rows.some(isMeasurementSheet) || mayOnThread(actor, MEASUREMENT_SHEET_PERMISSION, thread.recordType, (await resolveRecord(tx, thread.recordType, thread.recordId)) ?? scopeOfThread(thread))
   fileIds.forEach((fileId, index) => {
     const path = `body/attachments/${index}`
     const row = byId.get(fileId)

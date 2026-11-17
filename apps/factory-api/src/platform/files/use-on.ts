@@ -119,7 +119,8 @@ export async function useOnTargets(caller: CommandCaller, fileId: string, query:
   if (found.tooShort) return { tooShort: true, targets: [] }
   return caller.withClient(async (client) => {
     const from = await resolveRecord(client, source.recordType, source.recordId)
-    const sourceParty = from?.partyId ?? source.partyId ?? null
+    // As the carry compares them (B-PR-08a part 2: a work order's, hold's or NCR's customer is its wall party).
+    const sourceParty = wallPartyOf(from) ?? source.partyId ?? null
     const targets: UseOnTarget[] = []
     for (const result of found.results) {
       if (targets.length >= USE_ON_TARGETS) break
@@ -127,8 +128,9 @@ export async function useOnTargets(caller: CommandCaller, fileId: string, query:
       if (readsThroughModule(result.recordType) || ownerOf(result.recordType, kind)) continue
       const target = await resolveRecord(client, result.recordType, result.recordId)
       if (!target || !mayOnThread(actor, FILES_READ, result.recordType, target) || !can(actor, FILES_UPLOAD, target)) continue
-      if (sourceParty !== null && target.partyId !== null && target.partyId !== sourceParty) continue
-      targets.push({ recordType: result.recordType, recordId: result.recordId, number: result.number, title: result.title, subtitle: result.subtitle, area: result.area, partyId: target.partyId })
+      const targetParty = wallPartyOf(target)
+      if (sourceParty !== null && targetParty !== null && targetParty !== sourceParty) continue
+      targets.push({ recordType: result.recordType, recordId: result.recordId, number: result.number, title: result.title, subtitle: result.subtitle, area: result.area, partyId: targetParty })
     }
     return { tooShort: false, targets }
   })

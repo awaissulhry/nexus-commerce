@@ -271,7 +271,8 @@ export async function opensMeasurementSheets(caller: CommandCaller, record: { re
   const context = contextOf(caller)
   if (context.audience !== 'office') return true
   const scope = await caller.withClient((client) => resolveRecord(client, record.recordType, record.recordId))
-  return can(actorOf(context), MEASUREMENT_SHEET_PERMISSION, scope ?? { companyId: record.companyId })
+  // As threads read a record (its gate and its wall party: B-PR-08a part 2); a type no resolver knows keeps the file's company.
+  return scope ? mayOnThread(actorOf(context), MEASUREMENT_SHEET_PERMISSION, record.recordType, scope) : can(actorOf(context), MEASUREMENT_SHEET_PERMISSION, { companyId: record.companyId })
 }
 
 /** A locked sheet as an office reader without the permission sees it: what it is and where, never its name or content. */

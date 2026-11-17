@@ -186,4 +186,3 @@ describe('the copy names its source; a locked sheet is named as such (B-TH-083)'
     expect(en('locked.sheet')).toBe('Measurement sheet — you cannot open it')
   })
 })
-})
