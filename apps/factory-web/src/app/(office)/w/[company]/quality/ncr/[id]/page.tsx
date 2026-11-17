@@ -4,7 +4,7 @@ import { NcrRecord } from '../../../../../../../areas/quality/ncr/record/NcrReco
 
 export const metadata: Metadata = { title: 'Nonconformance · Nexus Factory' }
 
-/** Quality › Nonconformances › an NCR (SCR-145; `?tab=problem|containment|disposition|linked|activity`). */
+/** Quality › Nonconformances › an NCR (SCR-145; `?tab=problem|containment|disposition|cost|linked`; the old `activity` opens Problem & evidence with the thread — B-TH-266). */
 export default async function NcrRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (

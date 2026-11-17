@@ -4,9 +4,19 @@ import type { AnswerCheck, AnswerTemplate, Complaint, ComplaintLinkType, Complai
 import type { AnswerDraft, ComplaintsCan, InvestigationDraft, SendDraft } from '../model'
 import type { Notice, PhotoView, TriageActions, TriageModel } from '../view-model'
 
-/** The record's tabs (design rec:Complaint): Complaint · Investigation · Answer (B-W2b-113) · Linked records · Activity. */
-export const RECORD_TABS = ['complaint', 'investigation', 'answer', 'linked', 'activity'] as const
+/** The record's tabs (design rec:Complaint): Complaint · Investigation · Answer (B-W2b-113) · Linked records. */
+// ---- B-TH-266 (threads plan TH-6; 08-tabs O-QA-CMP; the rule of picture 38): tabs 5 → 4. Activity goes (R-ACT: its tools are in the
+// docked thread's "⋯"; the thread is the complaint's own, the same as the customer's portal complaint page, its customer the only party).
+export const RECORD_TABS = ['complaint', 'investigation', 'answer', 'linked'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Complaint with the thread opened (RecordFrame reads the address). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ activity: 'complaint' })
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'complaint'
+}
+// ---- end B-TH-266
 
 /** The facts the Complaint tab edits (EditModeBar), as typed. */
 export interface FactsDraft {
@@ -87,7 +97,8 @@ export interface ComplaintRecordModel {
   readonly sites: readonly SiteOption[] | null
   /** The record's own triage (Triage when new, or a re-triage). */
   readonly triage: TriageModel | null
-  readonly dockOpen: boolean
+  /** B-TH-266: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  readonly personId?: string | null
   /** Where the records it names open (`<type>:<id>` → the company's address: their page once built, else their panels). */
   readonly hrefs: Readonly<Record<string, string>>
   /** B-W2b-17: Link…'s choices for the type picked. */
@@ -111,7 +122,6 @@ export interface ComplaintRecordActions extends TriageActions {
   onReload?: () => void
   onCopy?: (text: string) => void
   onDismissNotice?: () => void
-  onDock?: () => void
   // B-W2b-113: the investigation and the answer letter.
   onInvestigationEdit?: (on: boolean) => void
   onInvestigationDraft?: (patch: Partial<InvestigationDraft>) => void

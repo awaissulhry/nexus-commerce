@@ -4,7 +4,7 @@ import { CapaRecord } from '../../../../../../../areas/quality/capa/record/CapaR
 
 export const metadata: Metadata = { title: 'Corrective action · Nexus Factory' }
 
-/** Quality › Corrective actions › a CAPA or an 8D (SCR-146-record; `?tab=problem|actions|report|activity`). */
+/** Quality › Corrective actions › a CAPA or an 8D (SCR-146-record; `?tab=problem|actions|report`; the old `activity` opens Problem with the thread — B-TH-266). */
 export default async function CapaRoute({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   return (

@@ -63,7 +63,8 @@ export interface CapaRecordModel {
   /** The record changed elsewhere while a dialog or a draft held work (the time it was seen). */
   readonly stale: string | null
   readonly busy: boolean
-  readonly keysOpen: boolean
+  /** B-TH-266: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  readonly personId?: string | null
   readonly copied: boolean
   readonly drawer: DrawerModel | null
   readonly report: ReportModel
@@ -92,6 +93,5 @@ export interface CapaRecordActions {
   onKeep?: () => void
   onShare?: (complaintId: string) => void
   onCopy?: () => void
-  onKeys?: (open: boolean) => void
   onDismissNotice?: () => void
 }

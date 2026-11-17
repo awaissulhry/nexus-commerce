@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { recordAddress } from '../../../../lib/records/record-links'
@@ -9,9 +8,8 @@ import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
-import { liveMatches, useLive, useRecordTab } from '../../_shared/hooks'
+import { liveMatches, useLive } from '../../_shared/hooks'
 import { problemKey } from '../../_shared/model'
-import { RecordProblem, RecordSkeleton } from '../../_shared/parts'
 import {
   acknowledgeComplaint,
   answerCheck,
@@ -76,16 +74,20 @@ import {
 } from '../model'
 import type { Notice, PhotoView, TriageModel } from '../view-model'
 import { ComplaintsMessages, useWords } from '../view/parts'
-import { IDLE_ANSWER, RECORD_TABS, type AnswerModel, type FactsDraft, type LinkOptions, type RecordDialog } from './view-model'
-import { ComplaintRecordView } from './view/ComplaintRecordView'
+import { IDLE_ANSWER, tabOf, type AnswerModel, type FactsDraft, type LinkOptions, type RecordDialog } from './view-model'
+import { ComplaintRecordState, ComplaintRecordView } from './view/ComplaintRecordView'
+// ---- B-TH-266: the docked thread on the complaint (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 /**
  * A complaint's container (`/w/<company>/quality/complaints/<id>?tab=…`, SCR-113 W2a part): reads the complaint (its
  * steps held with the API's codes), its photos, and — when a step needs them — the people of the company's complaints,
  * the styles and the sites; runs ONE write at a time with the version read (a stale one reads the complaint again and
  * says so); live complaint events read it again, or, while a dialog or an edit is open, say it changed with Reload.
- * `?do=ncr|register` (the list's row verbs) opens that step's dialog. The thread dock (O1) and Activity mount the record
- * panels. An NCR (B-W2a-47) or a repair (B-W2a-57) made from here opens in its own place.
+ * `?do=ncr|register` (the list's row verbs) opens that step's dialog. B-TH-266: the complaint's ONE thread docked beside every
+ * tab (the same thread as the customer's portal complaint page; an old Activity address lands on Complaint with the thread open).
+ * An NCR (B-W2a-47) or a repair (B-W2a-57) made from here opens in its own place.
  */
 export function ComplaintRecord({ complaintId }: { complaintId: string }) {
   return (
@@ -95,15 +97,12 @@ export function ComplaintRecord({ complaintId }: { complaintId: string }) {
   )
 }
 
-const WIDE = '(min-width: 1280px)'
-
 /** A link the page refuses before the API (a serial that finds no garment): its words. */
 class LinkProblem extends Error {
   constructor(readonly key: string) {
     super(key)
   }
 }
-const DOCK_KEY = 'fw.complaints.dock'
 
 const factsOf = (complaint: Complaint): FactsDraft => ({
   description: complaint.description,
@@ -140,7 +139,7 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
   const t = useWords()
   const can = useMemo(() => complaintsCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(RECORD_TABS)
+  const tab = tabOf(params?.get('tab'))
   const me = session.user.id
   const today = romeToday()
   const [offline, setOffline] = useState(false)
@@ -169,7 +168,6 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
   const [dialogProblem, setDialogProblem] = useState<string | null>(null)
   const [people, setPeople] = useState<{ value: ComplaintPeople | null; problem: string | null } | null>(null)
   const [triage, setTriage] = useState<TriageModel | null>(null)
-  const [dockOpen, setDockOpen] = useState(false)
   // B-W2b-17: Link…'s choices for the type picked, and the NCRs raised from this complaint (their Unlink is held).
   const [linkOptions, setLinkOptions] = useState<LinkOptions | null>(null)
   const [raisedFrom, setRaisedFrom] = useState<readonly string[] | null>(null)
@@ -212,14 +210,6 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
     void load()
     void loadPhotos()
   }, [load, loadPhotos])
-
-  useEffect(() => {
-    try {
-      setDockOpen(window.localStorage.getItem(DOCK_KEY) === '1' && window.matchMedia(WIDE).matches)
-    } catch {
-      setDockOpen(false)
-    }
-  }, [])
 
   const live = useLive(
     (change) => {
@@ -652,19 +642,9 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
     }
   }, [api, complaint, edit, load])
 
-  if (problem && !complaint)
-    return (
-      <RecordProblem
-        problem={problem}
-        back={
-          <Link className="fw-q-link" href={`${prefix}/quality/complaints`}>
-            {t('record.back')}
-          </Link>
-        }
-        onRetry={() => void load()}
-      />
-    )
-  if (!complaint) return <RecordSkeleton />
+  // B-TH-266: read, missing, refused or not for this role — inside the frame (the band stays), no thread.
+  if (problem && !complaint) return <ComplaintRecordState prefix={prefix} personId={me} state={problem === 'problem.notFound' ? 'notFound' : problem === 'problem.forbidden' ? 'forbidden' : { problem }} onRetry={() => void load()} />
+  if (!complaint) return <ComplaintRecordState prefix={prefix} personId={me} state="loading" />
 
   const built = OFFICE_PAGES
   const hrefs: Record<string, string> = {}
@@ -678,14 +658,20 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
   if (complaint.shipment) add('Shipment', complaint.shipment.id, complaint.shipment.number)
   if (complaint.order) add('SalesOrder', complaint.order.id, complaint.order.number)
 
-  const panels = can.threadsRead ? <RecordPanels record={{ type: 'Complaint', id: complaint.id, companyId: complaint.companyId, siteId: null }} title={complaint.number} party={{ id: complaint.party.id, name: complaint.party.legalName, emails: complaint.contact?.email ? [complaint.contact.email] : [] }} /> : undefined
+  // B-TH-266: the complaint's ONE thread docked beside every tab — the same conversation as the customer's portal complaint page; the
+  // complaint's own customer is its only party. Only with threads.read; the print view keeps the record panels' print form.
+  const ref = { type: 'Complaint', id: complaint.id, companyId: complaint.companyId, siteId: null }
+  const party = { id: complaint.party.id, name: complaint.party.legalName }
+  const thread = can.threadsRead ? <OfficeRecordThread docked record={ref} title={`${complaint.number} · ${complaint.party.legalName}`} recordLabel={complaint.number} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = can.threadsRead ? <RecordPanels record={ref} title={complaint.number} party={{ ...party, emails: complaint.contact?.email ? [complaint.contact.email] : [] }} /> : null
 
   const triageModel: TriageModel | null = triage ? { ...triage, people: people?.value ?? null, peopleProblem: people?.problem ?? null, styles, photos, offline } : null
 
   return (
     <ComplaintRecordView
-      model={{ prefix, can, tab, complaint, photos, asOf, live, offline, today, notice, changedAt, edit, styles, dialog, dialogBusy, dialogProblem, sites, triage: triageModel, dockOpen, hrefs, linkOptions, raisedFrom, investigation, answer }}
-      panels={panels}
+      model={{ prefix, can, tab, complaint, photos, asOf, live, offline, today, notice, changedAt, edit, styles, dialog, dialogBusy, dialogProblem, sites, triage: triageModel, hrefs, linkOptions, raisedFrom, investigation, answer, personId: me /* B-TH-266 */ }}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onTriage: openTriage,
         onDialog: (next) => {
@@ -707,27 +693,6 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
           )
         },
         onDismissNotice: () => setNotice(null),
-        onDock: () => {
-          let wide = false
-          try {
-            wide = window.matchMedia(WIDE).matches
-          } catch {
-            wide = false
-          }
-          if (!wide) {
-            router.push(`${pathname}?tab=activity`)
-            return
-          }
-          setDockOpen((current) => {
-            const next = !current
-            try {
-              window.localStorage.setItem(DOCK_KEY, next ? '1' : '0')
-            } catch {
-              // Not kept on this device; the dock still toggles.
-            }
-            return next
-          })
-        },
         onTriageGo: () => undefined,
         onTriageClose: () => setTriage(null),
         onTriageRetry: () => undefined,
