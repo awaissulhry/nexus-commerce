@@ -3,6 +3,10 @@
 import { ChevronDown, MessageSquareText, Save } from 'lucide-react'
 import { Menu, type MenuItemDef } from '@nexus/ui/components'
 import { Spinner, Tag } from '@nexus/ui/primitives'
+// B-TH-287: the draft on the server ("Draft saved 10:42", "Not saved · Retry").
+import { RotateCw, WifiOff } from 'lucide-react'
+import { Button } from '@nexus/ui/primitives'
+import { savedKey, type DraftSaved } from '../../composer/server-draft'
 import { formatTime } from '../../../i18n/format'
 import { useLocale, useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
@@ -74,22 +78,44 @@ function Replies({ model, onPick, onRetry }: { model: SavedRepliesModel; onPick?
   )
 }
 
-/** "Draft kept on this device · saved 10:42" (T8-F07 until N6): said, so nobody expects it on another computer. */
-export function DraftLine({ draft, timeZone }: { draft: LocalDraft | null; timeZone?: string }) {
+/**
+ * "Draft kept on this device · saved 10:42" (T8-F07 until N6): said, so nobody expects it on another computer.
+ * B-TH-287 (N6, B-TH-092): with the draft on the server the line says "Draft saved 10:42" (any computer of the person finds it),
+ * "Saving the draft…", "Not saved · Retry" (the device copy still holds it), offline "your text stays on this device", and two
+ * tabs' "A newer draft … was replaced". Without a server state (none yet) the device line stays.
+ */
+export function DraftLine({ draft, timeZone, saved, onRetry }: { draft: LocalDraft | null; timeZone?: string; saved?: DraftSaved | null; onRetry?: () => void }) {
   return (
     <WithMessages namespaces={[HELPERS_NS]}>
-      <Draft draft={draft} timeZone={timeZone} />
+      <Draft draft={draft} timeZone={timeZone} saved={saved ?? null} onRetry={onRetry} />
     </WithMessages>
   )
 }
 
-function Draft({ draft, timeZone }: { draft: LocalDraft | null; timeZone?: string | undefined }) {
+function Draft({ draft, timeZone, saved, onRetry }: { draft: LocalDraft | null; timeZone?: string | undefined; saved: DraftSaved | null; onRetry?: (() => void) | undefined }) {
   const t = useT(HELPERS_NS)
   const locale = useLocale()
+  const place = { locale, ...(timeZone ? { timeZone } : {}) }
+  // ---- B-TH-287: the server's state first; the device line when the server has said nothing yet.
+  if (saved) {
+    const at = saved.state === 'saved' || saved.state === 'replaced' ? formatTime(saved.at, place) : ''
+    const warn = saved.state === 'failed' || saved.state === 'replaced' || saved.state === 'offline'
+    return (
+      <span className={`fw-rtm-hint${warn ? ' is-warning' : ''}`} role="status">
+        {saved.state === 'saving' ? <Spinner size={12} /> : saved.state === 'offline' ? <WifiOff size={12} aria-hidden /> : <Save size={12} aria-hidden />} {t(savedKey(saved), { time: at })}
+        {saved.state === 'failed' && onRetry && (
+          <Button size="sm" variant="quiet" onClick={onRetry}>
+            <RotateCw size={12} aria-hidden /> {t('draft.retry')}
+          </Button>
+        )}
+      </span>
+    )
+  }
+  // ---- end B-TH-287
   if (!draft) return null
   return (
     <span className="fw-rtm-hint" role="status">
-      <Save size={12} aria-hidden /> {t('draft.kept', { time: formatTime(draft.savedAt, { locale, ...(timeZone ? { timeZone } : {}) }) })}
+      <Save size={12} aria-hidden /> {t('draft.kept', { time: formatTime(draft.savedAt, place) })}
     </span>
   )
 }

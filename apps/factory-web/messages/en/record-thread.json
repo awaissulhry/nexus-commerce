@@ -23,7 +23,20 @@
       "CLOSED": "Not posted: this thread is closed. Reopen it to reply; your text is back in the box.",
       "NOT_SHAREABLE": "Not posted: this record’s thread stays inside the factory and is never shared with a customer. Write an office note; your text is back in the box.",
       "other": "Not posted in the portal: the factory refused it as it is. Your text is back in the box."
-    }
+    },
+    "pinned": "Pinned for everyone on this record.",
+    "unpinned": "Unpinned: the message stays in the thread.",
+    "pin": {
+      "HELD": "A mail still in its 10 seconds to take it back, or taken back, is not pinned.",
+      "FULL": "This conversation already has 50 pinned messages: unpin one first.",
+      "forbidden": "Pinning needs the right to write on this conversation.",
+      "gone": "That message is no longer in this conversation.",
+      "failed": "The pin could not be changed. Try again."
+    },
+    "messageGone": "That message is no longer in this conversation, or it is out of your reach.",
+    "done": "Marked done. It opens again by itself when a new message arrives.",
+    "openAgain": "Open again: the thread is back in the work lists.",
+    "doneFailed": "Done could not be changed. Try again."
   },
   "pane": {
     "label": "Reading pane",

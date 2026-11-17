@@ -10,8 +10,10 @@ import type { CountKind, CountPopoverModel } from '../popups/model'
  *
  * B-TH-229 (TH-2, on B-TH-027 / B-TH-028): the API's ONE waiting rule (a request by its state, any other record by its last shared
  * message; working time on the company calendar; amber only while it waits on us past 1 working day for a request, 3 for any other
- * record), the owner (who answers it) with "Change owner", and "2 new" — the reader's own new messages. Not drawn until the back end
- * has it (honest UI): search (G11), "Done" (N18), "In project" (PROJ-G12).
+ * record), the owner (who answers it) with "Change owner", and "2 new" — the reader's own new messages.
+ * B-TH-288 (TH-9, on B-TH-093 / B-TH-097): "Mark done" / "Open again" — a work state apart from Close (the customer can still write;
+ * a new message opens it again) — and "Search in the thread" (office only, on the server's index: never a search over the messages
+ * loaded on screen; each hit re-checked by the API against its thread).
  *
  * Brand wall (W06, W08, W24, W34): the portal head is one plain line from real states, with no office count; "Share with a
  * partner" and "Ask a partner to approve" reach only this record's party (held when it has none); the doors open the
@@ -221,8 +223,8 @@ export interface HeadModel {
   readonly holds: Readonly<Record<HeadDoor, Held | null>>
   /** Me and the record: Follow / Unfollow, Mute / Unmute. */
   readonly follow: { readonly following: boolean; readonly muted: boolean } | null
-  /** My reminder on the record ("Reminder set for 18 Nov"), or null. */
-  readonly reminder: { readonly at: string } | null
+  /** My reminder on the record ("Reminder set for 18 Nov"), or null. B-TH-289: a follow-up says "if no answer". */
+  readonly reminder: { readonly at: string; readonly followUp?: boolean } | null
   /** threads.manage (Owner, Administrator): Close thread… / Reopen. */
   readonly canManage: boolean
   /** The dock's width now, or null where there is no dock (below 1280 px, a full page): no width menu. */
@@ -249,7 +251,62 @@ export interface HeadModel {
   // project's band reopens both in one command; the thread's own Reopen is refused by the API) — no Reopen in the head then.
   readonly reopenWithRecord?: boolean
   // ---- end TH-5 follow-up
+  // ---- B-TH-288 (B-TH-093; T1-F13): Done — when and by whom (null: open work); undefined: not offered (no office read). Held with why.
+  readonly done?: { readonly at: string; readonly by: string | null } | null
+  readonly doneHeld?: Held | null
+  /** B-TH-288 (B-TH-097; T1-F08): "Search in the thread" is offered (office, threads.read); its field and hits when open. */
+  readonly search?: ThreadSearchModel | null
+  // ---- end B-TH-288
 }
+
+// ---- B-TH-288 (B-TH-097; T1-F08): search in the thread ------------------------------------------------------------------------------
+/** One hit: the message (its id opens it), one line of its words, whose side it came from. Never another record's message. */
+export interface SearchHit {
+  readonly id: string
+  readonly excerpt: string | null
+  /** The message's direction code (INBOUND = theirs, OUTBOUND = ours to them, INTERNAL_NOTE = an office note), or null. */
+  readonly direction: string | null
+}
+
+export interface ThreadSearchModel {
+  readonly open: boolean
+  readonly query: string
+  /** idle: nothing typed yet; short: under two letters; searching; ready; failed (Try again). */
+  readonly state: 'idle' | 'short' | 'searching' | 'ready' | 'failed'
+  readonly hits: readonly SearchHit[]
+  /** How many messages match in all (the list shows the first 20). */
+  readonly total: number
+  /** The query's words as the server read them (they are marked in each hit). */
+  readonly words: readonly string[]
+}
+
+/** The words of a hit's side: their message, ours to them, an office note. */
+export const hitSideKey = (direction: string | null): string => (direction === 'INBOUND' ? 'search.side.theirs' : direction === 'OUTBOUND' ? 'search.side.ours' : direction === 'INTERNAL_NOTE' ? 'search.side.note' : 'search.side.other')
+
+/** The query is long enough to ask the server (factory-domain SEARCH_LIMITS.minQuery: two letters). */
+export const searchReady = (query: string): boolean => query.trim().length >= 2
+
+/** A hit's line cut in parts, the query's words marked (case and accents aside), for the list. */
+export function markWords(text: string, words: readonly string[]): { readonly text: string; readonly hit: boolean }[] {
+  const wanted = words.map((word) => word.trim()).filter((word) => word.length >= 2)
+  if (wanted.length === 0 || text === '') return [{ text, hit: false }]
+  // One character in, one out (accents dropped per character), so the marks keep the text's own positions.
+  const fold = (value: string) => value.split('').map((char) => char.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLocaleLowerCase().slice(0, 1) || char).join('')
+  const chars = text.split('')
+  const folded = fold(text)
+  const marks = new Array<boolean>(chars.length).fill(false)
+  for (const word of wanted.map(fold)) {
+    for (let at = folded.indexOf(word); at >= 0; at = folded.indexOf(word, at + 1)) for (let i = at; i < at + word.length && i < chars.length; i += 1) marks[i] = true
+  }
+  const parts: { text: string; hit: boolean }[] = []
+  chars.forEach((char, i) => {
+    const last = parts[parts.length - 1]
+    if (last && last.hit === marks[i]) parts[parts.length - 1] = { text: last.text + char, hit: last.hit }
+    else parts.push({ text: char, hit: marks[i]! })
+  })
+  return parts
+}
+// ---- end B-TH-288
 
 // ---- B-TH-251: one project the record is in (the chip's first one, the others in its tooltip).
 export interface HeadProject {
@@ -274,12 +331,16 @@ export type MenuRow =
   | { readonly kind: 'close' | 'reopen' }
   // B-TH-229: "Change owner…" (threads.post), after the doors.
   | { readonly kind: 'owner'; readonly held: Held | null }
+  // B-TH-288: "Mark done" / "Open again" (threads.post), after Change owner.
+  | { readonly kind: 'done'; readonly done: boolean; readonly held: Held | null }
+  // B-TH-288: "Search in the thread" (office) — on the phone head, where the search icon does not fit.
+  | { readonly kind: 'search' }
 
 /**
  * The "⋯" rows: the five R-ACT tools ALWAYS (held with why, also at count 0), the views on a phone, Print, then Close.
  * `folded`: the count chips did not fit the row (a narrow dock): the counts go on their door's line.
  */
-export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' | 'counts' | 'canManage' | 'closed' | 'compact' | 'views' | 'view' | 'print' | 'ownerHeld' | 'reopenWithRecord'>, folded = false): MenuRow[] {
+export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' | 'counts' | 'canManage' | 'closed' | 'compact' | 'views' | 'view' | 'print' | 'ownerHeld' | 'reopenWithRecord'> & Partial<Pick<HeadModel, 'done' | 'doneHeld' | 'search'>>, folded = false): MenuRow[] {
   const following = model.follow?.following ?? false
   const muted = model.follow?.muted ?? false
   const followers = model.counts.followers?.count
@@ -295,10 +356,13 @@ export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' 
     { kind: 'door', door: 'follow', held: model.holds.follow, label: { key: following ? 'act.unfollow' : 'act.follow' } },
     // Muting keeps a follow without its news: one must follow first.
     { kind: 'door', door: 'mute', held: model.holds.mute ?? (following ? null : { key: 'held.followFirst' }), label: { key: muted ? 'act.unmute' : 'act.mute' }, hint: { key: 'act.muteHint' } },
-    { kind: 'door', door: 'remind', held: model.holds.remind, label: { key: 'act.remind' }, ...(model.reminder ? { hint: { key: 'act.reminderSet', params: { at: model.reminder.at } } } : {}) },
+    { kind: 'door', door: 'remind', held: model.holds.remind, label: { key: 'act.remind' }, ...(model.reminder ? { hint: { key: model.reminder.followUp ? 'act.followUpSet' : 'act.reminderSet', params: { at: model.reminder.at } } } : {}) },
   ]
   // B-TH-229: who answers it, changed by whoever may write on it.
   if (model.ownerHeld !== undefined) rows.push({ kind: 'owner', held: model.ownerHeld })
+  // B-TH-288: Done apart from Close — not offered on a closed thread (closed is more than done).
+  if (model.done !== undefined && !model.closed) rows.push({ kind: 'done', done: model.done !== null, held: model.doneHeld ?? null })
+  if (model.compact && model.search) rows.push({ kind: 'search' })
   if (model.compact) for (const view of model.views) rows.push({ kind: 'view', view, checked: view === model.view })
   if (model.print) rows.push({ kind: 'print' })
   // TH-5 follow-up: a closed thread its record reopens (a closed project) offers no Reopen here; closing an open one stays.

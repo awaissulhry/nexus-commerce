@@ -821,7 +821,14 @@
       "portal": "Ask {customer}: your question goes to their portal (they get the portal's notice by e-mail). The request then waits for their answer.",
       "mail": "Ask {customer}: your question goes by e-mail from the request after the send check. The request then waits for their answer."
     },
-    "atFirst": "This is the first row of this view"
+    "atFirst": "This is the first row of this view",
+    "pinNote": {
+      "action": "Move to the thread as a pinned note",
+      "hint": "One place for office notes: it becomes an office note pinned first in the thread, and this field is emptied.",
+      "done": "The request note is now the thread’s first pinned office note.",
+      "none": "This request has no note to move any more.",
+      "offline": "You are offline."
+    }
   },
   "orderStatus": {
     "CONFIRMED": "Confirmed",

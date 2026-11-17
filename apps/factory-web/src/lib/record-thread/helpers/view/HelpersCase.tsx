@@ -9,6 +9,9 @@ import { DockedStage } from '../../parts/DockedStage'
 import type { LocalDraft, MentionPerson, SavedRepliesModel } from '../model'
 import { HELPERS_NS, MentionButton, MentionInput, type MentionInputHandle } from './MentionInput'
 import { DraftLine, SavedReplies } from './SavedReplies'
+// B-TH-287 / B-TH-289
+import type { DraftSaved } from '../../composer/server-draft'
+import { FollowUpTick, type FollowUpModel } from './FollowUp'
 
 /**
  * A design-review case of SCR-006-helpers: the helpers in a stand-in composer (the composer itself is TH-1b's) at the foot of the
@@ -23,6 +26,9 @@ export interface HelpersCaseModel {
   /** What the API's fill gives back per reply (made up). */
   readonly filled: Readonly<Record<string, string>>
   readonly draft: LocalDraft | null
+  // ---- B-TH-287 / B-TH-289: the draft on the server, and the follow-up tick on a reply (absent: none).
+  readonly saved?: DraftSaved | null
+  readonly followUp?: FollowUpModel | null
 }
 
 export function HelpersCase({ model }: { model: HelpersCaseModel }) {
@@ -38,6 +44,7 @@ export function HelpersCase({ model }: { model: HelpersCaseModel }) {
 function Composer({ model }: { model: HelpersCaseModel }) {
   const t = useT(HELPERS_NS)
   const [text, setText] = useState(model.text)
+  const [followUp, setFollowUp] = useState(model.followUp?.on ?? false) // B-TH-289
   const box = useRef<MentionInputHandle>(null)
   return (
     <div className={`fw-rtm-composer is-docked${model.mode === 'reply' ? ' is-reply' : ''}`}>
@@ -48,7 +55,8 @@ function Composer({ model }: { model: HelpersCaseModel }) {
       <div className="fw-rtm-foot">
         {model.mode === 'note' && <MentionButton onClick={() => box.current?.startMention()} />}
         <SavedReplies model={model.replies} onPick={(id) => setText(model.filled[id] ?? text)} />
-        <DraftLine draft={model.draft} />
+        {model.followUp && <FollowUpTick model={{ ...model.followUp, on: followUp }} onChange={setFollowUp} /* B-TH-289 */ />}
+        <DraftLine draft={model.draft} saved={model.saved ?? null} onRetry={() => undefined} /* B-TH-287 */ />
         <span className="fw-rtm-grow" />
         <Button size="sm" variant="primary">
           <Send size={14} aria-hidden /> {t(model.mode === 'note' ? 'design.addNote' : 'design.send')}

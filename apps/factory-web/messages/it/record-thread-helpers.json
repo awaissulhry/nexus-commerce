@@ -18,7 +18,7 @@
     "failed": "Impossibile leggere le risposte salvate",
     "retry": "Riprova",
     "none": "Ancora nessuna risposta salvata",
-    "noneHint": "Qui compaiono le risposte salvate scritte in italiano o in inglese.",
+    "noneHint": "Qui compaiono le risposte salvate scritte in italiano, inglese, tedesco, francese o spagnolo.",
     "notForThis": "Ancora nessuna risposta salvata per questo tipo di record",
     "notForThisHint": "Le risposte salvate sono per ordini, offerte, ordini d'acquisto, pratiche di assistenza, spedizioni e clienti o fornitori.",
     "filling": "La compilo con i dati di questo record…",
@@ -27,10 +27,19 @@
   },
   "language": {
     "it": "italiano",
-    "en": "inglese"
+    "en": "inglese",
+    "de": "tedesco",
+    "fr": "francese",
+    "es": "spagnolo"
   },
   "draft": {
-    "kept": "Bozza tenuta su questo dispositivo · salvata alle {time}"
+    "kept": "Bozza tenuta su questo dispositivo · salvata alle {time}",
+    "saved": "Bozza salvata alle {time}",
+    "replaced": "Bozza salvata alle {time} · è stata sostituita una bozza più recente di un’altra scheda o di un altro computer",
+    "saving": "Salvataggio della bozza…",
+    "failed": "Non salvata · il testo resta su questo dispositivo",
+    "retry": "Riprova",
+    "offline": "Sei offline: il testo resta su questo dispositivo"
   },
   "design": {
     "noteMark": "Nota d'ufficio · la leggono solo i tuoi colleghi",
@@ -51,5 +60,13 @@
     "invalid": "Scrivi un numero con al massimo due decimali, es. 1.250,00.",
     "tooLarge": "Questo importo è troppo grande per un messaggio.",
     "floor": "Una nota per il reparto non porta mai un importo: togli la spunta “Per il reparto” o l'importo."
+  },
+  "followUp": {
+    "label": "Ricordamelo tra {days} giorni se non rispondono",
+    "hint": "Lo ferma solo una risposta di {party}; una nota di un collega no.",
+    "set": "Te lo ricorda il {date} se non rispondono",
+    "failed": "Il promemoria non è stato impostato: impostalo da Ricordami sul messaggio.",
+    "held": "I promemoria sono nella Home: serve il permesso «{right}».",
+    "offline": "Sei offline: il promemoria si imposta quando il messaggio parte."
   }
 }

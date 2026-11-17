@@ -53,7 +53,6 @@ import { addTaskHeld, createBody, followersChangeFor, followReasonKey, taskChang
 import type { PanelRead } from '../../../record-panels/model'
 import { FollowersControl } from '../../../record-panels/view/FollowersControl'
 import { TaskNewDialog } from '../../../record-panels/view/TaskNewDialog'
-import { fillReply, listReplies } from '../document-send/template/api'
 import { useRecordFrame } from '../record-frame/RecordFrame'
 import { askedFiles } from '../record-frame/model' // B-TH-264 follow-up
 import { officeOnly, removeFile, shareWithParty } from './api'
@@ -65,6 +64,14 @@ import type { RecordThreadBase, RecordThreadHost } from './use-record-thread'
 // B-TH-251 (PROJ.linked-F05): "In project …" on the head of a record a project may link.
 import { useInProject } from '../../products/projects/record/linked/use-in-project'
 import { companyPrefix } from '../../../lib/session/session'
+// B-TH-286: the pins on the files line (B-TH-091).
+import { lineShown, pinLinesOf } from '../../../lib/record-thread/files/model'
+// B-TH-287: saved replies in the five languages written to a customer (B-TH-098), in the customer's language first.
+import { fillThreadReply, listThreadReplies, readMessageLanguage } from './api'
+import { REPLY_LANGUAGES, replyLanguageOf, type ReplyLanguage } from '../../../lib/record-thread/helpers/model'
+// B-TH-288: Done (B-TH-093) and search in the thread (B-TH-097), office only.
+import { searchThread, setThreadDone } from './api'
+import { searchReady, type ThreadSearchModel } from '../../../lib/record-thread/head/model'
 
 /** What the docked thread needs of its record beyond RecordThread v1's host (B-TH-300). */
 export interface DockedHost extends RecordThreadHost {
@@ -78,6 +85,9 @@ export interface DockedHost extends RecordThreadHost {
 
 const NAMESPACES = [HEAD_NS, FILES_NS, FILES_VIEW_NS, POPUPS_NS, HELPERS_NS, 'records', 'record-approvals', SHARES_NS, 'record-files', 'home-mywork']
 
+/** B-TH-288: the search before anything is typed (closed). */
+const CLOSED_SEARCH: ThreadSearchModel = { open: false, query: '', state: 'idle', hits: [], total: 0, words: [] }
+
 /** The files of the record the viewer walks: each document's version in force, newest first. */
 const latestOf = (files: readonly ThreadFile[]): ThreadFile[] => fileSeries(files).map((series) => series.latest)
 
@@ -90,7 +100,7 @@ const latestOf = (files: readonly ThreadFile[]): ThreadFile[] => fileSeries(file
  * (W06, W08, W24, W25, W34): Ask and Share reach only this record's party (the dialogs and the API check it again), the files are this
  * record's only, the @ list is office readers only (B-TH-208).
  */
-export function DockedOfficeThread(props: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null } | null; open: (messageId: string | null) => void; dialog: ReactNode }; remind?: (messageId: string) => ReactNode }) {
+export function DockedOfficeThread(props: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null; followUp?: boolean | undefined } | null; open: (messageId: string | null) => void; dialog: ReactNode }; remind?: (messageId: string) => ReactNode }) {
   return (
     <WithMessages namespaces={NAMESPACES}>
       <Docked {...props} />
@@ -98,7 +108,7 @@ export function DockedOfficeThread(props: { host: DockedHost; model: RecordThrea
   )
 }
 
-function Docked({ host, model, actions, base, reminder, remind }: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null } | null; open: (messageId: string | null) => void; dialog: ReactNode }; remind?: (messageId: string) => ReactNode }) {
+function Docked({ host, model, actions, base, reminder, remind }: { host: DockedHost; model: RecordThreadModel; actions: RecordThreadActions; base: RecordThreadBase; reminder: { mine: { remindAt: string | null; followUp?: boolean | undefined } | null; open: (messageId: string | null) => void; dialog: ReactNode }; remind?: (messageId: string) => ReactNode }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const locale = useLocale()
@@ -466,23 +476,43 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const mayReply = can.email && isReplyRecordType(key.type)
   const [replies, setReplies] = useState<SavedRepliesModel>({ status: isReplyRecordType(key.type) ? 'loading' : 'notForThis', replies: [], language: locale === 'en' ? 'en' : 'it' })
   const [repliesSeq, setRepliesSeq] = useState(0)
+  // ---- B-TH-287 (B-TH-098): the customer's language (what is written to them: their language when it is one of the five, else English)
+  // puts their replies first; every reply written in Italian, English, German, French or Spanish is listed (written by people).
+  useEffect(() => {
+    if (!mayReply || !partyId || !held.has('parties.view')) return
+    const controller = new AbortController()
+    readMessageLanguage(api, partyId, controller.signal)
+      .then((code) => {
+        const language = replyLanguageOf(code)
+        if (language) setReplies((now) => ({ ...now, language }))
+      })
+      .catch(() => undefined)
+    return () => controller.abort()
+  }, [api, partyId, mayReply, held])
   useEffect(() => {
     if (!mayReply || !isReplyRecordType(key.type)) return
     const recordType = key.type
     const controller = new AbortController()
     setReplies((now) => ({ ...now, status: 'loading' }))
-    Promise.all((['it', 'en'] as const).map((language) => listReplies(api, { language, recordType, companyId: host.record.companyId }, controller.signal)))
+    Promise.all(REPLY_LANGUAGES.map((language: ReplyLanguage) => listThreadReplies(api, { language, recordType, companyId: host.record.companyId }, controller.signal)))
       .then((lists) => {
-        const lines: SavedReplyLine[] = lists.flat().flatMap((reply) => (reply.language === 'it' || reply.language === 'en' ? [{ id: reply.id, name: reply.name, language: reply.language, shared: reply.shared }] : []))
+        const seen = new Set<string>()
+        const lines: SavedReplyLine[] = lists.flat().flatMap((reply) => {
+          const language = replyLanguageOf(reply.language)
+          if (!language || seen.has(reply.id)) return []
+          seen.add(reply.id)
+          return [{ id: reply.id, name: reply.name, language, shared: reply.shared }]
+        })
         setReplies((now) => ({ ...now, status: 'ready', replies: lines }))
       })
       .catch(() => !controller.signal.aborted && setReplies((now) => ({ ...now, status: 'failed' })))
     return () => controller.abort()
   }, [api, key.type, host.record.companyId, mayReply, repliesSeq])
+  // ---- end B-TH-287
   const pickReply = (replyId: string) => {
     if (!isReplyRecordType(key.type)) return
     setReplies((now) => ({ ...now, filling: true, missing: [] }))
-    fillReply(api, replyId, { recordType: key.type, recordId: key.id })
+    fillThreadReply(api, replyId, key) // B-TH-287: a reply in any of the five languages
       .then((filled) => {
         const before = model.composer.draft.body.trim()
         actions.onDraft({ ...model.composer.draft, body: before ? `${model.composer.draft.body}\n\n${filled.body}` : filled.body }, model.composer.notes)
@@ -529,6 +559,63 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   useEffect(() => reportNew?.(base.newCount), [reportNew, base.newCount])
   useEffect(() => () => reportNew?.(0), [reportNew])
 
+  // ── B-TH-288 (B-TH-093; T1-F13): Done — a work state apart from Close; whoever may write on the conversation, online ───────────
+  const [doneBusy, setDoneBusy] = useState(false)
+  const markDone = async (done: boolean) => {
+    if (doneBusy) return
+    setDoneBusy(true)
+    try {
+      await setThreadDone(api, key, done)
+      base.notify({ ns: 'record-thread', key: done ? 'notice.done' : 'notice.openAgain', tone: 'success' })
+    } catch {
+      base.notify({ ns: 'record-thread', key: 'notice.doneFailed', tone: 'danger' })
+    } finally {
+      setDoneBusy(false)
+      void base.loadThread()
+    }
+  }
+  const doneOf = base.server.done
+  // ── B-TH-288 (B-TH-097; T1-F08): search in the thread — the server's index, a moment after typing stops; the newest answer wins ────
+  const searchOffered = can.read
+  const [search, setSearch] = useState<ThreadSearchModel | null>(null)
+  const [searchSeq, setSearchSeq] = useState(0)
+  useEffect(() => setSearch(null), [key.type, key.id])
+  const searchQuery = search?.open ? search.query : ''
+  useEffect(() => {
+    if (!searchQuery) return
+    if (!searchReady(searchQuery)) {
+      setSearch((now) => (now ? { ...now, state: 'short', hits: [], total: 0 } : now))
+      return
+    }
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      setSearch((now) => (now ? { ...now, state: 'searching' } : now))
+      searchThread(api, key, searchQuery, controller.signal)
+        .then((answer) =>
+          setSearch((now) =>
+            now && now.query === searchQuery
+              ? { ...now, state: answer.tooShort ? 'short' : 'ready', words: answer.words, total: answer.total, hits: answer.results.map((hit) => ({ id: hit.recordId, excerpt: hit.subtitle, direction: hit.status })) }
+              : now,
+          ),
+        )
+        .catch(() => {
+          if (!controller.signal.aborted) setSearch((now) => (now && now.query === searchQuery ? { ...now, state: 'failed' } : now))
+        })
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [api, key, searchQuery, searchSeq])
+  const openSearch = (open: boolean) => setSearch((now) => (open ? { ...(now ?? CLOSED_SEARCH), open: true } : null))
+  const pickHit = (messageId: string) => {
+    setSearch(null)
+    // A view that hides the hit goes back to All first.
+    setView('all')
+    void base.jumpTo(messageId)
+  }
+  // ── end B-TH-288
+
   // ── the Head (T1, R-ACT) ──────────────────────────────────────────────────────────────────────────────────────────────
   const abilities: HeadAbilities = {
     task: addTaskHeld(held, true) === null,
@@ -570,13 +657,18 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     counts,
     holds,
     follow: followers.data ? { following: followers.data.me.following, muted: followers.data.me.muted } : null,
-    reminder: reminder.mine?.remindAt ? { at: reminder.mine.remindAt } : null,
+    reminder: reminder.mine?.remindAt ? { at: reminder.mine.remindAt, ...(reminder.mine.followUp ? { followUp: true } : {}) /* B-TH-289 */ } : null,
     canManage: can.manage,
     reopenWithRecord: host.reopenWithRecord ?? false, // TH-5 follow-up
     width: frame?.width ?? null,
     compact: frame?.phone ?? false,
     print: Boolean(host.printHref),
     now: Date.now(),
+    // ---- B-TH-288: Done (offered once the office read says it: null = open work) and the search (office, threads.read).
+    // A conversation with no message yet has nothing to mark (the API's NO_THREAD): not offered then.
+    ...(doneOf !== undefined && base.server.thread ? { done: doneOf ? { at: doneOf.at, by: doneOf.by.name } : null, doneHeld: offline ? { key: 'held.offline' } : !can.post ? { key: 'held.noRight', params: { right: rightRef('threads.post') } } : null } : {}),
+    search: searchOffered ? (search ?? CLOSED_SEARCH) : null,
+    // ---- end B-TH-288
   }
   const onDoor = (door: HeadDoor) => {
     const following = followers.data?.me.following ?? false
@@ -619,6 +711,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       else actions.onOpenFile?.(fileId)
     },
     onMoreFiles: () => setFilesOpen(true),
+    // B-TH-288: "/" opens the search over the Head row.
+    ...(searchOffered ? { onSlash: () => openSearch(true) } : {}),
     // B-TH-231: the message's files the reader opens, carried to another record.
     onUseOn: (messageId) => openUseOn(model.feed.messages.find((item) => item.id === messageId)?.files.map((file) => file.id) ?? []),
   }
@@ -681,6 +775,15 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           onCloseThread: () => setClosing({ problem: null }),
           onReopen: () => actions.onReopen?.(),
           onOwner: () => setOwning({ busy: false, problem: null }),
+          // ---- B-TH-288
+          onDone: (done) => void markDone(done),
+          onSearch: openSearch,
+          search: {
+            onQuery: (query) => setSearch((now) => (now ? { ...now, query, ...(query.trim() === '' ? { state: 'idle' as const, hits: [], total: 0 } : {}) } : now)),
+            onPick: pickHit,
+            onRetry: () => setSearchSeq((value) => value + 1),
+          },
+          // ---- end B-TH-288
         }}
       />
       {followersOpen && followers.data && (
@@ -695,13 +798,23 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     </>
   )
 
-  const filesLine =
-    lineFiles === null || lineFiles.length > 0 ? (
-      <FileStrip
-        model={{ files: lineFiles, party: filesParty, open: strip.open }}
-        actions={{ onToggle: strip.toggle, onOpen: (fileId, opener) => openViewer(latestOf(threadFiles), fileId, opener), onAllFiles: () => setFilesOpen(true) }}
-      />
-    ) : null
+  // B-TH-286 (B-TH-091; T2-F07): the pins lead the line ("2 pinned"); a line with neither pins nor files is not drawn (T2-F09).
+  const pinLines = base.pins ? pinLinesOf(base.pins) : null
+  const filesLine = lineShown(lineFiles, pinLines) ? (
+    <FileStrip
+      model={{ files: lineFiles, party: filesParty, open: strip.open, pins: pinLines, canUnpin: can.post && !offline }}
+      actions={{
+        onToggle: strip.toggle,
+        onOpen: (fileId, opener) => openViewer(latestOf(threadFiles), fileId, opener),
+        onAllFiles: () => setFilesOpen(true),
+        onPin: (messageId) => {
+          setView('all')
+          void base.jumpTo(messageId)
+        },
+        onUnpin: (messageId) => void base.unpin(messageId),
+      }}
+    />
+  ) : null
 
   const overlays = (
     <>

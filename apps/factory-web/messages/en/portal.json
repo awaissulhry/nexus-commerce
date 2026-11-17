@@ -169,7 +169,14 @@
       "other": "Your message was not sent. Your text is still here; send it again.",
       "more": "The earlier messages could not be read."
     },
-    "erased": "Message removed after a privacy request"
+    "erased": "Message removed after a privacy request",
+    "pins": {
+      "title_one": "{count} pinned message",
+      "title_other": "{count} pinned messages",
+      "removed": "Message removed after a privacy request",
+      "filesOnly_one": "{count} file",
+      "filesOnly_other": "{count} files"
+    }
   },
   "record": {
     "tabs": "Sections of the record",

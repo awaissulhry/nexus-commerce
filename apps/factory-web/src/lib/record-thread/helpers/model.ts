@@ -1,11 +1,13 @@
+import { isMessageLanguage, type MessageLanguage } from '@nexus/factory-domain/templates/message-languages'
 /**
  * B-TH-208 — the composer's helpers (threads plan T8; features T8-F01, F02, F07): write faster and safer. The pure part of
  * MentionInput (the @ suggestions, the "cannot read this record" warning, tagged people first), the Saved replies menu
  * (the existing replies of GET /templates/replies, Italian · English, shared and mine apart) and the draft kept on this
  * device until drafts live on the server (N6). No React, no API.
  *
- * B-TH-236: the amount field (B-TH-049) is helpers/amount.ts and view/AmountField.tsx. Not drawn until the back end has it:
- * "Remind me in 3 days if no answer" (B-TH-096), drafts on the server (B-TH-092).
+ * B-TH-236: the amount field (B-TH-049) is helpers/amount.ts and view/AmountField.tsx. B-TH-287: drafts on the server (B-TH-092) are
+ * composer/server-draft.ts, and saved replies come in the five languages written to a customer (B-TH-098: it, en, de, fr, es).
+ * B-TH-289: "Remind me in 3 days if no answer" (B-TH-096) on a message to the customer — below.
  *
  * Brand wall (W08, W34): @ offers office people who may read the record only — never a customer's portal person and never
  * the floor; a saved reply is filled by the API from THIS record (the view sends only the reply's id), so its placeholders
@@ -125,8 +127,14 @@ function mentionsInAll(text: string, people: readonly MentionPerson[]): string[]
 
 // ── saved replies ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The languages saved replies are written in (factory-domain templates TEMPLATE_LANGUAGES; C17). */
-export type ReplyLanguage = 'it' | 'en'
+/**
+ * The languages saved replies are written in — B-TH-287 (B-TH-098): the five written to a customer (factory-domain templates
+ * MESSAGE_LANGUAGES: Italian, English, German, French, Spanish; written by people, never machine-translated).
+ */
+export type ReplyLanguage = MessageLanguage
+export { MESSAGE_LANGUAGES as REPLY_LANGUAGES } from '@nexus/factory-domain/templates/message-languages'
+/** A language code as the API answers it: one of the five, else null (the line is not listed). */
+export const replyLanguageOf = (value: string | null | undefined): ReplyLanguage | null => (isMessageLanguage(value) ? value : null)
 
 /** A saved reply as the menu lists it (GET /templates/replies: name, language, shared or mine). Never its text. */
 export interface SavedReplyLine {
@@ -198,3 +206,18 @@ export function writeDraft(storage: Pick<Storage, 'setItem' | 'removeItem'> | nu
     return null
   }
 }
+
+// ── B-TH-289 (B-TH-096; T8-F05): "Remind me in 3 days if no answer" ─────────────────────────────────────────────────────────
+
+/** The follow-up comes back after this many days when the customer has not answered. */
+export const FOLLOW_UP_DAYS = 3
+
+/**
+ * Offered on a message to the customer (a reply by e-mail or in the portal) to whoever has reminders (Home: home.view), online.
+ * Only an answer from the customer's side stops it (their mail or portal post); a colleague's note, another mail of ours or a
+ * closed conversation's — the API's rule (platform/threads/follow-ups) — never the box's.
+ */
+export const followUpOffered = (mode: 'note' | 'reply' | 'portal', can: { readonly remind: boolean; readonly offline?: boolean }): boolean => mode !== 'note' && can.remind && !can.offline
+
+/** When the follow-up comes back: three days after the send (the reminder's own time, AT_TIME). */
+export const followUpAt = (now: number): string => new Date(now + FOLLOW_UP_DAYS * 86_400_000).toISOString()

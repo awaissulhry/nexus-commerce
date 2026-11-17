@@ -316,3 +316,108 @@ describe('B-TH-255 — the View asks the API what it hides; the office read keep
   })
 })
 // ---- end B-TH-255
+
+// ---- B-TH-286 / 287 / 288 / 289 (TH-9 on B-TH-091 pins, B-TH-092 drafts, B-TH-093 Done, B-TH-097 search, B-TH-096 follow-ups) -------
+import { discardServerDraft, pinMessage, pinRequestNote, readPins, readServerDraft, saveServerDraft, searchThread, setThreadDone, unpinMessage } from './api'
+import { pinRefusalKey } from './state'
+
+describe('TH-9 — pins, the draft on the server, Done, search, the follow-up', () => {
+  const recorder = (answer: unknown) => {
+    const calls: Array<{ method: string; path: string; body?: unknown; query?: unknown; idempotencyKey?: string }> = []
+    const handler = (method: string) => async (path: string, options: { body?: unknown; query?: unknown; idempotencyKey?: string; schema: { parse: (v: unknown) => unknown } }) => {
+      calls.push({ method, path, body: options.body, query: options.query, idempotencyKey: options.idempotencyKey })
+      return options.schema.parse(answer)
+    }
+    const api = { get: handler('GET'), post: handler('POST'), request: (method: string, path: string, options: never) => handler(method)(path, options) } as unknown as ApiClient
+    return { api, calls }
+  }
+  const pin = { messageId: 'm1', pinnedAt: '2026-11-17T09:00:00.000Z', pinnedBy: { id: 'u1', name: 'Alex Demo' }, message: { authorName: 'Dora', excerpt: 'Collar', at: '2026-11-16T09:00:00.000Z', audience: 'PARTNER', attachmentCount: 0, removed: false } }
+
+  it('B-TH-286: reads, pins and unpins on the conversation’s own address, each write with its key; the request note moves in one call', async () => {
+    const read = recorder({ pins: [pin] })
+    expect((await readPins(read.api, { type: 'SalesOrder', id: 'o 1' }))[0]!.messageId).toBe('m1')
+    expect(read.calls[0]).toMatchObject({ method: 'GET', path: '/threads/SalesOrder/o%201/pins' })
+    const put = recorder({ pins: [pin] })
+    await pinMessage(put.api, { type: 'SalesOrder', id: 'o1' }, 'm 1')
+    expect(put.calls[0]).toMatchObject({ method: 'PUT', path: '/threads/SalesOrder/o1/pins/m%201', idempotencyKey: expect.any(String) })
+    const del = recorder({ pins: [] })
+    expect(await unpinMessage(del.api, { type: 'SalesOrder', id: 'o1' }, 'm1')).toEqual([])
+    expect(del.calls[0]).toMatchObject({ method: 'DELETE', path: '/threads/SalesOrder/o1/pins/m1' })
+    const note = recorder({ pins: [pin], messageId: 'm2' })
+    expect((await pinRequestNote(note.api, 'i 1')).messageId).toBe('m2')
+    expect(note.calls[0]).toMatchObject({ method: 'POST', path: '/threads/Inquiry/i%201/pins/note' })
+  })
+
+  it('B-TH-286: a refused pin in words — held mail, 50 pins, no right, gone', () => {
+    const refusal = (code: string) => new ApiError('conflict', 409, 'conflict', 'x', null, [{ path: `refusal.${code}`, message: 'x' }])
+    expect(pinRefusalKey(refusal('HELD'))).toBe('notice.pin.HELD')
+    expect(pinRefusalKey(refusal('FULL'))).toBe('notice.pin.FULL')
+    expect(pinRefusalKey(new ApiError('forbidden', 403, 'forbidden', 'x'))).toBe('notice.pin.forbidden')
+    expect(pinRefusalKey(new ApiError('not_found', 404, 'not_found', 'x'))).toBe('notice.pin.gone')
+    expect(pinRefusalKey(new Error('x'))).toBe('notice.pin.failed')
+  })
+
+  it('B-TH-287: the draft is read, saved with the version last read (never a person or party), and discarded on its own address', async () => {
+    const draft = { recordType: 'SalesOrder', recordId: 'o1', audience: 'OFFICE', body: 'x', fields: { mode: 'note' }, attachments: [], savedAt: '2026-11-17T09:42:00.000Z', version: 4 }
+    const read = recorder({ draft })
+    expect((await readServerDraft(read.api, { type: 'SalesOrder', id: 'o1' }))?.version).toBe(4)
+    expect(read.calls[0]).toMatchObject({ method: 'GET', path: '/threads/SalesOrder/o1/draft' })
+    const save = recorder({ draft: { ...draft, version: 5 }, replacedNewer: false })
+    await saveServerDraft(save.api, { type: 'SalesOrder', id: 'o1' }, { audience: 'OFFICE', body: 'x', fields: { mode: 'note' }, attachments: [], version: 4 })
+    expect(save.calls[0]).toMatchObject({ method: 'PUT', path: '/threads/SalesOrder/o1/draft', body: { audience: 'OFFICE', body: 'x', fields: { mode: 'note' }, attachments: [], version: 4 } })
+    expect(JSON.stringify(save.calls[0]!.body)).not.toMatch(/userId|partyId/)
+    const discard = recorder({ draft: null })
+    await discardServerDraft(discard.api, { type: 'SalesOrder', id: 'o1' })
+    expect(discard.calls[0]).toMatchObject({ method: 'DELETE', path: '/threads/SalesOrder/o1/draft' })
+  })
+
+  it('B-TH-287: the container saves a pause after typing, restores the newer copy, and a sent or discarded text never comes back', () => {
+    const container = readFileSync(new URL('./use-record-thread.ts', import.meta.url), 'utf8')
+    expect(container).toContain('readServerDraft(api, key, controller.signal)')
+    expect(container).toContain('newerCopy(local, found)')
+    expect(container).toContain('DRAFT_SAVE_MS')
+    // A send clears the draft (forgetDraft stops saving); a save still on its way is followed by a discard.
+    expect(container).toMatch(/setKept\(null\)\s*stopSaving\(\)/)
+    expect(container).toContain('if (seq <= stoppedAt.current)')
+    expect(container).toContain('void discardServerDraft(api, key).catch(() => undefined)')
+    // Discard is the person's word: the server's draft goes too; an emptied box discards it.
+    expect(container).toMatch(/discardRef\.current = \(\) => \{[\s\S]*?discardServerDraft\(api, key\)/)
+    // Leaving with the draft on the server asks nothing (only files still going up are not kept).
+    expect(container).toContain("useLeaveGuard(keptOnServer ? { text: '', files: notKept } : { text: work.draft.body, files: unsentFiles })")
+  })
+
+  it('B-TH-288: Done on its own address (the customer can still write); search asks the server for this record’s messages only', async () => {
+    const done = recorder({ done: { at: '2026-11-17T09:00:00.000Z', by: { id: 'u1', name: 'Alex Demo' } } })
+    expect(await setThreadDone(done.api, { type: 'SalesOrder', id: 'o1' }, true)).toMatchObject({ by: { name: 'Alex Demo' } })
+    expect(done.calls[0]).toMatchObject({ method: 'PUT', path: '/threads/SalesOrder/o1/done', body: { done: true } })
+    const search = recorder({ query: 'collar', words: ['collar'], tooShort: false, results: [{ recordType: 'Message', recordId: 'm1', subtitle: 'Collar', status: 'INBOUND', indexedAt: '2026-11-17T09:00:00.000Z' }], counts: [], total: 1, nextOffset: null, asOf: null })
+    const hits = await searchThread(search.api, { type: 'SalesOrder', id: 'o1' }, 'collar')
+    expect(hits.results[0]!.recordId).toBe('m1')
+    expect(search.calls[0]).toMatchObject({ method: 'GET', path: '/search', query: { q: 'collar', type: 'Message', recordType: 'SalesOrder', recordId: 'o1' } })
+    // The thread page keeps Done (office only) through a live re-read.
+    const first = applyNewest(EMPTY_SERVER, { thread, messages: [], nextCursor: null, done: { at: 'x', by: { id: 'u1', name: null } } })
+    expect(applyNewest(first, { thread, messages: [], nextCursor: null }).done).toEqual({ at: 'x', by: { id: 'u1', name: null } })
+    expect(applyNewest(first, { thread, messages: [], nextCursor: null, done: null }).done).toBeNull()
+  })
+
+  it('B-TH-288: a hit or a pin is brought on screen (older pages read), the View back to All first; search only for readers', () => {
+    const container = readFileSync(new URL('./use-record-thread.ts', import.meta.url), 'utf8')
+    expect(container).toContain('const jumpTo = useCallback(')
+    expect(container).toContain('readThreadPage(api, key, current.cursor)')
+    const docked = readFileSync(new URL('./DockedOfficeThread.tsx', import.meta.url), 'utf8')
+    expect(docked).toMatch(/const pickHit = \(messageId: string\) => \{\s*setSearch\(null\)[\s\S]*?setView\('all'\)\s*void base\.jumpTo\(messageId\)/)
+    expect(docked).toContain('const searchOffered = can.read')
+    expect(docked).toContain('searchThread(api, key, searchQuery, controller.signal)')
+  })
+
+  it('B-TH-289: the follow-up is the person’s own reminder on the message that went, three days on; a mail taken back takes it along', () => {
+    const container = readFileSync(new URL('./use-record-thread.ts', import.meta.url), 'utf8')
+    expect(container).toContain("setReminder(api, { record: key, messageId, kind: 'AT_TIME', remindAt: followUpAt(Date.now()), note: null })")
+    expect(container).toContain('if (snapshot.followUp) void setFollowUp(messageId)')
+    expect(container).toContain("if (item.snapshot.followUp && item.snapshot.draft.mode === 'portal') void setFollowUp(messageId)")
+    expect(container).toContain('void removeReminder(api, followUp)')
+    // Never on an office note: the tick is offered on a message to the customer only.
+    expect(container).toContain('followUpOffered(work.draft.mode, { remind: true })')
+  })
+})
+// ---- end TH-9

@@ -7,7 +7,9 @@ import type { SavedRepliesModel, SavedReplyLine } from '../../../../lib/record-t
 import { SavedReplies } from '../../../../lib/record-thread/helpers/view/SavedReplies'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi } from '../../../../lib/session/context'
-import { fillReply, listReplies } from '../../../_shared/document-send/template/api'
+// B-TH-287 (B-TH-098): saved replies in the five languages written to a customer.
+import { REPLY_LANGUAGES, replyLanguageOf } from '../../../../lib/record-thread/helpers/model'
+import { fillThreadReply, listThreadReplies } from '../../../_shared/record-thread/api'
 import { MessageRemindMe } from '../../../../shell/panels/remind-me/view/MessageRemindMe'
 import { useRecordThread, type RecordThreadHost } from '../../../_shared/record-thread/use-record-thread'
 
@@ -72,8 +74,9 @@ export function RequestThread({ host, ask = null, onAsk, replyLanguage = null }:
     actions.onDraft({ mode: 'note', body: '', forFloor: false }, [])
   }
 
+  const askingNow = asking.current !== null && thread.model.composer.draft.mode === 'reply'
   const actions =
-    asking.current && thread.model.composer.draft.mode === 'reply'
+    askingNow
       ? {
           ...thread.actions,
           // A portal request: no address to check; any other: the send check first, then the request's own route.
@@ -86,12 +89,16 @@ export function RequestThread({ host, ask = null, onAsk, replyLanguage = null }:
           },
         }
       : thread.actions
-  return <RecordThread model={thread.model} actions={actions} remind={(messageId) => <MessageRemindMe record={host.record} messageId={messageId} />} slots={replies ? { helpers: replies } : undefined} />
+  // B-TH-289: the question of Ask for info goes through the request's own route (Need info: the request waits on the customer by its
+  // state) — no follow-up tick there; any other reply keeps it.
+  const model = askingNow ? { ...thread.model, composer: { ...thread.model.composer, followUp: null } } : thread.model
+  return <RecordThread model={model} actions={actions} remind={(messageId) => <MessageRemindMe record={host.record} messageId={messageId} />} slots={replies ? { helpers: replies } : undefined} />
 }
 
 /**
  * B-TH-234 (B-TH-046, O-SAL-INQ-LIST.pane-thread-T01): Saved replies ▾ beside the request's box — the office's shared replies and the
- * person's own for requests (GET /templates/replies, record type Inquiry, Italian and English, the customer's language first). Picking
+ * person's own for requests (GET /templates/replies, record type Inquiry — B-TH-287: Italian, English, German, French and Spanish —, the
+ * customer's language first). Picking
  * one fills the box from THIS request (POST …/fill: its number, what it is about, the wanted date, the customer's contact who wrote —
  * never another customer's); nothing is sent by picking, and the blanks the request could not fill are said under the box.
  */
@@ -99,7 +106,7 @@ function useRequestReplies(host: RecordThreadHost, thread: ReturnType<typeof use
   const api = useOfficeApi()
   const locale = useLocale()
   const mayReply = thread.base.held.has('email.send') || thread.base.held.has('threads.post')
-  const first = language === 'en' || language === 'it' ? language : locale === 'en' ? 'en' : 'it'
+  const first = replyLanguageOf(language) ?? (locale === 'en' ? 'en' : 'it')
   const [model, setModel] = useState<SavedRepliesModel>({ status: 'loading', replies: [], language: first })
   const [seq, setSeq] = useState(0)
   const companyId = host.record.companyId
@@ -107,9 +114,12 @@ function useRequestReplies(host: RecordThreadHost, thread: ReturnType<typeof use
     if (!mayReply) return
     const controller = new AbortController()
     setModel((now) => ({ ...now, status: 'loading', language: first }))
-    Promise.all((['it', 'en'] as const).map((one) => listReplies(api, { language: one, recordType: 'Inquiry', companyId }, controller.signal)))
+    Promise.all(REPLY_LANGUAGES.map((one) => listThreadReplies(api, { language: one, recordType: 'Inquiry', companyId }, controller.signal)))
       .then((lists) => {
-        const lines: SavedReplyLine[] = lists.flat().flatMap((reply) => (reply.language === 'it' || reply.language === 'en' ? [{ id: reply.id, name: reply.name, language: reply.language, shared: reply.shared }] : []))
+        const lines: SavedReplyLine[] = lists.flat().flatMap((reply) => {
+          const one = replyLanguageOf(reply.language)
+          return one ? [{ id: reply.id, name: reply.name, language: one, shared: reply.shared }] : []
+        })
         setModel((now) => ({ ...now, status: 'ready', replies: lines }))
       })
       .catch(() => !controller.signal.aborted && setModel((now) => ({ ...now, status: 'failed' })))
@@ -120,7 +130,7 @@ function useRequestReplies(host: RecordThreadHost, thread: ReturnType<typeof use
   if (!mayReply) return null
   const pick = (replyId: string) => {
     setModel((now) => ({ ...now, filling: true, missing: [] }))
-    fillReply(api, replyId, { recordType: 'Inquiry', recordId: host.record.id })
+    fillThreadReply(api, replyId, { type: 'Inquiry', id: host.record.id })
       .then((filled) => {
         const { model: now, actions } = latest.current
         const before = now.composer.draft.body.trim()

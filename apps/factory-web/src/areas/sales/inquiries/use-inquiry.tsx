@@ -9,6 +9,8 @@ import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { companyPrefix } from '../../../lib/session/session'
 import { setThreadStatus } from '../../../record-panels/api'
 import { readThreadPage } from '../../_shared/record-thread/api'
+// B-TH-286 (B-TH-091): the Request note moved into the thread as a pinned office note.
+import { pinRequestNote } from '../../_shared/record-thread/api'
 import { useLiveBus } from '../../../shell/live/use-live'
 // B-TH-252: "Start a project…" from the request.
 import { useStartProject } from './use-start-project'
@@ -515,6 +517,25 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
 
   // ---- B-TH-290: production's answer (typed by planning or the production manager in Details; the request as answered comes back) ----
   const production = useProductionAnswer(view, live === 'offline', (value, done) => after(value, done, false), () => void load(true))
+  // ---- B-TH-286 (B-TH-091; pane-facts-F06): one place for office notes — the Request note becomes the thread's first pinned office
+  // note (POST /threads/Inquiry/<id>/pins/note: the note posted in the person's name, pinned, the field emptied, one command).
+  const [pinning, setPinning] = useState(false)
+  const mayPinNote = can.manage && session.permissions.includes('threads.post') && can.thread
+  const pinNote = async () => {
+    const now = viewRef.current
+    if (!now || pinning) return
+    setPinning(true)
+    try {
+      await pinRequestNote(api, now.id)
+      setNotice({ key: 'pane.pinNote.done', tone: 'success' })
+      void load(true)
+    } catch (error) {
+      setNotice({ key: isApiError(error) && error.kind === 'conflict' ? 'pane.pinNote.none' : readProblem(error), tone: 'danger' })
+    } finally {
+      setPinning(false)
+    }
+  }
+  // ---- end B-TH-286
 
   const model: InquiryRecordModel = {
     prefix,
@@ -537,6 +558,8 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     startProject: { held: starting.held, dialog: starting.model },
     // B-TH-290
     production: production.model,
+    // B-TH-286
+    pinNote: mayPinNote ? { busy: pinning, held: live === 'offline' ? 'pane.pinNote.offline' : null } : null,
   }
 
   const withDraft = (change: (now: RequestDraft) => RequestDraft) =>
@@ -579,6 +602,8 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     startProject: { ...starting.actions, onOpen: starting.open },
     // B-TH-290
     production: production.actions,
+    // B-TH-286
+    onPinNote: () => void pinNote(),
     dialog: {
       onAssign: (assigneeId) => void assign(assigneeId),
       onRetryPeople: () => viewRef.current && readPeople(viewRef.current),

@@ -1,5 +1,6 @@
 'use client'
 
+import { Pin } from 'lucide-react'
 import { RefPair } from '@nexus/ui/components/RefPair/index'
 import { PartnerThread, type PartnerMessage } from '@nexus/ui/patterns/PartnerThread/index'
 import { useDsWords } from '../../../lib/i18n/ds-parts'
@@ -26,6 +27,8 @@ export interface ThreadViewModel {
   accessLine: string | null
   /** The last post failed, in words (the typed text stays). */
   failed: string | null
+  /** B-TH-286 (B-TH-091): the messages pinned for everyone on the record that this customer may read; empty: no line. */
+  pins?: readonly { readonly id: string; readonly author: string | null; readonly words: string; readonly date: string }[]
 }
 
 export interface ThreadViewProps {
@@ -40,8 +43,25 @@ export interface ThreadViewProps {
 export function ThreadView({ model, onChange, onSend, onMore, onRetry, headingLevel = 2 }: ThreadViewProps) {
   const t = useT('portal')
   const ds = useDsWords()
+  const pins = model.pins ?? []
   return (
     <div className="fw-pthread">
+      {/* B-TH-286 (T2-F07): what was pinned on this record, above the conversation; nothing when nothing is pinned (T2-F09). */}
+      {pins.length > 0 && (
+        <section className="fw-pthread-pins" aria-label={t('thread.pins.title', { count: pins.length })}>
+          <p className="fw-pthread-pins-title">
+            <Pin size={13} aria-hidden /> {t('thread.pins.title', { count: pins.length })}
+          </p>
+          <ul className="fw-pthread-pins-list">
+            {pins.map((pin) => (
+              <li key={pin.id}>
+                <span className="fw-pthread-pins-words">{pin.words}</span>
+                <span className="fw-pthread-pins-meta">{[pin.author ?? model.companyName, pin.date].join(' · ')}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       <PartnerThread
         title={model.title ?? t('thread.title')}
         headingLevel={headingLevel}

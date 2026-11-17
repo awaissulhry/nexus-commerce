@@ -10,7 +10,8 @@ import type { Tone } from '@nexus/ui/primitives'
  *
  * B-TH-236 (TH-3): Correct (a new message linked to the old one, never an edit), "In reply to …", "Corrected below", the amount
  * of an office note (price readers only) and the 10 seconds to take a mail back ("Sending to Brand Alpha… · Undo").
- * Not drawn until the back end has it (design kit §5): pins (N4).
+ * B-TH-286 (TH-9, on B-TH-091): pins — "Pin for everyone" / "Unpin" on the ⋯ (whoever may write on the conversation, online), a
+ * pinned card's pin beside its time; the files line's "2 pinned" lists them (a pointer to the message, never a copy of its words).
  *
  * B-TH-255 (TH-6, on B-TH-079): the erased card — "Message removed after a privacy request" for a message whose writer was erased
  * (thread-G09; never a message that only carries files) — and the files of an inbound mail that were not kept, with why, under its
@@ -97,6 +98,9 @@ export interface CardMessage {
   erased?: boolean
   skipped?: readonly SkippedFile[]
   // ---- end B-TH-255
+  // ---- B-TH-286 (B-TH-091; T3-F12): pinned for everyone on the record (the files line's "2 pinned" lists it).
+  pinned?: boolean
+  // ---- end B-TH-286
 }
 
 // ---- B-TH-255: a file of an inbound mail that was not kept (the API's skippedAttachments; never a signature logo).
@@ -139,6 +143,8 @@ export interface CardContext {
   now?: number
   /** The message to show unfolded and focused (`?message=<id>`). */
   anchorId?: string | null
+  /** B-TH-286 (B-TH-091): "Pin for everyone" / "Unpin" — threads.post, online (the API checks again). Absent: not offered. */
+  canPin?: boolean
 }
 
 // ── the words of a card's head ──────────────────────────────────────────────────────────────────────────────────────
@@ -259,7 +265,7 @@ export const sizeWords = (bytes: number, intlLocale: string): string =>
 
 // ── the card's ⋯ menu (T3-F07, F09, F10) ─────────────────────────────────────────────────────────────────────────────
 
-export type CardAction = 'reply' | 'correct' | 'task' | 'link' | 'useOn'
+export type CardAction = 'reply' | 'correct' | 'task' | 'link' | 'useOn' | 'pin' | 'unpin'
 
 /**
  * What the ⋯ of a card offers: Reply on the customer's message (when the reader may answer), Make a task (where the host has
@@ -267,8 +273,8 @@ export type CardAction = 'reply' | 'correct' | 'task' | 'link' | 'useOn'
  * part beside the menu (B-W2b-388). B-TH-236: Correct on one's own message (`correctionWay`); a message on its way offers nothing yet.
  */
 export function cardActions(
-  message: Pick<CardMessage, 'kind' | 'outbox'> & Partial<Pick<CardMessage, 'channel' | 'authorKind' | 'mine' | 'email'>> & { files?: readonly Pick<CardFile, 'status'>[] },
-  context: Pick<CardContext, 'canReply' | 'canTask' | 'canUseOn' | 'canCorrect'> & { readonly canReadFiles?: boolean },
+  message: Pick<CardMessage, 'kind' | 'outbox'> & Partial<Pick<CardMessage, 'channel' | 'authorKind' | 'mine' | 'email' | 'pinned'>> & { files?: readonly Pick<CardFile, 'status'>[] },
+  context: Pick<CardContext, 'canReply' | 'canTask' | 'canUseOn' | 'canCorrect' | 'canPin'> & { readonly canReadFiles?: boolean },
 ): CardAction[] {
   if (message.outbox) return []
   const actions: CardAction[] = []
@@ -278,9 +284,21 @@ export function cardActions(
   if (context.canTask) actions.push('task')
   // B-TH-231: "Use on another record…" when the message has a file the reader opens and may add files elsewhere (files.upload).
   if (context.canUseOn && context.canReadFiles && (message.files ?? []).some((file) => file.status === 'AVAILABLE')) actions.push('useOn')
+  // B-TH-286 (B-TH-091): pinned for everyone, or unpinned; never a mail in its undo window or taken back (the API refuses it too).
+  if (context.canPin && (message.pinned || pinnable(message))) actions.push(message.pinned ? 'unpin' : 'pin')
   actions.push('link')
   return actions
 }
+
+// ---- B-TH-286 (B-TH-091): what may be pinned — a message the server holds (never one on its way), and not a mail still in its 10
+// seconds to take it back or one taken back (the API's HELD refusal said before it is asked).
+export function pinnable(message: Pick<CardMessage, 'outbox'> & Partial<Pick<CardMessage, 'email'>>): boolean {
+  if (message.outbox) return false
+  const mail = message.email
+  if (mail && (mail.status === 'WITHDRAWN' || (mail.status === 'QUEUED' && mail.undoUntil))) return false
+  return true
+}
+// ---- end B-TH-286
 
 /** The address of a message (thread-G03: the same form as the bell's message anchor): the record's page with `?message=<id>`. */
 export function messageLink(recordHref: string, messageId: string): string {

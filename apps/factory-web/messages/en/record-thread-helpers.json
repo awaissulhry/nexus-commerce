@@ -18,7 +18,7 @@
     "failed": "Could not read the saved replies",
     "retry": "Try again",
     "none": "No saved replies yet",
-    "noneHint": "Saved replies written in Italian or English show here.",
+    "noneHint": "Saved replies written in Italian, English, German, French or Spanish show here.",
     "notForThis": "No saved replies for this kind of record yet",
     "notForThisHint": "Saved replies are for orders, quotes, purchase orders, service cases, shipments and customers or suppliers.",
     "filling": "Filling it with this record's details…",
@@ -27,10 +27,19 @@
   },
   "language": {
     "it": "Italian",
-    "en": "English"
+    "en": "English",
+    "de": "German",
+    "fr": "French",
+    "es": "Spanish"
   },
   "draft": {
-    "kept": "Draft kept on this device · saved {time}"
+    "kept": "Draft kept on this device · saved {time}",
+    "saved": "Draft saved {time}",
+    "replaced": "Draft saved {time} · a newer draft from another tab or computer was replaced",
+    "saving": "Saving the draft…",
+    "failed": "Not saved · your text stays on this device",
+    "retry": "Retry",
+    "offline": "You are offline; your text stays on this device"
   },
   "design": {
     "noteMark": "Office note · only your colleagues read it",
@@ -51,5 +60,13 @@
     "invalid": "Write a number with at most two decimals, e.g. 1,250.00.",
     "tooLarge": "That amount is too large for one message.",
     "floor": "A note for the floor never carries an amount: untick “For the floor” or take the amount off."
+  },
+  "followUp": {
+    "label": "Remind me in {days} days if no answer",
+    "hint": "Only an answer from {party} stops it; a colleague’s note does not.",
+    "set": "Reminds you {date} if no answer",
+    "failed": "The follow-up could not be set: set it from Remind me on the message.",
+    "held": "Reminders are on Home: they need the right “{right}”.",
+    "offline": "You are offline: the follow-up is set once the message goes."
   }
 }

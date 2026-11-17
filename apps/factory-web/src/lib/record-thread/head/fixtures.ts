@@ -5,6 +5,7 @@ import { BRAND_ALPHA } from '../../testing/two-brands'
 import { doorHolds, viewsOffered, whoAnswers, type HeadAbilities, type HeadModel } from './model'
 // B-TH-229: the API's waiting (B-TH-028) and owner.
 import { answersOf, type HeadOwner } from './model'
+import type { ThreadSearchModel } from './model' // B-TH-288
 import { HeadCase, type HeadCaseModel } from './view/HeadCase'
 
 /**
@@ -103,6 +104,22 @@ const api = (over: Partial<HeadModel> = {}, can: HeadAbilities = ALL): HeadModel
   head({ answers: answersOf({ on: 'US', since: '2026-11-17T06:40:00.000Z', workingMinutes: 242, calendar: true, amber: false, thresholdDays: 3 }), owner: BEA, ownerHeld: null, newCount: 2, ...over }, can)
 // ---- end B-TH-229
 
+// ---- B-TH-288: the search, closed and open (made-up hits of this order's thread only).
+const SEARCH_CLOSED: ThreadSearchModel = { open: false, query: '', state: 'idle', hits: [], total: 0, words: [] }
+const SEARCH_OPEN: ThreadSearchModel = {
+  open: true,
+  query: 'collar',
+  state: 'ready',
+  words: ['collar'],
+  total: 3,
+  hits: [
+    { id: id(31), excerpt: 'Collar in yellow piping, as on the sample we approved.', direction: 'INBOUND' },
+    { id: id(32), excerpt: 'We confirm the collar piping; the sample leaves on Friday.', direction: 'OUTBOUND' },
+    { id: id(33), excerpt: 'Check the collar on the second sample before we answer.', direction: 'INTERNAL_NOTE' },
+  ],
+}
+// ---- end B-TH-288
+
 const both = [438, 718] as const
 const all = [438, 718, 375] as const
 const c = (headModel: HeadModel, frames: HeadCaseModel['frames'] = all, open: HeadCaseModel['open'] = null): HeadCaseModel => ({ head: headModel, frames, dialogs: DIALOGS, open })
@@ -141,5 +158,13 @@ export const designScreen = defineDesignScreen<HeadCaseModel>({
     { id: 'door-share', label: 'Share with a partner → the existing dialog', model: c(head(), both, 'share') },
     { id: 'door-followers', label: 'Followers → the existing popover', model: c(head(), both, 'followers') },
     { id: 'door-remind', label: 'Remind me → the existing dialog', model: c(head(), both, 'remind') },
+    // ---- B-TH-288 (B-TH-093 Done, B-TH-097 search; T1-F08, T1-F13)
+    { id: 'th9-288-done', label: 'Done · Alex Demo, 17 Nov (not closed)', model: c(api({ answers: null, done: { at: '2026-11-17T09:00:00.000Z', by: 'Alex Demo' }, doneHeld: null, search: SEARCH_CLOSED })), note: 'Done is a work state apart from Close: off the work lists, the customer can still write, and a new message opens it again (the API). The pill says who and when; ⋯ “Open again”.' },
+    { id: 'th9-288-mark-done', label: 'Open work: ⋯ Mark done', model: c(api({ done: null, doneHeld: null, search: SEARCH_CLOSED }), both), note: 'Open “⋯”: Mark done, with the line “Off the work lists, not closed”. Whoever may write on the conversation may (threads.post).' },
+    { id: 'th9-288-done-held', label: 'Mark done held (no right to write)', model: c(api({ done: null, doneHeld: { key: 'held.noRight', params: { right: RIGHTS.follow } }, search: SEARCH_CLOSED }), both), note: 'The line is there, held with the right it needs — never hidden.' },
+    { id: 'th9-288-search', label: 'Search in the thread: hits with the words marked', model: c(api({ search: SEARCH_OPEN }), both), note: '“/” (or the search icon) lays the field over the Head row. The server’s index answers — never a search over the messages on screen; each hit was re-checked against this thread. ↑ / ↓ walk, Enter goes to the message even when it is not loaded yet (older pages are read), Esc closes.' },
+    { id: 'th9-288-search-none', label: 'Search: no message has these words', model: c(api({ search: { ...SEARCH_OPEN, query: 'zipper', hits: [], total: 0, words: ['zipper'] } }), both) },
+    { id: 'th9-288-search-short', label: 'Search: too short; and the phone (⋯ › Search)', model: c(api({ search: { ...SEARCH_OPEN, query: 'c', state: 'short', hits: [], total: 0, words: [] } }), all), note: 'One letter asks nothing; on the phone the search is in the “⋯”.' },
+    { id: 'th9-289-followup', label: 'A follow-up set: “Follow-up 20 Nov if no answer”', model: c(api({ reminder: { at: '2026-11-20T10:42:00.000Z', followUp: true }, search: SEARCH_CLOSED }), both), note: 'Open “⋯”: Remind me says the follow-up’s day. It stops by itself when the customer answers or the conversation closes (B-TH-096).' },
   ],
 })
