@@ -113,6 +113,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
   ProductSafetyReport: ShieldAlert,
   // B-W2b-383: as the transfers list.
   TransferOrder: Route,
+  // B-TH-261 follow-up: a catalogue order, as Incoming's kind mark for it.
+  PortalOrderRequest: ShoppingCart,
 })
 
 export function RecordTypeIcon({ type, size = 16 }: { type: string; size?: number }) {
