@@ -541,6 +541,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   band's `SupervisorFact` (by name inside one record; "You muted this order" for the supervisor himself). Mounted by the work order band
   (Change…) and Work orders ("Assign supervisor…", ≤ 100 orders; the Supervisor column Me / Someone else / Not set; Mine = `?supervisor=me`);
   the Customer card and the limits card mount the same dialog.
+- F-PR-18 customer urgency in the office: Work orders' Customer urgency column (Columns ▾; `list/model.ts customerUrgencyCellOf`: Urgent n ·
+  Urgent – asked · Regular · Set to regular by us, factory-domain `production-brand/urgency-state`) and filter (`?customerUrgency=`, the
+  API's computed term); the planning board's chip (`mark.customerUrgency`) and `?sort=urgency` (`model.ts urgencyFirst`: each customer's
+  urgent work orders take its own places inside our rush + priority level; a view only, nothing moves).
+- F-PR-22 `src/areas/production/_shared/notes/` (catalogue `production-notes`, CSS `fw-pnt-`) — THE note dialog of Ask the supervisor
+  (band ⋯ and the supervisor fact's Ask) and Note to N (Work orders: row ⋯, "Note to N…" ≤ 100): the threads MentionInput (people read
+  once per customer + company), `POST /production/notes/check` before Send (who cannot read, customers, the other-customer hold until
+  the tick), ONE `POST /production/notes`, one result per record (the rest counted); the bell's batch row "mentioned you on N orders".
 - The buying office (one catalogue `buying`; shared parts `areas/_shared/buying/`: abilities with the cost grain, words for
   problems and quantities, live hook, sites from `/inventory/locations`, layout CSS, made-up fixtures): `areas/planning/mrp/`
   What to buy & make (SCR-055: `?site=` `?view=` `?q=` `?line=` the Why detail; one-click Draft PO with Undo, Draft POs per

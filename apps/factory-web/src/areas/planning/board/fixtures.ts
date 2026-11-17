@@ -635,6 +635,21 @@ const held: Board = { ...BOARD, plan: { ...BOARD.plan, changesSincePublished: { 
 const empty: Board = { ...BOARD, plan: { ...BOARD.plan, id: null, version: null, published: null, changesSincePublished: null, publishHeld: 'The working plan has nothing on Tue 17 Nov to Mon 23 Nov to publish.' }, slots: [], workOrders: [], tray: [], problems: [], lanes: LANES.map((lane) => ({ ...lane, cells: lane.cells ? cells(lane.people ?? 0, Number(lane.efficiencyPct), {}) : null })) }
 const dialogCase = (dialog: BoardDialog): BoardViewModel => base({ dialog })
 
+// ---- F-PR-18: the customer's urgency on the board (made-up customers): the chip on each bar and card of a work order its customer
+// marked Urgent ("Customer urgency: Urgent 2", its place in the customer's OWN list), and Customer urgency first (`?sort=urgency`):
+// Brand Alpha's urgent WO-0104 takes the tray place Alpha's WO-0105 held; Brand Beta's places never move.
+const ALPHA = { id: uid('7171', 1), code: 'ALPHA', name: 'Brand Alpha' }
+const BETA = { id: uid('7171', 2), code: 'BETA', name: 'Brand Beta' }
+const URGENCY_OF: Readonly<Record<string, Pick<BoardWorkOrder, 'customer' | 'customerUrgency'>>> = {
+  [WO101.id]: { customer: ALPHA, customerUrgency: { urgentRank: 2 } },
+  [WO102.id]: { customer: BETA, customerUrgency: null },
+  [WO103.id]: { customer: BETA, customerUrgency: { urgentRank: 1 } },
+  [WO104.id]: { customer: ALPHA, customerUrgency: { urgentRank: 1 } },
+  [WO105.id]: { customer: ALPHA, customerUrgency: null },
+}
+export const URGENCY_BOARD: Board = { ...BOARD, workOrders: BOARD.workOrders.map((workOrder) => ({ ...workOrder, ...URGENCY_OF[workOrder.id] })) }
+// ---- end F-PR-18
+
 export const designScreen = defineDesignScreen<BoardViewModel>({
   screen: 'SCR-122',
   title: 'Planning board',
@@ -643,6 +658,11 @@ export const designScreen = defineDesignScreen<BoardViewModel>({
     { id: 'days', label: 'Two weeks in days (planner)', model: base(), note: 'Resources view: lines, work centres and a workshop with the load per day above each; Line 1 is over on Wed 18; Line 2 closed on Fri 20; the tray holds a late order without material and a draft. Moves work in this view only.' },
     { id: 'orders', label: 'Orders view', model: base({}, { view: 'orders' }), note: 'One lane per work order with its operations; a bar moves in time only (another order is held with the reason).' },
     { id: 'weeks', label: 'Eight weeks', model: base({ read: { status: 'ready', value: weeks() } }, { zoom: 'WEEK' }), note: 'Week buckets with their day ranges.' },
+    // ---- F-PR-18 ----
+    { id: 'urgency-chip', label: 'F-PR-18 · Customer urgency: the chip on the bars and cards of work orders their customer marked Urgent', model: base({ read: { status: 'ready', value: URGENCY_BOARD } }), note: 'The place in the customer’s own urgent list, never a place in our plan; Regular or switched off: no chip.' },
+    { id: 'urgency-first', label: 'F-PR-18 · Customer urgency first: each customer’s urgent work orders take its own places (Not on the board)', model: base({ read: { status: 'ready', value: URGENCY_BOARD } }, { sort: 'urgency' }), note: 'WO-0104 (Brand Alpha, urgent 1) takes the place WO-0105 (Brand Alpha) held; no other customer’s place changes; nothing is saved.' },
+    { id: 'urgency-orders', label: 'F-PR-18 · Orders view with Customer urgency first (our rush and priority still first)', model: base({ read: { status: 'ready', value: URGENCY_BOARD } }, { view: 'orders', sort: 'urgency' }) },
+    // ---- end F-PR-18
     { id: 'filtered', label: 'Filters and search', model: base({}, { lanes: [`LINE:${LINE1.id}`, `LINE:${LINE2.id}`], q: 'WO-01', material: false, late: true, materialMark: true, statuses: ['RELEASED', 'IN_PROGRESS'] }), note: 'Two lines, released and in-progress orders, an order number searched; every choice is in the address.' },
     { id: 'bar', label: 'Bar detail', model: dialogCase({ kind: 'bar', workOrderId: WO101.id, slotId: slotId(2), detail: { status: 'ready', value: BAR } }), note: 'Pop:bar — sizes, operations with their lanes and times, material, promise date, latest safe start; Open work order (Enter) and Send back to the tray.' },
     { id: 'bar-loading', label: 'Bar detail being read', model: dialogCase({ kind: 'bar', workOrderId: WO101.id, slotId: slotId(2), detail: { status: 'loading' } }) },
