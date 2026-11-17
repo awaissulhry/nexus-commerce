@@ -91,6 +91,8 @@ export const ORDER_EVENTS = [
   'approval_request.answered',
   'approval_request.withdrawn',
   'approval_request.expired',
+  // B-PR-30a: decided for the customer (it no longer waits on them).
+  'approval_request.decided_for_party',
   'deposit_request.waived',
   'production_issue.raised',
   'production_issue.answered',
@@ -411,7 +413,8 @@ export async function ordersOfEvent(db: Reader, event: Pick<EventEnvelope, 'type
     case 'approval_request.asked':
     case 'approval_request.answered':
     case 'approval_request.withdrawn':
-    case 'approval_request.expired': {
+    case 'approval_request.expired':
+    case 'approval_request.decided_for_party': { // B-PR-30a
       const recordType = text('recordType')
       const recordId = text('recordId')
       if (!recordId) return { orderIds: [], hold: null }

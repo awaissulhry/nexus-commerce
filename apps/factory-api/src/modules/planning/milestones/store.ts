@@ -119,8 +119,9 @@ export async function officeGate(caller: CommandCaller, gateId: string): Promise
 
 /** The facts the rules read about one gate (its order's status, its round's decision; B-PR-38: whether the round is its customer's to decide). */
 export async function gateFacts(db: Reader, gate: GateRow, order: Pick<OrderRow, 'number' | 'status'>): Promise<GateFacts> {
-  const found = gate.sampleRoundId ? await db.sampleRound.findUnique({ where: { id: gate.sampleRoundId }, select: { number: true, decision: true, kind: true, partyId: true } }) : null
-  const round = found ? { number: found.number, decision: found.decision, kind: found.kind, customerDecides: await customerDecides(db, found.partyId) } : null
+  // B-PR-30a: + the round's stage (a cancelled round waits for nothing: its gate may be re-pointed or removed again).
+  const found = gate.sampleRoundId ? await db.sampleRound.findUnique({ where: { id: gate.sampleRoundId }, select: { number: true, decision: true, kind: true, partyId: true, stage: true } }) : null
+  const round = found ? { number: found.number, decision: found.decision, kind: found.kind, customerDecides: await customerDecides(db, found.partyId), cancelled: found.stage === 'CANCELLED' } : null
   return {
     number: order.number,
     kind: gate.kind as GateKind,

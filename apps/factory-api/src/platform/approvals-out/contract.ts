@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { ANSWER_CHANNELS, APPROVAL_DECISIONS, APPROVAL_KINDS, APPROVAL_STATUSES } from '@nexus/factory-domain/approvals-out/kinds'
-import { APPROVAL_LIMITS } from '@nexus/factory-domain/approvals-out/rules'
+import { APPROVAL_LIMITS, OVERRIDE_LIMITS } from '@nexus/factory-domain/approvals-out/rules'
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { money, notMoney } from '@nexus/factory-domain/money/marked'
 import { LINE_CHANGES } from '@nexus/factory-domain/sales/amendments/amendments'
@@ -45,16 +45,22 @@ const officeRequestView = output({
     at: instant(),
     typedName: z.string(),
     words: z.string().nullable(),
-    via: z.enum(ANSWER_CHANNELS),
+    /** B-PR-30a: OFFICE — decided for the party by an office person (personName), with the reason the party reads. */
+    via: z.enum([...ANSWER_CHANNELS, 'OFFICE']),
     personName: z.string().nullable(),
     markup: output({ fileId: id(), page: z.number().int().nullable(), shapes: z.array(z.unknown()), note: z.string().nullable() }).nullable(),
   }).nullable(),
   withdrawn: output({ at: instant(), byName: z.string().nullable(), reason: z.string().nullable() }).nullable(),
+  // B-PR-30a: decided by us for the party (who, why the party reads), an override waiting for a second person (its task in
+  // Home › Approvals).
+  decidedForParty: output({ byName: z.string().nullable(), reason: z.string() }).nullable(),
+  override: output({ taskId: id(), act: z.enum(['DECIDE_FOR', 'REVERSE']) }).nullable(),
   askedBy: z.string().nullable(),
   createdAt: instant(),
   files: z.array(fileView),
   links: z.array(output({ id: id(), email: z.string().nullable(), expiresAt: instant(), used: z.boolean(), revoked: z.boolean(), lastUsedAt: instant().nullable() })),
-  may: output({ withdraw: z.boolean() }),
+  /** B-PR-30a: Decide for the customer — for the reader (production.brand.override; never the person who asked). */
+  may: output({ withdraw: z.boolean(), decideForParty: z.boolean() }),
   version: z.number().int(),
 })
 
@@ -95,6 +101,24 @@ export const withdrawContract = defineContract({
   response: { 200: output({ request: officeRequestView }) },
 })
 
+// ---- B-PR-30a: decide for the party (production.brand.override, step-up) -----------------------------------------------------
+
+/** Done at once, or waiting for a second person (the customer's switch): its task, and the words that say so. */
+const overrideOutcome = output({ outcome: z.enum(['DONE', 'SECOND_PERSON']), taskId: id().nullable(), words: words.nullable() })
+
+export const decideForPartyContract = defineContract({
+  params: requestParams,
+  body: input({
+    version: version(),
+    decision: z.enum(APPROVAL_DECISIONS),
+    answer: z.string().max(APPROVAL_LIMITS.answer).nullish(),
+    typedName: z.string().max(APPROVAL_LIMITS.typedName + 50),
+    /** Why we decide for the party: it reads it ("Decided by us for you: …"). */
+    reason: z.string().max(OVERRIDE_LIMITS.reason + 50),
+  }),
+  response: { 200: output({ request: officeRequestView, override: overrideOutcome }) },
+})
+
 // ---- the partner (link and portal) ---------------------------------------------------------------------------------------
 
 const lineChange = output({
@@ -124,6 +148,8 @@ const pageView = {
     /** The design's "Decided": "Approved — signed by Anna Rossi at 10:42 on 3 Nov. We can go ahead with cutting." */
     decided: z.string().nullable(),
     answer: output({ at: instant(), typedName: z.string(), words: z.string().nullable(), markupFileId: id().nullable() }).nullable(),
+    /** B-PR-30a: we decided it for you — "Decided by us for you: <why>" (never who of us); null: you answered it, or it waits. */
+    decidedForYou: z.string().nullable(),
     version: z.number().int(),
   }),
   content: output({

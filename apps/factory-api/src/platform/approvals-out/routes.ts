@@ -4,6 +4,7 @@ import { approvalsMailSettings, openApprovalFromMail, setApprovalsMail } from '.
 import { answerByLink, answerInPortal, linkApproval, portalApproval, portalApprovals } from './answer'
 import {
   askContract,
+  decideForPartyContract, // B-PR-30a
   linkApproveContract,
   linkPageContract,
   linkRefuseContract,
@@ -19,11 +20,14 @@ import {
 } from './contract'
 import { manifest } from './manifest'
 import { askApproval, officeRequest, recordRequests, withdrawApproval } from './office'
+// B-PR-30a: decide for the customer.
+import { decideForParty } from './override'
 
 /**
  * Approval requests to partners (B-W2b-184): the office asks and withdraws (./office.ts), the partner answers by link or in
  * its portal (./answer.ts), the office's side settles each answer (./settle.ts); the sweep (./sweep.ts) expires what nobody
  * answered; Home › Approvals by e-mail (modules/insights/sources/approvals-mail.ts, PLT-089). The screens are B-W2b-188's.
+ * B-PR-30a: the office decides for the customer (./override.ts).
  */
 export default defineRoutes('approvals-out', manifest, async (app) => {
   app.post('/approvals-out', { schema: askContract }, async (request, reply) => {
@@ -36,6 +40,9 @@ export default defineRoutes('approvals-out', manifest, async (app) => {
   app.get('/approvals-out/:requestId', { schema: officeRequestContract }, async (request) => officeRequest(request, request.params.requestId))
 
   app.post('/approvals-out/:requestId/withdraw', { schema: withdrawContract }, async (request) => withdrawApproval(request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
+
+  // B-PR-30a: decide an open request for the customer (a reason it reads; step-up; a second person when its switch is on).
+  app.post('/approvals-out/:requestId/decide-for-party', { schema: decideForPartyContract }, async (request) => decideForParty(request, request.params.requestId, request.body, idempotencyKeyFrom(request)))
 
   app.get('/link/approval', { schema: linkPageContract }, async (request) => linkApproval(app, request, request.query.language))
 

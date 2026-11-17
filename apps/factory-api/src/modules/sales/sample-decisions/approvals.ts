@@ -30,6 +30,9 @@ import { readSwatchRow, swatchCompanyOf, swatchFacts, waitingRequest } from './s
  *              the comments are the brand's words; decidedAt = the answer's time; PORTAL (decidedById = the portal person) or
  *              LINK (nobody named); a round goes DECIDED — the database checks it is that request's answer. A round or
  *              swatch decided meanwhile in the office keeps its decision (the settle says so in its audit row).
+ *              B-PR-30a: decided FOR the brand by the office (Decide for the customer: a reason it reads, step-up, a second
+ *              person when its switch is on) → OFFICE, decidedById = the office person who decided (the request's
+ *              decidedForPartyById), the comments our words — the same request, so the gate passes by its round's event.
  * The answer itself lands on the round's thread (the brand's own signed message), the engine's settle.
  */
 
@@ -45,13 +48,15 @@ const roundWords = (round: { number: string; kind: string; roundNo: number }) =>
 
 /** The brand's answer as a decision's columns, from the request (its time, its person or link, its words). */
 async function answerOf(tools: CommandTools, request: RequestRef) {
-  const row = await tools.tx.approvalRequest.findUnique({ where: { id: request.id }, select: { status: true, answer: true, typedName: true, answeredAt: true, answeredByUserId: true, answeredViaLinkId: true } })
+  const row = await tools.tx.approvalRequest.findUnique({ where: { id: request.id }, select: { status: true, answer: true, typedName: true, answeredAt: true, answeredByUserId: true, answeredViaLinkId: true, decidedForPartyById: true } })
   const decision = row ? decisionOfAnswer(row.status) : null
   if (!row || !decision || !row.answeredAt) return null
-  const via = row.answeredViaLinkId ? ('LINK' as const) : ('PORTAL' as const)
+  // B-PR-30a: decided for the brand by an office person → OFFICE, by that person (the database's rule for an office decision).
+  const via = row.decidedForPartyById ? ('OFFICE' as const) : row.answeredViaLinkId ? ('LINK' as const) : ('PORTAL' as const)
   // A refusal and an approval with changes always carry the brand's words (approvals-out answerProblems); a word for safety.
   const comments = row.answer?.trim() || (decision === 'APPROVED' ? null : 'No words given.')
-  return { decision, via, comments, decidedAt: row.answeredAt, decidedById: via === 'PORTAL' ? row.answeredByUserId : null, typedName: row.typedName }
+  const decidedById = via === 'OFFICE' ? row.decidedForPartyById : via === 'PORTAL' ? row.answeredByUserId : null
+  return { decision, via, comments, decidedAt: row.answeredAt, decidedById, typedName: row.typedName }
 }
 
 export const SAMPLE_ROUND_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({

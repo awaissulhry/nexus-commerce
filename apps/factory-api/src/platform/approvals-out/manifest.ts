@@ -10,6 +10,8 @@ export const manifest = defineManifest({
   'GET /approvals-out': { audiences: ['office'], permission: 'partners.approvals.view', scope: 'record' },
   'GET /approvals-out/:requestId': { audiences: ['office'], permission: 'partners.approvals.view', scope: 'record' },
   'POST /approvals-out/:requestId/withdraw': { audiences: ['office'], permission: 'partners.approvals.ask', scope: 'record' },
+  // B-PR-30a: decide for the customer (over the request's company and customer, step-up: ./override.ts).
+  'POST /approvals-out/:requestId/decide-for-party': { audiences: ['office'], permission: 'production.brand.override', scope: 'record' },
   'GET /link/approval': { audiences: ['link'], permission: 'links.open', scope: 'record' },
   'POST /link/approval/approve': { audiences: ['link'], permission: 'links.approve', scope: 'record' },
   'POST /link/approval/refuse': { audiences: ['link'], permission: 'links.refuse', scope: 'record' },

@@ -1,5 +1,5 @@
 import { isAnswered, KIND_RULES, type ApprovalKind, type ApprovalLocale, type ApprovalStatus } from '@nexus/factory-domain/approvals-out/kinds'
-import { answerHeld, decidedWords } from '@nexus/factory-domain/approvals-out/rules'
+import { answerHeld, decidedForPartyPageWords, decidedForPartyWords, decidedWords } from '@nexus/factory-domain/approvals-out/rules'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { CommandCaller } from '../../core/command'
 import { sameWords, type ApprovalContent } from './adapter'
@@ -13,6 +13,9 @@ import { filesOf, refOf, type PartnerRow } from './store'
  * the record's content, the request's files and the sender's name in the tenant's system scope after that (the partner role
  * reads neither an amendment nor an NCR): only what the adapter chose to show, never a cost, a margin or an office person.
  * Prices only on a revised order (the contract's price grain: the link's, or the portal person's).
+ *
+ * B-PR-30a: a request we decided FOR the party reads "Decided by us for you: <why>" (`decided`, `decidedForYou`), signed with
+ * our company's name — never who of us (the typed name of the office person stays the office's).
  */
 
 export async function partnerPage(system: CommandCaller, row: PartnerRow, locale: ApprovalLocale, now: Date) {
@@ -30,6 +33,10 @@ export async function partnerPage(system: CommandCaller, row: PartnerRow, locale
   })
   const held = answerHeld({ status, dueAt: row.dueAt, answeredAt: row.answeredAt, withdrawnAt: row.withdrawnAt }, now, locale) ?? facts.recordHeld
   const order = facts.content.revisedOrder
+  // B-PR-30a: our decision for the party, in the party's words (never who of us).
+  const forParty = row.decidedForPartyReason
+  const companyName = facts.company?.tradeName ?? facts.company?.legalName ?? ''
+  const decidedText = isAnswered(status) ? (forParty !== null ? decidedForPartyPageWords(kind, status, forParty, locale) : decidedWords(kind, status, row.typedName, row.answeredAt, locale)) : null
   return {
     request: {
       id: row.id,
@@ -38,11 +45,12 @@ export async function partnerPage(system: CommandCaller, row: PartnerRow, locale
       words: facts.label,
       label: facts.label.en,
       question: row.question,
-      from: { companyName: facts.company?.tradeName ?? facts.company?.legalName ?? '' },
+      from: { companyName },
       dueAt: toUtcIso(row.dueAt),
       status,
-      decided: isAnswered(status) ? decidedWords(kind, status, row.typedName, row.answeredAt, locale) : null,
-      answer: row.answeredAt ? { at: toUtcIso(row.answeredAt), typedName: row.typedName ?? '', words: row.answer, markupFileId: row.markupFileId } : null,
+      decided: decidedText,
+      answer: row.answeredAt ? { at: toUtcIso(row.answeredAt), typedName: forParty !== null ? companyName : (row.typedName ?? ''), words: row.answer, markupFileId: row.markupFileId } : null,
+      decidedForYou: forParty !== null && isAnswered(status) ? decidedForPartyWords(forParty, locale) : null,
       version: row.version,
     },
     content: {
