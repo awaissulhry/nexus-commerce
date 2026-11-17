@@ -54,6 +54,8 @@ import {
   termsOf,
   waitingInputOf,
   type ListTerms,
+  // F-PR-18: the Customer urgency column (under Columns ▾) and its filter.
+  customerUrgencyCellOf,
 } from '../list/model'
 // ---- end F-PR-03
 
@@ -247,6 +249,12 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       const key = markKeyOf(data.supervisor)
       return key ? <span>{tsv(key)}</span> : <span>—</span>
     }
+    // F-PR-18: the customer's own urgency (Urgent 2 · Urgent – asked · Regular · Set to regular by us); none: "—".
+    const UrgencyCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
+      if (!data) return null
+      const cell = customerUrgencyCellOf(data)
+      return cell ? <Tag tone={cell.tone}>{tw(cell.key, cell.params)}</Tag> : <span>—</span>
+    }
     const DueCell = ({ data }: ICellRendererParams<WorkOrderRow>) =>
       data ? (
         data.dueDate ? (
@@ -306,6 +314,8 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       later({ colId: 'readiness', headerName: tw('readiness.column'), minWidth: 130, flex: 0.9, cellRenderer: ReadinessCell }),
       later({ colId: 'priority', headerName: t('col.priority'), field: 'priority', minWidth: 112, flex: 0.6, type: 'rightAligned', cellRenderer: PriorityCell }),
       later({ colId: 'site', headerName: t('col.site'), field: 'siteCode', minWidth: 80, flex: 0.5 }),
+      // F-PR-18 (the export's column id `customerUrgency`): under Columns ▾.
+      later({ colId: 'customerUrgency', headerName: tw('urgency.column'), headerTooltip: tw('urgency.hint'), minWidth: 150, flex: 0.9, sortable: false, cellRenderer: UrgencyCell }),
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
   }, [t, tw, ts, tsv, locale, model.prefix, model.can.orders, model.now, names, readiness])
@@ -333,8 +343,10 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       { id: 'waitingOn', kind: 'choice', label: t('filter.waitingOn'), choices: FILTER_CHOICES.waitingOn.map((choice) => ({ value: choice.value, label: t(choice.key) })) },
       { id: 'risk', kind: 'choice', label: t('filter.health'), choices: FILTER_CHOICES.risk.map((choice) => ({ value: choice.value, label: t(choice.key) })) },
       { id: 'blockedBy', kind: 'choice', label: t('filter.blockedBy'), choices: FILTER_CHOICES.blockedBy.map((choice) => ({ value: choice.value, label: t(choice.key) })) },
+      // F-PR-18: the Customer urgency filter (the API's computed term `customerUrgency`).
+      { id: 'customerUrgency', kind: 'choice', label: tw('urgency.filter'), choices: FILTER_CHOICES.customerUrgency.map((choice) => ({ value: choice.value, label: tw(choice.key) })) },
     ],
-    values: { due: model.due ?? null, rush: model.rush ? 'true' : null, waitingOn: model.waitingOn ?? null, risk: model.risk ?? null, blockedBy: model.blockedBy ?? null },
+    values: { due: model.due ?? null, rush: model.rush ? 'true' : null, waitingOn: model.waitingOn ?? null, risk: model.risk ?? null, blockedBy: model.blockedBy ?? null, /* F-PR-18 */ customerUrgency: model.customerUrgency ?? null },
     onChange: (id, value) => {
       if (id === 'rush') actions?.onRush?.(value === 'true')
       else if (id === 'due') actions?.onDue?.(value as never)
@@ -367,6 +379,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
     party: model.customers?.party ?? null,
     group: model.group ?? null,
     supervisor: model.supervisor ?? null, // F-PR-21
+    customerUrgency: model.customerUrgency ?? null, // F-PR-18
   }
   const state = model.rows.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
@@ -382,7 +395,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
               setQuery('')
               // F-PR-03: every filter off in one address (the sort, the mode and the grouping stay).
               const off = cleared(terms)
-              actions?.onTerms?.({ view: off.view, q: off.q, due: off.due, rush: off.rush, waitingOn: null, risk: null, blockedBy: null, party: null })
+              actions?.onTerms?.({ view: off.view, q: off.q, due: off.due, rush: off.rush, waitingOn: null, risk: null, blockedBy: null, party: null, /* F-PR-21, F-PR-18 */ supervisor: off.supervisor, customerUrgency: off.customerUrgency })
             }}
           >
             {t('list.clearFilters')}

@@ -347,6 +347,8 @@ function WorkOrdersContainer() {
     supervisor: terms.supervisor,
     supervisorCan,
     assign: assign.model,
+    // F-PR-18
+    customerUrgency: terms.customerUrgency,
   }
 
   return (

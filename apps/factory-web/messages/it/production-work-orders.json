@@ -362,5 +362,23 @@
     "tile": "Miei",
     "assign": "Assegna supervisore…",
     "cardMe": "Supervisore: io"
+  },
+  "urgency": {
+    "column": "Urgenza cliente",
+    "filter": "Urgenza cliente",
+    "choice": {
+      "URGENT": "Urgente (cliente)",
+      "ASKED": "Urgente – richiesto",
+      "REGULAR": "Normale",
+      "SET_BACK": "Riportato a normale da noi"
+    },
+    "cell": {
+      "URGENT": "Urgente (cliente) {rank}",
+      "URGENT_SOME": "Urgente (cliente)",
+      "ASKED": "Urgente – richiesto",
+      "REGULAR": "Normale",
+      "SET_BACK": "Riportato a normale da noi"
+    },
+    "hint": "Il segno del cliente: urgente con il suo posto nell'elenco delle urgenze del cliente (mai un posto nel nostro piano). La nostra priorità e l'urgenza restano nostre."
   }
 }

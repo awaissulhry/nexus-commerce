@@ -136,6 +136,57 @@ describe("B-PR-22b the customer's urgency in the office's reads (PW-18 read part
   })
 })
 
+// ---- F-PR-18: the Work orders column's four states and its filter (production plan §5 "Work orders: … Customer urgency"; PW-06) ----
+describe('F-PR-18 Work orders: the Customer urgency column (Urgent 2 / Urgent – asked / Regular / Set to regular by us) and its filter', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const rowOf = (list: Json, id: string) => (list.workOrders as Json[]).find((row) => row.id === id)
+  const idsOf = (list: Json) => (list.workOrders as Json[]).map((row) => row.id as string)
+
+  it("each row's state: A's work order Urgent 2, B's (its order locked at Regular by us) Set to regular by us; the export says the same words", async () => {
+    const all = await read('office.all', '/production/work-orders?sort=risk&limit=100')
+    expect(rowOf(all, world.w.a.workOrderId)).toMatchObject({ customerUrgency: 'URGENT', urgentRank: 2, urgencyState: 'URGENT' })
+    expect(rowOf(all, world.w.b.workOrderId)).toMatchObject({ customerUrgency: 'REGULAR', urgentRank: null, urgencyState: 'SET_BACK' })
+    expect(rowOf(all, world.w.mixed.workOrderId)).toMatchObject({ urgencyState: 'URGENT', urgentRank: 2 })
+  })
+
+  it('the filter keeps the rows of one state only (a computed filter: every page of the list, never the loaded rows only)', async () => {
+    const setBack = await read('office.all', '/production/work-orders?customerUrgency=SET_BACK&limit=100')
+    expect(idsOf(setBack)).toContain(world.w.b.workOrderId)
+    expect(idsOf(setBack)).not.toContain(world.w.a.workOrderId)
+    expect((setBack.workOrders as Json[]).every((row) => row.urgencyState === 'SET_BACK')).toBe(true)
+    const urgent = await read('office.all', '/production/work-orders?customerUrgency=URGENT&sort=due&limit=100')
+    expect(idsOf(urgent)).toEqual(expect.arrayContaining([world.w.a.workOrderId, world.w.mixed.workOrderId]))
+    expect(idsOf(urgent)).not.toContain(world.w.b.workOrderId)
+    await read('office.all', '/production/work-orders?customerUrgency=urgent', 400)
+  })
+
+  it('an open "Urgent – asked" (RUSH) on a Regular order makes its work order Urgent – asked; answered, it is not', async () => {
+    const ask = newId()
+    const [order] = await admin<{ companyId: string; partyId: string }>(`SELECT "companyId"::text, "partyId"::text FROM "SalesOrder" WHERE id = $1`, [B.locked])
+    await world.replica([{ sql: `INSERT INTO "OrderChangeRequest" (id, "tenantId", "companyId", "partyId", "orderId", kind, status) VALUES ($1, $2, $3, $4, $5, 'RUSH', 'OPEN')`, values: [ask, world.ids.tenantId, order!.companyId, order!.partyId, B.locked] }])
+    try {
+      const all = await read('office.all', '/production/work-orders?sort=risk&limit=100')
+      expect(rowOf(all, world.w.b.workOrderId)).toMatchObject({ customerUrgency: 'REGULAR', urgencyState: 'ASKED' })
+      const asked = await read('office.all', '/production/work-orders?customerUrgency=ASKED&limit=100')
+      expect(idsOf(asked)).toContain(world.w.b.workOrderId)
+      expect((asked.workOrders as Json[]).every((row) => row.urgencyState === 'ASKED')).toBe(true)
+    } finally {
+      await world.replica([{ sql: `DELETE FROM "OrderChangeRequest" WHERE id = $1`, values: [ask] }])
+    }
+    expect(rowOf(await read('office.all', '/production/work-orders?sort=risk&limit=100'), world.w.b.workOrderId)).toMatchObject({ urgencyState: 'SET_BACK' })
+  })
+
+  it("PW-06: office.p2 (limited to B) filters only B's rows; A's urgent work orders are neither listed nor counted", async () => {
+    const urgent = await read('office.p2', '/production/work-orders?customerUrgency=URGENT&limit=100')
+    expect(idsOf(urgent)).not.toContain(world.w.a.workOrderId)
+    expect(idsOf(urgent)).not.toContain(world.w.mixed.workOrderId)
+    expect(JSON.stringify(urgent)).not.toContain(world.w.a.workOrderId)
+    const setBack = await read('office.p2', '/production/work-orders?customerUrgency=SET_BACK&limit=100')
+    expect(idsOf(setBack)).toContain(world.w.b.workOrderId)
+    expect((setBack.workOrders as Json[]).every((row) => row.urgencyState === 'SET_BACK' && row.customer?.id === world.ids.b)).toBe(true)
+  })
+})
+// ---- end F-PR-18
+
 describe('B-PR-22b the factory sets back, locks and unlocks (production.brand.override, step-up, no second person)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('asks a fresh code first: without one nothing is read or written', async () => {
     world.h.clock.advance(6 * 60_000)

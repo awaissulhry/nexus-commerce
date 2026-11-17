@@ -12,6 +12,7 @@ import { WithMessages } from '../../../../record-panels/i18n'
 import { BOARD_KIT_NAMESPACE, useBoardWords } from '../../../_shared/planning-board/words'
 import type { Board, BoardBucket } from '../api'
 import {
+  BOARD_SORTS,
   BOARD_VIEWS,
   bandPublishHeld,
   dayWords,
@@ -246,6 +247,14 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
       <div className="fw-pb-toolbar" role="group" aria-label={t('toolbar.label')}>
         <SegmentedControl size="sm" ariaLabel={t('toolbar.view')} options={BOARD_VIEWS.map((view) => ({ value: view, label: t(`toolbar.views.${view}`) }))} value={controls.view} onChange={(value) => setControls({ view: value === 'orders' ? 'orders' : 'resources' })} />
         <SegmentedControl size="sm" ariaLabel={t('toolbar.zoom')} options={ZOOMS.map((zoom) => ({ value: zoom, label: t(`toolbar.zooms.${zoom}`) }))} value={controls.zoom} onChange={(value) => setControls({ zoom: value as BoardBucket, from: null })} />
+        {/* F-PR-18: the order of Not on the board and of the orders view — the plan's, or the customer's urgency first (a view only). */}
+        <Select size="sm" aria-label={t('toolbar.sort')} value={controls.sort} onChange={(event) => setControls({ sort: event.target.value === 'urgency' ? 'urgency' : 'plan' })}>
+          {BOARD_SORTS.map((sort) => (
+            <option key={sort} value={sort}>
+              {t(`toolbar.sorts.${sort}`)}
+            </option>
+          ))}
+        </Select>
         <span className="fw-pb-dates">
           <Button size="sm" variant="secondary" onClick={() => setControls({ from: null })}>
             {t('toolbar.today')}
@@ -341,6 +350,8 @@ function BoardBody({ model, actions }: { model: BoardViewModel; actions?: BoardA
           </h2>
           <span className="fw-pb-hint">{t(controls.view === 'orders' ? 'board.hintOrders' : 'board.hint')}</span>
         </div>
+        {/* F-PR-18: what Customer urgency first does (and does not do). */}
+        {controls.sort === 'urgency' ? <p className="fw-pb-hint">{t('board.urgencyHint')}</p> : null}
         {model.read.status === 'loading' ? (
           <div className="fw-pb-skeleton" aria-busy="true" aria-label={t('band.reading')}>
             <Skeleton width="30%" />

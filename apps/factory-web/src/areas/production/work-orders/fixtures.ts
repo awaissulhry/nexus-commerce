@@ -94,6 +94,18 @@ const assignOf = (over: Partial<AssignSupervisorModel> = {}): AssignSupervisorMo
 const supervised = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => risky(role, { rows: { items: SUPERVISED_ROWS, more: false, problem: null }, counts: SUPERVISED_COUNTS, supervisorCan: { manage: role === 'manager' || role === 'owner' }, ...over })
 // ---- end F-PR-21
 
+// ---- F-PR-18: the customer's urgency per row (made-up): Urgent 2 (its place in the customer's OWN list), Urgent – asked, Regular, Set
+// to regular by us, and none (no order whose urgency counts) — the column under Columns ▾ and the Customer urgency filter.
+const URGENCY_STATES = [
+  { urgencyState: 'URGENT', customerUrgency: 'URGENT', urgentRank: 2 },
+  { urgencyState: 'ASKED', customerUrgency: 'REGULAR', urgentRank: null },
+  { urgencyState: 'REGULAR', customerUrgency: 'REGULAR', urgentRank: null },
+  { urgencyState: 'SET_BACK', customerUrgency: 'REGULAR', urgentRank: null },
+  { urgencyState: null, customerUrgency: null, urgentRank: null },
+] as const
+export const URGENCY_ROWS: WorkOrderRow[] = RISK_OPEN.map((row, index) => ({ ...row, ...(row.customer ? URGENCY_STATES[index % URGENCY_STATES.length]! : URGENCY_STATES[4]) }))
+// ---- end F-PR-18
+
 
 const WORDS: ReadinessRow['word'][] = ['NOT_BOOKED', 'EXPECTED', 'NOT_ENOUGH', 'RECEIVED', 'REQUESTED', 'DELAYED', 'NOT_PLANNED']
 const READINESS_ROWS: Record<string, ReadinessRow> = Object.fromEntries(
@@ -252,5 +264,10 @@ export const designScreen = defineDesignScreen<ListCase>({
       }),
     },
     // ---- end F-PR-21
+    // ---- F-PR-18 ----
+    { id: 'urgency-rows', label: 'F-PR-18 · The customer’s urgency per row (Columns ▾ Customer urgency): Urgent 2 · Urgent – asked · Regular · Set to regular by us', model: risky('manager', { rows: { items: URGENCY_ROWS, more: false, problem: null } }), note: 'The column is under Columns ▾ (its header tells what it is); the Quick filters ▾ Customer urgency is the API’s filter, over every page.' },
+    { id: 'urgency-filter', label: 'F-PR-18 · The Customer urgency filter “Urgent – asked” as a chip (`?customerUrgency=ASKED`)', model: risky('manager', { customerUrgency: 'ASKED', rows: { items: URGENCY_ROWS.filter((row) => row.urgencyState === 'ASKED'), more: false, problem: null } }) },
+    { id: 'urgency-none', label: 'F-PR-18 · The Customer urgency filter matching nothing: Clear filters', model: risky('manager', { customerUrgency: 'SET_BACK', rows: { items: [], more: false, problem: null } }) },
+    // ---- end F-PR-18
   ],
 })

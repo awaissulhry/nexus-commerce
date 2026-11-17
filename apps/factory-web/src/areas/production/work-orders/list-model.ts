@@ -13,6 +13,8 @@ import type { CustomerFilterState } from '../_shared/customer/model'
 import type { ListTerms } from './list/model'
 // F-PR-21: the production supervisor (Mine, the column, THE assign dialog).
 import type { AssignSupervisorActions, AssignSupervisorModel } from '../../_shared/production-supervisor/model'
+// F-PR-18: the Customer urgency filter.
+import type { CustomerUrgencyState } from '../_shared/api'
 
 /** SCR-069 — the work orders list's view model (WorkOrdersListView draws it and fetches nothing). */
 export interface WorkOrdersListModel {
@@ -73,6 +75,8 @@ export interface WorkOrdersListModel {
   /** THE assign dialog while open. */
   assign?: AssignSupervisorModel | null
   // ── end F-PR-21
+  /** F-PR-18: the Customer urgency filter (`?customerUrgency=`). */
+  customerUrgency?: CustomerUrgencyState | null
 }
 
 export interface WorkOrdersListActions {
