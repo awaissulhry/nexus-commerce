@@ -24,6 +24,29 @@ export const PROGRESS_NOTE =
 
 const at = (value: Date | null): string | null => (value ? toUtcIso(value) : null)
 
+// ── B-PR-03 (production plan, the brand wall) ──────────────────────────────────────────────────────────────────────────────
+/** A party as the office names it: its code and its trade name, else its legal name. */
+export interface CustomerParty {
+  readonly id: string
+  readonly code: string
+  readonly legalName: string
+  readonly tradeName: string | null
+}
+
+/**
+ * A work order's customer, for a list row and the record: its one customer (B-PR-01's WorkOrder.partyId), or none — a sample
+ * of a round for no customer, or `mixedCustomers`: made before the one-customer rule with cells of several customers (the
+ * screens say "Mixed brands (made before the rule)"; only people who reach every customer see one, ./scope).
+ */
+export function customerOf(row: { readonly partyId: string | null; readonly party: CustomerParty | null; readonly sizes: readonly { readonly partyId: string | null }[] }) {
+  return {
+    partyId: row.partyId,
+    customer: row.party ? { id: row.party.id, code: row.party.code, name: row.party.tradeName ?? row.party.legalName } : null,
+    mixedCustomers: row.partyId === null && row.sizes.some((cell) => cell.partyId !== null),
+  }
+}
+// ── end B-PR-03 ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
 /** The release as the audit row recorded it: when, by whom, and the planner's material override when there was one. */
 async function releaseOf(db: Reader, workOrder: Header) {
   if (!workOrder.releasedAt) return null
@@ -192,6 +215,8 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
   const perGarment = plan.operations.filter((op) => op.routingSeq !== null).reduce<Decimal>((sum, op) => sum.plus(op.standardMinutes), ZERO)
   const dueDate = dayOrNull(workOrder.dueDate)
   const genealogy = await genealogyOf(db, workOrder)
+  // B-PR-03: its one customer (read on its own: no relation inside a command's transaction).
+  const party = workOrder.partyId ? await db.party.findUnique({ where: { id: workOrder.partyId }, select: { id: true, code: true, legalName: true, tradeName: true } }) : null
   return {
     id: workOrder.id,
     number: workOrder.number,
@@ -229,6 +254,8 @@ export async function workOrderView(db: Reader, workOrder: Header, today: Busine
     repairOrder: workOrder.kind === 'REPAIR' ? await db.repairOrder.findFirst({ where: { workOrderId: workOrder.id }, select: { id: true, number: true, stage: true }, orderBy: { createdAt: 'desc' } }) : null,
     // B-W2b-246 (MES-018): the sample round a SAMPLE work order makes (WorkOrder.sampleRoundId, wave 29).
     sampleRound: workOrder.kind === 'SAMPLE' ? await db.sampleRound.findFirst({ where: { workOrders: { some: { id: workOrder.id } } }, select: { id: true, number: true, kind: true, roundNo: true, stage: true } }) : null,
+    // B-PR-03: its one customer (or none: a sample of no customer, or mixed customers made before the rule).
+    ...customerOf({ partyId: workOrder.partyId, party, sizes: cells }),
     orders: orders.map((order) => ({ id: order.id, number: order.number, customerRef: order.customerRef, status: order.status, partyId: order.partyId, partyName: order.partyName, depositRequired: order.depositRequired })),
     cells: cells.map((cell) => ({
       id: cell.id,
