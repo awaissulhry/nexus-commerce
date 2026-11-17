@@ -146,7 +146,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/portal/customer/returns/` — the customer's Returns & claims (B-W2b-197 on B-W2b-192's API, SCR-187; catalogue
   `portal-returns`, CSS prefix `fw-pret-`): `/p/<party>/returns?chip=&q=&start=RETURN|COMPLAINT&order=<id>` (the cases in
   the list frame with Export N, the Quality role's complaints, "Start a return or claim": what you need, details, check and
-  send), `/returns/<id>` and `/returns/complaints/<id>` `?tab=request|status|messages` (`CasePage.tsx`: Add photos, Cancel
+  send), `/returns/<id>` and `/returns/complaints/<id>` `?tab=request|status` (B-TH-275: the conversation docked, PL3; `CasePage.tsx`: Add photos, Cancel
   this request?, the return label and credit note PDFs in a new tab, the case's thread). `RECORD_PAGES.ReturnAuthorisation`
   and `.Complaint` open them; their partner views are in factory-api `platform/search/partner/views/`.
 - `src/portal/customer/returns/repair/` and `src/links/claim/types/repair/` — repairs and alterations from outside (B-W2b-342 on its
@@ -176,7 +176,7 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `u`). Profile: company, addresses and contacts typed on the page and sent together for our check (EditModeBar, ⌘S; Withdraw),
   then the shared account cards. Both read again on their `live.events`.
 - `src/portal/customer/orders/` — the customer's Orders & tracking (B-W2b-191, SCR-184, `/p/<party>/orders?chip=&q=&print=1`,
-  `/orders/<id>?tab=status|lines|shipments|documents|messages&line=`; catalogue `portal-orders`): `OrdersPage.tsx` / `OrderPage.tsx`
+  `/orders/<id>?tab=status|lines|shipments|documents&line=` (B-TH-275: the conversation docked); catalogue `portal-orders`): `OrdersPage.tsx` / `OrderPage.tsx`
   (containers; the route files pick them for a CUSTOMER), `api.ts` (every call: orders, change/cancel requests, the REVISED_ORDER
   re-confirmation, the order's documents, the deposit on the FAKE provider), `model.ts` (pure), `band.ts`, `view/` (list, print,
   record tabs, the pop-ups, `CustomerCase` for the design review). `RECORD_PAGES.SalesOrder` opens `/orders/<id>`.
