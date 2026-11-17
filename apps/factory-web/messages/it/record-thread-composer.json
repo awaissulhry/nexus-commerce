@@ -1,0 +1,56 @@
+{
+  "modeLabel": "Chi legge quello che scrivi",
+  "mode": {
+    "note": "Nota d'ufficio",
+    "reply": "Rispondi a {party}",
+    "replyProspect": "Rispondi a {party} (nuovo)"
+  },
+  "mark": {
+    "note": "Nota d'ufficio · la leggono solo i tuoi colleghi",
+    "reply": "Email a {party} · la leggono le persone in A e Cc"
+  },
+  "placeholder": {
+    "note": "Scrivi una nota d'ufficio per i colleghi · @ menziona un collega",
+    "reply": "Scrivi a {party}"
+  },
+  "send": {
+    "note": "Aggiungi la nota",
+    "reply": "Invia a {party}"
+  },
+  "live": {
+    "note": "Nota d'ufficio — la leggono solo i tuoi colleghi",
+    "reply": "Rispondi a {party} — {party} la legge"
+  },
+  "held": {
+    "offline": "Sei offline · il tuo testo resta su questo dispositivo",
+    "sending": "Invio in corso…",
+    "prospect": "Prima crea il cliente",
+    "empty": "Prima scrivi un messaggio",
+    "tooLong": "Togli {count} caratteri per inviarlo"
+  },
+  "box": {
+    "closed": "Chiusa da {who}, {date}. Il cliente non può scrivere qui.",
+    "closedPlain": "Questa conversazione è chiusa. Il cliente non può scrivere qui.",
+    "reopen": "Riapri",
+    "noRight": "Puoi leggere questa conversazione; per scrivere serve un altro ruolo.",
+    "noParty": "Questo record non ha un cliente: solo note."
+  },
+  "prospect": {
+    "line": "{party} è un potenziale cliente, non ancora un cliente.",
+    "make": "Crea il cliente"
+  },
+  "switch": {
+    "mentions": "Le menzioni restano nelle note d'ufficio: tolte da questo messaggio: {names}."
+  },
+  "floor": {
+    "label": "Per il reparto",
+    "on": "I tablet di {record} la mostrano: niente prezzi, i primi {limit} caratteri, per 14 giorni, nessun file, nessun nome. Nessuno registra chi l'ha letta.",
+    "off": "Spenta: questa nota la legge solo l'ufficio.",
+    "long": "Il tablet mostra i primi {limit} caratteri."
+  },
+  "drop": {
+    "note": "Rilascia i file per aggiungerli a questa nota d'ufficio (solo ufficio)",
+    "reply": "Rilascia i file per inviarli a {party}"
+  },
+  "counter": "Restano {count} caratteri"
+}

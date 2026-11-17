@@ -595,7 +595,7 @@
     "currency": "Currency",
     "paymentTerms": "Payment terms",
     "paymentTermsHint": "As agreed, in words",
-    "internalNote": "Internal note",
+    "internalNote": "Office note",
     "internalNoteHint": "Staff only; never on a document",
     "validFrom": "Valid from",
     "validFromHint": "The first day it applies",

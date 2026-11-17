@@ -322,7 +322,7 @@
     "photosNoRight": "Il tuo ruolo non può caricare file.",
     "photosPicked_one": "Sarà inviata {count} foto.",
     "photosPicked_other": "Saranno inviate {count} foto.",
-    "note": "Nota interna (facoltativa)",
+    "note": "Nota d'ufficio (facoltativa)",
     "noteHint": "Solo per l’ufficio: mai mostrata al cliente.",
     "problem": {
       "customer": "Scegli il cliente (o leggi il seriale).",
@@ -349,7 +349,7 @@
     "wordsSub": "{channel} · {time}",
     "edit": "Modifica",
     "about": "A cosa si riferisce",
-    "internalNote": "Nota interna:",
+    "internalNote": "Nota d'ufficio:",
     "valueNoGrain": "Il tuo ruolo non vede i prezzi",
     "orderValue": "Valore ordine {value} (netto)",
     "triage": "Smistamento",

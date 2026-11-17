@@ -16,12 +16,12 @@
     "audienceLong": {
       "INTERNAL": "Internal (full)",
       "SUBCONTRACTOR": "Subcontractor (no costs, no supplier names)",
-      "BRAND": "Customer (no internal notes)"
+      "BRAND": "Customer (no office notes)"
     },
     "audienceHint": {
       "INTERNAL": "Everything the office may see. The PDF never carries a cost: a paper travels.",
       "SUBCONTRACTOR": "No cost, margin or pay figure, no standard minutes, no supplier or workshop names, no alternates, approval states or people's names. What comes with the kit is marked.",
-      "BRAND": "As the workshop copy, and no internal notes and no kit mark. A private-label style's copy goes to its own brand only."
+      "BRAND": "As the workshop copy, and no office notes and no kit mark. A private-label style's copy goes to its own brand only."
     },
     "language": {
       "it": "Italian",
@@ -34,7 +34,7 @@
       "ALTERNATES": "alternate materials",
       "APPROVALS": "material approval states",
       "CUSTOMERS": "which customer sends a material",
-      "INTERNAL_NOTES": "internal notes",
+      "INTERNAL_NOTES": "office notes",
       "PEOPLE": "people's names"
     },
     "section": {

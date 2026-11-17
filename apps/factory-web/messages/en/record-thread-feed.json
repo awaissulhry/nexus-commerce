@@ -1,0 +1,86 @@
+{
+  "feed": {
+    "label": "Thread messages, oldest first"
+  },
+  "state": {
+    "loading": "Reading the thread…",
+    "error": "Could not load the thread",
+    "errorBody": "What you typed in the box below is kept.",
+    "tryAgain": "Try again",
+    "forbidden": "You cannot read this thread",
+    "forbiddenBody": "Reading it needs the right “{right}”. An administrator can give it to your role.",
+    "empty": "No messages yet",
+    "emptyBody": "Write the first one below.",
+    "offline": "Offline · as of {time}",
+    "offlineBody": "These are the messages until then. New ones show when you are back online; what you type stays on this device."
+  },
+  "older": {
+    "show": "Show {count} earlier",
+    "loading": "Reading earlier messages…",
+    "failed": "Could not load earlier messages",
+    "retry": "Retry"
+  },
+  "day": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "zone": "Days and times in the company's time zone (Europe/Rome), the same for everyone"
+  },
+  "fold": {
+    "count_one": "{count} earlier message",
+    "count_other": "{count} earlier messages",
+    "range": "{from} – {to}",
+    "show": "Show",
+    "label_one": "Show {count} earlier message",
+    "label_other": "Show {count} earlier messages"
+  },
+  "folded": {
+    "label": "Open the message of {author} at {time}"
+  },
+  "step": {
+    "text": "{who} {verb}",
+    "status": "{from} → {to}"
+  },
+  "changes": {
+    "text_one": "{count} change by {who}",
+    "text_other": "{count} changes by {who}",
+    "show": "Show",
+    "hide": "Hide",
+    "fields": "Changed: {fields}"
+  },
+  "who": {
+    "floorPerson": "A person on the floor",
+    "OFFICE": "Someone in the office",
+    "FLOOR": "A person on the floor",
+    "PARTNER": "The customer",
+    "LINK": "Someone with a link",
+    "SYSTEM": "Nexus Factory"
+  },
+  "verb": {
+    "created": "created the record",
+    "updated": "changed the record",
+    "deleted": "deleted the record",
+    "issued": "issued it",
+    "suspended": "suspended it",
+    "reinstated": "reinstated it",
+    "withdrawn": "withdrew it",
+    "archived": "archived it",
+    "statusChanged": "changed the status",
+    "sent": "sent it",
+    "uploaded": "added a file",
+    "shared": "changed who sees a file",
+    "retentionChanged": "changed how long a file is kept",
+    "assigned": "assigned it",
+    "released": "released it",
+    "rejected": "rejected it",
+    "approved": "approved it",
+    "confirmed": "confirmed it",
+    "cancelled": "cancelled it",
+    "changed": "changed the record"
+  },
+  "live": {
+    "bar_one": "{count} new message",
+    "bar_other": "{count} new messages",
+    "arrived_one": "{count} new message in the thread",
+    "arrived_other": "{count} new messages in the thread"
+  }
+}

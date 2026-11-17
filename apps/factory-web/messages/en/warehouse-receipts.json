@@ -388,7 +388,7 @@
     "sentWhere": "It is on the receipt’s thread (Activity), where the answer will arrive.",
     "toHint": "Only the supplier’s own contacts with an e-mail; add one in Purchasing › Suppliers.",
     "note": "Your note",
-    "noteHint": "Optional, at most {max} characters, set under the list in your own words. No price, no internal note.",
+    "noteHint": "Optional, at most {max} characters, set under the list in your own words. No price, no office note.",
     "preview": "What the supplier gets",
     "previewHint": "The standard text in the supplier’s language, with the documents you ask for and your note. It is not changed here."
   },

@@ -51,13 +51,13 @@
   },
   "claimTab": {
     "facts": "Da dove viene",
-    "fixedAfterSend": "Da quando è inviato, l’oggetto del reclamo resta come inviato: cambiano solo il rimedio, il credito concordato e la nota interna.",
+    "fixedAfterSend": "Da quando è inviato, l’oggetto del reclamo resta come inviato: cambiano solo il rimedio, il credito concordato e la nota d'ufficio.",
     "what": "Cosa non va e cosa si chiede"
   },
   "close": {
     "confirm": "Chiudi reclamo",
     "discrepancies": "Le sue difformità al ricevimento si chiudono con lui.",
-    "does": "Il reclamo è chiuso: non cambia più (solo la nota interna).",
+    "does": "Il reclamo è chiuso: non cambia più (solo la nota d'ufficio).",
     "goodsHere_one": "La merce di {count} riga non è mai partita: resta in magazzino.",
     "goodsHere_other": "La merce di {count} righe non è mai partita: resta in magazzino.",
     "held": {
@@ -219,7 +219,7 @@
     "agreed": "Credito concordato ({currency})",
     "agreedHint": "Vuoto: il valore della merce.",
     "foundAt": "Trovato",
-    "internalNote": "Nota interna",
+    "internalNote": "Nota d'ufficio",
     "internalNoteHint": "Solo per l’ufficio; mai inviata al fornitore.",
     "kind": "Tipo",
     "pickReason": "Scegli un motivo",

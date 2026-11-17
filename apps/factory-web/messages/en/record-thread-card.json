@@ -1,0 +1,104 @@
+{
+  "label": "{author}, {audience}, {time}",
+  "side": {
+    "theParty": "the customer",
+    "ours": "Us"
+  },
+  "author": {
+    "floorPerson": "A person on the floor",
+    "someone": "someone",
+    "USER": "Someone in the office",
+    "WORKER": "A person on the floor",
+    "PARTY": "The customer",
+    "SYSTEM": "Nexus Factory"
+  },
+  "audience": {
+    "theirs": "message from {party}",
+    "ours": "message to {party}, {party} reads it",
+    "note": "Office note, office only",
+    "noteFloor": "Office note, also on the floor",
+    "floor": "from the floor, office only"
+  },
+  "mark": {
+    "note": "Office note · Office only",
+    "alsoFloor": "Also on the floor",
+    "fromFloor": "From the floor",
+    "email": "Email",
+    "portal": "Portal",
+    "toEmail": "Email to {party}",
+    "toPortal": "In the portal · {party}"
+  },
+  "delivery": {
+    "QUEUED": "Waiting to send",
+    "SENDING": "Sending",
+    "SENT": "Sent",
+    "DELIVERED": "Delivered",
+    "BOUNCED": "Bounced",
+    "COMPLAINED": "Marked as spam",
+    "FAILED": "Not sent"
+  },
+  "menu": {
+    "label": "More for the message of {author} at {time}",
+    "reply": "Reply",
+    "replyHint": "To is filled from this mail",
+    "task": "Make a task",
+    "taskHint": "text from this message, due date, person",
+    "link": "Copy link to message",
+    "linkHint": "opens the record with this message open"
+  },
+  "body": {
+    "showAll": "Show all ({count} lines)",
+    "showQuoted": "Show the quoted text and the signature",
+    "hideQuoted": "Hide the quoted text and the signature"
+  },
+  "mentioned": {
+    "list": "Mentioned: {names}",
+    "more": "Mentioned: {names} +{count}"
+  },
+  "files": {
+    "label": "Pictures",
+    "open": "Open {name}",
+    "openShort": "Open",
+    "moreLabel_one": "Show {count} more file",
+    "moreLabel_other": "Show {count} more files",
+    "more_one": "{count} more",
+    "more_other": "{count} more",
+    "removed": "File removed",
+    "quarantined": "Held for the virus scan: it opens once the scan says it is clean",
+    "pending": "Still uploading",
+    "cannotOpen_one": "{count} file you cannot open",
+    "cannotOpen_other": "{count} files you cannot open"
+  },
+  "file": {
+    "kind": {
+      "photo": "Photo",
+      "pdf": "PDF",
+      "audio": "Voice note",
+      "document": "Document",
+      "file": "File"
+    }
+  },
+  "details": {
+    "email": "To {to} · Subject: {subject}"
+  },
+  "bounce": {
+    "text": "{to} could not get this mail: the mail service said so.",
+    "task": "Task made for you · Open",
+    "complained": "The recipient marked this mail as spam: no more mail goes to the address until an administrator clears it.",
+    "failed": "The mail service did not take this mail after its retries. Write it again to send it."
+  },
+  "outbox": {
+    "sending": "Sending…",
+    "failed": "Not sent · {reason}. Your text is kept.",
+    "retry": "Retry"
+  },
+  "reason": {
+    "network": "the connection dropped",
+    "refused": "the factory refused it as it is",
+    "forbidden": "you may not write here",
+    "conflict": "the thread changed meanwhile",
+    "unavailable": "Nexus could not be reached",
+    "outside": "an address belongs to another customer",
+    "failed": "something went wrong"
+  }
+}

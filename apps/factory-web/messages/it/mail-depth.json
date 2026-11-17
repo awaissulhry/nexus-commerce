@@ -41,7 +41,7 @@
       },
       "INTERNAL_MENTION": {
         "title": "@menziona un collega:",
-        "body": "Una @menzione va in una nota interna: {party} legge questo messaggio."
+        "body": "Una @menzione va in una nota d'ufficio: {party} legge questo messaggio."
       },
       "OFFICE_FILE": {
         "title": "Allegato solo ufficio:",

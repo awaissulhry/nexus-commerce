@@ -569,7 +569,7 @@
     "invoice": "Fattura {number} riga {seq}",
     "linesHead": "Cosa può tornare — scrivi i pezzi di ogni riga che torna",
     "linesLabel": "Righe che tornano",
-    "note": "Nota interna",
+    "note": "Nota d'ufficio",
     "noteHint": "Solo per l’ufficio",
     "noteOf": "Parole del cliente per {line}",
     "nothing": "Niente di questo cliente può tornare",
@@ -743,7 +743,7 @@
   },
   "replacement": {
     "body": "Un ordine per lo stesso cliente con le righe decise Sostituzione, senza addebito (una sostituzione in garanzia non è una vendita). Si spedisce come ogni ordine.",
-    "note": "Nota interna",
+    "note": "Nota d'ufficio",
     "submit": "Crea ordine di sostituzione",
     "title": "Crea ordine di sostituzione per {number}"
   },
