@@ -33,6 +33,7 @@ import {
   updateRound,
   updateShipment,
   workOrderOptions,
+  createSwatch, // F-PR-19
   type ApprovalView,
   type FitCell,
   type FitView,
@@ -45,6 +46,11 @@ import type { CellState, FitState, Loaded, Part, RecordDialog, SampleRecordModel
 import { SampleRecordView } from './view/SampleRecordView'
 import { defaultMode, workOrderBodyOf, workOrderFacts } from '../work-order/model'
 import { swatchHeld } from './view/ApprovalTab'
+// ---- F-PR-19: "Add a swatch" — the materials of the swatch's kind (Materials & trims' own reads) and the add
+import { getMaterial, listMaterials } from '../../materials/api'
+import { emptySwatchDraft, swatchBodyOf, swatchMaterialKinds, type SwatchKind } from '../model'
+import { addSwatchHeld, type SwatchModel } from '../view/SwatchDialog'
+// ---- end F-PR-19
 // ---- B-TH-262: the docked thread on the round (RecordFrame; Activity's tools in its "⋯") ----
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
 import { printHref } from '../../../../shell/print/print-model'
@@ -289,6 +295,65 @@ export function SampleRecord({ roundId }: { roundId: string }) {
     }
   }, [decide, api, say, load, readApprovalNow])
 
+  // ---- F-PR-19: "Add a swatch" (colour, leather, fabric, trim) ------------------------------------------------------------------
+  // The kind narrows the materials to those the API takes; the material's active colours follow its pick (one colour: picked).
+  const [swatch, setSwatch] = useState<Omit<SwatchModel, 'offline'> | null>(null)
+  const swatchKey = useRef<string | null>(null)
+  const swatchRead = useRef(0)
+  const findSwatchMaterials = useCallback(
+    (kind: SwatchKind, q: string) => {
+      const ticket = ++swatchRead.current
+      setSwatch((now) => (now ? { ...now, materials: null, materialsProblem: null } : now))
+      listMaterials(api, { q, kind: swatchMaterialKinds(kind), status: 'ACTIVE', limit: 50 })
+        .then((page) => {
+          if (ticket !== swatchRead.current) return
+          setSwatch((now) => (now ? { ...now, materials: page.materials.map((material) => ({ id: material.id, code: material.code, name: material.name })) } : now))
+        })
+        .catch((error: unknown) => {
+          if (ticket === swatchRead.current) setSwatch((now) => (now ? { ...now, materialsProblem: readProblem(error) } : now))
+        })
+    },
+    [api],
+  )
+  const pickSwatchMaterial = useCallback(
+    (itemId: string) => {
+      setSwatch((now) => (now ? { ...now, draft: { ...now.draft, itemId, itemColourId: '' }, colours: null, coloursProblem: null } : now))
+      if (!itemId) return
+      getMaterial(api, itemId)
+        .then((material) => {
+          const colours = material.colours.filter((colour) => colour.status === 'ACTIVE').map((colour) => ({ id: colour.id, code: colour.code, name: colour.name }))
+          setSwatch((now) => (now && now.draft.itemId === itemId ? { ...now, colours, draft: { ...now.draft, itemColourId: colours.length === 1 ? colours[0]!.id : '' } } : now))
+        })
+        .catch((error: unknown) => setSwatch((now) => (now && now.draft.itemId === itemId ? { ...now, coloursProblem: readProblem(error) } : now)))
+    },
+    [api],
+  )
+  const openSwatch = useCallback(() => {
+    const now = roundRef.current
+    if (!now) return
+    swatchKey.current = null
+    setSwatch({ round: { number: now.number, customer: now.party?.name ?? null }, draft: emptySwatchDraft(), materials: null, materialsProblem: null, colours: null, coloursProblem: null, busy: false, notice: null })
+    findSwatchMaterials('COLOUR', '')
+  }, [findSwatchMaterials])
+  const submitSwatch = useCallback(async () => {
+    const now = roundRef.current
+    if (!swatch || !now || addSwatchHeld({ ...swatch, offline })) return
+    setSwatch({ ...swatch, busy: true, notice: null })
+    swatchKey.current ??= newIdempotencyKey()
+    try {
+      await createSwatch(api, swatchBodyOf(now, swatch.draft), swatchKey.current)
+      swatchKey.current = null
+      setSwatch(null)
+      say({ key: 'swatch.add.done' }, 'success')
+      void readApprovalNow()
+    } catch (error) {
+      swatchKey.current = null
+      const problem = writeProblem(error)
+      setSwatch((open) => (open ? { ...open, busy: false, notice: { ...problem, tone: 'danger' } } : open))
+    }
+  }, [swatch, offline, api, say, readApprovalNow])
+  // ---- end F-PR-19
+
   // ---- dialogs ----------------------------------------------------------------------------------------------------------------
   const [dialog, setDialog] = useState<RecordDialog | null>(null)
   const dialogKey = useRef<string | null>(null)
@@ -420,6 +485,7 @@ export function SampleRecord({ roundId }: { roundId: string }) {
     approval,
     shipmentCells,
     decide: decide ? { ...decide, offline } : null,
+    swatch: swatch ? { ...swatch, offline } : null, // F-PR-19
     dialog,
   }
 
@@ -538,6 +604,19 @@ export function SampleRecord({ roundId }: { roundId: string }) {
             setDecide(null)
             openDecide()
           },
+        },
+        // F-PR-19: "Add a swatch" and its dialog.
+        onSwatchAdd: openSwatch,
+        swatch: {
+          onKind: (kind) => {
+            setSwatch((now) => (now ? { ...now, draft: { ...emptySwatchDraft(kind), q: now.draft.q, note: now.draft.note }, colours: null, coloursProblem: null } : now))
+            findSwatchMaterials(kind, swatch?.draft.q ?? '')
+          },
+          onFind: (q) => swatch && findSwatchMaterials(swatch.draft.kind, q),
+          onMaterial: pickSwatchMaterial,
+          onDraft: (patch) => setSwatch((now) => (now ? { ...now, draft: { ...now.draft, ...patch } } : now)),
+          onSubmit: () => void submitSwatch(),
+          onClose: () => setSwatch(null),
         },
         onShipmentCell: (shipmentId, field, value) => void patchShipment(shipmentId, field, { [field]: value }),
         onShipmentMark: (shipmentId, field) => void patchShipment(shipmentId, field, { [field]: new Date().toISOString() }),

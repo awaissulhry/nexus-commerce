@@ -613,6 +613,45 @@
     "ask": "Ask a question",
     "health": "Health",
     "waitingOn": "Waiting on",
-    "failed": "Could not load the production of this order"
+    "failed": "Could not load the production of this order",
+    "gates": {
+      "title": "Gates and dates",
+      "label": "Gates of this order",
+      "step": "Gate",
+      "state": "State",
+      "planned": "Planned",
+      "done": "Done on",
+      "review": "See what waits for you",
+      "none": "No gates or dates planned for this order yet.",
+      "states": {
+        "WAITING_YOU": "Waiting on you",
+        "WAITING_US": "Waiting on us",
+        "PASSED": "Passed",
+        "STARTED_BEFORE": "Started before approval"
+      }
+    },
+    "approvals": {
+      "label": "Your material approvals",
+      "material": "Material",
+      "sent": "Sent",
+      "answered": "Answered on",
+      "states": {
+        "WAITING_YOU": "Waiting on you",
+        "APPROVED": "Approved",
+        "APPROVED_WITH_COMMENTS": "Approved with comments",
+        "REFUSED": "Refused"
+      }
+    },
+    "planned": {
+      "label": "Our production days",
+      "cutStart": "Cutting starts",
+      "sewStart": "Sewing starts",
+      "finish": "Production ends",
+      "hint": "From our published production plan; these days may still move.",
+      "none": "No production days in our plan yet."
+    },
+    "pieces": {
+      "oneSize": "Made to measure"
+    }
   }
 }

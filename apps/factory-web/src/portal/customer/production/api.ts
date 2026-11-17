@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { BRAND_HEALTHS, HEALTH_REASON_CODES } from '@nexus/factory-domain/production-brand/health'
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels'
-import { BRAND_GATE_KINDS, BRAND_HOLD_READS } from '@nexus/factory-domain/production-brand/portal-read'
+import { APPROVAL_STATES, BRAND_GATE_KINDS, BRAND_GATE_STATES, BRAND_HOLD_READS } from '@nexus/factory-domain/production-brand/portal-read'
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
 import { BRAND_URGENCIES, URGENCY_BATCH_MAX, URGENCY_OUTCOMES } from '@nexus/factory-domain/production-brand/urgency'
 import { BRAND_SIDES } from '@nexus/factory-domain/production-brand/waiting'
@@ -154,6 +154,35 @@ export async function downloadProduction(api: ApiClient, query: { chip: Producti
 // ── one order's production (F-PR-12a: order › Status & progress) ─────────────────────────────────────────────────────────
 const stageFigures = { ordered: z.number(), cut: z.number().nullable(), sewn: z.number().nullable(), inspected: z.number().nullable(), packed: z.number().nullable() }
 
+// ---- F-PR-12b: the sections of + Progress (per line and size) and + Gates & dates (real gates, swatch answers, the published
+// plan's days), as B-PR-18's order read writes them (modules/production/brand-portal/contract.ts `progress`, `gates`).
+export { APPROVAL_STATES, BRAND_GATE_KINDS, BRAND_GATE_STATES }
+export type BrandGateKind = (typeof BRAND_GATE_KINDS)[number]
+export type BrandGateState = (typeof BRAND_GATE_STATES)[number]
+export type ApprovalState = (typeof APPROVAL_STATES)[number]
+
+const progressLine = z.object({
+  lineId: z.string(),
+  seq: z.number(),
+  style: named.nullable(),
+  colourway: named.nullable(),
+  ...stageFigures,
+  /** Its sizes in the scale's order; a size-less piece (made to measure) has no size. */
+  sizes: z.array(z.object({ size: z.string().nullable(), ...stageFigures })),
+})
+export type ProductionProgressLine = z.infer<typeof progressLine>
+
+const gatesSection = z.object({
+  /** Its real gates (PP sample, size set, sample, leather, trims, lab), in reading order; never one of the office's own. */
+  gates: z.array(z.object({ kind: z.enum(BRAND_GATE_KINDS), words, state: z.enum(BRAND_GATE_STATES), targetDate: z.string().nullable(), doneOn: z.string().nullable() })),
+  /** Its swatch answers (colour, leather, fabric, trims): approvals, not gates. */
+  approvals: z.array(z.object({ kind: z.string(), words, state: z.enum(APPROVAL_STATES), sentOn: z.string().nullable(), answeredOn: z.string().nullable() })),
+  /** Its own work's days in the PUBLISHED plan only (never the working plan, a line or a load). */
+  planned: z.object({ cutStart: z.string().nullable(), sewStart: z.string().nullable(), finish: z.string().nullable() }),
+})
+export type ProductionGates = z.infer<typeof gatesSection>
+// ---- end F-PR-12b
+
 export const productionOrderSchema = z.object({
   asOf: z.string(),
   ...levelFields,
@@ -187,11 +216,13 @@ export const productionOrderSchema = z.object({
     .object({
       asOf: z.string(),
       refreshSeconds: z.number(),
-      lines: z.array(z.object({ lineId: z.string(), seq: z.number(), ...stageFigures })),
+      lines: z.array(progressLine), // F-PR-12b: per line and size
       whole: z.object(stageFigures),
       percent: z.number().nullable(),
     })
     .nullable(),
+  /** + Gates & dates (F-PR-12b); null or absent: its level does not share them (not drawn). The states are drawn in the web's words. */
+  gates: gatesSection.nullable().optional(),
   live,
 })
 export type ProductionOrder = z.infer<typeof productionOrderSchema>
