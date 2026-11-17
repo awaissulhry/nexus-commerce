@@ -481,6 +481,13 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   productionCounts`); null without portal.production.view. A source may declare `live` events: the Home's `live.events` adds
   those of every shown source (production: brand_production.stage_reached | health_changed | urgency_changed | hold_changed,
   each reaching only its own party through PARTNER_LIVE_EVENTS). PG test `portal/home/production-home.pg.vitest.test.ts`.
+- B-PR-31 (production plan §6 L15, R-51; PW-P07, PW-15, PW-18): `portal/notifications/rules/production.ts` tells a customer of its
+  OWN production — stage reached (never the first), at risk / late (worse only), on hold / resumed (the keeper's cause via the
+  envelope's causationId), our set back / lock / unlock (by FACTORY, not asked, switch on; one notice per act, "and N more"), a
+  problem it reported answered (or "in the conversation of your order N"); `rules/change-requests.ts` every ask kind's answer and
+  our counter-offer (`order_change_request.countered`). Decisions pure in factory-domain `production-brand/notices.ts`; words
+  `portal.production.*`, topic PRODUCTION (daily by default). Readers: portal.home.view + salesOrders.view + production.view.
+  PG test `portal/notifications/production-notices.pg.vitest.test.ts`.
 
 ## Supplier orders in the portal (`src/modules/purchasing/portal-orders/`, B-W2b-174; SCM-094, SCM-086; Owner answers C2, P2)
 - Partner routes (in purchasing's routes.ts/manifest.ts; `portal.purchaseOrders.view`, scope party, no grain): `GET
