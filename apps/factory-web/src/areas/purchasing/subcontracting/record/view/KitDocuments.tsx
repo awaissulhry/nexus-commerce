@@ -14,13 +14,14 @@ import type { SubcontractOrder } from '../../api'
 import type { SubcontractRecordActions, SubcontractRecordModel } from '../record-model'
 
 /**
- * Documents (design rec documents; tabs job-sheet and ddt): the job sheet — a print page opened in a new tab, printed (or
- * saved as a PDF by the browser) and sent with the kit, with no price on it — and each kit DDT for work on our behalf
- * (DPR 472/1996: number and date kept 10 years, never changed; a mistake is annulled, its number stays): open its PDF,
- * print it again when the stored PDF is missing, annul it (its number typed). The live DDT shows inline in the DS PDF
- * viewer. The workshop's terms and invoices come with W2b and the supplier invoices (B-W2a-62).
+ * The kit's documents (design rec documents; tabs job-sheet and ddt), the second half of "Kit & documents" (B-TH-263: the old
+ * Documents tab merged into Kit sent — the job sheet travels with the kit, the kit DDTs are its papers): the job sheet — a print
+ * page opened in a new tab, printed (or saved as a PDF by the browser) and sent with the kit, with no price on it — and each kit DDT
+ * for work on our behalf (DPR 472/1996: number and date kept 10 years, never changed; a mistake is annulled, its number stays): open
+ * its PDF, show it here, print it again when the stored PDF is missing, annul it (its number typed). The live DDT shows inline in
+ * the DS PDF viewer. The workshop's terms and invoices come with W2b and the supplier invoices (B-W2a-62).
  */
-export function DocumentsTab({ order, model, actions }: { order: SubcontractOrder; model: SubcontractRecordModel; actions?: SubcontractRecordActions }) {
+export function KitDocuments({ order, model, actions }: { order: SubcontractOrder; model: SubcontractRecordModel; actions?: SubcontractRecordActions }) {
   const t = useT('subcontract-order')
   const shell = useT('shell')
   const locale = useLocale()
@@ -29,7 +30,10 @@ export function DocumentsTab({ order, model, actions }: { order: SubcontractOrde
   const pdf = model.pdf
   const shown = pdf ? order.ddts.find((ddt) => ddt.id === pdf.ddtId) ?? null : null
   return (
-    <div className="fw-by-stack">
+    <section className="fw-by-stack" aria-labelledby="fw-sco-docs-title">
+      <h3 id="fw-sco-docs-title" className="fw-by-h3">
+        {t('docs.title')}
+      </h3>
       <div className="fw-sco-docs">
         <div className="fw-sco-doc">
           <FileRow name={t('docs.jobSheet.name', { number: order.number })} status={t('docs.jobSheet.status')} />
@@ -105,6 +109,6 @@ export function DocumentsTab({ order, model, actions }: { order: SubcontractOrde
         </Card>
       )}
       <p className="fw-by-hint">{t('docs.later')}</p>
-    </div>
+    </section>
   )
 }

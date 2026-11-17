@@ -10,7 +10,7 @@ import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { readFromStore, storeUrl } from '../../../../record-panels/store'
 import { findMaterials, getMaterial } from '../../../_shared/buying/api'
 import { todayIn } from '../../../_shared/buying/model'
-import { useCoalesced, useLive, useThreadDock } from '../../../_shared/buying/hooks'
+import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { listLocations, stockOverview } from '../../../_shared/stock/api'
 import {
   actOn,
@@ -72,6 +72,9 @@ import { BalanceTab } from '../depth/BalanceTab'
 import { CostTab } from '../depth/CostTab'
 import { depthCan } from '../depth/model'
 import { TermsLink } from '../depth/TermsLink'
+// ---- B-TH-263: the docked thread on the subcontract order (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 const TIME_ZONE = 'Europe/Rome'
 
@@ -112,7 +115,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const [marks, setMarks] = useState<Record<string, SaveMark>>({})
   const [pdf, setPdf] = useState<DdtPdf | null>(null)
   const dialogKey = useRef<string | null>(null)
-  const { dockOpen, toggleDock } = useThreadDock('SubcontractOrder')
   const today = todayIn(TIME_ZONE)
 
   const setDialog = useCallback((next: RecordDialog | null) => {
@@ -460,10 +462,10 @@ function RecordContainer({ orderId }: { orderId: string }) {
     [api, can.files],
   )
 
-  // Documents: the live kit DDT inline, once per DDT.
+  // Kit & documents (B-TH-263, the old Documents tab): the live kit DDT inline, once per DDT.
   const liveId = order.status === 'ready' ? (liveDdt(order.value)?.id ?? null) : null
   useEffect(() => {
-    if (tab === 'documents' && liveId && can.files && pdf?.ddtId !== liveId) void showPdf(liveId)
+    if (tab === 'kit' && liveId && can.files && pdf?.ddtId !== liveId) void showPdf(liveId)
     // Only when the tab or the live DDT changes.
   }, [tab, liveId])
 
@@ -530,21 +532,22 @@ function RecordContainer({ orderId }: { orderId: string }) {
           : tab === 'cost'
             ? { cost: <CostTab order={order.value} can={deep} timeZone={TIME_ZONE} onChanged={() => void load()} /> }
             : undefined
-  const model: SubcontractRecordModel = { prefix, can, tab, order, live, dockOpen, changed, notice, busy, dialog, dialogProblem, marks, pdf, timeZone: TIME_ZONE, today, workshop, depth }
+  const model: SubcontractRecordModel = { prefix, can, tab, order, live, personId: session.user.id /* B-TH-263 */, changed, notice, busy, dialog, dialogProblem, marks, pdf, timeZone: TIME_ZONE, today, workshop, depth }
 
-  const panels =
-    order.status === 'ready' && (tab === 'activity' || dockOpen) ? (
-      <RecordPanels record={{ type: 'SubcontractOrder', id: order.value.id, companyId: order.value.companyId, siteId: order.value.site.id }} title={order.value.number} party={{ id: order.value.workshop.id, name: order.value.workshop.name, emails: [] }} />
-    ) : null
+  // B-TH-263: the docked thread (Head with Activity's doors, files line, Files view, feed, box), the order's own workshop only; the
+  // print view keeps the panels' print form.
+  const value = order.status === 'ready' ? order.value : null
+  const record = value ? { type: 'SubcontractOrder', id: value.id, companyId: value.companyId, siteId: value.site.id } : null
+  const title = value ? `${value.number} · ${value.workshop.name}` : ''
 
   return (
     <SubcontractRecordView
       model={model}
-      panels={panels}
+      thread={value && record ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.number} party={{ id: value.workshop.id, name: value.workshop.name }} partyRole="supplier" printHref={printHref(pathname, params?.toString() ?? '')} /> : null}
+      printThread={value && record ? <RecordPanels record={record} title={title} party={{ id: value.workshop.id, name: value.workshop.name, emails: [] }} /> : null}
       actions={{
         onRetry: () => void load(),
         onReload: () => void load(),
-        onDock: toggleDock,
         onDismissNotice: () => setNotice(null),
         onDialog: (next) => {
           if (!next) setDialogProblem(null)
