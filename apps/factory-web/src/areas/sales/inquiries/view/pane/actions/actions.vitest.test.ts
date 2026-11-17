@@ -189,6 +189,8 @@ describe('B-TH-234 — decline in words, Not an order, Ask the customer for…',
     expect(taskRefusal('REQUEST_CLOSED')).toEqual({ key: 'task.refusal.REQUEST_CLOSED' })
     expect(taskRefusal('SOMETHING')).toBeNull()
     for (const key of ['task.refusal.REQUEST_PROSPECT', 'task.refusal.REQUEST_CLOSED', 'pane.action.task', 'pane.action.notAnOrder', 'task.kind.SEND_MEASUREMENTS']) expect(words[key], key).toBeTruthy()
+    // A request its customer withdrew says so (never "lost" by us).
+    expect(paneActions({ ...VIEW, status: 'WITHDRAWN' }, owner, false).outcome).toEqual({ key: 'pane.outcome.withdrawn' })
   })
 })
 // ---- end B-TH-234

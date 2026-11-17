@@ -814,7 +814,8 @@
       "declined": "Rifiutata · {reason}",
       "lost": "Persa: il cliente non è andato avanti",
       "ordered": "Ordinata: diventata un ordine",
-      "orderedStatus": "Ordinata · {order} {status}"
+      "orderedStatus": "Ordinata · {order} {status}",
+      "withdrawn": "Ritirata dal cliente prima della nostra risposta"
     },
     "ask": {
       "portal": "Chiedi a {customer}: la domanda va nel suo portale (riceve l'avviso del portale per e-mail). La richiesta poi aspetta la risposta.",

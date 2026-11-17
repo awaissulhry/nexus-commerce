@@ -68,7 +68,9 @@ export function paneActions(view: InquiryView, can: InquiriesCan, offline: boole
               view.order
               ? { key: 'pane.outcome.orderedStatus', params: { order: view.order.number, status: `orderStatus.${view.order.status}` } }
               : { key: 'pane.outcome.ordered' }
-            : { key: 'pane.outcome.lost' }
+            : view.status === 'WITHDRAWN' // B-TH-234 (on B-TH-090/095): the customer withdrew it, never "lost" by us
+              ? { key: 'pane.outcome.withdrawn' }
+              : { key: 'pane.outcome.lost' }
     return { main: null, others: [], held, outcome, menu: [] }
   }
   // The main button follows the request: something to quote → Make quote; nothing that can go on a quote yet (no line with a

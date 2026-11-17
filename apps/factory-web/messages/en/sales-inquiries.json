@@ -814,7 +814,8 @@
       "declined": "Declined · {reason}",
       "lost": "Lost: the customer went away",
       "ordered": "Ordered: made into an order",
-      "orderedStatus": "Ordered · {order} {status}"
+      "orderedStatus": "Ordered · {order} {status}",
+      "withdrawn": "Withdrawn by the customer before we answered"
     },
     "ask": {
       "portal": "Ask {customer}: your question goes to their portal (they get the portal's notice by e-mail). The request then waits for their answer.",
