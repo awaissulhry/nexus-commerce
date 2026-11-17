@@ -1,0 +1,195 @@
+/*
+ * The request written like an e-mail (B-TH-220): layout only, semantic design-system tokens only. The compose fills the
+ * page's width (no page max-width: Owner rule 2026-10-29); from 1280 px a side column of about a third holds what the page
+ * puts beside it ("Your open requests"), so a 1920 screen has no dead space. Send sits at the compose's foot, sticky on a
+ * phone (above the portal's bottom bar, which is outside the scrolling page).
+ */
+
+.fw-rqc {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .fw-rqc.fw-rqc-with-aside {
+    grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  }
+  .fw-rqc-aside {
+    position: sticky;
+    top: var(--nds-space-16);
+  }
+}
+
+.fw-rqc-main,
+.fw-rqc-aside,
+.fw-rqc-card,
+.fw-rqc-details-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-rqc-card {
+  gap: var(--nds-space-14);
+}
+
+/* ── Goes to ── */
+.fw-rqc-to {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+  padding-bottom: var(--nds-space-12);
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-rqc-to-label {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.fw-rqc-to-value {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+  overflow-wrap: anywhere;
+}
+
+.fw-rqc-to-why,
+.fw-rqc-quiet,
+.fw-rqc-kept {
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.fw-rqc-quiet {
+  margin: 0;
+}
+
+.fw-rqc-message {
+  min-height: 240px;
+  line-height: 1.55;
+}
+
+.fw-rqc-keptrow {
+  min-height: 20px;
+  margin-top: calc(-1 * var(--nds-space-8));
+}
+
+.fw-rqc-kept {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+.fw-rqc-kept.is-warning {
+  color: var(--nds-warning-text);
+}
+
+/* ── files: held until the virus scanner runs (dashed = held, design kit §1.1) ── */
+.fw-rqc-files {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+  padding: var(--nds-space-12) var(--nds-space-16);
+  border: 1px dashed var(--nds-border-strong);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+}
+
+.fw-rqc-files > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.fw-rqc-files-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-rqc-files-title {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+/* ── Add details (optional) ── */
+.fw-rqc-details-summary {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-12);
+}
+
+.fw-rqc-details-sum {
+  font-weight: var(--nds-font-weight-normal);
+  color: var(--nds-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.fw-rqc-details-body {
+  padding-top: var(--nds-space-8);
+}
+
+.fw-rqc-details-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+}
+
+@media (min-width: 900px) {
+  .fw-rqc-details-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.fw-rqc-inline {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}
+
+.fw-rqc-failed {
+  margin: 0;
+  color: var(--nds-danger-text);
+  font-weight: var(--nds-font-weight-medium);
+}
+
+/* ── Send ── */
+.fw-rqc-send {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--nds-space-12);
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+@media (max-width: 719px) {
+  /* Above the portal's bottom bar (fixed over the scrolling page: 56 px and the safe area). */
+  .fw-rqc-send {
+    position: sticky;
+    bottom: calc(56px + env(safe-area-inset-bottom));
+    z-index: 1;
+    margin: 0 calc(-1 * var(--nds-space-16)) calc(-1 * var(--nds-space-16));
+    padding: var(--nds-space-12) var(--nds-space-16);
+    background: var(--nds-surface);
+  }
+  .fw-rqc-send > * {
+    flex: 1 1 0;
+  }
+}
+
+.fw-rqc-kept > svg {
+  flex: 0 0 auto;
+}

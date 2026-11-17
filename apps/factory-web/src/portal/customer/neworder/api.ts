@@ -165,7 +165,8 @@ export const takeTodaysPrices = (api: ApiClient, id: string, version: number, id
 export const discardDraft = (api: ApiClient, id: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<{ discarded: true }> =>
   api.request('DELETE', path(id), { query: { version }, schema: z.object({ discarded: z.literal(true) }), idempotencyKey })
 
-export const sentSchema = recordSchema.extend({ sent: z.object({ number: z.string(), confirmBy: z.string().nullable() }) })
+// B-TH-220 (with B-TH-041): no answer-time promise on either door: the send's answer no longer reads a confirm-by day.
+export const sentSchema = recordSchema.extend({ sent: z.object({ number: z.string() }) })
 export type SentRecord = z.infer<typeof sentSchema>
 export const sendDraft = (api: ApiClient, id: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<SentRecord> =>
   api.post(`${path(id)}/send`, { body: { version }, schema: sentSchema, idempotencyKey })
