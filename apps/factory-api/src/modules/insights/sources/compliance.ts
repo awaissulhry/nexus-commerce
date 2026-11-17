@@ -12,6 +12,7 @@ import { readEntries } from '../../compliance/register/store'
 import { traceOf } from '../../compliance/register/trace'
 import { styleCompliance } from '../../product/compliance/read'
 import { CHECK_LIMIT, SOURCE_LIMIT, type Source } from './common'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-37
 
 /**
  * Compliance (B-W1-43 PPE register, B-W1-20 style compliance): open register entries whose duties the law asks now are
@@ -54,15 +55,17 @@ export const registerDuty: Source = async ({ caller, viewer }) =>
 /** STYLE_COMPLIANCE: released styles with open demand whose compliance check BLOCKS something. */
 export const styleHold: Source = async ({ caller, viewer }) => {
   const demand = await caller.withClient(async (db) => {
-    const companies = scopeWhere(viewer.actor, CERTIFICATES_VIEW, { company: 'companyId' })
+    // B-PR-37 (the brand wall): the demand of the customers the viewer reaches — their orders (the order's customer) and their
+    // work orders (B-PR-03's workOrderWhere) — so a style's counts never mix in another customer's.
+    const orders = scopeWhere(viewer.actor, CERTIFICATES_VIEW, { company: 'companyId', party: 'partyId' })
     const lines = await db.salesOrderLine.findMany({
-      where: { order: { AND: [companies as Prisma.SalesOrderWhereInput, { status: { in: [...OPEN_STATUSES] } }] } },
+      where: { order: { AND: [orders as Prisma.SalesOrderWhereInput, { status: { in: [...OPEN_STATUSES] } }] } },
       distinct: ['styleId', 'orderId'],
       take: SOURCE_LIMIT * 5,
       select: { styleId: true, orderId: true },
     })
     const workOrders = await db.workOrder.findMany({
-      where: { AND: [companies as Prisma.WorkOrderWhereInput, { status: { in: ['DRAFT', 'RELEASED', 'IN_PROGRESS'] } }] },
+      where: { AND: [workOrderWhere(viewer.actor, CERTIFICATES_VIEW), { status: { in: ['DRAFT', 'RELEASED', 'IN_PROGRESS'] } }] },
       take: SOURCE_LIMIT * 5,
       select: { id: true, styleId: true },
     })

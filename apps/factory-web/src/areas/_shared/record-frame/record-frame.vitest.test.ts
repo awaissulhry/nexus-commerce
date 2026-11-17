@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest'
 import { CATALOGUE } from '../../../lib/i18n/messages'
 import { render, textOf } from '../../../lib/record-thread/parts/testing'
 import { arrivalOf, DOCK_COLUMNS, DOCK_FROM, dockWidth, FRAME_KEYS, frameMode, isThreadKey, PHONE_BELOW, THIRD_BELOW, threadPixels } from './model'
+// B-TH-229 / B-TH-230
+import { threadButtonWords } from './model'
 import { RecordFrame } from './RecordFrame'
 import { RecordNotices } from './RecordNotices'
 
@@ -45,6 +47,12 @@ describe('every old address keeps working (R-8)', () => {
     expect(arrivalOf(null)).toEqual({ openThread: false, door: null })
   })
 
+  // B-TH-230: a list's New messages cell opens the record with its thread (at "New since your last visit", B-TH-229).
+  it('?thread=new (the New messages cell) opens the thread, nothing else', () => {
+    expect(arrivalOf('?thread=new')).toEqual({ openThread: true, door: null })
+    expect(arrivalOf('?thread=open')).toEqual({ openThread: false, door: null })
+  })
+
   it('⌘J / Ctrl J toggles the thread, never with Alt or Shift', () => {
     const key = (more: Partial<{ key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean }>) => ({ key: 'j', metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...more })
     expect(isThreadKey(key({ metaKey: true }))).toBe(true)
@@ -53,6 +61,21 @@ describe('every old address keeps working (R-8)', () => {
     expect(isThreadKey(key({}))).toBe(false)
   })
 })
+
+// ---- B-TH-229: the band's "Thread · 2 new" (the same number as the Head's "2 new") ----------------------------------------------
+describe('B-TH-229 — the band says how many messages are new to the reader', () => {
+  it('"Thread", "Thread · 2 new", "Thread · 99+ new"; the screen reader hears the count', () => {
+    expect(threadButtonWords(0)).toEqual({ key: 'thread.button', label: null })
+    expect(threadButtonWords(2)).toEqual({ key: 'thread.buttonNew', count: 2, label: { key: 'thread.buttonNewLabel', count: 2 } })
+    expect(threadButtonWords(140)).toMatchObject({ key: 'thread.buttonMany', count: 99 })
+    const en = CATALOGUE.en['record-frame']!
+    const it = CATALOGUE.it['record-frame']!
+    expect(en['thread.buttonNew_other']).toBe('Thread · {count} new')
+    expect(en['thread.buttonNewLabel_other']).toBe('Thread, {count} new messages')
+    expect(it['thread.buttonNew_other']).toBe('Conversazione · {count} nuovi')
+  })
+})
+// ---- end B-TH-229
 
 describe('the frame on the page', () => {
   const band = { back: createElement('a', { href: '/w/demo/sales/orders' }, 'Orders'), title: 'SO-2026-0101 · Brand Alpha', status: createElement('span', null, 'In production'), meta: createElement('span', null, 'From Q-2026-0101') }

@@ -195,7 +195,8 @@
     "right": "Needs the sales permission ({right})",
     "offline": "Offline — this waits until the connection is back",
     "offlineKept": "Offline — your changes are kept on this page",
-    "notNow": "Not possible for this request now"
+    "notNow": "Not possible for this request now",
+    "needs": "Needs the right to {right}"
   },
   "right": {
     "sales": {
@@ -212,6 +213,14 @@
     },
     "files": {
       "upload": "add files"
+    },
+    "orders": {
+      "manage": "make orders"
+    },
+    "product": {
+      "styles": {
+        "manage": "make styles"
+      }
     }
   },
   "refusal": {
@@ -301,7 +310,16 @@
     "quoteWarnings_other": "{quote} made from {number}: {count} things to check on the quote",
     "openQuote": "Open {quote}",
     "askInfoPortal": "Asked {customer} in the portal: {number} waits for their answer (Need info); it resumes when they answer",
-    "askInfoMail": "Asked {customer} by e-mail: {number} waits for their answer (Need info); it resumes when they answer"
+    "askInfoMail": "Asked {customer} by e-mail: {number} waits for their answer (Need info); it resumes when they answer",
+    "orderConfirmed": "{order} made from {number} and confirmed",
+    "orderCredit": "{order} made from {number}: it waits for approval — the customer is over its credit limit or on a credit hold",
+    "orderApproval": "{order} made from {number}: it waits for approval — an approval rule for orders asks for a yes first",
+    "openOrder": "Open {order}",
+    "filesCarried_one": "{count} file of the request went with it",
+    "filesCarried_other": "{count} files of the request went with it",
+    "fileNotCarried": "{name} did not go with it: {reason}",
+    "styleDraft": "Style draft {style} made from {number}; the request stays open",
+    "openStyle": "Open {style}"
   },
   "closed": {
     "quoted": "Quoted as {quote} on {when}",
@@ -612,8 +630,8 @@
     "customer": "Open the customer {name}",
     "files": "Open the files of {number}",
     "quote": "Open quote {number}",
-    "parties": "Needs the customers right (parties.view)",
-    "quotes": "Needs the quotes right (quotes.view)"
+    "parties": "Needs the customers right",
+    "quotes": "Needs the quotes right"
   },
   "funnel": {
     "state": "Show only: {status}",
@@ -707,14 +725,19 @@
       "lines": "Lines",
       "packVersion": "Version {version}",
       "madeFrom": "Made from it",
-      "nothingMade": "Nothing made from it yet"
+      "nothingMade": "Nothing made from it yet",
+      "madeOrder": "Order {order} · {status}",
+      "madeStyle": "Style draft {code} · {name} · {status}",
+      "madeQuote": "Quote"
     },
     "action": {
       "quote": "Make quote",
       "askInfo": "Ask for info",
       "decline": "Decline",
       "match": "Match to a customer…",
-      "matchHint": "Pick or make the customer; then replies are possible"
+      "matchHint": "Pick or make the customer; then replies are possible",
+      "order": "Make order",
+      "styleDraft": "Make style draft"
     },
     "held": {
       "prospect": "Make the customer first: replies need a customer record"
@@ -724,11 +747,94 @@
       "quoted": "Quoted · {quote}",
       "declined": "Declined · {reason}",
       "lost": "Lost: the customer went away",
-      "ordered": "Ordered: made into an order"
+      "ordered": "Ordered: made into an order",
+      "orderedStatus": "Ordered · {order} {status}"
     },
     "ask": {
       "portal": "Ask {customer}: your question goes to their portal (they get the portal's notice by e-mail). The request then waits for their answer.",
       "mail": "Ask {customer}: your question goes by e-mail from the request after the send check. The request then waits for their answer."
+    }
+  },
+  "orderStatus": {
+    "CONFIRMED": "Confirmed",
+    "IN_PRODUCTION": "In production",
+    "READY": "Ready",
+    "PARTLY_SHIPPED": "Partly shipped",
+    "SHIPPED": "Shipped",
+    "CLOSED": "Closed",
+    "CANCELLED": "Cancelled",
+    "PENDING_APPROVAL": "Waiting for approval",
+    "DELIVERED": "Delivered"
+  },
+  "styleStatus": {
+    "DRAFT": "Draft",
+    "ACTIVE": "Active",
+    "ARCHIVED": "Archived"
+  },
+  "order": {
+    "title": "Make order",
+    "go": "Make order",
+    "customer": "Customer",
+    "contact": "Contact",
+    "promise": "Promise date",
+    "promiseHint": "The wanted date while it is ahead; change it if needed",
+    "customerRef": "Their PO",
+    "customerRefHint": "Required when the customer's terms ask for one",
+    "lines_one": "{count} line goes on the order",
+    "lines_other": "{count} lines go on the order",
+    "linesLabel": "The lines of the order",
+    "col": {
+      "n": "Line",
+      "style": "Style · colourway",
+      "pieces": "Pieces",
+      "price": "Unit price"
+    },
+    "pricePlaceholder": "List price",
+    "priceHint": "Blank: the customer's list price. A price the customer was shown is filled in.",
+    "priceHidden": "Prices: the customer's list price (your role does not see prices).",
+    "files_one": "{count} file of the request",
+    "files_other": "{count} files of the request",
+    "carry": "Copy the request's files to the order (shared as they are now)",
+    "noFiles": "The request has no files.",
+    "checks": "The order goes through the normal checks: a customer on hold, its PO where the terms ask for one, minimum quantities, the deposit, the credit limit and the approval rules. It comes out Confirmed, or Waiting for approval — the receipt says which.",
+    "closes": "The request closes as Ordered and names the order.",
+    "badPrice": "Line {n}: the price is not a number",
+    "poRequired": "This customer's terms ask for their PO number on every order: type it here."
+  },
+  "styleDraft": {
+    "title": "Make style draft",
+    "go": "Make style draft",
+    "code": "Style code",
+    "codeHint": "1 to 24 capital letters or digits, with . _ - inside",
+    "name": "Name",
+    "nameHint": "From the request's first line; change it as you like",
+    "type": "Product type",
+    "typeChoose": "Choose…",
+    "types": {
+      "JACKET": "Jacket",
+      "TROUSERS": "Trousers",
+      "SUIT": "Suit",
+      "GLOVES": "Gloves",
+      "VEST": "Vest",
+      "OTHER": "Other"
+    },
+    "scale": "Size scale",
+    "scaleHint": "The style's sizes come from this scale",
+    "scalesLoading": "Reading the size scales…",
+    "scalesFailed": "The size scales could not be read: close and try again",
+    "season": "Season",
+    "seasonHint": "Optional, for example SS27",
+    "brand": "Brand (the label on the garment)",
+    "brandValue": "{customer} — the request's own customer",
+    "files_one": "{count} file to carry",
+    "files_other": "{count} files to carry",
+    "noFiles": "The request has no files.",
+    "released": "A style needs a released version and an active colourway before an order takes it: Make order stays held until the request's lines name it.",
+    "stays": "The request stays open (In progress) and names the draft.",
+    "held": {
+      "code": "Type a style code: 1 to 24 capital letters or digits",
+      "type": "Choose the product type",
+      "scale": "Choose the size scale"
     }
   }
 }

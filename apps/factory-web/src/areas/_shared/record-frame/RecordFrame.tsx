@@ -15,6 +15,8 @@ import type { DockWidth } from '../../../lib/record-thread/head/model'
 import { useThreadWidth } from '../../../lib/record-thread/head/use-thread-width'
 import { usePrintMode } from '../../../shell/print/print-mode'
 import { arrivalOf, DOCK_COLUMNS, DOCK_FROM, dockWidth, FRAME_KEYS, frameMode, isThreadKey, PHONE_BELOW, type FrameMode } from './model'
+// B-TH-229: "Thread · 2 new".
+import { threadButtonWords } from './model'
 import './record-frame.css'
 
 export const FRAME_NS = 'record-frame'
@@ -64,6 +66,8 @@ export interface RecordFrameState {
   /** The door the address asked for on arrival (`panel=approvals`), once; the thread clears it. */
   readonly door: 'approve' | null
   readonly clearDoor: () => void
+  /** B-TH-229: the thread tells the band how many messages are new to the reader ("Thread · 2 new"). */
+  readonly reportNew?: (count: number) => void
 }
 
 const FrameContext = createContext<RecordFrameState | null>(null)
@@ -159,6 +163,8 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
   const [details, setDetails] = useState(false)
   const [keys, setKeys] = useState(false)
   const [door, setDoor] = useState<'approve' | null>(null)
+  // B-TH-229 (band-F05, PL1-F04): the reader's own new messages, as the docked thread read them.
+  const [fresh, setFresh] = useState(0)
   const before = useRef<DockWidth>('forty')
   const scrollKept = useRef<number | null>(null)
 
@@ -172,6 +178,7 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
     const next = new URLSearchParams(window.location.search)
     if (next.get('tab') === 'activity') next.delete('tab')
     next.delete('panel')
+    if (next.get(THREAD_PARAM) === 'new') next.delete(THREAD_PARAM) // B-TH-230: the New messages cell's door
     if (!window.matchMedia(`(min-width: ${DOCK_FROM}px)`).matches) next.set(THREAD_PARAM, 'open')
     else sizes.show()
     window.history.replaceState(null, '', `${window.location.pathname}${next.size > 0 ? `?${next.toString()}` : ''}${window.location.hash}`)
@@ -303,14 +310,25 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
   }, [])
 
   const state = useMemo<RecordFrameState>(
-    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null) }),
+    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh }),
     [mode, width, phone, choose, closeView, door],
   )
 
+  const buttonWords = threadButtonWords(fresh) // B-TH-229
   const threadButton = hasThread ? (
     // The tonal tint says "open" (aria-pressed for screen readers); not `active`, whose primary hover would darken the tonal words.
-    <Button size="sm" variant={open ? 'tonal' : 'secondary'} aria-pressed={open} aria-controls={dockId} aria-keyshortcuts="Meta+J Control+J" onClick={toggle} title={t(mode === 'docked' ? 'thread.hintDocked' : 'thread.hintView')}>
-      <MessageSquare size={14} aria-hidden /> <span>{t('thread.button')}</span>
+    <Button
+      size="sm"
+      variant={open ? 'tonal' : 'secondary'}
+      aria-pressed={open}
+      aria-controls={dockId}
+      aria-keyshortcuts="Meta+J Control+J"
+      aria-label={buttonWords.label ? t(buttonWords.label.key, { count: buttonWords.label.count }) : undefined}
+      onClick={toggle}
+      title={t(mode === 'docked' ? 'thread.hintDocked' : 'thread.hintView')}
+    >
+      {/* B-TH-229: "Thread · 2 new" (99+ above 99), the same number as the thread's Head. */}
+      <MessageSquare size={14} aria-hidden /> <span>{t(buttonWords.key, buttonWords.count === undefined ? undefined : { count: buttonWords.count })}</span>
       <span className="fw-rcf-keys" aria-hidden>
         <Kbd>⌘</Kbd>
         <Kbd>J</Kbd>

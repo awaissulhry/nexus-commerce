@@ -33,6 +33,11 @@ export interface FeedModel {
   runOpen?: boolean
   openIds?: readonly string[]
   newCount?: number
+  // ---- B-TH-229: the reader's own reading on arrival (B-TH-027): the line "New since your last visit" above the first new
+  // message, the read ones folded, the feed opening there; the count is the Head's "2 new".
+  firstNewId?: string | null
+  newSince?: number
+  // ---- end B-TH-229
 }
 
 export interface FeedActions extends CardActions {
@@ -40,6 +45,8 @@ export interface FeedActions extends CardActions {
   onOlder?: () => void
   /** "Try again" after the thread could not be read. */
   onReload?: () => void
+  /** B-TH-229: the newest message that was on screen for a second (the container marks the thread read up to it, T1-F04). */
+  onSeen?: (messageId: string) => void
 }
 
 /**
@@ -63,23 +70,71 @@ export function Feed({ model, actions, remind }: { model: FeedModel; actions?: F
   const keptFromBottom = useRef<number | null>(null)
 
   const rows = useMemo(
-    () => (model.state === 'ready' ? feedRows({ messages: model.messages, events: model.events, openIds, anchorId: model.context.anchorId ?? null, runOpen }) : []),
-    [model.state, model.messages, model.events, openIds, model.context.anchorId, runOpen],
+    () => (model.state === 'ready' ? feedRows({ messages: model.messages, events: model.events, openIds, anchorId: model.context.anchorId ?? null, runOpen, firstNewId: model.firstNewId ?? null, newCount: model.newSince ?? 0 }) : []),
+    [model.state, model.messages, model.events, openIds, model.context.anchorId, runOpen, model.firstNewId, model.newSince],
   )
   const today = dayOf(model.now)
 
-  // The first read: open at the newest message, or at the message a link names (unfolded and focused).
+  // The first read: open at the message a link names (unfolded and focused), else at the line "New since your last visit"
+  // (B-TH-229, T4-F01), else at the newest message. New messages below the screen wait behind the bar.
   const opened = useRef(false)
   useLayoutEffect(() => {
     const feed = feedRef.current
     if (!feed || opened.current || model.state !== 'ready') return
     opened.current = true
     const anchor = model.context.anchorId ? feed.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(model.context.anchorId)}"]`) : null
+    const line = feed.querySelector<HTMLElement>('[data-feed-new]')
     if (anchor) {
       anchor.scrollIntoView({ block: 'center' })
       anchor.focus({ preventScroll: true })
+    } else if (line) {
+      feed.scrollTop = Math.max(0, feed.scrollTop + line.getBoundingClientRect().top - feed.getBoundingClientRect().top - 8)
+      atBottom.current = feed.scrollHeight - feed.scrollTop - feed.clientHeight < 48
+      if (!atBottom.current) setNewCount(model.newSince ?? 0)
     } else feed.scrollTop = feed.scrollHeight
-  }, [model.state, model.context.anchorId, rows])
+  }, [model.state, model.context.anchorId, model.newSince, rows])
+
+  // B-TH-229 (T1-F04): what the person has seen — the newest message on screen for a second while the page is in view — goes to
+  // the container, which marks the thread read up to it (forward only, once). Never a "seen by" list: the mark is the reader's own.
+  const onSeen = actions?.onSeen
+  useEffect(() => {
+    const feed = feedRef.current
+    if (!feed || model.state !== 'ready' || !onSeen || typeof IntersectionObserver === 'undefined') return
+    const visible = new Set<string>()
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const flush = () => {
+      timer = null
+      if (document.visibilityState !== 'visible') return
+      let best = -1
+      for (const id of visible) best = Math.max(best, ids.indexOf(id))
+      if (best >= 0) onSeen(ids[best])
+    }
+    const later = () => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(flush, 1_000)
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const id = (entry.target as HTMLElement).dataset.messageId
+          if (!id) continue
+          const tall = entry.rootBounds ? entry.intersectionRect.height >= entry.rootBounds.height * 0.6 : false
+          if (entry.isIntersecting && (entry.intersectionRatio >= 0.6 || tall)) visible.add(id)
+          else visible.delete(id)
+        }
+        later()
+      },
+      { root: feed, threshold: [0, 0.6, 1] },
+    )
+    for (const element of feed.querySelectorAll<HTMLElement>('[data-message-id]')) observer.observe(element)
+    const onVisible = () => document.visibilityState === 'visible' && later()
+    document.addEventListener('visibilitychange', onVisible)
+    return () => {
+      observer.disconnect()
+      document.removeEventListener('visibilitychange', onVisible)
+      if (timer) clearTimeout(timer)
+    }
+  }, [model.state, rows, ids, onSeen])
 
   // Live: a page of older messages keeps the reader where they were; new messages at the end follow the reader at the bottom,
   // and otherwise wait behind the bar. A message the reader is sending always shows.
@@ -286,6 +341,14 @@ function Row({
     return (
       <p className="fw-rt-day" title={t('day.zone')}>
         <span>{word.kind === 'date' ? word.text : t(`day.${word.kind}`)}</span>
+      </p>
+    )
+  }
+  if (row.kind === 'new') {
+    // B-TH-229 (T4-F04): one line above the first new message; 200+ new says so.
+    return (
+      <p className="fw-rt-newline" data-feed-new="" role="separator" aria-label={t('unread.line', { count: row.count })}>
+        <span>{row.count > 200 ? t('unread.lineMany') : t('unread.line', { count: row.count })}</span>
       </p>
     )
   }

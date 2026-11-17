@@ -34,6 +34,8 @@ import { makersOf } from '../final/store'
 import { activeHoldsOf } from './checks'
 import { placerMayReleaseOf } from './settings'
 import { holdReasonWords, HOLD_COLUMNS, holdView, readHold, readSubjects, viewFactsOf, type HoldRow, type Reader, type Subject } from './store'
+// B-PR-06 (the brand wall): a hold names the customers of the goods it holds.
+import { customersOf, NO_CUSTOMER, reachesCustomers, reachesHold } from '../wall'
 // B-W2b-289 (SCM-179): the site's default quality place when none is named.
 import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
 
@@ -86,8 +88,9 @@ export const refuse = (problems: readonly Issue[], words: string): never => {
 export async function visibleHold(caller: CommandCaller, holdId: string, permission: typeof QUALITY_HOLDS_VIEW | typeof QUALITY_HOLDS_PLACE | typeof QUALITY_HOLDS_RELEASE): Promise<HoldRow> {
   const context = officeOf(caller)
   const row = await caller.withClient((client) => readHold(client, holdId))
-  if (!row || !can(actorOf(context), QUALITY_HOLDS_VIEW, { companyId: row.companyId, siteId: row.siteId })) throw new NotFoundError('Hold not found.')
-  if (!can(actorOf(context), permission, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError()
+  // B-PR-06 (the brand wall): and every customer of the goods it holds (another customer's hold is not found, as an unknown one).
+  if (!row || !(await caller.withClient((client) => reachesHold(client, actorOf(context), QUALITY_HOLDS_VIEW, row)))) throw new NotFoundError('Hold not found.')
+  if (!(await caller.withClient((client) => reachesHold(client, actorOf(context), permission, row)))) throw new ForbiddenError()
   return row
 }
 
@@ -243,7 +246,16 @@ export async function placeHoldInCommand(tools: CommandTools, input: PlaceHoldIn
   if (problems.length > 0) refuse(problems, 'The hold is not valid.')
 
   // What it holds: rows of one site, each holdable now.
-  const subjects = await readSubjects(tx, input.subjectType, input.subjectIds)
+  const read = await readSubjects(tx, input.subjectType, input.subjectIds)
+  // B-PR-06 (the brand wall): goods of a customer the office person does not reach (where they place holds) are as unknown
+  // ones, never named; another company's or site's goods keep their own refusal below.
+  const customers = context.audience === 'office' ? await customersOf(tx, read.map((subject) => ({ type: input.subjectType, id: subject.id }))) : null
+  const walled = (subject: Subject): boolean => {
+    if (customers === null) return false
+    const actor = actorOf(context as OfficeContext)
+    return can(actor, QUALITY_HOLDS_PLACE, { companyId: subject.companyId, siteId: subject.siteId }) && !reachesCustomers(actor, QUALITY_HOLDS_PLACE, subject, customers.get(`${input.subjectType}:${subject.id}`) ?? NO_CUSTOMER)
+  }
+  const subjects = read.filter((subject) => !walled(subject))
   const byId = new Map(subjects.map((subject) => [subject.id, subject]))
   const missing = input.subjectIds.map((id, index) => ({ id, index })).filter((entry) => !byId.has(entry.id))
   if (missing.length > 0) refuse(missing.map((entry) => ({ path: `body/subjectIds/${entry.index}`, message: `Not a ${input.subjectType === 'GarmentSerial' ? 'garment serial' : input.subjectType.replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase()} of the factory.` })), 'Some of these records are not found.')

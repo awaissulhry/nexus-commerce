@@ -1,0 +1,12 @@
+{
+  "column": "Nuovi messaggi",
+  "columnHint": "I tuoi nuovi messaggi sul record da quando hai letto la sua conversazione. Un clic apre la conversazione al primo nuovo.",
+  "cell": {
+    "count_one": "{count} nuovo",
+    "count_other": "{count} nuovi",
+    "many": "99+ nuovi",
+    "none": "Nessun messaggio nuovo",
+    "label_one": "{count} messaggio nuovo su {record}: apri la conversazione al primo nuovo",
+    "label_other": "{count} messaggi nuovi su {record}: apri la conversazione al primo nuovo"
+  }
+}

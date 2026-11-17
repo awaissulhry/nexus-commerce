@@ -261,8 +261,9 @@ export function RecordChain({ order, model }: { order: Order; model: OrderRecord
     {
       key: 'quote',
       label: t('chain.quote'),
-      value: order.chain.quote ? t('chain.quoteValue', { number: order.chain.quote.number, revision: order.chain.quote.revision }) : t('chain.noQuote'),
-      href: order.chain.quote && model.can.viewQuotes ? `${model.prefix}/sales/quotes/${order.chain.quote.id}` : null,
+      // B-TH-228: an order made straight from a request names the request (no quote between); "—" while that is read.
+      value: order.chain.quote ? t('chain.quoteValue', { number: order.chain.quote.number, revision: order.chain.quote.revision }) : model.madeFrom ? t('chain.fromRequest', { number: model.madeFrom.number }) : model.madeFromReading ? '—' : t('chain.noQuote'),
+      href: order.chain.quote && model.can.viewQuotes ? `${model.prefix}/sales/quotes/${order.chain.quote.id}` : !order.chain.quote && model.madeFrom ? `${model.prefix}/sales/incoming/${encodeURIComponent(model.madeFrom.id)}` : null,
     },
     { key: 'order', label: t('chain.order'), value: t(`status.${order.status}`), href: null },
     { key: 'deposit', label: t('chain.deposit'), value: t(`gate.state.${deposit.state}`), href: `${record}?tab=shipments` /* B-TH-214 */ },

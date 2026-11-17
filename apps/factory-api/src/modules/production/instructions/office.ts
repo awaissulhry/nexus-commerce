@@ -20,6 +20,7 @@ import {
   officeOf,
   operationsOf,
   readInstruction,
+  reachedStyles, // B-PR-37
   readVersion,
   revisionsOf,
   statusOf,
@@ -69,11 +70,17 @@ async function seenCounts(db: Db, versionIds: readonly string[]): Promise<Map<st
   return new Map([...seen].map(([versionId, workers]) => [versionId, workers.size]))
 }
 
-/** The released revisions whose routing does the operation (where a "for every style" instruction is used). */
-async function revisionsUsing(db: Db, operationIds: readonly string[]): Promise<Map<string, string[]>> {
+/**
+ * The released revisions whose routing does the operation (where a "for every style" instruction is used). B-PR-37 (the brand
+ * wall): only of the styles whose brand the caller reaches at the instruction's company — another customer's private label is
+ * neither named nor counted; our own collection is everyone's.
+ */
+async function revisionsUsing(db: Db, context: OfficeContext, companyId: string | null, operationIds: readonly string[]): Promise<Map<string, string[]>> {
   if (operationIds.length === 0) return new Map()
   const steps = await db.routingOperation.findMany({ where: { operationId: { in: [...new Set(operationIds)] } }, select: { operationId: true, revisionId: true } })
-  const released = new Set((await db.styleRevision.findMany({ where: { id: { in: [...new Set(steps.map((row) => row.revisionId))] }, status: 'RELEASED' }, select: { id: true } })).map((row) => row.id))
+  const releasedRows = await db.styleRevision.findMany({ where: { id: { in: [...new Set(steps.map((row) => row.revisionId))] }, status: 'RELEASED' }, select: { id: true, styleId: true } })
+  const reached = await reachedStyles(db, context, companyId, releasedRows.map((row) => row.styleId)) // B-PR-37
+  const released = new Set(releasedRows.filter((row) => reached.has(row.styleId)).map((row) => row.id))
   const used = new Map<string, Set<string>>()
   for (const step of steps) if (released.has(step.revisionId)) used.set(step.operationId, (used.get(step.operationId) ?? new Set()).add(step.revisionId))
   return new Map([...used].map(([operationId, revisions]) => [operationId, [...revisions]]))
@@ -123,7 +130,7 @@ export async function listInstructions(caller: CommandCaller, query: ListQuery) 
     const seen = await seenCounts(db, currentIds)
     const operations = await operationsOf(db, shown.map((row) => row.operationId))
     const revisions = await revisionsOf(db, shown.map((row) => row.styleRevisionId))
-    const used = await revisionsUsing(db, shown.filter((row) => row.styleRevisionId === null).map((row) => row.operationId))
+    const used = await revisionsUsing(db, context, context.companyId ?? null, shown.filter((row) => row.styleRevisionId === null).map((row) => row.operationId))
     const languagesByCompany = new Map<string, string[]>()
     for (const companyId of new Set(shown.map((row) => row.companyId))) languagesByCompany.set(companyId, await floorLanguagesOf(db, companyId))
     const counts = { active: 0, archived: 0, drafts: drafts.size }
@@ -213,7 +220,7 @@ export async function recordIn(db: Db, context: OfficeContext, instructionId: st
   const operation = (await operationsOf(db, [instruction.operationId])).get(instruction.operationId)
   const revisions = await revisionsOf(db, [instruction.styleRevisionId])
   const settings = await settingsOf(db, { routingOperationId: null, operationId: instruction.operationId })
-  const used = instruction.styleRevisionId ? [instruction.styleRevisionId] : ((await revisionsUsing(db, [instruction.operationId])).get(instruction.operationId) ?? [])
+  const used = instruction.styleRevisionId ? [instruction.styleRevisionId] : ((await revisionsUsing(db, context, instruction.companyId, [instruction.operationId])).get(instruction.operationId) ?? [])
   const usedRevisions = await revisionsOf(db, used.slice(0, 50))
   const current = versions.find((row) => row.status === 'PUBLISHED') ?? null
   const draft = versions.find((row) => row.status === 'DRAFT') ?? null

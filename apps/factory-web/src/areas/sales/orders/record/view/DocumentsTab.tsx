@@ -45,7 +45,8 @@ export function DocumentsTab({ order, model, actions }: { order: Order; model: O
           )}
         </div>
         {!quote ? (
-          <EmptyState title={t('docs.noQuote.title')} description={t('docs.noQuote.body')} />
+          // B-TH-228: an order made straight from a request says so (never "Typed by the office").
+          <EmptyState title={model.madeFrom ? t('docs.fromRequest.title', { number: model.madeFrom.number }) : t('docs.noQuote.title')} description={t('docs.noQuote.body')} />
         ) : !model.versions ? (
           <p className="fw-so-hint">{t('docs.noQuoteRight', { number: quote.number, revision: quote.revision })}</p>
         ) : model.versions.value === null ? (

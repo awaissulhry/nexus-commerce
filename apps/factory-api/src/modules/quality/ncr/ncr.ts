@@ -57,6 +57,8 @@ import {
   type NcrRow,
   type Reader,
 } from './store'
+// B-PR-06 (the brand wall): an NCR names the customers of what it is about.
+import { reachesNcr } from '../wall'
 
 /**
  * Nonconformances: raise, change, move on the board, close, cancel, link (B-W2a-47; QHS-080 from anywhere, QHS-081
@@ -120,8 +122,9 @@ export class StageRefusedError extends ConflictError {
 export async function visibleNcr(caller: CommandCaller, ncrId: string, permission?: Permission): Promise<{ context: OfficeContext; row: NcrRow }> {
   const context = officeOf(caller)
   const row = await caller.withClient((client) => readNcr(client, ncrId))
-  if (!row || !may(context, QUALITY_NCR_VIEW, row)) throw new NotFoundError('NCR not found.')
-  if (permission && !may(context, permission, row)) throw new ForbiddenError("This needs a right your role does not hold at the NCR's site.")
+  // B-PR-06 (the brand wall): and every customer it names (another customer's NCR is not found, as an unknown one).
+  if (!row || !(await caller.withClient((client) => reachesNcr(client, actorOf(context), QUALITY_NCR_VIEW, row.id, row)))) throw new NotFoundError('NCR not found.')
+  if (permission && !(await caller.withClient((client) => reachesNcr(client, actorOf(context), permission, row.id, row)))) throw new ForbiddenError("This needs a right your role does not hold at the NCR's site.")
   return { context, row }
 }
 

@@ -3,7 +3,12 @@
     "button": "Conversazione",
     "hintDocked": "Mostra o nascondi la conversazione accanto al record (⌘J)",
     "hintView": "Apri la conversazione (⌘J); Indietro torna alla stessa scheda",
-    "back": "Torna al record"
+    "back": "Torna al record",
+    "buttonNew_one": "Conversazione · {count} nuovo",
+    "buttonNew_other": "Conversazione · {count} nuovi",
+    "buttonMany": "Conversazione · 99+ nuovi",
+    "buttonNewLabel_one": "Conversazione, {count} messaggio nuovo",
+    "buttonNewLabel_other": "Conversazione, {count} messaggi nuovi"
   },
   "more": "Altre azioni",
   "details": {

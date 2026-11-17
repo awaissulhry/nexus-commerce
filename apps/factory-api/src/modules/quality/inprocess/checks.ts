@@ -28,7 +28,7 @@ import { customersOf, aqlPlanFor } from '../aql/chain'
 import { chipsOf, contentOfCheck, readChecks } from '../plans/store'
 // B-W2b-101's work-order lock (`factory.inprocess-check|tenant|<work order>`): a person here and a rule there never open two checks of one run at once.
 import { lockWorkOrderChecks } from '../triggers/open'
-import { assertOn, checkerOf, postedBy, refuse, signerOf, systemOf, type Checker } from './access'
+import { assertOn, checkerOf, mayOn, mayOnWork, postedBy, refuse, signerOf, systemOf, workOrderReachFor, type Checker } from './access'
 import { firstPieceRows, kindOf, lockRun, outcomeOf, readCheck, readLine, readOperationsOf, readResults, readWorkOrder, statusOf, type CheckRow, type LineRow, type Reader, type WorkOrderRow } from './store'
 import { checkViewOf } from './views'
 // B-W2b-GF5 (G361): W1's maker rule (the final inspection's): who made garments of the work order never signs for it.
@@ -123,7 +123,13 @@ async function whereOf(caller: CommandCaller, context: Checker, body: OpenBody):
     if (problems.length > 0) throw invalid('Say what the check is about.', problems)
     const owner = workOrder ?? line!
     if (workOrder && line && line.siteId !== workOrder.siteId) throw invalid('The line is of another site than the work order.', [{ path: 'lineId', message: 'The line is of another site than the work order.' }])
-    assertOn(context, QUALITY_INPROCESS_VIEW, QUALITY_INPROCESS_RECORD, owner, workOrder ? 'Work order' : 'Line')
+    // B-PR-06 (the brand wall): another customer's work order (or its bundle) is as an unknown one.
+    const reach = workOrder ? await workOrderReachFor(db, workOrder.id) : null
+    if (workOrder && (mayOn(context, QUALITY_INPROCESS_VIEW, workOrder) || mayOn(context, QUALITY_INPROCESS_RECORD, workOrder)) && !(mayOnWork(context, QUALITY_INPROCESS_VIEW, workOrder, reach) || mayOnWork(context, QUALITY_INPROCESS_RECORD, workOrder, reach))) {
+      if (bundle && !body.workOrderId) throw invalid('Not a bundle of this site.', [{ path: body.bundleId ? 'bundleId' : 'bundleCode', message: 'Not a bundle of this site.' }])
+      throw invalid('Work order not found.', [{ path: 'workOrderId', message: 'Work order not found.' }])
+    }
+    assertOn(context, QUALITY_INPROCESS_VIEW, QUALITY_INPROCESS_RECORD, owner, workOrder ? 'Work order' : 'Line', reach)
     if (place.workOrderOperationId) {
       const operations = await readOperationsOf(db, [workOrder!.id])
       if (!operations.some((operation) => operation.id === place.workOrderOperationId)) throw invalid('Not an operation of this work order.', [{ path: 'workOrderOperationId', message: 'Not an operation of this work order.' }])
@@ -351,7 +357,8 @@ export function assertOpen(row: Pick<CheckRow, 'status'>): void {
 export async function checkFor(caller: CommandCaller, context: Checker, checkId: string): Promise<CheckRow> {
   const row = await caller.withClient((db) => readCheck(db, checkId))
   if (!row) throw new NotFoundError('Check not found.')
-  assertOn(context, QUALITY_INPROCESS_VIEW, QUALITY_INPROCESS_RECORD, row, 'Check')
+  // B-PR-06: a check on a work order also needs its customer (another customer's check is not found).
+  assertOn(context, QUALITY_INPROCESS_VIEW, QUALITY_INPROCESS_RECORD, row, 'Check', await caller.withClient((db) => workOrderReachFor(db, row.workOrderId)))
   return row
 }
 

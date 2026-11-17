@@ -1,6 +1,5 @@
 import type { Prisma } from '@nexus/factory-db'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permissions'
 import { SUBSTITUTION_LIMITS, SUBSTITUTION_STATUSES, type SubstitutionStatus } from '@nexus/factory-domain/inventory/substitutions/rules'
@@ -9,6 +8,7 @@ import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { mayAt, officeContextOf } from '../ledger/access'
 import { readSubstitution, substitutionViews, SUBSTITUTION_COLUMNS } from './store'
+import { reachesWorkOrder, workOrderWhere } from '../../production/work-orders/scope' // B-PR-37
 
 /**
  * The office's reads of substitutes (B-W2b-298; design warehouse.picking pk-metrics "Substitutes waiting for approval (W2b)",
@@ -26,7 +26,8 @@ export interface ListQuery {
 
 export async function listSubstitutions(caller: CommandCaller, query: ListQuery) {
   const context = officeContextOf(caller)
-  const scope = scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput
+  // B-PR-37 (the brand wall): B-PR-03's workOrderWhere — the substitutes of the customers' work orders the person reaches.
+  const scope = workOrderWhere(actorOf(context), INVENTORY_STOCK_VIEW)
   return caller.withClient(async (db) => {
     const orders = await db.workOrder.findMany({ where: { AND: [scope, query.siteId ? { siteId: query.siteId } : {}, query.workOrderId ? { id: query.workOrderId } : {}] }, select: { id: true } })
     const ids = orders.map((row) => row.id)
@@ -49,8 +50,9 @@ export async function substitutionRecord(caller: CommandCaller, substitutionId: 
   const context = officeContextOf(caller)
   return caller.withClient(async (db) => {
     const row = await readSubstitution(db, substitutionId)
-    const header = row ? await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { companyId: true, siteId: true } }) : null
-    if (!row || !header || !mayAt(context, INVENTORY_STOCK_VIEW, header)) throw new NotFoundError('Substitute not found.')
+    const header = row ? await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { companyId: true, siteId: true, partyId: true } }) : null
+    // B-PR-37: and its work order's customer (another customer's substitute is not found, as an unknown one).
+    if (!row || !header || !mayAt(context, INVENTORY_STOCK_VIEW, header) || !reachesWorkOrder(actorOf(context), INVENTORY_STOCK_VIEW, header)) throw new NotFoundError('Substitute not found.')
     const [view] = await substitutionViews(db, [row])
     const task = row.approvalTaskId
       ? await db.approvalTask.findUnique({ where: { id: row.approvalTaskId }, select: { id: true, status: true, approverRoleId: true, approverUserId: true, signatureMeaning: true, dueAt: true, decidedAt: true, rejectReasonCode: true, rejectReason: true } })

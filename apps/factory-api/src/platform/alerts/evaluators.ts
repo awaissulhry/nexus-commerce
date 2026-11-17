@@ -11,6 +11,8 @@ import type { CommandTx } from '../../core/command'
 import { ddtDeadlines } from '../../modules/invoicing/from-shipment/deadlines'
 import { invoicedOf, readDdts, shippedOf } from '../../modules/invoicing/from-shipment/store'
 import { readSubjects } from '../../modules/quality/holds/store'
+// B-PR-37 (the brand wall): the customers of the goods a hold holds.
+import { holdCustomersOf } from '../../modules/quality/wall'
 // B-W2b-42: a site's people close to or over a working-time limit.
 import { workingTimeFindings } from '../../modules/people/limits/warnings'
 // B-W2b-314: a material below its planning minimum at a site.
@@ -100,6 +102,23 @@ async function holdLabel(tx: CommandTx, subjectType: string, subjectIds: readonl
   return subjectIds.length > 1 ? `${head} +${subjectIds.length - 1}` : head
 }
 
+// ── B-PR-37 (production plan §2, the brand wall outside Production) ─────────────────────────────────────────────────────
+/**
+ * The party of an alert about customer goods that no single customer owns — goods of several customers, or a work order of no
+ * customer (mixed before the rule): a fixed id that is no party's. Alerts' party column is nullable ("every party": a null
+ * party reaches everyone), so such an alert takes this marker instead: only a person whose grant reaches EVERY customer sees
+ * it in the Alerts inbox and gets its bell (scopeWhere / can() / roleReaches find it in no customer list).
+ */
+export const EVERY_PARTY_MARKER = 'ffffffff-ffff-8fff-bfff-ffffffffffff'
+
+/**
+ * An alert takes its place when it is raised and never changes it (engine.ts, the Alert guard). So the alert of customer
+ * goods carries its customer in its key too: an open alert raised before (or of goods whose customers changed) no longer
+ * matches, is cleared, and the alert is raised again with its customer. Goods of no customer keep their key.
+ */
+const customerKey = (partyId: string | null): string | null => (partyId === null ? null : partyId === EVERY_PARTY_MARKER ? 'customer-every' : `customer-${partyId}`)
+// ── end B-PR-37 ────────────────────────────────────────────────────────────────────────────────────────────────────────
+
 /** HOLD_TOO_LONG: quality holds still ACTIVE N hours after they were placed. */
 const holdTooLong: Find = async (tx, rule, now, only) => {
   const { hours } = thresholdOf('HOLD_TOO_LONG', rule.threshold) as { hours: number }
@@ -110,12 +129,17 @@ const holdTooLong: Find = async (tx, rule, now, only) => {
     select: { id: true, companyId: true, siteId: true, subjectType: true, subjectIds: true, reasonCode: true, placedAt: true },
   })
   const findings: Finding[] = []
+  // B-PR-37: the hold's customer (none: a lot, a hide; one: it; several, or a work order of none: every customer only).
+  const customers = await holdCustomersOf(tx, rows)
   for (const row of rows) {
+    const held = customers.get(row.id)
+    const partyId = !held || (held.parties.length === 0 && !held.unnamed) ? null : held.parties.length === 1 && !held.unnamed ? held.parties[0]! : EVERY_PARTY_MARKER
     findings.push({
       recordType: 'QualityHold',
       recordId: row.id,
+      subKey: customerKey(partyId),
       label: await holdLabel(tx, row.subjectType, row.subjectIds),
-      scope: { companyId: row.companyId, siteId: row.siteId, partyId: null },
+      scope: { companyId: row.companyId, siteId: row.siteId, partyId },
       facts: { hours: Math.floor((now.getTime() - row.placedAt.getTime()) / HOUR), threshold: hours, subjectType: row.subjectType, subjects: row.subjectIds.length, reasonCode: row.reasonCode, placedAt: row.placedAt.toISOString() },
     })
   }
@@ -132,16 +156,19 @@ const materialShort: Find = async (tx, rule, _now, only) => {
   })
   const ids = [...new Set(exceptions.map((row) => row.recordId).filter((id): id is string => id !== null))]
   if (ids.length === 0) return []
-  const orders = await tx.workOrder.findMany({ where: { id: { in: ids }, status: { in: ['RELEASED', 'IN_PROGRESS'] } }, select: { id: true, number: true, companyId: true, siteId: true } })
+  const orders = await tx.workOrder.findMany({ where: { id: { in: ids }, status: { in: ['RELEASED', 'IN_PROGRESS'] } }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true } })
   const itemIds = [...new Set(exceptions.map((row) => row.itemId).filter((id): id is string => id !== null))]
   const items = new Map((itemIds.length ? await tx.item.findMany({ where: { id: { in: itemIds } }, select: { id: true, code: true } }) : []).map((item) => [item.id, item.code]))
   return orders.map((order) => {
     const short = [...new Set(exceptions.filter((row) => row.recordId === order.id && row.itemId).map((row) => items.get(row.itemId!) ?? ''))].filter(Boolean).sort()
+    // B-PR-37: the work order's customer (none, or mixed before the rule: every customer only).
+    const partyId = order.partyId ?? EVERY_PARTY_MARKER
     return {
       recordType: 'WorkOrder',
       recordId: order.id,
+      subKey: customerKey(partyId),
       label: order.number,
-      scope: { companyId: order.companyId, siteId: order.siteId, partyId: null },
+      scope: { companyId: order.companyId, siteId: order.siteId, partyId },
       facts: { item: short.slice(0, 3).join(', ') + (short.length > 3 ? ` +${short.length - 3}` : ''), materials: short.length },
     }
   })

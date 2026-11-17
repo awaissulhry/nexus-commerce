@@ -22,6 +22,10 @@ import {
   loseInquiry,
   messageCustomer,
   quoteInquiry,
+  // B-TH-228
+  listScales,
+  orderInquiry,
+  styleDraftInquiry,
   readInquiry,
   readStyle,
   resumeInquiry,
@@ -34,6 +38,12 @@ import {
 import {
   emptyDecline,
   fieldLines,
+  // B-TH-228
+  orderBodyOf,
+  orderDonePhrase,
+  orderDraftOf,
+  styleDraftBodyOf,
+  styleDraftOf,
   inquiriesCan,
   leftOutPhrases,
   messageReach,
@@ -345,6 +355,15 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
       else if (verb === 'decline') setDialog({ kind: 'decline', draft: emptyDecline, busy: false, notice: null })
       else if (verb === 'lost') setDialog({ kind: 'lost', note: '', busy: false, notice: null })
       else if (verb === 'quote') setDialog({ kind: 'quote', customerRef: '', busy: false, notice: null })
+      // ---- B-TH-228: Make order (the request's lines, prices, date and PO), Make style draft (the scales of the request's company)
+      else if (verb === 'order') setDialog({ kind: 'order', draft: orderDraftOf(now, can), busy: false, notice: null })
+      else if (verb === 'styleDraft') {
+        setDialog({ kind: 'styleDraft', draft: styleDraftOf(now), scales: { status: 'loading' }, busy: false, notice: null })
+        listScales(api, now.companyId)
+          .then((value) => setDialog((open) => (open?.kind === 'styleDraft' ? { ...open, scales: { status: 'ready', value } } : open)))
+          .catch((error: unknown) => setDialog((open) => (open?.kind === 'styleDraft' ? { ...open, scales: { status: 'error', problem: readProblem(error) } } : open)))
+      }
+      // ---- end B-TH-228
       else if (verb === 'askInfo') {
         // B-TH-218: the box switches to the reply with the question; the pane says where it goes.
         setAsk({ token: Date.now(), question: '', portal: now.source === 'PORTAL' })
@@ -352,7 +371,7 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
       }
       else void runSimple(verb)
     },
-    [readPeople, runSimple],
+    [readPeople, runSimple, can, api],
   )
 
   // A row's verb from the list, once the inquiry is read.
@@ -410,6 +429,35 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
       } else if (dialog.kind === 'lost') {
         const value = await loseInquiry(api, now.id, { version: now.version, note: dialog.note.trim() }, verbKey.current)
         after(value, { key: 'done.lost', params: { number: value.number }, tone: 'success' }, true)
+      } else if (dialog.kind === 'order') {
+        // ---- B-TH-228: the order's own state in words (never "confirmed" while it waits), the files carried and those that were not.
+        const made = await orderInquiry(api, now.id, orderBodyOf(now, dialog.draft, can), verbKey.current)
+        const carried = made.files.carried.length
+        after(
+          made.inquiry,
+          {
+            ...orderDonePhrase(made, made.inquiry.number),
+            tone: made.order.status === 'CONFIRMED' && made.files.notCarried.length === 0 ? 'success' : 'warning',
+            link: can.ordersView ? { href: `${prefix}/sales/orders/${encodeURIComponent(made.order.id)}`, label: { key: 'done.openOrder', params: { order: made.order.number } } } : null,
+            lines: [...(carried > 0 ? [{ key: 'done.filesCarried', params: { count: carried } }] : []), ...made.files.notCarried.map((file) => ({ key: 'done.fileNotCarried', params: { name: file.name, reason: file.reason } }))],
+          },
+          true,
+        )
+      } else if (dialog.kind === 'styleDraft') {
+        // ---- B-TH-228: the draft opens in a new tab from the receipt; the request stays open (and in the list).
+        const made = await styleDraftInquiry(api, now.id, styleDraftBodyOf(now, dialog.draft), verbKey.current)
+        after(
+          made.inquiry,
+          {
+            key: 'done.styleDraft',
+            params: { style: made.style.code, number: made.inquiry.number },
+            tone: made.files.notCarried.length === 0 ? 'success' : 'warning',
+            link: can.styles ? { href: `${prefix}/products/styles/${encodeURIComponent(made.style.id)}`, label: { key: 'done.openStyle', params: { style: made.style.code } } } : null,
+            lines: [...(made.files.carried.length > 0 ? [{ key: 'done.filesCarried', params: { count: made.files.carried.length } }] : []), ...made.files.notCarried.map((file) => ({ key: 'done.fileNotCarried', params: { name: file.name, reason: file.reason } }))],
+          },
+          false,
+        )
+        // ---- end B-TH-228
       } else {
         const ref = dialog.customerRef.trim()
         const preview = quotePreview(now)
@@ -498,6 +546,9 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
       onDecline: (patch) => setDialog((open) => (open?.kind === 'decline' ? { ...open, draft: { ...open.draft, ...patch } } : open)),
       onLostNote: (note) => setDialog((open) => (open?.kind === 'lost' ? { ...open, note } : open)),
       onRef: (customerRef) => setDialog((open) => (open?.kind === 'quote' ? { ...open, customerRef } : open)),
+      // B-TH-228
+      onOrderDraft: (patch) => setDialog((open) => (open?.kind === 'order' ? { ...open, draft: { ...open.draft, ...patch } } : open)),
+      onStyleDraft: (patch) => setDialog((open) => (open?.kind === 'styleDraft' ? { ...open, draft: { ...open.draft, ...patch } } : open)),
       onSubmit: () => void submitDialog(),
       onClose: () => {
         verbKey.current = null
