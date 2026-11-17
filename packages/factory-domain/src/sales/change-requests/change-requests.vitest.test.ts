@@ -558,9 +558,6 @@ describe('B-PR-26: what the office may answer, the counter-offer as the customer
     expect(counterStateOf('EXPIRED')).toBe('LAPSED')
     expect(counterStateOf('WITHDRAWN')).toBe('LAPSED')
     expect(counterStateOf(null)).toBeNull()
-    // An answer we put back (B-PR-30b) stands no more: the office answers the request again.
-    expect(counterStateOf('APPROVED', true)).toBe('LAPSED')
-    expect(counterStateOf('OPEN', true)).toBe('WAITING')
     const open = officeAnswersOf({ kind: 'HOLD', status: 'OPEN' }, null)
     expect(open).toMatchObject({ accept: true, refuse: true, counter: true, waitingOn: 'US' })
     // A resume is accepted or refused, never countered (the pause is the customer's to end).

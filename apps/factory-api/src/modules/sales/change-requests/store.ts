@@ -304,14 +304,14 @@ export function requestView(row: RequestRow, cells: readonly AskedCell[], facts:
 // ---- B-PR-26 (production plan §3 "We accept, counter or refuse with words it reads", "Money"; review fix R-32): the counter --
 
 /**
- * Where each counter-offer stands, by its approval request's id (its status; an answer we put back reads LAPSED). The partner reads
- * its own party's approval requests (status and reversedAt are partner columns); the office every one it reads.
+ * Where each counter-offer stands, by its approval request's id (its status). The partner reads its own party's approval requests;
+ * the office every one it reads.
  */
 export async function readCounterStates(db: Reader, rows: readonly { readonly counterApprovalId: string | null }[]): Promise<Map<string, CounterState>> {
   const ids = [...new Set(rows.flatMap((row) => (row.counterApprovalId ? [row.counterApprovalId] : [])))]
   if (ids.length === 0) return new Map()
-  const found = await db.approvalRequest.findMany({ where: { id: { in: ids } }, select: { id: true, status: true, reversedAt: true } })
-  return new Map(found.map((row) => [row.id, counterStateOf(row.status, row.reversedAt !== null) ?? 'LAPSED']))
+  const found = await db.approvalRequest.findMany({ where: { id: { in: ids } }, select: { id: true, status: true } })
+  return new Map(found.map((row) => [row.id, counterStateOf(row.status) ?? 'LAPSED']))
 }
 
 /**

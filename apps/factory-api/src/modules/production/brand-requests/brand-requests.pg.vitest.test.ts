@@ -22,7 +22,9 @@ import { urgencyWorld, type UrgencyWorld } from '../testing/urgency-world'
  *   and      refuse with words per kind's permission (403 in words otherwise); a priced counter-offer answered only by A's buyer
  *            (the Production role reads that a price may apply, no fee); yes → Sales' accept carries it out with the counter's
  *            date; no → the request withdrawn; a lapsed counter is refused, never accepted; a batch is one group; Today routes
- *            each kind to its people; a partly shipped order is asked to cancel what is left (closed short at the answer)
+ *            each kind to its people; a partly shipped order is asked to cancel what is left (closed short at the answer);
+ *            B-PR-30a/b: a counter decided for the customer settles as their yes would; its yes is never put back (AGREED kept,
+ *            APPLIED once carried out)
  *
  * Every name, address and number is made up. Run with `node scripts/factory/run-pg-tests.mjs modules/production/brand-requests`.
  */
@@ -35,10 +37,11 @@ type Portal = Awaited<ReturnType<UrgencyWorld['portalPerson']>>
 let sales: Office
 let planner: Office
 let plannerB: Office
+let manager: Office
 let buyerA: Portal
 let productionA: Portal
 let buyerB: Portal
-const orders = {} as Record<'a1' | 'a2' | 'a3' | 'a4' | 'a5' | 'a6' | 'a7' | 'b1' | 'so1', { orderId: string; lineId: string }>
+const orders = {} as Record<'a1' | 'a2' | 'a3' | 'a4' | 'a5' | 'a6' | 'a7' | 'a8' | 'b1' | 'so1', { orderId: string; lineId: string }>
 
 const admin = <R = Json>(sql: string, values: unknown[] = []) => world.admin<R>(sql, values)
 const TODAY = () => businessDate(world.h.clock.now())
@@ -72,13 +75,14 @@ beforeAll(async () => {
   world = await urgencyWorld('pr26_brand_requests', NS)
   // Both customers' production asks open (the limits card's list); their urgency is on already (the world's).
   await admin(`UPDATE "PortalSettings" SET "productionAskKinds" = '{HOLD,RESUME,SPLIT_SHIPMENT,SAMPLE_ROUND}', version = version + 1 WHERE "partyId" = ANY($1::uuid[])`, [[world.ids.a, world.ids.b]])
-  for (const name of ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'] as const) orders[name] = await world.addOrder(world.ids.a, name.toUpperCase(), '2026-10-01')
+  for (const name of ['a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7', 'a8'] as const) orders[name] = await world.addOrder(world.ids.a, name.toUpperCase(), '2026-10-01')
   orders.b1 = await world.addOrder(world.ids.b, 'B1', '2026-10-01')
   const so1 = (await admin<{ id: string; lineId: string }>(`SELECT o.id::text AS id, l.id::text AS "lineId" FROM "SalesOrder" o JOIN "SalesOrderLine" l ON l."orderId" = o.id WHERE o."tenantId" = $1 AND o.number = 'SEED-SO-0001' ORDER BY l.seq LIMIT 1`, [world.ids.tenantId]))[0]!
   orders.so1 = { orderId: so1.id, lineId: so1.lineId }
   sales = await world.officePerson('sara.sales@pr26-office.example.com', 'sales')
   planner = await world.officePerson('piero.planner@pr26-office.example.com', 'planner')
   plannerB = await world.officePerson('bianca.planner@pr26-office.example.com', 'planner', [world.ids.b])
+  manager = await world.officePerson('marco.manager@pr26-office.example.com', 'production_manager')
   buyerA = await world.portalPerson('anna.buyer@pr26-brand-alpha.example.com', world.ids.a, ['customer-buyer', 'partner-approve'])
   productionA = await world.portalPerson('paolo.production@pr26-brand-alpha.example.com', world.ids.a, ['customer-production', 'partner-approve'])
   buyerB = await world.portalPerson('bea.buyer@pr26-brand-beta.example.com', world.ids.b, ['customer-buyer', 'partner-approve'])
@@ -289,5 +293,33 @@ describe('B-PR-26: the factory answers its customers’ requests', { timeout: SL
     // The accept closes the rest short (W2a's close of lines): an order that shipped nothing would be left empty, so it says no.
     const record = await ok(sales, `/sales/change-requests/${cancel.id}`)
     expect(record.preview).toMatchObject({ ok: false, cancel: null, problems: [{ path: 'body/lineIds', message: 'Nothing has shipped: closing every line would leave an empty order. Cancel the order instead.' }] })
+  })
+
+  it('B-PR-30a/b: a counter-offer decided for the customer settles as their yes; the yes is never put back (kept, then carried out)', async () => {
+    const cancel = await ask(buyerA, orders.a8.orderId, { kind: 'CANCEL', reasonCode: 'LEAD_TIME' })
+    const countered = await send(sales, 'POST', `/production/brand-requests/${cancel.id}/counter`, { version: 1, note: 'Made-up: we cancel it now, the fabric goes back to stock.' })
+    expect(countered.status, JSON.stringify(countered.body)).toBe(200)
+    const approvalId = countered.body.approvalRequestId as string
+    const versionOf = async () => (await admin<{ version: number }>('SELECT version FROM "ApprovalRequest" WHERE id = $1', [approvalId]))[0]!.version
+    // Decided by us for the customer (production.brand.override, a fresh code): the settle takes it as the customer's yes.
+    await manager.stepUp()
+    const decided = await send(manager, 'POST', `/approvals-out/${approvalId}/decide-for-party`, { version: await versionOf(), decision: 'APPROVED', typedName: 'Marco Manager', reason: 'Made-up: agreed with the customer on the phone.' })
+    expect(decided.status, JSON.stringify(decided.body)).toBe(200)
+    expect((await requestRow(cancel.id)).status).toBe('COUNTERED')
+    expect((await outbox('order_change_request.counter_answered')).map((row) => row.payload).find((payload) => payload.requestId === cancel.id)).toMatchObject({ answer: 'ACCEPTED' })
+    expect((await ok(sales, `/production/brand-requests/${cancel.id}`)).request).toMatchObject({ counter: { state: 'AGREED' }, may: { accept: true, refuse: false } })
+    // The yes is kept while the request waits for our accept (the database moves it on only by that accept), in words.
+    await manager.stepUp()
+    const kept = await send(manager, 'POST', `/approvals-out/${approvalId}/reverse`, { version: await versionOf(), reason: 'Made-up: put back.' })
+    expect(kept.status, JSON.stringify(kept.body)).toBe(409)
+    expect(kept.body.error.issues.at(-1).path).toBe('refusal/AGREED')
+    expect(kept.body.error.message).toMatch(/stays as it is/)
+    // Carried out by Sales' accept: the yes can no longer be put back (APPLIED, B-PR-30b's rule).
+    const accepted = await send(sales, 'POST', `/sales/change-requests/${cancel.id}/accept`, { version: (await requestRow(cancel.id)).version })
+    expect(accepted.status, JSON.stringify(accepted.body)).toBe(200)
+    await manager.stepUp()
+    const applied = await send(manager, 'POST', `/approvals-out/${approvalId}/reverse`, { version: await versionOf(), reason: 'Made-up: put back.' })
+    expect(applied.status).toBe(409)
+    expect(applied.body.error.issues.at(-1).path).toBe('refusal/APPLIED')
   })
 })

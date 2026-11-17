@@ -60,9 +60,8 @@ export const counterOfRow = (row: Pick<OfficeRequestRow, 'counterDate' | 'counte
 /** Where the request's counter stands now (null: never countered). */
 export async function counterStateIn(db: Reader, row: Pick<OfficeRequestRow, 'counterApprovalId'>): Promise<CounterState | null> {
   if (!row.counterApprovalId) return null
-  const approval = await db.approvalRequest.findUnique({ where: { id: row.counterApprovalId }, select: { status: true, reversedAt: true } })
-  // An answer we put back (B-PR-30b) stands no more: LAPSED.
-  return counterStateOf(approval?.status ?? null, (approval?.reversedAt ?? null) !== null) ?? 'LAPSED'
+  const approval = await db.approvalRequest.findUnique({ where: { id: row.counterApprovalId }, select: { status: true } })
+  return counterStateOf(approval?.status ?? null) ?? 'LAPSED'
 }
 
 /**

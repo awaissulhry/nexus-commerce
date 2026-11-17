@@ -126,11 +126,10 @@ export const COUNTER_STATES = ['WAITING', 'AGREED', 'REFUSED', 'LAPSED'] as cons
 export type CounterState = (typeof COUNTER_STATES)[number]
 
 /**
- * The counter's state from its approval request's status (null: not a status an approval has). An answer we put back
- * (B-PR-30b, `reversedAt`) stands no more: the counter reads LAPSED (the office answers the request again: it refuses it).
+ * The counter's state from its approval request's status (null: not a status an approval has). The customer's yes is not put
+ * back (B-PR-30b): once they agreed, the request is only carried out (apps/factory-api change-requests/counter-reverse).
  */
-export function counterStateOf(approvalStatus: string | null | undefined, reversed = false): CounterState | null {
-  if (reversed && (approvalStatus === 'APPROVED' || approvalStatus === 'APPROVED_WITH_CHANGES' || approvalStatus === 'REFUSED')) return 'LAPSED'
+export function counterStateOf(approvalStatus: string | null | undefined): CounterState | null {
   switch (approvalStatus) {
     case 'OPEN':
       return 'WAITING'
