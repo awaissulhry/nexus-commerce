@@ -2,7 +2,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { sessionGrants } from '@nexus/factory-domain/auth/roles/roles'
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can, type Actor } from '@nexus/factory-domain/core/permissions'
+import { can, reachesEveryParty, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PRODUCTION_REPORTS_SUBSCRIBE, PRODUCTION_REPORTS_VIEW } from '@nexus/factory-domain/production/reports/permissions'
 import { DAILY_REPORT_KEY, reportLocaleOf, subscriptionProblems, type ReportKey } from '@nexus/factory-domain/production/reports/subscriptions'
@@ -13,6 +13,7 @@ import { heldRoles } from '../../../platform/auth/roles/access'
 import type { Reader } from '../../planning/store'
 import type { ChangeSubscriptionBody, SubscribeBody } from './contract'
 import { officeContextOf, siteFor } from './daily'
+import { assertEveryParty } from '../work-orders/scope' // B-PR-07
 
 /**
  * Who gets a production report by e-mail (B-W2a-38; MES-301 "sent each morning"; design production.reports
@@ -88,6 +89,7 @@ export async function listRecipients(caller: CommandCaller, siteId: string) {
   const now = serverClock.now()
   return caller.withClient(async (db) => {
     const site = await siteFor(db, actor, PRODUCTION_REPORTS_VIEW, siteId)
+    assertEveryParty(actor, PRODUCTION_REPORTS_VIEW, { companyId: site.companyId, siteId: site.id }) // B-PR-07: the report mixes customers
     if (!can(actor, PRODUCTION_REPORTS_SUBSCRIBE, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError()
     const users = await db.user.findMany({ where: { status: 'ACTIVE' }, orderBy: [{ displayName: 'asc' }, { id: 'asc' }], take: MAX_PEOPLE, select: { id: true, displayName: true } })
     const subscribed = new Set(
@@ -96,10 +98,20 @@ export async function listRecipients(caller: CommandCaller, siteId: string) {
     const people: { id: string; name: string; me: boolean; subscribed: boolean }[] = []
     for (const user of users) {
       const reader = await readerOf(db, context.tenantId, user.id, now)
-      if (can(reader, PRODUCTION_REPORTS_VIEW, { companyId: site.companyId, siteId: site.id })) people.push({ id: user.id, name: user.displayName, me: user.id === context.actorId, subscribed: subscribed.has(user.id) })
+      if (readsDailyReport(reader, site)) people.push({ id: user.id, name: user.displayName, me: user.id === context.actorId, subscribed: subscribed.has(user.id) })
     }
     return { people: [...people.filter((person) => person.me), ...people.filter((person) => !person.me)] }
   })
+}
+
+/**
+ * B-PR-07 (production plan §2: a view that mixes brands needs access to every brand): the person reads the site's daily report,
+ * which counts every customer's work: the permission at the site, over every customer. The list of people, a subscription and
+ * each morning's mail ask it.
+ */
+export function readsDailyReport(reader: Actor, site: { readonly companyId: string; readonly id: string }): boolean {
+  const place = { companyId: site.companyId, siteId: site.id }
+  return can(reader, PRODUCTION_REPORTS_VIEW, place) && reachesEveryParty(reader, PRODUCTION_REPORTS_VIEW, place)
 }
 
 function settingsProblems(body: { readonly sendTime: string; readonly weekdays: readonly number[] }): Issue[] {
@@ -114,6 +126,7 @@ export async function subscribe(caller: CommandCaller, body: SubscribeBody, idem
   if (problems.length > 0) throw new ValidationError('The e-mail settings are not valid.', problems)
   const recipients = [...new Set(body.recipients ?? [context.actorId])]
   const site = await caller.withClient((db) => siteFor(db, actor, PRODUCTION_REPORTS_VIEW, body.siteId))
+  assertEveryParty(actor, PRODUCTION_REPORTS_VIEW, { companyId: site.companyId, siteId: site.id }) // B-PR-07: the report mixes customers
   if (recipients.some((userId) => userId !== context.actorId) && !can(actor, PRODUCTION_REPORTS_SUBSCRIBE, { companyId: site.companyId, siteId: site.id })) throw new ForbiddenError()
 
   const { result, replayed } = await command(caller, { name: 'production.subscribeReport', idempotencyKey, input: { ...body, recipients } }, async (tools) => {
@@ -127,8 +140,11 @@ export async function subscribe(caller: CommandCaller, body: SubscribeBody, idem
         refused.push({ path: `body/recipients/${index}`, message: 'Not an active person of this tenant.' })
         continue
       }
-      if (!can(await readerOf(tx, context.tenantId, userId, now), PRODUCTION_REPORTS_VIEW, { companyId: site.companyId, siteId: site.id }))
+      const reader = await readerOf(tx, context.tenantId, userId, now)
+      if (!can(reader, PRODUCTION_REPORTS_VIEW, { companyId: site.companyId, siteId: site.id }))
         refused.push({ path: `body/recipients/${index}`, message: `This person may not read the production reports of ${site.code}.` })
+      // B-PR-07: the report counts every customer's work.
+      else if (!readsDailyReport(reader, site)) refused.push({ path: `body/recipients/${index}`, message: `This person may not read the production reports of ${site.code}: the report mixes customers and needs access to every customer.` })
     }
     if (refused.length > 0) throw new ValidationError('Some people cannot get this report.', refused)
     await tx.$queryRaw`SELECT id FROM "ReportSubscription" WHERE "reportKey" = ${body.reportKey} AND "siteId" = ${site.id}::uuid AND "userId" = ANY(${recipients}::uuid[]) FOR UPDATE`

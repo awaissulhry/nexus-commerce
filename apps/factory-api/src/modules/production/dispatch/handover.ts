@@ -10,7 +10,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
-import { contextOf, floorOf, may, readerOf, refuse, type DispatchContext } from './access'
+import { assertEveryCustomer, contextOf, floorOf, may, readerOf, refuse, type DispatchContext } from './access'
 import { deviceLine } from './mine'
 import { dayColumn, dayOf, lineRowOf, siteRowOf, type LineRow, type Reader } from './store'
 import type { SiteRow } from '../../planning/store'
@@ -58,6 +58,7 @@ async function knownLine(caller: CommandCaller, context: DispatchContext, lineId
     return line ? { line, site: await siteRowOf(db, line.siteId) } : null
   })
   if (!found?.site || !may(context, permission, { companyId: found.line.companyId, siteId: found.line.siteId })) throw new NotFoundError('Line not found.')
+  assertEveryCustomer(context, permission, { companyId: found.line.companyId, siteId: found.line.siteId }) // B-PR-07
   return { line: found.line, site: found.site }
 }
 

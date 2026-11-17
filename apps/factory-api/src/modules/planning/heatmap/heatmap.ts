@@ -7,7 +7,7 @@ import { uniformBuckets, weekStart } from '@nexus/factory-domain/planning/settin
 import { amountText } from '@nexus/factory-domain/planning/subcontract-capacity/rules'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { siteFor } from '../access'
+import { everyPartySiteFor } from '../access'
 import { capacityAnswer, capacityWorld } from '../capacity/service'
 import { subcontractorWorld } from '../capacity/subcontractors'
 
@@ -25,7 +25,7 @@ import { subcontractorWorld } from '../capacity/subcontractors'
  */
 
 export async function heatmap(caller: CommandCaller, query: { readonly siteId: string; readonly from?: BusinessDate | undefined; readonly weeks?: number | undefined }) {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-07: mixes customers
   const weeks = query.weeks ?? DEFAULT_WEEKS
   if (!Number.isSafeInteger(weeks) || weeks < 1 || weeks > MAX_WEEKS) throw new ValidationError(`From 1 to ${MAX_WEEKS} weeks.`, [{ path: 'querystring/weeks', message: `At most ${MAX_WEEKS}.` }])
   const now = serverClock.now()

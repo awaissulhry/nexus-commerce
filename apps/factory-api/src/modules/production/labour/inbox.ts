@@ -5,10 +5,9 @@ import { PRODUCTION_LABOUR_VIEW } from '@nexus/factory-domain/production/labour/
 import { blockersOf, changesOf, LABOUR_LIMITS, lineDayState, readDisputeMessage, type Change, type InboxKind } from '@nexus/factory-domain/production/labour/rules'
 import { minutesOf, unusualOf } from '@nexus/factory-domain/production/offstandard/rules'
 import type { CommandCaller } from '../../../core/command'
-import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
 import { codesById, editedBlocks } from '../offstandard/store'
-import { officeOf } from './access'
+import { labourActor, officeOf } from './access'
 import type { InboxQuery } from './contract'
 import { linesInScope, openDays, reportsOf, sitesInScope } from './days'
 import { bundlesById, isoDay, lineOf, lineSources, linesById, operationsById, workOrdersById, type Reader } from './store'
@@ -49,7 +48,7 @@ const placeOf = (row: { id: string; code: string; name: string } | undefined) =>
 
 /** Every item waiting in the caller's scope (unsorted), and the line days held. */
 async function gather(db: Reader, caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly lineId?: string | undefined; readonly kind?: InboxKind | undefined }, now: Date) {
-  const actor = actorOf(officeOf(caller))
+  const actor = labourActor(officeOf(caller)) // B-PR-07: only where the caller reaches every customer
   const dayLines = await linesInScope(db, caller, query)
   const sites = await sitesInScope(db, caller, query)
   const siteIds = sites.map((site) => site.id)

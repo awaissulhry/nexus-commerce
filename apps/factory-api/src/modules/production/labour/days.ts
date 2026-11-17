@@ -21,7 +21,7 @@ import {
 import { command, StaleVersionError, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { serverClock } from '../../../core/time'
-import { officeLine, officeOf, refuse } from './access'
+import { labourActor, officeLine, officeOf, refuse } from './access'
 import type { CloseBody, DaysQuery, ReopenBody } from './contract'
 import { dayColumn, dayRange, employeesOfWorkers, isoDay, lineOf, lineSources, onLines, peopleNames, type LineRow, type Reader, type SiteRow } from './store'
 
@@ -237,7 +237,7 @@ export function dayViewOf(acc: DayFacts, names: Map<string, string>) {
 
 /** The lines of the sites the caller reaches with production.labour.view (optionally one site or one line). */
 export async function sitesInScope(db: Reader, caller: CommandCaller, query: { readonly siteId?: string | undefined }): Promise<SiteRow[]> {
-  const actor = actorOf(officeOf(caller))
+  const actor = labourActor(officeOf(caller)) // B-PR-07: only where the caller reaches every customer
   return db.site.findMany({
     where: { AND: [scopeWhere(actor, PRODUCTION_LABOUR_VIEW, { company: 'companyId', site: 'id' }) as Prisma.SiteWhereInput, query.siteId ? { id: query.siteId } : {}] },
     select: { id: true, companyId: true, code: true, name: true, timezone: true },

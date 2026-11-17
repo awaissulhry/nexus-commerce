@@ -2,7 +2,8 @@ import { ConflictError, ForbiddenError, NotFoundError, type Issue } from '@nexus
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import type { BoardRefusal } from '@nexus/factory-domain/production/boards/targets'
 import type { CommandCaller } from '../../../core/command'
-import type { FloorContext, OfficeContext } from '../../../core/context'
+import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
+import { assertEveryParty } from '../work-orders/scope'
 import { systemView } from '../scans/access'
 import { assertMay, may } from '../calls/access'
 import { lineOf, type LineRow, type Reader } from './store'
@@ -43,8 +44,20 @@ export async function knownLine(caller: CommandCaller, context: BoardContext, li
   const line = await caller.withClient((db: Reader) => lineOf(db, lineId))
   if (!line) throw new NotFoundError('Line not found.')
   assertMay(context, permission, { companyId: line.companyId, siteId: line.siteId }, 'Line')
+  assertEveryCustomer(context, permission, { companyId: line.companyId, siteId: line.siteId }) // B-PR-07
   return line
 }
+
+// ── B-PR-07 ──
+/**
+ * B-PR-07 (production plan §2: "A view that mixes brands (capacity, Line TV, daily report, board line totals) needs access to
+ * every brand"): a line's targets, its hours, the WIP heatmap and the TV count every customer's work. A person limited to some
+ * customers gets 403 in words that name none; a floor device reaches every customer of its site.
+ */
+export function assertEveryCustomer(context: BoardContext, permission: Permission, place: { readonly companyId: string; readonly siteId: string }): void {
+  assertEveryParty(actorOf(context), permission, place)
+}
+// ── end B-PR-07 ──
 
 export class BoardRefusedError extends ConflictError {
   override name = 'BoardRefusedError'

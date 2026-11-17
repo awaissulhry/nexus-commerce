@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, reachesEveryParty, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PLANNING_FIRM } from '@nexus/factory-domain/planning/mrp/permissions'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
@@ -205,6 +205,31 @@ async function workshopLoadsOf(db: Reader, rows: readonly PlannedRow[]): Promise
   return out
 }
 
+// ── B-PR-07 ──
+/**
+ * B-PR-07 (production plan §2, the brand wall): of `rows`, the planned orders `permission` reaches. A planned order is of the
+ * customer of the order lines it makes (one customer each, B-PR-03); a person of every customer at its site reaches every one;
+ * one limited to some customers reaches it only when every order line it pegs is of a customer they reach. One that makes for
+ * stock (no order line) names no customer: only with every customer, as a work order of no customer.
+ */
+export async function reachedPlanned(db: Reader, office: OfficeContext, permission: Permission, rows: readonly Pick<PlannedRow, 'id' | 'companyId' | 'siteId' | 'demand'>[]): Promise<Set<string>> {
+  const actor = actorOf(office)
+  const limited = rows.filter((row) => !reachesEveryParty(actor, permission, { companyId: row.companyId, siteId: row.siteId }))
+  const lineIds = [...new Set(limited.flatMap((row) => demandOf(row.demand).map((entry) => entry.orderLineId)))]
+  const partyOf = new Map(lineIds.length === 0 ? [] : (await db.salesOrderLine.findMany({ where: { id: { in: lineIds } }, select: { id: true, partyId: true } })).map((line) => [line.id, line.partyId]))
+  const out = new Set(rows.map((row) => row.id))
+  for (const row of limited) {
+    const demand = demandOf(row.demand)
+    const reached = demand.length > 0 && demand.every((entry) => {
+      const partyId = partyOf.get(entry.orderLineId)
+      return typeof partyId === 'string' && can(actor, permission, { companyId: row.companyId, siteId: row.siteId, partyId })
+    })
+    if (!reached) out.delete(row.id)
+  }
+  return out
+}
+// ── end B-PR-07 ──
+
 export interface ListQuery {
   readonly siteId: string
   readonly status?: PlannedOrderStatus | undefined
@@ -223,8 +248,22 @@ export async function listPlannedOrders(caller: CommandCaller, query: ListQuery)
         query.kind ? { kind: query.kind } : {},
       ],
     }
-    const rows = await db.plannedWorkOrder.findMany({ where, select: PLANNED_COLUMNS, orderBy: [{ startDate: 'asc' }, { dueDate: 'asc' }, { id: 'asc' }], take: 500 })
     const run = await latestDoneRun(db, site.id)
+    // B-PR-07: a person limited to some customers gets the planned orders of those customers, and counts of them only.
+    if (!reachesEveryParty(actorOf(office), PLANNING_VIEW, { companyId: site.companyId, siteId: site.id })) {
+      const open = await db.plannedWorkOrder.findMany({ where: { siteId: site.id, status: 'PLANNED' }, select: { id: true, companyId: true, siteId: true, demand: true, kind: true, firm: true } })
+      const reachedOpen = await reachedPlanned(db, office, PLANNING_VIEW, open)
+      const mine = open.filter((row) => reachedOpen.has(row.id))
+      const listed = await db.plannedWorkOrder.findMany({ where, select: PLANNED_COLUMNS, orderBy: [{ startDate: 'asc' }, { dueDate: 'asc' }, { id: 'asc' }] })
+      const reached = await reachedPlanned(db, office, PLANNING_VIEW, listed)
+      return {
+        siteId: site.id,
+        run: run ? { id: run.id, startedAt: toUtcIso(run.startedAt), finishedAt: run.finishedAt ? toUtcIso(run.finishedAt) : null } : null,
+        counts: { make: mine.filter((row) => row.kind === 'MAKE').length, subcontract: mine.filter((row) => row.kind === 'SUBCONTRACT').length, firm: mine.filter((row) => row.firm).length },
+        plannedOrders: await viewsOf(db, listed.filter((row) => reached.has(row.id)).slice(0, 500), office),
+      }
+    }
+    const rows = await db.plannedWorkOrder.findMany({ where, select: PLANNED_COLUMNS, orderBy: [{ startDate: 'asc' }, { dueDate: 'asc' }, { id: 'asc' }], take: 500 })
     const all = await db.plannedWorkOrder.groupBy({ by: ['kind'], where: { siteId: site.id, status: 'PLANNED' }, _count: { _all: true } })
     const firm = await db.plannedWorkOrder.count({ where: { siteId: site.id, status: 'PLANNED', firm: true } })
     return {
@@ -240,7 +279,9 @@ export async function listPlannedOrders(caller: CommandCaller, query: ListQuery)
 export async function plannedFor(caller: CommandCaller, id: string, permission: Permission = PLANNING_VIEW): Promise<PlannedRow> {
   const office = officeContextOf(caller)
   const row = isUuid(id) ? await caller.withClient((db) => readPlanned(db, id)) : null
-  assertMayAt(office, permission, row, 'Planned work order')
+  // B-PR-07: another customer's planned order is as unknown (404), for every read and write that names it.
+  const reached = row ? (await caller.withClient((db) => reachedPlanned(db, office, PLANNING_VIEW, [row]))).has(row.id) : false
+  assertMayAt(office, permission, reached ? row : null, 'Planned work order')
   return row!
 }
 

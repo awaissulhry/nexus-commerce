@@ -16,6 +16,7 @@ import { legalGateFor } from '../../people/privacy/gate'
 import { minimumGroupSizeFor } from '../../people/privacy/groups'
 import { wipFor } from '../scans/progress'
 import { officeContextOf, readDaily, siteFor, sitesFor, type ReportSite } from './daily'
+import { everyPartySites } from '../work-orders/scope' // B-PR-07
 
 /**
  * The floor overview by line (B-W2a-38; MES-160; design production.floor "Lines"; Owner answer F2), for Floor now: each
@@ -167,7 +168,8 @@ export async function linesAnswer(caller: CommandCaller, query: { readonly siteI
   const actor = actorOf(context)
   const now = serverClock.now()
   return caller.withClient(async (db) => {
-    const sites = query.siteId ? [await siteFor(db, actor, WORKORDERS_VIEW, query.siteId, context.companyId)] : await sitesFor(db, actor, WORKORDERS_VIEW, context.companyId)
+    // B-PR-07: each line's figures count every customer's work: only the sites where the caller reaches every customer.
+    const sites = everyPartySites(actor, WORKORDERS_VIEW, query.siteId ? [await siteFor(db, actor, WORKORDERS_VIEW, query.siteId, context.companyId)] : await sitesFor(db, actor, WORKORDERS_VIEW, context.companyId))
     if (query.siteId && sites.length === 0) throw new NotFoundError('Site not found.')
     const lines = []
     for (const site of sites) lines.push(...(await linesOfSite(db, site, now)))
