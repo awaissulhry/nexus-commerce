@@ -49,7 +49,7 @@ import { InquiriesMessages, isPageKey, NoAccess, NoticeLine, SourceTag, StatusPi
 import type { InquiryRecordActions, InquiryRecordModel } from '../record-model'
 import { joined, PictureCell, PictureViewer, useRequestPicture, type PictureLoader } from './cells'
 import { AssignDialog, DeclineDialog, type AssignModel, type DeclineModel } from './Dialogs'
-import { NewInquiryDialog, type NewInquiryActions, type NewInquiryModel } from './NewInquiryDialog'
+import { NewRequestDialog, type NewRequestActions, type NewRequestModel } from './NewRequestDialog'
 // B-TH-217: the reading pane beside the list (the 1160 px modal with its four tabs went).
 import { SplitPane } from '../../../../lib/split-pane/SplitPane'
 import { CloseThreadConfirm } from '../../../../lib/record-thread/popups/view/Confirms'
@@ -84,7 +84,8 @@ export interface InquiriesModel {
   dismissed: readonly string[]
   /** The rows a read brings at most (the API's limit). */
   limit: number
-  newInquiry: NewInquiryModel | null
+  /** B-TH-221: New request (the portal's compose with the customer or the prospect), open on `?new=1` or `?mail=`. */
+  newRequest: NewRequestModel | null
   bulk: BulkDialog | null
   /** The request open in the reading pane (`?open=`). */
   detail: InquiryRecordModel | null
@@ -125,7 +126,7 @@ export interface InquiriesActions {
     onClose?: () => void
   }
   onNew?: () => void
-  newInquiry?: NewInquiryActions
+  newRequest?: NewRequestActions
   record?: InquiryRecordActions
   onCopy?: (numbers: readonly string[]) => void
   onDismissNotice?: () => void
@@ -197,7 +198,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
   // c: New request; q / d / a: the focused (or the one selected) row's verb — never while typing or in a dialog.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (!isPageKey(event) || model.newInquiry || model.bulk || model.detail) return
+      if (!isPageKey(event) || model.newRequest || model.bulk || model.detail) return
       if (event.key === 'c' && model.can.manage) {
         event.preventDefault()
         latest.current.actions?.onNew?.()
@@ -214,7 +215,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [model.newInquiry, model.bulk, model.detail, model.can, offline, selected, byId])
+  }, [model.newRequest, model.bulk, model.detail, model.can, offline, selected, byId])
 
   const columns = useMemo<ColDef<InquiryRow>[]>(() => {
     const { model: m } = latest.current
@@ -666,7 +667,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
         }
       />
       {viewerRow && <ViewerFor row={viewerRow} model={model} actions={actions} onClose={() => setViewer(null)} />}
-      {model.newInquiry && <NewInquiryDialog model={model.newInquiry} me={model.me} can={model.can} prefix={model.prefix} actions={actions?.newInquiry} />}
+      {model.newRequest && <NewRequestDialog model={model.newRequest} me={model.me} can={model.can} prefix={model.prefix} actions={actions?.newRequest} />}
       {model.bulk?.kind === 'assign' && <AssignDialog model={model.bulk.model} actions={{ onAssign: actions?.bulk?.onAssign, onRetry: actions?.bulk?.onRetryPeople, onClose: actions?.bulk?.onClose }} />}
       {model.bulk?.kind === 'decline' && <DeclineDialog model={model.bulk.model} actions={{ onDraft: actions?.bulk?.onDecline, onSubmit: actions?.bulk?.onSubmit, onClose: actions?.bulk?.onClose }} />}
       {model.detail && model.pane?.closing && model.detail.loaded.status === 'ready' && (

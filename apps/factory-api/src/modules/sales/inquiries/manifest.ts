@@ -32,4 +32,6 @@ export const manifest = defineManifest({
   // company's own or, over every company, the tenant's).
   'GET /sales/inquiries/addresses': view,
   'PUT /sales/inquiries/addresses': { audiences: ['office'], permission: 'sales.settings.manage', scope: 'record' },
+  // B-TH-221 (wall W23): New request's customer picker — the customers this person may make a request for (also parties.view).
+  'GET /sales/inquiries/customers': manage,
 })

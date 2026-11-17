@@ -1,0 +1,109 @@
+/*
+ * SCR-105-new — New request in the office (B-TH-221): layout only, semantic design-system tokens only. The shared compose
+ * (lib/request-compose) draws the request; this file lays out the office's "From" in the compose's To place, the files and
+ * the office's own details. The window is the DS `xxl` (a full-screen sheet on a phone).
+ */
+
+.fw-inqn,
+.fw-inqn-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+.fw-inqn {
+  gap: var(--nds-space-16);
+}
+
+/* ── From: how it came, who asks (the compose's To place) ── */
+.fw-inqn-from {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+  margin: 0;
+  padding: 0 0 var(--nds-space-14);
+  border: 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-inqn-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-8);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-2);
+}
+
+.fw-inqn-who {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  align-items: end;
+}
+
+.fw-inqn-cards,
+.fw-inqn-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+@media (min-width: 720px) {
+  .fw-inqn-who {
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  }
+  .fw-inqn-cards,
+  .fw-inqn-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1000px) {
+  .fw-inqn-grid-4 {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.fw-inqn-reading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+/* ── files, the office's details ── */
+.fw-inqn-title {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-inqn-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-muted);
+}
+
+.fw-inqn-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-inqn-office {
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+.fw-inqn-target {
+  max-width: 420px;
+}
+
+.fw-inqn-inline {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-8);
+}

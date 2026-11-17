@@ -122,6 +122,9 @@ export async function createFromMail(caller: CommandCaller, inboundEmailId: stri
     note: body.note ?? null,
     lines: body.lines ?? [],
     assigneeId: body.assigneeId ?? null,
+    // B-TH-221: the customer's PO and delivery address, as the office's New request sends them.
+    customerRef: body.customerRef ?? null,
+    shipToAddressId: body.shipToAddressId ?? null,
   }
   await checkNew(caller, context, made)
   const { result } = await command(caller, { name: 'sales.inquiries.fromMail', idempotencyKey, input: { inboundEmailId, ...body, targetUnitPrice: markMoney('price', made.targetUnitPrice) } }, async (tools) => {
