@@ -34,6 +34,8 @@ export default defineIndexer({
       // its `everyParty` marker is the production lane's indexer plumbing, B-PR-08a part 2). Read here, never through the
       // work order's own entry, which the production lane owns.
       partyId: row.workOrder.partyId ?? row.workOrder.style.brandPartyId,
+      // B-PR-08a part 2: a work order of no customer (a sample of none, mixed before the rule) is every customer's (B-PR-06's wall).
+      everyParty: row.workOrder.partyId === null,
       number: row.number,
       title: row.workOrder.style.name,
       subtitle: row.workOrder.number,

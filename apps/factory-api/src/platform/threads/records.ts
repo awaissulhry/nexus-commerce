@@ -2,6 +2,10 @@ import type { FactoryClient } from '@nexus/factory-db'
 import { DomainError } from '@nexus/factory-domain/core/errors' // B-PR-08a
 import { can, type Actor, type Permission, type ScopedRecord } from '@nexus/factory-domain/core/permissions'
 import type { CommandTx } from '../../core/command'
+// ---- B-PR-08a part 2: the customers a hold or an NCR names, and the one marker of several (the quality wall, B-PR-06).
+import { isUuid } from '@nexus/factory-domain/core/ids'
+import { EVERY_PARTY_MARKER, holdCustomersOf, NCR_FACTS, ncrCustomersOf, NO_CUSTOMER, partyOfCustomers } from '../../modules/quality/wall'
+// ---- end B-PR-08a
 
 /**
  * Which records have a thread, and whose they are (plan A1 §2.3; COL-001). A thread takes its company, site and party
@@ -21,6 +25,10 @@ export interface RecordScope {
   readonly siteId: string | null
   /** The record's customer, supplier or subcontractor: the only party its shared messages may reach. */
   readonly partyId: string | null
+  // ---- B-PR-08a part 2: a NOT_SHAREABLE record's customer (a work order's, a hold's, an NCR's; the every-party marker for several or
+  // none): who in the OFFICE reaches its thread (mayOnThread), never a party anything is shared with (partyId stays null).
+  readonly wallPartyId?: string | null
+  // ---- end B-PR-08a
 }
 
 export type RecordResolver = (client: FactoryClient | CommandTx, recordId: string) => Promise<RecordScope | null>
@@ -128,10 +136,13 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
   },
   // modules/production/work-orders (SCR-070 Activity; B-W1-38 part 2): the work order's company and site; no party (a work
   // order may make the lines of several customers' orders, so its thread stays internal).
+  // ---- B-PR-08a part 2: its customer (WorkOrder.partyId, B-PR-01) is its WALL party; a work order of none (mixed before the rule,
+  // our own range) reaches only who reaches every customer (B-PR-03 reachesWorkOrder).
   WorkOrder: async (client, id) => {
-    const workOrder = await client.workOrder.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
-    return workOrder ? { companyId: workOrder.companyId, siteId: workOrder.siteId, partyId: null } : null
+    const workOrder = await client.workOrder.findUnique({ where: { id }, select: { companyId: true, siteId: true, partyId: true } })
+    return workOrder ? { companyId: workOrder.companyId, siteId: workOrder.siteId, partyId: null, wallPartyId: workOrder.partyId ?? EVERY_PARTY_MARKER } : null
   },
+  // ---- end B-PR-08a
   // modules/shipping (SCR-067; B-W1-49 the documents link mail): the shipment's company, site and party (its customer),
   // so its mail and the customer's replies stay with that customer.
   Shipment: async (client, id) => {
@@ -162,15 +173,20 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     return receipt ? { companyId: receipt.companyId, siteId: receipt.siteId, partyId: receipt.supplierId } : null
   },
   // modules/quality/holds (SCR-078 the Hold record's Activity tab; B-W2a-26): the hold's company and site; notes only.
+  // ---- B-PR-08a part 2: the WALL party of a hold is the customer of what it holds, of an NCR the customer of everything it names
+  // (modules/quality/wall.ts): one → it; several, or customer work of none → every customer only; a lot, a hide → none.
   QualityHold: async (client, id) => {
-    const hold = await client.qualityHold.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
-    return hold ? { companyId: hold.companyId, siteId: hold.siteId, partyId: null } : null
+    const hold = await client.qualityHold.findUnique({ where: { id }, select: { id: true, companyId: true, siteId: true, subjectType: true, subjectIds: true } })
+    if (!hold) return null
+    return { companyId: hold.companyId, siteId: hold.siteId, partyId: null, wallPartyId: partyOfCustomers((await holdCustomersOf(client, [hold])).get(hold.id) ?? NO_CUSTOMER) }
   },
   // B-W2a-47: an NCR's thread is internal (its supplier hears through the supplier claim, not here).
   Nonconformance: async (client, id) => {
-    const ncr = await client.nonconformance.findUnique({ where: { id }, select: { companyId: true, siteId: true } })
-    return ncr ? { companyId: ncr.companyId, siteId: ncr.siteId, partyId: null } : null
+    const ncr = await client.nonconformance.findUnique({ where: { id }, select: NCR_FACTS })
+    if (!ncr) return null
+    return { companyId: ncr.companyId, siteId: ncr.siteId, partyId: null, wallPartyId: partyOfCustomers((await ncrCustomersOf(client, [ncr])).get(ncr.id) ?? NO_CUSTOMER) }
   },
+  // ---- end B-PR-08a
   // modules/plant (SCR-148, SCR-149, SCR-150 the records' Activity tab; B-W2a-35): the machine's company and site; notes
   // only (a machine's supplier is no party of its maintenance).
   Machine: async (client, id) => {
@@ -314,10 +330,14 @@ export const THREAD_GATES: Readonly<Record<string, Permission>> = Object.freeze(
 })
 
 /** The permission on the record's thread AND the record type's gate (when it has one), over the thread's scope. */
-export function mayOnThread(actor: Actor, permission: Permission, recordType: string | null | undefined, scope: ScopedRecord): boolean {
-  if (!can(actor, permission, scope)) return false
+export function mayOnThread(actor: Actor, permission: Permission, recordType: string | null | undefined, /* B-PR-08a */ scope: WallScope): boolean {
+  // ---- B-PR-08a part 2: a work order's, hold's or NCR's thread is reached through its WALL party (the resolver's, officeRecord's,
+  // wallScopeOf's); a scope that does not carry it (a party-less thread row read as it is) reaches it only with every customer.
+  const at: ScopedRecord = recordType && !mayShare(recordType) ? { ...scope, partyId: scope.wallPartyId !== undefined ? scope.wallPartyId : EVERY_PARTY_MARKER } : scope
+  // ---- end B-PR-08a
+  if (!can(actor, permission, at)) return false
   const gate = recordType && Object.hasOwn(THREAD_GATES, recordType) ? THREAD_GATES[recordType] : undefined
-  return gate === undefined || can(actor, gate, scope)
+  return gate === undefined || can(actor, gate, at)
 }
 
 // ---- B-PR-08a (production plan R-02, §2 "work order, hold and NCR threads stay internal"; threads lead T2, 2026-11-17): a work
@@ -339,6 +359,70 @@ export const NOT_SHAREABLE_REFUSAL = Object.freeze({
 /** The 409 of a shared message on such a record: the words at `refusal/NOT_SHAREABLE`. */
 export const notShareableRefusal = (): DomainError =>
   new DomainError('conflict', NOT_SHAREABLE_REFUSAL.en, [{ path: 'refusal/NOT_SHAREABLE', message: NOT_SHAREABLE_REFUSAL.en }])
+
+// B-PR-08a part 2 (production plan §2 "office people limited to some brands get the same wall … in threads"; threads lead T2): an
+// office person limited to some customers reads, writes on, is mentioned on and is told of a work order's, hold's or NCR's thread
+// only when they reach its customer (every customer: several, or customer work of none). The customer is a WALL party, carried
+// beside the scope (`wallPartyId`) — never in `partyId`, the party a record's messages, files, links and portal tasks are SHARED
+// with: so every other reader of resolveRecord (files, shares, portal tasks, email in and out, notifications) still finds no party
+// on these three types, as before, and can share nothing by mistake. The thread row stays party-less.
+
+/** A scope as the office's thread checks read it: the record's (or its thread's), and a NOT_SHAREABLE record's wall party. */
+export type WallScope = ScopedRecord & { readonly wallPartyId?: string | null }
+
+/** Where a thread sits, as its row (or a message's thread) holds it. */
+export interface ThreadPlace {
+  readonly recordType: string
+  readonly recordId: string
+  readonly companyId: string | null
+  readonly siteId: string | null
+  readonly partyId: string | null
+}
+
+/** The customer a scope's record belongs to for the wall: its wall party when it has one, else its party. */
+export const wallPartyOf = (scope: WallScope | null | undefined): string | null => (scope ? (scope.wallPartyId !== undefined ? scope.wallPartyId : (scope.partyId ?? null)) : null)
+
+/** The wall party of each work order, hold and NCR asked, by `type:id` (one read per type); other types and unknown ids are left out. */
+export async function wallPartiesOf(client: FactoryClient | CommandTx, refs: readonly { readonly type: string; readonly id: string }[]): Promise<Map<string, string | null>> {
+  const out = new Map<string, string | null>()
+  const idsOf = (type: string) => [...new Set(refs.filter((ref) => ref.type === type && isUuid(ref.id)).map((ref) => ref.id))]
+  const workOrders = idsOf('WorkOrder')
+  if (workOrders.length > 0) {
+    for (const row of await client.workOrder.findMany({ where: { id: { in: workOrders } }, select: { id: true, partyId: true } })) out.set(`WorkOrder:${row.id}`, row.partyId ?? EVERY_PARTY_MARKER)
+  }
+  const holds = idsOf('QualityHold')
+  if (holds.length > 0) {
+    const rows = await client.qualityHold.findMany({ where: { id: { in: holds } }, select: { id: true, subjectType: true, subjectIds: true } })
+    const customers = await holdCustomersOf(client, rows)
+    for (const row of rows) out.set(`QualityHold:${row.id}`, partyOfCustomers(customers.get(row.id) ?? NO_CUSTOMER))
+  }
+  const ncrs = idsOf('Nonconformance')
+  if (ncrs.length > 0) {
+    const rows = await client.nonconformance.findMany({ where: { id: { in: ncrs } }, select: NCR_FACTS })
+    const customers = await ncrCustomersOf(client, rows)
+    for (const row of rows) out.set(`Nonconformance:${row.id}`, partyOfCustomers(customers.get(row.id) ?? NO_CUSTOMER))
+  }
+  return out
+}
+
+/**
+ * The office's scope of each thread: its own, and for a NOT_SHAREABLE record its wall party (a record gone: every customer only).
+ * Reads only for these three types, so a partner or link caller (which never reaches them) reads nothing more.
+ */
+export async function wallScopesOf(client: FactoryClient | CommandTx, threads: readonly ThreadPlace[]): Promise<(thread: ThreadPlace) => WallScope> {
+  const walls = await wallPartiesOf(client, threads.filter((thread) => !mayShare(thread.recordType)).map((thread) => ({ type: thread.recordType, id: thread.recordId })))
+  return (thread) => {
+    const own: WallScope = { companyId: thread.companyId, siteId: thread.siteId, partyId: thread.partyId }
+    if (mayShare(thread.recordType)) return own
+    const wall = walls.get(`${thread.recordType}:${thread.recordId}`)
+    return { ...own, partyId: null, wallPartyId: wall === undefined ? EVERY_PARTY_MARKER : wall }
+  }
+}
+
+/** One thread's office scope (wallScopesOf). */
+export async function wallScopeOf(client: FactoryClient | CommandTx, thread: ThreadPlace): Promise<WallScope> {
+  return (await wallScopesOf(client, [thread]))(thread)
+}
 // ---- end B-PR-08a
 
 let extra: Readonly<Record<string, RecordResolver>> = {}

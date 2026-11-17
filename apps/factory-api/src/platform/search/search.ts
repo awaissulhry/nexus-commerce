@@ -9,7 +9,7 @@ import { actorOf, type OfficeContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
 // B-TH-097: each message hit is read again against its thread (the record type's gate, the thread's scope now).
 import { mayOnThread } from '../threads/records'
-import { scopeOfThread } from '../threads/threads'
+import { wallScopesOf } from '../threads/records' // B-PR-08a part 2: a work order's, hold's or NCR's message hit through its customer
 
 /**
  * GET /search (B-W2a-32; PLT-153; design shell.search: the palette's Exact number and Records groups, the All results
@@ -24,6 +24,7 @@ import { scopeOfThread } from '../threads/threads'
  *     matching extent of the text instead (1.0);
  *   - only what the reader may open: an entry is seen through a grant that holds its view permission AND reaches its
  *     company, site and party (a null column is not limited), exactly as can()/scopeWhere() treat the record itself;
+ *     B-PR-08a: an entry of several customers (`everyParty`) only through a grant that reaches every customer;
  *   - ordered: the number typed whole first, then every word found as typed, then by how alike, then by where the
  *     words sit (a record's own number and name come first in its text), the screen's company (and tenant-wide records)
  *     before other companies', the newest entry first;
@@ -84,6 +85,10 @@ function visibleSql(actor: Actor, values: Values): string | null {
       if (set === 'all') continue
       parts.push(`(e."${column}" IS NULL OR e."${column}"::text = ANY(${values.textArray(set as readonly string[])}))`)
     }
+    // ---- B-PR-08a part 2 (the brand wall): an entry of several customers, or of customer work of none (SearchEntry.everyParty, the
+    // ONE marker, B-PR-01), only through a grant that reaches every customer — a list never does, however long.
+    if (grant.parties !== 'all') parts.push(`NOT e."everyParty"`)
+    // ---- end B-PR-08a
     clauses.push(`(${parts.join(' AND ')})`)
   }
   return clauses.length > 0 ? `(${clauses.join(' OR ')})` : null
@@ -141,8 +146,9 @@ async function messageRecords(client: FactoryClient, actor: Actor, ids: readonly
   const seen = new Map<string, { type: string; id: string }>()
   if (ids.length === 0) return seen
   const rows = await client.message.findMany({ where: { id: { in: [...ids] } }, select: { id: true, thread: { select: { recordType: true, recordId: true, companyId: true, siteId: true, partyId: true } } } })
+  const scopeOf = await wallScopesOf(client, rows.map((row) => row.thread)) // B-PR-08a part 2: the thread's customer now
   for (const row of rows) {
-    if (mayOnThread(actor, THREADS_READ, row.thread.recordType, scopeOfThread(row.thread))) seen.set(row.id, { type: row.thread.recordType, id: row.thread.recordId })
+    if (mayOnThread(actor, THREADS_READ, row.thread.recordType, scopeOf(row.thread))) seen.set(row.id, { type: row.thread.recordType, id: row.thread.recordId })
   }
   return seen
 }
