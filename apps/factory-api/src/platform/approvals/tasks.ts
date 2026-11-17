@@ -22,6 +22,7 @@ import {
   peopleNames,
   TASK_COLUMNS,
   visibleTasks,
+  customerWall, // B-PR-10
   waitingFor,
   type HeldApproverRole,
   type Reader,
@@ -104,7 +105,7 @@ export async function listTasks(caller: CommandCaller, query: ListQuery) {
   const actor = actorOf(context)
   return caller.withClient(async (db) => {
     const view = await viewOf(db, context)
-    const visible = visibleTasks(actor, context.actorId, view.roles)
+    const visible: Prisma.ApprovalTaskWhereInput = { AND: [visibleTasks(actor, context.actorId, view.roles), await customerWall(db, actor)] } // B-PR-10
     const status = query.status === 'ALL' ? undefined : (query.status as TaskRow['status'] | undefined)
     const filters: Prisma.ApprovalTaskWhereInput[] = [
       visible,
@@ -139,7 +140,7 @@ export async function listTasks(caller: CommandCaller, query: ListQuery) {
 }
 
 async function visibleTask(db: Reader, context: OfficeContext, roles: readonly HeldApproverRole[], taskId: string): Promise<TaskRow> {
-  const task = await db.approvalTask.findFirst({ where: { AND: [{ id: taskId }, visibleTasks(actorOf(context), context.actorId, roles)] }, select: TASK_COLUMNS })
+  const task = await db.approvalTask.findFirst({ where: { AND: [{ id: taskId }, visibleTasks(actorOf(context), context.actorId, roles), await customerWall(db, actorOf(context))] }, select: TASK_COLUMNS }) // B-PR-10: and the wall
   if (!task) throw new NotFoundError()
   return task
 }

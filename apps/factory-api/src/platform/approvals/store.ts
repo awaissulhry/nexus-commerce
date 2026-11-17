@@ -9,6 +9,7 @@ import type { CommandCaller, CommandTx } from '../../core/command'
 import { actorOf, type OfficeContext } from '../../core/context'
 import { heldRoles, liveAssignment } from '../auth/roles/access'
 import { kindOf, registeredKinds } from './kinds'
+import { workOrderWhere } from '../../modules/production/work-orders/scope' // B-PR-10
 
 /**
  * The approval engine's reads (B-W2b-282): who sees which request, who may decide it, the names the screens show. A request
@@ -75,6 +76,32 @@ export function visibleTasks(actor: Actor, userId: string, roles: readonly HeldA
     ],
   }
 }
+
+// ── B-PR-10 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * B-PR-10 (the brand wall; Owner rule 2026-11-16: "One brand must not be able to see anything related to any other brand"): a
+ * request's subject may be a customer's — a sales order is its customer's, an ask-to-buy for a work order is that work order's
+ * customer's. A person limited to some customers sees requests on the subjects of its customers only (a supplier's subject
+ * names no customer and stays); the production unit is not filtered (`{}`).
+ */
+export async function customerWall(db: Reader, actor: Actor): Promise<Prisma.ApprovalTaskWhereInput> {
+  const work = workOrderWhere(actor, APPROVALS_VIEW)
+  if (Object.keys(work).length === 0) return {}
+  const ofParty = { company: 'companyId', party: 'partyId' } as const
+  const ids = (rows: readonly { readonly id: string }[]) => rows.map((row) => row.id)
+  // The subjects that are a customer's, of the customers the person reaches (one query each; a person limited to some customers
+  // reaches few): a sales order, a quote's version and a credit check are their customer's, a private-label style its brand's,
+  // an ask-to-buy its work order's customer's (none: no customer).
+  const reached: Record<string, string[]> = {
+    SalesOrder: ids(await db.salesOrder.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, ofParty) as Prisma.SalesOrderWhereInput, select: { id: true } })),
+    QuoteVersion: ids(await db.quoteVersion.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, { party: 'partyId' }) as Prisma.QuoteVersionWhereInput, select: { id: true } })),
+    CreditCheck: ids(await db.creditCheck.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, { party: 'partyId' }) as Prisma.CreditCheckWhereInput, select: { id: true } })),
+    Style: ids(await db.style.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, { party: { field: 'brandPartyId', nullable: true } }) as Prisma.StyleWhereInput, select: { id: true } })),
+    PurchaseRequest: ids(await db.purchaseRequest.findMany({ where: { OR: [{ workOrderId: null }, { workOrder: { is: work } }] }, select: { id: true } })),
+  }
+  return { OR: [{ recordType: { notIn: Object.keys(reached) } }, ...Object.entries(reached).map(([recordType, recordIds]) => ({ recordType, recordId: { in: recordIds } }))] }
+}
+// ── end B-PR-10 ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** The requests that wait for the reader's yes: pending, addressed to them, not their own, and theirs to decide there. */
 export function waitingFor(actor: Actor, userId: string, roles: readonly HeldApproverRole[]): Prisma.ApprovalTaskWhereInput {
