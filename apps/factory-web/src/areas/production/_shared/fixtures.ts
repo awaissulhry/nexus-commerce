@@ -1,8 +1,5 @@
 import { createElement, type ReactNode } from 'react'
 import { permissionCheck } from '../../../lib/session/session'
-import { designScreen as panelsScreen } from '../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../record-panels/model'
-import { RecordPanelsView } from '../../../record-panels/view/RecordPanelsView'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../shell/design-data'
 import { officeNavFor } from '../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../shell/office/view/OfficeShellView'
@@ -556,15 +553,4 @@ export const SITE_WIP: SiteWip = {
   ],
 }
 
-// ---- the record panels on a work order --------------------------------------------------------------------------------------
-
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-
-export function panelsModel(): RecordPanelsViewModel {
-  const wo = workOrder('IN_PROGRESS')
-  return { ...conversation, record: { type: 'WorkOrder', id: wo.id, companyId: COMPANY, siteId: SITE.id }, title: `${wo.number} · ${STYLE.code}`, party: null }
-}
-
-export function panels(): ReactNode {
-  return createElement(RecordPanelsView, { model: panelsModel() })
-}
+// B-TH-265: the record panels' stand-in on a work order went: the work order's design cases draw its docked thread (record/fixtures.ts).

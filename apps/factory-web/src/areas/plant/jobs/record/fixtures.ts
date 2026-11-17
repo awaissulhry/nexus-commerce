@@ -1,8 +1,8 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/view/RecordPanelsView'
-import { at, canAs, CARDS, card, COMPANY, inShell, JOBS, MACHINES, NOW, PEOPLE, PREFIX, REQUESTS, SITE, TECHNICIANS, type PlantRole } from '../../_shared/fixtures'
+import { at, canAs, CARDS, card, inShell, JOBS, MACHINES, NOW, PEOPLE, PREFIX, REQUESTS, TECHNICIANS, type PlantRole } from '../../_shared/fixtures'
+// ---- B-TH-265: the job's docked thread in the design cases (notes only: a maintenance job has no party) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import { STEP_UP_CLOSED } from '../../_shared/parts'
 import type { DeepJobRecord } from '../../requests/depth/api'
 import { DEEP, DEEP_JOBS, deepJob, media, viewsOf } from '../../requests/depth/fixtures'
@@ -16,16 +16,16 @@ import { JobRecordView } from './view/JobRecordView'
  * the Unsafe lock panel with Sign safe and its fresh code), the Photos tab (before / after, voice notes, the requests'
  * photos; the camera, sending, a failed upload with Try again, no right), the Hand-back tab (the one-screen close with
  * the action and failure-code tiles, the API's minutes, the machine after — running held while locked), the Hand back
- * dialog, a handed-back job with the Line lead confirms panel, Activity (the record panels), Cancel, and the states.
+ * dialog, a handed-back job with the Line lead confirms panel, the docked thread beside both tabs (B-TH-265: notes only — a job has no
+ * party; Activity went, its tools in the thread's "⋯"; Problem and Photos are one tab), Cancel, and the states.
  */
 
 interface JobCase {
   role: PlantRole
   record: JobRecordModel
-  panels: RecordPanelsViewModel | null
+  /** B-TH-265: no thread here (without threads.read): no dock, no Thread button. */
+  noThread?: boolean
 }
-
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
 
 const base = { canManage: true, canWork: true, lock: null, files: [], requestFiles: [], close: { minutesSoFar: null, runningHeld: false, canHandBack: false }, canConfirm: false }
 
@@ -54,7 +54,6 @@ const CONFIRMED: DeepJobRecord = { ...HANDED, job: { ...HANDED.job, leadConfirme
 function record(role: PlantRole, tab: JobTab, value: DeepJobRecord | null, over: Partial<JobRecordModel> = {}): JobCase {
   return {
     role,
-    panels: tab === 'activity' && value ? { ...conversation, record: { type: 'MaintenanceJob', id: value.job.id, companyId: COMPANY, siteId: SITE.id }, title: `${value.job.number} · ${value.job.machine.assetNumber}`, party: null } : null,
     record: {
       prefix: PREFIX,
       can: canAs(role),
@@ -81,15 +80,18 @@ function record(role: PlantRole, tab: JobTab, value: DeepJobRecord | null, over:
 }
 
 function JobDesign({ model }: { model: JobCase }) {
-  const id = model.record.loaded.status === 'ready' ? model.record.loaded.value.job.id : 'x'
-  return inShell(`/plant/jobs/${id}`, createElement(JobRecordView, { model: model.record, panelsPreview: model.panels ?? undefined }), model.role)
+  const loaded = model.record.loaded
+  const id = loaded.status === 'ready' ? loaded.value.job.id : 'x'
+  // B-TH-265: the job's thread (notes only) beside both tabs; none without threads.read.
+  const thread = loaded.status === 'ready' && !model.noThread ? designDockedThread({ recordType: 'MaintenanceJob', record: loaded.value.job.number, party: null }) : null
+  return inShell(`/plant/jobs/${id}`, createElement(JobRecordView, { model: model.record, thread }), model.role)
 }
 
 const closing = { action: 'REPLACED_PART' as const, failure: 'WORN_PART', words: 'Crochet sostituito, tensione regolata.', after: 'RUNNING' as const }
 
 export const designScreen = defineDesignScreen<JobCase>({
   screen: 'SCR-149-record',
-  title: 'Maintenance job (Problem, Photos, Hand-back, Activity)',
+  title: 'Maintenance job (Problem & photos, Hand-back, the docked thread)',
   view: JobDesign,
   cases: [
     { id: 'problem-locked', label: 'Problem: the Unsafe lock panel — locked since, by whom, why; Sign safe here', model: record('maintenance', 'problem', SAFETY), note: 'The floor technician is named here, inside the one record (Owner W1).' },
@@ -97,13 +99,13 @@ export const designScreen = defineDesignScreen<JobCase>({
     { id: 'edit', label: 'Side panel: the explicit edit (priority, technician, due, problem)', model: record('maintenance', 'problem', THREAD, { edit: { type: 'CORRECTIVE', problem: JOBS.thread.problem, priority: 'P1', assignee: `USER:${TECHNICIANS[1]!.id}`, due: '2026-10-30T16:00' } }) },
     { id: 'sign-safe', label: 'Sign safe from the lock panel: what was checked, the state after (H1)', model: record('maintenance', 'problem', SAFETY, { dialog: { kind: 'signSafe', draft: { note: 'Carter rimontato e fissato; prova a vuoto ok.', machineAfter: null }, busy: false, problem: null } }) },
     { id: 'sign-safe-code', label: 'Sign safe: the fresh two-factor code', model: record('maintenance', 'problem', SAFETY, { dialog: { kind: 'signSafe', draft: { note: 'Carter rimontato.', machineAfter: 'RUNNING' }, busy: true, problem: null }, stepUp: { open: true, busy: false, sentence: 'stepUp.sentence.signSafe', problem: null } }) },
-    { id: 'photos', label: 'Photos: before / after and voice notes, and the requests’ photos', model: record('maintenance', 'photos', SAFETY), note: 'A thumbnail opens the Lightbox; the voice notes play here.' },
-    { id: 'photos-lightbox', label: 'Photos: one full size (Lightbox)', model: record('maintenance', 'photos', SAFETY, { lightbox: 0 }) },
-    { id: 'photos-empty', label: 'Photos: none yet', model: record('maintenance', 'photos', IN_PROGRESS) },
-    { id: 'photos-camera', label: 'Photos: the camera for a photo before the work (arrows and circles, faces kept out)', model: record('maintenance', 'photos', IN_PROGRESS, { capture: { state: 'camera', category: 'BEFORE_WORK' } }) },
-    { id: 'photos-sending', label: 'Photos: a voice note going up', model: record('maintenance', 'photos', SAFETY, { capture: { state: 'sending', kind: 'AUDIO' } }) },
-    { id: 'photos-failed', label: 'Photos: an upload refused in words, Try again', model: record('maintenance', 'photos', SAFETY, { capture: { state: 'failed', kind: 'PHOTO', words: { key: 'problem.unavailable' } } }) },
-    { id: 'photos-no-right', label: 'Photos as the production manager: adding held (no plant.jobs.work), files unread without files.read', model: record('production', 'photos', SAFETY, { can: { ...canAs('production'), readFiles: false }, media: viewsOf([...SAFETY.files, ...SAFETY.requestFiles], false) }) },
+    { id: 'photos', label: 'Problem & photos: before / after and voice notes, and the requests’ photos, under the problem', model: record('maintenance', 'problem', SAFETY), note: 'A thumbnail opens the Lightbox; the voice notes play here.' },
+    { id: 'photos-lightbox', label: 'Photos: one full size (Lightbox)', model: record('maintenance', 'problem', SAFETY, { lightbox: 0 }) },
+    { id: 'photos-empty', label: 'Photos: none yet', model: record('maintenance', 'problem', IN_PROGRESS) },
+    { id: 'photos-camera', label: 'Photos: the camera for a photo before the work (arrows and circles, faces kept out)', model: record('maintenance', 'problem', IN_PROGRESS, { capture: { state: 'camera', category: 'BEFORE_WORK' } }) },
+    { id: 'photos-sending', label: 'Photos: a voice note going up', model: record('maintenance', 'problem', SAFETY, { capture: { state: 'sending', kind: 'AUDIO' } }) },
+    { id: 'photos-failed', label: 'Photos: an upload refused in words, Try again', model: record('maintenance', 'problem', SAFETY, { capture: { state: 'failed', kind: 'PHOTO', words: { key: 'problem.unavailable' } } }) },
+    { id: 'photos-no-right', label: 'Photos as the production manager: adding held (no plant.jobs.work), files unread without files.read', model: record('production', 'problem', SAFETY, { can: { ...canAs('production'), readFiles: false }, media: viewsOf([...SAFETY.files, ...SAFETY.requestFiles], false) }) },
     { id: 'handback', label: 'Hand-back: the tiles (replaced a part · worn part), the minutes, Running', model: record('maintenance', 'handback', IN_PROGRESS, { handBack: closing }) },
     { id: 'handback-other', label: 'Hand-back: Other needs words (Hand back held, said why)', model: record('maintenance', 'handback', IN_PROGRESS, { handBack: { action: 'OTHER', failure: 'OTHER', words: '', after: 'RUNNING' } }) },
     { id: 'handback-locked', label: 'Hand-back while locked: "Running" held until it is signed safe', model: record('maintenance', 'handback', SAFETY, { handBack: { action: 'ADJUSTED', failure: 'LOOSE_PART', words: 'Carter rimontato.', after: 'DO_NOT_USE' } }) },
@@ -113,7 +115,15 @@ export const designScreen = defineDesignScreen<JobCase>({
     { id: 'handed-back', label: 'Handed back: the failure code, the minutes; Line lead confirms (stitch settings: first-piece check later)', model: record('maintenance', 'handback', HANDED) },
     { id: 'lead-confirmed', label: 'Line lead confirmed: by whom and when', model: record('maintenance', 'handback', CONFIRMED) },
     { id: 'lead-refused', label: 'Line lead confirm refused in words (confirmed already)', model: record('maintenance', 'handback', HANDED, { notice: { tone: 'danger', words: { key: 'done.leadRefused', params: { number: JOBS.handedBack.number } }, detail: { key: 'depthRefusal.LEAD_CONFIRMED' } } }) },
-    { id: 'activity', label: 'Activity: the record panels (thread, files, history)', model: record('maintenance', 'activity', SAFETY) },
+    // ---- B-TH-265: the docked thread (the rule of picture 38) ----
+    {
+      id: 'thread-docked',
+      label: 'B-TH-265 · The job’s thread docked beside Problem & photos (40 %, notes only)',
+      model: record('maintenance', 'problem', SAFETY),
+      note: 'The band sits in the shell’s band row with ONE state pill; the thread is docked, sticky, ⌘J hides it. A job has no party: Office notes only, no “Reply to”. Its “⋯” holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me). An old ?tab=photos opens Problem & photos; ?tab=activity too, with the thread.',
+    },
+    { id: 'thread-handback', label: 'B-TH-265 · The thread beside Hand-back', model: record('maintenance', 'handback', IN_PROGRESS, { handBack: closing }) },
+    { id: 'thread-no-right', label: 'B-TH-265 · Without threads.read: no thread beside the tabs (no Thread button)', model: { ...record('readOnly', 'problem', THREAD), noThread: true } },
     { id: 'cancel', label: 'Cancel with its reason', model: record('maintenance', 'problem', THREAD, { dialog: { kind: 'cancel', reason: '', busy: false, problem: null } }) },
     { id: 'refused', label: 'A move refused in words (locked as unsafe)', model: record('maintenance', 'problem', SAFETY, { notice: { tone: 'danger', words: { key: 'done.moveRefused', params: { number: JOBS.safety.number } }, detail: { key: 'refusal.LOCKED_UNSAFE' } } }) },
     { id: 'production', label: 'Production manager: plans and closes; works no job (Start held), signs nothing safe', model: record('production', 'problem', { ...SAFETY, job: { ...DEEP_JOBS.planned, machine: SAFETY.job.machine }, canWork: false, lock: { ...SAFETY.lock!, canSignSafe: false } }) },

@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { businessDate } from '@nexus/factory-domain/core/time'
@@ -17,11 +17,17 @@ import type { DocumentsState } from '../depth/view/DocumentsTab'
 import type { StatusDialogState } from '../depth/view/StatusDialog'
 import { costMinorOf, costTextOf, fieldOf, plantCan, problemOf, readProblem, TIME_ZONE, yearOf } from '../../_shared/model'
 import type { Loaded, Notice } from '../../_shared/parts'
-import { MACHINE_TABS, type MachineDraft, type MachineRecordModel, type MachineTab, type RecordDepth } from '../view-model'
+import { machineTabOf, type MachineDraft, type MachineRecordModel, type MachineTab, type RecordDepth } from '../view-model'
 import { MachineRecordView } from './view/MachineRecordView'
+// ---- B-TH-265: the docked thread on the machine (RecordFrame; new: the API had this thread, the page showed none) ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { printHref } from '../../../../shell/print/print-model'
+// ---- end B-TH-265
 
 /**
- * `/w/<company>/plant/machines/<id>` (SCR-150 record; `?tab=overview|history`): the machine read once and again on its live
+ * `/w/<company>/plant/machines/<id>` (SCR-150 record; `?tab=overview|docs|history|status`, B-TH-265: an old `tag` opens Overview & tag):
+ * the machine read once and again on its live
  * changes (its status, its requests and jobs); the explicit edit of its facts (only what changed is sent, with the version
  * read); Retire with its reason.
  */
@@ -29,11 +35,11 @@ export function MachineRecord({ machineId }: { machineId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const params = useSearchParams()
+  const pathname = usePathname()
   const locale = useLocale()
   const prefix = companyPrefix(session.company?.code ?? '')
   const can = useMemo(() => plantCan(session.permissions), [session.permissions])
-  const asked = params?.get('tab') ?? ''
-  const tab: MachineTab = (MACHINE_TABS as readonly string[]).includes(asked) ? (asked as MachineTab) : 'overview'
+  const tab: MachineTab = machineTabOf(params?.get('tab'))
 
   const [loaded, setLoaded] = useState<Loaded<MachineRecordValue>>({ status: 'loading' })
   const [asOf, setAsOf] = useState<string | null>(null)
@@ -315,11 +321,21 @@ export function MachineRecord({ machineId }: { machineId: string }) {
     }
   }, [api, value, retire, load])
 
-  const model: MachineRecordModel = { prefix, can, tab, loaded, timeZone: TIME_ZONE, live, asOf, sites, classes, edit, suppliers, busy, field, retire, notice, depth }
+  const model: MachineRecordModel = { prefix, can, tab, loaded, timeZone: TIME_ZONE, live, asOf, sites, classes, edit, suppliers, busy, field, retire, notice, depth, personId: session.user.id /* B-TH-265 */ }
+
+  // B-TH-265: the machine's thread docked beside every tab (notes only: a machine's supplier is no party of its maintenance; its company
+  // and site), with threads.read; its tools are in the thread's "⋯" (R-ACT). The print view keeps the record panels' print form.
+  const machineNow = value?.card.machine ?? null
+  const record = machineNow ? { type: 'Machine', id: machineNow.id, companyId: machineNow.companyId, siteId: machineNow.siteId } : null
+  const readsThreads = session.permissions.includes('threads.read')
+  const thread = machineNow && record && readsThreads ? <OfficeRecordThread docked record={record} title={machineNow.assetNumber} recordLabel={machineNow.assetNumber} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = machineNow && record && readsThreads ? <RecordPanels record={record} title={machineNow.assetNumber} /> : null
 
   return (
     <MachineRecordView
       model={model}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onRetry: () => void load(),
         onEdit: startEdit,

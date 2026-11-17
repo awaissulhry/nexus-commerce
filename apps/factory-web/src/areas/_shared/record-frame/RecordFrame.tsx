@@ -72,6 +72,10 @@ export interface RecordFrameState {
   // one of the thread's doors — the thread shows (docked) or opens full width (narrower), then the door opens, as `panel=approvals` does.
   readonly openDoor?: (door: 'approve') => void
   // ---- end B-TH-262
+  // ---- B-TH-265: a part of the band or body shows the thread with no door (the work order's "Open the order's thread" in Order files):
+  // docked, it shows (if hidden); narrower, the full-width thread opens.
+  readonly showThread?: () => void
+  // ---- end B-TH-265
 }
 
 const FrameContext = createContext<RecordFrameState | null>(null)
@@ -322,9 +326,15 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
     },
     [mode, sizes, viewOpen, openView],
   )
+  // ---- B-TH-265: show the thread (no door).
+  const showThread = useCallback(() => {
+    if (mode === 'docked') sizes.show()
+    else if (!viewOpen) openView()
+  }, [mode, sizes, viewOpen, openView])
+  // ---- end B-TH-265
   const state = useMemo<RecordFrameState>(
-    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh, openDoor /* B-TH-262 */ }),
-    [mode, width, phone, choose, closeView, door, openDoor],
+    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh, openDoor /* B-TH-262 */, showThread /* B-TH-265 */ }),
+    [mode, width, phone, choose, closeView, door, openDoor, showThread],
   )
 
   const buttonWords = threadButtonWords(fresh) // B-TH-229
