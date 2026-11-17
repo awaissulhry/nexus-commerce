@@ -128,7 +128,7 @@ const toldSince = async (before: readonly Told[]): Promise<Told[]> => {
 const partnerOf = (partyId: string): Actor => ({ audience: 'partner', tenantId: ids.tenantId, partyId, grants: [{ permissions: ['portal.production.view'], companies: 'all', sites: 'all', parties: [partyId] }] })
 
 /** A made-up sales order of a customer, written in the office scope (no production state unless the keeper keeps it). */
-async function salesOrder(partyId: string, status: 'DRAFT' | 'CONFIRMED'): Promise<string> {
+async function salesOrder(partyId: string, status: 'PENDING_APPROVAL' | 'CONFIRMED'): Promise<string> {
   const id = newId()
   await database.withScope({ audience: 'office', tenantId: ids.tenantId, actorId }, (client) =>
     client.salesOrder.create({
@@ -373,7 +373,7 @@ describe('B-PR-42a an order’s own supervisor, one or many (POST /production/or
   })
 
   it('an order not in production, one not kept yet, and a person without the measurements right are skipped in words; a viewer is forbidden; 101 orders are refused', async () => {
-    const draft = await salesOrder(ids.a, 'DRAFT')
+    const draft = await salesOrder(ids.a, 'PENDING_APPROVAL')
     const fresh = await salesOrder(ids.a, 'CONFIRMED')
     const result = await ok('office.all', 'POST', ORDERS_URL, { orderIds: [draft, fresh], supervisorId: people.backupA })
     expect(result.changed).toEqual([])

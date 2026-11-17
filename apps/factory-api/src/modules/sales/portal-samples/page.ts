@@ -22,6 +22,7 @@ import {
   type WaitingRecordType,
 } from '@nexus/factory-domain/sales/portal-samples/rules'
 import { cellsOf, piecesOf, roundLabel, type SampleKind } from '@nexus/factory-domain/sales/samples/rules'
+import type { SwatchKind } from '@nexus/factory-domain/sales/sample-decisions/rules' // B-PR-23: fabric and trim swatches too
 import { localeOf } from '../../../platform/approvals-out/store'
 import { portalReader } from '../portal-orders/access'
 import { nameIn, readBrandStyles, readMemberProjects, readRevisions, readRounds, readShipments, readStyles, readSwatches, readTechPackVersions, readWaitingRequests, type RoundRow, type ShipmentRow, type StyleRow } from './store'
@@ -60,7 +61,7 @@ interface WaitingRow {
   label: Words
   style: { id: string; code: string; name: string } | null
   round: { id: string; number: string; kind: SampleKind; roundNo: number; label: Words } | null
-  swatch: { id: string; kind: 'COLOUR' | 'LEATHER' } | null
+  swatch: { id: string; kind: SwatchKind } | null
   question: string
   askedAt: string
   dueAt: string

@@ -245,6 +245,9 @@ describe('the floor', () => {
       'ScanCorrectionRequest',
       'ScrapReason',
       'WorkOrder',
+      // B-PR-15 (production lane, #1579): a plain hold on a work order — a reason code, the office's note, the customer's words,
+      // who placed and lifted it and when; no cost, price, wages or per-person figure (checked below like every table here).
+      'WorkOrderHold',
       'WorkOrderMaterial',
       'WorkOrderOperation',
       'WorkOrderSize',
@@ -259,7 +262,9 @@ describe('the floor', () => {
       expect(access?.scopedBy, model.name).toEqual(model.name === 'ScrapReason' ? undefined : ['site'])
       // No money is walled off; only the floor rules' legal basis is hidden from the floor (B-W1-37: the floor reads who
       // its records name, never the basis, its reference or who recorded it, when).
-      expect(access?.hiddenColumns ?? [], model.name).toEqual(model.name === 'ProductionSettings' ? ['monitoringBasis', 'monitoringReference', 'monitoringRecordedAt', 'monitoringRecordedById'] : [])
+      // B-PR-15: a hold's tablet says why it is held, never the office's own note (words, not money).
+      const hidden: Readonly<Record<string, readonly string[]>> = { ProductionSettings: ['monitoringBasis', 'monitoringReference', 'monitoringRecordedAt', 'monitoringRecordedById'], WorkOrderHold: ['note'] }
+      expect(access?.hiddenColumns ?? [], model.name).toEqual(hidden[model.name] ?? [])
       expect(ownership.access[PARTNER_ROLE], model.name).toBeUndefined()
     }
   })

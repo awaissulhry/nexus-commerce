@@ -88,7 +88,13 @@ describe('the permission and its roles (B-W2b-183)', () => {
 
   it('tells the customer of the answer in an order mail topic, without the office’s words', () => {
     for (const key of ['portal.order.change_accepted', 'portal.order.change_refused', 'portal.order.cancel_accepted', 'portal.order.cancel_refused'] as const) expect(PARTNER_MESSAGE_TEMPLATES[key].topic).toBe('ORDERS')
-    expect(partnerSentence({ messageKey: 'portal.order.change_refused', recordLabel: 'SO-1', params: {} }, 'it', 'Demo')).toBe('La tua richiesta di modifica su SO-1 non è stata accettata')
+    // th2-backend step 7 (#1549, threads plan §0.5): the notice names the order by the customer's own number (the API's
+    // orderNamed: chip "#12", params yourKind/yourSeq), never the office's SO-… series; "per" reads right before "il vostro ordine".
+    const notice = { messageKey: 'portal.order.change_refused', recordLabel: '#12', params: { yourKind: 'ORDER', yourSeq: 12 } }
+    expect(partnerSentence(notice, 'it', 'Demo')).toBe('La tua richiesta di modifica per il vostro ordine 12 non è stata accettata')
+    expect(partnerSentence(notice, 'en', 'Demo')).toBe('Your change request on your order 12 was not accepted')
+    for (const key of ['portal.order.change_accepted', 'portal.order.change_refused', 'portal.order.cancel_accepted', 'portal.order.cancel_refused'] as const)
+      for (const locale of ['it', 'en'] as const) expect(partnerSentence({ ...notice, messageKey: key }, locale, 'Demo'), `${key} ${locale}`).not.toMatch(/SO-|#12/)
   })
 })
 

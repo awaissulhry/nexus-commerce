@@ -70,8 +70,10 @@ describe('the paper (SCR-006-print)', () => {
   })
 
   it('every print word exists in both languages', () => {
-    const en = Object.keys((CATALOGUE.en.records as Record<string, Record<string, string>>).print ?? {}).sort()
-    const it = Object.keys((CATALOGUE.it.records as Record<string, Record<string, string>>).print ?? {}).sort()
+    // A namespace's keys are flat paths (lib/i18n/messages flattenMessages): `print.title`.
+    const printKeys = (records: Readonly<Record<string, string>> | undefined) => Object.keys(records ?? {}).filter((key) => key.startsWith('print.')).map((key) => key.slice('print.'.length)).sort()
+    const en = printKeys(CATALOGUE.en.records)
+    const it = printKeys(CATALOGUE.it.records)
     expect(en).toEqual(['conversation', 'files', 'filesNone', 'notes', 'title'])
     expect(it).toEqual(en)
   })

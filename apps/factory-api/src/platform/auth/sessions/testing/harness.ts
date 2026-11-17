@@ -286,7 +286,7 @@ export class Browser {
     return this.cookies.get(CSRF_COOKIE)
   }
 
-  async send(method: 'GET' | 'POST' | 'PUT', url: string, body?: unknown, options: { csrf?: boolean; headers?: Record<string, string> } = {}): Promise<Answer> {
+  async send(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, body?: unknown, options: { csrf?: boolean; headers?: Record<string, string> } = {}): Promise<Answer> {
     const headers: Record<string, string> = { ...options.headers }
     if (this.cookies.size > 0) headers.cookie = [...this.cookies].map(([name, value]) => `${name}=${value}`).join('; ')
     if (method !== 'GET' && options.csrf !== false && this.csrfToken) headers[CSRF_HEADER] = this.csrfToken

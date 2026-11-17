@@ -30,8 +30,8 @@ export type WaitingMailReason = HeldReason | 'TRIAGE'
 
 export interface WaitingMail {
   readonly count: number
-  /** Why they wait, each once, in the order first met. */
-  readonly reasons: readonly WaitingMailReason[]
+  /** Why they wait, each once, in the order first met (a mutable array: the view goes out as the contract's waitingMailView). */
+  readonly reasons: WaitingMailReason[]
   /** The reader may open them in Mail to sort (email.triage over a mail's company): "Review"; else "A reply waits for a colleague to check it". */
   readonly mayReview: boolean
 }
