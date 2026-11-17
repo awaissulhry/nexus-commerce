@@ -1,6 +1,7 @@
 import type { FactoryClient } from '@nexus/factory-db'
 import type { LayoutTemplate } from '@nexus/factory-domain/documents/layouts'
-import { isTemplateLanguage, type TemplateLanguage } from '@nexus/factory-domain/templates/language'
+// B-TH-098: a person's template may be written in any of the five message languages.
+import { isMessageLanguage } from '@nexus/factory-domain/templates/message-languages'
 import { fillMail, type MailEvent, type MailWords } from '@nexus/factory-domain/templates/mail'
 import type { PlaceholderValues } from '@nexus/factory-domain/templates/placeholders'
 import type { CommandCaller, CommandTx } from '../../core/command'
@@ -43,8 +44,8 @@ export async function mailTemplateOf(
   context: { readonly audience: string } | null | undefined,
   input: { readonly companyId: string; readonly event: MailEvent; readonly language: string },
 ): Promise<MailWords | null> {
-  if (!mayRead(context) || !isTemplateLanguage(input.language)) return null
-  const language: TemplateLanguage = input.language
+  if (!mayRead(context) || !isMessageLanguage(input.language)) return null
+  const language = input.language
   const rows = await db.emailTemplate.findMany({
     where: { event: input.event, language, status: 'ACTIVE', OR: [{ companyId: input.companyId }, { companyId: null }] },
     select: { companyId: true, subject: true, body: true },

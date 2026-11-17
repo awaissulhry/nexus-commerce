@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { Actor } from '../../core/permissions'
+import type { Actor, /* B-PR-16 */ Permission } from '../../core/permissions'
 import { EVENT_CATALOGUE } from '../../events/catalogue'
+// B-PR-16: the production events on the partner live channel.
+import { isMoneyField } from '../../events/define'
+import type { EventEnvelope } from '../../events/envelope'
+import { liveMessageFor } from '../../events/live'
 import { homeCountProblems } from '../home/counts'
 import { portalEmailSettingsUrl, portalRecordUrl } from '../home/links'
 import { KIND_RULES } from '../tasks/kinds'
 import { digestFrequenciesAt } from './digest'
-import { partnerLiveViewFor } from './live'
+import { partnerLiveViewFor, /* B-PR-16 */ PARTNER_LIVE_EVENTS } from './live'
 import { composeDigestMail, composeNotificationMail, readUnsubscribeToken, unsubscribeToken, unsubscribeUrl } from './mail'
 import { PARTNER_MESSAGE_KEYS, partnerSentence, topicOfNotice } from './messages'
 import { allNonEssentialOff, changeProblems, frequencyOf, NON_ESSENTIAL_TOPICS, rowsOfChange, settingsOf, TRANSACTIONAL_TOPICS, type PartnerEmailFrequency, type PartnerEmailTopic } from './topics'
@@ -199,3 +203,110 @@ describe('a delivery that shipped (th3b follow-up 5)', () => {
   })
 })
 // ── end th3b follow-up 5 ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+// ── B-PR-16 (production plan §6; PW-P07, PW-15 events part; R-41, R-48) ───────────────────────────────────────────────────
+describe("a customer's production on its live channel (B-PR-16, PW-P07)", () => {
+  const O1 = '00000000-0000-7000-8000-0000000000e1'
+  const O2 = '00000000-0000-7000-8000-0000000000e2'
+  const BATCH = '00000000-0000-7000-8000-0000000000f1'
+  const OFFICE_PERSON = '00000000-0000-7000-8000-0000000000f2'
+  const OTHER_PERSON = '00000000-0000-7000-8000-0000000000f3'
+  const WO = '00000000-0000-7000-8000-0000000000f4'
+  const SITE = '00000000-0000-7000-8000-0000000000f5'
+  /** One payload of brand P1 per production event (each parses in the catalogue: the first test). */
+  const OF_P1: Readonly<Record<string, Record<string, unknown>>> = {
+    'brand_production.stage_reached': { orderId: O1, partyId: P1, stage: 'CUTTING', previous: 'PREPARING' },
+    'brand_production.health_changed': { orderId: O1, partyId: P1, health: 'AT_RISK', previous: 'ON_TRACK', byNote: true },
+    'brand_production.urgency_changed': { partyId: P1, orderIds: [O1, O2], urgency: 'URGENT', by: 'FACTORY', change: 'MARK', locked: false, undo: false, asked: true, batchId: BATCH },
+    'brand_production.hold_changed': { orderId: O1, partyId: P1, held: true, kind: 'QUALITY' },
+    'brand_production.supervisor_changed': { partyId: P1, orderIds: [O1, O2], supervisorId: OFFICE_PERSON, previousIds: [OTHER_PERSON], backupId: null, scope: 'ORDER', batchId: BATCH },
+    'production_issue.raised': { issueId: U, partyId: P1, recordType: 'SalesOrder', recordId: O1, source: 'BRAND', batchId: BATCH },
+    'production_issue.answered': { issueId: U, partyId: P1, source: 'BRAND', salesOrderId: O1, batchId: BATCH, answeredInOrderId: O2 },
+    'production_issue.escalated': { issueId: U, partyId: P1, batchId: BATCH, step: 1 },
+    'work_order_hold.placed': { holdId: U, workOrderId: WO, number: 'WO-2026-0001', siteId: SITE, partyId: P1, kind: 'BRAND', requestId: O2 },
+    'work_order_hold.lifted': { holdId: U, workOrderId: WO, number: 'WO-2026-0001', siteId: SITE, partyId: P1, kind: 'PRODUCTION', requestId: null },
+  }
+  /** What brand P1's sessions receive of each: its own stage, health, urgency and hold, ids and states only. */
+  const PARTNER_SEES: Readonly<Record<string, Record<string, unknown>>> = {
+    'brand_production.stage_reached': { orderId: O1, partyId: P1, stage: 'CUTTING' },
+    'brand_production.health_changed': { orderId: O1, partyId: P1, health: 'AT_RISK' },
+    'brand_production.urgency_changed': { partyId: P1, orderIds: [O1, O2], urgency: 'URGENT', by: 'FACTORY', change: 'MARK', locked: false, batchId: BATCH },
+    'brand_production.hold_changed': { orderId: O1, partyId: P1, held: true },
+  }
+  const NEVER_TO_A_PARTNER = Object.keys(OF_P1).filter((type) => !(type in PARTNER_SEES))
+
+  const envelopeOf = (type: string, payload: Record<string, unknown>): EventEnvelope => ({
+    eventId: U,
+    type,
+    version: 1,
+    context: EVENT_CATALOGUE.get(type, 1).context,
+    tenantId: T,
+    companyId: C1,
+    siteId: null,
+    subject: O1,
+    correlationId: 'req-1',
+    causationId: null,
+    source: 'test',
+    occurredAt: '2026-11-17T10:00:00.000Z',
+    payload,
+  })
+  const messageOf = (type: string, payload: Record<string, unknown> = OF_P1[type]!) => liveMessageFor(envelopeOf(type, payload), EVENT_CATALOGUE.get(type, 1))!
+  const sessionOf = (partyId: string, permissions: Permission[] = ['portal.production.view']): Actor => ({ audience: 'partner', tenantId: T, partyId, grants: [{ permissions, companies: [C1], sites: [], parties: [partyId] }] })
+  /** Every portal permission there is: a partner holding them all still never receives an office-only event. */
+  const everything = (partyId: string) => sessionOf(partyId, ['portal.production.view', 'portal.production.urgency', 'portal.home.view', 'portal.salesOrders.view', 'portal.comment'])
+
+  it('every sample is a valid payload of its declared event (the strict schema), and each one has a live rule', () => {
+    for (const [type, payload] of Object.entries(OF_P1)) {
+      expect(() => EVENT_CATALOGUE.parse(type, 1, payload), type).not.toThrow()
+      expect(EVENT_CATALOGUE.get(type, 1).live, type).not.toBeNull()
+    }
+  })
+
+  it.each(Object.keys(PARTNER_SEES))("%s reaches brand P1's own sessions with its ids and states only, never brand P2's", (type) => {
+    const message = messageOf(type)
+    const own = partnerLiveViewFor(message, sessionOf(P1), EVENT_CATALOGUE)
+    expect(own?.fields).toEqual(PARTNER_SEES[type])
+    expect(own).not.toHaveProperty('partyIds')
+    expect(own?.siteId).toBeNull()
+    // A P2 session drops every P1 message, whatever it holds.
+    expect(partnerLiveViewFor(message, sessionOf(P2), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor(message, everything(P2), EVENT_CATALOGUE)).toBeNull()
+    // P2's own reaches P2.
+    expect(partnerLiveViewFor(messageOf(type, { ...OF_P1[type], partyId: P2 }), sessionOf(P2), EVENT_CATALOGUE)?.fields).toMatchObject({ partyId: P2 })
+    // A P1 person without My production, another tenant, an office viewer: nothing.
+    expect(partnerLiveViewFor(message, sessionOf(P1, ['portal.home.view']), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor({ ...message, tenantId: P2 }, sessionOf(P1), EVENT_CATALOGUE)).toBeNull()
+    expect(partnerLiveViewFor(message, { ...sessionOf(P1), audience: 'office' }, EVENT_CATALOGUE)).toBeNull()
+  })
+
+  it('supervisor_changed, production_issue.* and work_order_hold.* never reach a partner, not even the party they name', () => {
+    expect(NEVER_TO_A_PARTNER.sort()).toEqual([
+      'brand_production.supervisor_changed',
+      'production_issue.answered',
+      'production_issue.escalated',
+      'production_issue.raised',
+      'work_order_hold.lifted',
+      'work_order_hold.placed',
+    ])
+    for (const type of NEVER_TO_A_PARTNER) {
+      expect(Object.hasOwn(PARTNER_LIVE_EVENTS, type), type).toBe(false)
+      expect(partnerLiveViewFor(messageOf(type), everything(P1), EVENT_CATALOGUE), type).toBeNull()
+    }
+    expect(Object.keys(PARTNER_LIVE_EVENTS).filter((type) => type.startsWith('production_issue.') || type.startsWith('work_order_hold.'))).toEqual([])
+  })
+
+  it('no partner rule of production lets money, an office person, an urgent place or a count through, nor more than the office rule copies', () => {
+    const production = Object.entries(PARTNER_LIVE_EVENTS).filter(([type]) => type.startsWith('brand_production.'))
+    expect(production.map(([type]) => type).sort()).toEqual(Object.keys(PARTNER_SEES).sort())
+    for (const [type, rule] of production) {
+      expect(rule).toMatchObject({ permission: 'portal.production.view', party: 'partyId' })
+      const office = EVENT_CATALOGUE.get(type, 1).live!.fields
+      for (const field of rule.fields) {
+        expect(isMoneyField(field), `${type}.${field}`).toBe(false)
+        expect(field, `${type}.${field}`).not.toMatch(/ById$|supervisor|backup|previous|rank|count|used|max|note|reason|undo|asked/i)
+        expect(office, `${type}.${field} is copied by the office rule`).toContain(field)
+      }
+    }
+  })
+})
+// ── end B-PR-16 ─────────────────────────────────────────────────────────────────────────────────────────────────────────

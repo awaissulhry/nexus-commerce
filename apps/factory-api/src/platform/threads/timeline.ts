@@ -19,6 +19,11 @@ import { mayOnThread } from './records'
 import { fieldLinesOf } from './timeline/field-lines'
 // B-TH-072: a project's linked news.
 import { linkedNewsOf } from '../../modules/product/projects/news'
+// ---- B-TH-079: the audience view, erased messages, an inbound mail's skipped files, mail waiting for a person, what the view hides.
+import type { FeedAudience } from '@nexus/factory-domain/threads/timeline'
+import { erasedAmong, feedAudienceWhere, skippedPartsOf, waitingMailOf, type WaitingMail } from './feed-depth'
+import { newToReaderWhere } from './reads'
+// ---- end B-TH-079
 
 /**
  * The record's timeline (feature COL-002; A2 SCR-006): one feed, newest first, of
@@ -53,8 +58,8 @@ function idsIn(value: unknown, found: Set<string> = new Set()): Set<string> {
 export async function readTimeline(
   caller: CommandCaller,
   record: RecordRef,
-  query: { readonly kinds: readonly TimelineKind[]; readonly cursor?: string | undefined; readonly limit: number },
-): Promise<{ entries: TimelineEntryView[]; nextCursor: string | null }> {
+  query: { readonly kinds: readonly TimelineKind[]; readonly cursor?: string | undefined; readonly limit: number; /* B-TH-079 */ readonly audience?: FeedAudience | undefined },
+): Promise<{ entries: TimelineEntryView[]; nextCursor: string | null; hiddenNew: number; waitingMail: WaitingMail | null }> {
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
@@ -63,6 +68,7 @@ export async function readTimeline(
   const take = query.limit + 1
   const held = heldGrains(actor)
   const newest = (field: string) => [{ [field]: 'desc' as const }, { id: 'desc' as const }]
+  const audience: FeedAudience = query.audience ?? 'ALL' // B-TH-079
 
   return caller.withClient(async (client) => {
     const { thread, scope } = await officeRecord(client, record)
@@ -72,7 +78,7 @@ export async function readTimeline(
     const messages =
       kinds.has('message') && thread
         ? await client.message.findMany({
-            where: { AND: [{ threadId: thread.id }, afterCursor(cursor, 'at') as Prisma.MessageWhereInput] },
+            where: { AND: [{ threadId: thread.id }, feedAudienceWhere(audience) /* B-TH-079 */, afterCursor(cursor, 'at') as Prisma.MessageWhereInput] },
             orderBy: newest('at') as Prisma.MessageOrderByWithRelationInput[],
             take,
             select: { id: true, at: true, direction: true, audience: true, channel: true, authorKind: true, authorId: true, authorName: true, bodyText: true, attachmentFileIds: true },
@@ -101,6 +107,10 @@ export async function readTimeline(
     const siteOf = (row: (typeof changes)[number]) => row.siteId ?? scope.siteId
     const gates = await workerGatesFor(client, [...(messages.some((row) => row.authorKind === 'WORKER') ? [scope.siteId] : []), ...changes.filter(onTheFloor).map(siteOf)])
 
+    // ---- B-TH-079: which messages of the page were erased (privacy), and the files an inbound mail did not keep.
+    const erased = await erasedAmong(client, messages)
+    const skipped = await skippedPartsOf(client, messages)
+    // ---- end B-TH-079
     if (kinds.has('message') && thread) {
       sources.push(
         messages.map((row) => {
@@ -119,6 +129,8 @@ export async function readTimeline(
               authorHidden,
               excerpt: excerptOf(row.bodyText),
               attachmentCount: row.attachmentFileIds.length,
+              erased: erased.has(row.id), // B-TH-079
+              skippedAttachments: skipped.get(row.id) ?? [], // B-TH-079
             },
           }
         }),
@@ -192,6 +204,15 @@ export async function readTimeline(
 
     const { items, more } = mergeNewestFirst(sources, query.limit)
     const last = items.at(-1)
-    return { entries: items.map((item) => item.entry), nextCursor: more && last ? encodeCursor(last) : null }
+    // ---- B-TH-079: the messages new to the reader that this view hides (a view left on never hides news: "Show all"), counted on the
+    // first page only; and the mail for this conversation that waits for a person.
+    let hiddenNew = 0
+    if (thread && !cursor && (audience !== 'ALL' || !kinds.has('message'))) {
+      const shown: Prisma.MessageWhereInput = kinds.has('message') ? feedAudienceWhere(audience) : { id: { in: [] } }
+      hiddenNew = await client.message.count({ where: { AND: [await newToReaderWhere(client, thread.id, { userId: context.actorId, office: true }), { NOT: shown }] } })
+    }
+    const waitingMail = thread ? await waitingMailOf(client, actor, thread.id) : null
+    return { entries: items.map((item) => item.entry), nextCursor: more && last ? encodeCursor(last) : null, hiddenNew, waitingMail }
+    // ---- end B-TH-079
   })
 }
