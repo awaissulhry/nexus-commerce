@@ -51,6 +51,8 @@ export interface ListFilters {
   readonly promiseTo?: BusinessDate | undefined
   /** Number or customer reference, case-insensitive. */
   readonly q?: string | undefined
+  /** B-TH-225: the label on the garment — a line's style of this brand party, or `own` (our own collection: no brand). */
+  readonly brand?: string | undefined
 }
 
 export interface ListQuery extends ListFilters {
@@ -80,6 +82,7 @@ export function whereOf(context: OfficeContext, filters: ListFilters, today: Bus
       filters.promiseFrom ? { promiseDate: { gte: asDay(filters.promiseFrom) } } : {},
       filters.promiseTo ? { promiseDate: { lte: asDay(filters.promiseTo) } } : {},
       filters.q ? { OR: [{ number: { contains: filters.q, mode: 'insensitive' } }, { customerRef: { contains: filters.q, mode: 'insensitive' } }] } : {},
+      filters.brand ? { lines: { some: { style: { brandPartyId: filters.brand === 'own' ? null : filters.brand } } } } : {}, // B-TH-225
     ],
   }
 }
@@ -175,7 +178,7 @@ const TILES = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'wait
  * state under the list's filters (scope, company, party, promise range, search), the board's lanes, and the tiles with
  * the filter each stands for.
  */
-export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q'>) {
+export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */>) {
   const context = officeContextOf(caller)
   const today = todayNow()
   const base = whereOf(context, filters, today)
