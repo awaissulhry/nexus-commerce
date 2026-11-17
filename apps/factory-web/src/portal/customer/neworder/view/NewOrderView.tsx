@@ -57,8 +57,9 @@ export interface NewOrderViewModel {
   sendHeld: string | null
   /** The problems are listed (after Show me, or a send that was held). */
   showProblems: boolean
-  sent: { number: string; customerRef: string | null; lines: number; pieces: number; net: string | null; currency: string; seesPrices: boolean } | null
-  closed: { status: RequestStatus; number: string | null; salesOrder: { id: string; number: string } | null } | null
+  /** B-TH-304 (pick A): no office number — their PO, the lines, the pieces. */
+  sent: { customerRef: string | null; lines: number; pieces: number; net: string | null; currency: string; seesPrices: boolean } | null
+  closed: { status: RequestStatus; salesOrder: { id: string } | null } | null
   offlineSince: string | null
   dialogs: { picker: PickerModel | null; address: AddressDialogModel | null; discard: DiscardModel | null }
 }
@@ -100,15 +101,15 @@ export function NewOrderView({ model, actions }: { model: NewOrderViewModel; act
       <div className="fw-pno">
         <EndState
           title={t('sent.title')}
-          // B-TH-220 (with B-TH-041): no answer-time promise.
-          body={sent.customerRef ? t('sent.bodyRef', { ref: sent.customerRef, number: sent.number }) : t('sent.body', { number: sent.number })}
+          // B-TH-220 (with B-TH-041): no answer-time promise. B-TH-304 (pick A): their PO, never the office's request number.
+          body={sent.customerRef ? t('sent.bodyYours', { ref: sent.customerRef }) : t('sent.bodyNone')}
           next={[t('summary.notice'), t('sent.next')]}
           facts={[
             { label: t('summary.lines'), value: String(sent.lines) },
             { label: t('summary.pieces'), value: words.pieces(sent.pieces) },
             ...(sent.seesPrices && sent.net ? [{ label: t('summary.net'), value: words.price(sent.net, sent.currency) ?? '—' }] : []),
           ]}
-          reference={{ value: sent.number, label: t('sent.reference') }}
+          {...(sent.customerRef ? { reference: { value: sent.customerRef, label: t('ref.yours') } } : {})}
           actions={[
             { label: t('sent.open'), href: requestedHref(model.prefix), variant: 'primary' },
             { label: t('sent.newOrder'), href: newOrderHref(model.prefix) },
@@ -125,8 +126,9 @@ export function NewOrderView({ model, actions }: { model: NewOrderViewModel; act
       <div className="fw-pno">
         <EndState
           tone="info"
-          title={closed.number ? t('closed.title', { number: closed.number }) : t('closed.titleNone')}
-          body={t(`closed.${closed.status}`, { order: closed.salesOrder?.number ?? '' })}
+          // B-TH-304 (pick A): never the office's request or order number; the order's own page names the customer's number.
+          title={t('closed.titleNone')}
+          body={t(`closed.${closed.status}`)}
           actions={[
             { label: t('sent.open'), href: closed.salesOrder ? `${model.prefix}/orders/${encodeURIComponent(closed.salesOrder.id)}` : requestedHref(model.prefix), variant: 'primary' },
             { label: t('sent.newOrder'), href: newOrderHref(model.prefix) },

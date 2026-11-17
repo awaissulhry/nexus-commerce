@@ -1,7 +1,7 @@
 import type { SectionLayoutValue, SectionSpec } from '@nexus/ui/patterns'
 import type { LiveState } from '../../../quality/_shared/model'
 import type { OfficeScope } from '../../../../shell/scope/scope-model'
-import type { Backlog, Headline, Intake, Returns } from '../api'
+import type { Backlog, Headline, Intake, Requests, Returns } from '../api'
 import type { DrillTarget, ReportsAddress, ReportsCan, ReportSection } from '../model'
 
 /** One read: each panel reads and fails on its own (design: "a failed read is never drawn as empty"). */
@@ -22,6 +22,8 @@ export interface ReportsModel {
   readonly intake: Read<Intake>
   readonly backlog: Read<Backlog>
   readonly returns: Read<Returns>
+  /** B-TH-235: the intake panel's request figure (requests received, quoted, ordered); absent: not read (a design case). */
+  readonly requests?: Read<Requests>
   readonly live: LiveState
   readonly asOf: string | null
   readonly layout: SectionLayoutValue
@@ -35,11 +37,12 @@ export interface ReportsModel {
 
 export interface ReportsActions {
   onAddress?: (change: Partial<ReportsAddress>) => void
-  onRetry?: (panel: ReportSection) => void
+  /** B-TH-235: `requests` — the intake panel's request figure alone. */
+  onRetry?: (panel: ReportSection | 'requests') => void
   onArrange?: (open: boolean) => void
   onArranged?: (next: SectionLayoutValue) => void
   /** A panel's (or the drill's) rows as a CSV file (the header and rows in the page's words). */
-  onExport?: (panel: ReportSection | 'drill', header: string[], rows: (string | number | null)[][]) => void
+  onExport?: (panel: ReportSection | 'drill' | 'requests', header: string[], rows: (string | number | null)[][]) => void
   /** Open what a number counts (null: close). */
   onDrill?: (target: DrillTarget | null) => void
   /** B-W2b-434 (follow-up DB1:01): pin this page's panels to a Home dashboard (saved for me on the server). */

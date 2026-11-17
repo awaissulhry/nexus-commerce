@@ -15,10 +15,12 @@ import { serverClock } from '../../../core/time'
 import { qualificationsFor } from '../../purchasing/qualification/qualifications'
 import { vaultFilesOf } from '../../purchasing/qualification/store'
 import { SUPPLIER_COLUMNS, standingOf } from '../../purchasing/suppliers-depth/store'
-import { assertMayAt, mayAt, officeContextOf, siteFor } from '../access'
+import { assertMayAt, everyPartySiteFor, mayAt, officeContextOf } from '../access'
 import { workshopsOf, type WorkshopRow } from '../schedule/store'
 import { SITE_COLUMNS, type Reader, type SiteRow } from '../store'
 import { capacityRowOf, closedDaysOf, linesOf, readCapacityRows, readJobs, readWorkOrderOperations, type Job, type WorkOrderOperations, type WorkshopLine } from './store'
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
+import { actorOf } from '../../../core/context' // B-PR-10
 
 /**
  * Only approved workshops (B-W2b-321; PLN-162; design planning.allocation "Workshops not approved for the style are held
@@ -178,7 +180,7 @@ const reasonsView = (verdict: Verdict) => ({ offered: verdict.offered, held: [..
 
 /** GET /planning/allocation/workshops. */
 export async function allocationWorkshops(caller: CommandCaller, query: { readonly siteId: string }) {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-10: workshops' loads of every customer
   const now = serverClock.now()
   const today = businessDate(now, site.timezone)
   return caller.withClient(async (db) => {
@@ -220,6 +222,8 @@ export async function plannedWorkOrder(caller: CommandCaller, workOrderId: strin
     return workOrder && site ? { workOrder, site } : null
   })
   assertMayAt(context, permission, found ? { companyId: found.workOrder.companyId, siteId: found.workOrder.siteId } : null, 'Work order')
+  // B-PR-10: another customer's work order is not found (its customer too), as an unknown one.
+  if (!reachesWorkOrder(actorOf(context), PLANNING_VIEW, found!.workOrder)) throw new NotFoundError('Work order not found.')
   return found!
 }
 

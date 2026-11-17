@@ -9,7 +9,7 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { workerGateFor } from '../../people/privacy/worker-gate'
 import { scanSubjectFor } from '../../production/settings/subject'
-import { mayAt, officeContextOf } from '../ledger/access'
+import { mayAt, officeContextOf, assertWholeWarehouse } from '../ledger/access'
 import { viewsOf } from '../reservations/read'
 import { RESERVATION_COLUMNS } from '../reservations/store'
 import { decimalText, fixed, locatedBy, mainPlace, PARTY_SELECT, partyName, perUnit, SCOPE, type Located } from './read-kit'
@@ -138,6 +138,7 @@ export interface HideQuery {
 /** The hides the caller may see, newest first (UUIDv7 ids: the receiving order), with the tiles and the matching sums. */
 export async function listHides(caller: CommandCaller, query: HideQuery) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const lotScope = scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, SCOPE) as Prisma.LotWhereInput
   const scope: Prisma.HideWhereInput = { AND: [{ lot: lotScope }, query.siteId ? { siteId: query.siteId } : {}] }
   const text = query.q?.trim()
@@ -214,6 +215,7 @@ export async function listHides(caller: CommandCaller, query: HideQuery) {
 /** One hide: its facts, its lot's quality, what happened to its area and every cut of it (the cut log, append-only). */
 export async function hideRecord(caller: CommandCaller, hideId: string) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const hide = isUuid(hideId) ? await caller.withClient((client) => client.hide.findUnique({ where: { id: hideId }, select: HIDE_SELECT })) : null
   if (!hide || !mayAt(context, INVENTORY_STOCK_VIEW, { companyId: hide.lot.companyId, siteId: hide.siteId })) throw new NotFoundError('Hide not found.')
   return caller.withClient(async (client) => {

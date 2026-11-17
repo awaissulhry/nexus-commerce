@@ -15,6 +15,8 @@ import { namesFor, officeOf, rulesClock, rulesGuarded, type Reader } from '../re
 import { overridesFor, readGateStyle } from './facts'
 import { decideGate, shipmentTargets } from './gate'
 import { workOrderGate } from './at-steps'
+import { reachesBrand, reachedSubjects, subjectReached } from '../wall' // B-PR-10
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * Gate refusals and overrides (B-W2b-254; PRD-272; design compliance.status › cs-gates "Gate refusals" and cs-override
@@ -112,6 +114,12 @@ export async function gateFeed(request: FastifyRequest, query: FeedQuery) {
       select: EVENT_SELECT,
       orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
+    }).then(async (found) => {
+      // B-PR-10: only events about the work orders and shipments the caller reaches, of styles of brands it reaches.
+      const reached = await reachedSubjects(db, actor, CERTIFICATES_VIEW)
+      if (reached === null) return found
+      const brands = new Map((await db.style.findMany({ where: { id: { in: [...new Set(found.flatMap((row) => (row.styleId ? [row.styleId] : [])))] } }, select: { id: true, brandPartyId: true } })).map((style) => [style.id, style.brandPartyId]))
+      return found.filter((row) => subjectReached(reached, row.subjectType, row.subjectId) && (!row.styleId || reachesBrand(actor, CERTIFICATES_VIEW, brands.get(row.styleId) ?? null)))
     })
     const requirementIds = [...new Set(rows.map((row) => row.requirementId))]
     const requirements = new Map(
@@ -204,7 +212,9 @@ export async function overrideRefusalOf(caller: CommandCaller, eventId: string, 
   const context = officeOf(caller)
   const actor = actorOf(context)
   const known = await caller.withClient((db) => db.gateEvent.findUnique({ where: { id: eventId }, select: EVENT_SELECT }))
-  if (!known || !can(actor, CERTIFICATES_VIEW, { companyId: known.companyId })) throw new NotFoundError('Gate event not found.')
+  // B-PR-10: an event about another customer's work order or shipment is not found (as an unknown id).
+  const reached = known ? await caller.withClient((db) => reachedSubjects(db, actor, CERTIFICATES_VIEW)) : null
+  if (!known || !can(actor, CERTIFICATES_VIEW, { companyId: known.companyId }) || !subjectReached(reached, known.subjectType, known.subjectId)) throw new NotFoundError('Gate event not found.')
   if (!can(actor, GATES_OVERRIDE, { companyId: known.companyId })) throw new ForbiddenError()
   const until = new Date(body.until)
   if (Number.isNaN(until.getTime())) throw new DomainError('validation_failed', 'The override ends at a time (ISO 8601).', [{ path: 'body/until', message: 'A time.' }])
@@ -295,13 +305,15 @@ export async function checkGateNow(request: FastifyRequest, query: { readonly ga
   return request.withClient(async (db) => {
     const answers = []
     if (query.subjectType === 'WorkOrder') {
-      const workOrder = await db.workOrder.findUnique({ where: { id: query.subjectId }, select: { id: true, number: true, companyId: true, siteId: true, styleId: true, labelTemplateId: true, styleRevisionId: true } })
-      if (!workOrder || !can(actor, CERTIFICATES_VIEW, { companyId: workOrder.companyId })) throw new NotFoundError('Work order not found.')
+      const workOrder = await db.workOrder.findUnique({ where: { id: query.subjectId }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true, styleId: true, labelTemplateId: true, styleRevisionId: true } })
+      // B-PR-10: another customer's work order is not found (its company, site AND customer).
+      if (!workOrder || !can(actor, CERTIFICATES_VIEW, { companyId: workOrder.companyId }) || !reachesWorkOrder(actor, CERTIFICATES_VIEW, workOrder)) throw new NotFoundError('Work order not found.')
       const labelTemplateId = workOrder.labelTemplateId ?? (workOrder.styleRevisionId ? ((await db.styleRevision.findUnique({ where: { id: workOrder.styleRevisionId }, select: { labelTemplateId: true } }))?.labelTemplateId ?? null) : null)
       answers.push(await workOrderGate(db, query.gate, { ...workOrder, labelTemplateId }, now))
     } else {
       const facts = await shipmentTargets(db, query.subjectId)
-      if (!facts || !can(actor, CERTIFICATES_VIEW, { companyId: facts.companyId })) throw new NotFoundError('Shipment not found.')
+      // B-PR-10: another customer's shipment is not found.
+      if (!facts || !can(actor, CERTIFICATES_VIEW, { companyId: facts.companyId }) || !subjectReached(await reachedSubjects(db, actor, CERTIFICATES_VIEW), 'Shipment', query.subjectId)) throw new NotFoundError('Shipment not found.')
       for (const [styleId, targets] of facts.styles) {
         answers.push(await decideGate(db, { gate: query.gate, subjectType: 'Shipment', subjectId: query.subjectId, subjectWords: `Shipment ${facts.number}`, companyId: facts.companyId, siteId: facts.siteId, styleId, targets, day: businessDate(now), now }))
       }

@@ -2,6 +2,8 @@ import { z } from 'zod'
 import { businessDate, id, input, instant, output } from '../../core/contracts'
 import { inquiryRow } from '../inquiries/contracts'
 import { INQUIRY_SOURCES, INQUIRY_STATUSES } from '../inquiries/rules'
+// B-TH-235: what a request became (Sales › Reports' request figure opens Incoming with it).
+import { REQUEST_OUTCOMES } from '../inquiries/rules'
 import { INCOMING_CHANGE_KINDS, INCOMING_KINDS, INCOMING_LIMITS, INCOMING_TILES } from './rules'
 
 /**
@@ -34,6 +36,8 @@ export const incomingListQuery = input({
   limit: z.coerce.number().int().min(1).max(INCOMING_LIMITS.list).optional(),
   /** `next` of the page before, as it came. */
   cursor: z.string().min(1).max(500).optional(),
+  /** B-TH-235: what a request became, as Sales › Reports' request figure counts it: only requests are listed then. */
+  outcome: z.enum(REQUEST_OUTCOMES).optional(),
 })
 export type IncomingListQuery = z.output<typeof incomingListQuery>
 
@@ -108,7 +112,11 @@ export const incomingRow = output({
 
 export const incomingList = output({
   rows: z.array(incomingRow),
-  /** Each tile's number under the filters, every kind the reader may see (null: not counted, "—"). */
+  /**
+   * Each tile's number under the filters, every kind the reader may see (null: not counted, "—"). B-TH-047: also CUSTOMER_REPLIES,
+   * the "Customer replies" saved row — the conversations on the customer's other records that wait on us and the reader may open,
+   * under the company and customer filters (its rows: GET /threads/waiting?side=CUSTOMER).
+   */
   counts: z.record(z.string(), z.number().int().nullable()),
   /** The rows of the tile asked, per kind (null: the reader may not see that kind, or the filters leave it out). */
   kinds: output({ REQUEST: z.number().int().nullable(), CATALOGUE_ORDER: z.number().int().nullable(), CHANGE_REQUEST: z.number().int().nullable() }),

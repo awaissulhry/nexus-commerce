@@ -7,6 +7,9 @@ import { defineManifest } from '../../../core/manifest'
 export const manifest = defineManifest({
   'GET /portal/sales-orders': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
   'GET /portal/sales-orders/in-transit': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
+  // ---- B-TH-061: the customer's own sheet and its "Download all" (written here in the partner scope, never the export job).
+  'GET /portal/sales-orders/sheet': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
+  'GET /portal/sales-orders/sheet/download': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
   'GET /portal/sales-orders/:orderId': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
   'GET /portal/sales-orders/:orderId/progress': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },
   'GET /portal/sales-orders/:orderId/shipments': { audiences: ['partner'], permission: 'portal.salesOrders.view', scope: 'party' },

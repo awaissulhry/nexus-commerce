@@ -59,7 +59,7 @@ async function styleLines(db: Reader, style: GateStyle, requirements: readonly R
 
 const styleWhere = (context: OfficeContext, query: { readonly companyId?: string | undefined; readonly q?: string | undefined; readonly brandId?: string | undefined }): Prisma.StyleWhereInput => ({
   AND: [
-    scopeWhere(actorOf(context), CERTIFICATES_VIEW, { company: { field: 'companyId', nullable: true } }) as Prisma.StyleWhereInput,
+    scopeWhere(actorOf(context), CERTIFICATES_VIEW, { company: { field: 'companyId', nullable: true }, party: { field: 'brandPartyId', nullable: true } }) as Prisma.StyleWhereInput, // B-PR-10: by brand too
     // Styles in development and in production (an archived one sells nowhere).
     { status: { not: 'ARCHIVED' } },
     query.companyId ? { companyId: query.companyId } : {},

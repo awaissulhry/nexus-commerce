@@ -33,6 +33,12 @@ export interface BulkTarget<Row> {
   readonly listKey: string
   readonly permission: Permission
   readonly fields: Readonly<Record<string, BulkTargetField<Row>>>
+  /**
+   * B-TH-060: the fields known only when the person asks — a list's custom values (platform/fields: the fields THIS person sees on
+   * the record type, by the frame's column id `cf:<code>`) — beside `fields`; a field this person does not see is no field of the
+   * list for them (400 "Not a field this list edits", never told it exists).
+   */
+  fieldsFor?(caller: CommandCaller): Promise<Readonly<Record<string, BulkTargetField<Row>>>>
   load(caller: CommandCaller, ids: readonly string[]): Promise<readonly Row[]>
   idOf(row: Row): string
   labelOf(row: Row): string

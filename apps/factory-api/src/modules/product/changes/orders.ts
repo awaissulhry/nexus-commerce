@@ -64,6 +64,7 @@ import {
   ORDER_COLUMNS,
   orderRowsOf,
   personMay,
+  orderWall,
   readOrderFor,
   refuse,
   REQUEST_COLUMNS,
@@ -150,8 +151,9 @@ async function linkRequests(tools: CommandTools, order: Pick<OrderData, 'id' | '
 /** POST /product/change-orders */
 export async function createOrder(caller: CommandCaller, body: CreateOrderBody, idempotencyKey?: string): Promise<OrderView> {
   const context = officeOf(caller)
-  const style = await caller.withClient((db) => db.style.findUnique({ where: { id: body.styleId }, select: { id: true, code: true, companyId: true } }))
-  if (!style || (style.companyId !== null && !may(context, PRODUCT_CHANGES_VIEW, style.companyId))) throw new NotFoundError('Style not found.')
+  const style = await caller.withClient((db) => db.style.findUnique({ where: { id: body.styleId }, select: { id: true, code: true, companyId: true, brandPartyId: true } }))
+  // B-PR-10: another customer's private-label style is not found (as an unknown id).
+  if (!style || (style.companyId !== null && !may(context, PRODUCT_CHANGES_VIEW, style.companyId)) || !can(actorOf(context), PRODUCT_CHANGES_VIEW, { partyId: style.brandPartyId })) throw new NotFoundError('Style not found.')
   const companyId = style.companyId ?? body.companyId ?? context.companyId ?? null
   if (companyId === null) badBody('companyId', `Style ${style.code} is every company's: say which company the change order is for.`)
   if (style.companyId !== null && body.companyId !== undefined && body.companyId !== style.companyId) badBody('companyId', 'The change order is for the style’s company.')
@@ -538,6 +540,7 @@ function orderWhere(context: OfficeContext, query: OrderListQuery, tile: OrderTi
   return {
     AND: [
       scope,
+      orderWall(actorOf(context), PRODUCT_CHANGES_VIEW), // B-PR-10
       byTile,
       query.status ? { status: query.status } : {},
       query.styleId ? { styleId: query.styleId } : {},

@@ -5,7 +5,7 @@ import { reversalOf } from '@nexus/factory-domain/inventory/ledger/moves'
 import { INVENTORY_TRANSFER } from '@nexus/factory-domain/inventory/permissions'
 import { DomainError } from '@nexus/factory-domain/core/errors'
 import { command, type CommandCaller } from '../../../core/command'
-import { mayAt, stockContextOf, type StockContext } from '../ledger/access'
+import { mayAt, stockContextOf, type StockContext, assertWholeWarehouse } from '../ledger/access'
 import { LEDGER_SELECT, postMoves, type LedgerRow } from '../ledger/post-moves'
 import { askAgainAfterUndoInCommand } from '../tasks/lifecycle'
 import { namesOf, taskView } from '../tasks/store'
@@ -26,6 +26,7 @@ const own = (context: StockContext, move: Pick<LedgerRow, 'createdById' | 'devic
 
 export async function undoMove(caller: CommandCaller, moveId: string, idempotencyKey?: string) {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const original = isUuid(moveId) ? await caller.withClient((db) => db.stockMove.findUnique({ where: { id: moveId }, select: LEDGER_SELECT })) : null
   if (!original || !mayAt(context, INVENTORY_TRANSFER, original)) throw new NotFoundError('Move not found.')
   const group = SCAN_KEY.exec(original.idempotencyKey)?.[1] ?? null

@@ -16,7 +16,7 @@ import { contextOf, mayWrite } from '../materials/store'
 import { readOperations, readSteps, type OperationFacts, type StepRecord } from '../routing/read'
 // B-W2b-95: a line a pattern piece names is not removed, nor turned into a material its graded pieces cannot take.
 import { assertNoPiecesUse, assertPiecesFollowMaterial } from '../pieces/guards'
-import { lockStyle } from '../styles/store'
+import { lockStyle, styleScope } from '../styles/store'
 import { requireEditRule } from '../lifecycle/edit-rule'
 // B-W2b-223: B-W2b-206's and B-W2b-211's BomLine rules said in words before the database refuses (never a 500).
 import { assertLineKeepsStructure, assertNotGroupRow } from '../bom-structure/guards'
@@ -40,7 +40,7 @@ export { contextOf }
 /** Each figure of a screen is rounded half up to the quantity scale (4 decimals), once. */
 export const ROUND: RoundTo = { scale: QUANTITY_SCALE, rounding: 'HALF_UP' }
 
-export const STYLE_COLUMNS = { id: true, code: true, name: true, companyId: true, status: true, sizes: true, baseSize: true, sizeScaleId: true } as const satisfies Prisma.StyleSelect
+export const STYLE_COLUMNS = { id: true, code: true, name: true, companyId: true, brandPartyId: true, status: true, sizes: true, baseSize: true, sizeScaleId: true } as const satisfies Prisma.StyleSelect // B-PR-10: brandPartyId
 export type BomStyleRow = Prisma.StyleGetPayload<{ select: typeof STYLE_COLUMNS }>
 
 export const REVISION_COLUMNS = {
@@ -137,7 +137,7 @@ export async function readStyleFor(caller: CommandCaller, styleId: string): Prom
   const context = contextOf(caller)
   if (!isUuid(styleId)) throw new NotFoundError('Style not found.')
   const row = await caller.withClient((client) => client.style.findUnique({ where: { id: styleId }, select: STYLE_COLUMNS }))
-  if (!row || !can(actorOf(context), PRODUCT_BOM_VIEW, { companyId: row.companyId })) throw new NotFoundError('Style not found.')
+  if (!row || !can(actorOf(context), PRODUCT_BOM_VIEW, styleScope(row))) throw new NotFoundError('Style not found.') // B-PR-10: its brand too
   return row
 }
 

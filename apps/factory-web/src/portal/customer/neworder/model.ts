@@ -2,6 +2,8 @@ import { formatNumber } from '../../../lib/i18n/format'
 import type { Locale } from '../../../lib/i18n/locales'
 import { addressLine } from '../account/model'
 import { LIMITS, type DraftLine, type DraftRecord, type DraftRequest, type HeaderBody, type NoticeCode, type PastLine, type Problem, type RequestSource, type ShipTo, type SizeAsk, type Verdict } from './api'
+// B-TH-304: the customer's own order numbers.
+import type { OwnNumber } from './api'
 
 /**
  * New order & reorder (B-W2b-194; design portal.customer.neworder, SCR-185), pure: the page's address, the three ways in,
@@ -47,6 +49,28 @@ export function newOrderHref(prefix: string, query: NewOrderQuery = {}): string 
 /** The ids of `styles=` (at most 20, each once). */
 export const stylesOf = (value: string | null | undefined): string[] =>
   [...new Set((value ?? '').split(',').map((part) => part.trim()).filter((part) => /^[0-9a-f-]{8,64}$/i.test(part)))].slice(0, 20)
+
+// ── B-TH-304 (pick A, plan §0.5): an order named by the customer's own number, never the office's series ──────────────────
+/** RefPair's second side for a past order: the customer's own number ("Your order" · "12"); null when it has none. */
+export function ownOrderRef(number: OwnNumber, locale: Locale): { label: string; value: string } | null {
+  if (!number) return null
+  const words = number.words[locale]
+  const value = String(number.seq)
+  return { label: words.endsWith(value) ? words.slice(0, words.length - value.length).trim() : words, value }
+}
+
+/** Where a reorder line came from, in words: "from your order 12 (your PO BA-PO-4410)", else by its day — never SO-…. */
+export function fromOrderText(source: { readonly yourNumber: OwnNumber; readonly customerRef: string | null; readonly orderDate: string | null }, t: Translate, day: (date: string) => string): string {
+  const ref = source.customerRef
+  if (source.yourNumber) return ref ? t('lines.fromOwnRef', { seq: source.yourNumber.seq, ref }) : t('lines.fromOwn', { seq: source.yourNumber.seq })
+  const when = source.orderDate ? day(source.orderDate) : '—'
+  return ref ? t('lines.fromDayRef', { day: when, ref }) : t('lines.fromDay', { day: when })
+}
+
+/** The label of a past order's lines: "Lines of your order 12", else by its day. */
+export const orderLinesLabel = (order: { readonly yourNumber: OwnNumber; readonly orderDate: string | null }, t: Translate, day: (date: string) => string): string =>
+  order.yourNumber ? t('reorder.linesOwn', { seq: order.yourNumber.seq }) : t('reorder.linesDay', { day: order.orderDate ? day(order.orderDate) : '—' })
+// ── end B-TH-304
 
 /** The orders list a sent request waits in (B-W2b-191: the Requested chip). */
 export const requestedHref = (prefix: string): string => `${prefix}/orders?chip=REQUESTED`

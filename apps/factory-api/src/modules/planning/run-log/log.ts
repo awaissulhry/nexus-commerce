@@ -5,7 +5,7 @@ import { demandOf, needDateOf, PROTECTABLE_FIELDS, sizesOf } from '@nexus/factor
 import { inputsSentence, readRunInputs, warningCounts } from '@nexus/factory-domain/planning/run-log/inputs'
 import { plannedOrderReason, requirementReason } from '@nexus/factory-domain/planning/run-log/reasons'
 import type { CommandCaller } from '../../../core/command'
-import { assertMayAt, officeContextOf } from '../access'
+import { assertEveryPartyAt, assertMayAt, officeContextOf } from '../access'
 import { PLANNED_COLUMNS } from '../planned-orders/store'
 import { dayOf } from '../store'
 import { quantityOf, REQUIREMENT_COLUMNS, RUN_COLUMNS, runCounts, runViewOf, sourcesOf, warningsOf } from '../views'
@@ -25,6 +25,7 @@ export async function runLog(caller: CommandCaller, runId: string): Promise<RunL
     const run = isUuid(runId) ? await db.planningRun.findUnique({ where: { id: runId }, select: { ...RUN_COLUMNS, inputs: true } }) : null
     assertMayAt(office, PLANNING_VIEW, run, 'Run')
     if (!run) throw new NotFoundError('Run not found.')
+    assertEveryPartyAt(office, PLANNING_VIEW, run) // B-PR-10: a run's log names every customer's orders (as its run, B-PR-07)
     const counts = (await runCounts(db, [run.id])).get(run.id) ?? { requirements: 0, short: 0 }
     const inputs = readRunInputs(run.inputs)
     const warnings = warningsOf(run.warnings)

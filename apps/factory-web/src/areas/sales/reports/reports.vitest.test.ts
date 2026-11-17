@@ -1,4 +1,15 @@
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+// B-TH-235: the request figure (the domain's parts and prospects' key), its design cases and Incoming's own address.
+import { PROSPECTS_KEY as DOMAIN_PROSPECTS, requestFiguresOf } from '@nexus/factory-domain/insights/sales-reports/rules'
+import type { DesignScreen } from '../../../lib/design/design-screen'
+import { messagesFor } from '../../../lib/i18n/messages'
+import { I18nProvider } from '../../../lib/i18n/provider'
+import { addressOf as incomingAddressOf, queryOf as incomingQueryOf } from '../inquiries/model'
+import { PROSPECTS_KEY, REQUEST_FIGURES, type RequestFigures as RequestFiguresRow } from './api'
+import { designScreen, REQUESTS } from './fixtures'
+import { LIVE_TYPES, REQUEST_DOORS, requestGroupName, requestsCsvRows, requestsDoor } from './model'
 import { BACKLOG_GROUPS as DOMAIN_BACKLOG, BACKLOG_HORIZONS as DOMAIN_HORIZONS, BACKLOG_WEEK_KINDS as DOMAIN_WEEKS, FEES_KEY as DOMAIN_FEES, INTAKE_BUCKETS as DOMAIN_BUCKETS, INTAKE_SPLITS as DOMAIN_SPLITS, NO_KEY as DOMAIN_NO_KEY, RETURN_GROUPS as DOMAIN_RETURNS } from '@nexus/factory-domain/insights/sales-reports/rules'
 import en from '../../../../messages/en/sales-reports.json'
 import it_ from '../../../../messages/it/sales-reports.json'
@@ -158,3 +169,96 @@ describe('Quote speed', () => {
     for (const tile of tiles) expect(typeof leaf(en, `speed.tile.${tile.key}`), tile.key).toBe('string')
   })
 })
+
+// ---- B-TH-235 (threads plan X-SAL-REPORTS.drill, L2-G10; Owner rule "every total opens its rows"): the request figure ----------
+describe('B-TH-235 requests received, quoted and ordered — every number a door to Sales › Incoming', () => {
+  const render = (id: string, locale: 'it' | 'en' = 'en') => {
+    const entry = (designScreen as unknown as DesignScreen<unknown>).cases.find((item) => item.id === id)!
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'sales-reports', 'warehouse-reports']) }, createElement((designScreen as unknown as DesignScreen<unknown>).view, { model: entry.model })))
+  }
+  // The figure's doors only (the shell's navigation may link Incoming too): each names requests.
+  const doors = (html: string): string[] => [...html.matchAll(/href="([^"]*\/sales\/incoming[^"]*)"/g)].map((match) => match[1]!.replace(/&amp;/g, '&')).filter((href) => href.includes('kind=REQUEST'))
+
+  it('its parts are the API’s, in the funnel’s order; the prospects’ key is the domain’s', () => {
+    expect([...REQUEST_FIGURES].sort()).toEqual(Object.keys(requestFiguresOf([])).filter((key) => !key.endsWith('Pct')).sort())
+    expect(PROSPECTS_KEY).toBe(DOMAIN_PROSPECTS)
+    expect(REQUEST_FIGURES[0]).toBe('received')
+  })
+
+  it('each figure opens Incoming with its tile or what the request became, the days and the customer — and Incoming reads exactly that', () => {
+    const company = 'c0c0c0c0-0000-4000-8000-000000000001'
+    const period = { company, from: '2026-11-01', to: '2026-11-12', group: null }
+    expect(requestsDoor('/w/DEMO', 'received', period)).toBe(`/w/DEMO/sales/incoming?tile=ALL&company=${company}&from=2026-11-01&to=2026-11-12&kind=REQUEST`)
+    expect(requestsDoor('/w/DEMO', 'open', { ...period, company: null })).toBe('/w/DEMO/sales/incoming?from=2026-11-01&to=2026-11-12&kind=REQUEST')
+    expect(requestsDoor('/w/DEMO', 'ordered', { ...period, group: 'c1c1c1c1-0000-4000-8000-000000000001' })).toBe(`/w/DEMO/sales/incoming?tile=ALL&company=${company}&party=c1c1c1c1-0000-4000-8000-000000000001&from=2026-11-01&to=2026-11-12&outcome=ORDERED&kind=REQUEST`)
+    expect(requestsDoor('/w/DEMO', 'notAnOrder', { ...period, group: PROSPECTS_KEY })).toBe(`/w/DEMO/sales/incoming?tile=ALL&company=${company}&prospect=1&from=2026-11-01&to=2026-11-12&outcome=NOT_AN_ORDER&kind=REQUEST`)
+    for (const figure of REQUEST_FIGURES) {
+      const href = requestsDoor('/w/DEMO', figure, { company, from: '2026-11-09', to: '2026-11-15', group: 'c1c1c1c1-0000-4000-8000-000000000001' })
+      const address = incomingAddressOf(new URLSearchParams(href.split('?')[1]))
+      // The list's own reading of the address: the door's tile, outcome, company, days and customer — the query the figure counts.
+      expect(incomingQueryOf(address), figure).toMatchObject({ tile: REQUEST_DOORS[figure].tile, outcome: REQUEST_DOORS[figure].outcome, companyId: company, receivedFrom: '2026-11-09', receivedTo: '2026-11-15', partyId: 'c1c1c1c1-0000-4000-8000-000000000001', prospect: false })
+    }
+    // The doors' table is the one the API test holds equal to the figure (request-funnel.pg: the same seven doors).
+    expect(Object.fromEntries(REQUEST_FIGURES.map((figure) => [figure, [REQUEST_DOORS[figure].tile, REQUEST_DOORS[figure].outcome]]))).toEqual({
+      received: ['ALL', null],
+      quoted: ['QUOTED', null],
+      ordered: ['ALL', 'ORDERED'],
+      declined: ['ALL', 'DECLINED'],
+      lost: ['LOST', null],
+      notAnOrder: ['ALL', 'NOT_AN_ORDER'],
+      open: ['OPEN', null],
+    })
+  })
+
+  it('on screen every number above 0 is a real link into Incoming (tiles, weeks, customers); a 0 opens nothing', () => {
+    const html = render('th-235-requests')
+    const links = doors(html)
+    const nonZero = (figures: RequestFiguresRow) => REQUEST_FIGURES.filter((figure) => figures[figure] > 0).length
+    const tiles = nonZero(REQUESTS.all!)
+    const weeks = REQUESTS.buckets.reduce((sum, bucket) => sum + (['received', 'quoted', 'ordered'] as const).filter((figure) => bucket.figures[figure] > 0).length, 0)
+    const customers = REQUESTS.groups.reduce((sum, group) => sum + nonZero(group.figures), 0)
+    expect(links).toHaveLength(tiles + weeks + customers)
+    expect(links.every((href) => href.startsWith('/w/') && href.endsWith('kind=REQUEST'))).toBe(true)
+    expect(links).toContain(requestsDoor(links[0]!.split('/sales/')[0]!, 'ordered', { company: REQUESTS.company?.id ?? null, from: REQUESTS.from, to: REQUESTS.to, group: null }))
+    // Every door names the company the figure was counted for (Incoming lists every company the person reaches).
+    expect(links.every((href) => href.includes(`company=${REQUESTS.company!.id}`))).toBe(true)
+    expect(links.filter((href) => href.includes('prospect=1')).length).toBe(nonZero(REQUESTS.groups.find((group) => group.key === PROSPECTS_KEY)!.figures))
+    for (const words of ['Requests received, quoted and ordered', 'Not an order', 'Prospects (not customers yet)', 'Order rate']) expect(html).toContain(words)
+    expect(render('th-235-requests', 'it')).toContain('Richieste arrivate, preventivate e ordinate')
+  })
+
+  it('W27/W30: a person limited to one customer sees that customer and the prospects only; without the requests’ right it says so, never 0', () => {
+    // The request figure's own block (the backlog panel beside it names every customer the backlog holds).
+    const block = (html: string) => {
+      const start = html.indexOf('class="fw-slr-requests"')
+      return start < 0 ? '' : html.slice(start, html.indexOf('</section>', start))
+    }
+    const limited = block(render('th-235-limited'))
+    const [first, second, third] = REQUESTS.groups
+    expect(limited).toContain(first!.name!)
+    expect(limited).toContain('Prospects (not customers yet)')
+    for (const other of [second!, third!]) {
+      expect(limited).not.toContain(other.name!)
+      expect(limited).not.toContain(other.code!)
+      expect(limited).not.toContain(other.key)
+    }
+    const outside = render('th-235-outside')
+    expect(outside).toContain('Requests are not in your role')
+    expect(doors(outside)).toEqual([])
+    expect(render('th-235-empty')).toContain('No request came in this period')
+    expect(render('th-235-failed')).toContain('The request figure could not be read.')
+    // Orders outside the role: the intake says so, the request figure still opens Incoming.
+    const ordersOutside = render('th-235-orders-outside')
+    expect(ordersOutside).toContain('Orders are not in your role')
+    expect(doors(ordersOutside).length).toBeGreaterThan(0)
+  })
+
+  it('the file holds the buckets then the customers, as on screen; requests refresh live', () => {
+    const rows = requestsCsvRows(REQUESTS, { bucket: (bucket) => bucket.key, group: (group) => requestGroupName(group, 'Prospects') })
+    expect(rows).toHaveLength(REQUESTS.buckets.length + REQUESTS.groups.length)
+    expect(rows[REQUESTS.buckets.length]).toEqual(['', `${REQUESTS.groups[0]!.code} · ${REQUESTS.groups[0]!.name}`, ...REQUEST_FIGURES.map((figure) => REQUESTS.groups[0]!.figures[figure]), REQUESTS.groups[0]!.figures.quotedPct, REQUESTS.groups[0]!.figures.orderedPct])
+    expect(requestGroupName(REQUESTS.groups.at(-1)!, 'Prospects')).toBe('Prospects')
+    expect(LIVE_TYPES).toContain('inquiry.')
+  })
+})
+// ---- end B-TH-235

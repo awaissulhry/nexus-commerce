@@ -2,7 +2,7 @@ import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { heldGrains, type Grain } from '@nexus/factory-domain/auth/grains/grains'
 import { ForbiddenError, NotFoundError, UnauthenticatedError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, EVERY_PARTY_WORDS, type Permission } from '@nexus/factory-domain/core/permissions'
 import { serverClock, type Clock } from '../../core/time'
 import { COMMAND_SETTINGS, runCommand, type CommandCaller, type CommandSpec, type CommandTools, type CommandTx } from '../../core/command'
 import { actorOf, type OfficeContext } from '../../core/context'
@@ -35,6 +35,10 @@ export function officeOf(caller: CommandCaller): OfficeContext {
   const context = caller.factoryContext
   if (!context) throw new UnauthenticatedError()
   if (context.audience !== 'office') throw new ForbiddenError()
+  // B-PR-10 (the brand wall, production plan §2 "a view that mixes brands needs access to every brand"): the books — a month's
+  // period, its exports, the integrity checks, the account mapping — add up every customer's invoices, stock and work in
+  // progress. A person none of whose grants reaches every customer gets 403 in words that name none of them.
+  if (!context.grants.some((grant) => grant.parties === 'all')) throw new ForbiddenError(EVERY_PARTY_WORDS.en)
   return context
 }
 

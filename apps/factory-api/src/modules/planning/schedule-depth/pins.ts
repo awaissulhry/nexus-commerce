@@ -12,6 +12,8 @@ import { storedSlotView } from '../schedule/publish'
 import { lockedSlot, lockedWorkingPlan, SLOT_COLUMNS, userNamesOf, type SlotRow } from '../schedule/store'
 import type { PinSlotBody, PinWorkOrderBody } from './contract'
 import { emitDepthChange, logChanges } from './log'
+import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
+import { actorOf } from '../../../core/context' // B-PR-10
 
 /**
  * Pinned operations (B-W2b-312; PLN-139 "lock an order or operation in place so automatic scheduling never moves it";
@@ -31,6 +33,9 @@ import { emitDepthChange, logChanges } from './log'
 
 async function slotTarget(caller: CommandCaller, slotId: string) {
   const context = officeContextOf(caller)
+  // B-PR-10: a pin holds work on lanes every customer shares (as B-PR-07's slot writes): 403 for a person limited to some
+  // customers, before any record is read.
+  assertEveryParty(actorOf(context), PLANNING_SCHEDULE_PIN)
   const slot = await caller.withClient((db) => (isUuid(slotId) ? db.scheduleSlot.findUnique({ where: { id: slotId }, select: { id: true, siteId: true, planKind: true, workOrder: { select: { id: true, number: true, companyId: true, site: { select: SITE_COLUMNS } } } } }) : Promise.resolve(null)))
   assertMayAt(context, PLANNING_VIEW, slot ? { companyId: slot.workOrder.companyId, siteId: slot.siteId } : null, 'Slot')
   assertMayAt(context, PLANNING_SCHEDULE_PIN, { companyId: slot!.workOrder.companyId, siteId: slot!.siteId }, 'Slot')
@@ -110,6 +115,9 @@ export async function pinSlot(caller: CommandCaller, slotId: string, body: PinSl
 
 async function workOrderTarget(caller: CommandCaller, workOrderId: string): Promise<{ id: string; number: string; companyId: string; site: SiteRow }> {
   const context = officeContextOf(caller)
+  // B-PR-10: a pin holds work on lanes every customer shares (as B-PR-07's slot writes): 403 for a person limited to some
+  // customers, before any record is read.
+  assertEveryParty(actorOf(context), PLANNING_SCHEDULE_PIN)
   const row = await caller.withClient((db) => (isUuid(workOrderId) ? db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, companyId: true, siteId: true, site: { select: SITE_COLUMNS } } }) : Promise.resolve(null)))
   assertMayAt(context, PLANNING_VIEW, row ? { companyId: row.companyId, siteId: row.siteId } : null, 'Work order')
   assertMayAt(context, PLANNING_SCHEDULE_PIN, { companyId: row!.companyId, siteId: row!.siteId }, 'Work order')

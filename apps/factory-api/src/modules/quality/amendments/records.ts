@@ -11,6 +11,7 @@ import { normalValue, SIGNED_STATES, type AmendedRecord, type AmendedRow, type A
 import type { CheckType } from '@nexus/factory-domain/quality/plans/rules'
 import type { CommandCaller, CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * The records a correction is of, and the rows of each it may be on (B-W2b-123; factory-db quality.prisma Inspection and
@@ -40,6 +41,8 @@ export interface AmendedRecordRow {
   readonly note: string | null
   readonly planVersionId: string | null
   readonly checklist: Prisma.JsonValue | null
+  /** B-PR-10: the work order it is of (an inspection's, a check's), with its one customer; null: of no work order (incoming). */
+  readonly workOrder: { readonly partyId: string | null } | null
 }
 
 const KIND_WORDS: Readonly<Record<string, string>> = { FIRST_PIECE: 'First piece', CUTTING: 'Cutting check', ROVING: 'Roving check', END_OF_LINE: 'End of line' }
@@ -50,22 +53,26 @@ export async function readRecord(db: Reader, type: AmendedRecord, id: string): P
   if (type === 'Inspection') {
     const row = await db.inspection.findUnique({ where: { id }, select: { id: true, companyId: true, siteId: true, status: true, signatureSha256: true, number: true, workOrderId: true, note: true, planVersionId: true, checklist: true } })
     if (!row) return null
-    const label = row.number ?? `${(await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { number: true } }))?.number ?? 'WO'} · inspection`
-    return { type, id: row.id, companyId: row.companyId, siteId: row.siteId, status: row.status, signatureSha256: row.signatureSha256, label, note: row.note, planVersionId: row.planVersionId, checklist: row.checklist }
+    const order = await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { number: true, partyId: true } })
+    const label = row.number ?? `${order?.number ?? 'WO'} · inspection`
+    return { type, id: row.id, companyId: row.companyId, siteId: row.siteId, status: row.status, signatureSha256: row.signatureSha256, label, note: row.note, planVersionId: row.planVersionId, checklist: row.checklist, workOrder: { partyId: order?.partyId ?? null } }
   }
   if (type === 'IncomingInspection') {
     const row = await db.incomingInspection.findUnique({ where: { id }, select: { id: true, companyId: true, siteId: true, status: true, signatureSha256: true, number: true, note: true, planVersionId: true } })
-    return row ? { type, id: row.id, companyId: row.companyId, siteId: row.siteId, status: row.status, signatureSha256: row.signatureSha256, label: row.number, note: row.note, planVersionId: row.planVersionId, checklist: null } : null
+    return row ? { type, id: row.id, companyId: row.companyId, siteId: row.siteId, status: row.status, signatureSha256: row.signatureSha256, label: row.number, note: row.note, planVersionId: row.planVersionId, checklist: null, workOrder: null } : null
   }
   const row = await db.inProcessCheck.findUnique({ where: { id }, select: { id: true, companyId: true, siteId: true, status: true, signatureSha256: true, kind: true, workOrderId: true, note: true, planVersionId: true, decidedAt: true } })
   if (!row) return null
-  const order = row.workOrderId ? (await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { number: true } }))?.number : null
-  const label = [KIND_WORDS[row.kind] ?? row.kind, order].filter(Boolean).join(' · ')
-  return { type, id: row.id, companyId: row.companyId, siteId: row.siteId, status: row.status, signatureSha256: row.signatureSha256, label, note: row.note, planVersionId: row.planVersionId, checklist: null }
+  const workOrder = row.workOrderId ? await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { number: true, partyId: true } }) : null
+  const label = [KIND_WORDS[row.kind] ?? row.kind, workOrder?.number].filter(Boolean).join(' · ')
+  return { type, id: row.id, companyId: row.companyId, siteId: row.siteId, status: row.status, signatureSha256: row.signatureSha256, label, note: row.note, planVersionId: row.planVersionId, checklist: null, workOrder: row.workOrderId ? { partyId: workOrder?.partyId ?? null } : null }
 }
 
-export const maySee = (context: OfficeContext, record: Pick<AmendedRecordRow, 'type' | 'companyId' | 'siteId'>, permission: Permission = VIEW_OF[record.type]): boolean =>
-  can(actorOf(context), permission, { companyId: record.companyId, siteId: record.siteId })
+// B-PR-10 (the brand wall): a record of a work order is seen only by who reaches that work order's customer (B-PR-03's rule: a
+// work order of no customer, every customer); an incoming inspection (supplier lots) or a check of no work order names none.
+export const maySee = (context: OfficeContext, record: Pick<AmendedRecordRow, 'type' | 'companyId' | 'siteId' | 'workOrder'>, permission: Permission = VIEW_OF[record.type]): boolean =>
+  can(actorOf(context), permission, { companyId: record.companyId, siteId: record.siteId }) &&
+  (record.workOrder === null || reachesWorkOrder(actorOf(context), permission, { companyId: record.companyId, siteId: record.siteId, partyId: record.workOrder.partyId }))
 
 /** The record as the caller may reach it: seen (else 404) and, when asked, the permission over it (else 403). */
 export async function recordFor(caller: CommandCaller, context: OfficeContext, type: AmendedRecord, id: string, permission?: Permission): Promise<AmendedRecordRow> {

@@ -44,6 +44,18 @@ export const isOpen = (status: InquiryStatus): boolean => (OPEN_STATUSES as read
 export const DECLINE_REASONS = ['CAPACITY', 'LEAD_TIME', 'NOT_OUR_PRODUCT', 'PRICE', 'OTHER', 'NOT_AN_ORDER'] as const
 export type DeclineReason = (typeof DECLINE_REASONS)[number]
 
+// ---- B-TH-235 (threads plan X-SAL-REPORTS.drill; Owner rule "every total opens its rows") ----------------------------------
+/**
+ * What a request became, as Sales › Reports' request figure counts it (factory-domain insights/sales-reports requestFiguresOf):
+ * ORDERED — an order was made straight from it (ORDERED) or from its quote (an order of one of the quote's versions, not
+ * cancelled, that the reader may see); DECLINED — declined for any reason but "Not an order"; NOT_AN_ORDER — declined as not an
+ * order. The figure's other parts are the list's own tiles (ALL, OPEN, QUOTED, LOST). Sales › Incoming lists exactly the rows a
+ * figure counts with `?outcome=` (and `?from=&to=` for the period).
+ */
+export const REQUEST_OUTCOMES = ['ORDERED', 'DECLINED', 'NOT_AN_ORDER'] as const
+export type RequestOutcome = (typeof REQUEST_OUTCOMES)[number]
+// ---- end B-TH-235
+
 /** GDPR art. 6(1): a contact's and a prospect's lawful basis. A request for a quote is CONTRACT (steps at the person's request). */
 export const LAWFUL_BASES = ['CONTRACT', 'CONSENT', 'LEGITIMATE_INTEREST', 'LEGAL_DUTY'] as const
 export type LawfulBasis = (typeof LAWFUL_BASES)[number]
@@ -139,6 +151,9 @@ export const INQUIRY_REFUSALS = [
   'MATCH_FOUND',
   'CODE_TAKEN',
   // ---- end B-TH-042
+  // ---- B-TH-043: "Not an order" sends nothing to the customer
+  'SENDS_NOTHING',
+  // ---- end B-TH-043
 ] as const
 export type InquiryRefusalCode = (typeof INQUIRY_REFUSALS)[number]
 export interface InquiryRefusal {
@@ -186,6 +201,25 @@ export function declineRefusal(facts: InquiryFacts, reason: DeclineReason, note:
 }
 
 export const loseRefusal = (facts: InquiryFacts): InquiryRefusal | null => closed(facts)
+
+// ---- B-TH-043 (threads plan G6, N13): Decline with one message, and Not an order ------------------------------------------
+
+/**
+ * The one message a single decline may send to the customer (the "Send to the customer" tick; a decline of several requests never
+ * sends: its body has no message). "Not an order" closes a request that asks nothing to make (spam, a wrong address, a question)
+ * without a word to the customer, who reads "Closed"; a prospect is no customer yet: it is made a customer first (B-TH-042), as
+ * for Ask for info.
+ */
+export function declineMessageRefusal(facts: InquiryFacts, reason: DeclineReason): InquiryRefusal | null {
+  if (reason === 'NOT_AN_ORDER') return refusal('SENDS_NOTHING', `"Not an order" closes ${facts.number} without a word to the customer (they read "Closed"): pick another reason to send a message.`)
+  return messageRefusal(facts)
+}
+
+/** A message from the request (Decline's, the record's "who gets it"): only to a customer of it, never to a prospect. */
+export function messageRefusal(facts: InquiryFacts): InquiryRefusal | null {
+  return facts.partyId === null ? refusal('NEEDS_CUSTOMER', `${facts.number} is from a prospect: make the customer first; a message goes to a customer of this request.`) : null
+}
+// ---- end B-TH-043
 
 /** Making the quote: open, and a customer (a quote is made for a party; a prospect is matched to one first). */
 export function quoteRefusal(facts: InquiryFacts): InquiryRefusal | null {

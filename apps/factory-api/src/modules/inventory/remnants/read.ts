@@ -9,7 +9,7 @@ import { MINIMUM_REMNANT, minimumRemnantIn, type RemnantState } from '@nexus/fac
 import { minimumRemnantFor } from './size'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { mayAt, officeContextOf, stockContextOf } from '../ledger/access'
+import { mayAt, officeContextOf, stockContextOf, assertWholeWarehouse } from '../ledger/access'
 import { REMNANT_SELECT, type RemnantRow } from './lifecycle'
 
 /**
@@ -84,6 +84,7 @@ export interface RemnantsQuery {
 /** GET /inventory/remnants: the site's tagged pieces, newest first, with the two numbers of the whole selection. */
 export async function listRemnants(caller: CommandCaller, query: RemnantsQuery) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const state = query.state ?? 'IN_STOCK'
   const where: Prisma.RemnantWhereInput = {
     AND: [
@@ -121,6 +122,7 @@ export async function listRemnants(caller: CommandCaller, query: RemnantsQuery) 
 /** GET /inventory/remnants/:remnantId: one piece, its history (audit rows, newest first). */
 export async function remnantRecord(caller: CommandCaller, remnantId: string) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const row = isUuid(remnantId) ? await caller.withClient((client) => client.remnant.findUnique({ where: { id: remnantId }, select: PIECE_SELECT })) : null
   if (!row || !mayAt(context, INVENTORY_STOCK_VIEW, row)) throw new NotFoundError('Remnant not found.')
   return caller.withClient(async (client) => {
@@ -161,6 +163,7 @@ export async function remnantRecord(caller: CommandCaller, remnantId: string) {
 /** GET /inventory/remnants/lookup?code=: a scanned RM tag (office, or the floor at its own site), with its hide's tag. */
 export async function lookupRemnant(caller: CommandCaller, code: string): Promise<{ remnant: ReturnType<typeof pieceView> }> {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const row = await caller.withClient((client) => client.remnant.findFirst({ where: { code: code.trim().toUpperCase() }, select: PIECE_SELECT }))
   if (!row || !mayAt(context, INVENTORY_ISSUE, row)) throw new NotFoundError('No remnant has this tag at your sites.')
   const names = await caller.withClient((client) => namesOf(client, [row]))

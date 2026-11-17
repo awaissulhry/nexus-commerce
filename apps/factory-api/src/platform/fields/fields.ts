@@ -116,8 +116,8 @@ async function picklistView(client: Client, picklistId: string): Promise<Picklis
   return picklistViewOf(client, list)
 }
 
-/** The words of a value in each language: a select's labels, a reference's words (both languages alike). */
-function wordsOf(field: FieldRow, value: StoredValue, references: ReadonlyMap<string, string>): { wordsIt: string | null; wordsEn: string | null } {
+/** The words of a value in each language: a select's labels, a reference's words (both languages alike). B-TH-061: also the portal sheet's (./portal-rows.ts). */
+export function wordsOf(field: FieldRow, value: StoredValue, references: ReadonlyMap<string, string>): { wordsIt: string | null; wordsEn: string | null } {
   const label = (code: string, language: 'it' | 'en') => {
     const option = field.options.find((entry) => entry.code === code)
     return option ? (language === 'it' ? option.labelIt : option.labelEn) : code

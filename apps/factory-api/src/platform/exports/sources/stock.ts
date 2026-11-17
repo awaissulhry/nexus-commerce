@@ -11,7 +11,7 @@ import { actorOf } from '../../../core/context'
 import { listStockLots } from '../../../modules/inventory/stock/lots'
 import { stockOverview } from '../../../modules/inventory/stock/stock'
 import { listHolds } from '../../../modules/quality/holds/reads'
-import { defineExportSource } from '../source'
+import { defineExportSource, /* B-PR-10 */ everyCustomerRefusal } from '../source'
 
 /**
  * Warehouse › Stock (SCR-060, `/warehouse/stock`): the export of the grid as the screen shows it. The address is the
@@ -189,6 +189,8 @@ const decimalCell = (value: Decimal | null): { decimal: string } | null => (valu
 export const stock = defineExportSource<Query, Row>({
   listKey: 'warehouse.stock',
   permission: INVENTORY_STOCK_VIEW,
+  // B-PR-10: the warehouse is one stock for every customer (its rows name every customer's work orders): every customer only.
+  refusal: everyCustomerRefusal(INVENTORY_STOCK_VIEW),
   query(address) {
     const siteId = address.get('site') || undefined
     if (siteId && !isUuid(siteId)) throw new ValidationError('Not a site.', [{ path: 'query/site', message: 'A site id.' }])
