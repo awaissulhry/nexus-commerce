@@ -2,6 +2,8 @@ import type { IncomingListQuery, IncomingRow } from '@nexus/factory-domain/sales
 import { INCOMING_CHANGE_KINDS, INCOMING_KINDS, INCOMING_TILES, KIND_WORDS, sourceWordsOf, stateWords, type IncomingKind, type IncomingTile } from '@nexus/factory-domain/sales/incoming/rules'
 import { SALES_INQUIRIES_VIEW } from '@nexus/factory-domain/sales/inquiries/permissions'
 import { DECLINE_WORDS, INQUIRY_SOURCES, INQUIRY_STATUSES, type InquirySource, type InquiryStatus } from '@nexus/factory-domain/sales/inquiries/rules'
+// B-TH-235: what a request became (Sales › Reports' request figure opens the list with it).
+import { REQUEST_OUTCOMES, type RequestOutcome } from '@nexus/factory-domain/sales/inquiries/rules'
 import { defineExportSource } from '../../../platform/exports/source'
 // B-TH-039 (threads plan L2-G07, PR-11): the list key stays `sales.inquiries`; the file reads Sales › Incoming's one read.
 import { listIncoming } from '../incoming/incoming'
@@ -11,7 +13,8 @@ import { listIncoming } from '../incoming/incoming'
  * so saved views, Pin to Today and old export links keep working). B-TH-039: the file reads Incoming's ONE read
  * (modules/sales/incoming: requests, catalogue orders and change requests, each row checked against its own view permission over
  * its company and customer; the screen's order) and pages to the end by its cursor — no "first 200 rows" any more. The address is
- * the page's: `?tile=` (the saved rows), `?kind=`, `?status=`, `?source=`, `?party=` / `?prospect=1`, `?company=`, `?q=`. The
+ * the page's: `?tile=` (the saved rows), `?kind=`, `?status=`, `?source=`, `?party=` / `?prospect=1`, `?company=`, `?q=` (B-TH-235:
+ * `?from=&to=` the days it came, `?outcome=` what a request became). The
  * columns are the list's (kind, number, from, summary, source, products asked, quantity by size, pieces, target price, wanted
  * date, received, waiting, assigned to, status); the assignee by name, as the list says it (B-TH-016, Owner decision 4); the
  * target price only with the price grain (a request's own; the other kinds have none).
@@ -19,6 +22,8 @@ import { listIncoming } from '../incoming/incoming'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 const idOf = (value: string | null): string | undefined => (value && UUID.test(value) ? value : undefined)
+// B-TH-235: a day of the address (`?from=`, `?to=`), else nothing.
+const dayOf = (value: string | null): string | undefined => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : undefined)
 const prefixed = (prefix: string, words: Readonly<Record<string, { readonly it: string; readonly en: string }>>, locale: 'it' | 'en') => Object.fromEntries(Object.entries(words).map(([code, text]) => [`${prefix}.${code}`, text[locale]]))
 const hours = (minutes: number | null): number | null => (minutes === null ? null : Math.round((minutes / 60) * 10) / 10)
 /** The page's own read size (the API's most): the file asks for pages of up to this many rows. */
@@ -54,6 +59,10 @@ export const inquiries = defineExportSource<IncomingListQuery, IncomingRow>({
     const company = idOf(address.get('company'))
     const prospect = address.get('prospect') === '1'
     const q = (address.get('q') ?? '').trim().slice(0, 100)
+    // B-TH-235: Sales › Reports' request figure opens the list with the period and what a request became (screen = file).
+    const from = dayOf(address.get('from'))
+    const to = dayOf(address.get('to'))
+    const outcome = address.get('outcome') ?? ''
     return {
       ...((INCOMING_TILES as readonly string[]).includes(tile) ? { tile: tile as IncomingTile } : {}),
       ...((INCOMING_KINDS as readonly string[]).includes(kind) ? { kind: kind as IncomingKind } : {}),
@@ -62,6 +71,10 @@ export const inquiries = defineExportSource<IncomingListQuery, IncomingRow>({
       ...(prospect ? { prospect: true } : party ? { partyId: party } : {}),
       ...(company ? { companyId: company } : {}),
       ...(q ? { q } : {}),
+      // B-TH-235
+      ...(from ? { receivedFrom: from } : {}),
+      ...(to ? { receivedTo: to } : {}),
+      ...((REQUEST_OUTCOMES as readonly string[]).includes(outcome) ? { outcome: outcome as RequestOutcome } : {}),
     }
   },
   // B-TH-039: every page of the one read, by its cursor, to the end (the tiles are not counted for a file).

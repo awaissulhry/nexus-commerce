@@ -1,4 +1,4 @@
-import { Archive, Calculator, ClipboardList, FileText, Home, IdCard, Package, RotateCcw, ShoppingBag, Truck, UserRound, type LucideIcon } from 'lucide-react'
+import { Archive, Calculator, ClipboardList, Factory, FileText, Home, IdCard, Package, RotateCcw, ShoppingBag, Truck, UserRound, type LucideIcon } from 'lucide-react'
 import { areaNavForPerson, findAreaNavPlace, type AreaNav, type AreaNavArea, type AreaNavItem, type AreaNavSection } from '@nexus/ui/patterns/shell/index'
 
 /**
@@ -9,6 +9,7 @@ import { areaNavForPerson, findAreaNavPlace, type AreaNav, type AreaNavArea, typ
  *   Customer       Home · Orders (Orders & requests, New order) · Quotes & samples (Quotes & requests, Samples &
  *                  tech packs, Catalogue)
  *                  · Documents · Returns & claims · Account
+ *                  F-PR-10: Home gains Waiting for you; Production after Orders (portal.production.view)
  *   Supplier       Home · Orders & jobs (Purchase orders for a supplier, Jobs for a workshop) · Deliveries · Documents · Profile
  *   Subcontractor  Home · Jobs · Documents · Profile
  *   Guest          Home · Accounting (the accountant) · Audit room (an auditor)
@@ -70,7 +71,29 @@ const SUPPLIERS: readonly PortalKind[] = ['SUPPLIER', 'SUBCONTRACTOR']
 
 export const PORTAL_AREAS: readonly PortalAreaDef[] = [
   // B-W2b-173: Home is the frame's own page until the Home steps (B-W2b-187 customer, B-W2b-179 supplier) draw theirs.
-  { id: 'home', label: 'nav.home', href: '/', icon: Home, permission: 'portal.home.view', kinds: ALL, badge: 'home', phone: 'tab', key: 'h', built: true },
+  {
+    id: 'home',
+    label: 'nav.home',
+    href: '/',
+    icon: Home,
+    permission: 'portal.home.view',
+    kinds: ALL,
+    badge: 'home',
+    phone: 'tab',
+    key: 'h',
+    built: true,
+    // ── F-PR-10 (production plan §5; 06-tree B.0) ──
+    // Home gains Waiting for you, the one place a customer answers. It sits under Home, not Production: a Designer answers
+    // sample and artwork approvals but does not see Production. F-PR-14 builds /waiting and sets its `built`; until then no
+    // door is drawn (the portal has no "Coming soon": it fails closed). Its count of everything waiting comes with
+    // B-PR-20 / F-PR-15; until then no number, never a made-up one. Home's own page keeps Home's name, so a person left with
+    // that one page (a supplier, a role without approvals) sees Home as before.
+    pages: [
+      { id: 'home.overview', label: 'nav.home', href: '/', permission: 'portal.home.view', built: true },
+      { id: 'home.waiting', label: 'nav.waiting', href: '/waiting', permission: 'portal.approvals.view', kinds: ['CUSTOMER'], built: false },
+    ],
+    // ── end F-PR-10 ──
+  },
   {
     id: 'orders',
     label: 'nav.orders',
@@ -90,6 +113,13 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
       { id: 'orders.new', label: 'nav.newOrder', href: '/orders/new', permission: 'portal.orderRequests.manage', built: true },
     ],
   },
+  // ── F-PR-10 (production plan §5; 06-tree B.0; 09-design (d)) ──
+  // The customer's Production: My production, for a customer with portal.production.view (Production, Buyer, Admin; Quality
+  // and Viewer read; Designer and Finance do not). On a phone a tab after Orders, so Returns goes under More for those people
+  // only (the DS bar keeps four marked tabs in manifest order). F-PR-11 builds /production and sets `built`; until then no door
+  // is drawn. No badge until a count of production items waiting on the customer exists (B-PR-20 / F-PR-15).
+  { id: 'production', label: 'nav.production', href: '/production', icon: Factory, permission: 'portal.production.view', kinds: ['CUSTOMER'], phone: 'tab', key: 'p', built: false },
+  // ── end F-PR-10 ──
   {
     id: 'quotes',
     label: 'nav.quotesSamples',

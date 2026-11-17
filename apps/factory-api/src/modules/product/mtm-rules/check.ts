@@ -114,10 +114,10 @@ export async function checkMeasures(caller: CommandCaller, body: MtmCheckBody): 
   return caller.withClient(async (db) => {
     const style = body.styleId
       ? isUuid(body.styleId)
-        ? await db.style.findUnique({ where: { id: body.styleId }, select: { id: true, code: true, companyId: true, mtmAllowed: true, measurementTemplateId: true, sizes: true, sizeScaleId: true } })
+        ? await db.style.findUnique({ where: { id: body.styleId }, select: { id: true, code: true, companyId: true, brandPartyId: true, mtmAllowed: true, measurementTemplateId: true, sizes: true, sizeScaleId: true } })
         : null
       : null
-    if (body.styleId && (!style || !can(actor, PRODUCT_STYLES_VIEW, { companyId: style.companyId }))) throw new NotFoundError('Style not found.')
+    if (body.styleId && (!style || !can(actor, PRODUCT_STYLES_VIEW, { companyId: style.companyId, partyId: style.brandPartyId }))) throw new NotFoundError('Style not found.') // B-PR-10
 
     const profile = body.measurementProfileId
       ? isUuid(body.measurementProfileId)

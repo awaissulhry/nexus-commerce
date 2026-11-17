@@ -64,11 +64,7 @@
   "record": {
     "changed": "Modificato alle {time} da un’altra persona · la finestra aperta resta",
     "reload": "Ricarica",
-    "dock": "Conversazione",
-    "dockHint": "La conversazione accanto a ogni scheda su uno schermo largo (⌘J)",
-    "dockLabel": "Conversazione, file e cronologia",
     "more": "Altre azioni",
-    "noPanels": "Qui compaiono conversazione, file e cronologia.",
     "not_found": {
       "title": "Non trovato"
     },
@@ -709,15 +705,16 @@
       "proposed": "{supplier} ha proposto modifiche: le accetti o le rifiuti tu.",
       "seeAnswer": "Vedi la loro risposta",
       "readOnly": "Sola lettura: il tuo ruolo vede l’ordine e non cambia nulla.",
-      "frozen": "L’ordine è stato inviato: qui le righe non cambiano più."
+      "frozen": "L’ordine è stato inviato: qui le righe non cambiano più.",
+      "dockLabel": "La conversazione dell’ordine d’acquisto",
+      "previewPdf": "Anteprima PDF",
+      "previewPdfHint": "Un esempio marcato come tale, con l’ordine com’è adesso, in una nuova scheda. Riporta i prezzi; il link di conferma non ne mostra."
     },
     "tab": {
       "lines": "Righe",
       "answer": "Risposta del fornitore",
       "receipts": "Ricevimenti",
       "invoices": "Fatture",
-      "documents": "Documenti",
-      "activity": "Attività",
       "checksOpen_one": "{count} controllo d’invio aperto",
       "checksOpen_other": "{count} controlli d’invio aperti",
       "waitsForYou": "Attende la tua decisione"
@@ -924,29 +921,6 @@
       "tableLabel": "Merce ricevuta a fronte di questo ordine",
       "empty": "Ancora nulla ricevuto",
       "emptyBody": "Il magazzino riceve la merce quando arriva."
-    },
-    "docs": {
-      "pdfs": "L’ordine come inviato (PDF)",
-      "none": "Nessun PDF archiviato.",
-      "noneDraft": "Ancora nessun documento — il PDF si crea e si congela all’invio.",
-      "preview": "Anteprima del PDF",
-      "openTab": "Apri in una nuova scheda",
-      "openPreview": "Apri l’anteprima del PDF in una nuova scheda",
-      "previewHint": "Un esempio marcato come tale, con l’ordine com’è adesso.",
-      "made": "Creato il {date} · {size} KB",
-      "download": "Scarica {name}",
-      "priceNote": "Il PDF riporta i prezzi; il link di conferma non ne mostra.",
-      "mails": "Email",
-      "noMails": "Ancora nessuna email.",
-      "to": "A",
-      "queued": "Quando",
-      "state": "Stato",
-      "mail": {
-        "queued": "In partenza",
-        "sent": "Inviata",
-        "delivered": "Consegnata",
-        "failed": "Non riuscita"
-      }
     },
     "send": {
       "title": "Invia {number} a {supplier}",
@@ -1398,12 +1372,12 @@
       "reversed": "Stornato il {time}",
       "linesLabel": "Righe del ricevimento",
       "linesCount_one": "{count} riga",
-      "linesCount_other": "{count} righe"
+      "linesCount_other": "{count} righe",
+      "dockLabel": "La conversazione del ricevimento"
     },
     "tab": {
       "lines": "Righe",
       "lots": "Lotti e pelli",
-      "activity": "Attività",
       "waiting_one": "{count} lotto attende la qualità",
       "waiting_other": "{count} lotti attendono la qualità"
     },

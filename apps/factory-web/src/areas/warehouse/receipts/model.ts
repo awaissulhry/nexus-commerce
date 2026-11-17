@@ -3,7 +3,6 @@ import { fixedRatio } from '@nexus/factory-domain/product/units/units'
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { phrase, type BuyingCan, type Loaded, type Part, type Phrase } from '../../_shared/buying/model'
 import type { LiveState } from '../../_shared/buying/hooks'
-import type { RecordPanelsViewModel } from '../../../record-panels/model'
 import type { ReceiptDailyActions, ReceiptDailyModel, HideListActions, HideListModel } from './daily-state'
 import type { ExpectedLine, LineBody, LotWithHides, Receipt, ReceiptBody, ReceiptCounts, ReceiptRow, ReceiptStatus, Recorded, Uom } from './api'
 import type { HeldActions, HeldModel } from './held/use-held-receipt'
@@ -388,12 +387,24 @@ export interface ReceiveActions {
   held?: HeldActions
 }
 
-/** B-W2a-63 adds Documents check (the DDT photo, Request from supplier) and Discrepancies, in the design's order. */
-export type ReceiptTab = 'lines' | 'lots' | 'documents' | 'discrepancies' | 'activity'
-export const RECEIPT_TABS: readonly ReceiptTab[] = Object.freeze(['lines', 'lots', 'documents', 'discrepancies', 'activity'])
+/**
+ * B-W2a-63 adds Documents check (the DDT photo, Request from supplier) and Discrepancies, in the design's order. B-TH-264 (threads plan
+ * O-WH-REC, the tabs of picture 39): tabs 5 → 4 — Activity goes; the receipt's thread is docked beside every tab (RecordFrame), its
+ * tools in the thread's "⋯" (R-ACT); "Request from supplier" (Documents check) writes in that thread.
+ */
+export type ReceiptTab = 'lines' | 'lots' | 'documents' | 'discrepancies'
+export const RECEIPT_TABS: readonly ReceiptTab[] = Object.freeze(['lines', 'lots', 'documents', 'discrepancies'])
 /** The tabs whose words are the `warehouse-receipts` catalogue's (W2a). */
 export const DAILY_TABS: readonly ReceiptTab[] = Object.freeze(['documents', 'discrepancies'])
-export const receiptTabOf = (value: string | null | undefined): ReceiptTab => ((RECEIPT_TABS as readonly string[]).includes(value ?? '') ? (value as ReceiptTab) : 'lines')
+/** B-TH-264: every old `?tab=` keeps working (R-8): Activity lands on Lines with the docked thread opened (RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, ReceiptTab>> = Object.freeze({ activity: 'lines' })
+export const receiptTabOf = (value: string | null | undefined): ReceiptTab => {
+  const asked = value ?? ''
+  if ((RECEIPT_TABS as readonly string[]).includes(asked)) return asked as ReceiptTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'lines'
+}
+/** B-TH-264: a tab whose body is a wide grid (the lines, the hides one by one): the docked thread takes one third under 1600 px. */
+export const isWideReceiptTab = (tab: ReceiptTab): boolean => tab === 'lines' || tab === 'lots'
 
 export interface ReceiptRecordModel {
   prefix: string
@@ -402,7 +413,8 @@ export interface ReceiptRecordModel {
   receipt: Loaded<Receipt>
   lots: Part<LotWithHides[]>
   live: LiveState
-  dockOpen: boolean
+  /** B-TH-264: who reads the page (the docked thread's width is remembered per person and record type). */
+  personId?: string | null
   changed: { at: string } | null
   notice: { tone: 'success' | 'danger' | 'info'; words: Phrase } | null
   /** The notes the post answered (the receiving page hands them over once). */
@@ -410,7 +422,6 @@ export interface ReceiptRecordModel {
   busy: boolean
   dialog: { kind: 'reverse'; reason: string } | null
   dialogProblem: Phrase | null
-  panelsPreview?: RecordPanelsViewModel
   selected?: readonly string[]
   timeZone?: string
   /** B-W2a-63: discrepancies, the report, the DDT photo, Request from supplier (absent: the W1 tabs only). */
@@ -420,7 +431,6 @@ export interface ReceiptRecordModel {
 export interface ReceiptRecordActions {
   onRetry?: () => void
   onReload?: () => void
-  onDock?: () => void
   onDialog?: (dialog: ReceiptRecordModel['dialog']) => void
   onReverse?: () => void
   onDismissNotice?: () => void

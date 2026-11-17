@@ -47,8 +47,15 @@ import {
   withStock,
   type ClaimAct,
   type ReturnDraft,
+  // B-TH-263
+  MERGED_TABS,
+  RECORD_TABS,
+  tabOf,
 } from './model'
 import { rightRef } from '../../../lib/i18n/rights'
+// B-TH-263: the claim on RecordFrame (tabs 4 → 2, the docked thread).
+import { readFileSync } from 'node:fs'
+import { textOf } from '../../../lib/record-thread/parts/testing'
 
 // The DS Modal opens only in a browser (after hydration, in a portal): here it draws in place, so every dialog's words
 // are checked too.
@@ -336,5 +343,61 @@ describe('every design case draws in both languages with no key left on screen',
       for (const tile of TILES) has(`tile.${tile.id}`)
       for (const act of ['send', 'sendAgain', 'answer', 'returnGoods', 'close', 'cancel']) has(`act.${act}`)
     }
+  })
+})
+
+// ---- B-TH-263: the claim on RecordFrame (O-PUR-CLM; the rule of picture 38, the tabs of 08-tabs) ----
+describe('B-TH-263: the claim on RecordFrame — Claim · Goods & credit, the thread docked', () => {
+  const screen = designScreen as unknown as DesignScreen<unknown>
+  const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const found = screen.cases.find((item) => item.id === id)
+    if (!found) throw new Error(`no case ${id}`)
+    return render(screen, found.model, locale)
+  }
+
+  it('two tabs; every old ?tab= keeps working (R-8): Credit → Goods & credit, Activity → Claim with the thread opened', () => {
+    expect(RECORD_TABS).toEqual(['claim', 'goods'])
+    expect(MERGED_TABS).toEqual({ credit: 'goods', activity: 'claim' })
+    expect(tabOf('credit')).toBe('goods')
+    expect(tabOf('goods')).toBe('goods')
+    expect(tabOf('activity')).toBe('claim')
+    expect(tabOf('constructor')).toBe('claim')
+    expect(tabOf(null)).toBe('claim')
+  })
+
+  it('Goods & credit keeps both tabs’ work: the return DDTs and their PDFs, the stock moves, then the credit expected', () => {
+    const text = textOf(html('record-goods'))
+    expect(text).toContain('Goods & credit')
+    expect(text).toContain('146/2026')
+    const credit = textOf(html('record-credit'))
+    expect(credit).toContain('Goods & credit')
+    expect(credit).toContain('Nothing returned')
+    expect(textOf(html('record-credit-replacement'))).toContain('Goods & credit')
+    expect(textOf(html('record-goods', 'it'))).toContain('Merce e accredito')
+    // The list's row menu opens the merged tab; no address to a tab that went.
+    expect(readFileSync(new URL('./list/view/ClaimsListView.tsx', import.meta.url), 'utf8')).not.toContain('?tab=credit')
+  })
+
+  it('ONE thread docked beside both tabs, its "⋯" (R-ACT) on each; no Activity tab, no record panels, no dock hook', () => {
+    for (const id of ['record-claim-rejected', 'record-goods', 'record-thread-docked']) {
+      const page = html(id)
+      expect(page.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(page, id).toContain('aria-label="Thread tools"')
+      expect(page, id).not.toContain('fw-rp-tabs')
+      expect(page, id).not.toContain('?tab=activity')
+      expect(page, id).not.toContain('?tab=credit')
+    }
+    const container = readFileSync(new URL('./record/ClaimRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain('party={{ id: value.supplier.id, name: value.supplier.name }} partyRole="supplier"')
+    expect(container).not.toContain('useThreadDock')
+    expect(readFileSync(new URL('./record/view/ClaimRecordView.tsx', import.meta.url), 'utf8')).not.toContain('RecordPanelsView')
+  })
+
+  it('the wall (W08, W25, W36): the docked thread speaks of this claim’s supplier only, never a customer’s name', () => {
+    const page = html('record-thread-docked')
+    const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
+    expect(dock).toContain('Conceria Demo S.r.l.')
+    expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
   })
 })

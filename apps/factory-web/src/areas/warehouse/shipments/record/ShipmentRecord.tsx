@@ -65,7 +65,7 @@ import {
   type Tracking,
 } from '../api'
 import { openPresigned, presignedBytes } from '../files'
-import { useCoalesced, useLive, useThreadDock } from '../hooks'
+import { useCoalesced, useLive } from '../hooks'
 import { abilitiesOf, ddtFormFor, ddtRequestOf, hasLeft, knownIds, liveTouches, readProblem, tabOf, writeProblem, type DdtForm, type RecordTab } from '../model'
 import { PART_LOADING, type Loaded, type Part, type PdfPart, type RecordDialog, type ShipmentRecordModel } from './record-model'
 import { ShipmentRecordView } from './view/ShipmentRecordView'
@@ -74,6 +74,9 @@ import { TrackingLinkCard } from '../tracking-link/TrackingLinkCard'
 // B-W2b-410
 import { useRecordDepth } from '../queue/record-depth'
 import { DEPTH_NS } from '../queue/shared/depth'
+// ---- B-TH-264: the docked thread on the shipment (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 /**
  * `/w/<company>/warehouse/shipments/<id>` (SCR-067): loads the shipment (shipping.view; the API checks its company,
@@ -130,7 +133,6 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
   const [ddtForm, setDdtForm] = useState<DdtForm | null>(null)
   const [bought, setBought] = useState<Bought | null>(null)
   const [sent, setSent] = useState<SentLinks | null>(null)
-  const { dockOpen, toggleDock } = useThreadDock()
   const keys = useRef<Record<string, string>>({})
   const keyOf = (name: string) => (keys.current[name] ??= newIdempotencyKey())
   const dropKey = (name: string) => delete keys.current[name]
@@ -334,7 +336,8 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
   const known = shipment.status === 'ready' ? knownIds(shipment.value, [...(ddts.value ?? []).map((row) => row.id)]) : null
   const knownRef = useRef(known)
   knownRef.current = known
-  const live = useLive(
+  // B-TH-264: the tab's live state shows in the shell's band (beside the record's band); here only the re-reads.
+  useLive(
     (change) => {
       if (!knownRef.current || !liveTouches(change, knownRef.current)) return
       const open = dialogRef.current
@@ -390,8 +393,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     tracking,
     documents,
     ready,
-    live,
-    dockOpen,
+    personId: session.user.id, // B-TH-264
     changed,
     notice,
     busy,
@@ -434,8 +436,23 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
     <ShipmentRecordView
       model={model}
       depth={depth}
-      panels={value ? <RecordPanels record={{ type: 'Shipment', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName, emails: [] }} /> : null}
-      // B-W2b-170: the customer's tracking page (links.tracking) on the Tracking & delivery tab.
+      // B-TH-264: the docked thread (Head with Activity's doors, files line, Files view, feed, box) — "Reply to" reaches this shipment's
+      // customer only, the files are this shipment's; the print view keeps the panels' print form.
+      thread={
+        value ? (
+          <OfficeRecordThread
+            docked
+            record={{ type: 'Shipment', id: value.id, companyId: value.companyId, siteId: value.siteId }}
+            title={`${value.number} · ${value.party.legalName}`}
+            recordLabel={value.number}
+            party={{ id: value.partyId, name: value.party.legalName }}
+            partyRole="customer"
+            printHref={printHref(pathname, params?.toString() ?? '')}
+          />
+        ) : null
+      }
+      printThread={value ? <RecordPanels record={{ type: 'Shipment', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName, emails: [] }} /> : null}
+      // B-W2b-170: the customer's tracking page (links.tracking) on Carrier & tracking.
       trackingLink={value ? <TrackingLinkCard shipmentId={value.id} /> : null}
       actions={{
         onRetry: () => void load(),
@@ -452,7 +469,6 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           if (which === 'evidence') loadEvidence(value)
         },
         onReload: () => void load(),
-        onDock: toggleDock,
         onDismissNotice: () => setNotice(null),
         onDialog: (next) => {
           setDialog(next)
@@ -513,7 +529,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           )
         },
         onOpenFile: (fileId) => void write(async () => openPresigned(await fileLink(api, fileId)), null),
-        // Carrier & label
+        // Carrier & tracking
         onDelivery: (next) =>
           void write(
             () =>

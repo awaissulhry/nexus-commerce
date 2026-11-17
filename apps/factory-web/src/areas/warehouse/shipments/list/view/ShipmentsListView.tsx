@@ -200,7 +200,7 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
       const [first, ...rest] = data.trackingNumbers
       if (!first) return <span className="fw-sh-muted">—</span>
       return (
-        <Link className="fw-sh-link fw-sh-mono" href={`${href(data)}?tab=tracking`}>
+        <Link className="fw-sh-link fw-sh-mono" href={`${href(data)}?tab=carrier`}>
           {first}
           {rest.length > 0 || data.labelled > data.trackingNumbers.length ? ` +${Math.max(rest.length, data.labelled - 1)}` : ''}
         </Link>
@@ -243,8 +243,8 @@ function ShipmentsList({ model, actions }: { model: ShipmentsListModel; actions?
             { id: 'open', label: t('list.open'), href: href(data) },
             { id: 'tab', label: t('list.openNewTab'), href: href(data), target: '_blank' },
             { id: 'documents', label: t('tab.documents'), href: `${href(data)}?tab=documents` },
-            ...(data.transportBy === 'CARRIER' ? [{ id: 'carrier', label: t('tab.carrier'), href: `${href(data)}?tab=carrier` }] : []),
-            ...(data.labelled > 0 ? [{ id: 'track', label: t('tab.tracking'), href: `${href(data)}?tab=tracking` }] : []),
+            // B-TH-264: Carrier & label and Tracking & delivery are one tab now (Carrier & tracking): one door.
+            ...(data.transportBy === 'CARRIER' || data.labelled > 0 ? [{ id: 'carrier', label: t('tab.carrier'), href: `${href(data)}?tab=carrier` }] : []),
           ]}
         />
       ) : null

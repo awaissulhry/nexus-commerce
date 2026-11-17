@@ -7,10 +7,6 @@
     "retry": "Riprova",
     "partFailed": "{part}: non è stato possibile leggerlo",
     "partLoading": "Lettura di {part}…",
-    "dock": "Conversazione",
-    "dockHint": "La conversazione accanto alla pagina (schermi larghi)",
-    "dockLabel": "Conversazione, file e cronologia",
-    "noPanels": "Il tuo ruolo non legge le conversazioni.",
     "more": "Altre azioni",
     "actions": "Azioni",
     "open": "Apri",
@@ -549,7 +545,9 @@
       "toChecklist": "Lista di rilascio in Test e sostanze",
       "noQuality": "Il tuo ruolo non può vedere la scheda qualità di un lotto: la qualità decide i lotti in Conformità › Test e sostanze.",
       "copyCode": "Copia il codice lotto",
-      "rejected": "Respinto il {date}: definitivo, la giacenza non si usa mai."
+      "rejected": "Respinto il {date}: definitivo, la giacenza non si usa mai.",
+      "dockLabel": "La conversazione del lotto",
+      "sameThread": "Stessa conversazione di Conformità › Test e sostanze"
     },
     "list": {
       "tableLabel": "Lotti",
@@ -644,11 +642,9 @@
       "issuedTo": "Ordini di lavoro"
     },
     "tab": {
-      "overview": "Panoramica",
+      "overview": "Panoramica e qualità",
       "trace": "Tracciabilità",
-      "moves": "Movimenti",
-      "activity": "Attività",
-      "quality": "Stato qualità"
+      "moves": "Movimenti"
     },
     "movesLabel": "Movimenti del lotto {code}",
     "release": {
@@ -825,7 +821,6 @@
       "noScrap": "Il tuo ruolo non può scaricare merce a perdita."
     },
     "quality": {
-      "status": "Stato e decisioni",
       "where": "Rilascio, blocco, rifiuto e il risultato Cr VI si decidono in Conformità › Test e sostanze.",
       "holdsTitle": "Blocchi e ispezioni",
       "noRight": "Il tuo ruolo non vede i blocchi di qualità.",

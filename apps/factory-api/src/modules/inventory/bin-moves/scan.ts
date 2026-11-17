@@ -1,7 +1,7 @@
 import { INVENTORY_TRANSFER } from '@nexus/factory-domain/inventory/permissions'
 import { OPEN_TASK_STATUSES } from '@nexus/factory-domain/inventory/tasks/rules'
 import type { CommandCaller } from '../../../core/command'
-import { stockContextOf } from '../ledger/access'
+import { stockContextOf, assertWholeWarehouse } from '../ledger/access'
 import type { Reader } from '../issue/store'
 import { namesOf, TASK_COLUMNS, taskView } from '../tasks/store'
 import { handOf, handView, type Hand } from './hand'
@@ -32,6 +32,7 @@ export async function tasksOfHand(db: Reader, hand: Hand) {
 
 export async function scanInHand(caller: CommandCaller, code: string) {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   return caller.withClient(async (db) => {
     const hand = await handOf(db, context, code, INVENTORY_TRANSFER)
     return { hand: handView(hand), tasks: await tasksOfHand(db, hand) }

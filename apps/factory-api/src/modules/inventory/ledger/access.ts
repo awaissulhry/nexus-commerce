@@ -1,7 +1,7 @@
 import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
 import { ForbiddenError, NotFoundError, UnauthenticatedError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, EVERY_PARTY_WORDS, type Permission } from '@nexus/factory-domain/core/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext, type RequestContext, type SystemContext } from '../../../core/context'
 
@@ -65,3 +65,19 @@ export function postedBy(context: StockContext): { readonly createdById: string 
   if (context.audience === 'floor') return { createdById: context.actorId, deviceId: context.deviceId, audience: 'FLOOR' }
   return { createdById: null, deviceId: null, audience: 'SYSTEM' }
 }
+
+// ── B-PR-10 ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+/**
+ * B-PR-10 — the warehouse decision of the brand wall (production plan §2: "a view that mixes brands needs access to every
+ * brand"). The warehouse is one stock for every customer: its ledger and a move's record, the reservations, the remnants, the
+ * stock counts, a figure's explanation, the locations, a move's undo or reversal add up and name every customer's work orders
+ * and stock (a balance is everyone's issues together). A person limited to some customers gets 403 in words that name none of
+ * them; floor devices and the system pass (a device reaches every customer of its site). A work order's own warehouse records
+ * (its kit, pick list, protector lots, the hides found for it, its substitutes, a roll issued to it) are walled by its customer
+ * instead (../issue/picking.ts mayPick, B-PR-05), so a person limited to a customer still works that customer's kits.
+ */
+export function assertWholeWarehouse(context: StockContext): void {
+  // Whatever the route's own permission: a person none of whose grants reaches every customer is limited to some.
+  if (context.audience === 'office' && !context.grants.some((grant) => grant.parties === 'all')) throw new ForbiddenError(EVERY_PARTY_WORDS.en)
+}
+// ── end B-PR-10 ──────────────────────────────────────────────────────────────────────────────────────────────────────────

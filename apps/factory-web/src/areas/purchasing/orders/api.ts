@@ -320,32 +320,6 @@ export async function cancelOrder(api: ApiClient, id: string, body: { version: n
   return api.post(`${orderUrl(id)}/cancel`, { body, schema: z.object({ order: orderSchema, supplierTold: z.boolean() }), idempotencyKey: newIdempotencyKey() })
 }
 
-const documentsSchema = z.object({
-  revision: z.number(),
-  status,
-  sentAt: z.string().nullable(),
-  documents: z.array(z.object({ fileId: z.string(), name: z.string(), sha256: z.string(), sizeBytes: z.number(), status: z.string(), createdAt: z.string() })),
-  links: z.array(linkState),
-  mails: z.array(
-    z.object({
-      id: z.string(),
-      to: z.array(z.string()),
-      cc: z.array(z.string()),
-      subject: z.string(),
-      status: z.string(),
-      queuedAt: z.string(),
-      sentAt: z.string().nullable(),
-      deliveredAt: z.string().nullable(),
-      failedAt: z.string().nullable(),
-    }),
-  ),
-})
-export type OrderDocuments = z.infer<typeof documentsSchema>
-
-export function getDocuments(api: ApiClient, id: string, signal?: AbortSignal): Promise<OrderDocuments> {
-  return api.get(`${orderUrl(id)}/documents`, { schema: documentsSchema, signal })
-}
-
 const supplierViewSchema = z.object({
   order: z.object({ number: z.string(), documentNumber: z.string(), status, orderDate: z.string(), requestedDate: z.string().nullable(), note: z.string().nullable() }),
   lines: z.array(

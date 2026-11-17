@@ -39,6 +39,8 @@ import { fetchRequests, fetchRequestsOpen, sendRequest, type RequestRow, type Se
 import { requestBandOf } from './band'
 import { NS, stylesOf, todayIn } from './model'
 import { closedRefusal, failedKey, goesToOf, openItems, receiptOf, reorderText, shipToChoices, stylesText, withCarried } from './request-model'
+// B-TH-304
+import { catalogueDoorOf } from './request-model'
 import { RequestPageView, type RequestPageModel } from './view/RequestPageView'
 import { useOrderingWords } from './words'
 
@@ -358,6 +360,8 @@ function ComposeContainer() {
           open: { state: requests.state, items: openItems(requests.value, frame.prefix, locale, at) },
           allHref: pageBuilt('orders.list') ? `${frame.prefix}/orders?chip=REQUESTED` : null,
           returnsHref,
+          // B-TH-304: the catalogue door, open again (catalogue orders land in Sales › Incoming; no answer-time promise).
+          catalogue: catalogueDoorOf(frame.prefix),
         },
         receipt: answer ? receiptOf(answer.answer, answer.draft, choices, frame.prefix, at) : null,
         discardOpen,

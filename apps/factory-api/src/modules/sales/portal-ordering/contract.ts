@@ -23,6 +23,8 @@ const at = instant()
 const version = z.number().int().min(1)
 const named = output({ id: id(), code: z.string(), name: z.string() })
 const numbered = output({ id: id(), number: z.string() })
+/** B-TH-304 (pick A, plan §0.5): the customer's own number of an order ("Your order 12"); the portal draws it, never `number`. */
+const yourNumber = output({ seq: z.number().int(), words }).nullable()
 const requestParams = input({ requestId: id() })
 const sizeAsk = input({ size: z.string().trim().min(1).max(ORDERING_LIMITS.size), quantity: z.number().int().min(1).max(ORDERING_LIMITS.quantity) })
 const sizes = z.array(sizeAsk).min(1).max(ORDERING_LIMITS.sizesPerLine)
@@ -112,7 +114,7 @@ const line = output({
   amount: money.price(z.string().nullable()),
   note: z.string().nullable(),
   /** A reorder line: the order line it came from. */
-  source: output({ orderLineId: id(), orderId: id(), orderNumber: z.string(), customerRef: z.string().nullable(), orderDate: day }).nullable(),
+  source: output({ orderLineId: id(), orderId: id(), orderNumber: z.string(), yourNumber, customerRef: z.string().nullable(), orderDate: day }).nullable(),
   notices: z.array(notice),
   problems: z.array(problem),
 })
@@ -234,14 +236,14 @@ export const withdrawContract = defineContract({ params: requestParams, body: in
 
 export const pastOrdersContract = defineContract({
   querystring: input({ q: z.string().trim().max(80).optional() }),
-  response: { 200: output({ orders: z.array(output({ id: id(), number: z.string(), customerRef: z.string().nullable(), orderDate: day.nullable(), lines: z.number().int(), pieces: z.number().int() })) }) },
+  response: { 200: output({ orders: z.array(output({ id: id(), number: z.string(), yourNumber, customerRef: z.string().nullable(), orderDate: day.nullable(), lines: z.number().int(), pieces: z.number().int() })) }) },
 })
 
 export const pastOrderContract = defineContract({
   params: input({ orderId: id() }),
   response: {
     200: output({
-      order: output({ id: id(), number: z.string(), customerRef: z.string().nullable(), orderDate: day.nullable() }),
+      order: output({ id: id(), number: z.string(), yourNumber, customerRef: z.string().nullable(), orderDate: day.nullable() }),
       lines: z.array(
         output({
           orderLineId: id(),

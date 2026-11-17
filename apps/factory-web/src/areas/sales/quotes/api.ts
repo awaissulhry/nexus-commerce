@@ -118,6 +118,17 @@ const approvalRequestSchema = z.object({
   decisionNote: z.string().nullable(),
 })
 
+// ---- B-TH-257 (B-TH-078's API on main): "Made from INQ-…" and the accepted quote's order — made (its number and status), or why it
+// waits (the reason code; the screens say their own words by it, it + en). Optional: an older API answer has neither.
+export const QUOTE_ORDER_WAITS = ['NO_SALES_ORDER_SERIES', 'ACCOUNT_ON_HOLD', 'PO_NUMBER_REQUIRED', 'NOT_MADE'] as const
+export type QuoteOrderWait = (typeof QUOTE_ORDER_WAITS)[number]
+const madeFromSchema = z.object({ inquiryId: z.string(), number: z.string() }).nullable()
+const quoteOrderSchema = z
+  .object({ state: z.enum(['MADE', 'WAITS']), id: z.string().nullable(), number: z.string().nullable(), status: z.string().nullable(), reason: z.enum(QUOTE_ORDER_WAITS).nullable(), words: z.string().nullable() })
+  .nullable()
+export type QuoteOrder = NonNullable<z.infer<typeof quoteOrderSchema>>
+// ---- end B-TH-257
+
 export const quoteSchema = z.object({
   id: z.string(),
   number: z.string(),
@@ -146,6 +157,9 @@ export const quoteSchema = z.object({
   issues: z.array(issueSchema),
   canAskApproval: z.boolean(),
   sendBlockers: z.array(issueSchema),
+  // B-TH-257
+  madeFrom: madeFromSchema.optional(),
+  order: quoteOrderSchema.optional(),
 })
 export type QuoteDetail = z.infer<typeof quoteSchema>
 const oneQuote = z.object({ quote: quoteSchema })
@@ -172,6 +186,9 @@ export const listRowSchema = z.object({
   createdById: z.string().nullable(),
   updatedAt: instant,
   version: z.number(),
+  // B-TH-257: the sub-line "from INQ-…" and an accepted row's order ("SO-…", or "Order waits").
+  madeFrom: madeFromSchema.optional(),
+  order: quoteOrderSchema.optional(),
 })
 export type QuoteListRow = z.infer<typeof listRowSchema>
 
@@ -507,6 +524,14 @@ export function sendQuote(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'versi
 export function sendNewLink(api: ApiClient, quote: Pick<QuoteDetail, 'id' | 'version'>): Promise<z.infer<typeof sendLinkSchema>> {
   return api.post(`${quotePath(quote.id)}/send-link`, { body: { version: quote.version }, schema: sendLinkSchema, idempotencyKey: newIdempotencyKey() })
 }
+
+// ---- B-TH-257 (O-SAL-QUO-REC.band-F03): "Order waits: … Make the order now" — POST /sales/orders from the accepted version
+// (orders.manage over the quote's customer; the API answers the order it made, or the one already made: `created` false).
+const madeOrderSchema = z.object({ created: z.boolean(), order: z.object({ id: z.string(), number: z.string() }) })
+export function makeOrderFromQuote(api: ApiClient, quoteVersionId: string): Promise<z.infer<typeof madeOrderSchema>> {
+  return api.post('/sales/orders', { body: { quoteVersionId }, schema: madeOrderSchema, idempotencyKey: newIdempotencyKey() })
+}
+// ---- end B-TH-257
 
 // ---- B-W2a-49: duplicate a quote (B-W2a-30's POST /sales/quotes/:id/duplicate; SAL-155) -----------------------------------
 

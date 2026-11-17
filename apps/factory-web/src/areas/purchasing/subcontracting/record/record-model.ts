@@ -2,7 +2,6 @@ import type { ReactNode } from 'react'
 import { isApiError, issuePath } from '../../../../lib/api/errors'
 import type { LiveState } from '../../../_shared/buying/hooks'
 import type { MaterialDetail, MaterialOption } from '../../../_shared/buying/api'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { BundleOption, KitDdtReason, OrderAction, OutsideOperations, ReceiveAnswer, ReceiveBody, SendKitAnswer, SendKitBody, SubcontractOrder, TransportBy, WorkshopStockRow } from '../api'
 import { plannedLines, words, type SubcontractCan, type Words } from '../model'
 
@@ -16,10 +15,22 @@ import { plannedLines, words, type SubcontractCan, type Words } from '../model'
 
 // ---- tabs ---------------------------------------------------------------------------------------------------------------------
 
-// B-W2b-344: Material balance and Cost (../depth) between Received back and Documents, as the design orders them.
-export const RECORD_TABS = ['ops', 'kit', 'back', 'balance', 'cost', 'documents', 'activity'] as const
+// B-W2b-344: Material balance and Cost (../depth) after Received back, as the design orders them.
+// ---- B-TH-263 (threads plan TH-6; 08-tabs O-PUR-SUB; the rule of picture 38): tabs 7 → 5. Documents merges into Kit sent — "Kit &
+// documents": the job sheet travels with the kit, the kit DDTs are its papers (open, show here, print again, annul: work, never the
+// Files view, R-1) —; Activity goes (R-ACT: its tools are in the docked thread's "⋯").
+export const RECORD_TABS = ['ops', 'kit', 'back', 'balance', 'cost'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
-export const tabOf = (value: string | null | undefined): RecordTab => ((RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'ops')
+/** Every old `?tab=` keeps working (R-8): Documents → Kit & documents; Activity → Operations & quantities with the thread opened (RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ documents: 'kit', activity: 'ops' })
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'ops'
+}
+/** A tab whose body is a wide grid (the operations' quantities, the kit lines): the docked thread takes one third under 1600 px (PL1, R-18). */
+export const isWideTab = (tab: RecordTab): boolean => tab === 'ops' || tab === 'kit'
+// ---- end B-TH-263
 
 /** A part read beside the order: its value, or why it is missing (both null: still loading). */
 export interface Part<T> {
@@ -513,7 +524,7 @@ export type RecordDialog =
   | { kind: 'receive'; draft: ReceiveDraft }
   | { kind: 'annul'; ddtId: string; reason: string; typed: string }
 
-/** The kit DDT shown in Documents: its PDF bytes, or why not. */
+/** The kit DDT shown in Kit & documents: its PDF bytes, or why not. */
 export interface DdtPdf {
   ddtId: string
   data: Uint8Array | null
@@ -526,7 +537,8 @@ export interface SubcontractRecordModel {
   tab: RecordTab
   order: Loaded<SubcontractOrder>
   live: LiveState
-  dockOpen: boolean
+  /** B-TH-263: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
   changed: { at: string } | null
   notice: { tone: 'success' | 'danger' | 'info' | 'warning'; words: Words } | null
   busy: boolean
@@ -534,9 +546,8 @@ export interface SubcontractRecordModel {
   dialogProblem: Words | null
   /** A draft's cells being saved, saved or refused, by `cellKey`. */
   marks: Readonly<Record<string, SaveMark>>
-  /** The live kit DDT's PDF in Documents (null: none shown). */
+  /** The live kit DDT's PDF in Kit & documents (null: none shown). */
   pdf: DdtPdf | null
-  panelsPreview?: RecordPanelsViewModel
   timeZone: string
   today: string
   /** Design cases. */
@@ -550,7 +561,6 @@ export interface SubcontractRecordModel {
 export interface SubcontractRecordActions {
   onRetry?: () => void
   onReload?: () => void
-  onDock?: () => void
   onDismissNotice?: () => void
   onDialog?: (dialog: RecordDialog | null) => void
   onAct?: (act: 'issue' | 'reopen') => void

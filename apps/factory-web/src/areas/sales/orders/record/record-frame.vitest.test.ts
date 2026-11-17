@@ -92,3 +92,78 @@ describe('the order on RecordFrame', () => {
     expect(reading).not.toContain('Made from INQ')
   })
 })
+
+// ---- B-TH-256: the order shows what points at it (O-SAL-ORD-REC.body-F07, .notice-F04, .notice-F06; picture 29) -----------------
+describe('B-TH-256 — what points at the order', () => {
+  it('Shipments & invoices lists the order’s complaints and returns, each a real link to its record, after the money', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = draw('th-256-links', locale)
+      const text = textOf(html)
+      expect(text).toContain(locale === 'en' ? 'Complaints and returns' : 'Reclami e resi')
+      for (const number of ['RCL-2026-0012', 'RCL-2026-0009', 'RMA-2026-0031']) expect(text).toContain(number)
+      expect(html).toContain('/quality/complaints/0190f0e2-6501-7000-8000-000000000001')
+      expect(html).toContain('/sales/returns/0190f0e2-6502-7000-8000-000000000001')
+      expect(text).toContain(locale === 'en' ? 'Investigating' : 'In analisi')
+      expect(text).toContain(locale === 'en' ? 'A replacement' : 'Una sostituzione')
+    }
+    const source = readFileSync(new URL('./view/OrderRecordView.tsx', import.meta.url), 'utf8')
+    expect(source).toMatch(/<MoneyTab order=\{order\} model=\{model\} actions=\{actions\} \/>\s*\{\/\*[^*]*\*\/\}\s*<PointsAtOrder/)
+  })
+
+  it('no complaints or returns: said in words, never an empty table; no right to either: nothing drawn (W27)', () => {
+    const none = textOf(draw('th-256-links-none'))
+    expect(none).toContain('No complaints about this order.')
+    expect(none).toContain('No returns of this order.')
+    const manager = textOf(draw('th-256-repromise-manager'))
+    expect(manager).not.toContain('Complaints and returns')
+    expect(manager).not.toContain('RCL-2026-0012')
+  })
+
+  it('planning’s re-promise in the one notice: the sizes from → to, who proposed it, Accept / Decline and the "Tell the customer" tick', () => {
+    const html = draw('th-256-repromise')
+    const text = textOf(html)
+    expect(text).toContain('Planning proposes new dates for line 20 · AX-100')
+    expect(text).toContain('Proposed by Paola Esempio')
+    expect(text).toContain('Tell the customer')
+    expect(text).toMatch(/50: 22\/12\/2026 → 12\/01\/2027/)
+    for (const words of ['Accept', 'Decline…']) expect(text).toContain(words)
+    // Inside the body column's notices, never above the thread.
+    const notices = html.slice(html.indexOf('fw-rcf-notices-list'), html.indexOf('class="fw-so-main"'))
+    expect(notices).toContain('Planning proposes new dates')
+    expect(html.slice(html.indexOf('class="fw-rcf-dock"'))).not.toContain('Planning proposes new dates')
+  })
+
+  it('who may not decide (the production manager; the proposer) reads it with Accept and Decline held, and why', () => {
+    const html = draw('th-256-repromise-manager')
+    expect(textOf(html)).toContain('Planning proposes new dates for line 20')
+    expect(html).toContain('Sales decides new dates (the right to manage orders), never the planner who proposed them.')
+    expect(textOf(html)).not.toContain('Tell the customer')
+  })
+
+  it('Decline asks the reason the planner reads (held until typed); the typed reason stays', () => {
+    const text = textOf(draw('th-256-decline'))
+    expect(text).toContain('Decline the new dates for line 20?')
+    expect(text).toContain('Il cliente ha già promesso la consegna al negozio.')
+  })
+
+  it('a compliance gate that blocks a work order: the gate’s own words, "Open in Compliance" only with the compliance view right', () => {
+    const html = draw('th-256-gate')
+    expect(textOf(html)).toContain('Work order release blocked: WO-2026-0140')
+    expect(textOf(html)).toContain('No valid EU type-examination certificate covers AX-100')
+    expect(html).toContain('/compliance/status?gate=WORK_ORDER_RELEASE&amp;feed=blocked&amp;days=30&amp;q=WO-2026-0140')
+    const words = draw('th-256-repromise-manager')
+    expect(textOf(words)).toContain('Work order release blocked: WO-2026-0140')
+    expect(words).not.toContain('/compliance/status?gate=')
+    expect(textOf(words)).toContain('Compliance clears or overrides it.')
+  })
+
+  it('the page reads the links with the order and again whenever it is read again; Accept and Decline go to planning’s routes', () => {
+    const container = readFileSync(new URL('./OrderRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain("useOrderLinks(api, order.status === 'ready' ? order.value : null, () => void load())")
+    const hook = readFileSync(new URL('./links/use-order-links.ts', import.meta.url), 'utf8')
+    expect(hook).toContain('[api, orderId, version, attempt]')
+    expect(hook).toContain('acceptRepromise(api, proposalId, { tell }, newIdempotencyKey())')
+    expect(hook).toContain('const tell = proposal.may.tell && current.tell[proposalId] === true')
+    expect(hook).toContain('declineRepromise(api, decline.proposalId, decline.reason, newIdempotencyKey())')
+  })
+})

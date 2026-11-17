@@ -20,7 +20,7 @@ import { isHeld, type LotQualityStatus } from '@nexus/factory-domain/inventory/s
 import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
-import { officeContextOf, siteFor } from '../ledger/access'
+import { officeContextOf, siteFor, assertWholeWarehouse } from '../ledger/access'
 import { itemUnitsOf, readHides, readItems, readLots, type HideRow, type ItemRow, type LotRow } from '../issue/store'
 import { viewsOf, type ReservationView } from './read'
 // B-W2b-100: one shade lot per order (SCM-206).
@@ -213,6 +213,7 @@ async function readDemand(tools: CommandTools, site: { id: string; companyId: st
 /** POST /inventory/reservations: one demand, its lines, each from what is available (SCM-205, SCM-209). */
 export async function reserve(caller: CommandCaller, body: ReserveInput, idempotencyKey?: string): Promise<{ reservations: ReservationView[] }> {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const site = await siteFor(caller, body.siteId, INVENTORY_RESERVE, 'body/siteId')
   if (Boolean(body.workOrderId) === Boolean(body.salesOrderLineId)) {
     throw new ValidationError('Reserve for one work order or one order line.', [{ path: 'body/workOrderId', message: 'Exactly one of workOrderId and salesOrderLineId.' }])
@@ -385,6 +386,7 @@ export interface ReleaseInput {
 /** POST /inventory/reservations/release: one or many, with the reason (SCM-210). */
 export async function release(caller: CommandCaller, body: ReleaseInput, idempotencyKey?: string): Promise<{ reservations: ReservationView[] }> {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const actor = actorOf(context)
   const problem = releaseReasonProblem(body.reason)
   if (problem) throw new ValidationError(problem, [{ path: 'body/reason', message: problem }])

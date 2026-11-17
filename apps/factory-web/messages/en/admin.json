@@ -1268,8 +1268,8 @@
         "why": "People, roles, badges, PINs and bank details: a code from the authenticator app."
       },
       "customerLimit": {
-        "title": "A customer limit covers customer records",
-        "why": "A role given for some customers shows only their customers, requests, quotes, orders, shipments, invoices, returns, complaints and samples. Styles, materials, work orders and production boards are not limited by customer: give such a person only the roles they need."
+        "title": "A customer limit covers customer records and production",
+        "why": "A role given for some customers shows only their customers, requests, quotes, orders, shipments, invoices, returns, complaints and samples, and in production only their work orders, cutting, scans, quality records and threads. Screens that mix customers (boards, capacity, the daily report) need every customer. Styles and materials are not limited by customer: give such a person only the roles they need."
       }
     },
     "mfa": {

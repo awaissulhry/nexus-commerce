@@ -64,11 +64,7 @@
   "record": {
     "changed": "Changed at {time} by someone else · your open dialog is kept",
     "reload": "Reload",
-    "dock": "Thread",
-    "dockHint": "The thread beside any tab on a wide screen (⌘J)",
-    "dockLabel": "Thread, files and history",
     "more": "More actions",
-    "noPanels": "The thread, files and history appear here.",
     "not_found": {
       "title": "Not found"
     },
@@ -709,15 +705,16 @@
       "proposed": "{supplier} proposed changes: you accept or refuse them.",
       "seeAnswer": "See their answer",
       "readOnly": "Read-only: your role sees the order and changes nothing.",
-      "frozen": "The order was sent: its lines no longer change here."
+      "frozen": "The order was sent: its lines no longer change here.",
+      "dockLabel": "The purchase order’s thread",
+      "previewPdf": "Preview PDF",
+      "previewPdfHint": "A sample marked as such, as the order stands now, in a new tab. It prints prices; the confirm link shows none."
     },
     "tab": {
       "lines": "Lines",
       "answer": "Supplier’s answer",
       "receipts": "Receipts",
       "invoices": "Invoices",
-      "documents": "Documents",
-      "activity": "Activity",
       "checksOpen_one": "{count} send check open",
       "checksOpen_other": "{count} send checks open",
       "waitsForYou": "Waits for your decision"
@@ -924,29 +921,6 @@
       "tableLabel": "Goods received against this order",
       "empty": "Nothing received yet",
       "emptyBody": "Warehouse receives the goods when they arrive."
-    },
-    "docs": {
-      "pdfs": "The order as sent (PDF)",
-      "none": "No PDF stored.",
-      "noneDraft": "No documents yet — the PDF is made and frozen when you send.",
-      "preview": "Preview the PDF",
-      "openTab": "Open in a new tab",
-      "openPreview": "Open the PDF preview in a new tab",
-      "previewHint": "A sample marked as such, as the order stands now.",
-      "made": "Made {date} · {size} KB",
-      "download": "Download {name}",
-      "priceNote": "The PDF prints prices; the confirm link shows none.",
-      "mails": "Mails",
-      "noMails": "No mail yet.",
-      "to": "To",
-      "queued": "When",
-      "state": "State",
-      "mail": {
-        "queued": "Waiting to leave",
-        "sent": "Sent",
-        "delivered": "Delivered",
-        "failed": "Failed"
-      }
     },
     "send": {
       "title": "Send {number} to {supplier}",
@@ -1398,12 +1372,12 @@
       "reversed": "Reversed {time}",
       "linesLabel": "Lines of the receipt",
       "linesCount_one": "{count} line",
-      "linesCount_other": "{count} lines"
+      "linesCount_other": "{count} lines",
+      "dockLabel": "The receipt’s thread"
     },
     "tab": {
       "lines": "Lines",
       "lots": "Lots & hides",
-      "activity": "Activity",
       "waiting_one": "{count} lot waits for quality",
       "waiting_other": "{count} lots wait for quality"
     },

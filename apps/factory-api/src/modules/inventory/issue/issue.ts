@@ -13,7 +13,7 @@ import { actorOf } from '../../../core/context'
 import { mayAt, postedBy, stockContextOf, type StockContext } from '../ledger/access'
 import { InsufficientStockError, LEDGER_SELECT, postMoves, type LedgerRow, type MoveDraft, type PostedMove } from '../ledger/post-moves'
 import type { PeriodLockOverride } from '@nexus/factory-domain/accounting/contracts'
-import { latestMoveOf, PickRefusedError, pickingWorkOrder, readGroup } from './picking'
+import { latestMoveOf, mayPick, PickRefusedError, pickingWorkOrder, readGroup } from './picking'
 import { giveBackIssue, reservedForIssue, ReservedForOtherError } from '../reservations/consume'
 import { holdOnIssue } from '../../quality/holds/checks'
 // B-W2b-100: one shade lot per order (SCM-206) and remnant stock (SCM-254).
@@ -227,6 +227,9 @@ export async function issueInCommand(
 ): Promise<IssueResult> {
   const context = contextOf(tools)
   const workOrder = await lockedWorkOrder(tools, workOrderId)
+  // B-PR-10: every issue checks the work order's site AND customer (a roll issued to another customer's work order was not
+  // checked by its caller): another customer's is not found, as an unknown one.
+  if (!mayPick(contextOf(tools), INVENTORY_ISSUE, workOrder)) throw new NotFoundError('Work order not found.')
   const { tx } = tools
   const reason = body.overIssueReason?.trim() || null
   if (reason && !mayOverIssue(context, workOrder)) throw new ForbiddenError("An over-issue is the office's, with the right to issue more than a work order needs.")

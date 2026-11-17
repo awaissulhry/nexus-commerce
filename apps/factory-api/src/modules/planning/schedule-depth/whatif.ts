@@ -15,7 +15,7 @@ import type { Prisma } from '@nexus/factory-db'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { command, StaleVersionError, type CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { assertMayAt, officeContextOf, siteFor } from '../access'
+import { assertMayAt, everyPartySiteFor, officeContextOf } from '../access'
 import { capacityAnswer, type CapacityWorld } from '../capacity/service'
 import { SITE_COLUMNS, type Reader, type SiteRow } from '../store'
 import { gateHoldsOf } from '../schedule/gates'
@@ -26,6 +26,8 @@ import { lockedWorkingPlan, userNamesOf, type SlotRow } from '../schedule/store'
 import type { ApplyWhatIfBody, CreateWhatIfBody, SetWhatIfMovesBody, WhatIfMoveInput } from './contract'
 import { emitDepthChange, logChanges, type LoggedChange } from './log'
 import { materialCheckOf, materialStartsOf } from './material'
+import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
+import { actorOf } from '../../../core/context' // B-PR-10
 
 /**
  * What-if on the planning board (B-W2b-312; design planning.board sec:whatif; WhatIfScenario of B-W2b-286): one planner's
@@ -74,6 +76,7 @@ const BANNER = 'What-if — nothing reaches the floor or other planners until yo
 
 async function scenarioFor(caller: CommandCaller, scenarioId: string, permission: Permission): Promise<ScenarioRow> {
   const context = officeContextOf(caller)
+  assertEveryParty(actorOf(context), PLANNING_VIEW) // B-PR-10: every customer, before the scenario is read
   const row = (await caller.withClient((db) => (isUuid(scenarioId) ? db.whatIfScenario.findUnique({ where: { id: scenarioId }, select: SCENARIO_COLUMNS }) : Promise.resolve(null)))) as ScenarioRow | null
   // Another planner's scenario does not exist for the caller: it is private.
   if (!row || row.ownerId !== context.actorId) throw new NotFoundError('What-if not found: a what-if is its planner\'s own.')
@@ -324,7 +327,8 @@ const audited = (row: Pick<ScenarioRow, 'status' | 'version'>, moves: number) =>
 /** POST /planning/schedule/what-ifs: a private DRAFT on the site's working plan as it is now. */
 export async function createWhatIf(caller: CommandCaller, body: CreateWhatIfBody, idempotencyKey?: string) {
   const context = officeContextOf(caller)
-  const site = await siteFor(caller, body.siteId, PLANNING_SCHEDULE_MANAGE)
+  // B-PR-10 (a named leftover): a what-if moves work on lanes every customer shares (as B-PR-07's slot writes): every customer.
+  const site = await everyPartySiteFor(caller, body.siteId, PLANNING_SCHEDULE_MANAGE)
   const { result, replayed } = await command(caller, { name: 'planning.whatif.create', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
     const plan = await lockedWorkingPlan(tx, site, context.tenantId, { actorId: context.actorId, now, bump: false })
@@ -340,7 +344,7 @@ export async function createWhatIf(caller: CommandCaller, body: CreateWhatIfBody
 /** GET /planning/schedule/what-ifs: the caller's own drafts at the site. */
 export async function listWhatIfs(caller: CommandCaller, query: { readonly siteId: string }) {
   const context = officeContextOf(caller)
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-10: as a what-if itself
   return caller.withClient(async (db) => {
     const rows = await db.whatIfScenario.findMany({ where: { siteId: site.id, ownerId: context.actorId, status: 'DRAFT' }, select: { id: true, name: true, status: true, version: true, basedAt: true, moves: true, updatedAt: true }, orderBy: [{ updatedAt: 'desc' }, { id: 'asc' }], take: 50 })
     return { site: siteViewOf(site), scenarios: rows.map((row) => ({ id: row.id, name: row.name, status: row.status, version: row.version, basedAt: toUtcIso(row.basedAt), moves: movesOf(row.moves).length, updatedAt: toUtcIso(row.updatedAt) })) }

@@ -11,6 +11,7 @@ import { SHIPPING_VIEW } from '@nexus/factory-domain/shipping/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { officeOf, rulesClock, type Reader } from '../register-of-rules/common'
+import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * Who reads a compliance report and of what (B-W2b-272). The office caller needs compliance.reports.view over the screen's
@@ -68,13 +69,19 @@ export const partyRef = (party: { readonly id: string; readonly code: string; re
  * asked (a party, else 404), the period asked or the 365 days up to today (400 in words otherwise; `period` given: the annual
  * review's year is checked by its caller), what the caller may see.
  */
-export async function placeOf(db: Reader, caller: CommandCaller, query: { readonly from?: string | undefined; readonly to?: string | undefined; readonly brandId?: string | undefined }): Promise<Place> {
+export async function placeOf(db: Reader, caller: CommandCaller, query: { readonly from?: string | undefined; readonly to?: string | undefined; readonly brandId?: string | undefined }, options: { readonly everyCustomer?: boolean } = {}): Promise<Place> {
   const context = officeOf(caller)
   const actor = actorOf(context)
   const companyId = context.companyId ?? null
   let company: Ref | null = null
   if (companyId) {
     if (!can(actor, COMPLIANCE_REPORTS_VIEW, { companyId })) throw new ForbiddenError('Compliance reports of this company are not in your role.')
+  }
+  // B-PR-10 (the brand wall, production plan §2 "a view that mixes brands needs access to every brand"): the compliance reports
+  // count every customer's styles, shipments and register entries and list every brand: a person limited to some customers gets
+  // 403 in words that name none of them. The chromium VI report (supplier lots, no customer) passes `everyCustomer: false`.
+  if (options.everyCustomer !== false) assertEveryParty(actor, COMPLIANCE_REPORTS_VIEW, companyId ? { companyId } : {})
+  if (companyId) {
     const row = await db.company.findUnique({ where: { id: companyId }, select: { id: true, code: true, legalName: true, tradeName: true } })
     if (!row) throw new NotFoundError('Company not found.')
     company = partyRef(row)

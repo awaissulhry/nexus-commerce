@@ -2,7 +2,7 @@ import { valuationKey } from '@nexus/factory-domain/inventory/ledger/valuation'
 import { unitCostPerBase } from '@nexus/factory-domain/inventory/receipts/rules'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { defineHandler, type EventHandler } from '../../../platform/outbox/dispatch'
-import { stockContextOf } from './access'
+import { stockContextOf, assertWholeWarehouse } from './access'
 import { LEDGER_SELECT, valueMovesInCommand } from './post-moves'
 
 /**
@@ -33,6 +33,7 @@ export function floorMoveValuationHandler(): EventHandler {
 /** Values one move that has no value yet (system callers only). Answers whether it is valued now. */
 export async function valueMove(caller: CommandCaller, moveId: string, causationId?: string): Promise<boolean> {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   if (context.audience !== 'system') throw new Error('valueMove runs as the system (the worker)')
   const before = await caller.withClient(async (client) => ({
     move: await client.stockMove.findUnique({ where: { id: moveId }, select: LEDGER_SELECT }),

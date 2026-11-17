@@ -27,6 +27,7 @@ import { scheduleWorld } from '../schedule/service'
 import { materialStartsOf } from '../schedule-depth/material'
 import { SITE_COLUMNS, type Reader, type SiteRow } from '../store'
 import { detectInputs, OPEN_COLUMNS } from './refresh'
+import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * Supply too late (B-W2b-317; PLN-200 "Supplier date slip replans affected orders"; design planning.exceptions › tiles
@@ -213,6 +214,7 @@ async function siteOf(caller: CommandCaller, db: Reader, siteId: string): Promis
 /** POST /planning/exceptions/supply-late/check — a planner checks a purchase order's dates now. */
 export async function checkSupplyLateNow(caller: CommandCaller, body: { readonly purchaseOrderId: string }, idempotencyKey?: string) {
   const context = officeContextOf(caller)
+  assertEveryParty(actorOf(context), PLANNING_VIEW) // B-PR-10: as the list it answers with, before any record is read
   const order = await caller.withClient((db) => (isUuid(body.purchaseOrderId) ? db.purchaseOrder.findUnique({ where: { id: body.purchaseOrderId }, select: { id: true, companyId: true, siteId: true } }) : Promise.resolve(null)))
   if (!order || !can(actorOf(context), PLANNING_VIEW, { companyId: order.companyId, siteId: order.siteId })) throw new NotFoundError('Purchase order not found.')
   if (!can(actorOf(context), PLANNING_EXCEPTIONS_MANAGE, { companyId: order.companyId, siteId: order.siteId })) throw new ForbiddenError()
@@ -354,6 +356,8 @@ const SUPPLY_LATE_COLUMNS = { id: true, siteId: true, dedupeKey: true, status: t
 export async function supplyLateList(caller: CommandCaller, query: { readonly siteId: string }) {
   return caller.withClient(async (db) => {
     const { context, site } = await siteOf(caller, db, query.siteId)
+    // B-PR-10: late supply names every customer's work orders it holds up: every customer only.
+    assertEveryParty(actorOf(context), PLANNING_VIEW, { companyId: site.companyId, siteId: site.id })
     const now = serverClock.now()
     const rows = await db.planningException.findMany({ where: { siteId: site.id, kind: SUPPLY_LATE, status: { not: 'RESOLVED' } }, select: SUPPLY_LATE_COLUMNS, orderBy: [{ daysLate: { sort: 'desc', nulls: 'last' } }, { firstSeenAt: 'asc' }, { id: 'asc' }], take: 200 })
     const fixes = await fixesOf(db, context, site, rows, now)

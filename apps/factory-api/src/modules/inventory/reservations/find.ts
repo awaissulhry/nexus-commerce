@@ -9,7 +9,7 @@ import { INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permission
 import { findHides, type FindHide } from '@nexus/factory-domain/inventory/reservations/find'
 import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
-import { mayAt, officeContextOf, siteFor } from '../ledger/access'
+import { mayAt, officeContextOf, siteFor, assertWholeWarehouse } from '../ledger/access'
 import { gradesOf } from '../hides/facts'
 import { itemUnitsOf, readAtWorkOrder, readItems, readLocations, readSiteStock, type Reader } from '../issue/store'
 import { liveTagsOf } from '../remnants/lifecycle'
@@ -41,6 +41,7 @@ export interface FindQuery {
 
 export async function findHidesForJob(caller: CommandCaller, query: FindQuery) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   let siteId: string
   let workOrder: { id: string; number: string; companyId: string; siteId: string } | null = null
   if (query.workOrderId) {

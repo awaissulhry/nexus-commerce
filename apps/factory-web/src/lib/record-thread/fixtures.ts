@@ -91,8 +91,66 @@ function renamed<T>(value: T, brand: BrandFixture): T {
   const text = JSON.stringify(value).split(BRAND_ALPHA.fileName).join(brand.fileName).split(BRAND_ALPHA.tradeName).join(brand.tradeName)
   return JSON.parse(text) as T
 }
+// ---- B-TH-257…264 (TH-6 part A): the docked thread of ANY record page in the design cases (the rule of picture 38) ----------------
+/** A record page's docked thread for a design case: its type, its number as the band names it, and its party (none: notes only). */
+export interface RecordDockedInput {
+  /** The thread's record type ("SampleRound", "PurchaseOrder" …): the box's context. */
+  readonly recordType: string
+  /** The record's number as its band shows it ("SR-2026-0007"). */
+  readonly record: string
+  /** The record's party, made-up ("Brand Alpha", "Pelli Demo S.p.A."), with whom it is to us; null: a record with notes only. */
+  readonly party: { readonly name: string; readonly role: 'customer' | 'supplier' | 'partner' } | null
+}
+
+/**
+ * The docked thread of any record (B-TH-257…264): the Head (who answers next, the counts, View, the width, the "⋯" with Activity's
+ * doors — R-ACT), the record's files line, the feed and the box, in the record's own number and its own party's name. A record
+ * without a party (a price list, a change order, a stock count) shows the office's notes only: no mail, no "Reply to", no files of a
+ * party. Brand Beta's words never appear in Brand Alpha's copy (the made-up party's name replaces Brand Alpha's everywhere).
+ */
+export function recordDockedThread(input: RecordDockedInput, head: Partial<HeadModel> = {}): ThreadCaseModel {
+  // The made-up party's own words everywhere — its name and code, its contacts, its file, its numbers: nothing of Brand Alpha's
+  // (brandMarkers) reaches another party's thread; a record without a party is named by its own number.
+  const name = input.party?.name ?? input.record
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'demo'
+  const brand: BrandFixture = {
+    ...BRAND_ALPHA,
+    legalName: name,
+    tradeName: name,
+    code: slug.toUpperCase(),
+    contact: { name: 'Giulia Esempio', email: `ordini@${slug}.example.com` },
+    portalPerson: { name: 'Marta Esempio', email: `marta@${slug}.example.com` },
+    address: { ...BRAND_ALPHA.address, line1: 'Via Esempio 1' },
+    fileName: `${name} tech pack.pdf`,
+    customerRef: `PO-${slug.toUpperCase()}`,
+    message: 'Please confirm the delivery date.',
+    numbers: { order: input.record, quote: input.record, request: input.record, invoice: input.record, style: input.record },
+  }
+  const base = dockedThread(brand, head, true)
+  const party = input.party
+  if (party) {
+    return {
+      ...base,
+      thread: { ...base.thread, composer: { ...base.thread.composer, context: { ...base.thread.composer.context, recordType: input.recordType, recordLabel: input.record } } },
+      docked: base.docked && { ...base.docked, head: { ...base.docked.head, party: { name: party.name, role: party.role } }, party: base.docked.party && { ...base.docked.party, role: party.role } },
+    }
+  }
+  const feed = base.thread.feed
+  return {
+    ...base,
+    thread: {
+      ...base.thread,
+      title: input.record,
+      feed: feed.state === 'ready' ? { ...feed, messages: feed.messages.filter((message) => message.kind === 'note'), context: { ...feed.context, partyName: null, canReply: false } } : feed,
+      composer: { ...base.thread.composer, context: { ...base.thread.composer.context, recordType: input.recordType, recordLabel: input.record, party: null, can: { ...base.thread.composer.context.can, email: false } }, to: [], cc: [], contacts: [], subject: '', recordFiles: [] },
+    },
+    docked: base.docked && { ...base.docked, head: demoHead({ record: input.record, party: null, counts: {}, ...head }, undefined, false), files: [], party: null },
+  }
+}
+// ---- end B-TH-257…264
+
 const DOCKED = dockedThread()
-const reply = (thread: RecordThreadModel): RecordThreadModel => ({ ...thread, composer: { ...thread.composer, draft: { mode: 'reply', body: 'Hello Alma,\nthe quote follows tomorrow morning.\nAlex', forFloor: false } } })
+const reply =(thread: RecordThreadModel): RecordThreadModel => ({ ...thread, composer: { ...thread.composer, draft: { mode: 'reply', body: 'Hello Alma,\nthe quote follows tomorrow morning.\nAlex', forFloor: false } } })
 
 export const designScreen = defineDesignScreen<ThreadCaseModel>({
   screen: 'SCR-006-thread',

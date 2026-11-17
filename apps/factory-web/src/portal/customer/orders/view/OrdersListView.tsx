@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useSyncExternalStore, type ReactNode } from 'react'
 import { Download, ExternalLink, MoreHorizontal, PackageSearch, WifiOff } from 'lucide-react'
-import { Banner, Card, EmptyState, Menu, PressableRow, type MenuItemDef } from '@nexus/ui/components'
+import { Banner, Card, EmptyState, Menu, MetricStrip, PressableRow, type MenuItemDef } from '@nexus/ui/components'
 import { MilestoneTracker } from '@nexus/ui/components/MilestoneTracker/index'
 import { RefPair } from '@nexus/ui/components/RefPair/index'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
@@ -21,6 +21,8 @@ import { useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useOrderWords } from '../words'
 import { Loading, PricesNote, ReadFailed } from './parts'
+// B-TH-238: the tiles above the list.
+import type { ListTile } from '../model'
 import '../orders.css'
 
 /**
@@ -58,6 +60,8 @@ export interface OrdersListViewModel {
   keysOpen?: boolean
   /** B-TH-230: the person's own new messages per row (one read of the rows shown); null/absent: no column. */
   unread?: UnreadMap | null
+  /** B-TH-238: We need something from you · Open requests · Open orders — each filters this list; null/absent: none. */
+  tiles?: readonly ListTile[] | null
 }
 
 export interface OrdersListActions {
@@ -288,6 +292,22 @@ function List({ model, actions }: { model: OrdersListViewModel; actions?: Orders
   return (
     <div className="fw-pord">
       {model.offlineSince ? <Banner tone="warning" icon={<WifiOff size={16} aria-hidden />} title={t('offline.title', { time: time(model.offlineSince) })} /> : null}
+      {model.tiles ? (
+        // B-TH-238 (P-CUS-ORD-LIST.tiles): each tile filters the list to its own rows (a button, pressed while chosen).
+        <section className="fw-pord-tiles" aria-label={t('tiles.label')}>
+          <MetricStrip
+            minTileWidth={180}
+            metrics={model.tiles.map((tile) => ({
+              label: t(`tiles.${tile.chip}`),
+              value: tile.value === null ? '—' : String(tile.value),
+              hint: t(`tiles.hint.${tile.chip}`),
+              onClick: () => actions?.onChip?.(tile.chip),
+              active: chip === tile.chip,
+              ...(tile.chip === 'NEEDS_YOU' && (tile.value ?? 0) > 0 ? { accent: 'var(--nds-warning)' } : {}),
+            }))}
+          />
+        </section>
+      ) : null}
       <div className="fw-pord-chiprow">
         <div className="fw-pord-chips" role="group" aria-label={t('chips.label')}>
           {chips.map((entry) => (

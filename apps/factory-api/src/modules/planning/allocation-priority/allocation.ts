@@ -5,7 +5,7 @@ import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { decimalOf, QUANTITY_SCALE } from '@nexus/factory-domain/product/units/units'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { siteFor } from '../access'
+import { everyPartySiteFor } from '../access'
 import { latestDoneRun } from '../inputs'
 import { livePlanOf } from '../readiness/service'
 import type { AllocationQuery } from './contract'
@@ -42,7 +42,7 @@ function partWords(entry: PartCoverage, uom: string): string {
 }
 
 export async function readAllocationPriority(caller: CommandCaller, query: AllocationQuery) {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-10: it ranks every customer's orders
   const asOf = serverClock.now()
   const scarceOnly = query.scarceOnly ?? true
   const colourFilter = query.itemColourId === undefined ? undefined : query.itemColourId === 'none' ? null : query.itemColourId

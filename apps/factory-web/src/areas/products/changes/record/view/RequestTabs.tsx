@@ -162,7 +162,7 @@ export function RequestChangeTab({ model, request, actions }: { model: ChangeRec
               <p className="fw-chg-hint">{offline ? t('held.offline') : t('held.needsRight', { right: t('right.files.upload') })}</p>
             )
           ) : null}
-          <p className="fw-chg-hint">{t('photos.inActivity')}</p>
+          <p className="fw-chg-hint">{t('photos.inFiles')}</p>
         </div>
       </Card>
       {editable.fields !== 'none' && changes.count > 0 && (
@@ -217,12 +217,16 @@ export function RequestApprovalsTab({ model, request }: { model: ChangeRecordMod
   )
 }
 
-/** A change request's Affected records: the style and the revision it is about (→ the revision its change order proposes). */
+/**
+ * A change request's Affected records: the style and the revision it is about (→ the revision its change order proposes). B-TH-262:
+ * the second half of the request's "Impact & affected" tab, under its own heading.
+ */
 export function RequestAffectedTab({ model, request }: { model: ChangeRecordModel; request: RequestView }) {
   const { t } = useWords()
   return (
     <div className="fw-chg-stack">
       <Card padded>
+        <h2 className="fw-chg-h2">{t('tab.affected')}</h2>
         <KeyValue
           labelCase="sentence"
           columns={3}

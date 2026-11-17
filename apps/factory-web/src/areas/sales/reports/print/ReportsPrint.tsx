@@ -5,6 +5,8 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { readProblem } from '../../../_shared/stock/model'
 import { getBacklog, getHeadline, getIntake, getReturns, type Backlog, type Headline, type Intake, type Returns } from '../api'
+// B-TH-235: the request figure on paper.
+import { getRequests, type Requests } from '../api'
 import { rangeShown, reportsAddressOf, reportsCan, romeToday } from '../model'
 import { ReportsPrintView } from './view/ReportsPrintView'
 
@@ -13,10 +15,11 @@ interface PrintRead {
   intake: Intake | null
   backlog: Backlog | null
   returns: Returns | null
+  requests: Requests | null // B-TH-235
   problem: string | null
 }
 
-const EMPTY: PrintRead = { headline: null, intake: null, backlog: null, returns: null, problem: null }
+const EMPTY: PrintRead = { headline: null, intake: null, backlog: null, returns: null, requests: null, problem: null }
 
 /**
  * `/w/<company>/sales/reports/print?from=&to=&by=&split=&backlog=` (SCR-427, design tab:print "Print stylesheet of the current
@@ -43,9 +46,10 @@ export function ReportsPrint() {
         const period = { from: address.from, to: address.to }
         const headline = await getHeadline(api, period)
         const intake = await getIntake(api, period, address.by, address.split)
+        const requests = await getRequests(api, period, address.by) // B-TH-235
         const backlog = await getBacklog(api, address.backlog)
         const returns = await getReturns(api, period)
-        if (live) setRead({ headline, intake, backlog, returns, problem: null })
+        if (live) setRead({ headline, intake, requests, backlog, returns, problem: null })
       } catch (error) {
         if (live) setRead({ ...EMPTY, problem: readProblem(error) })
       }

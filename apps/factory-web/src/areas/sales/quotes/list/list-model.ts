@@ -7,6 +7,8 @@ import type { NewFromKind, NewFromModel } from '../new-from/model'
 import type { Words } from '../record/lines-depth/model'
 import type { NewFromActions } from '../new-from/view/NewFrom'
 import type { QuotesPageLinksModel } from '../new-from/view/PageLinks'
+// B-TH-257: the New messages column.
+import type { UnreadMap } from '../../../../lib/last-message-cell/model'
 
 /** The quotes list's view model (SCR-034; design sales.quotes): the container (QuotesPage.tsx) fills it. */
 
@@ -70,6 +72,14 @@ export interface QuotesListViewModel {
   /** Design cases: the rows ticked, the row that has the focus. */
   selected?: readonly string[]
   focusRow?: number
+  // ---- B-TH-257 (X-SAL-QUO-LIST.grid-F03, F07, F08)
+  /** The reader's own new messages per quote (threads.read); null: no right, no column. */
+  unread?: UnreadMap | null
+  /** sales.inquiries.view: "from INQ-…" opens the request; else the number alone. */
+  readsRequests?: boolean
+  /** orders.view: an accepted row's "SO-…" opens its order. */
+  readsOrders?: boolean
+  // ---- end B-TH-257
 }
 
 export interface QuotesListActions extends DuplicateActions, NewFromActions {

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { DEMO_USER, rolePermissions } from '../../../../shell/design-data'
 import { inShell } from '../../../quality/_shared/fixtures'
-import { BACKLOG, HEADLINE, INTAKE, NOW, RETURNS, SALES } from '../fixtures'
+import { BACKLOG, HEADLINE, INTAKE, NOW, REQUESTS, RETURNS, SALES } from '../fixtures'
 import { reportsCan } from '../model'
 import { ReportsPrintView, type ReportsPrintModel } from './view/ReportsPrintView'
 
@@ -23,6 +23,7 @@ const model = (over: Partial<ReportsPrintModel> = {}): ReportsPrintModel => ({
   intake: INTAKE,
   backlog: BACKLOG,
   returns: RETURNS,
+  requests: REQUESTS, // B-TH-235: the request figure on paper
   problem: null,
   ...over,
 })

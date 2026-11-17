@@ -7,6 +7,8 @@ import { shellOf as ordersShellOf } from '../orders/design-data'
 import type { DraftLine, DraftRecord, DraftRow, PastOrder, PastOrderRow, ShipTo, UploadAnswer } from './api'
 import { NS } from './model'
 import { orderingWordsFor, type OrderingWords } from './words'
+// B-TH-304: the customer's own order numbers.
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
 
 /**
  * SCR-185 and SCR-226's made-up world (B-W2b-194; PLAN §3.1): the invented maker Pelletteria Esempio and its invented
@@ -231,15 +233,16 @@ export const DRAFTS: readonly DraftRow[] = [
 
 // ── reorder ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
 export const PAST_ORDERS: readonly PastOrderRow[] = [
-  { id: id(501), number: 'SO-2026-0141', customerRef: 'BA-PO-4410', orderDate: dayAt(-60), lines: 3, pieces: 74 },
-  { id: id(502), number: 'SO-2026-0098', customerRef: 'BA-PO-4302', orderDate: dayAt(-120), lines: 2, pieces: 40 },
-  { id: id(503), number: 'SO-2025-0412', customerRef: null, orderDate: dayAt(-300), lines: 1, pieces: 12 },
+  // B-TH-304: each with the customer's own number (the portal draws "Your order 12", never SO-…).
+  { id: id(501), number: 'SO-2026-0141', yourNumber: customerNumberOf('ORDER', 12), customerRef: 'BA-PO-4410', orderDate: dayAt(-60), lines: 3, pieces: 74 },
+  { id: id(502), number: 'SO-2026-0098', yourNumber: customerNumberOf('ORDER', 9), customerRef: 'BA-PO-4302', orderDate: dayAt(-120), lines: 2, pieces: 40 },
+  { id: id(503), number: 'SO-2025-0412', yourNumber: null, customerRef: null, orderDate: dayAt(-300), lines: 1, pieces: 12 },
 ]
 
 export function pastOrder(seesPrices = true): PastOrder {
   const price = (value: string) => (seesPrices ? value : undefined)
   return {
-    order: { id: id(501), number: 'SO-2026-0141', customerRef: 'BA-PO-4410', orderDate: dayAt(-60) },
+    order: { id: id(501), number: 'SO-2026-0141', yourNumber: customerNumberOf('ORDER', 12) /* B-TH-304 */, customerRef: 'BA-PO-4410', orderDate: dayAt(-60) },
     lines: [
       {
         orderLineId: id(601),

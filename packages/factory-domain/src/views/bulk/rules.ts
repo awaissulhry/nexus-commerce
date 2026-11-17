@@ -27,7 +27,8 @@ export const BULK_LIMITS = Object.freeze({
   text: 2000,
 })
 
-export const BULK_FIELD_KINDS = ['date', 'integer', 'text', 'choice'] as const
+// B-TH-060: `number` — a number with decimals (a custom NUMBER field edited in a cell of Sales › Orders).
+export const BULK_FIELD_KINDS = ['date', 'integer', 'text', 'choice', 'number'] as const
 export type BulkFieldKind = (typeof BULK_FIELD_KINDS)[number]
 
 /** A field's value: a day (YYYY-MM-DD) or a text or a choice's code, a whole number, or nothing. */
@@ -92,7 +93,7 @@ export function isDay(value: string): boolean {
  */
 export function normaliseValue(spec: BulkFieldSpec, value: unknown): BulkValue {
   if (value === null || value === undefined) return null
-  if (spec.kind === 'integer') {
+  if (spec.kind === 'integer' || spec.kind === 'number') {
     if (typeof value === 'number') return value
     if (typeof value === 'string') {
       const text = value.trim().replace(/\s/g, '')
@@ -125,6 +126,13 @@ export function valueProblem(spec: BulkFieldSpec, value: BulkValue): string | nu
     }
     case 'choice':
       return typeof value === 'string' && (spec.choices ?? []).includes(value) ? null : 'Not one of the choices.'
+    // ---- B-TH-060
+    case 'number':
+      if (typeof value !== 'number' || !Number.isFinite(value)) return 'A number is needed.'
+      if (spec.min !== undefined && value < spec.min) return `At least ${spec.min}.`
+      if (spec.max !== undefined && value > spec.max) return `At most ${spec.max}.`
+      return null
+    // ---- end B-TH-060
   }
 }
 

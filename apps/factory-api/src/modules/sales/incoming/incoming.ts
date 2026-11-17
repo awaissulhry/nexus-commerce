@@ -26,6 +26,7 @@ import { OPEN_STATUSES, summaryOf, WORKING_DAY_MINUTES } from '@nexus/factory-do
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { relativeRange } from '@nexus/factory-domain/views/quick/relative'
+import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue' // B-TH-047
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
@@ -33,6 +34,8 @@ import { baseWhere } from '../inquiries/inquiries'
 import { INQUIRY_COLUMNS, officeOf, type InquiryData, type Reader } from '../inquiries/store'
 import { rowsOf, waitingMinutesOf } from '../inquiries/views'
 import { readLines } from '../portal-ordering/store'
+// B-TH-047: "Customer replies", the conversations waiting on us across the customer's other records.
+import { waitingRowsOf } from '../../../platform/threads/waiting-list'
 
 /**
  * Sales › Incoming over every door (B-TH-039; threads plan G2, L2-G07): GET /sales/incoming — requests, catalogue orders and
@@ -90,7 +93,8 @@ const VIEW_OF: Readonly<Record<IncomingKind, Permission>> = Object.freeze({ REQU
 /** The kinds this reader may see at all (a grant of the kind's view permission) and this query lets in. */
 function kindsOf(actor: Actor, query: IncomingListQuery): { readonly sees: ReadonlySet<IncomingKind>; readonly listed: readonly IncomingKind[] } {
   const sees = new Set(INCOMING_KINDS.filter((kind) => grantsFor(actor, VIEW_OF[kind]).length > 0))
-  const requestsOnly = query.status !== undefined || query.prospect === true || (query.source !== undefined && query.source !== 'PORTAL')
+  // B-TH-235: `outcome` (what a request became, Sales › Reports' request figure) lists requests only.
+  const requestsOnly = query.status !== undefined || query.prospect === true || (query.source !== undefined && query.source !== 'PORTAL') || query.outcome !== undefined
   const listed = INCOMING_KINDS.filter((kind) => sees.has(kind) && (query.kind === undefined || query.kind === kind) && (!requestsOnly || kind === 'REQUEST'))
   return { sees, listed }
 }
@@ -124,7 +128,7 @@ async function filtersOf(db: Reader, context: OfficeContext, query: IncomingList
   const common = [query.partyId ? { partyId: query.partyId } : {}, query.companyId ? { companyId: query.companyId } : {}]
   return {
     // The requests: the inquiries' own list filter (the same scope, the same words).
-    request: baseWhere(context, { status: query.status, source: query.source, partyId: query.partyId, prospect: query.prospect, companyId: query.companyId, receivedFrom: query.receivedFrom, receivedTo: query.receivedTo, q }),
+    request: baseWhere(context, { status: query.status, source: query.source, partyId: query.partyId, prospect: query.prospect, companyId: query.companyId, receivedFrom: query.receivedFrom, receivedTo: query.receivedTo, q, outcome: query.outcome /* B-TH-235 */ }),
     catalogue: {
       AND: [
         scopeWhere(actor, ORDERS_VIEW, PARTY_SCOPE) as Prisma.PortalOrderRequestWhereInput,
@@ -536,6 +540,12 @@ export async function listIncoming(caller: CommandCaller, query: IncomingListQue
         counts[each] = listed.length === 0 ? null : Object.values(perKind).reduce((sum, value) => sum + (value ?? 0), 0)
         if (each === tile) for (const kind of INCOMING_KINDS) kinds[kind] = sees.has(kind) && listed.includes(kind) ? (perKind[kind] ?? 0) : null
       }
+      // ---- B-TH-047: the "Customer replies" saved row (GET /threads/waiting?side=CUSTOMER lists them): every conversation on the
+      // customer's other records (orders, quotes, returns …) whose newest shared message is the customer's, that this reader may
+      // open, under the company and customer filters; null when the reader reads no conversation ("—").
+      const replies = await waitingRowsOf(db, context, { side: 'CUSTOMER', companyId: query.companyId, partyId: query.partyId })
+      counts.CUSTOMER_REPLIES = grantsFor(actor, THREADS_READ).length === 0 ? null : replies.rows.length
+      // ---- end B-TH-047
     }
     return { rows, counts, kinds, next: page.next ? encodeCursor(page.next) : null, complete: waiting.complete }
   })

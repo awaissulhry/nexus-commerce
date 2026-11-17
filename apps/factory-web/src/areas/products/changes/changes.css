@@ -106,14 +106,7 @@
   gap: var(--nds-space-6);
 }
 
-/* The band of the record: the header, then its tabs. */
-.fw-chg-band {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-6);
-  min-width: 0;
-}
-
+/* The record's title in RecordFrame's band (B-TH-262): the style after the number, quieter. */
 .fw-chg-title-name {
   color: var(--nds-text-2);
   font-weight: var(--nds-font-weight-normal);

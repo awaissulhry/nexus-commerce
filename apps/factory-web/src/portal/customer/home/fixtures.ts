@@ -13,6 +13,11 @@ import { homeBandOf } from './band'
 import { previewRowOf, versionLines } from '../documents/preview/model'
 import type { DocumentPreviewModel } from '../documents/preview/view/DocumentPreview'
 import { documentRows, nextOrderRows, NS, orderCounts, tilesFor, tilesOf, type BuiltPages } from './model'
+// B-TH-238: the Messages card, and Brand Beta's Home (brand B reads its own requests and conversations only).
+import { messagesCardOf } from './model'
+import { BRAND_BETA } from '../../../lib/testing/two-brands'
+import type { RequestRow } from '../requests/api'
+import { betaShellOf, PREFIX as BETA_PREFIX, REQUESTS as BETA_REQUESTS } from '../requests/design-data'
 import type { ApproveDialogModel } from './view/ApproveDialog'
 import type { CustomerHomeViewModel } from './view/CustomerHomeView'
 import { HomeCase, type HomeCaseBuilder } from './view/HomeCase'
@@ -207,17 +212,83 @@ const DOCUMENTS: DocumentsRead = {
 }
 
 function conversations(locale: Locale): Conversation[] {
-  const line = (n: number, type: string, theirs: string | null, ours: string, author: string, it: string, en: string, hours: number): Conversation => ({
+  // B-TH-238: the API's partner views name a record by the customer's own number ("#43"), never the office's series.
+  const line = (n: number, type: string, theirs: string | null, ours: string, author: string, it: string, en: string, hours: number, newCount = 0, side = 'COMPANY'): Conversation => ({
     record: { type, id: id(500 + n), theirRef: theirs, ourRef: ours, subtitle: null, status: null },
     thread: { id: id(600 + n), status: 'OPEN' },
-    last: { id: id(700 + n), side: 'COMPANY', channel: 'PORTAL', authorName: author, excerpt: locale === 'it' ? it : en, attachmentCount: 0, at: at(hours) },
+    last: { id: id(700 + n), side, channel: 'PORTAL', authorName: author, excerpt: locale === 'it' ? it : en, attachmentCount: 0, at: at(hours) },
+    newCount,
   })
   return [
-    line(1, 'SalesOrder', 'PO-BA-883', 'SO-2026-0043', 'Marta Verdi', 'La pelle nera arriva lunedì: la consegna slitta di una settimana.', 'The black leather arrives on Monday: the delivery moves by one week.', -3),
-    line(2, 'Quote', null, 'Q-2026-0042', 'Marta Verdi', 'Vi abbiamo mandato la nuova offerta con le taglie richieste.', 'We sent you the new quote with the sizes you asked for.', -27),
-    line(3, 'SalesOrder', 'PO-BA-881', 'SO-2026-0041', 'Luca Prova', 'Il secondo collo parte domani con il corriere.', 'The second parcel leaves tomorrow with the carrier.', -50),
+    line(1, 'SalesOrder', 'PO-BA-883', '#43', 'Marta Verdi', 'La pelle nera arriva lunedì: la consegna slitta di una settimana.', 'The black leather arrives on Monday: the delivery moves by one week.', -3, 1),
+    line(2, 'Quote', null, '#42', 'Marta Verdi', 'Vi abbiamo mandato la nuova offerta con le taglie richieste.', 'We sent you the new quote with the sizes you asked for.', -27),
+    line(3, 'SalesOrder', 'PO-BA-881', '#41', 'Anna Esempio', 'Potete anticipare il secondo collo?', 'Could you send the second parcel earlier?', -50, 0, 'PARTNER'),
   ]
 }
+
+// ---- B-TH-238: the Messages card (what needs the customer first, then new messages, the account's conversation) -----------------
+const ALPHA_PARTY = id(990)
+const COMPANY = 'Pelletteria Esempio'
+const recordPage = (type: string, recordId: string) => (type === 'SalesOrder' ? `/orders/${recordId}` : type === 'Inquiry' ? `/orders/requests/${recordId}` : null)
+function messagesOf(locale: Locale, over: { conversations?: Conversation[]; state?: 'loading' | 'error' | 'ready' } = {}): NonNullable<CustomerHomeViewModel['messages']> {
+  const state = over.state ?? 'ready'
+  return {
+    state,
+    company: COMPANY,
+    card: state === 'ready' ? messagesCardOf({ prefix: PREFIX, partyId: ALPHA_PARTY, locale, waiting: [], needsYouCount: 0, conversations: over.conversations ?? conversations(locale), unread: {}, recordPage }) : null,
+    needsYouHref: `${PREFIX}/orders?chip=NEEDS_YOU`,
+  }
+}
+
+/**
+ * Brand Beta's (brand B, the reader of every wall scan) Messages: request 7 waits for its answer (NEED_INFO, 2 new), an order
+ * with a new message, a quote, and the account's conversation; only Beta's own numbers ("#12"), its PO, its address prefix.
+ */
+const BETA_PARTY = 'b2b2b2b2-0000-4000-8000-000000000299'
+function betaConversations(locale: Locale): Conversation[] {
+  const line = (key: string, type: string, recordId: string, theirs: string | null, ours: string | null, side: string, it: string, en: string, hours: number, newCount: number): Conversation => ({
+    record: { type, id: recordId, theirRef: theirs, ourRef: ours, subtitle: null, status: null },
+    thread: { id: `b2b2b2b2-0000-4000-8000-0000000006${key}`, status: 'OPEN' },
+    last: { id: `b2b2b2b2-0000-4000-8000-0000000007${key}`, side, channel: 'PORTAL', authorName: null, excerpt: locale === 'it' ? it : en, attachmentCount: 0, at: at(hours) },
+    newCount,
+  })
+  return [
+    line('01', 'Inquiry', BETA_REQUESTS[0]!.id, BRAND_BETA.customerRef, '#7', 'COMPANY', 'Quali taglie vi servono per la giacca?', 'Which sizes do you need for the jacket?', -2, 2),
+    line('02', 'SalesOrder', BRAND_BETA.ids.order, 'BETA-PO-0071', '#12', 'COMPANY', 'Il tessuto è arrivato: si parte lunedì.', 'The fabric arrived: we start on Monday.', -5, 1),
+    line('03', 'Quote', 'b2b2b2b2-0000-4000-8000-000000000503', null, '#3', 'PARTNER', 'Va bene, aspettiamo il preventivo nuovo.', 'Fine, we wait for the new quote.', -30, 0),
+    line('04', 'Party', BETA_PARTY, null, BRAND_BETA.code, 'COMPANY', 'Il listino nuovo arriva a gennaio.', 'The new price list comes in January.', -70, 0),
+  ]
+}
+export function betaMessagesOf(locale: Locale, over: { conversations?: Conversation[]; waiting?: readonly RequestRow[]; unread?: Record<string, number> } = {}): NonNullable<CustomerHomeViewModel['messages']> {
+  const waiting = over.waiting ?? BETA_REQUESTS.filter((row) => row.state.open)
+  return {
+    state: 'ready',
+    company: COMPANY,
+    card: messagesCardOf({ prefix: BETA_PREFIX, partyId: BETA_PARTY, locale, waiting, needsYouCount: waiting.filter((row) => row.state.needsYou).length, conversations: over.conversations ?? betaConversations(locale), unread: over.unread ?? {}, recordPage }),
+    needsYouHref: `${BETA_PREFIX}/orders?chip=NEEDS_YOU`,
+  }
+}
+function betaHomeCase(build: (locale: Locale) => Partial<CustomerHomeViewModel> = () => ({})): HomeCaseBuilder {
+  return (locale) => {
+    const t = words(locale)
+    const home: CustomerHomeViewModel = {
+      prefix: BETA_PREFIX,
+      search: null,
+      start: { newOrderHref: `${BETA_PREFIX}/orders/new`, buyer: true, admins: [BRAND_BETA.portalPerson.name], draft: null },
+      welcome: null,
+      tiles: null,
+      orders: null,
+      documents: null,
+      messages: betaMessagesOf(locale),
+      slow: false,
+      approve: null,
+      document: null,
+      ...build(locale),
+    }
+    return { shell: betaShellOf(locale, homeBandOf({ t, asOf: formatTime(HOME.asOf, { locale }), statement: null, emailSettings: true, ordersKey: true }), '/'), home, tasks: tasksOf(locale, []), verbs: { APPROVE: t('verb.APPROVE'), RECONFIRM_ORDER: t('verb.RECONFIRM_ORDER') } }
+  }
+}
+// ---- end B-TH-238
 
 const SEARCH_GROUPS = (locale: Locale) => {
   const portal = words(locale, 'portal')
@@ -378,7 +449,7 @@ function homeModel(locale: Locale, can: (permission: string) => boolean, built: 
     tiles: defs.some((def) => can(def.permission)) ? { state: 'ready', items: tilesOf(defs, HOME, can, { openItems: OPEN_ITEMS, format: moneyWriter(locale) }) } : null,
     orders: can('portal.salesOrders.view') ? { state: 'ready', items: nextOrderRows(ORDERS, locale, PREFIX, day), open: counts.open, seeAllHref: built.orders ? `${PREFIX}/orders` : null, newOrderHref: null, why: {} } : null,
     documents: can('portal.customerDocuments.view') ? { state: 'ready', items: documentRows(can('portal.payments.view') ? DOCUMENTS : { ...DOCUMENTS, items: DOCUMENTS.items.slice(0, 2) }, locale), seeAllHref: built.documents ? `${PREFIX}/documents` : null, busy: null, problem: null, held: null } : null,
-    messages: can('threads.read') ? { state: 'ready', items: conversations(locale).map((conversation) => ({ ...conversation, href: `${PREFIX}/open/${conversation.record.type}/${conversation.record.id}#messages` })) } : null,
+    messages: can('threads.read') ? messagesOf(locale) : null, // B-TH-238
     slow: false,
     approve: null,
     document: null,
@@ -405,7 +476,7 @@ const loadingSections = (slow: boolean): Partial<CustomerHomeViewModel> => ({
   tiles: { state: 'loading', items: tilesOf(tilesFor(TODAY_BUILT, BUYER), null, BUYER) },
   orders: { state: 'loading', items: [], open: null, seeAllHref: null, newOrderHref: null, why: {} },
   documents: { state: 'loading', items: [], seeAllHref: null, busy: null, problem: null, held: null },
-  messages: { state: 'loading', items: [] },
+  messages: { state: 'loading', company: COMPANY, card: null, needsYouHref: null }, // B-TH-238
   slow,
 })
 
@@ -425,6 +496,10 @@ export const designScreen = defineDesignScreen<HomeCaseBuilder>({
     { id: 'th-223-no-right', label: 'Start for a colleague who may not order', model: homeCase((locale) => ({ can: DESIGNER, tasks: tasksOf(locale, [TASKS[1]!]) })), note: 'No dead button: who in their company can give the right, and Ask a question.' },
     { id: 'linked', label: 'As it will be: every tile a link', model: homeCase(() => ({ built: ALL_BUILT })), note: 'Once Orders, Documents and Returns are built, each tile opens its list with the matching chip, and "See all 7 open orders" / "See all documents" appear.' },
     { id: 'finance', label: 'Finance: invoices and the statement', model: homeCase((locale) => ({ can: FINANCE, statement: true, tasks: tasksOf(locale, [PAY, ...TASKS.slice(2)]) })), note: 'The Invoices tile with its count, the open amount and the overdue count (price grain); ⋯ Download statement of account opens the PDF in a new tab; Pay on the invoice’s row opens its record.' },
+    // ---- B-TH-238 (P-HOME.messages): Brand Beta's Messages card — what needs it first, then new messages, its account's conversation
+    { id: 'th-238-messages', label: 'Messages (Brand Beta): we need something from you first, then new messages, the account', model: betaHomeCase(), note: 'Request 7 waits for its answer (2 new) → Answer opens the request; an order with 1 new message; a quote whose last message is theirs; the account’s conversation last. Only Beta’s own numbers (#12, Your request 7) and PO.' },
+    { id: 'th-238-messages-new', label: 'Messages (Brand Beta): new messages come before older ones', model: betaHomeCase((locale) => ({ messages: betaMessagesOf(locale, { waiting: [] }) })), note: 'No request waits: the request’s conversation is a conversation like the others; new ones first.' },
+    { id: 'th-238-messages-none', label: 'Messages (Brand Beta): nothing yet — the account is still offered', model: betaHomeCase((locale) => ({ messages: betaMessagesOf(locale, { waiting: [], conversations: [] }) })), note: '“No messages yet.” and “Your conversation with Pelletteria Esempio · Write to us”.' },
     { id: 'designer', label: 'A designer (no orders, documents or prices)', model: homeCase((locale) => ({ can: DESIGNER, tasks: tasksOf(locale, [TASKS[1]!]) })), note: 'Sections the role cannot open are not drawn (fails closed); what waits and our messages remain.' },
     {
       id: 'search',
@@ -445,7 +520,7 @@ export const designScreen = defineDesignScreen<HomeCaseBuilder>({
           tiles: { state: 'error', items: [] },
           orders: { state: 'error', items: [], open: null, seeAllHref: null, newOrderHref: null, why: {} },
           documents: { state: 'error', items: [], seeAllHref: null, busy: null, problem: null, held: null },
-          messages: { state: 'error', items: [] },
+          messages: messagesOf(locale, { state: 'error' }), // B-TH-238
         },
         tasks: tasksOf(locale, [], 'error'),
       })),
@@ -458,7 +533,7 @@ export const designScreen = defineDesignScreen<HomeCaseBuilder>({
         home: {
           orders: { state: 'ready', items: nextOrderRows(NO_ORDERS, locale, PREFIX, dayWriter(locale)), open: 0, seeAllHref: null, newOrderHref: null, why: {} },
           documents: { state: 'ready', items: [], seeAllHref: null, busy: null, problem: null, held: null },
-          messages: { state: 'ready', items: [] },
+          messages: messagesOf(locale, { conversations: [] }), // B-TH-238
         },
         tasks: tasksOf(locale, []),
       })),
@@ -466,13 +541,13 @@ export const designScreen = defineDesignScreen<HomeCaseBuilder>({
     {
       id: 'welcome',
       label: 'First visit: a buyer',
-      model: homeCase(() => ({ home: { welcome: { name: 'Anna', company: 'Pelletteria Esempio', buyer: true, newOrderHref: null, catalogueHref: null, admins: ['Paolo Esempio'] }, messages: { state: 'ready', items: [] } }, tasks: tasksOf('it', []) })),
+      model: homeCase((locale) => ({ home: { welcome: { name: 'Anna', company: 'Pelletteria Esempio', buyer: true, newOrderHref: null, catalogueHref: null, admins: ['Paolo Esempio'] }, messages: messagesOf(locale, { conversations: [] }) }, tasks: tasksOf('it', []) })),
       note: 'No order, nothing waits, no new document: a clear first step, not empty panels. While ordering in the portal is not built, the step is Ask us a question (the account’s conversation).',
     },
     {
       id: 'welcome-other',
       label: 'First visit: another role',
-      model: homeCase(() => ({ can: DESIGNER, home: { welcome: { name: 'Sara', company: 'Pelletteria Esempio', buyer: false, newOrderHref: null, catalogueHref: null, admins: ['Paolo Esempio'] }, messages: { state: 'ready', items: [] } }, tasks: tasksOf('it', []) })),
+      model: homeCase((locale) => ({ can: DESIGNER, home: { welcome: { name: 'Sara', company: 'Pelletteria Esempio', buyer: false, newOrderHref: null, catalogueHref: null, admins: ['Paolo Esempio'] }, messages: messagesOf(locale, { conversations: [] }) }, tasks: tasksOf('it', []) })),
     },
     { id: 'approve', label: 'Pop-up: Approve a sample', model: homeCase((locale) => ({ home: { approve: approveDialog(locale) } })), note: 'What we ask with the countdown, the facts in your language, the files (opened here), Approve · Approve with changes · Refuse, the comment, the typed name signs (Enter). J / K: the next waiting approval.' },
     { id: 'approve-photo', label: 'Pop-up: a photo open', model: homeCase((locale) => ({ home: { approve: approveDialog(locale, { file: { id: id(801), name: 'campione-fronte.jpg', state: 'ready', src: PICTURE, pdf: false }, decision: 'APPROVED_WITH_CHANGES', comment: locale === 'it' ? 'Cuciture del colletto più strette.' : 'Tighter stitching on the collar.' }) } })) },

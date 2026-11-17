@@ -11,6 +11,7 @@ import {
   askInfoRefusal,
   assignRefusal,
   declineRefusal,
+  declineMessageRefusal, // B-TH-043
   editRefusal,
   INQUIRY_TILES,
   lineProblems,
@@ -45,6 +46,9 @@ import { EMAIL_SEND } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { sendEmail } from '../../../platform/email-out/outbound'
 import { ensureThread, writeMessage } from '../../../platform/threads/threads'
 import { joinMailInCommand } from './join'
+// B-TH-235: the list's door from Sales › Reports' request figure (what a request became).
+import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
+import type { RequestOutcome } from '@nexus/factory-domain/sales/inquiries/rules'
 import {
   asDay,
   assertNoProblems,
@@ -83,8 +87,9 @@ import { inquiryViewOf, rowsOf, waitingMinutesOf } from './views'
  *   POST  /sales/inquiries/assign                the same for a selection, all or none
  *   POST  /sales/inquiries/:inquiryId/ask-info   NEED_INFO: waits for the customer (the message to them is the thread's)
  *   POST  /sales/inquiries/:inquiryId/resume     the customer answered: ASSIGNED (or NEW with nobody)
- *   POST  /sales/inquiries/:inquiryId/decline    DECLINED with the reason (OTHER in words)
- *   POST  /sales/inquiries/decline               the same for a selection, all or none
+ *   POST  /sales/inquiries/:inquiryId/decline    DECLINED with the reason (OTHER in words); B-TH-043: with ONE message to the
+ *                                                customer when "Send to the customer" is ticked (never with "Not an order")
+ *   POST  /sales/inquiries/decline               the same for a selection, all or none; it never sends anything
  *   POST  /sales/inquiries/:inquiryId/lost       LOST, why in words
  *   GET   /sales/inquiries/assignees             who an inquiry of a company (and customer) may be given to: by name
  *
@@ -129,6 +134,7 @@ export function baseWhere(context: OfficeContext, query: Omit<InquiryListQuery, 
       query.companyId ? { companyId: query.companyId } : {},
       query.receivedFrom ? { receivedAt: { gte: businessDayStart(query.receivedFrom) } } : {},
       query.receivedTo ? { receivedAt: { lt: businessDayStart(plusOne(query.receivedTo)) } } : {},
+      query.outcome ? outcomeWhere(context, query.outcome) : {}, // B-TH-235
       q
         ? {
             OR: [
@@ -145,6 +151,27 @@ export function baseWhere(context: OfficeContext, query: Omit<InquiryListQuery, 
     ],
   }
 }
+
+// ---- B-TH-235 (threads plan X-SAL-REPORTS.drill; Owner rule "every total opens its rows") ----------------------------------
+/**
+ * What a request became, exactly as Sales › Reports' request figure counts it (modules/insights/sales-reports facts requestsOf):
+ * ORDERED — ORDERED (made straight into an order), or QUOTED with an order of one of its quote's versions that is not cancelled
+ * and that the reader may see (orders.view over that order's company and customer; none without it, as the figure counts none);
+ * DECLINED — declined for any reason but "Not an order"; NOT_AN_ORDER — declined as not an order.
+ */
+function outcomeWhere(context: OfficeContext, outcome: RequestOutcome): Prisma.InquiryWhereInput {
+  switch (outcome) {
+    case 'ORDERED': {
+      const seen = scopeWhere(actorOf(context), ORDERS_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.SalesOrderWhereInput
+      return { OR: [{ status: 'ORDERED' }, { status: 'QUOTED', quote: { versions: { some: { salesOrders: { some: { AND: [seen, { status: { not: 'CANCELLED' } }] } } } } } }] }
+    }
+    case 'DECLINED':
+      return { status: 'DECLINED', NOT: { declineReason: 'NOT_AN_ORDER' } }
+    case 'NOT_AN_ORDER':
+      return { status: 'DECLINED', declineReason: 'NOT_AN_ORDER' }
+  }
+}
+// ---- end B-TH-235
 
 const plusOne = (day: string): string => new Date(asDay(day).getTime() + 86_400_000).toISOString().slice(0, 10)
 const OPEN: Prisma.InquiryWhereInput = { status: { in: [...OPEN_STATUSES] } }
@@ -630,7 +657,7 @@ export async function assignInquiries(caller: CommandCaller, body: BulkAssignBod
 
 // ---- B-TH-013: the question goes with "Ask for more information" ---------------------------------------------------------
 const ASK_NEEDS_CUSTOMER = 'Make the customer first: a question goes to a customer of this request (a prospect has no portal and no contact yet).'
-const ASK_NO_ADDRESS = 'Say whom to ask: this request names no contact with an e-mail address.'
+const ASK_NO_ADDRESS = 'Say whom to write to: this request names no contact with an e-mail address.'
 
 /**
  * POST /sales/inquiries/:inquiryId/ask-info: "Ask for more information". NEED_INFO, and — B-TH-013 — the question in the same
@@ -645,31 +672,11 @@ export async function askInfo(caller: CommandCaller, inquiryId: string, body: As
   refuse(askInfoRefusal(factsOf(inquiry)))
   const message = body.message
   if (message && inquiry.partyId === null) throw new ValidationError(ASK_NEEDS_CUSTOMER, [{ path: 'body/message', message: ASK_NEEDS_CUSTOMER }])
-  // A mail goes only from who may send mail there (email.send, as the thread's own send).
-  if (message && inquiry.source !== 'PORTAL' && !can(actorOf(context), EMAIL_SEND, scopeOf(inquiry))) throw new ForbiddenError('Your role does not send mail for this company or customer.')
-  if (message && inquiry.source !== 'PORTAL' && !message.to) {
-    const contact = inquiry.contactId ? await caller.withClient((db) => db.partyContact.findUnique({ where: { id: inquiry.contactId! }, select: { email: true } })) : null
-    if (!contact?.email) throw new ValidationError(ASK_NO_ADDRESS, [{ path: 'body/message/to', message: ASK_NO_ADDRESS }])
-  }
+  if (message) await checkMessage(caller, context, inquiry, message) // B-TH-043: the one message helper
   const { result } = await command(caller, { name: 'sales.inquiries.askInfo', idempotencyKey, input: { inquiryId, ...body } }, async (tools) => {
     const row = await lockForChange(tools, context, inquiryId, body.version)
     refuse(askInfoRefusal(factsOf(row)))
-    let asked: { via: 'PORTAL' | 'MAIL'; messageId: string } | null = null
-    if (message) {
-      const user = await tools.tx.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { displayName: true, email: true } })
-      const record = { type: 'Inquiry', id: row.id }
-      if (row.source === 'PORTAL') {
-        const { thread } = await ensureThread(tools, record, context.actorId)
-        if (thread.status !== 'OPEN') throw new InquiryRefusedError({ code: 'CLOSED', message: 'The request\'s conversation is closed; reopen it to ask.' })
-        const written = await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'PORTAL', author: { kind: 'USER', id: context.actorId, name: user.displayName }, bodyText: cleanBody(message.body) })
-        asked = { via: 'PORTAL', messageId: written.id }
-      } else {
-        const contact = row.contactId ? await tools.tx.partyContact.findUnique({ where: { id: row.contactId }, select: { email: true } }) : null
-        const to = message.to ?? (contact?.email ? [contact.email] : [])
-        const sent = await sendEmail(tools, { record, sender: { userId: context.actorId, name: user.displayName, email: user.email }, to, subject: message.subject ?? null, body: message.body, sendOutside: message.sendOutside })
-        asked = { via: 'MAIL', messageId: sent.messageId }
-      }
-    }
+    const asked = message ? await messageInCommand(tools, context, row, message, 'ask') : null
     await writeInquiry(tools, row, { status: 'NEED_INFO' })
     tools.audit({ action: 'sales.inquiries.askInfo', recordType: 'Inquiry', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: 'NEED_INFO', ...(asked ? { asked: asked.via, messageId: asked.messageId } : {}) } })
     emitChanged(tools, row, 'NEED_INFO', 'NEED_INFO', row.partyId, row.assigneeId)
@@ -678,6 +685,46 @@ export async function askInfo(caller: CommandCaller, inquiryId: string, body: As
   return result
 }
 // ---- end B-TH-013
+
+// ---- B-TH-043: ONE message to the request's customer — Ask for info's question (B-TH-013) and Decline's message ------------
+
+/** The message as both bodies carry it (askInfoBody.message, declineBody.message). */
+interface CustomerMessage {
+  readonly body: string
+  readonly subject?: string | undefined
+  readonly to?: readonly string[] | undefined
+  readonly sendOutside?: boolean | undefined
+}
+
+/** Before the command: a mail goes only from who may send mail there (email.send, as the thread's own send), to an address. */
+async function checkMessage(caller: CommandCaller, context: OfficeContext, inquiry: InquiryData, message: CustomerMessage): Promise<void> {
+  if (inquiry.source === 'PORTAL') return
+  if (!can(actorOf(context), EMAIL_SEND, scopeOf(inquiry))) throw new ForbiddenError('Your role does not send mail for this company or customer.')
+  if (message.to) return
+  const contact = inquiry.contactId ? await caller.withClient((db) => db.partyContact.findUnique({ where: { id: inquiry.contactId! }, select: { email: true } })) : null
+  if (!contact?.email) throw new ValidationError(ASK_NO_ADDRESS, [{ path: 'body/message/to', message: ASK_NO_ADDRESS }])
+}
+
+/**
+ * In the command: on a request the customer sent from the portal an OUTBOUND PORTAL message of its thread by the office person
+ * (the customer reads it in its portal, no mail); on any other a mail on the request's thread (email-out sendEmail: the one
+ * recipient rule, B-TH-004) to `to`, else the request's contact.
+ */
+async function messageInCommand(tools: CommandTools, context: OfficeContext, row: InquiryData, message: CustomerMessage, purpose: 'ask' | 'decline'): Promise<{ via: 'PORTAL' | 'MAIL'; messageId: string }> {
+  const user = await tools.tx.user.findUniqueOrThrow({ where: { id: context.actorId }, select: { displayName: true, email: true } })
+  const record = { type: 'Inquiry', id: row.id }
+  if (row.source === 'PORTAL') {
+    const { thread } = await ensureThread(tools, record, context.actorId)
+    if (thread.status !== 'OPEN') throw new InquiryRefusedError({ code: 'CLOSED', message: `The request's conversation is closed; reopen it to ${purpose === 'ask' ? 'ask' : 'write to the customer'}.` })
+    const written = await writeMessage(tools, thread, { direction: 'OUTBOUND', channel: 'PORTAL', author: { kind: 'USER', id: context.actorId, name: user.displayName }, bodyText: cleanBody(message.body) })
+    return { via: 'PORTAL', messageId: written.id }
+  }
+  const contact = row.contactId ? await tools.tx.partyContact.findUnique({ where: { id: row.contactId }, select: { email: true } }) : null
+  const to = message.to ? [...message.to] : contact?.email ? [contact.email] : []
+  const sent = await sendEmail(tools, { record, sender: { userId: context.actorId, name: user.displayName, email: user.email }, to, subject: message.subject ?? null, body: message.body, sendOutside: message.sendOutside })
+  return { via: 'MAIL', messageId: sent.messageId }
+}
+// ---- end B-TH-043
 
 /** POST /sales/inquiries/:inquiryId/resume: the customer answered. */
 export async function resumeInquiry(caller: CommandCaller, inquiryId: string, body: VersionBody, idempotencyKey?: string) {
@@ -702,28 +749,41 @@ export function emitClosed(tools: CommandTools, row: InquiryData, status: 'QUOTE
   tools.emit({ type: 'inquiry.closed', subject: row.id, companyId: row.companyId, payload: { inquiryId: row.id, number: row.number, status, previousStatus: row.status, quoteId, salesOrderId, declineReason, partyId: row.partyId } })
 }
 
-async function declineInCommand(tools: CommandTools, context: OfficeContext, row: InquiryData, reason: DeclineReason, note: string | null): Promise<InquiryStatus> {
+// B-TH-043: `sent` = the one message that went with it (a single decline with "Send to the customer" ticked), in the audit row.
+async function declineInCommand(tools: CommandTools, context: OfficeContext, row: InquiryData, reason: DeclineReason, note: string | null, sent: { via: 'PORTAL' | 'MAIL'; messageId: string } | null = null): Promise<InquiryStatus> {
   refuse(declineRefusal(factsOf(row), reason, note))
   const closeNote = note === null ? null : note.trim()
   await writeInquiry(tools, row, { status: 'DECLINED', declineReason: reason, closeNote, closedAt: tools.now, closedById: context.actorId })
-  tools.audit({ action: 'sales.inquiries.decline', recordType: 'Inquiry', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: 'DECLINED', declineReason: reason, closedAt: toUtcIso(tools.now) }, ...(closeNote ? { reason: closeNote } : {}) })
+  tools.audit({ action: 'sales.inquiries.decline', recordType: 'Inquiry', recordId: row.id, companyId: row.companyId, before: { status: row.status }, after: { status: 'DECLINED', declineReason: reason, closedAt: toUtcIso(tools.now), ...(sent ? { sent: sent.via, messageId: sent.messageId } : {}) }, ...(closeNote ? { reason: closeNote } : {}) })
   emitClosed(tools, row, 'DECLINED', null, reason)
   return 'DECLINED'
 }
 
-/** POST /sales/inquiries/:inquiryId/decline: "Decline inquiry" (the message to the customer, if any, is the thread's). */
+/**
+ * POST /sales/inquiries/:inquiryId/decline: "Decline inquiry". B-TH-043: with `message` ("Send to the customer" ticked) its ONE
+ * message goes in the same command (both or neither): a portal reply, or a mail under the recipient rule; "Not an order" and a
+ * prospect's request take none (said in words). Without it nothing goes to the customer.
+ */
 export async function declineInquiry(caller: CommandCaller, inquiryId: string, body: DeclineBody, idempotencyKey?: string) {
   const { context, inquiry } = await officeInquiry(caller, inquiryId, SALES_INQUIRIES_MANAGE)
   refuse(declineRefusal(factsOf(inquiry), body.reason, body.note ?? null))
+  const message = body.message
+  if (message) {
+    refuse(declineMessageRefusal(factsOf(inquiry), body.reason))
+    await checkMessage(caller, context, inquiry, message)
+  }
   const { result } = await command(caller, { name: 'sales.inquiries.decline', idempotencyKey, input: { inquiryId, ...body } }, async (tools) => {
     const row = await lockForChange(tools, context, inquiryId, body.version)
-    await declineInCommand(tools, context, row, body.reason, body.note ?? null)
+    refuse(declineRefusal(factsOf(row), body.reason, body.note ?? null))
+    if (message) refuse(declineMessageRefusal(factsOf(row), body.reason))
+    const sent = message ? await messageInCommand(tools, context, row, message, 'decline') : null
+    await declineInCommand(tools, context, row, body.reason, body.note ?? null, sent)
     return { inquiry: await viewInCommand(tools, row.id) }
   }).catch(databaseRefusal)
   return result
 }
 
-/** POST /sales/inquiries/decline: "Decline N" on a selection. */
+/** POST /sales/inquiries/decline: "Decline N" on a selection (B-TH-043: never sends anything; its body has no message). */
 export async function declineInquiries(caller: CommandCaller, body: BulkDeclineBody, idempotencyKey?: string) {
   if (body.reason === 'OTHER' && !body.note) throw new InquiryRefusedError({ code: 'OTHER_NEEDS_WORDS', message: 'Say in words why they are declined (the reason is Other).' })
   return eachOf(caller, 'sales.inquiries.declineMany', body.items, body, idempotencyKey, (tools, context, row) => declineInCommand(tools, context, row, body.reason, body.note ?? null))

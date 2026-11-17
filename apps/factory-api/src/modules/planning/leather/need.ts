@@ -18,7 +18,7 @@ import { availableHides } from '../../inventory/reservations/find'
 import { heldShades, shadeRuleFor } from '../../inventory/reservations/shade'
 import { readLines, type LineRecord } from '../../product/bom/store'
 import { certificateCovering } from '../../quality/lab/store'
-import { officeContextOf, seesCost, siteFor } from '../access'
+import { everyPartySiteFor, officeContextOf, seesCost } from '../access'
 import { readStock, readWorkOrders, type Reader, type SiteRow } from '../store'
 import { REQUIREMENT_COLUMNS, sourcesOf, type RequirementRow } from '../views'
 import type { NeedRowView, ProtectorRowView } from './contract'
@@ -155,7 +155,7 @@ export async function leatherNeed(caller: CommandCaller, query: { readonly siteI
   const withCost = seesCost(context)
   return caller.withClient(async (client) => {
     const db = client as Reader
-    const site = await siteFor(caller, query.siteId, PLANNING_VIEW, db)
+    const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW, db) // B-PR-10: every customer's leather need
     const rule = await shadeRuleFor(db, site.id)
     const run = await latestRunOf(db, site.id)
     if (!run) return { site: siteViewOf(site), run: null, rule, rows: [] }
@@ -342,7 +342,7 @@ async function needRowOf(input: NeedInput): Promise<NeedRowView> {
 export async function certifiedProtectors(caller: CommandCaller, query: { readonly siteId: string }) {
   return caller.withClient(async (client) => {
     const db = client as Reader
-    const site = await siteFor(caller, query.siteId, PLANNING_VIEW, db)
+    const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW, db) // B-PR-10: every customer's protectors
     const run = await latestRunOf(db, site.id)
     if (!run) return { site: siteViewOf(site), run: null, rows: [] }
     const facts = await readRunFacts(db, site, run.id, 'protector', false)

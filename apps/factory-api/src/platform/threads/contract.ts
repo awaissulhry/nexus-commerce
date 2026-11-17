@@ -4,6 +4,7 @@ import { grainedJson } from '@nexus/factory-domain/money/marked'
 import { AUTHOR_KINDS, MAX_ATTACHMENTS, MAX_BODY_LENGTH, MAX_MENTIONS, MESSAGE_AUDIENCES, MESSAGE_CHANNELS, MESSAGE_DIRECTIONS, RECORD_TYPE, THREAD_STATUSES } from '@nexus/factory-domain/threads/rules'
 import { FOLLOW_REASONS } from '@nexus/factory-domain/threads/followers'
 import { TIMELINE_KINDS } from '@nexus/factory-domain/threads/timeline'
+import { WAITING_SIDES } from '@nexus/factory-domain/threads/view-gates' // B-TH-047
 import { FILE_AUDIENCES, FILE_KINDS, FILE_STATUSES } from '../files/rules'
 
 /**
@@ -321,3 +322,43 @@ export const addFollowerContract = defineContract({
   body: input({ /** An active colleague who may read the record's thread. */ userId: id() }),
   response: { 200: followersView },
 })
+
+// ---- B-TH-047 (N10, N25, X-G06): conversations waiting on us across records — "Customer replies" (Incoming) and "Supplier replies"
+// (Purchasing › Orders). Each row only for a reader who may open its record (threads.read and the type's own view permission).
+const waitingRowView = output({
+  recordType: z.string(),
+  recordId: id(),
+  /** The record as a chip shows it (its number, code or name). */
+  label: z.string(),
+  companyId: id().nullable(),
+  /** The customer or supplier the conversation is with (the record's party). */
+  party: output({ id: id(), code: z.string(), name: z.string() }),
+  /** The message that waits: the customer's or supplier's newest shared one. */
+  lastMessage: output({ id: id(), at: instant(), channel: z.enum(MESSAGE_CHANNELS), authorName: z.string().nullable(), excerpt: z.string() }),
+  /** Since when it waits on us, in working minutes on the record's company calendar (`calendar` false: clock minutes); amber over the rule's days. */
+  waiting: output({ since: instant(), workingMinutes: z.number().int(), calendar: z.boolean(), amber: z.boolean(), thresholdDays: z.number().int() }),
+})
+export const waitingContract = defineContract({
+  querystring: input({
+    /** CUSTOMER: the customer wrote last ("Customer replies"); SUPPLIER: the supplier did ("Supplier replies"). */
+    side: z.enum(WAITING_SIDES),
+    /** One record type of the side only (e.g. PurchaseOrder). */
+    recordType: z.string().regex(RECORD_TYPE).optional(),
+    companyId: id().optional(),
+    partyId: id().optional(),
+    limit: z.coerce.number().int().min(1).max(100).optional(),
+    /** `next` of the page before, as it came. */
+    cursor: z.string().min(1).max(200).optional(),
+  }),
+  response: {
+    200: output({
+      rows: z.array(waitingRowView),
+      /** Every conversation of the side that waits on us and the reader may open (oldest first). */
+      count: z.number().int(),
+      /** false: more conversations wait than one read keeps (the list and its count are partial). */
+      complete: z.boolean(),
+      next: z.string().nullable(),
+    }),
+  },
+})
+// ---- end B-TH-047

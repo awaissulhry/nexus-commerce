@@ -35,8 +35,8 @@ type Reader = FactoryClient | CommandTx
 async function factsOf(db: Reader, context: RequestContext, codes: readonly string[]): Promise<{ facts: Map<string, SkuFacts>; styles: Map<string, { code: string; companyId: string | null }> }> {
   const actor = actorOf(context)
   const variants = await db.variant.findMany({ where: { sku: { in: [...codes] } }, select: { id: true, styleId: true, colourwayId: true, size: true, sku: true, gtin: true } })
-  const styleRows = variants.length === 0 ? [] : await db.style.findMany({ where: { id: { in: [...new Set(variants.map((row) => row.styleId))] } }, select: { id: true, code: true, companyId: true, status: true } })
-  const styles = new Map(styleRows.filter((row) => can(actor, PRODUCT_STYLES_VIEW, { companyId: row.companyId })).map((row) => [row.id, row]))
+  const styleRows = variants.length === 0 ? [] : await db.style.findMany({ where: { id: { in: [...new Set(variants.map((row) => row.styleId))] } }, select: { id: true, code: true, companyId: true, brandPartyId: true, status: true } })
+  const styles = new Map(styleRows.filter((row) => can(actor, PRODUCT_STYLES_VIEW, { companyId: row.companyId, partyId: row.brandPartyId })).map((row) => [row.id, row])) // B-PR-10: its brand too
   const refusals = new Map<string, string | null>()
   const shipped = new Map<string, Set<string>>()
   for (const style of styles.values()) {

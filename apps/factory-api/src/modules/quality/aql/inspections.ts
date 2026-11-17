@@ -110,7 +110,7 @@ async function inspectionFor(caller: CommandCaller, inspectionId: string, permis
   const context = inspectorOf(caller)
   const row = isUuid(inspectionId) ? await caller.withClient((client) => readInspection(client, inspectionId)) : null
   if (!row || !(mayOn(context, QUALITY_INSPECTIONS_VIEW, row) || mayOn(context, permission, row))) throw new NotFoundError('Inspection not found.')
-  const header = await finalWorkOrder(caller, row.workOrderId, permission)
+  const header = await finalWorkOrder(caller, row.workOrderId, permission, 'Inspection not found.') // B-PR-10: an unknown inspection's words
   return { row, header, context }
 }
 

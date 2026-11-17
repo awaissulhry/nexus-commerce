@@ -22,7 +22,8 @@ import { portalReader, type PortalReader } from '../portal-orders/access'
  *
  *   the tenant's (the office scope, read as the person, only AFTER the partner read found the party's own inquiries, and keyed
  *   by what that read returned): the quote each became and the order made from it (their status, number and the customer's own
- *   number), the delivery address, the styles' and colourways' names.
+ *   number), the delivery address, the styles' and colourways' names; B-TH-043: whether a declined one was "Not an order" (it
+ *   then reads "Closed"; the reason itself is never answered).
  *
  * Another party's request answers "not found" (W37); nothing here names another customer or counts the others' requests.
  */
@@ -57,6 +58,8 @@ type LineRow = Prisma.InquiryLineGetPayload<{ select: typeof PARTNER_LINE }>
 interface Made {
   readonly quote: { readonly id: string; readonly number: string; readonly status: string; readonly customerSeq: number | null; readonly sent: boolean; readonly updatedAt: Date } | null
   readonly order: { readonly id: string; readonly number: string; readonly status: string; readonly customerSeq: number | null; readonly updatedAt: Date } | null
+  /** B-TH-043: declined as "Not an order" (the customer reads "Closed"). */
+  readonly notAnOrder?: boolean
 }
 
 const ids = (values: readonly (string | null)[]): string[] => [...new Set(values.filter((value): value is string => value !== null))]
@@ -73,15 +76,19 @@ async function madeOf(reader: PortalReader, rows: readonly InquiryRow[]): Promis
   const quoteIds = ids(rows.map((row) => row.quoteId))
   // B-TH-025: the orders made straight from requests (no quote between): the customer reads the order's own state.
   const orderIds = ids(rows.map((row) => row.salesOrderId))
+  // B-TH-043: the declined ones, to tell "Not an order" (the office's decline reason, never partner-readable) from a decline.
+  const declinedIds = rows.filter((row) => row.status === 'DECLINED').map((row) => row.id)
   const made = new Map<string, Made>()
-  if (quoteIds.length === 0 && orderIds.length === 0) return made
+  if (quoteIds.length === 0 && orderIds.length === 0 && declinedIds.length === 0) return made
   const partyId = reader.session.partyId
-  const { quotes, orders, direct } = await reader.inTenant(async (client) => {
+  const { quotes, orders, direct, notAnOrder } = await reader.inTenant(async (client) => {
     const quotes = quoteIds.length === 0 ? [] : await client.quote.findMany({ where: { id: { in: quoteIds }, partyId }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true, versions: { where: { sentAt: { not: null } }, select: { id: true }, take: 1 } } })
     const orders = quoteIds.length === 0 ? [] : await client.salesOrder.findMany({ where: { partyId, quoteVersion: { quoteId: { in: quoteIds } } }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true, createdAt: true, quoteVersion: { select: { quoteId: true } } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })
     const direct = orderIds.length === 0 ? [] : await client.salesOrder.findMany({ where: { id: { in: orderIds }, partyId }, select: { id: true, number: true, status: true, customerSeq: true, updatedAt: true } })
-    return { quotes, orders, direct }
+    const notAnOrder = declinedIds.length === 0 ? [] : await client.inquiry.findMany({ where: { id: { in: declinedIds }, partyId, declineReason: 'NOT_AN_ORDER' }, select: { id: true } }) // B-TH-043
+    return { quotes, orders, direct, notAnOrder }
   })
+  for (const entry of notAnOrder) made.set(entry.id, { quote: null, order: null, notAnOrder: true }) // B-TH-043
   for (const row of rows) {
     // ---- B-TH-025: ORDERED, the order named on the request (the party checked again in the tenant read).
     const straight = row.salesOrderId ? direct.find((entry) => entry.id === row.salesOrderId) : undefined
@@ -104,7 +111,7 @@ async function madeOf(reader: PortalReader, rows: readonly InquiryRow[]): Promis
 
 /** The customer's state of a request from its real states (B-TH-011). */
 export function stateOfRow(row: Pick<InquiryRow, 'status'>, made: Made | undefined): { code: PortalRequestState; words: { it: string; en: string }; open: boolean; needsYou: boolean } {
-  const code = requestStateOf({ status: row.status as InquiryStatus, quoteStatus: made?.quote?.status ?? null, orderStatus: made?.order?.status ?? null })
+  const code = requestStateOf({ status: row.status as InquiryStatus, quoteStatus: made?.quote?.status ?? null, orderStatus: made?.order?.status ?? null, declineReason: made?.notAnOrder ? 'NOT_AN_ORDER' : null })
   return { code, words: REQUEST_STATE_WORDS[code], open: isOpenRequest(code), needsYou: code === 'NEED_INFO' }
 }
 

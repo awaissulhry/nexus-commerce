@@ -19,6 +19,8 @@ import type {
 } from './api'
 // B-W2b-382: the style block's rows, one per colourway (record/lines/key.ts).
 import { colourRowsOf, gridLinesOf } from './record/lines/key'
+// B-TH-257: "Customer sees: …" — the portal's own mapping of a request's state.
+import { REQUEST_STATE_WORDS, requestStateOf, type PortalRequestState } from '@nexus/factory-domain/sales/portal-requests/state'
 
 /**
  * The quotes screens' pure rules (SCR-034 list, SCR-035 record; B-W1-21, B-W1-24): what a person may see of the money
@@ -186,12 +188,38 @@ export function tileCount(tile: QuoteTile, rows: readonly QuoteListRow[] | null,
 
 // ---- the record (SCR-035) ----------------------------------------------------------------------------------------------
 
-export const QUOTE_TABS = ['lines', 'price', 'terms', 'versions', 'approval', 'documents', 'activity'] as const
+// ---- B-TH-257 (threads plan TH-6, O-SAL-QUO-REC.body-F01; the rule of picture 38): the quote on RecordFrame — tabs 7 → 5. Activity
+// goes (the docked thread beside every tab, its tools in the thread's "⋯": R-ACT); Documents does work (the live and frozen PDF,
+// the accept link, the evidence, the proofs, the deposit) and merges into Approval: "Approval & sending" (R-1, R-6). The quote's
+// copies are "Revisions" (the tab id stays `versions`).
+export const QUOTE_TABS = ['lines', 'price', 'terms', 'versions', 'approval'] as const
 export type QuoteTab = (typeof QUOTE_TABS)[number]
 
+/** Every old `?tab=` keeps working (R-8): the tab it merged into; Activity lands on Lines with the thread opened (RecordFrame). */
+export const MERGED_TABS: Readonly<Record<string, QuoteTab>> = { documents: 'approval', activity: 'lines' }
+
+/** The tab an address asks for: one of the five, an old one's new home, else Lines. */
 export function tabOf(asked: string | null | undefined): QuoteTab {
-  return (QUOTE_TABS as readonly string[]).includes(asked ?? '') ? (asked as QuoteTab) : 'lines'
+  const value = asked ?? ''
+  return (QUOTE_TABS as readonly string[]).includes(value) ? (value as QuoteTab) : (MERGED_TABS[value] ?? 'lines')
 }
+
+/** A tab whose body is a wide grid (the colour × size grids of Lines): the docked thread takes one third under 1600 px (PL1, R-18). */
+export const isWideTab = (tab: QuoteTab): boolean => tab === 'lines'
+
+/**
+ * "Customer sees: …" (O-SAL-QUO-REC.band-F05; review R-01): what the customer reads of the request this quote was made from, from the
+ * quote's own state and its order's — the portal's one mapping (factory-domain portal-requests/state), so the office never reads
+ * "Quote sent" for a draft. Null: no request behind the quote (made by hand), nothing is drawn.
+ */
+export function customerSeesOf(quote: Pick<QuoteDetail, 'status' | 'madeFrom' | 'order'>): PortalRequestState | null {
+  if (!quote.madeFrom) return null
+  return requestStateOf({ status: 'QUOTED', quoteStatus: quote.status, orderStatus: quote.order?.state === 'MADE' ? quote.order.status : null })
+}
+
+/** The customer's own words of that state, in the reader's language (the same words the portal shows). */
+export const customerSeesWords = (state: PortalRequestState, locale: Locale): string => REQUEST_STATE_WORDS[state][locale === 'en' ? 'en' : 'it']
+// ---- end B-TH-257
 
 /** The version can change: a DRAFT current version, and the person edits quotes. */
 export function isEditable(quote: Pick<QuoteDetail, 'current'>, can: Pick<QuoteAbilities, 'manage'>): boolean {

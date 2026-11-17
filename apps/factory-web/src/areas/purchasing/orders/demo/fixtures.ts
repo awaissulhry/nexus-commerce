@@ -1,5 +1,5 @@
 import { at, COLOURS, MATERIALS, SITE, SUPPLIERS, uid } from '../../../_shared/buying/fixtures'
-import type { OrderDocuments, OrderReceipt, OrderRow, OrderSummary, PoLine, PoStatus, PurchaseOrder, SupplierAnswer } from '../api'
+import type { OrderReceipt, OrderRow, OrderSummary, PoLine, PoStatus, PurchaseOrder, SupplierAnswer } from '../api'
 
 /**
  * Made-up purchase orders for SCR-058 / SCR-059 (and the receipts' links): "PO-2026-00NN" of the invented company to
@@ -176,15 +176,6 @@ export function answerOf(value: PurchaseOrder): SupplierAnswer {
     links: value.confirmLinks,
   }
 }
-
-export const DOCUMENTS = (value: PurchaseOrder): OrderDocuments => ({
-  revision: 1,
-  status: value.status,
-  sentAt: value.sentAt,
-  documents: value.sentAt ? [{ fileId: uid('6464', 1), name: 'PO-2026-0003.pdf', sha256: 'ab12', sizeBytes: 84_220, status: 'AVAILABLE', createdAt: value.sentAt }] : [],
-  links: value.confirmLinks,
-  mails: value.sentAt ? [{ id: uid('6565', 1), to: ['ordini@conceria-demo.example.com'], cc: [], subject: 'Ordine PO-2026-0003', status: 'DELIVERED', queuedAt: value.sentAt, sentAt: value.sentAt, deliveredAt: value.sentAt, failedAt: null }] : [],
-})
 
 export const RECEIPTS: OrderReceipt[] = [
   { id: uid('6301', 21), number: 'GR-2026-0021', status: 'POSTED', supplierDdtNumber: 'DDT-DEMO-554', supplierDdtDate: '2026-10-29', receivedAt: at(29, 8, 15), lines: 2, lots: 2, lotsReleased: 1, hides: 9, quantities: [{ uom: 'FT2', baseQuantity: '212.4000' }, { uom: 'PCS', baseQuantity: '24.0000' }], postedAt: at(29, 8, 20) },

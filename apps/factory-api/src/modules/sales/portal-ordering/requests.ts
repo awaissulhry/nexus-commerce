@@ -32,6 +32,8 @@ import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
 import { portalReader, type PortalReader } from '../portal-orders/access'
 import { factsOf, readCatalogue, type CustomerCatalogue } from './catalogue'
 import { dayText, dayValue, iso, lockRequest, priceOrNull, readLines, readRequest, REQUEST_COLUMNS, type LineRow, type Reader, type RequestRow } from './store'
+// B-TH-304: the customer's own order numbers in the catalogue door (pick A).
+import { customerNumberOf, type CustomerNumber } from '@nexus/factory-domain/sales/customer-numbers'
 
 /**
  * The customer's order requests in the portal (B-W2b-190; SAL-074 "portal orders arrive as requests", the draft of
@@ -80,6 +82,8 @@ export interface SourceFacts {
   readonly orderLineId: string
   readonly orderId: string
   readonly orderNumber: string
+  /** B-TH-304: the customer's own number of the order ("Your order 12"; pick A). */
+  readonly yourNumber: CustomerNumber | null
   readonly customerRef: string | null
   readonly orderDate: string
   readonly line: PastLine
@@ -92,7 +96,7 @@ async function sourcesOf(request: FastifyRequest, reader: PortalReader, lines: r
   const rows = await request.withClient((client) =>
     client.salesOrderLine.findMany({
       where: { id: { in: ids } },
-      select: { id: true, kind: true, unitPrice: true, styleRevisionId: true, order: { select: { id: true, number: true, customerRef: true, orderDate: true } }, sizes: { select: { size: true, quantity: true } } },
+      select: { id: true, kind: true, unitPrice: true, styleRevisionId: true, order: { select: { id: true, number: true, customerRef: true, orderDate: true, customerSeq: true /* B-TH-304 */ } }, sizes: { select: { size: true, quantity: true } } },
     }),
   )
   const revisionIds = [...new Set(rows.flatMap((row) => (row.styleRevisionId ? [row.styleRevisionId] : [])))]
@@ -105,6 +109,7 @@ async function sourcesOf(request: FastifyRequest, reader: PortalReader, lines: r
         orderLineId: row.id,
         orderId: row.order.id,
         orderNumber: row.order.number,
+        yourNumber: customerNumberOf('ORDER', row.order.customerSeq), // B-TH-304
         customerRef: row.order.customerRef,
         orderDate: dayText(row.order.orderDate)!,
         line: {
@@ -159,7 +164,7 @@ function lineView(line: LineRow, catalogue: CustomerCatalogue, source: SourceFac
     priceNow: asMoney('price', facts?.priceNow ? priceShown(facts.priceNow) : null),
     amount: asMoney('price', lineAmount(shown, pieces)),
     note: line.note,
-    source: source ? { orderLineId: source.orderLineId, orderId: source.orderId, orderNumber: source.orderNumber, customerRef: source.customerRef, orderDate: source.orderDate } : null,
+    source: source ? { orderLineId: source.orderLineId, orderId: source.orderId, orderNumber: source.orderNumber, yourNumber: source.yourNumber /* B-TH-304 */, customerRef: source.customerRef, orderDate: source.orderDate } : null,
     /** A reorder line's differences from the order it came from (named again whenever the draft is read). */
     notices: source ? [...reorderPlan(source.line, facts, seesPrices).notices] : [],
     problems: lineProblems({ id: line.id, sizes, unitPriceShown: shown }, facts, seesPrices).map(problemView),

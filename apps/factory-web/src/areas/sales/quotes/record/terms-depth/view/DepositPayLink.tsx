@@ -28,7 +28,7 @@ export interface DepositPayLinkActions {
 }
 
 /**
- * Documents › Deposit request › Pay online link (design quote.docs.deposit, W2b; Links › Pay online of B-W2b-199): mails the
+ * Approval & sending › Deposit request › Pay online link (design quote.docs.deposit, W2b; Links › Pay online of B-W2b-199): mails the
  * deposit's payment page — bank transfer, card or SEPA Direct Debit on the FAKE provider until the Owner's go-live — to
  * the quote's contact (W1's POST /payments/deposit-requests/:id/link; an older live page of that address stops). Held
  * without the right to record payments, and once the deposit is no longer open.

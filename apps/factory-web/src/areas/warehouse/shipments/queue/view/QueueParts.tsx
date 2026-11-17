@@ -359,7 +359,7 @@ function ExceptionsGrid({ model, actions, search, tools, keys, onHelp }: { model
   const locale = useLocale()
   const rows = model.exceptions.state === 'ready' ? model.exceptions.value.problems : null
   const columns = useMemo<ColDef<ProblemRow>[]>(() => {
-    const href = (row: ProblemRow) => `${model.prefix}/warehouse/shipments/${row.shipment.id}?tab=tracking`
+    const href = (row: ProblemRow) => `${model.prefix}/warehouse/shipments/${row.shipment.id}?tab=carrier` // B-TH-264: Carrier & tracking (one tab)
     const NumberCell = ({ data }: ICellRendererParams<ProblemRow>) =>
       data ? (
         <Link className="fw-sh-link" href={href(data)}>

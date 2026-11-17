@@ -73,8 +73,6 @@ export interface ChangesCan {
   workOrders: boolean
   /** Photos onto a request (files.upload). */
   files: boolean
-  /** The record's thread, files and history (threads.read). */
-  thread: boolean
 }
 
 export function changesCan(permissions: readonly string[]): ChangesCan {
@@ -93,7 +91,6 @@ export function changesCan(permissions: readonly string[]): ChangesCan {
     samples: has('sales.samples.view'),
     workOrders: has('workorders.view'),
     files: has('files.upload'),
-    thread: has('threads.read'),
   }
 }
 
@@ -167,13 +164,26 @@ export const listsOf = (address: ListAddress): ChangeLists => changeListsOf(addr
 
 // ---- the record's address ----------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['change', 'impact', 'approvals', 'affected', 'activity'] as const
+// ---- B-TH-262 (threads plan TH-6; the rule of picture 38, the tabs of picture 39 / 08-tabs O-PRD-CHR, O-PRD-CHO): the change on
+// RecordFrame — Activity goes (its thread docks beside every tab, its tools in the thread's "⋯", R-ACT). A change request 5 → 3: its two
+// small read-only tabs about the same question merge into "Impact & affected" (R-5; the address keeps `impact`); a change order 5 → 4.
+export const RECORD_TABS = ['change', 'impact', 'approvals', 'affected'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 export type RecordKind = 'request' | 'order'
 
-export function recordTabOf(params: { get(name: string): string | null }): RecordTab {
-  return oneOf(RECORD_TABS, params.get('tab')) ?? 'change'
+/** The tabs of each kind, in the order of the work: a request's Impact & affected is one tab (`impact`). */
+export const KIND_TABS: Readonly<Record<RecordKind, readonly RecordTab[]>> = { request: ['change', 'impact', 'approvals'], order: ['change', 'impact', 'approvals', 'affected'] }
+
+/** Every old `?tab=` keeps working (R-8): Activity → Change with the thread opened (RecordFrame reads it); a request's Affected → Impact & affected. */
+export const MERGED_TABS: Readonly<Record<RecordKind, Readonly<Record<string, RecordTab>>>> = { request: { affected: 'impact', activity: 'change' }, order: { activity: 'change' } }
+
+export function recordTabOf(params: { get(name: string): string | null }, kind: RecordKind = 'order'): RecordTab {
+  const asked = params.get('tab')
+  const merged = MERGED_TABS[kind]
+  if (asked && Object.hasOwn(merged, asked)) return merged[asked]!
+  return oneOf(KIND_TABS[kind], asked) ?? 'change'
 }
+// ---- end B-TH-262
 
 export function recordHref(prefix: string, kind: RecordKind, id: string, tab?: RecordTab): string {
   return `${prefix}/products/changes/${kind === 'request' ? 'requests' : 'orders'}/${encodeURIComponent(id)}${tab && tab !== 'change' ? `?tab=${tab}` : ''}`

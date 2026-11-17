@@ -32,6 +32,7 @@ import { actorOf, type RequestContext } from '../../../core/context'
 import { serverClock, type Clock } from '../../../core/time'
 import { officeOf } from '../../compliance/certificates/certificates'
 import { gateRequestFor } from '../../compliance/certificates/gate'
+import { styleScope } from '../styles/store' // B-PR-10
 
 /**
  * The style compliance tab, read side (B-W1-20; A2 SCR-045; PRD-270, QHS-103, LOG-020; Reg. (EU) 2016/425): the
@@ -87,7 +88,7 @@ export type StyleRow = Prisma.StyleGetPayload<{ select: typeof STYLE_SELECT }>
 export async function readVisibleStyle(client: Reader, context: RequestContext, styleId: string): Promise<StyleRow> {
   if (!isUuid(styleId)) throw new NotFoundError('Style not found.')
   const style = await client.style.findUnique({ where: { id: styleId }, select: STYLE_SELECT })
-  if (!style || !can(actorOf(context), STYLE_COMPLIANCE_VIEW, { companyId: style.companyId })) throw new NotFoundError('Style not found.')
+  if (!style || !can(actorOf(context), STYLE_COMPLIANCE_VIEW, styleScope(style))) throw new NotFoundError('Style not found.') // B-PR-10: its brand too
   return style
 }
 

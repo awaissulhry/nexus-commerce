@@ -11,7 +11,8 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { actorOf } from '../../../core/context'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { followInCommand } from '../../../platform/threads/followers'
-import { databaseRefusal, madeOf, may, NOTHING_MADE, officeOf, readRequestFor, refuse, REQUEST_COLUMNS, requestRowsOf, type RequestData } from './store'
+import { databaseRefusal, madeOf, may, NOTHING_MADE, officeOf, readRequestFor, refuse, REQUEST_COLUMNS, requestRowsOf, requestWall, type RequestData } from './store'
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * Change requests from the office (B-W2b-226; PRD-169, MES-006; design products.changes "New change request", changes.grid,
@@ -54,10 +55,11 @@ function badBody(path: string, message: string): never {
 export async function createRequest(caller: CommandCaller, body: CreateRequestBody, idempotencyKey?: string): Promise<RequestView> {
   const context = officeOf(caller)
   const checked = await caller.withClient(async (db) => {
-    const style = await db.style.findUnique({ where: { id: body.styleId }, select: { id: true, code: true, companyId: true } })
-    if (!style || (style.companyId !== null && !may(context, PRODUCT_CHANGES_VIEW, style.companyId))) throw new NotFoundError('Style not found.')
-    const workOrder = body.workOrderId ? await db.workOrder.findUnique({ where: { id: body.workOrderId }, select: { id: true, number: true, companyId: true, siteId: true, styleId: true } }) : null
-    if (body.workOrderId && (!workOrder || !may(context, PRODUCT_CHANGES_VIEW, workOrder.companyId))) throw new NotFoundError('Work order not found.')
+    const style = await db.style.findUnique({ where: { id: body.styleId }, select: { id: true, code: true, companyId: true, brandPartyId: true } })
+    // B-PR-10: another customer's private-label style, or another customer's work order, is not found (as an unknown id).
+    if (!style || (style.companyId !== null && !may(context, PRODUCT_CHANGES_VIEW, style.companyId)) || !can(actorOf(context), PRODUCT_CHANGES_VIEW, { partyId: style.brandPartyId })) throw new NotFoundError('Style not found.')
+    const workOrder = body.workOrderId ? await db.workOrder.findUnique({ where: { id: body.workOrderId }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true, styleId: true } }) : null
+    if (body.workOrderId && (!workOrder || !may(context, PRODUCT_CHANGES_VIEW, workOrder.companyId) || !reachesWorkOrder(actorOf(context), PRODUCT_CHANGES_VIEW, workOrder))) throw new NotFoundError('Work order not found.')
     if (workOrder && workOrder.styleId !== style.id) badBody('workOrderId', `Work order ${workOrder.number} makes another style.`)
     // The company it is numbered in: the style's; a tenant-wide style's: its work order's, else the one named.
     const companyId = style.companyId ?? workOrder?.companyId ?? body.companyId ?? context.companyId ?? null
@@ -175,10 +177,12 @@ export async function moveRequest(caller: CommandCaller, changeRequestId: string
 function requestWhere(caller: CommandCaller, query: RequestListQuery, tile: RequestTile): Prisma.ChangeRequestWhereInput {
   const context = officeOf(caller)
   const scope = scopeWhere(actorOf(context), PRODUCT_CHANGES_VIEW, { company: 'companyId' }) as Prisma.ChangeRequestWhereInput
+  const wall = requestWall(actorOf(context), PRODUCT_CHANGES_VIEW) // B-PR-10
   const statuses: readonly ChangeRequestStatus[] = query.status ? REQUEST_TILE_STATUSES[tile].filter((status) => status === query.status) : REQUEST_TILE_STATUSES[tile]
   return {
     AND: [
       scope,
+      wall,
       { status: { in: [...statuses] } },
       tile === 'ACCEPTED_FREE' ? { changeOrderId: null } : {},
       tile === 'MINE' ? { createdById: context.actorId } : {},
@@ -226,27 +230,25 @@ export async function readRequest(caller: CommandCaller, changeRequestId: string
       const refusal = manage ? requestMoveRefusal(row, to, 'given', { raisedById: row.createdById, personId: context.actorId }) : { code: 'REQUEST_MOVE' as const, message: 'Your role does not triage change requests.' }
       return { to, allowed: refusal === null, refusal }
     })
-    const workOrderSite = row.workOrderId ? await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { companyId: true, siteId: true } }) : null
-    const seesWork = workOrderSite !== null && canRead(context, workOrderSite)
+    const workOrderSite = row.workOrderId ? await db.workOrder.findUnique({ where: { id: row.workOrderId }, select: { companyId: true, siteId: true, partyId: true } }) : null
+    const seesWork = workOrderSite !== null && reachesWorkOrder(actorOf(context), WORKORDERS_VIEW, workOrderSite) // B-PR-10
     const made = seesWork && row.workOrderId ? ((await madeOf(db, [row.workOrderId])).get(row.workOrderId) ?? NOTHING_MADE) : null
     return { ...base!, photosList: photos.map((photo) => ({ ...photo, availableAt: photo.availableAt ? toUtcIso(photo.availableAt) : null })), moves, made }
   })
 }
 
-/** May the office person read the work order (workorders.view at its company and site)? */
-const canRead = (context: ReturnType<typeof officeOf>, place: { companyId: string; siteId: string }): boolean => can(actorOf(context), WORKORDERS_VIEW, place)
-
 /** GET /product/change-requests/work-orders/:workOrderId: the work order's "Change request" pop-up (MES-006). */
 export async function workOrderChanges(caller: CommandCaller, workOrderId: string) {
   const context = officeOf(caller)
   const workOrder = isUuid(workOrderId)
-    ? await caller.withClient((db) => db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, status: true, companyId: true, siteId: true, styleId: true, styleRevisionId: true } }))
+    ? await caller.withClient((db) => db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, status: true, companyId: true, siteId: true, partyId: true, styleId: true, styleRevisionId: true } }))
     : null
-  if (!workOrder || !canRead(context, workOrder) || !may(context, PRODUCT_CHANGES_VIEW, workOrder.companyId)) throw new NotFoundError('Work order not found.')
+  // B-PR-10: another customer's work order is not found (its company, site AND customer).
+  if (!workOrder || !reachesWorkOrder(actorOf(context), WORKORDERS_VIEW, workOrder) || !may(context, PRODUCT_CHANGES_VIEW, workOrder.companyId)) throw new NotFoundError('Work order not found.')
   return caller.withClient(async (db) => {
     const style = await db.style.findUniqueOrThrow({ where: { id: workOrder.styleId }, select: { id: true, code: true, name: true } })
     const revision = workOrder.styleRevisionId ? await db.styleRevision.findUnique({ where: { id: workOrder.styleRevisionId }, select: { id: true, revision: true, status: true } }) : null
-    const requests = await db.changeRequest.findMany({ where: { workOrderId }, select: REQUEST_COLUMNS, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50 })
+    const requests = await db.changeRequest.findMany({ where: { AND: [{ workOrderId }, requestWall(actorOf(context), PRODUCT_CHANGES_VIEW)] }, select: REQUEST_COLUMNS, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 50 })
     return {
       workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status, companyId: workOrder.companyId, siteId: workOrder.siteId, style, revision },
       made: (await madeOf(db, [workOrderId])).get(workOrderId) ?? NOTHING_MADE,

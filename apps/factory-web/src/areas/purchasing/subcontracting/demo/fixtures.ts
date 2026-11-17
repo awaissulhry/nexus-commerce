@@ -1,8 +1,6 @@
 import { createElement, type ReactNode } from 'react'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { permissionCheck } from '../../../../lib/session/session'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../../shell/design-data'
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
@@ -364,11 +362,4 @@ export function inShell(path: string, page: ReactNode, role: RoleCase = 'buyer')
     banners: [],
   }
   return createElement(OfficeShellView, { model: shell }, page)
-}
-
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-
-/** The record's Activity (the shared record panels) with a made-up conversation. */
-export function panelsModel(id: string, title: string): RecordPanelsViewModel {
-  return { ...conversation, record: { type: 'SubcontractOrder', id, companyId: COMPANY, siteId: SITE.id }, title, party: null }
 }

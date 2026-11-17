@@ -13,7 +13,7 @@ import { uniformBuckets } from '@nexus/factory-domain/planning/settings/buckets'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import { command, StaleVersionError, type CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { assertMayAt, mayAt, officeContextOf, siteFor } from '../access'
+import { assertMayAt, everyPartySiteFor, mayAt, officeContextOf } from '../access'
 import { capacityAnswer } from '../capacity/service'
 import { SITE_COLUMNS, type Reader, type SiteRow } from '../store'
 import type { AllocateBody } from './contract'
@@ -27,6 +27,8 @@ import { pinnedRefusal } from '../schedule-depth/pins'
 import { logChanges, type LoggedChange } from '../schedule-depth/log'
 // B-W2b-GB29 (G221, B-W2b-263's gap): the allocation board holds a gate as the planning board does.
 import { assertNoGateHold } from './gates'
+import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
+import { actorOf } from '../../../core/context' // B-PR-10
 
 /**
  * Allocation to lines and workshops (B-W2a-34; PLN-160; design planning.allocation "Lanes", "Allocation board"; factory-
@@ -83,7 +85,7 @@ function cardsOf(world: ScheduleWorld, workOrder: BoardWorkOrder) {
 /** GET /planning/allocation: the allocation board of a site. */
 export async function allocationBoard(caller: CommandCaller, query: { readonly siteId: string }) {
   const context = officeContextOf(caller)
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-10: lines and workshops shared by every customer
   const now = serverClock.now()
   return caller.withClient(async (db) => {
     const today = businessDate(now, site.timezone)
@@ -123,6 +125,9 @@ export async function allocationBoard(caller: CommandCaller, query: { readonly s
 
 async function workOrderSite(caller: CommandCaller, workOrderId: string): Promise<{ id: string; companyId: string; siteId: string; site: SiteRow }> {
   const context = officeContextOf(caller)
+  // B-PR-10: the allocation moves work on lanes every customer shares (as B-PR-07's slot writes): a person limited to some
+  // customers gets 403 before any record is read (an id of theirs or anyone's answers the same).
+  assertEveryParty(actorOf(context), PLANNING_SCHEDULE_MANAGE)
   const row = await caller.withClient((db: Reader) => (isUuid(workOrderId) ? db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, site: { select: SITE_COLUMNS } } }) : Promise.resolve(null)))
   assertMayAt(context, PLANNING_SCHEDULE_MANAGE, row ? { companyId: row.companyId, siteId: row.siteId } : null, 'Work order')
   return row!
