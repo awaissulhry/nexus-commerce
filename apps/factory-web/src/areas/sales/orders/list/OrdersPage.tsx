@@ -22,6 +22,13 @@ import { NAMESPACE as DEPTH } from '../depth/model'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
 import { brandName, NAMESPACE as SHEET } from './sheet/model'
 import type { PictureLoader } from './sheet/parts'
+// ---- B-TH-244 (TH-4: the overall view grouped by customer, honest totals, the later columns, Invoice shipped goods) ----
+import { fromDdtsCandidates, getOrderSummary, type OrderSummary } from '../api'
+import { boardNarrowOf, extraFromAddress, groupFromAddress, noExtra, withoutExtra, type ExtraTerms } from '../model'
+import { initiallyCollapsed, toggleGroup } from '../../../../list-frame/groups/model'
+import { groupedItems, groupsToRead, type GroupRows } from './sheet/overall'
+import type { InvoiceDraftsState } from './sheet/overall-parts'
+import { isApiError } from '../../../../lib/api/errors'
 // B-TH-230: the New messages column — one read of the page's rows, again on a live message.
 import { useLiveBus } from '../../../../shell/live/use-live'
 import { readUnreadWith } from '../../../../lib/last-message-cell/api'
@@ -64,7 +71,14 @@ function OrdersContainer() {
   // B-TH-057 (TH-4): the server sort and the custom field filter are address terms too (a saved view and the file keep them).
   const sort = sortFromAddress(params)
   const cf = cfFromAddress(params)
-  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort }), [brand, company, cf, sort])
+  // B-TH-244: the grouping (`?group=party`), the door terms beside the rows view, and the Progress column's read.
+  const group = groupFromAddress(params)
+  const extraKey = JSON.stringify(extraFromAddress(params, rows))
+  const extra = useMemo<ExtraTerms>(() => JSON.parse(extraKey) as ExtraTerms, [extraKey])
+  const [progressShown, setProgressShown] = useState(false)
+  const narrow = useMemo<Narrowing>(() => ({ brand, companyId: company, cf, sort, extra, progress: progressShown }), [brand, company, cf, sort, extra, progressShown])
+  const grouped = layout === 'list' && group === 'party' && !party
+  const wantsSummary = layout === 'list' && (grouped || rows === 'uninvoiced' || !noExtra(extra))
 
   const [list, setList] = useState<OrdersListModel['list']>({ items: null, more: false, problem: null })
   const [cursor, setCursor] = useState<string | null>(null)
@@ -80,7 +94,7 @@ function OrdersContainer() {
   const searchSeq = useRef(0)
 
   const go = useCallback(
-    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null }) =>
+    (next: { rows?: RowView; q?: string; layout?: Layout; party?: string | null; brand?: string | null; company?: string | null; sort?: OrderSort | null; cf?: string | null; group?: 'party' | null; extra?: ExtraTerms | null /* B-TH-244 */ }) =>
       router.replace(
         listAddress(pathname, {
           rows: next.rows ?? rows,
@@ -91,14 +105,50 @@ function OrdersContainer() {
           company: next.company === undefined ? company : next.company, // B-TH-225
           sort: next.sort === undefined ? sort : next.sort, // B-TH-057
           cf: next.cf === undefined ? cf : next.cf, // B-TH-057
+          group: next.group === undefined ? group : next.group, // B-TH-244
+          extra: next.extra === undefined ? extra : next.extra, // B-TH-244
         }),
       ),
-    [router, pathname, rows, q, layout, party, brand, company, sort, cf],
+    [router, pathname, rows, q, layout, party, brand, company, sort, cf, group, extra],
   )
+
+  // ── B-TH-244: the view's figures from the server (the grouped view's headers and grand total, the honest count of a door's view) ──
+  const [summary, setSummary] = useState<{ value: OrderSummary | null; problem: string | null } | null>(null)
+  const readSummary = useCallback(
+    (id: number) => {
+      if (!wantsSummary) {
+        setSummary(null)
+        return
+      }
+      getOrderSummary(api, rowsQuery(rows, q, null, party, narrow), grouped ? 'party' : null)
+        .then((answer) => id === readId.current && setSummary({ value: answer, problem: null }))
+        .catch((error: unknown) => id === readId.current && setSummary({ value: null, problem: readProblem(error) }))
+    },
+    [api, wantsSummary, rows, q, party, narrow, grouped],
+  )
+  // The grouped view: each customer's rows, read when its group is open (pages of 50), and the groups folded shut.
+  const [groupRows, setGroupRows] = useState<Record<string, GroupRows>>({})
+  const [collapsed, setCollapsed] = useState<string[] | null>(null)
+  const readGroup = useCallback(
+    async (partyId: string, cursor: string | null) => {
+      const id = readId.current
+      setGroupRows((current) => ({ ...current, [partyId]: { items: current[partyId]?.items ?? null, cursor: current[partyId]?.cursor ?? null, more: current[partyId]?.more ?? false, problem: null, loading: true } }))
+      try {
+        const page = await listOrders(api, rowsQuery(rows, q, cursor, partyId, narrow))
+        if (id !== readId.current) return
+        setGroupRows((current) => ({ ...current, [partyId]: { items: [...(cursor ? (current[partyId]?.items ?? []) : []), ...page.orders], cursor: page.nextCursor, more: page.nextCursor !== null, problem: null, loading: false } }))
+      } catch (error) {
+        if (id !== readId.current) return
+        setGroupRows((current) => ({ ...current, [partyId]: { items: current[partyId]?.items ?? null, cursor: current[partyId]?.cursor ?? null, more: current[partyId]?.more ?? false, problem: readProblem(error), loading: false } }))
+      }
+    },
+    [api, rows, q, narrow],
+  )
+  // ── end B-TH-244 ──
 
   const readBoard = useCallback(
     (id: number) => {
-      getBoard(api, q, undefined, party, narrow)
+      getBoard(api, q, undefined, party, boardNarrowOf(narrow) /* B-TH-244 */)
         .then((answer) => id === readId.current && setBoard(answer))
         .catch(() => id === readId.current && setBoard(null))
     },
@@ -108,6 +158,19 @@ function OrdersContainer() {
   const load = useCallback(async (silent = false) => {
     const id = ++readId.current
     readBoard(id)
+    readSummary(id) // B-TH-244
+    // B-TH-244: the grouped view reads its groups' rows itself (each group's own pages), after the figures name the groups.
+    if (grouped) {
+      if (!silent) {
+        setSummary(null)
+        setGroupRows({})
+        setCollapsed(null)
+      }
+      setList({ items: null, more: false, problem: null })
+      setAsOf(new Date().toISOString())
+      setUpdates(0)
+      return
+    }
     // B-W2b-323: By promise week reads its own lines (usePromiseWeek); the page keeps the tiles.
     if (layout === 'week') {
       setAsOf(new Date().toISOString())
@@ -149,7 +212,34 @@ function OrdersContainer() {
       if (id !== readId.current) return
       setList({ items: null, more: false, problem: readProblem(error) })
     }
-  }, [api, rows, q, party, narrow, layout, readBoard])
+  }, [api, rows, q, party, narrow, layout, readBoard, readSummary, grouped])
+
+  // ── B-TH-244: the grouped view opens with every group open up to ten (more: all folded), and reads the open groups' rows ──
+  const summaryGroups = summary?.value?.groups ?? null
+  useEffect(() => {
+    if (!grouped || !summaryGroups || collapsed !== null) return
+    setCollapsed(initiallyCollapsed(summaryGroups.map((entry) => entry.partyId)))
+  }, [grouped, summaryGroups, collapsed])
+  useEffect(() => {
+    if (!grouped || !summaryGroups || collapsed === null) return
+    for (const key of groupsToRead(summaryGroups, collapsed, groupRows)) void readGroup(key, null)
+  }, [grouped, summaryGroups, collapsed, groupRows, readGroup])
+  const groupedRows = useMemo(() => (grouped && summaryGroups ? groupedItems(summaryGroups, groupRows) : null), [grouped, summaryGroups, groupRows])
+
+  // ── B-TH-244: "Invoice shipped goods for N" (finance only) — the drafts Finance's From-DDTs dialog would open, nothing made here ──
+  const [invoiceDrafts, setInvoiceDrafts] = useState<InvoiceDraftsState | null>(null)
+  const invoiceAsked = useRef<readonly string[]>([])
+  const invoiceShipped = useCallback(
+    (ids: readonly string[]) => {
+      invoiceAsked.current = ids
+      setInvoiceDrafts({ value: null, problem: null, count: ids.length })
+      fromDdtsCandidates(api, ids)
+        .then((value) => setInvoiceDrafts((current) => (current ? { ...current, value } : current)))
+        .catch((error: unknown) => setInvoiceDrafts((current) => (current ? { ...current, problem: isApiError(error) && error.kind === 'forbidden' ? 'invoiceShipped.forbidden' : 'invoiceShipped.failed' } : current)))
+    },
+    [api],
+  )
+  // ── end B-TH-244 ──
 
   useEffect(() => {
     setList({ items: null, more: false, problem: null })
@@ -222,7 +312,10 @@ function OrdersContainer() {
 
   // Live: an order event (a new order, a move, a deposit paid…) → "N updates · Show"; the tiles follow at once. The
   // board reads its lanes again by itself (B-W2a-50: a board left open on a second screen).
-  const recount = useCoalesced(() => readBoard(readId.current), 800)
+  const recount = useCoalesced(() => {
+    readBoard(readId.current)
+    readSummary(readId.current) // B-TH-244: the totals follow at once, like the tiles
+  }, 800)
   const rereadBoard = useCoalesced(() => void load(true), 900)
   const live = useLive(
     (change) => {
@@ -265,13 +358,21 @@ function OrdersContainer() {
     readNumber(openedCompany)
   }, [opened, openedCompany, searchCustomers, readNumber])
 
+  // B-TH-244: the rows on screen (the grouped view's are its groups' reads).
+  const shownItems = grouped ? groupedRows : list.items
   // B-W2a-72: the Margin % column (margin grain): the margins of the orders on screen.
-  const margins = useListMargins(api, layout === 'board' ? null : list.items, q, session.permissions, asOf)
+  const margins = useListMargins(api, layout === 'board' ? null : shownItems, q, session.permissions, asOf)
 
   // ---- B-W2b-323: priority and season, By promise week, Import orders ----
-  const listDepth = useListDepth(api, layout === 'list' ? list.items : null, session.permissions, (changes) =>
-    setList((current) => ({ ...current, items: current.items?.map((row) => { const change = changes.find((entry) => entry.id === row.id); return change?.version ? { ...row, version: change.version } : row }) ?? null })),
-  )
+  const listDepth = useListDepth(api, layout === 'list' ? shownItems : null, session.permissions, (changes) => {
+    const bump = <R extends { id: string; version: number }>(row: R): R => {
+      const change = changes.find((entry) => entry.id === row.id)
+      return change?.version ? { ...row, version: change.version } : row
+    }
+    setList((current) => ({ ...current, items: current.items?.map(bump) ?? null }))
+    // B-TH-244: the grouped view's rows carry the new versions too.
+    setGroupRows((current) => Object.fromEntries(Object.entries(current).map(([key, entry]) => [key, { ...entry, items: entry.items?.map(bump) ?? null }])))
+  })
   const week = usePromiseWeek(api, session, { enabled: layout === 'week', asked: params?.get('site') ?? null, q, tick: weekTick, partyId: party /* B-TH-201 */ })
   // B-TH-293: on one customer's sheet (the switcher's customer) the import is offered that customer's remembered columns.
   const importer = useOrdersImport(api, session, locale === 'en' ? 'en' : 'it', () => void load(), customer)
@@ -280,12 +381,20 @@ function OrdersContainer() {
   const readsThreads = session.permissions.includes('threads.read')
   const [unreadTick, setUnreadTick] = useState(0)
   useLiveBus({ onChange: (change) => change.type.startsWith('thread.') && setUnreadTick((tick) => tick + 1), onReconnect: () => setUnreadTick((tick) => tick + 1) }, readsThreads && layout === 'list')
-  const unreadRows = useMemo(() => (layout === 'list' ? (list.items ?? []).map((row) => ({ recordType: 'SalesOrder', id: row.id })) : []), [layout, list.items])
+  const unreadRows = useMemo(() => (layout === 'list' ? (shownItems ?? []).map((row) => ({ recordType: 'SalesOrder', id: row.id })) : []), [layout, shownItems])
   const unread = useUnread(readsThreads ? readUnreadWith(api) : null, unreadRows, unreadTick)
   // ---- end B-TH-230
 
   const model: OrdersListModel = {
-    prefix, can, today: romeToday(), layout, rows, q, list, lanes, board, asOf, live, updates, notice, newOrder, margins,
+    prefix, can, today: romeToday(), layout, rows, q, lanes, board, asOf, live, updates, notice, newOrder, margins,
+    // B-TH-244: the grouped view's rows are its groups' own reads.
+    list: grouped ? { items: groupedRows, more: false, problem: summary?.problem ?? null } : list,
+    group: grouped ? 'party' : null,
+    extra,
+    summary,
+    groupRows,
+    collapsed: collapsed ?? [],
+    invoiceDrafts,
     unread: readsThreads ? unread : null, // B-TH-230
     customer, // B-TH-201
     // ---- B-TH-225 / B-TH-226 ----
@@ -304,7 +413,21 @@ function OrdersContainer() {
     <OrdersListView
       model={model}
       actions={{
-        onRows: (next) => go({ rows: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) /* B-W2b-323: a tile opens the list */ }),
+        // B-TH-244: "Shipped, not invoiced" opens grouped by customer (on All customers).
+        onRows: (next) => go({ rows: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) /* B-W2b-323: a tile opens the list */, ...(next === 'uninvoiced' && !party ? { group: 'party' as const } : {}) }),
+        // ---- B-TH-244 ----
+        onGroup: (next) => go({ group: next }),
+        onToggleGroup: (key) => setCollapsed((current) => toggleGroup(current ?? [], key)),
+        onGroupMore: (key) => void readGroup(key, groupRows[key]?.cursor ?? null),
+        onGroupRetry: (key) => void readGroup(key, null),
+        onSummaryRetry: () => readSummary(readId.current),
+        onClearExtra: (key) => go({ extra: key === null ? null : withoutExtra(extra, key) }),
+        onExtra: (next) => go({ extra: { ...extra, ...next } }),
+        onShownColumns: (ids) => setProgressShown(ids.includes('progress')),
+        onInvoiceShipped: invoiceShipped,
+        onInvoiceShippedRetry: () => invoiceShipped(invoiceAsked.current),
+        onCloseInvoiceDrafts: () => setInvoiceDrafts(null),
+        // ---- end B-TH-244 ----
         onLayout: (next) => go({ layout: next }),
         onSearch: (next) => go({ q: next }),
         onClearCustomer: () => go({ party: null }), // B-TH-201
@@ -317,7 +440,7 @@ function OrdersContainer() {
         onCustomerRetry: () => setCustomersTick((tick) => tick + 1),
         onBrand: (next) => go({ brand: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
         onCompany: (next) => go({ company: next, ...(layout === 'week' ? { layout: 'list' as const } : {}) }),
-        onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */ }),
+        onClearAll: () => go({ rows: 'open', q: '', party: null, brand: null, company: null, cf: null /* B-TH-057; the sort stays: it filters nothing */, extra: null /* B-TH-244; the grouping stays: it filters nothing */ }),
         onSort: (next) => go({ sort: next }), // B-TH-057
         onClearCf: () => go({ cf: null }), // B-TH-057
         loadPicture,

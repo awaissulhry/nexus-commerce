@@ -276,7 +276,11 @@
     "pinProblem": {
       "notFollowable": "This list has no count to follow yet.",
       "tooMany": "You pinned the most views already: unpin one first."
-    }
+    },
+    "builtIn": "Built-in views",
+    "viewsTrigger": "View: {name}",
+    "saveOwn": "Changed · Save as your own",
+    "saveOwnHint": "{name} is someone else's: your changes never alter it. Save them as a view of your own."
   },
   "quick": {
     "trigger": "Quick filters",

@@ -31,7 +31,7 @@ import { WithMessages } from '../record-panels/i18n'
 import { usePrintMode } from '../shell/print/print-mode'
 import { ListKeysInfo } from './ListKeysInfo'
 import { FIT_ROWS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
-import { ListToolsBar, type ExportAbout, type WithheldColumn } from './tools/ListToolsBar'
+import { ListToolsBar, type ExportAbout, type ListBuiltInViews, type WithheldColumn } from './tools/ListToolsBar'
 import { useListTools } from './tools/useListTools'
 import { BulkEditButton, BulkEditFlow, ExportSelected } from './w2b/bulk'
 import { useInlineEdit } from './w2b/edit'
@@ -176,6 +176,16 @@ export interface ListFrameProps<T> {
    */
   groups?: ListGroups<T> | null
   // ── end B-TH-241 ──
+  // ── B-TH-243 (threads plan TH-4, ORD-G10; SHEET.brand-view-F01), each opt-in ──
+  /** The list's own built-in views on top of Views ▾ (one menu of views; the list's Rows ▾ joins it). */
+  builtInViews?: ListBuiltInViews | null
+  /** A new saved view's name to start from ("Brand Alpha — tracking" on a customer's sheet). */
+  viewName?: string | null
+  // ── end B-TH-243 ──
+  // ── B-TH-244 (threads plan TH-4: a column that costs a read is read only while shown), opt-in ──
+  /** The columns on screen changed (their ids, left to right): a list reads a costly column's data only while it is shown. */
+  onShownColumns?: (ids: readonly string[]) => void
+  // ── end B-TH-244 ──
 }
 
 /** Today in the site's zone (YYYY-MM-DD). */
@@ -209,7 +219,7 @@ export function ListFrame<T>(props: ListFrameProps<T>) {
   )
 }
 
-function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick, onSortChanged, custom, groups }: ListFrameProps<T>) {
+function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick, onSortChanged, custom, groups, builtInViews, viewName, onShownColumns }: ListFrameProps<T>) {
   const t = useT('lists')
   const locale = useLocale()
   const ds = useDsLabels()
@@ -234,6 +244,11 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
   // Saved views and export: the layout on screen is applied to the columns the grid draws.
   const listTools = useListTools({ frame: frameRef, listKey, columns, title: title ?? label })
   useEffect(() => setCustomWanted(shownCustomIds(listTools.columns as never).length > 0), [listTools.columns])
+  // B-TH-244: the columns on screen, told to a list that asks (once per change of what is shown).
+  const shownRef = useRef(onShownColumns)
+  shownRef.current = onShownColumns
+  const shownKey = listTools.columns.filter((column) => !column.hide).map((column) => column.colId ?? (typeof column.field === 'string' ? column.field : '')).join('|')
+  useEffect(() => shownRef.current?.(shownKey === '' ? [] : shownKey.split('|')), [shownKey])
   const apiRef = useRef<GridApi<T> | null>(null)
   const [ready, setReady] = useState(false)
   // B-W2b-13: inline edit (the cells save through the list's bulk target), the modes, the bulk edit.
@@ -441,7 +456,7 @@ function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, se
   const frameTools = printing ? null : (
     <>
       {quick && quick.filters.length > 0 && <QuickMenu quick={quick} t={t} />}
-      {listTools.transport && <ListToolsBar state={listTools} withheld={withheld} about={exportAbout} />}
+      {listTools.transport && <ListToolsBar state={listTools} withheld={withheld} about={exportAbout} builtIns={builtInViews} suggested={viewName} /* B-TH-243 */ />}
       {modes && <ModeSwitch modes={offered} mode={mode} onMode={modes.onMode} t={t} />}
     </>
   )

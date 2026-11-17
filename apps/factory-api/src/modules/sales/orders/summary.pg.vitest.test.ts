@@ -227,6 +227,29 @@ describe('GET /sales/orders/summary (B-TH-058)', { timeout: SLOW_TEST_TIMEOUT_MS
   })
 })
 
+// ── B-TH-244 (threads plan TH-4; feature SHEET.overall-F06): the built-in view "Shipped, not invoiced" is a term of the list ──
+describe('shippedNotInvoiced=true (B-TH-244)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('keeps exactly the orders whose shipped pieces are more than their invoiced pieces; the board, the totals and every door follow', async () => {
+    // No rows term: every order the reader sees (the API's default).
+    const all = await opened('all', {})
+    const kept = await opened('all', { shippedNotInvoiced: 'true' })
+    const uninvoiced = (row: Json) => Number(row.shippedUnits) > Number(row.invoiced?.pieces ?? 0)
+    expect(kept.every(uninvoiced)).toBe(true)
+    // Every order with shipped goods not invoiced is kept, none other.
+    expect(new Set(kept.map((row) => row.id))).toEqual(new Set(all.filter(uninvoiced).map((row) => row.id)))
+    const summary = await ok('all', `/sales/orders/summary?group=party&${query({ shippedNotInvoiced: 'true' })}`)
+    expect(summary.all.orders.count).toBe(kept.length)
+    await expectDoorsExact('all', summary.all, 'shippedNotInvoiced')
+    for (const group of summary.groups as Json[]) {
+      expect(group.figures.orders.filter?.shippedNotInvoiced, `${group.code}: its door keeps the view's term`).toBe('true')
+      await expectDoorsExact('all', group.figures, `shippedNotInvoiced ${group.code}`)
+    }
+    const board = await ok('all', `/sales/orders/board?${query({ shippedNotInvoiced: 'true' })}`)
+    expect((board.byStatus as Json[]).reduce((total, entry) => total + Number(entry.count), 0)).toBe(kept.length)
+  })
+})
+// ── end B-TH-244 ──
+
 describe('the brand wall (T30): a person limited to one customer', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it("limited to A: A's figures and A's group only; no name, id or count of B; the doors open A's rows only", async () => {
     const answer = await ok('onlyA', '/sales/orders/summary?group=party')

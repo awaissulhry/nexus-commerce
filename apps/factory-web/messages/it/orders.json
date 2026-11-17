@@ -97,7 +97,8 @@
     "CANCELLED": "Annullati",
     "PENDING_APPROVAL": "In attesa di approvazione",
     "DELIVERED": "Consegnati",
-    "all": "Tutti gli ordini"
+    "all": "Tutti gli ordini",
+    "uninvoiced": "Spedito, non fatturato"
   },
   "tile": {
     "late": "In ritardo",

@@ -405,6 +405,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (every read, the tiles and the export follow). Wide columns (Ordered, Margin %, Priority, Season, From quote) from 1800 px.
   Keys `o` / ⌘↵ / Space live in the footer icon. Export N = the frame's `selection.exportSelected` (the export job with ids).
   List frame opt-ins added here: `exportAbout`, `onRowClick`, `ColDef.context.exportWith` (a cell's second fact in the file).
+  B-TH-243 / B-TH-244 (threads plan TH-4): ONE Views ▾ — the rows views are the frame's `builtInViews` on top of the saved ones
+  (no Rows ▾ on the list; the board keeps it), Save view as starts from "<customer> — tracking" (`viewName`), someone else's view
+  changed reads "Changed · Save as your own". The overall view: `?group=party` (All customers grouped by customer; never on a
+  customer's sheet) reads `GET /sales/orders/summary?group=party` and each open group's own pages (`list/sheet/overall.ts`: every
+  figure of a header and of the pinned grand total is the server's and a door — `model.ts doorAddress` turns the API's filter into
+  the page's address; the terms beside the rows view are `extraFromAddress`, each a chip); the built-in "Shipped, not invoiced" =
+  the API's `shippedNotInvoiced=true` (factory-domain `shippedNotInvoiced`); the later columns (Open pcs, Progress — read with
+  `progress=true` only while shown: the frame's `onShownColumns` —, Paid, Balance, Site, Order note, At risk, Customer's mark) are
+  opt-in columns; "Invoice shipped goods for N" (invoices.manage) reads `GET /invoicing/from-ddts/candidates` and opens Finance's
+  From-DDTs dialog per draft (`/finance/invoices?new=1&ddts=…&party=…`). The sheet passes `custom` (ORDER, its customer).
 - `src/areas/finance/` — Finance (area order 10, Italian "Amministrazione"; SCR-080 … SCR-083): `_shared/` (api.ts every call + zod,
   model.ts the pure rules — saved views ⇄ address = the API's own `?status=` `?docType=`, journey, next step held with its
   reason, the checks in words with where to fix, payment state, placement oldest first, CSV, problems —, hooks.ts live,

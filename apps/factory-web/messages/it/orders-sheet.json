@@ -15,7 +15,21 @@
     "daysLate": "Giorni di ritardo",
     "invoicedAmount": "Importo fatturato",
     "brandHint": "L'etichetta sul capo, non il cliente.",
-    "invoicedHint": "Fatture emesse meno note di credito, a pezzi; le bozze e le fatture d'acconto non contano."
+    "invoicedHint": "Fatture emesse meno note di credito, a pezzi; le bozze e le fatture d'acconto non contano.",
+    "openUnits": "Pz aperti",
+    "openUnitsHint": "Pezzi che l’ordine deve ancora (nessuno una volta spedito, chiuso o annullato)",
+    "progress": "Avanzamento",
+    "progressHint": "Tagliati, cuciti e finiti dei pezzi negli ordini di lavoro (letto solo mentre la colonna è mostrata)",
+    "paid": "Pagato",
+    "balance": "Saldo",
+    "balanceHint": "Ancora da pagare: il lordo meno note di credito e quanto pagato",
+    "site": "Sede",
+    "note": "Nota d’ordine",
+    "noteHint": "La nota interna dell’ufficio: il cliente non la vede mai",
+    "atRisk": "A rischio",
+    "atRiskHint": "La promessa è vicina e l’ordine è ancora in lavorazione (i giorni della regola di avviso)",
+    "customerUrgency": "Segno del cliente",
+    "customerUrgencyHint": "Il segno del cliente, in sola lettura (la Priorità resta dell’ufficio)"
   },
   "door": {
     "order": "Apri l'ordine {number} · la conversazione a destra",
@@ -95,7 +109,15 @@
     "company": "Azienda: {name}",
     "remove": "Togli “{name}”",
     "clearAll": "Togli tutti",
-    "cf": "Campi personalizzati: {terms}"
+    "cf": "Campi personalizzati: {terms}",
+    "late": "In ritardo",
+    "deposit": "In attesa di acconto",
+    "reaccept": "In attesa del cliente",
+    "uninvoiced": "Spedito, non fatturato",
+    "invoiced": "Fatturato: {state}",
+    "atRisk": "A rischio",
+    "currency": "Valuta: {currency}",
+    "urgency": "Segno del cliente: {urgency}"
   },
   "switcher": {
     "title": "Cliente",
@@ -157,5 +179,86 @@
     "daysLateBack": "Giorni di ritardo, prima i meno",
     "ordered": "Data ordine, prima la più vecchia",
     "orderedBack": "Data ordine, prima la più recente"
+  },
+  "views": {
+    "suggest": "{customer} — monitoraggio",
+    "ofCustomer": "Ordini di {customer}"
+  },
+  "group": {
+    "label": "Raggruppa le righe",
+    "none": "Nessun gruppo",
+    "party": "Raggruppa per cliente"
+  },
+  "uninvoiced": {
+    "none": "Tutto lo spedito è fatturato",
+    "noneBody": "Nessun ordine ha merce spedita in attesa di fattura."
+  },
+  "urgency": {
+    "URGENT": "Urgente",
+    "REGULAR": "Normale",
+    "filter": "Mostra solo gli ordini che il cliente segna {urgency}"
+  },
+  "atRisk": {
+    "filter": "Mostra solo gli ordini a rischio",
+    "days_one": "A rischio · manca {count} giorno",
+    "days_other": "A rischio · mancano {count} giorni"
+  },
+  "progress": {
+    "none": "Non ancora in lavorazione",
+    "text": "Tagliati {cut} · Cuciti {sewn} · Finiti {finished} di {inWork}"
+  },
+  "totals": {
+    "orders_one": "{n} ordine",
+    "orders_other": "{n} ordini",
+    "ordered": "{n} pz ordinati",
+    "shipped": "{n} spediti",
+    "open": "{n} ancora aperti",
+    "late": "In ritardo {n}",
+    "atRisk": "A rischio {n}",
+    "invoiced": {
+      "NONE": "Non fatturati {n}",
+      "PART": "Fatturati in parte {n}",
+      "ALL": "Fatturati {n}"
+    },
+    "timing": {
+      "PER_SHIPMENT": "Fatturato a ogni spedizione",
+      "MONTHLY": "Fatturato mensilmente"
+    },
+    "all": "Tutti i clienti",
+    "allMine": "Tutti i miei clienti",
+    "of": "Cifre di {name}",
+    "openSheet": "Apri il foglio di {name}"
+  },
+  "groups": {
+    "more": "Mostra altri di {name}"
+  },
+  "invoiceShipped": {
+    "action_one": "Fattura lo spedito di {count}",
+    "action_other": "Fattura lo spedito di {count}",
+    "pick": "Scegli gli ordini di cui fatturare lo spedito",
+    "tooMany": "Al massimo 100 ordini alla volta",
+    "title_one": "Fattura lo spedito di {count} ordine",
+    "title_other": "Fattura lo spedito di {count} ordini",
+    "close": "Chiudi",
+    "retry": "Riprova",
+    "reading": "Lettura di quanto spedito e non fatturato…",
+    "none": "Niente da fatturare: nessuno di questi ordini ha merce spedita in attesa.",
+    "drafts_one": "Una bozza, aperta in Amministrazione con i suoi DDT scelti. Qui non si crea nulla.",
+    "drafts_other": "{count} bozze — una per cliente e società. Ognuna si apre in Amministrazione con i suoi DDT scelti; qui non si crea nulla.",
+    "ddts_one": "{count} DDT",
+    "ddts_other": "{count} DDT",
+    "orders": "Ordini {numbers}",
+    "open": "Apri in Amministrazione",
+    "heldTitle_one": "{count} ordine aspetta:",
+    "heldTitle_other": "{count} ordini aspettano:",
+    "held": {
+      "NOTHING_SHIPPED": "Ancora nulla spedito",
+      "SHIPPED_WITHOUT_DDT": "Spedito senza DDT",
+      "IN_DRAFT": "Già in una bozza",
+      "INVOICED": "Già fatturato",
+      "OTHER": "Niente da fatturare ora"
+    },
+    "forbidden": "Fatturare lo spedito richiede il permesso di creare fatture.",
+    "failed": "Non è stato possibile leggere lo spedito. Riprova."
   }
 }

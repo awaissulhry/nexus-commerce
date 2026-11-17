@@ -97,7 +97,8 @@
     "CANCELLED": "Cancelled",
     "PENDING_APPROVAL": "Waiting for a yes",
     "DELIVERED": "Delivered",
-    "all": "All orders"
+    "all": "All orders",
+    "uninvoiced": "Shipped, not invoiced"
   },
   "tile": {
     "late": "Late",

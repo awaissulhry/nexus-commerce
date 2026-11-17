@@ -276,7 +276,11 @@
     "pinProblem": {
       "notFollowable": "Questo elenco non ha ancora un conteggio da seguire.",
       "tooMany": "Hai già fissato il massimo di viste: togline una prima."
-    }
+    },
+    "builtIn": "Viste di base",
+    "viewsTrigger": "Vista: {name}",
+    "saveOwn": "Modificata · Salva come tua",
+    "saveOwnHint": "{name} è di un altro: le tue modifiche non la cambiano mai. Salvale come una vista tua."
   },
   "quick": {
     "trigger": "Filtri rapidi",

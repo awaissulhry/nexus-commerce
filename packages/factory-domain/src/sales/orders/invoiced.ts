@@ -70,6 +70,18 @@ export function countedSign(line: Pick<InvoicedDocumentLine, 'docType' | 'status
   return 0
 }
 
+// ── B-TH-244 (threads plan TH-4; feature SHEET.overall-F06 "Shipped, not invoiced" by customer; rule C8) ──
+/**
+ * Has the order shipped goods that no issued invoice bills yet? Its pieces that left (shipments shipped or delivered) are more
+ * than its pieces invoiced less credited (this rule's `pieces`). One definition for the Orders sheet's built-in view, its count
+ * and its file (the list's `shippedNotInvoiced=true`).
+ */
+export function shippedNotInvoiced(shipped: number, invoiced: Pick<Invoiced, 'pieces'> | undefined): boolean {
+  if (shipped <= 0) return false
+  return new Dec(shipped).greaterThan(new Dec(invoiced?.pieces ?? '0'))
+}
+// ── end B-TH-244 ──
+
 /** The order's Invoiced state, pieces and amount from its lines and the invoice lines that name them. */
 export function invoicedOf(lines: readonly InvoicedOrderLine[], documentLines: readonly InvoicedDocumentLine[]): Invoiced {
   const byId = new Map(lines.map((line) => [line.id, line]))

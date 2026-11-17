@@ -210,6 +210,8 @@ const filterFields = {
   /** The order's currency (ISO 4217): a money total per currency opens its own rows. */
   currency: z.string().trim().regex(/^[A-Z]{3}$/).optional(),
   // ── end B-TH-058 / B-TH-059 ──
+  /** B-TH-244: shipped goods no issued invoice bills yet (the Orders sheet's built-in view "Shipped, not invoiced"). */
+  shippedNotInvoiced: flag.optional(),
 }
 
 /** B-TH-058: the list's every row term (the overall view's totals take the same, so each total opens exactly its rows). */
