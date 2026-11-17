@@ -134,7 +134,8 @@ describe('B-TH-054 golden flow TH-3: Incoming over every door, the composer in d
     const added = await A('POST', `${url}/lines`, { version: made.request.version, lines: [{ styleId: jacket.style, colourwayId: jacket.colourway, sizes: [{ size: '50', quantity: 2 }] }] })
     G.catalogue = (await A('POST', `${url}/send`, { version: added.request.version })).request
     // An order for A, made from a second request; A asks one more piece on it (the change door).
-    const second = await A('POST', '/portal/inquiries', { subject: 'Made-up: twelve team jackets', message: 'Made-up: twelve jackets in black.' }, 201)
+    // END CHECK (fix wave 3c): Brand Alpha orders with its purchase-order number (the order made from the request refuses without one).
+    const second = await A('POST', '/portal/inquiries', { subject: 'Made-up: twelve team jackets', message: 'Made-up: twelve jackets in black.', customerRef: BRAND_ALPHA.customerRef }, 201)
     await settle()
     const lined = await withLines(second.request.id, [{ styleId: jacket.style, colourwayId: jacket.colourway, sizes: { '50': 4, '52': 4, '54': 4 } }])
     const ordered = await ok(P.sales, 'POST', `/sales/inquiries/${second.request.id}/order`, { version: lined.version, lines: [{ seq: 10, unitPrice: '165' }] }, 201)
@@ -168,7 +169,7 @@ describe('B-TH-054 golden flow TH-3: Incoming over every door, the composer in d
     const made = await ok(P.sales, 'POST', `/sales/inquiries/${inquiry.id}/customer`, { version: inquiry.version, make: {} })
     expect(made).toMatchObject({ made: 'CUSTOMER', party: { name: PROSPECT.company } })
     G.gamma = made.party.id
-    const asked = await ok(P.sales, 'POST', `/sales/inquiries/${inquiry.id}/ask-info`, { version: made.inquiry.version, message: { body: 'Made-up question: which sizes does the club need?' } })
+    const asked = await ok(P.sales, 'POST', `/sales/inquiries/${inquiry.id}/ask-info`, { version: made.inquiry.version, message: { body: 'Made-up question: which sizes does the club need?', /* END CHECK (fix wave 3c): a first mail on the thread names its subject */ subject: 'Made-up: your riding club jackets' } })
     expect(asked.inquiry.status).toBe('NEED_INFO')
     await settle()
     expect(mailsTo(PROSPECT.email).some((mail) => mailText(mail.raw).includes('which sizes does the club need'))).toBe(true)
