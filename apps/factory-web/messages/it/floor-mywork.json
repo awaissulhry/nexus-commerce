@@ -155,8 +155,8 @@
   },
   "messages": {
     "title": "Messaggi sui tuoi ordini",
+    "titleOne": "Messaggi su {number}",
     "unread": "Nuovo",
-    "read": "Letto",
     "count_one": "{count} messaggio",
     "count_other": "{count} messaggi",
     "fromTablet": "Da questo tablet, aggiornato alle {time}",
@@ -173,6 +173,9 @@
       "FLOOR": "Da un'altra postazione"
     },
     "cut": "Il resto del messaggio è in ufficio.",
+    "onCard_one": "{count} messaggio su quest'ordine",
+    "onCard_other": "{count} messaggi su quest'ordine",
+    "asWritten": "Come è stato scritto, senza traduzione.",
     "gone": {
       "title": "Questo messaggio non è più aperto",
       "body": "Torna all'elenco."

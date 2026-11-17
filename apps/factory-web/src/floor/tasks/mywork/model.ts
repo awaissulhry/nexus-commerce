@@ -27,6 +27,8 @@ import { floorListChanges } from '@nexus/ui/floor/FloorListUpdates/floorListUpda
  *             the card says which. An operation that uses no material shows no flag
  *   messages  `GET /production/dispatch/mine/messages`: "For your work" counts the ones not opened on this tablet and hides
  *             at zero; which ones were opened stays on the tablet, per tablet, never per person (art. 4)
+ *   B-TH-278  a task's card lists its own work order's notes (`messagesOf`); a note opened is marked on this tablet only and
+ *             nothing goes back: no "Seen", no "Read", no name, no time (Statuto dei Lavoratori art. 4)
  *   help      Call for help: Material, the site's first active MATERIAL type: one tap through the floor queue, so it works
  *             offline; held with the reason when it cannot go
  *   warehouse a tablet at no station has no queue: B-W2b-308's task inbox is its My work (./warehouse, chosen by ./warehouse/entry.tsx)
@@ -267,6 +269,16 @@ export interface MyMessages {
   readonly asOf: string
   readonly messages: readonly WorkMessage[]
 }
+
+// ---- B-TH-278 (threads plan PL8, X-FLOOR-WO.notes; agreed with the production lane 2026-11-17): a work order's floor notes on its own
+// card. A note belongs to ONE work order: its card lists that work order's notes and no other (the wall: a floor note shows only on
+// its work order's own tablet views). Shown as written (no translation), never who, never money, never a customer: the read
+// carries the work order, where from, the words and the time, nothing more (messagesSchema keeps only those).
+/** The open notes of one work order, in the list's order (newest first); undefined: every work order of this tablet. */
+export function messagesOf(messages: readonly WorkMessage[], workOrderId: string | undefined): WorkMessage[] {
+  return workOrderId === undefined ? [...messages] : messages.filter((message) => message.workOrder.id === workOrderId)
+}
+// ---- end B-TH-278
 
 /** The ones not opened on this tablet: the chip's count. */
 export function unreadCount(messages: readonly Pick<WorkMessage, 'id'>[], seen: readonly string[]): number {
