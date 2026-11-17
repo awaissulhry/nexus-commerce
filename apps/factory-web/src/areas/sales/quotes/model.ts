@@ -220,8 +220,8 @@ export function customerSeesOf(quote: Pick<QuoteDetail, 'status' | 'madeFrom' | 
 }
 
 /**
- * TH-6 part B (B-TH-257 follow-up; B-TH-090's WITHDRAWN): the office sees the real reason behind the customer's word — the customer
- * withdrew the request (and when, when the API says so). Null for every other state (the customer's word says it all).
+ * TH-6 part B (B-TH-257 follow-up; B-TH-090's WITHDRAWN, B-TH-095's word): beside the customer's "Withdrawn", the office reads when the
+ * customer withdrew the request (when the API says so). Null for every other state (the customer's word says it all).
  */
 export function requestWithdrawnOf(quote: Pick<QuoteDetail, 'madeFrom'>): { readonly at: string | null } | null {
   return quote.madeFrom?.status === 'WITHDRAWN' ? { at: quote.madeFrom.closedAt ?? null } : null

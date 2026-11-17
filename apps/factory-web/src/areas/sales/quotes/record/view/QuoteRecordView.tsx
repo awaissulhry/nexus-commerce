@@ -11,7 +11,7 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { DocumentSendView, type DocumentSendActions, type SendParts } from '../../../../_shared/document-send/view/DocumentSendView'
 import { previewHref, type QuoteDetail } from '../../api'
 import { customerSeesOf, customerSeesWords, daysUntil, isWideTab, nextStep, QUOTE_TABS, readOnlyReason, STATUS_TONE, type QuoteTab } from '../../model'
-// TH-6 part B (B-TH-257 follow-up): the office reads why the customer's word is "Closed" — they withdrew the request.
+// TH-6 part B (B-TH-257 follow-up): beside the customer's "Withdrawn" (B-TH-095), the office reads when they withdrew the request.
 import { requestWithdrawnOf } from '../../model'
 import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
 import type { QuoteDepthSlots } from '../lines-depth/slots'
@@ -288,7 +288,7 @@ function ReadyRecord({ quote, model, actions, thread, printThread, sendActions, 
                   <span className="fw-q-hint">{t('record.madeFromPlain', { number: madeFrom.number })}</span>
                 ))}
               {sees && <span className="fw-q-hint">{t('record.customerSees', { state: customerSeesWords(sees, locale) })}</span>}
-              {/* TH-6 part B: the real reason, for the office only — the customer withdrew the request (on <date>). */}
+              {/* TH-6 part B: for the office — when the customer withdrew the request. */}
               {withdrawn && <Tag tone="warning">{withdrawn.at ? t('record.requestWithdrawnOn', { date: formatDate(withdrawn.at, { locale }) }) : t('record.requestWithdrawn')}</Tag>}
               {/* B-TH-257: the accepted quote's order (a cancelled one says so). */}
               {madeOrder &&

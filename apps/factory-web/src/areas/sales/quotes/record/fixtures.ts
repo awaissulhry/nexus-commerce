@@ -488,9 +488,9 @@ export const designScreen = defineDesignScreen<QuoteRecordViewModel>({
     // TH-6 part B (B-TH-257 follow-up; B-TH-090's WITHDRAWN): the customer withdrew the request after its quote was made.
     {
       id: 'th-6b-request-withdrawn',
-      label: 'TH-6 · The customer withdrew the request: "Customer sees: Closed" and, for the office, why',
+      label: 'TH-6 · The customer withdrew the request: "Customer sees: Withdrawn" and, for the office, when',
       model: model({ grains: GRAINS.sales, can: CAN.sales, quote: ready(withoutCost(quote({ madeFrom: { ...MADE_FROM, status: 'WITHDRAWN', declineReason: null, closedAt: '2026-10-28T10:15:00.000Z' }, order: null }))) }),
-      note: 'The customer’s word comes from the request’s own state (Closed, as the portal says it); the office also reads the real reason: the customer withdrew the request, and when.',
+      note: 'The customer’s word comes from the request’s own state (Withdrawn, as the portal says it, B-TH-095); the office also reads when the customer withdrew it.',
     },
     { id: 'th-257-no-request-right', label: 'TH-6 · Made from a request, read by someone without the requests right: the number, no link', model: model({ readsRequests: false, quote: ready(quote({ madeFrom: MADE_FROM, order: null })) }) },
     { id: 'th-257-order', label: 'TH-6 · Accepted: "Order SO-2026-0088 — Open" on the band', model: model(SENDING({ quote: ready(quote({ status: 'ACCEPTED', current: { status: 'ACCEPTED' }, madeFrom: MADE_FROM, order: ORDER_MADE })), versions: { items: [ACCEPTED_VERSION], people: {}, problem: null } })) },

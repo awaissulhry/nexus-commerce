@@ -178,25 +178,26 @@ describe('the Quotes list: New messages, "from INQ-…", an accepted row’s ord
 // ---- TH-6 part B (B-TH-257 follow-up; B-TH-090's WITHDRAWN, #1564): "Customer sees" reads the request's own state ----------------
 describe('TH-6 part B: a request the customer withdrew is never "Quote being prepared"', () => {
   it('the request’s own state decides, as the portal reads it; an older answer without it reads QUOTED as before', () => {
-    expect(customerSeesOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'WITHDRAWN', declineReason: null, closedAt: '2026-10-28T10:15:00.000Z' }, order: null }))).toBe('CLOSED')
-    expect(customerSeesOf(quote({ status: 'SENT', madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'WITHDRAWN' } }))).toBe('CLOSED')
+    // B-TH-095 (on main) gives WITHDRAWN its own word in the portal: the office reads the same.
+    expect(customerSeesOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'WITHDRAWN', declineReason: null, closedAt: '2026-10-28T10:15:00.000Z' }, order: null }))).toBe('WITHDRAWN')
+    expect(customerSeesOf(quote({ status: 'SENT', madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'WITHDRAWN' } }))).toBe('WITHDRAWN')
     expect(customerSeesOf(quote({ status: 'SENT', madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'QUOTED' } }))).toBe('QUOTE_SENT')
     expect(customerSeesOf(quote({ status: 'SENT', madeFrom: { inquiryId: 'i', number: 'INQ-1' } }))).toBe('QUOTE_SENT')
     expect(customerSeesOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'DECLINED', declineReason: 'NOT_AN_ORDER' } }))).toBe('CLOSED')
     expect(customerSeesOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'DECLINED', declineReason: 'PRICE' } }))).toBe('DECLINED')
   })
 
-  it('the office reads why: "The customer withdrew the request on …" beside the customer’s "Closed"; nothing for any other state', () => {
+  it('the office reads when: "The customer withdrew the request on …" beside the customer’s "Withdrawn"; nothing for any other state', () => {
     expect(requestWithdrawnOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'WITHDRAWN', closedAt: '2026-10-28T10:15:00.000Z' } }))).toEqual({ at: '2026-10-28T10:15:00.000Z' })
     expect(requestWithdrawnOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'WITHDRAWN' } }))).toEqual({ at: null })
     expect(requestWithdrawnOf(quote({ madeFrom: { inquiryId: 'i', number: 'INQ-1', status: 'QUOTED' } }))).toBeNull()
     expect(requestWithdrawnOf(quote({ madeFrom: null }))).toBeNull()
     const en = textOf(draw('th-6b-request-withdrawn'))
-    expect(en).toContain(`Customer sees: ${REQUEST_STATE_WORDS.CLOSED.en}`)
+    expect(en).toContain(`Customer sees: ${REQUEST_STATE_WORDS.WITHDRAWN.en}`)
     expect(en).toContain('The customer withdrew the request on')
     expect(en).not.toContain('Quote being prepared')
     const it = textOf(draw('th-6b-request-withdrawn', 'it'))
-    expect(it).toContain(`Il cliente legge: ${REQUEST_STATE_WORDS.CLOSED.it}`)
+    expect(it).toContain(`Il cliente legge: ${REQUEST_STATE_WORDS.WITHDRAWN.it}`)
     expect(it).toContain('Il cliente ha ritirato la richiesta il')
     expect(textOf(draw('th-257-made-from'))).not.toContain('withdrew')
   })
