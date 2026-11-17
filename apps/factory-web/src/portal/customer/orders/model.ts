@@ -332,6 +332,8 @@ export interface CancelDraft {
   note: string
   /** Send was pressed: the field problems show. */
   tried: boolean
+  /** F-PR-13: edit, then review (what it means, before Send); absent: edit. */
+  step?: 'edit' | 'review'
 }
 
 export const EMPTY_CANCEL: CancelDraft = { scope: 'ORDER', lineIds: [], reasonCode: '', note: '', tried: false }

@@ -281,7 +281,7 @@ describe('the portal rail per partner role (B-W2b-203)', () => {
 
 // ── F-PR-10 (production plan §5; 06-tree B.0; 09-design (d)): the customer's Production area and Home › Waiting for you ──
 describe('the Production area and Waiting for you (F-PR-10)', () => {
-  // The pages as they will be once F-PR-11 builds /production and F-PR-14 builds /waiting.
+  // The pages as built (F-PR-11 /production, F-PR-14 /waiting): kept as their own list so a later page step reads the same.
   const BUILT: readonly PortalAreaDef[] = PORTAL_AREAS.map((def) => (def.id === 'production' ? { ...def, built: true } : def.id === 'home' ? { ...def, pages: def.pages!.map((page) => ({ ...page, built: true })) } : def))
   const signedAs = (key: string, defs: readonly PortalAreaDef[] = BUILT) => {
     const template = PARTNER_ROLE_TEMPLATES.find((entry) => entry.key === key)!
@@ -308,23 +308,27 @@ describe('the Production area and Waiting for you (F-PR-10)', () => {
     expect(PORTAL_AREAS.map((area) => area.id).indexOf('production')).toBe(PORTAL_AREAS.map((area) => area.id).indexOf('orders') + 1)
   })
 
-  it('draws a door only to a page that exists: My production is built (F-PR-11); Waiting for you stays hidden until F-PR-14 builds it', () => {
+  it('draws a door only to a page that exists: My production (F-PR-11) and Waiting for you (F-PR-14) are built', () => {
     expect(PORTAL_AREAS.find((area) => area.id === 'production')!.built).toBe(true)
-    expect(PORTAL_AREAS.find((area) => area.id === 'home')!.pages!.find((page) => page.id === 'home.waiting')!.built).toBe(false)
+    // F-PR-14: /waiting exists (app/(portal)/p/[party]/waiting/page.tsx): its door is drawn for those who see approvals.
+    expect(PORTAL_AREAS.find((area) => area.id === 'home')!.pages!.find((page) => page.id === 'home.waiting')!.built).toBe(true)
     for (const key of ['customer-production', 'customer-buyer', 'customer-admin', 'customer-quality', 'customer-viewer']) {
       const today = signedAs(key, PORTAL_AREAS)
       expect(today.areas, key).toContain('production')
-      expect(today.homePages, key).toEqual([])
+      expect(today.homePages, key).toEqual(['home.overview', 'home.waiting'])
       expect(today.keys.p, key).toBe('/production')
     }
+    // The Designer answers sample and artwork approvals: Waiting for you, no production.
+    expect(signedAs('customer-designer', PORTAL_AREAS).homePages).toEqual(['home.overview', 'home.waiting'])
     // Finance and the Designer do not see production: no door, no key.
     for (const key of ['customer-finance', 'customer-designer']) {
       const today = signedAs(key, PORTAL_AREAS)
       expect(today.areas, key).not.toContain('production')
       expect(today.keys.p, key).toBeUndefined()
     }
-    // Home keeps its name and address when it has one page.
-    const home = portalNavFor({ can: everything, kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'home')!
+    // Finance sees no approvals: Home keeps its name and address with its one page.
+    expect(signedAs('customer-finance', PORTAL_AREAS).homePages).toEqual([])
+    const home = portalNavFor({ can: (permission) => permission !== 'portal.approvals.view', kinds: ['CUSTOMER'] }).areas.find((area) => area.id === 'home')!
     expect([home.label, home.href, home.badge, home.sections]).toEqual(['nav.home', '/', 'home', undefined])
   })
 

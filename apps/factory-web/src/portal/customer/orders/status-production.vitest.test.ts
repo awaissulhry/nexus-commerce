@@ -89,13 +89,13 @@ const ACTIONS: OrderRecordActions = { onAsk: () => undefined, onRetryProduction:
 const draw = (over: Partial<OrderRecordViewModel> = {}, locale: Locale = 'en', record = betaRecord()) => render(createElement(StatusTab, { model: model(record, over), record, actions: ACTIONS }), locale)
 
 describe('the order’s production on Status & progress, part 1 (every level)', () => {
-  it('waiting for you on this order, with the way to what waits (Home until Waiting for you exists)', () => {
+  it('waiting for you on this order, with the way to what waits (Waiting for you, F-PR-14)', () => {
     const html = draw()
     const text = textOf(html)
     expect(text).toContain('We are waiting for you on this order')
     expect(text).toContain('Since ')
     expect(text).toContain('See what waits for you')
-    expect(html).toContain(`href="${PREFIX}/"`)
+    expect(html).toContain(`href="${PREFIX}/waiting"`) // F-PR-14
     // Our turn: no banner of the customer's turn.
     expect(textOf(draw({ production: { state: 'ready', read: production({ waiting: { code: 'US', words: w('Waiting on us'), since: null } }) } }))).not.toContain('We are waiting for you on this order')
   })
@@ -162,14 +162,14 @@ describe('the rules behind it (production/model, F-PR-12a block)', () => {
     expect(stageNoteOf(production({ stage: null }), 'en')).toBeNull()
   })
 
-  it('holds keep only our curated words; Waiting for you once built, else Home', () => {
+  it('holds keep only our curated words; Waiting for you once built (F-PR-14: built), else Home', () => {
     expect(holdsOf(production().holds, 'it').map((hold) => [hold.kind, hold.customerWords])).toEqual([
       ['BRAND', 'In pausa su tua richiesta'],
       ['PRODUCTION', 'Materiale in arrivo'],
     ])
-    expect(waitingHrefOf(PREFIX)).toBe(`${PREFIX}/`)
-    const built = PORTAL_AREAS.map((area) => (area.id === 'home' ? { ...area, pages: area.pages!.map((page) => ({ ...page, built: true })) } : area))
-    expect(waitingHrefOf(PREFIX, built)).toBe(`${PREFIX}/waiting`)
+    expect(waitingHrefOf(PREFIX)).toBe(`${PREFIX}/waiting`)
+    const unbuilt = PORTAL_AREAS.map((area) => (area.id === 'home' ? { ...area, pages: area.pages!.map((page) => ({ ...page, built: page.id !== 'home.waiting' })) } : area))
+    expect(waitingHrefOf(PREFIX, unbuilt)).toBe(`${PREFIX}/`)
   })
 
   it('the API’s answer parses (a field the API adds never breaks the tab)', () => {
@@ -286,7 +286,7 @@ describe('the order’s production on Status & progress, part 2 (by level)', () 
     for (const words of ['Cutting starts', 'Sewing starts', 'Production ends', 'From our published production plan']) expect(text).toContain(words)
     // Something waits on the customer: the way to what waits.
     expect(text).toContain('See what waits for you')
-    expect(html).toContain(`href="${PREFIX}/"`)
+    expect(html).toContain(`href="${PREFIX}/waiting"`) // F-PR-14
   })
 
   it('nothing waits on the customer: no way to what waits; nothing planned: said in one line; no days in the plan: said', () => {
