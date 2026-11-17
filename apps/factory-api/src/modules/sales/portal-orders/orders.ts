@@ -1,4 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
+// B-TH-105: the customer's own numbers.
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { asMoney } from '@nexus/factory-domain/money/marked'
 import { orderProgress, type OrderProgress } from '@nexus/factory-domain/sales/orders/orders'
@@ -153,6 +155,7 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
         id: order.id,
         customerRef: order.customerRef,
         number: order.number,
+        yourNumber: customerNumberOf('ORDER', order.customerSeq),
         orderedOn: dayOf(order.orderDate),
         status,
         words: CUSTOMER_STATUS_WORDS[status],
@@ -177,6 +180,7 @@ export async function listOrders(app: FastifyInstance, request: FastifyRequest, 
       id: request.id,
       customerRef: request.customerRef,
       number: request.number,
+      yourNumber: null,
       orderedOn: request.sentAt ? businessDate(request.sentAt) : null,
       status: 'REQUESTED' as CustomerOrderStatus,
       words: CUSTOMER_STATUS_WORDS.REQUESTED,
@@ -310,6 +314,7 @@ export async function orderRecord(app: FastifyInstance, request: FastifyRequest,
       id: order.id,
       customerRef: order.customerRef,
       number: order.number,
+      yourNumber: customerNumberOf('ORDER', order.customerSeq),
       status,
       words: CUSTOMER_STATUS_WORDS[status],
       orderDate: dayOf(order.orderDate),

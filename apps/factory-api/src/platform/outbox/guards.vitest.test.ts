@@ -121,7 +121,9 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // again, dismiss, a test, Run now asked, a run failed, a Run now finished): with B-W2b-406, B-W2b-427 and B-W2b-435 (main 15a030a875) 942 → 948, 1486 → 1495.
     // B-W2b-GF2: no event and two literal emits (a fatal accident's deadline moved with the incident's time: inail_filing.changed;
     // a corrected invoice's declaration of intent used or given back: declaration_of_intent.changed): 948, 1495 → 1497.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(948 declared event version\(s\), 1497 literal emit/) })
+    // B-TH-013: no event and one literal emit (the customer's answer takes a request up again: inquiry.changed RESUMED by the
+    // resume handler): 948, 1497 → 1498.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(948 declared event version\(s\), 1498 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

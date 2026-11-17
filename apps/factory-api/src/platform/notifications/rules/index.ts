@@ -43,6 +43,8 @@ import { MONEY_RULES } from './money'
 import { SCHEDULE_PUBLISH_RULES } from '../../../modules/planning/schedule/notices'
 // B-W2b-GB29 (G221): a pre-production gate marked done or started before, to its owner.
 import { GATE_OWNER_RULES } from '../../../modules/planning/milestones/notices'
+// B-TH-015: a new request to the people who answer requests.
+import { REQUEST_RULES } from './requests'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -91,4 +93,6 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-W2b-GB29 (G217): planning.schedule_published with "Notify line leaders" on (SYSTEM to the leads of the lines it covers).
   ...SCHEDULE_PUBLISH_RULES,
   // B-W2b-GB29 (G221): order_gate.changed PASSED (SYSTEM) or STARTED_BEFORE (ALERT) to the gate's owner.
-  ...GATE_OWNER_RULES])
+  ...GATE_OWNER_RULES,
+  // B-TH-015: inquiry.received (ASSIGNMENT to who keeps inquiries over its company and customer, not its maker).
+  ...REQUEST_RULES])

@@ -88,7 +88,7 @@ afterAll(async () => {
 describe('the brand wall (W01, W37)', () => {
   it("a customer reads its own requests and their lines, never another customer's, a prospect's or another tenant's", async () => {
     const own = await sql(partner(A.P1), `SELECT id, number, "customerRef", status::text AS status FROM "Inquiry" ORDER BY number`)
-    expect(own).toEqual([{ id: s.inquiryIds.quoted, number: 'SEED-INQ-0004', customerRef: 'SEED-RFQ-12', status: 'QUOTED' }])
+    expect(own).toEqual([{ id: s.inquiryIds.quoted, number: 'SEED-INQ-0004', customerRef: 'SEED-BA-PO-12', status: 'QUOTED' }])
     const lines = await sql(partner(A.P1), `SELECT id, "styleId", "unitPriceShown"::text AS shown FROM "InquiryLine"`)
     expect(lines).toEqual([{ id: s.inquiryLineIds[3], styleId: A.jacket, shown: '420.000000' }])
     // P3 sees its phone request and its line only; P2 (a supplier) nothing at all.

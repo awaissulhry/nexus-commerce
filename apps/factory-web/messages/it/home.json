@@ -603,6 +603,7 @@
       "alerts.MARGIN_BELOW_FLOOR.QUOTED": "Il margine dell'ordine {label} è sotto il suo margine minimo: il suo preventivo era stato approvato sotto.",
       "alerts.STAMP_DUTY_DUE": "L'imposta di bollo del {label} scade il {dueOn} (mancano {days} giorni): pagala con F24 (codice tributo {f24Code}) e registra il pagamento.",
       "alerts.STAMP_DUTY_DUE.LATE": "L'imposta di bollo del {label} scadeva il {dueOn}: {days} giorni di ritardo. Pagala con F24 (codice tributo {f24Code}) e registra il pagamento.",
+      "alerts.REQUEST_NUMBERING_MISSING": "{label} riceve richieste ma non ha una numerazione delle richieste attiva (INQUIRY): il Nuovo ordine del portale è sospeso e la posta agli indirizzi delle richieste resta in attesa. Impostate la serie nella numerazione.",
       "INQUIRY_WAITING.ASSIGNED": "La richiesta {number} di {from} aspetta la tua risposta da più di un giorno lavorativo.",
       "INQUIRY_WAITING.NEW": "La richiesta {number} di {from} aspetta da più di un giorno lavorativo e nessuno la segue ancora.",
       "INQUIRY_WAITING.blocks": "Il cliente aspetta una risposta.",

@@ -17,6 +17,7 @@ import {
   overdue,
   piecesOfSizes,
   quoteRefusal,
+  readOnlyRefusal,
   resumeRefusal,
   seriesOf,
   sizesOf,
@@ -87,6 +88,8 @@ export interface RowView {
   readonly wantedDate: string | null
   readonly waiting: { readonly for: 'US' | 'CUSTOMER' | null; readonly workingMinutes: number | null; readonly overdue: boolean }
   readonly assigneeId: string | null
+  /** B-TH-016 (Owner decision 4): who keeps it, by name (office people only: an inquiry's assignee is an office user). */
+  readonly assignee: { readonly id: string; readonly name: string } | null
   readonly mine: boolean
   readonly quote: { readonly id: string; readonly number: string } | null
   readonly declineReason: DeclineReason | null
@@ -94,11 +97,15 @@ export interface RowView {
   readonly version: number
 }
 
-/** Who asks, in words (the list's From): the customer, else the prospect (company, name, e-mail), else the mail's sender. */
-function fromWordsOf(row: InquiryData, party: { readonly legalName: string; readonly tradeName: string | null } | undefined, sender: string | null): string {
+/**
+ * Who asks, in words (the list's From): the customer, else the prospect (company, name, e-mail), else the mail's sender. B-TH-016
+ * (PR-30, GDPR minimisation): a prospect's e-mail address (theirs, or the mail's sender) only for a reader who keeps inquiries
+ * (sales.inquiries.manage); a reader who only reads them (the production manager) is told "Prospect".
+ */
+function fromWordsOf(row: InquiryData, party: { readonly legalName: string; readonly tradeName: string | null } | undefined, sender: string | null, contactDetails: boolean): string {
   if (party) return partyName(party)
   if (row.prospectErasedAt) return 'Erased prospect'
-  return row.prospectCompany ?? row.prospectName ?? row.prospectEmail ?? sender ?? '—'
+  return row.prospectCompany ?? row.prospectName ?? (contactDetails ? (row.prospectEmail ?? sender) : 'Prospect') ?? '—'
 }
 
 /** The list's rows, their references read in one pass. */
@@ -112,7 +119,12 @@ export async function rowsOf(db: Reader, context: OfficeContext, rows: readonly 
     db.inboundEmail.findMany({ where: { id: { in: ids(rows.map((row) => row.sourceEmailId)) } }, select: { id: true, fromAddress: true } }),
     waiting ? Promise.resolve(waiting) : waitingMinutesOf(db, rows, now),
   ])
-  const styles = await db.style.findMany({ where: { id: { in: ids(lines.map((line) => line.styleId)) } }, select: { id: true, code: true } })
+  const [styles, keepers] = await Promise.all([
+    db.style.findMany({ where: { id: { in: ids(lines.map((line) => line.styleId)) } }, select: { id: true, code: true } }),
+    // B-TH-016: the assignees by name (office users; the list names office people, never floor workers).
+    db.user.findMany({ where: { id: { in: ids(rows.map((row) => row.assigneeId)) }, audience: 'OFFICE' }, select: { id: true, displayName: true } }),
+  ])
+  const keeperOf = byId(keepers)
   const partyOf = byId(parties)
   const quoteOf = byId(quotes)
   const mailOf = byId(mails)
@@ -135,7 +147,7 @@ export async function rowsOf(db: Reader, context: OfficeContext, rows: readonly 
       status,
       receivedAt: toUtcIso(row.receivedAt),
       party: party ? { id: party.id, code: party.code, name: partyName(party) } : null,
-      fromWords: fromWordsOf(row, party, row.sourceEmailId ? (mailOf.get(row.sourceEmailId)?.fromAddress ?? null) : null),
+      fromWords: fromWordsOf(row, party, row.sourceEmailId ? (mailOf.get(row.sourceEmailId)?.fromAddress ?? null) : null, may(context, SALES_INQUIRIES_MANAGE, row)),
       prospect: row.partyId === null,
       summary: summaryOf(row.request),
       products: own.map((line) => (line.styleId ? (styleOf.get(line.styleId)?.code ?? '') : summaryOf(line.description ?? '').slice(0, 40))).filter((words) => words !== ''),
@@ -146,6 +158,7 @@ export async function rowsOf(db: Reader, context: OfficeContext, rows: readonly 
       wantedDate: dayOrNull(row.wantedDate),
       waiting: { for: waitingFor(status), workingMinutes: waitingFor(status) === null ? null : workingMinutes, overdue: overdue(status, workingMinutes) },
       assigneeId: row.assigneeId,
+      assignee: row.assigneeId && keeperOf.get(row.assigneeId) ? { id: row.assigneeId, name: keeperOf.get(row.assigneeId)!.displayName } : null,
       mine: row.assigneeId !== null && row.assigneeId === context.actorId,
       quote: quote ? { id: quote.id, number: quote.number } : null,
       declineReason: (row.declineReason as DeclineReason | null) ?? null,
@@ -182,13 +195,17 @@ export async function techPackOf(db: Reader, row: Pick<InquiryData, 'techPackFil
 
 // ---- the record --------------------------------------------------------------------------------------------------------
 
-const action = (allowedByRole: boolean, refusal: InquiryRefusal | null) => ({ allowed: allowedByRole && refusal === null, refusal })
+/**
+ * An action for this reader: allowed, or held with the reason. B-TH-014: a reader whose role reads inquiries but keeps none (the
+ * production manager) is told READ_ONLY instead of an action held with no reason.
+ */
+const action = (allowedByRole: boolean, refusal: InquiryRefusal | null, readsOnly = false) => ({ allowed: allowedByRole && refusal === null, refusal: readsOnly ? readOnlyRefusal() : refusal })
 
 /** The inquiry's record: the row, what is asked, the mail, the files and tech pack, the quote, the actions for this reader. */
 export async function inquiryViewOf(db: Reader, context: OfficeContext, row: InquiryData, now: Date) {
   const [view] = await rowsOf(db, context, [row], now)
   const actor = actorOf(context)
-  const [lines, contact, people, mail, files, mailFiles, quote] = await Promise.all([
+  const [lines, contact, people, mail, files, mailFiles, quote, shipTo] = await Promise.all([
     db.inquiryLine.findMany({ where: { inquiryId: row.id }, select: LINE_COLUMNS, orderBy: { seq: 'asc' } }),
     row.contactId ? db.partyContact.findUnique({ where: { id: row.contactId }, select: { id: true, name: true, email: true, erasedAt: true } }) : Promise.resolve(null),
     db.user.findMany({ where: { id: { in: ids([row.assigneeId, row.closedById, row.createdById]) } }, select: { id: true, displayName: true } }),
@@ -196,6 +213,8 @@ export async function inquiryViewOf(db: Reader, context: OfficeContext, row: Inq
     db.storedFile.findMany({ where: { recordType: 'Inquiry', recordId: row.id, status: { not: 'DELETED' } }, select: FILE_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }),
     row.sourceEmailId ? db.storedFile.findMany({ where: { recordType: 'InboundEmail', recordId: row.sourceEmailId, status: { not: 'DELETED' } }, select: FILE_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] }) : Promise.resolve([]),
     row.quoteId ? db.quote.findUnique({ where: { id: row.quoteId }, select: { id: true, number: true, status: true, currentRevision: true, companyId: true, partyId: true } }) : Promise.resolve(null),
+    // B-TH-009 (L2-G01): the delivery address the customer asked (a WAITING one is decided with the order).
+    row.shipToAddressId ? db.partyAddress.findUnique({ where: { id: row.shipToAddressId }, select: { id: true, name: true, line1: true, postalCode: true, city: true, country: true, approvalStatus: true } }) : Promise.resolve(null),
   ])
   const [styles, colourways, version, techPack] = await Promise.all([
     db.style.findMany({ where: { id: { in: ids(lines.map((line) => line.styleId)) } }, select: { id: true, code: true, name: true } }),
@@ -214,11 +233,15 @@ export async function inquiryViewOf(db: Reader, context: OfficeContext, row: Inq
   return {
     ...view!,
     request: row.request,
+    // B-TH-009 (L2-G01): their PO and where the goods go.
+    customerRef: row.customerRef,
+    shipTo: shipTo ? { id: shipTo.id, name: shipTo.name, line1: shipTo.line1, postalCode: shipTo.postalCode, city: shipTo.city, country: shipTo.country, waiting: shipTo.approvalStatus === 'WAITING' } : null,
     note: row.note,
     closeNote: row.closeNote,
     contact: contact ? { id: contact.id, name: contact.erasedAt ? 'Erased contact' : contact.name, email: contact.email } : null,
+    // B-TH-016 (PR-30): a prospect's e-mail and phone only for a reader who keeps inquiries.
     prospectDetails: hasProspect
-      ? { name: row.prospectName, company: row.prospectCompany, email: row.prospectEmail, phone: row.prospectPhone, lawfulBasis: (row.prospectLawfulBasis as LawfulBasis | null) ?? null, erased: row.prospectErasedAt !== null }
+      ? { name: row.prospectName, company: row.prospectCompany, email: manage ? row.prospectEmail : null, phone: manage ? row.prospectPhone : null, lawfulBasis: (row.prospectLawfulBasis as LawfulBasis | null) ?? null, erased: row.prospectErasedAt !== null }
       : null,
     assignee: person(row.assigneeId),
     assignedAt: at(row.assignedAt),
@@ -235,10 +258,12 @@ export async function inquiryViewOf(db: Reader, context: OfficeContext, row: Inq
         sizes: sizesOf(line.sizes),
         quantity: line.quantity,
         note: line.note,
+        // B-TH-009 (L2-G08): the price the customer was shown when it asked (price grain).
+        unitPriceShown: asMoney('price', price(line.unitPriceShown)),
       }
     }),
     mail: mail
-      ? { id: mail.id, status: mail.status, receivedAt: toUtcIso(mail.receivedAt), from: { address: mail.fromAddress, name: mail.fromName }, subject: mail.subject, bodyText: mail.bodyText, bodyHtml: mail.bodyHtml, threadId: mail.threadId }
+      ? { id: mail.id, status: mail.status, receivedAt: toUtcIso(mail.receivedAt), from: { address: manage || row.partyId !== null ? mail.fromAddress : null, name: mail.fromName }, subject: mail.subject, bodyText: mail.bodyText, bodyHtml: mail.bodyHtml, threadId: mail.threadId }
       : null,
     techPack,
     files: files.filter(readsFiles).map(fileView),
@@ -251,14 +276,14 @@ export async function inquiryViewOf(db: Reader, context: OfficeContext, row: Inq
     createdBy: person(row.createdById),
     createdAt: toUtcIso(row.createdAt as Date),
     actions: {
-      edit: action(manage, editRefusal(facts)),
-      assign: action(manage, editRefusal(facts)),
-      unassign: action(manage, unassignRefusal(facts)),
-      askInfo: action(manage, askInfoRefusal(facts)),
-      resume: action(manage, resumeRefusal(facts)),
-      decline: action(manage, declineRefusal(facts, 'PRICE', null)),
-      lose: action(manage, loseRefusal(facts)),
-      quote: action(manage && can(actor, QUOTES_MANAGE, { companyId: row.companyId, ...(row.partyId ? { partyId: row.partyId } : {}) }), quoteRefusal(facts)),
+      edit: action(manage, editRefusal(facts), !manage),
+      assign: action(manage, editRefusal(facts), !manage),
+      unassign: action(manage, unassignRefusal(facts), !manage),
+      askInfo: action(manage, askInfoRefusal(facts), !manage),
+      resume: action(manage, resumeRefusal(facts), !manage),
+      decline: action(manage, declineRefusal(facts, 'PRICE', null), !manage),
+      lose: action(manage, loseRefusal(facts), !manage),
+      quote: action(manage && can(actor, QUOTES_MANAGE, { companyId: row.companyId, ...(row.partyId ? { partyId: row.partyId } : {}) }), quoteRefusal(facts), !manage),
     },
   }
 }

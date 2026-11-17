@@ -491,8 +491,7 @@
     "print": "Stampa la conferma",
     "setPriority_one": "Imposta priorità per {count}",
     "setPriority_other": "Imposta priorità per {count}",
-    "more": "Altre azioni",
-    "keys": "Scorciatoie da tastiera"
+    "more": "Altre azioni"
   },
   "import": {
     "action": "Importa ordini…",

@@ -199,6 +199,7 @@
     "MAIL_TAKEN": "This mail was already made into {number}",
     "QUOTE_TAKEN": "This quote was already made from another inquiry",
     "MAIL_NOT_WAITING": "Only a mail that was read (in Mail to sort, or in a thread) becomes an inquiry",
+    "READ_ONLY": "Your role reads requests; sales answers them",
     "other": "The factory refused this change"
   },
   "problem": {

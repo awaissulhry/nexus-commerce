@@ -314,6 +314,11 @@ export interface ExportSelectedProps<T> {
 }
 
 /** "Export N" in the selection row (Z16:02): this view's columns, the selected rows only, through the export engine. */
+// B-TH-225: the request "Export N" sends (pure, for the tests): the view's address and columns, only the picked rows' ids.
+export function selectedExportRequest<T>(input: { listKey: string; format: ExportFormat; query: string; columns: readonly ColDef<T>[]; title: string; ids: readonly string[] }) {
+  return { listKey: input.listKey, format: input.format, query: input.query, columns: exportColumnsOf(input.columns as never), title: input.title, ids: [...input.ids] }
+}
+
 export function ExportSelected<T>({ ids, columns, formats, transport, listKey, title, t, onReceipt }: ExportSelectedProps<T>) {
   const [job, setJob] = useState<ExportJob | null>(null)
   const [problem, setProblem] = useState<ToolsProblem | null>(null)
@@ -338,7 +343,7 @@ export function ExportSelected<T>({ ids, columns, formats, transport, listKey, t
 
   const start = (format: ExportFormat) => {
     transport
-      .startExport({ listKey, format, query: transport.query, columns: exportColumnsOf(columns as never), title, ids: [...ids] }, transport.newKey())
+      .startExport(selectedExportRequest({ listKey, format, query: transport.query, columns, title, ids }), transport.newKey())
       .then((next) => {
         polls.current = 0
         setProblem(null)

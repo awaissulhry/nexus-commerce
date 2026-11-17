@@ -25,6 +25,8 @@ import { floorFindingsWith } from '../../modules/costing/margins/floor'
 import { floorFiguresOf } from '../../modules/costing/margins/margins'
 // B-W2b-GB02 (G146): a stamp duty quarter not paid near (or past) its due day.
 import { stampDutyDueFindings } from '../../modules/invoicing/stamp-duty/quarters'
+// B-TH-012: a company that receives requests with no request numbering.
+import { numberingMissingFindings } from '../../modules/sales/portal-requests/open'
 // B-W2b-377: the approval engine's requests overdue (their record in words, read by their kind).
 import { kindOf } from '../approvals/kinds'
 import { kindLabelOf } from '../approvals/views'
@@ -306,6 +308,8 @@ export const FINDERS: Readonly<Partial<Record<RuleKind, Find>>> = Object.freeze(
   MARGIN_BELOW_FLOOR: floorFindingsWith(floorFiguresOf),
   // B-W2b-GB02 (G146): one per stamp duty quarter not paid N days before its due day (or after it), until it is paid.
   STAMP_DUTY_DUE: stampDutyDueFindings,
+  // B-TH-012: one per company that receives requests (a portal on, inquiry addresses) without an active INQUIRY series.
+  REQUEST_NUMBERING_MISSING: numberingMissingFindings,
 })
 
 export const DATED: Readonly<Partial<Record<RuleKind, Dated>>> = Object.freeze({

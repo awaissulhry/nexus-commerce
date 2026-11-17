@@ -84,7 +84,8 @@ export async function quoteInquiry(caller: CommandCaller, inquiryId: string, bod
           sizes: Object.entries(line.sizes).map(([size, quantity]) => ({ size, quantity, unitPrice: null })),
         })),
       },
-      { ...(body.customerRef ? { customerRef: body.customerRef } : {}) },
+      // B-TH-009 (L2-G01): the customer's own reference carries to the quote unless the office types another.
+      { ...(body.customerRef ? { customerRef: body.customerRef } : row.customerRef ? { customerRef: row.customerRef } : {}) },
     )
     const quote = await tx.quote.findUniqueOrThrow({ where: { id: made.quoteId }, select: { id: true, number: true } })
     await writeInquiry(tools, row, { status: 'QUOTED', quoteId: quote.id, closedAt: now, closedById: context.actorId })
