@@ -136,6 +136,9 @@ describe('B-TH-037 golden flow TH-2: a request becomes an order, a style draft, 
     await ok(P.owner, 'PUT', `/approvals/rules/${rule.id}`, { version: rule.version, active: true })
     await stepped(w, P.owner)
     await ok(P.owner, 'PUT', `/sales/credit/limits/${P3()}/${companyA()}`, { amount: 100, currency: 'EUR', reason: 'Made-up: a new customer starts small.' })
+    // Our own collection's vest (no brand: any customer orders it), its SKUs made at once, by the production manager.
+    const { style } = await ok(P.manager, 'POST', '/product/styles', { code: 'TH2-OWN-01', name: 'Own collection team vest (made up)', productType: 'VEST', season: 'FW27', sizeScaleId: id('product:size-scale:EU-JKT'), sizes: ['50', '52'], baseSize: '52', ppeCategory: 'NOT_PPE', colourways: [{ code: 'GRY', name: 'Grigio', colourId: id('product:colour:RED') }], generateSkus: true }, 201)
+    await ok(P.manager, 'POST', `/product/styles/${style.id}/revisions`, { changeNote: 'First revision of TH2-OWN-01' }, 201)
     await settle()
     // Each two-factor step moved the harness clock 30 s on, while a request is closed "not in the future" of the database's clock
     // (5 minutes of difference allowed): the clock goes back as far as every role given so far still holds (no step-up follows).
@@ -172,10 +175,10 @@ describe('B-TH-037 golden flow TH-2: a request becomes an order, a style draft, 
   })
 
   it('G3 customer B’s request becomes an order WAITING for approval (over its limit): said so to the office and to B, never “confirmed”', async () => {
-    const sent = await B('POST', '/portal/inquiries', { subject: 'Made-up: three liners', message: BRAND_BETA.message, customerRef: BRAND_BETA.customerRef }, 201)
+    const sent = await B('POST', '/portal/inquiries', { subject: 'Made-up: three team vests', message: BRAND_BETA.message, customerRef: BRAND_BETA.customerRef }, 201)
     G.betaRequest = sent.request
     await settle()
-    const liner = await styleOf('SEED-LNR-01', 'GRY')
+    const liner = await styleOf('TH2-OWN-01', 'GRY')
     const lined = await withLines(G.betaRequest.id, [{ styleId: liner.style, colourwayId: liner.colourway, sizes: { '52': 3 } }])
     const made = await ok(P.sales, 'POST', `/sales/inquiries/${G.betaRequest.id}/order`, { version: lined.version, lines: [{ seq: 10, unitPrice: '60' }] }, 201)
     expect(made.order).toMatchObject({ status: 'PENDING_APPROVAL', waitsFor: 'CREDIT' })
@@ -285,7 +288,14 @@ describe('B-TH-037 golden flow TH-2: a request becomes an order, a style draft, 
       { label: 'logo file', text: 'Made-up Alpha logo sketch.pdf' },
     ]
     // A search answer repeats what was typed (Beta typed A's numbers on purpose): its echo is left out of the scan.
-    const bodyOf = (entry: Seen) => (entry.url.startsWith('/portal/search') && entry.body && typeof entry.body === 'object' ? { ...(entry.body as Json), query: null, words: null } : entry.body)
+    // An unread count answers each record asked, as asked (Beta asked for A's ids on purpose: 0, as for an id that does not exist):
+    // that echo is left out of the scan, its counts are not.
+    const bodyOf = (entry: Seen) =>
+      entry.url.startsWith('/portal/search') && entry.body && typeof entry.body === 'object'
+        ? { ...(entry.body as Json), query: null, words: null }
+        : entry.url === '/threads/unread' && entry.body && typeof entry.body === 'object'
+          ? ((entry.body as Json).counts as Json[]).map((count) => ({ newCount: count.newCount, lastAt: count.lastAt }))
+          : entry.body
     const leaks = seen.filter((entry) => entry.who.startsWith('beta')).flatMap((entry) => findMarkers(bodyOf(entry), markers).map((found) => `${entry.method} ${entry.url} (${entry.status}): ${found}`))
     expect(leaks).toEqual([])
     const addresses = new Set(await addressesOf(w, beta))
