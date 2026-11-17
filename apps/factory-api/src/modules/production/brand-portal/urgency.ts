@@ -89,7 +89,8 @@ export async function markUrgency(app: FastifyInstance, request: FastifyRequest,
     { name: 'portal.production.urgency', idempotencyKey, input: { ...scope, urgency: body.urgency, orderIds: orders.map((order) => order.orderId) } },
     (tools) => markInCommand(tools, { ...scope, urgency: body.urgency, orders }),
   )
-  return { ...result, notFound, replayed }
+  // End-check fix: the contract's arrays are mutable; the command's view is readonly (a copy, same rows).
+  return { ...result, results: [...result.results], notFound, replayed }
 }
 
 /** PUT /portal/production/urgent-order */
@@ -111,7 +112,7 @@ export async function orderUrgent(app: FastifyInstance, request: FastifyRequest,
     { name: 'portal.production.urgentOrder', idempotencyKey, input: { ...scope, orderIds: body.orderIds, asOf: body.asOf ?? null } },
     (tools) => urgentOrderInCommand(tools, { ...scope, orderIds: body.orderIds, asOf }),
   )
-  return { ...result, notFound: 0, replayed }
+  return { ...result, results: [...result.results], notFound: 0, replayed }
 }
 
 /** POST /portal/production/urgency/undo */
@@ -125,5 +126,5 @@ export async function undoUrgency(app: FastifyInstance, request: FastifyRequest,
     { name: 'portal.production.urgencyUndo', idempotencyKey, input: { ...scope, batchId: body.batchId } },
     (tools) => undoInCommand(tools, { ...scope, batchId: body.batchId }),
   )
-  return { ...result, notFound: 0, replayed }
+  return { ...result, results: [...result.results], skipped: [...result.skipped], notFound: 0, replayed }
 }
