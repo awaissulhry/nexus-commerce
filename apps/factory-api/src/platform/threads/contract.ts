@@ -11,6 +11,21 @@ import { money } from '@nexus/factory-domain/money/marked'
 import { MESSAGE_AMOUNT_MAX } from '@nexus/factory-domain/threads/price-check'
 // ---- end B-TH-049 / B-TH-050
 import { FILE_AUDIENCES, FILE_KINDS, FILE_STATUSES } from '../files/rules'
+// ---- B-TH-079: the feed's audience view, the skipped files of an inbound mail, the mail waiting for a person.
+import { HELD_REASONS, SKIP_REASONS } from '@nexus/factory-domain/email-in/rules'
+import { FEED_AUDIENCES } from '@nexus/factory-domain/threads/timeline'
+/** Office only: a file of an inbound mail that was not kept, with why (a signature logo is never listed). */
+export const skippedAttachmentView = output({ name: z.string(), contentType: z.string(), sizeBytes: z.number().int(), reason: z.enum(SKIP_REASONS) })
+/** Office only: the mails for this conversation that wait for a person (HELD with why, TRIAGE: Mail to sort). */
+export const waitingMailView = output({
+  count: z.number().int(),
+  reasons: z.array(z.enum([...HELD_REASONS, 'TRIAGE'])),
+  /** The reader may open them in Mail to sort (email.triage): "Review"; else "A reply waits for a colleague to check it". */
+  mayReview: z.boolean(),
+})
+/** The audience view ("View ▾"): ALL, PARTNER ("With the customer") or OFFICE ("Office notes"); outside the office it only narrows. */
+const feedAudience = z.enum(FEED_AUDIENCES).default('ALL')
+// ---- end B-TH-079
 
 /**
  * The record threads' contracts (plan A1 §2.3, §3.7; A2 SCR-006 record panels: thread, timeline, files). A record is
@@ -99,6 +114,11 @@ export const messageView = output({
   corrects: linkedMessageView.nullable().optional(),
   correctedBy: output({ id: id(), at: instant() }).nullable().optional(),
   // ---- end B-TH-049 / B-TH-050
+  // ---- B-TH-079 (thread-G09, thread-G10): erased after a privacy request ("Message removed after a privacy request"; never an
+  // attachment-only message), and — office only — the files of an inbound mail that were not kept.
+  erased: z.boolean().optional(),
+  skippedAttachments: z.array(skippedAttachmentView).optional(),
+  // ---- end B-TH-079
   at: instant(),
 })
 export type MessageView = z.infer<typeof messageView>
@@ -124,7 +144,7 @@ export const setOwnerContract = defineContract({
 
 export const readThreadContract = defineContract({
   params: recordParams,
-  querystring: input(page),
+  querystring: input({ ...page, /* B-TH-079 */ audience: feedAudience }),
   response: {
     200: output({
       /** Null: the record has no message yet (or none this reader may see). */
@@ -148,6 +168,8 @@ export const readThreadContract = defineContract({
         }).nullable(),
       }).optional(),
       // ---- end B-TH-028
+      // ---- B-TH-079: office only — mail for this conversation that waits for a person (null: none).
+      waitingMail: waitingMailView.nullable().optional(),
     }),
   },
 })
@@ -258,6 +280,9 @@ export const timelineEntry = z.discriminatedUnion('kind', [
     /** The start of its text, one line. */
     excerpt: z.string(),
     attachmentCount: z.number().int(),
+    // ---- B-TH-079: erased after a privacy request (never an attachment-only message); an inbound mail's files not kept.
+    erased: z.boolean(),
+    skippedAttachments: z.array(skippedAttachmentView),
   }),
   output({
     kind: z.literal('change'),
@@ -316,6 +341,8 @@ export const timelineContract = defineContract({
   params: recordParams,
   querystring: input({
     ...page,
+    /** B-TH-079: the audience view of its messages (changes and files are not filtered by it; "Changes" is kinds=change). */
+    audience: feedAudience,
     /** Filter chips: a comma-separated list of message, change, file. Default every kind. B-TH-072: `linked` only when asked (a project). */
     kinds: z
       .string()
@@ -329,7 +356,16 @@ export const timelineContract = defineContract({
         return kinds as (typeof TIMELINE_ASKABLE_KINDS)[number][]
       }),
   }),
-  response: { 200: output({ entries: z.array(timelineEntry), nextCursor: z.string().nullable() }) },
+  response: {
+    200: output({
+      entries: z.array(timelineEntry),
+      nextCursor: z.string().nullable(),
+      // ---- B-TH-079: messages new to the reader that this view hides ("1 new message hidden by this view · Show all"); 0 on All.
+      hiddenNew: z.number().int(),
+      /** Mail for this conversation that waits for a person (null: none). */
+      waitingMail: waitingMailView.nullable(),
+    }),
+  },
 })
 
 // ---- followers (B-W2a-20; COL-011; design shell.panels popup followers) ------------------------------------------------

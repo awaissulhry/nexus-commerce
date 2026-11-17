@@ -37,6 +37,8 @@ import type { PartnerMessageView } from './contract'
 // ---- B-TH-027: the person's own read mark (their post moves it; "New since your last visit"; the list's new counts).
 import { markThreadRead, moveMark, readingOf, unreadCounts } from '../reads'
 // ---- end B-TH-027
+// ---- B-TH-079: a message erased after a privacy request is told apart from one that only carries files.
+import { erasedForOutside } from '../feed-depth'
 
 /**
  * A record's thread in a portal session (B-W2b-168; COL-059, COL-060; design portal.frame › thread "Ask a question /
@@ -218,10 +220,11 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
   })
   const mine = await minePosts(request, caller, read.shown)
   const last = read.shown.at(-1)
+  const erased = await erasedForOutside(request as CommandCaller, caller.context.tenantId, read.shown) // B-TH-079
   return {
     record: recordViewOf(ref.type, read.record),
     thread: read.thread ? { id: read.thread.id, status: read.thread.status } : null,
-    messages: read.shown.map((row) => messageViewOf(caller, row, read.attachments, mine, read.links)),
+    messages: read.shown.map((row) => ({ ...messageViewOf(caller, row, read.attachments, mine, read.links), ...(erased.has(row.id) ? { erased: true } : {}) })),
     nextCursor: read.rows.length > page.limit && last ? encodeCursor(last) : null,
     composer: read.composer,
     reading: read.reading,
