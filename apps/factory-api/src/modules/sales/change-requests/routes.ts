@@ -1,10 +1,10 @@
 import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { appClock } from '../../../platform/portal/tasks/clock'
-import { acceptContract, askContract, officeListContract, officeRecordContract, partnerListContract, refuseContract, rulesContract, saveSettingsContract, settingsContract, withdrawContract } from './contract'
+import { acceptContract, askContract, impactContract, officeListContract, officeRecordContract, partnerListContract, refuseContract, rulesContract, saveSettingsContract, settingsContract, withdrawContract } from './contract'
 import { manifest } from './manifest'
 import { acceptRequest, officeList, officeRecord, refuseRequest } from './office'
-import { askRequest, partnerList, portalRules, withdrawRequest } from './portal'
+import { askImpact, askRequest, partnerList, portalRules, withdrawRequest } from './portal'
 import { getCutoffs, saveCutoffs } from './settings'
 
 /**
@@ -19,6 +19,9 @@ export default defineRoutes('sales-change-requests', manifest, async (app) => {
   app.get('/portal/sales-orders/:orderId/change-requests/rules', { schema: rulesContract }, async (request) => portalRules(app, request, request.params.orderId, appClock(app).now()))
 
   app.get('/portal/sales-orders/:orderId/change-requests', { schema: partnerListContract }, async (request) => partnerList(app, request, request.params.orderId, appClock(app).now()))
+
+  // B-PR-25: the impact of an ask before Send (the same checks as Send; nothing is written).
+  app.post('/portal/sales-orders/:orderId/change-requests/impact', { schema: impactContract }, async (request) => askImpact(app, request, request.params.orderId, request.body, appClock(app).now()))
 
   app.post('/portal/sales-orders/:orderId/change-requests', { schema: askContract }, async (request, reply) => reply.code(201).send(await askRequest(app, request, request.params.orderId, request.body, idempotencyKeyFrom(request))))
 

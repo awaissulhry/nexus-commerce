@@ -251,13 +251,14 @@ describe('B-PR-13 the customer Production role and production for the other cust
   const role = (key: string) => partnerTemplateOf(key)!
   const has = (key: string, permission: string) => role(key).permissions.includes(permission as never)
 
-  it('the Production role: its orders and their production, urgency, approvals, samples, shared files and messages; no price grain, no ask yet', () => {
+  // B-PR-25: the Production role asks (portal.salesOrders.ask) from B-PR-25 on; still no price grain.
+  it('the Production role: its orders and their production, urgency, asks, approvals, samples, shared files and messages; no price grain', () => {
     const production = role(CUSTOMER_PRODUCTION_ROLE)
     expect(production).toMatchObject({ kind: 'CUSTOMER', admin: false, name: 'Production', grains: [] })
-    for (const permission of ['portal.home.view', 'portal.search', 'portal.salesOrders.view', 'portal.approvals.view', 'portal.samples.view', 'portal.customerDocuments.view', 'portal.comment', 'portal.production.view', 'portal.production.urgency']) {
+    for (const permission of ['portal.home.view', 'portal.search', 'portal.salesOrders.view', 'portal.approvals.view', 'portal.samples.view', 'portal.customerDocuments.view', 'portal.comment', 'portal.production.view', 'portal.production.urgency', 'portal.salesOrders.ask']) {
       expect(has(CUSTOMER_PRODUCTION_ROLE, permission), permission).toBe(true)
     }
-    for (const permission of ['portal.customerDocuments.finance', 'portal.customerDocuments.conformity', 'portal.salesOrders.ask', 'portal.orderRequests.manage', 'portal.payments.view', 'portal.colleagues.manage']) {
+    for (const permission of ['portal.customerDocuments.finance', 'portal.customerDocuments.conformity', 'portal.orderRequests.manage', 'portal.payments.view', 'portal.colleagues.manage']) {
       expect(has(CUSTOMER_PRODUCTION_ROLE, permission), permission).toBe(false)
     }
     expect(production.capabilities.allowed).toEqual(['comment', 'upload', 'approve'])
