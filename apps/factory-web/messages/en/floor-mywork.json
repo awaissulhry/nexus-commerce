@@ -155,8 +155,8 @@
   },
   "messages": {
     "title": "Messages on your work orders",
+    "titleOne": "Messages on {number}",
     "unread": "New",
-    "read": "Read",
     "count_one": "{count} message",
     "count_other": "{count} messages",
     "fromTablet": "From this tablet, as of {time}",
@@ -173,6 +173,9 @@
       "FLOOR": "From another station"
     },
     "cut": "The rest of this message is in the office.",
+    "onCard_one": "{count} message on this work order",
+    "onCard_other": "{count} messages on this work order",
+    "asWritten": "Shown as written, not translated.",
     "gone": {
       "title": "This message is no longer open",
       "body": "Go back to the list."
