@@ -283,8 +283,11 @@ export const inquiryListQuery = input({
 })
 export type InquiryListQuery = z.output<typeof inquiryListQuery>
 
-/** The inquiry a quote or an order came from (SAL-305: the tech pack carried to them): exactly one of the two. */
-export const sourceQuery = input({ quoteId: id().optional(), salesOrderId: id().optional() })
+/**
+ * The inquiry a quote or an order came from (SAL-305: the tech pack carried to them), or — B-TH-261 — the request a style draft
+ * was made from (Make style draft, B-TH-026: the request names it in its drafts): exactly one of the three.
+ */
+export const sourceQuery = input({ quoteId: id().optional(), salesOrderId: id().optional(), /* B-TH-261 */ styleId: id().optional() })
 export type SourceQuery = z.output<typeof sourceQuery>
 
 // ---- answers -----------------------------------------------------------------------------------------------------------

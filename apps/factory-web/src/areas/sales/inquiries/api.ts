@@ -21,6 +21,8 @@ import {
 import type { DeclineReason, InquirySource, InquiryStatus, RequestOutcome } from '@nexus/factory-domain/sales/inquiries/rules'
 // B-TH-233: Incoming's one read (B-TH-039).
 import { incomingList } from '@nexus/factory-domain/sales/incoming/contracts'
+// B-TH-290: production's answer (B-TH-094).
+import { productionSuggestionView, type ProductionAnswerBody } from '@nexus/factory-domain/sales/inquiries/production-answer'
 import type { IncomingKind, IncomingTile } from '@nexus/factory-domain/sales/incoming/rules'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { completeUpload, downloadLink, requestUpload } from '../../../record-panels/api'
@@ -126,6 +128,24 @@ export function listScales(api: ApiClient, companyId: string, signal?: AbortSign
   return api.get('/product/size-scales', { query: { status: 'ACTIVE', limit: 200, companyId }, schema: scalePage, signal }).then((answer) => answer.scales.map((scale) => ({ id: scale.id, code: scale.code, name: scale.name })))
 }
 // ---- end B-TH-228
+
+// ---- B-TH-290: production's answer on a request (B-TH-094; office only) ----------------------------------------------------------
+
+export type ProductionSuggestion = z.infer<typeof productionSuggestionView>
+
+/**
+ * PUT …/production-answer: OK, or NOT_BEFORE with its ISO week (`2026-W14`, this week or later), or null to take the answer back —
+ * typed by whoever records promise dates (planning.promise.manage over the request); the request as answered.
+ */
+export function setProductionAnswer(api: ApiClient, inquiryId: string, body: ProductionAnswerBody, idempotencyKey?: string): Promise<InquiryView> {
+  return api.request('PUT', `${one(inquiryId)}/production-answer`, { body, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
+}
+
+/** GET …/production-answer/suggestion: what planning's promise read suggests for the request's dated lines (nothing written). */
+export function readProductionSuggestion(api: ApiClient, inquiryId: string, siteId: string | null, signal?: AbortSignal): Promise<ProductionSuggestion> {
+  return api.get(`${one(inquiryId)}/production-answer/suggestion`, { query: { siteId: siteId ?? undefined }, schema: productionSuggestionView, signal })
+}
+// ---- end B-TH-290
 
 // ---- a selection: all or none -------------------------------------------------------------------------------------------------
 

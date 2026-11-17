@@ -87,5 +87,30 @@
     "line_one": "Nuovo dalla tua ultima visita · {count} messaggio",
     "line_other": "Nuovo dalla tua ultima visita · {count} messaggi",
     "lineMany": "Nuovo dalla tua ultima visita · oltre 200 messaggi"
+  },
+  "hidden": {
+    "line_one": "{count} nuovo messaggio nascosto da questa vista",
+    "line_other": "{count} nuovi messaggi nascosti da questa vista",
+    "showAll": "Mostra tutto"
+  },
+  "waiting": {
+    "review_one": "{count} e-mail per questa conversazione attende in Posta da smistare",
+    "review_other": "{count} e-mail per questa conversazione attendono in Posta da smistare",
+    "reviewWhy_one": "{count} e-mail per questa conversazione attende in Posta da smistare — {why}",
+    "reviewWhy_other": "{count} e-mail per questa conversazione attendono in Posta da smistare — {why}",
+    "reviewMany": "50 o più e-mail per questa conversazione attendono in Posta da smistare",
+    "reviewManyWhy": "50 o più e-mail per questa conversazione attendono in Posta da smistare — {why}",
+    "colleague_one": "Una risposta attende che un collega la controlli",
+    "colleague_other": "{count} risposte attendono che un collega le controlli",
+    "colleagueMany": "50 o più risposte attendono che un collega le controlli",
+    "open": "Controlla",
+    "reason": {
+      "UNKNOWN_SENDER": "mittente non tra i contatti",
+      "DMARC_FAIL": "il dominio del mittente non ha superato il controllo",
+      "SPAM": "segnata come spam",
+      "THREAD_CLOSED": "questa conversazione è chiusa",
+      "TRIAGE": "non ancora smistata",
+      "other": "da controllare"
+    }
   }
 }

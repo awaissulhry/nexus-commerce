@@ -229,8 +229,13 @@ export function outsideWords(cell: { readonly pomCode: string; readonly size: st
 
 // ---- swatches (SAL-314) ---------------------------------------------------------------------------------------------------
 
-export const SWATCH_KINDS = ['COLOUR', 'LEATHER'] as const
+// B-PR-23 (production plan, schema wave 4/5): FABRIC (a textile, lining, membrane or padding) and TRIM (a trim, hardware, thread
+// or label), each asked with the approval kind of its own name (B-PR-29).
+export const SWATCH_KINDS = ['COLOUR', 'LEATHER', 'FABRIC', 'TRIM'] as const
 export type SwatchKind = (typeof SWATCH_KINDS)[number]
+
+/** B-PR-23: the approval kind a swatch is asked with, by its name on the office's button. */
+const SWATCH_ASK_NAMES: Readonly<Record<SwatchKind, string>> = Object.freeze({ COLOUR: 'Colour', LEATHER: 'Leather', FABRIC: 'Fabric', TRIM: 'Trim' })
 
 export interface SwatchFacts {
   readonly kind: SwatchKind
@@ -256,9 +261,9 @@ export function swatchDecisionRefusal(swatch: SwatchFacts, waiting: WaitingReque
   return null
 }
 
-/** Why the brand cannot be asked about a swatch now (null: it can); `asked`: the request's kind (COLOUR or LEATHER). */
+/** Why the brand cannot be asked about a swatch now (null: it can); `asked`: the request's kind (the swatch's own: COLOUR, LEATHER, B-PR-23 FABRIC or TRIM). */
 export function swatchAskRefusal(swatch: SwatchFacts, asked: string, waiting: WaitingRequest | null): DecisionRefusal | null {
-  if (asked !== swatch.kind) return refusal('SWATCH_KIND', `This is a ${swatch.kind.toLowerCase()} swatch: ask with ${swatch.kind === 'LEATHER' ? 'Leather' : 'Colour'}.`)
+  if (asked !== swatch.kind) return refusal('SWATCH_KIND', `This is a ${swatch.kind.toLowerCase()} swatch: ask with ${SWATCH_ASK_NAMES[swatch.kind]}.`)
   if (swatch.decision !== null) return refusal('SWATCH_DECIDED', `The swatch is decided (${DECISION_WORDS[swatch.decision].en.toLowerCase()}): nobody is asked again.`)
   if (swatch.sentAt === null) return refusal('SWATCH_NOT_SENT', 'The swatch is not sent yet: send it, then ask the brand.')
   if (waiting) return refusal('BRAND_ASKED', `The brand is asked already (answer by ${day(waiting.dueAt)}).`)

@@ -4,7 +4,7 @@ import { defineManifest } from '../../../core/manifest'
  * Inquiries and requests for quotation (B-W2b-295; SAL-032, SAL-033, SAL-305; design sales.inquiries SCR-105). Office only: each
  * route asks sales.inquiries.* and checks the inquiry with can() over its company and customer (`record`). Making one from a mail
  * also asks email.triage over the mail; making the quote also quotes.manage; the inquiry a quote or order came from also
- * quotes.view or orders.view over that record.
+ * quotes.view or orders.view over that record (B-TH-261: the request a style draft came from, product.styles.view over the style).
  */
 const view = { audiences: ['office'], permission: 'sales.inquiries.view', scope: 'record' } as const
 const manage = { audiences: ['office'], permission: 'sales.inquiries.manage', scope: 'record' } as const

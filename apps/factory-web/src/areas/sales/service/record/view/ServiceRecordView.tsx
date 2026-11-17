@@ -2,11 +2,13 @@
 
 import { type ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowRight, MoreHorizontal, Scale } from 'lucide-react'
-import { Banner, Card, EmptyState, Menu, type MenuItemDef } from '@nexus/ui/components'
-import { Button, Pill, Spinner } from '@nexus/ui/primitives'
-import { RecordPanelsView, type RecordPanelsViewModel } from '../../../../../record-panels/view/RecordPanelsView'
-import { Freshness, RecordFrame, RecordProblem, RecordSkeleton } from '../../../../quality/_shared/parts'
+import { ArrowRight, Scale } from 'lucide-react'
+import { Banner, Card, EmptyState, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { Freshness, RecordProblem, RecordSkeleton } from '../../../../quality/_shared/parts'
+// ---- B-TH-259: the case on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import type { CaseRecord } from '../../api'
 import { actionHeld, coverDraftOf, emptyReturnDraft, MOVE_ACTIONS, mailStatusKey, personPhrase, primaryOf, RECORD_TABS, recordHref, repairDraftOf, type MoveAction } from '../../model'
 import { KindTag, NoticeLine, PriorityTag, ServiceMessages, StatusPill, useWords } from '../../parts'
@@ -20,33 +22,72 @@ import { WarrantyTab } from './WarrantyTab'
 export type { ServiceRecordActions, ServiceRecordModel } from '../view-model'
 
 /**
- * SCR-413 — a service case (design sales.service "Record: Service case"; `?tab=case|warranty|linked|actions|activity`,
- * `&do=` opens a row verb's dialog): the band (‹ Warranty & service, "<number> · <customer or rider>", its kind, channel,
- * priority, garment, owner and when it was opened; its status and the freshness; ONE primary — Open the case, Decide the
- * cover (a warranty claim before it is resolved), Resolve…, Resume, Close… — and ⋯ with every other move, Decide, Make
- * repair, Make RMA, Link a record and Copy number, each held with why) and its tabs: Case, Warranty check, Linked records,
- * Actions, Activity (the record panels: thread and timeline, plus the status mails sent to the customer).
+ * SCR-413 — a service case (design sales.service "Record: Service case"; `?tab=case|warranty|linked`, `&do=` opens a row verb's
+ * dialog), on RecordFrame (B-TH-259; the rule of picture 38, the tabs of picture 39 / 08-tabs O-SAL-SVC): the band in the shell's band
+ * row — ‹ Warranty & service, "<number> · <customer or rider>", ONE pill (its status), its kind, channel, priority, garment, owner,
+ * when it was opened, whether it tells the customer and the freshness as its details; ONE primary — Open the case, Decide the cover
+ * (a warranty claim before it is resolved), Resolve…, Resume, Close… — the Thread button (⌘J) and ⋯ with every other move, Decide,
+ * Make repair, Make RMA, Link a record and Copy number, each held with why. The case's thread is docked beside every tab (its
+ * customer's only; a rider's case: notes only), Activity's tools in its "⋯" (R-ACT). Tabs 5 → 3: Case (with the status mails sent
+ * to the customer, R1-G04), Warranty check, Linked records & actions (the actions under the records they create). ONE notice.
  */
-export function ServiceRecordView({ model, actions, panels, panelsPreview }: { model: ServiceRecordModel; actions?: ServiceRecordActions; panels?: ReactNode; panelsPreview?: RecordPanelsViewModel }) {
+// B-TH-259: `thread` is the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows.
+export function ServiceRecordView({ model, actions, thread, printThread }: { model: ServiceRecordModel; actions?: ServiceRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <ServiceMessages>
-      <Body model={model} actions={actions} panels={panels} panelsPreview={panelsPreview} />
+      <Body model={model} actions={actions} thread={thread} printThread={printThread} />
     </ServiceMessages>
   )
 }
 
-function Body({ model, actions, panels, panelsPreview }: { model: ServiceRecordModel; actions?: ServiceRecordActions; panels?: ReactNode; panelsPreview?: RecordPanelsViewModel }) {
-  const { t, say, day, when } = useWords()
+/** B-TH-259 (R1-G04): the status mails sent to the customer — on Case now (they were under Activity). */
+function StatusMails({ record }: { record: CaseRecord }) {
+  const { t, when } = useWords()
+  return (
+    <Card padded>
+      <section className="fw-svc-stack" aria-labelledby="svc-mails">
+        <h2 id="svc-mails" className="fw-svc-h2">
+          {t('mails.title')}
+        </h2>
+        <p className="fw-svc-hint">{record.notifyCustomer ? (record.contact?.email ? t('mails.on', { to: record.contact.email }) : t('mails.onNoContact')) : t('mails.off')}</p>
+        {record.mails.length === 0 ? (
+          <EmptyState title={t('mails.none')} />
+        ) : (
+          <ul className="fw-svc-list">
+            {record.mails.map((mail) => (
+              <li key={mail.id}>
+                <span className="fw-svc-cell">
+                  <span>{mail.subject}</span>
+                  <span className="fw-svc-hint">{t('mails.to', { to: mail.to.join(', '), when: when(mail.queuedAt) })}</span>
+                </span>
+                <Pill tone={mail.status === 'FAILED' || mail.status === 'BOUNCED' || mail.status === 'COMPLAINED' ? 'danger' : mail.status === 'DELIVERED' || mail.status === 'SENT' ? 'success' : 'neutral'}>{t(mailStatusKey(mail.status))}</Pill>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </Card>
+  )
+}
+
+function Body({ model, actions, thread, printThread }: { model: ServiceRecordModel; actions?: ServiceRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
+  const { t, say, day } = useWords()
   const listHref = `${model.prefix}/sales/service`
   const back = (
     <Link className="fw-svc-link" href={listHref}>
       {t('band.back')}
     </Link>
   )
-  if (!model.can.view || model.loaded.status === 'forbidden') return <RecordProblem problem="problem.forbidden" back={back} />
-  if (model.loaded.status === 'loading') return <RecordSkeleton />
-  if (model.loaded.status === 'notFound') return <RecordProblem problem="problem.notFound" back={back} />
-  if (model.loaded.status === 'error') return <RecordProblem problem={model.loaded.problem} back={back} onRetry={() => actions?.onRetry?.()} />
+  // B-TH-259: the states before the case is read sit in the frame with the way back and no thread.
+  const waiting = (title: ReactNode, children: ReactNode) => (
+    <RecordFrame recordType="ServiceCase" personId={model.me} band={{ back: <Link href={listHref}>{t('band.back')}</Link>, title, moreLabel: t('band.more') }} thread={null} threadLabel={t('record.dockLabel')}>
+      {children}
+    </RecordFrame>
+  )
+  if (!model.can.view || model.loaded.status === 'forbidden') return waiting(t('record.title'), <RecordProblem problem="problem.forbidden" back={back} />)
+  if (model.loaded.status === 'loading') return waiting(<Skeleton width={240} height={22} />, <RecordSkeleton />)
+  if (model.loaded.status === 'notFound') return waiting(t('record.title'), <RecordProblem problem="problem.notFound" back={back} />)
+  if (model.loaded.status === 'error') return waiting(t('record.title'), <RecordProblem problem={model.loaded.problem} back={back} onRetry={() => actions?.onRetry?.()} />)
   const record: CaseRecord = model.loaded.record
   const offline = model.live === 'offline'
   const primary = primaryOf(record)
@@ -88,85 +129,67 @@ function Body({ model, actions, panels, panelsPreview }: { model: ServiceRecordM
       {garment && <span className="fw-svc-code">{garment}</span>}
       <span>{t('band.owner', { name: say(personPhrase(record.people, record.ownerId, model.me)) ?? '' })}</span>
       <span>{t('band.opened', { date: day(record.openedAt) })}</span>
-    </span>
-  )
-  const status = (
-    <span className="fw-svc-row">
-      <StatusPill status={record.status} />
-      {record.notifyCustomer && <Pill tone="info">{t('band.tellsCustomer')}</Pill>}
+      {/* B-TH-259: ONE pill in the band (the status); "Tells the customer" is a detail. */}
+      {record.notifyCustomer && <Tag tone="info">{t('band.tellsCustomer')}</Tag>}
       <Freshness asOf={model.asOf} live={model.live} />
     </span>
   )
-  const tabs = RECORD_TABS.map((tab) => ({ id: tab, label: t(`tab.${tab}`), count: tab === 'linked' ? record.links.length : tab === 'activity' ? record.mails.length || null : null }))
-  const activity = panels ?? (panelsPreview ? <RecordPanelsView model={panelsPreview} /> : null)
+  // B-TH-259: tabs 5 → 3 — Case counts its status mails, Linked records & actions its records.
+  const tabs: TabItem[] = RECORD_TABS.map((tab) => ({ id: tab, href: recordHref(model.prefix, record.id, tab), label: t(`tab.${tab}`), count: tab === 'linked' ? record.links.length : tab === 'case' ? record.mails.length || null : null }))
 
   return (
     <div className="fw-svc">
       <RecordFrame
-        back={{ href: listHref, label: t('band.back') }}
-        title={`${record.number} · ${record.party ? record.party.legalName : t('row.rider')}`}
-        meta={meta}
-        status={status}
-        actions={
-          <>
-            {primaryButton}
-            <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" triggerProps={{ 'aria-label': t('band.more') }} items={menu} />
-          </>
-        }
-        tabs={tabs}
-        active={model.tab}
-        tabHref={(tab) => recordHref(model.prefix, record.id, tab as (typeof RECORD_TABS)[number])}
+        recordType="ServiceCase"
+        personId={model.me}
+        threadLabel={t('record.dockLabelOf', { number: record.number })}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: <Link href={listHref}>{t('band.back')}</Link>,
+          title: `${record.number} · ${record.party ? record.party.legalName : t('row.rider')}`,
+          status: <StatusPill status={record.status} />,
+          meta,
+          primary: primaryButton ?? undefined,
+          more: menu,
+          moreLabel: t('band.more'),
+        }}
       >
-        {offline && <Banner tone="warning" title={t('record.offline')} />}
-        {model.stale && (
-          <Banner
-            tone="warning"
-            title={t('record.stale', { time: model.stale })}
-            action={
-              <Button size="sm" variant="quiet" onClick={() => actions?.onReload?.()}>
-                {t('record.reload')}
-              </Button>
-            }
-          />
-        )}
-        {record.closed && <Banner tone="info" title={t('record.closedBanner', { date: day(record.closed.at), name: say(personPhrase(record.people, record.closed.byId, model.me)) ?? '' })}>{record.closed.reason}</Banner>}
-        <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
-        {model.tab === 'case' && <CaseTab model={model} record={record} actions={actions} />}
-        {model.tab === 'warranty' && <WarrantyTab model={model} record={record} actions={actions} />}
-        {model.tab === 'linked' && <LinkedTab model={model} record={record} actions={actions} />}
-        {model.tab === 'actions' && <ActionsTab model={model} record={record} actions={actions} />}
-        {model.tab === 'activity' && (
-          <div className="fw-svc-stack">
-            <Card padded>
-              <section className="fw-svc-stack" aria-labelledby="svc-mails">
-                <h2 id="svc-mails" className="fw-svc-h2">
-                  {t('mails.title')}
-                </h2>
-                <p className="fw-svc-hint">{record.notifyCustomer ? (record.contact?.email ? t('mails.on', { to: record.contact.email }) : t('mails.onNoContact')) : t('mails.off')}</p>
-                {record.mails.length === 0 ? (
-                  <EmptyState title={t('mails.none')} />
-                ) : (
-                  <ul className="fw-svc-list">
-                    {record.mails.map((mail) => (
-                      <li key={mail.id}>
-                        <span className="fw-svc-cell">
-                          <span>{mail.subject}</span>
-                          <span className="fw-svc-hint">{t('mails.to', { to: mail.to.join(', '), when: when(mail.queuedAt) })}</span>
-                        </span>
-                        <Pill tone={mail.status === 'FAILED' || mail.status === 'BOUNCED' || mail.status === 'COMPLAINED' ? 'danger' : mail.status === 'DELIVERED' || mail.status === 'SENT' ? 'success' : 'neutral'}>{t(mailStatusKey(mail.status))}</Pill>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </Card>
-            {activity ?? (
-              <Card padded>
-                <EmptyState title={t('activity.noThread')} description={say({ key: 'held.right', params: { right: 'right.threads.read' } }) ?? ''} />
-              </Card>
+        <div className="fw-svc-stack">
+          <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+          {/* B-TH-259: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+          <RecordNotices>
+            <NoticeLine notice={model.notice} onDismiss={actions?.onDismissNotice} />
+            {record.closed && <Banner tone="info" title={t('record.closedBanner', { date: day(record.closed.at), name: say(personPhrase(record.people, record.closed.byId, model.me)) ?? '' })}>{record.closed.reason}</Banner>}
+            {offline && <Banner tone="warning" title={t('record.offline')} />}
+            {model.stale && (
+              <Banner
+                tone="warning"
+                title={t('record.stale', { time: model.stale })}
+                action={
+                  <Button size="sm" variant="quiet" onClick={() => actions?.onReload?.()}>
+                    {t('record.reload')}
+                  </Button>
+                }
+              />
             )}
-          </div>
-        )}
+          </RecordNotices>
+          {model.tab === 'case' && (
+            // B-TH-259 (R1-G04): Case, then the status mails sent to the customer.
+            <div className="fw-svc-stack">
+              <CaseTab model={model} record={record} actions={actions} />
+              <StatusMails record={record} />
+            </div>
+          )}
+          {model.tab === 'warranty' && <WarrantyTab model={model} record={record} actions={actions} />}
+          {model.tab === 'linked' && (
+            // B-TH-259: Linked records & actions — the records linked, then the actions that make one (each lands in the list above).
+            <div className="fw-svc-stack">
+              <LinkedTab model={model} record={record} actions={actions} />
+              <ActionsTab model={model} record={record} actions={actions} />
+            </div>
+          )}
+        </div>
       </RecordFrame>
       <RecordDialogs model={model} record={record} actions={actions} />
     </div>

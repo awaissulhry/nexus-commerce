@@ -116,7 +116,7 @@ function DocumentsPart({ party }: { party: Party }) {
         qualifications: state.documents.qualifications,
         can: state.can,
         today: state.today,
-        questionnaireHref: state.can.questionnaire ? `${pathname}?tab=questionnaire` : null,
+        questionnaireHref: state.can.questionnaire ? `${pathname}?tab=documents#supplier-questionnaire` : null, // B-TH-260: one tab now
         notice: state.documents.notice,
         dialog: state.documents.dialog,
         companies: state.companies,

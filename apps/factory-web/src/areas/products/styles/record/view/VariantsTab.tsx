@@ -16,7 +16,7 @@ import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
 import type { StyleDepthSlots } from '../overview/slots'
 
 /**
- * SCR-041 Colourways & sizes: the size range (scale, sizes, base size; Apply says first how many SKUs it adds or
+ * SCR-041 Overview & variants › Colourways & sizes (B-TH-261: Colourways & sizes is part of the overview now): the size range (scale, sizes, base size; Apply says first how many SKUs it adds or
  * switches off), the body measures of the range, the colourways (main colour from the library), and the colour × size
  * SKU matrix — Space switches a cell, Shift+Space a whole colourway, the arrows move, Enter opens the cell (SKU, GTIN,
  * certificate coverage). A cell a valid certificate does not cover carries a mark (it blocks release, labels and
@@ -326,7 +326,6 @@ function MatrixCard({ style, model, actions, depth }: { style: StyleView; model:
                 { keys: ['⇧', 'Space'], does: t('matrix.keys.row') },
                 { keys: ['↵'], does: t('matrix.keys.open') },
               ]}
-              onHelp={() => actions?.onDialog?.({ kind: 'help' })}
             />
           </div>
         </div>

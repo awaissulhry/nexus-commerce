@@ -5,6 +5,8 @@ import type { EmployeesAddress } from '../_shared/model'
 import { blankNewDraft } from './use-dialogs'
 import { personOf, type EmployeesDialog, type EmployeesListModel } from './view-model'
 import { EmployeesView } from './view/EmployeesView'
+// ---- B-TH-271 (PL6): the team's made-up office notes docked in its window ----
+import { designDockedThread } from '../../_shared/record-frame/fixtures'
 
 /**
  * SCR-084 — Employees (People › Main) with made-up data only: the register (inline team and home line; one cell saving,
@@ -18,6 +20,8 @@ import { EmployeesView } from './view/EmployeesView'
 interface EmployeesCase {
   role: PeopleRole
   list: EmployeesListModel
+  /** B-TH-271: the open team's office notes — written (default), still empty (folded to "Add a note"), or none (no right). */
+  teamThread?: 'notes' | 'empty' | 'none'
 }
 
 const ADDRESS: EmployeesListModel['address'] = { tile: null, rows: 'ACTIVE', q: '', view: 'people', isNew: false, isImport: false, lineId: null, teamId: null }
@@ -103,7 +107,10 @@ const teamRows = [PEOPLE.paolo, PEOPLE.sara, PEOPLE.rita].map((person) => ({
 }))
 
 function EmployeesDesign({ model }: { model: EmployeesCase }) {
-  return inShell('/people/employees', createElement(EmployeesView, { model: model.list }), model.role)
+  // B-TH-271: the open team's office notes in its own words (code and name), notes only; none without threads.read and people.view.
+  const team = model.list.openTeamId ? ((model.list.teams.items ?? []).find((entry) => entry.id === model.list.openTeamId) ?? null) : null
+  const teamThread = team && model.teamThread !== 'none' ? designDockedThread({ recordType: 'Team', record: `${team.code} ${team.name}`, party: null }) : null
+  return inShell('/people/employees', createElement(EmployeesView, { model: model.list, teamThread, teamThreadEmpty: model.teamThread === 'empty' }), model.role)
 }
 
 export const designScreen = defineDesignScreen<EmployeesCase>({
@@ -126,6 +133,11 @@ export const designScreen = defineDesignScreen<EmployeesCase>({
     { id: 'teams', label: 'Teams view: lines, teams and leads with today\'s loans', model: list('hr', {}, { view: 'teams' }), note: 'x selects members, m moves them.' },
     { id: 'teams-line', label: 'Teams view on one line (a loan row\'s link)', model: list('hr', {}, { view: 'teams', lineId: LINE_B.id }) },
     { id: 'teams-selected', label: 'Teams view: two members selected → Move 2 to…', model: list('hr', { selected: [`${TEAMS[0]!.id}:${PEOPLE.paolo.id}`, `${TEAMS[0]!.id}:${PEOPLE.luca.id}`] }, { view: 'teams' }) },
+    // ---- B-TH-271 (PL6, picture 40): a team's window — its facts and its office notes docked beside them.
+    { id: 'team-window', label: 'B-TH-271 · A team’s window: its lead, members and loans, its office notes docked (PL6)', model: list('hr', { openTeamId: TEAMS[0]!.id }, { view: 'teams' }), note: '“Open the team” on its card (or its ⋯). Office notes only: a team has no party, nothing reaches the floor unless ticked, no read record. J / K walk the teams shown; Esc closes.' },
+    { id: 'team-window-empty', label: 'B-TH-271 · No notes yet: the thread folds to a slim “Add a note” column', model: { ...list('hr', { openTeamId: TEAMS[1]!.id }, { view: 'teams' }), teamThread: 'empty' } },
+    { id: 'team-window-no-notes', label: 'B-TH-271 · Without threads.read or people.view: the window is the team alone', model: { ...list('hr', { openTeamId: TEAMS[0]!.id }, { view: 'teams' }), teamThread: 'none' } },
+    // ---- end B-TH-271
     { id: 'teams-empty', label: 'Teams view: no teams yet', model: list('hr', { teams: { items: [], problem: null } }, { view: 'teams' }) },
     { id: 'new', label: 'New employee: empty', model: list('hr', { dialog: { kind: 'new', draft: blankNewDraft(SITES[0]!.id, TODAY), agencies: null, busy: false, problem: null, field: null } }) },
     { id: 'new-filled', label: 'New employee filled, with the floor sign-in', model: list('hr', { dialog: filledNew }) },

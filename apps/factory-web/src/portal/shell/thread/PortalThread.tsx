@@ -10,6 +10,10 @@ import { fetchThread, postMessage, type PartnerMessageRead, type PartnerRecord, 
 // B-TH-229: reading marks the conversation read for this portal person.
 import { markThreadRead } from '../api'
 import { usePortalFrame, usePortalLive, usePortalUnsaved } from '../frame'
+// ---- B-TH-273: docked in the portal record frame — the person's own new count goes to its "Messages (2 new)" button, and the
+// conversation is marked read only while it is on screen (never behind the narrow page's button).
+import { usePortalRecordFrame } from '../record/PortalRecordFrame'
+// ---- end B-TH-273
 import { THREAD_BODY_LIMIT, threadHeldKey } from '../thread-model'
 import { ThreadView } from '../view/ThreadView'
 
@@ -51,6 +55,14 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
   const box = useRef<HTMLDivElement>(null)
   const told = useRef({ onRecord, onMissing, onMessages })
   told.current = { onRecord, onMissing, onMessages }
+  // ---- B-TH-273
+  const dockFrame = usePortalRecordFrame()
+  const onScreen = dockFrame ? dockFrame.onScreen : true
+  const reportNew = dockFrame?.reportNew
+  useEffect(() => {
+    if (state === 'ready') reportNew?.(read?.reading?.newCount ?? 0)
+  }, [state, read, reportNew])
+  // ---- end B-TH-273
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -85,12 +97,17 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
   // person's own mark: the DS PartnerThread draws no new mark and nobody sees who read what.
   useEffect(() => {
     const newest = read?.messages[0]?.id
-    if (state !== 'ready' || !newest || (read?.reading?.newCount ?? 0) <= 0) return
+    // B-TH-273: only while the conversation is on screen (docked, or the narrow page's full-width view open).
+    if (state !== 'ready' || !newest || (read?.reading?.newCount ?? 0) <= 0 || !onScreen) return
     let timer: ReturnType<typeof setTimeout> | undefined
     const later = () => {
       clearTimeout(timer)
       timer = setTimeout(() => {
-        if (document.visibilityState === 'visible') void markThreadRead(frame.api, type, id, newest).catch(() => undefined)
+        // B-TH-273: the frame's button follows the count the API answers after the mark.
+        if (document.visibilityState === 'visible')
+          void markThreadRead(frame.api, type, id, newest)
+            .then((answer) => reportNew?.(answer.reading.newCount))
+            .catch(() => undefined)
       }, 1_000)
     }
     if (document.visibilityState === 'visible') later()
@@ -100,7 +117,7 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
       clearTimeout(timer)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [state, read, frame.api, type, id])
+  }, [state, read, frame.api, type, id, onScreen, reportNew])
 
   // "Ask a question" opens the box with the focus in it.
   useEffect(() => {
@@ -142,12 +159,13 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
         side: message.side === 'COMPANY' ? 'company' : 'partner',
         channel: message.channel === 'EMAIL' ? 'email' : message.channel === 'PORTAL' ? 'portal' : 'app',
         author: message.author,
-        body: message.body,
+        // B-TH-273 (B-TH-079, T3-F14): a message removed after a privacy request says so; a files-only message stays as it is.
+        body: message.erased ? t('thread.erased') : message.body,
         attachments: message.attachments.map((file) => ({ id: file.id, name: file.originalName, size: sizeText(file.sizeBytes, locale), href: `/api/files/${encodeURIComponent(file.id)}/download` })),
         at: message.at,
         atText: formatDateTime(message.at, { locale }),
       }))
-  }, [read, older, locale])
+  }, [read, older, locale, t])
 
   // B-TH-222
   useEffect(() => {

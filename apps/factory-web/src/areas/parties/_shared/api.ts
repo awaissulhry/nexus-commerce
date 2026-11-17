@@ -319,6 +319,11 @@ export const updateTaxIdentity = async (api: ApiClient, partyId: string, identit
 export const checkVies = (api: ApiClient, partyId: string, body: { companyId?: string } = {}, key: string = newIdempotencyKey()) =>
   api.post(`${party(partyId)}/vies-checks`, { body, schema: viesAnswer, idempotencyKey: key })
 
+// ---- B-TH-260 (B-TH-070): the band's "Projects (n)" — this party's projects the reader may see (GET /projects/counts, threads.read). ----
+const projectCountsSchema = z.object({ open: z.number().int(), all: z.number().int() })
+export const projectCounts = (api: ApiClient, partyId: string, signal?: AbortSignal) => api.get('/projects/counts', { query: { partyId }, schema: projectCountsSchema, signal })
+// ---- end B-TH-260
+
 export const viesHistory = (api: ApiClient, partyId: string, cursor?: string | null) =>
   api.get(`${party(partyId)}/vies-checks`, { query: { limit: 50, cursor: cursor ?? undefined }, schema: historyAnswer })
 

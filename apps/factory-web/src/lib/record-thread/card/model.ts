@@ -10,8 +10,11 @@ import type { Tone } from '@nexus/ui/primitives'
  *
  * B-TH-236 (TH-3): Correct (a new message linked to the old one, never an edit), "In reply to …", "Corrected below", the amount
  * of an office note (price readers only) and the 10 seconds to take a mail back ("Sending to Brand Alpha… · Undo").
- * Not drawn until the back end has it (design kit §5): pins (N4), the erased card (thread-G09), files not kept from a mail
- * (thread-G10).
+ * Not drawn until the back end has it (design kit §5): pins (N4).
+ *
+ * B-TH-255 (TH-6, on B-TH-079): the erased card — "Message removed after a privacy request" for a message whose writer was erased
+ * (thread-G09; never a message that only carries files) — and the files of an inbound mail that were not kept, with why, under its
+ * message (thread-G10; the office only: the API sends them to the office, never a signature logo).
  */
 
 export const CARD_KINDS = ['theirs', 'ours', 'note', 'floor'] as const
@@ -89,7 +92,22 @@ export interface CardMessage {
   correctedBy?: { id: string; at: string } | null
   mine?: boolean
   // ---- end B-TH-236
+  // ---- B-TH-255 (B-TH-079; T3-F14, T3-F15): erased after a privacy request (its writer's name and words blanked by the erasure — never
+  // a message that only carries files), and — office only — the files of an inbound mail that were not kept, with why.
+  erased?: boolean
+  skipped?: readonly SkippedFile[]
+  // ---- end B-TH-255
 }
+
+// ---- B-TH-255: a file of an inbound mail that was not kept (the API's skippedAttachments; never a signature logo).
+export interface SkippedFile {
+  name: string
+  contentType: string
+  sizeBytes: number
+  /** factory-domain email-in/rules SKIP_REASONS (without `inline`): type_not_allowed · too_large · empty · too_many. */
+  reason: string
+}
+// ---- end B-TH-255
 
 /** B-TH-236 (B-TH-050): a message another one points at, as a card names it ("In reply to Alma, 14 Nov: …"). */
 export interface CardLink {
@@ -329,5 +347,44 @@ export function amountWords(amount: { readonly value: number; readonly currency:
     return new Intl.NumberFormat(intlLocale, { style: 'currency', currency: amount.currency }).format(units)
   } catch {
     return `${units.toFixed(places)} ${amount.currency}`
+  }
+}
+
+// ── B-TH-255 (B-TH-079; T3-F14 erased, T3-F15 files not kept) ─────────────────────────────────────────────────────────
+
+/**
+ * Why a file of an inbound mail was not kept (factory-domain email-in/rules SKIP_REASONS; the test holds them together — the domain's
+ * rules reach node:crypto, so a browser module never imports them). `inline` (a signature logo) is never listed: skipped silently.
+ */
+export const SKIP_REASON_CODES = ['type_not_allowed', 'too_large', 'empty', 'too_many'] as const
+
+/** The reason's words: a key of record-thread-card (`skipped.reason.too_large`); an unknown code says "not kept" plainly. */
+export const skipReasonKey = (reason: string): string => ((SKIP_REASON_CODES as readonly string[]).includes(reason) ? `skipped.reason.${reason}` : 'skipped.reason.other')
+
+/**
+ * What a card's body says (T3-F14): the words; "Message removed after a privacy request" when the writer was erased (the API's
+ * `erased`); nothing more when it only carries files (an empty text with files is NEVER the erased card); nothing when it has neither
+ * (its files are counted below: "1 file you cannot open").
+ */
+export function bodyKind(message: Pick<CardMessage, 'erased' | 'body' | 'files'> & Partial<Pick<CardMessage, 'hiddenFiles' | 'lockedSheets'>>): 'erased' | 'text' | 'files' | 'empty' {
+  if (message.erased) return 'erased'
+  if (message.body.trim() !== '') return 'text'
+  return message.files.length > 0 || (message.hiddenFiles ?? 0) > 0 || (message.lockedSheets ?? 0) > 0 ? 'files' : 'empty'
+}
+
+/**
+ * The line under an inbound mail (T3-F15): "2 files in this e-mail were not kept: logo.ai (type not accepted), clip.mov (too
+ * large)" — each file by its name with the reason's words key; a signature logo (`inline`) is never listed. Null: nothing was dropped.
+ */
+export function skippedLine(skipped: readonly SkippedFile[] | undefined): { readonly count: number; readonly items: readonly { readonly name: string; readonly reasonKey: string }[] } | null {
+  const items = (skipped ?? []).filter((file) => file.reason !== 'inline').map((file) => ({ name: file.name, reasonKey: skipReasonKey(file.reason) }))
+  return items.length === 0 ? null : { count: items.length, items }
+}
+
+/** The API message's depth as the card carries it (the office read's `erased` and `skippedAttachments`). */
+export function cardDepth(message: { readonly erased?: boolean | undefined; readonly skippedAttachments?: readonly SkippedFile[] | undefined }): Pick<CardMessage, 'erased' | 'skipped'> {
+  return {
+    ...(message.erased ? { erased: true } : {}),
+    ...(message.skippedAttachments && message.skippedAttachments.length > 0 ? { skipped: message.skippedAttachments.map((file) => ({ name: file.name, contentType: file.contentType, sizeBytes: file.sizeBytes, reason: file.reason })) } : {}),
   }
 }

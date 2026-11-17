@@ -7,6 +7,8 @@ import { DEEP, DEEP_QUEUE, deep, deepRecord, media, PRESS_LOCK, trail, viewsOf }
 import { groupOfRecord, mergeDraftOf, retarget, type MergeGroup } from './depth/model'
 import type { RequestDetailModel, RequestDialog, RequestsListModel } from './view-model'
 import { RequestsView } from './view/RequestsView'
+// ---- B-TH-271 (PL6): the request's made-up thread docked in its detail window (office notes only) ----
+import { designDockedThread } from '../../_shared/record-frame/fixtures'
 
 /**
  * SCR-148 — Machine requests (Plant › Maintenance) with made-up data only: the queue (unsafe first, then the oldest)
@@ -23,6 +25,8 @@ import { RequestsView } from './view/RequestsView'
 interface RequestsCase {
   role: PlantRole
   list: RequestsListModel
+  /** B-TH-271: the open request's thread — notes (default), still empty (folded to "Add a note"), or none (no threads.read). */
+  thread?: 'notes' | 'empty' | 'none'
 }
 
 const sites = SITES.map((site) => ({ id: site.id, code: site.code, name: site.name }))
@@ -129,7 +133,10 @@ const report = (over: Partial<Extract<RequestDialog, { kind: 'report' }>> = {}):
 })
 
 function RequestsDesign({ model }: { model: RequestsCase }) {
-  return inShell('/plant/requests', createElement(RequestsView, { model: model.list }), model.role)
+  // B-TH-271: the open request's thread in its own words (the machine's number), office notes only.
+  const open = model.list.detail?.loaded.status === 'ready' ? model.list.detail.loaded.value.request : null
+  const thread = open && model.thread !== 'none' ? designDockedThread({ recordType: 'MaintenanceRequest', record: open.machine.assetNumber, party: null }) : null
+  return inShell('/plant/requests', createElement(RequestsView, { model: model.list, thread, threadEmpty: model.thread === 'empty' }), model.role)
 }
 
 const lockstitch = SYMPTOM_LIST.filter((entry) => entry.classId === null || entry.classId === MACHINES.sew3.class.id)
@@ -144,6 +151,11 @@ export const designScreen = defineDesignScreen<RequestsCase>({
     { id: 'tile-duplicates', label: 'Tile pressed: possible duplicates', model: list('maintenance', { address: { view: 'open', tile: 'DUPLICATES', siteId: null }, rows: { items: [DEEP.thread, DEEP.threadAgain], truncated: false, more: false, problem: null } }) },
     { id: 'one-site', label: 'One site chosen (no Site column), and a closed request in "All"', model: list('maintenance', { address: { view: 'all', tile: null, siteId: SITES[0]!.id }, rows: { items: [...DEEP_QUEUE, DEEP.closed], truncated: false, more: true, problem: null } }) },
     { id: 'detail-unsafe', label: 'Detail: an unsafe request waiting for its sign-safe (photo, voice note, a technician on the way)', model: list('maintenance', { detail: detail(UNSAFE_RECORD) }), note: 'S signs it safe (a fresh code); close and merge are held while it is locked; L is held: the machine is locked already.' },
+    // ---- B-TH-271 (PL6, picture 40): the request's own thread docked in the window's right column (office notes only).
+    { id: 'detail-thread', label: 'B-TH-271 · The request’s notes docked in the window (PL6): office notes only, Activity’s tools in its ⋯', model: list('maintenance', { detail: detail(THREAD_RECORD) }), note: 'The thread sits in the window’s right column (~40 % of the 1160 px window) beside the content, sticky while it scrolls. A maintenance request has no party: notes only, no "Reply to". J / K, A, M, C, D, L, S stay the window’s keys outside the thread.' },
+    { id: 'detail-thread-empty', label: 'B-TH-271 · No notes yet: the thread folds to a slim “Add a note” column', model: { ...list('maintenance', { detail: detail(NOISE_RECORD) }), thread: 'empty' }, note: 'Add a note opens it at its width with the box ready; another request (J / K) folds again until its own thread says otherwise.' },
+    { id: 'detail-no-thread', label: 'B-TH-271 · Without threads.read: the window is its content alone', model: { ...list('maintenance', { detail: detail(NOISE_RECORD) }), thread: 'none' } },
+    // ---- end B-TH-271
     { id: 'detail-photo', label: 'Detail: the photo full size (Lightbox)', model: list('maintenance', { detail: detail(UNSAFE_RECORD, { lightbox: 0 }) }) },
     { id: 'detail-duplicate', label: 'Detail: escalated twice (Routed to, the trail), a possible duplicate and the third-failure hint', model: list('maintenance', { detail: detail(THREAD_RECORD) }), note: 'D opens Merge requests; L locks the machine as unsafe; M makes a job; J / K walk the queue.' },
     { id: 'detail-fixed', label: 'Detail: what the requester sees — fixed, It works again offered', model: list('maintenance', { detail: detail(FIXED_RECORD) }), note: 'On my way is held: the job was handed back.' },

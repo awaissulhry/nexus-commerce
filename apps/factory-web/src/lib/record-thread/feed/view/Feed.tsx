@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ArrowDown, ChevronsUpDown, History, Lock, MailOpen, Mail, Tablet, WifiOff } from 'lucide-react'
+// B-TH-255: the lines of what the View hides and of the mail that waits for a person.
+import { EyeOff, MailWarning } from 'lucide-react'
+import Link from 'next/link'
 import { Banner, EmptyState } from '@nexus/ui/components'
 import { Button, Skeleton } from '@nexus/ui/primitives'
 import { rightWords } from '../../../i18n/messages'
@@ -11,7 +14,8 @@ import type { Locale } from '../../../i18n/locales'
 import { authorWords, type CardContext, type CardMessage } from '../../card/model'
 import { MessageCard, type CardActions } from '../../card/view/MessageCard'
 import { dayOf, dayWord, shortDateOf, timeOf } from '../../parts/time'
-import { arrivedAtEnd, feedRows, gistOf, PAGE_SIZE, verbKey, walkTarget, whoWords, type FeedEvent, type FeedRow } from '../model'
+import { arrivedAtEnd, feedRows, PAGE_SIZE, verbKey, walkTarget, whoWords, type FeedEvent, type FeedRow } from '../model'
+import { foldedGist, hiddenNewLine, waitingMailLine, type FeedWaitingMail } from '../model' // B-TH-255
 import '../../parts/parts.css'
 import '../feed.css'
 
@@ -38,6 +42,11 @@ export interface FeedModel {
   firstNewId?: string | null
   newSince?: number
   // ---- end B-TH-229
+  // ---- B-TH-255 (B-TH-079): the messages new to the reader that the Head's View hides (the API's `hiddenNew` for the view; 0 or absent
+  // on All), and the mail for this conversation that waits for a person (the office read's `waitingMail`; null: none).
+  hiddenNew?: number
+  waitingMail?: FeedWaitingMail | null
+  // ---- end B-TH-255
 }
 
 export interface FeedActions extends CardActions {
@@ -47,6 +56,8 @@ export interface FeedActions extends CardActions {
   onReload?: () => void
   /** B-TH-229: the newest message that was on screen for a second (the container marks the thread read up to it, T1-F04). */
   onSeen?: (messageId: string) => void
+  /** B-TH-255: "Show all" on the line of what the View hides (the Head's View back to All). */
+  onShowAll?: () => void
 }
 
 /**
@@ -254,7 +265,11 @@ export function Feed({ model, actions, remind }: { model: FeedModel; actions?: F
       )}
       <div ref={feedRef} className="fw-rt-feed" role="feed" tabIndex={0} aria-label={t('feed.label')} aria-busy={model.older === 'loading'} onScroll={onScroll} onKeyDown={onKeyDown}>
         {model.messages.length === 0 && model.events.length === 0 ? (
-          <EmptyState icon={<MailOpen size={22} aria-hidden />} title={t('state.empty')} description={t('state.emptyBody')} />
+          <>
+            <EmptyState icon={<MailOpen size={22} aria-hidden />} title={t('state.empty')} description={t('state.emptyBody')} />
+            {/* B-TH-255: a view that hides everything, or mail that waits, still says so under the empty state. */}
+            <EndLines model={model} actions={actions} t={t} />
+          </>
         ) : (
           <>
             {model.more &&
@@ -295,6 +310,8 @@ export function Feed({ model, actions, remind }: { model: FeedModel; actions?: F
                 onOpenMessage={(id) => setOpenIds((list) => [...list, id])}
               />
             ))}
+            {/* B-TH-255: what the View hides and the mail that waits for a person, at the end where new messages arrive. */}
+            <EndLines model={model} actions={actions} t={t} />
           </>
         )}
       </div>
@@ -378,7 +395,7 @@ function Row({
       >
         <Icon size={13} aria-hidden />
         <span className="fw-rt-line-who">{author}</span>
-        <span className="fw-rt-line-gist">{gistOf(message.body)}</span>
+        <span className="fw-rt-line-gist">{gistWords(message, card)}</span>
         <time dateTime={message.at}>{timeOf(message.at, locale)}</time>
       </button>
     )
@@ -432,6 +449,57 @@ function Row({
             <li key={index}>{line}</li>
           ))}
         </ul>
+      )}
+    </>
+  )
+}
+
+// ── B-TH-255 (B-TH-079; T1-F05, T4-F10) ─────────────────────────────────────────────────────────────────────────────
+
+/** A folded message's line: its first words; "Message removed (privacy request)" when erased; "2 files" when it carries files only. */
+function gistWords(message: CardMessage, card: Translate): string {
+  const gist = foldedGist(message)
+  return 'text' in gist ? gist.text : card(gist.key, gist.count === undefined ? undefined : { count: gist.count })
+}
+
+/**
+ * The quiet lines at the end of the feed: "1 new message hidden by this view · Show all" while the Head's View hides news (T1-F05),
+ * then the mail for this conversation that waits for a person (T4-F10) — for a reader with email.triage how many, why and Review
+ * (Home › Mail to sort); for anyone else "A reply waits for a colleague to check it", never the sender or why (W07, W08, W22, W34).
+ */
+function EndLines({ model, actions, t }: { model: FeedModel; actions?: FeedActions; t: Translate }) {
+  const hidden = hiddenNewLine(model.hiddenNew)
+  const waiting = waitingMailLine(model.waitingMail)
+  if (!hidden && !waiting) return null
+  return (
+    <>
+      {hidden && (
+        <p className="fw-rt-endline is-hidden-new" role="status">
+          <EyeOff size={14} aria-hidden />
+          <span>{t('hidden.line', { count: hidden.count })}</span>
+          {actions?.onShowAll && (
+            <>
+              <span aria-hidden>·</span>
+              <Button size="sm" variant="link" onClick={actions.onShowAll}>
+                {t('hidden.showAll')}
+              </Button>
+            </>
+          )}
+        </p>
+      )}
+      {waiting && (
+        <p className="fw-rt-endline is-waiting" role="note">
+          <MailWarning size={14} aria-hidden />
+          <span>{waiting.reasons.length > 0 ? t(`${waiting.key}Why`, { count: waiting.count, why: waiting.reasons.map((key) => t(key)).join(', ') }) : t(waiting.key, { count: waiting.count })}</span>
+          {waiting.href && (
+            <>
+              <span aria-hidden>·</span>
+              <Link className="fw-rt-endline-link" href={waiting.href}>
+                {t('waiting.open')}
+              </Link>
+            </>
+          )}
+        </p>
       )}
     </>
   )

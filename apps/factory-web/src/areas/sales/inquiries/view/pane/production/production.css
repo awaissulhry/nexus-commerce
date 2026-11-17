@@ -1,0 +1,68 @@
+/* B-TH-290: production's answer — the list's cell, Details' Production section and its editor (design-system tokens only). */
+
+.fw-prod-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-prod h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-prod:focus {
+  outline: none;
+}
+
+.fw-prod:focus-visible {
+  box-shadow: var(--nds-focus-ring);
+}
+
+.fw-prod-now {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+
+.fw-prod-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  padding: var(--nds-space-10);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-prod-suggest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-prod-suggest-title {
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-prod-suggestion {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}
+
+.fw-prod-lines {
+  margin: 0;
+  padding-inline-start: var(--nds-space-16);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-prod-office {
+  font-size: var(--nds-font-size-xs);
+}

@@ -8,6 +8,7 @@ import { Button, Input, Pill, SegmentedControl, Toggle } from '@nexus/ui/primiti
 import { ListFrame } from '../../../../list-frame/ListFrame'
 import type { LibraryChip } from '../api'
 import { bulkDownloadHeld, kindKey, type Grouping, type LibraryRow } from '../model'
+import { rowAskHref } from '../model' // B-TH-276
 import { languageWords } from '../preview/model'
 import { useDocumentWords } from '../words'
 
@@ -153,9 +154,12 @@ export function LibrarySection({ model, actions }: { model: LibraryModel; action
         description: held ?? undefined,
         onSelect: () => latest.current.actions?.onTab?.(data, file.fileId),
       }))
+      // B-TH-276 (P-CUS-DOCS [P10]): an invoice's document (a credit note's too) asks about its invoice on the conversation's page.
+      const ask = rowAskHref(now.prefix, data)
       const items: MenuItemDef[] = [
         ...tabs,
         ...(data.order ? [{ id: 'order', label: t('row.openOrder', { number: data.order.words }), href: `${now.prefix}/open/SalesOrder/${encodeURIComponent(data.order.id)}` }] : []),
+        ...(ask ? [{ id: 'ask', label: t('row.askInvoice'), href: ask }] : []),
       ]
       return (
         <span className="fw-pdoc-actions">

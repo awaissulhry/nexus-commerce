@@ -262,3 +262,41 @@
   flex: none;
   margin: 10px 12px 0;
 }
+
+/* ---- B-TH-255 (T1-F05, T4-F10): the quiet lines at the end of the feed — what the View hides ("1 new message hidden by this view ·
+   Show all") and the mail that waits for a person ("… waits in Mail to sort — sender not a contact · Review"). A dashed edge like the
+   fold: a line about the conversation, never a message. Semantic tokens only. */
+.fw-rt-endline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 0;
+  padding: 7px 10px;
+  min-width: 0;
+  border: 1px dashed var(--nds-border-strong);
+  border-radius: var(--nds-radius-md);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.4;
+  color: var(--nds-text-2);
+  overflow-wrap: anywhere;
+}
+
+.fw-rt-endline svg {
+  flex: none;
+}
+
+.fw-rt-endline > span:not([aria-hidden]) {
+  min-width: 0;
+}
+
+/* Not yellow: in the thread yellow means one thing only, "not sent to the customer" (design kit §3). */
+.fw-rt-endline.is-waiting svg {
+  color: var(--nds-info);
+}
+
+.fw-rt-endline-link {
+  font-weight: 600;
+  color: var(--nds-text-link);
+}
+/* ---- end B-TH-255 */

@@ -39,7 +39,8 @@ const ready = (over: Partial<ReleaseState> = {}, gate = demoGate()): ReleaseStat
 
 describe('Versions & changes: who reads what, the revisions and the pair compared', () => {
   it('the tab reads with the BOM right; its sections ask theirs; the cost needs the grain', () => {
-    expect(STYLE_TABS.indexOf('versions')).toBe(STYLE_TABS.indexOf('activity') - 1)
+    // B-TH-261: the last tab now that Activity is gone (its thread docks beside every tab).
+    expect(STYLE_TABS.indexOf('versions')).toBe(STYLE_TABS.length - 1)
     const all = tabsFor({ view: true, bomView: true } as never)
     expect(all).toContain('versions')
     expect(tabsFor({ view: true, bomView: false } as never)).not.toContain('versions')

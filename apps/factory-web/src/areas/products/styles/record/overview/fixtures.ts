@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../../lib/design/design-screen'
-import { demoStyle, recordModel, REVISIONS } from '../../demo/fixtures'
+import { demoStyle, recordModel, REVISIONS, styleThread } from '../../demo/fixtures'
 import type { StyleRecordViewModel } from '../record-model'
 import { StyleRecordView } from '../view/StyleRecordView'
 import { demoAssign, demoGate, demoLifecycle, demoPrivateLabel, demoRanges, demoStyleType, demoTexts, demoWhereUsed, depthModel } from './demo/fixtures'
@@ -28,13 +28,14 @@ interface Case {
 
 const style = demoStyle()
 const owner = (depth: Partial<StyleDepthModel> = {}, studio: Partial<StyleRecordViewModel> = {}): Case => ({ studio: recordModel('owner', studio), depth: depthModel('owner', depth) })
-const variants = (depth: Partial<StyleDepthModel> = {}, role: 'owner' | 'sales' = 'owner'): Case => ({ studio: recordModel(role, { tab: 'variants' }), depth: depthModel(role, depth) })
+// B-TH-261: Colourways & sizes is part of Overview & variants (the matrix's GTINs are on it).
+const variants = (depth: Partial<StyleDepthModel> = {}, role: 'owner' | 'sales' = 'owner'): Case => ({ studio: recordModel(role, { tab: 'overview' }), depth: depthModel(role, depth) })
 const assign = (extra: Partial<StyleDepthModel['assign']>, depth: Partial<StyleDepthModel> = {}): Case =>
   variants({ dialog: { kind: 'assign' }, assign: { ranges: ready(demoRanges()), rangeId: demoRanges().ranges[0]!.id, preview: ready(demoAssign(style)), done: null, problem: null, ...extra }, ...depth })
 
 const View = ({ model }: { model: Case }) => {
   const value = model.studio.style.status === 'ready' ? model.studio.style.value : style
-  return createElement(StyleRecordView, { model: model.studio, depth: { ...depthSlots(model.depth, undefined, value.skus), markets: model.markets ? createElement(MarketsCard, { model: model.markets }) : null /* B-W2b-283 */ } })
+  return createElement(StyleRecordView, { model: model.studio, thread: styleThread(model.studio) /* B-TH-261 */, depth: { ...depthSlots(model.depth, undefined, value.skus), markets: model.markets ? createElement(MarketsCard, { model: model.markets }) : null /* B-W2b-283 */ } })
 }
 
 const archivedStyle = { status: 'ready' as const, value: demoStyle({ status: 'ARCHIVED' }) }

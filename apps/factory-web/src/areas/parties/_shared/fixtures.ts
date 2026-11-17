@@ -1,8 +1,7 @@
 import { createElement, useEffect, useState, type ReactNode } from 'react'
 import { permissionCheck } from '../../../lib/session/session'
-import { designScreen as panelsScreen } from '../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../record-panels/model'
-import { RecordPanelsView } from '../../../record-panels/view/RecordPanelsView'
+// ---- B-TH-260: the party's made-up docked thread in the record's design cases (RecordFrame beside every tab) ----
+import { designDockedThread } from '../../_shared/record-frame/fixtures'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, OWNER_PERMISSIONS } from '../../../shell/design-data'
 import { officeNavFor } from '../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../shell/office/view/OfficeShellView'
@@ -497,7 +496,7 @@ export const withoutMoney = <Row extends { netAmount?: number }>(rows: readonly 
 // ---- abilities ----
 
 export const LIST_CAN: ListCan = { view: true, manage: true, block: true, vies: true }
-export const RECORD_CAN: RecordCan = { view: true, manage: true, block: true, vies: true, quotes: true, orders: true, purchaseOrders: true, price: true, cost: true, threads: true }
+export const RECORD_CAN: RecordCan = { view: true, manage: true, block: true, vies: true, quotes: true, orders: true, purchaseOrders: true, price: true, cost: true, threads: true, /* B-TH-260 */ projects: true, projectsManage: true }
 
 /**
  * The list design cases keep their own selection, so ticking rows, the header box, shift-click and x work in the
@@ -544,24 +543,20 @@ export function recordModel(side: Side, item: Party, over: Partial<PartyRecordMo
     quotes: loaded(QUOTES),
     orders: loaded(ORDERS),
     purchaseOrders: loaded(PURCHASE_ORDERS),
+    // B-TH-260: the person whose thread width the frame remembers; the band's "Projects (n)" (made-up counts).
+    personId: '0190f0e2-5555-7000-8000-000000000001',
+    projects: { open: 2, all: 3 },
     ...over,
   }
 }
 
-// ---- the record panels on a party record ----
+// ---- B-TH-260: the party's docked thread (it replaces the record panels' Activity and Documents tabs) ----
 
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-const filesCase = panelsScreen.cases.find((item) => item.id === 'files')!.model as RecordPanelsViewModel
-
-/** The record panels as a party record mounts them (thread, files, history), with the party as the mail's recipient. */
-export function panels(item: Party, tab: 'thread' | 'files' = 'thread'): ReactNode {
-  const base = tab === 'files' ? filesCase : conversation
-  const model: RecordPanelsViewModel = {
-    ...base,
-    record: { type: 'Party', id: item.id, companyId: item.companyId },
-    title: item.tradeName ?? item.legalName,
-    party: { id: item.id, name: item.tradeName ?? item.legalName, emails: item.contacts.flatMap((entry) => (entry.email ? [entry.email] : [])) },
-    tab,
-  }
-  return createElement(RecordPanelsView, { model })
+/**
+ * The party's made-up docked thread for a design case: "Reply to <this party>" only (its own made-up name, never another party's),
+ * whom it is to us (a customer or a supplier); none without threads.read.
+ */
+export function partyThread(item: Party, side: Side, can: Pick<RecordCan, 'threads'> = RECORD_CAN): ReactNode {
+  if (!can.threads) return null
+  return designDockedThread({ recordType: 'Party', record: item.code, party: { name: item.tradeName ?? item.legalName, role: side === 'customers' ? 'customer' : 'supplier' } })
 }

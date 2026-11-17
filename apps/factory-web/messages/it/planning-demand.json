@@ -203,7 +203,9 @@
     "SALESMAN": "Campionario vendita",
     "PRE_PRODUCTION": "Pre-produzione",
     "CERTIFICATION": "Campione per prova CE",
-    "BRAND": "Campione del brand"
+    "BRAND": "Campione del brand",
+    "SIZE_SET": "Set di taglie",
+    "TOP_OF_PRODUCTION": "Primi capi di produzione (TOP)"
   },
   "status": {
     "CONFIRMED": "Confermato",

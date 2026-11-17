@@ -14,6 +14,9 @@ import { RecordThread, type RecordThreadActions, type RecordThreadModel } from '
 import { doorHolds, viewsOffered, whoAnswers, type HeadAbilities, type HeadDoor, type HeadModel, type ThreadView } from '../../../lib/record-thread/head/model'
 // B-TH-229: the API's waiting and owner (B-TH-028), "Change owner…".
 import { answersOf } from '../../../lib/record-thread/head/model'
+// B-TH-255: the View sent to the API — how many new messages it hides.
+import { viewQuery } from '../../../lib/record-thread/head/model'
+import { readHiddenNew } from './api'
 import { OwnerDialog } from '../../../lib/record-thread/head/view/OwnerDialog'
 import { setThreadOwner } from './api'
 import { isApiError } from '../../../lib/api/errors'
@@ -71,6 +74,8 @@ export interface DockedHost extends RecordThreadHost {
   partyRole?: 'customer' | 'supplier' | 'partner'
   /** The page's print view (the Head's "Print or save as PDF"); absent: no Print line. */
   printHref?: string
+  /** TH-5 follow-up (B-TH-249): the record reopens its thread with itself (a closed project): neither the head nor the box offers Reopen. */
+  reopenWithRecord?: boolean
 }
 
 const NAMESPACES = [HEAD_NS, FILES_NS, FILES_VIEW_NS, POPUPS_NS, HELPERS_NS, 'records', 'record-approvals', SHARES_NS, 'record-files', 'home-mywork']
@@ -117,6 +122,28 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const kinds = feedKinds(model.feed.messages)
   const views = viewsOffered({ ...kinds, canAudit: held.has('audit.read') })
   const shown: ThreadView = views.includes(view) ? view : 'all'
+  // ---- B-TH-255 (T1-F05): a view is never remembered — another record (or a new visit) opens on All. While a view is on, the API says
+  // how many messages new to the reader it hides (the timeline read with the view's audience), read again whenever a message arrives:
+  // "1 new message hidden by this view · Show all" at the end of the feed, so a forgotten view never hides news.
+  useEffect(() => setView('all'), [key.type, key.id])
+  const [hiddenNew, setHiddenNew] = useState(0)
+  const newestId = base.server.messages[base.server.messages.length - 1]?.id ?? null
+  useEffect(() => {
+    const query = viewQuery(shown)
+    if (!query || !can.read) {
+      setHiddenNew(0)
+      return
+    }
+    const controller = new AbortController()
+    readHiddenNew(api, key, query, controller.signal)
+      .then(setHiddenNew)
+      .catch((error: unknown) => {
+        // A failed count says nothing (never a made-up number); the chip still names the view.
+        if ((error as { name?: string } | null)?.name !== 'AbortError') setHiddenNew(0)
+      })
+    return () => controller.abort()
+  }, [api, key, shown, newestId, can.read])
+  // ---- end B-TH-255
 
   // ── tasks (B-W2a-40: Home's tasks; reading them is home.view, adding tasks.manage + threads.post) ──────────────────────
   const seesTasks = held.has('home.view')
@@ -549,6 +576,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     follow: followers.data ? { following: followers.data.me.following, muted: followers.data.me.muted } : null,
     reminder: reminder.mine?.remindAt ? { at: reminder.mine.remindAt } : null,
     canManage: can.manage,
+    reopenWithRecord: host.reopenWithRecord ?? false, // TH-5 follow-up
     width: frame?.width ?? null,
     compact: frame?.phone ?? false,
     print: Boolean(host.printHref),
@@ -567,11 +595,19 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   }
 
   // B-TH-231: "Use on another record…" on a message's ⋯ for a person who may add files (files.upload), online.
-  const feed = feedForView({ ...model.feed, context: { ...model.feed.context, canTask: abilities.task && !offline, canUseOn: can.upload && !offline } }, shown)
+  // B-TH-255: the line of what the View hides comes with the view's feed (0 on All).
+  const feed = { ...feedForView({ ...model.feed, context: { ...model.feed.context, canTask: abilities.task && !offline, canUseOn: can.upload && !offline } }, shown), hiddenNew: shown === 'all' ? 0 : hiddenNew }
   const shownModel: RecordThreadModel = { ...model, feed }
   const fileOf = (fileId: string) => threadFiles.find((file) => file.id === fileId)
   const threadActions: RecordThreadActions = {
     ...actions,
+    // ---- B-TH-255: "Show all" puts the View back to All. While a view is on, nothing is marked read: the read mark is one place in
+    // the conversation, so marking the newest shown message would mark the messages the view hides as read too (the news they are).
+    onShowAll: () => setView('all'),
+    onSeen: shown === 'all' ? actions.onSeen : undefined,
+    // ---- end B-TH-255
+    // TH-5 follow-up (B-TH-249): a closed project's box offers no Reopen either (the API refuses it; the project's band reopens both).
+    ...(host.reopenWithRecord ? { onReopen: undefined } : {}),
     onTask: (messageId) => {
       const message = model.feed.messages.find((item) => item.id === messageId)
       openTask(message ? { title: message.body.replace(/\s+/g, ' ').trim().slice(0, 120) } : undefined, message?.id)

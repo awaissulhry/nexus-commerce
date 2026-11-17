@@ -7,6 +7,8 @@ import { useLocale } from '../../lib/i18n/provider'
 import { LinkBrandingContext } from '../../shell/links/view/LinkFrameView'
 import { postShareMessage, readLinkShare, readOlderMessages, setShareNotify, shareFileBytes, uploadShareFile } from './api'
 import { pickedProblem, readRefusal, START, writeRefusal, type InviteViewModel } from './model'
+// B-TH-274: the side column sits beside the thread from this width (its "i" sheet closes when the screen grows to it).
+import { TWO_COLUMNS_FROM } from './model'
 import { InviteView } from './view/InviteView'
 
 /** How often an open page reads the record again ("New message or file → the thread updates while open"). */
@@ -20,7 +22,8 @@ const REFRESH_MS = 30_000
  * "E-mail me", uploads files one by one (announce, the bytes to the store, complete) and opens a shared file in a new tab
  * (its bytes read once through the generic files route). A share revoked or ended meanwhile opens nothing: the page turns
  * into the frame's dead link. The tenant's colour goes on the page's pop-ups too (brandPortals, D24). The token stays in the
- * client's `x-factory-link` header.
+ * client's `x-factory-link` header. B-TH-274: it also keeps which pop-up is open over the page — the side column behind "i" on a
+ * narrow screen (closed by itself once the screen is 1280 px or wider: the column is on the page then) or the Files view.
  */
 export function InviteLink({ api }: { api: ApiClient }) {
   const locale = useLocale()
@@ -53,6 +56,18 @@ export function InviteLink({ api }: { api: ApiClient }) {
     }, REFRESH_MS)
     return () => clearInterval(timer)
   }, [load])
+
+  // ---- B-TH-274: the "i" sheet holds the side column only while the screen is narrower than the two columns.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const wide = window.matchMedia(`(min-width: ${TWO_COLUMNS_FROM}px)`)
+    const onChange = () => {
+      if (wide.matches) setModel((now) => (now.sheet === 'side' ? { ...now, sheet: null } : now))
+    }
+    wide.addEventListener('change', onChange)
+    return () => wide.removeEventListener('change', onChange)
+  }, [])
+  // ---- end B-TH-274
 
   const post = async () => {
     const current = latest.current
@@ -168,6 +183,8 @@ export function InviteLink({ api }: { api: ApiClient }) {
         onNotify: (on) => void notify(on),
         onFiles: (files) => void upload(files),
         onOpenFile: (fileId) => void open(fileId),
+        // B-TH-274: the side column behind "i", the Files view.
+        onSheet: (sheet) => setModel((now) => ({ ...now, sheet })),
         onDismiss: (what) =>
           setModel((now) =>
             what === 'post' ? { ...now, postProblem: null } : what === 'notify' ? { ...now, notifyProblem: null } : what === 'upload' ? { ...now, upload: { ...now.upload, problem: null, done: null } } : { ...now, fileProblem: null },

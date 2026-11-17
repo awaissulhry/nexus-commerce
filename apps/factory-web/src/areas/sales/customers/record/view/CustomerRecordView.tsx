@@ -9,25 +9,24 @@ import { useCustomerOverview, type CustomerMoneyModel } from '../../money/overvi
 import type { SupplierDepth } from '../../../../parties/_shared/view/PartyRecordView'
 
 /**
- * SCR-033 Customer record (design sales.customers "records: Customer"): Overview, Addresses & contacts, Tax & terms,
- * Quotes & orders, Documents and Activity of one party, seen from Sales. Requirements and Portal access (W2b) are not
- * drawn. The record is the shared one (areas/parties/_shared); Tax & terms adds the customer's Commercial terms card
- * (B-W2a-49, `terms`: the container mounts it). B-W2a-81: the Overview's Overdue and Returns this year tiles and the
- * open returns and claims under Now, from `money` (what the container reads beside the party).
+ * SCR-033 Customer record (design sales.customers "records: Customer"): Overview, Addresses & contacts, Terms & requirements,
+ * Quotes & orders and Portal access of one party, seen from Sales, on RecordFrame with its thread docked (B-TH-260: Documents and
+ * Activity went to the thread). The record is the shared one (areas/parties/_shared); Terms & requirements adds the customer's
+ * Commercial terms card (B-W2a-49, `terms`: the container mounts it). B-W2a-81: the Overview's Overdue and Returns this year tiles
+ * and the open returns and claims under Now, from `money` (what the container reads beside the party).
  */
 export function CustomerRecordView({
   model,
   actions,
-  panels,
-  documents,
+  thread,
   terms,
   money,
   depth,
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
-  panels?: ReactNode
-  documents?: ReactNode
+  /** B-TH-260: the customer's docked thread (a design case's; the page mounts OfficeRecordThread). */
+  thread?: ReactNode
   terms?: ReactNode
   money?: CustomerMoneyModel
   /** B-W2b-324: the customer in depth (the shared record's `depth` slot), drawn from made-up models in the design. */
@@ -35,7 +34,7 @@ export function CustomerRecordView({
 }) {
   return (
     <WithMessages namespaces={[CUSTOMER_MONEY_NAMESPACE]}>
-      <Customer model={model} actions={actions} panels={panels} documents={documents} terms={terms} money={money} depth={depth} />
+      <Customer model={model} actions={actions} thread={thread} terms={terms} money={money} depth={depth} />
     </WithMessages>
   )
 }
@@ -43,20 +42,18 @@ export function CustomerRecordView({
 function Customer({
   model,
   actions,
-  panels,
-  documents,
+  thread,
   terms,
   money,
   depth,
 }: {
   model: PartyRecordModel
   actions?: PartyRecordActions
-  panels?: ReactNode
-  documents?: ReactNode
+  thread?: ReactNode
   terms?: ReactNode
   money?: CustomerMoneyModel
   depth?: SupplierDepth | undefined
 }) {
   const overview = useCustomerOverview(money ?? null)
-  return <PartyRecordView model={{ ...model, side: 'customers' }} actions={actions} panels={panels} documents={documents} terms={terms} overview={overview} depth={depth} />
+  return <PartyRecordView model={{ ...model, side: 'customers' }} actions={actions} thread={thread} terms={terms} overview={overview} depth={depth} />
 }

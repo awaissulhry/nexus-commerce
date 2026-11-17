@@ -1,4 +1,4 @@
-import type { PanelRead, RecordPanelsViewModel } from '../../../../record-panels/model'
+import type { PanelRead } from '../../../../record-panels/model'
 import type { Assignable, TaskDraft } from '../../../../record-panels/tasks/model'
 import type { WizardActions } from '../../../admin/import/view/ImportWizard'
 import type {
@@ -33,7 +33,7 @@ import type { StyleMaterialApprovals } from '../compliance/materials'
 import type { StyleComposition } from '../compliance/composition'
 import type { PrepacksActions, PrepacksModel } from './prepacks/prepacks-model'
 import type { ProtectorsActions, ProtectorsModel } from './protectors/protectors-model'
-// B-W2b-236: Overview › Sketches and pictures; Files & patterns › Pattern files.
+// B-W2b-236: Overview & variants › Sketches and pictures; Patterns › Pattern files (B-TH-261: the tab names).
 import type { GalleryActions, GalleryModel } from './gallery/gallery-model'
 import type { PatternsActions, PatternsModel } from './files-w2b/patterns-model'
 // B-W2b-235: the routing in depth (Operations tab).
@@ -82,7 +82,6 @@ export type StyleDialog =
   | { kind: 'upload'; documentKind: 'DECLARATION_OF_CONFORMITY' | 'USER_INFORMATION'; language: string }
   /** W2a (B-W2a-66): a task for Compliance about a change that may need the notified body. */
   | { kind: 'tellCompliance'; certificateId: string }
-  | { kind: 'help' }
 
 export interface SearchState<T> {
   query: string
@@ -132,8 +131,13 @@ export interface StyleRecordViewModel {
   notice: StyleNotice | null
   /** Someone else changed the style while this page holds unsaved work. */
   changed: { at: string } | null
-  /** The thread beside the tab (Owner O1, ⌘J, 1280 px and wider). */
-  dockOpen: boolean
+  // ---- B-TH-261: the person (RecordFrame remembers the thread's width per person and record type) and the request the style
+  // draft was made from (GET /sales/inquiries/source?styleId=, read only with sales.inquiries.view; null: none or not read).
+  personId?: string | null
+  madeFrom?: { inquiryId: string; number: string } | null
+  /** Products › Development › Projects: "Start a project" with this style linked (threads.read reads projects, projects.manage makes one). */
+  projects?: { view: boolean; manage: boolean }
+  // ---- end B-TH-261
   /** The fields the last refused write named (`hsCode`, `body/netMassKg` …), for a form to point at. */
   refused?: string[]
   /** W2a: Duplicate style (the band's ⋯). */
@@ -142,7 +146,7 @@ export interface StyleRecordViewModel {
   bomImport: SheetImport | null
   /** W2a: an export of the BOM being made (its format). */
   exporting?: BomExportFormat | null
-  /** B-W2b-95: the Files & patterns tab's Pattern pieces (absent: not read, like idle). */
+  /** B-W2b-95: the Patterns tab's Pattern pieces (absent: not read, like idle). */
   pieces?: PiecesModel
   /** B-W2b-238: Compliance › Material checks — the approvals of the revision's materials (absent: not read). */
   materialApprovals?: StyleMaterialApprovals
@@ -151,7 +155,7 @@ export interface StyleRecordViewModel {
   /** B-W2b-233: the Sizes & measurements tab's Prepacks and Protector placement (absent: not read, like idle). */
   prepacks?: PrepacksModel
   protectors?: ProtectorsModel
-  /** B-W2b-236: Overview › Sketches and pictures and Files & patterns › Pattern files (absent: not read, like idle). */
+  /** B-W2b-236: Overview & variants › Sketches and pictures and Patterns › Pattern files (absent: not read, like idle). */
   gallery?: GalleryModel
   patternFiles?: PatternsModel
   /** B-W2b-235: the Operations tab's routing in depth — times, sizes, variants, checkpoints, settings (absent: not read). */
@@ -168,8 +172,6 @@ export interface StyleRecordViewModel {
   versions?: VersionsModel
   /** B-W2b-245: the Release modal on B-W2b-231's gate while it is open (absent: W1's release check). */
   release?: ReleaseModel
-  /** Design cases: the record panels drawn from made-up data. */
-  panelsPreview?: RecordPanelsViewModel
   /** Design cases: the identity form already being edited. */
   identityDraft?: StylePatch
   /** Design cases: the range card already being edited. */
@@ -181,7 +183,6 @@ export interface StyleRecordViewModel {
 export interface StyleRecordActions {
   onRetry?: () => void
   onReload?: () => void
-  onDock?: () => void
   onDialog?: (dialog: StyleDialog | null) => void
   onDismissNotice?: () => void
   onRevision?: (revisionId: string) => void

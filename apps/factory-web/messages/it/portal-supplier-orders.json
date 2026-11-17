@@ -181,8 +181,6 @@
     "lines": "Righe",
     "confirm": "Conferma o proponi",
     "asn": "Avvisi di spedizione",
-    "documents": "Documenti",
-    "messages": "Messaggi",
     "toAnswer": "Da rispondere"
   },
   "order": {
@@ -355,16 +353,12 @@
     "notConfirmed": "Prima conferma l'ordine: poi annuncia cosa spedisci."
   },
   "docs": {
-    "title": "Documenti",
     "asSent": "{number} come inviato",
     "sentOn": "Inviato il {at} · senza prezzi",
     "pdf": "PDF",
     "openPdf": "Apri il PDF di {number} (senza prezzi) in una nuova scheda",
-    "ddt": "Tuo DDT {number}",
-    "ddtOf": "Con l'avviso di spedizione {notice}",
     "noPrices": "La nostra copia dell'ordine dice cosa e quando, mai i prezzi.",
-    "requests": "Cosa ti chiediamo",
-    "noRequests": "Per ora non ti chiediamo nulla su questo ordine."
+    "requests": "Cosa ti chiediamo"
   },
   "messages": {
     "priceTalk": "Le domande sui prezzi vanno qui: questa conversazione è solo tra te e noi."
@@ -443,5 +437,8 @@
     "ROLL": "rotoli",
     "CONE": "coni",
     "BOX": "scatole"
+  },
+  "thread": {
+    "label": "Messaggi sull'ordine {number}"
   }
 }

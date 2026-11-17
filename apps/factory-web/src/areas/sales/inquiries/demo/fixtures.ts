@@ -551,3 +551,50 @@ const NOOP_THREAD = new Proxy({}, { get: () => noop }) as RecordThreadActions
 
 /** The pane's thread element for a design case. */
 export const demoThreadElement = (model: RecordThreadModel = threadModel()) => createElement('div', { className: 'fw-rt-pane-host' }, createElement(RecordThread, { model, actions: NOOP_THREAD }))
+
+// ---- B-TH-290 (threads plan TH-9, on B-TH-094): production's answer on a request — made-up answers, one made-up production manager ----
+const MARTA = { id: uid('5203', 1), name: 'Marta Demo' }
+
+/** "Production: not before week 3 of 2027" on the RFQ, typed by the production manager two days after it came (made-up). */
+export const PRODUCTION_LATE: NonNullable<InquiryRow['production']> = {
+  answer: 'NOT_BEFORE',
+  notBefore: '2027-01-18',
+  week: '2027-W03',
+  weekNumber: 3,
+  words: { it: 'Produzione: non prima della settimana 3 del 2027', en: 'Production: not before week 3 of 2027' },
+  tone: 'WARNING',
+  daysAfterWanted: 0,
+  answeredAt: at(12, 8, 15),
+  answeredBy: MARTA,
+}
+
+/** "Production: OK" (made-up). */
+export const PRODUCTION_OK: NonNullable<InquiryRow['production']> = {
+  answer: 'OK',
+  notBefore: null,
+  week: null,
+  weekNumber: null,
+  words: { it: 'Produzione: OK', en: 'Production: OK' },
+  tone: 'POSITIVE',
+  daysAfterWanted: null,
+  answeredAt: at(10, 16, 40),
+  answeredBy: MARTA,
+}
+
+/** A NOT_BEFORE 19 days after the date the RFQ wants (20 January 2027): "3 weeks after the wanted date" (made-up). */
+export const PRODUCTION_WEEKS_LATE: NonNullable<InquiryRow['production']> = {
+  ...PRODUCTION_LATE,
+  notBefore: '2027-02-08',
+  week: '2027-W06',
+  weekNumber: 6,
+  words: { it: 'Produzione: non prima della settimana 6 del 2027', en: 'Production: not before week 6 of 2027' },
+  daysAfterWanted: 19,
+}
+
+/** The record's "Production answer" action: the production manager may type it; sales is told who does. */
+export const PRODUCTION_ACTION = { allowed: true, refusal: null } as const
+export const PRODUCTION_NOT_MINE = { allowed: false, refusal: { code: 'NOT_PRODUCTION', message: 'x' } } as const
+
+/** The rows of Incoming with production's answers (the list's Production column): late on the RFQ, OK on the rain trousers. */
+export const PRODUCTION_ROWS: InquiryRow[] = ROWS.map((one, index) => (index === 0 ? { ...one, production: PRODUCTION_OK } : index === 1 ? { ...one, production: PRODUCTION_WEEKS_LATE } : one))
+// ---- end B-TH-290

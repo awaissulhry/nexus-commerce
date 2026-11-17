@@ -62,6 +62,8 @@ export const CODE_WORDS: Readonly<Record<string, Readonly<Record<string, string>
     RECEIPT_OVER_TOLERANCE: 'receipt beyond its tolerance',
     // B-W2b-420
     COST_SHEET: 'cost sheet',
+    // B-PR-23
+    BRAND_OVERRIDE: 'decision for a customer',
   },
 })
 

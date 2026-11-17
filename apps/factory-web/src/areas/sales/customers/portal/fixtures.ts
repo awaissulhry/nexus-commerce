@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { STEP_UP_CLOSED } from '../../../admin/shared/model'
 import { blankInvite, settingsDraftOf } from '../../../admin/users/partners/model'
-import { CUSTOMERS, inShell, panels, RECORD_CAN, recordModel } from '../../../parties/_shared/fixtures'
+import { CUSTOMERS, inShell, partyThread, RECORD_CAN, recordModel } from '../../../parties/_shared/fixtures'
 import { PartyRecordView } from '../../../parties/_shared/view/PartyRecordView'
 import { CUSTOMER_PEOPLE, customerAccess, portalModel, READ_ONLY, REQUESTS, rolesOf } from './demo'
 import type { PortalAccessModel } from './model'
@@ -19,7 +19,7 @@ const party = CUSTOMERS.find((item) => item.code === 'MODA-DEMO')!
 
 export function PortalDesign({ model }: { model: PortalAccessModel }) {
   const record = recordModel(model.side, party, { tab: 'portal', can: { ...RECORD_CAN, partners: true } })
-  return inShell(`/sales/customers/${party.id}`, createElement(PartyRecordView, { model: record, panels: panels(party), portal: createElement(PortalAccessView, { model }) }))
+  return inShell(`/sales/customers/${party.id}`, createElement(PartyRecordView, { model: record, thread: partyThread(party, model.side) /* B-TH-260 */, portal: createElement(PortalAccessView, { model }) }))
 }
 
 const base = (over: Partial<PortalAccessModel> = {}) => portalModel('customers', over)

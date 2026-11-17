@@ -21,11 +21,11 @@ const byName = (name: string) => view.pieces.find((piece) => piece.name === name
 const RANGE = view.sizes.map((size) => size.code)
 
 describe('the tab and who may change the list', () => {
-  it('is the tab before Activity, read with the BOM', () => {
-    // B-W2b-245: Versions & changes sits between Files & patterns and Activity (the design's order).
-    expect(STYLE_TABS.slice(-3)).toEqual(['files', 'versions', 'activity'])
-    expect(tabsFor(abilitiesOf(['product.styles.view', 'product.bom.view']))).toContain('files')
-    expect(tabsFor(abilitiesOf(['product.styles.view']))).not.toContain('files')
+  it('is the tab before Versions & changes (B-TH-261: Files & patterns is Patterns; Activity is gone), read with the BOM', () => {
+    // B-W2b-245: Versions & changes sits after Patterns (the design's order); the thread docks beside every tab.
+    expect(STYLE_TABS.slice(-2)).toEqual(['patterns', 'versions'])
+    expect(tabsFor(abilitiesOf(['product.styles.view', 'product.bom.view']))).toContain('patterns')
+    expect(tabsFor(abilitiesOf(['product.styles.view']))).not.toContain('patterns')
   })
 
   it('holds the list without the right, on a frozen revision and on an archived style', () => {
@@ -134,7 +134,7 @@ describe('every key of the section exists in it and en', () => {
   it('products', () => {
     const literal = new Set<string>()
     for (const file of sources(SRC)) for (const match of readFileSync(file, 'utf8').matchAll(/['"`]((?:pieces|held|problem)\.[A-Za-z0-9_.]*[A-Za-z0-9_])['"`]/g)) literal.add(match[1]!)
-    const built = [...PATTERN_GRAINS.map((grain) => `pieces.grain.${grain}`), ...PIECE_ISSUE_CODES.map((code) => `pieces.issue.${code}`), 'tab.files', 'problem.write.piecesUse']
+    const built = [...PATTERN_GRAINS.map((grain) => `pieces.grain.${grain}`), ...PIECE_ISSUE_CODES.map((code) => `pieces.issue.${code}`), 'tab.patterns', 'problem.write.piecesUse']
     expect(literal.size).toBeGreaterThan(50)
     expect([...literal, ...built].filter((key) => !has(key))).toEqual([])
   })

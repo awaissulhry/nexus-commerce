@@ -12,6 +12,9 @@ import { moneyText, needsCallNote, RECEIVABLES_NAMESPACE, stepPhrase, type Recei
 import { dayText } from './parts'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
 import { rightRef } from '../../../../lib/i18n/rights'
+// ---- B-TH-271 (PL6): the reminder's own thread docked in its window ----
+import { ReviewWindow } from '../../../_shared/review-window/ReviewWindow'
+import { inWindowThread } from '../../../_shared/review-window/model'
 
 export interface ReminderDialogState {
   readonly id: string
@@ -31,7 +34,9 @@ export type ReminderStep = 'edit' | 'skip' | 'cancel' | 'call'
  * customer's language — a preview to read before approving (a placeholder wording to confirm with the accountant) —,
  * the warnings (a payment being processed, a credit note being prepared, changed since prepared, no contact, switched
  * off: approval is not blocked by them), who prepared, approved and sent it. Edit text, Skip with reason, Approve (and
- * send while the Owner's switch is on; a call is recorded with what was said), Send an approved one. A approves.
+ * send while the Owner's switch is on; a call is recorded with what was said), Send an approved one. A approves. B-TH-271 (PL6,
+ * picture 40): the reminder's own thread docked in the window's right column — the customer's answer to the reminder is seen where
+ * it was approved ("Reply to <customer>", this customer only); it never folds (a customer's thread); A stays quiet inside it.
  */
 export function ReminderDialog({
   state,
@@ -49,6 +54,7 @@ export function ReminderDialog({
   onSkip,
   onCancel,
   depth,
+  thread,
 }: {
   state: ReminderDialogState
   ids: readonly string[]
@@ -74,6 +80,8 @@ export function ReminderDialog({
   onCancel?: (reminder: Reminder, reason: string) => Promise<boolean>
   /** B-W2b-425: the stops on its invoices and the customer's trusted level (its own container, or a design case's view). */
   depth?: ReactNode
+  /** B-TH-271 (PL6): the reminder's thread docked in the window (the page's OfficeRecordThread, or a design case's); none without threads.read. */
+  thread?: ReactNode
 }) {
   const t = useT(RECEIVABLES_NAMESPACE)
   const locale = useLocale()
@@ -111,6 +119,7 @@ export function ReminderDialog({
       if (event.key !== 'a' || event.metaKey || event.ctrlKey || event.altKey || step || !reminder || approveHeld) return
       const target = event.target as HTMLElement | null
       if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="menu"]') || target.isContentEditable)) return
+      if (inWindowThread(target)) return // B-TH-271: the docked thread's own keys
       event.preventDefault()
       approve()
     }
@@ -205,177 +214,180 @@ export function ReminderDialog({
         }
       >
         {reminder && (
-          <div className="fw-frv-detail">
-            {state.actionProblem && !step && <Banner tone="danger" title={t(state.actionProblem)} />}
-            {reminder.held.length > 0 && (
-              <Banner tone="warning" title={t('reminder.heldTitle', { count: reminder.held.length })}>
-                <ul className="fw-frv-held">
-                  {reminder.held.map((entry) => (
-                    <li key={entry.code}>{t(`heldReason.${entry.code}`)}</li>
-                  ))}
-                </ul>
-              </Banner>
-            )}
-            {/* B-W2b-425: Held (W2b stop rules) and trusted levels (sec:reminders#1, #2). */}
-            {depth}
-            {reminder.status === 'PREPARED' && !switchedOn && (
-              <Banner tone="info" title={t('switch.offTitle')}>
-                {t('reminder.offBody')}
-              </Banner>
-            )}
-            <div className="fw-frv-pair">
-              <Card padded aria-label={t('reminder.asks')}>
-                <div className="fw-frv-card">
-                  <h3 className="fw-frv-h3">{t('reminder.asks')}</h3>
-                  <SummaryTable
-                    label={t('reminder.asks')}
-                    stackOnPhone
-                    columns={[t('col.invoice'), t('col.issued'), t('col.due'), ...(can.price ? [t('col.openNow')] : [])]}
-                    align={['left', 'left', 'left', 'right']}
-                    rows={reminder.invoices.map((invoice) => ({
-                      id: invoice.id,
-                      cells: [
-                        can.invoices ? (
-                          <Link key="n" className="fw-frv-link" href={`${prefix}/finance/invoices/${encodeURIComponent(invoice.id)}`}>
-                            {invoice.number ?? t('reminder.draftInvoice')}
-                          </Link>
-                        ) : (
-                          (invoice.number ?? t('reminder.draftInvoice'))
-                        ),
-                        dayText(invoice.issueDate, locale),
-                        dayText(invoice.dueDate, locale),
+          // B-TH-271 (PL6): the reminder's content and, with threads.read, its thread docked beside it (a customer's: it never folds).
+          <ReviewWindow thread={thread ?? null} threadLabel={t('reminder.threadLabel', { level: reminder.level, customer: reminder.customer.name })} recordKey={reminder.id}>
+            <div className="fw-frv-detail">
+              {state.actionProblem && !step && <Banner tone="danger" title={t(state.actionProblem)} />}
+              {reminder.held.length > 0 && (
+                <Banner tone="warning" title={t('reminder.heldTitle', { count: reminder.held.length })}>
+                  <ul className="fw-frv-held">
+                    {reminder.held.map((entry) => (
+                      <li key={entry.code}>{t(`heldReason.${entry.code}`)}</li>
+                    ))}
+                  </ul>
+                </Banner>
+              )}
+              {/* B-W2b-425: Held (W2b stop rules) and trusted levels (sec:reminders#1, #2). */}
+              {depth}
+              {reminder.status === 'PREPARED' && !switchedOn && (
+                <Banner tone="info" title={t('switch.offTitle')}>
+                  {t('reminder.offBody')}
+                </Banner>
+              )}
+              <div className="fw-frv-pair">
+                <Card padded aria-label={t('reminder.asks')}>
+                  <div className="fw-frv-card">
+                    <h3 className="fw-frv-h3">{t('reminder.asks')}</h3>
+                    <SummaryTable
+                      label={t('reminder.asks')}
+                      stackOnPhone
+                      columns={[t('col.invoice'), t('col.issued'), t('col.due'), ...(can.price ? [t('col.openNow')] : [])]}
+                      align={['left', 'left', 'left', 'right']}
+                      rows={reminder.invoices.map((invoice) => ({
+                        id: invoice.id,
+                        cells: [
+                          can.invoices ? (
+                            <Link key="n" className="fw-frv-link" href={`${prefix}/finance/invoices/${encodeURIComponent(invoice.id)}`}>
+                              {invoice.number ?? t('reminder.draftInvoice')}
+                            </Link>
+                          ) : (
+                            (invoice.number ?? t('reminder.draftInvoice'))
+                          ),
+                          dayText(invoice.issueDate, locale),
+                          dayText(invoice.dueDate, locale),
+                          ...(can.price
+                            ? [
+                                <span key="o" className="fw-frv-num">
+                                  {moneyText(invoice.openNow ?? null, reminder.currency, locale)}
+                                </span>,
+                              ]
+                            : []),
+                        ],
+                      }))}
+                    />
+                    <KeyValue
+                      columns={1}
+                      labelCase="sentence"
+                      items={[
                         ...(can.price
                           ? [
-                              <span key="o" className="fw-frv-num">
-                                {moneyText(invoice.openNow ?? null, reminder.currency, locale)}
-                              </span>,
+                              {
+                                label: t('reminder.amountDue'),
+                                value: moneyText(reminder.amountDue ?? null, reminder.currency, locale),
+                              },
                             ]
                           : []),
-                      ],
-                    }))}
-                  />
+                        ...(can.price && typeof reminder.interestAmount === 'number'
+                          ? [
+                              {
+                                label: t('reminder.interest'),
+                                value: moneyText(reminder.interestAmount, reminder.currency, locale),
+                              },
+                            ]
+                          : []),
+                        {
+                          label: t('reminder.oldestDueLabel'),
+                          value: dayText(reminder.oldestDueDate, locale),
+                        },
+                        {
+                          label: t('reminder.levelLabel'),
+                          value: `${t('reminder.level', { level: reminder.level })} · ${say(stepPhrase(reminder).key, stepPhrase(reminder).params)}`,
+                        },
+                        {
+                          label: t('reminder.actionLabel'),
+                          value: <Tag tone="neutral">{t(`action.${reminder.action}`)}</Tag>,
+                        },
+                      ]}
+                    />
+                  </div>
+                </Card>
+                <Card padded aria-label={t('reminder.textTitle')}>
+                  <div className="fw-frv-card">
+                    <h3 className="fw-frv-h3">{t('reminder.textTitle')}</h3>
+                    {!can.price ? (
+                      <p className="fw-frv-muted">{t('reminder.textNoPrice', { right: rightRef('money.price') })}</p>
+                    ) : reminder.action === 'CALL' && !reminder.text?.body ? (
+                      <p className="fw-frv-muted">{t('reminder.callText')}</p>
+                    ) : (
+                      <>
+                        <p className="fw-frv-muted">
+                          <b>{reminder.text?.subject ?? t('reminder.noSubject')}</b>
+                        </p>
+                        <pre className="fw-frv-text">{reminder.text?.body ?? t('reminder.noText')}</pre>
+                      </>
+                    )}
+                    <p className="fw-frv-muted">{t('reminders.wording')}</p>
+                  </div>
+                </Card>
+              </div>
+              <Card padded aria-label={t('reminder.history')}>
+                <div className="fw-frv-card">
+                  <h3 className="fw-frv-h3">{t('reminder.history')}</h3>
                   <KeyValue
-                    columns={1}
+                    columns={2}
                     labelCase="sentence"
                     items={[
-                      ...(can.price
+                      {
+                        label: t('reminder.prepared'),
+                        value: `${formatDateTime(reminder.preparedAt, { locale })} · ${reminder.preparedBy?.name ?? (reminder.byHand ? t('reminder.someone') : t('reminder.ladder'))}`,
+                      },
+                      ...(reminder.approvedAt
                         ? [
                             {
-                              label: t('reminder.amountDue'),
-                              value: moneyText(reminder.amountDue ?? null, reminder.currency, locale),
+                              label: t('reminder.approved'),
+                              value: `${formatDateTime(reminder.approvedAt, { locale })} · ${reminder.approvedBy?.name ?? t('reminder.someone')}`,
                             },
                           ]
                         : []),
-                      ...(can.price && typeof reminder.interestAmount === 'number'
+                      ...(reminder.sentAt
                         ? [
                             {
-                              label: t('reminder.interest'),
-                              value: moneyText(reminder.interestAmount, reminder.currency, locale),
+                              label: t('reminder.sent'),
+                              value: formatDateTime(reminder.sentAt, { locale }),
                             },
                           ]
                         : []),
-                      {
-                        label: t('reminder.oldestDueLabel'),
-                        value: dayText(reminder.oldestDueDate, locale),
-                      },
-                      {
-                        label: t('reminder.levelLabel'),
-                        value: `${t('reminder.level', { level: reminder.level })} · ${say(stepPhrase(reminder).key, stepPhrase(reminder).params)}`,
-                      },
-                      {
-                        label: t('reminder.actionLabel'),
-                        value: <Tag tone="neutral">{t(`action.${reminder.action}`)}</Tag>,
-                      },
+                      ...(reminder.email
+                        ? [
+                            {
+                              label: t('reminder.email'),
+                              value: t('reminder.emailState', {
+                                status: t(`emailStatus.${emailStatusKey(reminder.email.status)}`),
+                                to: reminder.email.to.join(', '),
+                              }),
+                            },
+                          ]
+                        : []),
+                      ...(reminder.callNote
+                        ? [
+                            {
+                              label: t('reminder.callNote'),
+                              value: reminder.callNote,
+                            },
+                          ]
+                        : []),
+                      ...(reminder.skippedAt
+                        ? [
+                            {
+                              label: t('reminder.skipped'),
+                              value: `${formatDateTime(reminder.skippedAt, { locale })} · ${reminder.skippedBy?.name ?? t('reminder.someone')} · ${reminder.skipReason ?? ''}`,
+                            },
+                          ]
+                        : []),
+                      ...(reminder.cancelledAt
+                        ? [
+                            {
+                              label: t('reminder.cancelled'),
+                              value: `${formatDateTime(reminder.cancelledAt, { locale })} · ${reminder.cancelReason ?? ''}`,
+                            },
+                          ]
+                        : []),
                     ]}
                   />
                 </div>
               </Card>
-              <Card padded aria-label={t('reminder.textTitle')}>
-                <div className="fw-frv-card">
-                  <h3 className="fw-frv-h3">{t('reminder.textTitle')}</h3>
-                  {!can.price ? (
-                    <p className="fw-frv-muted">{t('reminder.textNoPrice', { right: rightRef('money.price') })}</p>
-                  ) : reminder.action === 'CALL' && !reminder.text?.body ? (
-                    <p className="fw-frv-muted">{t('reminder.callText')}</p>
-                  ) : (
-                    <>
-                      <p className="fw-frv-muted">
-                        <b>{reminder.text?.subject ?? t('reminder.noSubject')}</b>
-                      </p>
-                      <pre className="fw-frv-text">{reminder.text?.body ?? t('reminder.noText')}</pre>
-                    </>
-                  )}
-                  <p className="fw-frv-muted">{t('reminders.wording')}</p>
-                </div>
-              </Card>
             </div>
-            <Card padded aria-label={t('reminder.history')}>
-              <div className="fw-frv-card">
-                <h3 className="fw-frv-h3">{t('reminder.history')}</h3>
-                <KeyValue
-                  columns={2}
-                  labelCase="sentence"
-                  items={[
-                    {
-                      label: t('reminder.prepared'),
-                      value: `${formatDateTime(reminder.preparedAt, { locale })} · ${reminder.preparedBy?.name ?? (reminder.byHand ? t('reminder.someone') : t('reminder.ladder'))}`,
-                    },
-                    ...(reminder.approvedAt
-                      ? [
-                          {
-                            label: t('reminder.approved'),
-                            value: `${formatDateTime(reminder.approvedAt, { locale })} · ${reminder.approvedBy?.name ?? t('reminder.someone')}`,
-                          },
-                        ]
-                      : []),
-                    ...(reminder.sentAt
-                      ? [
-                          {
-                            label: t('reminder.sent'),
-                            value: formatDateTime(reminder.sentAt, { locale }),
-                          },
-                        ]
-                      : []),
-                    ...(reminder.email
-                      ? [
-                          {
-                            label: t('reminder.email'),
-                            value: t('reminder.emailState', {
-                              status: t(`emailStatus.${emailStatusKey(reminder.email.status)}`),
-                              to: reminder.email.to.join(', '),
-                            }),
-                          },
-                        ]
-                      : []),
-                    ...(reminder.callNote
-                      ? [
-                          {
-                            label: t('reminder.callNote'),
-                            value: reminder.callNote,
-                          },
-                        ]
-                      : []),
-                    ...(reminder.skippedAt
-                      ? [
-                          {
-                            label: t('reminder.skipped'),
-                            value: `${formatDateTime(reminder.skippedAt, { locale })} · ${reminder.skippedBy?.name ?? t('reminder.someone')} · ${reminder.skipReason ?? ''}`,
-                          },
-                        ]
-                      : []),
-                    ...(reminder.cancelledAt
-                      ? [
-                          {
-                            label: t('reminder.cancelled'),
-                            value: `${formatDateTime(reminder.cancelledAt, { locale })} · ${reminder.cancelReason ?? ''}`,
-                          },
-                        ]
-                      : []),
-                  ]}
-                />
-              </div>
-            </Card>
-          </div>
+          </ReviewWindow>
         )}
       </DetailModal>
 

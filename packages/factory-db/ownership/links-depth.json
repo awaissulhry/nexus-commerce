@@ -33,7 +33,7 @@
       }
     },
     "ApprovalRequest": {
-      "about": "The office asks an approval of a party, corrects the question, due time and contact while it is OPEN, withdraws it, and marks it EXPIRED past its due time. The party reads its own requests and answers an OPEN one once (approve, approve with changes, refuse; typed name, its markup file, the portal user or the APPROVAL link, the evidence): the guard refuses any other partner write. Never who asked or withdrew.",
+      "about": "The office asks an approval of a party, corrects the question, due time and contact while it is OPEN, withdraws it, and marks it EXPIRED past its due time. The party reads its own requests and answers an OPEN one once (approve, approve with changes, refuse; typed name, its markup file, the portal user or the APPROVAL link, the evidence): the guard refuses any other partner write. Never who asked or withdrew. B-PR-23 (production plan, schema wave 4/5): the office may decide for the party (an office person, with why: the third answerer, never the asker) and reverse an answer once (when, who, why); the party reads the reasons and when, never who decided for it or reversed (decidedForPartyById, reversedById hidden).",
       "kind": "tenant",
       "keyColumns": { "tenant": "tenantId", "party": "partyId" },
       "access": {
@@ -41,7 +41,7 @@
         "factory_partner_runtime": {
           "privileges": ["select", "update"],
           "scopedBy": ["party"],
-          "hiddenColumns": ["createdById", "withdrawnById"]
+          "hiddenColumns": ["createdById", "withdrawnById", "decidedForPartyById", "reversedById"]
         }
       }
     }

@@ -1,7 +1,8 @@
 import { defineDesignScreen } from '../../../../../lib/design/design-screen'
 import { COLOURWAY_IDS, demoStyle, recordModel, REV, REVISIONS, SIZES, STYLE_ID } from '../../demo/fixtures'
 import type { StyleRecordViewModel } from '../record-model'
-import { StyleRecordView } from '../view/StyleRecordView'
+// B-TH-261: the studio with its docked thread (RecordFrame).
+import { StyleDesign } from '../../demo/fixtures'
 import { demoProtectors, PLACEMENTS, PROTECTOR, readyProtectors } from '../protectors/fixtures'
 import { markKey as placementMark } from '../protectors/protectors-model'
 import type { PrepackView, StylePrepacksView } from './api'
@@ -115,7 +116,7 @@ const released = { style: { status: 'ready' as const, value: demoStyle() }, revi
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-287',
   title: 'Style studio: Sizes & measurements (prepacks, protector placement)',
-  view: StyleRecordView,
+  view: StyleDesign,
   cases: [
     {
       id: 'owner',

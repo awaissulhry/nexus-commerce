@@ -48,7 +48,8 @@ const admin = async (text: string, values: unknown[] = []) => (await db.admin.qu
 /** The columns the partner role may not read or write, of the tables a partner copies here (ownership/*.json). */
 const PARTNER_HIDDEN: Readonly<Record<string, readonly string[]>> = {
   PortalOrderRequest: ['decidedById'],
-  OrderChangeRequest: ['answeredById'],
+  // B-PR-23: nor who countered it.
+  OrderChangeRequest: ['answeredById', 'counteredById'],
   // W2b-5 (wave 44/44, B-W2b-297): nor who reviewed it or which office person measured it.
   MeasurementProfile: ['internalNote', 'createdById', 'measuredByUserId', 'reviewedById'],
 }

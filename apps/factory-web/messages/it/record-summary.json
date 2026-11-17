@@ -1,0 +1,35 @@
+{
+  "band": {
+    "home": "Inizio",
+    "reading": "Lettura del record…",
+    "partOf": "Fa parte di",
+    "moreLabel": "Altre azioni su questo record"
+  },
+  "summary": {
+    "label": "Questo record",
+    "type": "Tipo",
+    "number": "Numero",
+    "noNumber": "Senza numero",
+    "state": "Stato",
+    "partOf": "Fa parte di",
+    "theirRef": "Loro riferimento",
+    "hint": "La conversazione, i suoi file e la sua storia sono nella conversazione a fianco: File apre tutti i file, Vista › Modifiche mostra cosa è cambiato e il suo ⋯ contiene attività, approvazioni e condivisione."
+  },
+  "thread": {
+    "label": "Conversazione di {record}"
+  },
+  "missing": {
+    "title": "Non puoi vedere questo record",
+    "body": "Non esiste, oppure è fuori da ciò che puoi aprire.",
+    "home": "Torna all'inizio"
+  },
+  "noRight": {
+    "title": "Non puoi leggere la conversazione di questo record",
+    "body": "Serve il permesso “{right}”. Chiedi a un amministratore della tua società."
+  },
+  "failed": {
+    "title": "Non è stato possibile leggere il record",
+    "body": "Controlla la connessione e riprova.",
+    "retry": "Riprova"
+  }
+}

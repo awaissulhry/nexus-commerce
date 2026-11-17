@@ -587,3 +587,13 @@ export function cancelHeld(target: CancelTarget, reason: string, facts: WriteFac
 
 /** Numbers of the page in its language ("1.200,5"). */
 export const shown = (value: string, locale: Locale): string => (NUMBER.test(value.trim()) ? quantityShown(value.trim(), locale) : value)
+
+// ---- B-TH-277 (P-SUP-DEL.thread; tree: "the PO's thread docked beside the notice form instead of the Ask modal"): the conversation
+// that docks beside a notice and its steps is the ORDER's (a delivery is the order's talk: dates, documents, price, C2) — the
+// notice's order once it is read (not one that is not here), else the new notice's order once chosen and offered (the shippable
+// read named it). None before an order is chosen: no dock.
+export function dockedOrderOf(input: { readonly page: Pick<NoticePage, 'notice'> | null; readonly order: { readonly id: string; readonly number: string } | null; readonly missing: boolean }): { id: string; number: string } | null {
+  if (input.page && !input.missing) return { id: input.page.notice.purchaseOrder.id, number: input.page.notice.purchaseOrder.number }
+  return input.order ? { id: input.order.id, number: input.order.number } : null
+}
+// ---- end B-TH-277

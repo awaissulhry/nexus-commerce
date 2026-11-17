@@ -25,7 +25,9 @@
     "SALESMAN": "Salesman",
     "PRE_PRODUCTION": "Pre-production",
     "CERTIFICATION": "CE test sample",
-    "BRAND": "Brand sample"
+    "BRAND": "Brand sample",
+    "SIZE_SET": "Size set",
+    "TOP_OF_PRODUCTION": "Top of production"
   },
   "stage": {
     "REQUESTED": "Requested",
@@ -62,7 +64,9 @@
   },
   "swatch": {
     "COLOUR": "Colour",
-    "LEATHER": "Leather"
+    "LEATHER": "Leather",
+    "FABRIC": "Fabric",
+    "TRIM": "Trim"
   },
   "wo": {
     "status": {

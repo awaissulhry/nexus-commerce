@@ -1,7 +1,8 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { CAN, demoBom, demoCompliance, demoStyle, demoTypeChanges, recordModel, REV, REVISIONS } from '../demo/fixtures'
 import type { StyleRecordViewModel } from '../record/record-model'
-import { StyleRecordView } from '../record/view/StyleRecordView'
+// B-TH-261: the studio with its docked thread (RecordFrame).
+import { StyleDesign } from '../demo/fixtures'
 // B-W2b-238: Material checks — blocked or unapproved materials.
 import { STYLE_APPROVALS } from '../../materials/approval/demo'
 
@@ -21,7 +22,7 @@ const draft = { revisionId: REV.r3, bom: { status: 'ready' as const, value: demo
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-045',
   title: 'Style studio: Compliance',
-  view: StyleRecordView,
+  view: StyleDesign,
   cases: [
     { id: 'owner', label: 'Released revision 2', model: compliance(), note: 'Checks with what each stops; coverage colourway × size (58 not covered, the rest expiring in 47 days); DoC and leaflet per language; the label; tracking.' },
     { id: 'docs-older', label: 'Documents only for an older revision', model: compliance({ compliance: { status: 'ready', value: demoCompliance({ docs: 'older' }) } }), note: '"Only for rev 1": upload the signed one for revision 2.' },

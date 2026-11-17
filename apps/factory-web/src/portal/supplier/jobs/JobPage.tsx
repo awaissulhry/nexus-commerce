@@ -9,6 +9,9 @@ import { WithMessages } from '../../../record-panels/i18n'
 import { postMessage } from '../../shell/api'
 import { usePortalApi, usePortalBand, usePortalFrame, usePortalLive, usePortalUnsaved } from '../../shell/frame'
 import { PortalThread } from '../../shell/thread/PortalThread'
+// ---- B-TH-277: the job's conversation docks beside every tab (no Messages tab, no Ask modal; on a phone behind its button).
+import { PortalRecordFrame } from '../../shell/record/PortalRecordFrame'
+// ---- end B-TH-277
 import { NotInAccessHere, useOffline } from '../orders/parts'
 import { fetchJob, sendJobAct, uploadKitPhoto, type JobAct, type JobPage, type KitLine } from './api'
 import { jobBandOf } from './band'
@@ -20,7 +23,7 @@ import {
   DECLINE_DRAFT,
   declineBody,
   declineHeld,
-  isRecordTab,
+  jobTabOf, // B-TH-277
   kitAllAct,
   kitDayOf,
   kitDraftOf,
@@ -39,7 +42,6 @@ import {
   returnDraftOf,
   returnHeld,
   returnPieces,
-  tabFor,
   writeProblem,
   type ActEnd,
   type ActName,
@@ -58,7 +60,8 @@ import { useJobWords } from './words'
 /**
  * `/p/<party>/jobs/<id>?tab=…` for a workshop (B-W2b-181, SCR-193; design portal.supplier.jobs rec "Job"): reads the job
  * (GET /portal/jobs/:id), fills the band (title, the state, Accept while it waits, ⋯ Decline, the job sheet, Ask a
- * question, the five tabs), keeps what is typed (the kit count, today's pieces, the send-back, a problem: leaving asks
+ * question, the three tabs — B-TH-277), docks the job's conversation beside every tab (the portal record frame: phone first,
+ * "Messages (2 new)" under 1280 px), keeps what is typed (the kit count, today's pieces, the send-back, a problem: leaving asks
  * first), sends each act at the version shown with ONE Idempotency-Key per body, says the end in our words, and reads again
  * on the live channel's job events. A report not sent for want of a connection stays on the page (no background queue).
  */
@@ -142,7 +145,9 @@ function JobContainer({ id }: { id: string }) {
   usePortalLive({ onChange: (change) => (page?.live.events.includes(change.type) ? void load() : undefined), onReconnect: () => void load() }, allowed)
 
   const tabParam = search?.get('tab') ?? null
-  const tab = isRecordTab(tabParam) ? tabParam : page ? tabFor(page.job.nextStep) : 'progress'
+  // B-TH-277: an old ?tab=documents opens Kit received (its documents moved there); ?tab=messages the next step's tab, the frame
+  // showing the docked conversation.
+  const tab = jobTabOf(tabParam, page ? page.job.nextStep : null)
   const job = page?.job ?? null
   const facts: PersonFacts = { preview: frame.me.preview, offline, busy: busy !== null, mayAct: page ? { approve: page.mayAct.approve && mayAct.approve, comment: page.mayAct.comment && mayAct.comment, upload: page.mayAct.upload && mayAct.upload } : mayAct }
 
@@ -283,63 +288,63 @@ function JobContainer({ id }: { id: string }) {
   }
 
   return (
-    <JobRecordView
-      model={model}
-      actions={{
-        onRetry: () => {
-          setState('loading')
-          void load(false)
-        },
-        onAccept: openAccept,
-        onDecline: openDecline,
-        onKitAll: sendKitAll,
-        onKitLines: (on) => {
-          setKitLines(on)
-          if (!on && job) {
-            typed.current.kit = false
-            setKit(kitDraftOf(job))
-          }
-        },
-        onKitDraft: (draft) => {
-          typed.current.kit = true
-          setKit(draft)
-        },
-        onKitSend: sendKitLines,
-        onPhoto: (line: KitLine) => setPhoto({ lineId: line.id, line: { seq: line.seq, name: line.item.name || line.item.code }, busy: false, heldReason: null, problem: null }),
-        onProgressDraft: (draft) => {
-          typed.current.progress = true
-          setProgress(draft)
-        },
-        onProgressSend: sendProgress,
-        onProblemDraft: setProblem,
-        onProblemSend: () => void sendProblem(),
-        onReturnDraft: (draft) => {
-          typed.current.returns = true
-          setReturns(draft)
-        },
-        onReturnReview: () => {
-          if (job && !(actHeld(job, facts, 'sendBack') ?? returnHeld(returns, job, today))) setReviewing(true)
-        },
-        onDismissEnd: () => setEnd(null),
-        accept: {
-          onDraft: (draft) => setAccept((current) => (current ? { ...current, draft, problem: null } : current)),
-          onSend: () => void sendAccept(),
-          onDecline: () => {
-            setAccept(null)
-            openDecline()
+    <PortalRecordFrame thread={job && state === 'ready' ? <PortalThread type="SubcontractOrder" id={job.id} showRecord={false} headingLevel={2} /> : null} threadLabel={t('thread.label', { number: job?.number ?? '' })}>
+      <JobRecordView
+        model={model}
+        actions={{
+          onRetry: () => {
+            setState('loading')
+            void load(false)
           },
-          onClose: () => (busy ? undefined : setAccept(null)),
-        },
-        decline: {
-          onDraft: (draft) => setDecline((current) => (current ? { ...current, draft, problem: null } : current)),
-          onSend: () => void sendDecline(),
-          onClose: () => (busy ? undefined : setDecline(null)),
-        },
-        photo: { onCapture: capture, onClose: () => (photo?.busy ? undefined : setPhoto(null)) },
-        review: { onSend: sendReturn, onClose: () => (busy ? undefined : setReviewing(false)) },
-      }}
-    >
-      {job ? <PortalThread type="SubcontractOrder" id={job.id} showRecord={false} headingLevel={2} /> : null}
-    </JobRecordView>
+          onAccept: openAccept,
+          onDecline: openDecline,
+          onKitAll: sendKitAll,
+          onKitLines: (on) => {
+            setKitLines(on)
+            if (!on && job) {
+              typed.current.kit = false
+              setKit(kitDraftOf(job))
+            }
+          },
+          onKitDraft: (draft) => {
+            typed.current.kit = true
+            setKit(draft)
+          },
+          onKitSend: sendKitLines,
+          onPhoto: (line: KitLine) => setPhoto({ lineId: line.id, line: { seq: line.seq, name: line.item.name || line.item.code }, busy: false, heldReason: null, problem: null }),
+          onProgressDraft: (draft) => {
+            typed.current.progress = true
+            setProgress(draft)
+          },
+          onProgressSend: sendProgress,
+          onProblemDraft: setProblem,
+          onProblemSend: () => void sendProblem(),
+          onReturnDraft: (draft) => {
+            typed.current.returns = true
+            setReturns(draft)
+          },
+          onReturnReview: () => {
+            if (job && !(actHeld(job, facts, 'sendBack') ?? returnHeld(returns, job, today))) setReviewing(true)
+          },
+          onDismissEnd: () => setEnd(null),
+          accept: {
+            onDraft: (draft) => setAccept((current) => (current ? { ...current, draft, problem: null } : current)),
+            onSend: () => void sendAccept(),
+            onDecline: () => {
+              setAccept(null)
+              openDecline()
+            },
+            onClose: () => (busy ? undefined : setAccept(null)),
+          },
+          decline: {
+            onDraft: (draft) => setDecline((current) => (current ? { ...current, draft, problem: null } : current)),
+            onSend: () => void sendDecline(),
+            onClose: () => (busy ? undefined : setDecline(null)),
+          },
+          photo: { onCapture: capture, onClose: () => (photo?.busy ? undefined : setPhoto(null)) },
+          review: { onSend: sendReturn, onClose: () => (busy ? undefined : setReviewing(false)) },
+        }}
+      />
+    </PortalRecordFrame>
   )
 }

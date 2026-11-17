@@ -1,6 +1,6 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { at, inShell, panels, PURCHASE_ORDERS, RECORD_CAN, recordModel, SUPPLIERS, withoutMoney } from '../../../parties/_shared/fixtures'
+import { at, inShell, partyThread, PURCHASE_ORDERS, RECORD_CAN, recordModel, SUPPLIERS, withoutMoney } from '../../../parties/_shared/fixtures'
 import { failed, loaded, loading, partyDraftOf, type PartyRecordModel } from '../../../parties/_shared/model'
 import type { Party } from '../../../parties/_shared/api'
 import { SupplierRecordView } from './view/SupplierRecordView'
@@ -74,7 +74,8 @@ function SupplierDesign({ model }: { model: SupplierCase }) {
     createElement(
       WithMessages,
       { namespaces: DEPTH_NAMESPACES },
-      createElement(SupplierRecordView, { model: record, panels: party ? panels(party) : null, items: createElement(DesignSources, { model: sources ?? sourcesModel(), importAction }), depth: depthNodes(depth) }),
+      // B-TH-260: the supplier's docked thread (Activity and the Documents files copy went to it), with threads.read.
+      createElement(SupplierRecordView, { model: record, thread: party ? partyThread(party, 'suppliers', record.can) : null, items: createElement(DesignSources, { model: sources ?? sourcesModel(), importAction }), depth: depthNodes(depth) }),
     ),
   )
 }
@@ -141,9 +142,9 @@ const W2B_334: ReadonlyArray<{ id: string; label: string; model: SupplierCase; n
   { id: 'w2b-334-overview-error', label: "W2b Overview: couldn't load", model: overview({ profile: profileModel({ read: failedRead('problem.offline') }), now: nowModel({ profile: failedRead('problem.offline'), vault: failedRead('problem.offline') }) }) },
   { id: 'w2b-334-status', label: 'W2b Change status: on hold, with what it reaches', model: overview({ status: { profile: PROFILE, to: 'ON_HOLD', reason: 'Due lotti fuori specifica.', reach: ready({ status: 'ON_HOLD', draftsHeld: 2, openUnchanged: 1 }), busy: false, failed: null, tried: false } }) },
   { id: 'w2b-334-status-reason', label: 'W2b Change status: blocked without a reason (held)', model: overview({ status: { profile: PROFILE, to: 'BLOCKED', reason: '', reach: ready({ status: 'BLOCKED', draftsHeld: 0, openUnchanged: 3 }), busy: false, failed: null, tried: true } }) },
-  { id: 'w2b-334-contacts', label: 'W2b Contacts: what each one receives (a box per cell, saved as ticked)', model: { ...record('CONCERIA-DEMO', { tab: 'contacts', can: DEPTH_RECORD_CAN }), depth: { receives: receivesModel({ cells: { [`${PROFILE.contacts[0]!.id}:REMITTANCE`]: { state: 'saving' }, [`${PROFILE.contacts[1]!.id}:DOCUMENT`]: { state: 'saved' }, [`${PROFILE.contacts[2]!.id}:CLAIM`]: { state: 'refused', words: { key: 'receives.invalid' } } } }) } } },
-  { id: 'w2b-334-contacts-nobody', label: 'W2b Contacts: nobody receives POs (a contact with no e-mail)', model: { ...record('TESSITURA-ESEMPIO', { tab: 'contacts', can: DEPTH_RECORD_CAN }), depth: { receives: receivesModel({}, NOBODY) } } },
-  { id: 'w2b-334-contacts-read-only', label: 'W2b Contacts: read only (no parties.manage)', model: { ...record('CONCERIA-DEMO', { tab: 'contacts', can: { ...DEPTH_RECORD_CAN, manage: false } }), depth: { receives: receivesModel({ can: READ_CAN }) } } },
+  { id: 'w2b-334-contacts', label: 'W2b Overview & contacts: what each one receives (a box per cell, saved as ticked)', model: { ...record('CONCERIA-DEMO', { tab: 'overview', can: DEPTH_RECORD_CAN }), depth: { receives: receivesModel({ cells: { [`${PROFILE.contacts[0]!.id}:REMITTANCE`]: { state: 'saving' }, [`${PROFILE.contacts[1]!.id}:DOCUMENT`]: { state: 'saved' }, [`${PROFILE.contacts[2]!.id}:CLAIM`]: { state: 'refused', words: { key: 'receives.invalid' } } } }) } } },
+  { id: 'w2b-334-contacts-nobody', label: 'W2b Overview & contacts: nobody receives POs (a contact with no e-mail)', model: { ...record('TESSITURA-ESEMPIO', { tab: 'overview', can: DEPTH_RECORD_CAN }), depth: { receives: receivesModel({}, NOBODY) } } },
+  { id: 'w2b-334-contacts-read-only', label: 'W2b Overview & contacts: read only (no parties.manage)', model: { ...record('CONCERIA-DEMO', { tab: 'overview', can: { ...DEPTH_RECORD_CAN, manage: false } }), depth: { receives: receivesModel({ can: READ_CAN }) } } },
   { id: 'w2b-334-items-import', label: 'W2b Items & prices: Import price list', model: { ...items(), can: DEPTH_RECORD_CAN, depth: { importHeld: null } } },
   { id: 'w2b-334-items-import-held', label: 'W2b Items & prices: Import price list held (no import right)', model: { ...items(), can: DEPTH_RECORD_CAN, depth: { importHeld: 'Importing needs the rights to run imports and upload files.' } } },
   { id: 'w2b-334-documents', label: 'W2b Documents & qualification: asks, the gate, documents, the office review', model: documents(), note: 'A leather PO is held at Send (expired chromium VI report); a REACH declaration waits for our check; a company data change waits.' },
@@ -215,10 +216,10 @@ export const designScreen = defineDesignScreen<SupplierCase>({
       model: record('CONCERIA-DEMO', { can: { ...RECORD_CAN, cost: false }, purchaseOrders: loaded(withoutMoney(PURCHASE_ORDERS)) }),
       note: 'No values drawn, not even as —.',
     },
-    { id: 'contacts', label: 'Contacts: who receives POs', model: record('CONCERIA-DEMO', { tab: 'contacts' }), note: 'The Receives POs box saves at once.' },
-    { id: 'contacts-nobody', label: 'Contacts: nobody receives POs yet', model: record('TESSITURA-ESEMPIO', { tab: 'contacts' }) },
-    { id: 'contacts-empty', label: 'Contacts: none yet', model: record('PROTEZIONI-PROVA', { tab: 'contacts' }) },
-    { id: 'contact-new', label: 'Add a contact', model: record('CONCERIA-DEMO', { tab: 'contacts', dialog: { kind: 'contact' } }) },
+    { id: 'contacts', label: 'Overview & contacts: who receives POs', model: record('CONCERIA-DEMO', { tab: 'overview' }), note: 'The Receives POs box saves at once.' },
+    { id: 'contacts-nobody', label: 'Overview & contacts: nobody receives POs yet', model: record('TESSITURA-ESEMPIO', { tab: 'overview' }) },
+    { id: 'contacts-empty', label: 'Overview & contacts: none yet', model: record('PROTEZIONI-PROVA', { tab: 'overview' }) },
+    { id: 'contact-new', label: 'Add a contact', model: record('CONCERIA-DEMO', { tab: 'overview', dialog: { kind: 'contact' } }) },
     { id: 'items', label: 'Items & prices: approved sources', model: items(), note: 'Type in a cell and leave it: one field saved with the row\u2019s version. A colour\u2019s own primary, every colour of every company, an unusable unit.' },
     { id: 'items-saving', label: 'Items & prices: a price saving', model: items({ cells: { [`${ROW.id}:unitPrice`]: { state: 'saving' } } }) },
     { id: 'items-saved', label: 'Items & prices: the minimum saved', model: items({ cells: { [`${ROW.id}:minOrderQty`]: { state: 'saved' } } }) },
@@ -256,8 +257,9 @@ export const designScreen = defineDesignScreen<SupplierCase>({
     },
     { id: 'orders-empty', label: 'Orders: none yet', model: record('PROTEZIONI-PROVA', { tab: 'orders', purchaseOrders: loaded([]) }) },
     { id: 'orders-error', label: "Orders: couldn't load", model: record('CONCERIA-DEMO', { tab: 'orders', purchaseOrders: failed('problem.unavailable') }) },
-    { id: 'activity', label: 'Activity', model: record('CONCERIA-DEMO', { tab: 'activity' }) },
-    { id: 'dock', label: 'Thread beside Overview (≥ 1280 px, ⌘J)', model: record('CONCERIA-DEMO', { dockOpen: true }) },
+    // ---- B-TH-260: the thread docked (the rule of picture 38); Activity is gone, its tools in the thread's "⋯" (R-ACT).
+    { id: 'thread-docked', label: 'TH-6 · The supplier’s thread docked beside Overview & contacts (40 %): Reply to this supplier only', model: record('CONCERIA-DEMO'), note: 'The band sits in the shell’s band row with ONE pill; the thread is docked at 40 %. Its "⋯" holds Activity’s tools; its Files view the record’s loose files. An old ?tab=activity opens the thread; ?tab=contacts lands on Overview & contacts, ?tab=questionnaire on Documents & questionnaire.' },
+    { id: 'thread-no-right', label: 'TH-6 · Without threads.read: no thread beside the tabs (no Thread button)', model: record('CONCERIA-DEMO', { can: { ...RECORD_CAN, threads: false } }) },
     { id: 'address-new', label: 'Add a pick-up address', model: record('CONCERIA-DEMO', { dialog: { kind: 'address' } }) },
     { id: 'identity-new', label: 'New tax identity from a date', model: record('CONCERIA-DEMO', { dialog: { kind: 'identity', mode: 'new' } }) },
     { id: 'block', label: 'Block supplier', model: record('CONCERIA-DEMO', { dialog: { kind: 'block' } }) },
@@ -265,7 +267,8 @@ export const designScreen = defineDesignScreen<SupplierCase>({
     { id: 'loading', label: 'Loading', model: record('CONCERIA-DEMO', { party: null, asOf: null, live: 'connecting', purchaseOrders: loading() }) },
     { id: 'not-found', label: 'Not found', model: record('CONCERIA-DEMO', { party: null, problem: 'problem.notFound' }) },
     { id: 'no-access', label: 'No permission', model: record('CONCERIA-DEMO', { can: { ...RECORD_CAN, view: false } }) },
-    { id: 'shortcuts', label: 'Keyboard shortcuts (?)', model: record('CONCERIA-DEMO', { dialog: { kind: 'shortcuts' } }) },
+    // B-TH-260 (PR-14): the record's keys are in the band menu's ONE Keyboard line (no "?" overlay); one notice in the body column.
+    { id: 'notices', label: 'TH-6 · One notice: blocked shows, the changed-elsewhere notice waits behind "1 more notice"', model: record('FORN-BLOCCATO', { changedAt: at(29, 9, 40) }) },
     ...W2B_334,
   ],
 })

@@ -1212,5 +1212,79 @@
       "SEASON": "This season is not a season of the request’s company.",
       "LEAD": "A project is led by an active office person who may read it."
     }
+  },
+  "production": {
+    "col": "Production",
+    "colHint": "Production's answer: can we make it, or not before which week",
+    "cell": {
+      "OK": "OK",
+      "notBefore": "Not before week {week}",
+      "notBeforeYear": "Not before week {week} of {year}"
+    },
+    "late_one": "{count} day after the wanted date",
+    "late_other": "{count} days after the wanted date",
+    "lateWeeks_one": "{count} week after the wanted date",
+    "lateWeeks_other": "{count} weeks after the wanted date",
+    "title": "Production",
+    "none": "Production has not answered yet.",
+    "whoTypes": "Planning or the production manager types it here; ask them in an office note.",
+    "by": "Answered by {name}, {when}",
+    "byNobody": "Answered {when}",
+    "officeOnly": "Office only: the customer never sees it.",
+    "answer": "Answer for production",
+    "change": "Change the answer",
+    "menu": "Production answer…",
+    "menuHint": "OK, or not before which week (planning offers one)",
+    "chipHint": "open it in Details",
+    "editor": "Production's answer",
+    "kind": {
+      "label": "Answer",
+      "OK": "OK, we can make it",
+      "NOT_BEFORE": "Not before a week"
+    },
+    "week": "Not before week",
+    "weekHint": "The earliest week it can be ready (this week or a later one).",
+    "weekPick": "Pick the week",
+    "weekOption": "Week {week} · {from} – {to}",
+    "weekOptionYear": "Week {week} of {year} · {from} – {to}",
+    "suggest": {
+      "title": "Planning's suggestion",
+      "asking": "Asking planning…",
+      "again": "Ask again",
+      "use": "Use this suggestion",
+      "used": "Suggestion in use",
+      "at": "At {plant}",
+      "line": "Line {seq}: ready on {date}",
+      "linePart": "Line {seq}: some sizes ready on {date}, not all",
+      "lineNone": "Line {seq}: no date planning can promise",
+      "leftOut": "Line {seq}: {why}",
+      "plant": "Plant",
+      "plantPick": "Pick the plant that makes it",
+      "several": "The company has several plants: pick the one that makes it.",
+      "noPlant": "The company has no active plant to make it: answer it yourself.",
+      "forbidden": "Your role does not read promise dates at this plant: answer it yourself.",
+      "failed": "Planning could not be asked just now: try again, or answer it yourself.",
+      "noRight": "Planning's suggestion needs the right to read promise dates: answer it yourself."
+    },
+    "save": "Save the answer",
+    "takeBack": "Take the answer back",
+    "cancel": "Cancel",
+    "problem": {
+      "pick": "Pick OK or a week.",
+      "week": "Pick the earliest week it can be ready.",
+      "past": "That week is over: pick this week or a later one.",
+      "invalid": "The answer was refused: pick the week again.",
+      "noAnswer": "Production had not answered this request: there is nothing to take back.",
+      "stale": "Someone changed the request meanwhile: it was read again. Check the answer and save again.",
+      "unavailable": "The answer could not be saved just now: try again."
+    },
+    "held": {
+      "notProduction": "Production's answer is typed by whoever records promise dates (planning or the production manager)."
+    },
+    "done": {
+      "savedOk": "Production's answer on {number}: OK.",
+      "savedWeek": "Production's answer on {number}: not before week {week}.",
+      "takenBack": "Production's answer on {number} taken back."
+    }
   }
 }

@@ -13,6 +13,9 @@ import { answersOf, newWords, waitingWords } from './model'
 import { OwnerDialog } from './view/OwnerDialog'
 import { readWidth, writeWidth } from './use-thread-width'
 import { PortalHeadLine } from './view/PortalHeadLine'
+// B-TH-255
+import { viewQuery } from './model'
+import { feedKinds } from '../model'
 
 /**
  * B-TH-209 — the thread's Head (T1, rule R-ACT): who answers next from the last SHARED message, the five Activity doors
@@ -183,6 +186,20 @@ describe('the doors (R-ACT)', () => {
     expect(menuRows(base({ canManage: true, closed: { by: 'Alex Demo', at: '2026-11-12T16:00:00.000Z' } })).at(-1)).toEqual({ kind: 'reopen' })
   })
 
+  // ---- TH-5 follow-up (B-TH-249, PROJ.record-F04): a closed project reopens its thread from its own band (one command); the API refuses
+  // the thread's own Reopen, so the head never offers it — closing an open project's thread stays as it was.
+  it('a closed project: no Reopen in the head (neither the ⋯ line nor the closed line\'s button); Close thread stays on an open one', () => {
+    const render = (model: HeadModel) => renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: { head: model, frames: [718], dialogs: designScreen.cases[0]!.model.dialogs, open: null } })))
+    const closed = { by: 'Alex Demo', at: '2026-11-12T16:00:00.000Z' }
+    expect(menuRows(base({ canManage: true, closed, reopenWithRecord: true })).some((row) => row.kind === 'reopen' || row.kind === 'close')).toBe(false)
+    expect(menuRows(base({ canManage: true, reopenWithRecord: true })).at(-1)).toEqual({ kind: 'close' })
+    const html = render(base({ canManage: true, closed, reopenWithRecord: true }))
+    expect(html).toContain('Closed by Alex Demo')
+    expect(html).not.toContain('>Reopen<')
+    expect(render(base({ canManage: true, closed }))).toContain('>Reopen<')
+  })
+  // ---- end TH-5 follow-up
+
   it('folds the counts onto their doors when the chips do not fit', () => {
     const counts = { tasks: { kind: 'tasks' as const, count: 2, lines: [] } }
     expect(menuRows(base({ counts }), true)[0]).toMatchObject({ hint: { key: 'act.openTasks', params: { count: 2 } } })
@@ -245,3 +262,51 @@ describe('the words', () => {
     expect(html).toContain('aria-label="Thread tools"')
   })
 })
+
+// ---- B-TH-255 (B-TH-079, T1-F05): the View — the choices the thread holds, the chip, and what it asks the API ----------------
+describe('B-TH-255 — the View filters by audience: choices by what the thread holds, a chip, the API asked for what it hides', () => {
+  const render = (model: HeadModel, locale: 'it' | 'en' = 'en') => renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: { head: model, frames: [718], dialogs: designScreen.cases[0]!.model.dialogs, open: null } })))
+
+  it('the view as the API reads it: With the customer = PARTNER, Office notes = OFFICE, Changes = the steps only; All asks nothing', () => {
+    expect(viewQuery('shared')).toEqual({ audience: 'PARTNER', kinds: 'message' })
+    expect(viewQuery('notes')).toEqual({ audience: 'OFFICE', kinds: 'message' })
+    expect(viewQuery('changes')).toEqual({ audience: 'ALL', kinds: 'change' })
+    expect(viewQuery('all')).toBeNull()
+  })
+
+  it('a choice whose kind the thread lacks is not offered (a thread of shared messages only: no Office notes; notes only: no With the customer)', () => {
+    expect(viewsOffered({ ...feedKinds([{ kind: 'theirs' }, { kind: 'ours' }]), canAudit: false })).toEqual(['all', 'shared'])
+    expect(viewsOffered({ ...feedKinds([{ kind: 'note' }, { kind: 'floor' }]), canAudit: false })).toEqual(['all', 'notes'])
+    expect(viewsOffered({ ...feedKinds([]), canAudit: false })).toEqual(['all'])
+    // One choice only (All): no View menu at all.
+    expect(render(base({ views: ['all'] }))).not.toContain('aria-label="Choose what the thread shows"')
+    expect(render(base({ views: ['all', 'shared'] }))).toContain('aria-label="Choose what the thread shows"')
+  })
+
+  it('a chip names the active view (the party kind’s own words); its × shows all again; none on All', () => {
+    const supplier = render(base({ party: { name: 'Supplier Demo', role: 'supplier' }, view: 'shared', views: ['all', 'shared'] }))
+    expect(supplier).toContain('aria-label="Showing With the supplier: show all messages"')
+    const customer = render(base({ view: 'shared', views: ['all', 'shared', 'notes'] }))
+    expect(customer).toContain('aria-label="Showing With the customer: show all messages"')
+    expect(render(base({ view: 'notes', views: ['all', 'shared', 'notes'] }), 'it')).toContain('Mostra Note d&#x27;ufficio: mostra tutti i messaggi')
+    expect(render(base())).not.toContain('fw-rth-viewchip')
+  })
+
+  it('the hidden-new line belongs to the feed (record-thread-feed), in both languages with the same placeholders', () => {
+    for (const locale of LOCALES) {
+      const words = messagesFor(locale, ['record-thread-feed'])['record-thread-feed'] ?? {}
+      expect(words['hidden.line_one'], locale).toContain('{count}')
+      expect(words['hidden.line_other'], locale).toContain('{count}')
+      expect(words['hidden.showAll'], locale).toBeTruthy()
+    }
+  })
+
+  it('the design case of a supplier’s View draws with no key left, in it and en', () => {
+    const item = designScreen.cases.find((entry) => entry.id === 'th-255-view-supplier')!
+    for (const locale of LOCALES) {
+      const html = renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: item.model })))
+      expect(html).not.toMatch(KEY_ON_SCREEN)
+    }
+  })
+})
+// ---- end B-TH-255

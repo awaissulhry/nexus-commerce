@@ -696,7 +696,12 @@
     },
     "more": "Altre azioni",
     "openIt": "Aprilo",
-    "reload": "Ricarica"
+    "reload": "Ricarica",
+    "title": "Reso",
+    "repairTitle": "Riparazione",
+    "dockLabel": "Conversazione della scheda",
+    "dockLabelOf": "Conversazione di {number}",
+    "tabsLabel": "Parti della scheda"
   },
   "refusal": {
     "aboveSold": "Più di quanto venduto: la quantità è stata ripristinata.",
@@ -953,7 +958,6 @@
     "waitingBy": "Merce attesa entro il {date}"
   },
   "tab": {
-    "activity": "Attività",
     "credit": "Sostituzione e accredito",
     "inspection": "Controllo e decisione",
     "intake": "Accettazione e foto",

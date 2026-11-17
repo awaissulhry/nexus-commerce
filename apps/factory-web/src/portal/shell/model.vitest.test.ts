@@ -230,3 +230,38 @@ describe('the band a page fills', () => {
     expect(bandCalling({ current: null })).toBeNull()
   })
 })
+
+// ---- B-TH-273 (PL3; tree E "Portal record pages": the Messages tab and the Ask modal go everywhere) ------------------------------
+import { readFileSync } from 'node:fs'
+import { CATALOGUE } from '../../lib/i18n/messages'
+import { RECORD_TABS as CUSTOMER_ORDER_TABS } from '../customer/orders/model'
+import { RECORD_TABS as CUSTOMER_CASE_TABS } from '../customer/returns/model'
+import { RECORD_TABS as SUPPLIER_ORDER_TABS } from '../supplier/orders/model'
+import { RECORD_TABS as JOB_TABS } from '../supplier/jobs/model'
+import { emailTopicNoteKey } from './model'
+
+describe('B-TH-273 — record pages without Messages: the conversation docks in the portal record frame', () => {
+  it('no portal record page keeps a Messages tab (order 4, return and complaint 2, purchase order 3, job 3)', () => {
+    for (const tabs of [CUSTOMER_ORDER_TABS, CUSTOMER_CASE_TABS, SUPPLIER_ORDER_TABS, JOB_TABS] as readonly (readonly string[])[]) expect(tabs).not.toContain('messages')
+    expect(CUSTOMER_ORDER_TABS).toEqual(['status', 'lines', 'shipments', 'documents'])
+    expect(CUSTOMER_CASE_TABS).toEqual(['request', 'status'])
+    expect(SUPPLIER_ORDER_TABS).toHaveLength(3)
+    expect(JOB_TABS).toHaveLength(3)
+  })
+
+  it('the generic page has no tabs either (B-TH-274: the summary beside the conversation)', () => {
+    const page = readFileSync(new URL('./record/RecordPage.tsx', import.meta.url), 'utf8')
+    expect(page).not.toMatch(/tabs:\s*\{/)
+    expect(page).toContain('<PortalThread type={type} id={id}')
+  })
+
+  it('mail for messages says "as it happens" is the default beside its setting; a locked topic says why it is locked instead', () => {
+    expect(emailTopicNoteKey({ topic: 'MESSAGES', locked: false })).toBe('email.defaultInstant')
+    expect(emailTopicNoteKey({ topic: 'MESSAGES', locked: true })).toBeNull()
+    expect(emailTopicNoteKey({ topic: 'DATES', locked: false })).toBeNull()
+    expect(emailTopicNoteKey({ topic: 'NOT_A_TOPIC', locked: false })).toBeNull()
+    expect(CATALOGUE.en.portal!['email.defaultInstant']).toContain('As it happens by default')
+    expect(CATALOGUE.it.portal!['email.defaultInstant']).toBeTruthy()
+  })
+})
+// ---- end B-TH-273
