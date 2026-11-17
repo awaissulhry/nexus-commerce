@@ -271,10 +271,10 @@
     "noun": "richiesta",
     "tab": {
       "change": "Modifica",
-      "context": "Contesto",
-      "conversation": "Conversazione",
-      "history": "Cronologia"
+      "context": "Contesto e cronologia"
     },
+    "historyTitle": "Cronologia delle approvazioni",
+    "threadLabel": "Conversazione di questa richiesta",
     "asked": "{who} ha chiesto il {at}",
     "decided": "{status} da {who} il {at}",
     "withdrawn": "Ritirata il {at}",
@@ -298,10 +298,6 @@
     "due": "Da decidere entro",
     "noMoney": "Gli importi si vedono solo con il permesso di vederli.",
     "open": "Apri la pagina completa"
-  },
-  "conversation": {
-    "title": "Ancora nessun commento",
-    "body": "I commenti tra l’approvatore e chi ha chiesto restano con la richiesta."
   },
   "sign": {
     "title": "Approva come '{meaning}'",

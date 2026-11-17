@@ -355,8 +355,7 @@
     "title": "Scorciatoie da tastiera",
     "add": "Nuovo fascicolo tecnico",
     "pack": "Prepara il pacchetto prove",
-    "close": "Chiudi la finestra",
-    "dock": "Tieni la conversazione accanto al fascicolo"
+    "close": "Chiudi la finestra"
   },
   "pack": {
     "title": "Prepara il pacchetto prove · {number}",
@@ -444,15 +443,20 @@
     "archivedSince": "Archiviato il {date}, conservato fino al {until}",
     "archivedReason": "Motivo: {reason}",
     "archivedBody": "Resta com'era, leggibile da chi lo tiene.",
-    "reloadFailed": "Non è stato possibile rileggere il fascicolo: quello che vedi è l'ultima copia."
+    "reloadFailed": "Non è stato possibile rileggere il fascicolo: quello che vedi è l'ultima copia.",
+    "name": "Fascicolo tecnico",
+    "dockLabel": "Conversazione del fascicolo tecnico {number}",
+    "tabsLabel": "Parti del fascicolo tecnico",
+    "notFound": "Fascicolo tecnico non trovato",
+    "forbidden": "Non per il tuo ruolo",
+    "failed": "Il fascicolo tecnico non si è potuto leggere"
   },
   "tab": {
     "annex": "Elenco Allegato III",
     "risk": "Valutazione dei rischi",
     "tests": "Rapporti di prova",
     "production": "Controllo di produzione",
-    "pack": "Pacchetto prove",
-    "activity": "Attività"
+    "pack": "Pacchetto prove"
   },
   "stepUp": {
     "confirm": "Conferma",

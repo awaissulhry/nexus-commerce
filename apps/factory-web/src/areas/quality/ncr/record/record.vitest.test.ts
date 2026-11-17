@@ -45,6 +45,9 @@ import {
   TIME_ZONE,
 } from './view-model'
 import { ncrCan } from '../model'
+// B-TH-266: the NCR on RecordFrame (tabs 6 → 5, the docked thread).
+import { MERGED_TABS, RECORD_TABS, tabOf } from '../model'
+import { textOf } from '../../../../lib/record-thread/parts/testing'
 
 // The DS Modal opens in a portal after mount (nothing on a server render): drawn in place here, so every dialog's words
 // and its code are rendered and checked too.
@@ -127,7 +130,7 @@ describe('SCR-145 the NCR record: every design case draws in both languages with
       for (const state of DECISION_STATES) has(`decisionState.${state}`)
       for (const outcome of DISPOSITION_OUTCOMES) has(`outcome.${outcome}`)
       for (const move of DISPOSITION_MOVES) has(`move.${move}`)
-      for (const tab of ['problem', 'containment', 'disposition', 'cost', 'linked', 'activity']) has(`tab.${tab}`)
+      for (const tab of ['problem', 'containment', 'disposition', 'cost', 'linked']) has(`tab.${tab}`)
       // B-W2b-113
       for (const kind of COST_KINDS) has(`cost.kind.${kind}`)
       for (const type of ['NcrDispositionLine', 'ReworkOrder', 'StockMove', 'other']) has(`cost.record.${type}`)
@@ -251,5 +254,69 @@ describe('B-W2b-113: cost, concessions, escalate, cause', () => {
     expect(html('concession-critical')).toContain('never sold under a concession')
     expect(html('escalated')).toContain('CAPA-DEMO-0004')
     expect(html('rework-scrap', 'it')).toContain('Scarta tutto')
+  })
+})
+
+// ---- B-TH-266: the NCR on RecordFrame (O-QA-NCR; the rule of picture 38, the tabs of 08-tabs) ----
+describe('B-TH-266: the NCR on RecordFrame — five tabs, its own thread docked (internal: notes only)', () => {
+  const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const found = designScreen.cases.find((entry) => entry.id === id)
+    if (!found) throw new Error(`no case ${id}`)
+    return render(found.model, locale)
+  }
+
+  it('five tabs; every old ?tab= keeps working (R-8): Activity → Problem & evidence with the thread opened', () => {
+    expect(RECORD_TABS).toEqual(['problem', 'containment', 'disposition', 'cost', 'linked'])
+    expect(MERGED_TABS).toEqual({ activity: 'problem' })
+    for (const tab of RECORD_TABS) expect(tabOf(tab)).toBe(tab)
+    expect(tabOf('activity')).toBe('problem')
+    expect(tabOf('constructor')).toBe('problem')
+    expect(tabOf('nonsense')).toBe('problem')
+    expect(tabOf(null)).toBe('problem')
+    expect(tabOf(undefined)).toBe('problem')
+  })
+
+  it('ONE thread docked beside every tab, its "⋯" (R-ACT) on each; no Activity tab, no record panels, no dock hook, no "?" overlay', () => {
+    for (const id of ['problem', 'containment', 'disposition', 'linked', 'cost', 'thread-docked', 'closed']) {
+      const page = html(id)
+      expect(page.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(page, id).toContain('aria-label="Thread tools"')
+      expect(page, id).not.toContain('fw-rp-tabs')
+      expect(page, id).not.toContain('?tab=activity')
+      expect(page, id).not.toContain('fw-q-record-dock')
+    }
+    const container = readFileSync(join(__dirname, 'NcrRecord.tsx'), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain('party={null}')
+    expect(container).toContain('can.threadsRead')
+    expect(container).not.toContain("tab === 'activity'")
+    const view = readFileSync(join(__dirname, 'view', 'NcrRecordView.tsx'), 'utf8')
+    expect(view).not.toContain('RecordPanelsView')
+    expect(view).not.toContain("event.key === '?'")
+    expect(view).toContain('_shared/record-frame/RecordFrame')
+  })
+
+  it('the page states draw inside the frame with no thread (loading, failed, not found, no right)', () => {
+    for (const id of ['loading', 'error', 'not-found', 'no-permission']) {
+      const page = html(id)
+      expect(page, id).not.toContain('class="fw-rcf-dock"')
+    }
+    expect(textOf(html('no-permission'))).not.toContain('NCR-DEMO')
+  })
+
+  it('a role without threads.read has no thread (the frame draws no Thread button)', () => {
+    const viewOnly = designScreen.cases.find((entry) => entry.id === 'view-only')!
+    expect(viewOnly.model.record.can.threadsRead).toBe(true)
+    const noThreads = { ...viewOnly.model, record: { ...viewOnly.model.record, can: { ...viewOnly.model.record.can, threadsRead: false } } }
+    expect(render(noThreads, 'en')).not.toContain('class="fw-rcf-dock"')
+  })
+
+  it('the wall (W08, W25, W34): the NCR\'s thread is internal — no party, no "Reply to", no customer or supplier named in it', () => {
+    const page = html('thread-docked')
+    const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
+    expect(dock).toContain('NCR-DEMO-0031')
+    expect(dock).not.toMatch(/Reply to/)
+    expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
+    expect(textOf(html('thread-docked', 'it'))).toContain('Problema ed evidenze')
   })
 })

@@ -262,6 +262,7 @@ async function recordOf(db: Reader, file: FileRow, actor: Actor, now: Date) {
       archiveReason: file.archiveReason,
       createdAt: toUtcIso(file.createdAt),
       createdBy: gathered.names(file.createdById),
+      brand: await brandOf(db, style?.brandPartyId ?? null), // TH-6 part B: the thread's party
     },
     points: summary.points.map((entry) => ({
       point: entry.point,
@@ -280,6 +281,13 @@ async function recordOf(db: Reader, file: FileRow, actor: Actor, now: Date) {
   }
 }
 export type FileRecord = Awaited<ReturnType<typeof recordOf>>
+
+/** TH-6 part B (B-TH-267): the style's brand (the private-label customer) by id, its legal name; null for our own collection. */
+async function brandOf(db: Reader, partyId: string | null): Promise<{ id: string; name: string } | null> {
+  if (!partyId) return null
+  const party = await db.party.findUnique({ where: { id: partyId }, select: { id: true, legalName: true } })
+  return party ? { id: party.id, name: party.legalName } : null
+}
 
 /** GET /compliance/techfiles/:fileId */
 export async function getFile(request: FastifyRequest, fileId: string): Promise<FileRecord> {

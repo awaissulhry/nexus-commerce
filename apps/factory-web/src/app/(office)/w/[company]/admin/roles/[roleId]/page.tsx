@@ -4,7 +4,7 @@ import { RoleRecord } from '../../../../../../../areas/admin/roles/RoleRecord'
 
 export const metadata: Metadata = { title: 'Role · Nexus Factory' }
 
-/** Admin › Roles & permissions › a role (SCR-012 Role record; `?tab=permissions|rules|users|activity`). */
+/** Admin › Roles & permissions › a role (SCR-012 Role record; `?tab=permissions|rules|users`; the old `activity` opens Permissions with the thread — B-TH-269). */
 export default async function Page({ params }: { params: Promise<{ roleId: string }> }) {
   const { roleId } = await params
   return (

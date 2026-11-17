@@ -36,8 +36,16 @@ import {
   registerHeld,
   retainUntil,
   tileCounts,
+  // B-TH-267
+  MERGED_TABS,
+  RECORD_TABS,
+  tabOf,
+  threadPartyOf,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
+// B-TH-267: the certificate on RecordFrame (tabs 5 → 3, the docked thread).
+import { readFileSync } from 'node:fs'
+import { textOf } from '../../../lib/record-thread/parts/testing'
 
 const owner = certCan(ROLE_PERMISSIONS.owner)
 const production = certCan(ROLE_PERMISSIONS.production)
@@ -265,5 +273,91 @@ describe('every design case draws in both languages with no key left on screen',
 
   it('no money anywhere on these screens', () => {
     for (const screen of [listScreen, recordScreen] as DesignScreen<unknown>[]) for (const item of screen.cases) expect(render(screen, item.model, 'en'), item.id).not.toMatch(/€|EUR\b/)
+  })
+})
+
+// ---- B-TH-267: the certificate on RecordFrame (O-CMP-CERT; the rule of picture 38, the tabs of 08-tabs) ----
+describe('B-TH-267: the certificate on RecordFrame — Coverage · Renewals · Notified body & PDF, the thread docked', () => {
+  const screen = recordScreen as unknown as DesignScreen<unknown>
+  const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const found = screen.cases.find((item) => item.id === id)
+    if (!found) throw new Error(`no case ${id}`)
+    const View = screen.view as ComponentType<{ model: unknown }>
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: found.model })))
+  }
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('three tabs; every old ?tab= keeps working (R-8): Files → Notified body & PDF, Activity → Coverage with the thread opened', () => {
+    expect(RECORD_TABS).toEqual(['coverage', 'renewals', 'body'])
+    expect(MERGED_TABS).toEqual({ files: 'body', activity: 'coverage' })
+    expect(tabOf('files')).toBe('body')
+    expect(tabOf('body')).toBe('body')
+    expect(tabOf('renewals')).toBe('renewals')
+    expect(tabOf('activity')).toBe('coverage')
+    expect(tabOf('constructor')).toBe('coverage')
+    expect(tabOf(null)).toBe('coverage')
+    // No address to a tab that went: the band's "The PDF and files" and Add certificate's failed upload open Notified body & PDF.
+    expect(source('./record/view/CertificateRecordView.tsx')).not.toContain("'tab=files'")
+    expect(source('./CertificatesPage.tsx')).toContain("'body&pdf=failed'")
+    expect(source('./CertificatesPage.tsx')).not.toContain("'files&pdf=failed'")
+  })
+
+  it('Notified body & PDF keeps both tabs’ work: the body, then the certificate PDF on its own hash route and status gate (R-2)', () => {
+    const text = textOf(html('body-pdf'))
+    expect(text).toContain('Notified body & PDF')
+    expect(text).toContain('Demo Test Lab')
+    expect(text).toContain('demo-cert-0001.pdf')
+    expect(textOf(html('body-pdf', 'it'))).toContain('Organismo notificato e PDF')
+    expect(textOf(html('body-pdf-empty'))).toContain('Notified body & PDF')
+    // The PDF goes up through the certificate's own route (announce → store → confirm, the hash checked), never the thread's
+    // generic upload, and opens through its own download: the view hands no file to the frame's file viewer.
+    const container = source('./record/CertificateRecord.tsx')
+    expect(container).toContain('uploadPdf(api, value.id, picked)')
+    expect(container).toContain('listCertificateFiles(api, certificateId)')
+    expect(source('./record/view/CertificateRecordView.tsx')).not.toContain('openFiles')
+  })
+
+  it('ONE thread docked beside every tab, its "⋯" (R-ACT) on each; no Activity tab, no record panels, no dock copy', () => {
+    for (const id of ['valid', 'body-pdf', 'w2a-renewals', 'thread-docked']) {
+      const page = html(id)
+      expect(page.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(page, id).toContain('aria-label="Thread tools"')
+      expect(page, id).not.toContain('fw-rp-tabs')
+      expect(page, id).not.toContain('?tab=activity')
+      expect(page, id).not.toContain('tab=files')
+    }
+    // Not for this role, loading, not found: the band stays, no thread.
+    for (const id of ['no-permission', 'loading', 'not-found']) expect(html(id), id).not.toContain('class="fw-rcf-dock"')
+    const container = source('./record/CertificateRecord.tsx')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain('value && record && can.threads ?')
+    expect(container).not.toContain('?tab=activity')
+    expect(container).not.toContain('fw.ce.dock')
+    expect(source('./record/view/CertificateRecordView.tsx')).not.toContain('RecordPanelsView')
+  })
+
+  it('the thread’s only party is the brand that holds the certificate (the API’s rule); our own company’s: notes only', () => {
+    expect(threadPartyOf(byNumber('CERT-DEMO-0001'), BRANDS)).toBeNull()
+    expect(threadPartyOf(byNumber('CERT-DEMO-0008'), BRANDS)).toEqual({ id: BRANDS[0]!.id, name: 'Demo Moto' })
+    expect(threadPartyOf(byNumber('CERT-DEMO-0008'), null)).toBeNull()
+  })
+
+  it('the wall (W13, W34): the docked thread of a brand-held certificate speaks of that brand only', () => {
+    const page = html('thread-brand')
+    const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
+    expect(dock).toContain('Demo Moto')
+    expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
+    const own = html('thread-docked')
+    expect(textOf(own.slice(own.indexOf('class="fw-rcf-dock"')))).not.toContain('Demo Moto')
+  })
+
+  // TH-6 part B (PR-14): the record's own keys (k, r on a draft) are listed in the band menu's ONE Keyboard line — no "?" overlay.
+  it('passes its own keys to the band (k, and r on a draft) and has no "?" key handler, no keys line of its own, no keys window', () => {
+    const view = source('./record/view/CertificateRecordView.tsx')
+    expect(view).toContain("const keys = [{ keys: ['k'], label: t('keys.check') }, ...(certificate.status === 'DRAFT' ? [{ keys: ['r'], label: t('keys.register') }] : [])]")
+    expect(view).toMatch(/moreLabel: t\('record\.more'\),\s*keys,/)
+    expect(view).not.toContain("event.key === '?'")
+    expect(view).not.toContain("id: 'keys'")
+    expect(view).not.toMatch(/ShortcutsDialog|kind: 'shortcuts'/)
   })
 })

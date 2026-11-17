@@ -122,8 +122,9 @@ describe('the calls', () => {
 })
 
 describe('the record tabs in the design\'s order', () => {
-  it('the order: … Documents, Margin, Activity; the work order: … Quality, Labour & cost, Documents, Activity', () => {
-    expect(ORDER_TABS.slice(-3)).toEqual(['documents', 'margin', 'activity'])
+  // B-TH-214 / B-TH-301 merged the order's tabs 9 → 5 (Documents into Confirmation & changes; Activity docks as the thread).
+  it('the order: … Shipments & invoices, Confirmation & changes, Margin; the work order: … Quality, Labour & cost, Documents, Activity', () => {
+    expect(ORDER_TABS.slice(-3)).toEqual(['shipments', 'changes', 'margin'])
     expect(WORK_ORDER_TABS.slice(-4)).toEqual(['quality', 'labour', 'documents', 'activity'])
   })
 })

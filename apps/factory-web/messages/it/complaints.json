@@ -281,7 +281,7 @@
     "alt": "Foto {n} inviata dal cliente",
     "unread": "{name}: non visualizzabile",
     "noRight": "Il tuo ruolo non vede i file.",
-    "addInActivity": "Altre foto e la posta del cliente vanno nel thread della scheda (Attività)."
+    "addInThread": "Altre foto e la posta del cliente vanno nella conversazione del reclamo, accanto a ogni scheda: la stessa che il cliente vede sul suo reclamo."
   },
   "log": {
     "action": "Registra reclamo",
@@ -361,14 +361,16 @@
     "editWordsRequired": "Le parole del cliente restano sul reclamo",
     "editNothing": "Nessuna modifica",
     "editUnsaved": "Modifiche non salvate",
-    "editSave": "Salva modifiche"
+    "editSave": "Salva modifiche",
+    "title": "Reclamo",
+    "dockLabel": "La discussione del reclamo",
+    "tabsLabel": "Sezioni del reclamo"
   },
   "tab": {
     "complaint": "Reclamo",
     "investigation": "Indagine",
     "answer": "Risposta",
-    "linked": "Collegamenti",
-    "activity": "Attività"
+    "linked": "Collegamenti"
   },
   "action": {
     "triage": "Smista",

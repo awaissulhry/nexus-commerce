@@ -15,6 +15,7 @@ import type { DockWidth } from '../../../lib/record-thread/head/model'
 import { useThreadWidth } from '../../../lib/record-thread/head/use-thread-width'
 import { usePrintMode } from '../../../shell/print/print-mode'
 import { arrivalOf, DOCK_COLUMNS, DOCK_FROM, dockWidth, FRAME_KEYS, frameMode, isThreadKey, PHONE_BELOW, type FrameMode } from './model'
+import type { FrameFilesAsk } from './model' // B-TH-264 follow-up
 // B-TH-229: "Thread · 2 new".
 import { threadButtonWords } from './model'
 import './record-frame.css'
@@ -37,6 +38,10 @@ export interface RecordBand {
   readonly more?: readonly MenuItemDef[]
   /** The ⋯ button's accessible name ("More actions"). */
   readonly moreLabel?: string
+  // ---- TH-6 part B (PR-14: key hints only in the band menu's ONE "Keyboard" line): the record's own keys (a certificate's k / r, a
+  // lot's c / r), listed first in the frame's Keyboard window, in the page's words — no second keys line, no "?" overlay.
+  readonly keys?: readonly { readonly keys: readonly string[]; readonly label: string }[]
+  // ---- end TH-6 part B
 }
 
 export interface RecordFrameProps {
@@ -53,7 +58,14 @@ export interface RecordFrameProps {
   readonly printThread?: ReactNode
   /** The record's body: its tabs, its one notice, the tab's content. */
   readonly children: ReactNode
+  // ---- B-TH-269 (R-10; 08-tabs: User and Worker threads never dock open): the thread docks CLOSED on arrival; the band's Thread
+  // button, ⌘J or an old `?tab=activity` address shows it. A person's own choice to show it lasts while the page is open.
+  readonly closed?: boolean
+  // ---- end B-TH-269
 }
+
+// B-TH-264 follow-up: the body's files in the thread's ONE viewer (the types live in model.ts).
+export type { FrameFile, FrameFilesAsk } from './model'
 
 /** What the docked thread reads of its frame: the width (null where it is not docked), the chooser, the phone head, the way back. */
 export interface RecordFrameState {
@@ -72,8 +84,14 @@ export interface RecordFrameState {
   // one of the thread's doors — the thread shows (docked) or opens full width (narrower), then the door opens, as `panel=approvals` does.
   readonly openDoor?: (door: 'approve') => void
   // ---- end B-TH-262
+  // ---- B-TH-264 follow-up: the body's files in the thread's ONE viewer. `openFiles` is there only where the page has a thread (else
+  // the body opens the file as before); the thread reads `filesAsk` once and clears it.
+  readonly openFiles?: (ask: FrameFilesAsk) => void
+  readonly filesAsk?: FrameFilesAsk | null
+  readonly clearFiles?: () => void
+  // ---- end B-TH-264 follow-up
   // ---- B-TH-265: a part of the band or body shows the thread with no door (the work order's "Open the order's thread" in Order files):
-  // docked, it shows (if hidden); narrower, the full-width thread opens.
+  // docked, it shows (if hidden); narrower, the full-width thread opens. (TH-6 part B's invoice Send copy uses it too, B-TH-268.)
   readonly showThread?: () => void
   // ---- end B-TH-265
 }
@@ -152,7 +170,7 @@ export function RecordFrame(props: RecordFrameProps) {
   )
 }
 
-function Frame({ recordType, personId, band, thread, threadLabel, wide = false, printThread, children }: RecordFrameProps) {
+function Frame({ recordType, personId, band, thread, threadLabel, wide = false, printThread, children, closed = false /* B-TH-269 */ }: RecordFrameProps) {
   const t = useT(FRAME_NS)
   const slot = useBandSlot()
   const printing = usePrintMode()
@@ -164,13 +182,14 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
   const phone = useMedia(`(max-width: ${PHONE_BELOW - 1}px)`, false)
   const wideViewport = useMedia('(min-width: 1600px)', false)
   const mode: FrameMode = frameMode(docked ? DOCK_FROM : DOCK_FROM - 1)
-  const sizes = useThreadWidth(recordType, personId, { keys: false })
+  const sizes = useThreadWidth(recordType, personId, { keys: false, startHidden: closed /* B-TH-269 (R-10) */ })
   const width = dockWidth({ chosen: sizes.width, remembered: sizes.remembered, wideTab: wide, viewport: wideViewport ? 1600 : 1440 })
   const hasThread = thread !== null
   const viewOpen = params?.get(THREAD_PARAM) === 'open'
   const [details, setDetails] = useState(false)
   const [keys, setKeys] = useState(false)
   const [door, setDoor] = useState<'approve' | null>(null)
+  const [filesAsk, setFilesAsk] = useState<FrameFilesAsk | null>(null) // B-TH-264 follow-up
   // B-TH-229 (band-F05, PL1-F04): the reader's own new messages, as the docked thread read them.
   const [fresh, setFresh] = useState(0)
   const before = useRef<DockWidth>('forty')
@@ -326,6 +345,9 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
     },
     [mode, sizes, viewOpen, openView],
   )
+  // B-TH-264 follow-up: the body's files in the thread's viewer (a window over the page: the dock need not be shown for it).
+  const openFiles = useCallback((ask: FrameFilesAsk) => setFilesAsk(ask), [])
+  const clearFiles = useCallback(() => setFilesAsk(null), [])
   // ---- B-TH-265: show the thread (no door).
   const showThread = useCallback(() => {
     if (mode === 'docked') sizes.show()
@@ -333,8 +355,8 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
   }, [mode, sizes, viewOpen, openView])
   // ---- end B-TH-265
   const state = useMemo<RecordFrameState>(
-    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh, openDoor /* B-TH-262 */, showThread /* B-TH-265 */ }),
-    [mode, width, phone, choose, closeView, door, openDoor, showThread],
+    () => ({ mode, width: mode === 'docked' ? width : null, phone, choose, close: closeView, door, clearDoor: () => setDoor(null), reportNew: setFresh, openDoor /* B-TH-262 */, showThread /* B-TH-265 */, ...(hasThread ? { openFiles, filesAsk, clearFiles } : {}) /* B-TH-264 follow-up */ }),
+    [mode, width, phone, choose, closeView, door, openDoor, showThread, hasThread, openFiles, filesAsk, clearFiles],
   )
 
   const buttonWords = threadButtonWords(fresh) // B-TH-229
@@ -429,6 +451,17 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
       {keys && (
         <Modal open size="sm" title={t('keys.title')} onClose={() => setKeys(false)}>
           <dl className="fw-rcf-keylist">
+            {/* TH-6 part B: the record's own keys first, then the thread's. */}
+            {(band.keys ?? []).map((entry) => (
+              <div key={`own-${entry.keys.join('+')}`} className="fw-rcf-keyrow">
+                <dt>
+                  {entry.keys.map((key) => (
+                    <Kbd key={key}>{key}</Kbd>
+                  ))}
+                </dt>
+                <dd>{entry.label}</dd>
+              </div>
+            ))}
             {FRAME_KEYS.map((entry) => (
               <div key={entry.words} className="fw-rcf-keyrow">
                 <dt>

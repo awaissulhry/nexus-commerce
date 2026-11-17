@@ -9,12 +9,28 @@ import type { RoleEditorModel } from './save-role/view/RoleEditor'
 /**
  * SCR-012 Roles & permissions (design 02 admin.roles; PLT-029, PLT-030, PLT-034): the ready-made roles (kept equal to
  * their templates) and the tenant's custom copies, each said in plain words first — what it does, what money it sees —
- * then as a ticked list of actions. A role record: Permissions, Scope rules, Users, Activity. B-W2b-413: New role (a copy of a
- * ready-made role, new-role/) and Change role (a custom role's ticks, reviewed then saved, save-role/).
+ * then as a ticked list of actions. A role record: Permissions, Scope rules, Users, with its thread docked beside them (B-TH-269).
+ * B-W2b-413: New role (a copy of a ready-made role, new-role/) and Change role (a custom role's ticks, reviewed then saved, save-role/).
  */
 
-export const ROLE_TABS = ['permissions', 'rules', 'users', 'activity'] as const
+// ---- B-TH-269 (threads plan TH-6; 08-tabs O-ADM-ROLE; the rule of picture 38): tabs 4 → 3. Activity goes (R-ACT: its tools are in
+// the docked thread's "⋯"; its history in the thread's View › Changes).
+export const ROLE_TABS = ['permissions', 'rules', 'users'] as const
 export type RoleTab = (typeof ROLE_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Permissions with the thread opened (RecordFrame reads the address). */
+export const ROLE_MERGED_TABS: Readonly<Record<string, RoleTab>> = Object.freeze({ activity: 'permissions' })
+export const roleTabOf = (value: string | null | undefined): RoleTab => {
+  const asked = value ?? ''
+  if ((ROLE_TABS as readonly string[]).includes(asked)) return asked as RoleTab
+  return Object.hasOwn(ROLE_MERGED_TABS, asked) ? ROLE_MERGED_TABS[asked]! : 'permissions'
+}
+/**
+ * B-TH-005 (on the API: THREAD_GATES Role → roles.view) and W03: a role's thread holds notes about who holds it — read only with
+ * threads.read AND roles.view (the API refuses it otherwise; the page mounts no thread then). Notes only: no outside party.
+ */
+export const ROLE_THREAD_RIGHTS = ['threads.read', 'roles.view'] as const
+export const roleThreadMounted = (held: ReadonlySet<string>): boolean => ROLE_THREAD_RIGHTS.every((right) => held.has(right))
+// ---- end B-TH-269
 
 export interface RolesViewModel {
   prefix: string
@@ -63,7 +79,8 @@ export interface RoleRecordModel {
   /** People who hold the role now (from the users list), with where. */
   holders: Loaded<User>
   companies: readonly ScopeOption[]
-  dockOpen?: boolean
+  /** B-TH-269: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
   /** B-W2a-36: Scope rules › Two-factor (the switch, with who it affects); absent: the W0 read-only words. */
   twoFactor?: RoleTwoFactorModel
   /** B-W2b-413 (save-role/): a custom role's editable permissions; absent: read-only. */

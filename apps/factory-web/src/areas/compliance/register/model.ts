@@ -360,10 +360,21 @@ export interface EntryRecordModel {
   readonly dialogProblem?: { key: string; lines: readonly string[] } | null
   /** Someone else changed the entry while a dialog was open. */
   readonly changedAt?: string | null
-  readonly dockOpen?: boolean
+  /** B-TH-267: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  readonly personId?: string | null
   readonly today: string
 }
 
 // B-W2b-271: Authority notices (notices sent, requests received), after Affected units (design rec:Register entry tabs).
-export const RECORD_TABS = ['event', 'affected', 'authority', 'actions', 'activity'] as const
+// ---- B-TH-267 (threads plan TH-6; 08-tabs O-CMP-REG; the rule of picture 38): tabs 5 → 4. Activity goes (R-ACT: its tools are in the
+// docked thread's "⋯"); Event, Affected units, Authority notices and Actions stay.
+export const RECORD_TABS = ['event', 'affected', 'authority', 'actions'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Event with the thread opened (RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ activity: 'event' })
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'event'
+}
+// ---- end B-TH-267

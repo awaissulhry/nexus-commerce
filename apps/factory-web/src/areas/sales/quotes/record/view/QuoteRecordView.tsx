@@ -11,6 +11,8 @@ import { WithMessages } from '../../../../../record-panels/i18n'
 import { DocumentSendView, type DocumentSendActions, type SendParts } from '../../../../_shared/document-send/view/DocumentSendView'
 import { previewHref, type QuoteDetail } from '../../api'
 import { customerSeesOf, customerSeesWords, daysUntil, isWideTab, nextStep, QUOTE_TABS, readOnlyReason, STATUS_TONE, type QuoteTab } from '../../model'
+// TH-6 part B (B-TH-257 follow-up): beside the customer's "Withdrawn" (B-TH-095), the office reads when they withdrew the request.
+import { requestWithdrawnOf } from '../../model'
 import type { QuoteRecordActions, QuoteRecordViewModel } from '../record-model'
 import type { QuoteDepthSlots } from '../lines-depth/slots'
 import { DuplicateDialog } from '../../duplicate/view/DuplicateDialog'
@@ -242,6 +244,7 @@ function ReadyRecord({ quote, model, actions, thread, printThread, sendActions, 
   // ---- B-TH-257 (B-TH-078's API): where the quote came from and where it went ----
   const madeFrom = quote.madeFrom ?? null
   const sees = customerSeesOf(quote)
+  const withdrawn = requestWithdrawnOf(quote) // TH-6 part B
   const order = quote.order ?? null
   const madeOrder = order?.state === 'MADE' && order.id && order.number ? { id: order.id, number: order.number, cancelled: order.status === 'CANCELLED' } : null
   const orderWaits = order?.state === 'WAITS' ? order : null
@@ -285,6 +288,8 @@ function ReadyRecord({ quote, model, actions, thread, printThread, sendActions, 
                   <span className="fw-q-hint">{t('record.madeFromPlain', { number: madeFrom.number })}</span>
                 ))}
               {sees && <span className="fw-q-hint">{t('record.customerSees', { state: customerSeesWords(sees, locale) })}</span>}
+              {/* TH-6 part B: for the office — when the customer withdrew the request. */}
+              {withdrawn && <Tag tone="warning">{withdrawn.at ? t('record.requestWithdrawnOn', { date: formatDate(withdrawn.at, { locale }) }) : t('record.requestWithdrawn')}</Tag>}
               {/* B-TH-257: the accepted quote's order (a cancelled one says so). */}
               {madeOrder &&
                 (model.orders?.view ? (

@@ -1,14 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { formatTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
-import { useLive, useRecordTab } from '../../_shared/hooks'
+import { useLive } from '../../_shared/hooks'
 import {
   actionFiles,
   addAction,
@@ -35,14 +35,18 @@ import {
   type CapaStatus,
   type ReportLanguage,
 } from '../api'
-import { actionBodyOf, actionCellChange, capaCan, closeLinesOfRecord, emptyActionDraft, problemChangesOf, problemDraftOf, readProblem, recordHref, RECORD_TABS, refusalOf, stepAction, todayOf, type ProblemDraft } from '../model'
+import { actionBodyOf, actionCellChange, capaCan, closeLinesOfRecord, emptyActionDraft, problemChangesOf, problemDraftOf, readProblem, recordHref, refusalOf, stepAction, tabOf, todayOf, type ProblemDraft } from '../model'
 import type { CapaNotice, CellState } from '../parts'
 import type { CloseDialogModel } from '../view/CloseCapaDialog'
 import type { CapaRecordActions, CapaRecordModel, DrawerModel, Loaded, RecordDialog, ReportModel } from './view-model'
 import { CapaRecordView } from './view/CapaRecordView'
+// ---- B-TH-266: the docked thread on the CAPA (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 /**
- * `/w/<company>/quality/capa/<id>` (SCR-146-record; `?tab=problem|actions|report|activity`, `&add=1` opens Add action,
+ * `/w/<company>/quality/capa/<id>` (SCR-146-record; `?tab=problem|actions|report` — the old activity lands on Problem with the thread
+ * open, B-TH-266 —, `&add=1` opens Add action,
  * `&action=<id>` docks an action): the CAPA read once and again on its live changes (any `capa.` event that names it;
  * while a dialog or the Problem draft holds work, a banner says it changed instead); the people who may own it or be given
  * an action; the 8D preview when the Report tab opens. Every write is one call with its own Idempotency-Key and the
@@ -58,7 +62,8 @@ export function CapaRecord({ capaId }: { capaId: string }) {
   const prefix = companyPrefix(session.company?.code ?? '')
   const me = session.user.id
   const can = useMemo(() => capaCan(session.permissions), [session.permissions])
-  const tab = useRecordTab(RECORD_TABS)
+  const pathname = usePathname()
+  const tab = tabOf(params?.get('tab'))
   const [opened] = useState(() => new Date().toISOString())
   const today = todayOf(opened)
 
@@ -74,7 +79,6 @@ export function CapaRecord({ capaId }: { capaId: string }) {
   const [notice, setNotice] = useState<CapaNotice | null>(null)
   const [stale, setStale] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
-  const [keysOpen, setKeysOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [drawer, setDrawer] = useState<DrawerModel | null>(null)
   const [report, setReport] = useState<ReportModel>({ language: locale === 'en' ? 'en' : 'it', pdf: null, problem: null, keeping: false, sharing: null })
@@ -419,7 +423,6 @@ export function CapaRecord({ capaId }: { capaId: string }) {
         })
         .catch(() => undefined)
     },
-    onKeys: setKeysOpen,
     onDismissNotice: () => setNotice(null),
   }
 
@@ -447,12 +450,22 @@ export function CapaRecord({ capaId }: { capaId: string }) {
     notice,
     stale,
     busy,
-    keysOpen,
     copied,
     drawer: tab === 'actions' ? drawer : null,
     report,
+    personId: session.user.id, // B-TH-266
   }
 
-  const panels = record && tab === 'activity' ? <RecordPanels record={{ type: 'Capa', id: record.capa.id, companyId: record.capa.companyId, siteId: null }} title={`${record.capa.number} · ${record.capa.title}`} party={record.capa.customer ? { id: record.capa.customer.id, name: record.capa.customer.name, emails: [] } : null} /> : null
-  return <CapaRecordView model={model} actions={actions} panels={panels} />
+  // B-TH-266: the CAPA's ONE thread docked beside every tab (Head with Activity's doors, files line, Files view, feed, box) — the
+  // customer an 8D is written for is its only party (the API's thread scope: the CAPA's customer), an internal CAPA notes only. Only
+  // with threads.read; the print view keeps the record panels' print form.
+  const ref = record ? { type: 'Capa', id: record.capa.id, companyId: record.capa.companyId, siteId: null } : null
+  const customer = record?.capa.customer ?? null
+  const title = record ? `${record.capa.number} · ${record.capa.title}` : ''
+  const thread =
+    record && ref && can.threadsRead ? (
+      <OfficeRecordThread docked record={ref} title={title} recordLabel={record.capa.number} party={customer ? { id: customer.id, name: customer.name } : null} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
+    ) : null
+  const printThread = record && ref && can.threadsRead ? <RecordPanels record={ref} title={title} party={customer ? { id: customer.id, name: customer.name, emails: [] } : null} /> : null
+  return <CapaRecordView model={model} actions={actions} thread={thread} printThread={printThread} />
 }

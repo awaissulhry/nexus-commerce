@@ -281,7 +281,7 @@
     "alt": "Photo {n} the customer sent",
     "unread": "{name}: could not be shown",
     "noRight": "Your role cannot see files.",
-    "addInActivity": "More photos and the customer's mail go on the record's thread (Activity)."
+    "addInThread": "More photos and the customer's mail go on the complaint's thread, beside every tab: the same conversation the customer sees on their complaint."
   },
   "log": {
     "action": "Log complaint",
@@ -361,14 +361,16 @@
     "editWordsRequired": "The customer's words stay on the complaint",
     "editNothing": "Nothing changed",
     "editUnsaved": "Unsaved changes",
-    "editSave": "Save changes"
+    "editSave": "Save changes",
+    "title": "Complaint",
+    "dockLabel": "The complaint’s thread",
+    "tabsLabel": "Sections of the complaint"
   },
   "tab": {
     "complaint": "Complaint",
     "investigation": "Investigation",
     "answer": "Answer",
-    "linked": "Linked records",
-    "activity": "Activity"
+    "linked": "Linked records"
   },
   "action": {
     "triage": "Triage",

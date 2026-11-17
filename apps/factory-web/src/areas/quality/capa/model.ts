@@ -45,6 +45,8 @@ export const CAPA_PERMISSIONS = {
   filesUpload: 'files.upload',
   filesManage: 'files.manage',
   partiesView: 'parties.view',
+  // B-TH-266: the CAPA's docked thread (its notes, and the mail with the customer an 8D is written for).
+  threadsRead: 'threads.read',
 } as const
 export type CapaCan = Readonly<Record<keyof typeof CAPA_PERMISSIONS, boolean>>
 
@@ -185,8 +187,18 @@ export const closeLinesOfRecord = (record: CapaRecord): CloseLine[] =>
 // ---- the record ----------------------------------------------------------------------------------------------------------------
 
 /** The record's tabs (design rec CAPA): the W3 tabs (Root cause, Effectiveness) stay out. */
-export const RECORD_TABS = ['problem', 'actions', 'report', 'activity'] as const
+// ---- B-TH-266 (threads plan TH-6; 08-tabs O-QA-CAPA; the rule of picture 38): tabs 4 → 3. Activity goes (R-ACT: its tools are in the
+// docked thread's "⋯"; the thread is the CAPA's own — the customer an 8D is written for is its only party, an internal CAPA none).
+export const RECORD_TABS = ['problem', 'actions', 'report'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Problem with the thread opened (RecordFrame reads the address). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ activity: 'problem' })
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'problem'
+}
+// ---- end B-TH-266
 
 /** The band's ONE primary: the next stage, else Close at the last stage (null: ended). */
 export function primaryOf(capa: Pick<CapaRow, 'type' | 'status'>): { kind: 'move'; to: CapaStatus } | { kind: 'close' } | null {

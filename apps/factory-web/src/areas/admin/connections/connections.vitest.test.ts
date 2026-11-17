@@ -17,6 +17,9 @@ import { ACCOUNTS, CALLS, CHOICES, designScreen as connectionsScreen, SCANNER, I
 import { designScreen as mailScreen } from './mail/fixtures'
 import { dnsRows, draftProblems, emptyDraft, fromAddressOf, identityState, recordStateOf, recordsText } from './mail/model'
 import { accountState, AWAITING_SPEND, CONNECTION_TILES, KNOWN_REASONS, KNOWN_SETTINGS, LATER_SERVICES, residencyRows, sameDay, serviceRows, switchReach, tileMatch } from './model'
+// B-TH-269: the connection on RecordFrame (tabs 5 → 4, the docked thread behind integrations.view).
+import { CONNECTION_MERGED_TABS, CONNECTION_TABS, connectionTabOf, mayReadConnectionThread } from './model'
+import { textOf } from '../../../lib/record-thread/parts/testing'
 import { CallsCell, ServiceCell, StateCell } from './view/ConnectionsView'
 import { ConnectionsMessages } from './view/parts'
 
@@ -256,7 +259,8 @@ describe('every Connections string exists in it and en', () => {
       ...['working', 'failing', 'notCalled', 'paused', 'disabled'].map((state) => `conn.state.${state}`),
       ...CONNECTION_TILES.flatMap((tile) => [`conn.tile.${tile}`, `conn.tileHint.${tile}`]),
       ...LATER_SERVICES.map((service) => `conn.laterService.${service}`),
-      ...['overview', 'settings', 'calls', 'inbound', 'activity'].map((tab) => `conn.tab.${tab}`),
+      // B-TH-269: Activity went (the thread docks beside every tab).
+      ...['overview', 'settings', 'calls', 'inbound'].map((tab) => `conn.tab.${tab}`),
       ...['pause', 'resume'].flatMap((verb) => ['action', 'title', 'go', 'body', 'undo'].map((part) => `conn.${verb}.${part}`)),
       ...KNOWN_REASONS.map((reason) => `conn.reason.${reason}`),
       ...KNOWN_SETTINGS.map((setting) => `conn.setting.${setting}`),
@@ -385,5 +389,66 @@ describe('every Connections design case draws in both languages with no key left
   it('Italian words on the Italian screen', () => {
     expect(draw(CONNECTIONS, 'services', 'it')).toContain('Modalità di prova')
     expect(draw(MAIL, 'waiting', 'it')).toContain('Non ancora controllato da Nexus')
+  })
+})
+
+// ---- B-TH-269: the connection on RecordFrame (threads plan TH-6; 08-tabs O-ADM-CONN; the rule of picture 38) ---------------------------
+describe('B-TH-269 — the connection on RecordFrame: tabs 5 → 4, the docked thread (notes only), Activity gone (R-ACT)', () => {
+  const dockOf = (html: string) => html.slice(html.indexOf('class="fw-rcf-dock"'))
+
+  it('four tabs: Overview · Settings & secrets · Calls · Received; every old ?tab= keeps working (R-8: Activity → Overview)', () => {
+    expect(CONNECTION_TABS).toEqual(['overview', 'settings', 'calls', 'inbound'])
+    expect(CONNECTION_MERGED_TABS).toEqual({ activity: 'overview' })
+    expect(connectionTabOf('activity')).toBe('overview')
+    for (const tab of CONNECTION_TABS) expect(connectionTabOf(tab)).toBe(tab)
+    expect(connectionTabOf(null)).toBe('overview')
+    expect(connectionTabOf('constructor')).toBe('overview')
+    const text = textOf(draw(CONNECTIONS, 'record-dock'))
+    for (const tab of ['Overview', 'Settings & secrets', 'Calls', 'Received']) expect(text).toContain(tab)
+    expect(text).not.toMatch(/\bActivity\b/)
+  })
+
+  it('the thread is read only with integrations.view beside threads.read (B-TH-005, thread-G02)', () => {
+    expect(mayReadConnectionThread(['threads.read', 'integrations.view'])).toBe(true)
+    expect(mayReadConnectionThread(['threads.read'])).toBe(false)
+    expect(mayReadConnectionThread(['integrations.view', 'integrations.manage'])).toBe(false)
+    const container = readFileSync(new URL('./record/ConnectionRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('mayReadConnectionThread(held)')
+    expect(container).toMatch(/<OfficeRecordThread docked record=\{record\}[^>]*party=\{null\}/)
+    expect(container).not.toContain('useThreadDock')
+  })
+
+  it('ONE thread on the page, its "⋯" (R-ACT) on every tab; no record panels, no old dock', () => {
+    for (const id of ['record-dock', 'record-settings', 'record-calls', 'record-inbound']) {
+      const html = draw(CONNECTIONS, id)
+      expect(html.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(html, id).toContain('aria-label="Thread tools"')
+      expect(html, id).not.toContain('fw-rp-tabs')
+      expect(html, id).not.toContain('fw-adm-record-dock')
+      expect(html, id).not.toContain('?tab=activity')
+    }
+    const view = readFileSync(new URL('./record/view/ConnectionRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("from '../../../../_shared/record-frame/RecordFrame'")
+    expect(view).not.toContain('shared/view/RecordFrame')
+  })
+
+  it('the wall (W03): an admin record has no party — Office notes only, no "Reply to", no e-mail of anyone outside', () => {
+    const dock = textOf(dockOf(draw(CONNECTIONS, 'record-dock')))
+    expect(dock).not.toMatch(/Reply to (?!the customer)/)
+    expect(dock).not.toMatch(/@[a-z0-9-]+\.example/)
+  })
+
+  it('without integrations.view or threads.read there is no thread here: no dock, no Thread button', () => {
+    const html = draw(CONNECTIONS, 'record-no-thread')
+    expect(html).not.toContain('class="fw-rcf-dock"')
+    expect(html).not.toContain('aria-label="Thread tools"')
+  })
+
+  it('one state pill in the band; every banner in the one notice of the body column, never above the thread', () => {
+    const html = draw(CONNECTIONS, 'record-paused')
+    const dockAt = html.indexOf('class="fw-rcf-dock"')
+    expect(html.indexOf('class="fw-rcf-notices"')).toBeGreaterThan(-1)
+    expect(html.indexOf('class="fw-rcf-notices"')).toBeLessThan(dockAt)
+    expect(dockOf(html)).not.toContain('fw-rcf-notices')
   })
 })

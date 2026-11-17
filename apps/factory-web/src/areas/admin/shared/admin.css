@@ -162,14 +162,7 @@
   vertical-align: -1px;
 }
 
-/* ---- record frame ---- */
-.fw-adm-record {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-14);
-  min-width: 0;
-}
-
+/* ---- a page's band (the document template editor; the records are on the shared RecordFrame since B-TH-269) ---- */
 .fw-adm-band {
   display: flex;
   flex-direction: column;
@@ -177,32 +170,6 @@
   min-width: 0;
 }
 
-.fw-adm-dock-keys {
-  display: inline-flex;
-  gap: var(--nds-space-2);
-  margin-inline-start: var(--nds-space-4);
-}
-
-.fw-adm-record-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--nds-space-16);
-  align-items: start;
-}
-
-@media (min-width: 1280px) {
-  .fw-adm-record-body.has-dock {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
-  }
-}
-
-@media (max-width: 1279px) {
-  .fw-adm-record-dock {
-    display: none;
-  }
-}
-
-.fw-adm-record-main,
 .fw-adm-stack {
   display: flex;
   flex-direction: column;

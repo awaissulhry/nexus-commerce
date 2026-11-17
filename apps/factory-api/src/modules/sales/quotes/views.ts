@@ -25,6 +25,8 @@ import { holdQuoteIssues } from '../../parties/holds/stops'
 import { orderWaitFor, orderWaitWords } from '../../parties/holds/stops'
 import { hasOrderSeries } from '../orders/store'
 import type { QUOTE_ORDER_WAITS } from './contract'
+// TH-6 part B: the request's own state on "Made from".
+import type { InquiryStatus } from '@nexus/factory-domain/sales/inquiries/rules'
 import {
   APPROVAL_COLUMNS,
   dateTimeText,
@@ -104,7 +106,8 @@ export interface ReadFacts {
 export type QuoteOrderWait = (typeof QUOTE_ORDER_WAITS)[number]
 
 export interface QuoteSources {
-  readonly madeFrom: { readonly inquiryId: string; readonly number: string } | null
+  // TH-6 part B (B-TH-257 follow-up): the request's own state (WITHDRAWN by its customer, #1564) and when it ended.
+  readonly madeFrom: { readonly inquiryId: string; readonly number: string; readonly status: InquiryStatus; readonly declineReason: string | null; readonly closedAt: string | null } | null
   readonly order:
     | { readonly state: 'MADE'; readonly id: string; readonly number: string; readonly status: string; readonly reason: null; readonly words: null }
     | { readonly state: 'WAITS'; readonly id: null; readonly number: null; readonly status: null; readonly reason: QuoteOrderWait; readonly words: string }
@@ -116,7 +119,7 @@ type SourceQuote = Pick<QuoteRow, 'id' | 'status' | 'companyId' | 'partyId' | 'c
 export async function quoteSourcesOf(db: Reader, quotes: readonly SourceQuote[]): Promise<Map<string, QuoteSources>> {
   const ids = quotes.map((quote) => quote.id)
   if (ids.length === 0) return new Map()
-  const inquiries = await db.inquiry.findMany({ where: { quoteId: { in: ids } }, select: { id: true, number: true, quoteId: true }, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }] })
+  const inquiries = await db.inquiry.findMany({ where: { quoteId: { in: ids } }, select: { id: true, number: true, quoteId: true, status: true, declineReason: true, closedAt: true /* TH-6 part B */ }, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }] })
   const orders = await db.salesOrder.findMany({
     where: { quoteVersion: { quoteId: { in: ids } } },
     select: { id: true, number: true, status: true, quoteVersion: { select: { quoteId: true } } },
@@ -142,7 +145,7 @@ export async function quoteSourcesOf(db: Reader, quotes: readonly SourceQuote[])
       const order = orders.find((row) => row.quoteVersion?.quoteId === quote.id)
       const wait = waits.get(quote.id)
       const sources: QuoteSources = {
-        madeFrom: inquiry ? { inquiryId: inquiry.id, number: inquiry.number } : null,
+        madeFrom: inquiry ? { inquiryId: inquiry.id, number: inquiry.number, status: inquiry.status, declineReason: inquiry.declineReason ?? null, closedAt: inquiry.closedAt ? toUtcIso(inquiry.closedAt) : null /* TH-6 part B */ } : null,
         order: order
           ? { state: 'MADE', id: order.id, number: order.number, status: order.status, reason: null, words: null }
           : wait

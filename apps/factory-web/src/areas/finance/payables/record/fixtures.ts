@@ -1,12 +1,12 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { SupplierInvoice } from '../api'
 import { asSeenBy, canAs, CANDIDATES, DETAIL_0350, DETAIL_0398, DETAIL_0412, DETAIL_0420, DETAIL_0501, DETAIL_DE77, DETAIL_LAB14, inShell, PREFIX, TODAY, type Role } from '../demo/fixtures'
 import type { RecordTab } from '../model'
 import type { SupplierInvoiceModel } from './record-model'
 import { SupplierInvoiceView } from './view/SupplierInvoiceView'
+// B-TH-268: the docked thread of a design case, in the invoice's own supplier's words.
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-153 record — a supplier invoice (design finance.payables "Record: Supplier invoice") with made-up data only: Lines
@@ -14,18 +14,16 @@ import { SupplierInvoiceView } from './view/SupplierInvoiceView'
  * not mapped yet; a refused mapping in words), Match (the MatchPanel: a price difference to accept with its reason, goods
  * not arrived, stale → Match again, no PO linked, a credit note), Approval (ready; "You entered this invoice, so someone
  * else approves it"; approved; reject with reason), Payment (due, terms with the IBAN masked, Mark paid with its checks,
- * paid), Activity (the record panels), and the states (loading, error, not found, no permission, changed meanwhile) and
- * roles: Finance, Buyer, Read-only (no cost grain).
+ * paid), and the states (loading, error, not found, no permission, changed meanwhile) and roles: Finance, Buyer, Read-only (no
+ * cost grain). B-TH-268: on RecordFrame — three tabs (Approval & payment holds both halves), the supplier's thread docked beside
+ * every tab; a role without threads.read has none.
  */
 
 interface RecordCase {
   role: Role
   record: SupplierInvoiceModel
-}
-
-const panels = (title: string): RecordPanelsViewModel => {
-  const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-  return { ...conversation, record: { type: 'SupplierInvoice', id: DETAIL_0412.id, companyId: DETAIL_0412.company.id, siteId: null }, title, party: null }
+  /** B-TH-268: false — a role without threads.read (no thread on the page). */
+  thread?: boolean
 }
 
 const base = (role: Role, value: SupplierInvoice, tab: RecordTab, over: Partial<SupplierInvoiceModel> = {}): RecordCase => {
@@ -43,20 +41,21 @@ const base = (role: Role, value: SupplierInvoice, tab: RecordTab, over: Partial<
       savingLine: null,
       lineProblem: null,
       live: 'live',
-      dockOpen: false,
       changed: null,
       notice: null,
       busy: false,
       dialog: null,
       dialogProblem: null,
-      panelsPreview: panels(`${value.number} · ${value.supplier.name}`),
       ...over,
     },
   }
 }
 
 function RecordDesign({ model }: { model: RecordCase }) {
-  return inShell('/finance/payables', createElement(SupplierInvoiceView, { model: model.record }), model.role)
+  const value = model.record.invoice.status === 'ready' && model.record.can.view ? model.record.invoice.value : null
+  // B-TH-268: the made-up thread of this invoice's own supplier (the API's thread party); none while it is read or without the right.
+  const thread = value && model.thread !== false ? designDockedThread({ recordType: 'SupplierInvoice', record: value.number, party: { name: value.supplier.name, role: 'supplier' } }) : null
+  return inShell('/finance/payables', createElement(SupplierInvoiceView, { model: model.record, thread }), model.role)
 }
 
 const state = (status: SupplierInvoiceModel['invoice']): Partial<SupplierInvoiceModel> => ({ invoice: status })
@@ -64,7 +63,7 @@ const DE77_LINE = DETAIL_DE77.lines[0]!
 
 export const designScreen = defineDesignScreen<RecordCase>({
   screen: 'SCR-153-record',
-  title: 'Supplier invoice record: lines, match, approval, payment',
+  title: 'Supplier invoice record: lines, match, approval & payment',
   view: RecordDesign,
   cases: [
     {
@@ -113,17 +112,17 @@ export const designScreen = defineDesignScreen<RecordCase>({
       label: 'Approval · the API refused (someone accepted meanwhile? a difference left) in words',
       model: base('finance', DETAIL_0398, 'approval', { dialog: { kind: 'approve', note: '' }, dialogProblem: [{ key: 'refusal.DIFFERENCES' }] }),
     },
-    { id: 'approval-approved', label: 'Approval · approved by a colleague; Withdraw approval', model: base('finance', DETAIL_LAB14, 'approval') },
-    { id: 'payment', label: 'Payment · approved, due 1 Nov: Mark paid; IBAN masked', model: base('finance', DETAIL_LAB14, 'payment') },
+    { id: 'approval-approved', label: 'Approval & payment · approved by a colleague (Withdraw approval), due 1 Nov: Mark paid; IBAN masked', model: base('finance', DETAIL_LAB14, 'approval') },
     {
       id: 'payment-dialog',
-      label: 'Payment · Mark paid (the dialog, the reference still missing)',
-      model: base('finance', DETAIL_LAB14, 'payment', { dialog: { kind: 'pay', paidOn: TODAY, paymentRef: '' } }),
+      label: 'Approval & payment · Mark paid (the dialog, the reference still missing)',
+      model: base('finance', DETAIL_LAB14, 'approval', { dialog: { kind: 'pay', paidOn: TODAY, paymentRef: '' } }),
     },
-    { id: 'payment-held', label: 'Payment · not approved yet: Mark paid held with the reason', model: base('finance', DETAIL_0412, 'payment') },
-    { id: 'payment-paid', label: 'Payment · paid on 15 Oct with the bank reference', model: base('finance', DETAIL_0350, 'payment') },
-    { id: 'activity', label: 'Activity · the record panels', model: base('finance', DETAIL_0412, 'activity') },
-    { id: 'dock', label: 'The thread beside the tabs (⌘J)', model: base('finance', DETAIL_0412, 'match', { dockOpen: true }) },
+    { id: 'payment-held', label: 'Approval & payment · not approved yet: Mark paid held with the reason', model: base('finance', DETAIL_0412, 'approval') },
+    { id: 'payment-paid', label: 'Approval & payment · paid on 15 Oct with the bank reference', model: base('finance', DETAIL_0350, 'approval') },
+    // B-TH-268: the supplier's thread docked beside every tab (Activity's tools in its "⋯"); none without threads.read.
+    { id: 'thread-docked', label: 'TH-6 · The supplier’s thread docked beside Match (⌘J hides it)', model: base('finance', DETAIL_0412, 'match'), note: 'Reply to the supplier only; this invoice’s files only; Add task, Ask a partner to approve and Share with a partner in the thread’s ⋯.' },
+    { id: 'thread-none', label: 'TH-6 · A role without threads.read: no thread, no Thread button', model: { ...base('finance', DETAIL_0412, 'match'), thread: false } },
     { id: 'notice', label: 'A write done: Approved', model: base('finance', DETAIL_LAB14, 'approval', { notice: { tone: 'success', phrases: [{ key: 'notice.approved' }] } }) },
     { id: 'changed', label: 'Changed by someone else while a dialog was open: Read again', model: base('finance', DETAIL_0412, 'match', { changed: { at: '2026-10-30T08:45:00.000Z' } }) },
     { id: 'loading', label: 'Loading', model: base('finance', DETAIL_0412, 'lines', state({ status: 'loading' })) },

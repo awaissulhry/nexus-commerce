@@ -2,10 +2,12 @@ import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import type { Invoice, Sdi } from '../../_shared/api'
 import { STEP_UP_CLOSED } from '../../_shared/hooks'
-import { at, canOf, CHECKS_FAIL, CHECKS_READY, EXPORT_LINES, inShell, invoice, panelsModel, PREFIX, RELATED, RELATED_PAID, sdi, TD02, TD04, TODAY, withoutPrices, type Role } from '../../_demo/fixtures'
+import { at, canOf, CHECKS_FAIL, CHECKS_READY, EXPORT_LINES, inShell, invoice, PREFIX, RELATED, RELATED_PAID, sdi, TD02, TD04, TODAY, withoutPrices, type Role } from '../../_demo/fixtures'
 import { DRAFT_DUE_SOON, DRAFT_WITH_CHARGES, OVERPAID, TD04_ISSUED } from '../daily/demo/fixtures'
 import type { InvoiceRecordModel } from './record-model'
 import { InvoiceRecordView } from './view/InvoiceRecordView'
+// B-TH-268: the docked thread of a design case, in the invoice's own customer's words.
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-081 — the invoice record (design finance.invoices "Record: Invoice") with made-up data only: a draft TD01 from a
@@ -14,12 +16,15 @@ import { InvoiceRecordView } from './view/InvoiceRecordView'
  * rejected with SDI's reason and the deadline, Fix and resend (same number and date), sent again and delivered, a send
  * that failed, the credit note (TD04) dialog and its draft, the TD02 deposit invoice, an export line's "Why no VAT?",
  * payments placed, documents and the PDF, the states (loading, error, not found, no permission, held with its reason,
- * changed meanwhile) and the roles: Owner, Finance, Sales (read-only).
+ * changed meanwhile) and the roles: Owner, Finance, Sales (read-only). B-TH-268: on RecordFrame — three tabs (SDI & documents holds
+ * both halves), the customer's thread docked beside every tab; a role without threads.read has none.
  */
 
 interface RecordCase {
   role: Role
   record: InvoiceRecordModel
+  /** B-TH-268: false — a role without threads.read (no thread on the page). */
+  thread?: boolean
 }
 
 const base = (role: Role, value: Invoice, over: Partial<InvoiceRecordModel> = {}, sdiPart: Sdi | null = null): RecordCase => {
@@ -38,7 +43,6 @@ const base = (role: Role, value: Invoice, over: Partial<InvoiceRecordModel> = {}
       sdi: value.status === 'DRAFT' ? null : { value: sdiPart ?? sdi('notSent'), problem: null },
       pdf: { status: 'idle', src: null },
       live: 'live',
-      dockOpen: false,
       changed: null,
       notice: null,
       busy: false,
@@ -46,7 +50,6 @@ const base = (role: Role, value: Invoice, over: Partial<InvoiceRecordModel> = {}
       dialogProblem: null,
       resendProblems: null,
       stepUp: STEP_UP_CLOSED,
-      panelsPreview: panelsModel(),
       ...over,
     },
   }
@@ -66,8 +69,10 @@ const filesPending = invoice('ISSUED', { xmlFileId: null, pdfFileId: null, files
 const exportDraft = invoice('DRAFT', { lines: EXPORT_LINES, netTotal: 360000, vatTotal: 0, grossTotal: 360000, vatSummary: [{ rate: '0.00', nature: 'N3.1', legalRef: EXPORT_LINES[0]!.vatLegalRef, taxable: 360000, vat: 0, rounding: 0 }], billTo: { name: 'Squadra Fittizia S.r.l.', kind: 'FOREIGN' } })
 
 function InvoiceDesign({ model }: { model: RecordCase }) {
-  const id = model.record.invoice.status === 'ready' ? model.record.invoice.value.id : 'x'
-  return inShell(`/finance/invoices/${id}`, createElement(InvoiceRecordView, { model: model.record }), model.role)
+  const value = model.record.invoice.status === 'ready' ? model.record.invoice.value : null
+  // B-TH-268: the made-up thread of this invoice's own customer (the API's thread party is its buyer); none while it is read.
+  const thread = value && model.thread !== false ? designDockedThread({ recordType: 'Invoice', record: value.number ?? value.docType, party: { name: value.party.legalName, role: 'customer' } }) : null
+  return inShell(`/finance/invoices/${value?.id ?? 'x'}`, createElement(InvoiceRecordView, { model: model.record, thread }), model.role)
 }
 
 export const designScreen = defineDesignScreen<RecordCase>({
@@ -87,7 +92,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'vat-why', label: 'Finance · An export line: N3.1 with "Why no VAT?"', model: base('finance', exportDraft, { related: { value: { ...RELATED, depositRequests: [], depositInvoices: [] }, problem: null } }) },
     { id: 'issued-not-sent', label: 'Finance · Issued FT-2026-00031, not sent: Send to SDI', model: base('finance', issued, { notice: { tone: 'warning', words: { key: 'notice.issuedNotSent', params: { number: 'FT-2026-00031' } } } }, sdi('notSent')) },
     { id: 'send-dialog', label: 'Finance · Send to SDI', model: base('finance', issued, { dialog: { kind: 'send' } }, sdi('notSent')) },
-    { id: 'files-pending', label: 'Finance · Issued; its XML and PDF are still being made: Make the files', model: base('finance', filesPending, { tab: 'documents' }, sdi('notSent')) },
+    { id: 'files-pending', label: 'Finance · Issued; its XML and PDF are still being made: Make the files (SDI & documents)', model: base('finance', filesPending, { tab: 'sdi' }, sdi('notSent')) },
     { id: 'at-sdi', label: 'Finance · At SDI: waiting for its answer (SDI tab)', model: base('finance', atSdi, { tab: 'sdi', notice: { tone: 'success', words: { key: 'notice.issuedSent', params: { number: 'FT-2026-00031' } } } }, sdi('atSdi')) },
     { id: 'sending', label: 'Finance · Being sent (SDI tab)', model: base('finance', issued, { tab: 'sdi' }, sdi('sending')) },
     { id: 'delivered', label: 'Finance · Delivered and archived; Record payment (SDI tab)', model: base('finance', delivered, { tab: 'sdi' }, sdi('delivered')) },
@@ -105,9 +110,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'money-paid', label: 'Finance · Deposits & payments: the balance paid; the order can close', model: base('finance', paid, { tab: 'money', related: { value: RELATED_PAID, problem: null } }, sdi('delivered')) },
     { id: 'overdue', label: 'Finance · Overdue 14 days: Record payment', model: base('finance', overdue, { tab: 'money' }, sdi('delivered')) },
     { id: 'td02', label: 'Finance · The deposit invoice (TD02): paid by its deposit', model: base('finance', TD02, { related: { value: { ...RELATED, ddts: [], depositInvoices: [] }, problem: null } }, sdi('delivered')) },
-    { id: 'documents', label: 'Finance · Documents: the legal XML, the courtesy PDF, the DDT', model: base('finance', delivered, { tab: 'documents' }, sdi('delivered')) },
-    { id: 'activity', label: 'Finance · Activity: thread, files, history', model: base('finance', delivered, { tab: 'activity' }, sdi('delivered')) },
-    { id: 'dock', label: 'Finance · The thread beside a tab (⌘J, 1280 px and wider)', model: base('finance', delivered, { dockOpen: true }, sdi('delivered')) },
+    { id: 'documents', label: 'Finance · SDI & documents: where it is at SDI, then the legal XML, the courtesy PDF, the DDT', model: base('finance', delivered, { tab: 'sdi' }, sdi('delivered')) },
+    // B-TH-268: the thread docked beside every tab (Activity's tools in its "⋯"); the not-delivered notice offers Send copy.
+    { id: 'thread-docked', label: 'TH-6 · Finance · The customer’s thread docked beside Lines & VAT (⌘J hides it)', model: base('finance', delivered, {}, sdi('delivered')), note: 'Reply to the customer only; this invoice’s files only; Add task, Ask a partner to approve and Share with a partner in the thread’s ⋯.' },
+    { id: 'thread-send-copy', label: 'TH-6 · Finance · SDI could not deliver it: the notice’s Send copy shows the thread', model: base('finance', notDelivered, { tab: 'sdi' }, sdi('notDelivered')) },
+    { id: 'thread-none', label: 'TH-6 · A role without threads.read: no thread, no Thread button', model: { ...base('finance', delivered, {}, sdi('delivered')), thread: false } },
     { id: 'owner', label: 'Owner · Delivered, lines & VAT', model: base('owner', delivered, {}, sdi('delivered')) },
     { id: 'sales-read-only', label: 'Sales · Read-only: prices shown, every action held with the reason', model: base('sales', draft) },
     { id: 'sales-rejected', label: 'Sales · A rejected invoice: Fix and resend held (finance issues invoices)', model: base('sales', rejected, { tab: 'sdi' }, sdi('rejected')) },
@@ -130,6 +137,6 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2a-carry-refused', label: 'W2a · Finance · Carry refused: a refund of its credit note is live (said in words)', model: base('finance', OVERPAID, { dialog: { kind: 'carry' }, draft: { note: 'Keep it for the next order.' }, dialogProblem: { key: 'problem.write.state' } }, sdi('delivered')) },
     { id: 'w2a-carry-sales', label: 'W2a · Sales · Paid, then credited: carry held (recording payments is Finance’s)', model: base('sales', OVERPAID, {}, sdi('delivered')) },
     { id: 'w2a-td04-refund', label: 'W2a · Finance · An issued credit note: Refund (opens the Refund dialog in Payments)', model: base('finance', TD04_ISSUED, {}, sdi('delivered')) },
-    { id: 'w2a-xml-link', label: 'W2a · Finance · Documents: the XML viewed readable in a new tab', model: base('finance', delivered, { tab: 'documents' }, sdi('delivered')) },
+    { id: 'w2a-xml-link', label: 'W2a · Finance · SDI & documents: the XML viewed readable in a new tab', model: base('finance', delivered, { tab: 'sdi' }, sdi('delivered')) },
   ],
 })

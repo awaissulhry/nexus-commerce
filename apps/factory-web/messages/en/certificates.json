@@ -319,14 +319,13 @@
     "more": "More actions",
     "bodyMeta": "notified body {number} {name}",
     "modelMeta": "model {model}",
-    "noPanels": "The thread, files and history are shown here.",
-    "panelsHeld": "The thread, files and history need the permission to read threads."
+    "name": "Certificate",
+    "dockLabel": "Thread of the certificate",
+    "tabsLabel": "Sections of the certificate"
   },
   "tab": {
     "coverage": "Coverage",
-    "body": "Notified body",
-    "files": "Files",
-    "activity": "Activity",
+    "body": "Notified body & PDF",
     "renewals": "Renewals"
   },
   "action": {
@@ -603,9 +602,7 @@
     "title": "Keyboard shortcuts",
     "add": "Add certificate",
     "check": "Check a garment",
-    "register": "Register (a draft)",
-    "thread": "The thread beside the record",
-    "help": "All shortcuts"
+    "register": "Register (a draft)"
   },
   "ren": {
     "title": "Validity and renewal",

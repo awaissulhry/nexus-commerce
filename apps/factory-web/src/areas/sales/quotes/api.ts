@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
+// TH-6 part B (B-TH-257 follow-up): the request's own state on "Made from" (the factory-domain list the API checks against).
+import { INQUIRY_STATUSES } from '@nexus/factory-domain/sales/inquiries/rules'
 
 /**
  * The quotes screens' calls to the factory API (apps/factory-api modules/sales/quotes; B-W1-21, B-W1-24), through the
@@ -122,7 +124,17 @@ const approvalRequestSchema = z.object({
 // waits (the reason code; the screens say their own words by it, it + en). Optional: an older API answer has neither.
 export const QUOTE_ORDER_WAITS = ['NO_SALES_ORDER_SERIES', 'ACCOUNT_ON_HOLD', 'PO_NUMBER_REQUIRED', 'NOT_MADE'] as const
 export type QuoteOrderWait = (typeof QUOTE_ORDER_WAITS)[number]
-const madeFromSchema = z.object({ inquiryId: z.string(), number: z.string() }).nullable()
+const madeFromSchema = z
+  .object({
+    inquiryId: z.string(),
+    number: z.string(),
+    // TH-6 part B (B-TH-257 follow-up; B-TH-090's WITHDRAWN, #1564): the request's own state and when it ended — "Customer sees" reads
+    // it as the portal does. Optional: an older API answer has neither (read as QUOTED, as before).
+    status: z.enum(INQUIRY_STATUSES).optional(),
+    declineReason: z.string().nullable().optional(),
+    closedAt: instant.nullable().optional(),
+  })
+  .nullable()
 const quoteOrderSchema = z
   .object({ state: z.enum(['MADE', 'WAITS']), id: z.string().nullable(), number: z.string().nullable(), status: z.string().nullable(), reason: z.enum(QUOTE_ORDER_WAITS).nullable(), words: z.string().nullable() })
   .nullable()
@@ -189,6 +201,10 @@ export const listRowSchema = z.object({
   // B-TH-257: the sub-line "from INQ-…" and an accepted row's order ("SO-…", or "Order waits").
   madeFrom: madeFromSchema.optional(),
   order: quoteOrderSchema.optional(),
+  // TH-6 part B (B-TH-257 follow-up; grid-F01): the current version's first style and its main picture (fileId null: the
+  // placeholder; `small`: its ~320 px preview exists — readQuotePicture reads it), and how many styles ("+2").
+  picture: z.object({ styleId: z.string(), styleCode: z.string(), styleName: z.string(), fileId: z.string().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable().optional(),
+  styleCount: z.number().optional(),
 })
 export type QuoteListRow = z.infer<typeof listRowSchema>
 
@@ -400,6 +416,16 @@ export async function listQuotes(api: ApiClient, filter: ListFilter, cursor?: st
 export async function getQuote(api: ApiClient, id: string, signal?: AbortSignal): Promise<QuoteDetail> {
   return (await api.get(quotePath(id), { schema: oneQuote, signal })).quote
 }
+
+// ---- TH-6 part B (B-TH-257 follow-up): the list's Picture cell ---------------------------------------------------------------------
+const quotePictureAnswer = z.object({
+  picture: z.object({ fileId: z.string(), styleId: z.string(), contentType: z.string(), small: z.object({ url: z.string(), expiresAt: instant }).nullable() }),
+})
+/** GET /sales/quotes/:id/picture: the small preview (~320 px, a presigned GET of 60 s) of the row's style picture; never the original. */
+export async function readQuotePicture(api: ApiClient, id: string, signal?: AbortSignal): Promise<z.infer<typeof quotePictureAnswer>['picture']> {
+  return (await api.get(`${quotePath(id)}/picture`, { schema: quotePictureAnswer, signal })).picture
+}
+// ---- end TH-6 part B
 
 export function listVersions(api: ApiClient, id: string, signal?: AbortSignal): Promise<VersionsAnswer> {
   return api.get(`${quotePath(id)}/versions`, { schema: versionsSchema, signal })

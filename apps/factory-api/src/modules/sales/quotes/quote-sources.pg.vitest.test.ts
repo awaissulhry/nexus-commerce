@@ -48,6 +48,8 @@ const VIEW: Permission[] = ['quotes.view']
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const SESSIONS: Record<string, () => SessionContext> = {
   sales: () => ({ audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [grant(VIEW)] }),
+  // TH-6 part B: quotes.view and files.read, limited to a customer that is not SEED-Q-0001's (the wall).
+  otherCustomer: () => ({ audience: 'office', tenantId: A.tenant, actorId: newId(), grants: [{ permissions: [...VIEW, 'files.read'], companies: 'all', sites: 'all', parties: [newId()] }] }),
 }
 async function get(url: string): Promise<Json> {
   const response = await app.inject({ method: 'GET', url, headers: { 'x-test-session': 'sales' } })
@@ -82,7 +84,8 @@ afterAll(async () => {
 describe('B-TH-078: the quote reads its request and its order', () => {
   it('an accepted quote made from a request: "Made from SEED-INQ-0004" and its order, on the record and on the list', async () => {
     const quote = await record(S.accepted!)
-    expect(quote.madeFrom).toEqual({ inquiryId: S.inquiry, number: 'SEED-INQ-0004' })
+    // TH-6 part B: the request's own state rides with it (QUOTED, ended when it became the quote).
+    expect(quote.madeFrom).toEqual({ inquiryId: S.inquiry, number: 'SEED-INQ-0004', status: 'QUOTED', declineReason: null, closedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) })
     expect(quote.order).toEqual({ state: 'MADE', id: S.order, number: 'SEED-SO-0001', status: 'CONFIRMED', reason: null, words: null })
     const listed = await row(S.accepted!)
     expect(listed.madeFrom).toEqual(quote.madeFrom)
@@ -121,3 +124,38 @@ describe('B-TH-078: the quote reads its request and its order', () => {
     expect((await row(S.accepted!)).order).toMatchObject({ state: 'MADE', status: 'CANCELLED' })
   })
 })
+
+// ---- TH-6 part B (B-TH-257 follow-up; B-TH-090's WITHDRAWN, #1564): "Customer sees" reads the request's own state ----------------
+describe('TH-6 part B: "Made from" carries the request’s own state, so a request the customer withdrew is read as such', () => {
+  it('a request the customer withdrew after its quote: WITHDRAWN and when, on the record and on the list', async () => {
+    const before = (await admin<{ status: string; closedAt: Date | null }>('SELECT status, "closedAt" FROM "Inquiry" WHERE id = $1', [S.inquiry]))[0]!
+    await force(`UPDATE "Inquiry" SET status = 'WITHDRAWN', "closedAt" = '2026-11-16T10:00:00Z' WHERE id = $1`, [S.inquiry])
+    try {
+      const quote = await record(S.accepted!)
+      expect(quote.madeFrom).toEqual({ inquiryId: S.inquiry, number: 'SEED-INQ-0004', status: 'WITHDRAWN', declineReason: null, closedAt: '2026-11-16T10:00:00.000Z' })
+      expect((await row(S.accepted!)).madeFrom).toEqual(quote.madeFrom)
+    } finally {
+      await force(`UPDATE "Inquiry" SET status = $2::"InquiryStatus", "closedAt" = $3 WHERE id = $1`, [S.inquiry, before.status, before.closedAt])
+    }
+  })
+})
+
+// ---- TH-6 part B (B-TH-257 follow-up; O-SAL-QUO-LIST.grid-F01): the list row's picture, as the Orders sheet's ------------------------
+describe('TH-6 part B: a quote row names its first line’s style and its picture (the file only with files.read)', () => {
+  it('quotes.view alone: the style (code, name) and the count of styles, no file; the picture route answers 404', async () => {
+    const listed = await row(S.accepted!)
+    expect(listed.styleCount).toBeGreaterThan(0)
+    expect(listed.picture).toMatchObject({ styleId: expect.any(String), styleCode: expect.any(String), styleName: expect.any(String), fileId: null, contentType: null, small: false })
+    const response = await app.inject({ method: 'GET', url: `/sales/quotes/${S.accepted}/picture`, headers: { 'x-test-session': 'sales' } })
+    expect(response.statusCode).toBe(404)
+  })
+
+  it('a quote of a customer out of reach: no row, and its picture is 404 (never another customer’s style)', async () => {
+    const response = await app.inject({ method: 'GET', url: `/sales/quotes/${S.accepted}/picture`, headers: { 'x-test-session': 'otherCustomer' } })
+    expect(response.statusCode).toBe(404)
+    const list = await app.inject({ method: 'GET', url: '/sales/quotes?limit=200', headers: { 'x-test-session': 'otherCustomer' } })
+    expect(list.statusCode).toBe(200)
+    expect((list.json() as Json).quotes.some((quote: Json) => quote.id === S.accepted)).toBe(false)
+  })
+})
+// ---- end TH-6 part B
