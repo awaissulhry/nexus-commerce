@@ -113,7 +113,7 @@ describe('ORDERED exactly with the order', () => {
     await expect(update(office(), 'Inquiry', id, `status = 'ORDERED', "closedAt" = now(), "closedById" = $2::uuid`, a.actorId)).rejects.toThrow(/ORDERED exactly with the order it became/)
     await expect(update(office(), 'Inquiry', id, `"salesOrderId" = $2::uuid`, made)).rejects.toThrow(/ORDERED exactly with the order it became/)
     // Closed with when and by whom, as QUOTED, DECLINED and LOST.
-    await expect(update(office(), 'Inquiry', id, `status = 'ORDERED', "salesOrderId" = $2::uuid`, made)).rejects.toThrow(/wrong closing time \(QUOTED, ORDERED, DECLINED and LOST have one/)
+    await expect(update(office(), 'Inquiry', id, `status = 'ORDERED', "salesOrderId" = $2::uuid`, made)).rejects.toThrow(/wrong closing time \(QUOTED, ORDERED, DECLINED, LOST and WITHDRAWN have one/) // B-TH-090: WITHDRAWN
     // Another customer's order: the reference holds the request's company and customer.
     await expect(order(await customerInquiry(A.P3), made)).rejects.toThrow(/Inquiry_tenantId_companyId_partyId_salesOrderId_fkey|foreign key/)
     // A prospect's request is matched to its customer first.
@@ -122,7 +122,7 @@ describe('ORDERED exactly with the order', () => {
     // One request per order.
     await expect(order(await customerInquiry(A.P1), made)).rejects.toThrow(/Inquiry_one_per_order|duplicate key/)
     // Final and frozen: no way back, no other order, only its note.
-    await expect(update(office(), 'Inquiry', id, `status = 'ASSIGNED', "salesOrderId" = NULL, "closedAt" = NULL, "closedById" = NULL, "assigneeId" = $2::uuid, "assignedAt" = now()`, a.actorId)).rejects.toThrow(/cannot move from ORDERED to ASSIGNED \(QUOTED, ORDERED, DECLINED and LOST are final\)/)
+    await expect(update(office(), 'Inquiry', id, `status = 'ASSIGNED', "salesOrderId" = NULL, "closedAt" = NULL, "closedById" = NULL, "assigneeId" = $2::uuid, "assignedAt" = now()`, a.actorId)).rejects.toThrow(/cannot move from ORDERED to ASSIGNED \(QUOTED, ORDERED, DECLINED, LOST and WITHDRAWN are final\)/) // B-TH-090: WITHDRAWN
     await expect(update(office(), 'Inquiry', id, `"salesOrderId" = NULL`)).rejects.toThrow(/is ORDERED and never changes/)
     await expect(update(office(), 'Inquiry', id, `request = 'changed'`)).rejects.toThrow(/is ORDERED and never changes/)
     expect(await update(office(), 'Inquiry', id, `note = 'Order made from the request.'`)).toBe(1)
