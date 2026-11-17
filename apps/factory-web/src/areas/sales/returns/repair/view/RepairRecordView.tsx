@@ -2,11 +2,14 @@
 
 import { useEffect, useId, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
-import { MoreHorizontal, Pencil, Send, ShieldCheck } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, KeyValue, Menu, Stepper, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
+import { Pencil, Send, ShieldCheck } from 'lucide-react'
+import { Banner, Card, EmptyState, Field, KeyValue, Stepper, SummaryTable, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button, Checkbox, Input, SegmentedControl, Select, Spinner } from '@nexus/ui/primitives'
 import { Textarea } from '../../../../../lib/i18n/ds-parts'
-import { Freshness, RecordFrame, Section, StepUpDialog } from '../../../../quality/_shared/parts'
+import { Freshness, Section, StepUpDialog } from '../../../../quality/_shared/parts'
+// ---- B-TH-259: the repair on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { POINT_RESULTS, REPAIR_KINDS, type PointResult, type Repair, type RepairAction, type RepairKind } from '../../api'
 import { CHECK_POINTS, checklistProblems, checklistResult, isScrapped, ownerName, repairHref, repairStep, returnHref, type CheckPoint, type Words } from '../../model'
 import type { IntakeDraft, RepairActions, RepairModel, RepairTab } from '../../view-model'
@@ -16,7 +19,10 @@ import { EstimateTab } from '../../estimate/view/EstimateTab'
 import { RepairDialogs } from './RepairDialogs'
 
 /**
- * A repair or alteration's record (SCR-112, design sales.returns › Repair order, `?tab=intake|work|safety|return|activity`):
+ * A repair or alteration's record (SCR-112, design sales.returns › Repair order, `?tab=intake|estimate|work|safety|return`; B-TH-259: on
+ * RecordFrame, the band in the shell's row with ONE pill (the stage), the repair's thread docked beside every tab — shared with its
+ * customer (B-TH-081: the portal repair page reads it) —, Activity's tools in its "⋯" (R-ACT), ONE notice; an old ?tab=activity opens
+ * the thread):
  * the band (‹ Returns & repairs, the repair number, the customer and the garment, the stage; the next step by stage and ⋯
  * Cancel, Copy number), then the tabs: Intake & photos (what came in and in what state: the serial's garment, the
  * customer's DDT, the customer's words, photos, the serial's other repairs; edited with the EditModeBar), Work (the stages
@@ -26,10 +32,11 @@ import { RepairDialogs } from './RepairDialogs'
  * customer before the work starts; `model.estimate`), and the approval and the repair held while a sent estimate waits for
  * the customer's answer or after a declined one. Prices only on the Estimate tab, with the price grain. Fetches nothing.
  */
-export function RepairRecordView({ model, actions, panels }: { model: RepairModel; actions?: RepairActions; panels?: ReactNode }) {
+// B-TH-259: `thread` is the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows.
+export function RepairRecordView({ model, actions, thread, printThread }: { model: RepairModel; actions?: RepairActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <ReturnsMessages>
-      <RepairRecord model={model} actions={actions} panels={panels} />
+      <RepairRecord model={model} actions={actions} thread={thread} printThread={printThread} />
     </ReturnsMessages>
   )
 }
@@ -43,10 +50,10 @@ const NEXT_BY_STAGE: Partial<Record<Repair['stage'], RepairAction>> = {
   REPAIRED: 'ship',
 }
 
-function RepairRecord({ model, actions, panels }: { model: RepairModel; actions?: RepairActions; panels?: ReactNode }) {
+function RepairRecord({ model, actions, thread, printThread }: { model: RepairModel; actions?: RepairActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useWords()
   const { repair, prefix, can } = model
-  const tab: RepairTab = model.tab === 'activity' && !panels ? 'intake' : model.tab
+  const tab: RepairTab = model.tab
   const base = repairHref(prefix, repair.id)
   const held = (action: RepairAction): string | null => {
     const words = repairStep(action, repair, can, model.offline)
@@ -77,55 +84,52 @@ function RepairRecord({ model, actions, panels }: { model: RepairModel; actions?
     { id: 'number', label: t('row.copy'), onSelect: () => actions?.onCopy?.(repair.number) },
     { id: 'link', label: t('record.copyLink'), onSelect: () => actions?.onCopy?.(typeof window === 'undefined' ? base : `${window.location.origin}${base}`) },
   ]
-  const tabs = [
-    { id: 'intake', label: t('tab.intake') },
-    { id: 'estimate', label: t('depth:estimate.tab') },
-    { id: 'work', label: t('tab.work') },
-    { id: 'safety', label: t('tab.safety') },
-    { id: 'return', label: t('tab.return') },
-    ...(panels ? [{ id: 'activity', label: t('tab.activity') }] : []),
+  // B-TH-259: tabs 6 → 5 — Activity went to the docked thread.
+  const tabs: TabItem[] = [
+    { id: 'intake', label: t('tab.intake'), href: `${base}?tab=intake` },
+    { id: 'estimate', label: t('depth:estimate.tab'), href: `${base}?tab=estimate` },
+    { id: 'work', label: t('tab.work'), href: `${base}?tab=work` },
+    { id: 'safety', label: t('tab.safety'), href: `${base}?tab=safety` },
+    { id: 'return', label: t('tab.return'), href: `${base}?tab=return` },
   ]
 
   return (
     <>
       <RecordFrame
-        back={{ href: `${prefix}/sales/returns`, label: t('record.back') }}
-        title={
-          <>
-            <span className="fw-q-code">{repair.number}</span> · {t(`kind.${repair.kind}`)}
-          </>
-        }
-        meta={
-          <span className="fw-q-cell-row">
-            <span>{repair.party.legalName}</span>
-            {garment && <span className="fw-q-hint fw-q-code">{garment}</span>}
-            <Freshness asOf={model.asOf} live={model.live} />
-          </span>
-        }
-        status={
-          <span className="fw-q-cell-row">
-            {repair.safety.required && <SafetyTag state={repair.safety.state} />}
-            <RepairStagePill stage={repair.stage} />
-          </span>
-        }
-        actions={
-          <>
-            {next && (
-              <Button size="sm" variant="primary" heldReason={held(next)} onClick={() => run(next)}>
-                {t(`repair.action.${next}`)}
-              </Button>
-            )}
-            <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('record.more') }} items={moreItems} />
-          </>
-        }
-        tabs={tabs}
-        active={tab}
-        tabHref={(id) => `${base}?tab=${id}`}
-        dock={panels}
-        dockOpen={model.dockOpen}
-        onDock={() => actions?.onDock?.()}
+        recordType="RepairOrder"
+        personId={model.personId ?? null}
+        threadLabel={t('record.dockLabelOf', { number: repair.number })}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: <Link href={`${prefix}/sales/returns`}>{t('record.back')}</Link>,
+          title: (
+            <>
+              <span className="fw-q-code">{repair.number}</span> · {t(`kind.${repair.kind}`)}
+            </>
+          ),
+          status: <RepairStagePill stage={repair.stage} />,
+          meta: (
+            <span className="fw-q-cell-row">
+              <span>{repair.party.legalName}</span>
+              {garment && <span className="fw-q-hint fw-q-code">{garment}</span>}
+              {repair.safety.required && <SafetyTag state={repair.safety.state} />}
+              <Freshness asOf={model.asOf} live={model.live} />
+            </span>
+          ),
+          primary: next ? (
+            <Button size="sm" variant="primary" heldReason={held(next)} onClick={() => run(next)}>
+              {t(`repair.action.${next}`)}
+            </Button>
+          ) : undefined,
+          more: moreItems,
+          moreLabel: t('record.more'),
+        }}
       >
         <div className="fw-q-stack">
+          <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={tab} size="sm" overflow="scroll" />
+          {/* B-TH-259: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+          <RecordNotices>
           {model.offline && <Banner tone="warning" title={t('offline.title')}>{t('offline.body')}</Banner>}
           {model.changedAt && (
             <Banner
@@ -161,12 +165,12 @@ function RepairRecord({ model, actions, panels }: { model: RepairModel; actions?
               {repair.cancelReason ?? null}
             </Banner>
           )}
+          </RecordNotices>
           {tab === 'intake' && <IntakeTab model={model} actions={actions} held={held} run={run} />}
           {tab === 'estimate' && <EstimateTab model={model} actions={actions} />}
           {tab === 'work' && <WorkTab model={model} held={held} run={run} />}
           {tab === 'safety' && <SafetyTab model={model} actions={actions} held={held} run={run} />}
           {tab === 'return' && <ReturnTab model={model} held={held} run={run} />}
-          {tab === 'activity' && panels}
         </div>
       </RecordFrame>
       <RepairDialogs model={model} actions={actions} />

@@ -1,7 +1,8 @@
 import { defineDesignScreen } from '../../../../../lib/design/design-screen'
 import { demoStyle, recordModel, REV, REVISIONS, SIZES, STYLE_ID } from '../../demo/fixtures'
 import type { StyleRecordViewModel } from '../record-model'
-import { StyleRecordView } from '../view/StyleRecordView'
+// B-TH-261: the studio with its docked thread (RecordFrame).
+import { StyleDesign } from '../../demo/fixtures'
 import type { GradePreviewView, MeasurementSpecView, SpecPoint } from './api'
 import { NO_SPEC, specMarkKey, type SpecModel } from './spec-model'
 
@@ -135,7 +136,7 @@ const PASTE = 'DEMO-CHEST_W\t50\t52\t54\t56\t58\t60\t62\nDEMO-WAIST_W\t44\t46\ta
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-344',
   title: 'Style studio: Measurement spec and Apply grade rule',
-  view: StyleRecordView,
+  view: StyleDesign,
   cases: [
     { id: 'graded', label: 'A graded spec (draft revision 3)', model: sizes(ready(demoSpec())), note: 'Base 52 marked; back length 56 typed by hand among graded values (a dot); sleeve 46 and 48 "missing"; the picture of chest width in its card.' },
     {

@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { RecordThread } from '../../../lib/record-thread/RecordThread'
 import { MessageRemindMe } from '../../../shell/panels/remind-me/view/MessageRemindMe'
 import { DockedOfficeThread, type DockedHost } from './DockedOfficeThread'
@@ -15,8 +16,15 @@ import { useThreadReminder } from './use-thread-reminder'
  * are Home's, home.view). Office only: the portal keeps PortalThread on the DS PartnerThread (PR-15), and check-view-boundaries keeps
  * this file out of every other view.
  */
-export function OfficeRecordThread(host: DockedHost & { docked?: boolean }) {
+export function OfficeRecordThread(host: DockedHost & { docked?: boolean; /* B-TH-271 */ onEmpty?: (empty: boolean) => void }) {
   const { model, actions, base } = useRecordThread(host)
+  // ---- B-TH-271 (PL6): a window tells whether the thread is still empty (read, nothing written, no events): an office-only thread
+  // with nothing in it folds to a slim "Add a note" column there.
+  const feed = model.feed
+  const empty = feed.state === 'ready' && feed.messages.length === 0 && feed.events.length === 0 && !feed.more
+  const onEmpty = host.onEmpty
+  useEffect(() => onEmpty?.(empty), [empty, onEmpty])
+  // ---- end B-TH-271
   const remindable = base.held.has('home.view')
   const reminder = useThreadReminder(base.key, host.recordLabel, remindable)
   const remind = remindable ? (messageId: string) => <MessageRemindMe record={host.record} messageId={messageId} /> : undefined

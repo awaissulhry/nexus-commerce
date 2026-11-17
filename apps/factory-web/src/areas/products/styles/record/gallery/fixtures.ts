@@ -2,7 +2,8 @@ import { defineDesignScreen } from '../../../../../lib/design/design-screen'
 import { COLOURWAY_IDS, demoStyle, recordModel, REV, STYLE_ID } from '../../demo/fixtures'
 import { demoPicture } from '../../gallery/fixtures'
 import type { StyleRecordViewModel } from '../record-model'
-import { StyleRecordView } from '../view/StyleRecordView'
+// B-TH-261: the studio with its docked thread (RecordFrame).
+import { StyleDesign } from '../../demo/fixtures'
 import type { PictureView, StylePicturesView } from './api'
 import { NO_GALLERY, type GalleryModel } from './gallery-model'
 
@@ -89,7 +90,7 @@ const overview = (gallery: GalleryModel, role: 'owner' | 'production' | 'sales' 
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-304',
   title: 'Style studio: Overview › Sketches and pictures',
-  view: StyleRecordView,
+  view: StyleDesign,
   cases: [
     { id: 'owner', label: 'Sketches, photos per colourway, image pages with callouts', model: overview(ready()), note: 'The front flat is the main picture (the list, the gallery and the public DoC page show it). The red WebP photo is not in the tech pack PDF (JPEG or PNG ≤ 4 MB). Revision 2’s page is frozen.' },
     { id: 'viewer', label: 'A picture full size with its numbered callouts', model: overview(ready(view(), { dialog: { kind: 'view', pictureId: uid(5) } })) },

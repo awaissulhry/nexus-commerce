@@ -32,7 +32,7 @@ export function CustomersTab({ list, model, actions }: { list: PriceListDetail; 
     const NameCell = ({ data }: ICellRendererParams<ListCustomer>) =>
       data ? (
         <span className="fw-pl-cell">
-          <Link className="fw-pl-link" href={`${model.prefix}/sales/customers/${encodeURIComponent(data.id)}?tab=tax`} tabIndex={-1}>
+          <Link className="fw-pl-link" href={`${model.prefix}/sales/customers/${encodeURIComponent(data.id)}?tab=terms` /* B-TH-260: Terms & requirements */} tabIndex={-1}>
             {data.legalName}
           </Link>
           <span className="fw-pl-sub">{data.code}</span>

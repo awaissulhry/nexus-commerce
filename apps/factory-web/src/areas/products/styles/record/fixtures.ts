@@ -1,14 +1,17 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { demoBom, demoCompliance, demoDuplicated, demoOffer, demoStyle, newStyle, recordModel, REV, REVISIONS, SCALES, SIZES, STYLE_ID } from '../demo/fixtures'
+import { demoBom, demoCompliance, demoDuplicated, demoOffer, demoStyle, newStyle, PRIVATE_LABEL_BRAND, recordModel, REV, REVISIONS, SCALES, SIZES, STYLE_ID } from '../demo/fixtures'
 import { draftFor } from '../duplicate/duplicate-model'
 import type { StyleRecordViewModel } from './record-model'
-import { StyleRecordView } from './view/StyleRecordView'
+// B-TH-261: the studio with its docked thread (RecordFrame).
+import { StyleDesign } from '../demo/fixtures'
 
 /**
- * SCR-041 the Style studio — Overview and Colourways & sizes, with the band (revision in view, release held with its
- * reason), the release / revision / archive pop-ups, the thread beside the tab, and every state. Made-up data only
- * (demo/fixtures.ts): the jacket DEMO-JKT-01 with revision 2 released and revision 3 in draft (2 things before its
- * release: leather size 58 has no quantity, the zip has no colour for ANTR).
+ * SCR-041 the Style studio — Overview & variants (B-TH-261: Overview and Colourways & sizes in one tab), on RecordFrame: the band
+ * in the shell's row (ONE pill, the revision in view, release held with its reason), the release / revision / archive pop-ups, the
+ * style's thread docked beside every tab (Activity's tools in its "⋯"; a private-label style's with its brand, our own
+ * collection's notes only), one notice, and every state. Made-up data only (demo/fixtures.ts): the jacket DEMO-JKT-01 with
+ * revision 2 released and revision 3 in draft (2 things before its release: leather size 58 has no quantity, the zip has no colour
+ * for ANTR).
  */
 
 const owner = recordModel('owner')
@@ -19,8 +22,8 @@ const duplicate = { source: { id: STYLE_ID, code: 'DEMO-JKT-01', name: 'Giacca T
 
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-041',
-  title: 'Style studio: Overview, Colourways & sizes',
-  view: StyleRecordView,
+  title: 'Style studio: Overview & variants',
+  view: StyleDesign,
   cases: [
     { id: 'overview-owner', label: 'Owner: draft revision 3 in view', model: owner, note: 'Release revision 3 is held with "2 things to fix first"; r opens the check anyway. The side says what blocks and links each to its tab.' },
     { id: 'overview-product', label: 'Product office', model: recordModel('product') },
@@ -36,16 +39,20 @@ export const designScreen = defineDesignScreen<StyleRecordViewModel>({
     { id: 'abandon', label: 'Abandon the draft', model: recordModel('owner', { dialog: { kind: 'abandon' } }) },
     { id: 'archive', label: 'Archive the style', model: recordModel('owner', { dialog: { kind: 'archive' } }) },
     { id: 'archived', label: 'Archived style', model: recordModel('owner', { style: { status: 'ready', value: demoStyle({ status: 'ARCHIVED' }) } }), note: 'Read only; Reactivate in ⋯.' },
-    { id: 'variants-owner', label: 'Colourways & sizes', model: recordModel('owner', { tab: 'variants' }), note: 'Range card, colourways beside the body measures, the SKU matrix (Space / Shift+Space / arrows / Enter). Size 58 is not covered by the certificate: flagged.' },
-    { id: 'variants-range', label: 'Range being changed', model: recordModel('owner', { tab: 'variants', rangeDraft: { sizeScaleId: SCALES[0]!.id, sizes: [...SIZES.slice(1), '60'], baseSize: '52' } }), note: 'Before Apply: adds 60 (3 SKUs), takes out 46 (3 SKUs off, never deleted).' },
-    { id: 'variants-missing', label: 'SKUs to generate', model: recordModel('owner', { tab: 'variants', style: { status: 'ready', value: demoStyle({ missing: ['ROSSO:56', 'ROSSO:58'] }) } }), note: 'Generate 2 SKUs is the card\'s primary.' },
-    { id: 'generate', label: 'Generate SKUs', model: recordModel('owner', { tab: 'variants', style: { status: 'ready', value: demoStyle({ missing: ['ROSSO:56', 'ROSSO:58'] }) }, dialog: { kind: 'generate' } }) },
-    { id: 'colourway-add', label: 'Add a colourway', model: recordModel('owner', { tab: 'variants', dialog: { kind: 'colourway', colourwayId: null } }) },
-    { id: 'colourway-edit', label: 'Edit a colourway in use', model: recordModel('owner', { tab: 'variants', dialog: { kind: 'colourway', colourwayId: demoStyle().colourways[0]!.id } }), note: 'Its code is fixed: SKUs and orders name it.' },
-    { id: 'variants-sales', label: 'Colourways & sizes (sales)', model: recordModel('sales', { tab: 'variants' }), note: 'Read only: the chips are the range; every change is held with its reason.' },
-    { id: 'variants-empty', label: 'Colourways & sizes: nothing yet', model: recordModel('owner', { tab: 'variants', style: { status: 'ready', value: newStyle() }, revisionId: REV.r1, compliance: { status: 'idle' } }) },
-    { id: 'activity', label: 'Activity', model: recordModel('owner', { tab: 'activity' }) },
-    { id: 'dock', label: 'Thread beside the tab (wide)', model: recordModel('owner', { dockOpen: true }), note: '⌘J; 1280 px and wider (the phone opens Activity instead).' },
+    { id: 'variants-owner', label: 'Overview & variants: the range, colourways and SKU matrix', model: recordModel('owner', { tab: 'overview' }), note: 'Range card, colourways beside the body measures, the SKU matrix (Space / Shift+Space / arrows / Enter). Size 58 is not covered by the certificate: flagged.' },
+    { id: 'variants-range', label: 'Range being changed', model: recordModel('owner', { tab: 'overview', rangeDraft: { sizeScaleId: SCALES[0]!.id, sizes: [...SIZES.slice(1), '60'], baseSize: '52' } }), note: 'Before Apply: adds 60 (3 SKUs), takes out 46 (3 SKUs off, never deleted).' },
+    { id: 'variants-missing', label: 'SKUs to generate', model: recordModel('owner', { tab: 'overview', style: { status: 'ready', value: demoStyle({ missing: ['ROSSO:56', 'ROSSO:58'] }) } }), note: 'Generate 2 SKUs is the card\'s primary.' },
+    { id: 'generate', label: 'Generate SKUs', model: recordModel('owner', { tab: 'overview', style: { status: 'ready', value: demoStyle({ missing: ['ROSSO:56', 'ROSSO:58'] }) }, dialog: { kind: 'generate' } }) },
+    { id: 'colourway-add', label: 'Add a colourway', model: recordModel('owner', { tab: 'overview', dialog: { kind: 'colourway', colourwayId: null } }) },
+    { id: 'colourway-edit', label: 'Edit a colourway in use', model: recordModel('owner', { tab: 'overview', dialog: { kind: 'colourway', colourwayId: demoStyle().colourways[0]!.id } }), note: 'Its code is fixed: SKUs and orders name it.' },
+    { id: 'variants-sales', label: 'Overview & variants (sales)', model: recordModel('sales', { tab: 'overview' }), note: 'Read only: the chips are the range; every change is held with its reason.' },
+    { id: 'variants-empty', label: 'Overview & variants: nothing yet', model: recordModel('owner', { tab: 'overview', style: { status: 'ready', value: newStyle() }, revisionId: REV.r1, compliance: { status: 'idle' } }) },
+    // ---- B-TH-261: the thread docked (the rule of picture 38); Activity is gone, its tools are in the thread's "⋯" (R-ACT).
+    { id: 'thread-docked', label: 'TH-6 · Our own collection: the thread docked beside the tab (office notes only)', model: owner, note: 'The band sits in the shell’s band row with ONE pill; the thread is docked at 40 % (one third on Overview & variants, Sizes, BOM and Cost under 1600 px), sticky while the body scrolls, ⌘J hides it. Our own collection has no party: notes only, never shared with a customer. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Remind me); History is View › Changes. An old ?tab=activity lands here with the thread open; ?tab=variants and ?tab=files land on their tabs.' },
+    { id: 'thread-private-label', label: 'TH-6 · A private-label style: its thread is its brand’s only (Reply to Esempio Moto)', model: recordModel('owner', { style: { status: 'ready', value: { ...demoStyle(), brand: PRIVATE_LABEL_BRAND } } }), note: 'The style is made for one brand: Reply and Share reach that brand only; no other customer is ever offered.' },
+    { id: 'thread-made-from', label: 'TH-6 · A draft made from a request: “Made from INQ-… — Open” in the band', model: recordModel('owner', { style: { status: 'ready', value: { ...demoStyle(), status: 'DRAFT', brand: PRIVATE_LABEL_BRAND } }, madeFrom: { inquiryId: '0190f0e2-7777-7000-8000-000000000007', number: 'INQ-2026-0007' } }), note: 'Read only with sales.inquiries.view (Make style draft, B-TH-026); it opens the request in Sales › Incoming.' },
+    { id: 'thread-no-right', label: 'TH-6 · Without threads.read: no thread beside the tabs (no Thread button)', model: recordModel('owner', { can: { ...recordModel('owner').can, thread: false } }) },
+    { id: 'notices', label: 'TH-6 · One notice: a refusal shows, the archived and changed-elsewhere notices wait behind "2 more notices"', model: recordModel('owner', { style: { status: 'ready', value: demoStyle({ status: 'ARCHIVED' }) }, changed: { at: '2026-10-29T09:20:00.000Z' }, notice: { key: 'problem.write.moved', tone: 'danger' }, save: { state: 'failed', at: null } }) },
     { id: 'changed', label: 'Changed by someone else', model: recordModel('owner', { changed: { at: '2026-10-29T09:20:00.000Z' }, dialog: { kind: 'colourway', colourwayId: null } }) },
     { id: 'refused', label: 'A write refused', model: recordModel('owner', { notice: { key: 'problem.write.moved', tone: 'danger' }, save: { state: 'failed', at: null } }) },
     { id: 'compliance-failed', label: 'One part failed to load', model: recordModel('owner', { compliance: { status: 'error', problem: 'problem.read.unavailable' } }), note: 'The rest of the record stays usable.' },

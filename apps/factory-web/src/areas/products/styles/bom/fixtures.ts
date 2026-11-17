@@ -1,7 +1,8 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { CAN, demoBom, demoRouting, demoSheetImport, demoStyle, LINE_MATERIALS, MATERIAL, MATERIAL_RESULTS, newStyle, recordModel, REV, REVISIONS, ROWS } from '../demo/fixtures'
 import type { StyleRecordViewModel } from '../record/record-model'
-import { StyleRecordView } from '../record/view/StyleRecordView'
+// B-TH-261: the studio with its docked thread (RecordFrame).
+import { StyleDesign } from '../demo/fixtures'
 // B-W2b-241: the BOM in depth (made-up data: depth/demo/fixtures.ts; the pattern pieces of B-W2b-95's design data).
 import { demoPieces } from '../record/pieces/fixtures'
 import { NO_PIECES } from '../record/pieces/pieces-model'
@@ -36,7 +37,7 @@ const released = { style: { status: 'ready' as const, value: demoStyle() }, revi
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-042',
   title: 'Style studio: Materials (BOM)',
-  view: StyleRecordView,
+  view: StyleDesign,
   cases: [
     { id: 'lines', label: 'Lines (draft revision 3)', model: bom(), note: 'The BOM check first, each finding with Show me; n adds a material; Alt+↑ / Alt+↓ move a line; v cycles the views.' },
     { id: 'by-size', label: 'By size', model: bom({ bomView: 'sizes' }), note: 'Decimals typed either way; size 58 is "— missing" in an error tone, never 0; the base size is marked; leather totals per size.' },

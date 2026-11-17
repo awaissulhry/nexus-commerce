@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { MapPin, MoreHorizontal, Plus, Users } from 'lucide-react'
-import { Banner, Card, KeyValue, Menu, MetricStrip, RecordLayout, SummaryTable, type MenuItemDef, type Metric } from '@nexus/ui/components'
-import { Button, Checkbox, SegmentedControl, Tag, Toggle } from '@nexus/ui/primitives'
+import { FolderKanban, MapPin, MoreHorizontal, Plus, Table2, Users } from 'lucide-react'
+import { Banner, Card, KeyValue, Menu, MetricStrip, RecordLayout, SummaryTable, Tabs, type MenuItemDef, type Metric, type TabItem } from '@nexus/ui/components'
+import { Button, Checkbox, SegmentedControl, Skeleton, Tag, Toggle } from '@nexus/ui/primitives'
 import { EditModeBar } from '../../../../lib/i18n/ds-parts'
 import { formatDate, formatDateTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
@@ -43,14 +43,17 @@ import {
   type RecordDialog,
   type RecordTab,
 } from '../model'
-import { AddressModal, ArchiveModal, BlockModal, ContactModal, EditPartyModal, IdentityModal, PartyFields, ShortcutsModal } from './dialogs'
-import { dash, Freshness, NoAccess, NoticeBanner, PartiesMessages, ReadState, RecordFrame, RecordProblem, RecordSkeleton, RoleTags, StatusPill, ViesMark, ViesPill } from './parts'
+import { AddressModal, ArchiveModal, BlockModal, ContactModal, EditPartyModal, IdentityModal, PartyFields } from './dialogs'
+import { dash, Freshness, NoAccess, NoticeBanner, PartiesMessages, ReadState, RecordProblem, RecordSkeleton, RoleTags, StatusPill, ViesMark } from './parts'
+// ---- B-TH-260: the party on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame, useRecordFrame } from '../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../_shared/record-frame/RecordNotices'
+import { rightRef } from '../../../../lib/i18n/rights'
 
 export interface PartyRecordActions {
   onRetry?: () => void
   /** Read the record again (someone else changed it). */
   onReload?: () => void
-  onDock?: () => void
   onDialog?: (dialog: RecordDialog | null) => void
   onDismissNotice?: () => void
   /** Save the party's own fields (the customer's Edit dialog, the supplier's Overview form). Resolve true when saved. */
@@ -112,65 +115,75 @@ export interface SupplierDepth {
 }
 
 /**
- * SCR-033 Customer record and SCR-057 Supplier record (design sales.customers / purchasing.suppliers "records", 00
- * §2.2): one party record, two sides. The head (‹ list · name · identity · status, role and VIES pills · at most two
- * actions · ⋯), the tabs always in view (Owner L1), then the tab: a customer's Overview, Addresses & contacts, Tax &
- * terms, Quotes & orders, Documents and Activity; a supplier's Overview (its form with ⌘S), Contacts, Orders and
- * Activity. Later-wave tabs are not drawn. Fetches nothing: PartyRecord.tsx reads and writes; the record panels
- * (thread, files, history) come in as `panels` and `documents`.
+ * SCR-033 Customer record and SCR-057 Supplier record (design sales.customers / purchasing.suppliers "records", 00 §2.2): one party
+ * record, two sides, on RecordFrame (B-TH-260; the rule of picture 38, the tabs of picture 39 / 08-tabs O-SAL-CUST, O-PUR-SUP): the
+ * band in the shell's band row — ‹ list, the name, ONE pill (its status), the code, identity, roles, VIES and freshness as its
+ * details, "Projects (n)" opening this party's projects, the primary (Activate a prospect, else a customer's Check VIES), the Thread
+ * button (⌘J) and ⋯ (Check VIES when Activate is the primary, Block / Unblock, Archive / Reactivate, Start a project, Copy code;
+ * the frame's ONE Keyboard line lists the page's keys too). The party's thread is docked beside every tab (40 %): "Reply to
+ * <this party>" only; Activity's tools are in its "⋯" (R-ACT), its files in its Files view. Customer 8 → 5: Overview, Addresses &
+ * contacts, Terms & requirements, Quotes & orders ("Open this customer's sheet"), Portal access (a refused invite keeps its real
+ * reason here). Supplier 10 → 7: Overview & contacts, Items & prices, Documents & questionnaire, Orders, Quality & rating, Bank
+ * details, Portal access. ONE notice in the body column. Fetches nothing: PartyRecord.tsx reads and writes; the docked thread comes
+ * in as `thread`, its print form as `printThread`.
  */
-export function PartyRecordView({ model, actions, panels, documents, terms, items, overview, portal, questionnaire, depth }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode; depth?: SupplierDepth }) {
+export function PartyRecordView({ model, actions, thread, printThread, terms, items, overview, portal, questionnaire, depth }: { model: PartyRecordModel; actions?: PartyRecordActions; thread?: ReactNode; printThread?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode; depth?: SupplierDepth }) {
   return (
     <PartiesMessages>
-      <PartyRecord model={model} actions={actions} panels={panels} documents={documents} terms={terms} items={items} overview={overview} portal={portal} questionnaire={questionnaire} depth={depth} />
+      <PartyRecord model={model} actions={actions} thread={thread} printThread={printThread} terms={terms} items={items} overview={overview} portal={portal} questionnaire={questionnaire} depth={depth} />
     </PartiesMessages>
   )
 }
 
-function PartyRecord({ model, actions, panels, documents, terms, items, overview, portal, questionnaire, depth }: { model: PartyRecordModel; actions?: PartyRecordActions; panels?: ReactNode; documents?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode; depth?: SupplierDepth }) {
+/** B-TH-260: an old address that asked for the gone Documents tab shows the thread once (its files are the thread's Files view). */
+function ShowThreadOnArrival() {
+  const frame = useRecordFrame()
+  const show = frame?.showThread
+  useEffect(() => {
+    show?.()
+    // Once, on arrival.
+  }, [])
+  return null
+}
+
+function PartyRecord({ model, actions, thread, printThread, terms, items, overview, portal, questionnaire, depth }: { model: PartyRecordModel; actions?: PartyRecordActions; thread?: ReactNode; printThread?: ReactNode; terms?: ReactNode; items?: ReactNode; overview?: OverviewSlot; portal?: ReactNode; questionnaire?: ReactNode; depth?: SupplierDepth }) {
   const t = useT('parties')
   const locale = useLocale()
   const side = model.side
   const config = SIDES[side]
   const listHref = sideHref(model.prefix, config)
-  const back = { href: listHref, label: t(`${side}.title`) }
+  const backLink = <Link href={listHref}>{t(`${side}.title`)}</Link>
   const party = model.party
   const open = (dialog: RecordDialog | null) => actions?.onDialog?.(dialog)
+  const frameOf = (title: ReactNode, children: ReactNode) => (
+    <RecordFrame recordType="Party" personId={model.personId ?? null} band={{ back: backLink, title, moreLabel: t('record.more') }} thread={null} threadLabel={t('record.dockLabel')}>
+      {children}
+    </RecordFrame>
+  )
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null
-      if (event.metaKey || event.ctrlKey || event.altKey || model.dialog) return
-      if (target && (target.closest('input, textarea, select, [contenteditable="true"], [role="dialog"], [role="menu"]') || target.isContentEditable)) return
-      if (event.key === '?') {
-        event.preventDefault()
-        open({ kind: 'shortcuts' })
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
-
-  if (!model.can.view) return <NoAccess title={t(`${side}.noAccess.title`)} body={t(`${side}.noAccess.body`)} />
+  // B-TH-260: the page's states before the party is read (no access, a failed read, loading) sit in the frame with no thread.
+  if (!model.can.view) return frameOf(t(`${side}.noAccess.title`), <NoAccess title={t(`${side}.noAccess.title`)} body={t(`${side}.noAccess.body`)} />)
   if (model.problem && !party) {
-    return (
+    return frameOf(
+      t(model.problem === 'problem.notFound' ? 'record.notFoundTitle' : model.problem === 'problem.forbidden' ? 'record.forbiddenTitle' : 'record.failedTitle'),
       <RecordProblem
         problem={model.problem}
         onRetry={actions?.onRetry}
         back={
           <Button size="sm" asChild>
-            <Link href={back.href}>{t('record.backTo', { name: back.label })}</Link>
+            <Link href={listHref}>{t('record.backTo', { name: t(`${side}.title`) })}</Link>
           </Button>
         }
-      />
+      />,
     )
   }
-  if (!party) return <RecordSkeleton />
+  if (!party) return frameOf(<Skeleton width={240} height={22} />, <RecordSkeleton />)
 
   const can = model.can
   const editable = writable(party, can)
   const tabs = recordTabs(config, can)
   const tab: RecordTab = tabs.includes(model.tab) ? model.tab : 'overview'
+  const recordPath = sideHref(model.prefix, config, `/${encodeURIComponent(party.id)}`)
   const activeAddresses = party.addresses.filter((address) => address.status === 'ACTIVE')
   const activeContacts = party.contacts.filter((contact) => contact.status === 'ACTIVE')
   const ordersCount =
@@ -181,14 +194,30 @@ function PartyRecord({ model, actions, panels, documents, terms, items, overview
       : model.purchaseOrders.items && !model.purchaseOrders.more
         ? model.purchaseOrders.items.length
         : null
-  const tabItems = tabs.map((id) => ({
+  const tabItems: TabItem[] = tabs.map((id) => ({
     id,
+    href: `${recordPath}${id === 'overview' ? '' : `?tab=${id}`}`,
     label: t(`${side}.tab.${id}`),
-    count: id === 'addresses' ? activeAddresses.length + activeContacts.length : id === 'contacts' ? activeContacts.length : id === 'orders' ? ordersCount : undefined,
+    // B-TH-260: a supplier's Overview & contacts counts its contacts (Contacts merged into it).
+    count: id === 'addresses' ? activeAddresses.length + activeContacts.length : id === 'overview' && side === 'suppliers' ? activeContacts.length : id === 'orders' ? ordersCount : undefined,
   }))
   const viesHeld = !can.vies ? t('held.vies') : party.status === 'ARCHIVED' ? t('held.archived') : model.viesRunning ? t('vies.checking') : null
+  const viesLine = side === 'customers' && viesApplies(party)
+
+  // The band's ONE primary: Activate a prospect, else a customer's Check VIES (then Check VIES goes into ⋯).
+  const primary =
+    party.status === 'PROSPECT' ? (
+      <Button size="sm" variant="primary" onClick={() => actions?.onActivate?.()} heldReason={can.manage ? (model.busy ? t('common.saving') : null) : t('held.manage')}>
+        {t(`${side}.activate`)}
+      </Button>
+    ) : viesLine ? (
+      <Button size="sm" onClick={() => actions?.onCheckVies?.()} heldReason={viesHeld}>
+        {t('vies.checkNow')}
+      </Button>
+    ) : null
 
   const menu: MenuItemDef[] = [
+    ...(party.status === 'PROSPECT' && viesLine ? [{ id: 'vies', label: t('vies.checkNow'), onSelect: () => actions?.onCheckVies?.(), disabled: !!viesHeld, description: viesHeld ?? undefined }] : []),
     ...(party.status === 'ACTIVE' ? [{ id: 'block', label: t('row.block'), onSelect: () => open({ kind: 'block' }), disabled: !can.block, description: can.block ? undefined : t('held.block') }] : []),
     ...(party.status === 'BLOCKED'
       ? [{ id: 'unblock', label: t('row.unblock'), onSelect: () => actions?.onUnblock?.(), disabled: !can.block, description: can.block ? undefined : t('held.block') }]
@@ -201,113 +230,157 @@ function PartyRecord({ model, actions, panels, documents, terms, items, overview
       ? [{ id: 'reactivate', label: t('row.reactivate'), onSelect: () => actions?.onReactivate?.(), disabled: !can.manage, description: can.manage ? undefined : t('held.manage') }]
       : []),
     { id: 'sep', separator: true },
+    // B-TH-260 (TH-5's Projects): a new project with this party as its outside company (`?party=`); held without projects.manage.
+    ...(can.projects
+      ? [
+          {
+            id: 'project',
+            label: t('record.startProject'),
+            href: can.projectsManage ? `${model.prefix}/products/projects?new=1&party=${encodeURIComponent(party.id)}` : undefined,
+            disabled: !can.projectsManage,
+            description: can.projectsManage ? undefined : t('held.projects', { right: rightRef('projects.manage') }),
+          },
+        ]
+      : []),
     { id: 'copy', label: t('record.copyCode', { code: party.code }), onSelect: () => actions?.onCopyCode?.() },
-    { id: 'keys', label: t('keys.title'), onSelect: () => open({ kind: 'shortcuts' }) },
   ]
+  // B-TH-260 (PR-14): the page's own keys, first in the band menu's ONE Keyboard line (⌘J, ⌘↵ and the thread's keys follow).
+  const keys = [{ keys: ['←', '→'], label: t('keys.tabs') }, ...(side === 'suppliers' ? [{ keys: ['⌘', 'S'], label: t('keys.save') }] : [])]
   const { current } = identitiesOf(party)
   const meta =
     side === 'customers'
       ? [party.code, countryName(party.country, locale), party.taxMode ? t(`taxMode.${party.taxMode}`) : t('list.noIdentity')].join(' · ')
       : [party.code, party.vatNumber ?? party.fiscalCode ?? t('list.noIdentity'), countryName(party.country, locale)].join(' · ')
+  const projects = model.projects ?? null
   const dialog = model.dialog ?? null
   const editingAddress = dialog?.kind === 'address' && dialog.addressId ? party.addresses.find((address) => address.id === dialog.addressId) : undefined
   const editingContact = dialog?.kind === 'contact' && dialog.contactId ? party.contacts.find((contact) => contact.id === dialog.contactId) : undefined
 
   return (
-    <div className="fw-pty">
+    <>
       <RecordFrame
-        back={back}
-        title={partyName(party)}
-        meta={meta}
-        status={
-          <span className="fw-pty-tags">
-            <StatusPill status={party.status} />
-            <RoleTags roles={party.roles} />
-            <ViesPill standing={party.vies} />
-            <Freshness asOf={model.asOf} live={model.live} />
-          </span>
-        }
-        actions={
-          <>
-            {party.status === 'PROSPECT' && (
-              <Button size="sm" variant="primary" onClick={() => actions?.onActivate?.()} heldReason={can.manage ? (model.busy ? t('common.saving') : null) : t('held.manage')}>
-                {t(`${side}.activate`)}
-              </Button>
-            )}
-            {side === 'customers' && viesApplies(party) && (
-              <Button size="sm" onClick={() => actions?.onCheckVies?.()} heldReason={viesHeld}>
-                {t('vies.checkNow')}
-              </Button>
-            )}
-            <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('record.more') }} items={menu} />
-          </>
-        }
-        tabs={tabItems}
-        active={tab}
-        tabHref={(id) => `${sideHref(model.prefix, config, `/${encodeURIComponent(party.id)}`)}${id === 'overview' ? '' : `?tab=${id}`}`}
-        dock={tab === 'activity' || tab === 'documents' ? undefined : panels}
-        dockOpen={model.dockOpen}
-        onDock={actions?.onDock}
+        recordType="Party"
+        personId={model.personId ?? null}
+        threadLabel={t('record.dockLabelOf', { name: partyName(party) })}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: backLink,
+          title: partyName(party),
+          status: <StatusPill status={party.status} />,
+          meta: (
+            <span className="fw-pty-tags">
+              <span className="fw-pty-hint">{meta}</span>
+              <RoleTags roles={party.roles} />
+              {party.vies.state !== 'NOT_APPLICABLE' && <ViesMark standing={party.vies} />}
+              {/* B-TH-260 (B-TH-070): this party's projects — the open ones counted, all of them behind the link. */}
+              {can.projects && projects && (
+                <Link className="fw-pty-link" href={`${model.prefix}/products/projects?party=${encodeURIComponent(party.id)}&view=all`}>
+                  <FolderKanban size={12} aria-hidden /> {t('record.projects', { count: projects.open })}
+                </Link>
+              )}
+              <Freshness asOf={model.asOf} live={model.live} />
+            </span>
+          ),
+          primary,
+          more: menu,
+          moreLabel: t('record.more'),
+          keys,
+        }}
       >
-        <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-        {model.changedAt && (
-          <Banner
-            tone="warning"
-            title={t('record.changed', { time: formatDateTime(model.changedAt, { locale }) })}
-            action={
-              <Button size="sm" onClick={() => actions?.onReload?.()}>
-                {t('record.reload')}
-              </Button>
-            }
-          />
-        )}
-        {party.status === 'BLOCKED' && (
-          <Banner tone="danger" title={t(`${side}.blockedBanner`, { date: party.blocked ? formatDate(party.blocked.at, { locale }) : '—' })}>
-            {party.blocked?.reason ? <p className="fw-pty-hint">{t('record.blockedReason', { reason: party.blocked.reason })}</p> : null}
-          </Banner>
-        )}
-        {party.status === 'ARCHIVED' && <Banner tone="info" title={t('record.archivedBanner')} />}
-        {!can.manage && party.status !== 'ARCHIVED' && <Banner tone="info" title={t('record.readOnly')} />}
+        <div className="fw-pty">
+          {model.threadOnArrival && <ShowThreadOnArrival />}
+          <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabItems} active={tab} size="sm" overflow="scroll" />
+          {/* B-TH-260: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+          <RecordNotices>
+            {party.status === 'BLOCKED' && (
+              <Banner tone="danger" title={t(`${side}.blockedBanner`, { date: party.blocked ? formatDate(party.blocked.at, { locale }) : '—' })}>
+                {party.blocked?.reason ? <p className="fw-pty-hint">{t('record.blockedReason', { reason: party.blocked.reason })}</p> : null}
+              </Banner>
+            )}
+            {model.notice ? <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} /> : null}
+            {model.changedAt && (
+              <Banner
+                tone="warning"
+                title={t('record.changed', { time: formatDateTime(model.changedAt, { locale }) })}
+                action={
+                  <Button size="sm" onClick={() => actions?.onReload?.()}>
+                    {t('record.reload')}
+                  </Button>
+                }
+              />
+            )}
+            {party.status === 'ARCHIVED' && <Banner tone="info" title={t('record.archivedBanner')} />}
+            {!can.manage && party.status !== 'ARCHIVED' && <Banner tone="info" title={t('record.readOnly')} />}
+          </RecordNotices>
 
-        {tab === 'overview' && side === 'customers' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} />}
-        {tab === 'overview' && side === 'suppliers' && <SupplierOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} depth={depth} />}
-        {tab === 'addresses' && (
-          <div className="fw-pty-stack">
-            <AddressesCard model={model} party={party} actions={actions} editable={editable} />
-            <ContactsCard model={model} party={party} actions={actions} editable={editable} />
-            {/* B-W2b-324: consent, lawful basis and the personal-data actions (Sales' depth slot). */}
-            {side === 'customers' && depth?.contacts}
-          </div>
-        )}
-        {tab === 'contacts' && <ContactsCard model={model} party={party} actions={actions} editable={editable} />}
-        {/* B-W2b-334: what each contact receives (Purchasing's depth slot). */}
-        {tab === 'contacts' && side === 'suppliers' && depth?.contacts}
-        {tab === 'tax' && (
-          <div className="fw-pty-two-wide">
-            <IdentityCard model={model} party={party} current={current} actions={actions} editable={editable} />
-            <ViesCard model={model} party={party} actions={actions} viesHeld={viesHeld} />
-          </div>
-        )}
-        {/* A side's own Tax & terms card (Customers: Commercial terms, B-W2a-49), below identity and VIES. */}
-        {tab === 'tax' && terms}
-        {/* B-W2b-324: Hold and Customer PO number required (Sales' depth slot), then the Requirements tab. */}
-        {tab === 'tax' && side === 'customers' && depth?.tax}
-        {tab === 'requirements' && side === 'customers' && depth?.requirements}
-        {tab === 'orders' && side === 'customers' && <DealsTab model={model} actions={actions} />}
-        {tab === 'orders' && side === 'suppliers' && <PurchaseOrdersTab model={model} />}
-        {/* B-W2a-69: a supplier's Items & prices (Purchasing's Approved sources). */}
-        {tab === 'items' && side === 'suppliers' && items}
-        {/* B-W2b-180: Portal access (areas/sales/customers/portal, both sides). */}
-        {tab === 'portal' && portal}
-        {/* B-W2b-172: the supplier questionnaire (areas/purchasing/suppliers/questionnaire). */}
-        {tab === 'questionnaire' && side === 'suppliers' && questionnaire}
-        {/* B-W2b-334: a supplier's Documents & qualification, Quality & rating and Bank details (Purchasing's depth slot);
-            the record's files (upload, what a file is and until when) stay below the supplier's vault. */}
-        {tab === 'documents' && side === 'suppliers' && depth?.documents}
-        {tab === 'documents' && documents}
-        {tab === 'quality' && side === 'suppliers' && depth?.quality}
-        {tab === 'bank' && side === 'suppliers' && depth?.bank}
-        {tab === 'activity' && panels}
+          {tab === 'overview' && side === 'customers' && <CustomerOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} overview={overview} depth={depth} />}
+          {tab === 'overview' && side === 'suppliers' && (
+            // B-TH-260: Overview & contacts — the supplier's form and Now, then its contacts and what each receives (Purchasing's depth slot).
+            <div className="fw-pty-stack">
+              <SupplierOverview model={model} party={party} actions={actions} editable={editable} viesHeld={viesHeld} depth={depth} />
+              <ContactsCard model={model} party={party} actions={actions} editable={editable} />
+              {depth?.contacts}
+            </div>
+          )}
+          {tab === 'addresses' && (
+            <div className="fw-pty-stack">
+              <AddressesCard model={model} party={party} actions={actions} editable={editable} />
+              <ContactsCard model={model} party={party} actions={actions} editable={editable} />
+              {/* B-W2b-324: consent, lawful basis and the personal-data actions (Sales' depth slot). */}
+              {side === 'customers' && depth?.contacts}
+            </div>
+          )}
+          {tab === 'terms' && (
+            // B-TH-260: Terms & requirements — the tax identity and VIES, the side's own Commercial terms (B-W2a-49), the hold and PO
+            // number required (B-W2b-324), then the packing, labelling and document rules in force (B-W2b-324's Requirements).
+            <div className="fw-pty-stack">
+              <div className="fw-pty-two-wide">
+                <IdentityCard model={model} party={party} current={current} actions={actions} editable={editable} />
+                <ViesCard model={model} party={party} actions={actions} viesHeld={viesHeld} />
+              </div>
+              {terms}
+              {side === 'customers' && depth?.tax}
+              {side === 'customers' && depth?.requirements && (
+                <section id="party-requirements" className="fw-pty-anchor" aria-label={t('customers.requirementsLabel')}>
+                  {depth.requirements}
+                </section>
+              )}
+            </div>
+          )}
+          {tab === 'orders' && side === 'customers' && (
+            <div className="fw-pty-stack">
+              {/* B-TH-260 (SHEET-G12): one full sheet per customer — Sales › Orders with this customer and every row. */}
+              {can.orders && (
+                <p className="fw-pty-actions">
+                  <Link className="fw-pty-link" href={`${model.prefix}/sales/orders?party=${encodeURIComponent(party.id)}&rows=all`}>
+                    <Table2 size={14} aria-hidden /> {t('customers.openSheet')}
+                  </Link>
+                </p>
+              )}
+              <DealsTab model={model} actions={actions} />
+            </div>
+          )}
+          {tab === 'orders' && side === 'suppliers' && <PurchaseOrdersTab model={model} />}
+          {/* B-W2a-69: a supplier's Items & prices (Purchasing's Approved sources). */}
+          {tab === 'items' && side === 'suppliers' && items}
+          {/* B-W2b-180: Portal access (areas/sales/customers/portal, both sides; a refused invite keeps its real reason). */}
+          {tab === 'portal' && portal}
+          {tab === 'documents' && side === 'suppliers' && (
+            // B-TH-260: Documents & questionnaire — B-W2b-334's documents, profile changes and qualifications, then B-W2b-172's
+            // questionnaire (one onboarding place); the record's loose files are the docked thread's Files view.
+            <div className="fw-pty-stack">
+              {depth?.documents}
+              {questionnaire && (
+                <section id="supplier-questionnaire" className="fw-pty-anchor" aria-label={t('suppliers.questionnaireLabel')}>
+                  {questionnaire}
+                </section>
+              )}
+            </div>
+          )}
+          {tab === 'quality' && side === 'suppliers' && depth?.quality}
+          {tab === 'bank' && side === 'suppliers' && depth?.bank}
+        </div>
       </RecordFrame>
 
       <EditPartyModal
@@ -376,19 +449,7 @@ function PartyRecord({ model, actions, panels, documents, terms, items, overview
         onSave={(draft) => actions?.onSaveIdentity?.(draft, dialog?.kind === 'identity' ? dialog.mode : 'new')}
         onClose={() => open(null)}
       />
-      <ShortcutsModal
-        open={dialog?.kind === 'shortcuts'}
-        onClose={() => open(null)}
-        keys={[
-          { keys: ['←', '→'], does: t('keys.tabs') },
-          { keys: ['⌘', 'J'], does: t('keys.dock') },
-          ...(side === 'suppliers' ? [{ keys: ['⌘', 'S'], does: t('keys.save') }] : []),
-          { keys: ['⌘', '↵'], does: t('keys.submit') },
-          { keys: ['Esc'], does: t('keys.close') },
-          { keys: ['?'], does: t('keys.help') },
-        ]}
-      />
-    </div>
+    </>
   )
 }
 

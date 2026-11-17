@@ -410,7 +410,7 @@ function LeatherCard({ bom, model, editable, actions }: { bom: BomView; model: S
                 ]}
               />
               {/* B-W2b-241: the grade mix and minimum grade per pattern piece cut from this line (B-W2b-95's pieces). */}
-              <LeatherGrades pieces={model.pieces} lineId={line.id} filesHref={`${model.prefix}/products/styles/${bom.style.id}?tab=files&rev=${bom.revision.id}`} locale={locale} />
+              <LeatherGrades pieces={model.pieces} lineId={line.id} filesHref={`${model.prefix}/products/styles/${bom.style.id}?tab=patterns&rev=${bom.revision.id}` /* B-TH-261: Files & patterns is Patterns */} locale={locale} />
             </div>
           )
         })}

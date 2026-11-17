@@ -49,6 +49,8 @@ import { CreditLimits } from './credit/CreditLimits'
 // B-W2b-425: reminder stops and trusted levels (sec:reminders#1, #2).
 import { ReminderDepth } from './reminder-stops/ReminderDepth'
 import { ReminderStops } from './reminder-stops/ReminderStops'
+// B-TH-271 (PL6): the reminder's own thread docked in its window.
+import { OfficeRecordThread } from '../../_shared/record-thread/OfficeRecordThread'
 import type { StatementState } from './view/StatementDialog'
 
 const SLOW_MS = 1000
@@ -309,11 +311,29 @@ export function ReceivablesPage() {
     notice,
   }
 
+  // ---- B-TH-271 (PL6; O-FIN-REM.thread): the open reminder's own thread docked in its window — its customer's only ("Reply to
+  // <customer>", partyRole customer: a customer's answer to the reminder is seen where it was approved), Activity's tools in its "⋯"
+  // (R-ACT); only with threads.read (the API's wall decides who in the office reads it).
+  const openReminder = reminder?.value ?? null
+  const reminderThread =
+    openReminder && session.permissions.includes('threads.read') ? (
+      <OfficeRecordThread
+        key={openReminder.id}
+        docked
+        record={{ type: 'PaymentReminder', id: openReminder.id, companyId: openReminder.company.id, siteId: null }}
+        title={`${openReminder.customer.name} · ${openReminder.customer.code} · ${openReminder.level}`}
+        recordLabel={`${openReminder.customer.code} · ${openReminder.level}`}
+        party={{ id: openReminder.customer.id, name: openReminder.customer.name }}
+        partyRole="customer"
+      />
+    ) : null
+  // ---- end B-TH-271
+
   return (
     <ReceivablesView
       model={model}
       credit={<CreditLimits prefix={prefix} />}
-      depth={{ stops: <ReminderStops prefix={prefix} />, reminder: reminder?.value ? <ReminderDepth key={reminder.value.id} reminder={reminder.value} onChanged={() => readReminder(reminder.value!.id)} /> : null }}
+      depth={{ stops: <ReminderStops prefix={prefix} />, reminder: reminder?.value ? <ReminderDepth key={reminder.value.id} reminder={reminder.value} onChanged={() => readReminder(reminder.value!.id)} /> : null, reminderThread /* B-TH-271 */ }}
       actions={{
         onAddress: go,
         onSearch: (text) => {

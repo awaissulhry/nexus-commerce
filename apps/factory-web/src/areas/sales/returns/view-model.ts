@@ -174,8 +174,13 @@ export interface ReturnsListActions extends NewReturnActions, NewRepairActions, 
 
 // ---- the RMA record --------------------------------------------------------------------------------------------------------
 
-export const RMA_TABS = ['lines', 'inspection', 'credit', 'shipments', 'activity'] as const
+// ---- B-TH-259 (threads plan TH-6; the rule of picture 38, the tabs of picture 39 / 08-tabs O-SAL-RMA): the return on RecordFrame —
+// tabs 5 → 4, Activity goes: its thread docks beside every tab and its tools live in the thread's "⋯" (R-ACT).
+export const RMA_TABS = ['lines', 'inspection', 'credit', 'shipments'] as const
 export type RmaTab = (typeof RMA_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Lines (RecordFrame reads `tab=activity` and opens the thread). */
+export const MERGED_RMA_TABS: Readonly<Record<string, RmaTab>> = Object.freeze({ activity: 'lines' })
+// ---- end B-TH-259
 
 export type RmaDialog =
   | { readonly kind: 'receive'; readonly draft: ReceiptDraft }
@@ -214,7 +219,8 @@ export interface RmaModel {
   readonly newRepair: NewRepairModel | null
   /** B-W2b-16: Add lines (null: closed). */
   readonly addLines?: AddLinesModel | null
-  readonly dockOpen: boolean
+  /** B-TH-259: the person (RecordFrame remembers the thread's width per person and record type). */
+  readonly personId?: string | null
   /** B-W2b-352: the W2b parts (policy, deadline, credit without the goods, fees, split, size exchange, remake asked). */
   readonly depth?: RmaDepthModel
   /** B-W2b-368 (XF1:03): a line's remake outcome (./outcome-remake), drawn by the container; absent or null: nothing to say. */
@@ -229,7 +235,6 @@ export interface RmaActions extends CloseActions, NewRepairActions, RmaDepthActi
   onAddLinesClose?: () => void
   onReload?: () => void
   onDismissReceipt?: () => void
-  onDock?: () => void
   onQuantity?: (lineId: string, value: string) => void
   onReason?: (lineId: string, code: string) => void
   onRemoveLine?: (lineId: string) => void
@@ -246,8 +251,18 @@ export interface RmaActions extends CloseActions, NewRepairActions, RmaDepthActi
 // ---- the repair record ------------------------------------------------------------------------------------------------------
 
 /** B-W2b-352: `estimate` (the repair's estimate of parts and labour, SAL-387). */
-export const REPAIR_TABS = ['intake', 'estimate', 'work', 'safety', 'return', 'activity'] as const
+// ---- B-TH-259 (08-tabs O-SAL-REP): the repair on RecordFrame — tabs 6 → 5 (Intake & photos, Estimate, Work, Safety check, Return);
+// Activity goes: the repair's thread (shared with its customer since B-TH-081) docks beside every tab, its tools in its "⋯".
+export const REPAIR_TABS = ['intake', 'estimate', 'work', 'safety', 'return'] as const
 export type RepairTab = (typeof REPAIR_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity → Intake & photos (RecordFrame opens the thread). */
+export const MERGED_REPAIR_TABS: Readonly<Record<string, RepairTab>> = Object.freeze({ activity: 'intake' })
+/** The tab an address asks for (one of the record's, an old one mapped, else the first; own keys only). */
+export function tabOfAddress<T extends string>(tabs: readonly T[], merged: Readonly<Record<string, T>>, asked: string | null | undefined): T {
+  if (asked && (tabs as readonly string[]).includes(asked)) return asked as T
+  return asked && Object.hasOwn(merged, asked) ? merged[asked]! : tabs[0]!
+}
+// ---- end B-TH-259
 
 export interface IntakeDraft {
   readonly kind: Repair['kind']
@@ -295,7 +310,8 @@ export interface RepairModel {
   readonly dialog: RepairDialog | null
   readonly dialogBusy: boolean
   readonly dialogProblem: Words | null
-  readonly dockOpen: boolean
+  /** B-TH-259: the person (RecordFrame remembers the thread's width per person and record type). */
+  readonly personId?: string | null
   /** B-W2b-352: the Estimate tab (its revisions, lines, sends and answers). */
   readonly estimate?: EstimateModel
 }
@@ -303,7 +319,6 @@ export interface RepairModel {
 export interface RepairActions extends EstimateActions {
   onReload?: () => void
   onDismissReceipt?: () => void
-  onDock?: () => void
   onEdit?: () => void
   onEditDraft?: (patch: Partial<IntakeDraft>) => void
   onEditSave?: () => void

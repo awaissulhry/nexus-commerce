@@ -52,13 +52,17 @@ export type ListView = 'open' | 'active' | 'prospects' | 'brands' | 'riders' | '
 export type TileId = 'active' | 'prospects' | 'vies' | 'invoice' | 'blocked'
 
 // B-W2b-180: 'portal' = Portal access (the slot is areas/sales/customers/portal's, on both sides).
-// B-W2b-324: 'requirements' = the customer's Requirements (the slot is Sales', areas/sales/customers/depth).
-export type CustomerTab = 'overview' | 'addresses' | 'tax' | 'requirements' | 'orders' | 'documents' | 'portal' | 'activity'
-// B-W2a-69: 'items' = Items & prices (Approved sources; the slot is Purchasing's, areas/purchasing/suppliers).
-// B-W2b-172: 'questionnaire' = the supplier questionnaire (the slot is Purchasing's, areas/purchasing/suppliers/questionnaire).
-// B-W2b-334: 'documents' (Documents & qualification), 'quality' (Quality & rating), 'bank' (Bank details): Purchasing's depth slot.
-export type SupplierTab = 'overview' | 'contacts' | 'items' | 'documents' | 'orders' | 'quality' | 'bank' | 'questionnaire' | 'portal' | 'activity'
+// ---- B-TH-260 (threads plan TH-6; the rule of picture 38, the tabs of picture 39 / 08-tabs O-SAL-CUST, O-PUR-SUP): the party on
+// RecordFrame. Customer 8 → 5: Overview, Addresses & contacts, Terms & requirements ('terms': Tax & terms + B-W2b-324's
+// Requirements, every rule that applies to the customer's orders), Quotes & orders, Portal access — Documents (a second record-panels
+// copy) goes to the docked thread's Files view, Activity to the thread itself (R-ACT).
+export type CustomerTab = 'overview' | 'addresses' | 'terms' | 'orders' | 'portal'
+// Supplier 10 → 7: Overview & contacts ('overview': the form, Now, the contacts and what each receives), Items & prices (B-W2a-69),
+// Documents & questionnaire ('documents': B-W2b-334's documents and qualifications + B-W2b-172's questionnaire, one onboarding
+// place; its second record-panels Files copy goes to the thread), Orders, Quality & rating, Bank details, Portal access.
+export type SupplierTab = 'overview' | 'items' | 'documents' | 'orders' | 'quality' | 'bank' | 'portal'
 export type RecordTab = CustomerTab | SupplierTab
+// ---- end B-TH-260
 
 export interface SideConfig {
   side: Side
@@ -86,7 +90,7 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
     newStatus: 'ACTIVE',
     views: ['open', 'active', 'prospects', 'brands', 'riders', 'invoice', 'vies', 'blocked', 'archived', 'all'], // B-W2b-324: riders
     tiles: ['active', 'prospects', 'vies', 'invoice', 'blocked'],
-    tabs: ['overview', 'addresses', 'tax', 'requirements', 'orders', 'documents', 'portal', 'activity'], // B-W2b-180: portal; B-W2b-324: requirements
+    tabs: ['overview', 'addresses', 'terms', 'orders', 'portal'], // B-W2b-180: portal; B-TH-260: Terms & requirements; Documents and Activity go to the thread
     recordType: 'Party',
   },
   suppliers: {
@@ -97,10 +101,30 @@ export const SIDES: Readonly<Record<Side, SideConfig>> = {
     newStatus: 'PROSPECT',
     views: ['open', 'active', 'prospects', 'suppliers', 'subcontractors', 'carriers', 'blocked', 'archived', 'all'],
     tiles: ['active', 'prospects', 'blocked'],
-    tabs: ['overview', 'contacts', 'items', 'documents', 'orders', 'quality', 'bank', 'questionnaire', 'portal', 'activity'], // B-W2a-69: items; B-W2b-180: portal; B-W2b-172: questionnaire; B-W2b-334: documents, quality, bank
+    tabs: ['overview', 'items', 'documents', 'orders', 'quality', 'bank', 'portal'], // B-W2a-69: items; B-W2b-180: portal; B-W2b-334: quality, bank; B-TH-260: Overview & contacts, Documents & questionnaire
     recordType: 'Party',
   },
 }
+
+// ---- B-TH-260 (R-8): every old `?tab=` keeps working. A customer's Tax & terms and Requirements → Terms & requirements, its
+// Documents → the overview with the thread shown (its files are the thread's Files view), Activity → the overview (RecordFrame
+// opens the thread); a supplier's Contacts → Overview & contacts, Questionnaire → Documents & questionnaire, Activity → the overview.
+export const MERGED_TABS: Readonly<Record<Side, Readonly<Record<string, RecordTab>>>> = Object.freeze({
+  customers: Object.freeze({ tax: 'terms', requirements: 'terms', documents: 'overview', activity: 'overview' }),
+  suppliers: Object.freeze({ contacts: 'overview', questionnaire: 'documents', activity: 'overview' }),
+})
+
+/** The tab an address asks for on a side: one of its tabs, an old one mapped (R-8), else the overview (own keys only). */
+export function partyTabOf(side: Side, asked: string | null | undefined): RecordTab {
+  const tabs = SIDES[side].tabs as readonly string[]
+  if (asked && tabs.includes(asked)) return asked as RecordTab
+  const merged = MERGED_TABS[side]
+  return asked && Object.hasOwn(merged, asked) ? merged[asked]! : 'overview'
+}
+
+/** An old address whose tab went to the thread (a customer's Documents: its files are the thread's Files view): show the thread. */
+export const threadOnArrival = (side: Side, asked: string | null | undefined): boolean => side === 'customers' && asked === 'documents'
+// ---- end B-TH-260
 
 /** A tile is a named saved filter (00 §2.1): pressing it shows that view of the list. */
 export const TILE_VIEW: Readonly<Record<TileId, ListView>> = { active: 'active', prospects: 'prospects', vies: 'vies', invoice: 'invoice', blocked: 'blocked' }
@@ -861,6 +885,11 @@ export interface RecordCan {
   depth?: boolean
   /** B-W2b-334: purchasing.bank.view — the Bank details tab (hidden without it, as the design says). */
   bank?: boolean
+  // ---- B-TH-260: the band's "Projects (n)" (threads.read reads projects) and "Start a project" (projects.manage); the customer's sheet
+  // (Sales › Orders with this customer, orders.view).
+  projects?: boolean
+  projectsManage?: boolean
+  // ---- end B-TH-260
 }
 
 export type RecordDialog =
@@ -870,7 +899,6 @@ export type RecordDialog =
   | { kind: 'address'; addressId?: string }
   | { kind: 'contact'; contactId?: string }
   | { kind: 'identity'; mode: 'new' | 'correct' }
-  | { kind: 'shortcuts' }
 
 export interface PartyRecordModel {
   side: Side
@@ -888,7 +916,12 @@ export interface PartyRecordModel {
   dialog?: RecordDialog | null
   dialogProblem?: string | null
   refused?: readonly string[]
-  dockOpen?: boolean
+  // ---- B-TH-260: the person (RecordFrame remembers the thread's width per person), the band's "Projects (n)" (open, all; null: not
+  // read or not readable), an old address that asked for the gone Documents tab (the thread is shown on arrival).
+  personId?: string | null
+  projects?: { open: number; all: number } | null
+  threadOnArrival?: boolean
+  // ---- end B-TH-260
   /** Every VIES check of the party (the history), newest first. */
   history: Loaded<ViesCheck>
   quotes: Loaded<QuoteRow>
@@ -913,13 +946,12 @@ export interface PartyRecordModel {
 export function recordTabs(config: SideConfig, can: RecordCan): RecordTab[] {
   return config.tabs.filter((tab) => {
     if (tab === 'orders') return config.side === 'customers' ? can.quotes || can.orders : can.purchaseOrders
-    // B-W2b-334: a supplier's Documents & qualification and Quality & rating (Purchasing's depth slot), Bank details.
-    if (config.side === 'suppliers' && (tab === 'documents' || tab === 'quality')) return can.depth === true
+    // B-W2b-334 + B-TH-260: a supplier's Documents & questionnaire (Purchasing's depth slot and/or the questionnaire), Quality & rating.
+    if (config.side === 'suppliers' && tab === 'documents') return can.depth === true || can.questionnaire === true
+    if (config.side === 'suppliers' && tab === 'quality') return can.depth === true
     if (tab === 'bank') return can.bank === true
-    if (tab === 'requirements') return can.depth === true // B-W2b-324: Sales' depth slot
-    if (tab === 'activity' || tab === 'documents') return can.threads
     if (tab === 'portal') return can.partners === true // B-W2b-180
-    if (tab === 'questionnaire') return can.questionnaire === true // B-W2b-172
+    // B-TH-260: Terms & requirements always (the tax identity and VIES are every reader's); its Requirements part asks Sales' depth.
     return true
   })
 }

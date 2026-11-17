@@ -8,6 +8,8 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { storeUrl } from '../../../../record-panels/store'
 import { useLiveBus } from '../../../../shell/live/use-live'
 import { isStepUpCancelled, useStepUp } from '../../../admin/shared/step-up'
+// B-TH-260: the record's tab as the record reads it (every old `?tab=` mapped).
+import { partyTabOf } from '../../../parties/_shared/model'
 import {
   acceptUpload,
   approveChange,
@@ -98,7 +100,7 @@ export function useSupplierDepth(partyId: string) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const params = useSearchParams()
-  const tab = params?.get('tab') ?? 'overview'
+  const tab = partyTabOf('suppliers', params?.get('tab')) // B-TH-260: every old `?tab=` mapped (Contacts → Overview & contacts)
   const can = useMemo(() => depthCan(session.permissions), [session.permissions])
   const me = session.user.id
   const today = useMemo(() => todayOf(), [])
@@ -138,8 +140,8 @@ export function useSupplierDepth(partyId: string) {
   )
 
   const loadTab = useCallback(() => {
+    // B-TH-260: Overview & contacts — the profile (status, origin, what each contact receives) and the vault (the next document).
     if (tab === 'overview') void Promise.all([loadProfile(), loadVault()])
-    else if (tab === 'contacts') void loadProfile()
     else if (tab === 'documents') void Promise.all([loadVault(), loadChanges(), loadQualifications()])
     else if (tab === 'quality') void loadQuality()
     else if (tab === 'bank') void loadBank()

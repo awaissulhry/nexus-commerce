@@ -1,7 +1,8 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { demoBom, demoCost, demoRouting, demoStyle, demoSubcontractedRouting, newStyle, OPERATIONS, recordModel, REV, REVISIONS, WORKSHOPS } from '../demo/fixtures'
 import type { StyleRecordViewModel } from '../record/record-model'
-import { StyleRecordView } from '../record/view/StyleRecordView'
+// B-TH-261: the studio with its docked thread (RecordFrame).
+import { StyleDesign } from '../demo/fixtures'
 // B-W2b-235: the routing in depth (made-up data).
 import { DEMO_OPTIONS, DEMO_PLANS, demoDepthModel, STEP_ID } from './depth/demo/fixtures'
 
@@ -16,7 +17,7 @@ const routing = (overrides: Partial<StyleRecordViewModel> = {}, role: 'owner' | 
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-043',
   title: 'Style studio: Operations (routing)',
-  view: StyleRecordView,
+  view: StyleDesign,
   cases: [
     { id: 'owner', label: 'Routing (draft revision 3)', model: routing(), note: 'Minutes by department (a tile filters), the labour cost with the cost grain; minutes typed here; scanned switches; the final operation.' },
     { id: 'differs', label: 'Minutes differ from the library', model: routing({ routing: { status: 'ready', value: demoRouting({ differs: true }) } }), note: '"Library: 17 min · Use library value".' },

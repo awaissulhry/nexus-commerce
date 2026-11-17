@@ -633,15 +633,17 @@
   "tab": {
     "case": "Caso",
     "warranty": "Verifica garanzia",
-    "linked": "Documenti collegati",
-    "actions": "Azioni",
-    "activity": "Attività"
+    "linked": "Documenti collegati e azioni"
   },
   "record": {
     "offline": "Offline: l'ultima copia, con la sua ora. Le modifiche aspettano.",
     "stale": "Il caso è cambiato alle {time} mentre ci lavoravi.",
     "reload": "Rileggilo",
-    "closedBanner": "Chiuso il {date} da {name}."
+    "closedBanner": "Chiuso il {date} da {name}.",
+    "title": "Caso di assistenza",
+    "dockLabel": "Conversazione del caso",
+    "dockLabelOf": "Conversazione di {number}",
+    "tabsLabel": "Parti del caso"
   },
   "mails": {
     "title": "E-mail di cambio stato inviate al cliente",
@@ -660,9 +662,6 @@
     "COMPLAINED": "Segnalata come spam",
     "FAILED": "Non riuscita",
     "other": "Sconosciuto"
-  },
-  "activity": {
-    "noThread": "La conversazione non è mostrata"
   },
   "field": {
     "companyId": "La società",

@@ -58,7 +58,7 @@ describe('approved sources: who may do what, the views', () => {
   })
 
   it('the supplier’s Items & prices tab stays in view without purchasing.view (it says what is missing)', () => {
-    expect(SIDES.suppliers.tabs).toEqual(['overview', 'contacts', 'items', 'documents', 'orders', 'quality', 'bank', 'questionnaire', 'portal', 'activity']) // B-W2b-180: portal; B-W2b-334: documents, quality, bank
+    expect(SIDES.suppliers.tabs).toEqual(['overview', 'items', 'documents', 'orders', 'quality', 'bank', 'portal']) // B-W2b-180: portal; B-W2b-334: quality, bank; B-TH-260: Overview & contacts, Documents & questionnaire
     expect(recordTabs(SIDES.suppliers, { ...RECORD_CAN, purchaseOrders: false })).toContain('items')
   })
 
