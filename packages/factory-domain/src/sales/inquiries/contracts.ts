@@ -297,6 +297,26 @@ export const inquiryRow = output({
   declineReason: z.enum(DECLINE_REASONS).nullable(),
   closedAt: instant().nullable(),
   version: z.number().int(),
+  // ── B-TH-216 (threads plan TH-1b, Sales › Incoming: the Picture and Files cells). Always sent; optional only so typed demo
+  //    data elsewhere stays as it is. ──
+  /** The first line's style that names one, and its main picture (fileId null: the placeholder; `small`: its ~320 px preview
+   *  exists, GET /sales/inquiries/:inquiryId/picture serves it; the list never loads the original). Null: no style named. */
+  picture: output({ styleId: id(), styleCode: z.string(), styleName: z.string(), fileId: id().nullable(), contentType: z.string().nullable(), small: z.boolean() }).nullable().optional(),
+  /** The distinct styles its lines name ("+2" beside the picture). */
+  styleCount: z.number().int().optional(),
+  /** The request's files and its mail's kept attachments, counted by kind (null: no files.read over its company). */
+  fileCounts: output({ photos: z.number().int(), documents: z.number().int() }).nullable().optional(),
+  // ── end B-TH-216 ──
+})
+
+/** B-TH-216: GET /sales/inquiries/:inquiryId/picture — a presigned GET of the small preview (60 s); null until it exists. */
+export const inquiryPictureView = output({
+  picture: output({
+    fileId: id(),
+    styleId: id(),
+    contentType: z.string(),
+    small: output({ method: z.literal('GET'), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }).nullable(),
+  }),
 })
 
 export const inquiryList = output({

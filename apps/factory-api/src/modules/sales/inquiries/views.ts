@@ -39,6 +39,8 @@ import {
 import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { dayOrNull, factsOf, LINE_COLUMNS, may, type InquiryData, type LineData, type Reader } from './store'
+// B-TH-216 (Sales › Incoming): the Picture and Files cells.
+import { inquiryRowExtras, type InquiryRowExtras } from './row-extras'
 
 /**
  * How inquiry rows become the contracts' views (B-W2b-295): the list's rows (their customer or prospect, what is asked in
@@ -102,6 +104,11 @@ export interface RowView {
   readonly declineReason: DeclineReason | null
   readonly closedAt: string | null
   readonly version: number
+  // ── B-TH-216 (Sales › Incoming): the Picture and Files cells ──
+  readonly picture: InquiryRowExtras['picture']
+  readonly styleCount: number
+  readonly fileCounts: InquiryRowExtras['files']
+  // ── end B-TH-216 ──
 }
 
 /**
@@ -142,6 +149,7 @@ export async function rowsOf(db: Reader, context: OfficeContext, rows: readonly 
   const styleOf = byId(styles)
   const linesOf = new Map<string, LineData[]>()
   for (const line of lines) linesOf.set(line.inquiryId, [...(linesOf.get(line.inquiryId) ?? []), line])
+  const extras = await inquiryRowExtras(db, context, rows, linesOf) // B-TH-216
   return rows.map((row) => {
     const status = row.status as InquiryStatus
     const own = linesOf.get(row.id) ?? []
@@ -178,6 +186,10 @@ export async function rowsOf(db: Reader, context: OfficeContext, rows: readonly 
       declineReason: (row.declineReason as DeclineReason | null) ?? null,
       closedAt: at(row.closedAt),
       version: row.version,
+      // B-TH-216: the Picture and Files cells.
+      picture: extras.get(row.id)?.picture ?? null,
+      styleCount: extras.get(row.id)?.styleCount ?? 0,
+      fileCounts: extras.get(row.id)?.files ?? null,
     }
   })
 }

@@ -14,16 +14,16 @@
     "offline": "offline — changes wait to be sent"
   },
   "noAccess": {
-    "title": "You don't have access to inquiries",
-    "body": "Sales see and answer inquiries (Sales › Inquiries). Ask your administrator for the sales role if you need them."
+    "title": "You don't have access to requests",
+    "body": "Sales see and answer requests (Sales › Incoming). Ask your administrator for the sales role if you need them."
   },
   "list": {
     "intro": "New requests and RFQs from mail, the portal, the phone, a fair or a visit, until they become a quote. The oldest waiting first.",
-    "new": "New inquiry",
+    "new": "New request",
     "more": "More",
     "rulesLater": "Assignment rules",
-    "rulesLaterHint": "Comes later: inquiries are given by hand for now",
-    "tableLabel": "Inquiries",
+    "rulesLaterHint": "Comes later: requests are given by hand for now",
+    "tableLabel": "Requests",
     "search": "Search number, customer, request…",
     "rows": "Rows",
     "sourceLabel": "How it came",
@@ -31,22 +31,21 @@
     "fromLabel": "From",
     "allFrom": "Every customer and prospect",
     "prospectsOnly": "Prospects only (no customer yet)",
-    "count_one": "{count} inquiry",
-    "count_other": "{count} inquiries",
-    "countCapped": "The first {count} inquiries: narrow the filters to see the rest",
+    "count_one": "{count} request",
+    "count_other": "{count} requests",
+    "countCapped": "The first {count} requests: narrow the filters to see the rest",
     "countReading": "Reading…",
-    "failed": "Couldn't load inquiries",
+    "failed": "Couldn't load requests",
     "noMatch": "No rows match these filters",
-    "noMatchBody": "Change or clear the filters to see more inquiries.",
-    "empty": "No inquiries yet",
-    "emptyBody": "No inquiries. A mail from a customer becomes one from Mail to sort (\"Make an inquiry\"); a phone call or a visit with New inquiry.",
-    "foot": "Waiting counts working time on the company calendar; over one working day it turns red. A list never names a person: \"You\" or \"A colleague\".",
+    "noMatchBody": "Change or clear the filters to see more requests.",
+    "empty": "No requests yet",
+    "emptyBody": "No requests. A customer's portal request lands here by itself; a mail becomes one from Mail to sort (\"Make incoming request\"); a phone call or a visit with New request.",
     "copied_one": "{count} number copied",
     "copied_other": "{count} numbers copied",
     "withheldPrice": "needs the price right"
   },
   "col": {
-    "number": "Inquiry",
+    "number": "Number",
     "from": "From",
     "summary": "Summary",
     "source": "Source",
@@ -58,7 +57,18 @@
     "waiting": "Waiting",
     "assignedTo": "Assigned to",
     "status": "Status",
-    "more": "Actions"
+    "more": "Actions",
+    "picture": "Picture",
+    "customer": "Customer",
+    "subject": "Subject",
+    "files": "Files",
+    "quantity": "Quantity",
+    "wanted": "Wanted",
+    "received": "Received",
+    "owner": "Owner",
+    "state": "State",
+    "company": "Company",
+    "request": "Request"
   },
   "row": {
     "menu": "Actions for {number}",
@@ -67,30 +77,34 @@
     "copy": "Copy number"
   },
   "keys": {
-    "new": "New inquiry",
-    "quote": "Make quote (the focused or selected inquiry, or the open one)",
+    "new": "New request",
+    "quote": "Make quote (the focused or selected request, or the open one)",
     "assign": "Assign",
-    "decline": "Decline"
+    "decline": "Decline",
+    "recordWalk": "Between rows; while a request is open, the next or previous request",
+    "recordClose": "Close the open request"
   },
   "tile": {
     "NEW": "New",
-    "WAITING_US": "Waiting for us over 1 working day",
-    "WAITING_CUSTOMER": "Waiting for the customer",
+    "WAITING_US": "Waiting on us over 1 working day",
+    "WAITING_CUSTOMER": "Need info",
     "QUOTED_THIS_WEEK": "Quoted this week",
     "MINE": "Mine",
-    "OPEN": "Open (every one still waiting)",
+    "OPEN": "Open",
     "QUOTED": "Quoted",
     "DECLINED": "Declined",
     "LOST": "Lost",
     "ALL": "All",
     "hint": {
       "NEW": "Nobody has them yet",
-      "WAITING_US": "New or in progress, on the working calendar",
+      "WAITING_US": "Everyone's, on the working calendar (Today's alert counts yours or nobody's)",
       "WAITING_CUSTOMER": "We asked for more information",
-      "QUOTED_THIS_WEEK": "Became a quote since Monday"
+      "QUOTED_THIS_WEEK": "Became a quote since Monday",
+      "MINE": "Open requests you keep"
     },
     "failed": "Couldn't count",
-    "partial": "Counted on the oldest 1000 open inquiries"
+    "partial": "Counted on the oldest 1000 open requests",
+    "label": "Saved filters"
   },
   "chip": {
     "label": "Filters",
@@ -101,17 +115,26 @@
     "partyUnknown": "From: one customer",
     "q": "Search: “{q}”",
     "clear": "Remove the filter {what}",
-    "clearAll": "Clear all"
+    "clearAll": "Clear all",
+    "status": "State: {status}",
+    "company": "Company: {name}",
+    "companyUnknown": "Company: one company"
   },
   "notice": {
     "label": "Notices",
     "more_one": "{count} more notice",
     "more_other": "{count} more notices",
     "fewer": "Show one notice",
-    "partial": "More than 1000 inquiries are open: \"Waiting for us over 1 working day\" counts only the oldest 1000.",
-    "capped": "The list shows the first {count} inquiries of these filters: narrow them to see the rest.",
-    "prospects_one": "{count} open inquiry is from a prospect: match it to a customer (Request) before a quote.",
-    "prospects_other": "{count} open inquiries are from prospects: match each to a customer (Request) before a quote."
+    "partial": "More than 1000 requests are open: \"Waiting for us over 1 working day\" counts only the oldest 1000.",
+    "capped": "The list shows the first {count} requests of these filters: narrow them to see the rest.",
+    "prospects_one": "{count} open request is from a prospect: match it to a customer (Edit the request) before a quote.",
+    "prospects_other": "{count} open requests are from prospects: match each to a customer (Edit the request) before a quote.",
+    "mail_one": "{count} mail waits in Mail to sort",
+    "mail_other": "{count} mails wait in Mail to sort",
+    "mailMore": "More than {count} mails wait in Mail to sort",
+    "numbering": "Requests by portal and mail are off for {name}: no request numbering",
+    "numberingOpen": "Set up numbering",
+    "open": "Open"
   },
   "status": {
     "NEW": "New",
@@ -130,9 +153,9 @@
     "FAIR": "Fair"
   },
   "waiting": {
-    "us": "Waiting for us",
-    "usOverdue": "Waiting for us over 1 working day",
-    "customer": "Waiting for the customer"
+    "us": "Waiting on us",
+    "usOverdue": "Waiting on us over 1 working day",
+    "customer": "Waiting on customer"
   },
   "time": {
     "minutes": "{n} min",
@@ -143,39 +166,41 @@
   "assignee": {
     "me": "You",
     "other": "A colleague",
-    "nobody": "Nobody"
+    "nobody": "Nobody",
+    "name": "{name}",
+    "nameMe": "{name} (you)"
   },
   "bulk": {
-    "reach_one": "{count} open inquiry",
-    "reach_other": "{count} open inquiries",
+    "reach_one": "{count} open request",
+    "reach_other": "{count} open requests",
     "reachClosed": "{open} open · {closed} closed left out",
     "assign_one": "Assign {count}",
     "assign_other": "Assign {count}",
     "decline_one": "Decline {count}",
     "decline_other": "Decline {count}",
-    "noneOpen": "Only open inquiries can be assigned or declined",
-    "tooMany": "At most {max} inquiries at once",
-    "subject_one": "{count} inquiry selected",
-    "subject_other": "{count} inquiries selected",
-    "assigned_one": "{count} inquiry given to {name}",
-    "assigned_other": "{count} inquiries given to {name}",
-    "assignedMe_one": "{count} inquiry is now yours",
-    "assignedMe_other": "{count} inquiries are now yours",
-    "unassigned_one": "{count} inquiry is with nobody again",
-    "unassigned_other": "{count} inquiries are with nobody again",
-    "declined_one": "{count} inquiry declined ({reason})",
-    "declined_other": "{count} inquiries declined ({reason})"
+    "noneOpen": "Only open requests can be assigned or declined",
+    "tooMany": "At most {max} requests at once",
+    "subject_one": "{count} request selected",
+    "subject_other": "{count} requests selected",
+    "assigned_one": "{count} request given to {name}",
+    "assigned_other": "{count} requests given to {name}",
+    "assignedMe_one": "{count} request is now yours",
+    "assignedMe_other": "{count} requests are now yours",
+    "unassigned_one": "{count} request is with nobody again",
+    "unassigned_other": "{count} requests are with nobody again",
+    "declined_one": "{count} request declined ({reason})",
+    "declined_other": "{count} requests declined ({reason})"
   },
   "held": {
-    "right": "Your role does not allow this ({right})",
+    "right": "Needs the sales permission ({right})",
     "offline": "Offline — this waits until the connection is back",
     "offlineKept": "Offline — your changes are kept on this page",
-    "notNow": "Not possible for this inquiry now"
+    "notNow": "Not possible for this request now"
   },
   "right": {
     "sales": {
       "inquiries": {
-        "manage": "answer inquiries"
+        "manage": "answer requests"
       }
     },
     "quotes": {
@@ -198,8 +223,8 @@
     "NEEDS_CUSTOMER": "{number} is from a prospect: match it to a customer first (Request) — a quote is made for a customer",
     "OTHER_NEEDS_WORDS": "Say in words why it is declined (the reason is Other)",
     "MAIL_TAKEN": "This mail was already made into {number}",
-    "QUOTE_TAKEN": "This quote was already made from another inquiry",
-    "MAIL_NOT_WAITING": "Only a mail that was read (in Mail to sort, or in a thread) becomes an inquiry",
+    "QUOTE_TAKEN": "This quote was already made from another request",
+    "MAIL_NOT_WAITING": "Only a mail that was read (in Mail to sort, or in a thread) becomes a request",
     "READ_ONLY": "Your role reads requests; sales answers them",
     "NO_LINES": "{number} names nothing to make yet: add its lines (style, colourway, sizes) first",
     "LINES_NOT_READY": "{number} has lines that are not ready to order: each needs a style, its colourway and pieces by size (make the style draft first)",
@@ -214,7 +239,7 @@
     "contract": "The factory answered in a way this page does not read: reload the page",
     "rateLimited": "Too many requests at once: wait a moment and try again",
     "stale": "Someone changed it a moment ago: it was read again — check and try again",
-    "staleSome": "Some of these inquiries changed a moment ago: the list was read again — select them and try again",
+    "staleSome": "Some of these requests changed a moment ago: the list was read again — select them and try again",
     "invalid": "Something typed does not fit: see the fields named below",
     "writeForbidden": "Your role cannot do this"
   },
@@ -234,52 +259,35 @@
     "assigneeId": "Who it is given to",
     "receivedAt": "When it came",
     "reason": "The reason",
-    "items": "The inquiries selected",
+    "items": "The requests selected",
     "customerRef": "The customer's reference",
     "companyId": "The company",
     "other": "Another field"
   },
-  "tab": {
-    "request": "Request",
-    "files": "Files & specs",
-    "quote": "Quote",
-    "activity": "Activity"
-  },
   "record": {
-    "tabs": "Parts of the inquiry",
-    "noun": "inquiry",
-    "reading": "Reading the inquiry…",
-    "openFull": "Open full page",
+    "reading": "Reading the request…",
     "more": "More actions",
     "copyNumber": "Copy number",
     "copied": "{number} copied",
-    "back": "Inquiries",
-    "backToList": "Back to inquiries",
-    "notFoundTitle": "Inquiry not found",
-    "notFoundBody": "This inquiry is not there any more, or it belongs to another company or customer you do not see.",
-    "failedTitle": "Couldn't load the inquiry",
-    "offline": "Offline — the inquiry as last read; Apply and every verb wait for the connection",
-    "stale": "Someone changed this inquiry at {time}: reload to see it (your typing is kept until then)",
-    "reload": "Reload",
-    "withMe": "With you",
-    "with": "With {name}",
-    "withNobody": "With nobody yet"
+    "back": "Incoming",
+    "backToList": "Back to Incoming",
+    "notFoundTitle": "Request not found",
+    "notFoundBody": "This request is not there any more, or it belongs to another company or customer you do not see.",
+    "failedTitle": "Couldn't load the request",
+    "offline": "Offline — the request as last read; Apply and every verb wait for the connection",
+    "stale": "Someone changed this request at {time}: reload to see it (your typing is kept until then)",
+    "reload": "Reload"
   },
   "verb": {
     "quote": "Make quote",
     "quoteKey": "Make quote (Q)",
-    "assign": "Assign",
     "assignKey": "Assign… (A)",
-    "decline": "Decline",
     "declineKey": "Decline… (D)",
     "askInfo": "Ask for more information",
-    "askInfoHint": "It waits for the customer; write to them in Activity",
-    "resume": "The customer answered",
     "unassign": "Take it off (back to nobody)",
     "lost": "Mark as lost…"
   },
   "done": {
-    "askInfo": "{number} waits for the customer: write to them here in Activity",
     "resume": "{number} is back with us",
     "unassign": "{number} is with nobody again",
     "assign": "{number} given to {name}",
@@ -288,17 +296,20 @@
     "messageSent": "The message was sent to {to} (in Activity)",
     "messageFailed": "The message was not sent: write it again in Activity",
     "lost": "{number} marked as lost",
-    "quote": "{quote} made from {number}",
+    "quote": "{quote} made from {number} as a draft: the customer is not told yet (they read “Quote being prepared”)",
     "quoteWarnings_one": "{quote} made from {number}: {count} thing to check on the quote",
     "quoteWarnings_other": "{quote} made from {number}: {count} things to check on the quote",
-    "openQuote": "Open {quote}"
+    "openQuote": "Open {quote}",
+    "askInfoPortal": "Asked {customer} in the portal: {number} waits for their answer (Need info); it resumes when they answer",
+    "askInfoMail": "Asked {customer} by e-mail: {number} waits for their answer (Need info); it resumes when they answer"
   },
   "closed": {
     "quoted": "Quoted as {quote} on {when}",
     "declined": "Declined ({reason}) on {when}",
     "lost": "Lost on {when}",
     "by": "by {name}",
-    "noteOnly": "A closed inquiry changes no more: only its note."
+    "noteOnly": "A closed request changes no more: only its note.",
+    "ordered": "Made into an order on {when}"
   },
   "who": {
     "title": "Who asks",
@@ -309,13 +320,14 @@
     "received": "Received",
     "createdBy": "Recorded by",
     "createdByOn": "{name}, {when}",
-    "prospectTag": "Prospect",
     "erased": "Erased prospect (their personal data was removed)",
     "unknown": "Unknown sender — match to a customer",
     "unknownBody": "A quote is made for a customer: match this prospect to one (once), or make the customer in Sales › Customers first.",
     "match": "Match to a customer",
     "matchHint": "Once matched, the customer stays: the mail joins its conversation",
-    "matchNone": "Not matched yet"
+    "matchNone": "Not matched yet",
+    "new": "new",
+    "newHint": "Not a customer yet: a prospect"
   },
   "prospect": {
     "name": "Name",
@@ -349,7 +361,7 @@
     "pieces_other": "{count} pieces asked",
     "notes": "Notes",
     "note": "Note",
-    "noteHint": "For us only; it can change even once the inquiry is closed",
+    "noteHint": "For us only; it can change even once the request is closed",
     "readOnly": "Read-only: {reason}",
     "viewOnly": "You can view, not change",
     "closedReadOnly": "{number} is closed",
@@ -430,7 +442,7 @@
     "empty": "The mail has no text.",
     "pictures_one": "Show {count} picture",
     "pictures_other": "Show {count} pictures",
-    "waits": "A prospect’s mail waits in Mail to sort until the inquiry is matched to a customer; then it joins the conversation."
+    "waits": "A prospect’s mail waits in Mail to sort until the request is matched to a customer; then it joins the conversation."
   },
   "pack": {
     "title": "The brand's tech pack",
@@ -441,7 +453,7 @@
     "inForce": "Version {version}, in force",
     "newer": "Version {named} named; version {current} is in force now",
     "gone": "No version of this file is available now",
-    "choose": "Files of the inquiry and its mail",
+    "choose": "Files of the request and its mail",
     "chooseHint": "Tick the files that are the tech pack; Apply keeps the choice",
     "chooseReadOnly": "As named",
     "inPack": "Tech pack"
@@ -449,14 +461,17 @@
   "files": {
     "fromMail": "From the mail",
     "added": "Added here",
-    "none": "No files yet: add them below, or they come with the mail.",
+    "none": "No files",
     "download": "Download {name}",
-    "noRight": "Your role does not read the inquiry's files and conversation",
     "problem": {
       "type": "This kind of file cannot be added",
       "empty": "The file is empty",
       "size": "Larger than {max} MB"
-    }
+    },
+    "photos_one": "{count} photo",
+    "photos_other": "{count} photos",
+    "documents_one": "{count} document",
+    "documents_other": "{count} documents"
   },
   "quote": {
     "none": "Not quoted yet",
@@ -472,7 +487,7 @@
     },
     "revision": "Revision {n}",
     "noRight": "Your role does not read quotes",
-    "oneOnly": "One inquiry becomes one quote; its later revisions are on the quote.",
+    "oneOnly": "One request becomes one quote; its later revisions are on the quote.",
     "title": "Make quote",
     "go": "Make quote",
     "customer": "Customer",
@@ -487,7 +502,7 @@
     "emptyDraft": "No line names a style in a colourway with sizes: the quote starts empty (a draft to fill in).",
     "leftOut_one": "{count} line left out",
     "leftOut_other": "{count} lines left out",
-    "closes": "Lines are priced at the customer’s price list, else 0. The inquiry closes as Quoted and shows its quote."
+    "closes": "Lines are priced at the customer’s price list, else 0. The request closes as Quoted and shows its quote."
   },
   "leftOut": {
     "noStyle": "Line {n}: no style picked — add it on the quote",
@@ -507,7 +522,7 @@
   },
   "activity": {
     "none": "Nothing yet. The first change or message appears here.",
-    "noRight": "Your role does not read the inquiry's conversation"
+    "noRight": "Your role does not read the request's conversation"
   },
   "dialog": {
     "subject": "{number} · {from}"
@@ -518,14 +533,14 @@
     "nobody": "Nobody (take it off)",
     "now": "Now with {name}",
     "nobodyNow": "With nobody now",
-    "noPeople": "Nobody here keeps inquiries: an administrator gives the sales role.",
-    "listLabel": "People who keep inquiries here",
+    "noPeople": "Nobody here keeps requests: an administrator gives the sales role.",
+    "listLabel": "People who keep requests here",
     "search": "Search a name…",
     "partial": "Only the first people are listed: search a name.",
     "hint": "↑ ↓ to choose, Enter to give it. People are listed by name; nobody is counted."
   },
   "decline": {
-    "title": "Decline inquiry",
+    "title": "Decline request",
     "go": "Decline",
     "reason": "Why",
     "CAPACITY": "Capacity",
@@ -543,17 +558,17 @@
       "NOT_AN_ORDER": "It asks nothing to make (a question, a catalogue request)"
     },
     "note": "Why, in words",
-    "noteHint": "Optional; kept on the inquiry",
+    "noteHint": "Optional; kept on the request",
     "noteOther": "Needed when the reason is Other",
     "messageLabel": "Message to the customer (optional)",
-    "messageTo": "Sent to {to} through the inquiry’s conversation, after the decline",
+    "messageTo": "Sent to {to} through the request’s conversation, after the decline",
     "message": {
-      "many": "A message goes to one customer at a time: write from each inquiry’s Activity",
+      "many": "A message goes to one customer at a time: write from each request’s Activity",
       "prospect": "A prospect has no customer conversation yet: answer their mail from Mail to sort",
-      "noEmail": "The inquiry names no contact with an e-mail: pick one on Request first"
+      "noEmail": "The request names no contact with an e-mail: pick one on Request first"
     },
     "preview": "Preview — to {to}",
-    "final": "A closed inquiry changes no more (only its note).",
+    "final": "A closed request changes no more (only its note).",
     "held": {
       "reason": "Pick a reason",
       "long": "At most {max} characters"
@@ -563,17 +578,17 @@
     "title": "Mark as lost",
     "go": "Mark as lost",
     "note": "Why the customer went away",
-    "noteHint": "In words; kept on the inquiry",
+    "noteHint": "In words; kept on the request",
     "held": {
       "note": "Say why, in words"
     }
   },
   "new": {
-    "title": "New inquiry",
+    "title": "New request",
     "subtitle": "A phone call, a visit, a fair, or a portal request recorded by hand",
-    "fromMailTitle": "Make an inquiry from this mail",
+    "fromMailTitle": "Make a request from this mail",
     "fromMailSubtitle": "From {from}, {when}",
-    "go": "Create inquiry",
+    "go": "Create request",
     "source": "How it came",
     "who": "Who asks",
     "whoCustomer": "A customer",
@@ -587,11 +602,11 @@
     "requestFromMail": "The mail's subject and text; change it if you like",
     "toMe": "Give it to me",
     "files": "Files",
-    "filesHint": "Tech packs, sketches, photos: added once the inquiry is made (for us only; share them later from Files & specs)",
+    "filesHint": "Tech packs, sketches, photos: added once the request is made (for us only; share them later from Files & specs)",
     "filesNoRight": "Your role does not add files",
-    "fileLater": "Added once the inquiry is made",
+    "fileLater": "Added once the request is made",
     "attachments": "The mail's attachments",
-    "mailStays": "The mail and its attachments stay with the inquiry.",
+    "mailStays": "The mail and its attachments stay with the request.",
     "mailContact": "The sender is a contact of {name}",
     "mailDomain": "The sender writes from the domain of {name}",
     "mailProspect": "Nexus does not know the sender: a prospect, from the mail’s From",
@@ -606,5 +621,148 @@
     "done": "{number} made",
     "doneFiles_one": "{number} made; {count} file was not added: add it on Files & specs",
     "doneFiles_other": "{number} made; {count} files were not added: add them on Files & specs"
+  },
+  "page": {
+    "title": "Incoming"
+  },
+  "band": {
+    "countUnknown": "—",
+    "asOf": "as of {time}",
+    "count": {
+      "OPEN": "{count} open",
+      "NEW": "{count} new",
+      "WAITING_US": "{count} waiting on us over 1 working day",
+      "WAITING_CUSTOMER": "{count} need info",
+      "QUOTED_THIS_WEEK": "{count} quoted this week",
+      "MINE": "{count} yours",
+      "QUOTED": "{count} quoted",
+      "DECLINED": "{count} declined",
+      "LOST": "{count} lost",
+      "ALL": "{count} in all"
+    }
+  },
+  "door": {
+    "request": "Open {number}",
+    "customer": "Open the customer {name}",
+    "files": "Open the files of {number}",
+    "quote": "Open quote {number}",
+    "parties": "Needs the customers right (parties.view)",
+    "quotes": "Needs the quotes right (quotes.view)"
+  },
+  "funnel": {
+    "state": "Show only: {status}",
+    "source": "Show only: {source}",
+    "company": "Show only: {name}"
+  },
+  "picture": {
+    "open": "Picture of {style} on {number}: open it large",
+    "noneOf": "{number} names no style: no picture",
+    "alt": "{style}",
+    "viewerOf": "From {number}",
+    "small": "A small preview: the original opens from the style.",
+    "none": "No picture of this style yet",
+    "openStyle": "Open style",
+    "close": "Close",
+    "more": "+{count}",
+    "moreStyles_one": "{count} more style on this request: open it",
+    "moreStyles_other": "{count} more styles on this request: open it"
+  },
+  "peek": {
+    "title": "{number} · {customer}",
+    "received": "Received",
+    "source": "Source",
+    "state": "State",
+    "quantity": "Quantity",
+    "wanted": "Wanted",
+    "open": "Open the request",
+    "code": "Code",
+    "openCustomer": "Open the customer",
+    "customerTitle": "{name}",
+    "customerNote": "Every request of this customer: the From filter above."
+  },
+  "export": {
+    "heading": "Export · {view}",
+    "note": "The first {count} rows of this view: the export reads no more until the list reads in pages.",
+    "notePrice": "The first {count} rows of this view; the target price is left out (it needs the price right)."
+  },
+  "pane": {
+    "label": "The request",
+    "close": "Close the request",
+    "back": "Back to the list",
+    "menu": "More for {number}",
+    "of": "{n} of {total}",
+    "prev": "Previous request (K)",
+    "next": "Next request (J)",
+    "first": {
+      "label": "The request as written",
+      "from": {
+        "MAIL": "{who} wrote by e-mail",
+        "PORTAL": "{who} wrote in the portal"
+      },
+      "typed": "Typed by {name} ({source})",
+      "typedNobody": "Typed in the office ({source})",
+      "locked": "The customer's own words: nobody edits them; changes go to the request's details",
+      "lockedShort": "As written",
+      "original": "Show original e-mail",
+      "hideOriginal": "Hide the original e-mail"
+    },
+    "nothingElse": "Nothing else waits in this view",
+    "openFull": "Open full page",
+    "newTab": "Open in a new tab",
+    "print": "Print",
+    "erase": "Start an erasure request…",
+    "eraseHint": "A privacy request with an identity step and a 30-day clock; the request itself stays",
+    "closeThread": "Close thread…",
+    "threadClosed": "The thread of {number} is closed: the customer can no longer write there.",
+    "details": "Details",
+    "detailsOf": "Details · {facts}",
+    "pieces_one": "{count} pc",
+    "pieces_other": "{count} pcs",
+    "day": "{day}",
+    "handled": "Someone else changed this request at {time}",
+    "pick": "Pick a request",
+    "edit": {
+      "open": "Edit the request",
+      "title": "Edit {number}",
+      "close": "Close"
+    },
+    "facts": {
+      "number": "Number",
+      "received": "Received",
+      "source": "Source",
+      "wanted": "Wanted",
+      "quantity": "Quantity",
+      "po": "Their PO",
+      "shipTo": "Ship to",
+      "shipToWaiting": "Added in the portal: not checked yet",
+      "target": "Target price",
+      "contact": "Contact",
+      "prospect": "Prospect",
+      "lines": "Lines",
+      "packVersion": "Version {version}",
+      "madeFrom": "Made from it",
+      "nothingMade": "Nothing made from it yet"
+    },
+    "action": {
+      "quote": "Make quote",
+      "askInfo": "Ask for info",
+      "decline": "Decline",
+      "match": "Match to a customer…",
+      "matchHint": "Pick or make the customer; then replies are possible"
+    },
+    "held": {
+      "prospect": "Make the customer first: replies need a customer record"
+    },
+    "outcome": {
+      "quotedStatus": "Quoted · {quote} {status}",
+      "quoted": "Quoted · {quote}",
+      "declined": "Declined · {reason}",
+      "lost": "Lost: the customer went away",
+      "ordered": "Ordered: made into an order"
+    },
+    "ask": {
+      "portal": "Ask {customer}: your question goes to their portal (they get the portal's notice by e-mail). The request then waits for their answer.",
+      "mail": "Ask {customer}: your question goes by e-mail from the request after the send check. The request then waits for their answer."
+    }
   }
 }

@@ -10,7 +10,7 @@ import {
   type FromMailBody,
   type UpdateInquiryBody,
 } from '@nexus/factory-domain/sales/inquiries/contracts'
-import type { DeclineReason, InquirySource, InquiryTile } from '@nexus/factory-domain/sales/inquiries/rules'
+import type { DeclineReason, InquirySource, InquiryStatus, InquiryTile } from '@nexus/factory-domain/sales/inquiries/rules'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { completeUpload, downloadLink, requestUpload } from '../../../record-panels/api'
 import { contentTypeOf, uploadProblem, type FileKind } from '../../../record-panels/model'
@@ -50,6 +50,9 @@ export const LIST_LIMIT = 200
 
 export interface InquiryQuery {
   tile?: InquiryTile | null
+  /** B-TH-216: the State and Company cells narrow the list. */
+  status?: InquiryStatus | null
+  companyId?: string | null
   source?: InquirySource | null
   partyId?: string | null
   prospect?: boolean
@@ -60,6 +63,8 @@ export function listInquiries(api: ApiClient, query: InquiryQuery, signal?: Abor
   return api.get(base, {
     query: {
       tile: query.tile ?? undefined,
+      status: query.status ?? undefined,
+      companyId: query.companyId ?? undefined,
       source: query.source ?? undefined,
       partyId: query.prospect ? undefined : (query.partyId ?? undefined),
       prospect: query.prospect ? 'true' : undefined,
@@ -89,8 +94,13 @@ export function assignInquiry(api: ApiClient, inquiryId: string, body: { version
   return api.post(`${one(inquiryId)}/assign`, { body, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
 }
 
-export function askInfo(api: ApiClient, inquiryId: string, version: number, idempotencyKey?: string): Promise<InquiryView> {
-  return api.post(`${one(inquiryId)}/ask-info`, { body: { version }, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
+/**
+ * POST …/ask-info (B-TH-013): the request waits for the customer (Need info). B-TH-218: with `message` the question travels with
+ * it — on a request sent from the portal a reply the customer reads there, else a mail to `to` (the recipient rule, B-TH-004:
+ * `sendOutside` ticked for an address of another party); the customer's answer resumes the request by itself.
+ */
+export function askInfo(api: ApiClient, inquiryId: string, version: number, idempotencyKey?: string, message?: { body: string; subject?: string; to?: string[]; sendOutside?: boolean }): Promise<InquiryView> {
+  return api.post(`${one(inquiryId)}/ask-info`, { body: { version, ...(message ? { message } : {}) }, schema: answer, ...key(idempotencyKey) }).then((result) => result.inquiry)
 }
 
 export function resumeInquiry(api: ApiClient, inquiryId: string, version: number, idempotencyKey?: string): Promise<InquiryView> {
@@ -220,4 +230,31 @@ export async function uploadFile(api: ApiClient, inquiry: { id: string; companyI
   })
   await putToStore(upload, bytes)
   await completeUpload(api, stored.id)
+}
+
+// ---- B-TH-216 (Sales › Incoming): the Picture cell, and the facts of the list's one notice ----------------------------------------
+
+const instant = z.string()
+const pictureAnswer = z.object({
+  picture: z.object({ fileId: z.string(), styleId: z.string(), contentType: z.string(), small: z.object({ url: z.string(), expiresAt: instant }).nullable() }),
+})
+export type InquiryPicture = z.infer<typeof pictureAnswer>['picture']
+
+/** GET /sales/inquiries/:id/picture: the small preview (~320 px, a presigned GET of 60 s) of the row's style picture; never the original. */
+export async function readPicture(api: ApiClient, inquiryId: string, signal?: AbortSignal): Promise<InquiryPicture> {
+  return (await api.get(`${one(inquiryId)}/picture`, { schema: pictureAnswer, signal })).picture
+}
+
+/** GET /numbering/series (numbering.view): the companies of these with no ACTIVE request (INQUIRY) series — their portal and mail doors are off. */
+export async function companiesWithoutNumbering(api: ApiClient, companyIds: readonly string[], signal?: AbortSignal): Promise<string[]> {
+  const answer = await api.get('/numbering/series', { schema: z.object({ series: z.array(z.object({ companyId: z.string(), kind: z.string(), status: z.string() })) }), signal })
+  const numbered = new Set(answer.series.filter((series) => series.kind === 'INQUIRY' && series.status === 'ACTIVE').map((series) => series.companyId))
+  return companyIds.filter((id) => !numbered.has(id))
+}
+
+/** GET /email/inbound (email.triage): how many mails wait in Mail to sort, counted on the first page of 50 (`more`: there are more). */
+export async function mailToSortCount(api: ApiClient, signal?: AbortSignal): Promise<{ count: number; more: boolean }> {
+  const answer = await api.get('/email/inbound', { query: { limit: 50 }, schema: z.object({ mails: z.array(z.object({ status: z.string() })), nextCursor: z.string().nullable() }), signal })
+  // The API's default list is what waits (email-in rules TO_SORT: TRIAGE, HELD, FAILED), the same rows Mail to sort opens on.
+  return { count: answer.mails.filter((mail) => mail.status === 'TRIAGE' || mail.status === 'HELD' || mail.status === 'FAILED').length, more: answer.nextCursor !== null }
 }

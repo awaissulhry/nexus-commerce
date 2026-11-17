@@ -9,6 +9,7 @@ import { companyPrefix } from '../../../lib/session/session'
 import { useLiveBus } from '../../../shell/live/use-live'
 import {
   assignMany,
+  companiesWithoutNumbering,
   createFromMail,
   createInquiry,
   declineMany,
@@ -18,7 +19,9 @@ import {
   listContacts,
   listCustomers,
   listInquiries,
+  mailToSortCount,
   readMailDraft,
+  readPicture,
   readMailVersion,
   readStyle,
   uploadFile,
@@ -46,16 +49,19 @@ import {
   nextAfter,
   queryOf,
   readProblem,
+  fullPageHref,
   writeProblem,
   type ListAddress,
   type Loaded,
   type NewDraft,
   type Notice,
+  type NoticeFacts,
   type RowVerb,
 } from './model'
 import type { RecordVerb } from './record-model'
 import { useInquiry } from './use-inquiry'
 import type { StyleRead } from './view/LinesEditor'
+import type { PictureLoader } from './view/cells'
 import { InquiriesView, type BulkDialog } from './view/InquiriesView'
 import type { NewInquiryModel } from './view/NewInquiryDialog'
 
@@ -87,7 +93,7 @@ interface NewState {
 let fileSeq = 0
 
 /**
- * `/w/<company>/sales/inquiries` (SCR-105): the inquiries in the shared list frame with the API's own filters in the address
+ * `/w/<company>/sales/incoming` (SCR-105; B-TH-216: Sales › Incoming, renamed from Inquiries): the requests in the shared list frame with the API's own filters in the address
  * — `?tile=` (a saved filter; the tiles), `?source=`, `?party=` / `?prospect=1`, `?q=` — the inquiry in its DetailModal
  * (`?open=<id>&tab=`, the record container `use-inquiry.tsx`; J / K walk the rows; after a decision the next one opens), New
  * inquiry (`c`, `?new=1`), "Make an inquiry" from a mail (`?mail=<inbound mail id>`), Assign to… and Decline N over a
@@ -149,6 +155,30 @@ export function InquiriesPage() {
       .catch(() => setCustomers(null))
     return () => controller.abort()
   }, [api, can.view, can.parties, companyId])
+
+  // ---- B-TH-216: the one notice's facts (each read only for who may act on it), the Picture cell, a row opens its request ----
+  const companies = useMemo(() => session.companies.map((entry) => ({ id: entry.id, name: entry.name })), [session.companies])
+  const [noticeFacts, setNoticeFacts] = useState<NoticeFacts>({})
+  const mayNumbering = session.permissions.includes('numbering.view')
+  const maySort = session.permissions.includes('email.triage')
+  useEffect(() => {
+    if (!can.view) return
+    const controller = new AbortController()
+    if (mayNumbering && companies.length > 0)
+      companiesWithoutNumbering(api, companies.map((entry) => entry.id), controller.signal)
+        .then((ids) => setNoticeFacts((now) => ({ ...now, numberingMissing: ids.map((id) => companies.find((entry) => entry.id === id)?.name ?? id) })))
+        .catch(() => undefined)
+    if (maySort)
+      mailToSortCount(api, controller.signal)
+        .then((mailToSort) => setNoticeFacts((now) => ({ ...now, mailToSort })))
+        .catch(() => undefined)
+    return () => controller.abort()
+  }, [api, can.view, mayNumbering, maySort, companies])
+  const loadPicture = useCallback<PictureLoader>(async (inquiryId) => {
+    const picture = await readPicture(api, inquiryId)
+    return picture.small ? { url: picture.small.url, expiresAt: picture.small.expiresAt } : null
+  }, [api])
+  // ---- end B-TH-216 ----
 
   const live = useLiveBus(
     {
@@ -375,14 +405,32 @@ export function InquiriesPage() {
           : null,
         bulk: bulk ? ({ ...bulk, model: { ...bulk.model, offline } } as BulkDialog) : null,
         detail: address.open ? record.model : null,
+        // B-TH-217: the pane's facts — handled meanwhile, "Close thread…", the menu's rights.
+        pane: address.open ? { handled: record.handled, closing: record.closing, rights: { erase: session.permissions.includes('privacy.requests.manage'), closeThread: session.permissions.includes('threads.manage') } } : null,
+        companies, // B-TH-216
+        noticeFacts, // B-TH-216
       }}
-      slots={record.slots}
+      slots={{ thread: record.thread }}
       actions={{
         onAddress: (patch) => go({ ...patch, open: patch.open ?? null }),
         onClearFilters: () => go({ ...HOME_ADDRESS }),
         onRetry: () => void load(),
         onShowUpdates: () => void load(),
         onOpen: (inquiryId) => go({ open: inquiryId, tab: inquiryId === addressRef.current.open ? addressRef.current.tab : 'request' }),
+        // B-TH-216 (grid-F29 as on the Orders sheet): the rest of a row opens the request; ⌘ / Ctrl its full page in a new tab.
+        onOpenRow: (inquiryId, newTab) => (newTab ? window.open(fullPageHref(prefix, inquiryId, addressRef.current), '_blank', 'noopener') : go({ open: inquiryId, tab: 'request' })),
+        loadPicture,
+        // B-TH-217: the pane's own acts.
+        pane: {
+          onNext: () => {
+            const next = nextAfter(idsRef.current, addressRef.current.open ?? '')
+            go({ open: next && next !== addressRef.current.open ? next : null, tab: 'request' })
+          },
+          onErase: () => window.open(`${prefix}/admin/privacy?view=requests&new=1&kind=ERASURE`, '_blank', 'noopener'),
+          onCloseThread: record.onCloseThread,
+          onConfirmClose: record.onConfirmClose,
+          onCancelClose: record.onCancelClose,
+        },
         onRowVerb,
         onBulk: (kind, inquiryIds) => {
           bulkKey.current = null

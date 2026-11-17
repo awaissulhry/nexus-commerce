@@ -88,8 +88,8 @@ export const OFFICE: readonly TreeArea[] = [
         hideLabel: true,
         pages: [
           { id: 'sales.customers', title: 'Customers', titleIt: 'Clienti', wave: 'W1', href: '/sales/customers' },
-          // W2b: B-W2b-322 Inquiries (SCR-105).
-          { id: 'sales.inquiries', title: 'Inquiries', titleIt: 'Richieste', wave: 'W2b', href: '/sales/inquiries' },
+          // W2b: B-W2b-322 Inquiries (SCR-105); B-TH-216 (threads plan TH-1b): renamed Incoming, same place.
+          { id: 'sales.incoming', title: 'Incoming', titleIt: 'In arrivo', wave: 'W2b', href: '/sales/incoming' },
           { id: 'sales.quotes', title: 'Quotes', titleIt: 'Preventivi', wave: 'W1', href: '/sales/quotes' },
           { id: 'sales.orders', title: 'Orders', titleIt: 'Ordini', wave: 'W1', href: '/sales/orders' },
         ],

@@ -122,7 +122,8 @@ export const MESSAGE_TEMPLATES = {
   // asked; an inquiry given to a person; a product-safety report to the people who assess them (with an accident: said).
   'notifications.purchasing.requestOrdered': { en: 'Your request to buy {record} was put on purchase order {title}', it: 'La tua richiesta di acquisto {record} è stata messa nell’ordine di acquisto {title}' },
   'notifications.purchasing.requestRefused': { en: '{actor} refused your request to buy {record}', it: '{actor} ha rifiutato la tua richiesta di acquisto {record}' },
-  'notifications.inquiries.assigned': { en: '{actor} gave you inquiry {record}', it: '{actor} ti ha affidato la richiesta {record}' },
+  // B-TH-224 (threads plan TH-1b): one word — request (Sales › Incoming).
+  'notifications.inquiries.assigned': { en: '{actor} gave you request {record}', it: '{actor} ti ha affidato la richiesta {record}' },
   // B-TH-015: a new request, to the people who answer requests (its company and customer), not to who made it.
   'notifications.inquiries.newRequest': { en: 'New request {record} came in: take it or give it to someone', it: 'È arrivata la nuova richiesta {record}: prendila o affidala a qualcuno' },
   'notifications.safety.productReport': { en: 'Product-safety report {record} came in: assess it', it: 'È arrivata la segnalazione di sicurezza {record}: valutala' },

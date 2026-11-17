@@ -9,6 +9,7 @@ import {
   createInquiryContract,
   declineInquiryContract,
   fromMailContract,
+  inquiryPictureContract,
   listInquiriesContract,
   loseInquiryContract,
   mailDraftContract,
@@ -40,6 +41,8 @@ import { inquirySource, quoteInquiry } from './quote'
 // B-TH-025 / B-TH-026: Make order, Make style draft.
 import { orderInquiry } from './order'
 import { styleDraftOf } from './style-draft'
+// B-TH-216 (Sales › Incoming): the Picture cell's small preview.
+import { inquiryPicture } from './row-extras'
 // B-W2b-394 (ML1:02): the addresses whose mail makes an inquiry by itself.
 import { inquiryAddresses, inquiryAddressesContract, saveInquiryAddresses, saveInquiryAddressesContract } from './from-mail'
 
@@ -58,6 +61,7 @@ export default defineRoutes('sales.inquiries', manifest, async (app) => {
   app.post('/sales/inquiries/assign', { schema: bulkAssignContract }, async (request) => assignInquiries(request, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/inquiries/decline', { schema: bulkDeclineContract }, async (request) => declineInquiries(request, request.body, idempotencyKeyFrom(request)))
   app.get('/sales/inquiries/:inquiryId', { schema: readInquiryContract }, async (request) => ({ inquiry: await readInquiry(request, request.params.inquiryId) }))
+  app.get('/sales/inquiries/:inquiryId/picture', { schema: inquiryPictureContract }, async (request) => inquiryPicture(request, request.params.inquiryId)) // B-TH-216
   app.post('/sales/inquiries', { schema: createInquiryContract }, async (request, reply) => reply.code(201).send(await createInquiry(request, request.body, idempotencyKeyFrom(request))))
   app.patch('/sales/inquiries/:inquiryId', { schema: updateInquiryContract }, async (request) => updateInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
   app.post('/sales/inquiries/:inquiryId/assign', { schema: assignInquiryContract }, async (request) => assignInquiry(request, request.params.inquiryId, request.body, idempotencyKeyFrom(request)))
