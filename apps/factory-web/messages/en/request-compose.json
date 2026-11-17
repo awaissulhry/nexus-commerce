@@ -29,7 +29,55 @@
   },
   "files": {
     "title": "Files",
-    "closed": "Uploads from outside are closed for now: the virus scanner is not running here yet. Please send the file to your contact by e-mail."
+    "closed": "Uploads from outside are closed for now: the virus scanner is not running here yet. Please send the file to your contact by e-mail.",
+    "titleCount_one": "Files · {count}",
+    "titleCount_other": "Files · {count}",
+    "hintHold": "Photos, PDFs (tick a measurement sheet), designs and logos. They go right after Send, through the virus scan.",
+    "hintSend": "Photos, PDFs (tick a measurement sheet), designs and logos. They reach us through the virus scan.",
+    "drop": "Drop files here, paste them, or browse (25 MB a file, 15 MB a photo)",
+    "closedShort": "Nothing can be added here for now.",
+    "listLabel": "Your files",
+    "remove": "Take {name} off",
+    "sheet": "This is a measurement sheet",
+    "sheetHint": "body data: at the factory only the people who handle measurements open it",
+    "sheetShort": "Measurement sheet",
+    "design": "Kept as it is: download only",
+    "leftOut_one": "{count} file was left out: at most 20 files go at once.",
+    "leftOut_other": "{count} files were left out: at most 20 files go at once.",
+    "retry_one": "Retry the file",
+    "retry_other": "Retry {count} files",
+    "send_one": "Send the file",
+    "send_other": "Send {count} files",
+    "openRequest": "Open the request",
+    "scanningBody": "A file held for the virus scan reaches us once the scan says it is clean: nothing to do.",
+    "state": {
+      "uploading": "Uploading…",
+      "sent": "Sent",
+      "scanning": "Held for the virus scan: it reaches us once the scan says it is clean",
+      "failed": "Did not go",
+      "failedWhy": "Did not go: {reason}"
+    },
+    "problem": {
+      "page": "an SVG, HTML or script file is never accepted: send a PDF or PNG",
+      "type": "this type is not accepted (PDF, photos, Office documents, CSV, text, or Illustrator, EPS, Photoshop and ZIP files)",
+      "empty": "the file is empty",
+      "size": "too large: at most {max} MB for this kind of file"
+    },
+    "outcome": {
+      "waiting_one": "{count} file is going",
+      "waiting_other": "{count} files are going",
+      "sent_one": "{count} file sent",
+      "sent_other": "{count} files sent",
+      "scanning_one": "{count} held for the virus scan",
+      "scanning_other": "{count} held for the virus scan",
+      "failed_one": "{count} file did not go",
+      "failed_other": "{count} files did not go"
+    },
+    "failed": {
+      "network": "the connection dropped",
+      "store": "the file store did not take it",
+      "refused": "it was refused as it is"
+    }
   },
   "details": {
     "title": "Add details (optional)",

@@ -62,6 +62,10 @@ export const requestViewSchema = requestRowSchema.extend({
     order: z.object({ id: z.string(), number: z.string(), yourNumber }).nullable(),
   }),
   closedAt: z.string().nullable(),
+  // ---- B-TH-291 (B-TH-095): the version a withdrawal names, and whether Withdraw is offered (else why not, in the person's words).
+  version: z.number().optional(),
+  withdraw: z.object({ allowed: z.boolean(), words: z.string().nullable() }).optional(),
+  // ---- end B-TH-291
 })
 export type RequestView = z.infer<typeof requestViewSchema>
 
@@ -78,7 +82,12 @@ export const sendAnswerSchema = z.object({
 })
 export type SendAnswer = z.infer<typeof sendAnswerSchema>
 
-export const openAnswerSchema = z.object({ open: z.boolean(), reason: words.nullable() })
+export const openAnswerSchema = z.object({
+  open: z.boolean(),
+  reason: words.nullable(),
+  // B-TH-282 (B-TH-085): whether files may go with a request now, and why not in the person's words (the scanner's sentence).
+  files: z.object({ open: z.boolean(), words: z.string().nullable() }).optional(),
+})
 export type OpenAnswer = z.infer<typeof openAnswerSchema>
 
 /** POST /portal/inquiries: what the customer typed. Never a party or a company: the session's (W11). */
@@ -100,3 +109,44 @@ export const fetchRequestsOpen = (api: ApiClient, signal?: AbortSignal): Promise
 
 export const fetchRequest = (api: ApiClient, id: string, signal?: AbortSignal): Promise<RequestView> =>
   api.get(`/portal/inquiries/${encodeURIComponent(id)}`, { schema: z.object({ request: requestViewSchema }), signal }).then((answer) => answer.request)
+
+// ---- B-TH-282 (B-TH-085): the customer's files — onto its request while undecided (`/portal/inquiries/:id/files…`), else through
+// the request's thread (`/portal/threads/Inquiry/:id/files…`, the composer's own route); then one message of the customer carries
+// them. The body names no party or company: the session's (W11, W25, W37).
+const presigned = z.object({ method: z.enum(['PUT', 'GET']), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: z.string() })
+const partnerFile = z.object({ id: z.string(), originalName: z.string(), kind: z.string(), sizeBytes: z.number(), status: z.string(), measurementSheet: z.boolean() })
+export type PartnerFile = z.infer<typeof partnerFile>
+const announced = z.object({ file: partnerFile, upload: presigned })
+
+/** What a file announces: its name, type, size and SHA-256; "This is a measurement sheet" ticked or not. */
+export interface FileAnnounce {
+  originalName: string
+  contentType: string
+  sizeBytes: number
+  sha256: string
+  measurementSheet?: boolean
+}
+
+/** The door a file goes through: the request's own while undecided, the request's thread after. */
+export type FileDoor = 'request' | 'thread'
+
+const filesPath = (door: FileDoor, id: string) => (door === 'request' ? `/portal/inquiries/${encodeURIComponent(id)}/files` : `/portal/threads/Inquiry/${encodeURIComponent(id)}/files`)
+
+export const announceFile = (api: ApiClient, door: FileDoor, id: string, body: FileAnnounce, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(filesPath(door, id), { body: { ...body, ...(body.measurementSheet ? { measurementSheet: true } : {}) }, schema: announced, idempotencyKey })
+
+export const completeFile = (api: ApiClient, door: FileDoor, id: string, fileId: string, idempotencyKey: string = newIdempotencyKey()) =>
+  api.post(`${filesPath(door, id)}/${encodeURIComponent(fileId)}/complete`, { body: {}, schema: z.object({ file: partnerFile }), idempotencyKey }).then((answer) => answer.file)
+
+/** One message of the customer carrying the files sent (each available after the scan). */
+export function attachFiles(api: ApiClient, door: FileDoor, id: string, fileIds: readonly string[], idempotencyKey: string = newIdempotencyKey()): Promise<unknown> {
+  return door === 'request'
+    ? api.post(`/portal/inquiries/${encodeURIComponent(id)}/files/attach`, { body: { fileIds: [...fileIds] }, idempotencyKey })
+    : api.post(`/portal/threads/Inquiry/${encodeURIComponent(id)}/messages`, { body: { body: '', attachments: [...fileIds] }, idempotencyKey })
+}
+// ---- end B-TH-282
+
+// ---- B-TH-291 (B-TH-095): the customer withdraws its own request before the office decided ------------------------------------
+export const withdrawRequest = (api: ApiClient, id: string, version: number, idempotencyKey: string = newIdempotencyKey()): Promise<RequestView> =>
+  api.post(`/portal/inquiries/${encodeURIComponent(id)}/withdraw`, { body: { version }, schema: z.object({ request: requestViewSchema }), idempotencyKey }).then((answer) => answer.request)
+// ---- end B-TH-291

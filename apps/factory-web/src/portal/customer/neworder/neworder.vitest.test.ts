@@ -20,6 +20,9 @@ import { EMPTY_COMPOSE, sendBodyOf } from '../../../lib/request-compose/model'
 import { scanText } from '../../../lib/testing/brand-scan'
 import { BRAND_ALPHA, BRAND_BETA } from '../../../lib/testing/two-brands'
 import { sendRequest, type SendAnswer } from '../requests/api'
+// B-TH-282
+import { announceFile, attachFiles, completeFile } from '../requests/api'
+import { filesOutcome, holdFiles, retryCarry, stateAfterUpload, takesSheetTick, toAttach, toUpload } from '../../../lib/request-compose/files'
 import { requestView } from '../requests/design-data'
 import { requestBandOf } from './band'
 import { CATALOGUE_DOOR_OPEN, closedRefusal, failedKey, goesToOf, openItems, opensCatalogueDoor, receiptOf, reorderText, shipToChoices, stylesText, withCarried } from './request-model'
@@ -464,3 +467,96 @@ describe('B-TH-304 — the catalogue door is open again: New order offers it, wi
   })
 })
 // ---- end B-TH-304
+
+// ---- B-TH-282 (B-TH-083/084/085): customers attach files — held until Send, uploaded right after it onto the new request,
+// behind the virus scan; the measurement tick; design files download-only; the closed sentence; Retry.
+describe('B-TH-282 — New order takes files: held until Send, then onto the request', () => {
+  let n = 0
+  const keyOf = () => `k${++n}`
+
+  it('each file is checked as the API will: kinds by type, SVG refused naming the way out, sizes, at most 20 at once', () => {
+    const { held, leftOut } = holdFiles([], [
+      { name: 'sizes.pdf', type: 'application/pdf', size: 90_000 },
+      { name: 'front.jpg', type: 'image/jpeg', size: 3_000_000 },
+      { name: 'logo.ai', type: 'application/illustrator', size: 900_000 },
+      { name: 'pack.zip', type: 'application/zip', size: 900_000 },
+      { name: 'logo.svg', type: 'image/svg+xml', size: 9_000 },
+      { name: 'huge.jpg', type: 'image/jpeg', size: 16 * 1_048_576 },
+      { name: 'empty.pdf', type: 'application/pdf', size: 0 },
+    ], keyOf)
+    expect(leftOut).toBe(0)
+    expect(held.map((file) => [file.name, file.kind, file.problem?.key ?? null, file.design])).toEqual([
+      ['sizes.pdf', 'ATTACHMENT', null, false],
+      ['front.jpg', 'PHOTO', null, false],
+      ['logo.ai', 'ATTACHMENT', null, true],
+      ['pack.zip', 'DOCUMENT', null, true],
+      ['logo.svg', 'PHOTO', 'files.problem.page', false],
+      ['huge.jpg', 'PHOTO', 'files.problem.size', false],
+      ['empty.pdf', 'ATTACHMENT', 'files.problem.empty', false],
+    ])
+    expect(held.find((file) => file.name === 'huge.jpg')!.problem!.params).toEqual({ max: 15 })
+    const many = holdFiles([], Array.from({ length: 23 }, (_, i) => ({ name: `p${i}.jpg`, type: 'image/jpeg', size: 10 })), keyOf)
+    expect(many.held).toHaveLength(20)
+    expect(many.leftOut).toBe(3)
+    // The same file twice is held once.
+    expect(holdFiles(held, [{ name: 'sizes.pdf', type: 'application/pdf', size: 90_000 }], keyOf).held).toHaveLength(held.length)
+  })
+
+  it('the measurement tick on a PDF or a photo only (body data); a design file never', () => {
+    const { held } = holdFiles([], [{ name: 'a.pdf', type: 'application/pdf', size: 9 }, { name: 'b.png', type: 'image/png', size: 9 }, { name: 'c.ai', type: 'application/illustrator', size: 9 }, { name: 'd.svg', type: 'image/svg+xml', size: 9 }], keyOf)
+    expect(held.map((file) => takesSheetTick(file))).toEqual([true, true, false, false])
+  })
+
+  it('after Send: what waits goes, a sent or scanning file never twice; Retry carries again what arrived but was not carried', () => {
+    const base = holdFiles([], [{ name: 'a.pdf', type: 'application/pdf', size: 9 }, { name: 'b.pdf', type: 'application/pdf', size: 9 }, { name: 'c.svg', type: 'image/svg+xml', size: 9 }], keyOf).held
+    expect(toUpload(base).map((file) => file.name)).toEqual(['a.pdf', 'b.pdf'])
+    const after = [{ ...base[0]!, state: 'sent' as const, fileId: 'f-a', uploaded: true }, { ...base[1]!, state: 'scanning' as const, fileId: 'f-b', uploaded: true }, base[2]!]
+    expect(toUpload(after)).toEqual([])
+    expect(toAttach(after, new Set())).toEqual(['f-a'])
+    expect(toAttach(after, new Set(['f-a']))).toEqual([])
+    expect(stateAfterUpload('AVAILABLE')).toBe('sent')
+    expect(stateAfterUpload('QUARANTINED')).toBe('scanning')
+    const carryFailed = [{ ...after[0]!, state: 'failed' as const, failure: 'x' }]
+    expect(toUpload(carryFailed)).toEqual([])
+    expect(retryCarry(carryFailed)[0]!.state).toBe('sent')
+    expect(filesOutcome([...after, { ...base[0]!, key: 'z', state: 'failed' as const }])).toMatchObject({ sent: 1, scanning: 1, failed: 1, refused: 1 })
+  })
+
+  it('W25 W37: the file goes onto the session’s own request by its id only — never a party or a company; the thread door after a decision', async () => {
+    const calls: { path: string; body: unknown }[] = []
+    const api = { post: async (path: string, options: { body?: unknown }) => {
+      calls.push({ path, body: options.body })
+      return path.endsWith('/complete') ? { file: { id: 'f1', originalName: 'a.pdf', kind: 'ATTACHMENT', sizeBytes: 9, status: 'AVAILABLE', measurementSheet: true } } : { file: { id: 'f1', originalName: 'a.pdf', kind: 'ATTACHMENT', sizeBytes: 9, status: 'PENDING_UPLOAD', measurementSheet: true }, upload: { method: 'PUT', url: '/store/x', headers: {}, expiresAt: '2026-11-17T10:05:00Z' } }
+    } } as unknown as ApiClient
+    await announceFile(api, 'request', 'inq-1', { originalName: 'a.pdf', contentType: 'application/pdf', sizeBytes: 9, sha256: 'a'.repeat(64), measurementSheet: true })
+    await completeFile(api, 'request', 'inq-1', 'f1')
+    await attachFiles(api, 'request', 'inq-1', ['f1'])
+    await attachFiles(api, 'thread', 'inq-1', ['f1'])
+    expect(calls.map((call) => call.path)).toEqual(['/portal/inquiries/inq-1/files', '/portal/inquiries/inq-1/files/f1/complete', '/portal/inquiries/inq-1/files/attach', '/portal/threads/Inquiry/inq-1/messages'])
+    expect(calls[0]!.body).toEqual({ originalName: 'a.pdf', contentType: 'application/pdf', sizeBytes: 9, sha256: 'a'.repeat(64), measurementSheet: true })
+    expect(calls[2]!.body).toEqual({ fileIds: ['f1'] })
+    expect(calls[3]!.body).toEqual({ body: '', attachments: ['f1'] })
+    expect(JSON.stringify(calls)).not.toMatch(/party|company/i)
+  })
+
+  it('the design cases: the tick and the design word, the closed sentence, the receipt’s outcome with Retry — Brand Beta only', () => {
+    for (const locale of ['it', 'en'] as const) {
+      for (const id of ['th-282-files', 'th-282-files-closed', 'th-282-receipt-files']) {
+        const html = renderCase(locale, id)
+        expect(html.match(KEY)?.[0] ?? null, `${id} (${locale})`).toBeNull()
+        expect(scanText(html, BRAND_ALPHA), `${id} (${locale})`).toEqual([])
+      }
+    }
+    const files = renderCase('en', 'th-282-files')
+    expect(files).toContain('This is a measurement sheet')
+    expect(files).toContain('Kept as it is: download only')
+    expect(files).toContain('an SVG, HTML or script file is never accepted: send a PDF or PNG')
+    expect(files).toContain('They go right after Send, through the virus scan.')
+    expect(renderCase('en', 'th-282-files-closed')).toContain('Uploads from outside are closed for now')
+    const receipt = renderCase('en', 'th-282-receipt-files')
+    expect(receipt).toContain('1 file sent · 1 held for the virus scan · 1 file did not go')
+    expect(receipt).toContain('Retry the file')
+    expect(renderCase('it', 'th-282-receipt-files')).toContain('trattenuto per il controllo antivirus')
+  })
+})
+// ---- end B-TH-282

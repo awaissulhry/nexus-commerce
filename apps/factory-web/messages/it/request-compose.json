@@ -29,7 +29,55 @@
   },
   "files": {
     "title": "File",
-    "closed": "Per ora i caricamenti dall'esterno sono chiusi: l'antivirus qui non è ancora attivo. Mandate il file al vostro referente per e-mail."
+    "closed": "Per ora i caricamenti dall'esterno sono chiusi: l'antivirus qui non è ancora attivo. Mandate il file al vostro referente per e-mail.",
+    "titleCount_one": "File · {count}",
+    "titleCount_other": "File · {count}",
+    "hintHold": "Foto, PDF (spunta una scheda misure), disegni e loghi. Partono subito dopo Invia, passando dal controllo antivirus.",
+    "hintSend": "Foto, PDF (spunta una scheda misure), disegni e loghi. Ci arrivano passando dal controllo antivirus.",
+    "drop": "Trascina qui i file, incollali o sfoglia (25 MB a file, 15 MB a foto)",
+    "closedShort": "Per ora qui non si può aggiungere nulla.",
+    "listLabel": "I vostri file",
+    "remove": "Togli {name}",
+    "sheet": "Questa è una scheda misure",
+    "sheetHint": "dati del corpo: in fabbrica la aprono solo le persone che gestiscono le misure",
+    "sheetShort": "Scheda misure",
+    "design": "Conservato così com'è: solo da scaricare",
+    "leftOut_one": "{count} file è rimasto fuori: al massimo 20 file per volta.",
+    "leftOut_other": "{count} file sono rimasti fuori: al massimo 20 file per volta.",
+    "retry_one": "Riprova il file",
+    "retry_other": "Riprova {count} file",
+    "send_one": "Invia il file",
+    "send_other": "Invia {count} file",
+    "openRequest": "Apri la richiesta",
+    "scanningBody": "Un file trattenuto per il controllo antivirus ci arriva quando il controllo dice che è pulito: non serve fare nulla.",
+    "state": {
+      "uploading": "Caricamento…",
+      "sent": "Inviato",
+      "scanning": "Trattenuto per il controllo antivirus: ci arriva quando il controllo dice che è pulito",
+      "failed": "Non partito",
+      "failedWhy": "Non partito: {reason}"
+    },
+    "problem": {
+      "page": "un file SVG, HTML o uno script non è mai accettato: inviate un PDF o un PNG",
+      "type": "questo tipo non è accettato (PDF, foto, documenti Office, CSV, testo, o file Illustrator, EPS, Photoshop e ZIP)",
+      "empty": "il file è vuoto",
+      "size": "troppo grande: al massimo {max} MB per questo tipo di file"
+    },
+    "outcome": {
+      "waiting_one": "{count} file in partenza",
+      "waiting_other": "{count} file in partenza",
+      "sent_one": "{count} file inviato",
+      "sent_other": "{count} file inviati",
+      "scanning_one": "{count} trattenuto per il controllo antivirus",
+      "scanning_other": "{count} trattenuti per il controllo antivirus",
+      "failed_one": "{count} file non è partito",
+      "failed_other": "{count} file non sono partiti"
+    },
+    "failed": {
+      "network": "la connessione si è interrotta",
+      "store": "l'archivio dei file non l'ha accettato",
+      "refused": "è stato rifiutato così com'è"
+    }
   },
   "details": {
     "title": "Aggiungi dettagli (facoltativo)",

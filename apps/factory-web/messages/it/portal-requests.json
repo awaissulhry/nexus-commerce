@@ -57,5 +57,26 @@
     "retry": "Riprova"
   },
   "offline": "Nessuna connessione — si vede ciò che è stato caricato alle {time}",
-  "loading": "Lettura della richiesta…"
+  "loading": "Lettura della richiesta…",
+  "files": {
+    "title": "Aggiungi file",
+    "offline": "Siete offline: i file partono quando tornate in linea."
+  },
+  "withdraw": {
+    "action": "Ritira questa richiesta",
+    "hint": "Possibile finché non decidiamo.",
+    "title": "Ritirare la vostra richiesta {seq}?",
+    "titleNone": "Ritirare la vostra richiesta?",
+    "body": "Smettiamo di lavorarci. Non si può annullare: se cambiate idea, scriveteci nei messaggi qui sotto.",
+    "keep": "Tienila",
+    "confirm": "Ritira",
+    "busy": "Ritiro in corso…",
+    "problem": {
+      "changed": "Questa richiesta è cambiata nel frattempo: l'abbiamo riletta. Guardatela e riprovate se volete ancora.",
+      "missing": "Questa richiesta non è vostra, o non esiste più.",
+      "forbidden": "Il vostro accesso non permette di ritirare richieste. Il vostro amministratore può cambiarlo.",
+      "network": "Nessuna connessione: nulla è cambiato. Riprovate tra un momento.",
+      "failed": "Non è stato possibile ritirarla: nulla è cambiato. Riprovate tra un momento."
+    }
+  }
 }
