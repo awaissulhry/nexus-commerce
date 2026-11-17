@@ -841,7 +841,7 @@
       "paymentTerms": "Termini di pagamento",
       "note": "Nota per il fornitore",
       "noteHint": "Stampata sull’ordine.",
-      "internalNote": "Nota interna",
+      "internalNote": "Nota d'ufficio",
       "internalHint": "Solo per noi: mai sull’ordine né sul link."
     },
     "totals": {

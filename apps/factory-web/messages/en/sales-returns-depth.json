@@ -125,7 +125,7 @@
       "sent": "Sent",
       "decision": "Customer decision",
       "customerNote": "Note for the customer",
-      "internalNote": "Internal note",
+      "internalNote": "Office note",
       "withdrawn": "Withdrawn"
     },
     "sum": {
@@ -234,7 +234,7 @@
     "terms": {
       "open": "Edit terms",
       "title": "Terms of estimate {revision}",
-      "sentOnly": "Sent: only the internal note changes.",
+      "sentOnly": "Sent: only the office note changes.",
       "noDate": "No last day",
       "customerHint": "Shown to the customer with the estimate.",
       "internalHint": "Only the office reads it.",

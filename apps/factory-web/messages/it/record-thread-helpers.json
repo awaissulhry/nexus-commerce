@@ -33,11 +33,11 @@
     "kept": "Bozza tenuta su questo dispositivo · salvata alle {time}"
   },
   "design": {
-    "noteMark": "Nota interna · la leggono solo i tuoi colleghi",
+    "noteMark": "Nota d'ufficio · la leggono solo i tuoi colleghi",
     "replyMark": "Risposta al cliente",
-    "noteLabel": "Nota interna",
+    "noteLabel": "Nota d'ufficio",
     "replyLabel": "Risposta al cliente",
-    "notePlaceholder": "Scrivi una nota interna per i colleghi · @ menziona un collega",
+    "notePlaceholder": "Scrivi una nota d'ufficio per i colleghi · @ menziona un collega",
     "replyPlaceholder": "Scrivi al cliente",
     "addNote": "Aggiungi nota",
     "send": "Invia"

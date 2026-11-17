@@ -289,7 +289,7 @@
     "checkStyleNone": "No style",
     "fitNotes": "Fit notes, posture, asymmetry",
     "fitNotesHint": "The rider may read them",
-    "internal": "Internal note",
+    "internal": "Office note",
     "internalHint": "Office only",
     "held": {
       "customer": "Pick the customer first.",
@@ -360,7 +360,7 @@
     "photosCount_other": "{count} photos (Photos tab)",
     "photosNone": "None",
     "fitNotes": "Fit notes",
-    "internal": "Internal note",
+    "internal": "Office note",
     "old": "Measured more than 12 months ago: ask for a new measure before a repeat order."
   },
   "reviewPanel": {

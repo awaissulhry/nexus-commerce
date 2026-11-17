@@ -1,0 +1,218 @@
+/*
+ * To / Cc and the send check (B-TH-207, T7; picture 5). Another customer's address is a red chip; an unknown address amber;
+ * the check itself is TH-1c's send-check window (popups). DS tokens only.
+ */
+.fw-rt-rcpt {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+  min-width: 0;
+}
+
+.fw-rt-rcpt-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  min-height: 30px;
+  padding: 2px 0;
+  border-bottom: 1px solid var(--nds-border-subtle);
+  min-width: 0;
+}
+
+.fw-rt-rcpt-row.is-subject {
+  border-bottom: none;
+}
+
+.fw-rt-rcpt-lab {
+  width: 26px;
+  flex: none;
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  color: var(--nds-text-2);
+}
+
+.fw-rt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  max-width: 100%;
+  padding: 0 4px 0 8px;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+  border: 1px solid var(--nds-border-subtle);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text);
+  overflow-wrap: anywhere;
+}
+
+.fw-rt-chip small {
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+}
+
+.fw-rt-chip.is-other {
+  background: var(--nds-danger-soft);
+  border-color: var(--nds-danger);
+  color: var(--nds-danger-text);
+}
+
+.fw-rt-chip.is-other small {
+  color: var(--nds-danger-text);
+  font-weight: 700;
+}
+
+.fw-rt-chip.is-unknown {
+  background: var(--nds-warning-soft);
+  border-color: var(--nds-warning);
+}
+
+.fw-rt-chip.is-unknown small {
+  color: var(--nds-warning-text);
+  font-weight: 700;
+}
+
+.fw-rt-chip button {
+  display: inline-flex;
+  border: none;
+  background: none;
+  padding: 2px;
+  border-radius: 50%;
+  color: inherit;
+  cursor: pointer;
+}
+
+.fw-rt-chip button:hover {
+  background: var(--nds-surface-hover);
+}
+
+.fw-rt-chip button:focus-visible,
+.fw-rt-rcpt-subject:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+}
+
+.fw-rt-rcpt-in {
+  flex: 1 1 120px;
+  min-width: 80px;
+  height: 26px;
+  border: none;
+  outline: none;
+  background: none;
+  color: var(--nds-text);
+  font: inherit;
+  font-size: var(--nds-font-size-sm-plus);
+}
+
+.fw-rt-rcpt-in::placeholder {
+  color: var(--nds-placeholder);
+}
+
+.fw-rt-rcpt-in:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+  border-radius: var(--nds-radius-xs);
+}
+
+.fw-rt-rcpt-subject {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  border: none;
+  background: none;
+  padding: 2px 0;
+  color: var(--nds-text-2);
+  font: inherit;
+  font-size: var(--nds-font-size-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.fw-rt-rcpt-subject span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--nds-text);
+}
+
+.fw-rt-sugg {
+  position: absolute;
+  z-index: 30;
+  left: 30px;
+  top: calc(100% + 2px);
+  width: min(360px, calc(100% - 30px));
+  background: var(--nds-surface);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-xl);
+  box-shadow: var(--nds-shadow-menu);
+  padding: 6px;
+}
+
+.fw-rt-sugg-grp {
+  margin: 0;
+  padding: 6px 8px 2px;
+  font-size: var(--nds-font-size-xs);
+  font-weight: 700;
+  color: var(--nds-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.fw-rt-sugg [role='option'] {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  background: none;
+  border-radius: var(--nds-radius-md);
+  color: var(--nds-text);
+  font: inherit;
+  font-size: var(--nds-font-size-sm-plus);
+  text-align: start;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.fw-rt-sugg [role='option']:hover,
+.fw-rt-sugg [role='option'].is-active {
+  background: var(--nds-surface-hover);
+}
+
+.fw-rt-sugg [role='option'] small {
+  margin-inline-start: auto;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-xs);
+  flex: none;
+}
+
+.fw-rt-check-who {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-info-soft);
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.fw-rt-check-line {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--nds-font-size-sm-plus);
+  color: var(--nds-text-2);
+  line-height: 1.5;
+}
+
+/* The send check's key wrapper: no box of its own (the window is the DS Modal). */
+.fw-rt-contents {
+  display: contents;
+}

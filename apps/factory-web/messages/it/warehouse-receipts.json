@@ -388,7 +388,7 @@
     "sentWhere": "È nella conversazione del ricevimento (Attività), dove arriverà la risposta.",
     "toHint": "Solo i contatti del fornitore con un’e-mail; aggiungine uno in Acquisti › Fornitori.",
     "note": "La tua nota",
-    "noteHint": "Facoltativa, al massimo {max} caratteri, sotto l’elenco con le tue parole. Nessun prezzo, nessuna nota interna.",
+    "noteHint": "Facoltativa, al massimo {max} caratteri, sotto l’elenco con le tue parole. Nessun prezzo, nessuna nota d'ufficio.",
     "preview": "Cosa riceve il fornitore",
     "previewHint": "Il testo standard nella lingua del fornitore, con i documenti richiesti e la tua nota. Qui non si modifica."
   },

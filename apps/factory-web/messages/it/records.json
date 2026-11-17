@@ -54,21 +54,21 @@
     },
     "empty": {
       "title": "Ancora nessun messaggio",
-      "body": "Qui compaiono le note interne e la posta con il cliente o il fornitore di questo record, dalla più recente."
+      "body": "Qui compaiono le note d'ufficio e la posta con il cliente o il fornitore di questo record, dalla più recente."
     }
   },
   "composer": {
     "modeLabel": "Chi vede questo messaggio",
     "mode": {
-      "note": "Nota interna",
+      "note": "Nota d'ufficio",
       "email": "Email a {party}"
     },
     "title": {
-      "note": "Nota interna",
+      "note": "Nota d'ufficio",
       "email": "Email a {party}"
     },
     "rule": {
-      "note": "Una nota interna la vede solo l'ufficio: {party} non la vede mai.",
+      "note": "Una nota d'ufficio la vede solo l'ufficio: {party} non la vede mai.",
       "noteFloor": "Questa nota la vedono l'ufficio e i tablet che lavorano quest'ordine: {party} non la vede mai.",
       "noParty": "il cliente o il fornitore",
       "email": "Parte dall'indirizzo della tua azienda, a tuo nome. {party} la vede e la risposta torna in questa conversazione."
@@ -136,7 +136,7 @@
       "SYSTEM": "Nexus Factory"
     },
     "kind": {
-      "note": "Nota interna",
+      "note": "Nota d'ufficio",
       "outbound": "Email a {party}",
       "inbound": "Email da {party}"
     },
@@ -276,7 +276,7 @@
       }
     },
     "message": {
-      "note": "{who} ha aggiunto una nota interna",
+      "note": "{who} ha aggiunto una nota d'ufficio",
       "outbound": "{who} ha scritto a {party}",
       "inbound": "{who} ha scritto all'ufficio"
     },

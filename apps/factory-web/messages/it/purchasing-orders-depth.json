@@ -485,7 +485,7 @@
     "needDateHint": "Vuota: ogni riga il suo vecchio giorno se ancora oltre il tempo di consegna del fornitore, altrimenti il primo arrivo possibile.",
     "copies": "Lo stesso fornitore, sito, contatto, valuta, Incoterms, termini di pagamento e nota per il fornitore.",
     "prices": "I prezzi dalla fonte approvata del fornitore di oggi quando c’è, altrimenti quelli della vecchia riga.",
-    "notCopied": "Non copiati: la nota interna, i piani di consegna, rotoli, certificati e varianti, il modello di un ordine campione.",
+    "notCopied": "Non copiati: la nota d'ufficio, i piani di consegna, rotoli, certificati e varianti, il modello di un ordine campione.",
     "confirm_one": "Crea la bozza con {count} riga",
     "confirm_other": "Crea la bozza con {count} righe",
     "held": {

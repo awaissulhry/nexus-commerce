@@ -841,7 +841,7 @@
       "paymentTerms": "Payment terms",
       "note": "Note to the supplier",
       "noteHint": "Printed on the order.",
-      "internalNote": "Internal note",
+      "internalNote": "Office note",
       "internalHint": "Only for us: never on the order or the link."
     },
     "totals": {

@@ -221,7 +221,7 @@
     "fileHint": "Il PDF del fornitore: resta con la fattura (archivio fiscale).",
     "filePick": "Scegli il PDF",
     "fileChange": "Scegli un altro PDF",
-    "note": "Nota interna",
+    "note": "Nota d'ufficio",
     "datePlaceholder": "gg/mm/aaaa",
     "dateClear": "Togli la data",
     "submit": "Registra fattura",
@@ -389,7 +389,7 @@
     },
     "sendToBuyer": {
       "title": "Invia le differenze all'acquisti",
-      "body": "Una nota interna nella discussione della fattura elenca ogni riga fuori tolleranza (senza prezzi) e avvisa chi ha inviato l'ordine.",
+      "body": "Una nota d'ufficio nella discussione della fattura elenca ogni riga fuori tolleranza (senza prezzi) e avvisa chi ha inviato l'ordine.",
       "message": "Messaggio (facoltativo)",
       "confirm": "Invia all'acquisti"
     },

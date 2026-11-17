@@ -569,7 +569,7 @@
     "invoice": "Invoice {number} line {seq}",
     "linesHead": "What may come back — type the pieces of each line that comes back",
     "linesLabel": "Lines that come back",
-    "note": "Internal note",
+    "note": "Office note",
     "noteHint": "For the office only",
     "noteOf": "Customer’s words for {line}",
     "nothing": "Nothing of this customer can come back",
@@ -743,7 +743,7 @@
   },
   "replacement": {
     "body": "One order for the same customer with the lines decided Replace, at no charge (a guarantee replacement is not a sale). It ships as any order.",
-    "note": "Internal note",
+    "note": "Office note",
     "submit": "Make replacement order",
     "title": "Make replacement order for {number}"
   },

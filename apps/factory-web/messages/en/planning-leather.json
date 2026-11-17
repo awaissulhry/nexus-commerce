@@ -65,7 +65,7 @@
       "IGNORED": "This plan line was set aside in What to buy & make.",
       "OPEN": "Open."
     },
-    "noNote": "A note on the order needs the right to write internal notes.",
+    "noNote": "A note on the order needs the right to write office notes.",
     "sampleNoCustomer": "An internal sample has no customer to ask: its work order is ours.",
     "notMustBuy": "Only a line that must buy has a draft purchase order.",
     "busy": "Wait: the last action is still going."
