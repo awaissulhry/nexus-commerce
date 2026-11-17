@@ -7,20 +7,27 @@ import type { Locale } from '../../lib/i18n/locales'
 import { CATALOGUE, createTranslator } from '../../lib/i18n/messages'
 import type { EmailFrequency } from './api'
 import type { PortalBand } from './frame'
-import { badgesOf, noticesOf, type TaskRow } from './model'
+import { badgesOf, emailTopicNoteKey, noticesOf, type TaskRow } from './model'
 import { portalNavFor, type PortalKind } from './nav/portal-nav'
 import type { ShortcutGroup } from './view/FrameDialogs'
 import { PortalFrameCase, type PortalFrameCaseBuilder, type PortalFramePage, type PortalFramePopup } from './view/PortalFrameCase'
 import type { PortalShellViewModel } from './view/PortalShellView'
 import type { TasksViewModel } from './view/TasksView'
 import type { ThreadViewModel } from './view/ThreadView'
+// ---- B-TH-273 / B-TH-274
+import { createElement } from 'react'
+import { Card } from '@nexus/ui/components'
+import type { PortalFrameMode } from './record/model'
+import type { RecordSummaryModel } from './view/RecordView'
+// ---- end B-TH-273 / B-TH-274
 
 /**
  * SCR-027 — the portal frame's design review (B-W2b-173), every state with MADE-UP data only (no real customer, supplier,
  * person or number): a customer's, a supplier's and a workshop's frame with every area as it will be (the live portal shows
- * only built pages: the "today" case), branded and unbranded, loading, error, empty, offline, an office preview, a record
- * with its Messages, a read-only person, every pop-up (Notifications, E-mail settings, Still there?, Keyboard shortcuts,
- * Leave without sending?, My access, Language and theme, Search, Ask a question) and the portal terms.
+ * only built pages: the "today" case), branded and unbranded, loading, error, empty, offline, an office preview, the generic
+ * record page (B-TH-274: summary + conversation; an invoice's conversation; the account conversation), the record-page rule
+ * (B-TH-273: docked at 1440, "Messages (2 new)" under 1280 px), a read-only person, every pop-up (Notifications, E-mail settings,
+ * Still there?, Keyboard shortcuts, Leave without sending?, My access, Language and theme, Search) and the portal terms.
  */
 
 const HOUR = 3_600_000
@@ -152,19 +159,79 @@ function thread(locale: Locale, over: Partial<ThreadViewModel> = {}): ThreadView
   }
 }
 
+// ---- B-TH-274 (P-ANY, PL5): the generic page has no tabs — its band (their reference first, ours second, the state), the summary
+// beside the conversation from 1280 px. A delivery note: a record with no page of its own yet; its order is the parent link.
 const recordBand = (locale: Locale): PortalBand => {
   const t = words(locale)
   return {
-    title: `${t('record.type.SalesOrder')} SO-2026-0101`,
+    title: `${t('record.type.Ddt')} DDT-2026-0450`,
     back: { href: PREFIX, label: t('nav.home') },
-    refs: { theirs: 'BA-PO-7781', ours: 'SO-2026-0101' },
-    tabs: { label: t('record.tabs'), active: 'messages', items: [{ id: 'messages', label: t('record.messages'), href: '#messages' }] },
-    ask: { type: 'SalesOrder', id: '00000000-0000-7000-8000-000000000101', label: 'SO-2026-0101' },
+    refs: { theirs: 'BA-PO-7781', ours: 'DDT-2026-0450' },
+    status: { label: locale === 'it' ? 'Emesso' : 'Issued', tone: 'info' },
+    ask: { type: 'Ddt', id: '00000000-0000-7000-8000-000000000450', label: 'DDT-2026-0450' },
+  }
+}
+
+const summaryOf = (locale: Locale, over: Partial<RecordSummaryModel> = {}): RecordSummaryModel => {
+  const t = words(locale)
+  return {
+    state: 'ready',
+    type: t('record.type.Ddt'),
+    label: 'DDT-2026-0450',
+    theirRef: 'BA-PO-7781',
+    stateWords: locale === 'it' ? 'Emesso' : 'Issued',
+    stateTone: 'info',
+    parent: { words: `${t('record.type.SalesOrder')} #12`, href: `${PREFIX}/open/SalesOrder/00000000-0000-7000-8000-000000000101` },
+    ownPage: null,
+    ...over,
   }
 }
 
 // On a record page the references are in the band: the conversation does not repeat them (PortalThread showRecord={false}).
-const record = (locale: Locale, over: Partial<ThreadViewModel> = {}): PortalFramePage => ({ kind: 'record', record: { missing: false, subtitle: locale === 'it' ? 'Ordine del 3 novembre · 4 righe' : 'Order of 3 November · 4 lines', homeHref: PREFIX }, thread: thread(locale, { record: null, ...over }) })
+const record = (locale: Locale, over: Partial<ThreadViewModel> = {}, summary: Partial<RecordSummaryModel> | null = {}): PortalFramePage => ({
+  kind: 'record',
+  record: { missing: false, subtitle: null, homeHref: PREFIX, summary: summary ? summaryOf(locale, summary) : null },
+  thread: thread(locale, { record: null, ...over }),
+})
+
+// ---- B-TH-273 (PL3, picture 22): the rule every portal record page follows — a record's body (here a made-up order's Status card)
+// with its conversation docked at 1440, and below 1280 px behind "Messages (2 new)" (opened: the conversation full width, Back).
+const frameBody = (locale: Locale) =>
+  createElement(
+    'div',
+    { className: 'fw-precord' },
+    createElement(Card, { padded: true }, createElement('h2', { className: 'fw-precord-h2' }, locale === 'it' ? 'Stato e avanzamento' : 'Status & progress'), createElement('p', { className: 'fw-precord-sub' }, locale === 'it' ? 'In produzione: taglio terminato, cucitura in corso. Consegna prevista 21 novembre.' : 'In production: cutting done, sewing under way. Delivery expected 21 November.')),
+    createElement(Card, { padded: true }, createElement('h2', { className: 'fw-precord-h2' }, locale === 'it' ? 'Righe' : 'Lines'), createElement('p', { className: 'fw-precord-sub' }, locale === 'it' ? '4 righe · 120 capi' : '4 lines · 120 garments')),
+  )
+const orderBand = (locale: Locale): PortalBand => {
+  const t = words(locale)
+  return {
+    title: `${t('record.type.SalesOrder')} #12`,
+    back: { href: PREFIX, label: t('nav.home') },
+    refs: { theirs: 'BA-PO-7781', ours: '#12' },
+    status: { label: locale === 'it' ? 'In produzione' : 'In production', tone: 'info' },
+    ask: { type: 'SalesOrder', id: '00000000-0000-7000-8000-000000000101', label: '#12' },
+    tabs: {
+      label: t('record.tabs'),
+      active: 'status',
+      items: [
+        { id: 'status', label: locale === 'it' ? 'Stato e avanzamento' : 'Status & progress', href: '#status' },
+        { id: 'lines', label: locale === 'it' ? 'Righe' : 'Lines', href: '#lines', count: 4 },
+        { id: 'shipments', label: locale === 'it' ? 'Spedizioni e tracking' : 'Shipments & tracking', href: '#shipments' },
+        { id: 'documents', label: locale === 'it' ? 'Documenti' : 'Documents', href: '#documents' },
+      ],
+    },
+  }
+}
+const framePage = (locale: Locale, mode: PortalFrameMode, over: { viewOpen?: boolean; newCount?: number } = {}): PortalFramePage => ({
+  kind: 'frame',
+  body: frameBody(locale),
+  thread: thread(locale, { record: null }),
+  threadLabel: locale === 'it' ? 'Messaggi sull’ordine #12' : 'Messages about order #12',
+  mode,
+  ...over,
+})
+// ---- end B-TH-273 / B-TH-274
 
 function emailPopup(locale: Locale, changes = 0): PortalFramePopup {
   const t = words(locale)
@@ -174,7 +241,8 @@ function emailPopup(locale: Locale, changes = 0): PortalFramePopup {
     model: {
       open: true,
       state: 'ready',
-      topics: PARTNER_EMAIL_TOPICS.map((topic) => ({ topic, name: TOPIC_WORDS[topic][locale], frequency: isTransactional(topic) ? 'INSTANT' : (chosen[topic] ?? 'DAILY'), locked: isTransactional(topic), reason: isTransactional(topic) ? LOCKED_REASON[locale] : null })),
+      // B-TH-273 (PL3-F05): messages say "as it happens by default" beside their setting.
+      topics: PARTNER_EMAIL_TOPICS.map((topic) => ({ topic, name: TOPIC_WORDS[topic][locale], frequency: isTransactional(topic) ? 'INSTANT' : (chosen[topic] ?? 'DAILY'), locked: isTransactional(topic), reason: isTransactional(topic) ? LOCKED_REASON[locale] : null, note: emailTopicNoteKey({ topic, locked: isTransactional(topic) }) ? t(emailTopicNoteKey({ topic, locked: isTransactional(topic) })!) : null })),
       allOff: false,
       changes,
       saving: false,
@@ -310,9 +378,54 @@ export const designScreen = defineDesignScreen<PortalFrameCaseBuilder>({
     },
     {
       id: 'record',
-      label: 'Any record: band with RefPair, Messages',
-      model: caseOf((locale) => ({ shell: shell(locale, { band: recordBand(locale), path: '/open/SalesOrder/x' }), page: record(locale) })),
-      note: 'Their reference first, ours second; the ⋯ ends with "Ask a question" (focuses the box below); "You can also answer our e-mails".',
+      label: 'Generic page: the summary beside the conversation (PL5)',
+      model: caseOf((locale) => ({ shell: shell(locale, { band: recordBand(locale), path: '/open/Ddt/x' }), page: record(locale) })),
+      note: 'B-TH-274: no tabs. The conversation is the main column (~2/3), the summary beside it from 1280 px (~1/3): type, number, your reference, state, the order it belongs to (a link). Below 1280 px one line (type, number, state) and the rest behind "i". The ⋯ "Ask a question" focuses the box.',
+    },
+    {
+      id: 'record-invoice',
+      label: 'Generic page: an invoice’s conversation (?view=conversation)',
+      model: caseOf((locale) => {
+        const t = words(locale)
+        return {
+          shell: shell(locale, { band: { title: `${t('record.type.Invoice')} FT-2026-0311`, back: { href: PREFIX, label: t('nav.home') }, refs: { ours: 'FT-2026-0311' }, status: { label: locale === 'it' ? 'Da pagare' : 'To pay', tone: 'warning' }, ask: { type: 'Invoice', id: '00000000-0000-7000-8000-000000000311', label: 'FT-2026-0311' } }, path: '/open/Invoice/x' }),
+          page: record(locale, { messages: [] }, { type: t('record.type.Invoice'), label: 'FT-2026-0311', theirRef: null, stateWords: locale === 'it' ? 'Da pagare' : 'To pay', stateTone: 'warning', parent: null, ownPage: { href: `${PREFIX}/documents?invoice=00000000-0000-7000-8000-000000000311`, words: t('record.summary.open', { type: t('record.type.Invoice') }) } }),
+        }
+      }),
+      note: 'Documents › "Ask about this invoice" (B-TH-276) opens this page, not a pop-up: its PDF is one click away ("Open the Invoice page").',
+    },
+    {
+      id: 'record-account',
+      label: 'Generic page: the account conversation (Ask us a question)',
+      model: caseOf((locale) => {
+        const t = words(locale)
+        return { shell: shell(locale, { band: { title: t('thread.accountTitle'), back: { href: PREFIX, label: t('nav.home') }, ask: { type: 'Party', id: '00000000-0000-7000-8000-000000000001', label: null } }, path: '/open/Party/x' }), page: { kind: 'record', record: { missing: false, subtitle: null, homeHref: PREFIX, account: true, summary: null }, thread: thread(locale, { record: null, messages: [], title: t('thread.accountHeading') }) } }
+      }),
+      note: 'B-TH-273: no Ask pop-up any more — "Ask a question" on a page with no record opens this page (/open/Party/<your account>), the box ready.',
+    },
+    {
+      id: 'record-summary-failed',
+      label: 'Generic page: the summary failed, the conversation is there',
+      model: caseOf((locale) => ({ shell: shell(locale, { band: recordBand(locale), path: '/open/Ddt/x' }), page: record(locale, {}, { state: 'error' }) })),
+      note: 'Each part reads on its own: the summary says it could not be read, with Try again; the conversation works.',
+    },
+    {
+      id: 'frame-docked',
+      label: 'Record-page rule: the conversation docked (1440 / 1920)',
+      model: caseOf((locale) => ({ shell: shell(locale, { band: orderBand(locale), path: '/orders/x' }), page: framePage(locale, 'docked') })),
+      note: 'B-TH-273 (PL3, picture 22): every portal record page — order, return, complaint, repair, purchase order, delivery notice, job, the accountant — docks its ONE conversation at ~40 % (3 : 2), sticky under the band, the box at its foot. No Messages tab, no Ask pop-up. Open at 1440 and 1920: no dead space.',
+    },
+    {
+      id: 'frame-narrow',
+      label: 'Record-page rule: under 1280 px, "Messages (2 new)"',
+      model: caseOf((locale) => ({ shell: shell(locale, { band: orderBand(locale), path: '/orders/x' }), page: framePage(locale, 'stacked', { newCount: 2 }) })),
+      note: 'The body leads; the button counts the person’s own new messages and opens the conversation full width. Open at 1024 and phone 390.',
+    },
+    {
+      id: 'frame-narrow-open',
+      label: 'Record-page rule: under 1280 px, the conversation opened',
+      model: caseOf((locale) => ({ shell: shell(locale, { band: orderBand(locale), path: '/orders/x' }), page: framePage(locale, 'stacked', { viewOpen: true }) })),
+      note: 'Back returns to the same tab and scroll (the browser’s Back too).',
     },
     {
       id: 'record-readonly',
@@ -360,6 +473,5 @@ export const designScreen = defineDesignScreen<PortalFrameCaseBuilder>({
     { id: 'display', label: 'Pop-up: Language and theme', model: caseOf((locale) => ({ shell: shell(locale), page: home(locale), popup: { kind: 'display', model: { open: true, locale, theme: 'system', preview: false } } })), note: 'The language is the person’s own (the portal and our mails speak it); the theme is this device’s.' },
     { id: 'search', label: 'Pop-up: Search by their PO number', model: caseOf((locale) => ({ shell: shell(locale), page: home(locale), popup: searchPopup(locale) })), note: 'Grouped as the portal shows them; their reference first, the typed words marked; Enter opens; ⌘-click a new tab.' },
     { id: 'search-error', label: 'Pop-up: Search not answering', model: caseOf((locale) => ({ shell: shell(locale), page: home(locale), popup: searchPopup(locale, 'error') })) },
-    { id: 'ask', label: 'Pop-up: Ask a question (no record)', model: caseOf((locale) => ({ shell: shell(locale), page: home(locale), popup: { kind: 'ask', thread: thread(locale, { record: null, messages: [], title: words(locale)('thread.accountHeading') }) } })), note: 'On a page with no record the question is about the account; the box is focused.' },
   ],
 })

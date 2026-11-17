@@ -178,8 +178,10 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
 
 /**
  * Where a record opens in the portal, by the partner kind that reads it and the record's type (the API's links are
- * `/open/<type>/<id>`). A step that builds a record page sets its `built`; until then the frame's own record page opens
- * (its band and its Messages: every record has its conversation, COL-059).
+ * `/open/<type>/<id>`). A step that builds a record page sets its `built`; until then the frame's generic page opens (B-TH-274:
+ * the record's summary and its conversation as the main column — every record has its conversation, COL-059).
+ * B-TH-273: a built record page has NO Messages tab: it docks the record's conversation in the portal record frame
+ * (shell/record/PortalRecordFrame), and an old `?tab=messages` address opens its first tab with the conversation shown.
  */
 export interface PortalRecordPage {
   kinds: readonly PortalKind[]

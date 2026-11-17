@@ -57,13 +57,17 @@ import {
   type SessionEnd,
 } from './model'
 import { portalChords, portalNavFor } from './nav/portal-nav'
-import { PortalThread } from './thread/PortalThread'
+// ---- B-TH-273 (PL3-F03: no Ask modal): "Ask a question" focuses the docked conversation, else opens the conversation's page.
+import { accountConversationHref, conversationHref } from './record/model'
+import { PORTAL_ASK_EVENT } from './record/PortalRecordFrame'
+// B-TH-273 (PL3-F05): messages by mail "as it happens" is said as the default beside the setting.
+import { emailTopicNoteKey } from './model'
+// ---- end B-TH-273
 import { EmailSettingsView } from './view/EmailSettingsView'
 import { DisplayView, MyAccessView, ShortcutsView, StillThereView, UnsavedGuardView, type ShortcutGroup } from './view/FrameDialogs'
 import { NotificationsView } from './view/NotificationsView'
 import { PortalShellView, type PortalDialog } from './view/PortalShellView'
 import { SearchView, type SearchViewModel } from './view/SearchView'
-import { Modal } from '../../lib/i18n/ds-parts'
 import type { TaskRowState, TasksViewModel } from './view/TasksView'
 
 /**
@@ -456,19 +460,25 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
   }
 
   // "Ask a question": the record's conversation with the box focused; on a page with no record, the account's.
-  const [asking, setAsking] = useState<{ type: string; id: string; label: string | null } | null>(null)
+  // ---- B-TH-273 (PL3-F03, P-ANY; no Ask modal, no copy of the conversation in a pop-up): a page that docks the record's
+  // conversation (the portal record frame, `#messages`) shows it and focuses its box — narrower than 1280 px the frame opens its
+  // full-width view first; a page with the conversation in place (the request page, a project) scrolls to its box; anywhere else
+  // the conversation opens as its own page (the generic page `/open/<type>/<id>?view=conversation`, the account `/open/Party/<id>`).
   const ask = useCallback(
     (record: { type: string; id: string; label?: string | null } | null) => {
       const here = typeof document !== 'undefined' ? document.getElementById('messages') : null
       if (record && here) {
+        const handled = !here.dispatchEvent(new CustomEvent(PORTAL_ASK_EVENT, { cancelable: true }))
+        if (handled) return
         here.scrollIntoView({ block: 'start' })
         here.querySelector<HTMLTextAreaElement>('textarea')?.focus()
         return
       }
-      setAsking(record ? { type: record.type, id: record.id, label: record.label ?? null } : { type: 'Party', id: me.party.id, label: null })
+      leaveTo(record ? conversationHref(prefix, record) : accountConversationHref(prefix, me.party.id))
     },
-    [me.party.id],
+    [me.party.id, prefix, leaveTo],
   )
+  // ---- end B-TH-273
 
   // ── keys: / search, ? shortcuts, g + a letter goes to an area ──
   const chords = useMemo(() => portalChords(nav), [nav])
@@ -633,7 +643,8 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
               model={{
                 open: dialog === 'email',
                 state: email.state,
-                topics: (email.settings?.topics ?? []).map((topic) => ({ topic: topic.topic, name: topic.words[locale], frequency: email.draft[topic.topic] ?? topic.frequency, locked: topic.locked, reason: topic.reason ? topic.reason[locale] : null })),
+                // B-TH-273 (PL3-F05): the topic whose default is "as it happens" (messages) says so beside its setting.
+                topics: (email.settings?.topics ?? []).map((topic) => ({ topic: topic.topic, name: topic.words[locale], frequency: email.draft[topic.topic] ?? topic.frequency, locked: topic.locked, reason: topic.reason ? topic.reason[locale] : null, note: emailTopicNoteKey(topic) ? t(emailTopicNoteKey(topic)!) : null })),
                 allOff: email.settings ? allNonEssentialOff(email.settings, email.draft) : false,
                 changes: emailChanged.length,
                 saving: email.saving,
@@ -706,9 +717,6 @@ export function PortalShell({ me, branding, children }: PortalShellProps) {
             />
             <DisplayView model={{ open: dialog === 'display', locale, theme, saving: display.saving, failed: display.failed, preview: me.preview }} onLocale={(next) => void setLanguage(next)} onTheme={setTheme} onClose={close} />
             <StillThereView model={{ open: stillThere.open, endsAt, canStay: staying(idleEnd, absoluteEnd), busy: stillThere.busy, failed: stillThere.failed }} onStay={() => void stay()} onSignOut={() => goSignIn(null)} onEnded={sessionEnded} />
-            <Modal open={asking !== null} onClose={() => setAsking(null)} sheet size="lg" title={asking?.type === 'Party' ? t('thread.accountTitle') : (asking?.label ?? t('thread.title'))}>
-              {asking ? <PortalThread type={asking.type} id={asking.id} focus headingLevel={3} title={asking.type === 'Party' ? t('thread.accountHeading') : t('thread.title')} /> : null}
-            </Modal>
           </TasksContext.Provider>
         </PortalGuardProvider>
       </PortalBandProvider>

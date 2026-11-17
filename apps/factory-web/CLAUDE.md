@@ -101,11 +101,19 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   or the 12 hours → `ended=revoked`); a chosen sign-out sends none. A cut ticket's number (`CT…-YYYY-N`) is read before the carton rule
   (`floor/scan/scan-model.ts isCutTicketNumber`: a free code with `cutTicket`): Home opens Fabric cutting with it at a cutting table.
   `nav/portal-nav.ts` is THE merge point of every portal page: an area/page sets its `built`, a record page its line in
-  `RECORD_PAGES` (`/open/<type>/<id>`, the API's links, opens it; else the frame's record page with its Messages). Pages read
+  `RECORD_PAGES` (`/open/<type>/<id>`, the API's links, opens it; else the generic page, B-TH-274). Pages read
   `usePortalFrame()` (session, prefix, `api` that moves the idle clock, `access`, `ask`), fill the band with `usePortalBand`,
   guard typed work with `usePortalUnsaved`, listen with `usePortalLive`, and draw a record's conversation with
   `thread/PortalThread`. Home (`p/[party]/page.tsx`, a merge point of the Home steps) is the frame's task list for now.
   Catalogue `portal` (every partner permission, role, task kind, search group and record type has words: a test).
+- B-TH-273 / B-TH-274 (threads TH-6, PL3, PL5): `src/portal/shell/record/` — `PortalRecordFrame` docks a record's ONE conversation
+  (PortalThread) on every portal record page: ~40 % (3 : 2) from 1280 px, sticky; below, "Messages (2 new)" opens it full width
+  (`?thread=open`, Back). No Messages tab, no Ask modal: the dock is `#messages`, the frame's ⋯ "Ask a question" sends it
+  `PORTAL_ASK_EVENT` (focus; narrower opens the view first), a page with no docked conversation opens the conversation as a page
+  (`model.ts conversationHref` = `/open/<type>/<id>?view=conversation`, the account `/open/Party/<own id>`). Old `?tab=messages`
+  / `?thread=new` / `#messages` show the conversation on arrival (`portalArrivalOf`; `tabOrFirst` maps a removed tab). The
+  generic page (`RecordPage.tsx`, `view/RecordView.tsx`) = the summary (GET /records/:type/:id/summary, partner view) beside the
+  conversation. `usePortalRecordFrame()`: PortalThread reports its new count and marks read only while on screen.
 - `src/areas/sales/customers/portal/` — Portal access in the office (B-W2b-180; SCR-033-portal, SCR-057-portal): ONE tab both party
   records mount through the `portal` slot (`?tab=portal`; partners.view): the portal's switch, people at most, roles offered
   and the production-progress switch (C1, customers), What they see (`POST /partners/:id/preview`, then `/p/<code>` in a new
