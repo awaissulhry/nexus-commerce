@@ -468,7 +468,7 @@ describe('B-TH-233 Incoming over every door', () => {
     // A record type without a page of its own opens its panels, still at the message.
     expect(replyHref('/w/DEMO', { ...order, recordType: 'DepositRequest', label: 'DR-1' }, built)).toBe(`/w/DEMO/records/DepositRequest/${order.recordId}?label=DR-1&company=${order.companyId}&message=${order.lastMessage.id}`)
     // The one waiting rule (amber past the rule's days) comes from the API; clock time is said when the company has no calendar.
-    expect(replyWaiting(page.rows[1]!)).toEqual({ time: { key: 'time.daysHours', params: { d: 5, h: 0 } }, amber: true, clock: false })
+    expect(replyWaiting(page.rows[1]!)).toEqual({ time: { key: 'time.days', params: { d: 5 } }, amber: true, clock: false })
     expect(replyWaiting({ waiting: { ...page.rows[2]!.waiting, calendar: false } }).clock).toBe(true)
     // Nothing of another customer is added by the page: it draws the rows and the count the API returned for this reader.
     const limited = repliesOf(page.rows.filter((row) => row.party.id === page.rows[2]!.party.id))
