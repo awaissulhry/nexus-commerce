@@ -1,0 +1,30 @@
+{
+  "thread": {
+    "button": "Conversazione",
+    "hintDocked": "Mostra o nascondi la conversazione accanto al record (⌘J)",
+    "hintView": "Apri la conversazione (⌘J); Indietro torna alla stessa scheda",
+    "back": "Torna al record"
+  },
+  "more": "Altre azioni",
+  "details": {
+    "open": "Dettagli",
+    "title": "Dettagli"
+  },
+  "keys": {
+    "line": "Tastiera",
+    "lineHint": "I tasti di questa pagina",
+    "title": "Tastiera",
+    "thread": "Mostra o nascondi la conversazione",
+    "step": "Il passo principale della banda",
+    "walk": "Messaggio successivo e precedente, quando i messaggi hanno il focus",
+    "reply": "Rispondi al cliente, dalla conversazione fuori da un campo",
+    "note": "Nota d'ufficio, dalla conversazione fuori da un campo",
+    "esc": "Esci dal riquadro (il testo resta); da tutta la larghezza torna al record"
+  },
+  "notices": {
+    "more_one": "1 altro avviso",
+    "more_other": "Altri {count} avvisi",
+    "fewer_one": "Nascondi 1 avviso",
+    "fewer_other": "Nascondi {count} avvisi"
+  }
+}

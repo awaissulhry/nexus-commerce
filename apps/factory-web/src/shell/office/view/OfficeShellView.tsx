@@ -24,6 +24,8 @@ import { CompanySwitcherView, type CompanySwitcherViewModel } from '../../switch
 import { MFA_HINT_ID } from '../mfa-hint'
 import { areaTabHref, phoneNav, type LastPages } from '../phone-bar'
 import '../office-shell.css'
+// ---- B-TH-213: the record band slot (a record page draws its band in the area band row) ----
+import { BandSlotContext, useBandSlotHost } from '../band-slot'
 // B-W2b-F41: the rail's and the area navigation's own words (the ds-words catalogue).
 import { dsLabels } from '../../../lib/i18n/ds-labels'
 import { CATALOGUE, createTranslator } from '../../../lib/i18n/messages'
@@ -222,6 +224,8 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
       </a>
     </Button>
   ) : undefined
+  // ---- B-TH-213: a record page claims the band row (its band replaces the crumbs; live and Print stay beside it) ----
+  const band = useBandSlotHost(frame === 'office' && Boolean(area?.sections?.length), { status: liveStatus, actions: printAction })
 
   if (frame === 'print') {
     const company = model.switcher.companies.find((entry) => entry.code === model.switcher.company) ?? null
@@ -382,13 +386,15 @@ export function OfficeShellView({ model, children, onNavigate, onSiteChange, onS
                 onNavigationOpenChange={setAreaNavOpen}
                 labels={ds.workspaceSubheader} /* B-W2b-F41 */
                 header={
-                  <DetailHeader dense title={here} meta={above || undefined} status={liveStatus} actions={printAction} />
+                  // B-TH-213: a record band claims the row (its DetailHeader is drawn into the slot); else the page's place.
+                  band.claimed ? <div ref={band.ref} className="fw-band-slot" /> : <DetailHeader dense title={here} meta={above || undefined} status={liveStatus} actions={printAction} />
                 }
               />
             </div>
           ) : null}
           <main id="main-content" tabIndex={-1} className="fw-office-main">
-            {children}
+            {/* B-TH-213: the page reads the band slot */}
+            <BandSlotContext.Provider value={band.value}>{children}</BandSlotContext.Provider>
           </main>
         </div>
       </div>
