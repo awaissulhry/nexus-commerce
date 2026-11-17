@@ -305,6 +305,8 @@ describe('th3b follow-up 5: the customer reads its own order number in shipment 
   let taskId = ''
 
   it('a delivery that shipped: "A delivery of your order N has shipped" to A’s people only, chip "#N", never the shipment or order series', async () => {
+    // Its own start, whatever T06 left: company A's credit rule off, so the order is made CONFIRMED.
+    if ((await one<{ active: boolean }>('SELECT active FROM "ApprovalRule" WHERE id = $1', [ruleId])).active) await switchRule(false)
     order = await madeOrder('PO-TH3B-SHIP')
     expect(order.status).toBe('CONFIRMED')
     seq = (await one<{ customerSeq: number }>('SELECT "customerSeq" FROM "SalesOrder" WHERE id = $1', [order.id])).customerSeq
