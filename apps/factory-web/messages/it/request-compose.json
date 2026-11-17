@@ -25,7 +25,11 @@
     "at": "Bozza tenuta su questo dispositivo · {time}",
     "failed": "Non tenuta su questo dispositivo.",
     "retry": "Riprova",
-    "offline": "Siete offline: il testo resta su questo dispositivo."
+    "offline": "Siete offline: il testo resta su questo dispositivo.",
+    "saved": "Bozza salvata alle {time}",
+    "notSaved": "Non salvata",
+    "notSavedDevice": "Non salvata: il testo resta su questo dispositivo",
+    "replaced": "È stata sostituita una bozza più recente, scritta in un’altra scheda o su un altro computer."
   },
   "files": {
     "title": "File",

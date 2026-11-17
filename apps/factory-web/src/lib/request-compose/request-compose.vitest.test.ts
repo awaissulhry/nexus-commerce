@@ -28,6 +28,8 @@ import {
   type ComposeDraft,
 } from './model'
 import { RequestCompose, type RequestComposeModel } from './view/RequestCompose'
+// B-TH-287: the New order draft on the server.
+import { draftSaver, fromServerDraft, keptLineOf, newerDraft, serverDraftBody, type ServerDraftBody } from './server-draft'
 
 /**
  * B-TH-220 — the request written like an e-mail, shared by the portal's New order and (B-TH-221) the office's New request: what
@@ -253,3 +255,253 @@ describe('the compose in the office (B-TH-221)', () => {
   })
 })
 
+
+// ---- B-TH-287 (threads plan TH-9, N6; P-CUS-NEW.message-F02; wall W08, W37): the portal's New order on the server -------------------
+describe('B-TH-287 — the New order draft on the server', () => {
+  const view = (over: Partial<{ body: string; fields: Record<string, unknown>; savedAt: string; version: number }> = {}) => ({
+    body: BRAND_BETA.message,
+    fields: { subject: 'Rain jackets', customerRef: BRAND_BETA.customerRef, wantedDate: '2026-12-01', shipToAddressId: 'a1' },
+    savedAt: '2026-11-17T09:42:00.000Z',
+    version: 3,
+    ...over,
+  })
+
+  it('reads the server’s draft as the compose holds it (the message is its words); a bad day is dropped; nothing typed is no draft', () => {
+    expect(fromServerDraft(view())).toEqual({ draft: { subject: 'Rain jackets', message: BRAND_BETA.message, customerRef: BRAND_BETA.customerRef, wantedDate: '2026-12-01', shipToAddressId: 'a1' }, savedAt: Date.parse('2026-11-17T09:42:00.000Z'), version: 3 })
+    expect(fromServerDraft(view({ fields: { wantedDate: '1 December', subject: 5 } }))?.draft).toEqual({ ...EMPTY_COMPOSE, message: BRAND_BETA.message })
+    expect(fromServerDraft(view({ body: '', fields: {} }))).toBeNull()
+    expect(fromServerDraft(null)).toBeNull()
+  })
+
+  it('the body names no person, party or company (the API takes them from the session): the typed fields and the version read', () => {
+    const body = serverDraftBody(typed({ customerRef: BRAND_BETA.customerRef }), 4)
+    expect(body).toEqual({ audience: null, body: BRAND_BETA.message, fields: { subject: 'Rain jackets', customerRef: BRAND_BETA.customerRef, wantedDate: '', shipToAddressId: '' }, version: 4 })
+    expect(Object.keys(body)).not.toContain('partyId')
+    expect(JSON.stringify(body)).not.toMatch(/partyId|userId|companyId|person/)
+    expect(serverDraftBody(typed(), null)).not.toHaveProperty('version')
+  })
+
+  it('opens with the newer copy (the same moment: the server’s); a device copy the server no longer keeps is forgotten', () => {
+    const server = { draft: typed({ subject: 'From the server' }), savedAt: 2_000, version: 2 }
+    const device = { draft: typed({ subject: 'From this device' }), savedAt: 1_000 }
+    expect(newerDraft(server, device, true)).toMatchObject({ source: 'server', draft: { subject: 'From the server' }, forget: false })
+    expect(newerDraft(server, { ...device, savedAt: 3_000 }, true)).toMatchObject({ source: 'device', draft: { subject: 'From this device' } })
+    expect(newerDraft(server, { ...device, savedAt: 2_000 }, true)?.source).toBe('server')
+    expect(newerDraft(null, device, true)).toMatchObject({ source: 'device', forget: false })
+    // Saved on the server once, and the server — read without a fault — keeps none: sent or discarded on another computer.
+    expect(newerDraft(null, { ...device, onServer: true }, true)).toMatchObject({ forget: true })
+    // The server could not be read: this device's copy stays.
+    expect(newerDraft(null, { ...device, onServer: true }, false)).toMatchObject({ source: 'device', forget: false })
+    expect(newerDraft(null, null, true)).toBeNull()
+  })
+
+  it('the device copy remembers that the server had the same words', () => {
+    const storage = memory()
+    const key = composeDraftKey('person-1', BRAND_BETA.code)
+    expect(writeKeptCompose(storage, key, typed(), 5_000, true)).toEqual({ draft: typed(), savedAt: 5_000, onServer: true })
+    expect(readKeptCompose(storage, key, 6_000)).toEqual({ draft: typed(), savedAt: 5_000, onServer: true })
+    writeKeptCompose(storage, key, typed({ subject: 'Typed since' }), 7_000)
+    expect(readKeptCompose(storage, key, 8_000)?.onServer).toBeUndefined()
+  })
+
+  it('the line under the message: saved, replaced, not saved (and whether the text stays here), else the device’s own line', () => {
+    const time = () => '10:42'
+    expect(keptLineOf({ state: 'saved', at: 1, replaced: false }, { state: 'none' }, time)).toEqual({ state: 'saved', at: '10:42', replaced: false })
+    expect(keptLineOf({ state: 'failed' }, { state: 'kept', at: '10:40' }, time)).toEqual({ state: 'notSaved', device: true })
+    expect(keptLineOf({ state: 'failed' }, { state: 'failed' }, time)).toEqual({ state: 'notSaved', device: false })
+    expect(keptLineOf({ state: 'idle' }, { state: 'kept', at: '10:40' }, time)).toEqual({ state: 'kept', at: '10:40' })
+  })
+
+  it('draws “Draft saved 10:42”, the newest-wins warning and “Not saved · Retry” in Italian and English', () => {
+    const KEY = /\b(?:kept)\.[a-zA-Z_]+\b/
+    const cases: Array<[RequestComposeModel['kept'], { en: string[]; it: string[] }]> = [
+      [{ state: 'saved', at: '10:42' }, { en: ['Draft saved 10:42'], it: ['Bozza salvata alle 10:42'] }],
+      [{ state: 'saved', at: '10:42', replaced: true }, { en: ['Draft saved 10:42', 'A newer draft from another tab or computer was replaced.'], it: ['Bozza salvata alle 10:42', 'È stata sostituita una bozza più recente'] }],
+      [{ state: 'notSaved', device: false }, { en: ['Not saved', 'Retry'], it: ['Non salvata', 'Riprova'] }],
+      [{ state: 'notSaved', device: true }, { en: ['Not saved — your text stays on this device', 'Retry'], it: ['Non salvata: il testo resta su questo dispositivo', 'Riprova'] }],
+    ]
+    for (const locale of ['it', 'en'] as const) {
+      for (const [kept, expected] of cases) {
+        const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, [COMPOSE_NS, 'ds-words']) }, createElement(RequestCompose, { model: model(locale, { kept }), actions: { onRetryKeep: () => undefined }, words: { day: (iso: string) => iso } })))
+        for (const text of expected[locale]) expect(html, `${kept.state} (${locale})`).toContain(text)
+        expect(html.match(KEY)?.[0] ?? null).toBeNull()
+        expect(scanText(html, BRAND_ALPHA)).toEqual([])
+      }
+      // Offline says so first: the text stays on this device (never a "saved" that was not).
+      const offline = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, [COMPOSE_NS, 'ds-words']) }, createElement(RequestCompose, { model: model(locale, { kept: { state: 'saved', at: '10:42' }, offline: true }), words: { day: (iso: string) => iso } })))
+      expect(offline).toContain(locale === 'en' ? 'You are offline: your text stays on this device.' : 'Siete offline: il testo resta su questo dispositivo.')
+      expect(offline).not.toContain(locale === 'en' ? 'Draft saved' : 'Bozza salvata')
+    }
+  })
+
+  describe('the saver', () => {
+    /** A clock the test moves by hand, and an API whose answers the test lets land one by one. */
+    function harness(options: { enabled?: () => boolean } = {}) {
+      const timers: Array<{ run: () => void; at: number; id: number } | null> = []
+      let now = 0
+      const calls: Array<{ kind: 'save'; body: ServerDraftBody } | { kind: 'discard' }> = []
+      const waiting: Array<{ resolve: (answer: { savedAt: string; version: number; replacedNewer: boolean }) => void; reject: (error: unknown) => void }> = []
+      const saved: Array<{ version: number; replacedNewer: boolean; typedSince: boolean }> = []
+      let failed = 0
+      let version = 1
+      const saver = draftSaver(
+        {
+          enabled: options.enabled ?? (() => true),
+          save: (body) => {
+            calls.push({ kind: 'save', body })
+            return new Promise((resolve, reject) => waiting.push({ resolve, reject }))
+          },
+          discard: async () => {
+            calls.push({ kind: 'discard' })
+          },
+          onSaved: (answer) => saved.push({ version: answer.version, replacedNewer: answer.replacedNewer, typedSince: answer.typedSince }),
+          onFailed: () => {
+            failed += 1
+          },
+          setTimer: (run, ms) => {
+            const id = timers.length
+            timers.push({ run, at: now + ms, id })
+            return id
+          },
+          clearTimer: (id) => {
+            timers[id as number] = null
+          },
+        },
+        2000,
+      )
+      const tick = (ms: number) => {
+        now += ms
+        for (const timer of [...timers]) {
+          if (timer && timer.at <= now) {
+            timers[timer.id] = null
+            timer.run()
+          }
+        }
+      }
+      const land = async (replacedNewer = false) => {
+        version += 1
+        waiting.shift()!.resolve({ savedAt: '2026-11-17T09:42:00.000Z', version, replacedNewer })
+        await Promise.resolve()
+        await Promise.resolve()
+      }
+      const refuse = async () => {
+        waiting.shift()!.reject(new Error('no answer'))
+        await Promise.resolve()
+        await Promise.resolve()
+      }
+      return { saver, calls, saved, tick, land, refuse, failed: () => failed, flying: () => waiting.length }
+    }
+
+    it('saves after a pause with the version read, then with the version answered; the newest-wins answer is passed on', async () => {
+      const h = harness()
+      h.saver.known(1)
+      h.saver.typed(typed({ message: 'R' }))
+      h.tick(1000)
+      h.saver.typed(typed({ message: 'Rain' }))
+      h.tick(1999)
+      expect(h.calls).toEqual([])
+      h.tick(1)
+      expect(h.calls).toEqual([{ kind: 'save', body: serverDraftBody(typed({ message: 'Rain' }), 1) }])
+      await h.land(true)
+      expect(h.saved).toEqual([{ version: 2, replacedNewer: true, typedSince: false }])
+      h.saver.typed(typed({ message: 'Rain jackets' }))
+      h.tick(2000)
+      expect(h.calls[1]).toEqual({ kind: 'save', body: serverDraftBody(typed({ message: 'Rain jackets' }), 2) })
+    })
+
+    it('emptied by the person: the server’s copy is removed, not saved empty', async () => {
+      const h = harness()
+      h.saver.known(5)
+      h.saver.typed(EMPTY_COMPOSE)
+      h.tick(2000)
+      expect(h.calls).toEqual([{ kind: 'discard' }])
+      // Nothing on the server: nothing to remove.
+      const fresh = harness()
+      fresh.saver.typed(EMPTY_COMPOSE)
+      fresh.tick(2000)
+      expect(fresh.calls).toEqual([])
+    })
+
+    it('a save on its way when the request is sent never brings the words back: it is taken back once it lands', async () => {
+      const h = harness()
+      h.saver.typed(typed())
+      h.tick(2000)
+      expect(h.flying()).toBe(1)
+      h.saver.sending()
+      h.saver.sent()
+      await h.land()
+      expect(h.saved).toEqual([])
+      expect(h.calls.map((call) => call.kind)).toEqual(['save', 'discard'])
+    })
+
+    it('a save that was on its way when the send started and landed before it went is taken back too', async () => {
+      const h = harness()
+      h.saver.typed(typed())
+      h.tick(2000)
+      h.saver.sending()
+      await h.land()
+      h.saver.sent()
+      expect(h.calls.map((call) => call.kind)).toEqual(['save', 'discard'])
+    })
+
+    it('nothing saves while the request goes; a failed send lets the words be saved again; a send with nothing on its way removes nothing', async () => {
+      const h = harness()
+      h.saver.typed(typed())
+      h.saver.sending()
+      h.tick(5000)
+      expect(h.calls).toEqual([])
+      h.saver.typed(typed({ message: 'Changed while sending' }))
+      h.tick(5000)
+      expect(h.calls).toEqual([])
+      h.saver.sendFailed()
+      h.tick(2000)
+      expect(h.calls).toEqual([{ kind: 'save', body: serverDraftBody(typed({ message: 'Changed while sending' }), null) }])
+      await h.land()
+      h.saver.sending()
+      h.saver.sent()
+      // The send cleared it on the server itself: no DELETE, and the next draft starts without a version.
+      expect(h.calls.map((call) => call.kind)).toEqual(['save'])
+      h.saver.typed(typed({ message: 'A new one' }))
+      h.tick(2000)
+      expect(h.calls[1]).toEqual({ kind: 'save', body: serverDraftBody(typed({ message: 'A new one' }), null) })
+    })
+
+    it('Discard draft removes the server’s copy; a save on its way is taken back after it lands', async () => {
+      const h = harness()
+      h.saver.typed(typed())
+      h.tick(2000)
+      h.saver.discarded()
+      await h.land()
+      expect(h.saved).toEqual([])
+      expect(h.calls.map((call) => call.kind)).toEqual(['save', 'discard', 'discard'])
+    })
+
+    it('offline or a preview saves nothing; back online it saves what waited; a failed save waits for Retry', async () => {
+      let online = false
+      const h = harness({ enabled: () => online })
+      h.saver.typed(typed())
+      h.tick(2000)
+      expect(h.calls).toEqual([])
+      online = true
+      h.saver.flush()
+      expect(h.calls).toHaveLength(1)
+      await h.refuse()
+      expect(h.failed()).toBe(1)
+      h.saver.flush()
+      expect(h.calls).toHaveLength(2)
+      expect(h.calls[1]).toEqual(h.calls[0])
+    })
+
+    it('typed again while a save was on its way: that one goes next', async () => {
+      const h = harness()
+      h.saver.typed(typed({ message: 'One' }))
+      h.tick(2000)
+      h.saver.typed(typed({ message: 'One two' }))
+      await h.land()
+      expect(h.saved[0]?.typedSince).toBe(true)
+      h.tick(2000)
+      expect(h.calls[1]).toEqual({ kind: 'save', body: serverDraftBody(typed({ message: 'One two' }), 2) })
+    })
+  })
+})
+// ---- end B-TH-287

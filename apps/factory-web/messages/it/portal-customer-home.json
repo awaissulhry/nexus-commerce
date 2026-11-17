@@ -298,6 +298,7 @@
     "askHint": "Una domanda per noi che non riguarda un ordine.",
     "draft": "Bozza: {subject}",
     "draftKept": "tenuta su questo dispositivo · {time}",
+    "draftSaved": "salvata alle {time}",
     "continue": "Continua",
     "noRight": "Solo i buyer della tua azienda inviano ordini.",
     "noRightAsk": "Il tuo amministratore può darti il permesso: {names}.",

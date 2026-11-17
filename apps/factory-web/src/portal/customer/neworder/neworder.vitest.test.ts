@@ -25,6 +25,9 @@ import { announceFile, attachFiles, completeFile } from '../requests/api'
 import { filesOutcome, holdFiles, retryCarry, stateAfterUpload, takesSheetTick, toAttach, toUpload } from '../../../lib/request-compose/files'
 import { requestView } from '../requests/design-data'
 import { requestBandOf } from './band'
+// B-TH-287: the New order draft on the server.
+import { discardNewRequestDraft, fetchNewRequestDraft, saveNewRequestDraft } from './api'
+import { serverDraftBody } from '../../../lib/request-compose/server-draft'
 import { CATALOGUE_DOOR_OPEN, closedRefusal, failedKey, goesToOf, openItems, opensCatalogueDoor, receiptOf, reorderText, shipToChoices, stylesText, withCarried } from './request-model'
 // B-TH-304: the catalogue door open again.
 import { catalogueDoorOf, catalogueStartHref } from './request-model'
@@ -560,3 +563,45 @@ describe('B-TH-282 — New order takes files: held until Send, then onto the req
   })
 })
 // ---- end B-TH-282
+
+// ---- B-TH-287 (threads plan TH-9, N6; P-CUS-NEW.message-F02; wall W08, W37): the New order draft on the server -----------------------
+describe('B-TH-287 — the New order draft saves itself on the server', () => {
+  it('reads, saves and discards the person’s ONE New order draft; the body names no person, party or company', async () => {
+    const calls: { method: string; path: string; body?: unknown; key?: string }[] = []
+    const draft = { recordType: null, recordId: null, audience: null, body: BRAND_BETA.message, fields: { subject: 'Rain jackets' }, attachments: [], savedAt: '2026-11-17T09:42:00.000Z', version: 2 }
+    const api = {
+      get: async (path: string) => {
+        calls.push({ method: 'GET', path })
+        return { draft }
+      },
+      request: async (method: string, path: string, options: { body?: unknown; idempotencyKey?: string }) => {
+        calls.push({ method, path, body: options.body, key: options.idempotencyKey })
+        return method === 'PUT' ? { draft, replacedNewer: false } : { draft: null }
+      },
+    } as unknown as ApiClient
+    expect(await fetchNewRequestDraft(api)).toEqual(draft)
+    await saveNewRequestDraft(api, serverDraftBody({ ...EMPTY_COMPOSE, subject: 'Rain jackets', message: BRAND_BETA.message }, 2), 'key-1')
+    await discardNewRequestDraft(api, 'key-2')
+    expect(calls.map((call) => `${call.method} ${call.path}`)).toEqual(['GET /portal/drafts/new-request', 'PUT /portal/drafts/new-request', 'DELETE /portal/drafts/new-request'])
+    expect(calls[1]!.key).toBe('key-1')
+    expect(JSON.stringify(calls[1]!.body)).not.toMatch(/partyId|userId|companyId|BRAND-ALPHA|Brand Alpha/)
+    expect(calls[1]!.body).toMatchObject({ audience: null, body: BRAND_BETA.message, version: 2 })
+  })
+
+  it('the compose says where the draft is: saved on the server, a newer one replaced, not saved · Retry — in Italian and English', () => {
+    for (const locale of ['it', 'en'] as const) {
+      for (const id of ['th9-287-saved', 'th9-287-replaced', 'th9-287-not-saved']) {
+        const html = renderCase(locale, id)
+        expect(html.match(KEY)?.[0] ?? null, `${id} (${locale})`).toBeNull()
+        expect(scanText(html, BRAND_ALPHA), `${id} (${locale})`).toEqual([])
+      }
+    }
+    expect(renderCase('en', 'th9-287-saved')).toMatch(/Draft saved \d{2}:\d{2}/)
+    expect(renderCase('it', 'th9-287-saved')).toMatch(/Bozza salvata alle \d{2}[.:]\d{2}/)
+    expect(renderCase('en', 'th9-287-replaced')).toContain('A newer draft from another tab or computer was replaced.')
+    const notSaved = renderCase('en', 'th9-287-not-saved')
+    expect(notSaved).toContain('Not saved — your text stays on this device')
+    expect(notSaved).not.toContain('Draft saved')
+  })
+})
+// ---- end B-TH-287
