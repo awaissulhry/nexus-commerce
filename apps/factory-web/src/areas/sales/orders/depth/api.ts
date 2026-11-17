@@ -176,6 +176,8 @@ export interface SendConfirmationBody {
   subject?: string | null
   message?: string | null
   language?: 'it' | 'en'
+  /** B-TH-004 (TH-0 follow-up): the person's recorded "Send outside this customer" tick, only when ticked. */
+  sendOutside?: boolean
 }
 
 export function sendConfirmation(api: ApiClient, orderId: string, body: SendConfirmationBody, idempotencyKey: string): Promise<{ version: number; made: boolean; confirmation: Confirmation }> {
