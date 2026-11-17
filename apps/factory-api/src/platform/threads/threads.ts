@@ -623,6 +623,12 @@ export async function setThreadStatus(
   if (!thread || !scope || !mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('This record has no thread.')
   if (!mayOnThread(actor, THREADS_MANAGE, record.type, scope)) throw new ForbiddenError()
   // ---- end B-PR-08a
+  // ---- B-TH-066 (PROJ.record-F04): a CLOSED project's thread opens only with the project (Reopen on the project: one command).
+  if (record.type === 'Project' && input.status === 'OPEN') {
+    const project = await caller.withClient((client) => client.project.findUnique({ where: { id: record.id }, select: { status: true } }))
+    if (project?.status === 'CLOSED') throw new ConflictError('This project is closed: reopen the project, and its conversation opens with it.')
+  }
+  // ---- end B-TH-066
   const { result } = await command(
     caller,
     {

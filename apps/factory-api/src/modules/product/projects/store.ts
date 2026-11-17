@@ -6,7 +6,7 @@ import { can, scopeWhere, type Actor, type ScopedRecord } from '@nexus/factory-d
 import { PROJECTS_MANAGE } from '@nexus/factory-domain/projects/permissions'
 import { PROJECT_REFUSALS, type ProjectRefusalCode, type ProjectStatus } from '@nexus/factory-domain/projects/rules'
 import type { CommandCaller, CommandTx } from '../../../core/command'
-import { actorOf, type OfficeContext } from '../../../core/context'
+import { actorOf, type OfficeContext, type RequestContext } from '../../../core/context'
 import { mayOnThread } from '../../../platform/threads/records'
 
 /**
@@ -47,6 +47,12 @@ export function officeOf(caller: Pick<CommandCaller, 'factoryContext'>): OfficeC
   const context = caller.factoryContext
   if (!context || context.audience !== 'office') throw new ForbiddenError()
   return context
+}
+
+/** The tenant of a command's context (a project's commands run as the office or the system, never the platform). */
+export function tenantOf(context: RequestContext): string {
+  if (context.audience === 'platform') throw new ForbiddenError()
+  return context.tenantId
 }
 
 /** A project's scope: its company and its outside company (no site). */

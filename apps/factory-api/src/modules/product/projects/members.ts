@@ -7,7 +7,7 @@ import { command, type CommandCaller, type CommandTools } from '../../../core/co
 import { followInCommand, personReads } from '../../../platform/threads/followers'
 import { partyReaders } from '../../../platform/portal/tasks/people'
 import { addColleagueInCommand } from './projects'
-import { assertOpen, badBody, databaseRefusal, mayManage, mayPost, projectOr404, readableProject, refuse, scopeOf, type ProjectRow, type Reader } from './store'
+import { assertOpen, badBody, databaseRefusal, mayManage, mayPost, projectOr404, readableProject, refuse, scopeOf, tenantOf, type ProjectRow, type Reader } from './store'
 
 /**
  * Project people (threads plan TH-5, B-TH-068; PROJ-G04, PROJ-G05, PROJ-G06; design PROJ.members). A project's people are its
@@ -118,7 +118,7 @@ async function addOutsideInCommand(tools: CommandTools, row: ProjectRow, userId:
   const person = await tools.tx.user.findFirst({ where: { id: userId, audience: 'PARTNER', status: 'ACTIVE' }, select: { id: true, partyId: true } })
   // Neutral: a person of another company is "not one of this company's portal people", never who they are.
   if (!person || person.partyId !== row.partyId) refuse('MEMBER_OTHER_PARTY', 'body/userId')
-  const readers = await partyReaders(tools.tx, tools.context.tenantId, row.partyId, row.companyId, tools.now)
+  const readers = await partyReaders(tools.tx, tenantOf(tools.context), row.partyId, row.companyId, tools.now)
   if (!readers.some((reader) => reader.personId === userId)) refuse('MEMBER_OTHER_PARTY', 'body/userId')
   const added = await followInCommand(tools, recordOf(row), userId, 'ADDED', byId, row.partyId)
   if (added) tools.emit({ type: 'project.person_added', subject: row.id, companyId: row.companyId, payload: { projectId: row.id, number: row.number, partyId: row.partyId, userId, outside: true, byId } })

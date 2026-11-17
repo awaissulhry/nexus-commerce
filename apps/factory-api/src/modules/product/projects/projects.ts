@@ -12,7 +12,7 @@ import { allocateNumber } from '../../../platform/numbering/allocate'
 import { followInCommand, personReads } from '../../../platform/threads/followers'
 import { ensureThread, writeMessage } from '../../../platform/threads/threads'
 import { linkInCommand, type LinkAsk } from './links'
-import { asDay, assertOpen, badBody, databaseRefusal, managedProject, mayRead, officeOf, PROJECT_COLUMNS, projectOr404, readableProject, readableWhere, refuse, scopeOf, type ProjectRow, type Reader } from './store'
+import { asDay, assertOpen, badBody, databaseRefusal, managedProject, mayRead, officeOf, PROJECT_COLUMNS, projectOr404, readableProject, readableWhere, refuse, scopeOf, tenantOf, type ProjectRow, type Reader } from './store'
 import { projectViewsOf, type ProjectView } from './views'
 
 /**
@@ -70,13 +70,13 @@ async function checkedSeason(db: Reader, companyId: string, code: string | null 
 /** A lead: an active office person who may read the project (by their live roles). */
 async function checkedLead(tools: Pick<CommandTools, 'tx' | 'context' | 'now'>, leadId: string, scope: ReturnType<typeof scopeOf>): Promise<void> {
   const lead = await tools.tx.user.findFirst({ where: { id: leadId, status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
-  if (!lead || !(await personReads(tools.tx, tools.context.tenantId, lead.id, scope, tools.now, 'Project'))) refuse('LEAD', 'body/leadId')
+  if (!lead || !(await personReads(tools.tx, tenantOf(tools.context), lead.id, scope, tools.now, 'Project'))) refuse('LEAD', 'body/leadId')
 }
 
 /** The project's office colleague, added by `byId` (ADDED: told; CHOSE when they add themselves). True when a row was added. */
 export async function addColleagueInCommand(tools: CommandTools, row: Pick<ProjectRow, 'id' | 'companyId' | 'partyId' | 'number'>, userId: string, byId: string): Promise<boolean> {
   const user = await tools.tx.user.findFirst({ where: { id: userId, status: 'ACTIVE', audience: 'OFFICE' }, select: { id: true } })
-  if (!user || !(await personReads(tools.tx, tools.context.tenantId, user.id, scopeOf(row), tools.now, 'Project'))) refuse('MEMBER_NOT_READER', 'body/userId')
+  if (!user || !(await personReads(tools.tx, tenantOf(tools.context), user.id, scopeOf(row), tools.now, 'Project'))) refuse('MEMBER_NOT_READER', 'body/userId')
   const reason = userId === byId ? 'CHOSE' : 'ADDED'
   const added = await followInCommand(tools, { type: 'Project', id: row.id, companyId: row.companyId, siteId: null }, userId, reason, byId)
   if (added && reason === 'ADDED') {
@@ -98,12 +98,10 @@ export interface CreateProjectBody {
   readonly links?: readonly LinkAsk[] | undefined
 }
 
-/** The parts of a create other steps reuse ("Start a project" from a request: B-TH-071). */
+/** What another step adds to a create ("Start a project" from a request: B-TH-071). */
 export interface CreateExtras {
   /** The record it was started from (its event names it). */
   readonly from?: { readonly type: string; readonly id: string }
-  /** More work inside the same command, once the project row exists. */
-  readonly after?: (tools: CommandTools, row: ProjectRow) => Promise<void>
 }
 
 /** POST /projects */
@@ -139,7 +137,6 @@ export async function createProject(caller: CommandCaller, body: CreateProjectBo
     if (leadId !== context.actorId) await addColleagueInCommand(tools, row, leadId, context.actorId)
     for (const userId of colleagues) await addColleagueInCommand(tools, row, userId, context.actorId)
     for (const [index, ask] of (body.links ?? []).entries()) await linkInCommand(tools, actor, row, ask, `body/links/${index}`)
-    if (extras.after) await extras.after(tools, row)
     tools.emit({ type: 'project.created', subject: id, companyId: body.companyId, payload: { projectId: id, number, partyId, fromRecordType: extras.from?.type ?? null, fromRecordId: extras.from?.id ?? null } })
     return { id }
   }).catch(databaseRefusal)
