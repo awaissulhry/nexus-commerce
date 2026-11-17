@@ -94,7 +94,7 @@
   },
   "held": {
     "busy": "Creazione della richiesta…",
-    "unnumbered": "Le richieste non sono ancora numerate in questa azienda: Admin › Numerazione",
+    "unnumbered": "Le richieste non sono ancora numerate in questa azienda: Sistema › Documenti e numerazioni",
     "customer": "Scegli il cliente, o registra un potenziale cliente",
     "basis": "Scegli la base giuridica per i dati del potenziale cliente",
     "message": "Scrivi prima cosa hanno chiesto",
