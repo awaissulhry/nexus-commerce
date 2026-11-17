@@ -54,7 +54,7 @@ export const HEALTH_REASON_WORDS: Readonly<Record<HealthReasonCode, Words>> = Ob
 
 /** Who acts next, as the customer reads it: only you or us. */
 export const BRAND_WAITING_WORDS: Readonly<Record<BrandSide, Words>> = Object.freeze({
-  YOU: { it: 'Tocca a te', en: 'Waiting on you' },
+  YOU: { it: 'Tocca a voi', en: 'Waiting on you' },
   US: { it: 'Tocca a noi', en: 'Waiting on us' },
 })
 
@@ -85,7 +85,7 @@ export const ASK_KIND_WORDS: Readonly<Record<ProductionRequestKind, Words>> = Ob
 
 /** A closed ask refused to a customer: neutral, it never says why another customer may and it may not. */
 export const ASK_NOT_OPEN_WORDS: Words = Object.freeze({
-  it: "Questa richiesta non è disponibile per i tuoi ordini. Scrivici nella conversazione dell'ordine.",
+  it: "Questa richiesta non è disponibile per i vostri ordini. Scriveteci nella conversazione dell'ordine.",
   en: "This ask is not open for your orders. Write to us in the order's thread.",
 })
 
@@ -124,15 +124,15 @@ export const ASK_US_WORDS: Words = Object.freeze({ it: 'Chiedilo a noi', en: 'As
 
 /** Why a mark becomes an ask: cutting has started (read live), or the quota is used. */
 export function askUsWords(reason: AskReason, max: number): Words {
-  if (reason === 'CUT') return { it: 'Il taglio di questo ordine è iniziato: chiedilo a noi.', en: 'Cutting has started on this order: ask us to make it urgent.' }
-  if (max <= 0) return { it: 'Per i tuoi ordini le urgenze si chiedono a noi.', en: 'Urgent marks on your orders are asked of us: ask us to make it urgent.' }
+  if (reason === 'CUT') return { it: 'Il taglio di questo ordine è iniziato: chiedetelo a noi.', en: 'Cutting has started on this order: ask us to make it urgent.' }
+  if (max <= 0) return { it: 'Per i vostri ordini le urgenze si chiedono a noi.', en: 'Urgent marks on your orders are asked of us: ask us to make it urgent.' }
   return max === 1
-    ? { it: 'Hai già usato la tua urgenza: chiedilo a noi.', en: 'You have used your 1 urgent mark: ask us to make it urgent.' }
-    : { it: `Hai già usato le tue ${max} urgenze: chiedilo a noi.`, en: `You have used your ${max} urgent marks: ask us to make it urgent.` }
+    ? { it: 'Avete già usato la vostra urgenza: chiedetelo a noi.', en: 'You have used your 1 urgent mark: ask us to make it urgent.' }
+    : { it: `Avete già usato le vostre ${max} urgenze: chiedetelo a noi.`, en: `You have used your ${max} urgent marks: ask us to make it urgent.` }
 }
 
 /** The customer's urgency switch is off (neutral: never why another customer may). */
-export const URGENCY_NOT_OPEN_WORDS: Words = Object.freeze({ it: 'Le urgenze non sono attive per i tuoi ordini.', en: 'Urgent marks are not open for your orders.' })
+export const URGENCY_NOT_OPEN_WORDS: Words = Object.freeze({ it: 'Le urgenze non sono attive per i vostri ordini.', en: 'Urgent marks are not open for your orders.' })
 
 /** The order left My production (shipped in full, cancelled, closed). */
 export const NOT_IN_PRODUCTION_WORDS: Words = Object.freeze({ it: 'Questo ordine non è più in produzione.', en: 'This order is no longer in production.' })
@@ -213,23 +213,23 @@ export const ORDER_NOT_FOUND_WORDS: Words = Object.freeze({ it: 'Ordine non trov
 
 /** Its order went into production a moment ago: our keeper has not written its production state yet. */
 export const NOT_KEPT_YET_WORDS: Words = Object.freeze({
-  it: 'Questo ordine è appena entrato in produzione: riprova tra un momento.',
+  it: 'Questo ordine è appena entrato in produzione: riprovate tra un momento.',
   en: 'This order has just gone into production: try again in a moment.',
 })
 
 /** Its Urgent list changed after it read it (a mark, a set-back) at this time of day (hh:mm, company time). */
 export function changedAtWords(time: string): Words {
-  return { it: `Cambiato alle ${time}: rileggi l'elenco.`, en: `Changed at ${time}: read the list again.` }
+  return { it: `Cambiato alle ${time}: rileggete l'elenco.`, en: `Changed at ${time}: read the list again.` }
 }
 
 /** We changed its Urgent list after it read it, at this time of day (hh:mm, company time; never who: R-41; F-PR-11). */
 export function changedByUsAtWords(time: string): Words {
-  return { it: `Modificato da noi alle ${time}: rileggi l'elenco.`, en: `Changed by us at ${time}: read the list again.` }
+  return { it: `Modificato da noi alle ${time}: rileggete l'elenco.`, en: `Changed by us at ${time}: read the list again.` }
 }
 
 /** The Urgent list sent is the one it has. */
 export const URGENT_ORDER_UNCHANGED_WORDS: Words = Object.freeze({
-  it: "Niente da cambiare: i tuoi ordini urgenti sono già in quest'ordine.",
+  it: "Niente da cambiare: i vostri ordini urgenti sono già in quest'ordine.",
   en: 'Nothing to change: your urgent orders are in this order already.',
 })
 

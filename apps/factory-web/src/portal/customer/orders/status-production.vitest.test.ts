@@ -39,10 +39,10 @@ function production(over: Partial<ProductionOrder> = {}): ProductionOrder {
     inProduction: true,
     stage: { code: 'SEWING', words: w('Sewing', 'Confezione'), since: dayAt(-3), next: { code: 'QUALITY', words: w('Quality check', 'Controllo qualità') }, ahead: 1, aheadWords: w('1 line ahead', '1 riga avanti'), sewingNotCounted: false, sewingNotCountedWords: null },
     health: { code: 'AT_RISK', words: w('At risk', 'A rischio'), reason: { code: 'MATERIAL_LATE', words: w('Material delivery late', 'Consegna dei materiali in ritardo') } },
-    waiting: { code: 'YOU', words: w('Waiting on you', 'Tocca a te'), since: dayAt(-2) },
+    waiting: { code: 'YOU', words: w('Waiting on you', 'Tocca a voi'), since: dayAt(-2) },
     marks: { onHold: true, paused: true, partlyShipped: false, changePending: false, words: [] },
     holds: [
-      { kind: 'BRAND', since: dayAt(-1), words: w('Paused at your request', 'In pausa su tua richiesta') },
+      { kind: 'BRAND', since: dayAt(-1), words: w('Paused at your request', 'In pausa su vostra richiesta') },
       { kind: 'PRODUCTION', since: dayAt(-4), words: w('Material on its way', 'Materiale in arrivo') },
     ],
     urgency: null,
@@ -127,7 +127,7 @@ describe('the order’s production on Status & progress, part 1 (every level)', 
     // In Italian, the same facts in Italian words.
     const it = textOf(draw({}, 'it'))
     expect(it).toContain('Confezione · 32 di 40 cuciti · 1 riga avanti')
-    expect(it).toContain('Su questo ordine aspettiamo una tua risposta')
+    expect(it).toContain('Su questo ordine aspettiamo una vostra risposta')
   })
 
   it('a section not shared is not drawn: no production section when hidden (not in production, not its order, no access)', () => {
@@ -166,7 +166,7 @@ describe('the rules behind it (production/model, F-PR-12a block)', () => {
 
   it('holds keep only our curated words; Waiting for you once built, else Home', () => {
     expect(holdsOf(production().holds, 'it').map((hold) => [hold.kind, hold.customerWords])).toEqual([
-      ['BRAND', 'In pausa su tua richiesta'],
+      ['BRAND', 'In pausa su vostra richiesta'],
       ['PRODUCTION', 'Materiale in arrivo'],
     ])
     expect(waitingHrefOf(PREFIX)).toBe(`${PREFIX}/`)

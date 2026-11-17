@@ -92,7 +92,7 @@ function list(over: Partial<ProductionList> = {}): ProductionList {
     chips: [
       { chip: 'ALL', count: 4, words: { it: 'Tutti', en: 'All in production' } },
       { chip: 'URGENT', count: 2, words: { it: 'Urgenti', en: 'Urgent' } },
-      { chip: 'WAITING_ON_YOU', count: 0, words: { it: 'Tocca a te', en: 'Waiting on you' } },
+      { chip: 'WAITING_ON_YOU', count: 0, words: { it: 'Tocca a voi', en: 'Waiting on you' } },
     ],
     count: items.length,
     items,
@@ -167,7 +167,7 @@ describe('Mark urgent / Mark regular (L18: at once inside the quota and before C
     const locked = urgency({ locked: true, lockWords: { it: 'Riportato a normale da noi: x', en: 'Set to Regular by us: material not in' } })
     expect(markActionOf(row('b5', { urgency: locked }), FACTS, 'en', en)).toEqual({ urgency: 'URGENT', held: 'Set to Regular by us: material not in' })
     expect(markActionOf(row('b2', { urgency: URGENT(1) }), { ...FACTS, preview: true }, 'en', en)?.held).toBe('A preview reads only.')
-    expect(markActionOf(row('b2', { urgency: URGENT(1) }), { ...FACTS, offline: true }, 'it', t('it'))?.held).toBe('Nessuna connessione: riprova quando torni online.')
+    expect(markActionOf(row('b2', { urgency: URGENT(1) }), { ...FACTS, offline: true }, 'it', t('it'))?.held).toBe('Nessuna connessione: riprovate quando tornate online.')
   })
 
   it('urgency off for this customer, a role that reads, no urgency read: no mark is drawn at all', () => {
@@ -178,7 +178,7 @@ describe('Mark urgent / Mark regular (L18: at once inside the quota and before C
 
   it('the refusals in the person’s words (409 at body/orderIds/<i>/<OUTCOME>; 404 an order not its own: read again)', () => {
     expect(markRefusal(conflict('body/orderIds/0/ASK_CUT'), en)).toEqual({ words: 'Cutting has started on this order.', reread: true })
-    expect(markRefusal(conflict('body/orderIds/0/ASK_OVER_QUOTA'), t('it')).words).toBe('Hai usato tutte le tue urgenze. Riporta prima un ordine a normale.')
+    expect(markRefusal(conflict('body/orderIds/0/ASK_OVER_QUOTA'), t('it')).words).toBe('Avete usato tutte le vostre urgenze. Riportate prima un ordine a normale.')
     expect(markRefusal(conflict('body/orderIds/0/LOCKED'), en).words).toBe('We set this order to Regular: it stays Regular for now.')
     expect(markRefusal(conflict('body/orderIds', 'not_found'), en)).toEqual({ words: 'This order is not one of your orders in production.', reread: true })
     expect(markRefusal(new Error('boom'), en)).toEqual({ words: 'Could not save. Try again in a moment.', reread: false })

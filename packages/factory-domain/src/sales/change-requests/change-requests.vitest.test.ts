@@ -243,7 +243,7 @@ describe('B-PR-23: every kind of request on an order, and a countered one', () =
   it('a countered request waits for the customer, in words that name no amount and no person', () => {
     expect(REQUEST_STATUSES).toContain('COUNTERED')
     for (const status of REQUEST_STATUSES) expect(REQUEST_STATUS_WORDS[status].en.trim(), status).not.toBe('')
-    expect(REQUEST_STATUS_WORDS.COUNTERED).toEqual({ it: 'Controproposta: in attesa della tua risposta', en: 'Our counter-offer: waiting for your answer' })
+    expect(REQUEST_STATUS_WORDS.COUNTERED).toEqual({ it: 'Controproposta: in attesa della vostra risposta', en: 'Our counter-offer: waiting for your answer' })
     expect(WAITING_REQUEST_STATUSES).toEqual(['OPEN', 'COUNTERED'])
     expect(REQUEST_STATUSES.filter((status) => isWaitingRequest(status))).toEqual(['OPEN', 'COUNTERED'])
   })
@@ -417,15 +417,15 @@ describe('B-PR-24: the impact before Send — what is frozen, priced or not, the
     expect(impactOf({ kind: 'CANCEL' }, facts({ cancelFeePct: '15' })).priced).toBe(true)
     expect(impactOf({ kind: 'CANCEL' }, facts({ cancelFeePct: '0' })).priced).toBe(false)
     expect(impactOf({ kind: 'CANCEL' }, facts()).priced).toBe(false)
-    expect(impactOf({ kind: 'HOLD' }, facts())).toMatchObject({ frozen: [], priced: false, notes: [{ it: 'Una pausa può spostare la tua data', en: 'A pause may move your date' }], words: { en: 'Nothing you ask is frozen' } })
+    expect(impactOf({ kind: 'HOLD' }, facts())).toMatchObject({ frozen: [], priced: false, notes: [{ it: 'Una pausa può spostare la vostra data', en: 'A pause may move your date' }], words: { en: 'Nothing you ask is frozen' } })
     for (const impact of [change, rush]) expect(impactKeepable(impact)).toBe(true)
   })
 
   it('says the earliest date as an estimate: "From about 12 Dec — we confirm it", later than asked, partial, or none yet', () => {
-    expect(earliestWords(dateOnly([{ date: '2026-12-12', complete: true, meetsWanted: null }]))).toEqual({ it: 'Dal 12 dic circa — te lo confermiamo noi', en: 'From about 12 Dec — we confirm it' })
+    expect(earliestWords(dateOnly([{ date: '2026-12-12', complete: true, meetsWanted: null }]))).toEqual({ it: 'Dal 12 dic circa — ve lo confermiamo noi', en: 'From about 12 Dec — we confirm it' })
     expect(earliestWords(dateOnly([{ date: '2026-12-12', complete: false, meetsWanted: false }])).en).toBe('From about 12 Dec, later than the date you asked — we confirm it (some lines are not dated yet)')
     expect(earliestWords(dateOnly([])).en).toBe('We give you a date once we have planned it')
-    expect(impactOf({ kind: 'SAMPLE_ROUND' }, facts({ earliest: dateOnly([{ date: '2026-12-12', complete: true, meetsWanted: true }]) })).earliest).toEqual({ date: '2026-12-12', partial: false, meetsWanted: true, words: { it: 'Dal 12 dic circa — te lo confermiamo noi', en: 'From about 12 Dec — we confirm it' } })
+    expect(impactOf({ kind: 'SAMPLE_ROUND' }, facts({ earliest: dateOnly([{ date: '2026-12-12', complete: true, meetsWanted: true }]) })).earliest).toEqual({ date: '2026-12-12', partial: false, meetsWanted: true, words: { it: 'Dal 12 dic circa — ve lo confermiamo noi', en: 'From about 12 Dec — we confirm it' } })
   })
 
   it('wall (pure, PW-P06): impact words never carry a load, a line, another order or another brand; no number, no rule id', () => {
@@ -504,7 +504,7 @@ describe('B-PR-24: our counter-offer — a date, a price or words; answered by t
   it('R-09: the question never names the amount; a reader without the price grain sees only that a price applies, and its buyer answers', () => {
     const question = counterQuestion('RUSH', COUNTER, 'en')
     expect(question).toBe('Our counter-offer to your request “Urgent – asked”. The date we offer: 10 Dec. A price applies: your buyer sees it. Only lines 10 and 20.')
-    expect(counterQuestion('RUSH', COUNTER, 'it')).toBe('La nostra controproposta alla tua richiesta «Urgente – richiesto». La data che proponiamo: 10 dic. È previsto un costo: lo vede il tuo buyer. Only lines 10 and 20.')
+    expect(counterQuestion('RUSH', COUNTER, 'it')).toBe('La nostra controproposta alla vostra richiesta «Urgente – richiesto». La data che proponiamo: 10 dic. È previsto un costo: lo vede il vostro buyer. Only lines 10 and 20.')
     for (const text of [question, counterQuestion('RUSH', COUNTER, 'it'), counteredWords(COUNTER).en, counteredWords(COUNTER).it]) expect(text).not.toMatch(/2500|25[.,]00|€/)
     expect(counterQuestion('HOLD', { date: null, fee: 0, note: null }, 'en')).toBe('Our counter-offer to your request “Pause request”.')
     expect(counterPriced(COUNTER)).toBe(true)
@@ -515,7 +515,7 @@ describe('B-PR-24: our counter-offer — a date, a price or words; answered by t
     expect(counterAnswerHeld({ priced: true, maySeePrices: false, mayAnswer: true })).toBe('A price may apply: your buyer answers this counter-offer.')
     expect(counterAnswerHeld({ priced: true, maySeePrices: true, mayAnswer: true })).toBeNull()
     expect(counterAnswerHeld({ priced: false, maySeePrices: false, mayAnswer: true })).toBeNull()
-    expect(counterAnswerHeld({ priced: false, maySeePrices: true, mayAnswer: false }, 'it')).toMatch(/^Puoi leggere questa controproposta/)
+    expect(counterAnswerHeld({ priced: false, maySeePrices: true, mayAnswer: false }, 'it')).toMatch(/^Potete leggere questa controproposta/)
     expect(counteredWords(COUNTER).en).toBe('Our counter-offer · 10 Dec · a price applies')
   })
 

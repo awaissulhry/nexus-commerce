@@ -607,9 +607,9 @@
   },
   "production": {
     "label": "Produzione di questo ordine",
-    "waitingTitle": "Su questo ordine aspettiamo una tua risposta",
+    "waitingTitle": "Su questo ordine aspettiamo una vostra risposta",
     "waitingSince": "Dal {date}",
-    "waitingLink": "Vedi cosa ti aspetta",
+    "waitingLink": "Vedete cosa vi aspetta",
     "ask": "Fai una domanda",
     "health": "Andamento",
     "waitingOn": "Tocca a",

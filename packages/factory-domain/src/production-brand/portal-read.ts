@@ -54,7 +54,7 @@ export const BRAND_GATE_STATES = ['WAITING_YOU', 'WAITING_US', 'PASSED', 'STARTE
 export type BrandGateState = (typeof BRAND_GATE_STATES)[number]
 
 export const GATE_STATE_WORDS: Readonly<Record<BrandGateState, Words>> = Object.freeze({
-  WAITING_YOU: { it: 'Tocca a te', en: 'Waiting on you' },
+  WAITING_YOU: { it: 'Tocca a voi', en: 'Waiting on you' },
   WAITING_US: { it: 'Tocca a noi', en: 'Waiting on us' },
   PASSED: { it: 'Superata', en: 'Passed' },
   STARTED_BEFORE: { it: "Avviato prima dell'approvazione", en: 'Started before approval' },
@@ -101,7 +101,7 @@ export const APPROVAL_STATES = ['WAITING_YOU', 'APPROVED', 'APPROVED_WITH_COMMEN
 export type ApprovalState = (typeof APPROVAL_STATES)[number]
 
 export const APPROVAL_STATE_WORDS: Readonly<Record<ApprovalState, Words>> = Object.freeze({
-  WAITING_YOU: { it: 'Tocca a te', en: 'Waiting on you' },
+  WAITING_YOU: { it: 'Tocca a voi', en: 'Waiting on you' },
   APPROVED: { it: 'Approvato', en: 'Approved' },
   APPROVED_WITH_COMMENTS: { it: 'Approvato con commenti', en: 'Approved with comments' },
   REFUSED: { it: 'Rifiutato', en: 'Refused' },
@@ -287,7 +287,7 @@ export const BRAND_HOLD_READS = ['QUALITY', 'PRODUCTION', 'BRAND'] as const
 export type BrandHoldRead = (typeof BRAND_HOLD_READS)[number]
 
 /** Its own pause (an accepted HOLD ask): the words of the mark, never a reason of ours. */
-export const PAUSED_WORDS: Words = Object.freeze({ it: 'In pausa su tua richiesta', en: 'Paused at your request' })
+export const PAUSED_WORDS: Words = Object.freeze({ it: 'In pausa su vostra richiesta', en: 'Paused at your request' })
 export const ON_HOLD_WORDS: Words = Object.freeze({ it: 'In sospeso', en: 'On hold' })
 export const PARTLY_SHIPPED_WORDS: Words = Object.freeze({ it: 'Spedito in parte', en: 'Partly shipped' })
 export const CHANGE_PENDING_WORDS: Words = Object.freeze({ it: 'Modifica in attesa', en: 'Change pending' })

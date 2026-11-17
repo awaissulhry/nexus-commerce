@@ -103,7 +103,7 @@ const LIVE = { events: ['brand_production.stage_reached', 'brand_production.heal
 const CHIP_WORDS: Readonly<Record<ProductionChip, Words>> = Object.freeze({
   ALL: { it: 'Tutti in produzione', en: 'All in production' },
   URGENT: { it: 'Urgenti', en: 'Urgent' },
-  WAITING_ON_YOU: { it: 'Tocca a te', en: 'Waiting on you' },
+  WAITING_ON_YOU: { it: 'Tocca a voi', en: 'Waiting on you' },
   AT_RISK: { it: 'A rischio', en: 'At risk' },
   LATE: { it: 'In ritardo', en: 'Late' },
   ON_HOLD: { it: 'In sospeso', en: 'On hold' },

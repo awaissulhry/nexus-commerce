@@ -493,7 +493,7 @@ describe('B-PR-25: the asks its limits open, the impact before Send, kept at Sen
       ['SPLIT_SHIPMENT', false, 'NOT_OPEN'],
       ['SAMPLE_ROUND', false, 'NOT_OPEN'],
     ])
-    const words = { en: "This ask is not open for your orders. Write to us in the order's thread.", it: "Questa richiesta non è disponibile per i tuoi ordini. Scrivici nella conversazione dell'ordine." }
+    const words = { en: "This ask is not open for your orders. Write to us in the order's thread.", it: "Questa richiesta non è disponibile per i vostri ordini. Scriveteci nella conversazione dell'ordine." }
     expect(closed.asks[0].verdict.words).toEqual(words)
     const refused = await post(browsers.buyer, `/portal/sales-orders/${so3.id}/change-requests`, { kind: 'RUSH', note: 'Our season opens early.' })
     expect(refused.status, JSON.stringify(refused.body)).toBe(409)
@@ -602,7 +602,7 @@ describe('B-PR-25: the asks its limits open, the impact before Send, kept at Sen
     expect(buyerRead.body.cancelFee).toMatchObject({ pct: '15', currency: 'EUR', lines: [{ lineId: blk!.id, seq: 10, fee: expect.any(Number) }] })
     const productionRead = await post(production, `/portal/sales-orders/${so1.id}/change-requests/impact`, cancel)
     expect(productionRead.status, JSON.stringify(productionRead.body)).toBe(200)
-    expect(productionRead.body.impact).toMatchObject({ kind: 'CANCEL', priced: true, pricedWords: { en: 'A price may apply: we will tell you', it: 'Può essere previsto un costo: te lo diciamo noi' } })
+    expect(productionRead.body.impact).toMatchObject({ kind: 'CANCEL', priced: true, pricedWords: { en: 'A price may apply: we will tell you', it: 'Può essere previsto un costo: ve lo diciamo noi' } })
     expect('cancelFee' in productionRead.body).toBe(false)
     const productionRules = await ok(production, `/portal/sales-orders/${so1.id}/change-requests/rules`)
     expect('cancelFee' in productionRules).toBe(false)

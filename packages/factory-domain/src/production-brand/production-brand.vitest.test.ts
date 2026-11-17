@@ -648,9 +648,9 @@ describe('B-PR-22a the Urgent list put back and the portal command words', () =>
       expect(words.it.length).toBeGreaterThan(0)
       expect(words.en, words.en).not.toMatch(forbidden)
     }
-    expect(changedAtWords('10:42')).toEqual({ it: "Cambiato alle 10:42: rileggi l'elenco.", en: 'Changed at 10:42: read the list again.' })
+    expect(changedAtWords('10:42')).toEqual({ it: "Cambiato alle 10:42: rileggete l'elenco.", en: 'Changed at 10:42: read the list again.' })
     // F-PR-11: our change says when, never who ("Changed by us at 10:42").
-    expect(changedByUsAtWords('10:42')).toEqual({ it: "Modificato da noi alle 10:42: rileggi l'elenco.", en: 'Changed by us at 10:42: read the list again.' })
+    expect(changedByUsAtWords('10:42')).toEqual({ it: "Modificato da noi alle 10:42: rileggete l'elenco.", en: 'Changed by us at 10:42: read the list again.' })
   })
 })
 
