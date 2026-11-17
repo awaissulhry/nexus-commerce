@@ -19,7 +19,6 @@ import {
   finalStateOf,
   HOLD_STATE_WORDS,
   NO_REPORT_YET,
-  photoShown,
   QUALITY_NOT_SHARED,
   REPORT_NOT_FOUND,
   reportVersionOf,
@@ -27,15 +26,13 @@ import {
   workOrderAlone,
   type BrandDefectClass,
   type CellCount,
-  type PhotoSource,
 } from '@nexus/factory-domain/production-brand/quality-read'
 import { LEVEL_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers'
 import { listFiles, MissingFileError, readStoredFile, systemCallerOf } from '../../../platform/files/files'
-import { fileRecordScope } from '../../../platform/files/record-scope'
+import { contentWalledFor } from '../../../platform/files/content-wall' // fix-pr-2
 import { processFiles } from '../../../platform/files/service'
 import { reasonWords } from '../../../platform/reasons/service'
-import { wallPartyOf } from '../../../platform/threads/records'
 import { partnerOrder, portalReader, type PortalReader } from '../../sales/portal-orders/access'
 import { namesOf, readLines, type PortalLine } from '../../sales/portal-orders/store'
 import { GOODS_LINE_KINDS, isKeptState } from '../brand/facts'
@@ -293,26 +290,16 @@ async function readHolds(db: FactoryClient, work: OwnWork): Promise<HoldRead[]> 
 
 /**
  * The photos shared with it on its order (the partner read: files of the order shared with its party, row-level security first),
- * each drawn only when it is no copy, or a copy whose source is its own record or one of no customer (the source read in the
- * tenant's scope with the files' record scope: a work order's customer, the every-party marker of a mixed one).
+ * each drawn only when every record of its content is its own or of no customer: fix-pr-2, the threads lane's one content rule
+ * (platform/files/content-wall contentWalledFor — the photo's record, then its source's, a copy of a copy up to 8 hops, read in
+ * the tenant's scope; a mixed work order names several customers; a source that cannot be read: not drawn, fail closed).
  */
 async function readPhotos(request: FastifyRequest, reader: PortalReader, partyId: string, orderId: string) {
   const photos = (await listFiles(request, { recordType: 'SalesOrder', recordId: orderId })).filter((file) => file.kind === 'PHOTO')
   if (photos.length === 0) return []
-  const sourceOf = await reader.inTenant(async (db) => {
-    const rows = await db.storedFile.findMany({ where: { id: { in: photos.map((photo) => photo.id) } }, select: { id: true, sourceFileId: true } })
-    const sourceIds = [...new Set(rows.flatMap((row) => (row.sourceFileId ? [row.sourceFileId] : [])))]
-    const sources = sourceIds.length > 0 ? await db.storedFile.findMany({ where: { id: { in: sourceIds } }, select: { id: true, recordType: true, recordId: true } }) : []
-    const scopes = new Map<string, PhotoSource>()
-    for (const source of sources) {
-      const found = await fileRecordScope(db, reader.session.tenantId, source)
-      scopes.set(source.id, found.kind === 'record' ? { kind: 'party', partyId: wallPartyOf(found.scope) } : found.kind === 'customer' ? { kind: 'party', partyId: found.partyId } : found.kind === 'unknown' ? { kind: 'unknown' } : { kind: 'party', partyId: null })
-    }
-    // A copy whose source cannot be read (gone) is not drawn.
-    return new Map<string, PhotoSource>(rows.map((row): [string, PhotoSource] => [row.id, row.sourceFileId ? (scopes.get(row.sourceFileId) ?? { kind: 'unknown' }) : { kind: 'none' }]))
-  })
+  const walled = await reader.inTenant((db) => contentWalledFor(db, partyId, photos.map((photo) => photo.id)))
   return photos
-    .filter((photo) => photoShown(sourceOf.get(photo.id) ?? { kind: 'unknown' }, partyId))
+    .filter((photo) => !walled.has(photo.id))
     .map((photo) => ({ id: photo.id, name: photo.originalName, contentType: photo.contentType, sizeBytes: photo.sizeBytes, sharedOn: businessDate(new Date(photo.createdAt)) }))
 }
 

@@ -200,22 +200,6 @@ export const HOLD_STATE_WORDS: Readonly<Record<'ACTIVE' | 'ENDED', Words>> = Obj
   ENDED: { it: 'Concluso', en: 'Ended' },
 })
 
-// ---- photos ------------------------------------------------------------------------------------------------------------------
-
-/**
- * Where a photo on the customer's order came from, as the files' record scope reads its source (platform/files record-scope):
- * none (not a copy), a record of no customer, a record of one customer (its wall party: a work order's customer, the every-party
- * marker for a mixed one), or a record whose customer cannot be read.
- */
-export type PhotoSource = { readonly kind: 'none' } | { readonly kind: 'party'; readonly partyId: string | null } | { readonly kind: 'unknown' }
-
-/** A photo shared on its order is drawn only when its source is the customer's own record or one of no customer (WALL-G02, G07). */
-export function photoShown(source: PhotoSource, partyId: string): boolean {
-  if (source.kind === 'none') return true
-  if (source.kind === 'unknown') return false
-  return source.partyId === null || source.partyId === partyId
-}
-
 // ---- the inspection report ---------------------------------------------------------------------------------------------------
 
 /** The version of an inspection's report the customer opens: the newest in its language, else the newest. */
