@@ -262,6 +262,11 @@ export const REQUEST_CASES = [
   { id: 'th-282-files-closed', label: 'Files closed until the virus scanner runs (production)', model: requestPage('compose', () => ({ compose: { draft: TYPED }, files: filesArea({ open: false, held: [], closedWords: 'Uploads from outside are closed for now: the virus scanner is not running here yet. Please send the file to your contact by e-mail.' }) })), note: 'The API’s own sentence; the area takes nothing; the request still goes (B-TH-086 opens it with ClamAV).' },
   { id: 'th-282-receipt-files', label: 'The receipt: how the files went — sent, held for the scan, one to retry', model: requestPage('sent', (locale) => ({ receipt: RECEIPT(locale), receiptFiles: { held: AFTER, openHref: `${BETA}/orders/requests/b2b2b2b2-0000-4000-8000-000000000901` } })), note: '“1 file sent · 1 held for the virus scan · 1 file did not go” with Retry and Open the request; the request itself is made.' },
   // ---- end B-TH-282
+  // ---- B-TH-287 (P-CUS-NEW.message-F02): the draft on the server.
+  { id: 'th9-287-saved', label: 'Draft saved on the server', model: requestPage('compose', (locale) => ({ compose: { draft: TYPED, kept: { state: 'saved', at: time(locale, 0) } } })), note: '“Draft saved 10:42”: kept on the server for this person, so it is there on another computer too. Sending clears it.' },
+  { id: 'th9-287-replaced', label: 'Two tabs: the newest wins, said', model: requestPage('compose', (locale) => ({ compose: { draft: TYPED, kept: { state: 'saved', at: time(locale, 0), replaced: true } } })), note: 'Another tab or computer had saved a newer draft: this one replaced it, and the line says so.' },
+  { id: 'th9-287-not-saved', label: 'Not saved · Retry (the text stays on this device)', model: requestPage('compose', () => ({ compose: { draft: TYPED, kept: { state: 'notSaved', device: true } } })), note: 'The save failed: “Not saved — your text stays on this device · Retry”. Never a “saved” that was not.' },
+  // ---- end B-TH-287
 ] as const
 
 export const designScreen = defineDesignScreen<OrderingCaseBuilder>({

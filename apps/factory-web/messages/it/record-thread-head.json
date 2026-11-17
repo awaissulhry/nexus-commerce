@@ -68,7 +68,13 @@
     "reopen": "Riapri",
     "openTasks": "{count} aperte",
     "openApprovals": "{count} in attesa di risposta",
-    "invited": "{count} invitati"
+    "invited": "{count} invitati",
+    "done": "Segna come fatta",
+    "doneHint": "Fuori dagli elenchi di lavoro, non chiusa: il cliente può ancora scrivere e un nuovo messaggio la riapre.",
+    "openAgain": "Riapri",
+    "openAgainHint": "Di nuovo negli elenchi di lavoro.",
+    "followUpSet": "Promemoria il {at} se non rispondono",
+    "search": "Cerca nella conversazione"
   },
   "held": {
     "noRight": "Ti serve il diritto “{right}”.",
@@ -149,5 +155,34 @@
     "all": "Nei progetti: {names}",
     "labelMore_one": "Nel progetto: {name} e in {count} altro",
     "labelMore_other": "Nel progetto: {name} e in altri {count}"
+  },
+  "done": {
+    "by": "Fatta · {name}, {date}",
+    "noName": "Fatta, {date}",
+    "tip": "Segnata come fatta: fuori dagli elenchi di lavoro. Non chiusa: il cliente può ancora scrivere e un nuovo messaggio la riapre."
+  },
+  "search": {
+    "open": "Cerca nella conversazione ( / )",
+    "label": "Cerca nei messaggi di {record}",
+    "placeholder": "Parole o nome di un file",
+    "close": "Chiudi la ricerca",
+    "results": "Messaggi che corrispondono",
+    "count_one": "{count} messaggio corrisponde",
+    "count_other": "{count} messaggi corrispondono",
+    "more": "I primi {shown} di {count}: aggiungi una parola per restringere.",
+    "none": "Nessun messaggio contiene queste parole.",
+    "short": "Scrivi almeno due lettere.",
+    "searching": "Cerco nei messaggi…",
+    "failed": "La ricerca non ha risposto.",
+    "retry": "Riprova",
+    "go": "Vai al messaggio: {words}",
+    "noWords": "Un messaggio con soli file",
+    "hint": "Solo per l’ufficio. Invio porta al messaggio, anche se non è ancora sullo schermo.",
+    "side": {
+      "theirs": "Dal cliente",
+      "ours": "Al cliente",
+      "note": "Nota interna",
+      "other": "Messaggio"
+    }
   }
 }

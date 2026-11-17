@@ -336,3 +336,32 @@ describe('B-TH-290 — production\'s answer on a request: the chip, the column, 
   })
 })
 // ---- end B-TH-290
+
+// ---- B-TH-286 (B-TH-091; O-SAL-INQ-LIST.pane-facts-F06): the Request note becomes the thread's first pinned office note ------------
+describe('B-TH-286 — "Move to the thread as a pinned note"', () => {
+  const noted: InquiryView = { ...VIEW, note: 'Bea prefers a call in the morning.' }
+
+  it('is offered under the Request note when the container offers it (sales.inquiries.manage + threads.post), with why it exists', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = render({ model: record(noted, 'owner', { pinNote: { busy: false, held: null } }), actions: { onPinNote: () => undefined } }, locale)
+      expect(html).toContain(locale === 'en' ? 'Move to the thread as a pinned note' : 'Sposta nella conversazione come nota fissata')
+      expect(html).toContain(locale === 'en' ? 'One place for office notes' : 'Un solo posto per le note interne')
+      expect(html).not.toMatch(/pane\.pinNote\./)
+    }
+  })
+
+  it('is not offered without the container’s offer, without a note, and is held offline with why', () => {
+    expect(render({ model: record(noted, 'owner', { pinNote: null }), actions: { onPinNote: () => undefined } })).not.toContain('Move to the thread as a pinned note')
+    expect(render({ model: record({ ...VIEW, note: null }, 'owner', { pinNote: { busy: false, held: null } }), actions: { onPinNote: () => undefined } })).not.toContain('Move to the thread as a pinned note')
+    const held = render({ model: record(noted, 'owner', { pinNote: { busy: false, held: 'pane.pinNote.offline' } }), actions: { onPinNote: () => undefined } })
+    expect(held).toContain('You are offline.')
+  })
+
+  it('the container posts it through the one call and reads the request again (the field emptied by the API)', async () => {
+    const { readFileSync } = await import('node:fs')
+    const container = readFileSync(new URL('../../use-inquiry.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('await pinRequestNote(api, now.id)')
+    expect(container).toContain("const mayPinNote = can.manage && session.permissions.includes('threads.post') && can.thread")
+  })
+})
+// ---- end B-TH-286

@@ -58,8 +58,11 @@ function Case({ model }: { model: HeadCaseModel }) {
   const [view, setView] = useState<ThreadView>(model.head.view)
   const [width, setWidth] = useState<DockWidth | null>(model.head.width)
   const [follow, setFollow] = useState(model.head.follow)
+  // ---- B-TH-288: Done and the search, played in the case (made-up hits; nothing is asked).
+  const [done, setDone] = useState(model.head.done)
+  const [search, setSearch] = useState(model.head.search ?? null)
   const close = () => setOpen(null)
-  const head: HeadModel = { ...model.head, view, width, follow }
+  const head: HeadModel = { ...model.head, view, width, follow, ...(done !== undefined ? { done } : {}), search }
   const actions = {
     onDoor: (door: HeadDoor) => {
       if (door === 'follow' && follow) return setFollow({ following: !follow.following, muted: false })
@@ -70,6 +73,13 @@ function Case({ model }: { model: HeadCaseModel }) {
     onWidth: (choice: DockWidth | 'hide' | 'reset') => setWidth(choice === 'hide' ? width : choice === 'reset' ? 'forty' : choice),
     onCloseThread: () => setOpen('close'),
     onOwner: () => setOpen('owner'),
+    // ---- B-TH-288
+    onDone: (next: boolean) => setDone(next ? { at: new Date(model.head.now).toISOString(), by: 'Alex Demo' } : null),
+    onSearch: (next: boolean) => setSearch((now) => (now ? { ...now, open: next } : now)),
+    search: {
+      onQuery: (query: string) => setSearch((now) => (now ? { ...now, query, state: query.trim().length >= 2 ? 'ready' : query.trim() === '' ? 'idle' : 'short' } : now)),
+      onPick: () => setSearch((now) => (now ? { ...now, open: false } : now)),
+    },
   }
   const { dialogs } = model
   return (

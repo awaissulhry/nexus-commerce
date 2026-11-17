@@ -34,7 +34,16 @@ export interface SoldKey {
 export interface ReturnableRow extends SoldKey {
   readonly kind: 'INVOICED' | 'SHIPPED'
   readonly description: string
-  readonly order: { readonly id: string; readonly number: string; readonly lineSeq: number } | null
+  readonly order: {
+    readonly id: string
+    readonly number: string
+    readonly lineSeq: number
+    // ---- follow-up (th9-web-b; plan §0.5 "counts do not leak"): the customer's own number of the order (factory-db customerSeq) and
+    // its PO reference, so a page the customer reads names "Your order 7" (or their PO), never the office series. Office answers drop them.
+    readonly customerSeq: number | null
+    readonly customerRef: string | null
+    // ---- end follow-up
+  } | null
   readonly invoice: { readonly id: string; readonly number: string | null; readonly issueDate: BusinessDate | null; readonly lineSeq: number } | null
   readonly style: { readonly id: string; readonly code: string; readonly name: string } | null
   readonly colourway: { readonly id: string; readonly code: string; readonly name: string } | null
@@ -105,7 +114,7 @@ export async function returnableRows(db: Reader, query: ReturnableQuery, policy:
   const orderLineIds = [...new Set([...invoiceLines.flatMap((line) => (line.salesOrderLineId ? [line.salesOrderLineId] : [])), ...shipmentLines.map((line) => line.salesOrderLineId)])]
   const orderLines = orderLineIds.length ? await db.salesOrderLine.findMany({ where: { id: { in: orderLineIds } }, select: { id: true, orderId: true, seq: true, styleId: true, colourwayId: true, description: true, quantity: true, netAmount: true, unitPrice: true } }) : []
   const sizes = orderLineIds.length ? await db.salesOrderLineSize.findMany({ where: { lineId: { in: orderLineIds } }, select: { lineId: true, size: true, unitPrice: true } }) : []
-  const orders = orderLines.length ? await db.salesOrder.findMany({ where: { id: { in: [...new Set(orderLines.map((line) => line.orderId))] } }, select: { id: true, number: true, currency: true } }) : []
+  const orders = orderLines.length ? await db.salesOrder.findMany({ where: { id: { in: [...new Set(orderLines.map((line) => line.orderId))] } }, select: { id: true, number: true, currency: true, customerSeq: true, customerRef: true /* follow-up (th9-web-b) */ } }) : []
   const styles = orderLines.length ? await db.style.findMany({ where: { id: { in: [...new Set(orderLines.map((line) => line.styleId))] } }, select: { id: true, code: true, name: true, ppeCategory: true } }) : []
   const colourways = orderLines.length ? await db.colourway.findMany({ where: { id: { in: [...new Set(orderLines.map((line) => line.colourwayId))] } }, select: { id: true, code: true, name: true } }) : []
   const taken = await db.returnLine.findMany({
@@ -159,7 +168,7 @@ export async function returnableRows(db: Reader, query: ReturnableQuery, policy:
     const style = orderLine ? styleOf.get(orderLine.styleId) : undefined
     return {
       orderLine,
-      order: orderLine && order ? { id: order.id, number: order.number, lineSeq: orderLine.seq } : null,
+      order: orderLine && order ? { id: order.id, number: order.number, lineSeq: orderLine.seq, customerSeq: order.customerSeq, customerRef: order.customerRef /* follow-up (th9-web-b) */ } : null,
       style: style ? { id: style.id, code: style.code, name: style.name } : null,
       colourway: orderLine ? (colourwayOf.get(orderLine.colourwayId) ?? null) : null,
       ppe: style ? style.ppeCategory !== 'NOT_PPE' : false,

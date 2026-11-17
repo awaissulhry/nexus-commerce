@@ -7,6 +7,13 @@ import { useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { FileKind } from '../../../../record-panels/model'
 import { audienceMarks, fileSeries, filesChip, versionMark, type FilesParty, type ThreadFile } from '../model'
+// B-TH-286 (B-TH-091; T2-F07): "2 pinned" on the same line.
+import { Pin, PinOff } from 'lucide-react'
+import { DetailPopover } from '@nexus/ui/components'
+import { Button } from '@nexus/ui/primitives'
+import { useLocale } from '../../../i18n/provider'
+import { formatDate } from '../../../i18n/format'
+import { pinText, type PinLine } from '../model'
 import '../files.css'
 
 export const FILES_NS = 'record-thread-files'
@@ -18,6 +25,11 @@ export interface FileStripModel {
   party: FilesParty | null
   /** The strip under the line is open (remembered on this device). */
   open: boolean
+  // ---- B-TH-286 (B-TH-091; T2-F07): the conversation's pins (oldest first); null or absent: not read, no chip.
+  pins?: readonly PinLine[] | null
+  /** "Unpin" on each line: threads.post, online (the API checks again). */
+  canUnpin?: boolean
+  // ---- end B-TH-286
 }
 
 export interface FileStripActions {
@@ -26,6 +38,10 @@ export interface FileStripActions {
   onOpen?: (fileId: string, opener: HTMLElement | null) => void
   /** "All files": the Files view (T9). */
   onAllFiles?: () => void
+  // ---- B-TH-286: a pin's line jumps to its message (the container loads older pages until it is there); Unpin.
+  onPin?: (messageId: string) => void
+  onUnpin?: (messageId: string) => void
+  // ---- end B-TH-286
 }
 
 const KIND_ICON: Readonly<Record<FileKind, (size: number) => ReactNode>> = {
@@ -56,9 +72,12 @@ function Strip({ model, actions }: { model: FileStripModel; actions?: FileStripA
   const stripId = useId()
   const listRef = useRef<HTMLUListElement>(null)
   const [focus, setFocus] = useState(0)
+  // B-TH-286: the pins chip leads the line (pins are what was decided; files follow).
+  const pins = model.pins && model.pins.length > 0 ? <PinsChip pins={model.pins} canUnpin={model.canUnpin ?? false} actions={actions} /> : null
   if (model.files === null) {
     return (
       <div className="fw-rtf-line" role="status" aria-label={t('loading')}>
+        {pins}
         <span className="fw-rtf-chip is-loading">
           {t('chip.loading')} <Skeleton width={42} height={14} />
         </span>
@@ -66,8 +85,14 @@ function Strip({ model, actions }: { model: FileStripModel; actions?: FileStripA
     )
   }
   const series = fileSeries(model.files)
-  // T2-F09: nothing empty takes a band.
-  if (series.length === 0) return null
+  // T2-F09: nothing empty takes a band (no pins and no files: no line).
+  if (series.length === 0) {
+    return pins ? (
+      <div className="fw-rtf">
+        <div className="fw-rtf-line">{pins}</div>
+      </div>
+    ) : null
+  }
   const chip = filesChip(series)
 
   const walk = (event: KeyboardEvent<HTMLUListElement>) => {
@@ -83,6 +108,7 @@ function Strip({ model, actions }: { model: FileStripModel; actions?: FileStripA
   return (
     <div className="fw-rtf">
       <div className="fw-rtf-line">
+        {pins}
         <button type="button" className="fw-rtf-chip" aria-expanded={model.open} aria-controls={stripId} onClick={() => actions?.onToggle?.(!model.open)}>
           <span>{t('chip.label', { count: chip.count })}</span>
           <span className="fw-rtf-minis" aria-hidden>
@@ -137,3 +163,64 @@ function Strip({ model, actions }: { model: FileStripModel; actions?: FileStripA
     </div>
   )
 }
+
+// ---- B-TH-286 (B-TH-091; T2-F07 "2 pinned"): the chip and its popover — one line per pin (who, when, one line of its words or why
+// not), Enter on a line jumps to the message; "Unpin" for whoever may write here. A pin is a pointer to its message, never a copy.
+function PinsChip({ pins, canUnpin, actions }: { pins: readonly PinLine[]; canUnpin: boolean; actions?: FileStripActions | undefined }) {
+  const t = useT(FILES_NS)
+  const locale = useLocale()
+  return (
+    <DetailPopover
+      trigger={
+        <span className="fw-rtf-pinchip">
+          <Pin size={13} aria-hidden /> {t('pins.chip', { count: pins.length })}
+        </span>
+      }
+      triggerLabel={t('pins.label', { count: pins.length })}
+      triggerClassName="fw-rtf-chip"
+      panelClassName="nds-detailpop-scroll"
+      label={t('pins.title', { count: pins.length })}
+      hoverDelay={0}
+    >
+      {({ close }) => (
+        <div className="fw-rtf-pins">
+          <p className="fw-rtf-pins-title">{t('pins.title', { count: pins.length })}</p>
+          <ul className="fw-rtf-pins-lines">
+            {pins.map((pin) => {
+              const said = pinText(pin)
+              const words = 'text' in said ? said.text : t(said.key, said.params)
+              const who = pin.author ?? t('pins.someone')
+              const meta = [who, formatDate(pin.at, { locale }), pin.office ? t('pins.office') : null].filter(Boolean).join(' · ')
+              return (
+                <li key={pin.messageId} className="fw-rtf-pin">
+                  <button
+                    type="button"
+                    className={`fw-rtf-pin-go${pin.removed ? ' is-removed' : ''}`}
+                    aria-label={t('pins.go', { who, words })}
+                    onClick={() => {
+                      close({ returnFocus: false })
+                      actions?.onPin?.(pin.messageId)
+                    }}
+                  >
+                    <span className="fw-rtf-pin-words">
+                      {pin.office && <Lock size={12} aria-hidden />} {words}
+                    </span>
+                    <span className="fw-rtf-pin-meta">{meta}</span>
+                    {pin.pinnedBy && <span className="fw-rtf-pin-meta">{t('pins.by', { name: pin.pinnedBy, date: formatDate(pin.pinnedAt, { locale }) })}</span>}
+                  </button>
+                  {canUnpin && (
+                    <Button size="sm" variant="quiet" aria-label={t('pins.unpinLabel', { words })} onClick={() => actions?.onUnpin?.(pin.messageId)}>
+                      <PinOff size={13} aria-hidden /> {t('pins.unpin')}
+                    </Button>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+          <p className="fw-rtf-note">{t('pins.everyone')}</p>
+        </div>
+      )}
+    </DetailPopover>
+  )
+}
+// ---- end B-TH-286

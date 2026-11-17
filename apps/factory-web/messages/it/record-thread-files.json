@@ -87,5 +87,23 @@
   "sheet": {
     "open": "Scheda misure",
     "recorded": "Scheda misure: dati del corpo — ogni apertura viene registrata."
+  },
+  "pins": {
+    "chip_one": "{count} fissato",
+    "chip_other": "{count} fissati",
+    "label_one": "{count} messaggio fissato: apri l’elenco",
+    "label_other": "{count} messaggi fissati: apri l’elenco",
+    "title_one": "{count} messaggio fissato",
+    "title_other": "{count} messaggi fissati",
+    "someone": "Qualcuno",
+    "office": "Nota interna",
+    "go": "Vai al messaggio di {who}: {words}",
+    "by": "Fissato da {name}, {date}",
+    "unpin": "Togli",
+    "unpinLabel": "Togli dai fissati «{words}»",
+    "everyone": "Fissati per tutti su questo record. Un fissato rimanda al suo messaggio; non è mai una copia.",
+    "removed": "Messaggio rimosso dopo una richiesta di privacy",
+    "filesOnly_one": "{count} file",
+    "filesOnly_other": "{count} file"
   }
 }

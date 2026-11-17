@@ -104,7 +104,8 @@
     "whole": "Not one item: the whole delivery",
     "wholeBody": "The problem is with the delivery as a whole, or with something not in the list.",
     "size": "size {size}",
-    "order": "order {number}",
+    "order": "your order {seq}",
+    "orderRef": "your PO {ref}",
     "delivered": "delivered on {day}",
     "unknown": "An item no longer in the list"
   },

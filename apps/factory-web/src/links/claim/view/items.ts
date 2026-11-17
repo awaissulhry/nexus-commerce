@@ -17,7 +17,8 @@ export function itemFacts(item: ClaimItem, t: Translate, place: { locale: Locale
   return [
     item.style ? item.colourway?.name : null,
     item.style && item.size ? t('item.size', { size: item.size }) : null,
-    item.order ? t('item.order', { number: item.order.number }) : null,
+    // follow-up (th9-web-b; plan §0.5): their own order number, else their PO — never the office series.
+    item.order?.yourNumber ? t('item.order', { seq: item.order.yourNumber.seq }) : item.order?.yourRef ? t('item.orderRef', { ref: item.order.yourRef }) : null,
     item.deliveredOn ? t('item.delivered', { day: formatDate(item.deliveredOn, place) }) : null,
   ]
     .filter(Boolean)

@@ -5,6 +5,7 @@ import { ApiError } from '../../lib/api/errors'
 import { linkTaskOf } from '../_nav/link-types'
 import { claimPageSchema, type ClaimItem, type ClaimPage } from './api'
 import { designScreen } from './fixtures'
+import { itemFacts } from './view/items' // follow-up (th9-web-b)
 import {
   bodyOf,
   caseStateKey,
@@ -162,3 +163,29 @@ describe('SCR-197 Report a problem — the link page', () => {
     for (const key of named) expect(has(en, key), key).toBe(true)
   })
 })
+
+// ---- follow-up (th9-web-b; plan §0.5 "counts do not leak"): an item names the customer's OWN order, never the office series.
+describe('the order an item came on, in the customer’s own number (link page)', () => {
+  const en = flat(catalogue('en'))
+  const t = (key: string, params: Readonly<Record<string, string | number>> = {}) => (en[key] ?? key).replace(/\{(\w+)\}/g, (_, name: string) => String(params[name] ?? ''))
+  const place = { locale: 'en' as const }
+
+  it('says “your order N”, else their PO, else nothing about the order; never an office number', () => {
+    expect(itemFacts({ ...JACKET, order: { id: 'o', yourNumber: { seq: 4, words: { en: 'Your order 4', it: 'Il vostro ordine 4' } }, yourRef: 'BA-PO-118', lineSeq: 10 } }, t, place)).toContain('your order 4')
+    expect(itemFacts({ ...JACKET, order: { id: 'o', yourNumber: null, yourRef: 'BA-PO-118', lineSeq: 10 } }, t, place)).toContain('your PO BA-PO-118')
+    const none = itemFacts({ ...JACKET, order: { id: 'o', yourNumber: null, yourRef: null, lineSeq: 10 } }, t, place)
+    expect(none).not.toMatch(/order|SO-/)
+    for (const entry of start.items) expect(itemFacts(entry, t, place)).not.toMatch(/SO-/)
+  })
+
+  it('refuses an answer that names the office series instead of the customer’s number', () => {
+    const page = designScreen.cases.find((entry) => entry.id === 'start')!.model.page as ClaimPage
+    const officeNumber = { ...page, items: page.items.map((entry) => ({ ...entry, order: entry.order ? { id: entry.order.id, number: 'SO-2026-0042', lineSeq: entry.order.lineSeq } : null })) }
+    expect(claimPageSchema.safeParse(officeNumber).success).toBe(false)
+  })
+
+  it('has its words in Italian and English', () => {
+    for (const locale of ['it', 'en'] as const) for (const key of ['item.order', 'item.orderRef']) expect(has(flat(catalogue(locale)), key), `${locale} ${key}`).toBe(true)
+  })
+})
+// ---- end follow-up
