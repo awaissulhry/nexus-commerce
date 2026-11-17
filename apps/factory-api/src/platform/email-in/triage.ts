@@ -20,6 +20,7 @@ import type { EmailInRuntime } from './service'
 import { attachmentsOf, emitSorted, joinThread, keptOf, MAIL_SORT, type MailRow } from './sort'
 // B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
 import { mayOnThread } from '../threads/records'
+import { mayShare, notShareableRefusal } from '../threads/records' // B-PR-08a part 2
 
 /**
  * "Mail to sort" (A2 SCR-019; plan A1 §3.7; features COL-022, COL-023, COL-025): the office's side of email in. Every
@@ -283,6 +284,7 @@ export async function assignInbound(runtime: EmailInRuntime, caller: CommandCall
   const { scope } = await caller.withClient((client) => officeRecord(client, record))
   if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
   if (!mayOnThread(actor, THREADS_POST, record.type, scope)) throw new ForbiddenError()
+  if (!mayShare(record.type)) throw notShareableRefusal() // B-PR-08a part 2: a work order's, hold's or NCR's thread takes no mail, said in its words
   if (!scope.partyId) throw new ConflictError('This record has no customer or supplier to share the mail with.')
   const copies = await copyFiles(runtime, caller, mail, scope.companyId ?? null)
   const { result } = await command(
@@ -308,6 +310,7 @@ export async function releaseInbound(runtime: EmailInRuntime, caller: CommandCal
   if (thread) {
     const scope: ScopedRecord = scopeOfThread(thread)
     if (!mayOnThread(actor, THREADS_READ, thread.recordType, scope) || !mayOnThread(actor, THREADS_POST, thread.recordType, scope)) throw new ForbiddenError()
+    if (!mayShare(thread.recordType)) throw notShareableRefusal() // B-PR-08a part 2
     if (thread.partyId === null) throw new ConflictError('The thread this mail names has no customer or supplier to share it with; assign it to a record.')
     copies = await copyFiles(runtime, caller, mail, thread.companyId)
   }

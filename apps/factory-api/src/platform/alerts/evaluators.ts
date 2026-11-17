@@ -13,6 +13,7 @@ import { invoicedOf, readDdts, shippedOf } from '../../modules/invoicing/from-sh
 import { readSubjects } from '../../modules/quality/holds/store'
 // B-PR-37 (the brand wall): the customers of the goods a hold holds.
 import { holdCustomersOf } from '../../modules/quality/wall'
+import { EVERY_PARTY_MARKER } from '../../modules/quality/wall' // B-PR-08a: the one marker lives with the quality wall
 // B-W2b-42: a site's people close to or over a working-time limit.
 import { workingTimeFindings } from '../../modules/people/limits/warnings'
 // B-W2b-314: a material below its planning minimum at a site.
@@ -109,7 +110,7 @@ async function holdLabel(tx: CommandTx, subjectType: string, subjectIds: readonl
  * party reaches everyone), so such an alert takes this marker instead: only a person whose grant reaches EVERY customer sees
  * it in the Alerts inbox and gets its bell (scopeWhere / can() / roleReaches find it in no customer list).
  */
-export const EVERY_PARTY_MARKER = 'ffffffff-ffff-8fff-bfff-ffffffffffff'
+export { EVERY_PARTY_MARKER } // B-PR-08a: defined once in modules/quality/wall.ts (threads take it as a wall party too)
 
 /**
  * An alert takes its place when it is raised and never changes it (engine.ts, the Alert guard). So the alert of customer

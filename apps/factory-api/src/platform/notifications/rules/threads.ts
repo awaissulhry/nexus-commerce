@@ -5,7 +5,7 @@ import { followersOf } from '../../threads/followers'
 import { recordLabelOf } from '../../threads/labels'
 // B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
 import { mayOnThread } from '../../threads/records'
-import { scopeOfThread } from '../../threads/threads'
+import { wallScopeOf } from '../../threads/records' // B-PR-08a part 2: a work order's, hold's or NCR's thread is told through its customer
 import type { Draft, FanOutRule, RuleContext } from '../fan-out'
 
 /**
@@ -31,7 +31,7 @@ export const THREAD_RULES: readonly FanOutRule[] = Object.freeze([
       const payload = payloadOf('thread.user_mentioned').parse(raw) as unknown as { threadId: string; messageId: string; userId: string; authorId: string | null; batchId?: string }
       const thread = await threadOf(context, payload.threadId)
       const reader = thread ? await context.reader(payload.userId) : null
-      if (!thread || !reader || !mayOnThread(reader.actor, THREADS_READ, thread.recordType, scopeOfThread(thread))) return []
+      if (!thread || !reader || !mayOnThread(reader.actor, THREADS_READ, thread.recordType, await wallScopeOf(context.tx, thread))) return []
       const label = await recordLabelOf(context.tx, thread.recordType, thread.recordId)
       if (label === null) return []
       return [
@@ -65,10 +65,11 @@ export const THREAD_RULES: readonly FanOutRule[] = Object.freeze([
       const label = await recordLabelOf(context.tx, thread.recordType, thread.recordId)
       if (label === null) return []
       const drafts: Draft[] = []
+      const scope = await wallScopeOf(context.tx, thread) // B-PR-08a part 2
       for (const userId of followers) {
         if (userId === authorId || message.mentionedUserIds.includes(userId)) continue
         const reader = await context.reader(userId)
-        if (!reader || !mayOnThread(reader.actor, THREADS_READ, thread.recordType, scopeOfThread(thread))) continue
+        if (!reader || !mayOnThread(reader.actor, THREADS_READ, thread.recordType, scope)) continue
         drafts.push({
           userId,
           category: 'FOLLOWING',
