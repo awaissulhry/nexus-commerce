@@ -144,6 +144,9 @@ model Party {
   workOrders          WorkOrder[]
   // B-PR-12 sales-orders-depth.prisma (production plan, schema wave 2/5): its own freeze rules (they replace the company's).
   orderFreezeRules    OrderFreezeRule[]
+  // B-PR-15 brand-production.prisma (production plan, schema wave 3/5): its orders' production state and the issues about them.
+  brandOrderProductions BrandOrderProduction[]
+  productionIssues      ProductionIssue[]
   sampleSwatches      SampleSwatch[]
   sampleShipments     SampleShipment[]
   orderGates          OrderGate[]

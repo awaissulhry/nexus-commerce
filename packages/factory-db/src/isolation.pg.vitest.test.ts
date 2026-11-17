@@ -7,6 +7,7 @@ import { seed as seedAndon } from '../seed/andon'
 import { seed as seedApprovals } from '../seed/approvals'
 import { seed as seedAudit } from '../seed/audit'
 import { seed as seedAuth } from '../seed/auth'
+import { seed as seedBrandProduction } from '../seed/brand-production' // B-PR-15
 import { seed as seedBank } from '../seed/bank'
 import { seed as seedBuyingDepth } from '../seed/buying-depth'
 import { seed as seedCalendar } from '../seed/calendar'
@@ -541,6 +542,12 @@ beforeAll(async () => {
   // another party" exist inside the same tenant too and every generated partner case is proven against them by data.
   second = await seedSecondBrand({ db: factory, namespace: 'iso-a' })
   // ---- end B-TH-001
+  // ---- B-PR-15 (production plan, schema wave 3/5): P1's orders' production state (two Urgent, one locked by us; its first rows
+  // the plain ones a copy may repeat), the second brand's open BRAND issue with its task, and SEED-WO-0001's lifted production
+  // hold at A1 (the floor's row).
+  await seedBrandProduction({ db: factory, namespace: 'iso-a' })
+  await seedBrandProduction({ db: factory, namespace: 'iso-b' })
+  // ---- end B-PR-15
   // ---- B-TH-038: a mail taken back in its undo window on P1's quote thread: its message stays held, so the partner role's
   // value filter on Message (held: false) has a row of the other value inside P1's scope to prove itself against.
   await seedHeldMail({ db: factory, namespace: 'iso-a' })
@@ -593,6 +600,7 @@ it('covers every classified table and every runtime role', () => {
     'BomLineAlternate',
     'BomLineColour',
     'BomLineSize',
+    'BrandOrderProduction',
     'BrandingSet',
     'Bundle',
     'BundleCoupon',
@@ -933,6 +941,7 @@ it('covers every classified table and every runtime role', () => {
     'ProductSettings',
     'ProductTypeProfile',
     'ProductionControlTest',
+    'ProductionIssue',
     'ProductionSettings',
     'Project',
     'ProjectLink',
@@ -1161,6 +1170,7 @@ it('covers every classified table and every runtime role', () => {
     'WorkOrder',
     'WorkOrderClose',
     'WorkOrderCostEntry',
+    'WorkOrderHold',
     'WorkOrderKit',
     'WorkOrderMaterial',
     'WorkOrderOperation',

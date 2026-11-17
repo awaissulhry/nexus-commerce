@@ -93,8 +93,8 @@ describe('the seeds', () => {
     // B-W2b-F53: twelve a year, from 2026 to the year after the run's year (2026 and 2027 in a 2026 run).
     expect(holidays[0]!.n).toBe(12 * (Math.max(2027, seedYear() + 1) - 2026 + 1))
     const lists = await admin(`SELECT DISTINCT "list"::text AS list FROM "ReasonCode" WHERE "tenantId" = $1`, [core.tenantId])
-    // W2b-6 (B-W2b-363): + SUPPLIER_DOCUMENT_TYPE.
-    expect(lists).toHaveLength(14)
+    // W2b-6 (B-W2b-363): + SUPPLIER_DOCUMENT_TYPE. B-PR-15 (production plan, schema wave 3/5): + PRODUCTION_HOLD.
+    expect(lists).toHaveLength(15)
   })
 })
 

@@ -131,6 +131,16 @@ const ROWS: Readonly<Record<ReasonCodeList, readonly Row[]>> = {
     ['CARRIER_INSURANCE', 'Assicurazione del vettore', "Carrier's insurance", 'truck', BLUE],
     OTHER(),
   ],
+  // B-PR-15 (production plan, schema wave 3/5; B-PR-21): why a work order was put on a plain production hold (WorkOrderHold of
+  // kind PRODUCTION); quality holds keep HOLD, a customer's own pause is its HOLD ask.
+  PRODUCTION_HOLD: [
+    ['MATERIAL_MISSING', 'Materiale mancante', 'Material missing', 'package', AMBER],
+    ['TECHNICAL_QUESTION', 'Domanda tecnica aperta', 'Open technical question', 'flag', BLUE],
+    ['CAPACITY', 'Capacità', 'Capacity', 'clock', INDIGO],
+    ['MACHINE', 'Macchina ferma', 'Machine stopped', 'alert', RED],
+    ['PAYMENT', 'In attesa di pagamento', 'Waiting for payment', 'percent', VIOLET],
+    OTHER(),
+  ],
 }
 
 const reasonOf = ([code, labelIt, labelEn, icon, colour, needsDetail]: Row): StandardReason => Object.freeze({ code, labelIt, labelEn, icon, colour, needsDetail: needsDetail ?? false })
