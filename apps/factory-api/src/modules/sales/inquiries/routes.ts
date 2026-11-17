@@ -40,6 +40,8 @@ import { inquirySource, quoteInquiry } from './quote'
 import { inquiryPicture } from './row-extras'
 // B-W2b-394 (ML1:02): the addresses whose mail makes an inquiry by itself.
 import { inquiryAddresses, inquiryAddressesContract, saveInquiryAddresses, saveInquiryAddressesContract } from './from-mail'
+// B-TH-221: New request's customer picker (wall W23).
+import { inquiryCustomers, inquiryCustomersContract } from './customers'
 
 /**
  * Inquiries and requests for quotation (B-W2b-295): ./inquiries.ts (the list, the record, new, change, assign, ask for more
@@ -68,4 +70,6 @@ export default defineRoutes('sales.inquiries', manifest, async (app) => {
   // B-W2b-394 (ML1:02)
   app.get('/sales/inquiries/addresses', { schema: inquiryAddressesContract }, async (request) => inquiryAddresses(request, request.query))
   app.put('/sales/inquiries/addresses', { schema: saveInquiryAddressesContract }, async (request) => saveInquiryAddresses(request, request.body, idempotencyKeyFrom(request)))
+  // B-TH-221
+  app.get('/sales/inquiries/customers', { schema: inquiryCustomersContract }, async (request) => inquiryCustomers(request, request.query))
 })
