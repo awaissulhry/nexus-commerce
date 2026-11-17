@@ -14,6 +14,7 @@ import { linkCommand, useLink } from '../links/use'
 import { ensureThread } from '../threads/threads'
 import { resolveRecord } from '../threads/records'
 import { inviteLinkOf, linkAttachments, mayOf, messageViewOf, requireLiveShare, SHARE_POST_ACTION, threadOf, THREAD_PARTNER, type PartnerShareRow, type PartnerThreadRow } from './page'
+import { walledForOutside } from '../files/content-wall' // fix-wall-1
 
 /**
  * An invited partner writes on the shared record (B-W2b-200; COL-062 "comment"; design links.invite › Messages "post,
@@ -48,7 +49,7 @@ const HELD_WORDS: Readonly<Record<ShareHeldReason, string>> = {
 export const heldRefusal = (code: ShareHeldReason): DomainError => new DomainError(code === 'CLOSED' ? 'invalid_state' : 'forbidden', HELD_WORDS[code], [{ path: `held/${code}`, message: HELD_WORDS[code] }])
 
 /** What is wrong with the files a post attaches: files of the record, shared with the party's links, available. */
-async function attachmentProblems(tx: CommandTx, request: FastifyRequest, thread: PartnerThreadRow, fileIds: readonly string[]): Promise<Issue[]> {
+async function attachmentProblems(tx: CommandTx, request: FastifyRequest, thread: PartnerThreadRow, fileIds: readonly string[], /* fix-wall-1 */ walled: ReadonlySet<string> = new Set()): Promise<Issue[]> {
   if (fileIds.length === 0) return []
   const seen = await linkAttachments(tx, request, fileIds)
   const rows = new Map((await tx.storedFile.findMany({ where: { id: { in: [...fileIds] } }, select: { id: true, recordType: true, recordId: true, status: true, visibility: true, partyId: true } })).map((row) => [row.id, row]))
@@ -56,7 +57,7 @@ async function attachmentProblems(tx: CommandTx, request: FastifyRequest, thread
   fileIds.forEach((fileId, index) => {
     const path = `body/attachments/${index}`
     const row = rows.get(fileId)
-    if (!row || !audienceSees({ audience: 'link', partyId: thread.partyId ?? '', record: { type: thread.recordType, id: thread.recordId } }, { id: row.id, recordType: row.recordType, recordId: row.recordId, visibility: row.visibility as FileAudience[], partyId: row.partyId })) problems.push({ path, message: 'File not found.' })
+    if (!row || walled.has(fileId) /* fix-wall-1: as a wrong id */ || !audienceSees({ audience: 'link', partyId: thread.partyId ?? '', record: { type: thread.recordType, id: thread.recordId } }, { id: row.id, recordType: row.recordType, recordId: row.recordId, visibility: row.visibility as FileAudience[], partyId: row.partyId })) problems.push({ path, message: 'File not found.' })
     else if (!seen.has(fileId)) problems.push({ path, message: 'Only an available file of this record can be attached.' })
   })
   return problems
@@ -96,6 +97,8 @@ export async function postOnShare(request: FastifyRequest, input: SharePostInput
     return company?.tradeName ?? company?.legalName ?? ''
   })
 
+  // fix-wall-1: a file whose content is another customer's is not attached (read before the post's transaction, as the system).
+  const walled = await walledForOutside(request, draft.attachments)
   const { result } = await linkCommand(request, { name: SHARE_POST_ACTION, idempotencyKey, input: { ...draft } }, async (tools) => {
     // The share and the thread as they are now (narrowed, revoked, closed a moment ago?).
     const share = await requireLiveShare(request, tools.tx)
@@ -103,7 +106,7 @@ export async function postOnShare(request: FastifyRequest, input: SharePostInput
     if (!current || current.id !== thread.id || current.partyId !== link.partyId) throw new NotFoundError('Record not found.')
     const again = mayOf(share, current.status, true)
     if (again.postHeld) throw heldRefusal(again.postHeld)
-    const issues = await attachmentProblems(tools.tx, request, current, draft.attachments)
+    const issues = await attachmentProblems(tools.tx, request, current, draft.attachments, walled)
     if (issues.length > 0) throw new ValidationError('The message is not valid.', issues)
     await useLink(tools, request, { action: 'post' })
     const id = newId()
