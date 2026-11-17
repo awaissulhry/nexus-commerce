@@ -119,7 +119,9 @@ describe('grants and the seed', () => {
     expect(access('Notification').factory_partner_runtime).toEqual({ privileges: ['select'], scopedBy: ['party'], hiddenColumns: ['actorId'] })
     // B-TH-038: and never a held message (a mail waiting in its undo window or taken back).
     expect(access('Message').factory_partner_runtime).toEqual({ privileges: ['select', 'insert'], scopedBy: ['party'], hiddenColumns: NOT_THE_PARTNERS, onlyValues: { held: ['false'] } })
-    for (const name of ['NotificationDelivery', 'RecordFollower', 'MessageMention', 'Task']) expect(Object.keys(access(name)), name).toEqual(['factory_runtime'])
+    for (const name of ['NotificationDelivery', 'MessageMention', 'Task']) expect(Object.keys(access(name)), name).toEqual(['factory_runtime'])
+    // B-TH-065 (threads schema wave 8/9): a portal session reads its own party's project members, never who added them.
+    expect(access('RecordFollower').factory_partner_runtime).toEqual({ privileges: ['select'], scopedBy: ['party'], hiddenColumns: ['createdById'] })
     expect(access('Thread').factory_partner_runtime!.privileges).toEqual(['select'])
   })
 
