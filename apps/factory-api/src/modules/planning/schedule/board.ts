@@ -11,6 +11,10 @@ import { dayWords } from '@nexus/factory-domain/planning/schedule/time'
 import { uniformBuckets } from '@nexus/factory-domain/planning/settings/buckets'
 import { Dec } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
+// B-PR-07: the board's wall.
+import { EVERY_PARTY_WORDS, reachesEveryParty } from '@nexus/factory-domain/core/permissions'
+import { actorOf } from '../../../core/context'
+import { reachesWorkOrder } from '../../production/work-orders/scope'
 import { serverClock } from '../../../core/time'
 import { assertMayAt, mayAt, officeContextOf, siteFor } from '../access'
 import { calendarStateOf, capacityAnswer } from '../capacity/service'
@@ -202,17 +206,21 @@ export async function board(caller: CommandCaller, query: BoardQuery) {
   const buckets = uniformBuckets(from, to, bucket)
   return caller.withClient(async (db) => {
     const world = await scheduleWorld(db, site, { from, to }, now)
-    const readiness = query.readiness === 'false' || world.workOrders.length === 0 ? [] : await readinessFor(db, site, world.workOrders.map((workOrder) => workOrder.id))
+    // B-PR-07 (production plan §2): a person limited to some customers sees the bars, work orders, tray and problems of the
+    // work orders of those customers only, and no line load or capacity total (they count every customer's work).
+    const wall = boardWallOf(context, world)
+    const visible = world.workOrders.filter((workOrder) => wall.reaches(workOrder.id))
+    const readiness = query.readiness === 'false' || visible.length === 0 ? [] : await readinessFor(db, site, visible.map((workOrder) => workOrder.id))
     const readinessOf = new Map(readiness.map((row) => [row.workOrderId, row]))
-    const lanes = laneViewsOf(world, { from, to, buckets })
+    const lanes = laneViewsOf(world, { from, to, buckets }).map((lane) => (wall.every ? lane : { ...lane, cells: null }))
     const window = { start: businessDayStart(from, site.timezone), end: businessDayStart(plusDays(to, 1), site.timezone) }
-    const shown = world.slots.filter((slot) => slot.startAt < window.end && slot.endAt > window.start)
+    const shown = world.slots.filter((slot) => slot.startAt < window.end && slot.endAt > window.start && wall.reaches(slot.workOrderId))
     const names = await userNamesOf(db, shown.flatMap((slot) => [slot.updatedById, slot.pinnedById])) // B-W2b-312: who pinned it too
     // B-W2b-312: per work order its earliest start with material, from the readiness read above.
-    const starts = query.readiness === 'false' || world.workOrders.length === 0 ? null : await materialStartsOf(db, world, world.workOrders.map((workOrder) => workOrder.id), readiness)
-    const workOrders = world.workOrders.map((workOrder) => ({ ...workOrderViewOf(world, workOrder, readinessOf.get(workOrder.id) ?? null), materialStart: starts ? materialStartViewOf(world, workOrder, starts.get(workOrder.id)!) : null }))
-    const header = await planHeaderOf(db, world, context)
-    const tray = world.workOrders
+    const starts = query.readiness === 'false' || visible.length === 0 ? null : await materialStartsOf(db, world, visible.map((workOrder) => workOrder.id), readiness)
+    const workOrders = visible.map((workOrder) => ({ ...workOrderViewOf(world, workOrder, readinessOf.get(workOrder.id) ?? null), materialStart: starts ? materialStartViewOf(world, workOrder, starts.get(workOrder.id)!) : null }))
+    const header = await planHeaderOf(db, world, context, wall.every)
+    const tray = visible
       .map((workOrder) => ({ workOrder, schedule: world.schedules.get(workOrder.id)! }))
       .filter(({ schedule }) => schedule.status !== 'DONE' && schedule.placed !== 'ALL')
       .sort((a, b) => trayOrder({ ...a.schedule, dueDate: a.workOrder.dueDate, number: a.workOrder.number }, { ...b.schedule, dueDate: b.workOrder.dueDate, number: b.workOrder.number }))
@@ -230,6 +238,7 @@ export async function board(caller: CommandCaller, query: BoardQuery) {
         return { workOrderId: workOrder.id, unplacedOperations: unplaced.length, minutes: minutes.toFixed(1), latestSafeStart: iso2(schedule.latestSafeStart), chips }
       })
     const problems = [
+      // B-PR-07: a lane's overbooking counts every customer's work: none for a person limited to some customers (cells null).
       ...lanes.flatMap((lane) =>
         (lane.cells ?? [])
           .filter((cell) => Number(cell.overMinutes) > 0)
@@ -245,12 +254,12 @@ export async function board(caller: CommandCaller, query: BoardQuery) {
             daysLate: null,
           })),
       ),
-      ...world.workOrders
+      ...visible
         .filter((workOrder) => world.schedules.get(workOrder.id)!.status === 'LATE')
         .map((workOrder) => ({ kind: 'FINISHES_LATE' as const, words: world.schedules.get(workOrder.id)!.words, lane: null, date: workOrder.dueDate, bucketKey: null, overMinutes: null, loadPct: null, workOrderId: workOrder.id, daysLate: daysLateOf(world, workOrder) })),
     ]
     // B-W2b-312: operations in the past, material not in time, gate not passed (their own list).
-    const moreProblems = await depthProblemsOf(db, world, starts)
+    const moreProblems = (await depthProblemsOf(db, world, starts)).filter((problem) => wall.reaches(problem.workOrderId)) // B-PR-07
     const floor = await floorStatusesOf(db, world, shown) // B-W2b-329
     return {
       site: siteViewOf(site),
@@ -267,18 +276,36 @@ export async function board(caller: CommandCaller, query: BoardQuery) {
       tray,
       problems,
       moreProblems,
+      // B-PR-07: why the lanes carry no load (null: they do).
+      loadWithheld: wall.every ? null : EVERY_PARTY_WORDS.en,
     }
   })
 }
 
+// ── B-PR-07 ──
+/**
+ * What of the board a person sees (production plan §2, the brand wall): with every customer at the site, all of it; limited to
+ * some customers, the work orders of those customers (a work order of no customer, or a mixed one made before the rule, only
+ * with every customer) and their bars. The schedules stay counted on the whole site (capacity is shared).
+ */
+function boardWallOf(context: ReturnType<typeof officeContextOf>, world: ScheduleWorld): { readonly every: boolean; readonly reaches: (workOrderId: string) => boolean } {
+  const actor = actorOf(context)
+  const place = { companyId: world.site.companyId, siteId: world.site.id }
+  if (reachesEveryParty(actor, PLANNING_VIEW, place)) return { every: true, reaches: () => true }
+  const reached = new Set(world.workOrders.filter((workOrder) => reachesWorkOrder(actor, PLANNING_VIEW, { ...place, partyId: workOrder.partyId })).map((workOrder) => workOrder.id))
+  return { every: false, reaches: (workOrderId) => reached.has(workOrderId) }
+}
+// ── end B-PR-07 ──
+
 /** The board's band: the working plan, the last published version, what changed since, whether Publish is held. */
-async function planHeaderOf(db: Reader, world: ScheduleWorld, context: ReturnType<typeof officeContextOf>) {
+async function planHeaderOf(db: Reader, world: ScheduleWorld, context: ReturnType<typeof officeContextOf>, everyParty: boolean) {
   const site = { companyId: world.site.companyId, siteId: world.site.id }
   const mayChange = mayAt(context, PLANNING_SCHEDULE_MANAGE, site)
-  const mayPublish = mayAt(context, PLANNING_SCHEDULE_PUBLISH, site)
+  // B-PR-07: Publish sends every customer's bars; what changed since counts them: only with every customer.
+  const mayPublish = everyParty && mayAt(context, PLANNING_SCHEDULE_PUBLISH, site)
   const [published] = await publishedOf(db, world.site.id, 1)
   let changes = null
-  if (published) {
+  if (published && everyParty) {
     const tz = world.site.timezone
     const range = { start: businessDayStart(dayOf(published.coversFrom!), tz), end: businessDayStart(plusDays(dayOf(published.coversTo!), 1), tz) }
     const slots = await slotsOf(db, published.id)
@@ -287,19 +314,22 @@ async function planHeaderOf(db: Reader, world: ScheduleWorld, context: ReturnTyp
     changes = { moved: diff.moved, added: diff.added, removed: diff.removed, words: diffWords(diff) }
   }
   let hold: PublishHold | null = null
-  try {
-    const range = rangeOf(world, {})
-    const { previous, set, diff } = await publishDiff(db, world, range)
-    hold = publishHoldOf(previous, set, diff, range)
-  } catch (error) {
-    hold = { code: 'RANGE_NOT_VALID', words: error instanceof Error ? error.message : 'The default days cannot be published.', previousVersion: null, coversFrom: null, coversTo: null }
+  if (everyParty) {
+    try {
+      const range = rangeOf(world, {})
+      const { previous, set, diff } = await publishDiff(db, world, range)
+      hold = publishHoldOf(previous, set, diff, range)
+    } catch (error) {
+      hold = { code: 'RANGE_NOT_VALID', words: error instanceof Error ? error.message : 'The default days cannot be published.', previousVersion: null, coversFrom: null, coversTo: null }
+    }
   }
   if (!mayPublish) hold = NO_PERMISSION_HOLD
   return {
     id: world.plan?.id ?? null,
     version: world.plan?.version ?? null,
     updatedAt: world.plan ? toUtcIso(world.plan.updatedAt) : null,
-    published: published ? await versionHeaderOf(db, published) : null,
+    // B-PR-07: the version's note is the planners' own words over every customer: only with every customer.
+    published: published ? { ...(await versionHeaderOf(db, published)), ...(everyParty ? {} : { note: null }) } : null,
     changesSincePublished: changes,
     mayChange,
     mayPublish,
@@ -313,8 +343,8 @@ async function planHeaderOf(db: Reader, world: ScheduleWorld, context: ReturnTyp
 export async function workOrderSchedule(caller: CommandCaller, workOrderId: string) {
   const context = officeContextOf(caller)
   return caller.withClient(async (db) => {
-    const row = isUuid(workOrderId) ? await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, site: { select: SITE_COLUMNS }, sizes: { select: { size: true, quantity: true, colourway: { select: { code: true } } }, orderBy: [{ size: 'asc' }] } } }) : null
-    assertMayAt(context, PLANNING_VIEW, row ? { companyId: row.companyId, siteId: row.siteId } : null, 'Work order')
+    const row = isUuid(workOrderId) ? await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, companyId: true, siteId: true, /* B-PR-07 */ partyId: true, site: { select: SITE_COLUMNS }, sizes: { select: { size: true, quantity: true, colourway: { select: { code: true } } }, orderBy: [{ size: 'asc' }] } } }) : null
+    assertMayAt(context, PLANNING_VIEW, row && reachesWorkOrder(actorOf(context), PLANNING_VIEW, row) ? { companyId: row.companyId, siteId: row.siteId } : null, 'Work order') // B-PR-07: and its customer
     const now = serverClock.now()
     const today = businessDate(now, row!.site.timezone)
     const world = await scheduleWorld(db, row!.site, { from: today, to: today }, now)

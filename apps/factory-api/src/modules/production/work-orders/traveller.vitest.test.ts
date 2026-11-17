@@ -19,6 +19,7 @@ const facts = (number: string, operations: number): TravellerFacts => ({
   style: { code: 'JKT-DEMO', name: 'Giacca prova' },
   revision: 1,
   orders: ['SO-DEMO-1'],
+  customer: 'C-DEMO', // B-PR-11: the customer's code
   splitFrom: null,
   note: null,
   holdReason: null,

@@ -2,7 +2,8 @@ import { ConflictError, ForbiddenError, NotFoundError, type Issue } from '@nexus
 import type { Permission } from '@nexus/factory-domain/core/permissions'
 import type { DispatchRefusal } from '@nexus/factory-domain/production/dispatch/rules'
 import type { CommandCaller } from '../../../core/command'
-import type { FloorContext, OfficeContext } from '../../../core/context'
+import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
+import { assertEveryParty } from '../work-orders/scope'
 import { may } from '../calls/access'
 import { systemView } from '../scans/access'
 import { siteRowOf } from './store'
@@ -47,8 +48,20 @@ export const readerOf = (caller: CommandCaller, context: DispatchContext): Comma
 export async function knownSite(caller: CommandCaller, context: DispatchContext, siteId: string, permission: Permission): Promise<SiteRow> {
   const site = await readerOf(caller, context).withClient((db) => siteRowOf(db, siteId))
   if (!site || !may(context, permission, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Site not found.')
+  assertEveryCustomer(context, permission, { companyId: site.companyId, siteId: site.id }) // B-PR-07
   return site
 }
+
+// ── B-PR-07 ──
+/**
+ * B-PR-07 (production plan §2: "A view that mixes brands ... needs access to every brand"; L5 "Factory only: … dispatch"): a
+ * line's or station's dispatch list, the board, its print, the operators and the handover hold every customer's work on shared
+ * lanes. A person limited to some customers gets 403 in words that name none; a floor device reaches every customer of its site.
+ */
+export function assertEveryCustomer(context: DispatchContext, permission: Permission, place: { readonly companyId: string; readonly siteId: string }): void {
+  assertEveryParty(actorOf(context), permission, place)
+}
+// ── end B-PR-07 ──
 
 export class DispatchRefusedError extends ConflictError {
   override name = 'DispatchRefusedError'

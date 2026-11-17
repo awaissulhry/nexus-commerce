@@ -7,7 +7,7 @@ import { isOnBehalfEntry } from '@nexus/factory-domain/production/onbehalf/rules
 import type { CommandCaller } from '../../../core/command'
 import type { GateReader } from '../../people/privacy/gate'
 import { workerGateFor } from '../../people/privacy/worker-gate'
-import { officeOf, reaches } from './access'
+import { assertEveryCustomer, officeOf, reaches } from './access'
 import { bundlesById, chainsOf, COUNT_KINDS, devicesById, employeesOfWorkers, linesById, peopleNames, recordsFor, SCAN, sitesById, stationsById, toLabourScan, workOrdersById, type OperationRow, type Reader } from './store'
 
 /**
@@ -46,6 +46,7 @@ export async function recordOf(caller: CommandCaller, scanId: string) {
     const scan = isUuid(scanId) ? await db.operationScan.findUnique({ where: { id: scanId }, select: SCAN }) : null
     const site = scan ? (await sitesById(db, [scan.siteId])).get(scan.siteId) : undefined
     if (!scan || !site || !(COUNT_KINDS as readonly string[]).includes(scan.kind) || !reaches(context, PRODUCTION_LABOUR_VIEW, { companyId: site.companyId, siteId: site.id })) throw new NotFoundError('Labour record not found.')
+    assertEveryCustomer(context, { companyId: site.companyId, siteId: site.id }) // B-PR-07
     const chain = await chainsOf(db, [scan])
     const report = reportOf(toLabourScan(scan), new Map(chain.map((row) => [row.id, toLabourScan(row)])))
     const root = report ? chain.find((row) => row.id === report.id) : undefined

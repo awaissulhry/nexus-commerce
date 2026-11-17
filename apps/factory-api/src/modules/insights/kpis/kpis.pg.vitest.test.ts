@@ -101,10 +101,13 @@ beforeAll(async () => {
   // ---- B-W2b-F53: the seeds' orders are the seeds' history (dated October and November 2026, never moved), so they leave the
   // 60 days of the facts as the calendar moves on: a copy of company A's first seeded order, dated yesterday with its lines,
   // keeps an order in the window on every day (written past the guards, as the floor rows below are).
+  // B-TH-104 numbers each customer's orders (customerSeq, unique per tenant, company and customer) in a trigger the guards-off
+  // copy skips: the copy takes the customer's next number itself, as that trigger would.
   const [source] = await admin<{ id: string }>(`SELECT o.id FROM "SalesOrder" o WHERE o."tenantId" = $1 AND o."companyId" = $2 AND o.status <> 'CANCELLED' AND EXISTS (SELECT 1 FROM "SalesOrderLine" l WHERE l."orderId" = o.id) ORDER BY o.number LIMIT 1`, [T, companyA])
   const copyId = newId()
   await force(
-    `INSERT INTO "SalesOrder" SELECT (jsonb_populate_record(NULL::"SalesOrder", to_jsonb(o) || jsonb_build_object('id', $2::text, 'number', $3::text, 'orderDate', $4::text))).* FROM "SalesOrder" o WHERE o.id = $1`,
+    `INSERT INTO "SalesOrder" SELECT (jsonb_populate_record(NULL::"SalesOrder", to_jsonb(o) || jsonb_build_object('id', $2::text, 'number', $3::text, 'orderDate', $4::text,
+       'customerSeq', (SELECT coalesce(max(x."customerSeq"), 0) + 1 FROM "SalesOrder" x WHERE x."tenantId" = o."tenantId" AND x."companyId" = o."companyId" AND x."partyId" = o."partyId")))).* FROM "SalesOrder" o WHERE o.id = $1`,
     [source!.id, copyId, `K428-SO-${run}`, plusDays(today(), -1)],
   )
   await force(

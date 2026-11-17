@@ -10,7 +10,7 @@ import { dayWords, whenWords } from '@nexus/factory-domain/planning/schedule/tim
 import { uniformBuckets } from '@nexus/factory-domain/planning/settings/buckets'
 import { command, type CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { assertMayAt, mayAt, officeContextOf, siteFor } from '../access'
+import { assertEveryPartyAt, assertMayAt, everyPartySiteFor, mayAt, officeContextOf } from '../access'
 import { capacityAnswer } from '../capacity/service'
 import { readinessFor } from '../readiness/service'
 import { dayOf, SITE_COLUMNS, type Reader, type SiteRow } from '../store'
@@ -156,7 +156,7 @@ function laneNameOf(world: ScheduleWorld, slot: SlotRow): { code: string; name: 
 /** GET /planning/schedule/publish (planning.view): what Publish would send, its diff and its checks. */
 export async function publishPreview(caller: CommandCaller, query: PublishQuery) {
   const context = officeContextOf(caller)
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-07: Publish sends every customer's bars
   const now = serverClock.now()
   return caller.withClient(async (db) => {
     const today = businessDate(now, site.timezone)
@@ -240,7 +240,7 @@ async function checksOf(db: Reader, world: ScheduleWorld, range: PublishRange, s
 /** POST /planning/schedule/publish (planning.schedule.publish): the next numbered version, frozen, for the floor. */
 export async function publish(caller: CommandCaller, body: PublishBody, idempotencyKey?: string) {
   const context = officeContextOf(caller)
-  const site = await siteFor(caller, body.siteId, PLANNING_SCHEDULE_PUBLISH)
+  const site = await everyPartySiteFor(caller, body.siteId, PLANNING_SCHEDULE_PUBLISH) // B-PR-07: every customer's bars
   const { result, replayed } = await command(caller, { name: 'planning.schedule.publish', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
     const working = await lockedWorkingPlan(tx, site, context.tenantId, { actorId: context.actorId, now, expectedVersion: body.version, bump: false }) // B-W2b-329: named for the log
@@ -326,7 +326,7 @@ export async function publish(caller: CommandCaller, body: PublishBody, idempote
 
 /** GET /planning/schedule/versions (planning.view): the site's published versions, the latest first. */
 export async function listVersions(caller: CommandCaller, query: { readonly siteId: string }) {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-07: each version's bar count is every customer's
   return caller.withClient(async (db) => {
     const versions = await publishedOf(db, site.id)
     const counts = versions.length ? await db.scheduleSlot.groupBy({ by: ['planVersionId'], where: { planVersionId: { in: versions.map((version) => version.id) } }, _count: { _all: true } }) : []
@@ -343,6 +343,7 @@ export async function getVersion(caller: CommandCaller, versionId: string) {
     const version = isUuid(versionId) ? await db.planVersion.findUnique({ where: { id: versionId }, select: { ...PLAN_COLUMNS, site: { select: SITE_COLUMNS } } }) : null
     if (!version || version.kind !== 'PUBLISHED') throw new NotFoundError('Published version not found.')
     assertMayAt(context, PLANNING_VIEW, { companyId: version.companyId, siteId: version.siteId }, 'Published version')
+    assertEveryPartyAt(context, PLANNING_VIEW, version) // B-PR-07: a published version holds every customer's bars
     const now = serverClock.now()
     const today = businessDate(now, version.site.timezone)
     const world = await scheduleWorld(db, version.site, { from: today, to: today }, now)

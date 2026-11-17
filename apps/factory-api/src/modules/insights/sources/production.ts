@@ -10,6 +10,7 @@ import { readRefusals } from '../../production/scans/refusals-store'
 import { workerUsers } from '../../production/scans/store'
 import { checklistOf, readBasics, readReleaseFacts } from '../../production/work-orders/facts'
 import { HEADER } from '../../production/work-orders/store'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-07
 import { capped, CHECK_LIMIT, dayOrNull, SOURCE_LIMIT, type Source } from './common'
 
 /**
@@ -21,12 +22,12 @@ import { capped, CHECK_LIMIT, dayOrNull, SOURCE_LIMIT, type Source } from './com
 
 /** WORK_ORDER_HELD: DRAFT work orders whose release check has a BLOCKED check, soonest due first. */
 export const workOrderHeld: Source = async ({ caller, viewer }) => {
-  const scope = scopeWhere(viewer.actor, WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput
+  const scope = workOrderWhere(viewer.actor, WORKORDERS_VIEW) // B-PR-07: by customer too (B-PR-03's wall)
   return caller.withClient(async (db) => {
     const found = await db.workOrder.findMany({ where: { AND: [scope, { status: 'DRAFT' }] }, orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { id: 'asc' }], take: SOURCE_LIMIT + 1, select: HEADER })
     const { rows, complete } = capped(found, SOURCE_LIMIT)
     // The release check reads much: only for drafts this viewer may release, at most CHECK_LIMIT of them.
-    const mine = rows.filter((row) => actingPermission(viewer, { kind: 'WORK_ORDER_HELD', scope: { companyId: row.companyId, siteId: row.siteId, partyId: null } }) !== null)
+    const mine = rows.filter((row) => actingPermission(viewer, { kind: 'WORK_ORDER_HELD', scope: { companyId: row.companyId, siteId: row.siteId, partyId: row.partyId } }) !== null)
     const candidates: AttentionCandidate[] = []
     for (const row of mine.slice(0, CHECK_LIMIT)) {
       const basics = await readBasics(db, row)
@@ -40,7 +41,7 @@ export const workOrderHeld: Source = async ({ caller, viewer }) => {
         state: 'HELD',
         severity: heldWorkOrderSeverity(dueDate, viewer.today),
         record: { type: 'WorkOrder', id: row.id, label: row.number },
-        scope: { companyId: row.companyId, siteId: row.siteId, partyId: null },
+        scope: { companyId: row.companyId, siteId: row.siteId, partyId: row.partyId }, // B-PR-07: its customer
         ...workOrderHeldWords({ number: row.number, style: basics.style.code, checks: blocked, orders: basics.orders.map((order) => order.number) }),
         due: dueDate,
         since: row.createdAt,
@@ -50,6 +51,16 @@ export const workOrderHeld: Source = async ({ caller, viewer }) => {
     return { kind: 'WORK_ORDER_HELD', candidates, complete: complete && mine.length <= CHECK_LIMIT }
   })
 }
+
+// ── B-PR-07 ──
+/** Of the work orders `ids`, the ones the viewer's corrections right reaches (B-PR-03's wall, by customer too), with their number. */
+async function reachedOrders(db: FactoryClient, viewer: Viewer, ids: readonly string[]): Promise<Map<string, { id: string; number: string; partyId: string | null }>> {
+  const unique = [...new Set(ids)]
+  if (unique.length === 0) return new Map()
+  const rows = await db.workOrder.findMany({ where: { AND: [workOrderWhere(viewer.actor, PRODUCTION_SCAN_CORRECT), { id: { in: unique } }] }, select: { id: true, number: true, partyId: true } })
+  return new Map(rows.map((row) => [row.id, row]))
+}
+// ── end B-PR-07 ──
 
 /** The sites whose scan corrections and refusals the viewer looks after (company and site scope). */
 async function correctionSites(db: FactoryClient, viewer: Viewer) {
@@ -61,11 +72,14 @@ async function correctionSites(db: FactoryClient, viewer: Viewer) {
 export const scanCorrection: Source = async ({ caller, viewer }) =>
   caller.withClient(async (db) => {
     const sites = await correctionSites(db, viewer)
-    const pending = await readCorrectionRequests(db, { siteIds: sites.map((site) => site.id), status: 'PENDING' })
+    // B-PR-07: only the requests on work orders of the customers the viewer reaches (a mixed one only with every customer).
+    const all = await readCorrectionRequests(db, { siteIds: sites.map((site) => site.id), status: 'PENDING' })
+    const reached = await reachedOrders(db, viewer, all.map((row) => row.workOrderId))
+    const pending = all.filter((row) => reached.has(row.workOrderId))
     const { rows, complete } = capped(pending, SOURCE_LIMIT)
     if (rows.length === 0) return { kind: 'SCAN_CORRECTION', candidates: [], complete }
     const scans = await db.operationScan.findMany({ where: { id: { in: rows.map((row) => row.scanId) } }, select: { id: true, workerId: true, createdById: true } })
-    const orders = new Map((await db.workOrder.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.workOrderId))] } }, select: { id: true, number: true } })).map((row) => [row.id, row.number]))
+    const orders = new Map([...reached.values()].map((row) => [row.id, row.number]))
     const bundles = new Map((await db.bundle.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.bundleId))] } }, select: { id: true, code: true } })).map((row) => [row.id, row.code]))
     const operations = new Map(
       (await db.workOrderOperation.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.workOrderOperationId))] } }, select: { id: true, name: true } })).map((row) => [row.id, row.name]),
@@ -81,7 +95,7 @@ export const scanCorrection: Source = async ({ caller, viewer }) =>
         state: 'PENDING',
         severity: 'MEDIUM',
         record: { type: 'ScanCorrectionRequest', id: row.id, label: workOrder },
-        scope: { companyId: row.companyId, siteId: row.siteId, partyId: null },
+        scope: { companyId: row.companyId, siteId: row.siteId, partyId: reached.get(row.workOrderId)?.partyId ?? null }, // B-PR-07
         ...scanCorrectionWords({ workOrder, operation: operations.get(row.workOrderOperationId) ?? 'an operation', bundle: bundles.get(row.bundleId) ?? 'a bundle' }),
         due: null,
         since: new Date(row.serverTime),
@@ -95,18 +109,20 @@ export const scanCorrection: Source = async ({ caller, viewer }) =>
 export const scanRefusal: Source = async ({ caller, viewer }) =>
   caller.withClient(async (db) => {
     const sites = await correctionSites(db, viewer)
-    const open = await readRefusals(db, { siteIds: sites.map((site) => site.id), open: true })
+    // B-PR-07: a refusal on a work order shows only to people who reach its customer; one on no work order names none.
+    const all = await readRefusals(db, { siteIds: sites.map((site) => site.id), open: true })
+    const reached = await reachedOrders(db, viewer, all.flatMap((row) => (row.workOrderId ? [row.workOrderId] : [])))
+    const open = all.filter((row) => row.workOrderId === null || reached.has(row.workOrderId))
     const { rows, complete } = capped(open, SOURCE_LIMIT)
     const companyOf = new Map(sites.map((site) => [site.id, site.companyId]))
     const devices = new Map((await db.device.findMany({ where: { id: { in: [...new Set(rows.map((row) => row.deviceId))] } }, select: { id: true, name: true } })).map((row) => [row.id, row.name]))
-    const orderIds = [...new Set(rows.flatMap((row) => (row.workOrderId ? [row.workOrderId] : [])))]
-    const orders = new Map((orderIds.length > 0 ? await db.workOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true } }) : []).map((row) => [row.id, row.number]))
+    const orders = new Map([...reached.values()].map((row) => [row.id, row.number]))
     const candidates: AttentionCandidate[] = rows.map((row) => ({
       kind: 'SCAN_REFUSAL',
       state: row.final ? 'FINAL' : 'RETRYABLE',
       severity: 'LOW',
       record: { type: 'FloorScanRefusal', id: row.id, label: row.scanned ?? row.code },
-      scope: { companyId: companyOf.get(row.siteId) ?? null, siteId: row.siteId, partyId: null },
+      scope: { companyId: companyOf.get(row.siteId) ?? null, siteId: row.siteId, partyId: row.workOrderId ? (reached.get(row.workOrderId)?.partyId ?? null) : null }, // B-PR-07
       ...scanRefusalWords({ device: devices.get(row.deviceId) ?? 'a floor device', message: row.message, workOrder: row.workOrderId ? (orders.get(row.workOrderId) ?? null) : null }),
       due: null,
       since: new Date(row.serverTime),

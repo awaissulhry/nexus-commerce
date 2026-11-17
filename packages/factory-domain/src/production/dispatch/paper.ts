@@ -7,7 +7,8 @@ import { MATERIAL_STATES, type MaterialState } from './material'
  * The printed dispatch list (B-W2b-49; MES-032 "Prints the station or line list for the shift"; design production.dispatch
  * new tab "Dispatch list per station or line (print)": paper for the line at shift start), pure: what a line's or a
  * station's paper says, it or en, with an empty column to tick by hand. Per station and operation: the operator's name
- * beside a station only where the site names workers, never a figure per person; no money, no customer.
+ * beside a station only where the site names workers, never a figure per person; no money; the customer by its CODE only
+ * (B-PR-11, L13), never its name.
  */
 
 export const PAPER_LANGUAGES = ['it', 'en'] as const
@@ -17,6 +18,8 @@ export interface PaperCard {
   readonly order: number
   readonly rush: boolean
   readonly workOrder: string
+  /** B-PR-11 (L13): the customer's CODE (production/floor-customer), never its name; null: none. */
+  readonly customer: string | null
   readonly style: string
   readonly operation: { readonly seq: number; readonly name: string }
   readonly bundles: readonly string[]
@@ -55,7 +58,7 @@ const WORDS = {
     printed: 'Stampata',
     noStation: 'Senza postazione',
     operators: 'Operatori',
-    columns: ['N.', 'Ordine di lavoro', 'Modello', 'Operazione', 'Mazzi', 'Pezzi', 'Min', 'Consegna', 'Materiale', 'Fatto'],
+    columns: ['N.', 'Ordine di lavoro', 'Cliente', 'Modello', 'Operazione', 'Mazzi', 'Pezzi', 'Min', 'Consegna', 'Materiale', 'Fatto'],
     rush: 'URGENTE',
     held: 'In attesa',
     total: 'Totale',
@@ -74,7 +77,7 @@ const WORDS = {
     printed: 'Printed',
     noStation: 'No station',
     operators: 'Operators',
-    columns: ['No.', 'Work order', 'Style', 'Operation', 'Bundles', 'Pieces', 'Min', 'Due', 'Material', 'Done'],
+    columns: ['No.', 'Work order', 'Customer', 'Style', 'Operation', 'Bundles', 'Pieces', 'Min', 'Due', 'Material', 'Done'],
     rush: 'RUSH',
     held: 'On hold',
     total: 'Total',
@@ -129,6 +132,7 @@ export function dispatchPaper(facts: PaperFacts, language: PaperLanguage = 'it')
           cells: [
             String(card.order),
             card.rush ? `${card.workOrder} ${words.rush}` : card.workOrder,
+            card.customer ?? '—', // B-PR-11: the code only
             card.style,
             `Op ${card.operation.seq} ${card.operation.name}`,
             card.bundles.length > 0 ? card.bundles.join(', ') : '—',
