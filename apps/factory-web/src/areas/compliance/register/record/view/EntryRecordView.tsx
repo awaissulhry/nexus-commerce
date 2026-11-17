@@ -2,12 +2,12 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { ExternalLink, MoreHorizontal, Pencil, Siren } from 'lucide-react'
-import { Banner, Menu, type MenuItemDef } from '@nexus/ui/components'
-import { Button, Tag } from '@nexus/ui/primitives'
+import { ExternalLink, Pencil, Siren } from 'lucide-react'
+import { Banner, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
-import { CheckList, Freshness, NoticeBanner, RecordFrame, Section, type CheckLine } from '../../../../quality/_shared/parts'
+import { CheckList, Freshness, NoticeBanner, RecordProblem, RecordSkeleton, Section, type CheckLine } from '../../../../quality/_shared/parts'
 import { evidenceAddress } from '../../../../quality/_shared/model'
 import { actionHeld, ACTIONS, dutyState, evidenceSubject, nextAction, sourceKey, sourceLink, type EntryAction, type EntryRecordModel, type RecordTab } from '../../model'
 import { DayText, RegisterMessages, RiskTag, StatusPill, TraceTables } from '../../view/parts'
@@ -19,6 +19,9 @@ import { ActionsDepth } from '../../depth/view/ActionsDepth'
 import { AuthorityTab } from '../../depth/view/AuthorityTab'
 import { DepthDialogs } from '../../depth/view/DepthDialogs'
 import type { DepthActions, DepthModel } from '../../depth/view/types'
+// ---- B-TH-267: the register entry on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 
 /** B-W2b-271: the depth parts as the record mounts them (absent: a W1 record, as before). */
 export interface EntryDepth {
@@ -32,35 +35,62 @@ export interface EntryRecordActions extends DialogsActions {
   onDialog?: (action: EntryAction | null) => void
   onCopy?: (text: string) => void
   onReload?: () => void
-  onDock?: () => void
   onDismissNotice?: () => void
 }
 
 /**
- * SCR-113 a PPE register entry (design compliance.register › Register entry, W1): the band (‹ PPE register, the
- * reference with its kind and style, the risk, the status, the next duty as the primary — each action held with its
- * reason — and ⋯), then Event · Affected units · Actions · Activity as link tabs. A closed entry never changes: a
- * correction is a note in its thread. Fetches nothing: EntryRecord.tsx reads and writes; the record panels come in as
- * `panels`, and the reporters the event may name as `parties`.
+ * SCR-113 a PPE register entry (design compliance.register › Register entry, W1), on RecordFrame (B-TH-267; the rule of picture 38,
+ * the tabs of 08-tabs O-CMP-REG): the band in the shell's band row (‹ PPE register, the reference with its kind and style, ONE status
+ * pill; the risk, the style's name, who reported it and the freshness in its details; the next duty as the primary — each action held
+ * with its reason — beside the recall's door; the Thread button ⌘J, the frame's; ⋯ with its Keyboard line), the docked thread beside
+ * every tab (Activity's tools in its "⋯", R-ACT), then Event · Affected units · Authority notices · Actions as link tabs. A closed
+ * entry never changes: a correction is a note in its thread. Fetches nothing: EntryRecord.tsx reads and writes; the docked thread
+ * comes in as `thread` (the print view's form as `printThread`), and the reporters the event may name as `parties`.
  */
-export function EntryRecordView({ model, actions, panels, parties = null, depth }: { model: EntryRecordModel; actions?: EntryRecordActions; panels?: ReactNode; parties?: DialogsParties; depth?: EntryDepth }) {
+// B-TH-267: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
+export function EntryRecordView({ model, actions, thread, printThread, parties = null, depth }: { model: EntryRecordModel; actions?: EntryRecordActions; thread?: ReactNode; printThread?: ReactNode; parties?: DialogsParties; depth?: EntryDepth }) {
   return (
     <RegisterMessages>
-      <EntryRecord model={model} actions={actions} panels={panels} parties={parties} depth={depth} />
+      <EntryRecord model={model} actions={actions} thread={thread} printThread={printThread} parties={parties} depth={depth} />
     </RegisterMessages>
+  )
+}
+
+/**
+ * B-TH-267: the entry while it is read (no problem yet), or when it cannot be (not found, not for this role, the API did not
+ * answer): inside the frame — the band stays with the way back, no thread.
+ */
+export function EntryRecordState({ prefix, problem, personId = null, onRetry }: { prefix: string; problem: string | null; personId?: string | null; onRetry?: () => void }) {
+  return (
+    <RegisterMessages>
+      <EntryState prefix={prefix} problem={problem} personId={personId} onRetry={onRetry} />
+    </RegisterMessages>
+  )
+}
+
+function EntryState({ prefix, problem, personId, onRetry }: { prefix: string; problem: string | null; personId: string | null; onRetry?: () => void }) {
+  const t = useT('register')
+  const back = (
+    <Link className="fw-q-link" href={`${prefix}/compliance/register`}>
+      {t('record.back')}
+    </Link>
+  )
+  return (
+    <RecordFrame recordType="PpeRegisterEntry" personId={personId} band={{ back, title: problem ? t('record.name') : <Skeleton width={260} height={22} />, moreLabel: t('record.more') }} thread={null} threadLabel={t('record.dockLabel')}>
+      {problem ? <RecordProblem problem={problem} back={back} onRetry={onRetry} /> : <RecordSkeleton />}
+    </RecordFrame>
   )
 }
 
 type DialogsParties = Parameters<typeof EntryDialogs>[0]['model']['parties']
 
-function EntryRecord({ model, actions, panels, parties, depth }: { model: EntryRecordModel; actions?: EntryRecordActions; panels?: ReactNode; parties: DialogsParties; depth?: EntryDepth }) {
+function EntryRecord({ model, actions, thread, printThread, parties, depth }: { model: EntryRecordModel; actions?: EntryRecordActions; thread?: ReactNode; printThread?: ReactNode; parties: DialogsParties; depth?: EntryDepth }) {
   const t = useT('register')
   const d = useT('compliance-register-depth')
   const locale = useLocale()
   const { entry, can, prefix } = model
-  // Activity needs the record panels (threads.read): without them the record opens on Event. B-W2b-271: Authority notices
-  // needs the depth parts.
-  const tab: RecordTab = (model.tab === 'activity' && !panels) || (model.tab === 'authority' && !depth) ? 'event' : model.tab
+  // B-W2b-271: Authority notices needs the depth parts (without them the record opens on Event).
+  const tab: RecordTab = model.tab === 'authority' && !depth ? 'event' : model.tab
   const next = nextAction(entry)
   const held = (action: EntryAction) => {
     const key = actionHeld(action, entry, can)
@@ -83,80 +113,82 @@ function EntryRecord({ model, actions, panels, parties, depth }: { model: EntryR
     }),
   ]
 
-  const tabs: { id: RecordTab; label: string; count?: number | null }[] = [
+  // B-TH-267: the four tabs (Authority notices only with the depth parts), each counting what it lists.
+  const tabs: TabItem[] = [
     { id: 'event', label: t('tab.event') },
     { id: 'affected', label: t('tab.affected'), count: entry.trace.counts.concerned },
     // B-W2b-271: notices sent and requests received (the count: notices not cancelled + requests still open).
-    ...(depth ? [{ id: 'authority' as RecordTab, label: d('tab.authority'), count: authorityCount(depth.model.surveillance.value) }] : []),
+    ...(depth ? [{ id: 'authority', label: d('tab.authority'), count: authorityCount(depth.model.surveillance.value) }] : []),
     { id: 'actions', label: t('tab.actions'), count: entry.status === 'OPEN' ? openDuties : null },
-    ...(panels ? [{ id: 'activity' as RecordTab, label: t('tab.activity') }] : []),
-  ]
+  ].map((item) => ({ ...item, href: `${base}?tab=${item.id}` }))
 
   return (
     <RecordFrame
-      back={{ href: `${prefix}/compliance/register`, label: t('record.back') }}
-      title={
-        <>
-          <span className="fw-q-code">{entry.reference}</span> · {t(`kind.${entry.kind}`)} · {entry.style.code}
-        </>
-      }
-      meta={
-        <span className="fw-q-cell-row">
-          <span>{entry.style.name}</span>
-          {entry.party && <span className="fw-q-hint">{t('record.reportedBy', { name: entry.party.name })}</span>}
-          <Freshness asOf={model.asOf} live={model.live} />
-        </span>
-      }
-      status={
-        <span className="fw-q-cell-row">
-          <RiskTag risk={entry.risk} />
-          <StatusPill status={entry.status} />
-        </span>
-      }
-      actions={
-        <>
-          {next && (
-            <Button size="sm" variant="primary" heldReason={held(next)} onClick={() => actions?.onDialog?.(next)}>
-              {t(`action.${next}`)}
-            </Button>
-          )}
-          {depth && <RecallBandButton depth={depth} />}
-          <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('record.more') }} items={moreItems} />
-        </>
-      }
-      tabs={tabs}
-      active={tab}
-      tabHref={(id) => `${base}?tab=${id}`}
-      dock={tab === 'activity' ? undefined : panels}
-      dockOpen={model.dockOpen}
-      onDock={actions?.onDock}
-    >
-      <NoticeBanner notice={model.notice} namespace="register" onDismiss={actions?.onDismissNotice} />
-      {depth && <NoticeBanner notice={depth.notice} namespace="compliance-register-depth" onDismiss={depth.onDismissNotice} />}
-      {model.changedAt && (
-        <Banner
-          tone="info"
-          title={t('record.changed', { time: formatDateTime(model.changedAt, { locale }) })}
-          action={
-            <Button size="sm" onClick={() => actions?.onReload?.()}>
-              {t('record.reload')}
-            </Button>
-          }
-        />
-      )}
-      {entry.status === 'CLOSED' && (
-        <Banner tone="neutral" title={t('record.closed', { date: entry.closedAt ? formatDate(entry.closedAt, { locale }) : '—' })}>
-          {t('record.closedBody')}
-          {panels && (
+      recordType="PpeRegisterEntry"
+      personId={model.personId ?? null}
+      threadLabel={t('record.dockLabel')}
+      thread={thread ?? null}
+      printThread={printThread}
+      band={{
+        back: (
+          <Link className="fw-q-link" href={`${prefix}/compliance/register`}>
+            {t('record.back')}
+          </Link>
+        ),
+        title: (
+          <>
+            <span className="fw-q-code">{entry.reference}</span> · {t(`kind.${entry.kind}`)} · {entry.style.code}
+          </>
+        ),
+        // ONE status pill; the risk, the style's name, who reported it and the freshness in the band's details.
+        status: <StatusPill status={entry.status} />,
+        meta: (
+          <span className="fw-q-cell-row">
+            <RiskTag risk={entry.risk} />
+            <span>{entry.style.name}</span>
+            {entry.party && <span className="fw-q-hint">{t('record.reportedBy', { name: entry.party.name })}</span>}
+            <Freshness asOf={model.asOf} live={model.live} />
+          </span>
+        ),
+        // The next duty, and beside it the recall's door (B-W2b-271: Start recall / Open the recall running) — both kept.
+        primary:
+          next || depth ? (
             <>
-              {' '}
-              <Link className="fw-q-link" href={`${base}?tab=activity`}>
-                {t('record.addNote')}
-              </Link>
+              {next && (
+                <Button size="sm" variant="primary" heldReason={held(next)} onClick={() => actions?.onDialog?.(next)}>
+                  {t(`action.${next}`)}
+                </Button>
+              )}
+              {depth && <RecallBandButton depth={depth} />}
             </>
-          )}
-        </Banner>
-      )}
+          ) : undefined,
+        more: moreItems,
+        moreLabel: t('record.more'),
+      }}
+    >
+      <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={tab} size="sm" overflow="scroll" />
+      {/* B-TH-267: ONE notice in the body column, the most serious first; the rest behind "N more notices". A closed entry's
+          correction is a note in the thread docked beside it (the old "Add a note" link to Activity went with the tab). */}
+      <RecordNotices>
+        <NoticeBanner notice={model.notice} namespace="register" onDismiss={actions?.onDismissNotice} />
+        {depth && <NoticeBanner notice={depth.notice} namespace="compliance-register-depth" onDismiss={depth.onDismissNotice} />}
+        {model.changedAt && (
+          <Banner
+            tone="info"
+            title={t('record.changed', { time: formatDateTime(model.changedAt, { locale }) })}
+            action={
+              <Button size="sm" onClick={() => actions?.onReload?.()}>
+                {t('record.reload')}
+              </Button>
+            }
+          />
+        )}
+        {entry.status === 'CLOSED' && (
+          <Banner tone="neutral" title={t('record.closed', { date: entry.closedAt ? formatDate(entry.closedAt, { locale }) : '—' })}>
+            {t('record.closedBody')}
+          </Banner>
+        )}
+      </RecordNotices>
       {tab === 'event' && <EventTab model={model} held={held} onDialog={actions?.onDialog} />}
       {tab === 'affected' && (
         <Section title={t('affected.title')} sub={t('affected.sub')} id="reg-affected">
@@ -167,7 +199,6 @@ function EntryRecord({ model, actions, panels, parties, depth }: { model: EntryR
       {tab === 'authority' && depth && <AuthorityTab model={depth.model} actions={depth.actions} />}
       {tab === 'actions' && <ActionsTab model={model} held={held} onDialog={actions?.onDialog} />}
       {tab === 'actions' && depth && <ActionsDepth model={depth.model} actions={depth.actions} />}
-      {tab === 'activity' && panels}
       <EntryDialogs
         model={{ entry, dialog: model.dialog ?? null, busy: !!model.busy, problem: model.dialogProblem ?? null, today: model.today, parties }}
         actions={actions}

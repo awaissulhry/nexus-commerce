@@ -18,12 +18,13 @@ export const PEOPLE: Person[] = [
   { id: id(802), name: 'Marco Esempio (vendite)' },
 ]
 
-const ALL_SAFETY = ['sales.safety.view', 'sales.safety.manage', 'sales.safety.injury', 'sales.safety.log', 'sales.service.manage', 'sales.service.view', 'compliance.register.view', 'compliance.register.manage', 'parties.view', 'product.styles.view']
+// B-TH-267: the office roles read threads (the report's docked thread); the warehouse case below does not reach the report at all.
+const ALL_SAFETY = ['sales.safety.view', 'sales.safety.manage', 'sales.safety.injury', 'sales.safety.log', 'sales.service.manage', 'sales.service.view', 'compliance.register.view', 'compliance.register.manage', 'parties.view', 'product.styles.view', 'threads.read']
 export const ROLE_PERMISSIONS = {
   inspector: ALL_SAFETY,
-  sales: ['sales.safety.view', 'sales.safety.manage', 'sales.service.manage', 'sales.service.view', 'parties.view', 'product.styles.view'],
-  production: ['sales.safety.view', 'compliance.register.view'],
-  readOnly: ['sales.safety.view', 'compliance.register.view'],
+  sales: ['sales.safety.view', 'sales.safety.manage', 'sales.service.manage', 'sales.service.view', 'parties.view', 'product.styles.view', 'threads.read'],
+  production: ['sales.safety.view', 'compliance.register.view', 'threads.read'],
+  readOnly: ['sales.safety.view', 'compliance.register.view', 'threads.read'],
   warehouse: ['inventory.stock.view'],
 } as const satisfies Record<string, readonly string[]>
 export const canOf = (role: keyof typeof ROLE_PERMISSIONS): SafetyCan => safetyCan(ROLE_PERMISSIONS[role])

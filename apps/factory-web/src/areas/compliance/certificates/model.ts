@@ -666,8 +666,29 @@ export interface CertificatesListModel {
 }
 
 // W2a (B-W2a-66): Renewals (the validity, the expiry alerts, the renewal, the changes to the approved type).
-export const RECORD_TABS = ['coverage', 'renewals', 'body', 'files', 'activity'] as const
+// ---- B-TH-267 (threads plan TH-6; 08-tabs O-CMP-CERT; the rule of picture 38): tabs 5 → 3. Files merges into the Notified body tab,
+// "Notified body & PDF" (the certificate PDF keeps its own hash route and status gate, R-2 — never the thread's generic upload); Activity
+// goes (R-ACT: its tools are in the docked thread's "⋯"). The tab keeps its id `body`, so every address to it stays.
+export const RECORD_TABS = ['coverage', 'renewals', 'body'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Files → Notified body & PDF; Activity → Coverage with the thread opened (RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ files: 'body', activity: 'coverage' })
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'coverage'
+}
+/**
+ * The thread's party (the API's: platform/threads/records.ts Certificate): the brand that holds the certificate — the legal maker — and
+ * only a brand (a supplier holding a protector's certificate, or our own company, gives a thread of office notes only). The brand is
+ * known by the brands list (parties.view); without it no party is named here and the thread offers notes only.
+ */
+export function threadPartyOf(certificate: Pick<Certificate, 'holderPartyId'>, brands: readonly BrandOption[] | null): { id: string; name: string } | null {
+  if (!certificate.holderPartyId) return null
+  const brand = brands?.find((entry) => entry.id === certificate.holderPartyId)
+  return brand ? { id: brand.id, name: brand.tradeName ?? brand.legalName } : null
+}
+// ---- end B-TH-267
 
 export type RecordDialog =
   | { kind: 'register' }
@@ -746,7 +767,8 @@ export interface CertificateRecordModel {
   busy: boolean
   dialogProblem: string | null
   dialogLines: readonly string[]
-  dockOpen: boolean
+  /** B-TH-267: who reads (the docked thread's width is remembered per person and record type); design cases: none. */
+  personId?: string | null
   /** W2a: the Renewals tab (read while it is open); null: not mounted. */
   renewals: RenewalsModel | null
   /** W2b (B-W2b-255): the certificate in depth (Coverage and Notified body tabs) and the Notified bodies pop-up. */

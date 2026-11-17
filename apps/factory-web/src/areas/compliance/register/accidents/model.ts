@@ -23,6 +23,8 @@ export const SAFETY_PERMISSIONS = {
   registerManage: 'compliance.register.manage',
   parties: 'parties.view',
   styles: 'product.styles.view',
+  // B-TH-267: the report's docked thread (platform/threads/records.ts ProductSafetyReport) is read with threads.read.
+  threads: 'threads.read',
 } as const
 export type SafetyCan = Readonly<Record<keyof typeof SAFETY_PERMISSIONS, boolean>>
 
@@ -127,10 +129,20 @@ export const isNotifiable = (outcome: AccidentOutcome): boolean => (NOTIFIABLE_O
 /** A person's name from the answer's people; null when unknown. */
 export const nameOf = (people: readonly Person[] | null | undefined, id: string | null): string | null => (id ? (people?.find((person) => person.id === id)?.name ?? null) : null)
 
-/** The record's tabs. */
-export const RECORD_TABS = ['report', 'accident', 'photos'] as const
+/**
+ * The record's tabs. B-TH-267 (threads plan TH-6; 08-tabs O-CMP-SAFE; the rule of picture 38): 3 → 2 — Photos merges into "Report &
+ * photos" (each opening still recorded through the report's own route: R-4, never the thread's Files view or a generic viewer).
+ */
+export const RECORD_TABS = ['report', 'accident'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 export const isRecordTab = (value: string | null): value is RecordTab => (RECORD_TABS as readonly string[]).includes(value ?? '')
+/** Every old `?tab=` keeps working (R-8): Photos → Report & photos (an old Activity address opens the thread: RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ photos: 'report' })
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if (isRecordTab(asked)) return asked
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'report'
+}
 
 /** A dialog a row verb opens on the record (`?do=`). */
 export const RECORD_DOS = ['revise', 'told'] as const

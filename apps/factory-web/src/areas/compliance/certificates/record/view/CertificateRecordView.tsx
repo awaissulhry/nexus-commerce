@@ -2,14 +2,14 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { CircleCheck, CircleMinus, CircleX, Download, Lock, MoreHorizontal, Plus, Upload } from 'lucide-react'
-import { Banner, Card, Disclosure, EmptyState, KeyValue, Menu, SummaryTable, type MenuItemDef } from '@nexus/ui/components'
-import { Button, Spinner, Tag } from '@nexus/ui/primitives'
+import { CircleCheck, CircleMinus, CircleX, Download, Lock, Plus, Upload } from 'lucide-react'
+import { Banner, Card, Disclosure, EmptyState, KeyValue, SummaryTable, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { DateField } from '../../../../../lib/i18n/ds-parts'
 import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { isPageKey } from '../../../../quality/_shared/hooks'
-import { CheckList, dash, Freshness, NoAccess, NoticeBanner, RecordFrame, RecordProblem, RecordSkeleton, Section } from '../../../../quality/_shared/parts'
+import { CheckList, dash, Freshness, NoticeBanner, RecordProblem, RecordSkeleton, Section } from '../../../../quality/_shared/parts'
 import type { CertificateDetail, Coverage, MaterialOption, StyleFacts, StyleOption } from '../../api'
 import {
   acceptsCoverage,
@@ -24,6 +24,7 @@ import {
   rangeText,
   registerHeld,
   retainUntil,
+  RECORD_TABS,
   type CertificateRecordModel,
   type CheckModel,
   type CoverageDraft,
@@ -44,11 +45,13 @@ import { BodyPanel } from '../../depth/view/BodyPanel'
 import { BoughtInSection, DepthSections } from '../../depth/view/DepthSections'
 import { DepthDialogs } from '../../depth/view/dialogs'
 import { BodiesDialog } from '../../bodies/view/BodiesDialog'
+// ---- B-TH-267: the certificate on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 
 export interface CertificateRecordActions {
   onDialog?: (dialog: RecordDialog | null) => void
   onRetry?: () => void
-  onDock?: () => void
   onCopy?: (text: string) => void
   onDismissNotice?: () => void
   // a draft's details
@@ -88,56 +91,84 @@ export interface CertificateRecordActions {
 }
 
 /**
- * SCR-051 the certificate record (design compliance.certificates "Record: Certificate"; 00 §2.2; Owner L1: tabs in the
- * band): ‹ Certificates, "<number> · <standard> · class X", holder, notified body and model as meta, the status and the
- * validity in words, the next step as the primary — Register… on a draft (held with the first open check), Check a
- * garment on a valid one, Reinstate… on a suspended one — and ⋯ (Mark suspended…, Mark withdrawn…, Copy number, Keys).
- * Tabs: Coverage (what it covers per style: colourway × size, made-to-measure, the parts it covers; what it blocks when
- * it lapses), Notified body, Files (its PDF), Activity (the record panels). Fetches nothing: CertificateRecord.tsx does.
+ * SCR-051 the certificate record (design compliance.certificates "Record: Certificate"), on RecordFrame (B-TH-267; the rule of
+ * picture 38, the tabs of 08-tabs O-CMP-CERT): the band in the shell's band row (‹ Certificates, "<number> · <standard> · class X",
+ * ONE status pill; the validity in words, the holder, the notified body and the model in its details; the next step as the primary —
+ * Register… on a draft (held with the first open check), Check a garment on a valid one, Reinstate… on a suspended one —; the
+ * Thread button ⌘J, the frame's; ⋯ Mark suspended…, Mark withdrawn…, Renew, The PDF and files, Copy number, its Keyboard line), the
+ * docked thread beside every tab (Activity's tools in its "⋯", R-ACT), the tabs 5 → 3: Coverage (what it covers per style: colourway ×
+ * size, made-to-measure, the parts it covers; what it blocks when it lapses), Renewals, Notified body & PDF (the body, then the
+ * certificate's PDF on its own hash route and status gate — R-2 — and its retention). Fetches nothing: CertificateRecord.tsx does.
  */
-export function CertificateRecordView({ model, actions, panels }: { model: CertificateRecordModel; actions?: CertificateRecordActions; panels?: ReactNode }) {
+// B-TH-267: `thread` the docked thread (the office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
+export function CertificateRecordView({ model, actions, thread, printThread }: { model: CertificateRecordModel; actions?: CertificateRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <CertMessages>
-      <Record model={model} actions={actions} panels={panels} />
+      <Record model={model} actions={actions} thread={thread} printThread={printThread} />
     </CertMessages>
   )
 }
 
-function Record({ model, actions, panels }: { model: CertificateRecordModel; actions?: CertificateRecordActions; panels?: ReactNode }) {
+function Record({ model, actions, thread, printThread }: { model: CertificateRecordModel; actions?: CertificateRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useT('certificates')
   const back = { href: `${model.prefix}/compliance/certificates`, label: t('record.back') }
-  if (!model.can.view) return <NoAccess title={t('noAccess.title')} body={t('noAccess.body')} />
-  if (model.detail.problem)
+  const value = model.can.view && !model.detail.problem ? model.detail.value : null
+  if (!value) {
+    // B-TH-267: loading, failed, not found and not for this role draw inside the frame — the band stays, no thread.
     return (
-      <RecordProblem
-        problem={model.detail.problem}
-        back={
-          <Button size="sm" asChild>
-            <Link href={back.href}>{t('record.backToList')}</Link>
-          </Button>
-        }
-        onRetry={actions?.onRetry}
-      />
+      <RecordFrame
+        recordType="Certificate"
+        personId={model.personId ?? null}
+        band={{ back: <Link href={back.href}>{back.label}</Link>, title: model.can.view && !model.detail.problem ? <Skeleton width={260} height={22} /> : t('record.name'), moreLabel: t('record.more') }}
+        thread={null}
+        threadLabel={t('record.dockLabel')}
+      >
+        {!model.can.view ? (
+          <Card padded>
+            <EmptyState title={t('noAccess.title')} description={t('noAccess.body')} />
+          </Card>
+        ) : model.detail.problem ? (
+          <RecordProblem
+            problem={model.detail.problem}
+            back={
+              <Button size="sm" asChild>
+                <Link href={back.href}>{t('record.backToList')}</Link>
+              </Button>
+            }
+            onRetry={actions?.onRetry}
+          />
+        ) : (
+          <RecordSkeleton />
+        )}
+      </RecordFrame>
     )
-  if (!model.detail.value) return <RecordSkeleton />
-  return <Ready certificate={model.detail.value} model={model} actions={actions} panels={panels} back={back} />
+  }
+  return <Ready certificate={value} model={model} actions={actions} thread={thread} printThread={printThread} back={back} />
 }
 
-function Ready({ certificate, model, actions, panels, back }: { certificate: CertificateDetail; model: CertificateRecordModel; actions?: CertificateRecordActions; panels?: ReactNode; back: { href: string; label: string } }) {
+function Ready({ certificate, model, actions, thread, printThread, back }: { certificate: CertificateDetail; model: CertificateRecordModel; actions?: CertificateRecordActions; thread?: ReactNode; printThread?: ReactNode; back: { href: string; label: string } }) {
   const t = useT('certificates')
   const can = model.can
   const dialog = model.dialog
   const holder = holderOf(certificate, model.companies, model.brands)
   const registerWhy = registerHeld(certificate, can, model.today)
   const manageHeld = can.manage ? null : t('held.manage')
-  const tabs = [
-    { id: 'coverage', label: t('tab.coverage'), count: certificate.coverage.filter((entry) => entry.status === 'ACTIVE').length },
-    // W2a: the changes to the approved type still waiting (null while unread: nothing drawn).
-    { id: 'renewals', label: t('tab.renewals'), count: model.renewals?.reviews.value ? model.renewals.reviews.value.filter((review) => review.status === 'OPEN' || review.status === 'NOTIFIED').length : null },
-    { id: 'body', label: t('tab.body') },
-    { id: 'files', label: t('tab.files'), count: model.files?.value ? model.files.value.filter((file) => file.status === 'AVAILABLE').length : null },
-    { id: 'activity', label: t('tab.activity') },
-  ]
+  // B-TH-267: the three tabs; Notified body & PDF counts the files on file (null while unread: nothing drawn).
+  const available = model.files?.value ? model.files.value.filter((file) => file.status === 'AVAILABLE').length : null
+  const tabs: TabItem[] = RECORD_TABS.map((tab) => ({
+    id: tab,
+    href: certificateHref(model.prefix, certificate.id, `tab=${tab}`),
+    label: t(`tab.${tab}`),
+    count:
+      tab === 'coverage'
+        ? certificate.coverage.filter((entry) => entry.status === 'ACTIVE').length
+        : tab === 'renewals'
+          ? // W2a: the changes to the approved type still waiting (null while unread: nothing drawn).
+            model.renewals?.reviews.value
+            ? model.renewals.reviews.value.filter((review) => review.status === 'OPEN' || review.status === 'NOTIFIED').length
+            : null
+          : available,
+  }))
 
   // k: Check a garment, r: Register (a draft), ?: the keys; never while typing or in a dialog.
   const overlay = !!model.depth?.dialog || !!model.bodies?.open
@@ -181,10 +212,10 @@ function Ready({ certificate, model, actions, panels, back }: { certificate: Cer
     ...(certificate.status === 'SUSPENDED' ? [{ id: 'reinstate', label: t('action.reinstate'), onSelect: () => actions?.onDialog?.({ kind: 'status', move: 'reinstate' }), ...held(can.manage) }] : []),
     ...(certificate.status !== 'DRAFT' ? [{ id: 'check', label: t('check.open'), onSelect: () => actions?.onDialog?.({ kind: 'check' }) }] : []),
     ...(certificate.status === 'VALID' || certificate.status === 'SUSPENDED' ? [{ id: 'renew', label: t('row.renew'), href: certificateHref(model.prefix, certificate.id, 'tab=renewals&act=renew'), ...held(can.manage) }] : []),
-    { id: 'files', label: t('action.files'), href: certificateHref(model.prefix, certificate.id, 'tab=files') },
+    // B-TH-267: the PDF and files are on Notified body & PDF.
+    { id: 'files', label: t('action.files'), href: certificateHref(model.prefix, certificate.id, 'tab=body') },
     { id: 'copy', label: t('action.copyNumber'), onSelect: () => actions?.onCopy?.(certificate.number) },
-    { id: 'sep', separator: true },
-    { id: 'keys', label: t('keys.title'), onSelect: () => actions?.onDialog?.({ kind: 'shortcuts' }) },
+    // B-TH-267: the record's own keys (k, r) stay behind "?"; the band's Keyboard line is the frame's (⌘J and the thread's keys).
   ]
 
   const title = (
@@ -196,17 +227,13 @@ function Ready({ certificate, model, actions, panels, back }: { certificate: Cer
       </span>
     </span>
   )
+  // B-TH-267: ONE status pill in the band; the validity in words, the holder, the body, the model and the freshness in its details.
   const meta = (
     <span className="fw-q-tags">
+      <LeftTag certificate={certificate} today={model.today} />
       <span>{t(`holder.${holder.kind}`)}: {dash(holder.name)}</span>
       <span>· {t('record.bodyMeta', { number: certificate.notifiedBodyNumber, name: certificate.notifiedBodyName })}</span>
       {certificate.modelReference && <span>· {t('record.modelMeta', { model: certificate.modelReference })}</span>}
-    </span>
-  )
-  const status = (
-    <span className="fw-q-tags">
-      <StatusPill status={certificate.status} />
-      <LeftTag certificate={certificate} today={model.today} />
       <Freshness asOf={model.asOf} live={model.live} />
     </span>
   )
@@ -218,40 +245,42 @@ function Ready({ certificate, model, actions, panels, back }: { certificate: Cer
       case 'renewals':
         return model.renewals ? <RenewalsTab model={model.renewals} can={can} prefix={model.prefix} actions={actions?.renewals} /> : null
       case 'body':
-        // W2b (B-W2b-255): the directory's body, the scope check, NANDO, Pick from the directory (W1's typed view before it).
-        return model.depth ? <BodyPanel model={model.depth} can={can} prefix={model.prefix} actions={actions?.depth} onDirectory={() => actions?.bodies?.onOpen?.()} /> : <BodyTab certificate={certificate} model={model} />
-      case 'files':
-        return <FilesTab certificate={certificate} model={model} actions={actions} />
-      case 'activity':
-        return panels ?? <Section title={t('tab.activity')}>{<p className="fw-q-hint">{t(can.threads ? 'record.noPanels' : 'record.panelsHeld')}</p>}</Section>
+        // B-TH-267: Notified body & PDF — the body (W2b B-W2b-255: the directory's body, the scope check, NANDO, Pick from the directory;
+        // W1's typed view before it), then the certificate's PDF and files (their own hash route and status gate, R-2) and the retention.
+        return (
+          <>
+            {model.depth ? <BodyPanel model={model.depth} can={can} prefix={model.prefix} actions={actions?.depth} onDirectory={() => actions?.bodies?.onOpen?.()} /> : <BodyTab certificate={certificate} model={model} />}
+            <FilesTab certificate={certificate} model={model} actions={actions} />
+          </>
+        )
     }
   })()
 
   return (
     <>
       <RecordFrame
-        back={back}
-        title={title}
-        meta={meta}
-        status={status}
-        actions={
-          <>
-            {primary}
-            <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('record.more') }} items={more} />
-          </>
-        }
-        tabs={tabs}
-        active={model.tab}
-        tabHref={(tab) => certificateHref(model.prefix, certificate.id, `tab=${tab}`)}
-        dock={panels && model.tab !== 'activity' ? panels : undefined}
-        dockOpen={model.dockOpen}
-        onDock={actions?.onDock}
+        recordType="Certificate"
+        personId={model.personId ?? null}
+        threadLabel={t('record.dockLabel')}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: <Link href={back.href}>{back.label}</Link>,
+          title,
+          status: <StatusPill status={certificate.status} />,
+          meta,
+          primary,
+          more,
+          moreLabel: t('record.more'),
+        }}
       >
-        <div className="fw-q-stack">
+        <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+        {/* B-TH-267: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+        <RecordNotices>
           <NoticeBanner notice={model.notice} namespace="certificates" onDismiss={actions?.onDismissNotice} />
           <StateBanner certificate={certificate} />
-          {body}
-        </div>
+        </RecordNotices>
+        <div className="fw-q-stack">{body}</div>
       </RecordFrame>
 
       {model.depth && <DepthDialogs model={model.depth} can={can} actions={actions?.depth} />}

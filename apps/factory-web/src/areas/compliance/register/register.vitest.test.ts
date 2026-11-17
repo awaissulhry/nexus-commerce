@@ -25,7 +25,14 @@ import {
   tileCounts,
   viewQuery,
   viewRows,
+  // B-TH-267
+  MERGED_TABS,
+  RECORD_TABS,
+  tabOf,
 } from './model'
+// B-TH-267: the register entry on RecordFrame (tabs 5 → 4, the docked thread).
+import { readFileSync } from 'node:fs'
+import { textOf } from '../../../lib/record-thread/parts/testing'
 
 const params = (query: string) => new URLSearchParams(query)
 const row = (n: number) => ENTRIES.find((entry) => entry.reference.endsWith(String(n).padStart(4, '0')))!
@@ -191,5 +198,66 @@ describe('every design case draws in both languages with no key left on screen',
     for (const screen of [listScreen, entryScreen] as DesignScreen<unknown>[]) {
       for (const item of screen.cases) expect(render(screen, item.model, 'en'), `${screen.screen}/${item.id}`).not.toMatch(/€|EUR\b/)
     }
+  })
+})
+
+// ---- B-TH-267: the register entry on RecordFrame (O-CMP-REG; the rule of picture 38, the tabs of 08-tabs) ----
+describe('B-TH-267: the register entry on RecordFrame — Event · Affected units · Authority notices · Actions, the thread docked', () => {
+  const screen = entryScreen as unknown as DesignScreen<unknown>
+  const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const found = screen.cases.find((item) => item.id === id)
+    if (!found) throw new Error(`no case ${id}`)
+    const View = screen.view as ComponentType<{ model: unknown }>
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: found.model })))
+  }
+  const source = (path: string) => readFileSync(new URL(path, import.meta.url), 'utf8')
+
+  it('four tabs; every old ?tab= keeps working (R-8): Activity → Event with the thread opened', () => {
+    expect(RECORD_TABS).toEqual(['event', 'affected', 'authority', 'actions'])
+    expect(MERGED_TABS).toEqual({ activity: 'event' })
+    expect(tabOf('activity')).toBe('event')
+    expect(tabOf('authority')).toBe('authority')
+    expect(tabOf('actions')).toBe('actions')
+    expect(tabOf('constructor')).toBe('event')
+    expect(tabOf(null)).toBe('event')
+  })
+
+  it('ONE thread docked beside every tab, its "⋯" (R-ACT) on each; no Activity tab, no record panels, no dock copy', () => {
+    for (const id of ['event', 'affected', 'actions', 'closed', 'thread-docked', 'w2b-authority']) {
+      const page = html(id)
+      expect(page.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(page, id).toContain('aria-label="Thread tools"')
+      expect(page, id).not.toContain('fw-rp-tabs')
+      expect(page, id).not.toContain('tab=activity')
+    }
+    // Loading, not found, not for this role: inside the frame, the band stays, no thread.
+    for (const id of ['loading', 'not-found', 'sales', 'error']) {
+      const page = html(id)
+      expect(page, id).not.toContain('class="fw-rcf-dock"')
+      expect(textOf(page), id).toContain('PPE register')
+    }
+    const container = source('./record/EntryRecord.tsx')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain('const thread = threads ?')
+    expect(container).toContain('party={party} partyRole="customer"')
+    expect(container).not.toContain('?tab=activity')
+    expect(container).not.toContain('fw.register.dock')
+    const view = source('./record/view/EntryRecordView.tsx')
+    expect(view).not.toContain('tab=activity')
+    expect(view).not.toContain('RecordPanelsView')
+  })
+
+  it('a closed entry: read only, its correction a note in the thread docked beside it (no link to a tab that went)', () => {
+    const page = html('closed')
+    expect(textOf(page)).toContain('a correction is a note in its thread')
+    expect(page).not.toContain('Add a note</a>')
+  })
+
+  it('the wall (W16, W34): the docked thread speaks of the reporting customer only', () => {
+    const page = html('thread-docked')
+    const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
+    expect(dock).toContain('Moto Demo S.r.l.')
+    expect(dock).not.toContain('Esempio Distribuzione')
+    expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
   })
 })

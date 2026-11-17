@@ -1,15 +1,12 @@
-import { createElement, useEffect, useState, type ReactNode } from 'react'
+import { createElement, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
-import { RecordPanelsView } from '../../../../record-panels/view/RecordPanelsView'
 import { canFor, inShell, NOW, PREFIX, type RoleCase } from '../../../quality/_shared/fixtures'
-import { RecordProblem, RecordSkeleton } from '../../../quality/_shared/parts'
 import type { EntryDetail } from '../api'
 import { detailOf, ENTRIES, PARTIES, RELEASES, TRACE, TRACE_NOTHING_LEFT } from '../fixtures'
 import type { EntryAction, EntryRecordModel, RecordTab } from '../model'
-import { RegisterMessages } from '../view/parts'
-import { EntryRecordView } from './view/EntryRecordView'
+import { EntryRecordState, EntryRecordView } from './view/EntryRecordView'
+// B-TH-267: the entry's docked thread (made-up; the page mounts the office's OfficeRecordThread docked).
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 // B-W2b-271: the W2b cases (Authority notices, recall progress and the distributor log, their dialogs).
 import { depthOf, NOTICE_DRAFT, NOTICE_SENT, RECIPIENTS_NONE, SEND_RESULTS, SURVEILLANCE_EMPTY } from '../depth/fixtures'
 import { failedRead, ready, reading } from '../../../quality/_shared/model'
@@ -19,7 +16,8 @@ import type { DepthDialogKind, DepthModel } from '../depth/view/types'
  * SCR-113-entry a PPE register entry — made-up data only (the entries of SCR-113's fixtures). Each case is one state the
  * Owner reviews: each tab, the next duty as the primary (assess → corrective action → distributors → authority →
  * close), an entry opened by a release taken back (its link), one from a lab result (the lot's link), risk yes with the
- * authority duty, a closed entry (read only: notes only), every dialog, a refused close with the API's lines, a change
+ * authority duty, a closed entry (read only: notes only), the thread docked beside every tab (B-TH-267: RecordFrame, Activity's
+ * tools in the thread's "⋯"; the reporting party its only party), every dialog, a refused close with the API's lines, a change
  * by someone else while a dialog is open, the roles (read-only and production manager: every action held; sales: no
  * permission), loading and a failed read.
  */
@@ -48,19 +46,8 @@ export interface EntryDesignModel {
   readonly depth?: DepthModel
 }
 
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-
-/** The record panels as the entry mounts them (the made-up conversation of SCR-006, on this entry). */
-function panelsOf(entry: EntryDetail, role: RoleCase): ReactNode {
-  const model: RecordPanelsViewModel = {
-    ...conversation,
-    record: { type: 'PpeRegisterEntry', id: entry.id, companyId: entry.companyId, siteId: null },
-    title: entry.reference,
-    party: entry.party ? { id: entry.party.id, name: entry.party.name, emails: [] } : null,
-    can: role === 'readOnly' ? { ...conversation.can, post: false, email: false, manage: false, upload: false, share: false } : conversation.can,
-  }
-  return createElement(RecordPanelsView, { model })
-}
+/** B-TH-267: the entry's ONE thread docked beside every tab — the party that reported it is its only party (none: notes only). */
+const threadOf = (entry: EntryDetail) => designDockedThread({ recordType: 'PpeRegisterEntry', record: entry.reference, party: entry.party ? { name: entry.party.name, role: 'customer' } : null })
 
 function record(role: RoleCase, entry: EntryDetail, over: Partial<EntryRecordModel> = {}): EntryDesignModel {
   return {
@@ -79,7 +66,7 @@ function record(role: RoleCase, entry: EntryDetail, over: Partial<EntryRecordMod
       busy: false,
       dialogProblem: null,
       changedAt: null,
-      dockOpen: false,
+      personId: null,
       today: '2026-10-29',
       ...over,
     },
@@ -95,16 +82,16 @@ function EntryDesign({ model }: { model: EntryDesignModel }) {
   useEffect(() => setDialog(model.record?.dialog ?? null), [model.record])
   useEffect(() => setTab(model.record?.tab ?? 'event'), [model.record])
   const path = '/compliance/register'
-  if (model.state === 'loading') return inShell(path, createElement(RegisterMessages, null, createElement(RecordSkeleton)), model.role)
-  if (model.state === 'problem' || !model.record)
-    return inShell(path, createElement(RegisterMessages, null, createElement(RecordProblem, { problem: model.problem ?? 'problem.unavailable', back: null })), model.role)
+  // B-TH-267: loading and the problems draw inside the frame (the band stays, no thread).
+  if (model.state === 'loading') return inShell(path, createElement(EntryRecordState, { prefix: PREFIX, problem: null }), model.role)
+  if (model.state === 'problem' || !model.record) return inShell(path, createElement(EntryRecordState, { prefix: PREFIX, problem: model.problem ?? 'problem.unavailable' }), model.role)
   const recordModel: EntryRecordModel = { ...model.record, dialog, tab }
   const canSeeThread = model.role !== 'sales'
   return inShell(
     path,
     createElement(EntryRecordView, {
       model: recordModel,
-      panels: canSeeThread ? panelsOf(model.record.entry, model.role) : undefined,
+      thread: canSeeThread ? threadOf(model.record.entry) : null,
       parties: PARTIES,
       actions: { onDialog: setDialog, onCloseDialog: () => setDialog(null) },
       depth: model.depth ? { model: { ...model.depth, dialog: depthDialog }, actions: { onDialog: setDepthDialog } } : undefined,
@@ -121,8 +108,8 @@ export const designScreen = defineDesignScreen<EntryDesignModel>({
     { id: 'event', label: 'Owner: a complaint being assessed (Event)', model: record('owner', complaint), note: 'The primary is the next duty: Assess the risk.' },
     { id: 'affected', label: 'Affected units: work orders, cells, shipments with DDTs, customers', model: record('owner', complaint, { tab: 'affected' }) },
     { id: 'actions', label: 'Actions: the duties in words with the law, what stops the close', model: record('owner', complaint, { tab: 'actions' }) },
-    { id: 'activity', label: 'Activity: the thread, files and history', model: record('owner', complaint, { tab: 'activity' }) },
-    { id: 'dock', label: 'The thread beside the record on a wide screen (⌘J)', model: record('owner', complaint, { dockOpen: true }) },
+    // B-TH-267: Activity went (its tools in the docked thread's "⋯"); the thread is docked beside every tab.
+    { id: 'thread-docked', label: 'The thread docked beside the event: Reply to the reporting customer only', model: record('owner', complaint) },
     {
       id: 'from-reversal',
       label: 'Opened by a release taken back: the link to the release; risk yes, the authority next',

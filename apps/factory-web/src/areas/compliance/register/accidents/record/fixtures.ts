@@ -1,8 +1,11 @@
+import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../../lib/design/design-screen'
 import { asReadOnly, canOf, CLOSED_REPORT, NEW_REPORT, PREFIX, REPORT, REVISIONS, TODAY } from '../demo/fixtures'
 import { dialogFor, toldDialogFor } from './dialogs'
 import type { DialogState, RecordDialog, ReportRecordModel } from './view-model'
 import { ReportRecordView } from './view/ReportRecordView'
+// B-TH-267: the report's docked thread (made-up; the page mounts the office's OfficeRecordThread docked).
+import { designDockedThread } from '../../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-421-record (B-W2b-357) — a product-safety report in the office: Report (serious harm not told; a new public report not
@@ -10,8 +13,16 @@ import { ReportRecordView } from './view/ReportRecordView'
  * reporter hidden), Accident log (to tell, told, not in the log), Photos (one, none, adding), each dialog (close, file,
  * record in the log, a revision, the authority told, erase the reporter, erase the injury words, record whether hurt,
  * correct the facts) with its problems and a refusal, changed elsewhere, a closed report, loading, not found, error, no
- * permission. Made-up data only.
+ * permission. B-TH-267: Photos sits under the report (Report & photos), the thread docked beside both tabs (the report's customer
+ * its only party; a public report none: notes only). Made-up data only.
  */
+
+/** B-TH-267: the report with its ONE docked thread (a person with threads.read on a report that is read). */
+function ReportDesign({ model }: { model: ReportRecordModel }) {
+  const report = model.can.view && !model.problem ? model.report : null
+  const thread = report && model.can.threads ? designDockedThread({ recordType: 'ProductSafetyReport', record: report.number, party: report.party ? { name: report.party.legalName, role: 'customer' } : null }) : null
+  return createElement(ReportRecordView, { model, thread })
+}
 
 const base = (over: Partial<ReportRecordModel> = {}): ReportRecordModel => ({
   prefix: PREFIX,
@@ -28,6 +39,7 @@ const base = (over: Partial<ReportRecordModel> = {}): ReportRecordModel => ({
   notice: null,
   live: 'live',
   changed: false,
+  personId: null,
   ...over,
 })
 
@@ -38,7 +50,7 @@ const dialog = (value: RecordDialog, over: Partial<DialogState> = {}): DialogSta
 export const designScreen = defineDesignScreen<ReportRecordModel>({
   screen: 'SCR-421-record',
   title: 'Compliance › Product-safety report (the record)',
-  view: ReportRecordView,
+  view: ReportDesign,
   cases: [
     { id: 'report', label: 'Report: being assessed, serious harm not told (quality)', model: base(), note: 'The band: Close… as the one primary; ⋯ every other verb held with why. The injury behind a recorded opening.' },
     { id: 'injury-open', label: 'The injury opened by quality: the opening recorded', model: base({ injury: OPENED }), note: 'GDPR art. 9: the words only in this page’s state; Hide; every Show is a new recorded opening.' },
@@ -52,9 +64,11 @@ export const designScreen = defineDesignScreen<ReportRecordModel>({
     { id: 'accident-told', label: 'Accident log: the authority was told', model: base({ tab: 'accident', report: CLOSED_REPORT, revisions: { items: [CLOSED_REPORT.accidentLog.newest!], problem: null } }) },
     { id: 'accident-none', label: 'Accident log: not in the log (Record in the accident log…)', model: base({ tab: 'accident', report: { ...REPORT, accident: null, accidentLog: { revisions: 0, newest: null, state: { told: false, mustTell: false, words: '' } } }, revisions: { items: [], problem: null } }) },
     { id: 'accident-loading', label: 'Accident log: the revisions loading', model: base({ tab: 'accident', revisions: { items: null, problem: null } }) },
-    { id: 'photos', label: 'Photos: one, Add a photo', model: base({ tab: 'photos' }) },
-    { id: 'photos-none', label: 'Photos: none yet', model: base({ tab: 'photos', report: NEW_REPORT, photos: { photos: [], max: 6, until: null, held: null, capturing: false } }) },
-    { id: 'photos-adding', label: 'Photos: one sending', model: base({ tab: 'photos', photos: { photos: [{ key: 'x', name: 'PSR-DEMO-0002-photo-2.jpg', state: 'sending' }], max: 6, until: null, held: 'photos.held.sending', capturing: false, already: 1 } }) },
+    // B-TH-267: Photos merged into Report & photos (each opening still recorded through the report's own route, R-4).
+    { id: 'photos', label: 'Report & photos: one photo, Add a photo', model: base({ tab: 'report' }) },
+    { id: 'photos-none', label: 'Report & photos: no photo yet (a public report: the thread holds notes only)', model: base({ tab: 'report', report: NEW_REPORT, photos: { photos: [], max: 6, until: null, held: null, capturing: false } }) },
+    { id: 'photos-adding', label: 'Report & photos: one sending', model: base({ tab: 'report', photos: { photos: [{ key: 'x', name: 'PSR-DEMO-0002-photo-2.jpg', state: 'sending' }], max: 6, until: null, held: 'photos.held.sending', capturing: false, already: 1 } }) },
+    { id: 'thread-docked', label: 'The thread docked beside the report: Reply to the report’s customer only', model: base(), note: 'Never the injury (it has no thread) and never the photos (read only through their recorded opening).' },
     { id: 'dialog-close', label: 'Close…: the closing words', model: base({ dialog: dialog({ kind: 'close', note: 'Cucitura difettosa su 3 capi del lotto L-2240; lotto bloccato e richiamo valutato (inventato).' }) }) },
     { id: 'dialog-close-empty', label: 'Close… without words: held with why', model: base({ dialog: dialog({ kind: 'close', note: '' }, { tried: true }) }) },
     { id: 'dialog-file', label: 'File in the PPE register…', model: base({ report: NEW_REPORT, dialog: dialog(dialogFor('file', NEW_REPORT)) }) },
