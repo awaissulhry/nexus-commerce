@@ -535,10 +535,10 @@ export interface MessageInput {
   readonly held?: boolean
   // ---- end B-TH-048
   // ---- B-TH-049: a typed amount (price grain): an internal note that stays in the office only (checked first: amountProblems).
-  readonly amount?: MessageAmount
+  readonly amount?: MessageAmount | undefined
   // ---- B-TH-050: the message it answers or corrects, one at most (checked first: messageLinkProblems).
-  readonly replyToMessageId?: string | null
-  readonly correctsMessageId?: string | null
+  readonly replyToMessageId?: string | null | undefined
+  readonly correctsMessageId?: string | null | undefined
   // ---- end B-TH-049 / B-TH-050
 }
 
