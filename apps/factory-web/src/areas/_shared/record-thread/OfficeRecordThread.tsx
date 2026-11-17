@@ -2,15 +2,24 @@
 
 import { RecordThread } from '../../../lib/record-thread/RecordThread'
 import { MessageRemindMe } from '../../../shell/panels/remind-me/view/MessageRemindMe'
-import { useRecordThread, type RecordThreadHost } from './use-record-thread'
+import { DockedOfficeThread, type DockedHost } from './DockedOfficeThread'
+import { useRecordThread } from './use-record-thread'
+import { useThreadReminder } from './use-thread-reminder'
 
 /**
- * RecordThread v1 in the office (B-TH-212): `<OfficeRecordThread record={{ type, id, companyId, siteId }} title recordLabel party />`
- * in Incoming's reading pane (B-TH-217) and the request's full page (B-TH-219). It fills the height its host gives it. Each message
- * keeps the record panels' Remind me (B-W2b-388) beside its ⋯. Office only: the portal keeps PortalThread on the DS PartnerThread
- * (PR-15), and check-view-boundaries keeps this file out of every other view.
+ * RecordThread in the office: `<OfficeRecordThread record={{ type, id, companyId, siteId }} title recordLabel party />`.
+ * - B-TH-212 (v1): Incoming's reading pane (B-TH-217) and the request's full page (B-TH-219); it fills the height its host gives it.
+ * - B-TH-300 (`docked`): on a record page inside RecordFrame — the Head with Activity's doors (R-ACT), the files line, the Files view,
+ *   the one file viewer and Saved replies join the same feed and box.
+ * Each message keeps the record panels' Remind me (B-W2b-388) beside its ⋯, and it opens here (the thread's own Remind me; reminders
+ * are Home's, home.view). Office only: the portal keeps PortalThread on the DS PartnerThread (PR-15), and check-view-boundaries keeps
+ * this file out of every other view.
  */
-export function OfficeRecordThread(host: RecordThreadHost) {
-  const { model, actions } = useRecordThread(host)
-  return <RecordThread model={model} actions={actions} remind={(messageId) => <MessageRemindMe record={host.record} messageId={messageId} />} />
+export function OfficeRecordThread(host: DockedHost & { docked?: boolean }) {
+  const { model, actions, base } = useRecordThread(host)
+  const remindable = base.held.has('home.view')
+  const reminder = useThreadReminder(base.key, host.recordLabel, remindable)
+  const remind = remindable ? (messageId: string) => <MessageRemindMe record={host.record} messageId={messageId} /> : undefined
+  if (host.docked) return <DockedOfficeThread host={host} model={model} actions={actions} base={base} reminder={reminder} remind={remind} />
+  return <RecordThread model={model} actions={actions} remind={remind} slots={{ overlays: reminder.dialog }} />
 }

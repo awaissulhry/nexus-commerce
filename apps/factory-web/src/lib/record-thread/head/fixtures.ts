@@ -33,6 +33,9 @@ const counts: HeadModel['counts'] = {
   followers: { kind: 'followers', count: 3, lines: [{ id: 'f1', label: 'Alex Demo', meta: 'made it' }, { id: 'f2', label: 'Bea Esempio', meta: 'was mentioned' }, { id: 'f3', label: 'Carlo Prova', meta: 'chose to' }] },
 }
 
+/** B-TH-300: the Head the docked thread's design cases (SCR-006-thread, SCR-039) draw. */
+export const demoHead = (over: Partial<HeadModel> = {}, can: HeadAbilities = ALL, hasParty = true): HeadModel => head(over, can, hasParty)
+
 function head(over: Partial<HeadModel> = {}, can: HeadAbilities = ALL, hasParty = true): HeadModel {
   return {
     record: RECORD,

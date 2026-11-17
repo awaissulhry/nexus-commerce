@@ -1,0 +1,103 @@
+/* A design stand-in of the record frame (the docked thread's parts in their place): 3 : 2 from 1280 px, the thread alone below. */
+.fw-rt-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  padding: var(--nds-space-16);
+  min-height: max(760px, 100dvh);
+  background: var(--nds-bg);
+}
+
+.fw-rt-stage-body {
+  display: none;
+  flex-direction: column;
+  gap: var(--nds-space-14);
+  opacity: 0.45;
+}
+
+.fw-rt-stage-tabs {
+  display: flex;
+  gap: var(--nds-space-16);
+  height: 36px;
+  align-items: center;
+  border-bottom: 1px solid var(--nds-border-subtle);
+}
+
+.fw-rt-stage-tabs > span {
+  width: 96px;
+  height: 10px;
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface-sunken);
+}
+
+.fw-rt-stage-tabs > span.is-on {
+  background: var(--nds-border-strong);
+}
+
+.fw-rt-stage-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--nds-space-14);
+}
+
+.fw-rt-stage-card {
+  height: 140px;
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+}
+
+.fw-rt-stage-card.is-tall {
+  height: 360px;
+}
+
+.fw-rt-stage-dock {
+  min-width: 0;
+  height: max(728px, calc(100dvh - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  border: 1px solid var(--nds-border);
+  border-radius: var(--nds-radius-2xl);
+  background: var(--nds-surface);
+  overflow: hidden;
+}
+
+/* The part sits at the dock's foot (the composer's helpers), under a stand-in of the feed. */
+.fw-rt-stage-feed {
+  flex: 1 1 auto;
+  min-height: 0;
+  background: var(--nds-surface-sunken);
+  opacity: 0.6;
+}
+
+/* A full thread column inside the dock: its own card already. */
+.fw-rt-stage-dock > .fw-rt-column {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+}
+
+@media (min-width: 1280px) {
+  .fw-rt-stage {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+
+  .fw-rt-stage-body {
+    display: flex;
+  }
+}
+
+@media (max-width: 719px) {
+  .fw-rt-stage {
+    padding: 0;
+  }
+
+  .fw-rt-stage-dock {
+    height: max(640px, 100dvh);
+    border-radius: 0;
+    border-inline: 0;
+  }
+}

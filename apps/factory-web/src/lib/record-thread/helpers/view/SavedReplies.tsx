@@ -50,7 +50,8 @@ function Replies({ model, onPick, onRetry }: { model: SavedRepliesModel; onPick?
       <Menu
         label={
           <>
-            <MessageSquareText size={14} aria-hidden /> {t('replies.label')} <ChevronDown size={14} aria-hidden />
+            {/* B-TH-300: in a narrow dock the word gives way to the icon (the button keeps its name). */}
+            <MessageSquareText size={14} aria-hidden /> <span className="fw-rtm-replies-word">{t('replies.label')}</span> <ChevronDown size={14} aria-hidden />
           </>
         }
         items={items}

@@ -72,21 +72,37 @@ export interface RecordThreadActions extends FeedActions {
 }
 
 /**
- * RecordThread v1 (B-TH-212; pictures 1–5): a record's thread in ONE column — the feed (oldest at the top) and the box at the bottom,
- * with its files, To / Cc and the send check — for Incoming's reading pane and the request's full page. No head and no files line:
- * they come with the docked thread (B-TH-300). R and N switch the box from anywhere in the column outside a field; J / K walk the
+ * The docked thread's bands above the feed (B-TH-300; pictures 6–11): the Head with Activity's doors (T1) and the files line (T2),
+ * and the helpers beside the box (T8). Slots drawn by the office container: this view imports no office code.
+ */
+export interface RecordThreadSlots {
+  /** The Head (lib/record-thread/head): one 44 px row; not drawn without threads.read. */
+  head?: ReactNode
+  /** The files line (lib/record-thread/files): absent with no files. */
+  filesLine?: ReactNode
+  /** Saved replies ▾ beside the @ button. */
+  helpers?: ReactNode
+  /** The pop-ups the bands open (file viewer, Files view, the doors' dialogs): drawn after the column. */
+  overlays?: ReactNode
+}
+
+/**
+ * RecordThread (B-TH-212 v1, B-TH-300 docked; pictures 1–11): a record's thread in ONE column — the feed (oldest at the top) and the
+ * box at the bottom, with its files, To / Cc and the send check — for Incoming's reading pane and the request's full page; docked on
+ * a record page (RecordFrame) the Head and the files line join above the feed (3 bands above the first message with the band in the
+ * shell's row) and the helpers beside the box. R and N switch the box from anywhere in the column outside a field; J / K walk the
  * messages while the feed has the focus. Office only (PR-15: the portal keeps the DS PartnerThread). Draws its model: the office
  * container (areas/_shared/record-thread) reads, re-reads live and sends.
  */
-export function RecordThread({ model, actions, remind }: { model: RecordThreadModel; actions: RecordThreadActions; remind?: (messageId: string) => ReactNode }) {
+export function RecordThread({ model, actions, remind, slots }: { model: RecordThreadModel; actions: RecordThreadActions; remind?: (messageId: string) => ReactNode; slots?: RecordThreadSlots }) {
   return (
     <ThreadMessages>
-      <Column model={model} actions={actions} remind={remind} />
+      <Column model={model} actions={actions} remind={remind} slots={slots} />
     </ThreadMessages>
   )
 }
 
-function Column({ model, actions, remind }: { model: RecordThreadModel; actions: RecordThreadActions; remind?: (messageId: string) => ReactNode }) {
+function Column({ model, actions, remind, slots }: { model: RecordThreadModel; actions: RecordThreadActions; remind?: (messageId: string) => ReactNode; slots?: RecordThreadSlots }) {
   const t = useT('record-thread')
   const attach = useT('record-thread-attach')
   const send = useT('record-thread-send')
@@ -114,62 +130,68 @@ function Column({ model, actions, remind }: { model: RecordThreadModel; actions:
   }
 
   return (
-    <section ref={column} className="fw-rt-column" aria-label={t('label', { record: model.title })} onKeyDown={onKeyDown}>
-      {model.notice && (
-        <div className="fw-rt-notice" role={model.notice.tone === 'danger' ? 'alert' : 'status'}>
-          <Banner tone={model.notice.tone} onDismiss={actions.onDismissNotice}>
-            {notice(model.notice.key, model.notice.params)}
-          </Banner>
-        </div>
-      )}
-      <Feed
-        model={model.feed}
-        actions={{
-          ...actions,
-          onReply: (messageId) => {
-            actions.onReply?.(messageId)
-            focusBox()
-          },
-        }}
-        remind={remind}
-      />
-      {model.feed.state !== 'forbidden' && (
-        <Composer
-          context={composer.context}
-          draft={composer.draft}
-          notes={composer.notes}
-          sending={composer.sending}
-          hasFiles={composer.files.some((file) => file.phase === 'done')}
-          extraHeld={extraHeld}
-          now={model.feed.now}
-          recipients={<Recipients to={composer.to} cc={composer.cc} subject={composer.subject} contacts={composer.contacts} partyName={party} onChange={actions.onLines} />}
-          tray={<AttachmentTray files={composer.files} partyName={party} onRemove={actions.onRemoveFile} onRetry={actions.onRetryFile} />}
-          lines={<AttachmentLines files={composer.files} mode={mode} partyName={party} canShare={composer.canShare} overMailLimit={mailBytes(composer.files) > MAIL_MAX} onShare={actions.onShareFile} onRemove={actions.onRemoveFile} />}
-          clip={<ClipMenu canUpload={composer.canUpload} canPick={composer.canPick} onFiles={actions.onFiles} onPick={() => actions.onPicker(true)} />}
-          onDraft={actions.onDraft}
-          onSend={actions.onSend}
-          onReopen={actions.onReopen}
-          onMakeCustomer={actions.onMakeCustomer}
-          onEscape={() => column.current?.querySelector<HTMLElement>('.fw-rt-feed')?.focus()}
-          onFiles={composer.canUpload ? actions.onFiles : undefined}
-          hint={<DraftLine draft={model.kept ?? null} />}
+    <>
+      <section ref={column} className={`fw-rt-column${slots?.head ? ' is-docked' : ''}`} aria-label={t('label', { record: model.title })} onKeyDown={onKeyDown}>
+        {model.feed.state !== 'forbidden' && slots?.head}
+        {model.feed.state !== 'forbidden' && slots?.filesLine}
+        {model.notice && (
+          <div className="fw-rt-notice" role={model.notice.tone === 'danger' ? 'alert' : 'status'}>
+            <Banner tone={model.notice.tone} onDismiss={actions.onDismissNotice}>
+              {notice(model.notice.key, model.notice.params)}
+            </Banner>
+          </div>
+        )}
+        <Feed
+          model={model.feed}
+          actions={{
+            ...actions,
+            onReply: (messageId) => {
+              actions.onReply?.(messageId)
+              focusBox()
+            },
+          }}
+          remind={remind}
         />
-      )}
-      <FromRecordPicker open={model.pickerOpen ?? false} files={composer.recordFiles} mode={mode} partyName={party} record={composer.context.recordLabel} onClose={() => actions.onPicker(false)} onAdd={actions.onAddRecordFiles} />
-      <SendCheckDialog
-        model={{
-          open: Boolean(model.check),
-          state: model.check?.state ?? { status: 'checking' },
-          partyName: party,
-          to: composer.to,
-          cc: composer.cc,
-          files: composer.files.filter((file) => file.phase === 'done').length,
-          outside: model.check?.outside ?? false,
-          sending: composer.sending,
-        }}
-        actions={{ onBack: actions.onCheckBack, onRetry: actions.onCheckRetry, onOutside: actions.onOutside, onConfirm: actions.onConfirm }}
-      />
-      {model.leaving && <LeaveConfirm files={composer.files.filter((file) => file.phase !== 'refused').length} onStay={actions.onStay} onDiscard={actions.onDiscard} />}
-    </section>
+        {model.feed.state !== 'forbidden' && (
+          <Composer
+            context={composer.context}
+            draft={composer.draft}
+            notes={composer.notes}
+            sending={composer.sending}
+            hasFiles={composer.files.some((file) => file.phase === 'done')}
+            extraHeld={extraHeld}
+            now={model.feed.now}
+            recipients={<Recipients to={composer.to} cc={composer.cc} subject={composer.subject} contacts={composer.contacts} partyName={party} onChange={actions.onLines} />}
+            tray={<AttachmentTray files={composer.files} partyName={party} onRemove={actions.onRemoveFile} onRetry={actions.onRetryFile} />}
+            lines={<AttachmentLines files={composer.files} mode={mode} partyName={party} canShare={composer.canShare} overMailLimit={mailBytes(composer.files) > MAIL_MAX} onShare={actions.onShareFile} onRemove={actions.onRemoveFile} />}
+            clip={<ClipMenu canUpload={composer.canUpload} canPick={composer.canPick} onFiles={actions.onFiles} onPick={() => actions.onPicker(true)} />}
+            onDraft={actions.onDraft}
+            onSend={actions.onSend}
+            onReopen={actions.onReopen}
+            onMakeCustomer={actions.onMakeCustomer}
+            onEscape={() => column.current?.querySelector<HTMLElement>('.fw-rt-feed')?.focus()}
+            onFiles={composer.canUpload ? actions.onFiles : undefined}
+            hint={<DraftLine draft={model.kept ?? null} />}
+            helpers={slots?.helpers}
+          />
+        )}
+        <FromRecordPicker open={model.pickerOpen ?? false} files={composer.recordFiles} mode={mode} partyName={party} record={composer.context.recordLabel} onClose={() => actions.onPicker(false)} onAdd={actions.onAddRecordFiles} />
+        <SendCheckDialog
+          model={{
+            open: Boolean(model.check),
+            state: model.check?.state ?? { status: 'checking' },
+            partyName: party,
+            to: composer.to,
+            cc: composer.cc,
+            files: composer.files.filter((file) => file.phase === 'done').length,
+            outside: model.check?.outside ?? false,
+            sending: composer.sending,
+          }}
+          actions={{ onBack: actions.onCheckBack, onRetry: actions.onCheckRetry, onOutside: actions.onOutside, onConfirm: actions.onConfirm }}
+        />
+        {model.leaving && <LeaveConfirm files={composer.files.filter((file) => file.phase !== 'refused').length} onStay={actions.onStay} onDiscard={actions.onDiscard} />}
+      </section>
+      {slots?.overlays}
+    </>
   )
 }

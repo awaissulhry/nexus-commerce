@@ -1,33 +1,55 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { SplitPane } from '../split-pane/SplitPane'
 import { useT } from '../i18n/provider'
 import { addDropped, draftOfRecordFile, uploadAudience } from './attachments/model'
 import type { SwitchNote } from './composer/model'
-import { withOutbox, type OutboxItem } from './model'
+import { feedForView, withOutbox, type OutboxItem } from './model'
 import { ThreadMessages } from './parts/ThreadMessages'
+import { DockedStage } from './parts/DockedStage'
 import { RecordThread, type RecordThreadModel } from './RecordThread'
+// B-TH-300: the docked thread's bands in the design case.
+import type { DockWidth, HeadModel, ThreadView } from './head/model'
+import { RecordThreadHead } from './head/view/RecordThreadHead'
+import { fileSeries, toViewerFile, type FilesParty, type ThreadFile } from './files/model'
+import { FileStrip } from './files/view/FileStrip'
+import type { SavedRepliesModel } from './helpers/model'
+import { SavedReplies } from './helpers/view/SavedReplies'
+import { FileViewer } from './popups/view/FileViewer'
 
 export interface ThreadCaseModel {
   thread: RecordThreadModel
   /** Drawn as Incoming's reading pane (a list on the left), else the request's full page. */
   pane?: boolean
+  /** B-TH-300: the docked thread — the Head and the files line above the feed, Saved replies beside the box. */
+  docked?: {
+    head: HeadModel
+    files: readonly ThreadFile[] | null
+    party: FilesParty | null
+    stripOpen?: boolean
+    replies?: SavedRepliesModel
+    /** Made-up pictures and PDFs for the one file viewer. */
+    sources?: Readonly<Record<string, string | Uint8Array>>
+  }
+  /** Fill the host's height (inside a record page's dock) instead of standing in a record frame of its own. */
+  fill?: boolean
 }
 
 /**
  * SCR-006-thread: RecordThread v1 as the reading pane or the full page shows it (design review only). The box works: type, switch
  * (R / N), add files, open the send check; a note or a mail joins the feed as "Sending…" — nothing leaves the browser.
  */
-export function ThreadCase({ model }: { model: ThreadCaseModel }) {
+export function ThreadCase({ model, onWidth }: { model: ThreadCaseModel; onWidth?: (choice: DockWidth | 'hide' | 'reset') => void }) {
   return (
     <ThreadMessages>
-      <Case model={model} />
+      <Case model={model} onWidth={onWidth} />
     </ThreadMessages>
   )
 }
 
-function Case({ model }: { model: ThreadCaseModel }) {
+/** `onWidth`: the record page's frame (SCR-039) takes the width menu; without it the case keeps the width itself. */
+function Case({ model, onWidth }: { model: ThreadCaseModel; onWidth?: (choice: DockWidth | 'hide' | 'reset') => void }) {
   const t = useT('record-thread')
   const [thread, setThread] = useState(model.thread)
   const [outbox, setOutbox] = useState<OutboxItem[]>([])
@@ -47,10 +69,42 @@ function Case({ model }: { model: ThreadCaseModel }) {
     set({ draft: { ...composer.draft, body: '', forFloor: false }, notes: [], files: [] })
     setThread((current) => ({ ...current, check: null }))
   }
-  const view: RecordThreadModel = { ...thread, feed: { ...thread.feed, messages: withOutbox(thread.feed.messages, outbox) } }
+  // B-TH-300: the docked bands' own state in the case (the View, the width, the strip, the viewer); the phone head under 720 px.
+  const docked = model.docked
+  const [feedView, setFeedView] = useState<ThreadView>(docked?.head.view ?? 'all')
+  const [width, setWidth] = useState<DockWidth | null>(docked?.head.width ?? null)
+  const [stripOpen, setStripOpen] = useState(docked?.stripOpen ?? false)
+  const [viewing, setViewing] = useState<string | null>(null)
+  const [phone, setPhone] = useState(false)
+  useEffect(() => {
+    const list = window.matchMedia('(max-width: 719px)')
+    setPhone(list.matches)
+    const onChange = () => setPhone(list.matches)
+    list.addEventListener('change', onChange)
+    return () => list.removeEventListener('change', onChange)
+  }, [])
+  const latest = docked?.files ? fileSeries(docked.files).map((series) => series.latest) : []
+  const viewerFiles = latest.map((file) => toViewerFile(file, { src: docked?.sources?.[file.id] ?? null, downloadHref: file.status === 'AVAILABLE' ? '#download' : null }))
+  const viewerIndex = viewerFiles.findIndex((file) => file.id === viewing)
+  const slots = docked
+    ? {
+        head: (
+          <RecordThreadHead
+            model={{ ...docked.head, view: feedView, width: phone ? null : onWidth ? docked.head.width : width, compact: phone }}
+            actions={{ onView: setFeedView, onWidth: onWidth ?? ((choice) => setWidth(choice === 'hide' ? width : choice === 'reset' ? 'forty' : choice)) }}
+          />
+        ),
+        filesLine: docked.files === null || docked.files.length > 0 ? <FileStrip model={{ files: docked.files, party: docked.party, open: stripOpen }} actions={{ onToggle: setStripOpen, onOpen: (fileId) => setViewing(fileId) }} /> : null,
+        helpers: docked.replies ? <SavedReplies model={docked.replies} /> : null,
+        overlays: viewing && viewerIndex >= 0 ? <FileViewer files={viewerFiles} index={viewerIndex} onIndex={(index) => setViewing(viewerFiles[index]?.id ?? null)} onClose={() => setViewing(null)} /> : null,
+      }
+    : undefined
+  const messages = withOutbox(thread.feed.messages, outbox)
+  const view: RecordThreadModel = { ...thread, feed: docked ? feedForView({ ...thread.feed, messages }, feedView) : { ...thread.feed, messages } }
   const element = (
-    <div className="fw-rt-thread-case">
+    <div className={model.fill ? 'fw-rt-thread-case is-fill' : docked ? 'fw-rt-thread-case is-docked' : 'fw-rt-thread-case'}>
       <RecordThread
+        slots={slots}
         model={view}
         actions={{
           onDraft: (draft, notes: readonly SwitchNote[]) => set({ draft, notes }),
@@ -73,6 +127,7 @@ function Case({ model }: { model: ThreadCaseModel }) {
       />
     </div>
   )
+  if (docked && !model.fill) return <DockedStage>{element}</DockedStage>
   if (!model.pane) return element
   return (
     <div className="fw-rt-thread-case">
