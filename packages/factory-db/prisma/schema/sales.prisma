@@ -68,6 +68,10 @@ model Quote {
   number          String
   /// The customer. A quote never moves to another party: a quote for another party is a new quote.
   partyId         String      @db.Uuid
+  /// TH-1b (threads schema wave 2/9, B-TH-104; Owner decision PR-06, pick A): the customer's own running number of its
+  /// quotes ("Your quote 3"), 1, 2, 3 … per company and customer, given by the database when the quote is made, never
+  /// changed. Shown to the customer beside the office number (the QUOTE series stays the office's).
+  customerSeq     Int?
   /// The person at the party the quote and its accept link go to.
   contactId       String?     @db.Uuid
   /// The party's own reference (its inquiry or request number), printed on the quote.
@@ -105,6 +109,8 @@ model Quote {
   inquiries           Inquiry[]
 
   @@unique([tenantId, companyId, number])
+  // TH-1b (B-TH-104): each customer's own running number, once per company and customer.
+  @@unique([tenantId, companyId, partyId, customerSeq])
   // The target of the versions' reference: a version names its quote's party.
   @@unique([tenantId, partyId, id])
   // A party's quotes.
@@ -584,6 +590,10 @@ model SalesOrder {
   partyId             String           @db.Uuid
   /// The number from the company's SALES_ORDER series, unique in the company.
   number              String
+  /// TH-1b (threads schema wave 2/9, B-TH-104; Owner decision PR-06, pick A): the customer's own running number of its
+  /// orders ("Your order 12"), 1, 2, 3 … per company and customer, given by the database when the order is made, never
+  /// changed. Shown to the customer beside the office number; invoices and DDTs keep their legal series untouched.
+  customerSeq         Int?
   /// The ACCEPTED version it was made from; null for an order typed by the office. Never changes.
   quoteVersionId      String?          @db.Uuid
   /// The party's purchase order number.
@@ -701,6 +711,8 @@ model SalesOrder {
   feeCreditLines      SalesOrderLine[]     @relation("SalesOrderLineFeeCredit")
 
   @@unique([tenantId, companyId, number])
+  // TH-1b (B-TH-104): each customer's own running number, once per company and customer.
+  @@unique([tenantId, companyId, partyId, customerSeq])
   // The target of the references from the order's lines and deposit requests: the same company and party.
   @@unique([tenantId, companyId, partyId, id])
   // The board by state and the late list.

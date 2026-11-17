@@ -103,7 +103,7 @@ describe('the seed', () => {
     const before = await count()
     await seedSalesIntake({ db: factory, namespace: NS })
     expect(await count()).toEqual(before)
-    expect(before).toEqual({ i: 6, l: 3, r: 5, h: 2, t: 4, s: 4 })
+    expect(before).toEqual({ i: 6, l: 4, r: 5, h: 2, t: 4, s: 4 })
     const statuses = await admin(`SELECT number, status::text AS status FROM "Inquiry" ORDER BY number`)
     expect(statuses.map((row) => row.status)).toEqual(['NEW', 'ASSIGNED', 'NEED_INFO', 'QUOTED', 'DECLINED', 'LOST'])
     // FW27 on Q2's draft version and on SO1.
@@ -116,6 +116,8 @@ describe('grants', () => {
     for (const table of ['Inquiry', 'InquiryLine', 'CustomerRequirement', 'PartyHold', 'PartyCompanyTerms', 'Season']) {
       expect((await sql(office(), `SELECT count(*)::int AS n FROM "${table}"`))[0]!.n).toBeGreaterThan(0)
       await expect(sql(floor(), `SELECT 1 FROM "${table}" LIMIT 1`)).rejects.toThrow(/permission denied/)
+      // TH-1b (B-TH-009): a customer reads its own inquiries and their lines (portal-requests-th.pg); the rest stays office only.
+      if (table === 'Inquiry' || table === 'InquiryLine') continue
       await expect(sql(partner(A.P1), `SELECT 1 FROM "${table}" LIMIT 1`)).rejects.toThrow(/permission denied/)
     }
     await expect(sql(partner(A.P1), `SELECT "erasedById" FROM "PartyContact" LIMIT 1`)).rejects.toThrow(/permission denied/)
@@ -221,7 +223,7 @@ describe('inquiry lines', () => {
     await expect(add(id, { sizes: ['50'] })).rejects.toThrow(/pieces by size/)
     await expect(add(id, { quantity: 21 })).rejects.toThrow(/the sum of its sizes/)
     await expect(add(id, { styleId: null, colourwayId: null, description: null })).rejects.toThrow(/names a style or says what is asked/)
-    await expect(add(id, { styleId: null, description: 'Gloves' })).rejects.toThrow(/colourway only with its style/)
+    await expect(add(id, { description: 'Gloves', colourwayId: key('product:colourway:JKT-01:BLK') })).rejects.toThrow(/colourway only with its style/)
     const line = randomUUID()
     expect(await add(id, { id: line, sizes: {}, quantity: null })).toBe(1)
     expect(await update(office(), 'InquiryLine', line, `sizes = '{"52": 4}'::jsonb, quantity = 4`)).toBe(1)
