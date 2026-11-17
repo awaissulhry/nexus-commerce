@@ -165,6 +165,8 @@ const summarySchema = z.object({
   dueThisWeek: z.number().nullable().optional(),
   late: z.number().nullable().optional(),
   pastConfirmBy: z.number().optional(),
+  /** B-TH-240 (B-TH-047): orders whose conversation waits on us — the supplier wrote last (0 for a reader without threads.read). */
+  supplierReplies: z.number().optional(),
 })
 export type OrderSummary = z.infer<typeof summarySchema>
 const listSchema = z.object({ summary: summarySchema, orders: z.array(orderRowSchema), nextCursor: z.string().nullable() })
@@ -177,6 +179,8 @@ export interface OrderQuery {
   due?: 'LATE' | 'THIS_WEEK' | null
   /** B-W2a-52: still waiting for the supplier after the confirm-by time. */
   pastConfirmBy?: boolean
+  /** B-TH-240: only orders whose conversation waits on us (the supplier wrote last, B-TH-047). */
+  supplierReplies?: boolean
   q?: string
   siteId?: string
   partyId?: string
@@ -191,6 +195,7 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
       waitingOver48h: query.waitingOver48h ? 'true' : undefined,
       due: query.due ?? undefined,
       pastConfirmBy: query.pastConfirmBy ? 'true' : undefined,
+      supplierReplies: query.supplierReplies ? 'true' : undefined, // B-TH-240
       q: query.q?.trim() || undefined,
       siteId: query.siteId,
       partyId: query.partyId,
@@ -201,6 +206,32 @@ export function listOrders(api: ApiClient, query: OrderQuery, signal?: AbortSign
     signal,
   })
 }
+
+// ---- B-TH-240 (B-TH-047, X-PUR-ORD-LIST.grid-F01): the conversations on purchase orders that wait on us — the supplier wrote last ------
+// GET /threads/waiting?side=SUPPLIER&recordType=PurchaseOrder: each row only for a reader who may open its order (threads.read AND
+// purchasing.view over it, platform/threads waiting-list); the message that waits (who, when, first words) and how long, by the one rule.
+const waitingReplySchema = z.object({
+  recordType: z.string(),
+  recordId: z.string(),
+  label: z.string(),
+  companyId: z.string().nullable(),
+  party: z.object({ id: z.string(), code: z.string(), name: z.string() }),
+  lastMessage: z.object({ id: z.string(), at: z.string(), channel: z.string(), authorName: z.string().nullable(), excerpt: z.string() }),
+  waiting: z.object({ since: z.string(), workingMinutes: z.number(), calendar: z.boolean(), amber: z.boolean(), thresholdDays: z.number() }),
+})
+export type WaitingReply = z.infer<typeof waitingReplySchema>
+const waitingPage = z.object({ rows: z.array(waitingReplySchema), count: z.number(), complete: z.boolean(), next: z.string().nullable() })
+export type WaitingRepliesPage = z.infer<typeof waitingPage>
+
+/** One page (≤ 100, oldest first) of the purchase orders' conversations waiting on us; `next` = the cursor of the page after. */
+export function listSupplierReplies(api: ApiClient, query: { companyId?: string | null; partyId?: string | null; cursor?: string | null } = {}, signal?: AbortSignal): Promise<WaitingRepliesPage> {
+  return api.get('/threads/waiting', {
+    query: { side: 'SUPPLIER', recordType: 'PurchaseOrder', companyId: query.companyId ?? undefined, partyId: query.partyId ?? undefined, cursor: query.cursor ?? undefined, limit: 100 },
+    schema: waitingPage,
+    signal,
+  })
+}
+// ---- end B-TH-240
 
 const orderUrl = (id: string) => `/purchasing/orders/${encodeURIComponent(id)}`
 

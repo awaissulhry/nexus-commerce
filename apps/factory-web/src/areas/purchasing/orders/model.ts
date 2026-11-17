@@ -10,6 +10,9 @@ import type { DailyDialog, SendExtra } from './daily-model'
 // B-W2b-333: purchase orders in depth on screen (the depth parts of the studio).
 import { DOCUMENT_CODES, depthFixOf, type ChaseActions, type ChaseModel, type DepthCan, type OrderDepthActions, type OrderDepthModel, type WorklistPart } from './depth/model'
 import type { OrderApproval, WorklistRow } from './depth/api'
+// B-TH-240: Supplier replies and the New messages column.
+import type { RepliesPart } from './list/supplier-replies'
+import type { UnreadMap } from '../../../lib/last-message-cell/model'
 
 /**
  * Purchase orders (SCR-058) and the PO studio (SCR-059) — the screens' rules, pure: the saved views (the tiles are
@@ -36,7 +39,8 @@ export const STATUS_TONE: Readonly<Record<PoStatus, Tone>> = Object.freeze({
 
 // B-W2a-69: Rows ▾ Expected this week · Late (the API's `?due=`) and Past the confirm-by (`?pastConfirmBy=true`).
 // B-W2b-333: Confirmed later than needed (the tile's saved view: the expediting worklist's lines, reason CONFIRMED_LATE).
-export const ORDER_VIEWS = ['all', 'drafts', 'waiting', 'late', 'pastConfirmBy', 'proposed', 'confirmed', 'dueThisWeek', 'deliveryLate', 'confirmedLate', 'partly', 'received', 'declined', 'cancelled'] as const
+// B-TH-240: Supplier replies (the supplier wrote last on the order's conversation: the buying side of the one office inbox, B-TH-047).
+export const ORDER_VIEWS = ['all', 'drafts', 'waiting', 'late', 'pastConfirmBy', 'proposed', 'confirmed', 'dueThisWeek', 'deliveryLate', 'confirmedLate', 'supplierReplies', 'partly', 'received', 'declined', 'cancelled'] as const
 export type OrderView = (typeof ORDER_VIEWS)[number]
 
 const VIEW_STATUS: Readonly<Partial<Record<OrderView, PoStatus>>> = Object.freeze({
@@ -59,6 +63,7 @@ export function orderViewOf(params: { get(name: string): string | null } | null)
   if (params?.get('pastConfirmBy') === 'true') return 'pastConfirmBy'
   if (params?.get('due') === 'THIS_WEEK') return 'dueThisWeek'
   if (params?.get('due') === 'LATE') return 'deliveryLate'
+  if (params?.get('supplierReplies') === 'true') return 'supplierReplies' // B-TH-240
   const status = params?.get('status')
   const found = (Object.entries(VIEW_STATUS) as [OrderView, PoStatus][]).find(([name, value]) => value === status && name !== 'late')
   return found?.[0] ?? 'all'
@@ -66,7 +71,7 @@ export function orderViewOf(params: { get(name: string): string | null } | null)
 
 export function orderQuery(view: OrderView, q: string, cursor: string | null = null) {
   const due = view === 'dueThisWeek' ? ('THIS_WEEK' as const) : view === 'deliveryLate' ? ('LATE' as const) : null
-  return { status: VIEW_STATUS[view] ?? null, waitingOver48h: view === 'late', q, cursor, ...(due ? { due } : {}), ...(view === 'pastConfirmBy' ? { pastConfirmBy: true } : {}) }
+  return { status: VIEW_STATUS[view] ?? null, waitingOver48h: view === 'late', q, cursor, ...(due ? { due } : {}), ...(view === 'pastConfirmBy' ? { pastConfirmBy: true } : {}), ...(view === 'supplierReplies' ? { supplierReplies: true } : {}) /* B-TH-240 */ }
 }
 
 /** "Where POs stand": saved views with the API's counts (null: not known, drawn '—', never 0). */
@@ -79,6 +84,8 @@ export const ORDER_TILES: readonly { id: string; view: OrderView; count: (summar
   // B-W2a-69 (SCM-067): an open line expected from today to Sunday; expected before today.
   { id: 'dueThisWeek', view: 'dueThisWeek', count: (summary) => summary.dueThisWeek ?? null },
   { id: 'deliveryLate', view: 'deliveryLate', count: (summary) => summary.late ?? null },
+  // B-TH-240: the supplier wrote last and nobody answered yet (only for a reader of threads: list/supplier-replies.ts showsReplies).
+  { id: 'supplierReplies', view: 'supplierReplies', count: (summary) => summary.supplierReplies ?? null },
 ])
 
 /** The confirmation column in words: sent n days ago, confirmed by link or in the portal by a name, changes proposed, declined. */
@@ -311,6 +318,11 @@ export interface OrdersListModel {
   /** B-W2b-333: the chase dialog while it is open, and the rights it needs. */
   chase?: ChaseModel | null
   depthCan?: DepthCan
+  // ---- B-TH-240: the conversations that wait on us per order on the page (the Supplier replies view's Supplier wrote and Waiting
+  // cells), and the reader's own new messages per order (the New messages column; null/absent: no threads.read, no column).
+  replies?: RepliesPart | null
+  unread?: UnreadMap | null
+  // ---- end B-TH-240
   /** Design cases. */
   selected?: readonly string[]
   focusRow?: number
