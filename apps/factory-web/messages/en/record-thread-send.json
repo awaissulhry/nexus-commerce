@@ -25,7 +25,9 @@
     "person": "{name} ({org})",
     "files_one": "{count} file",
     "files_other": "{count} files",
-    "from": "From you, with this record's reply address, so the answer lands back here."
+    "from": "From you, with this record's reply address, so the answer lands back here.",
+    "correction": "A correction of a mail you sent: the old one stays and says “Corrected below”.",
+    "undo": "After Send you have 10 seconds to take it back."
   },
   "check": {
     "send": "Send to {party}",
@@ -39,7 +41,8 @@
       "refused": "Go back: this message cannot go from here",
       "officeFile": "Share or take off the office-only file first",
       "outside": "Tick “Send outside this customer”, or take the address off"
-    }
+    },
+    "sendCorrection": "Send the correction to {party}"
   },
   "problem": {
     "forbidden": "You may not send mail for this record.",
@@ -83,6 +86,14 @@
     "failed": "Not sent: {reason}. Your text is still in the box.",
     "outside": "An address belongs to another customer: the mail did not go. Take it off, or tick “Send outside this customer” in the check.",
     "hidden": "A blind copy goes only to our colleagues or to this customer's contacts: the mail did not go.",
-    "badRecipient": "Not sent: an address was refused (not valid, or it bounced or complained before). Fix the address and send again."
+    "badRecipient": "Not sent: an address was refused (not valid, or it bounced or complained before). Fix the address and send again.",
+    "takenBack": "Taken back: the mail did not go. Your text is back in the box.",
+    "undoFailed": "The mail could not be taken back: Nexus could not be reached. It may already have left.",
+    "undo": {
+      "NO_WINDOW": "Not taken back: this mail went at once, without the 10 seconds to undo it.",
+      "LEFT": "Not taken back: the mail has already left.",
+      "NOT_SENT": "Not taken back: the mail did not go, so there is nothing to undo.",
+      "NOT_YOURS": "Not taken back: only the person who sent this mail can undo it."
+    }
   }
 }

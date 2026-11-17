@@ -266,6 +266,8 @@ export const RECORD_PAGES: Readonly<Record<string, string>> = Object.freeze({
   PortalOrderRequest: '/sales/incoming?tile=ALL&kind=CATALOGUE_ORDER&catalogue=[id]',
   // B-W2b-354 Purchasing › Settings (SCR-256): a delivery tolerance opens in its dialog.
   DeliveryTolerance: '/purchasing/settings?tolerance=[id]',
+  // B-TH-248 (threads plan TH-5): a project opens its page (SCR-701, B-TH-249: the generic record page grown).
+  Project: '/products/projects/[id]',
 })
 
 /**
@@ -444,6 +446,8 @@ export const LIST_PAGES: Readonly<Record<string, string>> = Object.freeze({
   // `?styleId=`, `?q=`.
   '/product/change-requests': '/products/changes',
   '/product/change-orders': '/products/changes',
+  // B-TH-248: the projects list (SCR-700) reads the API's own terms (`?view=`, `?q=` …).
+  '/projects': '/products/projects',
 })
 
 export interface RecordRef {

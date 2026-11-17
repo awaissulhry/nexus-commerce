@@ -55,6 +55,8 @@ import { KeyNumbersSection } from '../numbers/view/KeyNumbers'
 import { WaitingOn } from '../waiting-on/WaitingOn'
 import { Following } from '../following/Following'
 import { MyViews } from '../my-views/MyViews'
+// B-TH-252: Today › My projects (a self-loading section, hidden when I am in no project).
+import { MyProjects } from '../projects/MyProjects'
 // B-W2b-435: the flow's value per stage at cost (cost grain) and ⋯ Daily digest by e-mail.
 import { FlowValue } from '../flow-value/FlowValue'
 import { DigestDialog } from '../../reports/digest/DigestDialog'
@@ -532,7 +534,8 @@ function Today({ model, actions }: { model: TodayViewModel; actions?: TodayActio
   const head = order.slice(0, at).map((id) => node[id])
   // B-W2b-388: My work after Coming up, in the design's order (only where the page has its container — it drives the tiles —:
   // these sections load themselves; the design index shows them as SCR-540 … 542).
-  const myWork = actions?.onTile ? [<WaitingOn key="waiting-on" />, <Following key="following" />, <MyViews key="my-views" />] : []
+  // B-TH-252: My projects after Changed since you looked (PROJ.home-F03).
+  const myWork = actions?.onTile ? [<WaitingOn key="waiting-on" />, <Following key="following" />, <MyProjects key="my-projects" />, <MyViews key="my-views" />] : []
   // B-TH-239: "New incoming requests" (Incoming's New tile, one read) right after "Needs me now", for a reader of requests.
   const incomingSection = model.incoming ? <IncomingSection key="incoming" state={model.incoming} now={model.now} live={model.live} onRetry={actions?.onRetryIncoming} /> : null
   const work = [...order.slice(at).filter((id) => id !== 'role-panels').flatMap((id) => (id === 'needs-me' ? [node[id], incomingSection] : [node[id]])), numbersSection, comingSection, ...myWork]

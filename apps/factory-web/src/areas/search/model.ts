@@ -37,7 +37,9 @@ export const SEARCH_TYPES = ['SalesOrder', 'Quote', 'Party', 'Style', 'Item', 'P
   'TransferOrder',
   // B-TH-261 follow-up (B-TH-040's indexer, #1545): a catalogue order a customer sent from its portal (orders.view; it opens beside the
   // Incoming list with its thread).
-  'PortalOrderRequest'] as const
+  'PortalOrderRequest',
+  // B-TH-252: a project (B-TH-066's indexer, by number or name; it opens its page, Products › Development › Projects).
+  'Project'] as const
 
 /** The status codes the search catalogue says in words (`search:status.<code>`); another code is not shown. */
 export const STATUS_CODES: ReadonlySet<string> = new Set([
@@ -173,6 +175,7 @@ export const SEARCH_VIEW_PERMISSIONS: readonly string[] = Object.freeze(['partie
   /* B-W2b-244 */ 'product.changes.view',
   /* B-W2b-322 */ 'sales.inquiries.view',
   /* B-W2b-353 */ 'sales.service.view',
-  /* B-W2b-361 */ 'sales.safety.view'])
+  /* B-W2b-361 */ 'sales.safety.view',
+  /* B-TH-252: a project is read with threads.read (every office person who reads threads, decision 14) */ 'threads.read'])
 
 export const canSearchSomething = (permissions: readonly string[]): boolean => permissions.some((permission) => SEARCH_VIEW_PERMISSIONS.includes(permission))

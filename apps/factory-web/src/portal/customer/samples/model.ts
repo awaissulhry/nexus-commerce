@@ -4,6 +4,9 @@ import type { ScanState } from '@nexus/factory-domain/product/techpack/scan'
 import type { ActionDueState } from '@nexus/ui/patterns/ActionList/index'
 import type { ApprovalRead } from '../home/api'
 import type { RoundRead, SamplesRead, StyleRead, TechPack, WaitingRead } from './api'
+// B-TH-253: the Projects block (the project's own rules: its address, which projects show).
+import type { PortalProject } from '../projects/api'
+import { openProjects, projectHref } from '../projects/model'
 
 /**
  * The brand's Samples & tech packs (B-W2b-262, SCR-225; design portal.customer.samples). Pure: the rows the three sections
@@ -171,6 +174,35 @@ export const olderPacks = (style: StyleRead): TechPack[] => style.techPacks.filt
 export function summaryOf(read: SamplesRead | null): { waiting: number | null; open: number; styles: number } {
   return { waiting: read?.counts.waiting ?? null, open: read?.counts.open ?? 0, styles: read?.counts.styles ?? 0 }
 }
+
+// ── B-TH-253 (PROJ.portal-F03): the Projects block — the person's own projects, development in one place ──────────────────
+export interface ProjectBlockRow {
+  readonly id: string
+  /** Its name (never the office's project number: an office series). */
+  readonly name: string
+  readonly status: PortalProject['status']
+  readonly targetDate: string
+  readonly href: string
+}
+
+/**
+ * The block's rows: the projects the person was added to that are still going (a closed one stays findable from its
+ * conversation), in the API's order; null — no block at all — without portal.projects.view (the answer's `projects` is null or
+ * absent) or when none is going.
+ */
+export function projectBlockOf(read: Pick<SamplesRead, 'projects'> | null, prefix: string): ProjectBlockRow[] | null {
+  const projects = read?.projects
+  if (!projects) return null
+  const rows = openProjects(projects).map((project) => ({ id: project.id, name: project.name, status: project.status, targetDate: project.targetDate, href: projectHref(prefix, project.id) }))
+  return rows.length > 0 ? rows : null
+}
+
+/**
+ * B-TH-073: a style in development and a sample round are discussed on their own pages (`/open/Style/<id>`, `/open/SampleRound/<id>`:
+ * the frame's record page with their conversation) — offered only to a person who reads conversations (threads.read).
+ */
+export const discussHref = (prefix: string, type: 'Style' | 'SampleRound', id: string): string => `${prefix}/open/${type}/${encodeURIComponent(id)}#messages`
+// ── end B-TH-253
 
 // ── the band ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 /**

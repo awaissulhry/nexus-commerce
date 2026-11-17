@@ -52,6 +52,8 @@ import { Inbox } from 'lucide-react'
 import { LifeBuoy } from 'lucide-react'
 // B-W2b-383: a transfer's icon (as its navigation row).
 import { Route } from 'lucide-react'
+// B-TH-252: a project.
+import { FolderKanban } from 'lucide-react'
 
 /** The icon of a record type in the search's rows (the palette's Records group, the All results page). */
 const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
@@ -113,6 +115,8 @@ const ICONS: Readonly<Record<string, LucideIcon>> = Object.freeze({
   ProductSafetyReport: ShieldAlert,
   // B-W2b-383: as the transfers list.
   TransferOrder: Route,
+  // B-TH-252
+  Project: FolderKanban,
   // B-TH-261 follow-up: a catalogue order, as Incoming's kind mark for it.
   PortalOrderRequest: ShoppingCart,
 })

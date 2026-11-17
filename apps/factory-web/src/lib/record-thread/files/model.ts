@@ -52,6 +52,8 @@ export interface ThreadFile {
   /** B-TH-083: a measurement sheet this reader may not open — no name; "Measurement sheet — you cannot open it". */
   readonly locked?: 'MEASUREMENTS'
   // ---- end B-TH-231
+  /** B-TH-283 (B-TH-083): a measurement sheet this reader opens (sales.measurements.view): body data, each opening recorded. */
+  readonly sheet?: boolean
 }
 
 export type FileOrigin = 'party' | 'ours' | 'made' | 'floor'
@@ -86,6 +88,8 @@ export function fromApiFile(file: ApiFile, previewUrl: string | null = null, ext
     // B-TH-231: the copy's source; B-TH-083: a sheet locked for this reader.
     ...(file.sourceFileId ? { sourceFileId: file.sourceFileId, source: file.origin ? { recordType: file.origin.recordType, recordId: file.origin.recordId, name: file.origin.originalName, versionNo: file.origin.versionNo } : null } : {}),
     ...(file.locked ? { locked: file.locked } : {}),
+    // B-TH-283: a sheet the reader may open says so (the API answers its category only to who opens it).
+    ...(file.category === 'MEASUREMENTS' && !file.locked ? { sheet: true } : {}),
     ...extra,
   }
 }

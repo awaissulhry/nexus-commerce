@@ -122,6 +122,62 @@
   color: var(--nds-text-strong);
 }
 
+/* ── B-TH-282: the files area open — a column: its head, the drop area, the files with their states and ticks ── */
+.fw-rqc-files.is-open {
+  flex-direction: column;
+  align-items: stretch;
+  border-style: solid;
+  border-color: var(--nds-border);
+  background: var(--nds-surface);
+}
+
+.fw-rqc-files-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-12);
+}
+
+.fw-rqc-files-head > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.fw-rqc-files-closed {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rqc-files-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-rqc-files-list > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  min-width: 0;
+}
+
+.fw-rqc-files-sheet {
+  padding-inline-start: var(--nds-space-8);
+}
+
+.fw-rqc-files-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
 /* ── Add details (optional) ── */
 .fw-rqc-details-summary {
   display: inline-flex;

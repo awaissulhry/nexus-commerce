@@ -14,6 +14,8 @@ import { PaneActions } from './actions/PaneActions'
 import { Closed, fromLine, MadeFrom, MailCard, ProspectFields, RecordDialogs, RequestEditor } from './sections'
 // B-TH-228: what was made from it — the order and the style drafts.
 import { MadeThings } from './sections'
+// B-TH-252: "Start a project…" in ⋯ (never a sixth main action) and its dialog.
+import { StartProjectDialog } from './actions/StartProjectDialog'
 import './pane.css'
 
 /**
@@ -172,7 +174,7 @@ function Loaded({ model, actions, slots, nav, onClose, picture, companyName, han
   const facts = <Details model={model} view={view} companyName={companyName ?? null} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} />
   return (
     <div className={`fw-rp is-${place}`} data-place={place}>
-      <PaneHead model={model} view={view} nav={nav ?? null} index={index} picture={picture ?? null} onClose={onClose} rights={rights} onErase={onErase} onCloseThread={onCloseThread} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} place={place} fullHref={fullHref} onInfo={() => setSheet(true)} />
+      <PaneHead model={model} view={view} nav={nav ?? null} index={index} picture={picture ?? null} onClose={onClose} rights={rights} onErase={onErase} onCloseThread={onCloseThread} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} place={place} fullHref={fullHref} onInfo={() => setSheet(true)} startProject={model.startProject ? { held: model.startProject.held, onOpen: actions?.startProject?.onOpen } : undefined} />
       {handled && (
         <Banner
           tone="warning"
@@ -217,22 +219,26 @@ function Loaded({ model, actions, slots, nav, onClose, picture, companyName, han
         </Modal>
       )}
       <RecordDialogs model={model} view={view} actions={actions} />
+      {/* B-TH-252 */}
+      {model.startProject?.dialog && <StartProjectDialog model={model.startProject.dialog} actions={actions?.startProject} />}
     </div>
   )
 }
 
-export type PaneMenuItem = 'full' | 'print' | 'edit' | 'erase' | 'close-thread' | 'copy'
+export type PaneMenuItem = 'full' | 'print' | 'edit' | 'erase' | 'close-thread' | 'copy' | /* B-TH-252 */ 'project'
 
 /**
  * Row 1's ⋯ (pane-head-F02): Open full page (the pane only), Print, Edit the request (who may), "Start an erasure request…" only
  * for a privacy admin and a prospect not yet erased (C14: a customer's contact is erased from the contact), "Close thread…" only
  * with threads.manage (C5; never the pane itself: × and Esc do that), Copy number.
  */
-export function paneMenu(view: Pick<InquiryView, 'prospect' | 'prospectDetails'>, place: 'pane' | 'page', rights: RequestPaneProps['rights'], canEdit: boolean): PaneMenuItem[] {
+export function paneMenu(view: Pick<InquiryView, 'prospect' | 'prospectDetails'>, place: 'pane' | 'page', rights: RequestPaneProps['rights'], canEdit: boolean, startProject = false): PaneMenuItem[] {
   return [
     ...(place === 'pane' ? (['full'] as const) : []),
     'print',
     ...(canEdit ? (['edit'] as const) : []),
+    // B-TH-252 (PROJ.new-F07): "Start a project…" for a person who reads projects (held with why when they may not start one here).
+    ...(startProject ? (['project'] as const) : []),
     ...(rights?.erase && view.prospect && !view.prospectDetails?.erased ? (['erase'] as const) : []),
     ...(rights?.closeThread ? (['close-thread'] as const) : []),
     'copy',
@@ -268,7 +274,7 @@ const dayWords = (say: (phrase: Phrase) => string | null) => (value: string | nu
 
 // ---- row 1: the request's identity -----------------------------------------------------------------------------------------------
 
-function PaneHead({ model, view, nav, index, picture, onClose, rights, onErase, onCloseThread, onEdit, place, fullHref, onInfo }: { model: InquiryRecordModel; view: InquiryView; nav: PaneNav | null; index: number; picture: string | null; onClose?: () => void; rights?: RequestPaneProps['rights']; onErase?: () => void; onCloseThread?: () => void; onEdit?: () => void; place: 'pane' | 'page'; fullHref?: string; onInfo?: () => void }) {
+function PaneHead({ model, view, nav, index, picture, onClose, rights, onErase, onCloseThread, onEdit, place, fullHref, onInfo, startProject }: { model: InquiryRecordModel; view: InquiryView; nav: PaneNav | null; index: number; picture: string | null; onClose?: () => void; rights?: RequestPaneProps['rights']; onErase?: () => void; onCloseThread?: () => void; onEdit?: () => void; place: 'pane' | 'page'; fullHref?: string; onInfo?: () => void; startProject?: { held: string | null; onOpen?: () => void } }) {
   const { t, say } = useWords()
   const who = fromLine(view, t)
   const waiting = waitingShort(view)
@@ -281,8 +287,10 @@ function PaneHead({ model, view, nav, index, picture, onClose, rights, onErase, 
     erase: { id: 'erase', label: t('pane.erase'), description: t('pane.eraseHint'), onSelect: () => onErase?.() },
     'close-thread': { id: 'close-thread', label: t('pane.closeThread'), onSelect: () => onCloseThread?.() },
     copy: { id: 'copy', label: t('record.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(view.number).catch(() => undefined) },
+    // B-TH-252: its customer becomes the project's outside company (never another); held with why (a prospect: match it first).
+    project: { id: 'project', label: t('project.open'), disabled: !!startProject?.held, description: startProject?.held ? t(startProject.held) : t('project.openHint'), onSelect: () => startProject?.onOpen?.() },
   }
-  const items = paneMenu(view, place, rights, !!onEdit).map((id) => make[id])
+  const items = paneMenu(view, place, rights, !!onEdit, !!startProject && startProject.held !== 'project.held.read').map((id) => make[id])
   return (
     <header className="fw-rp-head">
       <span className="fw-rp-pic" aria-hidden>

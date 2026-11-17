@@ -4,8 +4,8 @@
  * (the existing replies of GET /templates/replies, Italian · English, shared and mine apart) and the draft kept on this
  * device until drafts live on the server (N6). No React, no API.
  *
- * Not drawn until the back end has it: the amount field (B-TH-049), "Remind me in 3 days if no answer" (B-TH-096),
- * drafts on the server (B-TH-092).
+ * B-TH-236: the amount field (B-TH-049) is helpers/amount.ts and view/AmountField.tsx. Not drawn until the back end has it:
+ * "Remind me in 3 days if no answer" (B-TH-096), drafts on the server (B-TH-092).
  *
  * Brand wall (W08, W34): @ offers office people who may read the record only — never a customer's portal person and never
  * the floor; a saved reply is filled by the API from THIS record (the view sends only the reply's id), so its placeholders
@@ -167,7 +167,7 @@ export interface LocalDraft {
 }
 
 /** One draft per person, record and audience (an office note and a reply to the customer are kept apart). */
-export const draftKey = (personId: string, record: { readonly type: string; readonly id: string }, mode: 'note' | 'reply') => `factory.thread.draft.${personId}.${record.type}.${record.id}.${mode}`
+export const draftKey = (personId: string, record: { readonly type: string; readonly id: string }, mode: 'note' | 'reply' | 'portal') => `factory.thread.draft.${personId}.${record.type}.${record.id}.${mode}`
 
 /** The draft kept on this device, or null (none, too old, unreadable, or storage closed). */
 export function readDraft(storage: Pick<Storage, 'getItem'> | null, key: string, now: number): LocalDraft | null {

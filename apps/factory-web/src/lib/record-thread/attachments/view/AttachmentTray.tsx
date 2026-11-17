@@ -1,14 +1,14 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { Camera, FileText, ImageIcon, Layers, Lock, Paperclip, RotateCw, Upload, X } from 'lucide-react'
+import { Camera, FileText, ImageIcon, Layers, Lock, Paperclip, RotateCw, Ruler, Upload, X } from 'lucide-react'
 import { Menu, ProgressBar } from '@nexus/ui/components'
 import { Button, Input } from '@nexus/ui/primitives'
 import { Modal } from '../../../i18n/ds-parts'
 import { INTL_LOCALE } from '../../../i18n/locales'
 import { useLocale, useT } from '../../../i18n/provider'
 import { sizeWords } from '../../card/model'
-import { kindKey, officeInReply, pickerGroups, type DraftFile, type RecordFile } from '../model'
+import { kindKey, officeInReply, pickerGroups, type DraftFile, type RecordFile, type TrayMode } from '../model'
 import '../attachments.css'
 
 /**
@@ -44,6 +44,11 @@ export function AttachmentTray({ files, partyName, onRemove, onRetry }: { files:
                   </span>
                 )}
                 {file.phase === 'failed' && <span className="fw-rt-file-problem">{t('tray.failed', { reason: t(file.problem?.key ?? 'failed.failed') })}</span>}
+                {file.sheet && (
+                  <span className="fw-rt-file-aud is-sheet">
+                    <Ruler size={11} aria-hidden /> {t('sheet.mark')}
+                  </span>
+                )}
                 <span className={`fw-rt-file-aud ${file.audience === 'OFFICE' ? 'is-office' : 'is-shared'}`}>
                   {file.audience === 'OFFICE' ? (
                     <>
@@ -76,10 +81,12 @@ export function AttachmentTray({ files, partyName, onRemove, onRetry }: { files:
  * The paper clip (T6-F01): Upload from this device · Take a photo (the phone's camera; elsewhere the file picker) · From this
  * record. Held with the reason when the person may not upload or read the record's files.
  */
-export function ClipMenu({ canUpload, canPick, onFiles, onPick }: { canUpload: boolean; canPick: boolean; onFiles: (files: File[]) => void; onPick: () => void }) {
+export function ClipMenu({ canUpload, canPick, onFiles, onPick, onSheets }: { canUpload: boolean; canPick: boolean; onFiles: (files: File[]) => void; onPick: () => void; onSheets?: (files: File[]) => void }) {
   const t = useT('record-thread-attach')
   const device = useRef<HTMLInputElement>(null)
   const camera = useRef<HTMLInputElement>(null)
+  // B-TH-283: "Measurement sheet…" — the files chosen go up as measurement sheets (a PDF or a photo).
+  const sheets = useRef<HTMLInputElement>(null)
   if (!canUpload && !canPick) {
     return (
       <Button size="sm" variant="quiet" heldReason={t('clip.noRight')} aria-label={t('clip.label')}>
@@ -87,10 +94,10 @@ export function ClipMenu({ canUpload, canPick, onFiles, onPick }: { canUpload: b
       </Button>
     )
   }
-  const take = (input: HTMLInputElement | null) => {
+  const take = (input: HTMLInputElement | null, as: (files: File[]) => void = onFiles) => {
     const files = [...(input?.files ?? [])]
     if (input) input.value = ''
-    if (files.length > 0) onFiles(files)
+    if (files.length > 0) as(files)
   }
   return (
     <span className="fw-rt-clip">
@@ -101,9 +108,11 @@ export function ClipMenu({ canUpload, canPick, onFiles, onPick }: { canUpload: b
         items={[
           { id: 'device', label: t('clip.device'), icon: <Upload size={14} aria-hidden />, disabled: !canUpload, description: canUpload ? undefined : t('clip.noUpload'), onSelect: () => device.current?.click() },
           { id: 'photo', label: t('clip.photo'), icon: <Camera size={14} aria-hidden />, disabled: !canUpload, description: canUpload ? t('clip.photoHint') : t('clip.noUpload'), onSelect: () => camera.current?.click() },
+          ...(onSheets ? [{ id: 'sheet', label: t('clip.sheet'), icon: <Ruler size={14} aria-hidden />, disabled: !canUpload, description: canUpload ? t('clip.sheetHint') : t('clip.noUpload'), onSelect: () => sheets.current?.click() }] : []),
           { id: 'record', label: t('clip.record'), icon: <Layers size={14} aria-hidden />, disabled: !canPick, description: canPick ? undefined : t('clip.noRead'), onSelect: onPick },
         ]}
       />
+      {onSheets && <input ref={sheets} type="file" multiple accept="application/pdf,image/*" hidden tabIndex={-1} aria-hidden="true" onChange={(event) => take(event.currentTarget, onSheets)} />}
       <input ref={device} type="file" multiple hidden tabIndex={-1} aria-hidden="true" onChange={(event) => take(event.currentTarget)} />
       <input ref={camera} type="file" accept="image/*" capture="environment" hidden tabIndex={-1} aria-hidden="true" onChange={(event) => take(event.currentTarget)} />
     </span>
@@ -111,7 +120,7 @@ export function ClipMenu({ canUpload, canPick, onFiles, onPick }: { canUpload: b
 }
 
 /** The lines under the box (T6-F04, F06): an office-only file in a reply (Share with the customer, or Remove it) and the mail limit. */
-export function AttachmentLines({ files, mode, partyName, canShare, overMailLimit, onShare, onRemove }: { files: readonly DraftFile[]; mode: 'note' | 'reply'; partyName: string; canShare: boolean; overMailLimit: boolean; onShare: (key: string) => void; onRemove: (key: string) => void }) {
+export function AttachmentLines({ files, mode, partyName, canShare, overMailLimit, onShare, onRemove }: { files: readonly DraftFile[]; mode: TrayMode; partyName: string; canShare: boolean; overMailLimit: boolean; onShare: (key: string) => void; onRemove: (key: string) => void }) {
   const t = useT('record-thread-attach')
   const office = officeInReply(files, mode)
   if (office.length === 0 && !overMailLimit) return null
@@ -147,7 +156,7 @@ export function AttachmentLines({ files, mode, partyName, canShare, overMailLimi
  * in a reply the ones the customer may already see first, then the office's (picking one asks to share it) — a search past 12
  * files, then "Add N files".
  */
-export function FromRecordPicker({ open, files, mode, partyName, record, onClose, onAdd }: { open: boolean; files: readonly RecordFile[]; mode: 'note' | 'reply'; partyName: string; record: string; onClose: () => void; onAdd: (ids: string[]) => void }) {
+export function FromRecordPicker({ open, files, mode, partyName, record, onClose, onAdd }: { open: boolean; files: readonly RecordFile[]; mode: TrayMode; partyName: string; record: string; onClose: () => void; onAdd: (ids: string[]) => void }) {
   const t = useT('record-thread-attach')
   const locale = useLocale()
   const [query, setQuery] = useState('')
@@ -197,7 +206,7 @@ export function FromRecordPicker({ open, files, mode, partyName, record, onClose
       }
     >
       <div className="fw-rt-picker">
-        <p className="fw-rt-attach-muted">{mode === 'reply' ? t('picker.bodyReply', { party: partyName }) : t('picker.bodyNote', { record })}</p>
+        <p className="fw-rt-attach-muted">{mode !== 'note' ? t('picker.bodyReply', { party: partyName }) : t('picker.bodyNote', { record })}</p>
         {files.length > 12 && <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('picker.search')} aria-label={t('picker.search')} />}
         {groups.shared.length + groups.office.length === 0 ? (
           <p className="fw-rt-attach-muted">{t(files.length === 0 ? 'picker.none' : 'picker.noMatch')}</p>

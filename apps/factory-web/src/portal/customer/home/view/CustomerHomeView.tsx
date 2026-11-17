@@ -2,6 +2,8 @@
 
 import { useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { AlertCircle, Clock, FilePen, FileText, History, Lock, MessageSquare, PackageOpen, PenLine, Search, Sparkles } from 'lucide-react'
+// B-TH-253: a project row's mark.
+import { FolderKanban } from 'lucide-react'
 import { Banner, Card, DetailPopover, MetricStrip, ProgressBar, type Metric } from '@nexus/ui/components'
 import { MilestoneTracker } from '@nexus/ui/components/MilestoneTracker/index'
 import { RefPair } from '@nexus/ui/components/RefPair/index'
@@ -586,7 +588,7 @@ function Messages({
   failed: (text: string, onRetry?: () => void) => ReactNode
   onRetry?: () => void
 }) {
-  const { t, at } = useHomeWords()
+  const { t, at, day } = useHomeWords()
   const ds = useDsWords()
   const card = model.card
   const lastLine = (row: MessageRow) =>
@@ -612,6 +614,35 @@ function Messages({
       </li>
     )
   }
+  // ---- B-TH-253 (PROJ.portal-F01): a project the person was added to — its NAME (never the office's number), its status when it
+  // is not simply going, its target date, the last message or "No messages yet", new marks; it opens the project's page.
+  const projectRow = (row: MessageRow) => {
+    const name = row.subject ?? t('messages.projectTag')
+    const status = row.project?.status ?? null
+    return (
+      <li key={row.key} className="fw-pch-message">
+        <span className="fw-pch-message-main">
+          <span className="fw-pch-from">
+            <FolderKanban size={16} aria-hidden />
+            <strong>{name}</strong>
+            <Tag tone="neutral">{t('messages.projectTag')}</Tag>
+            {status === 'ON_HOLD' ? <Pill tone="warning">{t('messages.projectStatus.ON_HOLD')}</Pill> : status === 'CLOSED' ? <Pill tone="neutral">{t('messages.projectStatus.CLOSED')}</Pill> : null}
+            {fresh(row)}
+          </span>
+          <span className="fw-pch-sub">
+            {[row.project?.targetDate ? t('messages.projectTarget', { date: day(row.project.targetDate) }) : null, lastLine(row) ?? t('messages.projectNone')].filter(Boolean).join(' · ')}
+          </span>
+          {row.last?.excerpt ? <span className="fw-pch-excerpt">{row.last.excerpt}</span> : null}
+        </span>
+        <Button size="sm" asChild>
+          <a href={row.href} aria-label={t('messages.openProject', { name })}>
+            {t('messages.open')}
+          </a>
+        </Button>
+      </li>
+    )
+  }
+  // ---- end B-TH-253
   return (
     <section className="fw-pch-section fw-pch-messages" aria-labelledby="fw-pch-messages">
       <h2 id="fw-pch-messages" className="fw-pch-title">
@@ -649,6 +680,18 @@ function Messages({
                 ))}
               </ul>
               {card.needsYouCount > card.needsYou.length && model.needsYouHref ? <a href={model.needsYouHref}>{t('messages.needsYouAll', { count: card.needsYouCount })}</a> : null}
+            </div>
+          ) : null}
+          {/* B-TH-253: the projects the person was added to, after what needs the customer. */}
+          {card.projects.length > 0 ? (
+            <div className="fw-pch-stack">
+              <h3 className="fw-pch-subtitle">
+                <FolderKanban size={16} aria-hidden /> {t('messages.projects')}
+              </h3>
+              <ul className="fw-pch-rows" aria-label={t('messages.projectsLabel')}>
+                {card.projects.map(projectRow)}
+              </ul>
+              {card.projectsMore > 0 ? <p className="fw-pch-sub">{t('messages.projectsMore', { count: card.projectsMore })}</p> : null}
             </div>
           ) : null}
           {messagesEmpty(card) ? (

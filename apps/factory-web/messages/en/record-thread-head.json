@@ -142,5 +142,12 @@
     "amber_one": "Amber after {count} working day waiting on us.",
     "amber_other": "Amber after {count} working days waiting on us.",
     "notAmber": "Never amber while it waits on the other side."
+  },
+  "project": {
+    "in": "In project: {name}",
+    "more": "+{count}",
+    "all": "In projects: {names}",
+    "labelMore_one": "In project: {name} and {count} more",
+    "labelMore_other": "In project: {name} and {count} more"
   }
 }

@@ -1,0 +1,226 @@
+/*
+ * B-TH-249 — the project page (PROJ.record-F01): the band in the shell's band row (the record frame's look), the thread ~2/3 on the
+ * left, sticky under the band with its own scroll, the side column ~1/3 on the right (1440 ≈ 860 + 430; wider at 1920: no page
+ * max-width, no dead space). Below 1280 px one column: the thread, or the side column as a full-width view behind "Details". Layout
+ * only, design-system tokens only.
+ */
+
+.fw-prjr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-16);
+  min-width: 0;
+  align-items: start;
+}
+
+.fw-prjr-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  height: var(--fw-prjr-h, calc(100dvh - 180px));
+}
+
+.fw-prjr-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The thread column fills its section (its feed scrolls, the box sits at its foot). */
+.fw-prjr-thread > .fw-rt-column,
+.fw-prjr-thread > .fw-rt-thread-case {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+}
+
+.fw-prjr-side {
+  display: none;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-prjr-back {
+  flex: none;
+}
+
+.fw-prjr-alone {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+  min-width: 0;
+}
+
+@media (min-width: 1280px) {
+  .fw-prjr.has-side {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  }
+
+  .fw-prjr-main {
+    position: sticky;
+    top: var(--fw-prjr-top, 64px);
+  }
+
+  .fw-prjr.has-side > .fw-prjr-side {
+    display: flex;
+  }
+
+  .fw-prjr-details-btn,
+  .fw-prjr-back {
+    display: none;
+  }
+}
+
+@media (max-width: 1279px) {
+  .fw-prjr[data-view='details'] > .fw-prjr-main {
+    display: none;
+  }
+
+  .fw-prjr[data-view='details'] > .fw-prjr-side {
+    display: flex;
+  }
+}
+
+@media (max-width: 719px) {
+  /* The phone: the band's "Details" is its "i" (the word goes); the thread full page inside the gutters. */
+  .fw-prjr-details-word {
+    display: none;
+  }
+
+  .fw-prjr-main {
+    margin-inline: calc(-1 * var(--nds-space-16));
+  }
+}
+
+/* ── the band ──────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-prjr-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-prjr-title-name {
+  font-weight: var(--nds-font-weight-normal);
+}
+
+.fw-prjr-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  min-width: 0;
+  color: var(--nds-text-2);
+}
+
+.fw-prjr-meta-item a {
+  color: var(--nds-text-link);
+}
+
+/* ── the side column's sections ──────────────────────────────────────────────────────────────────────────────── */
+.fw-prjr-section {
+  min-width: 0;
+}
+
+.fw-prjr-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-prjr-line-hint,
+.fw-prjr-hint {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-prjr-goal {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.fw-prjr-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-prjr-item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-prjr-item-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-prjr-item-main > a,
+.fw-prjr-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fw-prjr-item-meta {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-prjr-item-side {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+}
+
+.fw-prjr-counts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+}
+
+/* ── dialogs ───────────────────────────────────────────────────────────────────────────────────────────────────── */
+.fw-prjr-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-prjr-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-12);
+}
+
+.fw-prjr-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-prjr-buttons {
+  display: inline-flex;
+  gap: var(--nds-space-8);
+  justify-content: flex-end;
+}
+
+/* The print view (`?print=1`): the band, the details, the thread's print form, one after the other. */
+.fw-prjr-print {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+}

@@ -105,7 +105,8 @@ function Strip({ model, actions }: { model: FileStripModel; actions?: FileStripA
               // B-TH-231 (B-TH-083): a sheet locked for this reader shows a lock and its words, never its own name.
               const held = file.status === 'QUARANTINED' || Boolean(file.locked)
               const markWords = [...marks.map((mark) => t(`audience.${mark}`)), ...(more > 0 ? [t('audience.more', { count: more })] : [])]
-              const name = [file.locked ? t('locked.sheet') : file.name, t(`kind.${file.kind}`), version ? t('version', { n: version }) : null, file.status === 'QUARANTINED' ? t('held') : null, ...markWords].filter(Boolean).join(' · ')
+              // B-TH-283: a sheet this reader opens is named as one ("each opening is recorded").
+              const name = [file.locked ? t('locked.sheet') : file.name, file.sheet ? t('sheet.open') : null, t(`kind.${file.kind}`), version ? t('version', { n: version }) : null, file.status === 'QUARANTINED' ? t('held') : null, ...markWords].filter(Boolean).join(' · ')
               return (
                 <li key={one.key}>
                   <button type="button" data-tile className={`fw-rtf-tile${held ? ' is-held' : ''}`} tabIndex={index === focus ? 0 : -1} aria-label={name} title={name} onFocus={() => setFocus(index)} onClick={(event) => actions?.onOpen?.(file.id, event.currentTarget)}>

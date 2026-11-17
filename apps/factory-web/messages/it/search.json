@@ -100,6 +100,7 @@
     "ServiceCase": "Caso di assistenza",
     "ProductSafetyReport": "Segnalazione di sicurezza prodotto",
     "TransferOrder": "Trasferimento",
+    "Project": "Progetto",
     "PortalOrderRequest": "Ordine dal catalogo",
     "other": "Record"
   },
@@ -151,6 +152,7 @@
     "ServiceCase": "Casi di assistenza",
     "ProductSafetyReport": "Segnalazioni di sicurezza prodotto",
     "TransferOrder": "Trasferimenti",
+    "Project": "Progetti",
     "PortalOrderRequest": "Ordini dal catalogo",
     "other": "Altri record"
   },

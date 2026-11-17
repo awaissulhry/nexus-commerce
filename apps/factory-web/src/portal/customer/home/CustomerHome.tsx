@@ -11,6 +11,9 @@ import { fetchRequests, type RequestList } from '../requests/api'
 // B-TH-238: the Messages card — the waiting requests' new messages (POST /threads/unread, the portal's own client).
 import { readUnreadWith } from '../../../lib/last-message-cell/api'
 import { messagesCardOf } from './model'
+// B-TH-253: the projects the person was added to, in the Messages card (members only; fails closed).
+import { fetchPortalProjects, type PortalProject } from '../projects/api'
+import { PROJECTS_PERMISSION } from '../projects/model'
 import { WithMessages } from '../../../record-panels/i18n'
 import { searchPortal } from '../../shell/api'
 import { PORTAL_AREAS, recordPageOf } from '../../shell/nav/portal-nav'
@@ -114,6 +117,9 @@ function HomeContainer() {
   const seesMessages = can('threads.read')
   const seesPayments = can('portal.payments.view')
   const seesApprovals = can('portal.approvals.view')
+  // B-TH-253 (PROJ.portal-F01): a project shows only with portal.projects.view and only to the people the office added (the API's
+  // members-only list); without the right — or when the read fails — no project row at all, never an error that says more.
+  const seesProjects = seesMessages && can(PROJECTS_PERMISSION)
   const seesPrices = frame.access?.role?.seesPrices ?? false
   const built = useMemo(() => ({ orders: pageBuilt('orders.list'), documents: pageBuilt('documents'), returns: pageBuilt('returns') }), [])
   const preview = frame.me.preview
@@ -122,6 +128,7 @@ function HomeContainer() {
   const [orders, setOrders] = useState<Async<OrdersRead>>(LOADING)
   const [documents, setDocuments] = useState<Async<DocumentsRead>>(LOADING)
   const [messages, setMessages] = useState<Async<Conversation[]>>(LOADING)
+  const [projects, setProjects] = useState<PortalProject[]>([]) // B-TH-253
   // B-TH-238: the open requests (what needs the customer first) and their new messages.
   const [waiting, setWaiting] = useState<Async<RequestList>>(LOADING)
   const [waitingUnread, setWaitingUnread] = useState<Record<string, number>>({})
@@ -177,7 +184,10 @@ function HomeContainer() {
     fetchRecentMessages(api)
       .then((value) => setMessages({ state: 'ready', value: value.conversations }))
       .catch(keep(setMessages))
-  }, [api, seesMessages])
+    // B-TH-253: the projects beside the conversations (a removed person's project is gone at the next read).
+    if (seesProjects) fetchPortalProjects(api).then(setProjects, () => setProjects([]))
+    else setProjects([])
+  }, [api, seesMessages, seesProjects])
   // B-TH-238: the requests that wait for the customer, with the API's count (Orders & requests' first tile reads the same).
   const readWaiting = useCallback(() => {
     if (!seesOrders || !seesMessages) return
@@ -227,7 +237,7 @@ function HomeContainer() {
     onChange: (change) => {
       if (liveEvents.has(change.type) || change.type.startsWith('partner_task.') || change.type.startsWith('partner_notification.')) readAll()
       // B-TH-238: a message or a request of this customer moved: the Messages card reads again in place.
-      else if (change.type.startsWith('thread.') || change.type.startsWith('inquiry.')) {
+      else if (change.type.startsWith('thread.') || change.type.startsWith('inquiry.') || change.type.startsWith('project.') /* B-TH-253 */) {
         readMessages()
         readWaiting()
       }
@@ -490,6 +500,7 @@ function HomeContainer() {
                     conversations: messages.value,
                     unread: waitingUnread,
                     recordPage: (type, id) => recordPageOf(frame.kinds, type, id),
+                    projects, // B-TH-253
                   })
                 : null,
               needsYouHref: built.orders ? `${prefix}/orders?chip=NEEDS_YOU` : null,

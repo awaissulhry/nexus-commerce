@@ -100,6 +100,7 @@
     "ServiceCase": "Service case",
     "ProductSafetyReport": "Product-safety report",
     "TransferOrder": "Transfer",
+    "Project": "Project",
     "PortalOrderRequest": "Catalogue order",
     "other": "Record"
   },
@@ -151,6 +152,7 @@
     "ServiceCase": "Service cases",
     "ProductSafetyReport": "Product-safety reports",
     "TransferOrder": "Transfers",
+    "Project": "Projects",
     "PortalOrderRequest": "Catalogue orders",
     "other": "Other records"
   },

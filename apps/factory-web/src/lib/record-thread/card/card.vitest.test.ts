@@ -20,6 +20,8 @@ import {
   type CardContext,
   type CardMessage,
 } from './model'
+// B-TH-236
+import { amountWords, correctionWay, excerptOf, showsUndo, undoLeft } from './model'
 import { MessageCard } from './view/MessageCard'
 
 /** B-TH-298 — the message card (T3): each kind, its audience in words and colour, the folds, the files, Retry keeps the text. */
@@ -190,3 +192,80 @@ describe('B-TH-231: hidden files counted, a sheet named as locked, “Use on ano
   })
 })
 // ---- end B-TH-231
+
+// ---- B-TH-236 (B-TH-048, B-TH-049, B-TH-050): Correct on one's own message, the links, the office amount, Undo for 10 seconds.
+describe('B-TH-236: Correct, “In reply to”, “Corrected below”, the amount, Undo', () => {
+  const CAN = { note: true, email: true, portal: true }
+  const MINE_MAIL: CardMessage = { ...OURS, mine: true }
+  const MINE_NOTE: CardMessage = { ...NOTE, mine: true }
+
+  it('Correct only on one’s own message, the way it went, with the right that way needs; never the customer’s or the floor’s', () => {
+    expect(correctionWay(MINE_MAIL, { canCorrect: CAN })).toBe('reply')
+    expect(correctionWay(MINE_NOTE, { canCorrect: CAN })).toBe('note')
+    expect(correctionWay({ ...MINE_MAIL, channel: 'PORTAL', email: null }, { canCorrect: CAN })).toBe('portal')
+    expect(correctionWay(OURS, { canCorrect: CAN })).toBeNull() // a colleague's mail
+    expect(correctionWay({ ...MAIL, mine: true }, { canCorrect: CAN })).toBeNull() // the customer corrects their own
+    expect(correctionWay({ ...STATION, mine: true }, { canCorrect: CAN })).toBeNull()
+    expect(correctionWay(MINE_MAIL, { canCorrect: { ...CAN, email: false } })).toBeNull()
+    expect(correctionWay(MINE_NOTE, {})).toBeNull()
+    // A mail still in its 10 seconds is taken back, not corrected; one taken back or not sent never reached them.
+    expect(correctionWay({ ...MINE_MAIL, email: { ...MINE_MAIL.email!, status: 'QUEUED', undoUntil: '2026-11-17T10:00:07Z' } }, { canCorrect: CAN })).toBeNull()
+    expect(correctionWay({ ...MINE_MAIL, email: { ...MINE_MAIL.email!, status: 'WITHDRAWN' } }, { canCorrect: CAN })).toBeNull()
+    expect(correctionWay({ ...MINE_MAIL, email: { ...MINE_MAIL.email!, status: 'FAILED' } }, { canCorrect: CAN })).toBeNull()
+    expect(cardActions(MINE_MAIL, { ...CONTEXT, canCorrect: CAN })).toEqual(['correct', 'task', 'link'])
+    expect(cardActions(MAIL, { ...CONTEXT, canCorrect: CAN })).toEqual(['reply', 'task', 'link'])
+    expect(textOf(card(MINE_MAIL, { ...CONTEXT, canCorrect: CAN }))).not.toContain('Correction of')
+  })
+
+  it('the correction says “Correction of 09:12” in its head (two marks at most); the old one “Corrected below”', () => {
+    const correction: CardMessage = { ...MINE_MAIL, id: 'c-1', at: '2026-11-17T08:20:00.000Z', body: 'Sorry, one change: Thursday.', files: [], corrects: { id: OURS.id, author: 'Alex Demo', excerpt: 'Good morning', at: OURS.at } }
+    const text = textOf(card(correction))
+    expect(text).toContain('Correction of 09:12')
+    expect(card(correction)).toContain(`href="#message-${OURS.id}"`)
+    expect(textOf(card({ ...MINE_MAIL, correctedBy: { id: 'c-1', at: '2026-11-17T08:20:00.000Z' } }))).toContain('Corrected below · 09:20')
+    expect(textOf(card({ ...MINE_MAIL, correctedBy: { id: 'c-1', at: '2026-11-17T08:20:00.000Z' } }, CONTEXT, 'it'))).toContain('Corretto più sotto · 09:20')
+    // A corrected floor note: the audience mark stays in the head, "Also on the floor" moves to the details line.
+    const floorFix = textOf(card({ ...FLOOR_NOTE, corrects: { id: 'n-1', author: 'Carlo Prova', excerpt: 'grey mesh', at: FLOOR_NOTE.at } }))
+    expect(floorFix).toContain('Office note · Office only Correction of')
+    expect(floorFix).toContain('Also on the floor')
+  })
+
+  it('a reply names the message it answers above its words (W08: only this thread’s message, its excerpt)', () => {
+    const reply: CardMessage = { ...MINE_MAIL, id: 'r-1', channel: 'PORTAL', email: null, body: 'Yes, both sizes.', files: [], replyTo: { id: MAIL.id, author: BRAND_ALPHA.portalPerson.name, excerpt: 'Is the label 3 cm from the hem on both sizes?', at: '2026-11-17T09:41:00.000Z' } }
+    const text = textOf(card(reply))
+    expect(text).toContain(`In reply to ${BRAND_ALPHA.portalPerson.name}, 17 Nov`)
+    expect(text).toContain('“Is the label 3 cm from the hem on both sizes?”')
+    expect(text).toContain(`In the portal · ${BRAND_ALPHA.tradeName}`)
+    expect(excerptOf('x'.repeat(200)).length).toBe(90)
+    expect(scanText(text, BRAND_BETA)).toEqual([])
+  })
+
+  it('an office note’s amount in the reader’s numbers, said office only (the API sends it to price readers only)', () => {
+    expect(amountWords({ value: 1_845_000, currency: 'EUR' }, 'en-GB')).toBe('€18,450.00')
+    expect(amountWords({ value: 1_845_000, currency: 'EUR' }, 'it-IT')).toMatch(/18\.450,00\s?€/)
+    const text = textOf(card({ ...NOTE, amount: { value: 125_000, currency: 'EUR' } }))
+    expect(text).toContain('Amount: €1,250.00 · office only, for those who see prices')
+    expect(textOf(card(NOTE))).not.toContain('Amount:')
+  })
+
+  it('Undo for 10 seconds: “Sending to <customer>… · Undo (7)” for the sender only, gone when the window passed', () => {
+    const now = Date.parse('2026-11-17T10:00:00.000Z')
+    const waiting: CardMessage = { ...MINE_MAIL, files: [], email: { to: [BRAND_ALPHA.contact.email], subject: 'Re: sizes', status: 'QUEUED', id: 'mail-1', undoUntil: '2026-11-17T10:00:07.000Z' } }
+    expect(undoLeft(waiting.email!.undoUntil, now)).toBe(7)
+    expect(undoLeft('2026-11-17T09:59:59.000Z', now)).toBe(0)
+    expect(undoLeft(null, now)).toBe(0)
+    expect(showsUndo(waiting, now)).toBe(true)
+    expect(showsUndo({ ...waiting, email: { ...waiting.email!, status: 'SENT' } }, now)).toBe(false)
+    expect(showsUndo({ ...waiting, email: { ...waiting.email!, undoUntil: undefined } }, now)).toBe(false)
+    const html = render(createElement(MessageCard, { message: waiting, context: { ...CONTEXT, now }, actions: { onUndo: () => undefined } }))
+    expect(textOf(html)).toContain(`Sending to ${BRAND_ALPHA.tradeName}… Undo (7)`)
+    expect(textOf(render(createElement(MessageCard, { message: waiting, context: { ...CONTEXT, now }, actions: { onUndo: () => undefined } }), 'it'))).toContain(`Invio a ${BRAND_ALPHA.tradeName} in corso… Annulla (7)`)
+    expect(textOf(render(createElement(MessageCard, { message: waiting, context: { ...CONTEXT, now: now + 8_000 }, actions: { onUndo: () => undefined } })))).not.toContain('Undo (')
+  })
+
+  it('the new cases draw with no key left on screen; Brand Beta’s copy stays clean', () => {
+    for (const [locale, id, html] of everyCase(designScreen)) expect(leftKeys(html, ['link', 'amount', 'undo', 'menu']), `${locale} ${id}`).toEqual([])
+    expect(designScreen.cases.map((item) => item.id)).toEqual(expect.arrayContaining(['corrected', 'reply-link', 'amount', 'undo']))
+  })
+})
+// ---- end B-TH-236

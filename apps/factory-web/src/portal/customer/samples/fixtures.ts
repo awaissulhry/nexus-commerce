@@ -7,7 +7,7 @@ import { portalNavFor } from '../../shell/nav/portal-nav'
 import type { PortalShellViewModel } from '../../shell/view/PortalShellView'
 import type { ApprovalRead } from '../home/api'
 import type { RoundRead, StyleRead, TechPack, WaitingRead } from './api'
-import { decisionHeld, NS, samplesBandOf } from './model'
+import { decisionHeld, NS, projectBlockOf, samplesBandOf } from './model'
 import type { DecisionDialogModel } from './view/DecisionDialog'
 import { SamplesCase, type SamplesCaseBuilder } from './view/SamplesCase'
 import type { SamplesViewModel } from './view/SamplesView'
@@ -284,6 +284,20 @@ const samplesCase =
 
 const EMPTY: Partial<SamplesViewModel> = { waiting: [], styles: [], rounds: [], roundsTotal: 0 }
 
+// ---- B-TH-253: the projects the person was added to (as GET /portal/samples answers them: open first; the office's number is in the
+// data and never drawn) — the block shows the ones still going.
+const PROJECTS = projectBlockOf(
+  {
+    projects: [
+      { id: id(901), number: 'PRJ-26-021', name: 'Touring jacket, new colours', status: 'ACTIVE', targetDate: dayAt(40) },
+      { id: id(902), number: 'PRJ-26-024', name: 'Kids’ rain range', status: 'ON_HOLD', targetDate: dayAt(90) },
+      { id: id(903), number: 'PRJ-25-030', name: 'Spring range', status: 'CLOSED', targetDate: dayAt(-30) },
+    ],
+  },
+  PREFIX,
+)
+// ---- end B-TH-253
+
 export const designScreen = defineDesignScreen<SamplesCaseBuilder>({
   screen: 'SCR-225',
   title: 'Samples & tech packs (portal.customer.samples)',
@@ -308,6 +322,10 @@ export const designScreen = defineDesignScreen<SamplesCaseBuilder>({
     { id: 'loading', label: 'Loading', model: samplesCase({ page: { state: 'loading', waiting: null, styles: [], rounds: [] } }) },
     { id: 'slow', label: 'Still loading', model: samplesCase({ page: { state: 'loading', slow: true, waiting: null, styles: [], rounds: [] } }) },
     { id: 'error', label: 'The read failed', model: samplesCase({ page: { state: 'error', waiting: null, styles: [], rounds: [] } }), note: 'The problem in our words and Try again; a failed read is never drawn as an empty list.' },
+    // ---- B-TH-253 (PROJ.portal-F03) and B-TH-073
+    { id: 'th-253-projects', label: 'Projects: the ones we added you to', model: samplesCase({ page: { projects: PROJECTS, discuss: true } }), note: 'A Projects block under what waits: each project by its name (never PRJ-…), its status and target date, Open; a closed one is not listed. Each style and round offers “Discuss” on its own page.' },
+    { id: 'th-253-no-projects', label: 'No project (or no right to see them): no block', model: samplesCase({ page: { projects: null, discuss: true } }), note: 'Without portal.projects.view the answer says nothing of projects: no block, no empty line.' },
+    // ---- end B-TH-253
     { id: 'no-permission', label: 'A role the page does not open', model: samplesCase({ can: FINANCE, person: 'finance', closed: true }), note: 'Not in the navigation (fails closed); a typed address says it is not part of the access, naming the admin.' },
     {
       id: 'preview',

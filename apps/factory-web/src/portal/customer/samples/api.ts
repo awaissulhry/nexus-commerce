@@ -5,6 +5,7 @@ import { BRAND_ROUND_STATUSES, STYLE_STAGES, WAITING_RECORD_TYPES } from '@nexus
 import { SAMPLE_DECISIONS, SAMPLE_KINDS, SAMPLE_STAGES } from '@nexus/factory-domain/sales/samples/rules'
 import { newIdempotencyKey, type ApiClient } from '../../../lib/api/client'
 import { readFromStore } from '../../../record-panels/store'
+import { portalProjectSchema } from '../projects/api' // B-TH-253
 
 /**
  * What the brand's Samples & tech packs page reads (B-W2b-262's API; design portal.customer.samples, SCR-225): the page in
@@ -88,6 +89,9 @@ export const samplesSchema = z.object({
   styles: z.array(styleSchema),
   rounds: z.array(roundSchema),
   counts: z.object({ waiting: z.number().nullable(), styles: z.number(), rounds: z.number(), open: z.number() }),
+  // ---- B-TH-253 (on B-TH-069): the projects the person was added to (open first, then by target date); null without
+  // portal.projects.view (nothing is said of them). Optional so an answer of before still reads.
+  projects: z.array(portalProjectSchema).nullable().optional(),
 })
 export type SamplesRead = z.infer<typeof samplesSchema>
 

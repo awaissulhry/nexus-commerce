@@ -274,6 +274,79 @@
   font-weight: 600;
 }
 
+/* B-TH-236: "In reply to …" above the words, "Correction of 09:12" in the head, "Corrected below", the office amount, Undo. */
+.fw-rt-linkline {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: 72ch;
+  padding: 3px 8px;
+  border-inline-start: 2px solid var(--nds-border-strong);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-surface-sunken);
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.4;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.fw-rt-linkline:hover span,
+.fw-rt-link-to:hover {
+  text-decoration: underline;
+}
+
+.fw-rt-mark-link {
+  text-decoration: none;
+}
+
+.fw-rt-mark-link:hover {
+  text-decoration: underline;
+}
+
+.fw-rt-link-to {
+  color: var(--nds-text-link);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.fw-rt-linkline:focus-visible,
+.fw-rt-mark-link:focus-visible,
+.fw-rt-link-to:focus-visible {
+  outline: 2px solid var(--nds-text);
+  outline-offset: 1px;
+}
+
+.fw-rt-amount {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: flex-start;
+  padding: 2px 8px;
+  border: 1px solid var(--nds-warning);
+  border-radius: var(--nds-radius-pill);
+  background: var(--nds-surface);
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.fw-rt-undo {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 6px 10px;
+  border-radius: var(--nds-radius-md);
+  background: var(--nds-info-soft);
+  color: var(--nds-info-text);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 600;
+}
+
 /* SCR-006-card (design review): the cards in one column, as the thread draws them. */
 .fw-rt-card-gallery {
   display: flex;

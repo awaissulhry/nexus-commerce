@@ -209,6 +209,11 @@ export const RECORD_PAGES: readonly PortalRecordPage[] = [
   { kinds: ['CUSTOMER'], type: 'PartyAddress', href: (id) => `/account?address=${encodeURIComponent(id)}#addresses`, built: true },
   // B-W2b-195: an invoice (a "Pay invoice" request, a notification) opens Documents on it: its Pay pop-up, or why not.
   { kinds: ['CUSTOMER'], type: 'Invoice', href: (id) => `/documents?invoice=${encodeURIComponent(id)}`, built: true },
+  // ---- B-TH-253 (threads plan TH-5, PROJ.portal): a project the person was ADDED to opens its own page (the generic record page
+  // grown: the summary and the thread as the main column) — the same page for a customer, a supplier and a workshop; a person
+  // who is not a member reads "not found" there (the API's check).
+  { kinds: ['CUSTOMER', 'SUPPLIER', 'SUBCONTRACTOR'], type: 'Project', href: (id) => `/projects/${encodeURIComponent(id)}`, built: true },
+  // ---- end B-TH-253
 ]
 
 // B-TH-220: whether a page is built (an area without pages, or one page of an area): its links may lead there.
