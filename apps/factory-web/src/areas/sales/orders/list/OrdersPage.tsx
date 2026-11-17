@@ -68,7 +68,7 @@ function OrdersContainer() {
   const [weekTick, setWeekTick] = useState(0) // B-W2b-323
   const readId = useRef(0)
   const companyId = session.company?.id ?? session.companies[0]?.id ?? ''
-  const [newOrder, setNewOrder] = useState<NewOrderDialogModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId) : null)
+  const [newOrder, setNewOrder] = useState<NewOrderDialogModel | null>(params?.get('new') === '1' && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions)) : null)
   const searchSeq = useRef(0)
 
   const go = useCallback(
@@ -307,7 +307,7 @@ function OrdersContainer() {
         onShowUpdates: () => void load(),
         onOpen: (id) => router.push(`${prefix}/sales/orders/${id}`),
         onDismissNotice: () => setNotice(null),
-        onNewOrder: (open) => setNewOrder(open && can.manage ? emptyNew(session.companies, companyId) : null),
+        onNewOrder: (open) => setNewOrder(open && can.manage ? emptyNew(session.companies, companyId, incomingOf(prefix, session.permissions)) : null),
         onNewCompany: (company) => setNewOrder((current) => (current ? { ...current, companyId: company, party: null, contactId: '' } : current)),
         onNewSearch: (query) => newOrder && searchCustomers(query, newOrder.companyId),
         onNewPick: (partyId) => {
@@ -342,6 +342,9 @@ function OrdersContainer() {
   )
 }
 
-function emptyNew(companies: NewOrderDialogModel['companies'], companyId: string): NewOrderDialogModel {
-  return { companies, companyId, results: null, searchProblem: null, party: null, partyProblem: null, contactId: '', customerRef: '', number: undefined }
+function emptyNew(companies: NewOrderDialogModel['companies'], companyId: string, incomingHref: string | null): NewOrderDialogModel {
+  return { companies, companyId, results: null, searchProblem: null, party: null, partyProblem: null, contactId: '', customerRef: '', number: undefined, incomingHref }
 }
+
+/** B-TH-221: New order's one pointer — a written request goes to Incoming's New request, for who may make one there. */
+const incomingOf = (prefix: string, permissions: readonly string[]): string | null => (permissions.includes('sales.inquiries.manage') ? `${prefix}/sales/incoming?new=1` : null)

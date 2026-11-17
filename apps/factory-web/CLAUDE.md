@@ -345,7 +345,10 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   after a decision the next one opens) and its full page on ONE container (`use-inquiry.tsx`: Request with the EditModeBar — the lines on the DS
   SizeGridEditor, a prospect matched once —, Files & specs with the brand's tech pack in force and the record panels' files, Quote, Activity =
   the record panels; Make quote, Assign, Ask for more information, Decline with an optional message through the thread, Mark as lost), New
-  inquiry (`c`) and "Make an inquiry" from a mail (`?mail=`: Mail to sort can link there). Row verbs are held before the click with
+  request (`c`, `?new=1`) and "Make incoming request" from a mail (`?mail=`: Mail to sort can link there) — B-TH-221: ONE window
+  (`view/NewRequestDialog.tsx`, container `use-new-request.ts`, rules `new-request.ts`, catalogue `sales-incoming-new`, SCR-105-new)
+  over the portal's compose (`lib/request-compose`, `slots.plain`, the office's voice) with the customer picked among GET
+  /sales/inquiries/customers (only the customers this person may make a request for) OR a prospect with its lawful basis. Row verbs are held before the click with
   factory-domain's own refusals (model.ts). `RECORD_PAGES.Inquiry` opens the full page; search type `Inquiry`.
 - `src/areas/sales/quotes/record/configurator/` — the configurator on a quote or order line (B-W2b-340 on its own API, modules/sales/configurator;
   SCR-425; catalogue `sales-configurator`, CSS prefix `fw-cfg-`): ONE container `use-configurator.ts` (reads, the person's draft, every change

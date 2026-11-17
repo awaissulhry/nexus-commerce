@@ -29,6 +29,8 @@ export interface NewOrderDialogModel {
   customerRef: string
   /** The number it will get: undefined while read, null when the company has no single active series. */
   number: string | null | undefined
+  /** B-TH-221: the one pointer — a written request goes to Incoming's New request (null: the person makes no request). */
+  incomingHref?: string | null
 }
 export interface OrdersListModel {
   /** `/w/<company>`. */

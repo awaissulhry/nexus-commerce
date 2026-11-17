@@ -2,6 +2,7 @@ import { z } from 'zod'
 import {
   assigneesView,
   bulkAnswer,
+  inquiryCustomersView,
   inquiryList,
   inquiryView,
   mailDraftView,
@@ -176,7 +177,8 @@ export function listContacts(api: ApiClient, partyId: string, signal?: AbortSign
     .then((result) => result.party.contacts.filter((contact) => contact.status === 'ACTIVE'))
 }
 
-const styleOption = z.object({ id: z.string(), code: z.string(), name: z.string(), sizes: z.array(z.string()), status: z.string() })
+// B-TH-221: the brand a style is made for (null: the open range) — a request names only its own customer's private labels.
+const styleOption = z.object({ id: z.string(), code: z.string(), name: z.string(), sizes: z.array(z.string()), status: z.string(), brand: z.object({ id: z.string() }).nullable().optional() })
 export type StyleOption = z.infer<typeof styleOption>
 
 export function findStyles(api: ApiClient, q: string, signal?: AbortSignal): Promise<StyleOption[]> {
@@ -193,6 +195,36 @@ export type StyleDetail = z.infer<typeof styleDetail>['style']
 export function readStyle(api: ApiClient, styleId: string, signal?: AbortSignal): Promise<StyleDetail> {
   return api.get(`/product/styles/${enc(styleId)}`, { schema: styleDetail, signal }).then((result) => result.style)
 }
+
+// ---- B-TH-221: New request — the picker's customers, and the picked customer's contacts and delivery addresses ------------------
+
+export type RequestCustomers = z.infer<typeof inquiryCustomersView>
+export type RequestCustomer = RequestCustomers['customers'][number]
+
+/** GET /sales/inquiries/customers: ONLY the customers this person may make a request for at the company (wall W23). */
+export function listRequestCustomers(api: ApiClient, companyId: string, signal?: AbortSignal): Promise<RequestCustomers> {
+  return api.get(`${base}/customers`, { query: { companyId, limit: 200 }, schema: inquiryCustomersView, signal })
+}
+
+const addressRead = z.object({
+  id: z.string(),
+  kinds: z.array(z.string()),
+  name: z.string().nullable(),
+  line1: z.string(),
+  postalCode: z.string(),
+  city: z.string(),
+  status: z.string(),
+  isDefaultShipTo: z.boolean(),
+  approval: z.object({ status: z.string() }).nullable().optional(),
+})
+export type AddressRead = z.infer<typeof addressRead>
+
+/** The picked customer's active contacts and its addresses (one read of GET /parties/:id, parties.view). */
+export async function readCustomerFacts(api: ApiClient, partyId: string, signal?: AbortSignal): Promise<{ contacts: ContactOption[]; addresses: AddressRead[] }> {
+  const { party } = await api.get(`/parties/${enc(partyId)}`, { schema: z.object({ party: z.object({ contacts: z.array(contactOption), addresses: z.array(addressRead) }) }), signal })
+  return { contacts: party.contacts.filter((contact) => contact.status === 'ACTIVE'), addresses: party.addresses }
+}
+// ---- end B-TH-221
 
 // ---- the thread's mail (the decline's message) and the files -------------------------------------------------------------------
 

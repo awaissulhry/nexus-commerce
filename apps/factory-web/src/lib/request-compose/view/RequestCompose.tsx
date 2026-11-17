@@ -63,10 +63,28 @@ export interface RequestComposeActions {
 export interface RequestComposeWords {
   /** A calendar day (`YYYY-MM-DD`) in the page's language. */
   day: (iso: string) => string
+  /**
+   * B-TH-221: the office's voice — a label of `request-compose` in other words ("Your message" → "What they asked"), or null for
+   * the compose's own. The portal passes none.
+   */
+  label?: (key: string, params?: Readonly<Record<string, string | number>>) => string | null
 }
 
-export function RequestCompose({ model, actions, words, to, aside, below }: { model: RequestComposeModel; actions?: RequestComposeActions; words: RequestComposeWords; to?: ReactNode; aside?: ReactNode; below?: ReactNode }) {
-  const t = useT(COMPOSE_NS)
+/**
+ * B-TH-221 (the office's New request): `plain` draws the compose without its own card and Send row (a dialog's body: the
+ * dialog's footer sends), `files` takes the place of the held files area (office uploads work), `details` adds the office's
+ * own fields inside "Add details (optional)". The portal passes none of them and draws as before.
+ */
+export interface RequestComposeSlots {
+  plain?: boolean
+  files?: ReactNode
+  details?: ReactNode
+}
+
+export function RequestCompose({ model, actions, words, to, aside, below, slots }: { model: RequestComposeModel; actions?: RequestComposeActions; words: RequestComposeWords; to?: ReactNode; aside?: ReactNode; below?: ReactNode; slots?: RequestComposeSlots }) {
+  const own = useT(COMPOSE_NS)
+  const t = (key: string, params?: Readonly<Record<string, string | number>>): string => words.label?.(key, params) ?? own(key, params)
+  const plain = slots?.plain === true
   const draft = model.draft
   const held = model.readOnly
   const change = (field: ComposeField) => (value: string) => actions?.onChange?.(field, value)
@@ -98,7 +116,7 @@ export function RequestCompose({ model, actions, words, to, aside, below }: { mo
         {model.notice ? (
           <Banner tone="info" title={model.notice} onDismiss={actions?.onDismissNotice} />
         ) : null}
-        <Card padded className="fw-rqc-card">
+        <Frame plain={plain}>
           {to ?? (
             <div className="fw-rqc-to" role="group" aria-labelledby="fw-rqc-to-label">
               <span id="fw-rqc-to-label" className="fw-rqc-to-label">
@@ -134,15 +152,17 @@ export function RequestCompose({ model, actions, words, to, aside, below }: { mo
           <div className="fw-rqc-keptrow" role="status" aria-live="polite">
             {keptLine}
           </div>
-          <div className="fw-rqc-files" role="group" aria-labelledby="fw-rqc-files-title">
-            <Paperclip size={18} aria-hidden />
-            <div className="fw-rqc-files-text">
-              <span id="fw-rqc-files-title" className="fw-rqc-files-title">
-                {t('files.title')}
-              </span>
-              <span>{model.filesHeld}</span>
+          {slots?.files ?? (
+            <div className="fw-rqc-files" role="group" aria-labelledby="fw-rqc-files-title">
+              <Paperclip size={18} aria-hidden />
+              <div className="fw-rqc-files-text">
+                <span id="fw-rqc-files-title" className="fw-rqc-files-title">
+                  {t('files.title')}
+                </span>
+                <span>{model.filesHeld}</span>
+              </div>
             </div>
-          </div>
+          )}
           <Disclosure
             className="fw-rqc-details"
             open={model.detailsOpen}
@@ -199,6 +219,7 @@ export function RequestCompose({ model, actions, words, to, aside, below }: { mo
                   </Field>
                 ) : null}
               </div>
+              {slots?.details}
             </div>
           </Disclosure>
           {model.same ? (
@@ -219,18 +240,29 @@ export function RequestCompose({ model, actions, words, to, aside, below }: { mo
               {model.failed}
             </p>
           ) : null}
-          <div className="fw-rqc-send">
-            <Button variant="quiet" onClick={() => actions?.onDiscard?.()} heldReason={held ? model.sendHeld : null}>
-              {t('send.discard')}
-            </Button>
-            <Button variant="primary" onClick={() => actions?.onSend?.()} heldReason={model.sendHeld}>
-              {model.sending ? t('send.sending') : t('send.send')}
-            </Button>
-          </div>
-        </Card>
+          {plain ? null : (
+            <div className="fw-rqc-send">
+              <Button variant="quiet" onClick={() => actions?.onDiscard?.()} heldReason={held ? model.sendHeld : null}>
+                {t('send.discard')}
+              </Button>
+              <Button variant="primary" onClick={() => actions?.onSend?.()} heldReason={model.sendHeld}>
+                {model.sending ? t('send.sending') : t('send.send')}
+              </Button>
+            </div>
+          )}
+        </Frame>
         {below}
       </section>
       {aside ? <aside className="fw-rqc-aside">{aside}</aside> : null}
     </div>
+  )
+}
+
+/** The compose's frame: the DS card in the portal, a plain stack inside a dialog's body (B-TH-221). */
+function Frame({ plain, children }: { plain: boolean; children?: ReactNode }) {
+  return plain ? <div className="fw-rqc-card fw-rqc-plain">{children}</div> : (
+    <Card padded className="fw-rqc-card">
+      {children}
+    </Card>
   )
 }

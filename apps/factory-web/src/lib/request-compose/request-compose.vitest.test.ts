@@ -212,3 +212,44 @@ describe('the compose view', () => {
     expect(detailsSummary(typed(), [], { t, day: (iso) => iso })).toBeNull()
   })
 })
+
+// ── B-TH-221: the office's New request draws the same compose in its own place and voice ──
+describe('the compose in the office (B-TH-221)', () => {
+  const office = (view: RequestComposeModel, slots: Parameters<typeof RequestCompose>[0]['slots'], label?: (key: string) => string | null) =>
+    renderToStaticMarkup(
+      createElement(
+        I18nProvider,
+        { locale: 'en', messages: messagesFor('en', [COMPOSE_NS, 'ds-words']) },
+        createElement(RequestCompose, { model: view, words: { day: (iso: string) => iso, ...(label ? { label } : {}) }, to: createElement('fieldset', { 'data-office-from': true }, 'From: a customer'), slots }),
+      ),
+    )
+
+  it('the portal draws as before when no slot is given: its card, the held files sentence, Send', () => {
+    const html = render('en', model('en'))
+    expect(html).toContain('nds-card')
+    expect(html).toContain('Discard draft')
+    expect(html).toContain('>Send<')
+  })
+
+  it('plain: no card and no Send row (the dialog sends); the office’s From in the To place, its files and details in theirs', () => {
+    const html = office(model('en', { goesTo: null }), { plain: true, files: createElement('div', { 'data-office-files': true }, 'Drop files'), details: createElement('div', { 'data-office-details': true }, 'Target price') })
+    expect(html).toContain('data-office-from')
+    expect(html).not.toContain('Goes to')
+    expect(html).toContain('data-office-files')
+    expect(html).not.toContain('Uploads from outside are closed')
+    expect(html).toContain('data-office-details')
+    expect(html).not.toContain('Discard draft')
+    expect(html).not.toContain('>Send<')
+    expect(html).not.toContain('nds-card')
+  })
+
+  it('the office’s voice replaces the labels that speak to the customer, and only those', () => {
+    const voice = (key: string) => (key === 'message.label' ? 'What they asked' : key === 'details.ref' ? 'Their PO' : null)
+    const html = office(model('en', { goesTo: null }), { plain: true }, voice)
+    expect(html).toContain('What they asked')
+    expect(html).toContain('Their PO')
+    expect(html).not.toContain('Your message')
+    expect(html).toContain('Subject (optional)')
+  })
+})
+
