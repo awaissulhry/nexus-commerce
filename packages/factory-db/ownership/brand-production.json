@@ -1,0 +1,22 @@
+{
+  "$comment": "Who may read and write each model of prisma/schema/brand-production.prisma (rules: src/ownership.ts; roles: src/roles.ts). B-PR-15 (production plan, schema wave 3/5; lead picks L17, L20, L21, L24; review fixes R-41, R-48, R-49; wall test PW-15 DB part): the office (and the worker and scheduler in the tenant's system context: the keeper B-PR-17, the escalation scan B-PR-45) writes a customer's production state of its orders and the issues that need an answer through apps/factory-api's modules/production, always with command(); a customer's urgency from the portal is written in the office scope after the partner read (the portal pattern). The API keeps staff to the companies and customers their grants reach (the brand wall is in the API: the office role is walled by tenant only). A customer reads its own orders' production state through the partner role, by party (BrandOrderProduction.partyId), never the office's note on a raised health, who raised it, who set or locked an urgency, nor the order's supervisor and since when (the customer is never told who, R-41), nor who made the row. The issues are office only: a customer reads 'Waiting on us since' / 'Answered' through the API, never the issue, its task or who answers. The floor and link sessions read and write nothing here. Neither table is ever deleted from (the …_brand_production_guards triggers, for every login). After a change run `npm run policies -w @nexus/factory-db -- <folder>`.",
+  "models": {
+    "BrandOrderProduction": {
+      "about": "The office (the keeper, the urgency and supervisor commands, the factory's raise, set-back and lock) makes an order's row when the order is CONFIRMED and keeps it; it reads every row of the tenant (the API scopes it by company and customer). The order's customer reads its own rows: the plain stage and since when, the health and the raise's reason code, what it waits on, its urgency, its place in its Urgent list, who set it (BRAND or FACTORY, never a name), the batch of the last change, the lock and its reason; never the office's note, who raised the health, who set or locked an urgency, the supervisor or since when, nor who made the row (PW-15).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] },
+        "factory_partner_runtime": { "privileges": ["select"], "scopedBy": ["party"], "hiddenColumns": ["healthNote", "healthSetById", "urgencySetById", "urgencyLockedById", "supervisorId", "supervisorAssignedAt", "createdById"] }
+      }
+    },
+    "ProductionIssue": {
+      "about": "The office raises an issue with its Task ('Needs an answer', B-PR-43b; a customer's 'Report a problem' is written by the API in the office scope after the partner read, B-PR-45), marks it answered, reopened or cancelled and escalates it, and reads every issue of the tenant (the API scopes it by company and customer). Office only: no portal, floor or link grant (PW-15).",
+      "kind": "tenant",
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
+      "access": {
+        "factory_runtime": { "privileges": ["select", "insert", "update"] }
+      }
+    }
+  }
+}

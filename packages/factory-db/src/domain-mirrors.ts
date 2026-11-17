@@ -12,12 +12,21 @@ import { ITEM_KINDS, ITEM_SOURCINGS, ITEM_TRACKINGS, MATERIAL_STATUSES, TANNAGES
 import { OPERATION_STATUSES, WORK_CENTRE_KINDS } from '@nexus/factory-domain/product/routing/operations'
 import { UOMS } from '@nexus/factory-domain/product/units/units'
 import { BUNDLE_CODE_MODES, FLOOR_RULE_MODES } from '@nexus/factory-domain/production/settings/floor-rules'
+import { WORK_ORDER_HOLD_KINDS, WORK_ORDER_HOLD_STATUSES } from '@nexus/factory-domain/production/holds/kinds' // B-PR-15
+import { BRAND_HEALTHS, HEALTH_REASON_CODES } from '@nexus/factory-domain/production-brand/health' // B-PR-15
+import { ISSUE_SOURCES, ISSUE_STATUSES } from '@nexus/factory-domain/production-brand/issues' // B-PR-15
 import { PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels'
+import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages' // B-PR-15
+import { BRAND_URGENCIES, URGENCY_ACTORS } from '@nexus/factory-domain/production-brand/urgency' // B-PR-15
+import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting' // B-PR-15
 import { MONITORING_BASES, SCAN_SUBJECTS } from '@nexus/factory-domain/production/settings/monitoring'
 import { REQUEST_KINDS } from '@nexus/factory-domain/sales/change-requests/rules'
 import { DOCUMENT_TEMPLATE_KINDS } from '@nexus/factory-domain/templates/documents'
 import {
+  BrandHealth,
+  BrandStage,
+  BrandUrgency,
   BundleCodeMode,
   DataRequestKind,
   DataRequestStatus,
@@ -25,8 +34,11 @@ import {
   DocumentTemplateKind,
   ErasureMethod,
   FloorRuleMode,
+  HealthReason,
   IntegrationMode,
   IntegrationProvider,
+  IssueSource,
+  IssueStatus,
   ItemKind,
   ItemSourcing,
   ItemTracking,
@@ -49,7 +61,11 @@ import {
   SkillLevel,
   Tannage,
   Uom,
+  UrgencyActor,
+  WaitingOn,
   WorkCentreKind,
+  WorkOrderHoldKind,
+  WorkOrderHoldStatus,
 } from './generated/prisma/enums'
 
 /**
@@ -126,4 +142,16 @@ export const MIRRORS: readonly Mirror[] = Object.freeze([
   // (CHANGE and CANCEL of the portal, the production asks beside them).
   mirror('ProductionShareLevel', ProductionShareLevel, 'production-brand/levels PRODUCTION_SHARE_LEVELS', PRODUCTION_SHARE_LEVELS, true),
   mirror('OrderChangeRequestKind', OrderChangeRequestKind, 'sales/change-requests/rules REQUEST_KINDS + production-brand/kinds PRODUCTION_REQUEST_KINDS', [...REQUEST_KINDS, ...PRODUCTION_REQUEST_KINDS] as const, true),
+  // B-PR-15 (production plan, schema wave 3/5): a customer's production state of its orders (B-PR-13's stages, health and
+  // waiting, B-PR-41's urgency), the issues that need an answer and the plain production hold.
+  mirror('BrandStage', BrandStage, 'production-brand/stages BRAND_STAGES', BRAND_STAGES, true),
+  mirror('BrandHealth', BrandHealth, 'production-brand/health BRAND_HEALTHS', BRAND_HEALTHS, true),
+  mirror('HealthReason', HealthReason, 'production-brand/health HEALTH_REASON_CODES', HEALTH_REASON_CODES, true),
+  mirror('WaitingOn', WaitingOn, 'production-brand/waiting WAITING_ON', WAITING_ON, true),
+  mirror('BrandUrgency', BrandUrgency, 'production-brand/urgency BRAND_URGENCIES', BRAND_URGENCIES, true),
+  mirror('UrgencyActor', UrgencyActor, 'production-brand/urgency URGENCY_ACTORS', URGENCY_ACTORS, true),
+  mirror('IssueSource', IssueSource, 'production-brand/issues ISSUE_SOURCES', ISSUE_SOURCES, true),
+  mirror('IssueStatus', IssueStatus, 'production-brand/issues ISSUE_STATUSES', ISSUE_STATUSES, true),
+  mirror('WorkOrderHoldKind', WorkOrderHoldKind, 'production/holds/kinds WORK_ORDER_HOLD_KINDS', WORK_ORDER_HOLD_KINDS, true),
+  mirror('WorkOrderHoldStatus', WorkOrderHoldStatus, 'production/holds/kinds WORK_ORDER_HOLD_STATUSES', WORK_ORDER_HOLD_STATUSES, true),
 ])
