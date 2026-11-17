@@ -29,9 +29,11 @@ export interface PortalThreadProps {
   onMissing?: () => void
   /** Draw the record's references above the conversation (default true; a record page has them in its band). */
   showRecord?: boolean
+  // B-TH-222: the messages as read, oldest first (the request page quotes our question of a request that waits for the customer).
+  onMessages?: (messages: readonly PartnerMessage[]) => void
 }
 
-export function PortalThread({ type, id, focus = false, headingLevel = 2, title, onRecord, onMissing, showRecord = true }: PortalThreadProps) {
+export function PortalThread({ type, id, focus = false, headingLevel = 2, title, onRecord, onMissing, showRecord = true, onMessages }: PortalThreadProps) {
   const frame = usePortalFrame()
   const t = useT('portal')
   const locale = useLocale()
@@ -45,8 +47,8 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
   const [failed, setFailed] = useState<string | null>(null)
   const key = useRef<string | null>(null)
   const box = useRef<HTMLDivElement>(null)
-  const told = useRef({ onRecord, onMissing })
-  told.current = { onRecord, onMissing }
+  const told = useRef({ onRecord, onMissing, onMessages })
+  told.current = { onRecord, onMissing, onMessages }
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -122,6 +124,11 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
         atText: formatDateTime(message.at, { locale }),
       }))
   }, [read, older, locale])
+
+  // B-TH-222
+  useEffect(() => {
+    if (state === 'ready') told.current.onMessages?.(messages)
+  }, [messages, state])
 
   const more = async () => {
     if (!cursor) return
