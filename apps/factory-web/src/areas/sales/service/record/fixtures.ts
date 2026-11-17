@@ -1,13 +1,16 @@
 import { createElement, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import type { CaseRecord } from '../api'
-import { actionsFor, BUSINESS_CASE, canFor, CLOSED_CASE, CONSUMER_CASE, CONTACTS, CUSTOMERS, inShell, LINK_FOUND, LINKS, MAILS, ME, NOW, panelsOf, PEOPLE, PREFIX, REASONS, recordOf, RIDER_CASE, ROWS, TODAY, type RoleCase } from '../demo/fixtures'
+import { actionsFor, BUSINESS_CASE, canFor, CLOSED_CASE, CONSUMER_CASE, CONTACTS, CUSTOMERS, inShell, LINK_FOUND, LINKS, MAILS, ME, NOW, PEOPLE, PREFIX, REASONS, recordOf, RIDER_CASE, ROWS, TODAY, type RoleCase } from '../demo/fixtures'
 import { caseDraftOf, coverDraftOf, emptyReturnDraft, repairDraftOf, type RecordTab } from '../model'
 import type { RecordDialog, ServiceRecordModel } from './view-model'
 import { ServiceRecordView } from './view/ServiceRecordView'
+// ---- B-TH-259: the case's made-up docked thread (RecordFrame beside every tab) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
- * SCR-413 — a service case (made-up data only): each tab (Case, Warranty check, Linked records, Actions, Activity), the band's
+ * SCR-413 — a service case (made-up data only): each tab (B-TH-259: Case with its status mails, Warranty check, Linked records &
+ * actions; the case's thread docked beside every tab — its customer's only, a rider's case notes only), the band's
  * primary per status, every dialog (a move with the status mail, the cover decided, Link, Unlink, Make repair, Make RMA for a
  * remake), the receipts, the role cases (sales decides; quality follows up without deciding; production reads) and every state
  * of a record (loading, not found, error, no permission, offline, changed elsewhere).
@@ -57,7 +60,8 @@ function RecordDesign({ model: design }: { model: DesignModel }) {
     '/sales/service',
     createElement(ServiceRecordView, {
       model,
-      panelsPreview: record ? panelsOf(record) : undefined,
+      // B-TH-259: the case's thread in its own words; none without threads.read.
+      thread: record && model.can.threads ? designDockedThread({ recordType: 'ServiceCase', record: record.number, party: record.party ? { name: record.party.legalName, role: 'customer' } : null }) : null,
       actions: {
         onDraft: (patch) => setModel((now) => ({ ...now, draft: { ...(now.draft ?? (record ? caseDraftOf(record) : caseDraftOf(CONSUMER_CASE))), ...patch } })),
         onDiscard: () => setModel((now) => ({ ...now, draft: null })),
@@ -98,18 +102,21 @@ export const designScreen = defineDesignScreen<DesignModel>({
     { id: 'linked-empty', label: 'Linked records: nothing yet', model: base(CONSUMER_CASE, 'linked') },
     { id: 'link', label: 'Link a record: an order found by its number, one already linked', model: dialog({ ...CONSUMER_CASE, links: LINKS }, linkDialog(), 'linked') },
     { id: 'unlink', label: 'Unlink the order', model: dialog({ ...CONSUMER_CASE, links: LINKS }, { kind: 'unlink', linkId: LINKS[1]!.id, busy: false, notice: null }, 'linked') },
-    { id: 'actions', label: 'Actions: repair, return, remake, credit — each says what it creates', model: base(CONSUMER_CASE, 'actions') },
-    { id: 'actions-rider', label: 'Actions for a rider’s case: held — name the customer first', model: base(RIDER_CASE, 'actions') },
-    { id: 'repair', label: 'Make repair: the case’s problem goes with it', model: dialog(CONSUMER_CASE, { kind: 'repair', draft: repairDraftOf(CONSUMER_CASE), busy: false, notice: null }, 'actions') },
-    { id: 'return-remake', label: 'Make RMA for a remake: the reason and the fit', model: dialog(CONSUMER_CASE, { kind: 'return', draft: { ...emptyReturnDraft('REMAKE'), reasonCode: 'WRONG_SIZE' }, reasons: { items: REASONS, problem: null }, busy: false, notice: null }, 'actions') },
-    { id: 'return-no-shipment', label: 'Make RMA held: the garment did not leave on a shipment we know', model: dialog(recordOf(ROWS[1]!), { kind: 'return', draft: emptyReturnDraft('RETURN'), reasons: { items: REASONS, problem: null }, busy: false, notice: null }, 'actions') },
-    { id: 'made-repair', label: 'Receipt: a repair opened and linked (Open it)', model: base({ ...CONSUMER_CASE, links: LINKS.slice(0, 1) }, 'actions', { notice: { key: 'repair.done', params: { number: 'DEMO-REP-0002' }, tone: 'success', link: { href: `${PREFIX}/sales/returns/repairs/demo`, label: { key: 'repair.open', params: { number: 'DEMO-REP-0002' } } } } }) },
+    { id: 'actions', label: 'Linked records & actions: repair, return, remake, credit — each says what it creates', model: base(CONSUMER_CASE, 'linked') },
+    { id: 'actions-rider', label: 'Linked records & actions for a rider’s case: held — name the customer first', model: base(RIDER_CASE, 'linked') },
+    { id: 'repair', label: 'Make repair: the case’s problem goes with it', model: dialog(CONSUMER_CASE, { kind: 'repair', draft: repairDraftOf(CONSUMER_CASE), busy: false, notice: null }, 'linked') },
+    { id: 'return-remake', label: 'Make RMA for a remake: the reason and the fit', model: dialog(CONSUMER_CASE, { kind: 'return', draft: { ...emptyReturnDraft('REMAKE'), reasonCode: 'WRONG_SIZE' }, reasons: { items: REASONS, problem: null }, busy: false, notice: null }, 'linked') },
+    { id: 'return-no-shipment', label: 'Make RMA held: the garment did not leave on a shipment we know', model: dialog(recordOf(ROWS[1]!), { kind: 'return', draft: emptyReturnDraft('RETURN'), reasons: { items: REASONS, problem: null }, busy: false, notice: null }, 'linked') },
+    { id: 'made-repair', label: 'Receipt: a repair opened and linked (Open it)', model: base({ ...CONSUMER_CASE, links: LINKS.slice(0, 1) }, 'linked', { notice: { key: 'repair.done', params: { number: 'DEMO-REP-0002' }, tone: 'success', link: { href: `${PREFIX}/sales/returns/repairs/demo`, label: { key: 'repair.open', params: { number: 'DEMO-REP-0002' } } } } }) },
     { id: 'move-resolve', label: 'Resolve: what was done, words for the customer with the status mail', model: dialog(BUSINESS_CASE, { kind: 'move', draft: { action: 'resolve', resolution: 'A new pocket was sewn in.', reason: '', message: 'Your jacket is ready.' }, busy: false, notice: null }) },
     { id: 'move-close', label: 'Close without a resolution: why (held until said); the customer is not told', model: dialog(RIDER_CASE, { kind: 'move', draft: { action: 'close', resolution: '', reason: '', message: '' }, busy: false, notice: null }) },
     { id: 'moved', label: 'Receipt: moved, the customer told by mail', model: base(BUSINESS_CASE, 'case', { notice: { key: 'move.done', params: { number: BUSINESS_CASE.number, status: 'status.RESOLVED' }, tone: 'success', lines: [{ key: 'move.mailSent', params: { to: 'contact@example.com' } }] } }) },
     { id: 'moved-no-mail', label: 'Receipt: moved, no mail went (said, never holding the move)', model: base(BUSINESS_CASE, 'case', { notice: { key: 'move.done', params: { number: BUSINESS_CASE.number, status: 'status.OPEN' }, tone: 'warning', lines: [{ key: 'move.mailNotSent.NO_CONTACT_EMAIL' }] } }) },
     { id: 'refused-cover', label: 'Resolve refused: a warranty claim whose cover is not decided (in words)', model: base(CONSUMER_CASE, 'case', { notice: { key: 'problem.held', tone: 'danger', lines: [{ key: 'held.COVER_UNDECIDED' }] } }) },
-    { id: 'activity', label: 'Activity: the status mails sent to the customer, then the thread and timeline', model: base({ ...CONSUMER_CASE, mails: MAILS }, 'activity') },
+    // ---- B-TH-259: Activity is gone — the status mails are on Case (R1-G04), the thread docks beside every tab (R-ACT in its "⋯").
+    { id: 'activity', label: 'TH-6 · Case with the status mails sent to the customer; the case’s thread docked beside it', model: base({ ...CONSUMER_CASE, mails: MAILS }, 'case'), note: 'An old ?tab=activity lands here with the thread open; ?tab=actions on Linked records & actions.' },
+    { id: 'thread-rider', label: 'TH-6 · A rider’s case: the thread holds office notes only (no customer of ours)', model: base(RIDER_CASE) },
+    { id: 'thread-no-right', label: 'TH-6 · Without threads.read: no thread beside the tabs', model: base(CONSUMER_CASE, 'case', { can: { ...canFor('owner'), threads: false } }) },
     { id: 'stale', label: 'Changed elsewhere while editing: read it again', model: base(CONSUMER_CASE, 'case', { draft: EDITED, stale: '10:41' }) },
     { id: 'offline', label: 'Offline: the last copy, every write held', model: base(CONSUMER_CASE, 'case', { live: 'offline', draft: EDITED }) },
     { id: 'loading', label: 'Loading', model: base(null) },
