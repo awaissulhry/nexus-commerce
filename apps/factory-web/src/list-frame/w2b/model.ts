@@ -139,6 +139,8 @@ export type ListQuickFilter =
   | { readonly id: string; readonly kind: 'date'; readonly label: string; readonly choices: readonly RelativeDay[] }
   /** A fixed word of the list's own ("late=true"). */
   | { readonly id: string; readonly kind: 'flag'; readonly label: string; readonly value: string }
+  /** F-PR-03: one of the list's own words for one term ("waitingOn=BRAND"): a heading with its choices, one at a time. */
+  | { readonly id: string; readonly kind: 'choice'; readonly label: string; readonly choices: readonly { readonly value: string; readonly label: string }[] }
 
 export interface ListQuick {
   readonly filters: readonly ListQuickFilter[]
@@ -152,6 +154,7 @@ export function quickValueOf(filter: ListQuickFilter, value: string | null | und
   if (!value) return null
   if (filter.kind === 'me') return value === ME ? ME : null
   if (filter.kind === 'date') return isRelativeDay(value) && filter.choices.includes(value) ? value : null
+  if (filter.kind === 'choice') return filter.choices.some((choice) => choice.value === value) ? value : null // F-PR-03
   return value === filter.value ? value : null
 }
 
@@ -163,11 +166,12 @@ export function activeQuick(quick: ListQuick): Array<{ filter: ListQuickFilter; 
   })
 }
 
-/** The next value of a quick filter pressed (or a date choice picked): on with that value, or off when it was on. */
-export function toggledQuick(filter: ListQuickFilter, current: string | null, picked?: RelativeDay): string | null {
+/** The next value of a quick filter pressed (or a date choice / F-PR-03 a word choice picked): on with that value, or off when it was on. */
+export function toggledQuick(filter: ListQuickFilter, current: string | null, picked?: string): string | null {
   if (filter.kind === 'me') return current === ME ? null : ME
   if (filter.kind === 'flag') return current === filter.value ? null : filter.value
   if (!picked) return null
+  if (filter.kind === 'choice' && !filter.choices.some((choice) => choice.value === picked)) return null // F-PR-03
   return current === picked ? null : picked
 }
 

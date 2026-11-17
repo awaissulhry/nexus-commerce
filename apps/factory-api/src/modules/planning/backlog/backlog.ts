@@ -4,9 +4,12 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { PLANNING_BACKLOG_MANAGE } from '@nexus/factory-domain/planning/backlog/permissions'
-import { rankedBacklog, rankProblems, ruleCompare, RULE_WORDS, whyWords, type BacklogOrder, type PriorityLevel, type RankItem } from '@nexus/factory-domain/planning/backlog/rank'
+import { rankedBacklog, rankProblems, ruleCompare, RULE_WORDS, urgencyCounts, whyWords, type BacklogOrder, type PriorityLevel, type RankItem } from '@nexus/factory-domain/planning/backlog/rank'
 import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { currentPromiseOf, dayWords } from '@nexus/factory-domain/planning/promise/rules'
+// B-PR-22b: the customer's urgency in the backlog (the brand-slot pass and its words).
+import type { BrandUrgency } from '@nexus/factory-domain/production-brand/urgency'
+import { customerUrgencyChipWords } from '@nexus/factory-domain/production-brand/words'
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
@@ -48,8 +51,10 @@ const ORDER_SELECT = {
   priorityLevel: true,
   priority: true,
   backlogRank: true,
-  party: { select: { id: true, code: true, legalName: true, tradeName: true } },
+  party: { select: { id: true, code: true, legalName: true, tradeName: true, /* B-PR-22b */ portalSettings: { select: { id: true, productionUrgencyOn: true } } } },
   lines: { where: { kind: { not: 'FEE' }, closedShortAt: null }, select: { id: true, siteId: true, promiseDate: true, quantity: true, sizes: { select: { size: true } } } },
+  // B-PR-22b: the customer's own urgency of the order (BrandOrderProduction, one row per order: its own key).
+  brandProductions: { select: { key: true, urgency: true, urgentRank: true } },
 } as const satisfies Prisma.SalesOrderSelect
 
 type OrderRow = Prisma.SalesOrderGetPayload<{ select: typeof ORDER_SELECT }>
@@ -80,6 +85,20 @@ function promiseOf(order: OrderRow, rows: ReadonlyMap<string, Parameters<typeof 
   return earliest ?? (order.promiseDate ? dayOf(order.promiseDate) : null)
 }
 
+// ── B-PR-22b ──
+/**
+ * The customer's own urgency of an order for the brand-slot pass (factory-domain planning/backlog/rank brandSlots, B-PR-41): its
+ * mark and its place in the customer's Urgent list (BrandOrderProduction, its own key), and whether the customer's urgency switch
+ * is on (PortalSettings: off, the mark is kept but orders nothing — R-46). Reads only; never writes priorityLevel, priority,
+ * backlogRank, WorkOrder.priority or rush.
+ */
+function customerUrgencyOf(order: OrderRow): Pick<BacklogOrder, 'customerUrgency' | 'urgentRank' | 'urgencyOn'> {
+  const state = order.brandProductions.find((row) => row.key === `brand-production:${order.id}`)
+  const settings = order.party.portalSettings.find((row) => row.id === order.party.id)
+  return { customerUrgency: (state?.urgency ?? 'REGULAR') as BrandUrgency, urgentRank: state?.urgentRank ?? null, urgencyOn: settings?.productionUrgencyOn ?? false }
+}
+// ── end B-PR-22b ──
+
 /** The company's open orders the reader sees, ranked (`context` null: every order, the system's read for allocation). */
 export async function backlogOf(db: Reader, companyId: string, context: OfficeContext | null, options: { readonly siteId?: string | undefined } = {}): Promise<(BacklogEntry & { position: number; rulePosition: number })[]> {
   const where: Prisma.SalesOrderWhereInput = {
@@ -105,6 +124,7 @@ export async function backlogOf(db: Reader, companyId: string, context: OfficeCo
         promise: promiseOf(order, rows),
         customerCode: order.party.code,
         orderDate: dayOf(order.orderDate),
+        ...customerUrgencyOf(order), // B-PR-22b
         status: order.status,
         companyId: order.companyId,
         customer: { id: order.party.id, code: order.party.code, name: order.party.tradeName ?? order.party.legalName },
@@ -157,6 +177,8 @@ function viewOf(company: { id: string; code: string; name: string }, entries: Aw
       lines: entry.lines,
       pieces: entry.pieces,
       why: whyWords(entry, words),
+      // B-PR-22b: the customer's urgency that orders it here (its own places only): Urgent n while the switch is on; else null.
+      customerUrgency: urgencyCounts(entry) ? { urgentRank: entry.urgentRank ?? null, words: customerUrgencyChipWords(entry.urgentRank ?? null) } : null,
     })),
   }
 }

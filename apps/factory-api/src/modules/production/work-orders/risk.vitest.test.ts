@@ -118,3 +118,36 @@ describe('the sorts and the cursor', () => {
     expect(() => decodeCursor('due', 'due~0~2026-11-01~not-an-id-of-thirty-six-characters!!')).toThrow(/start from the first page/)
   })
 })
+
+// ── B-PR-22b ──
+describe("B-PR-22b the risk sort's tie: the customer's urgency (06-tree §0.4 \"ties by brand priority\")", () => {
+  it('same risk and due date: the customer-urgent work order first (by its place in its customer\'s list), then the newest; other sorts ignore it', () => {
+    const rows: { key: SortKey }[] = [
+      { key: { rank: 1, due: '2026-12-01', id: id(1) } },
+      { key: { rank: 1, due: '2026-12-01', id: id(2), urgent: 2 } },
+      { key: { rank: 1, due: '2026-12-01', id: id(3), urgent: 1 } },
+      { key: { rank: 0, due: '2026-12-09', id: id(4) } },
+      { key: { rank: 1, due: '2026-11-30', id: id(5) } },
+    ]
+    const order = (sort: 'risk' | 'due' | 'newest') => [...rows].sort((a, b) => compareKeys(sort, a.key, b.key)).map((row) => row.key.id)
+    // A late one first; then at risk by due date; among the same due date the urgent ones (1st, 2nd), then the newest.
+    expect(order('risk')).toEqual([id(4), id(5), id(3), id(2), id(1)])
+    expect(order('due')).toEqual([id(5), id(3), id(2), id(1), id(4)])
+  })
+
+  it("the risk token carries the tie (u<place>) and pages after it; a due token never does", () => {
+    const rows: { key: SortKey }[] = [
+      { key: { rank: 1, due: '2026-12-01', id: id(1) } },
+      { key: { rank: 1, due: '2026-12-01', id: id(2), urgent: 2 } },
+      { key: { rank: 1, due: '2026-12-01', id: id(3), urgent: 1 } },
+    ]
+    const first = pageOf(rows, 'risk', null, 1)
+    expect(first.next).toBe(`risk~1~2026-12-01~u1~${id(3)}`)
+    expect(decodeCursor('risk', first.next!)).toEqual({ rank: 1, due: '2026-12-01', id: id(3), urgent: 1 })
+    const second = pageOf(rows, 'risk', decodeCursor('risk', first.next!), 1)
+    expect(second.page.map((row) => row.key.id)).toEqual([id(2)])
+    expect(pageOf(rows, 'risk', decodeCursor('risk', second.next!), 5).page.map((row) => row.key.id)).toEqual([id(1)])
+    expect(encodeCursor('due', { rank: 1, due: '2026-12-01', id: id(3), urgent: 1 })).toBe(`due~1~2026-12-01~${id(3)}`)
+    expect(() => decodeCursor('due', `due~1~2026-12-01~u1~${id(3)}`)).toThrow(/start from the first page/)
+  })
+})

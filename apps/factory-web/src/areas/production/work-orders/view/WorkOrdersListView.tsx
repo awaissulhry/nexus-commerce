@@ -13,7 +13,7 @@ import { formatDate, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useScopedT, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import type { WorkOrderRow } from '../../_shared/api'
-import { LIST_VIEWS, listProgress, STATUS_TONE, TILES, type ListView } from '../../_shared/model'
+import { LIST_VIEWS, STATUS_TONE, type ListView } from '../../_shared/model'
 import { WORK_ORDER_STATUSES } from '@nexus/factory-domain/production/work-orders/machine'
 import type { ListEdit, ListQuick } from '../../../../list-frame/w2b/model'
 import type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
@@ -24,10 +24,46 @@ import { ReadinessPill, say } from '../daily/view/DailyParts'
 import { releaseHeld, RUSH_CHOICES, SHIFT_NAMESPACE, travellersHeld, travellersHref } from '../every-shift/model'
 import { ReleaseReview } from '../every-shift/view/ReleaseReview'
 import '../../_shared/production.css'
+// ---- F-PR-03: the list by risk (Customer with its orders and POs, Stage, Done, Health, Waiting on, Blocked by; filters, groups) ----
+import { HealthPill } from '../../../../lib/production/view/HealthPill'
+import { WaitingOnPill } from '../../../../lib/production/view/WaitingOnPill'
+import { CustomerFilter } from '../../_shared/customer/view/CustomerFilter'
+import type { ListGroups } from '../../../../list-frame/groups/model'
+import type { ListSort } from '../../_shared/api'
+import {
+  blockedKeyOf,
+  boardMarksOf,
+  cleared,
+  customerCellOf,
+  customerGroupsOf,
+  doneOf,
+  FILTER_CHOICES,
+  filterChange,
+  groupFigures,
+  groupKeyOf,
+  healthCellOf,
+  listAddress,
+  listTiles,
+  narrowed,
+  SORT_CHOICES,
+  stageLineOf,
+  termsOf,
+  waitingInputOf,
+  type ListTerms,
+} from '../list/model'
+// ---- end F-PR-03
 
 export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
 
 /**
+ * F-PR-03 (production plan §5, 06-tree A.3): sorted by risk by default (Sort ▾ Risk first · Due date · Newest first); the columns
+ * Work order · Customer (its name, each sales order as a link, the customer PO) · Style · Stage (the state and the furthest step) ·
+ * Done (finished, bar and words one figure) · Due · Health (late, at risk, blocked, on track) · Waiting on · Blocked by · ⋯, with
+ * Pieces, Readiness, Priority and Site under Columns ▾; the customer filter and the quick filters Waiting on, Health, Blocked by
+ * (each a chip); Group ▾ By customer (each header the server's figures for that customer); the tiles At risk and Waiting on
+ * customer; board cards with the customer code, the health and who the work waits on. Hold N as before. Key hints only in the
+ * footer's information icon (the frame's).
+ *
  * SCR-069 — Work orders (Production; design production.workorders, 00 §2.1 list frame): the tiles (each a saved view),
  * the shared list frame (search by number, batch or style; Rows ▾ views; select-all, shift range, x; Export N, Edit N
  * and Release N while rows are selected; live changes behind "N updates · Show"; B-W2b-13: Table · Board · Calendar ·
@@ -97,6 +133,8 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
   const daily = model.daily ?? null
   const holdWait = daily ? say(tw, bulkHoldHeld(picked, daily.can)) : null
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('list.keyNew') }]
+  // F-PR-03: a customer cell names the customer with parties.view, else its code (06-tree A.0).
+  const names = model.customers?.names ?? false
 
   const columns = useMemo<ColDef<WorkOrderRow>[]>(() => {
     const href = (row: WorkOrderRow) => `${model.prefix}/production/work-orders/${row.id}`
@@ -109,7 +147,19 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
           <span className="fw-pr-cell-sub">{data.batchNumber ? t('list.batch', { batch: data.batchNumber }) : t('list.noBatch')}</span>
         </span>
       ) : null
-    const StatusCell = ({ data }: ICellRendererParams<WorkOrderRow>) => (data ? <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill> : null)
+    // F-PR-03: Stage = the state and, under it, the furthest step the floor counted (the same figure as before).
+    const StatusCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
+      if (!data) return null
+      const line = stageLineOf(data)
+      return (
+        <span className="fw-pr-cell">
+          <span>
+            <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill>
+          </span>
+          <span className="fw-pr-cell-sub">{t(line.key, line.params)}</span>
+        </span>
+      )
+    }
     const StyleCell = ({ data }: ICellRendererParams<WorkOrderRow>) =>
       data ? (
         <span className="fw-pr-cell">
@@ -122,24 +172,66 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
           </span>
         </span>
       ) : null
-    const CustomerCell = ({ data }: ICellRendererParams<WorkOrderRow>) =>
-      data ? (
+    // F-PR-03: the customer (its name with parties.view, else its code), each sales order a link (orders.view) and its customer PO.
+    const CustomerCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
+      if (!data) return null
+      const cell = customerCellOf(data, names)
+      return (
         <span className="fw-pr-cell">
-          <span className="fw-pr-ellipsis">{[...new Set(data.orders.map((order) => order.partyName))].join(', ') || '—'}</span>
-          <span className="fw-pr-cell-sub">{data.orders.map((order) => order.number).join(' · ')}</span>
+          <span className="fw-pr-ellipsis">{cell.name ?? (cell.mixed ? t('customer.mixed') : t('list.noCustomer'))}</span>
+          <span className="fw-pr-cell-sub">
+            {cell.orders.map((order, index) => (
+              <span key={order.id}>
+                {index > 0 ? ' · ' : ''}
+                {model.can.orders ? (
+                  <Link className="fw-pr-link" href={`${model.prefix}/sales/orders/${encodeURIComponent(order.id)}`}>
+                    {order.number}
+                  </Link>
+                ) : (
+                  order.number
+                )}
+                {order.po ? ` · ${t('list.po', { po: order.po })}` : ''}
+              </span>
+            ))}
+          </span>
         </span>
-      ) : null
-    // F-PR-01: the bar and its words are ONE figure (the furthest step counted), never finished 0 % beside "Sewn 80 of 100".
+      )
+    }
+    // F-PR-03: Done = finished of the pieces; the bar and its words are ONE figure (rule R5); not counted: no bar, said in words.
     const ProgressCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
       if (!data) return null
-      const figure = listProgress(data)
+      const figure = doneOf(data)
       const words = t(figure.words.key, figure.words.params)
       return (
         <span className="fw-pr-progress">
-          <ProgressBar value={figure.percent} ariaLabel={t('list.progressLabel', { number: data.number, figure: words })} height={6} />
+          <ProgressBar value={figure.percent} ariaLabel={t('list.doneLabel', { number: data.number, figure: words })} height={6} />
           <span className="fw-pr-cell-sub">{words}</span>
         </span>
       )
+    }
+    // F-PR-03: Health from the row's risk (the shared chip; Blocked as its own words, the Blocked by column says by what).
+    const HealthCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
+      if (!data) return null
+      const cell = healthCellOf(data)
+      if (cell.kind === 'none') return <span>—</span>
+      if (cell.kind === 'unknown') return <HealthPill face="office" computed={undefined} explain={false} />
+      if (cell.kind === 'blocked')
+        return (
+          <Pill tone="warning" icon={<PauseCircle size={12} aria-hidden />}>
+            {t('risk.BLOCKED')}
+          </Pill>
+        )
+      return <HealthPill face="office" {...cell.input} explain={false} />
+    }
+    const WaitingCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
+      if (!data) return null
+      const input = waitingInputOf(data)
+      return <WaitingOnPill face="office" who={input.who} since={input.since} now={model.now} />
+    }
+    const BlockedCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
+      if (!data) return null
+      const key = blockedKeyOf(data)
+      return key ? <Tag tone="warning">{t(key)}</Tag> : <span>—</span>
     }
     const DueCell = ({ data }: ICellRendererParams<WorkOrderRow>) =>
       data ? (
@@ -183,20 +275,25 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
           ]}
         />
       ) : null
+    // F-PR-03: Pieces, Readiness, Priority and Site under Columns ▾ (shown when a layout asks); the ids are the export's (B-PR-34).
+    const later = (column: ColDef<WorkOrderRow>): ColDef<WorkOrderRow> => ({ ...column, hide: true, context: { ...((column.context as object | undefined) ?? {}), optIn: true } })
     return [
-      { colId: 'number', headerName: t('col.number'), field: 'number', minWidth: 130, flex: 1, cellRenderer: NumberCell },
-      { colId: 'status', headerName: t('col.status'), field: 'status', minWidth: 120, flex: 0.8, cellRenderer: StatusCell },
-      { colId: 'style', headerName: t('col.style'), field: 'styleCode', minWidth: 180, flex: 1.5, cellRenderer: StyleCell },
-      { colId: 'customer', headerName: t('col.customer'), minWidth: 160, flex: 1.4, cellRenderer: CustomerCell },
-      { colId: 'pieces', headerName: t('col.pieces'), field: 'pieces', minWidth: 76, flex: 0.5, type: 'rightAligned' },
-      { colId: 'progress', headerName: t('col.progress'), minWidth: 160, flex: 1.3, cellRenderer: ProgressCell },
-      { colId: 'readiness', headerName: tw('readiness.column'), minWidth: 130, flex: 0.9, cellRenderer: ReadinessCell },
+      { colId: 'number', headerName: t('col.number'), field: 'number', minWidth: 130, flex: 0.9, cellRenderer: NumberCell },
+      { colId: 'customer', headerName: t('col.customer'), minWidth: 180, flex: 1.4, cellRenderer: CustomerCell },
+      { colId: 'style', headerName: t('col.style'), field: 'styleCode', minWidth: 170, flex: 1.3, cellRenderer: StyleCell },
+      { colId: 'status', headerName: t('col.stage'), field: 'status', minWidth: 150, flex: 1, cellRenderer: StatusCell },
+      { colId: 'progress', headerName: t('col.done'), minWidth: 150, flex: 1, cellRenderer: ProgressCell },
       { colId: 'due', headerName: t('col.due'), field: 'dueDate', minWidth: 132, flex: 0.9, cellRenderer: DueCell },
-      { colId: 'priority', headerName: t('col.priority'), field: 'priority', minWidth: 112, flex: 0.6, type: 'rightAligned', cellRenderer: PriorityCell },
-      { colId: 'site', headerName: t('col.site'), field: 'siteCode', minWidth: 80, flex: 0.5 },
+      { colId: 'risk', headerName: t('col.health'), minWidth: 120, flex: 0.8, sortable: false, cellRenderer: HealthCell },
+      { colId: 'waitingOn', headerName: t('col.waitingOn'), minWidth: 150, flex: 1, sortable: false, cellRenderer: WaitingCell },
+      { colId: 'blockedBy', headerName: t('col.blockedBy'), minWidth: 110, flex: 0.7, sortable: false, cellRenderer: BlockedCell },
+      later({ colId: 'pieces', headerName: t('col.pieces'), field: 'pieces', minWidth: 76, flex: 0.5, type: 'rightAligned' }),
+      later({ colId: 'readiness', headerName: tw('readiness.column'), minWidth: 130, flex: 0.9, cellRenderer: ReadinessCell }),
+      later({ colId: 'priority', headerName: t('col.priority'), field: 'priority', minWidth: 112, flex: 0.6, type: 'rightAligned', cellRenderer: PriorityCell }),
+      later({ colId: 'site', headerName: t('col.site'), field: 'siteCode', minWidth: 80, flex: 0.5 }),
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, tw, ts, locale, model.prefix, readiness])
+  }, [t, tw, ts, locale, model.prefix, model.can.orders, model.now, names, readiness])
 
   // B-W2b-13 — the W2b list frame: board by state, calendar by due date, cards, the due quick filter, inline and bulk edit.
   const final = (row: WorkOrderRow) => (row.status === 'CLOSED' || row.status === 'CANCELLED' ? t('w2b.heldFinal') : null)
@@ -213,13 +310,24 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
     bulk: { noun: { one: t('w2b.noun_one'), other: t('w2b.noun_other') } },
     held: model.can.manage ? null : t('held.noManage'),
   }
+  // F-PR-03: the computed filters Waiting on, Health and Blocked by join the quick filters (each a chip; the API's terms).
   const quick: ListQuick = {
     filters: [
       { id: 'due', kind: 'date', label: t('w2b.quickDue'), choices: ['overdue', 'today', 'this-week', 'next-week', 'next-7-days', 'this-month'] },
       { id: 'rush', kind: 'flag', label: ts('rush.word'), value: 'true' },
+      { id: 'waitingOn', kind: 'choice', label: t('filter.waitingOn'), choices: FILTER_CHOICES.waitingOn.map((choice) => ({ value: choice.value, label: t(choice.key) })) },
+      { id: 'risk', kind: 'choice', label: t('filter.health'), choices: FILTER_CHOICES.risk.map((choice) => ({ value: choice.value, label: t(choice.key) })) },
+      { id: 'blockedBy', kind: 'choice', label: t('filter.blockedBy'), choices: FILTER_CHOICES.blockedBy.map((choice) => ({ value: choice.value, label: t(choice.key) })) },
     ],
-    values: { due: model.due ?? null, rush: model.rush ? 'true' : null },
-    onChange: (id, value) => (id === 'rush' ? actions?.onRush?.(value === 'true') : actions?.onDue?.(value as never)),
+    values: { due: model.due ?? null, rush: model.rush ? 'true' : null, waitingOn: model.waitingOn ?? null, risk: model.risk ?? null, blockedBy: model.blockedBy ?? null },
+    onChange: (id, value) => {
+      if (id === 'rush') actions?.onRush?.(value === 'true')
+      else if (id === 'due') actions?.onDue?.(value as never)
+      else {
+        const next = filterChange(id, value)
+        if (next) actions?.onTerms?.(next)
+      }
+    },
   }
   const laneTotal = (status: WorkOrderRow['status']): number | null => {
     const counts = model.counts
@@ -229,10 +337,25 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
   const shownStatuses = WORK_ORDER_STATUSES.filter((status) => model.view === 'all' || (items ?? []).some((row) => row.status === status) || ['DRAFT', 'RELEASED', 'IN_PROGRESS'].includes(status))
 
   const filtered = model.view !== 'all' || model.q.trim() !== ''
+  // F-PR-03: the list's terms as the model holds them (one shape for the address, the tiles and the empty state).
+  const terms: ListTerms = {
+    ...termsOf(null, ['table']),
+    view: model.view,
+    q: model.q,
+    mode: model.mode ?? 'table',
+    due: model.due ?? null,
+    rush: !!model.rush,
+    ...(model.sort ? { sort: model.sort } : {}),
+    waitingOn: model.waitingOn ?? null,
+    risk: model.risk ?? null,
+    blockedBy: model.blockedBy ?? null,
+    party: model.customers?.party ?? null,
+    group: model.group ?? null,
+  }
   const state = model.rows.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
   ) : items && items.length === 0 ? (
-    model.q.trim() !== '' || !!model.due || !!model.rush || (model.view !== 'all' && model.view !== 'open') ? (
+    narrowed(terms) ? (
       <EmptyState
         title={t('list.noMatch.title')}
         description={t('list.noMatch.body')}
@@ -241,10 +364,9 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
             size="sm"
             onClick={() => {
               setQuery('')
-              actions?.onSearch?.('')
-              actions?.onDue?.(null)
-              actions?.onRush?.(false)
-              actions?.onView?.('all')
+              // F-PR-03: every filter off in one address (the sort, the mode and the grouping stay).
+              const off = cleared(terms)
+              actions?.onTerms?.({ view: off.view, q: off.q, due: off.due, rush: off.rush, waitingOn: null, risk: null, blockedBy: null, party: null })
             }}
           >
             {t('list.clearFilters')}
@@ -266,7 +388,9 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
     )
   ) : undefined
 
-  const tileView = (TILES.find((tile) => tile.view === model.view)?.view ?? null) as ListView | null
+  // F-PR-03: the tiles (the state views, and At risk / Waiting on customer as the API's filters).
+  const tiles = listTiles(terms, model.counts)
+  const groups = useCustomerGroups(model, actions, terms, names)
 
   return (
     <div className="fw-pr">
@@ -316,11 +440,11 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       )}
 
       <MetricStrip
-        metrics={TILES.map((tile) => ({
+        metrics={tiles.map((tile) => ({
           label: t(`tile.${tile.id}`),
-          value: model.counts ? String(tile.count(model.counts)) : '—',
-          onClick: () => actions?.onView?.(model.view === tile.view ? 'open' : tile.view),
-          active: tileView === tile.view,
+          value: tile.count === null ? '—' : String(tile.count),
+          onClick: () => actions?.onTerms?.(tile.next),
+          active: tile.active,
         }))}
       />
 
@@ -345,13 +469,28 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
           />
         }
         tools={
-          <Select size="sm" aria-label={t('list.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as ListView)}>
-            {LIST_VIEWS.map((view) => (
-              <option key={view} value={view}>
-                {t(`view.${view}`)}
-              </option>
-            ))}
-          </Select>
+          <>
+            <Select size="sm" aria-label={t('list.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as ListView)}>
+              {LIST_VIEWS.map((view) => (
+                <option key={view} value={view}>
+                  {t(`view.${view}`)}
+                </option>
+              ))}
+            </Select>
+            {/* F-PR-03: the Production pages' one customer filter (`?party=`), the sort (risk first by default), Group ▾ By customer. */}
+            {model.customers && <CustomerFilter state={model.customers} onPick={(party) => actions?.onParty?.(party)} />}
+            <Select size="sm" aria-label={t('sort.label')} value={terms.sort} onChange={(event) => actions?.onTerms?.({ sort: event.target.value as ListSort })}>
+              {SORT_CHOICES.map((sort) => (
+                <option key={sort} value={sort}>
+                  {t(`sort.${sort}`)}
+                </option>
+              ))}
+            </Select>
+            <Select size="sm" aria-label={t('group.label')} value={terms.group ?? ''} onChange={(event) => actions?.onTerms?.({ group: event.target.value === 'party' ? 'party' : null })}>
+              <option value="">{t('group.none')}</option>
+              <option value="party">{t('group.party')}</option>
+            </Select>
+          </>
         }
         selection={{
           selected,
@@ -408,7 +547,16 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
           board: {
             lanes: shownStatuses.map((status) => ({ id: status, label: t(`status.${status}`), total: laneTotal(status), tone: STATUS_TONE[status] === 'neutral' ? undefined : STATUS_TONE[status] })),
             laneOf: (row) => row.status,
-            card: (row) => ({ title: `${row.styleCode} · ${row.styleName}`, fields: [{ label: t('col.pieces'), value: String(row.pieces) }, ...(row.dueDate ? [{ label: t('col.due'), value: formatDate(`${row.dueDate}T12:00:00Z`, { locale }) }] : [])], marks: row.daysLate ? [{ label: t('list.daysLate', { count: row.daysLate }), tone: 'danger' as const }] : [] }),
+            // F-PR-03: each card names its customer by code (a board is read across the room), its health and who it waits on.
+            card: (row) => ({
+              title: `${row.styleCode} · ${row.styleName}`,
+              fields: [
+                ...(row.customer ? [{ label: t('board.customer'), value: row.customer.code }] : row.mixedCustomers ? [{ label: t('board.customer'), value: t('customer.mixed') }] : []),
+                { label: t('col.pieces'), value: String(row.pieces) },
+                ...(row.dueDate ? [{ label: t('col.due'), value: formatDate(`${row.dueDate}T12:00:00Z`, { locale }) }] : []),
+              ],
+              marks: row.risk !== undefined ? boardMarksOf(row, model.now ?? Date.now()).map((mark) => ({ label: mark.words.map((words) => t(words.key, words.params)).join(' · '), tone: mark.tone })) : row.daysLate ? [{ label: t('list.daysLate', { count: row.daysLate }), tone: 'danger' as const }] : [],
+            }),
             heldReason: t('w2b.boardHeld'),
           },
           calendar: { dateOf: (row) => row.dueDate, label: t('w2b.dueDate'), field: 'due' },
@@ -416,6 +564,8 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
         cards={{ hrefOf: (row) => `${model.prefix}/production/work-orders/${row.id}` }}
         edit={edit}
         quick={quick}
+        groups={groups /* F-PR-03 */}
+        onShownColumns={actions?.onShownColumns /* F-PR-03: the readiness word is read only while shown */}
         {...(model.today ? { today: model.today } : {})}
       />
       {filtered && model.view !== 'open' && <p className="fw-pr-hint">{t('list.viewing', { view: t(`view.${model.view}`) })}</p>}
@@ -446,4 +596,60 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       )}
     </div>
   )
+}
+
+// ---- F-PR-03: grouped by customer ----------------------------------------------------------------------------------------------
+
+/**
+ * The list frame's groups when the list is grouped by customer (`?group=party`): one header per customer of the loaded rows, in the
+ * list's order (the customer with the most urgent work order first), its name a link to the list narrowed to that customer, and its
+ * figures the server's for that customer's whole production (never summed from the rows on screen); work orders made before the
+ * one-customer rule and samples for no customer get a header of their own in words. The grand total under the grid is the tiles'
+ * counts (every customer the person may see, or the one picked). Null: not grouped.
+ */
+function useCustomerGroups(model: WorkOrdersListModel, actions: WorkOrdersListActions | undefined, terms: ListTerms, names: boolean): ListGroups<WorkOrderRow> | null {
+  const t = useT('production')
+  const path = `${model.prefix}/production/work-orders`
+  return useMemo(() => {
+    if (model.group !== 'party' || !model.rows.items) return null
+    const groups = customerGroupsOf(model.rows.items, names)
+    const figures = (partyId: string) => {
+      const read = model.groupCounts?.[partyId]
+      if (!read || read === 'reading') return null
+      if (read === 'failed')
+        return (
+          <span className="fw-pr-inline">
+            {t('group.figuresFailed')}
+            <Button size="sm" variant="quiet" onClick={() => actions?.onRetryGroup?.(partyId)}>
+              {t('common.retry')}
+            </Button>
+          </span>
+        )
+      const phrase = groupFigures(read)
+      return <span className="fw-pr-hint">{t(phrase.key, phrase.params)}</span>
+    }
+    const total = model.counts ? groupFigures(model.counts) : null
+    const scope = model.customers?.everyCustomer === false ? t('customer.allMine') : t('customer.all')
+    return {
+      keyOf: groupKeyOf,
+      groups: groups.map((group) => {
+        const name = group.name ?? (group.kind === 'mixed' ? t('customer.mixed') : t('list.noCustomer'))
+        return {
+          key: group.key,
+          name,
+          label: group.partyId ? (
+            <Link className="fw-pr-link" href={listAddress(path, { ...terms, party: group.partyId, group: null })} title={t('group.only', { name })}>
+              {name}
+            </Link>
+          ) : (
+            <span>{name}</span>
+          ),
+          summary: group.partyId ? figures(group.partyId) : <span className="fw-pr-hint">{t(group.kind === 'mixed' ? 'group.mixedNote' : 'group.noneNote')}</span>,
+        }
+      }),
+      collapsed: model.collapsed ?? [],
+      onToggle: (key) => actions?.onToggleGroup?.(key),
+      total: total ? <span className="fw-pr-hint">{t('group.total', { scope, ...(total.params ?? {}) })}</span> : null,
+    }
+  }, [model.group, model.rows.items, model.groupCounts, model.counts, model.collapsed, model.customers?.everyCustomer, names, path, terms, t, actions])
 }

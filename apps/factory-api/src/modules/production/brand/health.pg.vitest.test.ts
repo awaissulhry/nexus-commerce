@@ -19,9 +19,9 @@ import { seed as seedNumbering } from '../../../../../../packages/factory-db/see
 import { seed as seedProduction } from '../../../../../../packages/factory-db/seed/production'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
 import { buildApp } from '../../../core/app'
-import { testAuthenticator, type SessionContext } from '../../../core/context'
+import { testAuthenticator } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
-import { productionTwoBrands, twoBrandIds, twoBrandSessions, type ProductionTwoBrands } from '../testing/two-brands'
+import { productionTwoBrands, twoBrandIds, twoBrandSessions, type OfficeSession, type ProductionTwoBrands } from '../testing/two-brands'
 import { planKeep, type KeeperRow } from './keeper'
 
 /**
@@ -54,7 +54,7 @@ const ns = 'pr2i-health'
 const ids = twoBrandIds(ns)
 const actorId = seedUuid(ns, 'actor')
 const PERMISSIONS: Permission[] = ['workorders.view', 'workorders.manage', 'production.brand.manage']
-const SESSIONS: Record<string, SessionContext> = {
+const SESSIONS: Record<string, OfficeSession> = {
   ...twoBrandSessions(ids.tenantId, ids.a, ids.b, PERMISSIONS),
   // Sees every customer's production, manages none of it.
   'office.viewer': { audience: 'office', tenantId: ids.tenantId, actorId: newId(), grants: [{ permissions: ['workorders.view'], companies: 'all', sites: 'all', parties: 'all' }] },

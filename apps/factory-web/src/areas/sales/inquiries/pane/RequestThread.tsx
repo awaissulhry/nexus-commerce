@@ -80,13 +80,14 @@ export function RequestThread({ host, ask = null, onAsk, replyLanguage = null }:
     actions.onDraft({ mode: 'note', body: '', forFloor: false }, [])
   }
 
-  const askingNow = asking.current !== null && thread.model.composer.draft.mode === 'reply'
+  const asked = asking.current // this render's question (a ref read once, so the check below narrows it)
+  const askingNow = asked !== null && thread.model.composer.draft.mode === 'reply'
   const actions =
     askingNow
       ? {
           ...thread.actions,
           // A portal request: no address to check; any other: the send check first, then the request's own route.
-          onSend: asking.current.portal ? () => void send() : thread.actions.onSend,
+          onSend: asked.portal ? () => void send() : thread.actions.onSend,
           onConfirm: () => void send(),
           onDraft: (...args: Parameters<typeof thread.actions.onDraft>) => {
             // Back to an Office note: the question is no longer asked.

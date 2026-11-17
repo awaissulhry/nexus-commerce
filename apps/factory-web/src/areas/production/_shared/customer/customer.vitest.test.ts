@@ -43,11 +43,14 @@ describe('the address key ?party=', () => {
     expect(takesParty('/w/F1/production/bundles/0000')).toBe(false)
     expect(carryParty('/w/F1/production/bundles', '/production/cutting', here)).toBe(`/w/F1/production/bundles?party=${A}`)
     expect(carryParty('/w/F1/production/scrap?view=today', '/production/cutting', here)).toBe(`/w/F1/production/scrap?view=today&party=${A}`)
-    // A link that names its own customer keeps it; a record, another area and Work orders (F-PR-03) get none.
+    // A link that names its own customer keeps it; a record and another area get none. F-PR-03: Work orders takes it now (and
+    // gives it back), never a work order's record.
     expect(carryParty(`/w/F1/production/scrap?party=${B}`, '/production/cutting', here)).toBe(`/w/F1/production/scrap?party=${B}`)
     expect(carryParty('/w/F1/production/cutting/orders/0000', '/production/cutting', here)).toBe('/w/F1/production/cutting/orders/0000')
     expect(carryParty('/w/F1/sales/orders', '/production/cutting', here)).toBe('/w/F1/sales/orders')
-    expect(carryParty('/w/F1/production/work-orders', '/production/cutting', here)).toBe('/w/F1/production/work-orders')
+    expect(carryParty('/w/F1/production/work-orders', '/production/cutting', here)).toBe(`/w/F1/production/work-orders?party=${A}`)
+    expect(carryParty('/w/F1/production/cutting', '/production/work-orders', here)).toBe(`/w/F1/production/cutting?party=${A}`)
+    expect(carryParty('/w/F1/production/work-orders/0000', '/production/work-orders', here)).toBe('/w/F1/production/work-orders/0000')
     // From a page that is not a Production list, or with no customer picked: as it was.
     expect(carryParty('/w/F1/production/bundles', '/sales/orders', here)).toBe('/w/F1/production/bundles')
     expect(carryParty('/w/F1/production/bundles', '/production/cutting', params('view=cut'))).toBe('/w/F1/production/bundles')

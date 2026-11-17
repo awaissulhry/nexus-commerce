@@ -17,6 +17,8 @@ import { NotReleased, PartState } from '../../record/view/WorkOrderRecordView'
 import { bundlesOnHold, DAILY_NAMESPACE, splitHeld } from '../../daily/model'
 import { FinishedCard, say } from '../../daily/view/DailyParts'
 import { SHIFT_NAMESPACE } from '../../every-shift/model'
+// F-PR-05a: one Report finished button on the page — the band's while released garments wait, else this card's.
+import { reportFirst } from '../../record/overview/model'
 
 /**
  * SCR-072 — Bundles (design wo-bundles; MES-065, MES-068, MES-073): per cell what is cut, bundled and still to bundle;
@@ -32,8 +34,8 @@ export function BundlesTab({ workOrder, model, actions }: { workOrder: WorkOrder
   if (!data) return <PartState label={t('tab.bundles')} problem={model.bundles.problem} onRetry={() => actions?.onRetryPart?.('bundles')} />
   return (
     <div className="fw-pr-stack">
-      {/* B-W2a-46 (wo-bundles "W2a Report finished to stock"; wo-finish). */}
-      {model.daily && <FinishedCard workOrder={workOrder} daily={model.daily} actions={actions?.daily} />}
+      {/* B-W2a-46 (wo-bundles "W2a Report finished to stock"; wo-finish). F-PR-05a: its button is the band's primary now. */}
+      {model.daily && <FinishedCard workOrder={workOrder} daily={model.daily} actions={actions?.daily} inBand={reportFirst(workOrder, model.daily.finished?.value ?? null)} />}
       <CellsCard data={data} />
       <BundleList workOrder={workOrder} data={data} model={model} actions={actions} />
       {model.bundleOpen && <BundleDetail data={data} workOrder={workOrder} model={model} actions={actions} />}

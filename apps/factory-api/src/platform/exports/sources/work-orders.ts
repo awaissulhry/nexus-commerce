@@ -13,6 +13,8 @@ import { BLOCKED_BY, LIST_SORTS, WORK_ORDER_RISKS } from '../../../modules/produ
 import { SUPERVISOR_FILTERS } from '../../../modules/production/work-orders/work-orders'
 import { SUPERVISOR_MARKS } from '@nexus/factory-domain/production-brand/supervisor'
 import { SUPERVISOR_MARK_WORDS } from '@nexus/factory-domain/production-brand/words'
+// B-PR-22b: the customer's urgency cell.
+import { CUSTOMER_URGENCY_WORDS, URGENCY_WORDS } from '@nexus/factory-domain/production-brand/words'
 
 /**
  * Production › Work orders (SCR-069, `/production/work-orders`): the export of the list as the screen shows it. The
@@ -125,10 +127,14 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     blockedBy: { value: (row, words) => (row.risk?.blockedBy ? words(`blocked.${row.risk.blockedBy}`) : null) },
     // B-PR-42a: the production supervisor for the person who asked for the file (Me / Someone else / Not set).
     supervisor: { value: (row, words) => (row.supervisor ? words(`supervisor.${row.supervisor}`) : null) },
+    // B-PR-22b: its customer's urgency that counts ("Urgent (customer) 2" / "Regular"; empty: none, or the switch off).
+    customerUrgency: { value: (row, words) => (row.customerUrgency === 'URGENT' ? `${words('customerUrgent')}${row.urgentRank !== null ? ` ${row.urgentRank}` : ''}` : row.customerUrgency === 'REGULAR' ? words('customerRegular') : null) },
   },
   words: {
     it: {
       ...wordsOf('it'), // B-PR-34
+      customerUrgent: CUSTOMER_URGENCY_WORDS.chip.it, // B-PR-22b
+      customerRegular: URGENCY_WORDS.REGULAR.it, // B-PR-22b
       'status.DRAFT': 'Bozza',
       'status.RELEASED': 'Rilasciato',
       'status.IN_PROGRESS': 'In lavorazione',
@@ -140,6 +146,8 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     },
     en: {
       ...wordsOf('en'), // B-PR-34
+      customerUrgent: CUSTOMER_URGENCY_WORDS.chip.en, // B-PR-22b
+      customerRegular: URGENCY_WORDS.REGULAR.en, // B-PR-22b
       'status.DRAFT': 'Draft',
       'status.RELEASED': 'Released',
       'status.IN_PROGRESS': 'In progress',

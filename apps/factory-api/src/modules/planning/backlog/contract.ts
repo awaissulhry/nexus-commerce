@@ -35,6 +35,8 @@ const backlogView = output({
       lines: z.number().int(),
       pieces: z.number().int(),
       why: z.string(),
+      /** B-PR-22b: the customer's urgency that places it among its OWN orders (Urgent n, while its switch is on); null: none. */
+      customerUrgency: output({ urgentRank: z.number().int().nullable(), words: output({ it: z.string(), en: z.string() }) }).nullable(),
     }),
   ),
 })

@@ -4,7 +4,7 @@ import { BRAND_HEALTHS, HEALTH_REASON_CODES } from '@nexus/factory-domain/produc
 import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels'
 import { APPROVAL_STATES, BRAND_GATE_KINDS, BRAND_GATE_STATES, BRAND_HOLD_READS } from '@nexus/factory-domain/production-brand/portal-read'
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
-import { BRAND_URGENCIES } from '@nexus/factory-domain/production-brand/urgency'
+import { BRAND_URGENCIES, URGENCY_BATCH_MAX, URGENCY_OUTCOMES } from '@nexus/factory-domain/production-brand/urgency'
 import { BRAND_SIDES } from '@nexus/factory-domain/production-brand/waiting'
 import { PROGRESS_STAGES } from '@nexus/factory-domain/sales/portal-orders/progress'
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise'
@@ -142,16 +142,23 @@ export const listContract = defineContract({
     locale: z.enum(['it', 'en']).optional(),
   }),
   response: {
-    200: output({
-      asOf: instant(),
-      ...levelFields,
-      chip: z.enum(PRODUCTION_CHIPS),
-      chips: z.array(output({ chip: z.enum(PRODUCTION_CHIPS), count: z.number().int(), words })),
-      /** Rows in the chip (after the search): every one is in `items` (no page, no cut). */
-      count: z.number().int(),
-      items: z.array(row),
-      live,
-    }),
+    /**
+     * The list (JSON), or with `format=csv` its own file: the CSV's bytes, which leave as they are (fastify sends a Buffer
+     * unserialized; the JSON branch is the one serialized and checked).
+     */
+    200: z.union([
+      output({
+        asOf: instant(),
+        ...levelFields,
+        chip: z.enum(PRODUCTION_CHIPS),
+        chips: z.array(output({ chip: z.enum(PRODUCTION_CHIPS), count: z.number().int(), words })),
+        /** Rows in the chip (after the search): every one is in `items` (no page, no cut). */
+        count: z.number().int(),
+        items: z.array(row),
+        live,
+      }),
+      z.custom<Buffer>((value) => Buffer.isBuffer(value), { message: 'Expected the file bytes.' }),
+    ]),
   },
 })
 
@@ -219,3 +226,64 @@ export const orderContract = defineContract({
     }),
   },
 })
+
+// ── B-PR-22a ──
+/**
+ * B-PR-22a: the customer's urgency commands (./urgency.ts). One result per OWN order; an id that is not one of its own orders is
+ * only counted (`notFound`), never named. Refusals that change nothing come back as 409 with each order's words at
+ * `body/orderIds/<index>/<outcome>` (ASK_CUT / ASK_OVER_QUOTA = "Ask us"; URGENCY_OFF, NOT_OPEN, LOCKED, UNCHANGED, NOT_KEPT).
+ * Every write takes an Idempotency-Key.
+ */
+const urgencyResult = output({
+  orderId: id(),
+  number: z.string(),
+  customerRef: z.string().nullable(),
+  outcome: z.enum(URGENCY_OUTCOMES),
+  done: z.boolean(),
+  words: words.nullable(),
+  /** "Ask us" beside a mark over the quota or from Cutting (the way to "Urgent – asked"). */
+  ask: words.nullable(),
+  urgency: z.enum(BRAND_URGENCIES).nullable(),
+  /** Its place in the customer's OWN Urgent list after the command (1 first); never a place in our plan. */
+  urgentRank: z.number().int().nullable(),
+})
+
+const urgencyAnswer = output({
+  /** The batch this command made: send it to Undo. */
+  batchId: id().nullable(),
+  results: z.array(urgencyResult),
+  /** Ids named that are not its own orders: counted, never named. */
+  notFound: z.number().int(),
+  use: urgentUse.nullable(),
+  replayed: z.boolean(),
+})
+
+const orderIds = (max: number) => z.array(id()).min(1).max(max)
+
+export const markUrgencyContract = defineContract({
+  body: input({ orderIds: orderIds(URGENCY_BATCH_MAX), urgency: z.enum(BRAND_URGENCIES) }),
+  response: { 200: urgencyAnswer },
+})
+
+export const urgentOrderContract = defineContract({
+  body: input({
+    /** Its WHOLE Urgent list in the new order ("Move to top": the list with that order first). */
+    orderIds: orderIds(200),
+    /** The list's `asOf` as read: a change after it is named in the refusal ("Changed at 10:42", "Changed by us"). */
+    asOf: instant().optional(),
+  }),
+  response: { 200: urgencyAnswer },
+})
+
+export const undoUrgencyContract = defineContract({
+  body: input({ batchId: id() }),
+  response: {
+    200: urgencyAnswer.extend({
+      /** The batch put back. */
+      undone: id(),
+      /** Its orders left as they are, with why ("Changed since: left as it is", or the mark's own rule now). */
+      skipped: z.array(output({ orderId: id(), number: z.string(), customerRef: z.string().nullable(), words })),
+    }),
+  },
+})
+// ── end B-PR-22a ──

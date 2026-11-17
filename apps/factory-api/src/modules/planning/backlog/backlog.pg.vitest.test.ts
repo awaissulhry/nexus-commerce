@@ -33,9 +33,12 @@ const tenant = seedUuid(ns, 'tenant')
 const A: Record<string, string> = {}
 const grant = (permissions: Permission[]): Grant => ({ permissions, companies: 'all', sites: 'all', parties: 'all' })
 const office = (permissions: Permission[]): SessionContext => ({ audience: 'office', tenantId: tenant, actorId: newId(), grants: [grant(permissions)] })
+// B-PR-22b: a second customer made in the brand-slot test, and an office person limited to it.
+const BETA = newId()
 const SESSIONS: Record<string, SessionContext> = {
   planner: office(['planning.view', 'planning.backlog.manage', 'orders.view']),
   reader: office(['planning.view', 'orders.view']),
+  betaReader: { audience: 'office', tenantId: tenant, actorId: newId(), grants: [{ permissions: ['planning.view', 'orders.view'], companies: 'all', sites: 'all', parties: [BETA] }] },
 }
 
 type Json = Record<string, any>
@@ -137,3 +140,97 @@ describe('the backlog ranked (PLN-177)', { timeout: 120_000 }, () => {
     expect(events.length).toBeGreaterThanOrEqual(3)
   })
 })
+
+// ── B-PR-22b ──
+/**
+ * B-PR-22b (production plan §3 "Brand-slot rule"; review fixes R-40, R-46, R-69; wall test PW-18): the customer's urgency in the
+ * backlog. Made here, after the tests above (their "rank by rule" hand-ranks every order open then): customer A (the seeds' P1)
+ * gets three new orders and a made-up customer Beta two, all normal priority, their promises interleaved A, B, A, B, A; each with
+ * its production state, Regular. Then A marks its three Urgent (3rd, 2nd, 1st in its own list): A's orders take A's own places in
+ * its own order, Beta's places are identical before and after; with A's switch off the marks order nothing; a person limited to
+ * Beta reads only Beta's orders and no urgency of A. The marks are written as the customer's command leaves them (the command
+ * itself: modules/production/brand-portal/urgency.pg.vitest.test.ts).
+ */
+describe("B-PR-22b the customer's urgency in the backlog: the brand-slot pass (PW-18)", { timeout: 120_000 }, () => {
+  const made: Record<'a1' | 'a2' | 'a3' | 'b1' | 'b2', string> = { a1: newId(), a2: newId(), a3: newId(), b1: newId(), b2: newId() }
+  const P1 = seedUuid(ns, 'party:P1')
+  const placesOf = (backlog: Json, ids: readonly string[]) => ids.map((orderId) => (backlog.orders as Json[]).find((order) => order.id === orderId)?.position ?? null)
+  const orderOf = (backlog: Json, ids: readonly string[]) => (backlog.orders as Json[]).filter((order) => ids.includes(order.id)).map((order) => order.id)
+
+  it("A's three urgent orders take A's own places in A's order; Beta's places never change; switched off, no effect", async () => {
+    const actorId = newId()
+    await database.withScope({ audience: 'office', tenantId: tenant, actorId }, (client) =>
+      client.$transaction(async (tx) => {
+        await tx.party.create({ data: { id: BETA, code: 'T-BKL-BETA', kind: 'ORGANISATION', legalName: 'Made-up customer Beta', roles: ['CUSTOMER'] }, select: { id: true } })
+        const plan: [keyof typeof made, string, string][] = [
+          ['a1', P1, '2026-12-01'],
+          ['b1', BETA, '2026-12-02'],
+          ['a2', P1, '2026-12-03'],
+          ['b2', BETA, '2026-12-04'],
+          ['a3', P1, '2026-12-05'],
+        ]
+        for (const [key, partyId, promise] of plan) {
+          await tx.salesOrder.create({
+            data: { id: made[key], companyId: A.company!, partyId, number: `T-BKL-${key.toUpperCase()}-${made[key].slice(-4)}`, status: 'CONFIRMED', orderDate: new Date('2026-11-01T00:00:00.000Z'), promiseDate: new Date(`${promise}T00:00:00.000Z`), taxMode: 'IT_B2B', billTo: { legalName: 'Made-up' }, shipTo: { name: 'Made-up' } },
+            select: { id: true },
+          })
+          await tx.brandOrderProduction.create({ data: { id: newId(), companyId: A.company!, partyId, salesOrderId: made[key], key: `brand-production:${made[key]}`, createdById: actorId }, select: { id: true } })
+        }
+        for (const partyId of [P1, BETA]) {
+          const settings = await tx.portalSettings.findUnique({ where: { id: partyId }, select: { id: true } })
+          if (settings) await tx.portalSettings.update({ where: { id: partyId }, data: { productionUrgencyOn: true, productionUrgentMax: 3 }, select: { id: true } })
+          else await tx.portalSettings.create({ data: { id: partyId, partyId, productionUrgencyOn: true, productionUrgentMax: 3 }, select: { id: true } })
+        }
+      }),
+    )
+    const alpha = [made.a1, made.a2, made.a3]
+    const beta = [made.b1, made.b2]
+    const before = await ok('reader', 'GET', `/planning/backlog?companyId=${A.company}`)
+    expect(orderOf(before, [...alpha, ...beta])).toEqual([made.a1, made.b1, made.a2, made.b2, made.a3])
+    const alphaPlaces = placesOf(before, alpha)
+    const betaPlaces = placesOf(before, beta)
+    expect((before.orders as Json[]).filter((order) => [...alpha, ...beta].includes(order.id)).every((order) => order.customerUrgency === null)).toBe(true)
+
+    // A marks a3 1st, a2 2nd, a1 3rd (as its portal command writes them: Urgent, its own place, by the customer).
+    for (const [orderId, rank] of [[made.a3, 1], [made.a2, 2], [made.a1, 3]] as const) {
+      await admin(`UPDATE "BrandOrderProduction" SET urgency = 'URGENT', "urgentRank" = $2, "urgencySetAt" = now(), "urgencySetBy" = 'BRAND', "urgencyBatchId" = $3, version = version + 1 WHERE key = $1`, [`brand-production:${orderId}`, rank, newId()])
+    }
+    const marked = await ok('reader', 'GET', `/planning/backlog?companyId=${A.company}`)
+    // A's orders hold exactly A's places, now in A's own order; Beta's places are identical (PW-18).
+    expect(placesOf(marked, beta)).toEqual(betaPlaces)
+    expect(placesOf(marked, [made.a3, made.a2, made.a1])).toEqual(alphaPlaces)
+    expect(orderOf(marked, [...alpha, ...beta])).toEqual([made.a3, made.b1, made.a2, made.b2, made.a1])
+    const a3 = (marked.orders as Json[]).find((order) => order.id === made.a3)!
+    expect(a3.why).toMatch(/customer urgency: own places \(urgent 1\)/)
+    expect(a3.customerUrgency).toEqual({ urgentRank: 1, words: { it: 'Urgenza cliente: Urgente 1', en: 'Customer urgency: Urgent 1' } })
+    // Its place by the rule alone is unchanged (the pass is never a key of the rule); no lever of ours was written.
+    expect((marked.orders as Json[]).find((order) => order.id === made.a3)!.rulePosition).toBe((before.orders as Json[]).find((order) => order.id === made.a3)!.rulePosition)
+    expect(await admin(`SELECT id FROM "SalesOrder" WHERE id = ANY($1::uuid[]) AND ("backlogRank" IS NOT NULL OR priority <> 0 OR "priorityLevel" <> 'NORMAL')`, [[...alpha, ...beta]])).toEqual([])
+
+    // A person limited to Beta reads only Beta's orders, in the same places among themselves, and no urgency of A.
+    const limited = await ok('betaReader', 'GET', `/planning/backlog?companyId=${A.company}`)
+    expect((limited.orders as Json[]).every((order) => order.customer.id === BETA)).toBe(true)
+    expect(orderOf(limited, beta)).toEqual(beta)
+    expect(JSON.stringify(limited)).not.toContain(made.a1)
+    expect((limited.orders as Json[]).every((order) => order.customerUrgency === null)).toBe(true)
+
+    // A's urgency switch off: the marks are kept but order nothing (R-46).
+    await admin(`UPDATE "PortalSettings" SET "productionUrgencyOn" = false, version = version + 1 WHERE id = $1`, [P1])
+    const off = await ok('reader', 'GET', `/planning/backlog?companyId=${A.company}`)
+    expect(orderOf(off, [...alpha, ...beta])).toEqual([made.a1, made.b1, made.a2, made.b2, made.a3])
+    expect(placesOf(off, beta)).toEqual(betaPlaces)
+    expect((off.orders as Json[]).filter((order) => alpha.includes(order.id)).every((order) => order.customerUrgency === null)).toBe(true)
+    expect((await admin<{ urgency: string }>(`SELECT urgency::text FROM "BrandOrderProduction" WHERE key = $1`, [`brand-production:${made.a3}`]))[0]!.urgency).toBe('URGENT')
+  })
+
+  it('a hand-ranked order keeps its place: an urgent mark on it orders nothing', async () => {
+    await admin(`UPDATE "PortalSettings" SET "productionUrgencyOn" = true, version = version + 1 WHERE id = $1`, [P1])
+    await ok('planner', 'PUT', '/planning/backlog/ranks', { companyId: A.company, ranks: [{ orderId: made.a1, from: null, to: 1 }] }, key())
+    const backlog = await ok('reader', 'GET', `/planning/backlog?companyId=${A.company}`)
+    const a1 = (backlog.orders as Json[]).find((order) => order.id === made.a1)!
+    expect(a1).toMatchObject({ rank: 1, why: 'Ranked by hand: 1.', customerUrgency: null })
+    // The other two urgent orders of A take A's remaining own places (the rule's b1, a2, b2, a3: A holds the 2nd and 4th), a3 first.
+    expect(orderOf(backlog, [made.a2, made.a3, made.b1, made.b2])).toEqual([made.b1, made.a3, made.b2, made.a2])
+  })
+})
+// ── end B-PR-22b ──

@@ -24,7 +24,7 @@ import { designScreen as editorScreen } from './fixtures'
 import { REPLY_RECORD_TYPES } from '@nexus/factory-domain/templates/replies'
 import { createSavedReply, deleteSavedReply, listSavedReplies, updateSavedReply } from '../mail-templates/replies/api'
 import { REPLIES, repliesAnswer } from '../mail-templates/replies/fixtures'
-import { deleteReach, draftBody, draftOf, draftProblems, mailPartOf, newDraft, NO_FILTER, replyPreview, replyRowHeld, replyRowsOf, saveHeld } from '../mail-templates/replies/model'
+import { deleteReach, draftBody, draftOf, draftProblems, mailPartOf, newDraft, NO_FILTER, replyPreview, replyRowHeld, replyRowsOf, saveHeld as replySaveHeld } from '../mail-templates/replies/model'
 import { designScreen as mailEditorScreen } from './mail/fixtures'
 import {
   documentChanges,
@@ -407,14 +407,14 @@ describe('B-TH-279 saved replies: the rows, the draft, what a save sends, what e
 
   it('Save waits: no right to send e-mail; sharing without the share right; another’s or a shared reply one may not change; busy; problems; nothing changed', () => {
     const state = { reply: null, draft: { ...newDraft(), name: 'n', body: 'b' }, mayWrite: true, mayShare: true, busy: false, companyId: 'c1' }
-    expect(saveHeld(state)).toBeNull()
-    expect(saveHeld({ ...state, mayWrite: false })).toBe('tpl.replies.held.noRight')
-    expect(saveHeld({ ...state, draft: { ...state.draft, shared: true }, mayShare: false })).toBe('tpl.replies.held.share')
-    expect(saveHeld({ ...state, reply: reply(4), draft: draftOf(reply(4)) })).toBe('tpl.replies.held.sharedNoRight')
-    expect(saveHeld({ ...state, reply: { ...reply(5), mayChange: false }, draft: draftOf(reply(5)) })).toBe('tpl.replies.held.notYours')
-    expect(saveHeld({ ...state, busy: true })).toBe('tpl.held.busy')
-    expect(saveHeld({ ...state, draft: { ...state.draft, body: '{{nope}}' } })).toBe('tpl.held.problems')
-    expect(saveHeld({ ...state, reply: reply(1), draft: draftOf(reply(1)) })).toBe('tpl.held.nothingChanged')
+    expect(replySaveHeld(state)).toBeNull()
+    expect(replySaveHeld({ ...state, mayWrite: false })).toBe('tpl.replies.held.noRight')
+    expect(replySaveHeld({ ...state, draft: { ...state.draft, shared: true }, mayShare: false })).toBe('tpl.replies.held.share')
+    expect(replySaveHeld({ ...state, reply: reply(4), draft: draftOf(reply(4)) })).toBe('tpl.replies.held.sharedNoRight')
+    expect(replySaveHeld({ ...state, reply: { ...reply(5), mayChange: false }, draft: draftOf(reply(5)) })).toBe('tpl.replies.held.notYours')
+    expect(replySaveHeld({ ...state, busy: true })).toBe('tpl.held.busy')
+    expect(replySaveHeld({ ...state, draft: { ...state.draft, body: '{{nope}}' } })).toBe('tpl.held.problems')
+    expect(replySaveHeld({ ...state, reply: reply(1), draft: draftOf(reply(1)) })).toBe('tpl.held.nothingChanged')
   })
 
   it('Delete N reaches only the replies one may change; the others cannot be ticked, said why', () => {

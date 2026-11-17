@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { newId } from '@nexus/factory-domain/core/ids'
+import type { Grant } from '@nexus/factory-domain/core/permissions'
 import { buildApp } from '../../core/app'
 import { testAuthenticator, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
@@ -43,7 +44,7 @@ const office = { writer: newId(), other: newId() }
 type Json = Record<string, any>
 const admin = async <T = Json>(sql: string, values: unknown[] = []): Promise<T[]> => (await h.db.admin.query(sql, values)).rows as T[]
 const sessions = (): Record<string, SessionContext> => {
-  const grants = [{ permissions: ['threads.read', 'threads.post', 'files.read'], companies: 'all' as const, sites: 'all' as const, parties: 'all' as const }]
+  const grants: readonly Grant[] = [{ permissions: ['threads.read', 'threads.post', 'files.read'], companies: 'all', sites: 'all', parties: 'all' }]
   return { writer: { audience: 'office', tenantId: world.tenantId, actorId: office.writer, grants }, other: { audience: 'office', tenantId: world.tenantId, actorId: office.other, grants } }
 }
 const call = async (who: keyof typeof office, method: 'GET' | 'PUT' | 'DELETE' | 'POST', url: string, payload?: Json) => {

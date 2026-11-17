@@ -23,6 +23,10 @@ export function quickMenuItems(quick: ListQuick, t: Translate): MenuItemDef[] {
     if (filter.kind === 'date') {
       items.push({ id: `h-${filter.id}`, heading: true, label: filter.label })
       for (const choice of filter.choices) items.push({ id: `${filter.id}:${choice}`, label: t(`quick.day.${choice}`), checked: value === choice, onSelect: () => quick.onChange(filter.id, toggledQuick(filter, value, choice)) })
+    } else if (filter.kind === 'choice') {
+      // F-PR-03: a heading and the list's own words for the term, one at a time.
+      items.push({ id: `h-${filter.id}`, heading: true, label: filter.label })
+      for (const choice of filter.choices) items.push({ id: `${filter.id}:${choice.value}`, label: choice.label, checked: value === choice.value, onSelect: () => quick.onChange(filter.id, toggledQuick(filter, value, choice.value)) })
     } else {
       items.push({ id: filter.id, label: filter.label, checked: value !== null, onSelect: () => quick.onChange(filter.id, toggledQuick(filter, value)) })
     }
@@ -55,7 +59,13 @@ export function QuickChips({ quick, t }: { quick: ListQuick; t: Translate }) {
   return (
     <div className="fw-list-chips" role="group" aria-label={t('quick.chips')}>
       {on.map(({ filter, value }) => {
-        const words = filter.kind === 'date' ? t('quick.chipDate', { filter: filter.label, day: t(`quick.day.${value}`) }) : filter.label
+        // F-PR-03: a word choice reads "Waiting on: Customer" (the same pattern as a day).
+        const words =
+          filter.kind === 'date'
+            ? t('quick.chipDate', { filter: filter.label, day: t(`quick.day.${value}`) })
+            : filter.kind === 'choice'
+              ? t('quick.chipDate', { filter: filter.label, day: filter.choices.find((choice) => choice.value === value)?.label ?? value })
+              : filter.label
         return (
           <FilterChip key={filter.id} pressed onClick={() => quick.onChange(filter.id, null)} aria-label={t('quick.remove', { filter: words })}>
             {words} <X size={11} aria-hidden />

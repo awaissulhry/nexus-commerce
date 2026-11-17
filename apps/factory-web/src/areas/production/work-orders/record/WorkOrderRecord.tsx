@@ -34,7 +34,7 @@ import {
   type WorkOrderWip,
 } from '../../_shared/api'
 import { useCoalesced, useLive } from '../../_shared/hooks'
-import { abilitiesOf, cellsBody, liveTouches, readProblem, releaseRefusalCodes, tabOf, writeProblem, type SizeLayer } from '../../_shared/model'
+import { abilitiesOf, cellsBody, liveTouches, readProblem, releaseRefusalCodes, tabOf, writeProblem } from '../../_shared/model'
 import { PART_LOADING, type Loaded, type Part, type RecordDialog, type ReprintRun, type WorkOrderRecordModel } from './record-model'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { useStepUp, isStepUpCancelled } from '../../../quality/_shared/hooks'
@@ -62,6 +62,13 @@ import { pickOf, threadChoices } from './order-files/model'
 import { useOrderFiles } from './order-files/use-order-files'
 import { WorkOrderThreads } from './view/WorkOrderThreads'
 // ---- end B-TH-265
+// ---- F-PR-05a: the band's health (each order's, B-PR-35) with Raise to At risk, the Overview's gates, Preview as <customer> ----
+import { useBrandHealth } from './health/use-health'
+import { useOrderGates } from './gates/use-gates'
+import { customerFactOf, previewRecord } from './overview/model'
+import { partnerProblem, portalAddress } from '../../../admin/users/partners/model'
+import { openPreview } from '../../../admin/users/partners/preview'
+// ---- end F-PR-05a
 
 /**
  * `/w/<company>/production/work-orders/<id>` (SCR-070 … SCR-072): loads the work order (workorders.view; the API checks
@@ -111,7 +118,6 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   const dialogRef = useRef<RecordDialog | null>(null)
   dialogRef.current = dialog
   const [changed, setChanged] = useState<{ at: string } | null>(null)
-  const [sizeLayer, setSizeLayer] = useState<SizeLayer>('finished')
   const [bundleOpen, setBundleOpen] = useState<{ bundleId: string; scans: Part<BundleScan[]> } | null>(null)
   const [cutOpen, setCutOpen] = useState<string | null>(null)
   // B-W2b-130.
@@ -369,13 +375,13 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   const value = workOrder.status === 'ready' ? workOrder.value : null
   const orderFiles = useOrderFiles(api, value?.id ?? null)
   const choices = value ? threadChoices(value.orders, orderFiles.model.files) : []
-  const pick = pickOf(orderFiles.pick, choices)
-  const pickedOrder = choices.find((choice) => choice.orderId === pick) ?? null
+  const threadPick = pickOf(orderFiles.pick, choices) // not `pick`: that is the pick list's part
+  const pickedOrder = choices.find((choice) => choice.orderId === threadPick) ?? null
   const readsThreads = session.permissions.includes('threads.read')
   const own = value ? { type: 'WorkOrder', id: value.id, companyId: value.companyId, siteId: value.siteId } : null
   const thread =
     value && own && readsThreads ? (
-      <WorkOrderThreads choices={choices} pick={pick} onPick={orderFiles.setPick}>
+      <WorkOrderThreads choices={choices} pick={threadPick} onPick={orderFiles.setPick}>
         {pickedOrder ? (
           <OfficeRecordThread
             key={`order-${pickedOrder.orderId}`}
@@ -394,6 +400,20 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     ) : null
   const printThread = value && own && readsThreads ? <ThreadPrint record={own} title={`${value.number} · ${value.style.code}`} /> : null
   // ---- end B-TH-265
+  // ---- F-PR-05a: the health of its own orders (re-read after each change of the work order), its orders' gates while the Overview
+  // shows (planning.view), and Preview as <customer> (partners.preview: the portal in a new tab, read-only, recorded) ----
+  const health = useBrandHealth(api, value, session.permissions, (words) => setNotice({ tone: 'success', words }))
+  const gates = useOrderGates(api, value, session.permissions, tab === 'overview')
+  const [previewing, setPreviewing] = useState(false)
+  const preview = useCallback(() => {
+    const fact = value ? customerFactOf(value) : null
+    if (!value || !fact || fact.kind !== 'customer' || previewing) return
+    setPreviewing(true)
+    openPreview(api, fact.id, portalAddress(fact.code, previewRecord(value)))
+      .catch((error: unknown) => setNotice({ tone: 'danger', words: { key: partnerProblem(error) === 'problem.forbidden' ? 'band.previewForbidden' : 'band.previewFailed' } }))
+      .finally(() => setPreviewing(false))
+  }, [api, value, previewing])
+  // ---- end F-PR-05a
   // ---- B-TH-280: the work order's custom fields at the end of its first tab (Overview & release), as the old panels drew them above
   // theirs: the record frame's slot (the tab bodies stay the production lane's).
   const fields = value && tab === 'overview' ? <RecordCustomFields record={{ type: 'WorkOrder', id: value.id }} title={value.number} /> : null
@@ -418,7 +438,6 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     dialog,
     dialogProblem,
     reprint,
-    sizeLayer,
     waitingAt,
     bundleOpen,
     cutOpen,
@@ -439,6 +458,11 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     personId: session.user.id,
     orderFiles: orderFiles.model,
     threadChoices: choices,
+    // F-PR-05a
+    health: health.model,
+    gates: gates.part,
+    preview: { can: session.permissions.includes('partners.preview'), busy: previewing },
+    partiesView: session.permissions.includes('parties.view'),
   }
 
   return (
@@ -505,7 +529,6 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
           if (on) dirty.current.add(which)
           else dirty.current.delete(which)
         },
-        onSizeLayer: setSizeLayer,
         onCorrect: (entryId, reason) =>
           void write(
             async () => {
@@ -581,6 +604,10 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         },
         // B-TH-265
         orderFiles: orderFiles.actions,
+        // F-PR-05a
+        health: health.actions,
+        onRetryGates: gates.retry,
+        onPreview: preview,
         onWaitingAt: (seq) => {
           const query = new URLSearchParams(params?.toString() ?? '')
           query.set('tab', 'bundles')

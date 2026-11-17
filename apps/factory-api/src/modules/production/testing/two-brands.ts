@@ -83,9 +83,12 @@ export interface BrandProductionRows {
 
 const grantOf = (permissions: readonly Permission[], parties: Grant['parties']): Grant => ({ permissions: [...permissions], companies: 'all', sites: 'all', parties })
 
+/** An office test session (its `actorId` is the person's: a floor, portal or link session names none). */
+export type OfficeSession = Extract<SessionContext, { audience: 'office' }>
+
 /** The office sessions of the wall: every customer, and one limited to each brand (the same permissions). */
-export function twoBrandSessions(tenantId: string, a: string, b: string, permissions: readonly Permission[]): Record<'office.all' | 'office.p1' | 'office.p2', SessionContext> {
-  const office = (parties: Grant['parties']): SessionContext => ({ audience: 'office', tenantId, actorId: newId(), grants: [grantOf(permissions, parties)] })
+export function twoBrandSessions(tenantId: string, a: string, b: string, permissions: readonly Permission[]): Record<'office.all' | 'office.p1' | 'office.p2', OfficeSession> {
+  const office = (parties: Grant['parties']): OfficeSession => ({ audience: 'office', tenantId, actorId: newId(), grants: [grantOf(permissions, parties)] })
   return { 'office.all': office('all'), 'office.p1': office([a]), 'office.p2': office([b]) }
 }
 

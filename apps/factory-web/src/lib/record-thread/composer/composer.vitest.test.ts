@@ -315,7 +315,7 @@ describe('th-backend-g step 1: a saved reply names the office’s numbers in a n
     expect(note).toEqual({ mode: 'note', body: 'Typed first\n\nThank you for INQ-2026-0042.', forFloor: false, numbers: [{ office: 'INQ-2026-0042', customer: '#7' }] })
     expect(withSavedReply(draft({ mode: 'reply' }), { body: 'Thank you for #7.', audience: 'CUSTOMER', numbers }).numbers).toBeUndefined()
     // A prospect's number is the same in both forms: nothing to keep.
-    expect(withSavedReply(draft(), { body: 'INQ-2026-0043', audience: 'OFFICE', numbers: [{ placeholder: 'inquiry.number', office: 'INQ-2026-0043', customer: 'INQ-2026-0043' }] }).numbers).toBeUndefined()
+    expect(withSavedReply(draft(), { body: 'INQ-2026-0043', audience: 'OFFICE', numbers: [{ office: 'INQ-2026-0043', customer: 'INQ-2026-0043' }] }).numbers).toBeUndefined()
   })
 
   it('switching the note to the customer swaps the office’s numbers for its own and says so; a number it has none for goes', () => {
