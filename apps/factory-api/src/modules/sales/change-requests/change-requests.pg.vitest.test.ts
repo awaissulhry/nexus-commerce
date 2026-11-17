@@ -446,7 +446,7 @@ describe('B-PR-23: a production ask ("Urgent – asked") on the order is read in
     const second = await browsers.buyer.post(`/portal/sales-orders/${so3.id}/change-requests`, { kind: 'CANCEL', reasonCode: 'LEAD_TIME' })
     expect(second.status).toBe(409)
     expect(second.body.error.issues[0].path).toBe('body/OPEN_REQUEST')
-    // A production ask never shows as a change request on Home › Approvals (B-PR-12's rule holds for the new kinds).
+    // A production ask is not Sales' row on Home › Approvals (B-PR-26: it goes to the people who answer it, production.brand.manage).
     expect((await today(office(), { kind: 'ORDER_CHANGE_REQUEST', limit: 50 })).items.map((item: Json) => item.record.id ?? item.id)).not.toContain(rush)
     // B-PR-25: a production ask is withdrawn from the order page too while it waits (B-PR-23 sent it to the thread until then).
     const withdraw = await browsers.buyer.post(`/portal/sales-orders/${so3.id}/change-requests/${rush}/withdraw`, { version: 1 })

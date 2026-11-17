@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import { CAPABILITIES, PARTNER_KINDS } from '@nexus/factory-domain/auth/partners/kinds'
+import { PRODUCTION_ASK_KINDS, PRODUCTION_REQUEST_KINDS, type ProductionAskKind } from '@nexus/factory-domain/production-brand/kinds' // F-PR-07
+import { PRODUCTION_SHARE_LEVELS, type ProductionShareLevel } from '@nexus/factory-domain/production-brand/levels' // F-PR-07
 import type { ApiClient } from '../../../../lib/api/client'
 
 /**
@@ -175,3 +177,57 @@ export const askPartner = (api: ApiClient, partyId: string, body: { kind: Askabl
   api.post(`${party(partyId)}/tasks`, { body, idempotencyKey, schema: z.object({ task: request, made: z.boolean() }) })
 export const cancelRequest = (api: ApiClient, taskId: string, version: number, idempotencyKey: string) =>
   api.post(`/partner-tasks/${enc(taskId)}/cancel`, { body: { version }, idempotencyKey, schema: z.object({ task: request }) })
+
+// ── F-PR-07: a customer's production limits (the limits card on Customer › Portal access; B-PR-14's own route) ─────────────
+
+const limitWords = z.object({ it: z.string(), en: z.string() })
+/** An office person named on the card (supervisor, backup) or the customer's approver: the name, and still active or not. */
+const namedPerson = z.object({ id: z.string(), name: z.string(), active: z.boolean() })
+
+export const productionLimitsSchema = z.object({
+  party: partnerParty,
+  production: z.object({
+    /** What the customer sees of its orders in production (each level adds to the one before). */
+    level: z.enum(PRODUCTION_SHARE_LEVELS),
+    /** Kept until B-PR-40: derived from the level. */
+    progressShared: z.boolean(),
+    urgency: z.object({ on: z.boolean(), max: z.number(), now: z.number(), dormant: limitWords.nullable(), overQuota: limitWords.nullable() }),
+    askKinds: z.array(z.enum(PRODUCTION_ASK_KINDS)),
+    openAsks: z.array(z.enum(PRODUCTION_REQUEST_KINDS)),
+    approver: namedPerson.nullable(),
+    overrideFourEyes: z.boolean(),
+    /** Office only: read here, saved through PUT /production/brands/:partyId/supervisor (production.brand.manage). */
+    supervisor: namedPerson.nullable(),
+    backup: namedPerson.nullable(),
+    productionRoleOffered: z.boolean(),
+    productionRoleWords: limitWords.nullable(),
+    /** The portal settings' version (0: no row yet; the supervisor's route shares it). */
+    version: z.number(),
+  }),
+  /** partners.production.manage over this customer (the write asks a fresh code). */
+  mayManage: z.boolean(),
+})
+export type ProductionLimits = z.infer<typeof productionLimitsSchema>
+export type ProductionLimitsView = ProductionLimits['production']
+
+export interface ProductionLimitsBody {
+  /** "Production partner": Progress, urgency on (quota 3), every production ask; a field the body names wins. */
+  preset?: 'PRODUCTION_PARTNER'
+  productionLevel?: ProductionShareLevel
+  productionUrgencyOn?: boolean
+  productionUrgentMax?: number
+  productionAskKinds?: ProductionAskKind[]
+  /** An active portal person of this customer; null: anyone with the approve right. */
+  productionApproverId?: string | null
+  overrideFourEyes?: boolean
+  /** The version read (0: no settings row yet). */
+  version: number
+}
+
+/** GET /partners/:partyId/production — the customer's limits card (partners.view over it; another customer's: 404). */
+export const getProductionLimits = (api: ApiClient, partyId: string) => api.get(`${party(partyId)}/production`, { schema: productionLimitsSchema })
+
+/** PUT /partners/:partyId/production — partners.production.manage over the customer, after a fresh code when asked. */
+export const changeProductionLimits = (api: ApiClient, partyId: string, body: ProductionLimitsBody, idempotencyKey: string) =>
+  api.request('PUT', `${party(partyId)}/production`, { body, idempotencyKey, schema: productionLimitsSchema })
+// ── end F-PR-07 ──

@@ -30,3 +30,26 @@ export function readPickList(api: ApiClient, scope: { readonly partyId: string; 
 export function assignOrderSupervisors(api: ApiClient, body: { readonly orderIds: readonly string[]; readonly supervisorId: string | null }, idempotencyKey: string): Promise<OrderSupervisorsAnswer> {
   return api.post('/production/orders/supervisor', { body: { orderIds: [...body.orderIds], supervisorId: body.supervisorId }, schema: assignSchema, idempotencyKey })
 }
+
+// ── F-PR-07: the customer's default supervisor and backup (the limits card; B-PR-42a `PUT /production/brands/:partyId/supervisor`) ──
+const customerSupervisorSchema = z.object({
+  customer: z.object({
+    partyId: z.string(),
+    supervisor: z.object({ id: z.string(), name: z.string(), active: z.boolean() }).nullable(),
+    backup: z.object({ id: z.string(), name: z.string(), active: z.boolean() }).nullable(),
+    /** The portal settings' version after the change (the limits card's route shares it). */
+    version: z.number(),
+    ordersOnDefault: z.number(),
+  }),
+})
+export type CustomerSupervisorAnswer = z.infer<typeof customerSupervisorSchema>
+
+/**
+ * The customer's default supervisor and backup (production.brand.manage at every company of the customer; no portal is opened: the
+ * API makes the settings row with the portal OFF when there is none). Both slots are sent each time (null: none; no backup without a
+ * supervisor), with the portal settings' version read.
+ */
+export function setCustomerSupervisor(api: ApiClient, partyId: string, body: { readonly supervisorId: string | null; readonly backupId: string | null; readonly version: number }, idempotencyKey: string): Promise<CustomerSupervisorAnswer> {
+  return api.request('PUT', `/production/brands/${encodeURIComponent(partyId)}/supervisor`, { body: { supervisorId: body.supervisorId, backupId: body.backupId, version: body.version }, schema: customerSupervisorSchema, idempotencyKey })
+}
+// ── end F-PR-07 ──

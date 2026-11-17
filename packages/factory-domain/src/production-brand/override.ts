@@ -1,4 +1,4 @@
-import { SAMPLE_ROUND_RECORD, SAMPLE_SWATCH_RECORD, type ApprovalKind } from '../approvals-out/kinds'
+import { APPROVAL_DECISIONS, SAMPLE_ROUND_RECORD, SAMPLE_SWATCH_RECORD, type ApprovalDecision, type ApprovalKind } from '../approvals-out/kinds'
 import { mayReverse } from '../approvals-out/rules'
 import type { Words } from '../portal/tasks/kinds'
 import { BEFORE_CUT_SAMPLE_KINDS, dayWords, type AskSampleKind, type CutStart } from '../sales/change-requests/rules'
@@ -112,3 +112,87 @@ export function reverseVerdict(facts: ReverseFacts): ReverseVerdict {
   }
   return possible(['MARK_ONLY'])
 }
+
+// ---- B-PR-30a / B-PR-30b (production plan §3 "Decide for a brand, undo — … a second person when the brand's switch is on";
+// 07-control §6.5; review fix R-06): the act a second person grants, and who may grant it ------------------------------------
+
+/**
+ * What the office person asked to do for the customer, carried on the BRAND_OVERRIDE task's preview (its `changes`, which the
+ * fingerprint covers: the second person grants exactly this, and nothing is written before the yes):
+ *
+ *   DECIDE_FOR  the decision (approve, approve with changes, refuse), its words, the typed name of the person who decided and
+ *               why (the customer reads it)
+ *   REVERSE     why the answer is put back (the customer reads it)
+ */
+export type OverrideOrder =
+  | { readonly act: 'DECIDE_FOR'; readonly decision: ApprovalDecision; readonly answer: string | null; readonly typedName: string; readonly reason: string }
+  | { readonly act: 'REVERSE'; readonly reason: string }
+
+/** A change as the approvals engine's preview keeps it (approvals/rules PreviewChange, no money in any of them). */
+export interface OverrideChange {
+  readonly field: string
+  readonly from: unknown
+  readonly to: unknown
+}
+
+/** The order as the task's preview changes (the second person reads them on the request). */
+export function overrideChanges(order: OverrideOrder): OverrideChange[] {
+  if (order.act === 'REVERSE') {
+    return [
+      { field: 'act', from: null, to: 'REVERSE' },
+      { field: 'reversed', from: false, to: true },
+      { field: 'reason', from: null, to: order.reason },
+    ]
+  }
+  return [
+    { field: 'act', from: null, to: 'DECIDE_FOR' },
+    { field: 'status', from: 'OPEN', to: order.decision },
+    { field: 'answer', from: null, to: order.answer },
+    { field: 'typedName', from: null, to: order.typedName },
+    { field: 'reason', from: null, to: order.reason },
+  ]
+}
+
+/** The order back from a task's preview changes (null: not one this module wrote — the yes then carries out nothing). */
+export function overrideOrderOf(changes: readonly OverrideChange[]): OverrideOrder | null {
+  const value = (field: string): unknown => changes.find((change) => change.field === field)?.to
+  const text = (field: string): string | null => {
+    const found = value(field)
+    return typeof found === 'string' && found.trim() !== '' ? found : null
+  }
+  const reason = text('reason')
+  if (reason === null) return null
+  const act = value('act')
+  if (act === 'REVERSE') return value('reversed') === true ? { act: 'REVERSE', reason } : null
+  if (act !== 'DECIDE_FOR') return null
+  const decision = value('status')
+  const typedName = text('typedName')
+  if (typeof decision !== 'string' || !(APPROVAL_DECISIONS as readonly string[]).includes(decision) || typedName === null) return null
+  return { act: 'DECIDE_FOR', decision: decision as ApprovalDecision, answer: text('answer'), typedName, reason }
+}
+
+/**
+ * Who may grant the override (null: they may): never the person who asked for it (grantProblem), and never the person who asked
+ * the customer for this approval (the same rule as deciding it: "never the asker").
+ */
+export function overrideGrantProblem(override: { readonly requestedById: string; readonly askedById: string | null }, granterId: string): string | null {
+  return grantProblem(override, granterId) ?? (override.askedById !== null && override.askedById === granterId ? 'You asked the customer for this approval: someone else grants what we do for them.' : null)
+}
+
+/**
+ * B-PR-30b, what is NOT built (it needs a schema change: the database keeps a decided sample round, a decided swatch and a passed
+ * gate as they are — factory_sample_round_guard, factory_sample_swatch_guard, factory_order_gate_guard): putting back the
+ * customer's decision on a sample round or a material swatch. Until those guards let a reversal through, the office reads why
+ * (code KEPT) and makes a new round or swatch to ask again; nothing is marked put back that still holds.
+ */
+export const RECORD_KEPT_WORDS: Readonly<Record<'SampleRound' | 'SampleSwatch', Words>> = Object.freeze({
+  SampleRound: {
+    it: "La decisione del cliente su un giro di campionatura resta com'è: per cambiarla fate un nuovo giro e chiedetelo di nuovo al cliente.",
+    en: "The customer's decision on a sample round stays as it is: to change it, make a new round and ask them again.",
+  },
+  SampleSwatch: {
+    it: "La decisione del cliente su un campione di materiale resta com'è: per cambiarla inviate un nuovo campione e chiedetelo di nuovo.",
+    en: "The customer's decision on a material swatch stays as it is: to change it, send a new swatch and ask them again.",
+  },
+})
+
