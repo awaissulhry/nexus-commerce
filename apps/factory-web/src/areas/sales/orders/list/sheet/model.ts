@@ -166,7 +166,7 @@ export function switcherLines(customers: readonly OrderCustomer[], searched: boo
  * with the number of orders the view holds (every page, not only the loaded rows), and the note that money columns are left out
  * without the price right.
  */
-export function exportAbout(t: (key: string, params?: Readonly<Record<string, string | number>>) => string, input: { customer: string | null; view: string; count: number | null; price: boolean; formats: readonly ExportFormat[] }): { heading: string; formats: Partial<Record<ExportFormat, string>>; note: string } {
+export function exportAbout(t: (key: string, params?: Readonly<Record<string, string | number>>) => string, input: { customer: string | null; view: string; count: number | null; price: boolean; formats: readonly ExportFormat[]; margin?: boolean }): { heading: string; formats: Partial<Record<ExportFormat, string>>; note: string } {
   const heading = t('export.heading', { customer: input.customer ?? t('switcher.all'), view: input.view })
   const formats: Partial<Record<ExportFormat, string>> = {}
   for (const format of input.formats) {
@@ -174,5 +174,7 @@ export function exportAbout(t: (key: string, params?: Readonly<Record<string, st
     const kind = format === 'XLSX' ? 'xlsx' : 'csv'
     formats[format] = input.count === null ? t(`export.${kind}Every`) : t(`export.${kind}`, { count: input.count })
   }
-  return { heading, formats, note: input.price ? t('export.note') : `${t('export.note')} ${t('export.noteNoPrice')}` }
+  // Margin % is estimated on screen per order; the export has no per-page margin read, so the file leaves it out and says so.
+  const notes = [t('export.note'), ...(input.price ? [] : [t('export.noteNoPrice')]), ...(input.margin ? [t('export.noteMargin')] : [])]
+  return { heading, formats, note: notes.join(' ') }
 }

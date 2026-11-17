@@ -134,7 +134,8 @@
     "xlsxEvery": "Excel (.xlsx) — ogni ordine di questa vista",
     "csvEvery": "CSV — ogni ordine di questa vista",
     "note": "Il file = lo schermo: le stesse righe (ogni pagina, non solo quelle caricate) e le colonne visibili.",
-    "noteNoPrice": "Le colonne degli importi restano fuori: serve il permesso dei prezzi."
+    "noteNoPrice": "Le colonne degli importi restano fuori: serve il permesso dei prezzi.",
+    "noteMargin": "Il margine % resta sullo schermo: il file non lo contiene."
   },
   "keys": {
     "door": "Apri ciò che nomina la cella attiva",

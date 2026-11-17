@@ -119,6 +119,8 @@ describe('the honest count and what Export ▾ says the file holds (screen = fil
       expect(everyone.heading).toContain(t('switcher.all'))
       expect(everyone.formats.XLSX).toBe(t('export.xlsxEvery'))
       expect(everyone.note).toBe(t('export.note'))
+      // Margin % on screen is not written to the file: the menu says so.
+      expect(exportAbout(t, { customer: null, view: 'Open', count: 3, price: true, formats: ['CSV'], margin: true }).note).toBe(`${t('export.note')} ${t('export.noteMargin')}`)
       const items = exportMenuItems((key) => key, ['XLSX', 'CSV'], [], (iso) => iso, { start: () => undefined, open: () => undefined }, String, about)
       expect(items[0]).toMatchObject({ id: 'h-about', heading: true, label: about.heading })
       expect(items.map((item) => item.label)).toEqual([about.heading, about.formats.XLSX, about.formats.CSV])

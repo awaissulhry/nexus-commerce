@@ -183,7 +183,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
       open={model.switcherOpen}
     />
   ) : null
-  const about = exportAbout(s, { customer: customerName, view: t(`rows.${model.rows}`), count, price: model.can.price, formats: ['XLSX', 'CSV'] })
+  const about = exportAbout(s, { customer: customerName, view: t(`rows.${model.rows}`), count, price: model.can.price, formats: ['XLSX', 'CSV'], margin: !!model.margins && wide })
   const viewerRow = viewer ? (items ?? []).find((row) => row.id === viewer) ?? null : null
   // ── end B-TH-225 / B-TH-226 ──
   const state = model.list.problem ? (

@@ -134,7 +134,8 @@
     "xlsxEvery": "Excel (.xlsx) — every order in this view",
     "csvEvery": "CSV — every order in this view",
     "note": "The file = the screen: the same rows (every page, not only the loaded ones) and the visible columns.",
-    "noteNoPrice": "Money columns are left out: they need the price right."
+    "noteNoPrice": "Money columns are left out: they need the price right.",
+    "noteMargin": "Margin % stays on the screen: the file leaves it out."
   },
   "keys": {
     "door": "Open what the focused cell names",
