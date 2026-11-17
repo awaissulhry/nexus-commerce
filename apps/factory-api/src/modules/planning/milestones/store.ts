@@ -10,6 +10,8 @@ import { actorOf, SYSTEM_ACTOR_ID, type OfficeContext } from '../../../core/cont
 import { heldRoles } from '../../../platform/auth/roles/access'
 import { officeContextOf } from '../access'
 import type { Reader } from '../store'
+// B-PR-38: a gate that waits for a customer's own round (its portal on) is passed by the customer's answer, never by hand.
+import { customerDecides } from '../../sales/sample-decisions/owner'
 
 /**
  * Time & action's rows (B-W2b-263; factory-db samples.prisma `OrderGate`, B-W2b-212): the refusal every gate write throws in
@@ -115,9 +117,10 @@ export async function officeGate(caller: CommandCaller, gateId: string): Promise
   return { context, actor, ...found }
 }
 
-/** The facts the rules read about one gate (its order's status, its round's decision). */
+/** The facts the rules read about one gate (its order's status, its round's decision; B-PR-38: whether the round is its customer's to decide). */
 export async function gateFacts(db: Reader, gate: GateRow, order: Pick<OrderRow, 'number' | 'status'>): Promise<GateFacts> {
-  const round = gate.sampleRoundId ? await db.sampleRound.findUnique({ where: { id: gate.sampleRoundId }, select: { number: true, decision: true, kind: true } }) : null
+  const found = gate.sampleRoundId ? await db.sampleRound.findUnique({ where: { id: gate.sampleRoundId }, select: { number: true, decision: true, kind: true, partyId: true } }) : null
+  const round = found ? { number: found.number, decision: found.decision, kind: found.kind, customerDecides: await customerDecides(db, found.partyId) } : null
   return {
     number: order.number,
     kind: gate.kind as GateKind,
@@ -126,7 +129,7 @@ export async function gateFacts(db: Reader, gate: GateRow, order: Pick<OrderRow,
     overriddenAt: gate.overriddenAt,
     ownerId: gate.ownerId,
     createdById: gate.createdById,
-    round: round ? { number: round.number, decision: round.decision, kind: round.kind } : null,
+    round,
   }
 }
 

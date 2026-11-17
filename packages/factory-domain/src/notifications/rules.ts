@@ -133,6 +133,13 @@ export const MESSAGE_TEMPLATES = {
   'notifications.projects.removedYou': { en: '{actor} took you out of {record}', it: '{actor} ti ha tolto da {record}' },
   'notifications.projects.stale': { en: '{record} is past its target date and quiet for 14 days: close or update it', it: '{record} ha superato la data obiettivo e non ha messaggi da 14 giorni: chiudilo o aggiornalo' },
   // ---- end B-TH-068 / B-TH-071
+  // ---- B-PR-42b (production plan §3 "Supervisor"; L22, R-60): the production supervisor told once per change and customer, never once
+  // per order ({record}: the order, or the customer; {count}: its orders he supervises now and reads); the backup when newly named.
+  'notifications.production.supervisorOfOrder': { en: 'You are the production supervisor of order {record}', it: 'Sei il supervisore di produzione dell’ordine {record}' },
+  'notifications.production.supervisorOfOrders': { en: 'You are the production supervisor of {count} orders of {record}', it: 'Sei il supervisore di produzione di {count} ordini di {record}' },
+  'notifications.production.supervisorOfCustomer': { en: 'You are the production supervisor of {record}', it: 'Sei il supervisore di produzione di {record}' },
+  'notifications.production.backupOfCustomer': { en: 'You are the backup of the production supervisor of {record}', it: 'Sei il sostituto del supervisore di produzione di {record}' },
+  // ---- end B-PR-42b
   'notifications.safety.productReport': { en: 'Product-safety report {record} came in: assess it', it: 'È arrivata la segnalazione di sicurezza {record}: valutala' },
   'notifications.safety.productAccident': { en: 'Product-safety report {record} came in with an accident: assess it and see whether the authority must be told', it: 'È arrivata la segnalazione di sicurezza {record} con un incidente: valutala e verifica se va informata l’autorità' },
   // B-W2b-394 (COL-027): a team-inbox mail given to a person ({record}: its subject, {title}: the inbox), and its follow-up that came

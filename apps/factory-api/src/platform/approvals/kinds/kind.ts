@@ -37,6 +37,12 @@ export interface ApprovalSubject {
   readonly changes: readonly PreviewChange[]
   /** Why a yes may not be asked on it now, in words (null: it may). */
   readonly held: string | null
+  /**
+   * B-PR-38 (the brand wall): the customer the subject is of, when it is ONE customer's (a BRAND_OVERRIDE's request): the
+   * history of the subject is then read only by someone who reaches that customer (../history/registry.ts). Left out: the
+   * subject's company and site decide, as before.
+   */
+  readonly partyId?: string | null
 }
 
 /** A request as a kind's hook sees it. */

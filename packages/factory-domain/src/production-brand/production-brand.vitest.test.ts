@@ -43,7 +43,7 @@ import { placeInUrgentList, ranksOf, URGENCY_OUTCOMES } from './urgency'
 // B-PR-22b
 import { lockReasonProblems, URGENCY_LOCK_REASON_MAX, URGENCY_OFFICE_BATCH_MAX } from './urgency'
 import { ALREADY_LOCKED_WORDS, customerUrgencyChipWords, NO_OVERRIDE_RIGHT_WORDS, NOT_LOCKED_WORDS } from './words'
-import { CHANGED_BY_US_SINCE_WORDS, changedAtWords, NOT_KEPT_YET_WORDS, NOTHING_TO_UNDO_WORDS, NOTHING_UNDONE_WORDS, ORDER_NOT_FOUND_WORDS, URGENT_ORDER_UNCHANGED_WORDS } from './words'
+import { changedAtWords, changedByUsAtWords, NOT_KEPT_YET_WORDS, NOTHING_TO_UNDO_WORDS, NOTHING_UNDONE_WORDS, ORDER_NOT_FOUND_WORDS, URGENT_ORDER_UNCHANGED_WORDS } from './words'
 
 const line = (facts: Partial<LineStageFacts> = {}): LineStageFacts => ({ reached: null, allReleased: false, done: false, sewingCounted: true, ...facts })
 
@@ -642,12 +642,14 @@ describe('B-PR-22a the Urgent list put back and the portal command words', () =>
   it('every outcome is a known code; the refusal words name no person, place, line or other customer', () => {
     expect(URGENCY_OUTCOMES).toEqual(expect.arrayContaining(['DONE', 'ASK_CUT', 'ASK_OVER_QUOTA', 'URGENCY_OFF', 'NOT_OPEN', 'LOCKED', 'UNCHANGED', 'NOT_KEPT']))
     const forbidden = /supervisor|line \d|work order|worker|other customer|another customer|position|queue/i
-    for (const words of [ORDER_NOT_FOUND_WORDS, NOT_KEPT_YET_WORDS, changedAtWords('10:42'), CHANGED_BY_US_SINCE_WORDS, URGENT_ORDER_UNCHANGED_WORDS, NOTHING_TO_UNDO_WORDS, NOTHING_UNDONE_WORDS]) {
+    for (const words of [ORDER_NOT_FOUND_WORDS, NOT_KEPT_YET_WORDS, changedAtWords('10:42'), changedByUsAtWords('10:42'), URGENT_ORDER_UNCHANGED_WORDS, NOTHING_TO_UNDO_WORDS, NOTHING_UNDONE_WORDS]) {
       expect(words.en.length).toBeGreaterThan(0)
       expect(words.it.length).toBeGreaterThan(0)
       expect(words.en, words.en).not.toMatch(forbidden)
     }
     expect(changedAtWords('10:42')).toEqual({ it: "Cambiato alle 10:42: rileggi l'elenco.", en: 'Changed at 10:42: read the list again.' })
+    // F-PR-11: our change says when, never who ("Changed by us at 10:42").
+    expect(changedByUsAtWords('10:42')).toEqual({ it: "Modificato da noi alle 10:42: rileggi l'elenco.", en: 'Changed by us at 10:42: read the list again.' })
   })
 })
 

@@ -1,0 +1,140 @@
+{
+  "list": {
+    "title": "La mia produzione",
+    "label": "I tuoi ordini in produzione",
+    "count_one": "{count} ordine",
+    "count_other": "{count} ordini",
+    "search": "Cerca tra i tuoi ordini in produzione",
+    "searchHint": "Il tuo ordine d'acquisto, il tuo numero d'ordine o un modello",
+    "failed": "Impossibile caricare i tuoi ordini in produzione",
+    "failedBody": "Non è stato possibile leggere l'elenco. Riprova tra un momento.",
+    "empty": "Nessun ordine in produzione al momento.",
+    "emptyBody": "Quando iniziamo a produrre uno dei tuoi ordini, compare qui con la sua fase e la data in cui lo prevediamo pronto.",
+    "allOrders": "Vedi tutti gli ordini",
+    "noMatch": "Nessun ordine corrisponde",
+    "noMatchSearch": "Nessun ordine in produzione corrisponde a “{q}”.",
+    "noMatchChip": "Al momento nessun ordine in produzione è in questo gruppo.",
+    "clear": "Mostra tutti",
+    "fileName": "La mia produzione"
+  },
+  "state": {
+    "retry": "Riprova"
+  },
+  "offline": {
+    "title": "Nessuna connessione — mostriamo quanto caricato alle {time}"
+  },
+  "band": {
+    "updated": "Aggiornato alle {time}",
+    "urgentOrder": "Ordine delle urgenze",
+    "orderFew": "Segna urgenti due ordini per metterli in ordine.",
+    "export": "Esporta",
+    "exporting": "Esportazione…",
+    "exportHint": "Tutti gli ordini di questa vista, in un file CSV",
+    "exportNone": "Nessun ordine da esportare"
+  },
+  "keys": {
+    "search": "Cerca",
+    "open": "Apri l'ordine"
+  },
+  "use": {
+    "hint": "Gli ordini urgenti passano per primi tra i tuoi ordini quando pianifichiamo di nuovo."
+  },
+  "chips": {
+    "label": "Mostra",
+    "chip": "{name}: {count}",
+    "clear": "Mostra tutti"
+  },
+  "col": {
+    "urgency": "Urgenza",
+    "order": "Il tuo ordine",
+    "sent": "Inviato",
+    "styles": "Modelli",
+    "stage": "Fase",
+    "waiting": "Tocca a",
+    "expected": "Previsto",
+    "actions": "Azioni"
+  },
+  "ref": {
+    "yours": "Il tuo ordine d'acquisto"
+  },
+  "cell": {
+    "styleMore": "{style} +{count}",
+    "pieces": "{count} pz",
+    "stagesOf": "Fasi di {name}",
+    "next": "Poi: {what}",
+    "nextOn": "Poi: {what} · {date}",
+    "moved": "Spostata · prima {date}",
+    "noDate": "Data da definire",
+    "seeWhat": "Vedi cosa ci serve"
+  },
+  "row": {
+    "menu": "Azioni per {name}",
+    "open": "Apri l'ordine",
+    "markUrgent": "Segna urgente",
+    "markRegular": "Segna normale",
+    "noName": "il tuo ordine"
+  },
+  "group": {
+    "URGENT": "Urgente",
+    "REGULAR": "Normale",
+    "regularHint": "Per giorno di invio dell'ordine, dal più vecchio"
+  },
+  "held": {
+    "preview": "Un'anteprima è solo in lettura.",
+    "offline": "Nessuna connessione: riprova quando torni online.",
+    "busy": "Salvataggio…",
+    "locked": "Abbiamo riportato questo ordine a normale.",
+    "asked": "Ci hai chiesto di renderlo urgente: ti rispondiamo presto.",
+    "cut": "Il taglio di questo ordine è iniziato.",
+    "quota": "{used} urgenti su {max}. Riporta prima un ordine a normale.",
+    "quotaNone": "Per i tuoi ordini le urgenze si chiedono a noi."
+  },
+  "notice": {
+    "urgent": "{name} ora è urgente: Urgente {rank}.",
+    "urgentNoRank": "{name} ora è urgente.",
+    "regular": "{name} ora è normale.",
+    "ordered": "I tuoi ordini urgenti sono salvati nel nuovo ordine.",
+    "undo": "Annulla",
+    "undone": "Riportato com'era.",
+    "undoneSkipped_one": "Riportato com'era; {count} ordine era cambiato nel frattempo ed è lasciato com'è.",
+    "undoneSkipped_other": "Riportato com'era; {count} ordini erano cambiati nel frattempo e sono lasciati come sono.",
+    "hide": "Nascondi",
+    "exportFailed": "Non è stato possibile creare il file."
+  },
+  "refused": {
+    "ASK_CUT": "Il taglio di questo ordine è iniziato.",
+    "ASK_OVER_QUOTA": "Hai usato tutte le tue urgenze. Riporta prima un ordine a normale.",
+    "URGENCY_OFF": "Le urgenze non sono attive per i tuoi ordini.",
+    "NOT_OPEN": "Questo ordine non è più in produzione.",
+    "LOCKED": "Abbiamo riportato questo ordine a normale: per ora resta normale.",
+    "UNCHANGED": "Niente da cambiare: l'ordine è già così.",
+    "NOT_KEPT": "Questo ordine è appena entrato in produzione: riprova tra un momento.",
+    "NO_RIGHT": "Il tuo ruolo può leggere la produzione; per segnare gli ordini serve il ruolo Produzione o Acquisti.",
+    "notFound": "Questo ordine non è tra i tuoi ordini in produzione.",
+    "forbidden": "Il tuo ruolo può leggere la produzione; per segnare gli ordini serve il ruolo Produzione o Acquisti.",
+    "failed": "Impossibile salvare. Riprova tra un momento.",
+    "undoNotFound": "Modifica non trovata: niente da annullare.",
+    "undoNothing": "Niente annullato: ogni ordine è cambiato nel frattempo."
+  },
+  "dialog": {
+    "title": "Ordine delle urgenze",
+    "how": "Trascina, oppure usa ↑ ↓ sulla maniglia.",
+    "list": "I tuoi ordini urgenti, il primo in cima",
+    "top": "Sposta in cima",
+    "topLabel": "Sposta {name} in cima",
+    "promise": "I tuoi ordini urgenti passano per primi tra i tuoi ordini quando pianifichiamo di nuovo. Le date cambiano solo quando te lo diciamo.",
+    "save": "Salva l'ordine",
+    "saving": "Salvataggio…",
+    "cancel": "Annulla",
+    "unmoved": "Sposta prima un ordine.",
+    "changedByUsAt": "Modificato da noi alle {time}.",
+    "changedByUs": "Modificato da noi.",
+    "changedAt": "Cambiato alle {time}.",
+    "changed": "Cambiato da quando l'hai aperto.",
+    "reread": "I tuoi ordini urgenti sono cambiati: rileggi l'elenco.",
+    "unchanged": "Niente da cambiare: i tuoi ordini urgenti sono già in quest'ordine.",
+    "loadTheirs": "Usa il nuovo elenco",
+    "keepMine": "Tieni il mio ordine",
+    "failed": "Impossibile salvare l'ordine. Riprova tra un momento."
+  }
+}

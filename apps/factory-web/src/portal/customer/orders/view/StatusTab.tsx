@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { ArrowUpRight, CheckCircle2, Clock, History } from 'lucide-react'
+import { ArrowUpRight, CheckCircle2, Clock, History, Hourglass } from 'lucide-react'
 import { Banner, Card, ChangeReview, DetailPopover, Disclosure, KeyValue, ProgressBar, type KeyValueItem } from '@nexus/ui/components'
 import { MilestoneTracker } from '@nexus/ui/components/MilestoneTracker/index'
 import { Button, Pill } from '@nexus/ui/primitives'
@@ -13,17 +13,35 @@ import { orderRefOf, stateLineKey } from '../model'
 import { useOrderWords, type OrderWords } from '../words'
 import { Loading, ReadFailed, SizeRunTable } from './parts'
 import type { OrderRecordActions, OrderRecordViewModel } from './OrderRecordView'
+// ---- F-PR-12a: the order's production (B-PR-18), drawn with the shared production parts (F-PR-01)
+import { HealthPill } from '../../../../lib/production/view/HealthPill'
+import { ProductionHoldBanner } from '../../../../lib/production/view/ProductionHoldBanner'
+import { WaitingOnPill } from '../../../../lib/production/view/WaitingOnPill'
+import type { ProductionOrder } from '../../production/api'
+import { healthInputOf, holdsOf, stageNoteOf, waitingInputOf } from '../../production/model'
+// ---- end F-PR-12a
 
 /**
  * Order › Status & progress (design rec "Order" tab status): "Please re-confirm" when a revised version waits (SAL-222), where
  * the order is (the six steps with their dates, the promise date big with its history in customer words), the customer's
  * change and cancel requests with our answer, production progress per line and size when the account shares it (C1), the
  * deposit and the order's facts. Money only with the price grain.
+ *
+ * F-PR-12a (production plan §4, §5; 06-tree B.2 P-ORD-wait, P-ORD-hold, P-ORD-tracker, P-ORD-requests), part 1, on today's tab
+ * frame: while the order is in production and the person sees production, "We are waiting for you on this order" (to what waits
+ * for it), the hold banner in our curated words (every level; "Ask a question" opens the order's conversation), and where it is —
+ * the plain stage as the note of the "In production" step (+ the count from + Progress), the promise and its moves (as before),
+ * the health chip with its reason code and who acts next (You / Us). Its requests keep their true states. A section the
+ * customer's level does not share, or an order not in production, is not drawn.
  */
 export function StatusTab({ model, record, actions }: { model: OrderRecordViewModel; record: OrderRecord; actions?: OrderRecordActions }) {
+  const production = model.production?.state === 'ready' ? model.production.read : null // F-PR-12a
   return (
     <div className="fw-pord-tab">
       {record.order.reconfirmNeeded ? <ReconfirmPanel model={model} actions={actions} /> : null}
+      {/* F-PR-12a: what waits for the customer (a revised order to re-confirm says it above), then what holds its work. */}
+      {production && !record.order.reconfirmNeeded ? <ProductionWaiting read={production} href={model.waitingHref ?? null} /> : null}
+      {production ? <ProductionHold read={production} actions={actions} /> : null}
       {/* B-TH-275 */}
       <StateLine model={model} record={record} />
       <Tracker model={model} record={record} actions={actions} />
@@ -140,13 +158,18 @@ function Tracker({ model, record, actions }: { model: OrderRecordViewModel; reco
   const promise = promiseOf(order)
   const moves = movesOf(record.promiseHistory)
   const history = promiseMoves(record.promiseHistory, locale, day).reverse()
+  // F-PR-12a: the plain stage is the note of the "In production" step (06-tree §0.2), only true states.
+  const production = model.production
+  const read = production?.state === 'ready' ? production.read : null
+  const note = read ? stageNoteOf(read, locale) : null
+  const steps = milestoneSteps(record.milestones, locale, day).map((step) => (note && step.id === 'IN_PRODUCTION' ? { ...step, note } : step))
   // The popover opens only once the page runs in the browser (a server render never draws it: no hydration mismatch).
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
   return (
     <Card header={t('tracker.title')} headingLevel={2}>
       <div className="fw-pord-tracker">
-        <MilestoneTracker steps={milestoneSteps(record.milestones, locale, day)} label={t('tracker.label', { number: orderRefOf(order, t) /* B-TH-275 */ })} labels={ds.milestoneTracker} />
+        <MilestoneTracker steps={steps /* F-PR-12a */} label={t('tracker.label', { number: orderRefOf(order, t) /* B-TH-275 */ })} labels={ds.milestoneTracker} />
         <div className="fw-pord-promise">
           {order.status === 'CANCELLED' ? (
             <p className="fw-pord-promise-date">{order.cancelledOn ? t('tracker.cancelledOn', { date: day(order.cancelledOn) }) : t('tracker.cancelled')}</p>
@@ -188,9 +211,74 @@ function Tracker({ model, record, actions }: { model: OrderRecordViewModel; reco
           ) : null}
         </div>
       </div>
+      {/* F-PR-12a: the health chip with its reason code and who acts next; a failed read says so here, with Try again. */}
+      {read ? (
+        <ProductionFacts read={read} />
+      ) : production?.state === 'error' ? (
+        <ReadFailed title={t('production.failed')} onRetry={actions?.onRetryProduction} />
+      ) : production?.state === 'loading' ? (
+        <Loading rows={1} height={24} />
+      ) : null}
     </Card>
   )
 }
+
+// ---- F-PR-12a ------------------------------------------------------------------------------------------------------------------
+/** "We are waiting for you on this order · Since 12 Nov" with the way to what waits (Waiting for you, until it exists Home). */
+function ProductionWaiting({ read, href }: { read: ProductionOrder; href: string | null }) {
+  const { t, day } = useOrderWords()
+  if (read.waiting.code !== 'YOU') return null
+  return (
+    <Banner
+      tone="warning"
+      icon={<Hourglass size={16} aria-hidden />}
+      title={t('production.waitingTitle')}
+      action={
+        href ? (
+          <Button asChild size="sm" variant="primary">
+            <a href={href}>{t('production.waitingLink')}</a>
+          </Button>
+        ) : undefined
+      }
+    >
+      {read.waiting.since ? t('production.waitingSince', { date: day(read.waiting.since) }) : null}
+    </Banner>
+  )
+}
+
+/** The most serious hold in our curated words (a quality check, our hold's reason, its own pause); the rest counted. */
+function ProductionHold({ read, actions }: { read: ProductionOrder; actions?: OrderRecordActions }) {
+  const { t, locale } = useOrderWords()
+  if (read.holds.length === 0) return null
+  return (
+    <ProductionHoldBanner
+      face="customer"
+      holds={holdsOf(read.holds, locale)}
+      action={
+        actions?.onAsk ? (
+          <Button size="sm" onClick={() => actions.onAsk?.()}>
+            {t('production.ask')}
+          </Button>
+        ) : undefined
+      }
+    />
+  )
+}
+
+/** Health (the chip and a person's reason code, never a note) and who acts next (You / Us; never a supplier or a workshop). */
+function ProductionFacts({ read }: { read: ProductionOrder }) {
+  const { t } = useOrderWords()
+  const items: KeyValueItem[] = [
+    { label: t('production.health'), value: <HealthPill face="customer" {...healthInputOf(read.health)} /> },
+    { label: t('production.waitingOn'), value: <WaitingOnPill face="customer" now={Date.parse(read.asOf)} {...waitingInputOf(read.waiting)} /> },
+  ]
+  return (
+    <section className="fw-pord-production" aria-label={t('production.label')}>
+      <KeyValue columns={2} labelCase="sentence" items={items} />
+    </section>
+  )
+}
+// ---- end F-PR-12a
 
 function Requests({ model, actions }: { model: OrderRecordViewModel; actions?: OrderRecordActions }) {
   const words = useOrderWords()

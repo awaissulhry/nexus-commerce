@@ -7,6 +7,7 @@ import { Button } from '@nexus/ui/primitives'
 import type { ApprovalPage, ChangeRequest, DocumentsRead, OrderRecord, ProgressRead, ShipmentsRead } from '../api'
 import type { RecordTab } from '../model'
 import { useOrderWords } from '../words'
+import type { ProductionOrder } from '../../production/api' // F-PR-12a
 // ---- B-TH-275: the order docks its conversation (the portal record frame, B-TH-273): no Messages tab, no Ask modal.
 import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
 import type { PortalFrameMode } from '../../../shell/record/model'
@@ -83,6 +84,15 @@ export interface OrderRecordViewModel {
   /** The design review: the frame's layout whatever the window (docked at 1440, the narrow "Messages (2 new)"). */
   frame?: { mode: PortalFrameMode; viewOpen?: boolean; newCount?: number }
   // ---- end B-TH-275
+  // ---- F-PR-12a: the order's production (GET /portal/production/:orderId, B-PR-18) on Status & progress, part 1
+  /**
+   * `hidden`: not part of the reader's access (no portal.production.view), not in production, or not one of its orders (404):
+   * no production section is drawn (a section not shared is not drawn); absent: the same.
+   */
+  production?: { state: 'loading' | 'error' | 'ready' | 'hidden'; read: ProductionOrder | null }
+  /** Where "See what waits for you" leads (Waiting for you once built, until then Home). */
+  waitingHref?: string | null
+  // ---- end F-PR-12a
 }
 
 export interface OrderRecordActions {
@@ -104,6 +114,9 @@ export interface OrderRecordActions {
   onPreview?: (file: { fileId: string; title: string }) => void
   onDownload?: (file: { fileId: string; name: string }) => void
   onDismissNotice?: () => void
+  // F-PR-12a: the order's production read again; the hold banner's "Ask a question" (the order's docked conversation).
+  onRetryProduction?: () => void
+  onAsk?: () => void
   dialog?: {
     change?: ChangeDialogActions
     cancel?: CancelDialogActions

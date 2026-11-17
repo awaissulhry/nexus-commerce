@@ -25,9 +25,9 @@ import {
 import {
   ALREADY_LOCKED_WORDS,
   ASK_US_WORDS,
-  CHANGED_BY_US_SINCE_WORDS,
   CHANGED_SINCE_WORDS,
   changedAtWords,
+  changedByUsAtWords, // F-PR-11
   dormantMarksWords,
   NO_OVERRIDE_RIGHT_WORDS,
   NOT_KEPT_YET_WORDS,
@@ -492,8 +492,13 @@ export async function urgentOrderInCommand(tools: CommandTools, input: UrgentOrd
     const changed = input.asOf === null ? [] : rows.filter((row) => row.open && row.setAt !== null && row.setAt > input.asOf! && (named.has(row.orderId) || row.urgency === 'URGENT'))
     const latest = changed.sort((a, b) => b.setAt!.getTime() - a.setAt!.getTime())[0]
     if (latest) {
-      const words = latest.setBy === 'FACTORY' ? CHANGED_BY_US_SINCE_WORDS : changedAtWords(clockWords(latest.setAt!))
-      throw new DomainError('conflict', words.en, [{ path: 'body/orderIds/CHANGED_SINCE', message: words.en }, ...problems])
+      // ── F-PR-11: the path says who (US: we; YOU: its own side) and when (hh:mm, company time), so the portal writes "Changed by us
+      // at 10:42" in the person's language — never a name.
+      const time = clockWords(latest.setAt!)
+      const byUs = latest.setBy === 'FACTORY'
+      const words = byUs ? changedByUsAtWords(time) : changedAtWords(time)
+      throw new DomainError('conflict', words.en, [{ path: `body/orderIds/CHANGED_SINCE/${byUs ? 'US' : 'YOU'}/${time}`, message: words.en }, ...problems])
+      // ── end F-PR-11
     }
     throw new DomainError('conflict', problems[0]!.message, problems)
   }

@@ -116,9 +116,9 @@ export const PORTAL_AREAS: readonly PortalAreaDef[] = [
   // ── F-PR-10 (production plan §5; 06-tree B.0; 09-design (d)) ──
   // The customer's Production: My production, for a customer with portal.production.view (Production, Buyer, Admin; Quality
   // and Viewer read; Designer and Finance do not). On a phone a tab after Orders, so Returns goes under More for those people
-  // only (the DS bar keeps four marked tabs in manifest order). F-PR-11 builds /production and sets `built`; until then no door
-  // is drawn. No badge until a count of production items waiting on the customer exists (B-PR-20 / F-PR-15).
-  { id: 'production', label: 'nav.production', href: '/production', icon: Factory, permission: 'portal.production.view', kinds: ['CUSTOMER'], phone: 'tab', key: 'p', built: false },
+  // only (the DS bar keeps four marked tabs in manifest order). F-PR-11 built /production (My production): the door is drawn.
+  // No badge until a count of production items waiting on the customer exists (B-PR-20 / F-PR-15).
+  { id: 'production', label: 'nav.production', href: '/production', icon: Factory, permission: 'portal.production.view', kinds: ['CUSTOMER'], phone: 'tab', key: 'p', built: true /* F-PR-11 */ },
   // ── end F-PR-10 ──
   {
     id: 'quotes',
