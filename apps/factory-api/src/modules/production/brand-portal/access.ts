@@ -213,8 +213,9 @@ export interface OrderWork {
 }
 
 const NO_WORK: OrderWork = Object.freeze({ workOrderIds: [], ownWorkOrderIds: [], onHold: false, paused: false, holds: [] })
-const QUALITY_HOLD_WORDS: Words = Object.freeze({ it: 'Controllo qualità', en: 'Quality check' })
-const PRODUCTION_HOLD_WORDS: Words = Object.freeze({ it: 'Fermo di produzione', en: 'Production hold' })
+// B-PR-19: exported for the quality read (./quality.ts), the same fallback words.
+export const QUALITY_HOLD_WORDS: Words = Object.freeze({ it: 'Controllo qualità', en: 'Quality check' })
+export const PRODUCTION_HOLD_WORDS: Words = Object.freeze({ it: 'Fermo di produzione', en: 'Production hold' })
 
 /**
  * The work of these lines' orders and what holds it: a work order ON_HOLD (the "On hold" mark), its own accepted pause (an ACTIVE

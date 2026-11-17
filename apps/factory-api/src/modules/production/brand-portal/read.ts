@@ -110,7 +110,8 @@ const CHIP_WORDS: Readonly<Record<ProductionChip, Words>> = Object.freeze({
   READY: { it: 'Pronti per la spedizione', en: 'Ready to ship' },
 })
 
-const NOT_IN_PRODUCTION = 'This order is not in production.'
+/** B-PR-19: also the quality read's (./quality.ts). */
+export const NOT_IN_PRODUCTION = 'This order is not in production.'
 
 export interface ListQuery {
   readonly chip: ProductionChip

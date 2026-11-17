@@ -6,6 +6,7 @@ import { APPROVAL_STATES, BRAND_GATE_KINDS, BRAND_GATE_STATES, BRAND_HOLD_READS 
 import { BRAND_STAGES } from '@nexus/factory-domain/production-brand/stages'
 import { BRAND_URGENCIES, URGENCY_BATCH_MAX, URGENCY_OUTCOMES } from '@nexus/factory-domain/production-brand/urgency'
 import { BRAND_SIDES } from '@nexus/factory-domain/production-brand/waiting'
+import { BRAND_CHECK_KINDS, DEFECT_CLASSES, FINAL_STATES } from '@nexus/factory-domain/production-brand/quality-read' // B-PR-19
 import { PROGRESS_STAGES } from '@nexus/factory-domain/sales/portal-orders/progress'
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise'
 
@@ -287,3 +288,90 @@ export const undoUrgencyContract = defineContract({
   },
 })
 // ── end B-PR-22a ──
+
+// ── B-PR-19 ──
+/**
+ * B-PR-19: the quality of the customer's own goods (./quality.ts), at the QUALITY level only (below it: 404, the section is not
+ * drawn). Per line and size its released and reversed pieces; final inspections and in-process checks only of a work order that is
+ * the customer's alone (a line made on a shared one: `sharedWork` with its words); holds by reason code and words; the photos the
+ * factory shared on its order. Never a work order, a lot of another's goods, an inspector, a worker, a line or a note.
+ */
+const int = z.number().int()
+const sizeFigures = output({ size: z.string().nullable(), ordered: int, released: int, reversed: int })
+const finalState = z.enum(FINAL_STATES)
+
+export const qualityContract = defineContract({
+  params: input({ orderId: id() }),
+  response: {
+    200: output({
+      asOf: instant(),
+      level: z.enum(PRODUCTION_SHARE_LEVELS),
+      levelWords: words,
+      order: output({ id: id(), customerRef: z.string().nullable(), number: z.string(), yourNumber }),
+      /** Its goods lines: pieces released by quality and taken back, per size, never above what it ordered. */
+      lines: z.array(
+        output({
+          lineId: id(),
+          seq: int,
+          style: named.nullable(),
+          colourway: named.nullable(),
+          ordered: int,
+          released: int,
+          reversed: int,
+          sizes: z.array(sizeFigures),
+          /** Some of its goods are made on a work order that is not its alone: their results are not shared. */
+          sharedWork: z.boolean(),
+          sharedWorkWords: words.nullable(),
+        }),
+      ),
+      /** The final inspections of its single-customer work orders (a cancelled one never). */
+      finals: z.array(
+        output({
+          inspectionId: id(),
+          number: z.string().nullable(),
+          state: finalState,
+          stateWords: words,
+          decidedOn: day.nullable(),
+          /** The order's lines it judges (their numbers on the order). */
+          lines: z.array(int),
+          /** The sampling plan over its own garments alone (ISO 2859-1). */
+          sampling: output({ garments: int, sample: int, inspectionLevel: z.string(), aqlMajor: z.string(), aqlMinor: z.string(), acceptMajor: int, acceptMinor: int }),
+          /** Once decided: garments with a defect per class in the sample, and each defect found. */
+          defects: output({
+            critical: int,
+            major: int,
+            minor: int,
+            found: z.array(output({ defectClass: z.enum(DEFECT_CLASSES), classWords: words, code: z.string(), words: words.nullable(), garments: int })),
+          }).nullable(),
+          /** The report the factory issued (GET …/quality/report/:inspectionId); null: none yet. */
+          report: output({ version: int, language: z.string(), madeOn: day }).nullable(),
+        }),
+      ),
+      /** First-piece, cutting and end-of-line checks of its single-customer work orders, per kind. */
+      checks: z.array(
+        output({
+          kind: z.enum(BRAND_CHECK_KINDS),
+          words,
+          state: finalState,
+          stateWords: words,
+          passed: int,
+          failed: int,
+          waiting: int,
+          countWords: words,
+          pieces: int,
+          defectivePieces: int,
+          lastOn: day.nullable(),
+        }),
+      ),
+      /** What held its goods: by reason code and words, since and until; never the note, never who. */
+      holds: z.array(output({ kind: z.enum(BRAND_HOLD_READS), code: z.string(), words, since: day, until: day.nullable(), active: z.boolean(), stateWords: words })),
+      /** The photos the factory shared on its order (opened with GET /files/:fileId/preview). */
+      photos: z.array(output({ id: id(), name: z.string(), contentType: z.string(), sizeBytes: int, sharedOn: day })),
+      live,
+    }),
+  },
+})
+
+/** The inspection report PDF of a single-customer work order's decided inspection (the newest kept version; inline). */
+export const qualityReportContract = defineContract({ params: input({ orderId: id(), inspectionId: id() }), response: {} })
+// ── end B-PR-19 ──

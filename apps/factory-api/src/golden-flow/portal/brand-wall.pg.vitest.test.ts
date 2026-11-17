@@ -133,6 +133,8 @@ async function alphaIds(): Promise<Record<string, string[]>> {
     inquiryId: await ids(`SELECT id::text AS id FROM "Inquiry" WHERE "partyId" = $1 ORDER BY id LIMIT 4`),
     // B-TH-069 / B-TH-072: Brand Alpha's projects (GET /portal/projects/:projectId/news; the seed's SEED-PRJ-001 and -003).
     projectId: await ids(`SELECT id::text AS id FROM "Project" WHERE "partyId" = $1 ORDER BY id LIMIT 3`),
+    // B-PR-19: inspections of Brand Alpha's goods (GET /portal/production/:orderId/quality/report/:inspectionId).
+    inspectionId: await ids(`SELECT DISTINCT i.id::text AS id FROM "Inspection" i JOIN "WorkOrderSize" c ON c."workOrderId" = i."workOrderId" WHERE c."partyId" = $1 ORDER BY 1 LIMIT 3`),
   }
 }
 
