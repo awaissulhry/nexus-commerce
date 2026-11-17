@@ -6,6 +6,12 @@ import { addFollower, listFollowers, setMyFollow } from './followers'
 import { manifest } from './manifest'
 import { mentionablePeople, postNote, readThread, setThreadStatus } from './threads'
 import { readTimeline } from './timeline'
+// B-TH-027: each person's own read mark.
+import { markReadContract, markUnreadContract, unreadContract } from './contract'
+import { markThreadRead, markThreadUnread, unreadCounts } from './reads'
+// B-TH-028: who answers the conversation.
+import { setOwnerContract } from './contract'
+import { setThreadOwner } from './owner'
 
 /**
  * Record threads and the record timeline (platform part; plan A1 §2.3, §3.7; features COL-001, COL-002, COL-003): read
@@ -18,6 +24,15 @@ export default defineRoutes('threads', manifest, async (app) => {
     const { recordType, recordId } = request.params
     return readThread(request, { type: recordType, id: recordId }, request.query)
   })
+
+  // ---- B-TH-027
+  app.post('/threads/unread', { schema: unreadContract }, async (request) => unreadCounts(request, request.body.records.map((record) => ({ type: record.recordType, id: record.recordId }))))
+  app.post('/threads/:recordType/:recordId/read', { schema: markReadContract }, async (request) => markThreadRead(request, { type: request.params.recordType, id: request.params.recordId }, request.body, idempotencyKeyFrom(request)))
+  app.post('/threads/:recordType/:recordId/unread', { schema: markUnreadContract }, async (request) => markThreadUnread(request, { type: request.params.recordType, id: request.params.recordId }, request.body, idempotencyKeyFrom(request)))
+  // ---- end B-TH-027
+  // ---- B-TH-028
+  app.put('/threads/:recordType/:recordId/owner', { schema: setOwnerContract }, async (request) => setThreadOwner(request, { type: request.params.recordType, id: request.params.recordId }, request.body, idempotencyKeyFrom(request)))
+  // ---- end B-TH-028
 
   app.get('/threads/:recordType/:recordId/timeline', { schema: timelineContract }, async (request) => {
     const { recordType, recordId } = request.params

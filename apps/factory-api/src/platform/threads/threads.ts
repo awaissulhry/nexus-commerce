@@ -32,6 +32,11 @@ import type { AttachmentView, MessageView, ThreadView } from './contract'
 import { followInCommand } from './followers'
 import { mayOnThread, resolveRecord, type RecordScope } from './records'
 import { mayShare, notShareableRefusal } from './records' // B-PR-08a
+// ---- B-TH-027 / B-TH-028: the reader's own read mark; the office's head (who answers, what waits).
+import { serverClock } from '../../core/time'
+import { headOf } from './owner'
+import { readingOf, whoOf, type Reading } from './reads'
+// ---- end B-TH-027 / B-TH-028
 
 /**
  * Record threads (plan A1 §2.3, §3.7; features COL-001, COL-003, COL-020):
@@ -225,6 +230,10 @@ export interface ThreadPage {
   readonly thread: ThreadView | null
   readonly messages: MessageView[]
   readonly nextCursor: string | null
+  // ---- B-TH-027 / B-TH-028
+  readonly reading?: Reading | null
+  readonly head?: Awaited<ReturnType<typeof headOf>>
+  // ---- end B-TH-027 / B-TH-028
 }
 
 const EMPTY: ThreadPage = Object.freeze({ thread: null, messages: [], nextCursor: null })
@@ -248,6 +257,9 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
       const found = await officeRecord(client, record)
       if (!mayOnThread(actor, THREADS_READ, record.type, found.scope)) throw new NotFoundError('Record not found.')
       thread = found.thread
+      // ---- B-TH-028: a record without a message yet still has who answers it and what waits (a request by its state).
+      if (!thread) return { ...EMPTY, reading: null, head: await headOf(client, record, null, serverClock.now()) }
+      // ---- end B-TH-028
     } else {
       // Row-level security shows a partner only its own party's threads; "none" and "not yours" look the same.
       thread = await client.thread.findFirst({ where: recordWhere(record), select: THREAD_COMMON })
@@ -265,10 +277,17 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     const last = shown.at(-1)
     // A thread sits on one site: its gate is read once, and only for a page with a floor note (the office's: others read none).
     const gates = await workerGatesFor(client, office && shown.some((row) => row.authorKind === 'WORKER') ? [thread.siteId] : [])
+    // ---- B-TH-027: the reader's own reading (office and portal people; a link has none). B-TH-028: the office's head only (W08).
+    const who = whoOf(context)
+    const reading = who ? await readingOf(client, thread.id, who) : null
+    const head = office ? await headOf(client, record, { ...thread, ownerId: (await client.thread.findUnique({ where: { id: thread.id }, select: { ownerId: true } }))?.ownerId ?? null }, serverClock.now()) : undefined
+    // ---- end B-TH-027 / B-TH-028
     return {
       thread: threadViewOf(thread),
       messages: shown.map((row) => messageViewOf(row, attachments, gates.at(thread.siteId).open)),
       nextCursor: rows.length > page.limit && last ? encodeCursor(last) : null,
+      reading,
+      ...(head ? { head } : {}),
     }
   })
 }
