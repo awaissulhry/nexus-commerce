@@ -260,3 +260,34 @@ export function undoPlan(
   }
   return { restore, skipped }
 }
+
+// ---- B-PR-22a: what an urgency command did to one order ------------------------------------------------------------------------
+
+/**
+ * Done, or why not (in words beside it): ASK_CUT / ASK_OVER_QUOTA = "Ask us" (B-PR-46a turns them into "Urgent – asked"), the
+ * mark's refusals (URGENCY_OFF, NOT_OPEN, LOCKED, UNCHANGED), NOT_KEPT (an order just confirmed: our keeper has not written its
+ * production state yet), NO_RIGHT (the office: seen, but the person may not change that customer's urgency).
+ */
+export const URGENCY_OUTCOMES = ['DONE', 'ASK_CUT', 'ASK_OVER_QUOTA', 'URGENCY_OFF', 'NOT_OPEN', 'LOCKED', 'UNCHANGED', 'NOT_KEPT', 'NO_RIGHT'] as const
+export type UrgencyOutcome = (typeof URGENCY_OUTCOMES)[number]
+
+// ---- B-PR-22a: the Urgent list rewritten 1..n ------------------------------------------------------------------------------------
+
+/**
+ * The customer's Urgent list after an undo: `current` its urgent orders now, in their order (ids); `placed` the orders put back,
+ * each at the place (1 first) it held before its batch — placed from the first place down, each clamped to the end of the list
+ * as it stands. Every other order keeps its order. The command writes the result as the ranks 1..n (no database key on the
+ * rank: B-PR-15; the customer's lock serialises the rewrite).
+ */
+export function placeInUrgentList(current: readonly string[], placed: readonly { readonly orderId: string; readonly rank: number }[]): string[] {
+  const moving = new Set(placed.map((entry) => entry.orderId))
+  const out = current.filter((orderId) => !moving.has(orderId))
+  for (const entry of [...placed].sort((a, b) => a.rank - b.rank || text(a.orderId, b.orderId))) {
+    const at = Math.max(0, Math.min(Math.trunc(entry.rank) - 1, out.length))
+    out.splice(at, 0, entry.orderId)
+  }
+  return out
+}
+
+/** The ranks 1..n of an Urgent list in its order. */
+export const ranksOf = (order: readonly string[]): Map<string, number> => new Map(order.map((orderId, index) => [orderId, index + 1]))

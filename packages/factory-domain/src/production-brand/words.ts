@@ -205,3 +205,34 @@ export const PRODUCTION_ROLE_NOT_OFFERED_WORDS: Words = Object.freeze({
   it: 'Il ruolo Produzione non è tra i ruoli ammessi di questo cliente: aggiungilo per darlo a qualcuno.',
   en: "The Production role is not among this customer's allowed roles: add it to give it to someone.",
 })
+
+// ---- B-PR-22a: the customer's urgency commands from its portal (refusals in words; never a name, a place or another customer) --
+
+/** An id that is not one of its own orders (another customer's, or none): neutral, as an unknown id. */
+export const ORDER_NOT_FOUND_WORDS: Words = Object.freeze({ it: 'Ordine non trovato.', en: 'Order not found.' })
+
+/** Its order went into production a moment ago: our keeper has not written its production state yet. */
+export const NOT_KEPT_YET_WORDS: Words = Object.freeze({
+  it: 'Questo ordine è appena entrato in produzione: riprova tra un momento.',
+  en: 'This order has just gone into production: try again in a moment.',
+})
+
+/** Its Urgent list changed after it read it (a mark, a set-back) at this time of day (hh:mm, company time). */
+export function changedAtWords(time: string): Words {
+  return { it: `Cambiato alle ${time}: rileggi l'elenco.`, en: `Changed at ${time}: read the list again.` }
+}
+
+/** We changed its Urgent list after it read it (never who: R-41). */
+export const CHANGED_BY_US_SINCE_WORDS: Words = Object.freeze({ it: "Modificato da noi: rileggi l'elenco.", en: 'Changed by us: read the list again.' })
+
+/** The Urgent list sent is the one it has. */
+export const URGENT_ORDER_UNCHANGED_WORDS: Words = Object.freeze({
+  it: "Niente da cambiare: i tuoi ordini urgenti sono già in quest'ordine.",
+  en: 'Nothing to change: your urgent orders are in this order already.',
+})
+
+/** An Undo of a batch it never made (another customer's, ours, or none): neutral. */
+export const NOTHING_TO_UNDO_WORDS: Words = Object.freeze({ it: 'Modifica non trovata: niente da annullare.', en: 'This change is not found: nothing to undo.' })
+
+/** An Undo that put nothing back: every order changed since (or may no longer be put back). */
+export const NOTHING_UNDONE_WORDS: Words = Object.freeze({ it: 'Niente annullato: ogni ordine è cambiato nel frattempo.', en: 'Nothing was undone: every order changed since.' })

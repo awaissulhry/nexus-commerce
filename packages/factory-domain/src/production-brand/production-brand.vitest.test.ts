@@ -38,6 +38,9 @@ import {
   URGENCY_WORDS,
   urgentUsedWords,
 } from './words'
+// B-PR-22a
+import { placeInUrgentList, ranksOf, URGENCY_OUTCOMES } from './urgency'
+import { CHANGED_BY_US_SINCE_WORDS, changedAtWords, NOT_KEPT_YET_WORDS, NOTHING_TO_UNDO_WORDS, NOTHING_UNDONE_WORDS, ORDER_NOT_FOUND_WORDS, URGENT_ORDER_UNCHANGED_WORDS } from './words'
 
 const line = (facts: Partial<LineStageFacts> = {}): LineStageFacts => ({ reached: null, allReleased: false, done: false, sewingCounted: true, ...facts })
 
@@ -615,5 +618,32 @@ describe('B-PR-41 the words of urgency, the supervisor and the limits card', () 
       expect(words.en, words.en).not.toMatch(forbidden)
       expect(words.it, words.it).not.toMatch(forbidden)
     }
+  })
+})
+
+// ── B-PR-22a ──
+describe('B-PR-22a the Urgent list put back and the portal command words', () => {
+  it('places undone orders back at their old places, from the first place down, clamped to the end; the rest keep their order', () => {
+    expect(placeInUrgentList(['c', 'a', 'b'], [{ orderId: 'a', rank: 1 }, { orderId: 'b', rank: 2 }])).toEqual(['a', 'b', 'c'])
+    expect(placeInUrgentList(['b', 'a', 'c'], [{ orderId: 'a', rank: 1 }, { orderId: 'b', rank: 2 }])).toEqual(['a', 'b', 'c'])
+    expect(placeInUrgentList(['a', 'c'], [{ orderId: 'b', rank: 2 }])).toEqual(['a', 'b', 'c'])
+    expect(placeInUrgentList(['a'], [{ orderId: 'b', rank: 9 }])).toEqual(['a', 'b'])
+    expect(placeInUrgentList([], [])).toEqual([])
+    expect([...ranksOf(['x', 'y', 'z'])]).toEqual([
+      ['x', 1],
+      ['y', 2],
+      ['z', 3],
+    ])
+  })
+
+  it('every outcome is a known code; the refusal words name no person, place, line or other customer', () => {
+    expect(URGENCY_OUTCOMES).toEqual(expect.arrayContaining(['DONE', 'ASK_CUT', 'ASK_OVER_QUOTA', 'URGENCY_OFF', 'NOT_OPEN', 'LOCKED', 'UNCHANGED', 'NOT_KEPT']))
+    const forbidden = /supervisor|line \d|work order|worker|other customer|another customer|position|queue/i
+    for (const words of [ORDER_NOT_FOUND_WORDS, NOT_KEPT_YET_WORDS, changedAtWords('10:42'), CHANGED_BY_US_SINCE_WORDS, URGENT_ORDER_UNCHANGED_WORDS, NOTHING_TO_UNDO_WORDS, NOTHING_UNDONE_WORDS]) {
+      expect(words.en.length).toBeGreaterThan(0)
+      expect(words.it.length).toBeGreaterThan(0)
+      expect(words.en, words.en).not.toMatch(forbidden)
+    }
+    expect(changedAtWords('10:42')).toEqual({ it: "Cambiato alle 10:42: rileggi l'elenco.", en: 'Changed at 10:42: read the list again.' })
   })
 })

@@ -1,13 +1,16 @@
+import { idempotencyKeyFrom } from '../../../core/command'
 import { defineRoutes } from '../../../core/manifest'
 import { attachmentDisposition } from '../../../platform/files/rules'
 import { appClock } from '../../../platform/portal/tasks/clock'
-import { listContract, orderContract } from './contract'
+import { listContract, markUrgencyContract, orderContract, undoUrgencyContract, urgentOrderContract } from './contract'
 import { manifest } from './manifest'
 import { productionCsv, productionList, productionOrder } from './read'
+import { markUrgency, orderUrgent, undoUrgency } from './urgency'
 
 /**
  * B-PR-18: the customer's own production in its portal (production plan §4, §5; design 06-tree B.1 My production, B.2 Order ›
- * Status & progress; the screens are F-PR-11 and F-PR-12a/b). Reads only; see ./read.ts.
+ * Status & progress; the screens are F-PR-11 and F-PR-12a/b). Reads only; see ./read.ts. B-PR-22a adds the customer's urgency
+ * commands (./urgency.ts).
  */
 export default defineRoutes('portal-production', manifest, async (app) => {
   app.get('/portal/production', { schema: listContract }, async (request, reply) => {
@@ -21,4 +24,11 @@ export default defineRoutes('portal-production', manifest, async (app) => {
   })
 
   app.get('/portal/production/:orderId', { schema: orderContract }, async (request) => productionOrder(app, request, request.params.orderId, appClock(app).now()))
+
+  // B-PR-22a: the customer's urgency (./urgency.ts).
+  app.post('/portal/production/urgency', { schema: markUrgencyContract }, async (request) => markUrgency(app, request, request.body, idempotencyKeyFrom(request)))
+
+  app.put('/portal/production/urgent-order', { schema: urgentOrderContract }, async (request) => orderUrgent(app, request, request.body, idempotencyKeyFrom(request)))
+
+  app.post('/portal/production/urgency/undo', { schema: undoUrgencyContract }, async (request) => undoUrgency(app, request, request.body, idempotencyKeyFrom(request)))
 })
