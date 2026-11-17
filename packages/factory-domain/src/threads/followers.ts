@@ -15,7 +15,9 @@
  * Following brings the record's news to the person's notifications (FOLLOWING: a note, a mail out, a reply in).
  */
 
-export const FOLLOW_REASONS = ['CREATOR', 'ASSIGNEE', 'MENTIONED', 'CHOSE'] as const
+// B-TH-065 (threads plan, schema wave 8/9; PROJ-G04): ADDED, a person a colleague added by hand ("added by Marco"); the only
+// reason of a project member of its outside company (only the office adds them).
+export const FOLLOW_REASONS = ['CREATOR', 'ASSIGNEE', 'MENTIONED', 'CHOSE', 'ADDED'] as const
 export type FollowReason = (typeof FOLLOW_REASONS)[number]
 
 /** The most followers a record lists (the popover; the count is exact). */

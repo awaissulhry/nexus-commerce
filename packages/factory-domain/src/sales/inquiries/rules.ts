@@ -20,6 +20,9 @@ import type { Issue } from '../../core/errors'
  * prospect is matched to a party first. DECLINED says why (OTHER in words); LOST says in words why the customer went away.
  * TH-2 (threads schema wave 3/9, B-TH-022): an ORDERED inquiry names the order made straight from it (one order per inquiry,
  * B-TH-025); "Not an order" (NOT_AN_ORDER) is a decline reason for a request that asks nothing to make (B-TH-043).
+ * TH-9 (threads schema wave 9/9, B-TH-090): a customer may withdraw its own request before the office decided (WITHDRAWN, from
+ * an open state, closed by a portal person of that customer: B-TH-095); production's answer (OK, or not before a week) is a
+ * column of the office's (B-TH-094).
  * A closed inquiry is frozen but for its note (and the erasure of its prospect, GDPR art. 17). The brand's tech pack is a set
  * of files of the inquiry or of its mail with the version the brand names; the quote and the order made from it read it from
  * the inquiry, each file as its current version ("always the version in force").
@@ -31,10 +34,11 @@ export type InquirySource = (typeof INQUIRY_SOURCES)[number]
 export const TYPED_SOURCES = ['OFFICE', 'PHONE', 'FAIR', 'PORTAL'] as const satisfies readonly InquirySource[]
 export type TypedSource = (typeof TYPED_SOURCES)[number]
 
-export const INQUIRY_STATUSES = ['NEW', 'ASSIGNED', 'NEED_INFO', 'QUOTED', 'DECLINED', 'LOST', 'ORDERED'] as const
+// B-TH-090: WITHDRAWN, the customer withdrew it before the office decided (final, like the others closed).
+export const INQUIRY_STATUSES = ['NEW', 'ASSIGNED', 'NEED_INFO', 'QUOTED', 'DECLINED', 'LOST', 'ORDERED', 'WITHDRAWN'] as const
 export type InquiryStatus = (typeof INQUIRY_STATUSES)[number]
 export const OPEN_STATUSES = ['NEW', 'ASSIGNED', 'NEED_INFO'] as const satisfies readonly InquiryStatus[]
-export const CLOSED_STATUSES = ['QUOTED', 'DECLINED', 'LOST', 'ORDERED'] as const satisfies readonly InquiryStatus[]
+export const CLOSED_STATUSES = ['QUOTED', 'DECLINED', 'LOST', 'ORDERED', 'WITHDRAWN'] as const satisfies readonly InquiryStatus[]
 export const isOpen = (status: InquiryStatus): boolean => (OPEN_STATUSES as readonly string[]).includes(status)
 
 export const DECLINE_REASONS = ['CAPACITY', 'LEAD_TIME', 'NOT_OUR_PRODUCT', 'PRICE', 'OTHER', 'NOT_AN_ORDER'] as const
@@ -90,6 +94,7 @@ export const STATUS_WORDS: Readonly<Record<InquiryStatus, Words>> = Object.freez
   DECLINED: { it: 'Rifiutata', en: 'Declined' },
   LOST: { it: 'Persa', en: 'Lost' },
   ORDERED: { it: 'Ordinata', en: 'Ordered' },
+  WITHDRAWN: { it: 'Ritirata', en: 'Withdrawn' },
 })
 export const SOURCE_WORDS: Readonly<Record<InquirySource, Words>> = Object.freeze({
   OFFICE: { it: 'Ufficio', en: 'Office' },

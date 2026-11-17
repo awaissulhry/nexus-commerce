@@ -1,0 +1,125 @@
+// Projects (threads plan TH-5, schema wave 8/9, B-TH-065; gaps PROJ-G01, PROJ-G03, PROJ-G04, PROJ-G06; Products ›
+// Development › Projects): the second kind of conversation, beside the one thread of each record. A project is work on
+// several records, or on work that has no record yet (a new collection, a style family, a leather change across styles, a
+// made-to-measure programme, R&D, finding a supplier). It is a thin record of its own (record type `Project`): its
+// conversation is a normal thread (threads.prisma), so notes, mail, mentions, followers, tasks, reminders, files and the
+// timeline come with it, and its people are the thread's followers (collab.prisma RecordFollower: office people by hand with
+// reason ADDED, and the outside company's portal people, whose rows name that party).
+//
+//   Project       numbered PRJ-… from the company's PROJECT series; a name, a goal, a lead (an office person: required, as is
+//                 the target date, against projects nobody owns), ONE outside company (a customer, a brand, a supplier or a
+//                 subcontractor) chosen when it is made and never changed, or none (an office-only project), an optional
+//                 season of the company, ACTIVE ⇄ ON_HOLD → CLOSED with its outcome (DONE or STOPPED and one line) → reopened
+//                 ACTIVE. Never deleted.
+//   ProjectLink   a record the project is about (a style, a sample round, a quote, an order, a purchase order …), by record
+//                 type + id with an optional note, like a service case's links; the record is of the project's company (or
+//                 tenant-wide) and of the project's outside company or of none: another company's record is refused by the
+//                 database, and so is a later change that would make a linked record another company's. Added and removed
+//                 while the project is not CLOSED; never changed. No message is ever copied between a record's thread and a
+//                 project: each side lists the other.
+//
+// Who sees what (ownership/projects.json): the office reads and writes (the API checks projects.manage, B-TH-066). The
+// project's outside company reads its own projects and their links through the partner role (by party), never the office's
+// columns: the lead, the goal, the outcome and its words, the link notes, who made or closed it (the portal shows name,
+// status and target date, PROJ.portal-F02); which portal people may open a project (its members) is the API's check on top of
+// the party wall (B-TH-068, B-TH-069). The floor reads nothing here (a project never reaches a tablet). The hand-written
+// …_projects_th_guards migration holds the rules for every login. Money: none (a project holds no price or cost).
+
+/// A project (PROJ-G01): work on several records, or with none yet, with its own thread. Numbered from the company's
+/// PROJECT series (PRJ-…). Its company, number, outside company and creation never change. Never deleted.
+model Project {
+  id           String          @id @db.Uuid
+  tenantId     String          @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The company whose project it is. Never changes.
+  companyId    String          @db.Uuid
+  /// From the company's PROJECT series (PRJ-…), unique in the company; given at insert, never changed.
+  number       String
+  /// What it is called ("FW27 airbag line"): one line, 1 to 200 characters.
+  name         String
+  /// What it is for, in words (up to 4000 characters). The office's own words: hidden from the outside company.
+  /// @internal
+  goal         String?
+  /// Who leads it: an active office person when named or changed (required).
+  leadId       String          @db.Uuid
+  /// The ONE outside company the project is shared with (a customer, a brand, a supplier or a subcontractor of the tenant,
+  /// tenant-wide or of this company, neither blocked nor archived), chosen when it is made and never changed; null: an
+  /// office-only project. The only party its shared messages reach (its thread's party) and the partner policy's key.
+  partyId      String?         @db.Uuid
+  /// The season it is for, when it is for one: a season of the company (the reference holds the company).
+  seasonCode   String?
+  /// When it should be done (required, against projects with no end; a date past it shows the project as late).
+  targetDate   DateTime        @db.Date
+  status       ProjectStatus   @default(ACTIVE)
+  /// CLOSED: how it ended (DONE or STOPPED) and the one line that says it (1 to 500 characters), when and by whom; exactly
+  /// then (a reopened project has none). The office's own reading: what the outside company is told is a message.
+  outcome      ProjectOutcome?
+  /// @internal
+  outcomeNote  String?
+  closedAt     DateTime?       @db.Timestamptz(3)
+  closedById   String?         @db.Uuid
+  version      Int             @default(1)
+  createdAt    DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime        @default(now()) @updatedAt @db.Timestamptz(3)
+  createdById  String?         @db.Uuid
+
+  company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  lead    User    @relation("ProjectLead", fields: [tenantId, leadId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // Restrict, not Prisma's SetNull default for an optional relation: that would also clear tenantId (and companyId).
+  party   Party?  @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  season  Season? @relation(fields: [tenantId, companyId, seasonCode], references: [tenantId, companyId, code], onDelete: Restrict, onUpdate: Restrict)
+  links   ProjectLink[]
+
+  @@unique([tenantId, companyId, number])
+  // The target of its links' reference.
+  @@unique([tenantId, id])
+  // The list (status, then the nearest target date), a lead's projects ("My projects"), an outside company's.
+  @@index([tenantId, companyId, status, targetDate])
+  @@index([tenantId, leadId, status])
+  @@index([tenantId, partyId])
+}
+
+/// ACTIVE ⇄ ON_HOLD; ACTIVE | ON_HOLD → CLOSED (with its outcome); CLOSED → ACTIVE (reopened: the outcome goes).
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  CLOSED
+}
+
+/// How a closed project ended.
+enum ProjectOutcome {
+  /// It reached its goal.
+  DONE
+  /// It was stopped before.
+  STOPPED
+}
+
+/// A record a project is about (PROJ-G03), both ways: the project lists its records, each record lists its projects. Never
+/// changed: a link is added or removed (while its project is not CLOSED).
+model ProjectLink {
+  id          String   @id @db.Uuid
+  tenantId    String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  projectId   String   @db.Uuid
+  /// Its project's outside company, copied by the database at every write (the app never writes it): the partner policy's
+  /// key, so the outside company reads the links of its own projects; null for an office-only project's.
+  partyId     String?  @db.Uuid
+  /// The record: its model name (`Style`, `SampleRound`, `Quote`, `SalesOrder`, `PurchaseOrder` …: the guard's list) and id;
+  /// of the project's company or tenant-wide, and of the project's outside company or of none.
+  recordType  String
+  recordId    String   @db.Uuid
+  /// `link:<projectId>:<recordType>:<recordId>`: a record is linked once to a project (the unique key; the isolation
+  /// tests' copies add a `-…` suffix, as a read mark's key takes one).
+  key         String
+  /// Why it is linked (one line, 1 to 500 characters). The office's own words: hidden from the outside company.
+  /// @internal
+  note        String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  createdById String?  @db.Uuid
+
+  project Project @relation(fields: [tenantId, projectId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, projectId])
+  // The projects a record is in (its "In project" chip).
+  @@index([tenantId, recordType, recordId])
+  @@index([tenantId, partyId])
+}
