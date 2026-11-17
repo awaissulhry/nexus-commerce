@@ -44,7 +44,9 @@ export function paneActions(view: InquiryView, can: InquiriesCan, offline: boole
           : { key: 'pane.outcome.quoted', params: { quote: view.quote?.number ?? '—' } }
         : view.status === 'DECLINED'
           ? { key: 'pane.outcome.declined', params: { reason: view.declineReason ? `decline.${view.declineReason}` : 'decline.OTHER' } }
-          : { key: 'pane.outcome.lost' }
+          : view.status === 'ORDERED'
+            ? { key: 'pane.outcome.ordered' }
+            : { key: 'pane.outcome.lost' }
     return { main: null, others: [], held, outcome, menu: [] }
   }
   // The main button follows the request: something to quote → Make quote; nothing that can go on a quote yet (no line with a

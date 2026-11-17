@@ -305,7 +305,8 @@
     "declined": "Rifiutata ({reason}) il {when}",
     "lost": "Persa il {when}",
     "by": "da {name}",
-    "noteOnly": "Una richiesta chiusa non cambia più: solo la sua nota."
+    "noteOnly": "Una richiesta chiusa non cambia più: solo la sua nota.",
+    "ordered": "Diventata un ordine il {when}"
   },
   "who": {
     "title": "Chi chiede",
@@ -753,7 +754,8 @@
       "quotedStatus": "Preventivata · {quote} {status}",
       "quoted": "Preventivata · {quote}",
       "declined": "Rifiutata · {reason}",
-      "lost": "Persa: il cliente non è andato avanti"
+      "lost": "Persa: il cliente non è andato avanti",
+      "ordered": "Ordinata: diventata un ordine"
     },
     "ask": {
       "portal": "Chiedi a {customer}: la domanda va nel suo portale (riceve l'avviso del portale per e-mail). La richiesta poi aspetta la risposta.",

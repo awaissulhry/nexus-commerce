@@ -52,6 +52,8 @@ describe('the actions row (B-TH-218)', () => {
     expect(row.main).toBeNull()
     expect(row.others).toEqual([])
     expect(row.outcome?.key).toMatch(/^pane\.outcome\.quoted/)
+    // B-TH-022 (main): a request made straight into an order says so, never "Lost".
+    expect(paneActions({ ...QUOTED_VIEW, status: 'ORDERED', quote: null, quoteDetail: null }, owner, false).outcome).toEqual({ key: 'pane.outcome.ordered' })
   })
 
   it('Make quote says the quote is a DRAFT and the customer reads "Quote being prepared" (not told yet)', () => {

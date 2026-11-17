@@ -50,7 +50,9 @@ export function Closed({ view }: { view: InquiryView }) {
       ? t('closed.quoted', { quote: view.quote?.number ?? '—', when: when(view.closedAt) })
       : view.status === 'DECLINED'
         ? t('closed.declined', { reason: reason ?? '—', when: when(view.closedAt) })
-        : t('closed.lost', { when: when(view.closedAt) })
+        : view.status === 'ORDERED'
+          ? t('closed.ordered', { when: when(view.closedAt) })
+          : t('closed.lost', { when: when(view.closedAt) })
   return (
     <Banner tone="info" title={title}>
       <p className="fw-inq-text">

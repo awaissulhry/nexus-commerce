@@ -305,7 +305,8 @@
     "declined": "Declined ({reason}) on {when}",
     "lost": "Lost on {when}",
     "by": "by {name}",
-    "noteOnly": "A closed request changes no more: only its note."
+    "noteOnly": "A closed request changes no more: only its note.",
+    "ordered": "Made into an order on {when}"
   },
   "who": {
     "title": "Who asks",
@@ -753,7 +754,8 @@
       "quotedStatus": "Quoted · {quote} {status}",
       "quoted": "Quoted · {quote}",
       "declined": "Declined · {reason}",
-      "lost": "Lost: the customer went away"
+      "lost": "Lost: the customer went away",
+      "ordered": "Ordered: made into an order"
     },
     "ask": {
       "portal": "Ask {customer}: your question goes to their portal (they get the portal's notice by e-mail). The request then waits for their answer.",
