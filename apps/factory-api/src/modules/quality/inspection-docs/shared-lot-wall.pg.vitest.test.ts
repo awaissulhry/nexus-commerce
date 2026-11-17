@@ -100,9 +100,11 @@ describe('T16: an inspection of a work order with cells of A and B is not shared
     const workOrderId = (await admin<{ workOrderId: string }>('SELECT "workOrderId" FROM "Inspection" WHERE id = $1', [inspection()]))[0]!.workOrderId
     const cell = (await admin<{ id: string }>('SELECT id FROM "WorkOrderSize" WHERE "workOrderId" = $1 ORDER BY id LIMIT 1', [workOrderId]))[0]!.id
     const made = newId()
-    // A cell of brand B on the same work order (no order line: past the cell triggers, test data only).
+    // A cell of brand B on the same work order (no order line: past the cell triggers, test data only). Since B-PR-01 only a
+    // work order made before the one-customer rule has cells of two customers, and its partyId is null ("Mixed brands").
     await admin(`DO $$ BEGIN
       SET LOCAL session_replication_role = replica;
+      UPDATE "WorkOrder" SET "partyId" = NULL WHERE id = '${workOrderId}';
       INSERT INTO "WorkOrderSize" SELECT (jsonb_populate_record(NULL::"WorkOrderSize", to_jsonb(w) || jsonb_build_object('id', '${made}', 'partyId', '${beta}', 'salesOrderLineId', NULL, 'measurementProfileId', NULL, 'size', '99'))).* FROM "WorkOrderSize" w WHERE w.id = '${cell}';
     END $$`)
     expect((await admin('SELECT DISTINCT "partyId" FROM "WorkOrderSize" WHERE "workOrderId" = $1 AND "partyId" IS NOT NULL ORDER BY 1', [workOrderId])).length).toBe(2)
