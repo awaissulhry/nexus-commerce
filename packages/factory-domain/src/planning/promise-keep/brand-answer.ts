@@ -126,3 +126,14 @@ export function refusalTaskOf(input: { readonly orderNumber: string; readonly li
       `The customer did not accept the new date (${dates}).${words} The date stands. Re-plan and propose again, keep the date and tell them why in the order's thread, or answer their request if they ask to cancel. Close this task when it is handled.`.slice(0, 4000),
   }
 }
+
+// ---- B-PR-30b (production plan §3 "decide for a brand or undo"; 08-backend §4.6 "REPROMISE asked again"): putting the
+// customer's answer to a new date back. The date stands either way; the customer is asked again about the same date — unless
+// the order no longer waits or the line's date moved since (then the newer date is asked from the re-promise). ---------------
+
+/** Why the customer's answer to a new date is not put back (the office reads it; null: it is, and they are asked again). */
+export function repromiseReverseHeld(input: { readonly orderOpen: boolean; readonly movedSince: boolean }): Words | null {
+  if (!input.orderOpen) return { it: "Questo ordine non attende più una nuova data: non c'è niente da chiedere di nuovo.", en: 'This order no longer waits for a new date: there is nothing to ask again.' }
+  if (input.movedSince) return { it: 'La data è cambiata di nuovo: chiedete al cliente la più recente dalla riprogrammazione.', en: 'The date changed again since: ask the customer about the newest one from the re-promise.' }
+  return null
+}

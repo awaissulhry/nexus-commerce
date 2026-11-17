@@ -137,6 +137,10 @@ const workOrderView = z.object({
   schedule: scheduleView,
   readiness: readinessView,
   materialStart: materialStartView.nullable().optional(),
+  // F-PR-18 (B-W2b-20, B-PR-22b): its one customer (null: none or several), and its customer's urgency that counts — the chip
+  // "Customer urgency: Urgent 2" (its place in the customer's OWN list; the API's words are dropped: the board says its own).
+  customer: named.nullable().optional(),
+  customerUrgency: z.object({ urgentRank: z.number().nullable() }).nullable().optional(),
   operations: z.array(operationView),
 })
 export type BoardWorkOrder = z.infer<typeof workOrderView>

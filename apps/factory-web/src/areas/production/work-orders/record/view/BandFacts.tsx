@@ -22,7 +22,7 @@ import { SupervisorFact } from '../../../../_shared/production-supervisor/view/S
  * F-PR-21: the supervisor fact follows (by name: inside one record only; no customer order: none). Health and waiting on are tags in the band (the
  * band keeps ONE status pill, the record frame's rule); the Overview's Health card draws the shared chip with its why.
  */
-export function BandFacts({ workOrder, model, onChangeSupervisor }: { workOrder: WorkOrder; model: WorkOrderRecordModel; /** F-PR-21 */ onChangeSupervisor?: () => void }) {
+export function BandFacts({ workOrder, model, onChangeSupervisor, ask }: { workOrder: WorkOrder; model: WorkOrderRecordModel; /** F-PR-21 */ onChangeSupervisor?: () => void; /** F-PR-22: the fact's Ask (the note dialog). */ ask?: { readonly label: string; readonly held: string | null; readonly onAsk: () => void } }) {
   const t = useT('production')
   const words = useProductionWords()
   const fact = customerFactOf(workOrder)
@@ -64,7 +64,7 @@ export function BandFacts({ workOrder, model, onChangeSupervisor }: { workOrder:
       {health && health !== 'loading' ? <HealthTag view={healthView('office', health)} say={words.say} unknown={t('parts.health.unknown')} /> : null}
       {waiting && waiting !== 'loading' ? <WaitingTag view={waitingView('office', waiting, Date.now())} say={words.say} unknown={t('parts.waiting.unknown')} /> : null}
       {/* F-PR-21: the supervisor fact (the work order's own read, B-PR-42a: by name inside this one record). */}
-      {model.supervisor && <SupervisorFact fact={supervisorFactOf(workOrder)} can={model.supervisor.can} onChange={onChangeSupervisor} />}
+      {model.supervisor && <SupervisorFact fact={supervisorFactOf(workOrder)} can={model.supervisor.can} onChange={onChangeSupervisor} {...(ask ? { ask } : {}) /* F-PR-22 */} />}
     </>
   )
 }

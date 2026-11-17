@@ -2,6 +2,7 @@ import type { LiveState } from '../../../../shell/live/use-live'
 import type { StepUpModel } from '../../../admin/shared/model'
 import type { Askable, PartnerPerson, PartnerRequest, PortalAccess } from '../../../admin/users/partners/api'
 import type { PartnerCan, PartnerInviteDraft, PersonDraft, RowAction, SettingsDraft } from '../../../admin/users/partners/model'
+import type { LimitsActions, LimitsModel } from './limits/model' // F-PR-07
 
 /**
  * Customer › Portal access and Supplier › Portal access (B-W2b-180; design sales.customers rec:Customer/customer.portal,
@@ -64,6 +65,8 @@ export interface PortalAccessModel {
   requests: RequestsModel
   /** A preview is being opened (the new tab waits for the portal's cookie). */
   previewing: boolean
+  /** F-PR-07: the production limits card of a customer (null / absent: not drawn — a supplier, a workshop, an adviser). */
+  limits?: LimitsModel | null
   /** Design cases: the drafts a dialog or the settings card starts with. */
   inviteDraft?: PartnerInviteDraft
   personDraft?: PersonDraft
@@ -89,6 +92,8 @@ export interface PortalAccessActions {
   onStepUpClose?: () => void
   onDismissNotice?: () => void
   onHelp?: () => void
+  /** F-PR-07: the limits card's own (Apply, the freeze dialog, Open My production as …). */
+  limits?: LimitsActions
 }
 
 /** The person a dialog is about. */

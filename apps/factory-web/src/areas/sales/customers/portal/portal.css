@@ -162,3 +162,59 @@
 .fw-pa-cards-wide {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
 }
+
+/* F-PR-07 — the production limits card (layout only). The four levels on one row from ~760 px of card (1440: the record body
+ * beside the thread; 1920: wider), one under the other on a phone; May do beside Who answers on a wide card. */
+.fw-pa-lim {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  scroll-margin-top: var(--nds-space-16);
+}
+
+.fw-pa-lim-levels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--nds-space-8);
+}
+
+.fw-pa-lim-two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: var(--nds-space-16);
+  align-items: start;
+  min-width: 0;
+}
+
+.fw-pa-lim-marks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+}
+
+.fw-pa-lim-asks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-pa-lim-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  min-width: 0;
+}
+
+.fw-pa-lim-office {
+  padding-top: var(--nds-space-12);
+  border-top: 1px solid var(--nds-border-subtle);
+}
+
+@media (max-width: 480px) {
+  .fw-pa-lim-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
