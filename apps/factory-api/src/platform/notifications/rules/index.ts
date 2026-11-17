@@ -47,6 +47,8 @@ import { GATE_OWNER_RULES } from '../../../modules/planning/milestones/notices'
 import { REQUEST_RULES } from './requests'
 // B-TH-068: a person added to a record by a colleague ("added you"), a colleague taken out of a project.
 import { PROJECT_RULES } from './projects'
+// B-PR-42b: the production supervisor told once per change and customer (ASSIGNMENT; the backup when newly named).
+import { PRODUCTION_SUPERVISOR_RULES } from './production-supervisor'
 
 /**
  * The fan-out's rules, one file per source (B-W2a-20: mentions and followed records, assignments, approvals). A step that
@@ -99,4 +101,6 @@ export const FAN_OUT_RULES: readonly FanOutRule[] = Object.freeze([...THREAD_RUL
   // B-TH-015: inquiry.received (ASSIGNMENT to who keeps inquiries over its company and customer, not its maker).
   ...REQUEST_RULES,
   // B-TH-068: thread.follower_added (ASSIGNMENT to the office person added), project.person_removed (SYSTEM to the colleague taken out).
-  ...PROJECT_RULES])
+  ...PROJECT_RULES,
+  // B-PR-42b: brand_production.supervisor_changed (ASSIGNMENT to the supervisor now, once per change and customer; the new backup).
+  ...PRODUCTION_SUPERVISOR_RULES])

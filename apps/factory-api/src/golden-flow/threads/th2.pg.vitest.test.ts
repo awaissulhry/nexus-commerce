@@ -33,8 +33,8 @@ import { DATABASE_FUTURE_MS, oneClock } from '../testing/world'
  *       file carried, the request still open and naming it.
  *   G10 unread per person: the office's counts of a page of records, the "New since your last visit" line, read marks; A's portal
  *       counts only what was shared with A, and its own read mark clears it.
- *   N1/N2 who answers and what waits: the request's assignee, waiting on the customer once asked; the order's maker; never in a
- *       portal answer (W08).
+ *   N1/N2 who answers and what waits: the request's assignee, waiting on the customer once asked; the order's production
+ *       supervisor (T8: customer A's default, seed/production-supervisor.ts); never in a portal answer (W08).
  *   T37 / T00 customer B finds none of A's requests, orders, files or style drafts by any door, and the name scan over everything B
  *       got (answers and mail) holds nothing of A.
  *   Z   no route answered 500 during the flow.
@@ -235,11 +235,12 @@ describe('B-TH-037 golden flow TH-2: a request becomes an order, a style draft, 
     expect(((await A('GET', '/portal/threads')).conversations as Json[]).find((entry) => entry.record.id === G.second.id)?.newCount).toBe(0)
   })
 
-  it('N1/N2 who answers and what waits: the request’s assignee, waiting on the customer once asked; the order’s maker; never in a portal answer', async () => {
+  it('N1/N2 who answers and what waits: the request’s assignee, waiting on the customer once asked; the order’s production supervisor; never in a portal answer', async () => {
     const request = (await ok(P.sales, 'GET', `/threads/Inquiry/${G.second.id}`)).head
     expect(request).toMatchObject({ owner: { id: P.sales.id, source: 'ASSIGNEE' }, waiting: { on: 'CUSTOMER', amber: false, thresholdDays: 1 } })
     const order = (await ok(P.sales, 'GET', `/threads/SalesOrder/${G.order.id}`)).head
-    expect(order.owner).toMatchObject({ id: P.sales.id, source: 'MAKER' })
+    // T8: customer A's order is answered by its production supervisor (A's default, seed/production-supervisor.ts), not its maker.
+    expect(order.owner).toMatchObject({ id: `ffffffff${id('production-supervisor:user:supervisor').slice(8)}`, name: 'Seed Production Supervisor', source: 'SUPERVISOR' })
     const portal = await A('GET', `/threads/Inquiry/${G.second.id}`)
     expect(portal.head).toBeUndefined()
     expect(JSON.stringify(await A('GET', `/portal/threads/Inquiry/${G.second.id}`))).not.toContain('ASSIGNEE')

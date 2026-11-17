@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
 import type { FastifyInstance } from 'fastify'
-import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { templateOf } from '@nexus/factory-domain/auth/roles/templates'
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { Grant, Permission } from '@nexus/factory-domain/core/permissions'
@@ -16,7 +16,6 @@ import { callerFor, command } from '../../core/command'
 import { testAuthenticator, type RequestContext, type SessionContext } from '../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../env'
 import { startHarness, type Harness } from '../auth/sessions/testing/harness'
-import { registerOwnerResolver, resetOwnerResolvers } from './owner'
 import { ensureThread, writeMessage } from './threads'
 
 /**
@@ -26,8 +25,8 @@ import { ensureThread, writeMessage } from './threads'
  * name and word is made up.
  *
  *   - owner: the record's maker → a request's assignee → the thread's own (PUT …/owner by whoever may post; only an active office
- *     person who reads it) → back to the record's own; a sales order's production supervisor once the production lane registers
- *     its resolver (the hook), skipped before;
+ *     person who reads it) → back to the record's own; a sales order's production supervisor (T8: modules/production/supervisor
+ *     registers its resolver when the routes load), skipped while the order has none;
  *   - waiting: a request by its state (on us, amber after 1 working day), any other record by its newest shared message (theirs:
  *     on us, amber after 3; ours: on the customer, never amber); an office note never flips it;
  *   - W08: a portal reader's thread answer has no owner and no waiting.
@@ -102,8 +101,6 @@ beforeAll(async () => {
   )
 }, 900_000)
 
-afterEach(() => resetOwnerResolvers())
-
 afterAll(async () => {
   await app?.close()
   await h?.close()
@@ -128,12 +125,21 @@ describe('B-TH-028 who answers a conversation', () => {
     expect(await one('SELECT "ownerId" FROM "Thread" WHERE "recordType" = $1 AND "recordId" = $2', ['Inquiry', inquiry.id])).toEqual({ ownerId: null })
   })
 
-  it('a sales order: its production supervisor once the production lane registers the resolver (the hook); skipped before', async () => {
-    const order = await one(`SELECT id FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0001'`, [T])
+  it('a sales order: its production supervisor (T8, registered by modules/production/supervisor); skipped while it has none', async () => {
+    const order = await one(`SELECT id, "partyId" FROM "SalesOrder" WHERE "tenantId" = $1 AND number = 'SEED-SO-0001'`, [T])
+    // These seeds name no production supervisor of P1: the chain skips the step.
     const before = (await head('SalesOrder', order.id)).owner
     expect(before?.source ?? null).not.toBe('SUPERVISOR')
-    registerOwnerResolver('SalesOrder', 'SUPERVISOR', async () => PEOPLE.carla)
-    expect((await head('SalesOrder', order.id)).owner).toMatchObject({ id: PEOPLE.carla, source: 'SUPERVISOR' })
+    // ---- T8: P1's default production supervisor, as PUT /production/brands/:partyId/supervisor writes it (one PortalSettings row
+    // per party, its id the party's; B-PR-42a): the order's conversation is now his.
+    await admin(
+      `INSERT INTO "PortalSettings" (id, "tenantId", "partyId", "portalOn", "productionSupervisorId", "productionSupervisorSetAt", "createdAt", "updatedAt")
+       VALUES ($1, $2, $1, false, $3, now(), now(), now())
+       ON CONFLICT (id) DO UPDATE SET "productionSupervisorId" = EXCLUDED."productionSupervisorId", "productionSupervisorSetAt" = EXCLUDED."productionSupervisorSetAt", version = "PortalSettings".version + 1, "updatedAt" = now()`,
+      [order.partyId, T, PEOPLE.carla],
+    )
+    expect((await head('SalesOrder', order.id)).owner).toMatchObject({ id: PEOPLE.carla, name: 'Made-up carla', source: 'SUPERVISOR' })
+    // ---- end T8
     // The thread's own owner still comes first.
     await ok('ada', 'PUT', `/threads/SalesOrder/${order.id}/owner`, { ownerId: PEOPLE.bruno })
     expect((await head('SalesOrder', order.id)).owner).toMatchObject({ id: PEOPLE.bruno, source: 'SET' })

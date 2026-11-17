@@ -3,6 +3,11 @@ import { defineRoutes } from '../../../core/manifest'
 import { setCustomerSupervisor, setOrderSupervisors, supervisorPickList } from './assign'
 import { customerSupervisorContract, orderSupervisorsContract, pickListContract } from './contract'
 import { manifest } from './manifest'
+import { registerSupervisorThreadHooks } from './threads-hooks' // T7 / T8
+
+// ---- T7 / T8 (threads agreements): the supervisor first in a note's @ list, and a sales order's owner (./threads-hooks).
+registerSupervisorThreadHooks()
+// ---- end T7 / T8
 
 /**
  * The production supervisor (./manifest, B-PR-42a): the pick list, the customer's default and backup, an order's own (one or

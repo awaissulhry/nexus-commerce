@@ -23,8 +23,9 @@ import { contextOf, ensureThread, officeRecord, type RecordRef } from './threads
  *
  *   owner      ONE owner, the chain's first: the thread's own (Thread.ownerId, set by whoever may post on it) → the record's
  *              responsible person by its type's resolver (a request: its assignee; a sales order: its production supervisor —
- *              registered by the production lane, `registerOwnerResolver`, skipped until it is) → the record's maker (the
- *              office person of its first audit row). Inactive people stay named, marked inactive (the head says so).
+ *              T8: registered by modules/production/supervisor through `registerOwnerResolver`, skipped where none is named)
+ *              → the record's maker (the office person of its first audit row). Inactive people stay named, marked inactive
+ *              (the head says so).
  *   waiting    factory-domain threads/waiting `waitingOf`: a request by its state, any other record by its newest shared
  *              message; the working minutes on the record's company calendar (clock minutes without one), amber after 1
  *              working day for a request and 3 for any other record, on us only.
@@ -48,17 +49,12 @@ const RESOLVERS = new Map<string, { readonly source: Exclude<OwnerSource, 'SET' 
 ])
 
 /**
- * The registration hook (agreement T8): a module names a record type's responsible person — the production lane registers
- * SalesOrder → its production supervisor (SUPERVISOR) when that field exists. Registered after the built-in ones of the type.
+ * The registration hook (agreement T8): a module names a record type's responsible person — modules/production/supervisor
+ * (threads-hooks.ts) registers SalesOrder → its production supervisor (SUPERVISOR) when its routes load. Registered after the
+ * built-in ones of the type; a source registered again replaces itself.
  */
 export function registerOwnerResolver(recordType: string, source: 'ASSIGNEE' | 'SUPERVISOR', resolve: OwnerResolver): void {
   RESOLVERS.set(recordType, [...(RESOLVERS.get(recordType) ?? []).filter((entry) => entry.source !== source), { source, resolve }])
-}
-
-/** Test only: the built-in resolvers again. */
-export function resetOwnerResolvers(): void {
-  for (const key of [...RESOLVERS.keys()]) if (key !== 'Inquiry') RESOLVERS.delete(key)
-  RESOLVERS.set('Inquiry', RESOLVERS.get('Inquiry')!.filter((entry) => entry.source === 'ASSIGNEE'))
 }
 
 /** The record's maker: the office person of its first audit row (the command that made it); null: the system or a portal person. */
