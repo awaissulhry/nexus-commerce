@@ -1,4 +1,6 @@
 import type { Tone } from '@nexus/ui/primitives'
+// F-PR-02: the production pages' one customer filter.
+import { isEveryCustomerRefusal, PARTY_KEY, partyTerm } from '../_shared/customer/model'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { DailyLane, LineCard, LineState, Recipient, ReportLocale, Subscription } from './api'
 
@@ -42,18 +44,21 @@ export interface ReportAddress {
   readonly site: string | null
   /** null: today at the site. */
   readonly date: string | null
+  /** F-PR-02: the customer filter (`?party=`: the style × size tables of one customer); absent or null: every customer. */
+  readonly party?: string | null
 }
 
 export function addressOf(params: { get(name: string): string | null } | null): ReportAddress {
   const site = params?.get('site')?.trim() ?? ''
   const date = params?.get('date')?.trim() ?? ''
-  return { site: UUID.test(site) ? site : null, date: DAY.test(date) ? date : null }
+  return { site: UUID.test(site) ? site : null, date: DAY.test(date) ? date : null, ...partyTerm(params) }
 }
 
 export function addressText(address: ReportAddress): string {
   const query = new URLSearchParams()
   if (address.site) query.set('site', address.site)
   if (address.date) query.set('date', address.date)
+  if (address.party) query.set(PARTY_KEY, address.party)
   const text = query.toString()
   return text ? `?${text}` : ''
 }
@@ -212,8 +217,13 @@ export function subscribeProblem(error: unknown, people: readonly Recipient[], a
 }
 
 /** A read that failed, as a message key. */
+/** F-PR-02: the read was refused because the view adds up every customer (the page draws the honest words). */
+export const EVERY_CUSTOMER_PROBLEM = 'error.everyCustomer'
+
 export function readProblem(error: unknown): string {
   if (!isApiError(error)) return 'error.read'
+  // F-PR-02: a view that adds up every customer, refused to a person limited to some (B-PR-07): said as such.
+  if (isEveryCustomerRefusal(error)) return EVERY_CUSTOMER_PROBLEM
   if (error.kind === 'forbidden') return 'error.forbidden'
   if (error.kind === 'not_found') return 'error.notFound'
   if (error.kind === 'unavailable') return 'error.offline'

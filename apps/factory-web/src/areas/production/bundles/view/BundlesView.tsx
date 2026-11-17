@@ -21,6 +21,9 @@ import { PlaceCell } from './parts'
 import { FindingsDialog, ScanPatterns } from './ScanPatterns'
 import '../../_shared/production.css'
 import '../bundles.css'
+// F-PR-02: the customer filter and the Customer column (the customer's code: a bundle is a floor object, L13).
+import { useProductionWords } from '../../../../lib/production/words'
+import { CustomerFilter } from '../../_shared/customer/view/CustomerFilter'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
 import { rightRef } from '../../../../lib/i18n/rights'
 
@@ -63,6 +66,7 @@ function Bundles({ model, actions }: { model: BundlesModel; actions?: BundlesAct
   useEffect(() => setSelected((current) => current.filter((id) => rowsKey.includes(id))), [rowsKey])
   useEffect(() => setSelected(model.selected ?? []), [model.selected])
   const picked = (items ?? []).filter((row) => selected.includes(row.id))
+  const words = useProductionWords()
 
   const columns = useMemo<ColDef<TrackedBundle>[]>(() => {
     const href = (row: TrackedBundle) => `${model.prefix}/production/bundles/${row.id}`
@@ -131,6 +135,7 @@ function Bundles({ model, actions }: { model: BundlesModel; actions?: BundlesAct
     return [
       { colId: 'code', headerName: t('col.bundle'), field: 'code', minWidth: 140, flex: 1, cellRenderer: CodeCell },
       { colId: 'workOrder', headerName: t('col.workOrder'), minWidth: 150, flex: 0.9, cellRenderer: OrderCell },
+      { colId: 'customer', headerName: words.t('customer.column'), minWidth: 104, flex: 0.6, valueGetter: (params) => (params.data ? (params.data.customerCode ?? '—') : '') },
       { colId: 'style', headerName: t('col.style'), minWidth: 150, flex: 1.2, cellRenderer: StyleCell },
       { colId: 'colour', headerName: t('col.colour'), minWidth: 104, flex: 0.7, cellRenderer: ColourCell },
       { colId: 'size', headerName: t('col.size'), field: 'size', minWidth: 96, flex: 0.4 },
@@ -144,13 +149,13 @@ function Bundles({ model, actions }: { model: BundlesModel; actions?: BundlesAct
       ...(site ? [site] : []),
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.can, scope])
+  }, [t, locale, model.prefix, model.can, scope, words])
 
   if (!model.can.view) {
     return <EmptyState title={t('noAccess.title')} description={t('noAccess.body', { right: rightRef('production.bundles.view') })} />
   }
 
-  const filtered = model.q.trim() !== '' || model.view !== 'active'
+  const filtered = model.q.trim() !== '' || model.view !== 'active' || !!model.customers?.party
   const state = model.rows.problem ? (
     <EmptyState title={t('list.failed')} description={scoped(`production:${model.rows.problem}`)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
   ) : items && items.length === 0 ? (
@@ -165,6 +170,7 @@ function Bundles({ model, actions }: { model: BundlesModel; actions?: BundlesAct
               setQuery('')
               actions?.onSearch?.('')
               actions?.onView?.('all')
+              if (model.customers?.party) actions?.onCustomer?.(null)
             }}
           >
             {t('list.clearFilters')}
@@ -251,13 +257,16 @@ function Bundles({ model, actions }: { model: BundlesModel; actions?: BundlesAct
           />
         }
         tools={
-          <Select size="sm" aria-label={t('list.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as BundleView)}>
-            {BUNDLE_VIEWS.map((view) => (
-              <option key={view} value={view}>
-                {t(`view.${view}`)}
-              </option>
-            ))}
-          </Select>
+          <>
+            <Select size="sm" aria-label={t('list.viewLabel')} value={model.view} onChange={(event) => actions?.onView?.(event.target.value as BundleView)}>
+              {BUNDLE_VIEWS.map((view) => (
+                <option key={view} value={view}>
+                  {t(`view.${view}`)}
+                </option>
+              ))}
+            </Select>
+            {model.customers && <CustomerFilter state={model.customers} onPick={actions?.onCustomer} />}
+          </>
         }
         selection={{
           selected,

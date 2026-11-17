@@ -130,6 +130,9 @@ const downgradeView = output({
   withdrawn: output({ at: instant(), reason: z.string() }).nullable(),
   version: z.number().int(),
   createdAt: instant(),
+  /** F-PR-02: its work order's one customer (null: none), or one made before the one-customer rule with several. */
+  customer: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
+  mixedCustomers: z.boolean(),
 })
 
 const source = { sourceScanId: id().optional(), reworkOrderId: id().optional() }

@@ -31,6 +31,7 @@ import { DOWNGRADE_COLUMNS, downgradesOfSource, lockDowngrade, readDowngrade, re
 // B-W2b-219: the second-quality move by the row's moveId.
 import { movesOfDowngrades, originalAmong, originalMoveOf } from './downgrade-move'
 import { inWords } from '../settings/cutting-rules'
+import { customerOfRow, workOrderCustomers } from '../work-orders/customers' // F-PR-02
 
 /**
  * Second quality instead of scrap (B-W2b-126; MES-133; design production.scrap pop:sc-downgrade "Downgrade to second quality":
@@ -403,6 +404,7 @@ export async function downgradeViews(db: Reader, rows: readonly DowngradeRow[]) 
   // B-W2b-219: the moves by key and the ones the rows name.
   const moves = await movesOfDowngrades(db, rows)
   const places = new Map((await db.location.findMany({ where: { id: { in: unique(moves.map((move) => move.toLocationId)) } }, select: { id: true, code: true, name: true } })).map((row) => [row.id, row]))
+  const customers = await workOrderCustomers(db, rows.map((row) => row.workOrderId)) // F-PR-02: Scrap & rework's Customer column
   return rows.map((row) => {
     const order = orders.get(row.workOrderId)
     const move = originalAmong(moves, row)
@@ -431,6 +433,7 @@ export async function downgradeViews(db: Reader, rows: readonly DowngradeRow[]) 
       withdrawn: row.voidedAt ? { at: toUtcIso(row.voidedAt), reason: row.voidReason ?? '' } : null,
       version: row.version,
       createdAt: toUtcIso(row.createdAt),
+      ...customerOfRow(customers, row.workOrderId), // F-PR-02
     }
   })
 }

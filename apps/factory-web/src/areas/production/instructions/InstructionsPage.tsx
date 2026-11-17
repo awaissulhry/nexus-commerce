@@ -10,6 +10,8 @@ import { useLiveChanges } from '../../../record-panels/live'
 import { bringTypedSteps, createInstruction, getInstruction, listInstructions, listOperations, listStyles, setStatus, styleRevisions, typedSteps, type InstructionList } from './api'
 import { EMPTY_NEW, instructionsCan, listAddressOf, listCsv, listQueryText, NAMESPACES, NS, readProblem, rowsOfView, statusOfView, tileCounts, writeProblem, type ListAddress, type NewDraft, type Notice } from './model'
 import { InstructionsListView, type InstructionsListModel, type NewInstructionModel, type TypedModel } from './view/InstructionsListView'
+// F-PR-02: the customer filter.
+import { useProductionCustomers } from '../_shared/customer/use-customers'
 
 function downloadCsv(name: string, text: string): void {
   const url = URL.createObjectURL(new Blob([`﻿${text}`], { type: 'text/csv;charset=utf-8' }))
@@ -46,6 +48,9 @@ function Container() {
   const pathname = usePathname()
   const params = useSearchParams()
   const address = useMemo(() => listAddressOf(params), [params])
+  // F-PR-02: the customer filter (the rows and the tiles follow it).
+  const customers = useProductionCustomers('instructions')
+  const partyId = customers.partyId
   const can = useMemo(() => instructionsCan(session.permissions), [session.permissions])
   const prefix = pathname.replace(/\/production\/instructions\/?$/, '')
   const companyId = session.company?.id ?? null
@@ -72,13 +77,13 @@ function Container() {
     setList(null)
     setProblem(null)
     try {
-      const answer = await listInstructions(api, { companyId, status, q: address.q })
+      const answer = await listInstructions(api, { companyId, status, q: address.q, partyId })
       if (mine !== readSeq.current) return
       setList(answer)
       // The tiles count the whole ACTIVE list (a search or the archived view narrows only the rows).
       if (status === 'ACTIVE' && !address.q.trim()) setActive(answer)
       else {
-        listInstructions(api, { companyId, status: 'ACTIVE' })
+        listInstructions(api, { companyId, status: 'ACTIVE', partyId })
           .then((whole) => mine === readSeq.current && setActive(whole))
           .catch(() => undefined)
       }
@@ -87,7 +92,7 @@ function Container() {
     } catch (error) {
       if (mine === readSeq.current) setProblem(readProblem(error))
     }
-  }, [api, can.view, companyId, status, address.q])
+  }, [api, can.view, companyId, status, address.q, partyId])
 
   useEffect(() => {
     void load()
@@ -251,6 +256,7 @@ function Container() {
     prefix,
     can,
     address,
+    customers: customers.state,
     rows: { items: problem ? null : items, truncated: list?.truncated ?? false, problem },
     tiles: tileCounts(active ?? (status === 'ACTIVE' ? list : null)),
     asOf,

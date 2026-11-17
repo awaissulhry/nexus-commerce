@@ -26,6 +26,8 @@ import { navWithMfaHint } from './mfa-hint'
 import { testModeRights } from './test-mode'
 import { useShellNotices } from './use-test-mode'
 import { OfficeShellView, type OfficeFrame, type SystemBanner } from './view/OfficeShellView'
+// F-PR-02: the Production pages' customer filter, carried from page to page.
+import { carryParty } from '../../areas/production/_shared/customer/model'
 
 /**
  * The live Office shell: the signed-in person (from the office layout) → the shell's view model. It owns what the view
@@ -121,7 +123,8 @@ export function OfficeShell({ session, company, site: initialSite = null, childr
         paletteRecords: recordSearch.records,
         bell,
       }}
-      onNavigate={(href) => router.push(href)}
+      // F-PR-02: a move between two Production pages keeps their one customer filter (`?party=`).
+      onNavigate={(href) => router.push(carryParty(href, path, search))}
       onSiteChange={setSite}
       onPaletteQuery={recordSearch.onQuery}
       onSignOut={() => {

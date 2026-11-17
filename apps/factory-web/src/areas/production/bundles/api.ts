@@ -52,6 +52,8 @@ export const trackedRowSchema = z.object({
   hides: z.array(hideRef),
   voidedAt: z.string().nullable(),
   createdAt: z.string(),
+  // F-PR-02: its customer's CODE (a floor surface too: never the name, L13); null: none.
+  customerCode: z.string().nullable().optional(),
 })
 export type TrackedBundle = z.infer<typeof trackedRowSchema>
 const pageSchema = z.object({ bundles: z.array(trackedRowSchema), nextCursor: z.string().nullable(), asOf: z.string() })
@@ -65,6 +67,8 @@ export interface BundlesQuery {
   q?: string
   cursor?: string | null
   limit?: number
+  /** F-PR-02: the customer filter (`?party=`). */
+  partyId?: string | undefined
 }
 
 export function listBundles(api: ApiClient, query: BundlesQuery, signal?: AbortSignal): Promise<BundlesPage> {
@@ -77,6 +81,7 @@ export function listBundles(api: ApiClient, query: BundlesQuery, signal?: AbortS
       q: query.q?.trim() || undefined,
       cursor: query.cursor ?? undefined,
       limit: query.limit ?? 50,
+      partyId: query.partyId,
     },
     schema: pageSchema,
     signal,
@@ -95,7 +100,9 @@ const tilesSchema = z.object({
 })
 export type BundleTiles = z.infer<typeof tilesSchema>
 
-export const bundleTiles = (api: ApiClient, siteId: string | null, signal?: AbortSignal): Promise<BundleTiles> => api.get('/production/bundles/tiles', { query: { siteId: siteId ?? undefined }, schema: tilesSchema, signal })
+// F-PR-02: the tiles follow the customer filter (`partyId`).
+export const bundleTiles = (api: ApiClient, siteId: string | null, signal?: AbortSignal, partyId?: string): Promise<BundleTiles> =>
+  api.get('/production/bundles/tiles', { query: { siteId: siteId ?? undefined, partyId }, schema: tilesSchema, signal })
 
 // ---- the record ---------------------------------------------------------------------------------------------------------------
 

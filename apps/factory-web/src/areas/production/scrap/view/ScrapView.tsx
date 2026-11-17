@@ -42,6 +42,10 @@ import { ReplaceDialog, ScrapItemDialog, say, type ReplaceDraftModel } from './S
 import { downgradeOpenHeld, type DowngradeDraft, type SecondTotals } from '../model'
 import { DowngradeDialog, type DowngradeModel, type RepairModel } from './SecondDialogs'
 import '../scrap.css'
+// F-PR-02: the customer filter and the Customer column.
+import { useProductionWords } from '../../../../lib/production/words'
+import type { CustomerFilterState } from '../../_shared/customer/model'
+import { CustomerFilter, useCustomerCell } from '../../_shared/customer/view/CustomerFilter'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
 import { rightRef } from '../../../../lib/i18n/rights'
 
@@ -74,6 +78,8 @@ export interface ScrapModel {
   readonly second?: SecondTotals | null
   readonly downgrade?: DowngradeModel | null
   readonly repair?: RepairModel | null
+  /** F-PR-02: the customer filter (`?party=`, set through onAddress); absent: none drawn. */
+  readonly customers?: CustomerFilterState
   /** Design cases. */
   readonly selected?: readonly string[]
   readonly focusRow?: number
@@ -315,6 +321,8 @@ function ScrapList({
     return () => clearTimeout(timer)
   }, [query])
 
+  const words = useProductionWords()
+  const customerCell = useCustomerCell(model.customers?.names ?? false)
   const columns = useMemo<ColDef<ScrapRow>[]>(() => {
     const WhenCell = ({ data }: ICellRendererParams<ScrapRow>) =>
       data ? (
@@ -391,6 +399,7 @@ function ScrapList({
     return [
       { colId: 'at', headerName: t('col.date'), minWidth: 110, flex: 0.6, cellRenderer: WhenCell, valueGetter: (params) => params.data?.at ?? '' },
       { colId: 'workOrder', headerName: t('col.workOrder'), minWidth: 120, flex: 0.8, cellRenderer: WorkOrderCell, valueGetter: (params) => params.data?.workOrder.number ?? '' },
+      { colId: 'customer', headerName: words.t('customer.column'), minWidth: 110, flex: 0.7, valueGetter: (params) => (params.data ? customerCell(params.data) : '') },
       { colId: 'bundle', headerName: t('col.bundle'), minWidth: 125, flex: 0.9, cellRenderer: BundleCell, valueGetter: (params) => params.data?.bundle?.code ?? '' },
       { colId: 'operation', headerName: t('col.operation'), minWidth: 115, flex: 0.9, valueGetter: (params) => (params.data?.operation ? `${params.data.operation.seq} · ${params.data.operation.name}` : '—') },
       { colId: 'pieces', headerName: t('col.pieces'), minWidth: 72, flex: 0.35, type: 'rightAligned', valueGetter: (params) => params.data?.pieces ?? 0 },
@@ -403,10 +412,10 @@ function ScrapList({
       ...(model.can.cost ? [{ colId: 'value', headerName: t('col.value'), minWidth: 100, flex: 0.7, type: 'rightAligned', valueGetter: (params) => (params.data ? moneyText(params.data.value, params.data.currency, locale) : '') } satisfies ColDef<ScrapRow>] : []),
       { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, locale, model.prefix, model.can.workOrders, model.can.cost, model.can.downgrade, model.rows.items, model.timeZone, actions])
+  }, [t, locale, model.prefix, model.can.workOrders, model.can.cost, model.can.downgrade, model.rows.items, model.timeZone, actions, words, customerCell])
 
   const items = model.rows.items
-  const narrowed = model.address.q.trim() !== '' || model.address.view !== 'all' || model.address.kind !== null || model.address.group !== null
+  const narrowed = model.address.q.trim() !== '' || model.address.view !== 'all' || model.address.kind !== null || model.address.group !== null || !!model.address.party
   const state = model.rows.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
   ) : filtered && filtered.length === 0 ? (
@@ -419,7 +428,7 @@ function ScrapList({
             size="sm"
             onClick={() => {
               setQuery('')
-              actions?.onAddress?.({ q: '', view: 'all', kind: null, group: null })
+              actions?.onAddress?.({ q: '', view: 'all', kind: null, group: null, party: null })
             }}
           >
             {t('common.clearFilters')}
@@ -475,6 +484,7 @@ function ScrapList({
                 </option>
               ))}
             </Select>
+            {model.customers && <CustomerFilter state={model.customers} onPick={(party) => actions?.onAddress?.({ party, group: null })} />}
           </span>
         }
         selection={{

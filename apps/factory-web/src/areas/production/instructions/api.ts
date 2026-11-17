@@ -55,6 +55,8 @@ export const listRow = z.object({
   draft: z.object({ versionId: z.string(), number: z.number().int() }).nullable(),
   usedIn: z.number().int(),
   updatedAt: z.string(),
+  // F-PR-02: the style's brand, a customer's private label (null: our own collection, or an operation on every style).
+  customer: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable().optional(),
 })
 export type InstructionRow = z.infer<typeof listRow>
 
@@ -65,10 +67,12 @@ export interface ListQuery {
   companyId: string | null
   status: 'ACTIVE' | 'ARCHIVED'
   q?: string
+  /** F-PR-02: the customer filter (`?party=`): that customer's private-label instructions. */
+  partyId?: string | undefined
 }
 
 export function listInstructions(api: ApiClient, query: ListQuery, signal?: AbortSignal): Promise<InstructionList> {
-  return api.get(base, { query: { companyId: query.companyId ?? undefined, status: query.status, q: query.q?.trim() || undefined }, schema: listAnswer, signal })
+  return api.get(base, { query: { companyId: query.companyId ?? undefined, status: query.status, q: query.q?.trim() || undefined, partyId: query.partyId }, schema: listAnswer, signal })
 }
 
 // ---- the record ------------------------------------------------------------------------------------------------------------

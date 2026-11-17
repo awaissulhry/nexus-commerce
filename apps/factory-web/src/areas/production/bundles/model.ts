@@ -1,4 +1,6 @@
 import { WHO_PURPOSES, type ScanPatternKind, type WhoPurpose } from '@nexus/factory-domain/production/bundles/patterns'
+// F-PR-02: the production pages' one customer filter.
+import { PARTY_KEY, partyTerm } from '../_shared/customer/model'
 import type { BundleTicket } from '@nexus/factory-domain/production/bundles/ticket'
 import type { BundlePlace } from '@nexus/factory-domain/production/bundles/where'
 import type { LabelBlock, LabelLayout } from '@nexus/ui/components/LabelPreview/index'
@@ -81,6 +83,8 @@ export interface BundlesAddress {
   view: BundleView
   q: string
   ask: FindingsAsk | null
+  /** F-PR-02: the customer filter (`?party=`); absent or null: every customer. */
+  party?: string | null
 }
 
 interface Params {
@@ -112,6 +116,7 @@ export function addressOf(params: Params | null | undefined): BundlesAddress {
     view: viewOfAddress(params),
     q: params?.get('q') ?? '',
     ask: KINDS.includes(kind) ? { kind: kind as ScanPatternKind, lineId: params?.get('checkLine') || null, operationCode: params?.get('checkOp') || null } : null,
+    ...partyTerm(params),
   }
 }
 
@@ -132,13 +137,14 @@ export function addressText(address: BundlesAddress): string {
     if (address.ask.lineId) query.set('checkLine', address.ask.lineId)
     if (address.ask.operationCode) query.set('checkOp', address.ask.operationCode)
   }
+  if (address.party) query.set(PARTY_KEY, address.party)
   const text = query.toString()
   return text ? `?${text}` : ''
 }
 
 /** The API's query of a view. A view of places is ACTIVE bundles; "On hold" reads the quality place, `rowsOfView` keeps the holds. */
-export function viewQuery(view: BundleView, q: string, siteId: string | null, cursor: string | null = null): BundlesQuery {
-  const base: BundlesQuery = { siteId, q: q.trim() || undefined, cursor, limit: BUNDLES_PAGE }
+export function viewQuery(view: BundleView, q: string, siteId: string | null, cursor: string | null = null, partyId?: string): BundlesQuery {
+  const base: BundlesQuery = { siteId, q: q.trim() || undefined, cursor, limit: BUNDLES_PAGE, ...(partyId ? { partyId } : {}) }
   if (view === 'all') return base
   if (view === 'void') return { ...base, status: 'VOID' }
   if (view === 'stuck') return { ...base, status: 'ACTIVE', stuck: true }

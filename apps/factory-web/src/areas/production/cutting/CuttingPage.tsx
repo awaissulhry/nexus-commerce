@@ -15,6 +15,8 @@ import { groupKeyOf, listCsv, listRows, NO_DRAFT, newOrderBody, newOrderHeld, or
 import type { NewOrderModel } from './orders/view/NewCutOrderDialog'
 import type { AllocModel } from './view/CutDialogs'
 import { CuttingView, type CuttingModel } from './view/CuttingView'
+// F-PR-02: the customer filter.
+import { useProductionCustomers } from '../_shared/customer/use-customers'
 
 const TIME_ZONE = 'Europe/Rome'
 const PAGE = 50
@@ -47,6 +49,8 @@ function Container() {
   const can = useMemo(() => cuttingCanOf(session.permissions), [session.permissions])
   const orders = useMemo(() => ordersCanOf(session.permissions), [session.permissions])
   const address = addressOf(params)
+  const customers = useProductionCustomers('cutting')
+  const partyId = customers.partyId
 
   const [cuts, setCuts] = useState<{ items: readonly CutRow[] | null; more: boolean; problem: string | null }>({ items: null, more: false, problem: null })
   const [orderRows, setOrderRows] = useState<{ items: readonly CutOrderSummary[] | null; more: boolean; problem: string | null }>({ items: null, more: false, problem: null })
@@ -79,10 +83,10 @@ function Container() {
 
   /** The fabric cut orders per status (the tiles): one row is enough, the counts come with it. */
   const loadFabric = useCallback(() => {
-    listCutOrders(api, { view: 'open', kind: 'FABRIC', limit: 1 })
+    listCutOrders(api, { view: 'open', kind: 'FABRIC', limit: 1, partyId })
       .then((page) => setFabric(page.tiles))
       .catch(() => setFabric(null))
-  }, [api])
+  }, [api, partyId])
 
   const load = useCallback(async () => {
     if (!can.view) return
@@ -91,8 +95,8 @@ function Container() {
     loadFabric()
     const orderView = orderViewOf(address.view)
     const [cutsRead, ordersRead] = await Promise.allSettled([
-      listCuts(api, { view: address.view, q: address.q, limit }),
-      orderView ? listCutOrders(api, { view: orderView, q: address.q, limit }) : Promise.resolve(null),
+      listCuts(api, { view: address.view, q: address.q, limit, partyId }),
+      orderView ? listCutOrders(api, { view: orderView, q: address.q, limit, partyId }) : Promise.resolve(null),
     ])
     if (id !== readId.current) return
     if (cutsRead.status === 'fulfilled') {
@@ -103,13 +107,13 @@ function Container() {
     if (ordersRead.status === 'fulfilled') setOrderRows({ items: ordersRead.value?.rows ?? [], more: !!ordersRead.value?.nextCursor, problem: null })
     else setOrderRows({ items: null, more: false, problem: readProblem(ordersRead.reason) })
     setUpdates(0)
-  }, [api, can.view, address.view, address.q, limit, loadYield, loadFabric])
+  }, [api, can.view, address.view, address.q, limit, loadYield, loadFabric, partyId])
 
   useEffect(() => {
     void load()
   }, [load])
 
-  useEffect(() => setLimit(PAGE), [address.view, address.q])
+  useEffect(() => setLimit(PAGE), [address.view, address.q, partyId])
 
   // "Still loading…" after about a second (the design's slow note).
   useEffect(() => {
@@ -122,7 +126,7 @@ function Container() {
   const refreshTiles = useCoalesced(() => {
     loadYield()
     loadFabric()
-    listCuts(api, { view: address.view, q: address.q, limit: 1 })
+    listCuts(api, { view: address.view, q: address.q, limit: 1, partyId })
       .then((page) => setTiles(page.tiles))
       .catch(() => undefined)
   }, 1000)
@@ -290,6 +294,7 @@ function Container() {
     timeZone: TIME_ZONE,
     notice,
     newOrder: address.newCut ? { groups: groups.value, problem: groups.problem, stations, draft, busy: creating.busy, error: creating.error } : null,
+    customers: customers.state,
     alloc: address.alloc ? (alloc ?? { cut: null, material: null, availability: { value: null, problem: null }, busy: false, problem: null }) : null,
   }
 
@@ -298,6 +303,7 @@ function Container() {
       model={model}
       actions={{
         onView: (view: CutView) => go({ view }),
+        onCustomer: customers.onPick,
         onSearch: (q) => go({ q }),
         onMore: () => setLimit((current) => Math.min(200, current + PAGE)),
         onRetry: () => {
