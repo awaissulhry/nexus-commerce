@@ -69,6 +69,8 @@ export interface DockedHost extends RecordThreadHost {
   partyRole?: 'customer' | 'supplier' | 'partner'
   /** The page's print view (the Head's "Print or save as PDF"); absent: no Print line. */
   printHref?: string
+  /** TH-5 follow-up (B-TH-249): the record reopens its thread with itself (a closed project): neither the head nor the box offers Reopen. */
+  reopenWithRecord?: boolean
 }
 
 const NAMESPACES = [HEAD_NS, FILES_NS, FILES_VIEW_NS, POPUPS_NS, HELPERS_NS, 'records', 'record-approvals', SHARES_NS, 'record-files', 'home-mywork']
@@ -545,6 +547,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     follow: followers.data ? { following: followers.data.me.following, muted: followers.data.me.muted } : null,
     reminder: reminder.mine?.remindAt ? { at: reminder.mine.remindAt } : null,
     canManage: can.manage,
+    reopenWithRecord: host.reopenWithRecord ?? false, // TH-5 follow-up
     width: frame?.width ?? null,
     compact: frame?.phone ?? false,
     print: Boolean(host.printHref),
@@ -568,6 +571,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const fileOf = (fileId: string) => threadFiles.find((file) => file.id === fileId)
   const threadActions: RecordThreadActions = {
     ...actions,
+    // TH-5 follow-up (B-TH-249): a closed project's box offers no Reopen either (the API refuses it; the project's band reopens both).
+    ...(host.reopenWithRecord ? { onReopen: undefined } : {}),
     onTask: (messageId) => {
       const message = model.feed.messages.find((item) => item.id === messageId)
       openTask(message ? { title: message.body.replace(/\s+/g, ' ').trim().slice(0, 120) } : undefined, message?.id)

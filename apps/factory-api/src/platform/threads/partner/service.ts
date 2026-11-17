@@ -110,7 +110,8 @@ async function openRecord(client: FactoryClient, caller: PartnerCaller, ref: Rec
   return { record, scope }
 }
 
-const recordViewOf = (type: string, record: PartnerRecord) => ({ type, id: record.id, theirRef: record.theirRef, ourRef: record.ourRef, subtitle: record.subtitle, status: record.status })
+// TH-5 follow-up (B-TH-253): + the record's date as its partner view gives it (a project's target date; the search already sends it).
+const recordViewOf = (type: string, record: PartnerRecord) => ({ type, id: record.id, theirRef: record.theirRef, ourRef: record.ourRef, subtitle: record.subtitle, status: record.status, date: record.date ? toUtcIso(record.date) : null })
 
 /** The attached files the partner may see: shared with its party's portal, available, and files.read over them. */
 async function visibleAttachments(client: FactoryClient | CommandTx, caller: PartnerCaller, fileIds: readonly string[]): Promise<Map<string, AttachmentView>> {
