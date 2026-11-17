@@ -145,7 +145,7 @@ const requestBody = output({
   held: words.nullable(),
   /** Lines whose price changed since it was shown ("Prices changed since you started — Review"). */
   pricesChanged: notMoney(z.number().int()),
-  /** "This is a request. We confirm price, quantities and date within 1 working day …" */
+  /** "This is a request. We confirm price, quantities and date with you …" (B-TH-041: never by when). */
   notice: words,
 })
 
@@ -225,7 +225,8 @@ export const discardContract = defineContract({ params: requestParams, querystri
 export const sendContract = defineContract({
   params: requestParams,
   body: input({ version }),
-  response: { 200: record.extend({ sent: output({ number: z.string(), confirmBy: day.nullable(), words }) }) },
+  // B-TH-041 (Owner decision 3): confirmBy is always null (no answer-time promise); kept until the portal's words drop it (B-TH-220).
+  response: { 200: record.extend({ sent: output({ number: z.string(), confirmBy: z.null(), words }) }) },
 })
 export const withdrawContract = defineContract({ params: requestParams, body: input({ version }), response: { 200: record } })
 

@@ -27,7 +27,6 @@ import {
 } from '@nexus/factory-domain/sales/portal-ordering/rules'
 import type { CommandTools, CommandTx } from '../../../core/command'
 import { allocateNumber } from '../../../platform/numbering/allocate'
-import { addWorkingDaysFor } from '../../../platform/calendars/service'
 import { portalOf } from '../../../platform/auth/portal/service'
 import { appClock, commandOn } from '../../../platform/portal/tasks/clock'
 import { portalReader, type PortalReader } from '../portal-orders/access'
@@ -571,8 +570,8 @@ async function sendProblems(tx: CommandTx, row: RequestRow, lines: readonly Line
 /**
  * The send: in the tenant's office scope as the portal person (the numbering grant; the office role may move a DRAFT to
  * SENT with its number and nothing else, the guard holds it), checked again inside the command (the catalogue today, the
- * prices shown), the PORTAL_REQUEST number, SENT, its audit row and portal_order_request.sent. The answer says when the
- * factory confirms: the next working day of the company's calendar.
+ * prices shown), the PORTAL_REQUEST number, SENT, its audit row and portal_order_request.sent. B-TH-041 (Owner decision 3): the
+ * answer promises no time to confirm by — `confirmBy` stays in the answer as null until the portal's words drop it (B-TH-220).
  */
 export async function sendRequest(app: FastifyInstance, request: FastifyRequest, requestId: string, version: number, idempotencyKey?: string) {
   const reader = portalReader(app, request)
@@ -594,20 +593,20 @@ export async function sendRequest(app: FastifyInstance, request: FastifyRequest,
     const pieces = lines.reduce((sum, line) => sum + piecesOfSizes(sizesOf(line)), 0)
     tools.audit({ recordType: 'PortalOrderRequest', recordId: current.id, companyId: current.companyId, before: { status: 'DRAFT' }, after: { status: 'SENT', number: number.formatted, lines: lines.length, pieces, byPartner: true } })
     tools.emit({ type: 'portal_order_request.sent', subject: current.id, companyId: current.companyId, payload: { requestId: current.id, number: number.formatted, partyId: current.partyId, source: current.source, lines: lines.length, pieces } })
-    const confirmBy = (await addWorkingDaysFor(tx, { scope: 'COMPANY', id: current.companyId }, day, 1)).date
-    return { number: number.formatted, confirmBy }
+    return { number: number.formatted }
   })
   const sent = await ownRequest(request, reader, requestId)
-  const { number, confirmBy } = outcome.result
+  const { number } = outcome.result
   const po = sent.customerRef
   return {
     ...(await requestView(app, request, reader, sent)),
     sent: {
       number,
-      confirmBy,
+      // B-TH-041: no promise of when we confirm.
+      confirmBy: null,
       words: {
-        it: `Richiesta d'ordine inviata${po ? ` — il vostro ordine ${po}` : ''}, la nostra richiesta ${number}.${confirmBy ? ` Confermiamo entro il ${confirmBy.split('-').reverse().join('/')}.` : ''}`,
-        en: `Order request sent${po ? ` — your PO ${po}` : ''}, our request ${number}.${confirmBy ? ` We confirm by ${confirmBy}.` : ''}`,
+        it: `Richiesta d'ordine inviata${po ? ` — il vostro ordine ${po}` : ''}, la nostra richiesta ${number}. Vi confermiamo prezzo, quantità e data.`,
+        en: `Order request sent${po ? ` — your PO ${po}` : ''}, our request ${number}. We confirm price, quantities and date with you.`,
       },
     },
   }
