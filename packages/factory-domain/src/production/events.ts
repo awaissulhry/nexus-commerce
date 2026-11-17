@@ -23,6 +23,8 @@ import { EXTRA_REASON_CODES } from './extraops/rules'
 import { ON_BEHALF_REASON_CODES } from './onbehalf/rules'
 // B-W2b-103: leather cutting rules.
 import { CUT_OVERRIDE_REASON_CODES, CUT_WARNING_KINDS } from './cutting/checks'
+// B-PR-16: the plain production hold on a work order.
+import { WORK_ORDER_HOLD_KINDS } from './holds/kinds'
 
 /**
  * The production module's events (plan A1 §3.4, §3.5 "workorder.released"; MES-001, MES-005, MES-007, MES-278; design
@@ -873,4 +875,42 @@ export const events = [
     }),
     live: { permission: 'production.cutting.view', floor: 'production.cut.override', fields: ['workOrderId', 'number', 'hideId', 'cutLogId'] },
   }),
+  // ---- B-PR-16 (production plan §6; 08-backend §4.5; B-PR-21 places and lifts them): the plain hold on a work order beside
+  // quality's (production/holds/kinds): PRODUCTION, the factory's own reason; BRAND, the customer's accepted pause (its HOLD ask,
+  // `requestId`). Ids, the number and the kind only: never the reason, the office's note, the words meant for the customer or a
+  // person. `partyId`, the work order's one customer (null: none), so the office's live screens send them only to people who
+  // reach that customer (events/live.ts); the work order's tablets of its site see it held (floor.work). The customer reads a
+  // hold through brand_production.hold_changed (the keeper, B-PR-17), never these.
+  defineEvent({
+    type: 'work_order_hold.placed',
+    context: 'production',
+    description: "A plain hold was placed on a work order (the factory's production reason, or the customer's accepted pause): it is on hold.",
+    payload: z.strictObject({
+      holdId: z.uuid(),
+      workOrderId: z.uuid(),
+      number: z.string(),
+      siteId: z.uuid(),
+      partyId: z.uuid().nullable(),
+      kind: z.enum(WORK_ORDER_HOLD_KINDS),
+      /** BRAND: the customer's HOLD ask it answers; PRODUCTION: null. */
+      requestId: z.uuid().nullable(),
+    }),
+    live: { permission: 'workorders.view', floor: 'floor.work', fields: ['workOrderId', 'number', 'holdId', 'kind'] },
+  }),
+  defineEvent({
+    type: 'work_order_hold.lifted',
+    context: 'production',
+    description: 'A plain hold on a work order was lifted (the work order leaves ON_HOLD only when no hold names it any more).',
+    payload: z.strictObject({
+      holdId: z.uuid(),
+      workOrderId: z.uuid(),
+      number: z.string(),
+      siteId: z.uuid(),
+      partyId: z.uuid().nullable(),
+      kind: z.enum(WORK_ORDER_HOLD_KINDS),
+      requestId: z.uuid().nullable(),
+    }),
+    live: { permission: 'workorders.view', floor: 'floor.work', fields: ['workOrderId', 'number', 'holdId', 'kind'] },
+  }),
+  // ---- end B-PR-16
 ] as const

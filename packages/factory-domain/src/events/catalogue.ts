@@ -330,6 +330,8 @@ import { events as receivablesFigures } from '../receivables-figures/events'
 import { events as insightsDigest } from '../insights-digest/events'
 // B-W2b-435: alert routes (alert.route_added, alert.route_removed).
 import { events as alertRoutes } from '../alert-routes/events'
+// B-PR-16: a customer's production (stage, health, urgency, supervisor, holds) and the issues that need an answer.
+import { events as productionBrand } from '../production-brand/events'
 import type { EventDefinition } from './define'
 
 /**
@@ -723,6 +725,8 @@ export const EVENT_DEFINITIONS = [...integration, ...files, ...links, ...threads
   ...integrationHealth,
   // B-TH-066
   ...projects,
+  // B-PR-16
+  ...productionBrand,
 ] as const satisfies readonly EventDefinition[]
 
 /** Every declared event type. */
