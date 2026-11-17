@@ -358,8 +358,13 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       { id: 'blockedBy', kind: 'choice', label: t('filter.blockedBy'), choices: FILTER_CHOICES.blockedBy.map((choice) => ({ value: choice.value, label: t(choice.key) })) },
       // F-PR-18: the Customer urgency filter (the API's computed term `customerUrgency`).
       { id: 'customerUrgency', kind: 'choice', label: tw('urgency.filter'), choices: FILTER_CHOICES.customerUrgency.map((choice) => ({ value: choice.value, label: tw(choice.key) })) },
+      // F-PR-04: the Overview's numbers open the list with these (each a chip): blocked by a gate; the mixed work orders made
+      // before the rule and the work of no customer — offered to a person of every customer (nobody else has any), shown when set.
+      { id: 'gate', kind: 'flag', label: t('filter.gate'), value: 'true' },
+      ...(model.customers?.everyCustomer === true || model.mixed ? [{ id: 'mixed', kind: 'flag' as const, label: t('customer.mixed'), value: 'true' }] : []),
+      ...(model.customers?.everyCustomer === true || model.noCustomer ? [{ id: 'noCustomer', kind: 'flag' as const, label: t('list.noCustomer'), value: 'true' }] : []),
     ],
-    values: { due: model.due ?? null, rush: model.rush ? 'true' : null, waitingOn: model.waitingOn ?? null, risk: model.risk ?? null, blockedBy: model.blockedBy ?? null, /* F-PR-18 */ customerUrgency: model.customerUrgency ?? null },
+    values: { due: model.due ?? null, rush: model.rush ? 'true' : null, waitingOn: model.waitingOn ?? null, risk: model.risk ?? null, blockedBy: model.blockedBy ?? null, /* F-PR-18 */ customerUrgency: model.customerUrgency ?? null, /* F-PR-04 */ gate: model.gate ? 'true' : null, mixed: model.mixed ? 'true' : null, noCustomer: model.noCustomer ? 'true' : null },
     onChange: (id, value) => {
       if (id === 'rush') actions?.onRush?.(value === 'true')
       else if (id === 'due') actions?.onDue?.(value as never)
@@ -393,6 +398,10 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
     group: model.group ?? null,
     supervisor: model.supervisor ?? null, // F-PR-21
     customerUrgency: model.customerUrgency ?? null, // F-PR-18
+    // F-PR-04
+    gate: !!model.gate,
+    mixed: !!model.mixed,
+    noCustomer: !!model.noCustomer,
   }
   const state = model.rows.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
@@ -408,7 +417,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
               setQuery('')
               // F-PR-03: every filter off in one address (the sort, the mode and the grouping stay).
               const off = cleared(terms)
-              actions?.onTerms?.({ view: off.view, q: off.q, due: off.due, rush: off.rush, waitingOn: null, risk: null, blockedBy: null, party: null, /* F-PR-21, F-PR-18 */ supervisor: off.supervisor, customerUrgency: off.customerUrgency })
+              actions?.onTerms?.({ view: off.view, q: off.q, due: off.due, rush: off.rush, waitingOn: null, risk: null, blockedBy: null, party: null, /* F-PR-21, F-PR-18 */ supervisor: off.supervisor, customerUrgency: off.customerUrgency, /* F-PR-04 */ gate: off.gate, mixed: off.mixed, noCustomer: off.noCustomer })
             }}
           >
             {t('list.clearFilters')}

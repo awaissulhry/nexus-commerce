@@ -22,6 +22,8 @@ export const PARTY_KEY = 'party'
  * reads `?party=` too (its list, tiles and export follow it).
  */
 export const CUSTOMER_PAGES = [
+  // F-PR-04: Production › Overview (its rows, tiles and every door to Work orders follow it).
+  '/production/overview',
   // F-PR-17: Floor now reads it too.
   '/production/floor',
   // F-PR-03: the work orders list.

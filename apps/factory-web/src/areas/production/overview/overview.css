@@ -1,0 +1,49 @@
+/*
+ * F-PR-04 — Production › Overview LAYOUT (06-tree A.1): the head row with the customer filter and Only mine, the tiles, Exceptions
+ * by customer full width, WIP by stage beside Most urgent from 1600 px (stacked below), the open issues full width. The controls are
+ * the design system's; this file only places them, with semantic tokens (no colours of its own). No page max-width (Owner rule
+ * 2026-10-29): the page fills the shell's main area at 1440 and 1920.
+ */
+.fw-pov-pair {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--nds-space-14);
+  min-width: 0;
+}
+
+@media (min-width: 1600px) {
+  .fw-pov-pair {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+/* A headed DS Card (its own head and body padding); in the two-column row it may shrink below its table's width. */
+.fw-pov-card {
+  min-width: 0;
+}
+
+.fw-pov-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+/* A wide table (Exceptions by customer, 14 columns) scrolls inside its card on a narrow desktop; a phone stacks its rows. */
+.fw-pov-wide {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.fw-pov-zero {
+  color: var(--nds-text-muted);
+}
+
+.fw-pov-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+  margin-top: var(--nds-space-8);
+}

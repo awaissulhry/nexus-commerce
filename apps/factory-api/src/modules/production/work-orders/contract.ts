@@ -224,6 +224,8 @@ export const listContract = defineContract({
     /** `true`: made before the one-customer rule with cells of several customers (a split is needed; every customer only). */
     mixed: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
     // ── end B-PR-33 ──
+    /** F-PR-04: `true`: the work of no customer (a sample for no customer: no customer, no cell of a customer; every customer only). */
+    noCustomer: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
     /** The `nextCursor` of the page before (newest: a work order id; risk and due: a position token of that sort). */
     cursor: z.string().trim().min(1).max(80).optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),

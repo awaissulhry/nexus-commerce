@@ -132,6 +132,8 @@ export interface ListQuery {
   /** Made before the one-customer rule with cells of several customers ("Mixed customers (made before the rule)": a split is needed). */
   readonly mixed?: boolean | undefined
   // ── end B-PR-33 ──
+  /** F-PR-04: the work of no customer (the Overview's "No customer" row: no customer and no cell of a customer). */
+  readonly noCustomer?: boolean | undefined
   /** `newest`: the last row's id; a computed sort: its position token (./risk decodeCursor). */
   readonly cursor?: string | undefined
   readonly limit: number
@@ -161,6 +163,8 @@ function listWhere(context: ReturnType<typeof officeContextOf>, query: Omit<List
       query.rush !== undefined ? { rush: query.rush } : {},
       // B-PR-33: made before the one-customer rule — no customer, and cells of a customer (a sample for no customer has none).
       query.mixed ? { partyId: null, sizes: { some: { partyId: { not: null } } } } : {},
+      // F-PR-04: the work of no customer — no customer and no cell of a customer (the Overview's "No customer" row, tally groupOf).
+      query.noCustomer ? { partyId: null, sizes: { none: { partyId: { not: null } } } } : {},
       q
         ? {
             OR: [

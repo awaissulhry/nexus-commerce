@@ -79,6 +79,10 @@ export interface WorkOrdersListModel {
   // ── end F-PR-21
   /** F-PR-18: the Customer urgency filter (`?customerUrgency=`). */
   customerUrgency?: CustomerUrgencyState | null
+  /** F-PR-04: the Overview's flags (`?gate=true`, `?mixed=true`, `?noCustomer=true`), each a chip. */
+  gate?: boolean
+  mixed?: boolean
+  noCustomer?: boolean
   // ── F-PR-22 ──
   /** threads.post: "Note to N…" and a row's "Office note…" (held in words without it). */
   noteCan?: boolean

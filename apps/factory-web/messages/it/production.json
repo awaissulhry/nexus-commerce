@@ -1146,7 +1146,8 @@
   "filter": {
     "waitingOn": "Tocca a",
     "health": "Andamento",
-    "blockedBy": "Bloccato da"
+    "blockedBy": "Bloccato da",
+    "gate": "Bloccato da un gate"
   },
   "waitingChoice": {
     "BRAND": "Cliente",
@@ -1231,5 +1232,111 @@
     "none": "Niente scartato né rilavorato.",
     "unknown": "Non noto: una rilavorazione non ha un costo al minuto in vigore.",
     "toQuality": "Scarti e motivi: Qualità"
+  },
+  "ovw": {
+    "hint": "La produzione di ogni cliente. Ogni numero apre Ordini di produzione con lo stesso filtro.",
+    "scopeMine": "Solo i tuoi clienti: ogni dato e il Totale sono solo loro. Ogni numero apre Ordini di produzione con lo stesso filtro.",
+    "mine": {
+      "label": "Solo i miei",
+      "hint": "Gli ordini che seguo come supervisore"
+    },
+    "tile": {
+      "waitingOnUs": "Tocca a noi",
+      "waitingOnCustomer": "Tocca al cliente",
+      "late": "In ritardo",
+      "atRisk": "A rischio",
+      "blocked": "Bloccati",
+      "customerRequests": "Richieste dei clienti",
+      "requestsHint": "Da rispondere in Home › Approvazioni"
+    },
+    "failed": "Non è stato possibile leggere la panoramica.",
+    "empty": {
+      "title": "Nessun lavoro in produzione",
+      "body": "Nessun ordine di produzione aperto e nessuna richiesta di un cliente in attesa.",
+      "mineTitle": "Niente di tuo in produzione",
+      "mineBody": "Nessun ordine aperto o richiesta degli ordini che segui. Spegni Solo i miei per vedere ogni cliente."
+    },
+    "total": "Totale",
+    "door": "{what} · {who}: {count} — apri in Ordini di produzione",
+    "doorApprovals": "{what} · {who}: {count} — apri in Home › Approvazioni",
+    "col": {
+      "customer": "Cliente",
+      "inProduction": "In produzione",
+      "late": "In ritardo",
+      "atRisk": "A rischio",
+      "blocked": "Bloccati",
+      "onUs": "Tocca a noi",
+      "onCustomer": "Tocca al cliente",
+      "onSupplier": "Tocca al fornitore",
+      "onWorkshop": "Tocca al terzista",
+      "onHold": "In sospeso",
+      "gate": "Gate",
+      "split": "Da dividere",
+      "urgent": "Urgente (cliente)",
+      "requests": "Richieste"
+    },
+    "exceptions": {
+      "title": "Eccezioni per cliente",
+      "hint": "Ordini di produzione aperti per cliente, poi il Totale. Tocca a noi … al terzista: chi deve agire sull'ordine. Gate: non iniziato, il suo ordine attende un gate. Da dividere: creato prima della regola di un solo cliente."
+    },
+    "pieces_one": "{pieces} pezzo",
+    "pieces_other": "{pieces} pezzi",
+    "requestsWaiting": "{count} in attesa in tutto",
+    "wip": {
+      "title": "Lavoro in corso per fase",
+      "hint": "Pezzi per fase; una cella apre gli ordini di produzione di quella riga in quello stato. Il lavoro sospeso conta solo in In sospeso.",
+      "pieces": "In produzione (pezzi)",
+      "notCounted": "non contato qui",
+      "stage": {
+        "NOT_RELEASED": "Non rilasciati",
+        "RELEASED": "Rilasciati",
+        "CUTTING": "Taglio",
+        "SEWING": "Cucitura",
+        "AT_WORKSHOP": "Dal terzista",
+        "QUALITY": "Controllo qualità",
+        "FINISHED": "Finiti",
+        "ON_HOLD": "In sospeso"
+      },
+      "sewingNotCounted_one": "{count} ordine iniziato non conta la cucitura qui: — in Cucitura e Controllo qualità.",
+      "sewingNotCounted_other": "{count} ordini iniziati non contano la cucitura qui: — in Cucitura e Controllo qualità."
+    },
+    "urgent": {
+      "title": "I più urgenti",
+      "hint": "In ritardo e a rischio, i più urgenti per primi (l'ordine per rischio di Ordini di produzione).",
+      "none": "Niente in ritardo o a rischio",
+      "supervisor": "Supervisore",
+      "shownOf": "{shown} di {count}",
+      "showAll": "Mostra tutti in Ordini di produzione",
+      "more": "Altro per {number}",
+      "askFailed": "Chiedi al supervisore non si è aperto: {reason}"
+    },
+    "issues": {
+      "title": "Problemi aperti",
+      "hint": "Domande e problemi che aspettano la nostra risposta.",
+      "figures": "{open} aperti · {noReply} senza risposta inviata · {escalated} inoltrati · {mine} per te",
+      "none": "Nessun problema aperto",
+      "noneMine": "Nessun problema aperto è tuo.",
+      "col": {
+        "record": "Documento",
+        "source": "Da",
+        "raised": "Segnalato",
+        "due": "Risposta entro",
+        "state": "Stato",
+        "task": "Attività"
+      },
+      "source": {
+        "BRAND": "Cliente",
+        "OFFICE": "Ufficio"
+      },
+      "state": {
+        "noReply": "Nessuna risposta inviata",
+        "escalatedBackup": "Inoltrato al sostituto",
+        "escalatedOwner": "Inoltrato a titolare e amministratore",
+        "waiting": "Tocca a noi"
+      },
+      "overdue": "Scaduto",
+      "shownOf": "{shown} di {count}, i più vecchi per primi",
+      "showMore": "Mostra altri"
+    }
   }
 }

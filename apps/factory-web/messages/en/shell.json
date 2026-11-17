@@ -131,6 +131,7 @@
     "production": {
       "area": "Production",
       "main": "Main",
+      "overview": "Overview",
       "floor": "Floor now",
       "workOrders": "Work orders",
       "dispatch": "Dispatch",
