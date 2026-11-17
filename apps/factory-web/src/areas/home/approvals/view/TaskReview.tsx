@@ -2,15 +2,15 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { Check, ExternalLink, MessagesSquare, PenLine, X } from 'lucide-react'
-import { Banner, EmptyState, Field, KeyValue } from '@nexus/ui/components'
+import { Check, ExternalLink, PenLine, X } from 'lucide-react'
+import { Banner, Field, KeyValue } from '@nexus/ui/components'
 import { Button, Kbd, Pill, Select, Tag } from '@nexus/ui/primitives'
 import { DetailModal, Modal, ReviewChangesPanel, StepUpModal, Textarea } from '../../../../lib/i18n/ds-parts'
 import { formatDateTime, formatTime } from '../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { ApprovalHistory } from '../../../../shell/panels/approvals/view/ApprovalHistory'
 import type { TaskDetail, Words } from '../api'
-import { DEPTH_NS, REVIEW_TABS, type InboxActions, type InboxViewModel, type ReviewTab } from '../model'
+import { DEPTH_NS, REVIEW_TABS, reviewTabOf, type InboxActions, type InboxViewModel, type ReviewTab } from '../model'
 import { heldOf, openIdOf, valueText, type InboxRow } from '../inbox'
 import { requestWords } from '../words/request-words'
 
@@ -19,13 +19,15 @@ const said = (words: Words | null | undefined, locale: string, fallback = ''): s
 /**
  * The review of one request of the approval engine (B-W2b-307; design home.approvals pop:review, pop:sign, pop:reject,
  * PLT-091, PLT-093, PLT-105): a centred DetailModal (`?open=<id>`, J / K the next and previous request, ← / → the tabs)
- * with Change (the re-check line, every field from → to, the rules that asked and their values, who else may decide),
- * Context (the record's facts and Open full page), Conversation (the request's thread) and History (every approval of its
- * record). Approve (A) — a rule with a signature opens "Approve as '<meaning>'" (the meaning, the version it binds to, a
- * fresh authenticator code) — and Reject (R: a reason of the list and words). Held with the reason before the click: my own
- * request (naming who can), not mine to decide, changed since asked, gone, offline.
+ * with Change (the re-check line, every field from → to, the rules that asked and their values, who else may decide) and
+ * Context & history (the record's facts, Open full page, then every approval of its record with its signature meanings).
+ * B-TH-270 (PL6, picture 40): the window's tabs 4 → 2 and the request's thread docked in its right column (~40 % of the
+ * 1160 px window), beside both tabs — the old Conversation; under 800 px of screen it follows the tabs' content. Approve
+ * (A) — a rule with a signature opens "Approve as '<meaning>'" (the meaning, the version it binds to, a fresh authenticator
+ * code) — and Reject (R: a reason of the list and words); never while the focus is in the thread (its own keys). Held with
+ * the reason before the click: my own request (naming who can), not mine to decide, changed since asked, gone, offline.
  */
-export function TaskReview({ model, actions, conversation, kindWords }: { model: InboxViewModel; actions?: InboxActions; conversation?: ReactNode; kindWords: (row: InboxRow) => string }) {
+export function TaskReview({ model, actions, thread, kindWords }: { model: InboxViewModel; actions?: InboxActions; thread?: ReactNode; kindWords: (row: InboxRow) => string }) {
   const t = useT(DEPTH_NS)
   const sales = useT('sales')
   const locale = useLocale()
@@ -35,12 +37,13 @@ export function TaskReview({ model, actions, conversation, kindWords }: { model:
   const detail = review.detail.status === 'ready' ? review.detail.value : null
   const task = detail ?? row?.task ?? null
   const [comment, setComment] = useState(review.comment ?? '')
-  const [ownTab, setOwnTab] = useState<ReviewTab>(review.tab ?? 'change')
+  // B-TH-270: an old tab id lands on its merged tab (R-8: Conversation → Change, History → Context & history).
+  const [ownTab, setOwnTab] = useState<ReviewTab>(reviewTabOf(review.tab))
   useEffect(() => {
     setComment(review.comment ?? '')
-    setOwnTab(review.tab ?? 'change')
+    setOwnTab(reviewTabOf(review.tab))
   }, [review.id, review.comment, review.tab])
-  const tab = actions?.onTab ? (review.tab ?? 'change') : ownTab
+  const tab = actions?.onTab ? reviewTabOf(review.tab) : ownTab
   const setTab = (next: ReviewTab) => (actions?.onTab ? actions.onTab(next) : setOwnTab(next))
 
   // The held reason, from the request as read now (the detail re-reads it) else its row.
@@ -69,6 +72,8 @@ export function TaskReview({ model, actions, conversation, kindWords }: { model:
       const target = event.target as HTMLElement | null
       if (event.metaKey || event.ctrlKey || event.altKey || dialog) return
       if (target && (target.closest('input, textarea, select, [contenteditable="true"]') || target.isContentEditable)) return
+      // B-TH-270: the docked thread has its own keys (R reply, N note, J / K the messages): A / R are the window's only outside it.
+      if (target?.closest('.fw-apv-window-thread')) return
       if (event.key === 'a') {
         event.preventDefault()
         approve()
@@ -156,7 +161,9 @@ export function TaskReview({ model, actions, conversation, kindWords }: { model:
         </Field>
       )}
     </div>
-  ) : tab === 'context' ? (
+  ) : (
+    // B-TH-270 (R1-G05): Context & history — the record's facts and its page, then every approval of its record with the meaning of
+    // each signature (its own read: the approval history, never the thread's Changes view).
     <div className="fw-apv-review">
       <KeyValue
         dense
@@ -177,18 +184,30 @@ export function TaskReview({ model, actions, conversation, kindWords }: { model:
           </Link>
         </Button>
       )}
-    </div>
-  ) : tab === 'conversation' ? (
-    <div className="fw-apv-review">{conversation ?? <EmptyState icon={<MessagesSquare size={22} aria-hidden />} title={t('conversation.title')} description={t('conversation.body')} />}</div>
-  ) : (
-    <div className="fw-apv-review">
-      {review.history ? (
-        <ApprovalHistory model={review.history} actions={actions?.history} heading={false} />
-      ) : (
-        <ApprovalHistory model={{ allowed: true, read: { status: 'ready', lines: detail?.history ?? [], more: false } }} heading={false} />
-      )}
+      <section className="fw-apv-history" aria-labelledby="fw-apv-history-h">
+        <h3 id="fw-apv-history-h" className="fw-apv-h">
+          {t('review.historyTitle')}
+        </h3>
+        {review.history ? (
+          <ApprovalHistory model={review.history} actions={actions?.history} heading={false} />
+        ) : (
+          <ApprovalHistory model={{ allowed: true, read: { status: 'ready', lines: detail?.history ?? [], more: false } }} heading={false} />
+        )}
+      </section>
     </div>
   )
+  // B-TH-270 (PL6): the tab's content and the request's thread docked in the window's right column (none without threads.read).
+  const content =
+    body && thread ? (
+      <div className="fw-apv-window has-thread">
+        <div className="fw-apv-window-body">{body}</div>
+        <aside className="fw-apv-window-thread" aria-label={t('review.threadLabel')}>
+          {thread}
+        </aside>
+      </div>
+    ) : (
+      body
+    )
 
   return (
     <>
@@ -227,7 +246,7 @@ export function TaskReview({ model, actions, conversation, kindWords }: { model:
           ) : undefined
         }
       >
-        {body}
+        {content}
       </DetailModal>
       {detail && dialog?.kind === 'sign' && signs && <SignDialog task={detail} busy={dialog.busy} problem={dialog.problem} actions={actions} />}
       {detail && dialog?.kind === 'reject' && <RejectDialog task={detail} dialog={dialog} actions={actions} />}

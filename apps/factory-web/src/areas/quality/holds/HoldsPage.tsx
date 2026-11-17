@@ -7,7 +7,8 @@ import { isApiError } from '../../../lib/api/errors'
 import { useLocale, useT } from '../../../lib/i18n/provider'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
-import { RecordPanels } from '../../../record-panels/RecordPanels'
+// B-TH-270 (PL6): the hold's thread docked in its review window (the record panels' Activity tab went).
+import { OfficeRecordThread } from '../../_shared/record-thread/OfficeRecordThread'
 import { csvLine, downloadText, isStepUpCancelled, liveMatches, useLive, useStepUp } from '../_shared/hooks'
 import { failedRead, newNcrAddress, problemKey, qualityCan, ready, reading, type Notice, type Read } from '../_shared/model'
 import { editHold, getHold, getHoldSettings, holdCounts, holdPeople, holdReasons, listHolds, releaseHold, saveHoldSettings, type EditBody, type Hold, type HoldCounts, type HoldDetail, type HoldSettingsAnswer, type Person } from './api'
@@ -457,9 +458,18 @@ function HoldsContainer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   const openHold = detail.value?.hold ?? null
-  const panels =
+  // B-TH-270 (PL6; 08-tabs O-QA-HOLD): the hold's thread docked in the window's right column, beside every tab — office notes only (a
+  // hold is never shared: the API refuses a shared message and names no party), Activity's tools in its "⋯" (R-ACT). Only with
+  // threads.read (the API's wall party decides who in the office reads it).
+  const thread =
     openHold && can.threadsRead ? (
-      <RecordPanels record={{ type: 'QualityHold', id: openHold.id, companyId: openHold.companyId, siteId: openHold.siteId }} title={label(openHold)} />
+      <OfficeRecordThread
+        docked
+        record={{ type: 'QualityHold', id: openHold.id, companyId: openHold.companyId, siteId: openHold.siteId }}
+        title={openHold.number ? `${openHold.number} · ${label(openHold)}` : label(openHold)}
+        recordLabel={openHold.number ?? label(openHold)}
+        party={null}
+      />
     ) : null
 
   return (
@@ -501,7 +511,7 @@ function HoldsContainer() {
           depth: { mode, canTransfer, genealogy: depth.genealogy, affected: depth.affected, quarantine: depth.quarantine, moving: depth.moving },
         }}
         stepUp={stepUp}
-        panels={panels}
+        thread={thread}
         actions={{
           onView: (next) => {
             setSelected([])

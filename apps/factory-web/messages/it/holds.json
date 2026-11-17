@@ -136,7 +136,6 @@
     "whoTitle": "Chi decide"
   },
   "detail": {
-    "activityLater": "Qui si aprono conversazione, file e cronologia di questo blocco.",
     "blocks": "Cosa blocca",
     "closed": "Chiuso nella sua NC",
     "evidence": "Prove di conformità",
@@ -160,12 +159,12 @@
     "source": "Origine",
     "subtitle": "{reason} · dal {date}",
     "tab": {
-      "activity": "Attività",
       "decision": "Decisione",
       "hold": "Blocco",
       "affected": "Coinvolti"
     },
     "tabsLabel": "Parti del blocco",
+    "threadLabel": "Conversazione di {hold}",
     "tag": "Stampa cartellino",
     "title": "Blocco",
     "trace": "Traccia",
@@ -215,7 +214,6 @@
     "noRelease": "Solo la qualità sblocca un blocco: chiedi a un ispettore qualità.",
     "noReleaseHere": "Non sblocchi blocchi in questa sede.",
     "noRows": "Nessun blocco in questa vista.",
-    "noThreads": "Non leggi conversazioni e cronologia.",
     "notActive": "Questo blocco non è più attivo: non cambia più.",
     "pickFirst": "Seleziona prima i blocchi.",
     "traceKind": "La tracciabilità parte da un lotto o da una pelle: tracciala dai suoi lotti in Lotti e tracciabilità.",

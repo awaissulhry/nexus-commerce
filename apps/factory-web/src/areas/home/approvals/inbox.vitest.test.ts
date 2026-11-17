@@ -37,6 +37,8 @@ import {
   valueText,
   type InboxRow,
 } from './inbox'
+// B-TH-270: the review window's tabs 4 → 2 and the thread docked in it (PL6).
+import { MERGED_REVIEW_TABS, REVIEW_TABS, reviewTabOf } from './model'
 
 /** Home › Approvals in depth (SCR-030, B-W2b-307), the approval history (SCR-352) and Approval rules (SCR-167): rules, words, cases. */
 
@@ -193,7 +195,7 @@ describe('every string of approvals-depth exists in it and en', () => {
     for (const status of ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN', 'STALE']) keys.add(`status.${status}`)
     for (const view of INBOX_VIEWS) keys.add(`tile.${view}`).add(`table.${view}`).add(`empty.${view}.title`).add(`empty.${view}.body`)
     for (const code of KNOWN_REFUSALS) keys.add(`refusal.${code}`)
-    for (const tab of ['change', 'context', 'conversation', 'history']) keys.add(`review.tab.${tab}`)
+    for (const tab of REVIEW_TABS) keys.add(`review.tab.${tab}`) // B-TH-270: Change · Context & history
     for (const kind of ['forbidden', 'unavailable', 'rate_limited', 'signed_out', 'step_up', 'invalid', 'internal']) keys.add(`problem.${kind}`)
     keys.add('history.problem.forbidden').add('history.problem.unavailable').add('review.not_found').add('review.forbidden')
     // A source's own words: Today's and the W1 review's (other catalogues), never this one.
@@ -253,5 +255,49 @@ describe('every design case of B-W2b-307 draws in both languages with no key lef
     expect(html.slice(0, html.indexOf('fw-list'))).not.toMatch(/<kbd/i)
     const none = render(designScreen as DesignScreen<unknown>, { depth: depthModel({ can: { quotes: { view: false, manage: false, approve: false, send: false }, tasks: false, decide: false, today: true, rules: false }, grains: { price: false, cost: false, margin: false } }) }, 'en')
     expect(none).not.toContain('Amount')
+  })
+})
+
+// ---- B-TH-270 (threads plan TH-6, PL6; 08-tabs O-HOME-APV; picture 40): the review window 4 → 2 ------------------------------
+// The drawn window (Context & history with its signature meanings, the one docked thread, notes only) is held in
+// review-window.vitest.test.ts, where the DS DetailModal draws in place.
+describe('B-TH-270: the review window — Change · Context & history, the request’s thread docked in it', () => {
+  it('two tabs; every old tab id lands on its new place (R-8): Conversation → Change beside the thread, History → Context & history', () => {
+    expect(REVIEW_TABS).toEqual(['change', 'context'])
+    expect(MERGED_REVIEW_TABS).toEqual({ conversation: 'change', history: 'context' })
+    expect(reviewTabOf('conversation')).toBe('change')
+    expect(reviewTabOf('history')).toBe('context')
+    expect(reviewTabOf('context')).toBe('context')
+    expect(reviewTabOf('change')).toBe('change')
+    expect(reviewTabOf('constructor')).toBe('change')
+    expect(reviewTabOf(undefined)).toBe('change')
+  })
+
+  it('the words: "Context & history" and the history heading in both languages; no Conversation or History tab, no empty Conversation', () => {
+    expect(CATALOGUE.en[NS]?.['review.tab.context']).toBe('Context & history')
+    expect(CATALOGUE.it[NS]?.['review.tab.context']).toBe('Contesto e cronologia')
+    expect(CATALOGUE.en[NS]?.['review.historyTitle']).toBe('Approval history')
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale][NS] ?? {}
+      expect(words['review.tab.conversation'], locale).toBeUndefined()
+      expect(words['review.tab.history'], locale).toBeUndefined()
+      expect(words['conversation.title'], locale).toBeUndefined()
+      expect(words['review.threadLabel']?.trim(), locale).toBeTruthy()
+    }
+  })
+
+  it('the page mounts the request’s thread docked (ApprovalTask, no party) only with threads.read; the record panels are gone from the window', () => {
+    const page = readFileSync(join(SRC, 'areas/home/approvals/Approvals.tsx'), 'utf8')
+    expect(page).toContain("thread={task && held.has('threads.read') ? <RequestThread task={task} /> : undefined}")
+    expect(page).not.toContain('RequestPanels')
+    const thread = readFileSync(join(SRC, 'areas/home/approvals/words/RequestThread.tsx'), 'utf8')
+    expect(thread).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(thread).toContain("type: 'ApprovalTask'")
+    expect(thread).toContain('party={null}')
+    for (const file of files('areas/home/approvals')) expect(readFileSync(file, 'utf8'), file).not.toMatch(/record-panels\/RecordPanels|RecordPanelsView/)
+    const review = readFileSync(join(SRC, 'areas/home/approvals/view/TaskReview.tsx'), 'utf8')
+    expect(review).not.toContain("tab === 'conversation'")
+    // A / R are the window's keys only outside the thread (the thread keeps R reply, N note, J / K the messages).
+    expect(review).toContain("target?.closest('.fw-apv-window-thread')")
   })
 })

@@ -82,14 +82,26 @@ export interface TaskReviewModel {
   history: ApprovalHistoryModel | null
   /** The comment typed with the yes. */
   comment?: string
-  /** The tab open (design: Change · Context · Conversation · History). */
+  /** The tab open (B-TH-270: Change · Context & history; the thread is docked beside both). */
   tab?: ReviewTab
   /** B-W2b-382: the page of the request's record (its parent's for a subject with no page), also when its row is not listed. */
   recordHref?: string | null
 }
 
-export const REVIEW_TABS = ['change', 'context', 'conversation', 'history'] as const
+// ---- B-TH-270 (threads plan TH-6, PL6; 08-tabs O-HOME-APV; the review windows, picture 40): the review window 4 → 2. Change ·
+// Context & history — the approval history with its signature meanings joins Context (its own read, R1-G05: never the thread's
+// Changes view, which would lose the meanings and the earlier decisions); Conversation → the request's thread docked in the
+// window's right column (PL6, ~40 % of the 1160 px window), beside both tabs, Activity's tools in its "⋯" (R-ACT).
+export const REVIEW_TABS = ['change', 'context'] as const
 export type ReviewTab = (typeof REVIEW_TABS)[number]
+/** Every old tab id keeps working (R-8): Conversation → Change (the thread is docked beside every tab); History → Context & history. */
+export const MERGED_REVIEW_TABS: Readonly<Record<string, ReviewTab>> = Object.freeze({ conversation: 'change', history: 'context' })
+export const reviewTabOf = (value: string | null | undefined): ReviewTab => {
+  const asked = value ?? ''
+  if ((REVIEW_TABS as readonly string[]).includes(asked)) return asked as ReviewTab
+  return Object.hasOwn(MERGED_REVIEW_TABS, asked) ? MERGED_REVIEW_TABS[asked]! : 'change'
+}
+// ---- end B-TH-270
 
 /** One row of Approve N, re-read before the yes: current (approved with the others), or left out with the reason. */
 export interface BulkLine {
