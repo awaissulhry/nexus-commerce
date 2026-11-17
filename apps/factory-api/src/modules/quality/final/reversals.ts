@@ -75,7 +75,7 @@ export async function reverseRelease(caller: CommandCaller, releaseId: string, b
   const context = officeOf(caller)
   const release = await caller.withClient((db) => readRelease(db, releaseId))
   if (!release || !(mayOn(context, QUALITY_INSPECTIONS_VIEW, release) || mayOn(context, QUALITY_GARMENTS_REVERSE, release))) throw new NotFoundError('Release not found.')
-  const header = await finalWorkOrder(caller, release.workOrderId, QUALITY_GARMENTS_REVERSE)
+  const header = await finalWorkOrder(caller, release.workOrderId, QUALITY_GARMENTS_REVERSE, 'Release not found.') // B-PR-06
   const problem = reasonProblem(body.reason)
   if (problem) throw new ValidationError('Say why the garments are taken back.', [{ ...problem, path: 'body/reason' }])
   const serialIds = [...(body.serialIds ?? [])]

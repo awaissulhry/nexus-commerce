@@ -6,7 +6,7 @@ import { QUALITY_INSPECTIONS_RECORD } from '@nexus/factory-domain/quality/final/
 import { command, StaleVersionError, type CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { heldRoles } from '../../../platform/auth/roles/access'
-import { officeOf, type Signer } from './access'
+import { officeOf, reachesInspectionWork, type Signer } from './access'
 import { identityOf, madeAny } from './facts'
 import { makersOf, readInspection, type InspectionRow, type Reader } from './store'
 
@@ -145,8 +145,10 @@ export async function assignInspections(caller: CommandCaller, body: AssignBody,
   // Nothing to change (each one already has this assignee, at the version read): the answer as it stands, no command —
   // a command writes and audits something, and an assignment that changes nothing writes nothing.
   const current = await caller.withClient((db) => Promise.all(body.inspections.map((entry) => readInspection(db, entry.id))))
+  // B-PR-06: the brand wall (another customer's inspection is never "unchanged": the command refuses it as not found).
+  const reached = await caller.withClient((db) => Promise.all(current.map((row) => (row ? reachesInspectionWork(db, context, QUALITY_INSPECTIONS_RECORD, row) : false))))
   const unchanged = current.every((row, index) => {
-    if (!row || row.version !== body.inspections[index]!.version || row.status !== 'OPEN' || !can(actorOf(context), QUALITY_INSPECTIONS_RECORD, { companyId: row.companyId, siteId: row.siteId })) return false
+    if (!row || !reached[index] || row.version !== body.inspections[index]!.version || row.status !== 'OPEN' || !can(actorOf(context), QUALITY_INSPECTIONS_RECORD, { companyId: row.companyId, siteId: row.siteId })) return false
     const before = assigneeOf(row)
     return before.userId === assignee.userId && before.workerId === assignee.workerId
   })
@@ -159,8 +161,9 @@ export async function assignInspections(caller: CommandCaller, body: AssignBody,
     for (const [index, entry] of body.inspections.entries()) {
       await tx.$queryRaw`SELECT "id" FROM "Inspection" WHERE "id" = ${entry.id}::uuid FOR UPDATE`
       const row = await readInspection(tx, entry.id)
-      if (!row || !can(actorOf(context), 'quality.inspections.view', { companyId: row.companyId, siteId: row.siteId })) throw new NotFoundError('Inspection not found.')
-      if (!can(actorOf(context), QUALITY_INSPECTIONS_RECORD, { companyId: row.companyId, siteId: row.siteId })) throw new ForbiddenError("Assigning an inspector needs the right to record inspections over the inspection's company and site.")
+      // B-PR-06: the brand wall too (another customer's inspection is not found, as an unknown one).
+      if (!row || !can(actorOf(context), 'quality.inspections.view', { companyId: row.companyId, siteId: row.siteId }) || !(await reachesInspectionWork(tx, context, 'quality.inspections.view', row))) throw new NotFoundError('Inspection not found.')
+      if (!can(actorOf(context), QUALITY_INSPECTIONS_RECORD, { companyId: row.companyId, siteId: row.siteId }) || !(await reachesInspectionWork(tx, context, QUALITY_INSPECTIONS_RECORD, row))) throw new ForbiddenError("Assigning an inspector needs the right to record inspections over the inspection's company and site.")
       if (row.version !== entry.version) throw new StaleVersionError('Inspection', row.id, row.version, entry.version)
       const order = await tx.workOrder.findUnique({ where: { id: row.workOrderId }, select: { number: true } })
       const label = row.number ?? order?.number ?? row.id

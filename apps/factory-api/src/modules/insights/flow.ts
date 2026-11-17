@@ -26,6 +26,7 @@ import type { CommandCaller } from '../../core/command'
 import { ORDER_DEPOSIT_ONLY } from '../sales/deposits/deposits'
 import { dayOrNull } from './sources/common'
 import { scopeFilterOf, viewerOf } from './viewer'
+import { workOrderWhere } from '../production/work-orders/scope' // B-PR-37
 
 /**
  * GET /home/flow (B-W1-52; SCR-031 W1 "Overview" on Today; design home.today `flow`): per lens the person can see
@@ -76,7 +77,8 @@ const orders: Reader = async (db, viewer, filter) => {
 
 const workOrders: Reader = async (db, viewer, filter) => {
   const found = await db.workOrder.findMany({
-    where: { AND: [scopeWhere(viewer.actor, WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput, filterWhere(filter, true), { status: { in: ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED'] } }] },
+    // B-PR-37 (the brand wall): B-PR-03's workOrderWhere — the customers' work orders the viewer reaches.
+    where: { AND: [workOrderWhere(viewer.actor, WORKORDERS_VIEW), filterWhere(filter, true), { status: { in: ['DRAFT', 'RELEASED', 'IN_PROGRESS', 'COMPLETED'] } }] },
     take: FLOW_LIMIT + 1,
     select: { status: true, dueDate: true, createdAt: true },
   })

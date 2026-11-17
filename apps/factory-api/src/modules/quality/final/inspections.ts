@@ -114,7 +114,7 @@ export async function inspectionFor(caller: CommandCaller, inspectionId: string,
   const context = inspectorOf(caller)
   const inspection = await caller.withClient((client) => readInspection(client, inspectionId))
   if (!inspection || !(mayOn(context, QUALITY_INSPECTIONS_VIEW, inspection) || mayOn(context, permission, inspection))) throw new NotFoundError('Inspection not found.')
-  const header = await finalWorkOrder(caller, inspection.workOrderId, permission)
+  const header = await finalWorkOrder(caller, inspection.workOrderId, permission, 'Inspection not found.') // B-PR-06
   return { inspection, header }
 }
 
