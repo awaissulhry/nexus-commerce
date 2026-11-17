@@ -62,12 +62,16 @@ const B = (method: 'GET' | 'POST', url: string, body?: unknown, status: number |
 const officeNumber = async (inquiryId: string) => (await admin<{ number: string }>(w, 'SELECT number FROM "Inquiry" WHERE id = $1', [inquiryId]))[0]!.number
 const ownRequests = async (partyId: string) => (await admin<{ n: number }>(w, 'SELECT count(*)::int AS n FROM "Inquiry" WHERE "tenantId" = $1 AND "partyId" = $2', [w.tenant.id, partyId]))[0]!.n
 
-/** The harness clock back to now, or just after the newest role assignment when that is later (a role must have started). */
+/**
+ * The harness clock (a clock the test moves; each two-factor step moved it 30 s on) within 4 minutes of the database's: a request
+ * closes "not in the future" (5 minutes of difference allowed). It goes back no further than the newest role given (a role must
+ * have started), and real time catches up with it for the rest (the harness clock stands still while real time runs).
+ */
 async function settleClock(): Promise<void> {
   const [latest] = await admin<{ at: Date | null }>(w, 'SELECT max("validFrom") AS at FROM "RoleAssignment" WHERE "tenantId" = $1', [w.tenant.id])
-  const target = Math.max(Date.now(), (latest?.at?.getTime() ?? 0) + 1000)
-  console.info(`settleClock: harness ran ${Math.round((w.h.clock.now().getTime() - Date.now()) / 1000)} s ahead; now ${Math.round((target - Date.now()) / 1000)} s`)
-  w.h.clock.set(new Date(target))
+  w.h.clock.set(new Date(Math.min(w.h.clock.now().getTime(), Math.max(Date.now(), (latest?.at?.getTime() ?? 0) + 1000))))
+  const ahead = w.h.clock.now().getTime() - Date.now()
+  if (ahead > 240_000) await new Promise((resolve) => setTimeout(resolve, ahead - 240_000))
 }
 
 beforeAll(async () => {
@@ -103,7 +107,7 @@ describe('B-TH-021 golden flow TH-1b: a request like an e-mail, from the portal 
     // Each two-factor step moved the harness clock 30 s on, while a request is closed "not in the future" of the database's clock
     // (5 minutes of difference allowed): the clock goes back as far as every role given so far still holds (no step-up follows).
     await settleClock()
-  })
+  }, 900_000)
 
   it('T37 customer A sends a request from its portal, text only: the receipt says “Your request N” (its own count), never the office series', async () => {
     expect((await A('GET', '/portal/inquiries/open')).open).toBe(true)

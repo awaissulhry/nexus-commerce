@@ -72,7 +72,7 @@ const styleOf = async (code: string, colour: string) => {
 /** A file the office adds to a request, shared with the request's customer (its portal): announced, its bytes sent, completed. */
 async function sharedFile(recordId: string, name: string): Promise<string> {
   const body = pdf(name)
-  const announced = await ok(P.sales, 'POST', '/files', { recordType: 'Inquiry', recordId, kind: 'DOCUMENT', ...announce(name, body), visibility: ['OFFICE', 'PARTNER'] }, 201)
+  const announced = await ok(P.sales, 'POST', '/files', { recordType: 'Inquiry', recordId, companyId: companyA(), kind: 'DOCUMENT', ...announce(name, body), visibility: ['OFFICE', 'PARTNER'] }, 201)
   await putBytes(w, announced, body)
   expect((await ok(P.sales, 'POST', `/files/${announced.file.id}/complete`)).file.status).toBe('AVAILABLE')
   return announced.file.id
@@ -84,12 +84,16 @@ async function withLines(inquiryId: string, lines: Json[]): Promise<Json> {
   return (await ok(P.sales, 'PATCH', `/sales/inquiries/${inquiryId}`, { version: record.version, lines })).inquiry
 }
 
-/** The harness clock back to now, or just after the newest role assignment when that is later (a role must have started). */
+/**
+ * The harness clock (a clock the test moves; each two-factor step moved it 30 s on) within 4 minutes of the database's: a request
+ * closes "not in the future" (5 minutes of difference allowed). It goes back no further than the newest role given (a role must
+ * have started), and real time catches up with it for the rest (the harness clock stands still while real time runs).
+ */
 async function settleClock(): Promise<void> {
   const [latest] = await admin<{ at: Date | null }>(w, 'SELECT max("validFrom") AS at FROM "RoleAssignment" WHERE "tenantId" = $1', [w.tenant.id])
-  const target = Math.max(Date.now(), (latest?.at?.getTime() ?? 0) + 1000)
-  console.info(`settleClock: harness ran ${Math.round((w.h.clock.now().getTime() - Date.now()) / 1000)} s ahead; now ${Math.round((target - Date.now()) / 1000)} s`)
-  w.h.clock.set(new Date(target))
+  w.h.clock.set(new Date(Math.min(w.h.clock.now().getTime(), Math.max(Date.now(), (latest?.at?.getTime() ?? 0) + 1000))))
+  const ahead = w.h.clock.now().getTime() - Date.now()
+  if (ahead > 240_000) await new Promise((resolve) => setTimeout(resolve, ahead - 240_000))
 }
 
 beforeAll(async () => {
@@ -134,7 +138,7 @@ describe('B-TH-037 golden flow TH-2: a request becomes an order, a style draft, 
     // Each two-factor step moved the harness clock 30 s on, while a request is closed "not in the future" of the database's clock
     // (5 minutes of difference allowed): the clock goes back as far as every role given so far still holds (no step-up follows).
     await settleClock()
-  })
+  }, 900_000)
 
   it('G3 customer A’s portal request gets its lines and a shared file; Make order: ONE order of A, CONFIRMED, the file carried', async () => {
     const sent = await A('POST', '/portal/inquiries', { subject: 'Made-up: twelve team jackets', message: `${BRAND_ALPHA.message}\nTwelve jackets in black, as the sketch.`, customerRef: BRAND_ALPHA.customerRef, wantedDate: addDays(today(), 45) }, 201)
