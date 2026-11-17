@@ -305,7 +305,8 @@ describe('the catalogue', () => {
   })
 })
 
-const LEFT_KEY = /\b(?:common|held|problem|record|uom|kind|disc|discStatus|discStatusWords|docs|report|request|new|settle|remove|claim|hideList|photo|detail|refused|notice|tile|view|col|list|lines|lots|band|tab|contactRole|language|remedy|rc|po|imp)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+// B-TH-264: the docked thread lists its files by name ("label-detail.jpg"): a key starts a word, never after a hyphen.
+const LEFT_KEY = /(?<![\w-])(?:common|held|problem|record|uom|kind|disc|discStatus|discStatusWords|docs|report|request|new|settle|remove|claim|hideList|photo|detail|refused|notice|tile|view|col|list|lines|lots|band|tab|contactRole|language|remedy|rc|po|imp)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 /** Permission names are stripped before the key check, though no screen says one since B-W2b-F51. */
 const PERMISSIONS = /\b(?:planning\.(?:view|run|decide)|purchasing\.(?:view|manage|send|claims\.manage|claims\.return)|inventory\.(?:stock\.view|receive|reverse|locations\.view|discrepancies\.manage|discrepancies\.report|receipts\.documents\.request)|quality\.lots\.view|money\.cost|email\.send|parties\.view|files\.upload|imports\.run)\b/g
 
