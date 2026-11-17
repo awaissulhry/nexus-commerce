@@ -1,12 +1,14 @@
 {
   "tile": {
     "dueThisWeek": "In arrivo questa settimana",
-    "deliveryLate": "In ritardo"
+    "deliveryLate": "In ritardo",
+    "supplierReplies": "Risposte dei fornitori"
   },
   "view": {
     "dueThisWeek": "Attesi questa settimana",
     "deliveryLate": "Consegne in ritardo",
-    "pastConfirmBy": "Oltre il termine di conferma"
+    "pastConfirmBy": "Oltre il termine di conferma",
+    "supplierReplies": "Risposte dei fornitori (ha scritto per ultimo il fornitore)"
   },
   "delivery": {
     "LATE": "In ritardo",
@@ -348,5 +350,35 @@
     "closedShort_other": "{count} righe chiuse a saldo: la pianificazione libera il resto.",
     "confirmByMoved": "Il termine di conferma è stato spostato; l'avviso lo segue.",
     "reminded": "Sollecito inviato a {email}."
+  },
+  "replies": {
+    "col": "Ha scritto il fornitore",
+    "colWaiting": "In attesa di noi",
+    "colWaitingHint": "Dall'ultimo messaggio del fornitore, in tempo lavorativo sul calendario dell'azienda; ambra dopo 3 giorni lavorativi",
+    "reading": "Lettura del messaggio…",
+    "door": "Apri la conversazione di {number} al messaggio del fornitore",
+    "noWords": "Un messaggio senza testo (solo file)",
+    "by": "{who} · {time}",
+    "tipWorking": "Tempo lavorativo sul calendario dell'azienda da quando ha scritto il fornitore; ambra dopo {days} giorni lavorativi",
+    "tipClock": "Tempo d'orologio da quando ha scritto il fornitore (l'azienda non ha un calendario lavorativo); ambra dopo {days} giorni lavorativi",
+    "wait": {
+      "minutes": "{n} min",
+      "hours": "{n} h",
+      "days": "{n} g"
+    },
+    "noThreads": "Le conversazioni non ti sono aperte: questa vista non può elencarle.",
+    "readFailed": "Non è stato possibile leggere i messaggi dei fornitori: gli ordini sono elencati, i loro messaggi no. Riprova con Mostra o Riprova.",
+    "countUnknown": "Quante conversazioni attendono una nostra risposta non è ancora noto.",
+    "countPartial_one": "{count} conversazione attende una nostra risposta: ha scritto per ultimo il fornitore (solo le prime 1000 sono descritte).",
+    "countPartial_other": "{count} conversazioni attendono una nostra risposta: ha scritto per ultimo il fornitore (solo le prime 1000 sono descritte).",
+    "count_one": "{count} conversazione attende una nostra risposta: ha scritto per ultimo il fornitore. La nostra risposta la toglie da questa vista.",
+    "count_other": "{count} conversazioni attendono una nostra risposta: ha scritto per ultimo il fornitore. La nostra risposta le toglie da questa vista.",
+    "empty": {
+      "title": "Nessun fornitore attende una risposta",
+      "body": "Quando un fornitore scrive nella conversazione di un ordine e nessuno ha ancora risposto, l'ordine compare qui. Una nota d'ufficio non conta; la nostra risposta lo toglie.",
+      "noThreadsTitle": "Le conversazioni non ti sono aperte",
+      "noThreadsBody": "Questa vista elenca gli ordini il cui fornitore ha scritto per ultimo. Serve il diritto di leggere le conversazioni: chiedi a un amministratore.",
+      "all": "Tutti gli ordini"
+    }
   }
 }

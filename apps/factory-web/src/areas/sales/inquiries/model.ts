@@ -27,8 +27,14 @@ import type { LineBody, UpdateInquiryBody } from '@nexus/factory-domain/sales/in
 import { amberOf, WAITING_THRESHOLD_DAYS } from '@nexus/factory-domain/threads/waiting'
 // B-TH-235: what a request became (Sales › Reports' request figure opens the list with it).
 import { REQUEST_OUTCOMES, type RequestOutcome } from '@nexus/factory-domain/sales/inquiries/rules'
+// B-TH-233: Incoming over every door (B-TH-039's one read: requests, catalogue orders, change requests).
+import { INCOMING_KINDS, INCOMING_TILES, stateWords, type IncomingKind, type IncomingTile } from '@nexus/factory-domain/sales/incoming/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
-import type { InquiryFile, InquiryLine, InquiryList, InquiryRow, InquiryView } from './api'
+import { recordAddress } from '../../../lib/records/record-links'
+import type { IncomingList, IncomingQuery, IncomingRow, InquiryFile, InquiryLine, InquiryRow, InquiryView, WaitingRow } from './api'
+// B-TH-234: answer a new customer, hand the customer a task.
+import type { CustomerCheck, CustomerMade, RequestTaskKind } from './api'
+import type { MakeCustomerBody } from '@nexus/factory-domain/sales/inquiries/contracts'
 
 /**
  * Sales › Inquiries (SCR-105, B-W2b-322 on B-W2b-295's API), pure: who may do what, the page's address (the tiles = the API's
@@ -100,6 +106,10 @@ export interface InquiriesCan {
   ordersView?: boolean
   stylesManage?: boolean
   // ---- end B-TH-228
+  // ---- B-TH-234: "Ask <customer> for…" a task in its portal (partners.tasks.manage); a new customer from the prospect (parties.manage).
+  tasks?: boolean
+  partiesManage?: boolean
+  // ---- end B-TH-234
 }
 
 export function inquiriesCan(permissions: readonly string[]): InquiriesCan {
@@ -122,11 +132,14 @@ export function inquiriesCan(permissions: readonly string[]): InquiriesCan {
     orders: has('orders.manage'),
     ordersView: has('orders.view'),
     stylesManage: has('product.styles.manage'),
+    // B-TH-234
+    tasks: has('partners.tasks.manage'),
+    partiesManage: has('parties.manage'),
   }
 }
 
 /** The rights a held verb may name, each with words (`right.<permission>`). */
-export const KNOWN_RIGHTS = ['sales.inquiries.manage', 'quotes.manage', 'email.send', 'files.upload', 'email.triage', 'orders.manage', 'product.styles.manage'] as const
+export const KNOWN_RIGHTS = ['sales.inquiries.manage', 'quotes.manage', 'email.send', 'files.upload', 'email.triage', 'orders.manage', 'product.styles.manage', /* B-TH-234 */ 'partners.tasks.manage', 'parties.manage'] as const
 
 // ---- the page's address ---------------------------------------------------------------------------------------------------
 
@@ -134,11 +147,20 @@ export const RECORD_TABS = ['request', 'files', 'quote', 'activity'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
 /** The tile of a page without one: the API's default (every open inquiry). */
-export const DEFAULT_TILE: InquiryTile = 'OPEN'
+export const DEFAULT_TILE: IncomingTile = 'OPEN'
+
+// ---- B-TH-233: the saved rows are Incoming's own (B-TH-039's tiles) plus "Customer replies" (B-TH-047, a view of conversations) ----
+/** "Customer replies": the conversations on the customer's other records that wait on us (GET /threads/waiting?side=CUSTOMER). */
+export const CUSTOMER_REPLIES = 'CUSTOMER_REPLIES' as const
+export type ListTile = IncomingTile | typeof CUSTOMER_REPLIES
+export const LIST_TILES: readonly ListTile[] = [...INCOMING_TILES, CUSTOMER_REPLIES]
+export { INCOMING_KINDS }
+export type { IncomingKind, IncomingTile }
+// ---- end B-TH-233
 
 export interface ListAddress {
-  /** A tile = a saved filter (the API's own `tile`); OPEN when the address names none. */
-  readonly tile: InquiryTile
+  /** A tile = a saved filter (the API's own `tile`); OPEN when the address names none. B-TH-233: or "Customer replies". */
+  readonly tile: ListTile
   /** B-TH-216: one state (the State cell narrows the list to it). */
   readonly status: InquiryStatus | null
   readonly source: InquirySource | null
@@ -163,9 +185,13 @@ export interface ListAddress {
   /** What a request became, as the figure counts it (`?outcome=`): Ordered, Declined (not "Not an order"), Not an order, Withdrawn (B-TH-095). */
   readonly outcome: RequestOutcome | null
   // ---- end B-TH-235
+  // ---- B-TH-233: one kind of row (`?kind=`), and the catalogue order open in the reading pane (`?catalogue=<id>`; a request is `?open=`).
+  readonly kind: IncomingKind | null
+  readonly catalogue: string | null
+  // ---- end B-TH-233
 }
 
-export const HOME_ADDRESS: ListAddress = { tile: DEFAULT_TILE, status: null, source: null, company: null, party: null, prospect: false, q: '', open: null, tab: 'request', isNew: false, mail: null, from: null, to: null, outcome: null }
+export const HOME_ADDRESS: ListAddress = { tile: DEFAULT_TILE, status: null, source: null, company: null, party: null, prospect: false, q: '', open: null, tab: 'request', isNew: false, mail: null, from: null, to: null, outcome: null, kind: null, catalogue: null }
 
 const oneOf = <T extends string>(values: readonly T[], value: string | null): T | null => (value !== null && (values as readonly string[]).includes(value) ? (value as T) : null)
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -175,15 +201,18 @@ const dayOf = (value: string | null): string | null => (value && /^\d{4}-\d{2}-\
 
 export function addressOf(params: { get(name: string): string | null }): ListAddress {
   const prospect = params.get('prospect') === '1'
+  // B-TH-233: a catalogue order is `?catalogue=<id>`; a link that names the kind (`?kind=CATALOGUE_ORDER&open=<id>`) opens it too.
+  const kind = oneOf(INCOMING_KINDS, params.get('kind'))
+  const openAsCatalogue = kind === 'CATALOGUE_ORDER' && !params.get('catalogue') && !!idOf(params.get('open'))
   return {
-    tile: oneOf(INQUIRY_TILES, params.get('tile')) ?? DEFAULT_TILE,
+    tile: oneOf(LIST_TILES, params.get('tile')) ?? DEFAULT_TILE, // B-TH-233: Incoming's tiles and Customer replies
     status: oneOf(INQUIRY_STATUSES, params.get('status')),
     source: oneOf(INQUIRY_SOURCES, params.get('source')),
     company: idOf(params.get('company')),
     party: prospect ? null : idOf(params.get('party')),
     prospect,
     q: (params.get('q') ?? '').slice(0, 100),
-    open: idOf(params.get('open')),
+    open: openAsCatalogue ? null : idOf(params.get('open')),
     tab: oneOf(RECORD_TABS, params.get('tab')) ?? 'request',
     isNew: params.get('new') === '1',
     mail: idOf(params.get('mail')),
@@ -191,6 +220,9 @@ export function addressOf(params: { get(name: string): string | null }): ListAdd
     from: dayOf(params.get('from')),
     to: dayOf(params.get('to')),
     outcome: oneOf(REQUEST_OUTCOMES, params.get('outcome')),
+    // B-TH-233: one kind; a catalogue order open beside the list (never with a request open: the request wins).
+    kind,
+    catalogue: openAsCatalogue ? idOf(params.get('open')) : idOf(params.get('open')) ? null : idOf(params.get('catalogue')),
   }
 }
 
@@ -207,7 +239,10 @@ export function addressText(address: ListAddress): string {
   if (address.from) params.set('from', address.from)
   if (address.to) params.set('to', address.to)
   if (address.outcome) params.set('outcome', address.outcome)
+  // B-TH-233
+  if (address.kind) params.set('kind', address.kind)
   if (address.open) params.set('open', address.open)
+  else if (address.catalogue) params.set('catalogue', address.catalogue)
   if (address.open && address.tab !== 'request') params.set('tab', address.tab)
   if (address.isNew) params.set('new', '1')
   if (address.mail) params.set('mail', address.mail)
@@ -216,7 +251,7 @@ export function addressText(address: ListAddress): string {
 }
 
 /** Anything narrowing the rows beyond the default tile. */
-export const isFiltered = (address: ListAddress): boolean => address.tile !== DEFAULT_TILE || !!address.status || !!address.source || !!address.company || !!address.party || address.prospect || !!address.q.trim() || !!address.from || !!address.to || !!address.outcome /* B-TH-235 */
+export const isFiltered = (address: ListAddress): boolean => address.tile !== DEFAULT_TILE || !!address.status || !!address.source || !!address.company || !!address.party || address.prospect || !!address.q.trim() || !!address.from || !!address.to || !!address.outcome /* B-TH-235 */ || !!address.kind /* B-TH-233 */
 
 /** B-TH-216: Sales › Incoming (renamed from Inquiries; the old address redirects, shell/nav/renamed.ts). */
 export const PAGE_PATH = '/sales/incoming'
@@ -234,7 +269,7 @@ export const recordTabOf = (params: { get(name: string): string | null }): Recor
 
 /** The full page of a request opened from the list: `?back=` keeps the list's filters (never an address of its own: only a query). */
 export function fullPageHref(prefix: string, inquiryId: string, list: ListAddress): string {
-  const query = addressText({ ...list, open: null, isNew: false, mail: null })
+  const query = addressText({ ...list, open: null, isNew: false, mail: null, catalogue: null })
   return `${recordHref(prefix, inquiryId)}?back=${encodeURIComponent(query || '?')}`
 }
 
@@ -246,12 +281,16 @@ export function backAddressOf(params: { get(name: string): string | null }): { r
 }
 
 /** "Back to Incoming": the list with its filters and this request open beside it. */
-export const backHref = (prefix: string, list: ListAddress, inquiryId: string): string => listHref(prefix, { ...list, open: inquiryId, isNew: false, mail: null })
+export const backHref = (prefix: string, list: ListAddress, inquiryId: string): string => listHref(prefix, { ...list, open: inquiryId, catalogue: null, isNew: false, mail: null })
 
-/** The list query the API takes for an address. */
-export function queryOf(address: ListAddress) {
+/**
+ * The query Incoming's one read takes for an address (B-TH-233: GET /sales/incoming). "Customer replies" lists conversations (its
+ * own read); Incoming's read then brings the tiles' counts under the same filters (as for Open).
+ */
+export function queryOf(address: ListAddress): IncomingQuery {
   return {
-    tile: address.tile,
+    tile: address.tile === CUSTOMER_REPLIES ? DEFAULT_TILE : address.tile,
+    kind: address.kind,
     status: address.status,
     source: address.source,
     companyId: address.company,
@@ -268,22 +307,29 @@ export function queryOf(address: ListAddress) {
 // ---- tiles, chips and notices ---------------------------------------------------------------------------------------------
 
 /** The tiles (saved filters), in the tree's order (B-TH-216, O-SAL-INQ-LIST.tiles): New · Waiting on us over 1 working day · Need info · Quoted this week · Mine. */
-export const DESIGN_TILES = ['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'MINE'] as const satisfies readonly InquiryTile[]
-/** Rows ▾ (the saved rows), in the design's order: Mine, New, Need info, Quoted, Declined, All, and the rest. */
-export const SAVED_ROWS = ['OPEN', 'MINE', 'NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'QUOTED', 'DECLINED', 'LOST', 'ALL'] as const satisfies readonly InquiryTile[]
+export const DESIGN_TILES = ['NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'MINE'] as const satisfies readonly IncomingTile[]
+/**
+ * Rows ▾ (the saved rows, list-F05), in the design's order: Open (the default) · Mine · the queue's own · Quoted · Ordered · Declined ·
+ * Not an order · Lost · All, then "Customer replies" (B-TH-233: the one office inbox of conversations waiting on us, B-TH-047).
+ * Catalogue orders and change requests are the Kind filter (`?kind=`), with every saved row.
+ */
+export const SAVED_ROWS = ['OPEN', 'MINE', 'NEW', 'WAITING_US', 'WAITING_CUSTOMER', 'QUOTED_THIS_WEEK', 'QUOTED', 'ORDERED', 'DECLINED', 'NOT_AN_ORDER', 'LOST', 'ALL', CUSTOMER_REPLIES] as const satisfies readonly ListTile[]
+
+/** What a tile's number is read from: Incoming's counts (B-TH-233: `counts.CUSTOMER_REPLIES` too). */
+type Counted = Pick<IncomingList, 'counts' | 'complete'>
 
 /** A tile's number: the API's count under the filters; unknown is "—", never 0 (the design's rule). */
-export function tileValue(list: InquiryList | null, tile: InquiryTile, failed: boolean): string {
+export function tileValue(list: Counted | null, tile: ListTile, failed: boolean): string {
   if (failed || !list) return '—'
   const value = list.counts[tile]
   return value === null || value === undefined ? '—' : String(value)
 }
 
 /** WAITING_US is counted on at most 1000 open inquiries: past that the API says the count is partial. */
-export const tilePartial = (list: InquiryList | null, tile: InquiryTile): boolean => tile === 'WAITING_US' && !!list && !list.complete
+export const tilePartial = (list: Counted | null, tile: ListTile): boolean => tile === 'WAITING_US' && !!list && !list.complete
 
 export interface FilterChipModel {
-  readonly id: 'tile' | 'status' | 'source' | 'company' | 'party' | 'prospect' | 'q' | 'received' | 'outcome' // B-TH-235
+  readonly id: 'tile' | 'status' | 'source' | 'company' | 'party' | 'prospect' | 'q' | 'received' | 'outcome' /* B-TH-235 */ | 'kind' /* B-TH-233 */
   readonly label: Phrase
   readonly clear: Partial<ListAddress>
 }
@@ -292,6 +338,8 @@ export interface FilterChipModel {
 export function chipsOf(address: ListAddress, partyName: string | null, companyName: string | null = null): FilterChipModel[] {
   const chips: FilterChipModel[] = []
   if (address.tile !== DEFAULT_TILE) chips.push({ id: 'tile', label: { key: 'chip.tile', params: { tile: `tile.${address.tile}` } }, clear: { tile: DEFAULT_TILE } })
+  // B-TH-233: one kind of row (Requests, Catalogue orders, Change requests).
+  if (address.kind) chips.push({ id: 'kind', label: { key: 'chip.kind', params: { kind: `kind.${address.kind}` } }, clear: { kind: null } })
   // B-TH-216: the State and Company cells narrow the list; each narrowing is a chip.
   if (address.status) chips.push({ id: 'status', label: { key: 'chip.status', params: { status: `status.${address.status}` } }, clear: { status: null } })
   if (address.source) chips.push({ id: 'source', label: { key: 'chip.source', params: { source: `source.${address.source}` } }, clear: { source: null } })
@@ -323,14 +371,17 @@ export interface NoticeFacts {
   readonly mailToSort?: { readonly count: number; readonly more: boolean } | null
 }
 
-export function pageNotices(list: InquiryList | null, limit: number, dismissed: ReadonlySet<string>, facts: NoticeFacts = {}): PageNotice[] {
+/**
+ * B-TH-233: the list reads in pages now (Show more, the cursor), so the "first 200 rows" notice went; the prospects are counted on
+ * the rows read (open requests of prospects, any kind's `open`).
+ */
+export function pageNotices(list: Pick<IncomingList, 'rows' | 'complete'> | null, dismissed: ReadonlySet<string>, facts: NoticeFacts = {}): PageNotice[] {
   if (!list) return []
   const notices: PageNotice[] = []
   // B-TH-216: the most serious first — a company whose portal and mail doors are off (no request numbering).
   for (const name of facts.numberingMissing ?? []) notices.push({ key: 'notice.numbering', params: { name }, tone: 'warning', value: `numbering:${name}` })
   if (!list.complete) notices.push({ key: 'notice.partial', tone: 'warning', value: 'partial' })
-  if (list.rows.length >= limit) notices.push({ key: 'notice.capped', params: { count: limit }, tone: 'warning', value: `capped:${limit}` })
-  const prospects = list.rows.filter((row) => row.prospect && isOpen(row.status)).length
+  const prospects = list.rows.filter((row) => row.prospect && row.open).length
   if (prospects > 0) notices.push({ key: 'notice.prospects', params: { count: prospects }, tone: 'info', value: `prospects:${prospects}` })
   // B-TH-216: mails that wait in Mail to sort (only for people who sort mail).
   const mail = facts.mailToSort
@@ -348,7 +399,7 @@ export function noticeLink(notice: Pick<PageNotice, 'key'>, prefix: string): { r
 }
 
 /** B-TH-216 (band-F01): the band's count, said in words for the current Rows ▾ choice ("41 open"); unknown is "—", never 0. */
-export function bandCount(list: InquiryList | null, tile: InquiryTile, failed: boolean): Phrase {
+export function bandCount(list: Counted | null, tile: ListTile, failed: boolean): Phrase {
   const value = failed || !list ? null : list.counts[tile]
   return value === null || value === undefined ? { key: 'band.countUnknown' } : { key: `band.count.${tile}`, params: { count: value } }
 }
@@ -411,9 +462,13 @@ export function filesPhrases(row: Pick<InquiryRow, 'fileCounts'>): Phrase[] | nu
   return [...(files.photos > 0 ? [{ key: 'files.photos', params: { count: files.photos } }] : []), ...(files.documents > 0 ? [{ key: 'files.documents', params: { count: files.documents } }] : [])]
 }
 
-/** B-TH-216 (band-F03): what Export ▾ says the file holds — the view, and the first 200 rows until the list reads in pages (L2-G07). */
-export function exportPhrases(tile: InquiryTile, limit: number, can: Pick<InquiriesCan, 'price'>): { readonly heading: Phrase; readonly note: Phrase } {
-  return { heading: { key: 'export.heading', params: { view: `tile.${tile}`, count: limit } }, note: { key: can.price ? 'export.note' : 'export.notePrice', params: { count: limit } } }
+/**
+ * B-TH-216 (band-F03): what Export ▾ says the file holds — the view. B-TH-233 (L2-G07): the file pages Incoming's one read to its
+ * end (every kind of row the reader may open), so the "first 200 rows" note went; the target price is left out without the grain,
+ * and a file with prospects' names holds personal data (said always: the reader cannot see every page before exporting).
+ */
+export function exportPhrases(tile: ListTile, can: Pick<InquiriesCan, 'price'>): { readonly heading: Phrase; readonly note: Phrase } {
+  return { heading: { key: 'export.heading', params: { view: `tile.${tile}` } }, note: { key: can.price ? 'export.note' : 'export.notePrice' } }
 }
 
 // ---- verbs held with the reason ----------------------------------------------------------------------------------------------
@@ -574,13 +629,19 @@ export function styleDraftBodyOf(view: InquiryView, draft: StyleDraftDraft): { v
 
 // ---- the selection (Assign to…, Decline N) -------------------------------------------------------------------------------------
 
-/** What a bulk verb reaches: the open inquiries of the selection (at most the API's 100); closed ones are left out with why. */
-export function bulkReach(rows: readonly InquiryRow[], selected: readonly string[]): { readonly open: InquiryRow[]; readonly closed: number; readonly held: Phrase | null } {
-  const picked = rows.filter((row) => selected.includes(row.id))
-  const open = picked.filter((row) => isOpen(row.status))
-  const closed = picked.length - open.length
-  const held = open.length === 0 ? { key: 'bulk.noneOpen' } : open.length > INQUIRY_LIMITS.bulk ? { key: 'bulk.tooMany', params: { max: INQUIRY_LIMITS.bulk } } : null
-  return { open, closed, held }
+/**
+ * What a bulk verb reaches: the open requests of the selection (at most the API's 100); closed ones are left out with why. B-TH-233
+ * (list-F11): a selection over every kind — Assign and Decline act on requests only; a catalogue order or a change request is left
+ * out and counted (`others`), each decided on its own (the pane, Home › Approvals). `selected` holds the rows' keys (`<kind>:<id>`).
+ */
+export function bulkReach(rows: readonly IncomingRow[], selected: readonly string[]): { readonly open: InquiryRow[]; readonly closed: number; readonly others: number; readonly held: Phrase | null } {
+  const picked = rows.filter((row) => selected.includes(row.key))
+  const requests = picked.flatMap((row) => (row.kind === 'REQUEST' && row.request ? [row.request] : []))
+  const open = requests.filter((row) => isOpen(row.status))
+  const closed = requests.length - open.length
+  const others = picked.length - requests.length
+  const held = open.length === 0 ? { key: others > 0 && requests.length === 0 ? 'bulk.noneRequests' : 'bulk.noneOpen' } : open.length > INQUIRY_LIMITS.bulk ? { key: 'bulk.tooMany', params: { max: INQUIRY_LIMITS.bulk } } : null
+  return { open, closed, others, held }
 }
 
 // ---- the lines asked (a style in a colourway, or words; pieces by size or in all) -----------------------------------------------
@@ -769,8 +830,6 @@ export interface RequestDraft {
   readonly currency: string
   readonly note: string
   readonly contactId: string | null
-  /** A prospect matched to a customer (once): the party it becomes. */
-  readonly matchPartyId: string | null
   readonly prospect: ProspectDraft
   readonly lines: readonly LineDraft[]
   readonly techPackFileIds: readonly string[]
@@ -785,7 +844,6 @@ export function requestDraftOf(view: InquiryView): RequestDraft {
     currency: view.currency,
     note: view.note ?? '',
     contactId: view.contact?.id ?? null,
-    matchPartyId: null,
     prospect: { name: view.prospectDetails?.name ?? '', company: view.prospectDetails?.company ?? '', email: view.prospectDetails?.email ?? '', phone: view.prospectDetails?.phone ?? '' },
     lines: lineDraftsOf(view.lines),
     techPackFileIds: view.techPack.files.map((file) => file.named.id),
@@ -837,19 +895,14 @@ export function requestChanges(view: InquiryView, draft: RequestDraft, can: Pick
         if (draft.currency !== was.currency) body.currency = draft.currency
       }
     } else if (!can.price && draft.currency !== was.currency) body.currency = draft.currency
-    if (draft.matchPartyId && !view.party) {
-      body.partyId = draft.matchPartyId
-      body.prospect = null
-      if (draft.contactId) body.contactId = draft.contactId
-    } else {
-      if (draft.contactId !== was.contactId && view.party) body.contactId = draft.contactId
-      const wasProspect = prospectBodyOf(was.prospect)
-      const nowProspect = prospectBodyOf(draft.prospect)
-      if (!view.party && !view.prospectDetails?.erased && JSON.stringify(wasProspect) !== JSON.stringify(nowProspect)) {
-        const prospectIssue = prospectProblem(draft.prospect)
-        if (prospectIssue) problem ??= prospectIssue
-        else body.prospect = nowProspect
-      }
+    // B-TH-234: a prospect gets its customer only through "Make or match the customer" (the check first, W23), never by a PATCH here.
+    if (draft.contactId !== was.contactId && view.party) body.contactId = draft.contactId
+    const wasProspect = prospectBodyOf(was.prospect)
+    const nowProspect = prospectBodyOf(draft.prospect)
+    if (!view.party && !view.prospectDetails?.erased && JSON.stringify(wasProspect) !== JSON.stringify(nowProspect)) {
+      const prospectIssue = prospectProblem(draft.prospect)
+      if (prospectIssue) problem ??= prospectIssue
+      else body.prospect = nowProspect
     }
     if (!sameLines(was.lines, draft.lines)) {
       const lines = draft.lines.filter((line) => !isBlankLine(line))
@@ -861,7 +914,7 @@ export function requestChanges(view: InquiryView, draft: RequestDraft, can: Pick
     if (!sameIds(was.techPackFileIds, draft.techPackFileIds)) body.techPackFileIds = [...draft.techPackFileIds]
     if (draft.techPackVersion.trim() !== was.techPackVersion.trim()) body.techPackVersion = blank(draft.techPackVersion) ? null : draft.techPackVersion.trim()
   }
-  const count = Object.keys(body).filter((key) => key !== 'prospect' || !('partyId' in body)).length + (problem ? 1 : 0)
+  const count = Object.keys(body).length + (problem ? 1 : 0)
   if (Object.keys(body).length === 0) return { count: problem ? 1 : 0, body: null, problem }
   return { count, body: { version: view.version, ...body } as UpdateInquiryBody, problem }
 }
@@ -879,28 +932,62 @@ export function toggleTechPack(draft: RequestDraft, fileId: string, on: boolean)
 export interface DeclineDraft {
   readonly reason: DeclineReason | null
   readonly note: string
-  /** The message to the customer (optional), sent through the inquiry's thread after the decline. */
+  /** The message to the customer (optional). B-TH-234 (B-TH-043): it goes in the decline's own command, only when `send` is ticked. */
   readonly message: string
+  /** B-TH-234: "Send to the customer" (off until ticked: nothing goes unless ticked). */
+  readonly send?: boolean
 }
 
-export const emptyDecline: DeclineDraft = { reason: null, note: '', message: '' }
+export const emptyDecline: DeclineDraft = { reason: null, note: '', message: '', send: false }
 
-/** Why Decline is held: a reason; OTHER says it in words (factory-domain OTHER_NEEDS_WORDS). */
+/** Why Decline is held: a reason; OTHER says it in words (factory-domain OTHER_NEEDS_WORDS). B-TH-234: a ticked message needs words; "Not an order" sends nothing. */
 export function declineHeld(draft: DeclineDraft, offline: boolean): Phrase | null {
   if (!draft.reason) return { key: 'decline.held.reason' }
   if (draft.reason === 'OTHER' && blank(draft.note)) return { key: 'refusal.OTHER_NEEDS_WORDS' }
   if (draft.note.trim().length > INQUIRY_LIMITS.closeNote) return { key: 'decline.held.long', params: { max: INQUIRY_LIMITS.closeNote } }
+  // B-TH-234
+  if (draft.send && draft.reason === 'NOT_AN_ORDER') return { key: 'refusal.SENDS_NOTHING' }
+  if (draft.send && blank(draft.message)) return { key: 'decline.held.message' }
   if (offline) return { key: 'held.offline' }
   return null
 }
 
-/** Who the decline's message reaches, or why it cannot be sent (the thread mails the inquiry's customer only). */
-export function messageReach(view: Pick<InquiryView, 'party' | 'contact'> | null, can: Pick<InquiriesCan, 'email' | 'thread'>): { readonly to: string | null; readonly held: Phrase | null } {
-  if (!view) return { to: null, held: { key: 'decline.message.many' } }
-  if (!can.email || !can.thread) return { to: null, held: { key: 'held.right', params: { right: 'right.email.send' } } }
-  if (!view.party) return { to: null, held: { key: 'decline.message.prospect' } }
-  if (!view.contact?.email) return { to: null, held: { key: 'decline.message.noEmail' } }
-  return { to: view.contact.email, held: null }
+/**
+ * Who the decline's message reaches, or why it cannot be sent. B-TH-234 (B-TH-043): the request answers where its message goes
+ * (`messageTo`): PORTAL — the customer reads it in its portal; MAIL — to the request's contact (`to`), in the customer's language;
+ * none with the refusal (a prospect: make the customer first). A mail needs email.send. The message never goes to anyone else.
+ */
+export interface MessageReach {
+  readonly to: string | null
+  readonly via: 'PORTAL' | 'MAIL' | null
+  /** The customer's language (its contact's, else its own): the dialog says to write in it. */
+  readonly language: string | null
+  readonly held: Phrase | null
+}
+
+export function messageReach(view: Pick<InquiryView, 'party' | 'contact' | 'number' | 'messageTo'> | null, can: Pick<InquiriesCan, 'email' | 'thread'>): MessageReach {
+  if (!view) return { to: null, via: null, language: null, held: { key: 'decline.message.many' } }
+  const known = view.messageTo
+  if (known) {
+    if (known.refusal) return { to: null, via: null, language: known.language, held: refusalPhrase(known.refusal.code, view.number) }
+    if (known.via === null) return { to: null, via: null, language: known.language, held: { key: 'decline.message.prospect' } }
+    if (known.via === 'MAIL' && (!can.email || !can.thread)) return { to: null, via: 'MAIL', language: known.language, held: { key: 'held.right', params: { right: 'right.email.send' } } }
+    if (known.via === 'MAIL' && known.to.length === 0) return { to: null, via: 'MAIL', language: known.language, held: { key: 'decline.message.noEmail' } }
+    return { to: known.via === 'MAIL' ? known.to.join(', ') : null, via: known.via, language: known.language, held: null }
+  }
+  // An answer without `messageTo` (typed demo data of before): the request's contact by mail.
+  if (!can.email || !can.thread) return { to: null, via: null, language: null, held: { key: 'held.right', params: { right: 'right.email.send' } } }
+  if (!view.party) return { to: null, via: null, language: null, held: { key: 'decline.message.prospect' } }
+  if (!view.contact?.email) return { to: null, via: null, language: null, held: { key: 'decline.message.noEmail' } }
+  return { to: view.contact.email, via: 'MAIL', language: null, held: null }
+}
+
+/** B-TH-234: the decline's body — the message only when ticked, reachable and not "Not an order" (bulk never sends: its own body). */
+export function declineBodyOf(view: Pick<InquiryView, 'version' | 'party' | 'contact' | 'number' | 'messageTo'>, draft: DeclineDraft, can: Pick<InquiriesCan, 'email' | 'thread'>): { version: number; reason: DeclineReason; note?: string; message?: { body: string } } | null {
+  if (!draft.reason) return null
+  const note = draft.note.trim()
+  const message = draft.send && draft.reason !== 'NOT_AN_ORDER' && !messageReach(view, can).held ? draft.message.trim() : ''
+  return { version: view.version, reason: draft.reason, ...(note ? { note } : {}), ...(message ? { message: { body: message } } : {}) }
 }
 
 export const lostHeld = (note: string, offline: boolean): Phrase | null => (blank(note) ? { key: 'lost.held.note' } : note.trim().length > INQUIRY_LIMITS.closeNote ? { key: 'decline.held.long', params: { max: INQUIRY_LIMITS.closeNote } } : offline ? { key: 'held.offline' } : null)
@@ -1016,8 +1103,8 @@ export const fieldLines = (paths: readonly string[]): Phrase[] => {
 /** A day in the business calendar (YYYY-MM-DD) in the site's zone. */
 export const todayOf = (iso: string): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso))
 
-/** The list's ids in the order shown (J / K walks them). */
-export const navIdsOf = (list: InquiryList | null): string[] => (list ? list.rows.map((row) => row.id) : [])
+/** The list's ids in the order shown (J / K walks them). B-TH-233: the rows that open beside the list (a change request opens Home › Approvals). */
+export const navIdsOf = (list: Pick<IncomingList, 'rows'> | null): string[] => (list ? list.rows.filter((row) => row.opens.place === 'INCOMING').map((row) => row.id) : [])
 
 /** The next inquiry after a decision (the queue moves on), else null. */
 export function nextAfter(ids: readonly string[], current: string): string | null {
@@ -1025,3 +1112,191 @@ export function nextAfter(ids: readonly string[], current: string): string | nul
   if (index < 0) return ids[0] ?? null
   return ids[index + 1] ?? ids[index - 1] ?? null
 }
+
+// ---- B-TH-233 (threads plan TH-3, G2, L2-G07; O-SAL-INQ-LIST.list-F01/F05/F11/F14, .tiles-F03): the rows of every kind ----------
+
+/**
+ * Where a row opens (list-F11: each kind follows its own view right — the API lists a row only to a reader who may open it):
+ *   request    beside the list, the reading pane with its thread (`?open=<id>`)
+ *   catalogue  a catalogue order beside the list, its pane with its thread (B-TH-040; `?catalogue=<id>`)
+ *   approvals  a change or cancel request (agreement T3, `opens.place` APPROVALS): Home › Approvals, where it is answered
+ */
+export type RowPlace = 'request' | 'catalogue' | 'approvals'
+export const placeOf = (row: Pick<IncomingRow, 'kind' | 'opens'>): RowPlace => (row.opens.place === 'APPROVALS' ? 'approvals' : row.kind === 'CATALOGUE_ORDER' ? 'catalogue' : 'request')
+
+/**
+ * Home › Approvals for a change request (agreement T3). Approvals' review window (`?open=`) reads the approval engine's tasks only
+ * (areas/home/approvals/Approvals.tsx), so a change request's id would open "not found" there: the door opens Approvals on its kind
+ * — the change requests waiting, each opening its order — until Approvals opens one by its id (then `&open=<opens.id>`, one line).
+ */
+export const approvalsHref = (prefix: string): string => `${prefix}/home/approvals?kind=ORDER_CHANGE_REQUEST`
+
+/** The address a row opens at — a real link (⌘-click: a new tab): the pane beside the list, or Home › Approvals. */
+export function rowHref(prefix: string, address: ListAddress, row: Pick<IncomingRow, 'kind' | 'id' | 'opens'>): string {
+  const place = placeOf(row)
+  if (place === 'approvals') return approvalsHref(prefix)
+  return listHref(prefix, { ...address, isNew: false, mail: null, open: place === 'request' ? row.id : null, catalogue: place === 'catalogue' ? row.id : null, tab: 'request' })
+}
+
+/** The record type of a row's thread (its New messages, B-TH-230): a request, a catalogue order, a change request. */
+export const THREAD_TYPE: Readonly<Record<IncomingKind, string>> = Object.freeze({ REQUEST: 'Inquiry', CATALOGUE_ORDER: 'PortalOrderRequest', CHANGE_REQUEST: 'OrderChangeRequest' })
+
+/** The state's tone: a request by its status; a catalogue order or change request waiting (SENT, OPEN) informs, accepted succeeds. */
+export function stateTone(row: Pick<IncomingRow, 'kind' | 'state' | 'request'>): Tone {
+  if (row.kind === 'REQUEST' && row.request) return STATUS_TONE[row.request.status]
+  if (row.state === 'SENT' || row.state === 'OPEN') return 'info'
+  return row.state === 'ACCEPTED' ? 'success' : 'neutral'
+}
+
+/** The row's own facts beside its summary: a catalogue order's lines, a change request's order (what it changes). */
+export function kindFacts(row: Pick<IncomingRow, 'catalogueOrder' | 'changeRequest'>): Phrase | null {
+  if (row.catalogueOrder) return { key: 'kindFacts.catalogue', params: { count: row.catalogueOrder.lines, lines: row.catalogueOrder.lines, ref: row.catalogueOrder.customerRef ?? '—' } }
+  if (row.changeRequest) return { key: `kindFacts.change.${row.changeRequest.kind}`, params: { order: row.changeRequest.order.number } }
+  return null
+}
+
+/** list-F12: numbers repeat per company — a reader of several companies reads "INQ-0042 · CO2" (the name on hover). */
+export const numberWithCompany = (number: string, companyCode: string | null, many: boolean): string => (many && companyCode ? `${number} · ${companyCode}` : number)
+
+/** A request's row as Incoming reads it (the design cases and tests: the API sends Incoming rows; a request keeps its whole row). */
+export function incomingRowOf(row: InquiryRow): IncomingRow {
+  return {
+    key: `REQUEST:${row.id}`,
+    kind: 'REQUEST',
+    id: row.id,
+    number: row.number,
+    companyId: row.companyId,
+    receivedAt: row.receivedAt,
+    party: row.party,
+    fromWords: row.fromWords,
+    prospect: row.prospect,
+    summary: row.summary,
+    pieces: row.pieces > 0 ? row.pieces : null,
+    wantedDate: row.wantedDate,
+    state: row.status,
+    stateWords: stateWords('REQUEST', row.status, row.declineReason),
+    open: isOpen(row.status),
+    waiting: row.waiting,
+    version: row.version,
+    opens: { place: 'INCOMING', id: row.id },
+    request: row,
+    catalogueOrder: null,
+    changeRequest: null,
+  }
+}
+
+/** The rows the page holds: the first page and every page "Show more" read after it, each row once (a row that moved is kept where it was first read). */
+export function mergePages(pages: ReadonlyArray<Pick<IncomingList, 'rows'>>): IncomingRow[] {
+  const seen = new Set<string>()
+  const rows: IncomingRow[] = []
+  for (const page of pages)
+    for (const row of page.rows) {
+      if (seen.has(row.key)) continue
+      seen.add(row.key)
+      rows.push(row)
+    }
+  return rows
+}
+
+// ---- "Customer replies" (list-F14, B-TH-047): the one office inbox of conversations waiting on us ----------------------------------
+
+/**
+ * Where a Customer replies row opens: its record's own page (or its panels) at the message that waits (`?message=<id>`, the bell's
+ * anchor: the thread scrolls to it and opens). The row was listed only because the reader may open that record (threads.read AND
+ * the record's own view permission, checked by the API row by row).
+ */
+export function replyHref(prefix: string, row: Pick<WaitingRow, 'recordType' | 'recordId' | 'label' | 'companyId' | 'lastMessage'>, built: ReadonlySet<string>): string {
+  const address = recordAddress({ type: row.recordType, id: row.recordId, label: row.label, companyId: row.companyId, siteId: null }, built)
+  return `${prefix}${address}${address.includes('?') ? '&' : '?'}message=${encodeURIComponent(row.lastMessage.id)}`
+}
+
+/** How long a conversation waits on us, in working time (clock time when its company has no calendar), amber past the rule's days. */
+export function replyWaiting(row: Pick<WaitingRow, 'waiting'>): { readonly time: Phrase; readonly amber: boolean; readonly clock: boolean } {
+  return { time: workingTime(row.waiting.workingMinutes), amber: row.waiting.amber, clock: !row.waiting.calendar }
+}
+
+/** The record's kind in words (`recordType.<type>`), else the record's own label alone (a type without words says nothing more). */
+export const REPLY_RECORD_TYPES = ['SalesOrder', 'Quote', 'Invoice', 'PaymentReminder', 'Shipment', 'Ddt', 'ReturnAuthorisation', 'RepairOrder', 'Complaint', 'SampleRound', 'ServiceCase', 'ProductSafetyReport', 'Style', 'Certificate', 'Capa', 'MeasurementProfile', 'Party', 'ChangeRequest', 'ApprovalRequest'] as const
+export const replyTypeKey = (recordType: string): string | null => ((REPLY_RECORD_TYPES as readonly string[]).includes(recordType) ? `recordType.${recordType}` : null)
+// ---- end B-TH-233
+
+// ---- B-TH-234 (threads plan TH-3; pane-actions-F08, on B-TH-042): answer a new customer — match or make it from the prospect ------
+
+/** What the person picked in "Make or match the customer": one of the customers the check found, or a new one from the prospect. */
+export type CustomerChoice =
+  | { readonly mode: 'match'; readonly partyId: string; readonly contactId: string | null; readonly addContact: boolean }
+  | { readonly mode: 'make'; readonly code: string; readonly legalName: string; readonly kind: 'ORGANISATION' | 'PERSON'; readonly status: 'PROSPECT' | 'ACTIVE' }
+
+/**
+ * The dialog starts from the check: ONE customer found by one of its contacts' own address (and no second one) is picked; nobody
+ * found → a new customer from the prospect (the suggestion); anything else waits for the person's pick (W23: never a silent guess).
+ */
+export function customerChoiceOf(check: CustomerCheck): CustomerChoice | null {
+  const byContact = check.candidates.filter((candidate) => candidate.matchedBy === 'CONTACT')
+  if (!check.ambiguous && check.candidates.length === 1 && byContact.length === 1) return { mode: 'match', partyId: byContact[0]!.party.id, contactId: byContact[0]!.contact?.id ?? null, addContact: false }
+  if (check.candidates.length === 0 && check.make.allowed) return { mode: 'make', code: check.suggestion.code, legalName: check.suggestion.legalName, kind: check.suggestion.kind, status: 'PROSPECT' }
+  return null
+}
+
+/** Picking a customer asks first unless it was found by its own contact's address alone; a new customer asks first while any was found. */
+export function customerAsksFirst(check: CustomerCheck, choice: CustomerChoice | null): boolean {
+  if (!choice) return false
+  if (choice.mode === 'make') return check.candidates.length > 0
+  const candidate = check.candidates.find((one) => one.party.id === choice.partyId)
+  return !(candidate?.matchedBy === 'CONTACT' && !check.ambiguous)
+}
+
+const PARTY_CODE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,23}$/
+
+/** Why the pick waits, in words: the right, the API's own check (match / make), the code and name, the person's yes, offline. */
+export function customerHeld(check: CustomerCheck, choice: CustomerChoice | null, confirmed: boolean, can: Pick<InquiriesCan, 'manage'>, offline: boolean): Phrase | null {
+  if (!can.manage) return { key: 'held.right', params: { right: 'right.sales.inquiries.manage' } }
+  if (!choice) return { key: 'customer.held.pick' }
+  const gate = choice.mode === 'make' ? check.make : check.match
+  if (!gate.allowed) return gate.refusal ? refusalPhrase(gate.refusal.code) : choice.mode === 'make' ? { key: 'held.needs', params: { right: 'right.parties.manage' } } : { key: 'held.notNow' }
+  if (choice.mode === 'make' && !PARTY_CODE.test(choice.code.trim())) return { key: 'customer.held.code' }
+  if (choice.mode === 'make' && blank(choice.legalName)) return { key: 'customer.held.name' }
+  if (customerAsksFirst(check, choice) && !confirmed) return { key: 'customer.held.confirm' }
+  if (offline) return { key: 'held.offline' }
+  return null
+}
+
+/** The body of POST …/customer: the pick, and `confirmed` only when the check asks first. */
+export function customerBodyOf(view: Pick<InquiryView, 'version'>, check: CustomerCheck, choice: CustomerChoice, confirmed: boolean): MakeCustomerBody {
+  const yes = customerAsksFirst(check, choice) && confirmed ? { confirmed: true } : {}
+  if (choice.mode === 'match') return { version: view.version, match: { partyId: choice.partyId, ...(choice.contactId ? { contactId: choice.contactId } : {}), ...(choice.addContact ? { addContact: true } : {}) }, ...yes }
+  return { version: view.version, make: { code: choice.code.trim().toUpperCase(), legalName: choice.legalName.trim(), kind: choice.kind, status: choice.status }, ...yes }
+}
+
+/** The receipt: what happened (a match, a new contact, a new customer), and whether the mail the request came from joined the thread. */
+export function customerDone(made: Pick<CustomerMade, 'made' | 'party' | 'mailJoined'>, number: string): { readonly phrase: Phrase; readonly lines: Phrase[] } {
+  const params = { customer: made.party.name, number }
+  const phrase: Phrase = { key: made.made === 'CUSTOMER' ? 'done.customerMade' : made.made === 'CONTACT' ? 'done.customerContact' : 'done.customerMatched', params }
+  return { phrase, lines: made.mailJoined ? [{ key: 'done.mailJoined' }] : [] }
+}
+
+// ---- B-TH-234 (B-TH-051): "Ask <customer> for…" a document, an answer or measurements, by a date — a task in its portal ------------
+
+export interface TaskDraft {
+  readonly kind: RequestTaskKind | null
+  /** The due day (YYYY-MM-DD, the site's day), or null: no date. */
+  readonly due: string | null
+}
+
+export const emptyTask: TaskDraft = { kind: null, due: null }
+
+/** Why the task waits, in words: the right, a prospect (no portal yet), a closed request, the kind, a day in the past, offline. */
+export function taskHeld(view: Pick<InquiryView, 'party' | 'status'>, draft: TaskDraft | null, can: Pick<InquiriesCan, 'tasks'>, offline: boolean, today: string): Phrase | null {
+  if (!can.tasks) return { key: 'held.needs', params: { right: 'right.partners.tasks.manage' } }
+  if (!view.party) return { key: 'task.held.prospect' }
+  if (!isOpen(view.status)) return { key: 'task.held.closed' }
+  if (draft && !draft.kind) return { key: 'task.held.kind' }
+  if (draft?.due && draft.due <= today) return { key: 'task.held.due' }
+  if (offline) return { key: 'held.offline' }
+  return null
+}
+
+/** A task refusal the API names (`refusal/REQUEST_PROSPECT`, `REQUEST_CLOSED`) in the page's words, else the general refusal. */
+export const TASK_REFUSALS = ['REQUEST_PROSPECT', 'REQUEST_CLOSED'] as const
+export const taskRefusal = (code: string | null): Phrase | null => (code && (TASK_REFUSALS as readonly string[]).includes(code) ? { key: `task.refusal.${code}` } : null)
+// ---- end B-TH-234

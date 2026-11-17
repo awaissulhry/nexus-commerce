@@ -14,6 +14,7 @@ import {
   CURRENCIES,
   isOpen,
   messageReach,
+  todayOf, // B-TH-234: a task's due day must be ahead of the site's today
   priceText,
   quotePreview,
   requestChanges,
@@ -24,6 +25,7 @@ import {
 import { useWords } from '../../parts'
 import type { InquiryRecordActions, InquiryRecordModel } from '../../record-model'
 import { AssignDialog, DeclineDialog, LostDialog, QuoteDialog } from '../Dialogs'
+import { CustomerDialog, TaskDialog } from './CustomerDialogs' // B-TH-234
 // B-TH-228: Make order, Make style draft.
 import { OrderDialog, StyleDraftDialog } from '../Dialogs'
 import { carriableFiles, orderHeld, styleDraftDialogHeld } from '../../model'
@@ -116,7 +118,7 @@ export function RequestEditorBody({ model, view, draft, actions }: { model: Inqu
             ) : (
               <ProspectFields model={model} view={view} draft={draft} editable={editable} actions={actions} />
             )}
-            {(party || draft.matchPartyId) && (
+            {party && (
               <Field label={t('who.contact')}>
                 {editable && model.contacts ? (
                   model.contacts.items === null && !model.contacts.problem ? (
@@ -198,24 +200,15 @@ export function ProspectFields({ model, view, draft, editable, actions }: { mode
       <Banner tone="warning" title={t('who.unknown')}>
         <p className="fw-inq-text">{t('who.unknownBody')}</p>
       </Banner>
-      {editable && model.customers && (
+      {/* B-TH-234: one way to give a prospect its customer — the check first ("Make or match the customer"), never a pick here. */}
+      {editable && (
         <Field label={t('who.match')} hint={t('who.matchHint')}>
-          {model.customers.items === null && !model.customers.problem ? (
-            <Skeleton height={32} />
-          ) : (
-            <Select size="sm" value={draft.matchPartyId ?? ''} onChange={(event) => actions?.onMatch?.(event.target.value || null)}>
-              <option value="">{t('who.matchNone')}</option>
-              {(model.customers.items ?? []).map((party) => (
-                <option key={party.id} value={party.id}>
-                  {party.code} · {party.tradeName ?? party.legalName}
-                </option>
-              ))}
-            </Select>
-          )}
+          <Button size="sm" onClick={() => actions?.onVerb?.('customer')}>
+            {t('pane.action.match')}
+          </Button>
         </Field>
       )}
-      {!draft.matchPartyId && (
-        <div className="fw-inq-form-grid">
+      <div className="fw-inq-form-grid">
           {/* B-TH-217 (PR-30, GDPR minimisation): a prospect's e-mail and phone only for who answers requests. */}
           {(model.can.manage ? (['name', 'company', 'email', 'phone'] as const) : (['name', 'company'] as const)).map((field) => (
             <Field key={field} label={t(`prospect.${field}`)}>
@@ -225,8 +218,7 @@ export function ProspectFields({ model, view, draft, editable, actions }: { mode
           <Field label={t('prospect.basis')}>
             <span className="fw-inq-value">{details?.lawfulBasis ? t(`basis.${details.lawfulBasis}`) : t('basis.CONTRACT')}</span>
           </Field>
-        </div>
-      )}
+      </div>
     </div>
   )
 }
@@ -448,6 +440,12 @@ export function RecordDialogs({ model, view, actions }: { model: InquiryRecordMo
     return <AssignDialog model={{ subject, current: view.assignee, people: dialog.people, busy: dialog.busy, notice: dialog.notice, offline }} actions={{ onAssign: actions?.dialog?.onAssign, onRetry: actions?.dialog?.onRetryPeople, onClose: close }} />
   if (dialog.kind === 'decline')
     return <DeclineDialog model={{ subject, draft: dialog.draft, message: messageReach(view, model.can), busy: dialog.busy, notice: dialog.notice, offline }} actions={{ onDraft: actions?.dialog?.onDecline, onSubmit: actions?.dialog?.onSubmit, onClose: close }} />
+  // ---- B-TH-234: make or match the customer (the check first), "Ask <customer> for…"
+  if (dialog.kind === 'customer')
+    return <CustomerDialog model={{ view, check: dialog.check, choice: dialog.choice, confirmed: dialog.confirmed, can: model.can, busy: dialog.busy, notice: dialog.notice, offline }} actions={{ onCustomer: actions?.dialog?.onCustomer, onRetry: actions?.dialog?.onRetryCheck, onSubmit: actions?.dialog?.onSubmit, onClose: close }} />
+  if (dialog.kind === 'task')
+    return <TaskDialog model={{ view, draft: dialog.draft, can: model.can, today: todayOf(new Date().toISOString()), busy: dialog.busy, notice: dialog.notice, offline }} actions={{ onTask: actions?.dialog?.onTask, onSubmit: actions?.dialog?.onSubmit, onClose: close }} />
+  // ---- end B-TH-234
   if (dialog.kind === 'lost') return <LostDialog model={{ subject, note: dialog.note, busy: dialog.busy, notice: dialog.notice, offline }} actions={{ onNote: actions?.dialog?.onLostNote, onSubmit: actions?.dialog?.onSubmit, onClose: close }} />
   // ---- B-TH-228
   if (dialog.kind === 'order')

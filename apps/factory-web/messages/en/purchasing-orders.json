@@ -1,12 +1,14 @@
 {
   "tile": {
     "dueThisWeek": "Due this week",
-    "deliveryLate": "Late"
+    "deliveryLate": "Late",
+    "supplierReplies": "Supplier replies"
   },
   "view": {
     "dueThisWeek": "Expected this week",
     "deliveryLate": "Late deliveries",
-    "pastConfirmBy": "Past the confirm-by time"
+    "pastConfirmBy": "Past the confirm-by time",
+    "supplierReplies": "Supplier replies (the supplier wrote last)"
   },
   "delivery": {
     "LATE": "Late",
@@ -348,5 +350,35 @@
     "closedShort_other": "{count} lines closed short: planning releases the rest.",
     "confirmByMoved": "The confirm-by time moved; the alert follows it.",
     "reminded": "Reminder sent to {email}."
+  },
+  "replies": {
+    "col": "Supplier wrote",
+    "colWaiting": "Waiting on us",
+    "colWaitingHint": "Since the supplier's newest message, in working time on the company calendar; amber after 3 working days",
+    "reading": "Reading the message…",
+    "door": "Open the conversation of {number} at the supplier's message",
+    "noWords": "A message without words (files only)",
+    "by": "{who} · {time}",
+    "tipWorking": "Working time on the company calendar since the supplier wrote; amber after {days} working days",
+    "tipClock": "Clock time since the supplier wrote (the company has no working calendar); amber after {days} working days",
+    "wait": {
+      "minutes": "{n} min",
+      "hours": "{n} h",
+      "days": "{n} d"
+    },
+    "noThreads": "Conversations are not open to you, so this view cannot list them.",
+    "readFailed": "The suppliers' messages could not be read: the orders are listed, their messages are not. Try again with Show or Retry.",
+    "countUnknown": "How many conversations wait on us is not known yet.",
+    "countPartial_one": "{count} conversation waits on us: the supplier wrote last (only the first 1000 are said in words).",
+    "countPartial_other": "{count} conversations wait on us: the supplier wrote last (only the first 1000 are said in words).",
+    "count_one": "{count} conversation waits on us: the supplier wrote last. Our reply takes it off this view.",
+    "count_other": "{count} conversations wait on us: the supplier wrote last. Our reply takes them off this view.",
+    "empty": {
+      "title": "No supplier waits for an answer",
+      "body": "When a supplier writes in an order's conversation and nobody has answered yet, the order shows here. An office note does not count; our reply takes it off.",
+      "noThreadsTitle": "Conversations are not open to you",
+      "noThreadsBody": "This view lists the orders whose supplier wrote last. It needs the right to read conversations: ask an administrator.",
+      "all": "Every order"
+    }
   }
 }

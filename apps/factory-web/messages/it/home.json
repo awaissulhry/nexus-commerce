@@ -781,6 +781,21 @@
       "noRecord": "Questa voce non ha un record da ricordarti.",
       "already": "Promemoria impostato.",
       "passed": "Il giorno prima è già passato."
+    },
+    "incoming": {
+      "title": "In arrivo",
+      "sameAsIncoming": "Gli stessi numeri di Vendite › In arrivo",
+      "offline": "Offline: gli ultimi numeri letti",
+      "loading": "Sto contando le richieste in arrivo…",
+      "error": "Non è stato possibile contare le richieste in arrivo.",
+      "new": "Nuove richieste in arrivo",
+      "newHint": "Richieste, ordini dal catalogo e richieste di modifica che nessuno ha ancora iniziato: il riquadro Nuove di In arrivo",
+      "catalogue": "Ordini dal catalogo da decidere",
+      "catalogueHint": "Ordini che i clienti hanno inviato dal catalogo del loro portale, in attesa di Accetta o Rifiuta",
+      "waiting": "In attesa nostra da oltre un giorno lavorativo",
+      "waitingHint": "Di tutti, come li conta il riquadro di In arrivo (Aspetta me ora elenca solo le tue o di nessuno)",
+      "open": "Apri",
+      "lineLabel": "{what}: {count}. Apri in In arrivo"
     }
   },
   "mailToSort": {

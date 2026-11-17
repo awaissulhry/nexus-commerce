@@ -3,7 +3,7 @@ import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { I18nProvider } from '../../../../../lib/i18n/provider'
 import { messagesFor } from '../../../../../lib/i18n/messages'
-import { canFor, CONTACTS, CUSTOMERS, JACKET_DETAIL, ME, PREFIX, PROSPECT_VIEW, QUOTED_VIEW, STYLE_OPTIONS, VIEW, type RoleCase } from '../../demo/fixtures'
+import { canFor, CONTACTS, JACKET_DETAIL, ME, PREFIX, PROSPECT_VIEW, QUOTED_VIEW, STYLE_OPTIONS, VIEW, type RoleCase } from '../../demo/fixtures'
 import type { InquiryView } from '../../api'
 import { NAMESPACES } from '../../model'
 import type { InquiryRecordModel } from '../../record-model'
@@ -25,7 +25,6 @@ const record = (view: InquiryView | null, role: RoleCase = 'owner', over: Partia
   draft: null,
   saving: false,
   busy: false,
-  customers: view?.prospect ? { items: CUSTOMERS, problem: null } : null,
   contacts: view?.party ? { items: CONTACTS, problem: null } : null,
   styles: { items: STYLE_OPTIONS, problem: null },
   details: { [JACKET_DETAIL.id]: { status: 'ready', value: JACKET_DETAIL } },
@@ -102,3 +101,60 @@ describe('the reading pane (B-TH-217)', () => {
     expect(it_).not.toMatch(/\bpane\.[a-z]+/)
   })
 })
+
+// ---- B-TH-234 (threads plan TH-3; pane-actions-F08, on B-TH-042; wall W20, W23): make or match the customer — the check first -------
+import type { CustomerCheck } from '../../api'
+import { customerAsksFirst, customerBodyOf, customerChoiceOf, customerDone, customerHeld } from '../../model'
+
+describe('B-TH-234 — match before make, the lawful basis carried, never a silent guess (W23)', () => {
+  const owner234 = canFor('owner')
+  const BRAND = { id: '0190f0e2-5201-7000-8000-000000000001', code: 'DEMO-BRAND', name: 'Demo Moto Brand' }
+  const SHOP = { id: '0190f0e2-5201-7000-8000-000000000002', code: 'DEMO-SHOP', name: 'Demo Rider Shop' }
+  const base: CustomerCheck = {
+    prospect: { name: 'Demo Track Club', company: 'Demo Track Club', email: 'club@track-demo.example.com', phone: null, lawfulBasis: 'CONTRACT', erased: false },
+    candidates: [],
+    ambiguous: false,
+    suggestion: { code: 'DEMO-TRACK', legalName: 'Demo Track Club', kind: 'ORGANISATION' },
+    make: { allowed: true, refusal: null },
+    match: { allowed: true, refusal: null },
+  }
+
+  it('one customer found by its own contact\'s address is picked and goes alone; anything weaker asks first', () => {
+    const byContact: CustomerCheck = { ...base, candidates: [{ party: BRAND, contact: { id: 'c1', name: 'Bea Esempio' }, matchedBy: 'CONTACT' }] }
+    const choice = customerChoiceOf(byContact)
+    expect(choice).toEqual({ mode: 'match', partyId: BRAND.id, contactId: 'c1', addContact: false })
+    expect(customerAsksFirst(byContact, choice)).toBe(false)
+    expect(customerHeld(byContact, choice, false, owner234, false)).toBeNull()
+    expect(customerBodyOf(PROSPECT_VIEW, byContact, choice!, false)).toEqual({ version: PROSPECT_VIEW.version, match: { partyId: BRAND.id, contactId: 'c1' } })
+    // Found by its domain: nothing is picked for the person; once picked it asks first, and `confirmed` goes only with the tick.
+    const byDomain: CustomerCheck = { ...base, candidates: [{ party: BRAND, contact: null, matchedBy: 'DOMAIN' }] }
+    expect(customerChoiceOf(byDomain)).toBeNull()
+    expect(customerHeld(byDomain, null, false, owner234, false)).toEqual({ key: 'customer.held.pick' })
+    const picked = { mode: 'match' as const, partyId: BRAND.id, contactId: null, addContact: true }
+    expect(customerHeld(byDomain, picked, false, owner234, false)).toEqual({ key: 'customer.held.confirm' })
+    expect(customerBodyOf(PROSPECT_VIEW, byDomain, picked, true)).toEqual({ version: PROSPECT_VIEW.version, match: { partyId: BRAND.id, addContact: true }, confirmed: true })
+    // Two customers with the same address: ambiguous, the person picks and confirms.
+    const two: CustomerCheck = { ...base, ambiguous: true, candidates: [{ party: BRAND, contact: { id: 'c1', name: 'Bea' }, matchedBy: 'CONTACT' }, { party: SHOP, contact: { id: 'c2', name: 'Carlo' }, matchedBy: 'CONTACT' }] }
+    expect(customerChoiceOf(two)).toBeNull()
+    expect(customerAsksFirst(two, { mode: 'match', partyId: SHOP.id, contactId: 'c2', addContact: false })).toBe(true)
+  })
+
+  it('a new customer: the suggestion when nobody was found; asks first while any was; needs the right and a code', () => {
+    const fresh = customerChoiceOf(base)
+    expect(fresh).toEqual({ mode: 'make', code: 'DEMO-TRACK', legalName: 'Demo Track Club', kind: 'ORGANISATION', status: 'PROSPECT' })
+    expect(customerBodyOf(PROSPECT_VIEW, base, fresh!, false)).toEqual({ version: PROSPECT_VIEW.version, make: { code: 'DEMO-TRACK', legalName: 'Demo Track Club', kind: 'ORGANISATION', status: 'PROSPECT' } })
+    const found: CustomerCheck = { ...base, candidates: [{ party: BRAND, contact: null, matchedBy: 'NAME' }] }
+    expect(customerHeld(found, fresh, false, owner234, false)).toEqual({ key: 'customer.held.confirm' })
+    expect(customerHeld({ ...base, make: { allowed: false, refusal: null } }, fresh, false, owner234, false)).toEqual({ key: 'held.needs', params: { right: 'right.parties.manage' } })
+    expect(customerHeld({ ...base, make: { allowed: false, refusal: { code: 'PROSPECT_ERASED', message: 'x' } } }, fresh, false, owner234, false)?.key).toBe('refusal.PROSPECT_ERASED')
+    expect(customerHeld(base, { ...fresh!, mode: 'make', code: '  ' } as never, false, owner234, false)).toEqual({ key: 'customer.held.code' })
+    expect(customerHeld(base, fresh, false, canFor('reader'), false)).toEqual({ key: 'held.right', params: { right: 'right.sales.inquiries.manage' } })
+  })
+
+  it('the receipt says what happened, and that the mail joined the conversation (shared with this customer only)', () => {
+    expect(customerDone({ made: 'CUSTOMER', party: BRAND, mailJoined: true }, 'INQ-DEMO-0003')).toEqual({ phrase: { key: 'done.customerMade', params: { customer: BRAND.name, number: 'INQ-DEMO-0003' } }, lines: [{ key: 'done.mailJoined' }] })
+    expect(customerDone({ made: null, party: BRAND, mailJoined: false }, 'INQ-DEMO-0003').phrase.key).toBe('done.customerMatched')
+    expect(customerDone({ made: 'CONTACT', party: BRAND, mailJoined: false }, 'INQ-DEMO-0003').phrase.key).toBe('done.customerContact')
+  })
+})
+// ---- end B-TH-234

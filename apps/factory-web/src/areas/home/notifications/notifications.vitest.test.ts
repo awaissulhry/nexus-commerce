@@ -13,6 +13,8 @@ import { designScreen as shellScreen } from '../../../shell/office/fixtures'
 import { fetchCounts, fetchNotifications, markDone, markRead, markTabRead, muteProblem, muteRecord, readProblem, saveDigest, snoozeNotifications, wakeNotifications, writeProblem } from './api'
 import { designScreen } from './fixtures'
 import { bellWords, digestProblem, digestTimes, freshCount, idsOf, openAddress, pageKey, stateOf, tabOf, unreadOf, whenGroup, writeHeld, type Notification } from './model'
+import { listSchema, rowsOf, togetherWords } from './model' // B-TH-239
+import { rowWords } from './words' // B-TH-239
 import { notificationKeys } from './view/NotificationsView'
 import { sentenceWords } from './words'
 
@@ -284,3 +286,83 @@ describe('every design case draws in both languages with no key left on screen',
     expect(bell('owner')).not.toContain('Notifications: ')
   })
 })
+
+// ── B-TH-239 (threads plan TH-3; O-HOME-NOTIF.list-F01 / .prefs-F01, picture 17): grouped notices, and new requests in the matrix ──
+describe('grouped notices and the preferences around Incoming (B-TH-239)', () => {
+  const request = (n: number, minute: number, extra: Partial<Notification> = {}): Notification => ({
+    ...base,
+    id: `r${n}`,
+    category: 'ASSIGNMENT',
+    eventType: 'inquiry.received',
+    messageKey: 'notifications.inquiries.newRequest',
+    record: { type: 'Inquiry', id: `inq${n}`, label: `INQ-2026-000${n}` },
+    anchor: null,
+    params: {},
+    actor: null,
+    people: {},
+    createdAt: `2026-10-29T09:${String(minute).padStart(2, '0')}:00.000Z`,
+    group: { key: `r${n}`, count: 1, ids: [`r${n}`] },
+    ...extra,
+  })
+
+  it('new requests that came together are ONE row "5 new requests came in", opening Incoming’s New tile, acting on every notice', () => {
+    const rows = rowsOf([request(1, 40), request(2, 38), request(3, 35), request(4, 31), request(5, 28), base], '/w/DEMO', OFFICE_PAGES)
+    expect(rows).toHaveLength(2)
+    const folded = rows[0]!
+    expect(folded.fold).toEqual({ requests: 5, oldest: '2026-10-29T09:28:00.000Z' })
+    expect(folded.href).toBe('/w/DEMO/sales/incoming?tile=NEW')
+    // The chip still names the newest request (a real record); every id is reached by open, done, snooze and the tick.
+    expect(folded.record.label).toBe('INQ-2026-0001')
+    expect(folded.recordHref).toBe('/w/DEMO/sales/incoming/inq1')
+    expect(idsOf(rows, [folded.id])).toEqual(['r1', 'r2', 'r3', 'r4', 'r5'])
+    expect(folded.group.count).toBe(5)
+    expect(rows[1]!.fold).toBeUndefined()
+    const en = createTranslator('en', CATALOGUE.en['home-notifications']!)
+    const it_ = createTranslator('it', CATALOGUE.it['home-notifications']!)
+    expect(en('fold.newRequests', { count: 5 })).toBe('5 new requests came in: take them or give them to someone')
+    expect(it_('fold.newRequests', { count: 5 })).toBe('Sono arrivate 5 nuove richieste: prendile o affidale a qualcuno')
+  })
+
+  it('they fold only as neighbours, in the same state, each within 15 minutes of the one before; a single notice stays itself', () => {
+    // A gap over 15 minutes, a read one between, another kind between: three rows each.
+    expect(rowsOf([request(1, 50), request(2, 20)], '', OFFICE_PAGES).map((row) => row.fold?.requests ?? 1)).toEqual([1, 1])
+    expect(rowsOf([request(1, 40), request(2, 38, { read: true }), request(3, 36)], '', OFFICE_PAGES).map((row) => row.fold?.requests ?? 1)).toEqual([1, 1, 1])
+    expect(rowsOf([request(1, 40), base, request(3, 36)], '', OFFICE_PAGES)).toHaveLength(3)
+    const one = rowsOf([request(1, 40)], '/w/DEMO', OFFICE_PAGES)[0]!
+    expect(one.fold).toBeUndefined()
+    expect(one.href).toBe('/w/DEMO/sales/incoming?open=inq1')
+    // Without Incoming built the folded row keeps the newest request's own address.
+    expect(rowsOf([request(1, 40), request(2, 39)], '', new Set(['/sales/incoming/[id]']))[0]!.href).toBe('/sales/incoming/inq1')
+  })
+
+  it('"N together": one record’s notices, a batch on several records (B-TH-045), nothing for a single one or a fold', () => {
+    expect(togetherWords({ group: { key: 'a', count: 1, ids: ['a'] } })).toBeNull()
+    expect(togetherWords({ group: { key: 'a', count: 3, ids: ['a', 'b', 'c'] } })).toEqual({ key: 'together', count: 3 })
+    expect(togetherWords({ group: { key: 'batch:x:MENTION', count: 12, ids: [], records: 12 } })).toEqual({ key: 'togetherRecords', count: 12, records: 12 })
+    expect(togetherWords({ group: { key: 'a', count: 5, ids: [], records: 5 }, fold: { requests: 5, oldest: '' } })).toBeNull()
+    expect(createTranslator('en', CATALOGUE.en['home-notifications']!)('togetherRecords', { count: 12, records: 12 })).toBe('12 together, on 12 records')
+    // The API's `records` is read (B-TH-045); an answer without it still reads.
+    expect(listSchema.parse({ ...LIST, items: [{ ...base, group: { ...base.group, records: 1 } }] }).items[0]!.group.records).toBe(1)
+    expect(listSchema.parse(LIST).items[0]!.group.records).toBeUndefined()
+  })
+
+  it('wall: a folded row says no customer words and no price — the request numbers only (the words the grid’s cells call)', () => {
+    const model = designScreen.cases.find((entry) => entry.id === 'th3-239-grouped')!.model
+    const rows = model.list.status === 'ready' ? model.list.data.items : []
+    for (const locale of LOCALES) {
+      const t = createTranslator(locale, CATALOGUE[locale]['home-notifications']!)
+      const words = rows.map((row) => rowWords(row, t, locale))
+      expect(words[0]).toBe(locale === 'en' ? '5 new requests came in: take them or give them to someone' : 'Sono arrivate 5 nuove richieste: prendile o affidale a qualcuno')
+      for (const text of words) expect(text).not.toMatch(/€|EUR|\{[a-z]+\}|fold\./)
+      const together = togetherWords(rows[1]!)!
+      expect(t(together.key, { count: together.count, records: together.records ?? 1 })).toBe(locale === 'en' ? '12 together, on 12 records' : '12 insieme, su 12 record')
+    }
+    expect(rows.map((row) => row.fold?.requests ?? 1)).toEqual([5, 1, 1])
+  })
+
+  it('preferences: new requests come under "Assigned" and its words say so (a row of their own needs a schema change)', () => {
+    expect(CATALOGUE.en['home-mywork']!['prefs.event.ASSIGNED.hint']).toMatch(/new request/)
+    expect(CATALOGUE.it['home-mywork']!['prefs.event.ASSIGNED.hint']).toMatch(/nuova richiesta/)
+  })
+})
+// ── end B-TH-239 ──

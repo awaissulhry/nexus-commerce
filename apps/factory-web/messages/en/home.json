@@ -781,6 +781,21 @@
       "noRecord": "This item has no record to remind you of.",
       "already": "Reminder set.",
       "passed": "The day before has passed already."
+    },
+    "incoming": {
+      "title": "Incoming",
+      "sameAsIncoming": "The same numbers as Sales › Incoming",
+      "offline": "Offline: the last numbers read",
+      "loading": "Counting the incoming requests…",
+      "error": "Couldn't count the incoming requests.",
+      "new": "New incoming requests",
+      "newHint": "Requests, catalogue orders and change requests nobody has started yet: Incoming's New tile",
+      "catalogue": "Catalogue orders to decide",
+      "catalogueHint": "Orders customers sent from their portal catalogue, waiting for Accept or Refuse",
+      "waiting": "Waiting on us over a working day",
+      "waitingHint": "Everyone's, as Incoming's tile counts them (Needs me now lists only yours or nobody's)",
+      "open": "Open",
+      "lineLabel": "{what}: {count}. Open in Incoming"
     }
   },
   "mailToSort": {

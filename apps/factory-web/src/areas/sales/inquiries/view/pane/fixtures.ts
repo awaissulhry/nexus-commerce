@@ -5,7 +5,7 @@ import { canFor, COMPANY_ID, CONTACTS, CUSTOMERS, DECLINED_VIEW, DEMO_PICTURES, 
 // B-TH-228: Make order, Make style draft.
 import { ORDERABLE_VIEW, ORDERED_VIEW } from '../../demo/fixtures'
 import { orderDraftOf, styleDraftOf } from '../../model'
-import type { InquiryView } from '../../api'
+import type { CustomerCheck, InquiryView } from '../../api'
 import { HOME_ADDRESS } from '../../model'
 import type { InquiryRecordModel } from '../../record-model'
 import { InquiriesView, type InquiriesModel } from '../InquiriesView'
@@ -16,6 +16,20 @@ import { InquiriesView, type InquiriesModel } from '../InquiriesView'
  * Row 1 (picture · customer — subject · state with waiting · owner · 2 of 3 · ⋯ · ×), row 2 (ONE main button that follows the
  * request, Make quote, Ask for info, Decline, Details ▾), the customer's own words first, the thread, Details.
  */
+
+// ---- B-TH-234: the customer check's three answers (made-up customers; only those the person may make requests for) ----
+const CHECK_BASE: CustomerCheck = {
+  prospect: { name: 'Demo Track Club', company: 'Demo Track Club', email: 'club@track-demo.example.com', phone: '+39 02 0000 0000', lawfulBasis: 'CONTRACT', erased: false },
+  candidates: [],
+  ambiguous: false,
+  suggestion: { code: 'DEMO-TRACK', legalName: 'Demo Track Club', kind: 'ORGANISATION' },
+  make: { allowed: true, refusal: null },
+  match: { allowed: true, refusal: null },
+}
+const CHECK_CONTACT: CustomerCheck = { ...CHECK_BASE, candidates: [{ party: { id: CUSTOMERS[0]!.id, code: CUSTOMERS[0]!.code, name: CUSTOMERS[0]!.tradeName ?? CUSTOMERS[0]!.legalName }, contact: { id: CONTACTS[0]!.id, name: CONTACTS[0]!.name }, matchedBy: 'CONTACT' }] }
+const CHECK_DOMAIN: CustomerCheck = { ...CHECK_BASE, candidates: [{ party: { id: CUSTOMERS[1]!.id, code: CUSTOMERS[1]!.code, name: CUSTOMERS[1]!.legalName }, contact: null, matchedBy: 'DOMAIN' }] }
+const CHECK_NONE: CustomerCheck = CHECK_BASE
+// ---- end B-TH-234
 
 interface PaneCase {
   readonly role: RoleCase
@@ -35,7 +49,6 @@ function record(view: InquiryView, role: RoleCase, over: Partial<InquiryRecordMo
     draft: null,
     saving: false,
     busy: false,
-    customers: view.prospect ? { items: CUSTOMERS, problem: null } : null,
     contacts: view.party ? { items: CONTACTS, problem: null } : null,
     styles: { items: STYLE_OPTIONS, problem: null },
     details: { [JACKET_DETAIL.id]: { status: 'ready', value: JACKET_DETAIL }, [PANTS_DETAIL.id]: { status: 'ready', value: PANTS_DETAIL } },
@@ -65,7 +78,6 @@ function paneCase(view: InquiryView, role: RoleCase = 'owner', over: Partial<Inq
       updates: 0,
       notice: null,
       dismissed: [],
-      limit: 200,
       newRequest: null,
       bulk: null,
       detail: record(view, role, over),
@@ -118,6 +130,18 @@ export const designScreen = defineDesignScreen<PaneCase>({
     { id: 'th-228-made-from', label: 'TH-2 · Made from it: the style draft with its own state (opens in a new tab)', model: paneCase(ORDERABLE_VIEW), note: 'Details › Made from it lists the style draft TJ-SS27 (Draft); Make order may go (every line ready).' },
     // ---- end B-TH-228
     // B-TH-230: New messages beside the reading pane (the e-mail-like list keeps the count under the request's words).
+    // ---- B-TH-234 (TH-3): answer a new customer, decline in words, hand the customer a task
+    { id: 'th3-234-customer', label: 'TH-3 · Make or match the customer: the check found one customer by a contact\'s own address — picked, goes alone; the prospect\'s lawful basis travels', model: paneCase(PROSPECT_VIEW, 'owner', { dialog: { kind: 'customer', check: { status: 'ready', value: CHECK_CONTACT }, choice: { mode: 'match', partyId: CHECK_CONTACT.candidates[0]!.party.id, contactId: CHECK_CONTACT.candidates[0]!.contact!.id, addContact: false }, confirmed: false, busy: false, notice: null } }), note: 'Only customers this person may make a request for are listed (never another customer by name). After it: the "new" mark goes, replies open, the mail joins the conversation shared with that customer only.' },
+    { id: 'th3-234-customer-domain', label: 'TH-3 · Found only by the company domain: nothing is picked for you; once picked it asks first ("I checked: … is from …")', model: paneCase(PROSPECT_VIEW, 'owner', { dialog: { kind: 'customer', check: { status: 'ready', value: CHECK_DOMAIN }, choice: { mode: 'match', partyId: CHECK_DOMAIN.candidates[0]!.party.id, contactId: null, addContact: true }, confirmed: false, busy: false, notice: null } }) },
+    { id: 'th3-234-customer-make', label: 'TH-3 · Nobody found: a new customer from the prospect (code proposed, Prospect until confirmed)', model: paneCase(PROSPECT_VIEW, 'owner', { dialog: { kind: 'customer', check: { status: 'ready', value: CHECK_NONE }, choice: { mode: 'make', code: CHECK_NONE.suggestion.code, legalName: CHECK_NONE.suggestion.legalName, kind: 'ORGANISATION', status: 'PROSPECT' }, confirmed: false, busy: false, notice: null } }) },
+    { id: 'th3-234-customer-reading', label: 'TH-3 · The check being read', model: paneCase(PROSPECT_VIEW, 'owner', { dialog: { kind: 'customer', check: { status: 'loading' }, choice: null, confirmed: false, busy: false, notice: null } }) },
+    { id: 'th3-234-decline-portal', label: 'TH-3 · Decline with one message: "Send to the customer" ticked — the customer reads it in its portal, with the decline (one step)', model: paneCase({ ...VIEW, source: 'PORTAL', messageTo: { via: 'PORTAL', to: [], language: 'en', refusal: null } }, 'owner', { dialog: { kind: 'decline', draft: { reason: 'LEAD_TIME', note: 'Earliest slot is March.', message: 'Thank you for the request: we cannot deliver by 20 January. We could from March.', send: true }, busy: false, notice: null } }) },
+    { id: 'th3-234-decline-mail', label: 'TH-3 · Decline with one message by mail: to the request\'s contact, written in Italian (the customer\'s language)', model: paneCase({ ...VIEW, messageTo: { via: 'MAIL', to: ['buyer@brand-demo.example.com'], language: 'it', refusal: null } }, 'owner', { dialog: { kind: 'decline', draft: { reason: 'CAPACITY', note: '', message: 'Grazie per la richiesta: non possiamo produrla entro gennaio.', send: true }, busy: false, notice: null } }) },
+    { id: 'th3-234-not-an-order', label: 'TH-3 · ⋯ Not an order: closed without counting as declined — nothing is sent, the customer reads "Closed"', model: paneCase(VIEW, 'owner', { dialog: { kind: 'decline', draft: { reason: 'NOT_AN_ORDER', note: 'A supplier\'s newsletter.', message: '', send: false }, busy: false, notice: null } }) },
+    { id: 'th3-234-decline-prospect', label: 'TH-3 · Decline a prospect\'s request: no message possible (make the customer first)', model: paneCase({ ...PROSPECT_VIEW, messageTo: { via: null, to: [], language: null, refusal: { code: 'NEEDS_CUSTOMER', message: 'x' } } }, 'owner', { dialog: { kind: 'decline', draft: { reason: 'CAPACITY', note: '', message: '', send: false }, busy: false, notice: null } }) },
+    { id: 'th3-234-task', label: 'TH-3 · Ask Demo Moto Brand for… a document, an answer or measurements, by a date (a task in its portal)', model: paneCase(VIEW, 'owner', { can: { ...canFor('owner'), tasks: true }, dialog: { kind: 'task', draft: { kind: 'SEND_MEASUREMENTS', due: '2026-11-20' }, busy: false, notice: null } }) },
+    { id: 'th3-234-task-refused', label: 'TH-3 · The task refused in words: the request was closed meanwhile', model: paneCase(VIEW, 'owner', { can: { ...canFor('owner'), tasks: true }, dialog: { kind: 'task', draft: { kind: 'UPLOAD_DOCUMENT', due: null }, busy: false, notice: { key: 'task.refusal.REQUEST_CLOSED', tone: 'danger' } } }) },
+    // ---- end B-TH-234
     { id: 'th-230-pane-new', label: 'TH-2 · New messages beside the pane: "● 2 new" under the request; amber waiting by the one rule', model: paneCase(VIEW, 'owner', {}, { unread: { [ROWS[0]!.id]: { newCount: 2, lastAt: '2026-11-17T09:42:00.000Z' }, [ROWS[2]!.id]: { newCount: 3, lastAt: '2026-11-16T15:10:00.000Z' } } }) },
   ],
 })

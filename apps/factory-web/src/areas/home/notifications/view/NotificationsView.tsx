@@ -17,6 +17,7 @@ import { SNOOZE_MAX_DAYS } from '../../today/snooze'
 import {
   NOTIFICATION_TABS,
   pageKey,
+  togetherWords, // B-TH-239
   unreadOf,
   whenGroup,
   writeHeld,
@@ -28,7 +29,7 @@ import {
   type NotificationsViewModel,
   type NotificationTab,
 } from '../model'
-import { sentenceWords } from '../words'
+import { rowWords } from '../words'
 import { DigestDialog } from './DigestDialog'
 import '../notifications.css'
 // B-W2b-388 (PLT-140, PLT-141): the preferences matrix and push on this device (each loads itself).
@@ -125,7 +126,8 @@ function Page({ model, actions }: { model: NotificationsViewModel; actions?: Not
   const rows = useMemo(() => data?.items ?? [], [data])
   const held = writeHeld({ live: model.live, busy: model.busy })
   const heldText = held ? t(held) : null
-  const sentence = (row: NotificationRow) => sentenceWords(row, t, locale)
+  // B-TH-239: folded new-request notices read "5 new requests came in" (no record's words beyond the newest number on its chip).
+  const sentence = (row: NotificationRow) => rowWords(row, t, locale)
 
   const askSnooze = (ids: readonly string[]) => {
     const picked = rows.filter((row) => ids.includes(row.id))
@@ -182,7 +184,11 @@ function Page({ model, actions }: { model: NotificationsViewModel; actions?: Not
             </a>
             <span className="fw-ntf-sub">
               {t(`category.${row.category}`)}
-              {row.group.count > 1 ? ` · ${t('together', { count: row.group.count })}` : ''}
+              {/* B-TH-239: a batch says on how many records (B-TH-045); folded new requests say it in the sentence. */}
+              {(() => {
+                const together = togetherWords(row)
+                return together ? ` · ${t(together.key, { count: together.count, records: together.records ?? 1 })}` : ''
+              })()}
             </span>
           </span>
         </span>

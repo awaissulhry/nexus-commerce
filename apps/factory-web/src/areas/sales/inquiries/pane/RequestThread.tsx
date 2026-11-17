@@ -1,7 +1,13 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RecordThread } from '../../../../lib/record-thread/RecordThread'
+// B-TH-234 (B-TH-046): saved replies for requests beside the box, filled from THIS request (its number, subject, wanted date, contact).
+import type { SavedRepliesModel, SavedReplyLine } from '../../../../lib/record-thread/helpers/model'
+import { SavedReplies } from '../../../../lib/record-thread/helpers/view/SavedReplies'
+import { useLocale } from '../../../../lib/i18n/provider'
+import { useOfficeApi } from '../../../../lib/session/context'
+import { fillReply, listReplies } from '../../../_shared/document-send/template/api'
 import { MessageRemindMe } from '../../../../shell/panels/remind-me/view/MessageRemindMe'
 import { useRecordThread, type RecordThreadHost } from '../../../_shared/record-thread/use-record-thread'
 
@@ -35,10 +41,13 @@ export interface RequestThreadProps {
   readonly ask?: AskInfo | null
   /** The question as it is sent: the container calls …/ask-info and answers whether it went (the box empties then). */
   readonly onAsk?: (send: AskSend) => Promise<boolean>
+  /** B-TH-234: the customer's language (the request's `messageTo.language`): its saved replies first. */
+  readonly replyLanguage?: string | null
 }
 
-export function RequestThread({ host, ask = null, onAsk }: RequestThreadProps) {
+export function RequestThread({ host, ask = null, onAsk, replyLanguage = null }: RequestThreadProps) {
   const thread = useRecordThread(host)
+  const replies = useRequestReplies(host, thread, replyLanguage)
   const asking = useRef<AskInfo | null>(null)
   const seen = useRef(0)
   const latest = useRef(thread)
@@ -77,5 +86,48 @@ export function RequestThread({ host, ask = null, onAsk }: RequestThreadProps) {
           },
         }
       : thread.actions
-  return <RecordThread model={thread.model} actions={actions} remind={(messageId) => <MessageRemindMe record={host.record} messageId={messageId} />} />
+  return <RecordThread model={thread.model} actions={actions} remind={(messageId) => <MessageRemindMe record={host.record} messageId={messageId} />} slots={replies ? { helpers: replies } : undefined} />
+}
+
+/**
+ * B-TH-234 (B-TH-046, O-SAL-INQ-LIST.pane-thread-T01): Saved replies ▾ beside the request's box — the office's shared replies and the
+ * person's own for requests (GET /templates/replies, record type Inquiry, Italian and English, the customer's language first). Picking
+ * one fills the box from THIS request (POST …/fill: its number, what it is about, the wanted date, the customer's contact who wrote —
+ * never another customer's); nothing is sent by picking, and the blanks the request could not fill are said under the box.
+ */
+function useRequestReplies(host: RecordThreadHost, thread: ReturnType<typeof useRecordThread>, language: string | null) {
+  const api = useOfficeApi()
+  const locale = useLocale()
+  const mayReply = thread.base.held.has('email.send') || thread.base.held.has('threads.post')
+  const first = language === 'en' || language === 'it' ? language : locale === 'en' ? 'en' : 'it'
+  const [model, setModel] = useState<SavedRepliesModel>({ status: 'loading', replies: [], language: first })
+  const [seq, setSeq] = useState(0)
+  const companyId = host.record.companyId
+  useEffect(() => {
+    if (!mayReply) return
+    const controller = new AbortController()
+    setModel((now) => ({ ...now, status: 'loading', language: first }))
+    Promise.all((['it', 'en'] as const).map((one) => listReplies(api, { language: one, recordType: 'Inquiry', companyId }, controller.signal)))
+      .then((lists) => {
+        const lines: SavedReplyLine[] = lists.flat().flatMap((reply) => (reply.language === 'it' || reply.language === 'en' ? [{ id: reply.id, name: reply.name, language: reply.language, shared: reply.shared }] : []))
+        setModel((now) => ({ ...now, status: 'ready', replies: lines }))
+      })
+      .catch(() => !controller.signal.aborted && setModel((now) => ({ ...now, status: 'failed' })))
+    return () => controller.abort()
+  }, [api, companyId, mayReply, seq, first])
+  const latest = useRef(thread)
+  latest.current = thread
+  if (!mayReply) return null
+  const pick = (replyId: string) => {
+    setModel((now) => ({ ...now, filling: true, missing: [] }))
+    fillReply(api, replyId, { recordType: 'Inquiry', recordId: host.record.id })
+      .then((filled) => {
+        const { model: now, actions } = latest.current
+        const before = now.composer.draft.body.trim()
+        actions.onDraft({ ...now.composer.draft, body: before ? `${now.composer.draft.body}\n\n${filled.body}` : filled.body }, now.composer.notes)
+        setModel((one) => ({ ...one, filling: false, missing: filled.missing }))
+      })
+      .catch(() => setModel((one) => ({ ...one, filling: false, status: 'failed' })))
+  }
+  return <SavedReplies model={model} onPick={pick} onRetry={() => setSeq((value) => value + 1)} />
 }

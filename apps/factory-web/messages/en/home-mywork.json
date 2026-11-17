@@ -135,6 +135,9 @@
       "body": "Follow a record (Follow, on any record) or pin a saved view: what changes shows here, one line each."
     },
     "notBuilt": "This list has no page of its own yet.",
+    "newMessages_one": "{record}: {count} new message",
+    "newMessages_other": "{record}: {count} new messages",
+    "newMessagesHint": "Opens the first message you have not read yet.",
     "more_one": "and {count} more",
     "more_other": "and {count} more",
     "seen": "Seen",
@@ -281,7 +284,7 @@
     },
     "event": {
       "MENTIONED": { "label": "Mentioned", "hint": "someone @mentioned you" },
-      "ASSIGNED": { "label": "Assigned", "hint": "a task or a Today row given to you" },
+      "ASSIGNED": { "label": "Assigned", "hint": "a task, a Today row or a request given to you, and each new request of a customer whose requests you answer" },
       "APPROVAL_WAITING": { "label": "Approval waiting", "hint": "a request waits for your yes" },
       "APPROVAL_DECIDED": { "label": "Approval decided", "hint": "a request you asked for was decided" },
       "FOLLOWING_CHANGED": { "label": "Record I follow changed", "hint": "a followed record or saved view changed" },

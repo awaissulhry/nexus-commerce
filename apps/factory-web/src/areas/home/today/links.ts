@@ -2,6 +2,7 @@ import { attentionAddress, hasRecordPage, recordAddress } from '../../../lib/rec
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
 import { DECIDED_HERE, type HandledList, type HandledView, type PanelRow, type QueueItem, type TodayItem } from './model'
 import type { PanelRecordRow } from './panels'
+import { catalogueOrderHref, INCOMING_PAGE } from './incoming/model' // B-TH-239
 
 /**
  * Where Today's rows open (design 00 §2.3): the row's kind's own page when it has one (a privacy duty: Admin › Privacy &
@@ -13,6 +14,10 @@ export function queueItem(item: TodayItem, prefix: string, built: ReadonlySet<st
   // W2a: an exception rule's alert (record type Alert) has no page of its own until Home › Alerts is built: its chip
   // opens the row here, whose review links the record the alert is about.
   if (item.kind === 'RULE_ALERT' && !hasRecordPage(item.record.type, built)) return { ...item, href: `${prefix}/home/today?open=${encodeURIComponent(item.key)}`, reviewHref: null }
+  // ── B-TH-239 (O-HOME-TODAY.incoming-F03): a catalogue order to decide opens in Sales › Incoming's reading pane (before, it opened
+  //    only its record panels: no page decided it). Its Accept / Refuse live there. ──
+  if (item.kind === 'PORTAL_ORDER_REQUEST' && built.has(INCOMING_PAGE)) return { ...item, href: catalogueOrderHref(prefix, item.record.id), reviewHref: null }
+  // ── end B-TH-239 ──
   const href = `${prefix}${attentionAddress(item.kind, { type: item.record.type, id: item.record.id, label: item.record.label, companyId: item.companyId, siteId: item.siteId }, built)}`
   const ownReview = item.decide === 'REVIEW' && !DECIDED_HERE.has(item.kind) && hasRecordPage(item.record.type, built)
   return { ...item, href, reviewHref: ownReview ? href : null }
