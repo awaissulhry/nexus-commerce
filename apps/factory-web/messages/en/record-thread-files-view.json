@@ -52,7 +52,11 @@
     "cancel": "Cancel",
     "confirm_one": "Add the file",
     "confirm_other": "Add {count} files",
-    "busy": "The files are being added."
+    "busy": "The files are being added.",
+    "sheet": "This is a measurement sheet",
+    "sheetHint": "a PDF or a photo; body data: only those with the measurements right open it, each opening recorded",
+    "sheetFloor": "A measurement sheet never goes to the floor: choose another audience or untick it",
+    "sheetType": "a measurement sheet is a PDF or a photo of one"
   },
   "select": {
     "all": "Choose all {count}",

@@ -190,6 +190,9 @@
       "Complaint": "Complaint",
       "RepairOrder": "Repair",
       "Inquiry": "Request",
+      "Project": "Project",
+      "Style": "Style",
+      "SampleRound": "Sample round",
       "other": "Record"
     }
   },
@@ -313,7 +316,8 @@
       "portal_approvals_view": "See what we ask you to approve",
       "portal_samples_view": "See your samples, your styles in development and their tech packs",
       "portal_production_view": "See your orders in production: stage, expected date, health and who acts next",
-      "portal_production_urgency": "Mark your orders in production urgent or regular, within your urgent quota"
+      "portal_production_urgency": "Mark your orders in production urgent or regular, within your urgent quota",
+      "portal_projects_view": "See the projects of your organisation we added you to, with your own records linked to them and the messages shared with you"
     }
   },
   "display": {

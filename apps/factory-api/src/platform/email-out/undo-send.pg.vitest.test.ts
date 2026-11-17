@@ -150,7 +150,7 @@ describe('taking a mail back', () => {
     expect(taken.status, JSON.stringify(taken.body)).toBe(200)
     expect(taken.body.email).toMatchObject({ id, status: 'WITHDRAWN', withdrawnById: salesId, undoUntil: null })
     expect(taken.body.email.withdrawnAt).not.toBeNull()
-    expect(taken.body.text).toEqual({ to: ['oops@customer-a.example.com'], cc: ['copy@customer-a.example.com'], bcc: [], subject: 'Prezzo sbagliato', body: 'Il prezzo è 10.', attachments: [] })
+    expect(taken.body.text).toEqual({ to: ['oops@customer-a.example.com'], cc: ['copy@customer-a.example.com'], bcc: [], subject: 'Prezzo sbagliato', body: 'Il prezzo è 10.', attachments: [], replyToMessageId: null, correctsMessageId: null })
     const row = await outboundOf(id)
     expect(row).toMatchObject({ status: 'WITHDRAWN', withdrawnById: salesId, attempts: 0 })
     expect((await admin(`SELECT payload FROM "OutboxEvent" WHERE type = 'email.status_changed' AND subject = $1`, [id])).map((event) => event.payload.status)).toEqual(['WITHDRAWN'])
@@ -172,6 +172,20 @@ describe('taking a mail back', () => {
     expect(again.status).toBe(200)
     expect(again.body.email).toMatchObject({ status: 'WITHDRAWN', withdrawnAt: taken.body.email.withdrawnAt })
   })
+
+  // ---- th3-web-c follow-up (B-TH-236): the take-back gives back what the mail answered or corrected (B-TH-050).
+  it('a correction taken back comes back with the message it corrects, so the composer reopens "Correcting …"', async () => {
+    const first = await send(sales, { to: ['fix@customer-a.example.com'], subject: 'Consegna', body: 'Il taglio parte mercoledì.' })
+    expect(first.status, JSON.stringify(first.body)).toBe(201)
+    const firstRow = await outboundOf(first.body.email.id)
+    expect(await deliverOutbound(h.email, system(), firstRow.id, { retry: true, clock: at(firstRow.queuedAt, 11_000), build: threadMailBuilder(h.email, system()) })).toBe('sent')
+    const correction = await send(sales, { to: ['fix@customer-a.example.com'], subject: 'Consegna', body: 'Correggo: il taglio parte giovedì.', correctsMessageId: first.body.messageId })
+    expect(correction.status, JSON.stringify(correction.body)).toBe(201)
+    const taken = await undo(sales, correction.body.email.id)
+    expect(taken.status, JSON.stringify(taken.body)).toBe(200)
+    expect(taken.body.text).toMatchObject({ body: 'Correggo: il taglio parte giovedì.', correctsMessageId: first.body.messageId, replyToMessageId: null })
+  })
+  // ---- end th3-web-c follow-up
 
   it('refused in words: another person, a mail that left, a mail that did not go, a mail with no window; another record’s path finds nothing', async () => {
     const mine = (await send(sales, { to: ['late@customer-a.example.com'], body: 'Parte.' })).body.email.id as string

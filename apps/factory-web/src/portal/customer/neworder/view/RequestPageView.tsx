@@ -6,6 +6,9 @@ import { EndState } from '@nexus/ui/components/EndState/index'
 import { Button, Pill, Skeleton } from '@nexus/ui/primitives'
 import { Modal, useDsWords } from '../../../../lib/i18n/ds-parts'
 import { RequestCompose, type RequestComposeActions, type RequestComposeModel } from '../../../../lib/request-compose/view/RequestCompose'
+// B-TH-282: the customer's files (held until Send) and how they went (the receipt).
+import { ComposeFiles, ComposeFilesOutcome, type ComposeFilesActions, type ComposeFilesModel } from '../../../../lib/request-compose/view/ComposeFiles'
+import type { HeldFile } from '../../../../lib/request-compose/files'
 import { useOrderingWords } from '../words'
 // B-TH-304: the catalogue door in the side column.
 import type { CatalogueDoor } from '../request-model'
@@ -64,6 +67,10 @@ export interface RequestPageModel {
   }
   receipt: RequestReceipt | null
   discardOpen: boolean
+  // ---- B-TH-282: the files area while composing (null: the held area with `compose.filesHeld`), and the files after Send.
+  files?: ComposeFilesModel | null
+  receiptFiles?: { held: readonly HeldFile[]; openHref: string } | null
+  // ---- end B-TH-282
 }
 
 export interface RequestPageActions {
@@ -74,6 +81,10 @@ export interface RequestPageActions {
   onNewOrder?: () => void
   onDiscardConfirm?: () => void
   onDiscardCancel?: () => void
+  // ---- B-TH-282
+  files?: ComposeFilesActions
+  onRetryFiles?: () => void
+  // ---- end B-TH-282
 }
 
 export function RequestPageView({ model, actions, day }: { model: RequestPageModel; actions?: RequestPageActions; day: (iso: string) => string }) {
@@ -152,6 +163,7 @@ export function RequestPageView({ model, actions, day }: { model: RequestPageMod
           ]}
           labels={ds.endState}
         >
+          {model.receiptFiles ? <ComposeFilesOutcome held={model.receiptFiles.held} onRetry={actions?.onRetryFiles} openHref={model.receiptFiles.openHref} /> : null}
           <section className="fw-pno-sent" aria-labelledby="fw-pno-sent-title">
             <h3 id="fw-pno-sent-title" className="fw-pno-h3">
               {t('receipt.sent')}
@@ -181,7 +193,13 @@ export function RequestPageView({ model, actions, day }: { model: RequestPageMod
           }
         />
       ) : null}
-      <RequestCompose model={model.compose} actions={actions?.compose} words={{ day }} aside={<Aside model={model} onRetry={actions?.onRetryList} />} />
+      <RequestCompose
+        model={model.compose}
+        actions={actions?.compose}
+        words={{ day }}
+        aside={<Aside model={model} onRetry={actions?.onRetryList} />}
+        {...(model.files ? { slots: { files: <ComposeFiles model={model.files} actions={actions?.files} /> } } : {})}
+      />
       <Modal
         open={model.discardOpen}
         onClose={() => actions?.onDiscardCancel?.()}

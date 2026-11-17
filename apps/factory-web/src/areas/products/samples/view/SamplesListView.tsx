@@ -38,6 +38,9 @@ import {
 import { DecisionTag, Freshness, isPageKey, KindTag, NoAccess, NoticeLine, PageHead, SamplesMessages, StagePill, useWords } from '../parts'
 import { DecideDialog, type DecideActions, type DecideModel } from './DecideDialog'
 import { NewRoundDialog, type NewRoundActions, type NewRoundModel } from './NewRoundDialog'
+// B-TH-251 (X-PRD-SMP-LIST.grid): "Add to project" on the selected rounds.
+import { addToHeld, type AddToListPart, type AddToProjectActions, type AddToRecord } from '../../projects/add-to/model'
+import { AddToProjectButton, AddToProjectDialog } from '../../projects/add-to/view/AddToProjectDialog'
 
 /** SCR-110 — Products › Development › Samples & prototypes: tiles, Board · List · Calendar over the same rounds and filters. */
 export interface SamplesListModel {
@@ -60,6 +63,8 @@ export interface SamplesListModel {
   moving: string | null
   newRound: NewRoundModel | null
   decide: DecideModel | null
+  /** B-TH-251: "Add to project" on the selected rounds (absent: no button). */
+  addToProject?: AddToListPart
   /** Design cases: the rows selected, the calendar's day open, the keys panel open. */
   selected?: readonly string[]
   day?: string | null
@@ -79,6 +84,9 @@ export interface SamplesListActions {
   decide?: DecideActions
   onCopy?: (numbers: readonly string[]) => void
   onDismissNotice?: () => void
+  /** B-TH-251: "Add to project" on the selected rounds (each by its number), and its dialog. */
+  onAddToProject?: (records: AddToRecord[]) => void
+  addToProject?: AddToProjectActions
 }
 
 export function SamplesListView({ model, actions }: { model: SamplesListModel; actions?: SamplesListActions }) {
@@ -356,9 +364,19 @@ function List({ model, actions }: { model: SamplesListModel; actions?: SamplesLi
           onChange: setSelected,
           exportSelected: true,
           actions: (
-            <Button size="sm" aria-label={t('list.copyMany', { count: picked.length })} onClick={() => actions?.onCopy?.(picked.map((row) => row.number))}>
-              <Copy size={13} aria-hidden /> <SelectionLabel>{t('list.copyMany', { count: picked.length })}</SelectionLabel>
-            </Button>
+            <>
+              <Button size="sm" aria-label={t('list.copyMany', { count: picked.length })} onClick={() => actions?.onCopy?.(picked.map((row) => row.number))}>
+                <Copy size={13} aria-hidden /> <SelectionLabel>{t('list.copyMany', { count: picked.length })}</SelectionLabel>
+              </Button>
+              {/* B-TH-251: Add to project — held with why without projects.manage, past 200 rows, offline. */}
+              {model.addToProject && (
+                <AddToProjectButton
+                  count={picked.length}
+                  held={addToHeld({ manage: model.addToProject.manage, count: picked.length, offline: model.addToProject.offline || offline })}
+                  onClick={() => actions?.onAddToProject?.(picked.map((row) => ({ id: row.id, number: row.number })))}
+                />
+              )}
+            </>
           ),
         }}
         updates={model.updates > 0 ? { count: model.updates, onShow: () => actions?.onShowUpdates?.() } : null}
@@ -380,6 +398,19 @@ function List({ model, actions }: { model: SamplesListModel; actions?: SamplesLi
       <p className="fw-smp-hint">{model.list && !model.list.complete ? t('list.footMore') : t('list.foot')}</p>
       {model.newRound && <NewRoundDialog model={model.newRound} can={model.can} actions={actions?.newRound} />}
       {model.decide && <DecideDialog model={model.decide} actions={actions?.decide} />}
+      {/* B-TH-251: the Add to project dialog; after its answer, closing it clears the selection. */}
+      {model.addToProject?.dialog && (
+        <AddToProjectDialog
+          model={model.addToProject.dialog}
+          actions={{
+            ...actions?.addToProject,
+            onClose: () => {
+              if (model.addToProject?.dialog?.result) setSelected([])
+              actions?.addToProject?.onClose?.()
+            },
+          }}
+        />
+      )}
     </div>
   )
 }

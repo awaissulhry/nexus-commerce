@@ -73,7 +73,8 @@ export interface RequestComposeWords {
 /**
  * B-TH-221 (the office's New request): `plain` draws the compose without its own card and Send row (a dialog's body: the
  * dialog's footer sends), `files` takes the place of the held files area (office uploads work), `details` adds the office's
- * own fields inside "Add details (optional)". The portal passes none of them and draws as before.
+ * own fields inside "Add details (optional)". B-TH-282: the portal passes `files` too — its customer's files (ComposeFiles,
+ * held until Send, or the API's sentence while uploads from outside are closed).
  */
 export interface RequestComposeSlots {
   plain?: boolean

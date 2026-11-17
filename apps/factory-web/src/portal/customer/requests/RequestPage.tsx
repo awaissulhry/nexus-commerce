@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { PartnerMessage } from '@nexus/ui/patterns/PartnerThread/index'
 import { isApiError } from '../../../lib/api/errors'
 import { WithMessages } from '../../../record-panels/i18n'
@@ -10,6 +10,14 @@ import { useOffline } from '../orders/hooks'
 import { NotInAccess } from '../orders/view/parts'
 import { fetchRequest, type RequestView } from './api'
 import { NS, questionOf, stateLinks, stateTone, yourNumberText, type ThreadLine } from './model'
+// ---- B-TH-282 (files) and B-TH-291 (withdraw)
+import { newIdempotencyKey } from '../../../lib/api/client'
+import { issuePath } from '../../../lib/api/errors'
+import { useT } from '../../../lib/i18n/provider'
+import { COMPOSE_NS } from '../../../lib/request-compose/model'
+import { fetchRequestsOpen, withdrawRequest } from './api'
+import { filesDoorOf, withdrawProblemKey } from './model'
+import { useRequestFiles } from './use-request-files'
 import { RequestRecordView } from './view/RequestView'
 import { useRequestWords } from './words'
 
@@ -23,7 +31,7 @@ import { useRequestWords } from './words'
  */
 export function CustomerRequestRecordPage({ id }: { id: string }) {
   return (
-    <WithMessages namespaces={[NS, 'portal-orders', 'ds-words']}>
+    <WithMessages namespaces={[NS, 'portal-orders', 'ds-words', COMPOSE_NS]}>
       <RequestContainer id={id} />
     </WithMessages>
   )
@@ -42,6 +50,24 @@ function RequestContainer({ id }: { id: string }) {
   const [messages, setMessages] = useState<ThreadLine[]>([])
   const box = useRef<HTMLDivElement>(null)
   const backHref = `${frame.prefix}/orders`
+  // ---- B-TH-282: the files' gate (the API's words while uploads from outside are closed) and the files being sent.
+  const tc = useT(COMPOSE_NS)
+  const mayOrder = frame.me.permissions.includes('portal.orderRequests.manage')
+  const [gate, setGate] = useState<{ open: boolean; words: string | null } | null>(null)
+  const fileWords = useMemo(() => ({ network: tc('files.failed.network'), store: tc('files.failed.store'), refused: tc('files.failed.refused') }), [tc])
+  const files = useRequestFiles(api, fileWords)
+  useEffect(() => {
+    if (!allowed || !mayOrder) return
+    const abort = new AbortController()
+    fetchRequestsOpen(api, abort.signal)
+      .then((answer) => setGate(answer.files ?? { open: false, words: null }))
+      .catch(() => setGate(null))
+    return () => abort.abort()
+  }, [api, allowed, mayOrder])
+  // ---- B-TH-291: Withdraw's question (one key per question: a retry after a lost answer withdraws once).
+  const [withdrawing, setWithdrawing] = useState<{ busy: boolean; problem: string | null } | null>(null)
+  const withdrawKey = useRef<string | null>(null)
+  // ---- end B-TH-282 / B-TH-291
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -93,6 +119,27 @@ function RequestContainer({ id }: { id: string }) {
   if (!allowed) return <NotInAccess admins={(frame.access?.admins ?? []).map((admin) => admin.displayName)} homeHref={frame.prefix} />
 
   const question = request ? questionOf(request.state.code, messages) : null
+
+  // ---- B-TH-291: withdraw at the version read; refused in the API's words (another customer's request is not found: W37).
+  const withdraw = async () => {
+    if (!request || request.version === undefined || withdrawing?.busy) return
+    withdrawKey.current ??= newIdempotencyKey()
+    setWithdrawing({ busy: true, problem: null })
+    try {
+      const next = await withdrawRequest(api, id, request.version, withdrawKey.current)
+      withdrawKey.current = null
+      setRequest(next)
+      setWithdrawing(null)
+      frame.refreshTasks()
+    } catch (error) {
+      const refusal = isApiError(error) ? error.issues.find((issue) => issuePath(issue).replace(/\./g, '/').startsWith('refusal/')) : undefined
+      if (isApiError(error) && error.kind !== 'unavailable') withdrawKey.current = null
+      setWithdrawing({ busy: false, problem: refusal?.message ?? t(withdrawProblemKey(isApiError(error) ? error.kind : null)) })
+      if (isApiError(error) && (error.kind === 'conflict' || error.kind === 'not_found')) void load()
+    }
+  }
+  const door = request ? filesDoorOf(request.state.code) : 'request'
+  // ---- end B-TH-291
   return (
     <div ref={box}>
       <RequestRecordView
@@ -103,6 +150,11 @@ function RequestContainer({ id }: { id: string }) {
           question: question ? { body: question.body, at: question.at } : null,
           offlineSince: offline && loadedAt ? time(loadedAt) : null,
           backHref,
+          // B-TH-282: "Add files" for who sends requests; the API's sentence while uploads from outside are closed.
+          files: request && mayOrder && gate ? { open: gate.open, closedWords: gate.words, held: files.held, leftOut: files.leftOut, when: 'send', readOnly: frame.me.preview || offline, heldReason: frame.me.preview ? tc('held.preview') : offline ? t('files.offline') : null } : null,
+          // B-TH-291
+          withdraw: request?.withdraw ?? null,
+          withdrawing,
         }}
         actions={{
           onAnswer: () => {
@@ -113,6 +165,21 @@ function RequestContainer({ id }: { id: string }) {
           onRetry: () => {
             setState('loading')
             void load()
+          },
+          // ---- B-TH-282
+          files: {
+            onDrop: files.add,
+            onSheet: files.sheet,
+            onRemove: files.remove,
+            onRetry: () => void files.send(id, door),
+            onSend: () => void files.send(id, door),
+          },
+          // ---- B-TH-291
+          onWithdraw: () => setWithdrawing({ busy: false, problem: null }),
+          onWithdrawConfirm: () => void withdraw(),
+          onWithdrawCancel: () => {
+            withdrawKey.current = null
+            setWithdrawing(null)
           },
         }}
         thread={state === 'missing' ? null : <PortalThread type="Inquiry" id={id} title={t('thread.title')} showRecord={false} onMissing={() => setState('missing')} onMessages={onMessages} />}

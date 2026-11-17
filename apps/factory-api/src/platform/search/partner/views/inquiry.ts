@@ -5,7 +5,8 @@ import { requestStateOf } from '@nexus/factory-domain/sales/portal-requests/stat
 import { definePartnerView, equalsTyped, holdsTyped, idsOf, type PartnerReader, type PartnerRecord } from '../view'
 
 // ---- follow-up th-backend-d (Not an order → Closed): a closed request reads with the customer's own word, as the portal's request
-// page and list say it (factory-domain sales/portal-requests/state.ts requestStateOf): LOST and WITHDRAWN read CLOSED; DECLINED reads
+// page and list say it (factory-domain sales/portal-requests/state.ts requestStateOf): LOST reads CLOSED; WITHDRAWN reads WITHDRAWN
+// ("Withdrawn", the customer's own act, B-TH-095 — th3-web-c follow-up); DECLINED reads
 // DECLINED, or CLOSED when it was declined as "Not an order" (B-TH-043) — the decline reason is an office column the partner role
 // never reads, so it is read through the reader's `inTenant` (../view PartnerReader, B-TH-073's one way to read a tenant column for a
 // portal person): only the ids the partner read gave, of the session's own party. Every other state keeps its code as before.
@@ -21,7 +22,7 @@ const partnerStatusOf = (status: string, declineReason: string | null = null): s
  * step 7 (threads plan §0.5, counts do not leak) — the customer's OWN number "#7" (never the office's INQ-… series), its subject
  * (the request's first line) under it and as words the partner may type. Its thread opens on it (platform/threads/partner): the
  * customer's request words are its first message. A closed request carries the customer's own word (follow-up th-backend-d: "Not an
- * order", LOST and WITHDRAWN read CLOSED, never the office's DECLINED or LOST).
+ * order" and LOST read CLOSED, never the office's DECLINED or LOST; th3-web-c: WITHDRAWN reads WITHDRAWN, "Withdrawn").
  */
 export default definePartnerView({
   recordType: 'Inquiry',

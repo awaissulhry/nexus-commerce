@@ -95,6 +95,10 @@ const COPY = file(13, { name: 'Rider photo front.jpg', contentType: 'image/jpeg'
 const LOCKED = file(14, { name: '', locked: 'MEASUREMENTS' })
 const WITH_COPIES = [...WITHOUT_ORIGIN, COPY, LOCKED]
 // ---- end B-TH-231
+// ---- B-TH-283 (B-TH-083): a measurement sheet the reader opens (marked, each opening recorded) beside one locked for them.
+const SHEET = file(15, { name: 'Measurements Anna A.pdf', sheet: true })
+const WITH_SHEETS = [...WITHOUT_ORIGIN, SHEET, LOCKED]
+// ---- end B-TH-283
 
 export const designScreen = defineDesignScreen<FilesViewCaseModel>({
   screen: 'SCR-006-filesview',
@@ -116,6 +120,10 @@ export const designScreen = defineDesignScreen<FilesViewCaseModel>({
     },
     { id: 'use-on-refused', label: 'Use on another record…: refused in words (another customer’s record)', model: { ...c({ files: WITH_COPIES }), targets: TARGETS, useOn: { files: [{ id: id(3), name: 'Collar detail.jpg' }], party: { name: PARTY.name }, query: 'AX-100', targets: TARGETS, searching: false, chosen: TARGETS[0]!.key, share: false, canShare: true, busy: false, problem: 'useOn.refused.otherParty', failed: [], copied: 0 } } },
     // ---- end B-TH-231
+    // ---- B-TH-283
+    { id: 'sheets', label: 'Measurement sheets: opened (recorded) and locked', model: c({ files: WITH_SHEETS }), note: 'Who holds the measurements right (the production manager does on purpose) opens a sheet, marked “each opening is recorded”; who does not (finance) reads the lock and why, never its name.' },
+    { id: 'upload-sheet', label: 'Add a file as a measurement sheet', model: c({ upload: { files: [{ name: 'Measurements Anna A.pdf', sizeBytes: 180_000 }], kind: 'ATTACHMENT', audience: 'FLOOR', kinds: ['ATTACHMENT', 'DOCUMENT', 'PHOTO'], audiences: ['OFFICE', 'FLOOR', 'PARTNER'], sheet: true } }), note: 'The tick at upload files it as body data; a sheet never goes to the floor (Add is held with why until another audience is chosen).' },
+    // ---- end B-TH-283
     { id: 'no-upload', label: 'No right to upload', model: c({ can: { upload: false, share: false, delete: false }, uploadHeld: null }), note: 'The upload is held with the reason; the bulk actions say the right they need.' },
     { id: 'block', label: 'A required document refuses the move', model: c({ missing: [{ id: 'm2', document: 'Test report EN 17092-3', before: 'Shipped', level: 'BLOCK' }] }) },
     { id: 'empty', label: 'No files yet', model: c({ files: [] }), note: 'An empty view never looks like an error: the drop area says what to do.' },

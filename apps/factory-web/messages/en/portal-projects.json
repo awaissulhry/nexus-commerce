@@ -1,0 +1,69 @@
+{
+  "band": {
+    "title": "Project"
+  },
+  "loading": "Reading the project…",
+  "offline": "No connection. What you see was read at {time}.",
+  "status": {
+    "ACTIVE": "Active",
+    "ON_HOLD": "On hold",
+    "CLOSED": "Closed"
+  },
+  "summary": {
+    "kind": "Project",
+    "target": "Target date {date}",
+    "shared": "The messages here are shared between your team and {company}. Only the people of your team we added see this project.",
+    "onHold": "The project is on hold for now: you can still write to {company} here.",
+    "closed": "The project is closed: its messages stay here to read."
+  },
+  "thread": {
+    "title": "Messages about this project"
+  },
+  "news": {
+    "title": "News of your records",
+    "hint": "When one of your records linked to this project moves on, you see it here.",
+    "empty": "Nothing moved on your records yet.",
+    "failed": "The news could not be read right now.",
+    "record": "{type} {ref}",
+    "moved": "{record}: {from} → {to}",
+    "now": "{record}: now {to}",
+    "changed": "{record} moved on",
+    "more_one": "+{count} more that day",
+    "more_other": "+{count} more that day",
+    "older": "Show older news",
+    "reading": "Reading…"
+  },
+  "move": {
+    "REQUESTED": "requested",
+    "IN_PROGRESS": "in progress",
+    "SENT": "sent",
+    "RECEIVED": "received",
+    "DECIDED": "decided",
+    "APPROVED": "approved",
+    "REJECTED": "rejected",
+    "ACCEPTED": "accepted",
+    "DECLINED": "declined",
+    "EXPIRED": "expired",
+    "CONFIRMED": "confirmed",
+    "IN_PRODUCTION": "in production",
+    "READY": "ready",
+    "PARTLY_SHIPPED": "partly shipped",
+    "SHIPPED": "shipped",
+    "DELIVERED": "delivered",
+    "CLOSED": "closed",
+    "CANCELLED": "cancelled",
+    "ON_HOLD": "on hold",
+    "OPEN": "open",
+    "COMPLETED": "completed"
+  },
+  "missing": {
+    "title": "Project not found",
+    "body": "This project is not one of yours, or it no longer exists.",
+    "home": "Go to Home"
+  },
+  "failed": {
+    "title": "The project could not be read",
+    "body": "Try again in a moment.",
+    "retry": "Try again"
+  }
+}

@@ -190,6 +190,17 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   true states, the question with Answer, PortalThread type Inquiry; `RECORD_PAGES.Inquiry`; catalogue `portal-requests`). Orders &
   tracking became Orders & requests (requests first, "Closed requests" chip, Kind/Subject columns, Next shipment from 1600 px); Home's
   Start card (New order / Ask a question / the draft). Portal pages show the customer's own numbers only, never INQ-/SO-/QT-/RQ-.
+  B-TH-282 (TH-7): customers' files — `lib/request-compose/files.ts` (pure: kinds, refusals, the measurement tick on a PDF or photo,
+  design files download-only, states sent / held for the virus scan / failed) + `view/ComposeFiles.tsx`; `requests/use-request-files.ts`
+  uploads (announce → PUT → complete → ONE message carries them): New order holds them and sends them right after Send onto the new
+  request (the receipt says how they went, Retry); the request page's "Add files" beside the thread uses the request's door while
+  undecided, its thread's after (the DS PartnerThread has no upload slot: B-TH-305 waits for the Owner). Closed uploads say the API's
+  sentence (GET /portal/inquiries/open `files`). B-TH-291: "Withdraw this request" while undecided (`version`, one key per question).
+- B-TH-236 / B-TH-237 / B-TH-283 (the office thread): Undo for 10 s on the sender's mail (`email.undoUntil`, POST …/emails/:id/undo,
+  the text back in the box), the amount field on an office note for `money.price` (`lib/record-thread/helpers/amount.ts`), the floor's
+  price check, Reply / Correct links (`DraftLink`; Correct on one's own message the way it went), "In the portal only" (POST …/replies;
+  NO_PORTAL removes the choice), and measurement sheets (the paper clip's "Measurement sheet…", the box's measurement side, the Files
+  view's tick; a sheet the reader opens is marked "each opening is recorded").
 - `src/app/design/` — the LOCAL design index. Route files are `*.design.tsx`: `next.config.ts` reads that extension
   only under `next dev` (`src/lib/design/route.ts`), so `/design` does not exist in a build.
 - `src/shell/` — the frames: `office/` (SCR-003), `switcher/` (SCR-002), `palette/` (SCR-004), `links/` (SCR-028),
@@ -216,6 +227,19 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   `products-changes`, CSS prefix `fw-chg-`): `view/DecideDialog.tsx` + `use-decide.ts` are THE "Approve change" (A / R, J / K),
   `view/Redline.tsx` the redline (B-W2b-220's compare, one VersionCompare per part), `view/Impact.tsx` the work in progress and the
   drift. `RECORD_PAGES.ChangeRequest` / `.ChangeOrder` open the records.
+- `src/areas/products/projects/` — Products › Development › Projects (threads plan TH-5, B-TH-248 … B-TH-253 on the API's
+  modules/product/projects, B-TH-066 … B-TH-072): `api.ts` (every office call, zod written here: the contract lives in the API),
+  `model.ts` + `parts.tsx` (shared: rights, addresses, status and target words, refusals from `refusal/<CODE>`), the list
+  `/products/projects?view=&party=|office=1&lead=&season=&target=&q=&new=1&link=<Type>:<id>` (SCR-700, `ProjectsPage.tsx`,
+  `list-model.ts`; every cell a door; never Close in bulk), the project page `/products/projects/<id>` (SCR-701, `record/`: its own
+  `ProjectFrame` — the thread ~2/3 left, the side column right, `?details=open` below 1280 px; `/records/Project/<id>` redirects
+  there), `record/people/` (SCR-701-people), `record/linked/` (SCR-701-linked; `use-in-project.ts` = the thread head's "In
+  project" chip, read by DockedOfficeThread), `record/news/` (linked news, asked only: `kinds=linked`), `add-to/` (bulk "Add to
+  project" on Styles and Samples, SCR-701-addto). One catalogue per part: `products-projects` (shared + list),
+  `products-projects-record`, `-people`, `-linked`. Today's My projects is `areas/home/today/projects/` (SCR-029-projects),
+  "Start a project…" the request pane's ⋯ (`areas/sales/inquiries/start-project.ts`, `use-start-project.ts`), the portal's side
+  `src/portal/customer/projects/` (`/p/<party>/projects/<id>`, SCR-702; never the office's PRJ number). Members-only office
+  projects and templates (B-TH-292) come later.
 - `src/areas/products/styles/versions/` + `styles/release/` + `src/areas/production/work-orders/spec/` — B-W2b-245 (SCR-348, SCR-349;
   catalogue `products-versions`, CSS prefix `fw-ver-`): the style's Versions & changes tab (`?tab=versions`: revisions, Compare
   revisions — also a pop-up from the band ⋯ —, the style's change requests and orders, orders on older revisions), THE Release

@@ -1,0 +1,65 @@
+{
+  "people": {
+    "title": "Persone ({count})",
+    "team": "Il nostro team ({count})",
+    "outside": "{company} ({count})",
+    "invited": "Invitati con un link ({count})",
+    "org": {
+      "team": "Il nostro team",
+      "invited": "Con un link"
+    },
+    "you": "{name} (tu)",
+    "lead": "Responsabile",
+    "muted": "Silenziato",
+    "since": "dal {date}",
+    "until": "fino al {date}",
+    "ended": "Scaduto",
+    "onlyYou": "Ci sei solo tu. Aggiungi un collega.",
+    "more": "Mostrati i primi {shown} di {count}.",
+    "outsideNone": "Ancora nessuno di {company}.",
+    "outsideInvite": "Un contatto di {company} senza accesso al portale si invita con un link dalla porta Condividi del thread."
+  },
+  "why": {
+    "CREATOR": "lo ha creato",
+    "ASSIGNEE": "ha ricevuto qualcosa da fare qui",
+    "MENTIONED": "è stato menzionato",
+    "CHOSE": "ha scelto di seguirlo",
+    "ADDED": "è stato aggiunto",
+    "addedBy": "aggiunto da {name}"
+  },
+  "add": {
+    "team": "Aggiungi un collega",
+    "outside": "Aggiungi persone di {company}",
+    "teamTitle": "Aggiungi un collega a {project}",
+    "outsideTitle": "Aggiungi persone di {company} a {project}",
+    "teamIntro": "Sono proposti solo i colleghi che possono leggere il progetto. Chi aggiungi riceve un avviso.",
+    "outsideIntro": "Sono proposte solo le persone del portale di {company}. Vedono il progetto nel loro portale e leggono solo i messaggi inviati a {company}.",
+    "search": "Cerca per nome",
+    "pick": "Aggiungi",
+    "pickLabel": "Aggiungi {name}",
+    "reading": "Lettura di chi si può aggiungere…",
+    "nobodyTeam": "Chi può vedere questo progetto ne fa già parte.",
+    "nobodyOutside": "Nessuna persona del portale di {company} da aggiungere.",
+    "noMatch": "Nessuno corrisponde a “{q}”.",
+    "close": "Chiudi"
+  },
+  "out": {
+    "remove": "Togli",
+    "removeLabel": "Togli {name} dal progetto",
+    "removeTitle": "Togliere {name} da {project}?",
+    "removeBodyTeam": "Toglierlo non gli nasconde il progetto: smette solo di ricevere le novità. Riceve un avviso una volta.",
+    "removeBodyOutside": "Non vedrà più il progetto nel portale di {company}. Ciò che ha scritto resta.",
+    "removeConfirm": "Togli",
+    "leave": "Lascia",
+    "leaveLabel": "Lascia il progetto",
+    "leaveTitle": "Lasciare {project}?",
+    "leaveBody": "Riceverai comunque un avviso quando qualcuno ti menziona.",
+    "leaveConfirm": "Lascia il progetto"
+  },
+  "notice": {
+    "addedTeam": "{name} è stato aggiunto e ha ricevuto un avviso.",
+    "addedOutside": "{name} è stato aggiunto: vede il progetto nel suo portale.",
+    "removed": "{name} è stato tolto dal progetto.",
+    "left": "Hai lasciato il progetto. Riceverai comunque un avviso quando qualcuno ti menziona."
+  }
+}

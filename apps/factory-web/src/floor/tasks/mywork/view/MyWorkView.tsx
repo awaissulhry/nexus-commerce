@@ -17,7 +17,7 @@ import { FloorState } from '../../../frame/view/FloorState'
 import type { FloorMode } from '../../../model'
 import { ListFooter, TaskLine, Ticks, type TickState } from '../../shared/view/TaskParts'
 import { ReasonPickerBody, useDoneHeld, type ReasonPickerAction, type ReasonPickerModel } from '../../reasons/view/ReasonPicker'
-import { arranged, emptyOf, excerptOf, leftOf, MATERIAL_TONE, putLastWords, STATE_TONE, unreadCount, type DispatchEntry, type DispatchList, type HelpHeld, type MaterialFlag, type MyMessages, type PutLast, type QueueRow, type WorkMessage } from '../model'
+import { arranged, emptyOf, excerptOf, leftOf, MATERIAL_TONE, messagesOf, putLastWords, STATE_TONE, unreadCount, type DispatchEntry, type DispatchList, type HelpHeld, type MaterialFlag, type MyMessages, type PutLast, type QueueRow, type WorkMessage } from '../model'
 // B-W2b-126: the repair queue (MES-132).
 import { repairHeld, repairTile, type RepairQueue } from '../repair/model'
 import { RepairCard, RepairLine, RepairList, RepairOut, RepairUnread, type RepairLineModel } from '../repair/view/RepairViews'
@@ -47,10 +47,10 @@ export type MyWorkStep =
   | { readonly kind: 'entry'; readonly slotId: string }
   /** Put it last: the reason tile (the office's PAUSE list). */
   | { readonly kind: 'reason'; readonly slotId: string; readonly picker: ReasonPickerModel }
-  /** "Messages": the open messages on my work orders. */
-  | { readonly kind: 'messages' }
-  /** One message, whole, with Read aloud. */
-  | { readonly kind: 'message'; readonly id: string }
+  /** "Messages": the open messages on my work orders; B-TH-278: `workOrderId`, one work order's own (opened from its card). */
+  | { readonly kind: 'messages'; readonly workOrderId?: string }
+  /** One message, whole, with Read aloud; `workOrderId`: the list it was opened from (Back goes there). */
+  | { readonly kind: 'message'; readonly id: string; readonly workOrderId?: string }
   /** B-W2b-126: the repair queue; one repair's card; how a repair came out (scan out). */
   | { readonly kind: 'repair' }
   | { readonly kind: 'repairItem'; readonly reworkId: string }
@@ -148,10 +148,11 @@ export type MyWorkAction =
   | { type: 'putLast'; slotId: string }
   | { type: 'reason'; action: ReasonPickerAction }
   | { type: 'reasonDone' }
-  | { type: 'messages' }
+  // B-TH-278: `workOrderId` when a task's card opens its own work order's notes.
+  | { type: 'messages'; workOrderId?: string }
   // B-W2b-232
   | { type: 'instructions' }
-  | { type: 'message'; id: string }
+  | { type: 'message'; id: string; workOrderId?: string }
   | { type: 'help' }
   | { type: 'repair' }
   | { type: 'repairOpen'; reworkId: string }
@@ -274,6 +275,8 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
   const card = (row: QueueRow, id: string, title: string) => {
     const { entry } = row
     const left = leftOf(entry)
+    // B-TH-278: this work order's own floor notes, and no other's (the wall agreed with the production lane).
+    const notes = messagesOf(model.messages?.messages ?? [], entry.workOrder.id).length
     return (
       <FloorCard
         icon={<ListTodo />}
@@ -308,6 +311,11 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
         <TaskLine tone="info" icon={<ScanLine />}>
           {t('scanToStart')}
         </TaskLine>
+        {notes > 0 ? (
+          <FloorButton size="lg" variant="secondary" block icon={<MessageSquareText />} onClick={() => send({ type: 'messages', workOrderId: entry.workOrder.id })}>
+            {t('message.onCard', { count: notes })}
+          </FloorButton>
+        ) : null}
       </FloorCard>
     )
   }
@@ -320,6 +328,9 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
 
   const openMessages = model.messages?.messages ?? []
   const unread = unreadCount(openMessages, model.seen ?? [])
+  // B-TH-278: the list a task's card opened holds that work order's notes only.
+  const listed = step.kind === 'messages' || step.kind === 'message' ? messagesOf(openMessages, step.workOrderId) : openMessages
+  const listedNumber = step.kind === 'messages' && step.workOrderId !== undefined ? (listed[0]?.workOrder.number ?? null) : null
   // B-W2b-126: the repair queue's tile (this station's repairs, else the site's), hidden at zero.
   const repairCount = repairTile(model.repair ?? null)
   // B-W2b-109: my inspections' tile (hidden at zero), what waits for me or for nobody yet.
@@ -390,7 +401,7 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
       body = (
         <section className="fw-floor-stack" aria-labelledby="fw-mywork-messages">
           <h2 id="fw-mywork-messages" className="fw-floor-section-title">
-            {t('messages.title')}
+            {listedNumber ? t('messages.titleOne', { number: listedNumber }) : t('messages.title')}
           </h2>
           {model.messagesAsOf ? (
             <p className="fw-mywork-status fw-floor-muted">
@@ -400,13 +411,13 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
               {t('messages.fromTablet', { time: time(model.messagesAsOf) })}
             </p>
           ) : null}
-          {openMessages.length > 0 ? <Messages rows={openMessages} seen={model.seen ?? []} t={t} shared={shared} when={(value) => formatDateTime(value, { locale, timeZone })} send={send} /> : <FloorState tone="info" icon={<MessageSquare />} title={t('messages.none.title')} text={t('messages.none.body')} />}
+          {listed.length > 0 ? <Messages rows={listed} seen={model.seen ?? []} t={t} shared={shared} when={(value) => formatDateTime(value, { locale, timeZone })} send={(action) => send(action.type === 'message' ? { ...action, ...(step.workOrderId !== undefined ? { workOrderId: step.workOrderId } : {}) } : action)} /> : <FloorState tone="info" icon={<MessageSquare />} title={t('messages.none.title')} text={t('messages.none.body')} />}
         </section>
       )
       break
 
     case 'message': {
-      const message = openMessages.find((row) => row.id === step.id)
+      const message = listed.find((row) => row.id === step.id)
       actions = [back]
       body = message ? (
         <FloorCard
@@ -420,7 +431,9 @@ function StationWorkView({ model, onAction, onFrame, camera }: MyWorkViewProps) 
           labels={ds.floorCard}
         >
           <div className="fw-floor-stack">
+            {/* B-TH-278: the words as written: never translated, never changed; the screen's own words are the worker's language. */}
             <p className="fw-mywork-text">{message.text}</p>
+            <p className="fw-floor-muted">{t('message.asWritten')}</p>
             {message.cut ? (
               <TaskLine tone="info" icon={<MessageSquare />}>
                 {t('message.cut')}
@@ -706,7 +719,10 @@ function Queue({ rows, done, t, shared, locale, day, send }: { rows: readonly Qu
   )
 }
 
-/** The open messages on my work orders, newest first; the ones not opened here say so. Where from, never who. */
+/**
+ * The open messages on my work orders, newest first; the ones not opened here say "New". Where from, never who. B-TH-278: an opened
+ * one says nothing (no "Read", no "Seen": nothing records who read what, Statuto dei Lavoratori art. 4).
+ */
 function Messages({ rows, seen, t, shared, when, send }: { rows: readonly WorkMessage[]; seen: readonly string[]; t: Translate; shared: Translate; when: (value: string) => string; send: (action: MyWorkAction) => void }) {
   const { group, onKeyDown } = useRowKeys()
   const opened = new Set(seen)
@@ -723,7 +739,7 @@ function Messages({ rows, seen, t, shared, when, send }: { rows: readonly WorkMe
                 tone={unread ? 'primary' : 'neutral'}
                 title={<span className="fw-floor-code">{message.workOrder.number}</span>}
                 meta={[excerptOf(message.text), t(`message.from.${message.from}`), when(message.at)].join(' · ')}
-                status={unread ? t('messages.unread') : t('messages.read')}
+                status={unread ? t('messages.unread') : undefined}
                 onPress={() => send({ type: 'message', id: message.id })}
               />
             )

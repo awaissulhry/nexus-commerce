@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { createElement } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -6,7 +8,7 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { FLOOR_NAMESPACES } from '../routes'
 import { dispatchSchema, helpSchema, messagesSchema, mineSchema } from './api'
 import { designScreen } from './fixtures'
-import { arranged, changedRows, emptyOf, excerptOf, helpHeld, helpPayload, leftOf, listChanged, listOf, materialTile, putLastIn, readPutLast, readSeen, signatureOf, unreadCount, withPutLast, withSeen, type DispatchEntry, type DispatchList, type PutLast, type StationHelp } from './model'
+import { arranged, changedRows, emptyOf, excerptOf, helpHeld, helpPayload, leftOf, listChanged, listOf, materialTile, messagesOf, putLastIn, readPutLast, readSeen, signatureOf, unreadCount, withPutLast, withSeen, type DispatchEntry, type DispatchList, type PutLast, type StationHelp, type WorkMessage } from './model'
 import { MyWorkView } from './view/MyWorkView'
 
 /**
@@ -266,3 +268,84 @@ describe('Call for help: Material (design mywork.cant-find)', () => {
     expect(parsed.tiles[0]).toEqual({ type: { id: 't', code: 'MATERIAL', kind: 'MATERIAL', labelIt: 'Materiale', labelEn: 'Material' }, open: { id: 'c' } })
   })
 })
+
+// ---- B-TH-278 (threads plan PL8, X-FLOOR-WO.notes; the wall agreed with the production lane 2026-11-17) ----------------------------
+describe('B-TH-278 floor notes on the tablet: as written, on their own work order only, no read record, no money, no customer', () => {
+  const screen = (id: string, locale: 'it' | 'en' = 'en') => {
+    const item = designScreen.cases.find((entry) => entry.id === id)
+    if (!item) throw new Error(`no design case ${id}`)
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, FLOOR_NAMESPACES) }, createElement(MyWorkView, { model: item.model })))
+  }
+  const textOf = (html: string) => html.replace(/<[^>]+>/g, ' ').replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&')
+  const note = (id: string, workOrderId: string, number: string): WorkMessage => ({ id, workOrder: { id: workOrderId, number }, from: 'OFFICE', text: `Note ${id}`, cut: false, at: LIST.asOf })
+
+  it('a work order\'s card lists its own notes and no other work order\'s', () => {
+    const notes = [note('a', 'wo-1', 'WO-1'), note('b', 'wo-2', 'WO-2'), note('c', 'wo-1', 'WO-1')]
+    expect(messagesOf(notes, 'wo-1').map((row) => row.id)).toEqual(['a', 'c'])
+    expect(messagesOf(notes, 'wo-3')).toEqual([])
+    expect(messagesOf(notes, undefined).map((row) => row.id)).toEqual(['a', 'b', 'c'])
+    expect(textOf(screen('th-278-card'))).toContain('2 messages on this work order')
+    expect(textOf(screen('th-278-card', 'it'))).toContain('2 messaggi su quest')
+    const one = textOf(screen('th-278-one-work-order'))
+    expect(one).toContain('Messages on WO-DEMO-0051')
+    expect(one).toContain('Left sleeve first on this one')
+    expect(one).toContain('Per questa commessa usate il filo rinforzato')
+    // The other work orders' notes stay on their own cards.
+    expect(one).not.toMatch(/WO-DEMO-0042|WO-DEMO-0047|Cuciture diverse|Le taglie 52/)
+    // A card with no note of its own shows no button.
+    expect(textOf(screen('entry'))).not.toMatch(/on this work order/)
+  })
+
+  it('shows a note as written: never translated, never changed, its lines kept; the screen\'s own words in the worker\'s language', () => {
+    const written = 'Prima la manica sinistra, poi la destra.\n«Attenzione» al nastro: 3 mm — non di più.'
+    const parsed = messagesSchema.parse({ asOf: LIST.asOf, messages: [{ ...note('m', 'wo-1', 'WO-1'), text: written }] })
+    expect(parsed.messages[0]!.text).toBe(written)
+    for (const locale of ['it', 'en'] as const) {
+      const html = screen('th-278-as-written', locale)
+      expect(html, locale).toContain('Left sleeve first on this one, please (demo).\nThe pattern changed on Monday.')
+      expect(textOf(html), locale).toContain(locale === 'it' ? 'Come è stato scritto, senza traduzione.' : 'Shown as written, not translated.')
+      expect(textOf(html), locale).toContain(locale === 'it' ? "Dall'ufficio" : 'From the office')
+    }
+  })
+
+  it('keeps no read record: an unopened note says New, an opened one says nothing (no Read, no Seen), and nothing goes back', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const text = textOf(screen('th-278-one-work-order', locale))
+      expect(text, locale).toContain(locale === 'it' ? 'Nuovo' : 'New')
+      expect(text, locale).not.toMatch(/\bRead\b|\bLetto\b|\bLetti\b|\bSeen\b|\bVisto\b|Visualizzat|\bopened by\b|\baperto da\b/i)
+      // The catalogue holds no word for it any more.
+      expect(JSON.stringify(messagesFor(locale, ['floor-mywork'])), locale).not.toMatch(/"read":|"Letto"|"Read"/)
+    }
+    // The tablet keeps the ids it opened, never a person or a time; anything else in its storage is dropped.
+    expect(readSeen(JSON.stringify(['m1', { id: 'm2', by: 'Someone', at: LIST.asOf }]))).toEqual(['m1'])
+    // The messages are only ever read (a GET through floorRead): no route, queue kind or write tells the office a note was opened.
+    const read = (file: string) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8')
+    const api = read('./api.ts')
+    expect(api).toContain("floorRead(api, '/production/dispatch/mine/messages'")
+    expect(api).not.toMatch(/messages[^\n]*(floorWrite|enqueue|method:\s*'(POST|PUT|PATCH|DELETE)')/)
+    const screenCode = read('./MyWork.tsx')
+    const opened = screenCode.slice(screenCode.indexOf('const openMessage'), screenCode.indexOf('const onAction'))
+    expect(opened).toContain('saveSeen')
+    expect(opened).not.toMatch(/api\.|queue\.|fetch\(|enqueue/)
+  })
+
+  it('never shows money, a customer or who wrote it: the read keeps the work order, where from, the words and the time only', () => {
+    const parsed = messagesSchema.parse({
+      asOf: LIST.asOf,
+      messages: [{ ...note('m', 'wo-1', 'WO-1'), amount: { value: 15800, currency: 'EUR' }, customer: { code: 'C-ALPHA', name: 'Brand Alpha' }, partyName: 'Brand Alpha', authorName: 'Someone' }],
+    })
+    expect(Object.keys(parsed.messages[0]!).sort()).toEqual(['at', 'cut', 'from', 'id', 'text', 'workOrder'])
+    expect(Object.keys(parsed.messages[0]!.workOrder).sort()).toEqual(['id', 'number'])
+    for (const locale of ['it', 'en'] as const) {
+      for (const id of ['th-278-card', 'th-278-one-work-order', 'th-278-as-written']) {
+        const text = textOf(screen(id, locale))
+        expect(text, `${id} (${locale})`).not.toMatch(/€|\bEUR\b|Brand Alpha|Brand Beta|C-ALPHA/)
+      }
+      // The screen's own words about notes name no money, pay or customer.
+      const words = messagesFor(locale, ['floor-mywork'])['floor-mywork'] as Record<string, unknown>
+      const own = JSON.stringify([words.messages, words.message])
+      expect(own, locale).not.toMatch(/€|prezz|price|cost|paga|\bpay|stipend|salar|client|customer|brand|marchio/i)
+    }
+  })
+})
+// ---- end B-TH-278

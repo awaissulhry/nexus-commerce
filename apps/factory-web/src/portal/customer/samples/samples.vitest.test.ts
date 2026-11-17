@@ -8,6 +8,8 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import type { RoundRead, WaitingRead } from './api'
 import { designScreen } from './fixtures'
 import { addressOf, addressQuery, answerProblem, answerRefusal, commentNeeded, decisionHeld, decisionTitle, decisionsOf, dueStateOf, neighbourOf, NS, requestHeld, roundsShown, samplesBandOf, trackingText } from './model'
+// B-TH-253: the Projects block; B-TH-073: a style and a round discussed on their own pages.
+import { discussHref, projectBlockOf } from './model'
 
 /**
  * SCR-225 › the brand's Samples & tech packs (B-W2b-262), pure: the address, the waiting rows' due, the decision's rules
@@ -123,5 +125,45 @@ describe('SCR-225 design cases', () => {
     expect(html).toContain('Giri di campionatura')
     expect(html).not.toContain('Waiting for your decision')
     expect(html).not.toContain('Sample rounds')
+  })
+})
+
+// ---- B-TH-253 (PROJ.portal-F03) and B-TH-073
+describe('B-TH-253 — the Projects block and "Discuss"', () => {
+  const PROJECT = (n: number, status: 'ACTIVE' | 'ON_HOLD' | 'CLOSED') => ({ id: id(900 + n), number: `PRJ-26-0${10 + n}`, name: `Project ${n}`, status, targetDate: '2026-12-20' })
+  const render = (entryId: string, locale: 'it' | 'en' = 'en') => {
+    const entry = designScreen.cases.find((item) => item.id === entryId)!
+    return renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(designScreen.view, { model: entry.model })))
+  }
+
+  it('no block without the right (projects null or absent) or with none going; the open ones in the API’s order, each opening its page', () => {
+    expect(projectBlockOf(null, '/p/X')).toBeNull()
+    expect(projectBlockOf({}, '/p/X')).toBeNull()
+    expect(projectBlockOf({ projects: null }, '/p/X')).toBeNull()
+    expect(projectBlockOf({ projects: [] }, '/p/X')).toBeNull()
+    expect(projectBlockOf({ projects: [PROJECT(1, 'CLOSED')] }, '/p/X')).toBeNull()
+    const rows = projectBlockOf({ projects: [PROJECT(1, 'ACTIVE'), PROJECT(2, 'ON_HOLD'), PROJECT(3, 'CLOSED')] }, '/p/X')!
+    expect(rows.map((row) => row.name)).toEqual(['Project 1', 'Project 2'])
+    expect(rows[0]).toMatchObject({ href: `/p/X/projects/${id(901)}`, status: 'ACTIVE', targetDate: '2026-12-20' })
+    // The office's project number never travels to the view.
+    expect(JSON.stringify(rows)).not.toMatch(/PRJ-/)
+  })
+
+  it('on screen: the block by name with its status and target date; none without the right; never the office number', () => {
+    const html = render('th-253-projects')
+    expect(html).toContain('Projects')
+    expect(html).toContain('Touring jacket, new colours')
+    expect(html).toContain('On hold')
+    expect(html).toContain('Target date')
+    expect(html).not.toContain('Spring range')
+    expect(html).not.toMatch(/PRJ-\d{2}-\d{3}/)
+    expect(render('th-253-no-projects')).not.toContain('Touring jacket, new colours')
+    expect(render('buyer')).not.toContain('fw-psmp-projects')
+    expect(render('th-253-projects', 'it')).toContain('Progetti')
+  })
+
+  it('B-TH-073: a style and a round open their own conversation page', () => {
+    expect(discussHref('/p/X', 'Style', 's1')).toBe('/p/X/open/Style/s1#messages')
+    expect(discussHref('/p/X', 'SampleRound', 'r1')).toBe('/p/X/open/SampleRound/r1#messages')
   })
 })

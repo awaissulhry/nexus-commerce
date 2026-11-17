@@ -1,0 +1,32 @@
+/* B-TH-251 — the project's Linked block, the Link dialog and the Add to project dialog (layout only, DS tokens). */
+.fw-prjl .nds-card-body { display: flex; flex-direction: column; gap: var(--nds-space-12); }
+.fw-prjl-empty, .fw-prjl-hint, .fw-prjl-text { margin: 0; color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }
+.fw-prjl-group { display: flex; flex-direction: column; gap: var(--nds-space-6); }
+.fw-prjl-group-title { margin: 0; font-size: var(--nds-font-size-sm); font-weight: 600; color: var(--nds-text-2); }
+.fw-prjl-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.fw-prjl-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'main menu' 'note menu' 'meta menu'; column-gap: var(--nds-space-8); row-gap: var(--nds-space-2); padding: var(--nds-space-8) 0; border-bottom: 1px solid var(--nds-border-subtle); }
+.fw-prjl-row:last-child { border-bottom: 0; }
+.fw-prjl-row[aria-busy='true'] { opacity: 0.6; }
+.fw-prjl-main { grid-area: main; display: flex; align-items: center; flex-wrap: wrap; gap: var(--nds-space-6); min-width: 0; }
+.fw-prjl-label { font-family: var(--nds-font-mono); font-weight: 600; color: var(--nds-text-link); text-decoration: none; }
+.fw-prjl-label:hover { text-decoration: underline; }
+.fw-prjl-label:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; border-radius: var(--nds-radius-sm); }
+.fw-prjl-hidden { color: var(--nds-text-2); font-style: italic; }
+.fw-prjl-note { grid-area: note; min-width: 0; overflow-wrap: anywhere; font-size: var(--nds-font-size-sm); color: var(--nds-text); }
+.fw-prjl-meta { grid-area: meta; font-size: var(--nds-font-size-xs); color: var(--nds-text-2); }
+.fw-prjl-menu { grid-area: menu; align-self: start; }
+
+/* The Link dialog. */
+.fw-prjl-dialog { display: flex; flex-direction: column; gap: var(--nds-space-12); }
+.fw-prjl-searchrow { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); }
+.fw-prjl-search { flex: 1 1 240px; min-width: 0; }
+.fw-prjl-results { display: flex; flex-direction: column; gap: var(--nds-space-2); max-height: 320px; overflow-y: auto; }
+.fw-prjl-candidate { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--nds-space-6); }
+.fw-prjl-num { font-family: var(--nds-font-mono); font-weight: 600; }
+.fw-prjl-kind { font-size: var(--nds-font-size-sm); color: var(--nds-text-2); }
+.fw-prjl-picked { margin: 0; font-weight: 600; }
+
+/* The Add to project dialog (the Styles and Samples lists). */
+.fw-prjl-skipped { margin: 0; padding-left: var(--nds-space-16); display: flex; flex-direction: column; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); }
+.fw-prjl-summary { margin: 0; font-weight: 600; }
+.fw-prjl-actions { display: flex; flex-wrap: wrap; gap: var(--nds-space-8); }

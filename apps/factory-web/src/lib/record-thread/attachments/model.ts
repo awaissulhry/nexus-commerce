@@ -5,8 +5,10 @@
  * reply it is shared with the record's customer — and only with that customer (B-TH-003, the API). An office-only file in a reply
  * is named: share it with the customer (files.manage) or take it off; the mail carries at most 10 MB together. Pure.
  *
- * Not drawn until the back end has it: the measurement-sheet tick (N11, B-TH-083: picture 4 marks it "needs N11"), resumable big
- * uploads and expiring links (later). B-TH-084 (G12): design files (Illustrator, EPS, Photoshop; a ZIP as a document) are taken,
+ * B-TH-283 (B-TH-083, N11): a file goes up as a measurement sheet — a PDF or a photo, from the paper clip's "Measurement sheet…" or
+ * dropped on the box's measurement side — filed as body data (only holders of sales.measurements.view open it). B-TH-237: a message
+ * in the portal shares its files with the customer like a reply (no mail limit: nothing is mailed). Not drawn until the back end has
+ * it: resumable big uploads and expiring links (later). B-TH-084 (G12): design files (Illustrator, EPS, Photoshop; a ZIP as a document) are taken,
  * download-only; SVG, HTML and scripts never, with the way out named ("send a PDF or PNG").
  */
 
@@ -85,6 +87,17 @@ export function refusalOf(file: { name: string; type?: string; size: number }): 
 /** Who sees a file of the message: the office only, or the office and the record's customer. */
 export type DraftAudience = 'OFFICE' | 'PARTY'
 
+/** The composer's audiences (composer/model COMPOSER_MODES): a note, a reply by e-mail, a message in the portal (B-TH-237). */
+export type TrayMode = 'note' | 'reply' | 'portal'
+
+/** B-TH-237: a reply by e-mail and a message in the portal both reach the customer. */
+const reachesCustomer = (mode: TrayMode): boolean => mode === 'reply' || mode === 'portal'
+
+// ---- B-TH-283 (B-TH-083): a measurement sheet is a PDF or a photo of one (never a design file, a sheet or a text).
+const SHEET_TYPES = ['application/pdf', ...PHOTOS]
+export const takesSheet = (contentType: string): boolean => SHEET_TYPES.includes(contentType)
+// ---- end B-TH-283
+
 export interface DraftFile {
   /** This screen's key for the row. */
   key: string
@@ -101,21 +114,23 @@ export interface DraftFile {
   audience: DraftAudience
   /** Why it was refused or failed. */
   problem?: Problem
+  /** B-TH-283: it goes up as a measurement sheet (body data: only holders of the measurements right open it). */
+  sheet?: boolean
 }
 
 /**
  * The audience a new upload takes: the message's (T6-F04). A reply's file is shared with the customer when the person may share
  * files (files.manage); otherwise it stays office only and the reply names it.
  */
-export function uploadAudience(mode: 'note' | 'reply', canShare: boolean, hasParty: boolean): DraftAudience {
-  return mode === 'reply' && canShare && hasParty ? 'PARTY' : 'OFFICE'
+export function uploadAudience(mode: TrayMode, canShare: boolean, hasParty: boolean): DraftAudience {
+  return reachesCustomer(mode) && canShare && hasParty ? 'PARTY' : 'OFFICE'
 }
 
 /** The files a message carries as it goes: done ones. */
 export const sendable = (files: readonly DraftFile[]): DraftFile[] => files.filter((file) => file.phase === 'done' && file.fileId)
 
 /** An office-only file in a reply: named; Send waits until it is shared or taken off. */
-export const officeInReply = (files: readonly DraftFile[], mode: 'note' | 'reply'): DraftFile[] => (mode === 'reply' ? files.filter((file) => file.phase === 'done' && file.audience === 'OFFICE') : [])
+export const officeInReply = (files: readonly DraftFile[], mode: TrayMode): DraftFile[] => (reachesCustomer(mode) ? files.filter((file) => file.phase === 'done' && file.audience === 'OFFICE') : [])
 
 /** The bytes a mail would carry. */
 export const mailBytes = (files: readonly DraftFile[]): number => files.filter((file) => file.phase === 'done' || file.phase === 'uploading').reduce((sum, file) => sum + file.sizeBytes, 0)
@@ -125,7 +140,7 @@ export const mailBytes = (files: readonly DraftFile[]): number => files.filter((
  * files, an office-only file in a reply, more than 10 MB in a mail (an Office note has no mail limit). A refused file waits beside
  * the box with its reason and holds nothing.
  */
-export function trayHeld(files: readonly DraftFile[], mode: 'note' | 'reply'): Problem | null {
+export function trayHeld(files: readonly DraftFile[], mode: TrayMode): Problem | null {
   const uploading = files.filter((file) => file.phase === 'uploading').length
   if (uploading > 0) return { key: 'held.waiting', params: { count: uploading } }
   const failed = files.filter((file) => file.phase === 'failed').length
@@ -162,13 +177,16 @@ export function draftOfRecordFile(file: RecordFile, key: string): DraftFile {
   return { key, name: file.name, sizeBytes: file.sizeBytes, contentType: file.contentType, source: 'record', phase: 'done', fileId: file.id, audience: file.shared ? 'PARTY' : 'OFFICE' }
 }
 
-/** The files a drop or paste adds: refused ones keep their reason; past 20 the rest is left out and said. */
-export function addDropped(current: readonly DraftFile[], dropped: ReadonlyArray<{ name: string; type?: string; size: number }>, audience: DraftAudience, nextKey: () => string): { files: DraftFile[]; added: DraftFile[]; leftOut: number } {
+/**
+ * The files a drop or paste adds: refused ones keep their reason; past 20 the rest is left out and said. B-TH-283: `sheet` — they go
+ * up as measurement sheets; a file that cannot be one (not a PDF or a photo) is refused with why.
+ */
+export function addDropped(current: readonly DraftFile[], dropped: ReadonlyArray<{ name: string; type?: string; size: number }>, audience: DraftAudience, nextKey: () => string, sheet = false): { files: DraftFile[]; added: DraftFile[]; leftOut: number } {
   const room = Math.max(0, MAX_FILES - current.filter((file) => file.phase !== 'refused').length)
   const added: DraftFile[] = []
   let leftOut = 0
   for (const file of dropped) {
-    const problem = refusalOf(file)
+    const problem = refusalOf(file) ?? (sheet && !takesSheet(contentTypeOf(file)) ? { key: 'refused.sheetType' } : null)
     if (!problem && added.filter((item) => item.phase !== 'refused').length >= room) {
       leftOut += 1
       continue
@@ -182,6 +200,7 @@ export function addDropped(current: readonly DraftFile[], dropped: ReadonlyArray
       phase: problem ? 'refused' : 'uploading',
       audience,
       ...(problem ? { problem } : {}),
+      ...(sheet && !problem ? { sheet: true } : {}),
     })
   }
   return { files: [...current, ...added], added, leftOut }

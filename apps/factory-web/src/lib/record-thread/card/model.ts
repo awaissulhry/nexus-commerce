@@ -8,8 +8,10 @@ import type { Tone } from '@nexus/ui/primitives'
  * read too ("Also on the floor") and a station's comment ("From the floor"). One yellow means one thing everywhere: not sent
  * to the customer. This file is pure: the view draws its answers, the office container fills the model.
  *
- * Not drawn until the back end has it (design kit §5): Correct (thread-G20, TH-3), pins (N4), the erased card (thread-G09),
- * files not kept from a mail (thread-G10), unread marks (G10).
+ * B-TH-236 (TH-3): Correct (a new message linked to the old one, never an edit), "In reply to …", "Corrected below", the amount
+ * of an office note (price readers only) and the 10 seconds to take a mail back ("Sending to Brand Alpha… · Undo").
+ * Not drawn until the back end has it (design kit §5): pins (N4), the erased card (thread-G09), files not kept from a mail
+ * (thread-G10).
  */
 
 export const CARD_KINDS = ['theirs', 'ours', 'note', 'floor'] as const
@@ -66,8 +68,11 @@ export interface CardMessage {
   /** The people a note mentioned (null: someone the reader does not know). */
   mentions: readonly (string | null)[]
   files: readonly CardFile[]
-  /** A mail we sent: to whom, its subject and its state. */
-  email?: { to: readonly string[]; subject: string; status: Delivery } | null
+  /**
+   * A mail we sent: to whom, its subject and its state. B-TH-236 (B-TH-048): its id and copies, and — for the person who sent it,
+   * while it waits its 10 seconds — until when it may be taken back ("Sending to Brand Alpha… · Undo").
+   */
+  email?: { to: readonly string[]; subject: string; status: Delivery; id?: string; cc?: readonly string[]; undoUntil?: string } | null
   /** A bounce made a task for the writer (GET /email/delivery-status): where it opens, while the reader sees it. */
   bounceTask?: { href: string } | null
   /** Our message on its way (before the server confirmed it) or not sent (the text is kept). */
@@ -76,6 +81,23 @@ export interface CardMessage {
   hiddenFiles?: number
   lockedSheets?: number
   // ---- end B-TH-231
+  // ---- B-TH-236 (B-TH-049, B-TH-050): the price typed in the amount field (an office note; price readers only), what it answers
+  // or corrects, the newest message that corrects it ("Corrected below"), and whether the reader wrote it (Correct is one's own).
+  amount?: { value: number; currency: string }
+  replyTo?: CardLink | null
+  corrects?: CardLink | null
+  correctedBy?: { id: string; at: string } | null
+  mine?: boolean
+  // ---- end B-TH-236
+}
+
+/** B-TH-236 (B-TH-050): a message another one points at, as a card names it ("In reply to Alma, 14 Nov: …"). */
+export interface CardLink {
+  id: string
+  /** Null: a floor worker the site's gate keeps back ("A person on the floor"). */
+  author: string | null
+  excerpt: string
+  at: string
 }
 
 /** What every card of one thread shares. */
@@ -90,6 +112,13 @@ export interface CardContext {
   canTask?: boolean
   /** B-TH-231: "Use on another record…" for the message's files (files.upload; the host carries them). */
   canUseOn?: boolean
+  /**
+   * B-TH-236 (B-TH-050): Correct on one's own message, by the way it went — an office note (threads.post), a mail (email.send), a
+   * reply in the portal (threads.post, the portal offered). Absent: Correct is not offered.
+   */
+  canCorrect?: { readonly note: boolean; readonly email: boolean; readonly portal: boolean }
+  /** B-TH-236: "now" in ms for Undo's seconds (a design case passes a fixed one; the thread passes none: the clock). */
+  now?: number
   /** The message to show unfolded and focused (`?message=<id>`). */
   anchorId?: string | null
 }
@@ -212,17 +241,22 @@ export const sizeWords = (bytes: number, intlLocale: string): string =>
 
 // ── the card's ⋯ menu (T3-F07, F09, F10) ─────────────────────────────────────────────────────────────────────────────
 
-export type CardAction = 'reply' | 'task' | 'link' | 'useOn'
+export type CardAction = 'reply' | 'correct' | 'task' | 'link' | 'useOn'
 
 /**
  * What the ⋯ of a card offers: Reply on the customer's message (when the reader may answer), Make a task (where the host has
  * tasks), Copy link to message (always: it opens the record with this message unfolded and focused). Remind me is the host's own
- * part beside the menu (B-W2b-388). Correct waits for thread-G20 (TH-3); a message on its way offers nothing yet.
+ * part beside the menu (B-W2b-388). B-TH-236: Correct on one's own message (`correctionWay`); a message on its way offers nothing yet.
  */
-export function cardActions(message: Pick<CardMessage, 'kind' | 'outbox'> & { files?: readonly Pick<CardFile, 'status'>[] }, context: Pick<CardContext, 'canReply' | 'canTask' | 'canUseOn'> & { readonly canReadFiles?: boolean }): CardAction[] {
+export function cardActions(
+  message: Pick<CardMessage, 'kind' | 'outbox'> & Partial<Pick<CardMessage, 'channel' | 'authorKind' | 'mine' | 'email'>> & { files?: readonly Pick<CardFile, 'status'>[] },
+  context: Pick<CardContext, 'canReply' | 'canTask' | 'canUseOn' | 'canCorrect'> & { readonly canReadFiles?: boolean },
+): CardAction[] {
   if (message.outbox) return []
   const actions: CardAction[] = []
   if (message.kind === 'theirs' && context.canReply) actions.push('reply')
+  // B-TH-236 (B-TH-050): Correct on one's own message, by the way it went (never an edit: a new message linked to the old one).
+  if (correctionWay(message, context) !== null) actions.push('correct')
   if (context.canTask) actions.push('task')
   // B-TH-231: "Use on another record…" when the message has a file the reader opens and may add files elsewhere (files.upload).
   if (context.canUseOn && context.canReadFiles && (message.files ?? []).some((file) => file.status === 'AVAILABLE')) actions.push('useOn')
@@ -237,4 +271,63 @@ export function messageLink(recordHref: string, messageId: string): string {
   const params = new URLSearchParams(query)
   params.set('message', messageId)
   return `${base}?${params.toString()}${hash ? `#${hash}` : ''}`
+}
+
+// ── B-TH-236 (B-TH-048, B-TH-049, B-TH-050): Correct, the links, the amount, Undo ────────────────────────────────────────────
+
+/** The way a correction goes: the way the message went (an office note by a note, a mail by a mail, a portal reply in the portal). */
+export type CorrectionWay = 'note' | 'reply' | 'portal'
+
+/** The mail states a correction follows: the mail reached the mail service (a mail still waiting is taken back instead; one taken back or not sent never reached them). */
+const CORRECTABLE_MAIL: readonly Delivery[] = ['SENDING', 'SENT', 'DELIVERED']
+
+/**
+ * How Correct goes for this message, or null when it is not offered: only on the reader's own message, never one on its way; an
+ * office note they wrote (the floor's copy follows when it went to the floor), a mail they sent once it left, a reply of theirs in
+ * the portal — each only with the right that way needs. Never on the customer's message (they correct their own) or the floor's.
+ */
+export function correctionWay(
+  message: Pick<CardMessage, 'kind' | 'outbox'> & Partial<Pick<CardMessage, 'channel' | 'authorKind' | 'mine' | 'email'>>,
+  context: Pick<CardContext, 'canCorrect'>,
+): CorrectionWay | null {
+  const can = context.canCorrect
+  if (!can || !message.mine || message.outbox) return null
+  if (message.kind === 'note' && message.authorKind === 'USER') return can.note ? 'note' : null
+  if (message.kind !== 'ours') return null
+  if (message.channel === 'PORTAL') return can.portal ? 'portal' : null
+  if (message.channel === 'EMAIL' && message.email && CORRECTABLE_MAIL.includes(message.email.status) && !message.email.undoUntil) return can.email ? 'reply' : null
+  return null
+}
+
+/** Whole seconds left to take a mail back (0: the window passed), from the API's `undoUntil`. */
+export function undoLeft(undoUntil: string | null | undefined, now: number): number {
+  if (!undoUntil) return 0
+  const until = Date.parse(undoUntil)
+  return Number.isFinite(until) ? Math.max(0, Math.ceil((until - now) / 1000)) : 0
+}
+
+/** The card's Undo shows on our mail while its sender may still take it back. */
+export const showsUndo = (message: Pick<CardMessage, 'kind' | 'outbox' | 'email'>, now: number): boolean => message.kind === 'ours' && !message.outbox && message.email?.status === 'QUEUED' && undoLeft(message.email.undoUntil, now) > 0
+
+/** A linked message in one short line: at most 90 characters of its words. */
+export function excerptOf(text: string, max = 90): string {
+  const line = text.replace(/\s+/g, ' ').trim()
+  return line.length <= max ? line : `${line.slice(0, max - 1).trimEnd()}…`
+}
+
+/** The amount in the reader's numbers ("€ 1.250,00", "€1,250.00"): minor units of its currency. */
+export function amountWords(amount: { readonly value: number; readonly currency: string }, intlLocale: string): string {
+  const places = (() => {
+    try {
+      return new Intl.NumberFormat(intlLocale, { style: 'currency', currency: amount.currency }).resolvedOptions().maximumFractionDigits ?? 2
+    } catch {
+      return 2
+    }
+  })()
+  const units = amount.value / 10 ** places
+  try {
+    return new Intl.NumberFormat(intlLocale, { style: 'currency', currency: amount.currency }).format(units)
+  } catch {
+    return `${units.toFixed(places)} ${amount.currency}`
+  }
 }

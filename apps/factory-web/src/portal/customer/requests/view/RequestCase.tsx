@@ -25,7 +25,7 @@ export function RequestCase({ model: build }: { model: RequestCaseBuilder }) {
   const locale = useLocale()
   const model = build(locale)
   return (
-    <WithMessages namespaces={[NS, 'portal-orders', 'ds-words', 'portal', 'shell']}>
+    <WithMessages namespaces={[NS, 'portal-orders', 'ds-words', 'portal', 'shell', 'request-compose']}>
       <PortalShellView model={model.shell}>
         <RequestRecordView model={model.page} thread={model.thread ? <ThreadView model={model.thread} /> : null} />
       </PortalShellView>

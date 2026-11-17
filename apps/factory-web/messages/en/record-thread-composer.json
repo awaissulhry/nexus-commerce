@@ -3,30 +3,38 @@
   "mode": {
     "note": "Office note",
     "reply": "Reply to {party}",
-    "replyProspect": "Reply to {party} (new)"
+    "replyProspect": "Reply to {party} (new)",
+    "portal": "In the portal only"
   },
   "mark": {
     "note": "Office note · only your colleagues read it",
-    "reply": "Email to {party} · the people in To and Cc read it"
+    "reply": "Email to {party} · the people in To and Cc read it",
+    "portal": "In {party}’s portal · no e-mail"
   },
   "placeholder": {
     "note": "Write an office note for your colleagues · @ mentions a colleague",
-    "reply": "Write to {party}"
+    "reply": "Write to {party}",
+    "portal": "Write to {party}: they read it in their portal"
   },
   "send": {
     "note": "Add note",
-    "reply": "Send to {party}"
+    "reply": "Send to {party}",
+    "portal": "Post to {party}"
   },
   "live": {
     "note": "Office note — only your colleagues read it",
-    "reply": "Reply to {party} — {party} reads this"
+    "reply": "Reply to {party} — {party} reads this",
+    "portal": "In the portal only — {party} reads this in their portal, no e-mail"
   },
   "held": {
     "offline": "You are offline · your text stays on this device",
     "sending": "Sending…",
     "prospect": "Make the customer first",
     "empty": "Write a message first",
-    "tooLong": "Cut {count} characters to send it"
+    "tooLong": "Cut {count} characters to send it",
+    "amount": "Fix the amount first: a number, at most two decimals",
+    "amountFloor": "An amount stays in the office: untick “For the floor” or take the amount off",
+    "floorPrice": "Held: “{found}” looks like a price, and the floor never sees money. Take it out, or write it as an office note’s amount"
   },
   "box": {
     "closed": "Closed by {who}, {date}. The customer cannot write here.",
@@ -40,17 +48,39 @@
     "make": "Make the customer"
   },
   "switch": {
-    "mentions": "Mentions stay in office notes: taken out of this message: {names}."
+    "mentions": "Mentions stay in office notes: taken out of this message: {names}.",
+    "amount": "An amount stays on office notes: taken off this message.",
+    "correction": "A correction goes the way its message went: this is a new message now, not a correction."
   },
   "floor": {
     "label": "For the floor",
     "on": "The tablets of {record} show it: no prices, the first {limit} characters, for 14 days, no file, no name. Nobody records who read it.",
     "off": "Off: only the office reads this note.",
-    "long": "The tablet shows the first {limit} characters."
+    "long": "The tablet shows the first {limit} characters.",
+    "locked": "The note you correct is on the tablets: the correction goes there too."
   },
   "drop": {
     "note": "Drop the files to add them to this office note (office only)",
-    "reply": "Drop the files to send them to {party}"
+    "reply": "Drop the files to send them to {party}",
+    "portal": "Drop the files to share them with {party} in this message",
+    "sheets": "As measurement sheets (body data)"
   },
-  "counter": "{count} characters left"
+  "counter": "{count} characters left",
+  "portal": {
+    "line": "{party} reads it in their portal. No e-mail is sent: their mail setting decides when they hear of it (as it happens, unless they changed it)."
+  },
+  "link": {
+    "replying": "Replying to {who}, {when}",
+    "someone": "a person on the floor",
+    "correcting": {
+      "note": "Correcting your office note of {time}: the old one stays and says “Corrected below”",
+      "reply": "Correcting your mail of {time}: whoever got it gets the correction",
+      "portal": "Correcting your message of {time} in {party}’s portal"
+    },
+    "dropReply": "Not a reply to that message any more",
+    "dropCorrect": "Not a correction any more"
+  },
+  "amount": {
+    "add": "Amount"
+  }
 }

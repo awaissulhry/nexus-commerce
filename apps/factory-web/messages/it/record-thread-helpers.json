@@ -41,5 +41,15 @@
     "replyPlaceholder": "Scrivi al cliente",
     "addNote": "Aggiungi nota",
     "send": "Invia"
+  },
+  "amount": {
+    "label": "Importo",
+    "placeholder": "es. 1.250,00",
+    "currency": "Valuta",
+    "remove": "Togli l'importo",
+    "hint": "Lo leggono solo i colleghi che vedono i prezzi — mai il cliente, un link o il reparto.",
+    "invalid": "Scrivi un numero con al massimo due decimali, es. 1.250,00.",
+    "tooLarge": "Questo importo è troppo grande per un messaggio.",
+    "floor": "Una nota per il reparto non porta mai un importo: togli la spunta “Per il reparto” o l'importo."
   }
 }

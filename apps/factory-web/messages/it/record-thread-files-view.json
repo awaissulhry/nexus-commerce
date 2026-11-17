@@ -52,7 +52,11 @@
     "cancel": "Annulla",
     "confirm_one": "Aggiungi il file",
     "confirm_other": "Aggiungi {count} file",
-    "busy": "I file sono in aggiunta."
+    "busy": "I file sono in aggiunta.",
+    "sheet": "Questa è una scheda misure",
+    "sheetHint": "un PDF o una foto; dati del corpo: la apre solo chi ha il permesso sulle misure, ogni apertura registrata",
+    "sheetFloor": "Una scheda misure non va mai in reparto: scegli un altro pubblico o togli la spunta",
+    "sheetType": "una scheda misure è un PDF o una sua foto"
   },
   "select": {
     "all": "Scegli tutti i {count}",
