@@ -18,6 +18,7 @@ import {
   reasonOf,
   removeRefusal,
   shapeRefusal,
+  handPassRefusal, // B-PR-38
   startBeforeRefusal,
   tileCounts,
   tileOf,
@@ -79,6 +80,20 @@ describe('gates', () => {
     expect(isSampleGate('SIZE_SET')).toBe(true)
     expect(passRefusal({ number: 'SO-1', kind: 'SIZE_SET', orderStatus: 'CONFIRMED', passedAt: null, overriddenAt: null, ownerId: null, createdById: null, round: { number: 'SR-3', decision: null, kind: 'SIZE_SET' } }, '2026-11-17', '2026-11-17')?.code).toBe('ROUND_NOT_APPROVED')
     expect(passRefusal({ number: 'SO-1', kind: 'SIZE_SET', orderStatus: 'CONFIRMED', passedAt: null, overriddenAt: null, ownerId: null, createdById: null, round: { number: 'SR-3', decision: 'APPROVED_WITH_COMMENTS', kind: 'SIZE_SET' } }, '2026-11-17', '2026-11-17')).toBeNull()
+    // B-PR-38 (R-06): the office's own "Mark done" of a gate waiting for a customer's own round points to Decide for the customer;
+    // the system's pass by the round's approval and the gates of an internal round or a customer without a portal are as before.
+    const waiting = { number: 'SO-1', kind: 'PP_SAMPLE' as const, orderStatus: 'CONFIRMED', passedAt: null, overriddenAt: null, ownerId: null, createdById: null }
+    const theirs = { number: 'SR-5', decision: null, kind: 'PRE_PRODUCTION', customerDecides: true }
+    expect(handPassRefusal({ ...waiting, round: theirs }, '2026-11-17', '2026-11-17')).toEqual({
+      code: 'CUSTOMER_DECIDES',
+      message: "The gate waits for the customer's answer on sample round SR-5: it passes by itself when they approve it. To decide for them, use Decide for the customer on the round (a reason they read).",
+    })
+    expect(passRefusal({ ...waiting, round: theirs }, '2026-11-17', '2026-11-17')?.code).toBe('ROUND_NOT_APPROVED')
+    expect(handPassRefusal({ ...waiting, round: { ...theirs, customerDecides: false } }, '2026-11-17', '2026-11-17')?.code).toBe('ROUND_NOT_APPROVED')
+    expect(handPassRefusal({ ...waiting, round: { ...theirs, decision: 'APPROVED' } }, '2026-11-17', '2026-11-17')).toBeNull()
+    expect(handPassRefusal({ ...waiting, round: theirs }, '2026-11-18', '2026-11-17')?.code).toBe('FUTURE_DAY')
+    expect(handPassRefusal({ ...waiting, orderStatus: 'CLOSED', round: theirs }, '2026-11-17', '2026-11-17')?.code).toBe('ORDER_CLOSED')
+    expect(handPassRefusal({ ...waiting, kind: 'LAB_PASSED', round: null }, '2026-11-17', '2026-11-17')).toBeNull()
     expect(isSampleGate('SIZE_SET')).toBe(true)
     expect(GATE_KINDS).toContain('SIZE_SET')
   })

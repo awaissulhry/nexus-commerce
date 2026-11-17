@@ -29,6 +29,8 @@ import {
   swatchAnswerHeldWords,
   SWATCH_KINDS,
   SWATCH_WORDS,
+  // B-PR-38
+  customerDecidesRefusal,
 } from './rules'
 import { ITEM_KINDS } from '../../product/materials/rules'
 
@@ -168,6 +170,32 @@ describe('fabric and trim swatches (B-PR-29)', () => {
     expect(kindsFor('SampleSwatch')).toEqual(expect.arrayContaining(['COLOUR', 'LEATHER', 'FABRIC', 'TRIM']))
     expect(kindsFor('SampleRound')).toEqual(['SAMPLE'])
     expect(kindsFor('Style')).toEqual(expect.arrayContaining(['FABRIC', 'TRIM']))
+  })
+})
+
+// ---- B-PR-38 (production plan §3 "No silent decisions"; review fix R-06) -------------------------------------------------------
+describe('no silent office decision on a customer\'s own round or swatch (B-PR-38)', () => {
+  const made = { number: 'SR-2026-0007', stage: 'UNDER_REVIEW' as const, partyId: 'p1' }
+  it('a round of a customer whose portal is on is refused in words that point to Decide for the customer, asked or not', () => {
+    const words = "Sample round SR-2026-0007 is the customer's to decide: ask them to approve it in their portal, or use Decide for the customer (a reason they read; a second person when their switch is on)."
+    expect(decisionRefusal(made, null, true)).toEqual({ code: 'CUSTOMER_DECIDES', message: words })
+    expect(decisionRefusal(made, { dueAt: DUE }, true)?.code).toBe('CUSTOMER_DECIDES')
+    // Closed and not made yet keep their own words; an internal round and a customer without a portal stay the office's.
+    expect(decisionRefusal({ ...made, stage: 'DECIDED' }, null, true)?.code).toBe('ROUND_CLOSED')
+    expect(decisionRefusal({ ...made, stage: 'REQUESTED' }, null, true)?.code).toBe('NOTHING_MADE')
+    expect(decisionRefusal({ ...made, partyId: null }, null, true)).toBeNull()
+    expect(decisionRefusal(made, null, false)).toBeNull()
+    expect(decisionRefusal(made, null)).toBeNull()
+    expect(decisionRefusal(made, { dueAt: DUE }, false)?.code).toBe('BRAND_ASKED')
+  })
+
+  it('a swatch the same way, its kind in the words; never naming the customer', () => {
+    const sent = { kind: 'FABRIC' as const, sentAt: new Date('2026-11-02T09:00:00Z'), decision: null }
+    expect(swatchDecisionRefusal(sent, null, true)).toMatchObject({ code: 'CUSTOMER_DECIDES', message: expect.stringMatching(/^This fabric swatch is the customer's to decide: /) })
+    expect(swatchDecisionRefusal({ ...sent, sentAt: null }, null, true)?.code).toBe('SWATCH_NOT_SENT')
+    expect(swatchDecisionRefusal({ ...sent, decision: 'APPROVED' }, null, true)?.code).toBe('SWATCH_DECIDED')
+    expect(swatchDecisionRefusal(sent, null, false)).toBeNull()
+    expect(customerDecidesRefusal('X').message).not.toMatch(/brand alpha|another customer/i)
   })
 })
 

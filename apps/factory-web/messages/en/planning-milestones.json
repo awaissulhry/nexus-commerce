@@ -352,6 +352,7 @@
     "FUTURE_DAY": "A gate is passed today or on a day before, not on a day to come.",
     "KEPT": "A gate that was passed or started before is kept.",
     "OWNER_NOT_ALLOWED": "That person may not keep this order's gates.",
+    "CUSTOMER_DECIDES": "It waits for the customer's answer on its sample round: it passes by itself when they approve it. To decide for them, use Decide for the customer on the round.",
     "changed": "Someone changed it meanwhile: it was read again, try once more.",
     "forbidden": "Your role may not do this for this order's company or customer.",
     "notFound": "Not found: it was removed meanwhile.",

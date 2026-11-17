@@ -14,7 +14,9 @@ import { isOpenStage, type SampleDecision, type SampleKind, type SampleStage } f
  *                 on its pinned revision, recorded by the office (OFFICE: who recorded it) or the brand's answer to its
  *                 approval request of kind SAMPLE (PORTAL: the partner person; LINK: the link, nobody named). Its stage goes
  *                 DECIDED with it. While the brand is asked (an OPEN request), the office does not decide over it: it
- *                 withdraws the request first. A rejected round may be followed by the next round of its kind.
+ *                 withdraws the request first. A rejected round may be followed by the next round of its kind. B-PR-38: the
+ *                 office records it (OFFICE) only for an internal round or a customer without a portal; a round or swatch of a
+ *                 customer whose portal is on is the customer's to answer, or ours only through Decide for the customer.
  *   swatches      a colour or leather swatch is sent to the brand once, then asked (COLOUR or LEATHER request) or decided in
  *                 the office, once. What was sent (the colour, the lot) changes only until it is sent.
  *   fit           per point of measure of the round's revision spec and size of the round: the nominal and tolerances frozen
@@ -79,6 +81,8 @@ export const DECISION_REFUSALS = [
   'NO_COMPANY',
   // B-PR-29: a fabric swatch of a textile, lining, membrane or padding; a trim swatch of a trim, hardware, thread or label.
   'MATERIAL_KIND',
+  // B-PR-38: a round or swatch of a customer whose portal is on is the customer's to decide (or ours only as Decide for the customer).
+  'CUSTOMER_DECIDES',
 ] as const
 export type DecisionRefusalCode = (typeof DECISION_REFUSALS)[number]
 export interface DecisionRefusal {
@@ -101,10 +105,31 @@ export interface WaitingRequest {
 const day = (value: Date): string => value.toISOString().slice(0, 10)
 const closedWords = (round: { readonly number: string; readonly stage: SampleStage }): string => `Sample round ${round.number} is ${round.stage === 'DECIDED' ? 'decided' : 'cancelled'}`
 
-/** Why the office cannot record a round's decision now (null: it can). */
-export function decisionRefusal(round: DecidableRound, waiting: WaitingRequest | null): DecisionRefusal | null {
+// ---- B-PR-38 (production plan §3 "No silent decisions"; review fix R-06; 07-control §6.4 "Factory and a brand-owned PP / size
+// set / TOP decision: only as an override, never a plain office decision") ------------------------------------------------------
+/**
+ * A round or a swatch of a customer whose portal is on is the customer's own: the customer answers it (the office asks it), or
+ * the office decides it FOR the customer — "Decide for the customer": a reason the customer reads, the customer told, a second
+ * person when its switch is on (B-PR-30a). The plain office decision (decidedVia OFFICE) stays for an internal round and for a
+ * customer without a portal (its word by mail or phone). The office reads why; nothing names another customer.
+ */
+export function customerDecidesRefusal(what: string): DecisionRefusal {
+  return refusal(
+    'CUSTOMER_DECIDES',
+    `${what} is the customer's to decide: ask them to approve it in their portal, or use Decide for the customer (a reason they read; a second person when their switch is on).`,
+  )
+}
+// ---- end B-PR-38
+
+/**
+ * Why the office cannot record a round's decision now (null: it can). B-PR-38: `customerDecides` — the round's customer has
+ * its portal on, so the plain office decision is refused (customerDecidesRefusal), whether or not it was asked yet.
+ */
+export function decisionRefusal(round: DecidableRound, waiting: WaitingRequest | null, customerDecides = false): DecisionRefusal | null {
   if (!isOpenStage(round.stage)) return refusal('ROUND_CLOSED', `${closedWords(round)}: its decision is recorded once.`)
   if (round.stage === 'REQUESTED') return refusal('NOTHING_MADE', `Sample round ${round.number} is only requested: it is decided once its sample is made (move it on, or make its sample work order).`)
+  // B-PR-38: never a silent decision on a customer's own round.
+  if (customerDecides && round.partyId !== null) return customerDecidesRefusal(`Sample round ${round.number}`)
   if (waiting) return refusal('BRAND_ASKED', `Sample round ${round.number} waits for the brand's answer (by ${day(waiting.dueAt)}): withdraw the request first, then record the decision.`)
   return null
 }
@@ -288,10 +313,12 @@ export function swatchSentOnceRefusal(swatch: SwatchFacts, sentAt: Date): Decisi
   return swatch.sentAt !== null && swatch.sentAt.getTime() !== sentAt.getTime() ? refusal('SENT_ONCE', 'The swatch was already sent: when it was sent stays as it was.') : null
 }
 
-/** Why a swatch's decision cannot be recorded in the office now (null: it can). */
-export function swatchDecisionRefusal(swatch: SwatchFacts, waiting: WaitingRequest | null): DecisionRefusal | null {
+/** Why a swatch's decision cannot be recorded in the office now (null: it can). B-PR-38: `customerDecides` as for a round. */
+export function swatchDecisionRefusal(swatch: SwatchFacts, waiting: WaitingRequest | null, customerDecides = false): DecisionRefusal | null {
   if (swatch.decision !== null) return refusal('SWATCH_DECIDED', `The swatch is decided (${DECISION_WORDS[swatch.decision].en.toLowerCase()}): its decision is recorded once.`)
   if (swatch.sentAt === null) return refusal('SWATCH_NOT_SENT', 'The swatch is not sent yet: it is decided once the brand has it.')
+  // B-PR-38: never a silent decision on a customer's own swatch.
+  if (customerDecides) return customerDecidesRefusal(`This ${SWATCH_WORDS[swatch.kind].en} swatch`)
   if (waiting) return refusal('BRAND_ASKED', `The swatch waits for the brand's answer (by ${day(waiting.dueAt)}): withdraw the request first, then record the decision.`)
   return null
 }

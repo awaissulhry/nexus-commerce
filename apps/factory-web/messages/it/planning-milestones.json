@@ -352,6 +352,7 @@
     "FUTURE_DAY": "Un gate si supera oggi o un giorno prima, non un giorno futuro.",
     "KEPT": "Un gate superato o con partenza anticipata si conserva.",
     "OWNER_NOT_ALLOWED": "Quella persona non può gestire i gate di questo ordine.",
+    "CUSTOMER_DECIDES": "Aspetta la risposta del cliente sul suo giro campione: si supera da solo quando lo approva. Per decidere al suo posto, usa Decidi per il cliente sul giro.",
     "changed": "Qualcuno l'ha modificato nel frattempo: è stato riletto, riprova.",
     "forbidden": "Il tuo ruolo non può farlo per l'azienda o il cliente di questo ordine.",
     "notFound": "Non trovato: è stato tolto nel frattempo.",

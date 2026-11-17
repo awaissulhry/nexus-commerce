@@ -15,7 +15,7 @@ import {
   milestoneStateOf,
   OPEN_ORDER_STATUSES,
   orderClosedRefusal,
-  passRefusal,
+  handPassRefusal,
   productionStartOf,
   removeRefusal,
   startBeforeRefusal,
@@ -28,6 +28,8 @@ import {
 } from '@nexus/factory-domain/planning/milestones/rules'
 import type { GateView, MilestoneView, OrderView } from './contract'
 import { action, GATE_COLUMNS, lacking, namesOf, ORDER_COLUMNS, SYSTEM_PASSER, type GateRow, type OrderRow, type Reader } from './store'
+// B-PR-38: a gate waiting for a customer's own round says why "Mark done" is held.
+import { portalOnParties } from '../../sales/sample-decisions/owner'
 
 /**
  * Time & action's read model (B-W2b-263; design planning.milestones sec:gates, sec:calendar): the open sales orders the caller
@@ -178,7 +180,16 @@ export interface WorldContext {
 }
 
 /** One gate as the screens draw it, with what may happen now. */
-export function gateViewOf(gate: GateRow, order: OrderRow, round: { id: string; number: string; kind: string; decision: string | null } | null, names: ReadonlyMap<string, string>, facts: OrderFacts, world: WorldContext, today: BusinessDate): GateView {
+export function gateViewOf(
+  gate: GateRow,
+  order: OrderRow,
+  // B-PR-38: `customerDecides` — the round is a customer's whose portal is on.
+  round: { id: string; number: string; kind: string; decision: string | null; customerDecides?: boolean } | null,
+  names: ReadonlyMap<string, string>,
+  facts: OrderFacts,
+  world: WorldContext,
+  today: BusinessDate,
+): GateView {
   const kind = gate.kind as GateKind
   const gateFacts: GateFacts = {
     number: order.number,
@@ -188,7 +199,7 @@ export function gateViewOf(gate: GateRow, order: OrderRow, round: { id: string; 
     overriddenAt: gate.overriddenAt,
     ownerId: gate.ownerId,
     createdById: gate.createdById,
-    round: round ? { number: round.number, decision: round.decision, kind: round.kind } : null,
+    round: round ? { number: round.number, decision: round.decision, kind: round.kind, customerDecides: round.customerDecides ?? false } : null,
   }
   const ownerId = gate.ownerId ?? gate.createdById
   const person = (id: string | null) => (id && names.has(id) ? { id, name: names.get(id)! } : null)
@@ -199,7 +210,7 @@ export function gateViewOf(gate: GateRow, order: OrderRow, round: { id: string; 
     kind,
     label: gate.label,
     targetDate: day(gate.targetDate),
-    sampleRound: round,
+    sampleRound: round ? { id: round.id, number: round.number, kind: round.kind, decision: round.decision } : null,
     owner: person(ownerId),
     ownerId: gate.ownerId,
     makerId: gate.createdById,
@@ -213,7 +224,7 @@ export function gateViewOf(gate: GateRow, order: OrderRow, round: { id: string; 
     holds: held(facts.workOrders), // B-W2b-F22
     version: gate.version,
     actions: {
-      pass: action(lacking(world.actor, PLANNING_MILESTONES_MANAGE, order), passRefusal(gateFacts, today, today)),
+      pass: action(lacking(world.actor, PLANNING_MILESTONES_MANAGE, order), handPassRefusal(gateFacts, today, today)), // B-PR-38
       startBefore: action(lacking(world.actor, PLANNING_MILESTONES_OVERRIDE, order), startBeforeRefusal(gateFacts, world.actorId)),
       edit: action(lacking(world.actor, PLANNING_MILESTONES_MANAGE, order), editRefusal(gateFacts)),
       remove: action(lacking(world.actor, PLANNING_MILESTONES_MANAGE, order), removeRefusal(gateFacts)),
@@ -267,10 +278,11 @@ export async function readWorld(db: Reader, world: WorldContext, filter: WorldFi
   ])
   const roundIds = [...new Set(gates.flatMap((gate) => (gate.sampleRoundId ? [gate.sampleRoundId] : [])))]
   const [rounds, names] = await Promise.all([
-    roundIds.length ? db.sampleRound.findMany({ where: { id: { in: roundIds } }, select: { id: true, number: true, kind: true, decision: true } }) : Promise.resolve([]),
+    roundIds.length ? db.sampleRound.findMany({ where: { id: { in: roundIds } }, select: { id: true, number: true, kind: true, decision: true, partyId: true } }) : Promise.resolve([]),
     namesOf(db, gates.flatMap((gate) => [gate.ownerId, gate.createdById, gate.passedById, gate.overriddenById])),
   ])
-  const roundOf = new Map(rounds.map((row) => [row.id, row]))
+  const theirs = await portalOnParties(db, rounds.map((row) => row.partyId)) // B-PR-38
+  const roundOf = new Map(rounds.map((row) => [row.id, { id: row.id, number: row.number, kind: row.kind, decision: row.decision, customerDecides: row.partyId !== null && theirs.has(row.partyId) }]))
   const partyOf = new Map(parties.map((row) => [row.id, row]))
   const views: OrderView[] = orders.map((order) => {
     const own = facts.get(order.id) ?? { workOrders: [], shippedAt: null, leather: 'NOT_RECEIVED' as const }
@@ -309,10 +321,11 @@ export async function readGateView(db: Reader, world: WorldContext, gateId: stri
   const order = await db.salesOrder.findUniqueOrThrow({ where: { id: gate.salesOrderId }, select: ORDER_COLUMNS })
   const [facts, round, names] = await Promise.all([
     orderFactsOf(db, [order.id]),
-    gate.sampleRoundId ? db.sampleRound.findUnique({ where: { id: gate.sampleRoundId }, select: { id: true, number: true, kind: true, decision: true } }) : Promise.resolve(null),
+    gate.sampleRoundId ? db.sampleRound.findUnique({ where: { id: gate.sampleRoundId }, select: { id: true, number: true, kind: true, decision: true, partyId: true } }) : Promise.resolve(null),
     namesOf(db, [gate.ownerId, gate.createdById, gate.passedById, gate.overriddenById]),
   ])
-  return gateViewOf(gate, order, round, names, facts.get(order.id) ?? { workOrders: [], shippedAt: null, leather: 'NOT_RECEIVED' }, world, businessDate(world.now))
+  const theirs = round?.partyId ? await portalOnParties(db, [round.partyId]) : new Set<string>() // B-PR-38
+  return gateViewOf(gate, order, round ? { id: round.id, number: round.number, kind: round.kind, decision: round.decision, customerDecides: round.partyId !== null && theirs.has(round.partyId) } : null, names, facts.get(order.id) ?? { workOrders: [], shippedAt: null, leather: 'NOT_RECEIVED' }, world, businessDate(world.now))
 }
 
 export { orderFactsOf }

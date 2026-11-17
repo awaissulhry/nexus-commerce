@@ -250,6 +250,7 @@
     "SWATCH_ROUND_CANCELLED": "Il giro è annullato: non si aggiungono campioni colore.",
     "SWATCH_KIND": "Chiedi al cliente con il tipo del campione (colore, pelle, tessuto o accessorio).",
     "LEATHER_ONLY": "Un campione pelle è di una pelle.",
+    "CUSTOMER_DECIDES": "Questo cliente ha il portale attivo: approva lì. Chiediglielo, oppure usa Decidi per il cliente (con un motivo che legge).",
     "MATERIAL_KIND": "Un campione tessuto è di un tessuto, una fodera, una membrana o un’imbottitura; un campione accessorio di un accessorio, una minuteria, un filo o un’etichetta.",
     "NOT_THE_ROUNDS_PARTY": "Il campione colore va al cliente del giro.",
     "NO_COMPANY": "Un campione colore di un modello condiviso senza giro non si può chiedere al cliente: chiedilo su un giro o decidilo qui.",
