@@ -44,7 +44,7 @@ describe('a return in customer words', () => {
   it('names each status and whose move it is', () => {
     expect(returnStateOf('AUTHORISED')).toBe('SEND_IT_BACK')
     expect(returnNextStep({ ...facts, status: 'REQUESTED', answerBy: '2026-11-10' })).toMatchObject({ forYou: false, code: 'WE_DECIDE', words: { en: 'We look at your request and answer by 2026-11-10.' } })
-    expect(returnNextStep({ ...facts, status: 'AUTHORISED', goodsDueBy: '2026-11-30' })).toMatchObject({ forYou: true, code: 'SEND_IT_BACK', words: { it: 'Stampa le istruzioni di reso e rispediscilo entro il 30/11/2026.' } })
+    expect(returnNextStep({ ...facts, status: 'AUTHORISED', goodsDueBy: '2026-11-30' })).toMatchObject({ forYou: true, code: 'SEND_IT_BACK', words: { it: 'Stampate le istruzioni di reso e rispeditelo entro il 30/11/2026.' } })
     expect(returnNextStep({ ...facts, status: 'INSPECTED', dispositions: ['CREDIT_ONLY', 'REPAIR'] }).words.en).toBe('Inspected: a credit note; we repair it and send it back.')
     expect(returnNextStep({ ...facts, status: 'REJECTED', rejectReason: 'Outside the return window.' }).words.en).toBe('Not accepted: Outside the return window.')
     // A question of ours comes first while the case is open.

@@ -225,7 +225,7 @@ describe('the proposal as the order keeps it, and what accepting it makes (P2: t
     expect(decisionProblem('CONFIRMED')).toBe('The order has no proposal waiting for a decision.')
     expect(proposalAcceptedMail({ language: 'it', number: 'PO-2026-0001', recipientName: 'Ufficio ordini', message: ' A presto ' })).toEqual({
       subject: 'Ordine di acquisto PO-2026-0001: modifiche accettate',
-      body: "Gentile Ufficio ordini,\n\nabbiamo accettato le modifiche che ci ha proposto: l'ordine PO-2026-0001 è confermato come da sua proposta. Grazie.\n\nA presto",
+      body: "Gentile Ufficio ordini,\n\nabbiamo accettato le modifiche che ci avete proposto: l'ordine PO-2026-0001 è confermato come da vostra proposta. Grazie.\n\nA presto",
     })
     expect(proposalAcceptedMail({ language: 'en', number: 'PO-1', recipientName: null }).body).toBe('Dear supplier,\n\nwe accepted the changes you proposed: purchase order PO-1 is confirmed as you proposed it. Thank you.')
   })

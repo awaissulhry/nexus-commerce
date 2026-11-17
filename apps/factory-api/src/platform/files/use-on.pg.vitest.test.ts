@@ -63,9 +63,9 @@ async function call(session: string, method: 'GET' | 'POST' | 'PUT', url: string
   return { status: response.statusCode, body: response.json() as Json }
 }
 const pdf = (text: string): Buffer => Buffer.from(`%PDF-1.7 made-up file of the use-on test: ${text}`)
-async function uploaded(name: string, record: { recordType: string; recordId: string }): Promise<Json> {
+async function uploaded(name: string, record: { recordType: string; recordId: string }, /* END CHECK (fix wave 3c) */ extra: Json = {}): Promise<Json> {
   const body = pdf(name)
-  const announced = await call('office', 'POST', '/files', { companyId: companyA, kind: 'DOCUMENT', originalName: name, contentType: 'application/pdf', sizeBytes: body.length, sha256: createHash('sha256').update(body).digest('hex'), ...record })
+  const announced = await call('office', 'POST', '/files', { companyId: companyA, kind: 'DOCUMENT', originalName: name, contentType: 'application/pdf', sizeBytes: body.length, sha256: createHash('sha256').update(body).digest('hex'), ...record, ...extra })
   expect(announced.status, JSON.stringify(announced.body)).toBe(201)
   expect((await app.inject({ method: 'PUT', url: announced.body.upload.url, headers: announced.body.upload.headers, payload: body })).statusCode).toBe(200)
   const done = await call('office', 'POST', `/files/${announced.body.file.id}/complete`)
@@ -168,5 +168,21 @@ describe('B-TH-231: "Use on another record…" offers records of the same custom
     expect((await call('uploaderOnly', 'POST', `/files/${alphaFile.id}/use-on`, { recordType: 'Quote', recordId: Q1, visibility: ['PARTNER'] })).status).toBe(403)
     expect((await call('uploaderOnly', 'POST', `/files/${alphaFile.id}/use-on`, { recordType: 'Quote', recordId: Q1 })).status).toBe(201)
   })
+
+  // ---- END CHECK (fix wave 3c; B-TH-025/026 on B-TH-231): a file brand A already reads, copied onto brand A's record and shared
+  // as it was, tells brand A nothing new: files.upload carries it (Make order's carry, done by sales). Shared anew: words, 403.
+  it('a copy shared as its source already is, with the same customer, needs files.upload only; sharing anew is refused in words', async () => {
+    const sharedFile = await uploaded('Made-up Alpha shared sketch.pdf', { recordType: 'SalesOrder', recordId: SO1 }, { visibility: ['OFFICE', 'PARTNER'] })
+    expect(sharedFile).toMatchObject({ visibility: ['OFFICE', 'PARTNER'], partyId: P1 })
+    const carried = await call('uploaderOnly', 'POST', `/files/${sharedFile.id}/use-on`, { recordType: 'Quote', recordId: Q1, visibility: ['PARTNER'] })
+    expect(carried.status, JSON.stringify(carried.body)).toBe(201)
+    expect(carried.body.file).toMatchObject({ recordType: 'Quote', recordId: Q1, visibility: ['OFFICE', 'PARTNER'], partyId: P1, sourceFileId: sharedFile.id })
+    const anew = await call('uploaderOnly', 'POST', `/files/${alphaFile.id}/use-on`, { recordType: 'Quote', recordId: Q1, visibility: ['PARTNER'] })
+    expect(anew.status).toBe(403)
+    expect(anew.body.error.message).toBe(USE_ON_WORDS.shareNeedsManage)
+    // Still never across the wall: brand A's shared file onto brand B's order is refused, whoever carries it.
+    expect((await call('uploaderOnly', 'POST', `/files/${sharedFile.id}/use-on`, { recordType: 'SalesOrder', recordId: second.salesOrderId, visibility: ['PARTNER'] })).body.error.issues[0].path).toBe('refusal/OTHER_PARTY')
+  })
+  // ---- end END CHECK
 })
 // ---- end B-TH-231

@@ -99,7 +99,7 @@ export const isWaitingRequest = (status: string): boolean => (WAITING_REQUEST_ST
 
 /** SAL-304: what the cancel pop-up says of a made-to-measure order for a consumer (Codice del Consumo art. 59). */
 export const NO_WITHDRAWAL_WORDS: Words = Object.freeze({
-  it: 'Prodotto su misura per un consumatore: non si applica il diritto di recesso (Codice del Consumo art. 59). Puoi comunque chiederci di annullarlo.',
+  it: 'Prodotto su misura per un consumatore: non si applica il diritto di recesso (Codice del Consumo art. 59). Potete comunque chiederci di annullarlo.',
   en: 'Made to measure for a consumer: no right of withdrawal applies (Codice del Consumo art. 59). You can still ask us to cancel it.',
 })
 
@@ -233,7 +233,7 @@ const FREE_WORDS: Readonly<Record<RequestKind, Words>> = Object.freeze({
 
 function statusCutoffWords(status: SalesOrderStatus, cutoff: CutoffStatus): Words {
   // A cut-off at CONFIRMED: never from the portal (the office takes such requests by mail or on the order's thread).
-  if (cutoff === 'CONFIRMED' && status === 'CONFIRMED') return { it: "Non possibile dal portale: scrivici sull'ordine", en: 'Not possible from the portal: write to us on the order' }
+  if (cutoff === 'CONFIRMED' && status === 'CONFIRMED') return { it: "Non possibile dal portale: scriveteci sull'ordine", en: 'Not possible from the portal: write to us on the order' }
   return { it: `Non possibile: ${STATUS_NAMES[status].it}`, en: `Not possible: ${STATUS_NAMES[status].en}` }
 }
 
@@ -252,7 +252,7 @@ export function orderVerdict(kind: RequestKind, order: RuleOrder, cutoffs: Cutof
   }
   if (order.openRequestDay !== null) {
     const day = order.openRequestDay
-    return verdict('OPEN_REQUEST', { it: `La tua richiesta del ${dayWords(day, 'it')} attende la nostra risposta`, en: `Your request of ${dayWords(day, 'en')} waits for our answer` }, day)
+    return verdict('OPEN_REQUEST', { it: `La vostra richiesta del ${dayWords(day, 'it')} attende la nostra risposta`, en: `Your request of ${dayWords(day, 'en')} waits for our answer` }, day)
   }
   const cutoff = kind === 'CHANGE' ? cutoffs.changeStatus : cutoffs.cancelStatus
   if (cutoff !== null && pastCutoff(order.status, cutoff)) return verdict('STATUS', statusCutoffWords(order.status, cutoff))

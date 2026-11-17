@@ -331,7 +331,7 @@ describe('the mail (GDPR art. 32)', () => {
 
   it('says the password comes apart when the link has one, never the password itself (B-W2b-GF1, G212)', () => {
     const it = payrollLinkMail({ ...mail, password: true }, 'https://example.test/l#token=abc').body
-    expect(it).toContain('serve la password che le diamo a parte')
+    expect(it).toContain('serve la password che vi diamo a parte')
     const en = payrollLinkMail({ ...mail, locale: 'en', password: true }, 'https://example.test/l#token=abc').body
     expect(en).toContain('password we give you separately')
     expect(en).toContain('confirm that you received the file')

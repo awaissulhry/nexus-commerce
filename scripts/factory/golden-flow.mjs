@@ -102,8 +102,10 @@ const SUITES = {
   'sales-depth': { folder: SALES_DEPTH, extra: [] },
   // B-W2b-436
   'money-depth': { folder: MONEY_DEPTH, extra: [] },
-  // B-TH-102
-  threads: { folder: THREADS, extra: [] },
+  // B-TH-102. END CHECK (fix wave 3c): the threads plan's seven flows run one after the other. In parallel (vitest takes one
+  // worker per file on this machine) seven worlds migrate and seed at once, and the seed's transactions outlive their 5 s
+  // (P2028): five files stopped in their setup and their 61 steps never ran.
+  threads: { folder: THREADS, extra: ['--no-file-parallelism'] },
 }
 const suiteName = process.argv[2] ?? 'w1'
 const suite = SUITES[suiteName]

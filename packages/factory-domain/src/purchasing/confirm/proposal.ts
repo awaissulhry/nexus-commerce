@@ -92,7 +92,7 @@ const ACCEPTED_MAIL = {
   it: {
     subject: (number: string) => `Ordine di acquisto ${number}: modifiche accettate`,
     hello: (name: string | null) => (name ? `Gentile ${name},` : 'Gentile fornitore,'),
-    body: (number: string) => `abbiamo accettato le modifiche che ci ha proposto: l'ordine ${number} è confermato come da sua proposta. Grazie.`,
+    body: (number: string) => `abbiamo accettato le modifiche che ci avete proposto: l'ordine ${number} è confermato come da vostra proposta. Grazie.`,
   },
   en: {
     subject: (number: string) => `Purchase order ${number}: changes accepted`,

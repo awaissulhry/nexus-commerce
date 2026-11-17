@@ -3,6 +3,7 @@ import { isUuid } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { CASE_LIMITS } from '@nexus/factory-domain/sales/portal-returns/rules'
 import type { CommandTx } from '../../../core/command'
+import { contentWalledFor } from '../../../platform/files/content-wall' // fix-wall-1
 
 /**
  * The reads of returns and complaints for the people outside (B-W2b-192). Every read here runs in the tenant's office-role
@@ -156,7 +157,9 @@ export async function sharedFilesOf(db: Reader, partyId: string, records: readon
     take: 500,
   })
   const wanted = new Set(records.map((record) => `${record.type}:${record.id}`))
-  return rows.filter((row) => wanted.has(`${row.recordType}:${row.recordId}`))
+  // fix-wall-1: a file whose content is another customer's (an old copy of a mixed lot's photo) is not shown (read as the system).
+  const walled = await contentWalledFor(db, partyId, rows.map((row) => row.id))
+  return rows.filter((row) => wanted.has(`${row.recordType}:${row.recordId}`) && !walled.has(row.id))
 }
 
 /** A credit note that credits lines of a return (issued: not a draft, not one SDI rejected): its number, day and PDF. */

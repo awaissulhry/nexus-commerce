@@ -20,6 +20,8 @@ import { BLOCKED_BY, LIST_SORTS, WORK_ORDER_RISKS } from './risk'
 import { SUPERVISOR_MARKS, SUPERVISOR_SOURCES } from '@nexus/factory-domain/production-brand/supervisor'
 // B-PR-22b: the customer's urgency per row.
 import { BRAND_URGENCIES } from '@nexus/factory-domain/production-brand/urgency'
+// F-PR-18: the Customer urgency column's state and filter.
+import { CUSTOMER_URGENCY_STATES } from '@nexus/factory-domain/production-brand/urgency-state'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-003, MES-005, MES-007, MES-305; A2 SCR-069, SCR-070): the
@@ -214,6 +216,8 @@ export const listContract = defineContract({
     // ── end B-PR-34 ──
     /** B-PR-42a: `me` — the work orders whose production supervisor is the caller ("Mine"); there is no filter by another person. */
     supervisor: z.enum(['me']).optional(),
+    /** F-PR-18: one customer urgency state — URGENT, ASKED ("Urgent – asked"), REGULAR, SET_BACK ("Set to regular by us"); computed. */
+    customerUrgency: z.enum(CUSTOMER_URGENCY_STATES).optional(),
     // ── B-PR-33 (Production › Overview: every number opens this list with its filters) ──
     /** `true`: production work orders not started whose open order waits on a gate (the planning board does not place them). */
     gate: z.enum(['true', 'false']).transform((value) => value === 'true').optional(),
@@ -269,6 +273,8 @@ export const listContract = defineContract({
           customerUrgency: z.enum(BRAND_URGENCIES).nullable(),
           /** B-PR-22b: its place in the customer's OWN Urgent list (1 first; null when Regular) — never a place in our plan. */
           urgentRank: z.number().int().nullable(),
+          /** F-PR-18: the Customer urgency column's state (null: none — no order whose urgency counts, or the switch off). */
+          urgencyState: z.enum(CUSTOMER_URGENCY_STATES).nullable(),
         }),
       ),
       /** B-PR-34: a work order id (newest) or a position token (risk, due). */

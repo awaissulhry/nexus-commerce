@@ -152,17 +152,17 @@ const MAIL_WORDS = {
     noLink: 'The link is in the mail we sent you.',
   },
   it: {
-    subject: (reference: string, company: string) => `Il Suo reso ${reference}: l’etichetta del vettore - ${company}`,
+    subject: (reference: string, company: string) => `Il vostro reso ${reference}: l’etichetta del vettore - ${company}`,
     body: (reference: string, url: string, until: string) =>
       [
         'Gentile cliente,',
         '',
-        `il Suo reso ${reference} è autorizzato. Quando la merce è imballata, apra questo link, prenoti il vettore e stampi l’etichetta da applicare sul collo:`,
+        `il vostro reso ${reference} è autorizzato. Quando la merce è imballata, aprite questo link, prenotate il vettore e stampate l’etichetta da applicare sul collo:`,
         url,
         '',
-        `Nulla viene prenotato prima che usi il link. Il link resta aperto fino al ${until}.`,
+        `Nulla viene prenotato prima che usiate il link. Il link resta aperto fino al ${until}.`,
       ].join('\n'),
-    noLink: 'Il link è nella mail che Le abbiamo inviato.',
+    noLink: 'Il link è nella mail che vi abbiamo inviato.',
   },
 } as const
 

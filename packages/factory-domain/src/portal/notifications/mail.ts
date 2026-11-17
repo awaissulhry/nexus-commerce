@@ -45,15 +45,15 @@ export interface ComposedMail {
 
 const WORDS = {
   it: {
-    hello: (name: string) => `Ciao ${name},`,
+    hello: (name: string) => `Buongiorno ${name},`,
     open: 'Apri nel portale',
     digestIntro: (company: string) => `ecco le novità dal portale di ${company}:`,
-    daily: (company: string, count: number) => `Il tuo riepilogo giornaliero da ${company}: ${count} ${count === 1 ? 'novità' : 'novità'}`,
-    weekly: (company: string, count: number) => `Il tuo riepilogo settimanale da ${company}: ${count} ${count === 1 ? 'novità' : 'novità'}`,
+    daily: (company: string, count: number) => `Il vostro riepilogo giornaliero da ${company}: ${count} ${count === 1 ? 'novità' : 'novità'}`,
+    weekly: (company: string, count: number) => `Il vostro riepilogo settimanale da ${company}: ${count} ${count === 1 ? 'novità' : 'novità'}`,
     more: (count: number) => `e altre ${count} nel portale.`,
     manage: 'Gestisci le e-mail',
     unsubscribe: 'Disiscriviti dalle e-mail non essenziali',
-    essential: 'Le e-mail su ordini, consegne e fatture continuano ad arrivare: servono per gestire i tuoi ordini.',
+    essential: 'Le e-mail su ordini, consegne e fatture continuano ad arrivare: servono per gestire i vostri ordini.',
   },
   en: {
     hello: (name: string) => `Hello ${name},`,
