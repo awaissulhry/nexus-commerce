@@ -9,7 +9,7 @@ import type { PlanInput, PlanItem, PlanOrderLine } from '../explode'
 import { configuredRevision, effectLineId, garmentNeeds, shareKey, type GarmentSource } from './explosion'
 import { planLevelled, type Garments } from './multilevel'
 import { PLANNING_PLANNED_CONVERT } from './permissions'
-import { convertProblem, firmProblem, inHouseDays, keptByRun, openCells, outsideWorkOf, proposeWork, sizeGroupsOf, sizeGroupWords, workOrderLinesOf } from './rules'
+import { convertProblem, customerOfDemand, firmProblem, inHouseDays, keptByRun, openCells, outsideWorkOf, proposalKey, proposeWork, sizeGroupsOf, sizeGroupWords, workOrderLinesOf } from './rules'
 
 /* Planned work and subcontract orders (B-W2b-293). Every id, code and number here is made up. */
 
@@ -234,6 +234,25 @@ describe('planned work orders from the demand (PLN-067, PLN-069, PLN-089)', () =
       ['52-54', 'SUBCONTRACT', '20'],
     ])
   })
+
+  // ── B-PR-03 (production plan: one customer per work order, so one per planned order) ──
+  it('lines of two customers with the same style, colourway and day: one planned order per customer, keyed by it', () => {
+    const two = [lineOf('1', { partyId: 'party-A' }), lineOf('2', { partyId: 'party-B', sizes: [{ size: '50', pieces: 3 }] }), lineOf('3', { partyId: 'party-A', sizes: [{ size: '52', pieces: 1 }] })]
+    const plan = proposeWork({ cells: openCells(two, () => null, [], []), runDate: '2026-11-12', rule: 'ONE_GRID', groups: [], sizesOf: () => ['48', '50', '52'], outsideOf: () => null })
+    expect(plan.map((row) => [row.customerId, row.sizes.map((size) => `${size.size}x${size.quantity}`).join(' '), [...new Set(row.demand.map((entry) => entry.orderLineId))].join(',')])).toEqual([
+      ['party-A', '48x2 50x4 52x3', 'ol-1,ol-3'],
+      ['party-B', '50x3', 'ol-2'],
+    ])
+    expect(new Set(plan.map((row) => row.key)).size).toBe(2)
+    // A stored row keeps its key when its demand is of one customer; one of two customers (planned before the rule) matches none.
+    const partyOf = (orderLineId: string) => two.find((line) => line.orderLineId === orderLineId)?.partyId
+    const stored = (demand: { orderLineId: string }[]) => proposalKey({ kind: 'MAKE', styleId: 'style-JKT', colourwayId: 'cw-BLK', styleRevisionId: null, sizeGroup: null, dueDate: '2026-12-10', customerId: customerOfDemand(demand, partyOf) })
+    expect(stored([{ orderLineId: 'ol-2' }])).toBe(plan[1]!.key)
+    expect(plan.map((row) => row.key)).not.toContain(stored([{ orderLineId: 'ol-1' }, { orderLineId: 'ol-2' }]))
+    expect(customerOfDemand([], partyOf)).toBeNull()
+    expect(customerOfDemand([{ orderLineId: 'ol-9' }], partyOf)).toBe('?')
+  })
+  // ── end B-PR-03 ──
 
   it('a work order of the demand, the lead time, and what holds a row', () => {
     expect(workOrderLinesOf([{ orderId: 'so-1', orderLineId: 'ol-1', size: '48', pieces: 2 }, { orderId: 'so-1', orderLineId: 'ol-1', size: '50', pieces: 4 }, { orderId: 'so-2', orderLineId: 'ol-2', size: '50', pieces: 1 }])).toEqual([

@@ -1,6 +1,4 @@
-import type { Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { beforeRelease, blockingCodes } from '@nexus/factory-domain/production/work-orders/bulk'
 import type { WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_RELEASE, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
@@ -11,6 +9,7 @@ import { mayOn, officeContextOf } from './access'
 import { checklistOf, readBasics, readReleaseFacts } from './facts'
 import { releaseWorkOrder } from './release'
 import { newPlanCache } from './release/blockers'
+import { workOrderWhere } from './scope'
 import { HEADER } from './store'
 import { todayNow } from './work-orders'
 
@@ -19,7 +18,8 @@ import { todayNow } from './work-orders'
  * ReviewChangesModal with per-row blockers)"): what the list frame's bulk target `production.work-orders.release`
  * (apps/factory-api platform/views/bulk/targets/work-order-release.ts) reads and writes.
  *
- *   read    the asked work orders the caller may see (workorders.view over their companies and sites), each one before
+ *   read    the asked work orders the caller may see (workorders.view over their companies, sites and customers: B-PR-03; another
+ *           customer's is not among them, so the frame answers it as not found), each one before
  *           its release that the caller may release checked with THE release check (./facts checklistOf, the record's
  *           and the release command's one answer; a site's plan read once for all its drafts), keeping the codes of the
  *           checks that block it.
@@ -36,6 +36,8 @@ export interface ReleaseRow {
   readonly version: number
   readonly companyId: string
   readonly siteId: string
+  /** B-PR-03: its one customer (null: a sample of no customer, or mixed customers made before the rule). */
+  readonly partyId: string | null
   /** The codes of the release checks that block it now (empty: releasable, or not before its release). */
   readonly blocking: readonly ReleaseCheckCode[]
 }
@@ -48,7 +50,7 @@ export async function releaseRowsFor(caller: CommandCaller, ids: readonly string
   const today = todayNow()
   return caller.withClient(async (client) => {
     const rows = await client.workOrder.findMany({
-      where: { AND: [scopeWhere(actorOf(context), WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput, { id: { in: wanted } }] },
+      where: { AND: [workOrderWhere(actorOf(context), WORKORDERS_VIEW), { id: { in: wanted } }] },
       select: HEADER,
     })
     const plans = newPlanCache()
@@ -56,7 +58,7 @@ export async function releaseRowsFor(caller: CommandCaller, ids: readonly string
     for (const row of rows) {
       let blocking: ReleaseCheckCode[] = []
       if (beforeRelease(row) && mayOn(context, WORKORDERS_RELEASE, row)) blocking = blockingCodes(checklistOf(await readReleaseFacts(client, await readBasics(client, row), today, plans), null).checks)
-      out.push({ id: row.id, number: row.number, status: row.status, heldFromStatus: row.heldFromStatus, version: row.version, companyId: row.companyId, siteId: row.siteId, blocking })
+      out.push({ id: row.id, number: row.number, status: row.status, heldFromStatus: row.heldFromStatus, version: row.version, companyId: row.companyId, siteId: row.siteId, partyId: row.partyId, blocking })
     }
     return out
   })
