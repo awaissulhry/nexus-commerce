@@ -297,7 +297,8 @@
         "requestRefused": "{actor} refused your request to buy {record}"
       },
       "inquiries": {
-        "assigned": "{actor} gave you inquiry {record}"
+        "assigned": "{actor} gave you inquiry {record}",
+        "newRequest": "New request {record} came in: take it or give it to someone"
       },
       "mail": {
         "assigned": "{actor} gave you a mail of {title}: {record}",
