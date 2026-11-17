@@ -151,10 +151,6 @@
       "body": "Cambia la ricerca o le righe, oppure togli i filtri."
     },
     "clearFilters": "Togli i filtri",
-    "activeFilters": "Filtri attivi",
-    "customerChip": "Cliente: {name}",
-    "customerHidden": "Un cliente che non puoi aprire",
-    "removeCustomer": "Togli il filtro {name}",
     "empty": {
       "title": "Ancora nessun ordine",
       "body": "Gli ordini compaiono qui quando un cliente accetta un preventivo, o quando l'ufficio ne inserisce uno con Nuovo ordine.",
@@ -178,28 +174,6 @@
     "marginHint": "Come stimato ora",
     "quote": "Dal preventivo",
     "more": "Altro"
-  },
-  "bulk": {
-    "export_one": "Esporta {count} (CSV)",
-    "export_other": "Esporta {count} (CSV)"
-  },
-  "csv": {
-    "number": "Numero",
-    "customer": "Cliente",
-    "customerRef": "Ordine del cliente",
-    "status": "Stato",
-    "deposit": "Acconto",
-    "depositDue": "Scadenza acconto",
-    "lines": "Righe",
-    "units": "Capi",
-    "shipped": "Spediti",
-    "orderDate": "Ordinato",
-    "requested": "Richiesto",
-    "promised": "Promesso",
-    "daysLate": "Giorni di ritardo",
-    "net": "Imponibile",
-    "gross": "Totale",
-    "quote": "Preventivo"
   },
   "board": {
     "label": "Ordini per stato",

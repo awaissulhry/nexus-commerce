@@ -1,0 +1,145 @@
+{
+  "title": "Ordini",
+  "titleOf": "Ordini · {name}",
+  "count_one": "{count} ordine",
+  "count_other": "{count} ordini",
+  "loadedOf": "{loaded} di {total} caricati",
+  "col": {
+    "picture": "Foto",
+    "brand": "Marchio",
+    "invoiced": "Fatturato",
+    "company": "Azienda",
+    "gross": "Lordo",
+    "customerRef": "Ordine del cliente",
+    "requested": "Richiesto",
+    "daysLate": "Giorni di ritardo",
+    "invoicedAmount": "Importo fatturato",
+    "brandHint": "L'etichetta sul capo, non il cliente.",
+    "invoicedHint": "Fatture emesse meno note di credito, a pezzi; le bozze e le fatture d'acconto non contano."
+  },
+  "door": {
+    "order": "Apri l'ordine {number} · la conversazione a destra",
+    "customer": "Apri il cliente {name}",
+    "lines": "Apri le righe di {number}",
+    "promise": "Apri le righe e le promesse di {number}",
+    "deposit": "Apri la fattura d'acconto di {number}",
+    "shipOne": "Apri il DDT {ddt} sulla sua spedizione",
+    "ship": "Apri i DDT di {number}",
+    "invoiceOne": "Apri la fattura {number}",
+    "invoices": "Apri le fatture di {number}",
+    "quote": "Apri l'offerta {number}"
+  },
+  "held": {
+    "invoices": "Serve il permesso delle fatture (invoices.view)",
+    "shipping": "Serve il permesso delle spedizioni (shipping.view)",
+    "quotes": "Serve il permesso delle offerte (quotes.view)"
+  },
+  "invoiced": {
+    "NONE": "Nessuno",
+    "PART": "In parte",
+    "ALL": "Tutto",
+    "amount": "{amount} fatturati"
+  },
+  "brand": {
+    "own": "Collezione propria",
+    "hidden": "Etichetta non visibile",
+    "hiddenWhy": "Il nome di questa etichetta non ti viene mostrato.",
+    "several_one": "{count} marchio",
+    "several_other": "{count} marchi",
+    "filter": "Mostra solo {name} (filtra il foglio)",
+    "pick": "{names} — scegline uno per filtrare il foglio",
+    "pickTitle": "{count} marchi su {number}",
+    "unknown": "un marchio"
+  },
+  "status": {
+    "filter": "Mostra solo “{status}” (filtra il foglio)"
+  },
+  "company": {
+    "filter": "Mostra solo {name} (filtra il foglio)",
+    "unknown": "un'azienda"
+  },
+  "picture": {
+    "open": "Mostra in grande la foto di {number} · {style}",
+    "noneOf": "{number} non ha ancora una foto",
+    "alt": "{style} foto principale",
+    "more": "+{count}",
+    "viewerOf": "La foto di {number}",
+    "close": "Chiudi",
+    "openStyle": "Apri il modello",
+    "none": "Ancora nessuna foto",
+    "small": "Un'anteprima piccola. La foto intera è sul modello.",
+    "moreStyles_one": "L'ordine ha {count} altro modello: apri le sue righe",
+    "moreStyles_other": "L'ordine ha altri {count} modelli: apri le sue righe"
+  },
+  "peek": {
+    "customer": "Sul cliente",
+    "order": "Sull'ordine",
+    "openOrders": "Ordini aperti",
+    "late": "In ritardo",
+    "lastOrder": "Ultimo ordine",
+    "openCustomer": "Apri il cliente",
+    "openOrder": "Apri l'ordine",
+    "status": "Stato",
+    "promised": "Promesso",
+    "pieces": "Pezzi",
+    "who": "Cliente",
+    "notCounted": "—",
+    "noPromise": "Ancora nessuna promessa"
+  },
+  "tile": "{label} · {name}",
+  "chips": {
+    "label": "Cosa restringe il foglio",
+    "customer": "{name}",
+    "status": "Stato: {status}",
+    "brand": "Marchio: {name}",
+    "company": "Azienda: {name}",
+    "remove": "Togli “{name}”",
+    "clearAll": "Togli tutti"
+  },
+  "switcher": {
+    "title": "Cliente",
+    "trigger": "scegli di chi sono gli ordini del foglio",
+    "all": "Tutti i clienti",
+    "allMine": "Tutti i miei clienti ({count})",
+    "chosen": "Cliente: {name}",
+    "reading": "Cliente: …",
+    "unknown": "Cliente: non disponibile",
+    "fixed": "Cliente: {name}",
+    "fixedHint": "Vedi solo gli ordini di questo cliente.",
+    "search": "Trova un cliente",
+    "searchHint": "Nome o codice",
+    "recent": "Recenti",
+    "everyone": "Tutti i clienti ({count})",
+    "mine": "I miei clienti ({count})",
+    "open_one": "{count} aperto",
+    "open_other": "{count} aperti",
+    "late_one": "{count} in ritardo",
+    "late_other": "{count} in ritardo",
+    "archived": "archiviato",
+    "typeToFind": "altri {count}: scrivi per trovarli",
+    "failed": "Non è stato possibile leggere i clienti.",
+    "noMatch": "Nessun cliente corrisponde a “{q}”",
+    "none": "Nessun cliente ha ancora ordini",
+    "unavailable": "Questo cliente non è disponibile.",
+    "unavailableBody": "Il link indica un cliente che non puoi aprire, o che non esiste più.",
+    "showAll": "Mostra tutti i clienti"
+  },
+  "export": {
+    "title": "Ordini - {customer}",
+    "heading": "{customer} — {view}",
+    "xlsx_one": "Excel (.xlsx) — {count} ordine in questa vista",
+    "xlsx_other": "Excel (.xlsx) — tutti i {count} ordini di questa vista",
+    "csv_one": "CSV — {count} ordine in questa vista",
+    "csv_other": "CSV — tutti i {count} ordini di questa vista",
+    "xlsxEvery": "Excel (.xlsx) — ogni ordine di questa vista",
+    "csvEvery": "CSV — ogni ordine di questa vista",
+    "note": "Il file = lo schermo: le stesse righe (ogni pagina, non solo quelle caricate) e le colonne visibili.",
+    "noteNoPrice": "Le colonne degli importi restano fuori: serve il permesso dei prezzi."
+  },
+  "keys": {
+    "door": "Apri ciò che nomina la cella attiva",
+    "doorTab": "Aprilo in una nuova scheda",
+    "peek": "Uno sguardo al cliente o all'ordine (sul suo link)"
+  },
+  "shippedOf": "{shipped} di {units}"
+}

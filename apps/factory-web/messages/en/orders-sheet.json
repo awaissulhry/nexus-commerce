@@ -1,0 +1,145 @@
+{
+  "title": "Orders",
+  "titleOf": "Orders · {name}",
+  "count_one": "{count} order",
+  "count_other": "{count} orders",
+  "loadedOf": "{loaded} of {total} loaded",
+  "col": {
+    "picture": "Picture",
+    "brand": "Brand",
+    "invoiced": "Invoiced",
+    "company": "Company",
+    "gross": "Gross",
+    "customerRef": "Customer PO",
+    "requested": "Requested",
+    "daysLate": "Days late",
+    "invoicedAmount": "Invoiced amount",
+    "brandHint": "The label on the garment — not the customer.",
+    "invoicedHint": "Issued invoices less credit notes, by pieces; drafts and deposit invoices do not count."
+  },
+  "door": {
+    "order": "Open order {number} · its thread on the right",
+    "customer": "Open the customer {name}",
+    "lines": "Open the lines of {number}",
+    "promise": "Open the lines and promises of {number}",
+    "deposit": "Open the deposit invoice of {number}",
+    "shipOne": "Open delivery note {ddt} on its shipment",
+    "ship": "Open the delivery notes of {number}",
+    "invoiceOne": "Open invoice {number}",
+    "invoices": "Open the invoices of {number}",
+    "quote": "Open the quote {number}"
+  },
+  "held": {
+    "invoices": "Needs the invoices right (invoices.view)",
+    "shipping": "Needs the shipping right (shipping.view)",
+    "quotes": "Needs the quotes right (quotes.view)"
+  },
+  "invoiced": {
+    "NONE": "None",
+    "PART": "Part",
+    "ALL": "All",
+    "amount": "{amount} invoiced"
+  },
+  "brand": {
+    "own": "Own collection",
+    "hidden": "Label not shown",
+    "hiddenWhy": "The name of this label is not shown to you.",
+    "several_one": "{count} brand",
+    "several_other": "{count} brands",
+    "filter": "Show only {name} (filters the sheet)",
+    "pick": "{names} — pick one to filter the sheet",
+    "pickTitle": "{count} brands on {number}",
+    "unknown": "a brand"
+  },
+  "status": {
+    "filter": "Show only “{status}” (filters the sheet)"
+  },
+  "company": {
+    "filter": "Show only {name} (filters the sheet)",
+    "unknown": "a company"
+  },
+  "picture": {
+    "open": "Show the picture of {number} large · {style}",
+    "noneOf": "{number} has no picture yet",
+    "alt": "{style} main picture",
+    "more": "+{count}",
+    "viewerOf": "The picture of {number}",
+    "close": "Close",
+    "openStyle": "Open style",
+    "none": "No picture yet",
+    "small": "A small preview. The full picture is on the style.",
+    "moreStyles_one": "The order has {count} more style: open its lines",
+    "moreStyles_other": "The order has {count} more styles: open its lines"
+  },
+  "peek": {
+    "customer": "About the customer",
+    "order": "About the order",
+    "openOrders": "Open orders",
+    "late": "Late",
+    "lastOrder": "Last order",
+    "openCustomer": "Open the customer",
+    "openOrder": "Open the order",
+    "status": "Status",
+    "promised": "Promised",
+    "pieces": "Pieces",
+    "who": "Customer",
+    "notCounted": "—",
+    "noPromise": "No promise yet"
+  },
+  "tile": "{label} · {name}",
+  "chips": {
+    "label": "What narrows the sheet",
+    "customer": "{name}",
+    "status": "Status: {status}",
+    "brand": "Brand: {name}",
+    "company": "Company: {name}",
+    "remove": "Remove “{name}”",
+    "clearAll": "Clear all"
+  },
+  "switcher": {
+    "title": "Customer",
+    "trigger": "choose whose orders the sheet shows",
+    "all": "All customers",
+    "allMine": "All my customers ({count})",
+    "chosen": "Customer: {name}",
+    "reading": "Customer: …",
+    "unknown": "Customer: not available",
+    "fixed": "Customer: {name}",
+    "fixedHint": "You see only this customer's orders.",
+    "search": "Find a customer",
+    "searchHint": "Name or code",
+    "recent": "Recent",
+    "everyone": "All customers ({count})",
+    "mine": "My customers ({count})",
+    "open_one": "{count} open",
+    "open_other": "{count} open",
+    "late_one": "{count} late",
+    "late_other": "{count} late",
+    "archived": "archived",
+    "typeToFind": "{count} more: type to find",
+    "failed": "The customers could not be read.",
+    "noMatch": "No customer matches “{q}”",
+    "none": "No customer has orders yet",
+    "unavailable": "This customer is not available.",
+    "unavailableBody": "The link names a customer you cannot open, or one that no longer exists.",
+    "showAll": "Show all customers"
+  },
+  "export": {
+    "title": "Orders - {customer}",
+    "heading": "{customer} — {view}",
+    "xlsx_one": "Excel (.xlsx) — the {count} order in this view",
+    "xlsx_other": "Excel (.xlsx) — all {count} orders in this view",
+    "csv_one": "CSV — the {count} order in this view",
+    "csv_other": "CSV — all {count} orders in this view",
+    "xlsxEvery": "Excel (.xlsx) — every order in this view",
+    "csvEvery": "CSV — every order in this view",
+    "note": "The file = the screen: the same rows (every page, not only the loaded ones) and the visible columns.",
+    "noteNoPrice": "Money columns are left out: they need the price right."
+  },
+  "keys": {
+    "door": "Open what the focused cell names",
+    "doorTab": "Open it in a new tab",
+    "peek": "Peek at the customer or the order (on its link)"
+  },
+  "shippedOf": "{shipped} of {units}"
+}
