@@ -79,7 +79,7 @@ type Reader = FactoryClient | CommandTx
 
 /** The pins of a thread as the reader's client reads them (a portal client: its own customer's only), with their messages. */
 async function pinsOf(client: Reader, threadId: string, office: boolean): Promise<{ pins: Omit<PinView, 'message'>[]; messages: Map<string, { id: string; authorName: string | null; bodyText: string; at: Date; audience: 'OFFICE' | 'PARTNER'; attachmentFileIds: string[] }> }> {
-  const rows = office
+  const rows: { messageId: string; pinnedAt: Date; pinnedById: string | null }[] = office
     ? await client.threadPin.findMany({ where: { threadId }, orderBy: [{ pinnedAt: 'asc' }, { id: 'asc' }], take: PINS_MAX, select: { messageId: true, pinnedAt: true, pinnedById: true } })
     : (await client.threadPin.findMany({ where: { threadId, partyId: { not: null } }, orderBy: [{ pinnedAt: 'asc' }, { id: 'asc' }], take: PINS_MAX, select: { messageId: true, pinnedAt: true } })).map((row) => ({ ...row, pinnedById: null as string | null }))
   const messageRows = rows.length === 0 ? [] : await client.message.findMany({ where: { threadId, id: { in: rows.map((row) => row.messageId) }, ...(office ? {} : { audience: 'PARTNER' as const }) }, select: { id: true, authorName: true, bodyText: true, at: true, audience: true, attachmentFileIds: true } })

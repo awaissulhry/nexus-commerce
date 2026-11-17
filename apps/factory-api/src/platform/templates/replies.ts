@@ -349,7 +349,7 @@ export async function fillMailEvent(
   })
   if (read.template) {
     const words = fillMail(read.template, read.values)
-    return { ...words, language: read.language, source: 'COMPANY' as const, read: true, fellBack: false, words: null, missing: [...new Set([...missingValues(read.template.subject, read.values), ...missingValues(read.template.body, read.values)])] }
+    return { ...words, language: read.language, source: 'TEMPLATE' as const, read: true, fellBack: false, words: null, missing: [...new Set([...missingValues(read.template.subject, read.values), ...missingValues(read.template.body, read.values)])] }
   }
   const code = codeWordsOf(event, read.language, { sendUnread: body.sendUnread === true })
   // The office's tick on a drafted text not read yet is recorded: who used which language's words, on which record.

@@ -358,8 +358,8 @@ export const fillMailEventContract = defineContract({
       body: z.string(),
       /** The language the words are in (an unread draft without the tick: English). */
       language: messageLanguage,
-      /** Where the words come from: the company's version, every company's, or the code's words. */
-      source: z.enum(['COMPANY', 'ALL', 'CODE']),
+      /** Where the words come from: a person's version in use (the company's own, else every company's), or the code's words. */
+      source: z.enum(['TEMPLATE', 'CODE']),
       /** The asked language's texts were read once by a person (Italian, English and a person's own template: always). */
       read: z.boolean(),
       /** English was given instead of an unread draft; `words` says why in the reader's languages. */
