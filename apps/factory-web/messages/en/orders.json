@@ -269,7 +269,8 @@
     "readOnly": "Read-only: your role follows orders and changes none.",
     "amended": "Amended · rev {revision}",
     "reapproval": "Waiting for the customer to accept the change",
-    "typed": "Typed by the office"
+    "typed": "Typed by the office",
+    "madeFrom": "Made from {number} — Open"
   },
   "held": {
     "busy": "Working on the last change…",

@@ -2,6 +2,9 @@ import { createElement, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../../../lib/design/design-screen'
 import { DEMO_COMPANIES } from '../../../../../shell/design-data'
 import { canFor, COMPANY_ID, CONTACTS, CUSTOMERS, DECLINED_VIEW, DEMO_PICTURES, demoThreadElement, inShell, JACKET_DETAIL, listOf, ME, NOW, PANTS_DETAIL, PREFIX, PROSPECT_VIEW, QUOTED_VIEW, ROWS, STYLE_OPTIONS, threadModel, VIEW, type RoleCase } from '../../demo/fixtures'
+// B-TH-228: Make order, Make style draft.
+import { ORDERABLE_VIEW, ORDERED_VIEW } from '../../demo/fixtures'
+import { orderDraftOf, styleDraftOf } from '../../model'
 import type { InquiryView } from '../../api'
 import { HOME_ADDRESS } from '../../model'
 import type { InquiryRecordModel } from '../../record-model'
@@ -105,5 +108,16 @@ export const designScreen = defineDesignScreen<PaneCase>({
     { id: 'pane-quote', label: 'TH-1b · Make quote (a DRAFT): what goes over and what is left out; the customer is not told yet', model: paneCase(VIEW, 'owner', { dialog: { kind: 'quote', customerRef: '', busy: false, notice: null } }) },
     { id: 'pane-decline', label: 'TH-1b · Decline: the reason, an optional message (off by default)', model: paneCase(VIEW, 'owner', { dialog: { kind: 'decline', draft: { reason: 'LEAD_TIME', note: '', message: '' }, busy: false, notice: null } }) },
     { id: 'pane-loading', label: 'TH-1b · The request being read', model: paneCase(VIEW, 'owner', { loaded: { status: 'loading' } }) },
+    // ---- B-TH-228 (TH-2): Make order and Make style draft
+    { id: 'th-228-order-held', label: 'TH-2 · Make order held: a line asked in words — "make the style draft first" (the API’s words on hover)', model: paneCase(VIEW), note: 'Make quote stays the main button (something to quote); Make order is beside it, held with the API’s reason: line 30 has no colourway, line 40 no style yet.' },
+    { id: 'th-228-style-main', label: 'TH-2 · Only a line in words: Make style draft is the main button', model: paneCase({ ...VIEW, lines: VIEW.lines.slice(3) }), note: 'Nothing can go on a quote; the glove asked in words needs its style first.' },
+    { id: 'th-228-order', label: 'TH-2 · Make order: lines, the price the customer was shown, the date, their PO, the files going with it', model: paneCase(ORDERABLE_VIEW, 'owner', { dialog: { kind: 'order', draft: orderDraftOf(ORDERABLE_VIEW, canFor('owner')), busy: false, notice: null } }), note: 'The order goes through the normal checks and comes out Confirmed or Waiting for approval — the receipt says which. ⌘↵ makes it.' },
+    { id: 'th-228-order-waits', label: 'TH-2 · The receipt: made, waiting for approval (credit) — never “confirmed”; a file that did not go with it', model: paneCase(ORDERED_VIEW, 'owner', { notice: { key: 'done.orderCredit', params: { order: 'SO-2026-0142', number: ORDERED_VIEW.number }, tone: 'warning', link: { href: `${PREFIX}/sales/orders/x`, label: { key: 'done.openOrder', params: { order: 'SO-2026-0142' } } }, lines: [{ key: 'done.filesCarried', params: { count: 2 } }, { key: 'done.fileNotCarried', params: { name: 'size chart.xlsx', reason: 'The file is still being checked.' } }] } }), note: 'The request is Ordered and names the order with ITS own state.' },
+    { id: 'th-228-style-draft', label: 'TH-2 · Make style draft: code, name, type, scale, which files go — for the request’s own customer’s label', model: paneCase(VIEW, 'owner', { dialog: { kind: 'styleDraft', draft: { ...styleDraftOf(VIEW), code: 'GL-SS27', productType: 'GLOVES' }, scales: { status: 'ready', value: [{ id: 'sc-1', code: 'EU-GLOVE', name: 'Gloves S–XXL' }, { id: 'sc-2', code: 'EU-46-60', name: 'Jackets 46–60' }] }, busy: false, notice: null } }), note: 'The brand is the request’s customer (shown, never chosen). A style needs a released version and a colourway before an order takes it.' },
+    { id: 'th-228-style-production', label: 'TH-2 · The production manager may make a style draft (every sales action held)', model: paneCase({ ...VIEW, lines: VIEW.lines.slice(3) }, 'production', { dialog: { kind: 'styleDraft', draft: styleDraftOf(VIEW), scales: { status: 'loading' }, busy: false, notice: null } }) },
+    { id: 'th-228-made-from', label: 'TH-2 · Made from it: the style draft with its own state (opens in a new tab)', model: paneCase(ORDERABLE_VIEW), note: 'Details › Made from it lists the style draft TJ-SS27 (Draft); Make order may go (every line ready).' },
+    // ---- end B-TH-228
+    // B-TH-230: New messages beside the reading pane (the e-mail-like list keeps the count under the request's words).
+    { id: 'th-230-pane-new', label: 'TH-2 · New messages beside the pane: "● 2 new" under the request; amber waiting by the one rule', model: paneCase(VIEW, 'owner', {}, { unread: { [ROWS[0]!.id]: { newCount: 2, lastAt: '2026-11-17T09:42:00.000Z' }, [ROWS[2]!.id]: { newCount: 3, lastAt: '2026-11-16T15:10:00.000Z' } } }) },
   ],
 })

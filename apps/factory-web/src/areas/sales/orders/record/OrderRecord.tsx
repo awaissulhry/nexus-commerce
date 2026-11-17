@@ -1,6 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+// B-TH-228: the request the order was made from (the source read).
+import { getTechPack } from '../depth/api'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
@@ -389,6 +391,21 @@ function RecordContainer({ orderId }: { orderId: string }) {
 
   const reviewBanner = useReviewBanner(api, order.status === 'ready' ? order.value : null, session.permissions, prefix) // B-W2b-368
 
+  // ---- B-TH-228: the request an order was made from straight (no quote between) — the band's "Made from INQ-… — Open". The source
+  // read answers nothing to a person who may not read that request (office only: the portal never reads it).
+  const [madeFrom, setMadeFrom] = useState<{ id: string; number: string } | null>(null)
+  const readsRequests = session.permissions.includes('sales.inquiries.view')
+  const straightId = order.status === 'ready' && order.value.chain.quote === null ? order.value.id : null
+  useEffect(() => {
+    if (!straightId || !readsRequests) return setMadeFrom(null)
+    const abort = new AbortController()
+    getTechPack(api, straightId, abort.signal)
+      .then((answer) => setMadeFrom(answer.inquiry ? { id: answer.inquiry.id, number: answer.inquiry.number } : null))
+      .catch(() => setMadeFrom(null))
+    return () => abort.abort()
+  }, [api, straightId, readsRequests])
+  // ---- end B-TH-228
+
   const model: OrderRecordModel = {
     depth: depth.model, // B-W2b-323
     reviewBanner: createElement(ReviewBanner, { model: reviewBanner.model, onRetry: reviewBanner.retry }), // B-W2b-368
@@ -403,6 +420,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     sdi,
     versions,
     personId: session.user.id, // B-TH-214
+    madeFrom, // B-TH-228
     changed,
     notice,
     busy,

@@ -23,8 +23,10 @@ import {
   type TypedSource,
 } from '@nexus/factory-domain/sales/inquiries/rules'
 import type { LineBody, UpdateInquiryBody } from '@nexus/factory-domain/sales/inquiries/contracts'
+// B-TH-230: the one waiting rule (amber).
+import { amberOf, WAITING_THRESHOLD_DAYS } from '@nexus/factory-domain/threads/waiting'
 import { isApiError, issuePath } from '../../../lib/api/errors'
-import type { InquiryLine, InquiryList, InquiryRow, InquiryView } from './api'
+import type { InquiryFile, InquiryLine, InquiryList, InquiryRow, InquiryView } from './api'
 
 /**
  * Sales › Inquiries (SCR-105, B-W2b-322 on B-W2b-295's API), pure: who may do what, the page's address (the tiles = the API's
@@ -90,6 +92,12 @@ export interface InquiriesCan {
   email: boolean
   /** "Make an inquiry" from a mail (email.triage). */
   triage: boolean
+  // ---- B-TH-228: Make order (orders.manage) and the order as a link (orders.view); Make style draft (product.styles.manage: the
+  // production manager too) and the drafts as links (product.styles.view).
+  orders?: boolean
+  ordersView?: boolean
+  stylesManage?: boolean
+  // ---- end B-TH-228
 }
 
 export function inquiriesCan(permissions: readonly string[]): InquiriesCan {
@@ -108,11 +116,15 @@ export function inquiriesCan(permissions: readonly string[]): InquiriesCan {
     files: has('files.read'),
     email: has('email.send'),
     triage: has('email.triage'),
+    // B-TH-228
+    orders: has('orders.manage'),
+    ordersView: has('orders.view'),
+    stylesManage: has('product.styles.manage'),
   }
 }
 
 /** The rights a held verb may name, each with words (`right.<permission>`). */
-export const KNOWN_RIGHTS = ['sales.inquiries.manage', 'quotes.manage', 'email.send', 'files.upload', 'email.triage'] as const
+export const KNOWN_RIGHTS = ['sales.inquiries.manage', 'quotes.manage', 'email.send', 'files.upload', 'email.triage', 'orders.manage', 'product.styles.manage'] as const
 
 // ---- the page's address ---------------------------------------------------------------------------------------------------
 
@@ -349,8 +361,11 @@ export function waitingOf(row: Pick<InquiryRow, 'waiting'>): { readonly phrase: 
   const { waiting } = row
   if (waiting.for === null) return null
   const time = waiting.workingMinutes === null ? null : workingTime(waiting.workingMinutes)
-  if (waiting.for === 'CUSTOMER') return { phrase: { key: 'waiting.customer' }, tone: 'warning', time }
-  return { phrase: { key: waiting.overdue ? 'waiting.usOverdue' : 'waiting.us' }, tone: waiting.overdue ? 'danger' : 'neutral', time }
+  // B-TH-230: amber by the ONE waiting rule (factory-domain threads/waiting: a request waiting on us past 1 working day) — the same
+  // as the thread head's pill and Today; waiting on the customer is never amber (it is not ours to answer).
+  if (waiting.for === 'CUSTOMER') return { phrase: { key: 'waiting.customer' }, tone: 'neutral', time }
+  const amber = waiting.workingMinutes !== null && amberOf({ on: 'US', since: new Date(0), thresholdDays: WAITING_THRESHOLD_DAYS.REQUEST }, waiting.workingMinutes)
+  return { phrase: { key: amber ? 'waiting.usOverdue' : 'waiting.us' }, tone: amber ? 'warning' : 'neutral', time }
 }
 
 /**
@@ -407,10 +422,118 @@ export function actionHeld(view: InquiryView, action: keyof InquiryView['actions
   if (!can.manage) return { key: 'held.right', params: { right: 'right.sales.inquiries.manage' } }
   // B-TH-025 / B-TH-026: Make order and Make style draft are optional in the answer (always sent by the API).
   if (!state) return { key: 'held.notNow' }
-  if (!state.allowed) return state.refusal ? refusalPhrase(state.refusal.code, view.number) : action === 'quote' && !can.quotes ? { key: 'held.right', params: { right: 'right.quotes.manage' } } : { key: 'held.notNow' }
+  if (!state.allowed)
+    return state.refusal
+      ? refusalPhrase(state.refusal.code, view.number)
+      : action === 'quote' && !can.quotes
+        ? { key: 'held.right', params: { right: 'right.quotes.manage' } }
+        : action === 'order' && !can.orders // B-TH-228
+          ? { key: 'held.right', params: { right: 'right.orders.manage' } }
+          : { key: 'held.notNow' }
   if (offline) return { key: 'held.offline' }
   return null
 }
+
+// ---- B-TH-228 (threads plan TH-2; pane-actions-F02 / F04): Make order and Make style draft ----------------------------------
+
+/**
+ * Make style draft is the product office's action (product.styles.manage over the request's company): the production manager may,
+ * so it is NOT held by the sales right. The API's own `actions.styleDraft` decides (closed, a prospect, the most drafts), then the
+ * right, then offline.
+ */
+export function styleDraftHeld(view: InquiryView, can: InquiriesCan, offline: boolean): Phrase | null {
+  const state = view.actions.styleDraft
+  if (!can.stylesManage) return { key: 'held.needs', params: { right: 'right.product.styles.manage' } }
+  if (!state) return { key: 'held.notNow' }
+  if (!state.allowed) return state.refusal ? refusalPhrase(state.refusal.code, view.number) : { key: 'held.notNow' }
+  if (offline) return { key: 'held.offline' }
+  return null
+}
+
+/** What Make order sends, as typed: a price per line (blank = the customer's list price), the promise date, their PO, the files. */
+export interface OrderDraft {
+  /** By the line's seq: the unit price typed (on the order's basis), '' = the list price. */
+  readonly prices: Readonly<Record<number, string>>
+  readonly promiseDate: string | null
+  readonly customerRef: string
+  readonly carryFiles: boolean
+}
+
+/** The dialog starts from the request: the price the customer was shown on each line (price grain only), their date and PO, files on. */
+export function orderDraftOf(view: InquiryView, can: InquiriesCan): OrderDraft {
+  const prices: Record<number, string> = {}
+  for (const line of view.lines) prices[line.seq] = can.price && typeof line.unitPriceShown === 'string' ? line.unitPriceShown : ''
+  return { prices, promiseDate: view.wantedDate, customerRef: view.customerRef ?? '', carryFiles: true }
+}
+
+/** A typed price as the API takes it (a decimal string, a comma accepted), or null when it is not one. */
+export function priceOf(typed: string): string | null {
+  const value = typed.trim().replace(',', '.')
+  return /^\d{1,12}(\.\d{1,6})?$/.test(value) ? value : null
+}
+
+/** Why Make order waits (the API's own rule first, then a price that is not a price), or null. */
+export function orderHeld(view: InquiryView, draft: OrderDraft, can: InquiriesCan, offline: boolean): Phrase | null {
+  const held = actionHeld(view, 'order', can, offline)
+  if (held) return held
+  const bad = view.lines.find((line) => (draft.prices[line.seq] ?? '').trim() !== '' && priceOf(draft.prices[line.seq] ?? '') === null)
+  if (bad) return { key: 'order.badPrice', params: { n: bad.seq / 10 } }
+  return null
+}
+
+/** The Make order body: only the prices typed (a price is sent only with the price grain), the date, the PO, carrying the files. */
+export function orderBodyOf(view: InquiryView, draft: OrderDraft, can: InquiriesCan): { version: number; lines?: Array<{ seq: number; unitPrice: string }>; promiseDate?: string | null; customerRef?: string; carryFiles: boolean } {
+  const lines = can.price ? view.lines.flatMap((line) => { const price = priceOf(draft.prices[line.seq] ?? ''); return price ? [{ seq: line.seq, unitPrice: price }] : [] }) : []
+  const ref = draft.customerRef.trim()
+  return { version: view.version, ...(lines.length > 0 ? { lines } : {}), ...(draft.promiseDate !== view.wantedDate ? { promiseDate: draft.promiseDate } : {}), ...(ref ? { customerRef: ref } : {}), carryFiles: draft.carryFiles }
+}
+
+/** The request's files that may go with what is made from it (its own and its mail's), as the dialogs list them. */
+export const carriableFiles = (view: Pick<InquiryView, 'files' | 'mailFiles'>): InquiryFile[] => [...view.files, ...view.mailFiles]
+
+/** What Make order says when it is done: confirmed, or waiting for approval and why — never "confirmed" while it waits (L2-G06). */
+export function orderDonePhrase(made: { order: { number: string; status: 'CONFIRMED' | 'PENDING_APPROVAL'; waitsFor: 'CREDIT' | 'APPROVAL' | null } }, number: string): Phrase {
+  const params = { order: made.order.number, number }
+  if (made.order.status === 'CONFIRMED') return { key: 'done.orderConfirmed', params }
+  return { key: made.order.waitsFor === 'CREDIT' ? 'done.orderCredit' : 'done.orderApproval', params }
+}
+
+/** The style the request becomes a draft of, as typed. */
+export interface StyleDraftDraft {
+  readonly code: string
+  readonly name: string
+  readonly productType: string
+  readonly sizeScaleId: string
+  readonly season: string
+  /** The request's files to carry to the style. */
+  readonly fileIds: readonly string[]
+}
+
+/** The first line of the request, as a style's name starts (at most 200 characters). */
+const subjectOf = (view: Pick<InquiryView, 'request' | 'number'>): string => (view.request.split(/\r?\n/).find((line) => line.trim() !== '')?.trim() ?? view.number).slice(0, 200)
+
+export function styleDraftOf(view: InquiryView): StyleDraftDraft {
+  return { code: '', name: subjectOf(view), productType: '', sizeScaleId: '', season: '', fileIds: carriableFiles(view).map((file) => file.id) }
+}
+
+/** The style library's code rule (factory-domain product/styles STYLE_CODE). */
+const STYLE_CODE = /^[A-Z0-9](?:[A-Z0-9._-]{0,22}[A-Z0-9])?$/
+
+/** Why Make style draft waits (the API's rule and the right first, then the code and the product type), or null. */
+export function styleDraftDialogHeld(view: InquiryView, draft: StyleDraftDraft, can: InquiriesCan, offline: boolean): Phrase | null {
+  const held = styleDraftHeld(view, can, offline)
+  if (held) return held
+  if (!STYLE_CODE.test(draft.code.trim().toUpperCase())) return { key: 'styleDraft.held.code' }
+  if (!draft.productType) return { key: 'styleDraft.held.type' }
+  return null
+}
+
+export function styleDraftBodyOf(view: InquiryView, draft: StyleDraftDraft): { version: number; code: string; name?: string; productType: string; sizeScaleId?: string; season?: string; fileIds: string[] } {
+  const name = draft.name.trim()
+  const season = draft.season.trim()
+  return { version: view.version, code: draft.code.trim().toUpperCase(), ...(name ? { name } : {}), productType: draft.productType, ...(draft.sizeScaleId ? { sizeScaleId: draft.sizeScaleId } : {}), ...(season ? { season } : {}), fileIds: [...draft.fileIds] }
+}
+// ---- end B-TH-228
 
 // ---- the selection (Assign to…, Decline N) -------------------------------------------------------------------------------------
 

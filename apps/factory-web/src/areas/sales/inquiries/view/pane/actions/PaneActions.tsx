@@ -1,6 +1,6 @@
 'use client'
 
-import { FilePlus2, MessageCircleQuestion, MoreHorizontal, XCircle } from 'lucide-react'
+import { FilePlus2, MessageCircleQuestion, MoreHorizontal, PackagePlus, Shirt, XCircle } from 'lucide-react'
 import { Menu, type MenuItemDef } from '@nexus/ui/components'
 import { Button } from '@nexus/ui/primitives'
 import type { InquiryView } from '../../../api'
@@ -8,8 +8,8 @@ import { useWords } from '../../../parts'
 import type { InquiryRecordActions, InquiryRecordModel } from '../../../record-model'
 import { paneActions, type PaneAction } from './model'
 
-const ICON = { quote: FilePlus2, askInfo: MessageCircleQuestion, decline: XCircle } as const
-const KEY = { quote: 'q', askInfo: undefined, decline: 'd' } as const
+const ICON = { quote: FilePlus2, askInfo: MessageCircleQuestion, decline: XCircle, order: PackagePlus, styleDraft: Shirt } as const
+const KEY = { quote: 'q', askInfo: undefined, decline: 'd', order: undefined, styleDraft: undefined } as const
 
 /**
  * Row 2 of the reading pane and the full page's side (B-TH-218): ONE main button that follows the request, the other actions

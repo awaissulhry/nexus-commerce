@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, type ReactNode } from 'react'
-import { FilePlus2, XCircle } from 'lucide-react'
+import { FilePlus2, PackagePlus, Shirt, XCircle } from 'lucide-react'
 import { Banner, Field, SummaryTable } from '@nexus/ui/components'
-import { Button, Input, RadioCard, Skeleton } from '@nexus/ui/primitives'
-import { Modal, Textarea } from '../../../../lib/i18n/ds-parts'
-import type { Assignees } from '../api'
+import { Button, Checkbox, Input, RadioCard, Select, Skeleton } from '@nexus/ui/primitives'
+import { DateField, FileRow, Modal, Textarea } from '../../../../lib/i18n/ds-parts'
+import type { Assignees, InquiryFile, InquiryLine, ScaleOption } from '../api'
+// B-TH-228: Make order, Make style draft.
+import type { OrderDraft, StyleDraftDraft } from '../model'
 import { DECLINE_REASONS, declineHeld, lostHeld, type DeclineDraft, type DeclineReason, type Loaded, type Notice, type Phrase, type QuotePreview } from '../model'
 import { NoticeLine, useWords } from '../parts'
 import { ListboxPanel } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
@@ -315,6 +317,235 @@ export function QuoteDialog({ model, actions }: { model: QuoteModel; actions?: Q
           </Banner>
         )}
         <p className="fw-inq-hint">{t('quote.closes')}</p>
+      </div>
+    </Modal>
+  )
+}
+
+// ---- B-TH-228: Make order ------------------------------------------------------------------------------------------------------
+
+export interface OrderModel {
+  readonly subject: Phrase
+  readonly customer: string
+  readonly contact: string | null
+  /** The request's lines: each goes on the order (a line not ready holds the button, in the API's words). */
+  readonly lines: readonly InquiryLine[]
+  readonly draft: OrderDraft
+  /** The price grain: prices typed per line; without it the customer's list price, said. */
+  readonly prices: boolean
+  readonly currency: string
+  readonly files: readonly InquiryFile[]
+  /** Why Make order waits (a line not ready: "make the style draft first"; no right; a price that is not one; offline), else null. */
+  readonly held: Phrase | null
+  readonly busy: boolean
+  readonly notice: Notice | null
+}
+
+export interface OrderActions {
+  onDraft?: (patch: Partial<OrderDraft>) => void
+  onSubmit?: () => void
+  onClose?: () => void
+}
+
+/**
+ * Make order (pane-actions-F02; B-TH-025): the order made straight from the request — its lines with their pieces, a unit price per
+ * line (blank = the customer's list price; the price the customer was shown is filled in; prices only with the price grain), the
+ * promise date (the wanted date while it is ahead), their PO, and the request's files going with it. The order goes through the
+ * normal checks and comes out Confirmed or Waiting for approval: the receipt says which (never "confirmed" while it waits). ⌘↵ makes it.
+ */
+export function OrderDialog({ model, actions }: { model: OrderModel; actions?: OrderActions }) {
+  const { t, say } = useWords()
+  const held = model.busy ? t('common.working') : say(model.held)
+  const submit = () => actions?.onSubmit?.()
+  useSubmitKey(submit, !!held)
+  const pieces = (line: InquiryLine) => Object.values(line.sizes).reduce((sum, value) => sum + value, 0) || (line.quantity ?? 0)
+  return (
+    <Modal
+      open
+      onClose={() => actions?.onClose?.()}
+      size="lg"
+      title={t('order.title')}
+      subtitle={say(model.subject) ?? undefined}
+      footer={
+        <Buttons onClose={actions?.onClose}>
+          <Button variant="primary" heldReason={held} onClick={submit} aria-keyshortcuts="Meta+Enter">
+            <PackagePlus size={14} aria-hidden /> {t('order.go')}
+          </Button>
+        </Buttons>
+      }
+    >
+      <div className="fw-inq-dialog">
+        <NoticeLine notice={model.notice} />
+        <div className="fw-inq-form-grid">
+          <Field label={t('order.customer')}>
+            <span className="fw-inq-value">{model.customer}</span>
+          </Field>
+          <Field label={t('order.contact')}>
+            <span className="fw-inq-value">{model.contact ?? '—'}</span>
+          </Field>
+          <Field label={t('order.promise')} hint={t('order.promiseHint')}>
+            <DateField value={model.draft.promiseDate ?? ''} clearable onChange={(value) => actions?.onDraft?.({ promiseDate: value || null })} />
+          </Field>
+          <Field label={t('order.customerRef')} hint={t('order.customerRefHint')}>
+            <Input size="sm" value={model.draft.customerRef} maxLength={100} onChange={(event) => actions?.onDraft?.({ customerRef: event.target.value })} />
+          </Field>
+        </div>
+        <h3 className="fw-inq-h3">{t('order.lines', { count: model.lines.length })}</h3>
+        <SummaryTable
+          label={t('order.linesLabel')}
+          columns={[t('order.col.n'), t('order.col.style'), t('order.col.pieces'), ...(model.prices ? [t('order.col.price')] : [])]}
+          rows={model.lines.map((line) => ({
+            id: String(line.seq),
+            cells: [
+              String(line.seq / 10),
+              line.style ? `${line.style.code}${line.colourway ? ` · ${line.colourway.code}` : ''}` : (line.description ?? '—'),
+              <span key="n" className="fw-inq-num">{pieces(line)}</span>,
+              ...(model.prices
+                ? [
+                    <Input
+                      key="p"
+                      size="sm"
+                      inputMode="decimal"
+                      aria-label={`${t('order.col.price')} · ${t('order.col.n')} ${line.seq / 10}`}
+                      placeholder={t('order.pricePlaceholder')}
+                      value={model.draft.prices[line.seq] ?? ''}
+                      onChange={(event) => actions?.onDraft?.({ prices: { ...model.draft.prices, [line.seq]: event.target.value } })}
+                    />,
+                  ]
+                : []),
+            ],
+          }))}
+        />
+        <p className="fw-inq-hint">{model.prices ? `${t('order.priceHint')} (${model.currency})` : t('order.priceHidden')}</p>
+        <h3 className="fw-inq-h3">{t('order.files', { count: model.files.length })}</h3>
+        {model.files.length === 0 ? (
+          <p className="fw-inq-hint">{t('order.noFiles')}</p>
+        ) : (
+          <>
+            <Checkbox checked={model.draft.carryFiles} onChange={(event) => actions?.onDraft?.({ carryFiles: event.target.checked })} label={t('order.carry')} />
+            <div className="fw-inq-files">
+              {model.files.map((file) => (
+                <FileRow key={file.id} name={file.originalName} size={file.sizeBytes} />
+              ))}
+            </div>
+          </>
+        )}
+        <Banner tone="info" title={t('order.checks')} />
+        <p className="fw-inq-hint">{t('order.closes')}</p>
+      </div>
+    </Modal>
+  )
+}
+
+// ---- B-TH-228: Make style draft --------------------------------------------------------------------------------------------------
+
+export const PRODUCT_TYPES = ['JACKET', 'TROUSERS', 'SUIT', 'GLOVES', 'VEST', 'OTHER'] as const
+
+export interface StyleDraftModel {
+  readonly subject: Phrase
+  /** The request's own customer: the label on the garment (never another brand; the API takes it from the request). */
+  readonly customer: string
+  readonly draft: StyleDraftDraft
+  readonly scales: Loaded<readonly ScaleOption[]>
+  readonly files: readonly InquiryFile[]
+  readonly held: Phrase | null
+  readonly busy: boolean
+  readonly notice: Notice | null
+}
+
+export interface StyleDraftActions {
+  onDraft?: (patch: Partial<StyleDraftDraft>) => void
+  onSubmit?: () => void
+  onClose?: () => void
+}
+
+/**
+ * Make style draft (pane-actions-F04; B-TH-026): a DRAFT style for the request's own customer's label (shown, not chosen: W12), its
+ * code, name (the request's first line), product type, an optional size scale and season, and which of the request's photos and
+ * files go with it. The request stays open and names the draft; a style needs a released version and a colourway before an order
+ * takes it (said). The production manager may make one. ⌘↵ makes it.
+ */
+export function StyleDraftDialog({ model, actions }: { model: StyleDraftModel; actions?: StyleDraftActions }) {
+  const { t, say } = useWords()
+  const held = model.busy ? t('common.working') : say(model.held)
+  const submit = () => actions?.onSubmit?.()
+  useSubmitKey(submit, !!held)
+  const picked = new Set(model.draft.fileIds)
+  return (
+    <Modal
+      open
+      onClose={() => actions?.onClose?.()}
+      size="lg"
+      title={t('styleDraft.title')}
+      subtitle={say(model.subject) ?? undefined}
+      footer={
+        <Buttons onClose={actions?.onClose}>
+          <Button variant="primary" heldReason={held} onClick={submit} aria-keyshortcuts="Meta+Enter">
+            <Shirt size={14} aria-hidden /> {t('styleDraft.go')}
+          </Button>
+        </Buttons>
+      }
+    >
+      <div className="fw-inq-dialog">
+        <NoticeLine notice={model.notice} />
+        <div className="fw-inq-form-grid">
+          <Field label={t('styleDraft.code')} hint={t('styleDraft.codeHint')} required>
+            <Input size="sm" value={model.draft.code} maxLength={24} autoCapitalize="characters" onChange={(event) => actions?.onDraft?.({ code: event.target.value.toUpperCase() })} />
+          </Field>
+          <Field label={t('styleDraft.name')} hint={t('styleDraft.nameHint')}>
+            <Input size="sm" value={model.draft.name} maxLength={200} onChange={(event) => actions?.onDraft?.({ name: event.target.value })} />
+          </Field>
+          <Field label={t('styleDraft.type')} required>
+            <Select size="sm" value={model.draft.productType} onChange={(event) => actions?.onDraft?.({ productType: event.target.value })}>
+              <option value="">{t('styleDraft.typeChoose')}</option>
+              {PRODUCT_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {t(`styleDraft.types.${type}`)}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label={t('styleDraft.scale')} hint={model.scales.status === 'error' ? t('styleDraft.scalesFailed') : model.scales.status === 'loading' ? t('styleDraft.scalesLoading') : t('styleDraft.scaleHint')}>
+            <Select size="sm" value={model.draft.sizeScaleId} disabled={model.scales.status !== 'ready'} onChange={(event) => actions?.onDraft?.({ sizeScaleId: event.target.value })}>
+              <option value="">{t('styleDraft.scaleNone')}</option>
+              {model.scales.status === 'ready' &&
+                model.scales.value.map((scale) => (
+                  <option key={scale.id} value={scale.id}>
+                    {scale.code} · {scale.name}
+                  </option>
+                ))}
+            </Select>
+          </Field>
+          <Field label={t('styleDraft.season')} hint={t('styleDraft.seasonHint')}>
+            <Input size="sm" value={model.draft.season} maxLength={20} onChange={(event) => actions?.onDraft?.({ season: event.target.value })} />
+          </Field>
+          <Field label={t('styleDraft.brand')}>
+            <span className="fw-inq-value">{t('styleDraft.brandValue', { customer: model.customer })}</span>
+          </Field>
+        </div>
+        <h3 className="fw-inq-h3">{t('styleDraft.files', { count: picked.size })}</h3>
+        {model.files.length === 0 ? (
+          <p className="fw-inq-hint">{t('styleDraft.noFiles')}</p>
+        ) : (
+          <div className="fw-inq-files">
+            {model.files.map((file) => (
+              <FileRow
+                key={file.id}
+                name={file.originalName}
+                size={file.sizeBytes}
+                actions={
+                  <Checkbox
+                    checked={picked.has(file.id)}
+                    aria-label={file.originalName}
+                    onChange={(event) => actions?.onDraft?.({ fileIds: event.target.checked ? [...model.draft.fileIds, file.id] : model.draft.fileIds.filter((id) => id !== file.id) })}
+                  />
+                }
+              />
+            ))}
+          </div>
+        )}
+        <Banner tone="info" title={t('styleDraft.released')} />
+        <p className="fw-inq-hint">{t('styleDraft.stays')}</p>
       </div>
     </Modal>
   )

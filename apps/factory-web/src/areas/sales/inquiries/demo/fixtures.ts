@@ -38,7 +38,7 @@ const template = (key: string): string[] => {
 
 /** The role cases the design names: sales (answers, quotes), a reader (no change, no price), nobody. */
 export const ROLE_PERMISSIONS = {
-  owner: [...OWNER_PERMISSIONS, ...template('sales'), 'sales.inquiries.view', 'sales.inquiries.manage', 'quotes.manage', 'quotes.view', 'money.price', 'parties.view', 'product.styles.view', 'threads.read', 'files.read', 'files.upload', 'email.send', 'email.triage'],
+  owner: [...OWNER_PERMISSIONS, ...template('sales'), 'sales.inquiries.view', 'sales.inquiries.manage', 'quotes.manage', 'quotes.view', 'money.price', 'parties.view', 'product.styles.view', 'threads.read', 'files.read', 'files.upload', 'email.send', 'email.triage', 'orders.manage', 'orders.view', 'product.styles.manage'], // B-TH-228: + orders, styles
   sales: template('sales'),
   reader: template('read_only'),
   warehouse: template('warehouse'),
@@ -257,6 +257,9 @@ export const VIEW: InquiryView = {
     decline: { allowed: true, refusal: null },
     lose: { allowed: true, refusal: null },
     quote: { allowed: true, refusal: null },
+    // B-TH-228: line 30 has no colourway, line 40 no style yet → Make order held in the API's words; a style draft may be made.
+    order: { allowed: false, refusal: { code: 'LINES_NOT_READY', message: 'x' } },
+    styleDraft: { allowed: true, refusal: null },
   },
 }
 
@@ -269,6 +272,9 @@ const closedActions: InquiryView['actions'] = {
   decline: { allowed: false, refusal: { code: 'CLOSED', message: 'x' } },
   lose: { allowed: false, refusal: { code: 'CLOSED', message: 'x' } },
   quote: { allowed: false, refusal: { code: 'CLOSED', message: 'x' } },
+  // B-TH-228
+  order: { allowed: false, refusal: { code: 'CLOSED', message: 'x' } },
+  styleDraft: { allowed: false, refusal: { code: 'CLOSED', message: 'x' } },
 }
 
 /** A prospect's inquiry from the office: nobody has it, it waits for a customer before a quote. */
@@ -290,8 +296,19 @@ export const PROSPECT_VIEW: InquiryView = {
   closedBy: null,
   createdBy: { id: ME, name: DEMO_USER.displayName },
   createdAt: at(12, 9, 12),
-  actions: { ...VIEW.actions, unassign: { allowed: false, refusal: { code: 'NOT_ASSIGNED', message: 'x' } }, quote: { allowed: false, refusal: { code: 'NEEDS_CUSTOMER', message: 'x' } } },
+  actions: { ...VIEW.actions, unassign: { allowed: false, refusal: { code: 'NOT_ASSIGNED', message: 'x' } }, quote: { allowed: false, refusal: { code: 'NEEDS_CUSTOMER', message: 'x' } }, order: { allowed: false, refusal: { code: 'NEEDS_CUSTOMER', message: 'x' } }, styleDraft: { allowed: false, refusal: { code: 'NEEDS_CUSTOMER', message: 'x' } } },
 }
+
+// ---- B-TH-228: a request whose every line is ready (a style, its colourway, pieces by size): Make order may go; a style draft made
+// from another request; and the request made straight into an order (ORDERED, the order with ITS own state).
+export const ORDERABLE_VIEW: InquiryView = {
+  ...VIEW,
+  lines: VIEW.lines.slice(0, 2).map((line, index) => ({ ...line, unitPriceShown: (index === 0 ? price('139.00') : price(null)) as InquiryView['lines'][number]['unitPriceShown'] })),
+  customerRef: 'PO-DEMO-0042',
+  actions: { ...VIEW.actions, order: { allowed: true, refusal: null } },
+  styleDrafts: [{ id: uid('5901', 1), code: 'TJ-SS27', name: 'Touring jacket SS27', status: 'DRAFT' }],
+}
+// ---- end B-TH-228
 
 /** A quoted inquiry: closed, its quote, its value (a price). */
 export const QUOTED_VIEW: InquiryView = {
@@ -313,6 +330,15 @@ export const QUOTED_VIEW: InquiryView = {
   createdBy: { id: OTHER, name: 'Marco Demo' },
   createdAt: at(3, 11, 1),
   actions: closedActions,
+}
+
+/** B-TH-228: made straight into an order — the order with ITS own state (it waits for approval: never "confirmed"). */
+export const ORDERED_VIEW: InquiryView = {
+  ...QUOTED_VIEW,
+  status: 'ORDERED',
+  quote: null,
+  quoteDetail: null,
+  order: { id: uid('5951', 1), number: 'SO-2026-0142', status: 'PENDING_APPROVAL' },
 }
 
 /** A declined inquiry: read-only but for its note. */

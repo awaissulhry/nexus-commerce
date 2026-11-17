@@ -269,7 +269,8 @@
     "readOnly": "Sola lettura: il tuo ruolo segue gli ordini e non ne cambia nessuno.",
     "amended": "Modificato · rev. {revision}",
     "reapproval": "In attesa che il cliente accetti la modifica",
-    "typed": "Inserito dall'ufficio"
+    "typed": "Inserito dall'ufficio",
+    "madeFrom": "Creato da {number} — Apri"
   },
   "held": {
     "busy": "Sto salvando l'ultima modifica…",

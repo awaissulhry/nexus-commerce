@@ -81,6 +81,8 @@ export interface OrderRecordModel {
   versions: Part<VersionsAnswer> | null
   /** B-TH-214: the person (the docked thread's width is remembered per person and record type on this device). */
   personId?: string | null
+  /** B-TH-228: the request the order was made from straight (no quote between), for the band's "Made from INQ-… — Open"; office people who read requests only. */
+  madeFrom?: { readonly id: string; readonly number: string } | null
   /** Someone changed the order while a dialog holds typed work: "Changed at 10:42 · Reload". */
   changed: { at: string } | null
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase } | null

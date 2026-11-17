@@ -64,6 +64,8 @@ export const designScreen = defineDesignScreen<RequestCaseBuilder>({
     { id: 'th-222-quote-accepted', label: 'Quote accepted', model: page('QUOTE_ACCEPTED', () => ({ view: { made: { quote: QUOTE(true), order: null } } })) },
     { id: 'th-222-order-waiting', label: 'Order waiting for approval (never "confirmed" before it is)', model: page('ORDER_WAITING', () => ({ view: { made: { quote: QUOTE(true), order: ORDER } } })), note: '“Made into Your order 12” opens the order page.' },
     { id: 'th-222-order-confirmed', label: 'Order confirmed', model: page('ORDER_CONFIRMED', () => ({ view: { made: { quote: QUOTE(true), order: ORDER } } })) },
+    // B-TH-228: made straight into an order by the office (no quote between): the order's own state.
+    { id: 'th-228-ordered-straight', label: 'Made straight into an order, waiting for approval', model: page('ORDER_WAITING', () => ({ view: { made: { quote: null, order: ORDER } } })), note: 'The office made the order from the request (Make order): the page reads the order’s own state — waiting for approval is never “confirmed” — and links “Your order 12”.' },
     { id: 'th-222-declined', label: 'Declined — our message in the thread', model: page('DECLINED') },
     { id: 'th-222-closed', label: 'Closed', model: page('CLOSED') },
     {

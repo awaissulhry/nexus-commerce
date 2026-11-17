@@ -1,6 +1,6 @@
 import type { LiveState } from '../../../shell/live/use-live'
-import type { Assignees, ContactOption, InquiryView, PartyOption, StyleOption } from './api'
-import type { DeclineDraft, InquiriesCan, LineDraft, Loaded, Notice, RecordTab, RequestDraft } from './model'
+import type { Assignees, ContactOption, InquiryView, PartyOption, ScaleOption, StyleOption } from './api'
+import type { DeclineDraft, InquiriesCan, LineDraft, Loaded, Notice, OrderDraft, RecordTab, RequestDraft, StyleDraftDraft } from './model'
 import type { StyleRead } from './view/LinesEditor'
 
 /**
@@ -15,8 +15,11 @@ export type RecordDialog =
   | { readonly kind: 'decline'; readonly draft: DeclineDraft; readonly busy: boolean; readonly notice: Notice | null }
   | { readonly kind: 'lost'; readonly note: string; readonly busy: boolean; readonly notice: Notice | null }
   | { readonly kind: 'quote'; readonly customerRef: string; readonly busy: boolean; readonly notice: Notice | null }
+  // ---- B-TH-228: Make order, Make style draft
+  | { readonly kind: 'order'; readonly draft: OrderDraft; readonly busy: boolean; readonly notice: Notice | null }
+  | { readonly kind: 'styleDraft'; readonly draft: StyleDraftDraft; readonly scales: Loaded<readonly ScaleOption[]>; readonly busy: boolean; readonly notice: Notice | null }
 
-export type RecordVerb = 'quote' | 'assign' | 'decline' | 'lost' | 'askInfo' | 'resume' | 'unassign'
+export type RecordVerb = 'quote' | 'assign' | 'decline' | 'lost' | 'askInfo' | 'resume' | 'unassign' | 'order' | 'styleDraft'
 
 export interface InquiryRecordModel {
   readonly prefix: string
@@ -69,5 +72,8 @@ export interface InquiryRecordActions {
     onRef?: (customerRef: string) => void
     onSubmit?: () => void
     onClose?: () => void
+    // B-TH-228
+    onOrderDraft?: (patch: Partial<OrderDraft>) => void
+    onStyleDraft?: (patch: Partial<StyleDraftDraft>) => void
   }
 }
