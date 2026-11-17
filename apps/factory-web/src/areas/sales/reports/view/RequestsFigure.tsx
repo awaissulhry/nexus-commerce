@@ -13,7 +13,7 @@ type Props = { model: ReportsModel; actions?: ReportsActions | undefined }
 
 /** The period table's columns (the funnel); the customer table shows every part. */
 const BUCKET_FIGURES: readonly RequestFigure[] = ['received', 'quoted', 'ordered']
-const GROUP_FIGURES: readonly RequestFigure[] = ['received', 'quoted', 'ordered', 'declined', 'lost', 'notAnOrder', 'open']
+const GROUP_FIGURES: readonly RequestFigure[] = ['received', 'quoted', 'ordered', 'declined', 'lost', 'withdrawn', 'notAnOrder', 'open'] // B-TH-095: withdrawn
 
 /**
  * B-TH-235 (threads plan X-SAL-REPORTS.drill, L2-G10; on B-TH-052's GET /sales/reports/requests): the intake panel's request

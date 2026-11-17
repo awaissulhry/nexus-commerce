@@ -241,6 +241,8 @@ const requestFigures = output({
   ordered: z.number().int(),
   declined: z.number().int(),
   lost: z.number().int(),
+  /** B-TH-095: withdrawn by the customer from the portal before the office decided. */
+  withdrawn: z.number().int(),
   notAnOrder: z.number().int(),
   /** quoted ÷ (received − not an order), one decimal. */
   quotedPct: pct(),

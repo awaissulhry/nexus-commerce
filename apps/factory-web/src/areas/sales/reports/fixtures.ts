@@ -260,11 +260,12 @@ export const HEADLINE: Headline = {
 
 // ---- B-TH-235: requests received, quoted and ordered (made-up counts, the API's shape) ----------------------------------------
 
-const figures = (received: number, quoted: number, ordered: number, declined: number, lost: number, notAnOrder: number): RequestFigures => {
-  const open = received - quoted - (ordered > quoted ? ordered - quoted : 0) - declined - lost - notAnOrder
+// B-TH-095: `withdrawn` (by the customer, before the office decided), 0 unless given.
+const figures = (received: number, quoted: number, ordered: number, declined: number, lost: number, notAnOrder: number, withdrawn = 0): RequestFigures => {
+  const open = received - quoted - (ordered > quoted ? ordered - quoted : 0) - declined - lost - withdrawn - notAnOrder
   const whole = received - notAnOrder
   const pct = (part: number) => (whole > 0 ? ((part / whole) * 100).toFixed(1) : null)
-  return { received, open: Math.max(0, open), quoted, ordered, declined, lost, notAnOrder, quotedPct: pct(quoted), orderedPct: pct(ordered) }
+  return { received, open: Math.max(0, open), quoted, ordered, declined, lost, withdrawn, notAnOrder, quotedPct: pct(quoted), orderedPct: pct(ordered) }
 }
 export const REQUESTS: Requests = {
   ...head,

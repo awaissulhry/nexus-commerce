@@ -1,5 +1,6 @@
 import { GRAINS, type Grain } from '@nexus/factory-domain/auth/grains/grains'
 import { FIELD_CODE, FIELD_LIMITS, FIELD_TYPES, OPTION_CODE, PICKING_TYPES, type FieldAudience, type FieldType } from '@nexus/factory-domain/fields/rules'
+import { CUSTOMER_FIELD_RECORD_KEYS } from '@nexus/factory-domain/fields/access' // B-TH-242
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { Locale } from '../../../lib/i18n/locales'
 import { RECORD_KEYS, type EditorField, type Field, type FieldChange, type ListValue, type NewFieldBody, type NewValueBody, type Picklist, type RecordKey } from './api'
@@ -100,6 +101,14 @@ export interface FieldDraft {
   linkTo: RecordKey | null
   /** Whose field: null = every company. */
   companyId: string | null
+  // ── B-TH-242 (threads plan TH-4, SHEET-G06, X-ADM-FIELDS.dialog-F01): for every customer, or for one customer only ──
+  /** "For: every customer · one customer". */
+  forCustomer: 'every' | 'one'
+  /** The one customer (null until picked; always null for every customer). */
+  partyId: string | null
+  /** Its name, as the picker or the field's line read it (for the dialog's words only; never sent). */
+  partyName: string | null
+  // ── end B-TH-242 ──
 }
 
 export const newDraft = (section = 'custom'): FieldDraft => ({
@@ -117,6 +126,9 @@ export const newDraft = (section = 'custom'): FieldDraft => ({
   picklistId: null,
   linkTo: null,
   companyId: null,
+  forCustomer: 'every', // B-TH-242
+  partyId: null,
+  partyName: null,
 })
 
 export const draftOfField = (field: Field): FieldDraft => ({
@@ -134,6 +146,10 @@ export const draftOfField = (field: Field): FieldDraft => ({
   picklistId: field.picklist?.id ?? null,
   linkTo: field.linkRecordType,
   companyId: field.companyId,
+  // B-TH-242: a field's customer never changes (shown fixed in its dialog).
+  forCustomer: field.partyId ? 'one' : 'every',
+  partyId: field.partyId,
+  partyName: 'partyName' in field ? ((field as EditorField).partyName ?? null) : null,
 })
 
 /** A key from a label: lower-case letters, digits and underscores from a letter (`Heat number` → `heat_number`). */
@@ -168,6 +184,11 @@ export function withDraft(draft: FieldDraft, patch: Partial<FieldDraft>, grains:
   if (patch.audience !== undefined) {
     if (patch.audience === 'MONEY' && next.grain === null) next.grain = [...grains][0] ?? null
     if (patch.audience !== 'MONEY') next.grain = null
+  }
+  // B-TH-242: back to every customer drops the customer picked.
+  if (patch.forCustomer === 'every') {
+    next.partyId = null
+    next.partyName = null
   }
   if (patch.labelEn !== undefined && !next.codeTyped) next.code = codeFrom(patch.labelEn)
   if (patch.code !== undefined) next.codeTyped = true
@@ -215,6 +236,8 @@ export function draftHeld(draft: FieldDraft, context: DraftContext): string | nu
     if (draft.picklistId === null) return 'wait.list'
   }
   if (!context.editing && draft.type === 'LINK' && draft.linkTo === null) return 'wait.linkTo'
+  // B-TH-242: "For: one customer" waits for the customer.
+  if (!context.editing && draft.forCustomer === 'one' && draft.partyId === null) return 'wait.customer'
   if (context.editing && fieldChangeOf(context.editing, draft) === null) return 'wait.nothingChanged'
   return null
 }
@@ -237,6 +260,8 @@ export function newFieldBody(recordType: RecordKey, draft: FieldDraft): NewField
     shownInPortal: draft.shownInPortal,
     picklistId: PICKING_TYPES.includes(type) ? draft.picklistId : null,
     linkTo: type === 'LINK' ? draft.linkTo : null,
+    // B-TH-242: only on a record type whose records name their customer; for every customer: null.
+    partyId: customerChoiceOn(recordType) && draft.forCustomer === 'one' ? draft.partyId : null,
   }
 }
 
@@ -433,8 +458,41 @@ export function previewField(draft: FieldDraft, picklists: readonly Picklist[], 
     picklist: list ? { id: list.id, code: list.code, labelIt: list.labelIt, labelEn: list.labelEn, values: list.values } : null,
     linkTo: null,
     linkRecordType: draft.linkTo,
+    partyId: draft.forCustomer === 'one' ? draft.partyId : null, // B-TH-242
   }
 }
+
+// ── B-TH-242 (threads plan TH-4, SHEET-G06 / WALL-G08; features X-ADM-FIELDS.dialog-F01, -F02, SHEET.brand-fields-F06; wall W17) ──
+/** "For: every customer · one customer" is offered on the record types whose records name their customer (customers, quotes, orders). */
+export const customerChoiceOn = (recordType: RecordKey): boolean => (CUSTOMER_FIELD_RECORD_KEYS as readonly string[]).includes(recordType)
+
+/**
+ * The dialog's line under "Show in the portal": a field for every customer that the portal shows puts its NAME in every
+ * customer's portal ('Every customer will see this column name in its portal.'), so no customer's name or code reaches the
+ * others through a label. A field for one customer, or one the portal does not show: no line.
+ */
+export function portalLineOf(draft: Pick<FieldDraft, 'shownInPortal' | 'forCustomer' | 'audience' | 'grain'>, portalRecord: boolean): 'portalLine.every' | null {
+  if (!draft.shownInPortal || portalHeld(draft, portalRecord) !== null) return null
+  return draft.forCustomer === 'every' ? 'portalLine.every' : null
+}
+
+/** Where the column will appear, for the preview: on every customer's records, or on one customer's only. */
+export function whereLineOf(draft: Pick<FieldDraft, 'forCustomer' | 'partyName' | 'partyId'>): { key: string; params?: Record<string, string> } {
+  if (draft.forCustomer === 'one') return draft.partyId ? { key: 'customer.previewOne', params: { customer: draft.partyName ?? '…' } } : { key: 'customer.previewPick' }
+  return { key: 'customer.previewEvery' }
+}
+
+/** The customer picker's search refused or failed, in our words (customers are read with the customers' own right). */
+export function customerSearchFault(error: unknown): string {
+  if (isApiError(error) && (error.kind === 'forbidden' || error.kind === 'step_up')) return 'customer.cannotSearch'
+  if (isApiError(error) && error.kind === 'unavailable') return 'fault.offline'
+  return 'customer.searchFailed'
+}
+
+/** The field's line in the grid: its customer ('Brand Alpha only'), or every customer. */
+export const customerLineOf = (field: Pick<EditorField, 'partyId' | 'partyName'>): { key: string; params?: Record<string, string> } =>
+  field.partyId ? { key: 'customer.lineOne', params: { customer: field.partyName ?? '—' } } : { key: 'customer.lineEvery' }
+// ── end B-TH-242 ──
 
 // ── picklists ────────────────────────────────────────────────────────────────────────────────────────────────────────
 

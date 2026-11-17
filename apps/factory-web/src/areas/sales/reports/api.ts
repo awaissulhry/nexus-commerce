@@ -193,7 +193,8 @@ export type QuoteSpeed = z.infer<typeof quoteSpeedSchema>
 // ---- B-TH-235: requests received, quoted and ordered (the intake panel's request figure) ----------------------------------------
 
 /** The parts of the request figure, in the funnel's order (the API's requestFigures; reports.vitest.test.ts holds them equal). */
-export const REQUEST_FIGURES = ['received', 'quoted', 'ordered', 'declined', 'lost', 'notAnOrder', 'open'] as const
+// B-TH-095: `withdrawn` — withdrawn by the customer from the portal before the office decided.
+export const REQUEST_FIGURES = ['received', 'quoted', 'ordered', 'declined', 'lost', 'withdrawn', 'notAnOrder', 'open'] as const
 export type RequestFigure = (typeof REQUEST_FIGURES)[number]
 /** The group of the requests from prospects (no customer yet): one group, named by nobody (the API's PROSPECTS_KEY). */
 export const PROSPECTS_KEY = 'prospects'
@@ -205,6 +206,7 @@ const requestFigures = z.object({
   ordered: z.number(),
   declined: z.number(),
   lost: z.number(),
+  withdrawn: z.number(), // B-TH-095
   notAnOrder: z.number(),
   quotedPct: z.string().nullable(),
   orderedPct: z.string().nullable(),

@@ -11,6 +11,12 @@ import { isOpenRequest, REQUEST_STATE_WORDS, requestStateOf, type PortalRequestS
 import { piecesOfSizes, sizesOf, type InquiryStatus } from '@nexus/factory-domain/sales/inquiries/rules'
 import { priceText } from '@nexus/factory-domain/sales/quotes/quotes'
 import { portalReader, type PortalReader } from '../portal-orders/access'
+// ---- B-TH-095: whether the customer may still withdraw it (before the office decided), and its version for the withdrawal.
+import { can } from '@nexus/factory-domain/core/permissions'
+import { PORTAL_ORDER_REQUESTS_MANAGE } from '@nexus/factory-domain/sales/portal-ordering/permissions'
+import { WITHDRAW_WORDS, withdrawRefusal } from '@nexus/factory-domain/sales/portal-requests/state'
+import { partnerLocaleOf } from '@nexus/factory-domain/threads/partner/rules'
+// ---- end B-TH-095
 
 /**
  * The customer's requests as its portal reads them (B-TH-103 partner-first, rule P1; B-TH-011 the real state; B-TH-105 its own
@@ -49,6 +55,8 @@ const PARTNER_INQUIRY = {
   salesOrderId: true,
   closedAt: true,
   updatedAt: true,
+  // B-TH-095: the version the customer's withdrawal names (partner-readable).
+  version: true,
 } as const satisfies Prisma.InquirySelect
 type InquiryRow = Prisma.InquiryGetPayload<{ select: typeof PARTNER_INQUIRY }>
 
@@ -199,8 +207,19 @@ export async function requestViewOf(reader: PortalReader, request: FastifyReques
       order: made?.order ? { id: made.order.id, number: customerRefOf('ORDER', made.order.customerSeq) ?? '—', yourNumber: customerNumberOf('ORDER', made.order.customerSeq) } : null,
     },
     closedAt: row.closedAt ? toUtcIso(row.closedAt) : null,
+    // ---- B-TH-095: Withdraw is offered before the office decided, to who sends requests (never in a preview); else why not.
+    version: row.version,
+    withdraw: withdrawOf(reader, row),
   }
 }
+
+// ---- B-TH-095
+function withdrawOf(reader: PortalReader, row: Pick<InquiryRow, 'status' | 'companyId' | 'partyId'>): { allowed: boolean; words: string | null } {
+  const code = withdrawRefusal(row.status as InquiryStatus)
+  const may = !reader.session.preview && can(reader.actor, PORTAL_ORDER_REQUESTS_MANAGE, { companyId: row.companyId, partyId: row.partyId })
+  return { allowed: may && code === null, words: code ? WITHDRAW_WORDS[code][partnerLocaleOf(reader.session.person.locale)] : null }
+}
+// ---- end B-TH-095
 
 /** GET /portal/inquiries/:inquiryId */
 export async function readRequest(app: FastifyInstance, request: FastifyRequest, inquiryId: string, _now: Date) {

@@ -97,7 +97,8 @@
     "state": "State",
     "used": "Filled on",
     "usedCount_one": "{count} record",
-    "usedCount_other": "{count} records"
+    "usedCount_other": "{count} records",
+    "customer": "For"
   },
   "section": {
     "custom": "Custom fields"
@@ -352,7 +353,8 @@
     "valueCodeTaken": "The list has this code already.",
     "description": "A description is at most 500 characters.",
     "allOn": "Every selected value is offered already.",
-    "allOff": "No selected value is offered now."
+    "allOff": "No selected value is offered now.",
+    "customer": "Pick the customer this field is for."
   },
   "fault": {
     "code": "The key was refused: lower-case letters, digits and underscores, from a letter.",
@@ -472,5 +474,30 @@
       "stale": "Someone saved first.",
       "value": "This value was refused: one no longer offered, or a person, file or record that cannot be named here."
     }
+  },
+  "customer": {
+    "legend": "For",
+    "every": "Every customer",
+    "everyHint": "On the records of every customer ({record}).",
+    "one": "One customer only",
+    "oneHint": "Only on one customer's records ({record}): its sheet, its forms and its portal. No other customer sees it, not even its name.",
+    "search": "Customer",
+    "searchHint": "The active customers of the field's company.",
+    "searchPlaceholder": "Name or code",
+    "searching": "Looking for customers…",
+    "none": "No active customer matches.",
+    "change": "Change customer",
+    "cannotSearch": "You may not read the customers: ask for the customers' right, or make the field for every customer.",
+    "searchFailed": "The customers could not be read. Try again.",
+    "oneFixed": "For {customer} only (it never changes).",
+    "everyFixed": "For every customer (it never changes).",
+    "previewEvery": "Shown on the records of every customer ({record}).",
+    "previewOne": "Shown only on the records of {customer} ({record}).",
+    "previewPick": "Pick the customer: the field will show on its records only ({record}).",
+    "lineOne": "{customer} only",
+    "lineEvery": "Every customer"
+  },
+  "portalLine": {
+    "every": "Every customer will see this column name in its portal."
   }
 }

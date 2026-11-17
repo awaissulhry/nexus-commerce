@@ -50,12 +50,14 @@ export interface SaveViewDialogProps {
   onCopy: (link: string) => void
   onSave: (draft: ViewDraft) => void
   onClose: () => void
+  /** B-TH-243: a new view's name to start from ("Brand Alpha — tracking" on a customer's sheet). */
+  suggested?: string | null
 }
 
 /** Save view (design pop:save-view): name, who sees it, what it keeps; Copy link once it exists. ⌘Enter saves. */
-export function SaveViewDialog({ view, answer, state, busy, problem, link, onCopy, onSave, onClose }: SaveViewDialogProps) {
+export function SaveViewDialog({ view, answer, state, busy, problem, link, onCopy, onSave, onClose, suggested }: SaveViewDialogProps) {
   const t = useT('lists')
-  const [name, setName] = useState(view?.name ?? '')
+  const [name, setName] = useState(view?.name ?? suggested ?? '')
   const [audience, setAudience] = useState<ViewAudience | 'DEFAULT'>(view ? (view.roleDefault ? 'DEFAULT' : view.audience) : 'ONLY_ME')
   const heldRoles: readonly RoleRef[] = answer.roles
   const anyRoles: readonly RoleRef[] = answer.allRoles.length > 0 ? answer.allRoles : answer.roles
