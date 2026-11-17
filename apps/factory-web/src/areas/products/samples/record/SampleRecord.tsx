@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { formatTime } from '../../../../lib/i18n/format'
@@ -39,20 +39,24 @@ import {
   type RoundView,
   type StyleDetail,
 } from '../api'
-import { approvalHeld, fieldOfPath, panelOf, readProblem, recordHref, recordTabOf, requestChanges, requestDraftOf, samplesCan, todayOf, writeProblem, type ManualStage, type Notice, type Phrase, type RequestDraft } from '../model'
+import { approvalHeld, fieldOfPath, readProblem, recordHref, recordTabOf, requestChanges, requestDraftOf, samplesCan, todayOf, writeProblem, type ManualStage, type Notice, type Phrase, type RequestDraft } from '../model'
 import type { DecideModel } from '../view/DecideDialog'
 import type { CellState, FitState, Loaded, Part, RecordDialog, SampleRecordModel } from './view-model'
 import { SampleRecordView } from './view/SampleRecordView'
 import { defaultMode, workOrderBodyOf, workOrderFacts } from '../work-order/model'
 import { swatchHeld } from './view/ApprovalTab'
+// ---- B-TH-262: the docked thread on the round (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 const LIVE_TYPES = ['sample_round.', 'sample_shipment.', 'sample_swatch.'] as const
 const EMPTY_COMMENT: FitState['comment'] = { pointOfMeasureId: '', bodyArea: '', text: '', busy: false, notice: null }
 
 /**
- * `/w/<company>/products/samples/<round>?tab=request|sample|fit|approval|shipments|activity&panel=` (the round's record,
- * also opened in a new tab by ⌘-click on a card). It reads the round, then each tab's part on its own (the style for the
- * Request's grid, the Approval, the Fit) and does what the view asks — every write with the version read and one
+ * `/w/<company>/products/samples/<round>?tab=request|sample|fit|approval|shipments` (the round's record, also opened in a new tab
+ * by ⌘-click on a card; B-TH-262: an old `?tab=activity` lands on the Request with the thread open, `panel=approvals` opens its
+ * Ask). It reads the round, then each tab's part on its own (the style for the Request's grid, the Approval, the Fit) and does what
+ * the view asks — every write with the version read and one
  * Idempotency-Key per attempt. Live `sample_round.*` of this round read it again (while the Request holds unsaved work:
  * the "changed elsewhere" banner instead).
  */
@@ -61,11 +65,11 @@ export function SampleRecord({ roundId }: { roundId: string }) {
   const session = useOfficeSession()
   const router = useRouter()
   const params = useSearchParams()
+  const pathname = usePathname()
   const locale = useLocale()
   const prefix = companyPrefix(session.company?.code ?? '')
   const can = useMemo(() => samplesCan(session.permissions), [session.permissions])
   const tab = recordTabOf(params)
-  const panel = panelOf(params)
   const [opened] = useState(() => new Date().toISOString())
   const today = todayOf(opened)
 
@@ -404,7 +408,6 @@ export function SampleRecord({ roundId }: { roundId: string }) {
     today,
     can,
     tab,
-    panel,
     loaded,
     asOf,
     live,
@@ -420,15 +423,21 @@ export function SampleRecord({ roundId }: { roundId: string }) {
     dialog,
   }
 
-  const panels =
-    round && tab === 'activity' && can.thread ? (
-      <RecordPanels record={{ type: 'SampleRound', id: round.id, companyId: round.companyId, siteId: null }} title={`${round.number} · ${round.style.code}`} party={round.party ? { id: round.party.id, name: round.party.name, emails: [] } : null} tab={panel ?? undefined} />
+  // B-TH-262: the docked thread beside every tab (its Head holds Activity's doors, R-ACT); the print view keeps the panels' print form.
+  // Brand wall (W08, W12, W20, W25, W34): the round's own customer only; an internal round has none (notes only).
+  const record = round ? { type: 'SampleRound', id: round.id, companyId: round.companyId, siteId: null } : null
+  const title = round ? `${round.number} · ${round.style.code}` : ''
+  const thread =
+    round && record ? (
+      <OfficeRecordThread docked record={record} title={title} recordLabel={round.number} party={round.party ? { id: round.party.id, name: round.party.name } : null} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
     ) : null
+  const printThread = round && record ? <RecordPanels record={record} title={title} party={round.party ? { id: round.party.id, name: round.party.name, emails: [] } : null} /> : null
 
   return (
     <SampleRecordView
       model={model}
-      panels={panels}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onRetry: () => {
           setLoaded({ status: 'loading' })

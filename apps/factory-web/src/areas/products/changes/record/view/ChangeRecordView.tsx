@@ -2,64 +2,80 @@
 
 import { useEffect, type ReactNode } from 'react'
 import Link from 'next/link'
-import { FileX, Gavel, MoreHorizontal, Rocket, Send, ShieldOff } from 'lucide-react'
-import { Banner, Card, EmptyState, Field, Menu, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
-import { DetailHeader } from '@nexus/ui/patterns'
+import { FileX, Gavel, Rocket, Send, ShieldOff } from 'lucide-react'
+import { Banner, Card, EmptyState, Field, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button, Kbd, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
-import { RecordPanelsView, type RecordPanelsViewModel } from '../../../../../record-panels/view/RecordPanelsView'
 import type { OrderView, RequestView } from '../../api'
-import { actionHeld, isLiveOrderStatus, listHref, moveHeld, recordHref, RECORD_TABS, styleHref } from '../../model'
-import { ChangesMessages, Freshness, isPageKey, KindTag, NoticeLine, OrderPill, PriorityTag, RequestPill, useWords } from '../../parts'
+import { actionHeld, isLiveOrderStatus, KIND_TABS, listHref, moveHeld, recordHref, styleHref, type RecordTab } from '../../model'
+import { ChangesMessages, isPageKey, KindTag, NoticeLine, OrderPill, PriorityTag, RequestPill, useWords } from '../../parts'
 import { DecideDialog } from '../../view/DecideDialog'
 import type { ChangeRecordActions, ChangeRecordModel, RecordDialog } from '../view-model'
 import { OrderAffectedTab, OrderApprovalsTab, OrderChangeTab, OrderImpactTab } from './OrderTabs'
 import { RequestAffectedTab, RequestApprovalsTab, RequestChangeTab, RequestImpactTab } from './RequestTabs'
+// ---- B-TH-262: the change on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 
 export type { ChangeRecordActions, ChangeRecordModel } from '../view-model'
 
 /**
- * SCR-117-record — a change (design products.changes "Record: Change"; Owner L1: the tabs always in view): ‹ Changes &
- * versions, its number and style, kind, priority, status (a change order's approvals "1 of 2"), freshness; the primary
- * act its state allows — a request: Accept or reject…; a change order: Submit for approval, Approve…, Release revision N;
- * ⋯ the rest (Start the draft revision, Write a change order, the style, Copy number, Cancel…). Tabs: Change, Impact,
- * Approvals, Affected records, Activity (the record panels). A real address: ⌘-click on a row opens it in a new tab
- * (design tab:changes.record, beside the style's draft revision).
+ * SCR-117-record — a change (design products.changes "Record: Change"; Owner L1: the tabs always in view), on RecordFrame (B-TH-262;
+ * the rule of picture 38, the tabs of picture 39): the band in the shell's band row — ‹ Changes & versions, its number and style, ONE
+ * pill (its status), kind, priority, title and a change order's approvals "1 of 2" as the band's details; the primary act its state
+ * allows — a request: Accept or reject…; a change order: Submit for approval, Approve…, Release revision N; the Thread button (⌘J);
+ * ⋯ the rest (Start the draft revision, Write a change order, the style, Copy number, Cancel…) and the Keyboard line. The change's
+ * thread is docked beside every tab (40 %); Activity's tools are in the thread's "⋯" (R-ACT). Tabs: a request 5 → 3 (Change, Impact &
+ * affected, Approvals); a change order 5 → 4 (Change, Impact, Approvals, Affected records). ONE notice in the body column. A real
+ * address: ⌘-click on a row opens it in a new tab (design tab:changes.record, beside the style's draft revision).
  */
-export function ChangeRecordView({ model, actions, panels, panelsPreview }: { model: ChangeRecordModel; actions?: ChangeRecordActions; panels?: ReactNode; panelsPreview?: RecordPanelsViewModel }) {
+// B-TH-262: `thread` is the docked thread (the office's OfficeRecordThread docked, or a design case's), `printThread` what the print view
+// shows of it (the record panels' print form).
+export function ChangeRecordView({ model, actions, thread, printThread }: { model: ChangeRecordModel; actions?: ChangeRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <ChangesMessages>
-      <Body model={model} actions={actions} panels={panels} panelsPreview={panelsPreview} />
+      <Body model={model} actions={actions} thread={thread} printThread={printThread} />
     </ChangesMessages>
+  )
+}
+
+/** The words of a tab: a request's `impact` is the merged "Impact & affected". */
+export const tabWords = (kind: ChangeRecordModel['kind'], tab: RecordTab): string => (kind === 'request' && tab === 'impact' ? 'tab.impactAffected' : `tab.${tab}`)
+
+/** The page's states before the change is read (loading, not found, failed, no access): the band with the way back, no thread. */
+function Waiting({ model, title, children }: { model: ChangeRecordModel; title: ReactNode; children: ReactNode }) {
+  const { t } = useWords()
+  return (
+    <RecordFrame recordType={model.kind === 'order' ? 'ChangeOrder' : 'ChangeRequest'} personId={model.me} band={{ back: <Link href={listHref(model.prefix)}>{t('record.back')}</Link>, title, moreLabel: t('record.more') }} thread={null} threadLabel={t('record.dockLabel')}>
+      <div className="fw-chg">{children}</div>
+    </RecordFrame>
   )
 }
 
 function Problem({ title, body, back, onRetry, icon }: { title: string; body: string; back: ReactNode; onRetry?: () => void; icon: ReactNode }) {
   const { t } = useWords()
   return (
-    <div className="fw-chg">
-      <Card padded>
-        <EmptyState
-          icon={icon}
-          title={title}
-          description={body}
-          action={
-            <span className="fw-chg-actions">
-              {back}
-              {onRetry && (
-                <Button size="sm" onClick={onRetry}>
-                  {t('common.retry')}
-                </Button>
-              )}
-            </span>
-          }
-        />
-      </Card>
-    </div>
+    <Card padded>
+      <EmptyState
+        icon={icon}
+        title={title}
+        description={body}
+        action={
+          <span className="fw-chg-actions">
+            {back}
+            {onRetry && (
+              <Button size="sm" onClick={onRetry}>
+                {t('common.retry')}
+              </Button>
+            )}
+          </span>
+        }
+      />
+    </Card>
   )
 }
 
-function Body({ model, actions, panels, panelsPreview }: { model: ChangeRecordModel; actions?: ChangeRecordActions; panels?: ReactNode; panelsPreview?: RecordPanelsViewModel }) {
+function Body({ model, actions, thread, printThread }: { model: ChangeRecordModel; actions?: ChangeRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const { t, say } = useWords()
   const list = listHref(model.prefix)
   const back = (
@@ -71,7 +87,7 @@ function Body({ model, actions, panels, panelsPreview }: { model: ChangeRecordMo
   const request = model.loaded.status === 'ready' ? (model.loaded.request ?? null) : null
   const order = model.loaded.status === 'ready' ? (model.loaded.order ?? null) : null
 
-  // a: Approve change (an order waiting for approval, a request to triage) — never while typing or in a dialog.
+  // a: Approve change (an order waiting for approval, a request to triage) — never while typing or in a dialog. ⌘J is the frame's.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!isPageKey(event) || model.dialog || model.decide) return
@@ -85,98 +101,117 @@ function Body({ model, actions, panels, panelsPreview }: { model: ChangeRecordMo
     return () => window.removeEventListener('keydown', onKey)
   }, [model.dialog, model.decide, model.can.manage, order, request, actions])
 
-  if (!model.can.view || model.loaded.status === 'forbidden') return <Problem icon={<ShieldOff size={24} aria-hidden />} title={t('noAccess.title')} body={t('noAccess.body')} back={back} />
+  if (!model.can.view || model.loaded.status === 'forbidden')
+    return (
+      <Waiting model={model} title={t('noAccess.title')}>
+        <Problem icon={<ShieldOff size={24} aria-hidden />} title={t('noAccess.title')} body={t('noAccess.body')} back={back} />
+      </Waiting>
+    )
   if (model.loaded.status === 'loading')
     return (
-      <div className="fw-chg" aria-busy="true">
-        <p className="fw-chg-hint" role="status">
-          <Spinner size={14} /> {t('record.loading')}
-        </p>
-        <Skeleton height={36} width="40%" />
-        <Skeleton height={28} width="60%" />
-        <div className="fw-chg-two">
-          <Skeleton height={220} />
-          <Skeleton height={220} />
+      <Waiting model={model} title={<Skeleton width={260} height={22} />}>
+        <div className="fw-chg" aria-busy="true">
+          <p className="fw-chg-hint" role="status">
+            <Spinner size={14} /> {t('record.loading')}
+          </p>
+          <Skeleton height={28} width="60%" />
+          <div className="fw-chg-two">
+            <Skeleton height={220} />
+            <Skeleton height={220} />
+          </div>
         </div>
-      </div>
+      </Waiting>
     )
-  if (model.loaded.status === 'notFound') return <Problem icon={<FileX size={24} aria-hidden />} title={t('record.notFoundTitle')} body={t('record.notFoundBody')} back={back} />
-  if (model.loaded.status === 'error') return <Problem icon={<FileX size={24} aria-hidden />} title={t('record.failedTitle')} body={t(model.loaded.problem)} back={back} onRetry={() => actions?.onRetry?.()} />
+  if (model.loaded.status === 'notFound')
+    return (
+      <Waiting model={model} title={t('record.notFoundTitle')}>
+        <Problem icon={<FileX size={24} aria-hidden />} title={t('record.notFoundTitle')} body={t('record.notFoundBody')} back={back} />
+      </Waiting>
+    )
+  if (model.loaded.status === 'error')
+    return (
+      <Waiting model={model} title={t('record.failedTitle')}>
+        <Problem icon={<FileX size={24} aria-hidden />} title={t('record.failedTitle')} body={t(model.loaded.problem)} back={back} onRetry={() => actions?.onRetry?.()} />
+      </Waiting>
+    )
 
   const id = (order ?? request)!.id
   const number = order ? order.number : (request!.number ?? t('row.floorNoNumber'))
   const style = (order ?? request)!.style
-  const tabs: TabItem[] = RECORD_TABS.map((tab) => ({
+  const tabs: TabItem[] = KIND_TABS[model.kind].map((tab) => ({
     id: tab,
     href: recordHref(model.prefix, model.kind, id, tab),
-    label: t(`tab.${tab}`),
+    label: t(tabWords(model.kind, tab)),
     count: tab === 'approvals' && order ? (order.approvalsList.length > 0 ? order.approvalsList.length : null) : tab === 'impact' && order ? order.workInProgress.length || null : null,
   }))
-  const activity = panels ?? (panelsPreview ? <RecordPanelsView model={panelsPreview} /> : null)
   const { primary, menu } = order ? orderActs(order, model, actions, t, say, offline) : requestActs(request!, model, actions, t, say, offline)
 
   return (
-    <div className="fw-chg">
-      <div className="fw-chg-band">
-        <DetailHeader
-          backAsChild
-          backLabel={<Link href={list}>{t('record.back')}</Link>}
-          title={
+    <>
+      <RecordFrame
+        recordType={model.kind === 'order' ? 'ChangeOrder' : 'ChangeRequest'}
+        personId={model.me}
+        threadLabel={t('record.dockLabel')}
+        thread={thread ?? null}
+        printThread={printThread}
+        band={{
+          back: <Link href={list}>{t('record.back')}</Link>,
+          title: (
             <span>
               {number} <span className="fw-chg-title-name">· {style.code}</span>
             </span>
-          }
-          meta={
+          ),
+          status: order ? <OrderPill status={order.status} /> : <RequestPill status={request!.status} />,
+          meta: (
             <span className="fw-chg-row">
               <KindTag kind={model.kind} />
               <PriorityTag priority={(order ?? request)!.priority} />
               <span>{(order ?? request)!.title}</span>
-            </span>
-          }
-          status={
-            <span className="fw-chg-row">
-              {order ? <OrderPill status={order.status} /> : <RequestPill status={request!.status} />}
               {order && order.approvals.required > 0 && <span>{t('approvals.count', { approved: order.approvals.approved, required: order.approvals.required })}</span>}
-              <Freshness asOf={model.asOf} live={model.live} />
             </span>
-          }
-          actions={
-            <span className="fw-chg-actions">
-              {primary}
-              <Menu label={<MoreHorizontal size={16} aria-hidden />} align="right" triggerProps={{ 'aria-label': t('record.more') }} items={menu} />
-            </span>
-          }
-        />
-        <Tabs ariaLabel={t('record.tabs')} tabs={tabs} active={model.tab} />
-      </div>
-      {offline && <Banner tone="warning" title={t('record.offline')} />}
-      {model.stale && (
-        <Banner
-          tone="warning"
-          title={t('record.stale', { time: model.stale })}
-          action={
-            <Button size="sm" variant="quiet" onClick={() => actions?.onReload?.()}>
-              {t('record.reload')}
-            </Button>
-          }
-        />
-      )}
-      {order?.status === 'CANCELLED' && <Banner tone="info" title={t('record.cancelledBanner', { reason: order.cancelReason ?? '—' })} />}
-      {order?.status === 'REJECTED' && <Banner tone="danger" title={t('record.rejectedBanner')} />}
-      {request?.status === 'REJECTED' && <Banner tone="danger" title={t('record.requestRejected', { note: request.decisionNote ?? '—' })} />}
-      <NoticeLine notice={model.notice} lines={model.lines} onDismiss={actions?.onDismissNotice} />
-      {request && model.tab === 'change' && <RequestChangeTab model={model} request={request} actions={actions} />}
-      {request && model.tab === 'impact' && <RequestImpactTab model={model} request={request} />}
-      {request && model.tab === 'approvals' && <RequestApprovalsTab model={model} request={request} />}
-      {request && model.tab === 'affected' && <RequestAffectedTab model={model} request={request} />}
-      {order && model.tab === 'change' && <OrderChangeTab model={model} order={order} actions={actions} />}
-      {order && model.tab === 'impact' && <OrderImpactTab model={model} order={order} actions={actions} />}
-      {order && model.tab === 'approvals' && <OrderApprovalsTab model={model} order={order} actions={actions} />}
-      {order && model.tab === 'affected' && <OrderAffectedTab model={model} order={order} actions={actions} />}
-      {model.tab === 'activity' && (activity ?? <p className="fw-chg-hint">{model.can.thread ? t('activity.none') : t('activity.noRight')}</p>)}
+          ),
+          primary,
+          more: menu,
+          moreLabel: t('record.more'),
+        }}
+      >
+        <Tabs ariaLabel={t('record.tabs')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+        {/* B-TH-262: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+        <RecordNotices>
+          <NoticeLine notice={model.notice} lines={model.lines} onDismiss={actions?.onDismissNotice} />
+          {order?.status === 'REJECTED' && <Banner tone="danger" title={t('record.rejectedBanner')} />}
+          {request?.status === 'REJECTED' && <Banner tone="danger" title={t('record.requestRejected', { note: request.decisionNote ?? '—' })} />}
+          {order?.status === 'CANCELLED' && <Banner tone="info" title={t('record.cancelledBanner', { reason: order.cancelReason ?? '—' })} />}
+          {offline && <Banner tone="warning" title={t('record.offline')} />}
+          {model.stale && (
+            <Banner
+              tone="warning"
+              title={t('record.stale', { time: model.stale })}
+              action={
+                <Button size="sm" variant="quiet" onClick={() => actions?.onReload?.()}>
+                  {t('record.reload')}
+                </Button>
+              }
+            />
+          )}
+        </RecordNotices>
+        {request && model.tab === 'change' && <RequestChangeTab model={model} request={request} actions={actions} />}
+        {/* B-TH-262 (R-5): a request's Impact & affected — where it was seen and what is made of it, then the style and revision it is about. */}
+        {request && model.tab === 'impact' && (
+          <div className="fw-chg-stack">
+            <RequestImpactTab model={model} request={request} />
+            <RequestAffectedTab model={model} request={request} />
+          </div>
+        )}
+        {request && model.tab === 'approvals' && <RequestApprovalsTab model={model} request={request} />}
+        {order && model.tab === 'change' && <OrderChangeTab model={model} order={order} actions={actions} />}
+        {order && model.tab === 'impact' && <OrderImpactTab model={model} order={order} actions={actions} />}
+        {order && model.tab === 'approvals' && <OrderApprovalsTab model={model} order={order} actions={actions} />}
+        {order && model.tab === 'affected' && <OrderAffectedTab model={model} order={order} actions={actions} />}
+      </RecordFrame>
       {order && model.dialog && <RecordDialogView dialog={model.dialog} order={order} actions={actions} offline={offline} />}
       {model.decide && <DecideDialog model={model.decide} prefix={model.prefix} canWorkOrders={model.can.workOrders} actions={actions?.decide} />}
-    </div>
+    </>
   )
 }
 
