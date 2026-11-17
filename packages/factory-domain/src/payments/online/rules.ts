@@ -144,18 +144,18 @@ export type OnlineLocale = 'it' | 'en'
 
 /** The provider's reason in our words (design links.pay "card" error: "Your bank declined the card. Try another card or pay by transfer."). */
 const FAILURE_WORDS: Readonly<Record<string, { readonly it: string; readonly en: string }>> = {
-  card_declined: { it: 'La banca ha rifiutato la carta. Prova con un’altra carta o paga con bonifico.', en: 'Your bank declined the card. Try another card or pay by transfer.' },
-  insufficient_funds: { it: 'La carta non ha fondi sufficienti. Prova con un’altra carta o paga con bonifico.', en: 'The card has not enough funds. Try another card or pay by transfer.' },
-  expired_card: { it: 'La carta è scaduta. Prova con un’altra carta o paga con bonifico.', en: 'The card has expired. Try another card or pay by transfer.' },
-  incorrect_cvc: { it: 'Il codice di sicurezza non è corretto. Riprova.', en: 'The security code is not right. Try again.' },
-  authentication_failed: { it: 'La banca non ha confermato il pagamento. Riprova o paga con bonifico.', en: 'Your bank did not confirm the payment. Try again or pay by transfer.' },
-  payment_intent_authentication_failure: { it: 'La banca non ha confermato il pagamento. Riprova o paga con bonifico.', en: 'Your bank did not confirm the payment. Try again or pay by transfer.' },
-  debit_not_authorized: { it: 'La banca non ha autorizzato l’addebito SEPA. Paga con bonifico o con carta.', en: 'Your bank did not authorise the SEPA debit. Pay by transfer or by card.' },
-  insufficient_funds_sepa: { it: 'L’addebito SEPA è stato respinto. Paga con bonifico o con carta.', en: 'The SEPA debit was returned. Pay by transfer or by card.' },
-  provider_unavailable: { it: 'Il servizio di pagamento non risponde. Riprova tra poco o paga con bonifico.', en: 'The payment service does not answer. Try again in a moment or pay by transfer.' },
-  provider_refused: { it: 'Il servizio di pagamento ha rifiutato la richiesta. Paga con bonifico.', en: 'The payment service refused the request. Pay by transfer.' },
+  card_declined: { it: 'La banca ha rifiutato la carta. Provate con un’altra carta o pagate con bonifico.', en: 'Your bank declined the card. Try another card or pay by transfer.' },
+  insufficient_funds: { it: 'La carta non ha fondi sufficienti. Provate con un’altra carta o pagate con bonifico.', en: 'The card has not enough funds. Try another card or pay by transfer.' },
+  expired_card: { it: 'La carta è scaduta. Provate con un’altra carta o pagate con bonifico.', en: 'The card has expired. Try another card or pay by transfer.' },
+  incorrect_cvc: { it: 'Il codice di sicurezza non è corretto. Riprovate.', en: 'The security code is not right. Try again.' },
+  authentication_failed: { it: 'La banca non ha confermato il pagamento. Riprovate o pagate con bonifico.', en: 'Your bank did not confirm the payment. Try again or pay by transfer.' },
+  payment_intent_authentication_failure: { it: 'La banca non ha confermato il pagamento. Riprovate o pagate con bonifico.', en: 'Your bank did not confirm the payment. Try again or pay by transfer.' },
+  debit_not_authorized: { it: 'La banca non ha autorizzato l’addebito SEPA. Pagate con bonifico o con carta.', en: 'Your bank did not authorise the SEPA debit. Pay by transfer or by card.' },
+  insufficient_funds_sepa: { it: 'L’addebito SEPA è stato respinto. Pagate con bonifico o con carta.', en: 'The SEPA debit was returned. Pay by transfer or by card.' },
+  provider_unavailable: { it: 'Il servizio di pagamento non risponde. Riprovate tra poco o pagate con bonifico.', en: 'The payment service does not answer. Try again in a moment or pay by transfer.' },
+  provider_refused: { it: 'Il servizio di pagamento ha rifiutato la richiesta. Pagate con bonifico.', en: 'The payment service refused the request. Pay by transfer.' },
 }
-const FAILURE_DEFAULT = { it: 'Il pagamento non è andato a buon fine. Riprova o paga con bonifico.', en: 'The payment did not go through. Try again or pay by transfer.' } as const
+const FAILURE_DEFAULT = { it: 'Il pagamento non è andato a buon fine. Riprovate o pagate con bonifico.', en: 'The payment did not go through. Try again or pay by transfer.' } as const
 
 export function failureWords(code: string | null, locale: OnlineLocale): string {
   return (code ? FAILURE_WORDS[code] : undefined)?.[locale] ?? FAILURE_DEFAULT[locale]
@@ -163,12 +163,12 @@ export function failureWords(code: string | null, locale: OnlineLocale): string 
 
 /** Why card payments are not offered, in words (the page shows bank transfer alone, with this line). */
 const UNAVAILABLE_WORDS: Readonly<Record<AccountRefusal | 'NO_ACCOUNT', { readonly it: string; readonly en: string }>> = {
-  NO_ACCOUNT: { it: 'Il pagamento con carta non è disponibile: paga con bonifico.', en: 'Card payment is not available: pay by bank transfer.' },
-  NOT_A_PAYMENT_ACCOUNT: { it: 'Il pagamento con carta non è disponibile: paga con bonifico.', en: 'Card payment is not available: pay by bank transfer.' },
-  NOT_ACTIVE: { it: 'Il pagamento con carta è sospeso: paga con bonifico.', en: 'Card payment is paused: pay by bank transfer.' },
-  GATE_SPEND: { it: 'Il pagamento con carta non è ancora attivo: paga con bonifico.', en: 'Card payment is not switched on yet: pay by bank transfer.' },
-  FAKE_IN_PRODUCTION: { it: 'Il pagamento con carta non è disponibile: paga con bonifico.', en: 'Card payment is not available: pay by bank transfer.' },
-  FAKE_PROVIDER_LIVE: { it: 'Il pagamento con carta non è disponibile: paga con bonifico.', en: 'Card payment is not available: pay by bank transfer.' },
+  NO_ACCOUNT: { it: 'Il pagamento con carta non è disponibile: pagate con bonifico.', en: 'Card payment is not available: pay by bank transfer.' },
+  NOT_A_PAYMENT_ACCOUNT: { it: 'Il pagamento con carta non è disponibile: pagate con bonifico.', en: 'Card payment is not available: pay by bank transfer.' },
+  NOT_ACTIVE: { it: 'Il pagamento con carta è sospeso: pagate con bonifico.', en: 'Card payment is paused: pay by bank transfer.' },
+  GATE_SPEND: { it: 'Il pagamento con carta non è ancora attivo: pagate con bonifico.', en: 'Card payment is not switched on yet: pay by bank transfer.' },
+  FAKE_IN_PRODUCTION: { it: 'Il pagamento con carta non è disponibile: pagate con bonifico.', en: 'Card payment is not available: pay by bank transfer.' },
+  FAKE_PROVIDER_LIVE: { it: 'Il pagamento con carta non è disponibile: pagate con bonifico.', en: 'Card payment is not available: pay by bank transfer.' },
 }
 export const unavailableWords = (reason: AccountRefusal | 'NO_ACCOUNT', locale: OnlineLocale): string => UNAVAILABLE_WORDS[reason][locale]
 
@@ -226,7 +226,7 @@ export function receiptMail(input: {
 export function paymentLinkMail(input: { readonly locale: OnlineLocale; readonly what: string; readonly amount: string; readonly dueDate: string | null; readonly expiresOn: string; readonly message: string | null }, url: string | null): { readonly subject: string; readonly body: string } {
   const it = input.locale === 'it'
   const kept = it ? '[Link personale inviato solo per e-mail: non è conservato qui.]' : '[A personal link, sent by e-mail only: it is not kept here.]'
-  const subject = it ? `${input.what}: paga online` : `${input.what}: pay online`
+  const subject = it ? `${input.what}: pagate online` : `${input.what}: pay online`
   const lead = it
     ? `ecco la pagina per pagare ${input.what} (${input.amount}${input.dueDate ? `, scadenza ${input.dueDate}` : ''}): con carta, addebito diretto SEPA o bonifico.`
     : `here is the page to pay ${input.what} (${input.amount}${input.dueDate ? `, due ${input.dueDate}` : ''}): by card, SEPA Direct Debit or bank transfer.`

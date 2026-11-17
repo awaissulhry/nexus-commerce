@@ -91,7 +91,7 @@ describe('the permission and its roles (B-W2b-183)', () => {
     // th2-backend step 7 (#1549, threads plan §0.5): the notice names the order by the customer's own number (the API's
     // orderNamed: chip "#12", params yourKind/yourSeq), never the office's SO-… series; "per" reads right before "il vostro ordine".
     const notice = { messageKey: 'portal.order.change_refused', recordLabel: '#12', params: { yourKind: 'ORDER', yourSeq: 12 } }
-    expect(partnerSentence(notice, 'it', 'Demo')).toBe('La tua richiesta di modifica per il vostro ordine 12 non è stata accettata')
+    expect(partnerSentence(notice, 'it', 'Demo')).toBe('La vostra richiesta di modifica per il vostro ordine 12 non è stata accettata')
     expect(partnerSentence(notice, 'en', 'Demo')).toBe('Your change request on your order 12 was not accepted')
     for (const key of ['portal.order.change_accepted', 'portal.order.change_refused', 'portal.order.cancel_accepted', 'portal.order.cancel_refused'] as const)
       for (const locale of ['it', 'en'] as const) expect(partnerSentence({ ...notice, messageKey: key }, locale, 'Demo'), `${key} ${locale}`).not.toMatch(/SO-|#12/)

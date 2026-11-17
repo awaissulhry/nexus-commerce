@@ -58,7 +58,7 @@ export type PartnerThreadLocale = (typeof PARTNER_THREAD_LOCALES)[number]
 export const PARTNER_THREAD_WORDS = Object.freeze({
   PREVIEW: { it: "Questa è un'anteprima del portale: sola lettura.", en: 'This is a preview of the portal: it is read-only.' },
   NO_COMMENT: {
-    it: 'Il tuo accesso permette di leggere questa conversazione, non di scrivere. Il tuo amministratore può cambiarlo.',
+    it: 'Il vostro accesso permette di leggere questa conversazione, non di scrivere. Il vostro amministratore può cambiarlo.',
     en: 'Your access lets you read this conversation, not write in it. Your admin can change that.',
   },
   CLOSED: {
@@ -66,7 +66,7 @@ export const PARTNER_THREAD_WORDS = Object.freeze({
     en: '{company} closed this conversation: no new message can be added.',
   },
   REPLY_BY_EMAIL: {
-    it: 'Puoi anche rispondere alle nostre e-mail: la risposta arriva qui.',
+    it: 'Potete anche rispondere alle nostre e-mail: la risposta arriva qui.',
     en: 'You can also answer our e-mails: your reply lands here.',
   },
 } satisfies Record<ComposerReason | 'REPLY_BY_EMAIL', Record<PartnerThreadLocale, string>>)

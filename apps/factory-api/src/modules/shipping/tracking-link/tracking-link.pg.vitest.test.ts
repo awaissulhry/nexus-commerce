@@ -153,7 +153,7 @@ describe('the tracking link when the goods leave (B-W2b-170)', { timeout: SLOW_T
     const mails = trackingMails(BUYER_MAIL)
     expect(mails).toHaveLength(1)
     const text = textOf(mails[0]!.raw)
-    expect(text).toContain('il suo ordine SEED-PO-78 è in viaggio (spedizione SEED-SH-0001).')
+    expect(text).toContain('il vostro ordine SEED-PO-78 è in viaggio (spedizione SEED-SH-0001).')
     expect(text).toContain('Corriere: Seed Express.')
     mailedToken = tokenOfMail(mails[0]!.raw)
     const link = await one(`SELECT purpose::text, email, "maxUses", uses, note, "createdById", "expiresAt" FROM "OneOffLink" WHERE "recordId" = $1 AND purpose = 'SHIPMENT_TRACK'`, [SH1])
@@ -161,7 +161,7 @@ describe('the tracking link when the goods leave (B-W2b-170)', { timeout: SLOW_T
     expect(new Date(link.expiresAt).getTime() - h.clock.now().getTime()).toBe(180 * 24 * 60 * 60 * 1000)
     // The outbound row keeps the subject only; no row anywhere holds the token.
     const outbound = await one(`SELECT subject, "templateKey", "recordType" FROM "EmailOutbound" WHERE "templateKey" = 'shipping.tracking_link'`)
-    expect(outbound).toEqual({ subject: 'Il suo ordine SEED-PO-78 — Seed A', templateKey: 'shipping.tracking_link', recordType: 'OneOffLink' })
+    expect(outbound).toEqual({ subject: 'Il vostro ordine SEED-PO-78 — Seed A', templateKey: 'shipping.tracking_link', recordType: 'OneOffLink' })
     const secret = mailedToken.split('.').at(-1)!
     for (const table of ['AuditLog', 'OutboxEvent', 'EmailOutbound', 'IdempotencyReceipt', 'OneOffLink']) {
       expect((await one<{ n: number }>(`SELECT count(*)::int AS n FROM "${table}" WHERE row_to_json("${table}")::text LIKE $1`, [`%${secret}%`])).n, table).toBe(0)
@@ -331,7 +331,7 @@ describe('Ask for a new link on a dead tracking link', { timeout: SLOW_TEST_TIME
     await h.auth.settled()
     const mails = trackingMails(BUYER_MAIL)
     expect(mails).toHaveLength(before + 1)
-    expect(textOf(mails.at(-1)!.raw)).toContain('come richiesto, ecco un nuovo link per seguire il suo ordine SEED-PO-78')
+    expect(textOf(mails.at(-1)!.raw)).toContain('come richiesto, ecco un nuovo link per seguire il vostro ordine SEED-PO-78')
     const renewed = await one(`SELECT "renewalOfId", note FROM "OneOffLink" WHERE "recordId" = $1 AND note = $2`, [SH1, TRACKING_NOTES.RENEWED])
     expect(renewed.renewalOfId).toBe((await one(`SELECT id FROM "OneOffLink" WHERE "recordId" = $1 AND note = $2`, [SH1, TRACKING_NOTES.SHIPPED])).id)
     expect((await linkCall(tokenOfMail(mails.at(-1)!.raw), 'GET', '/link/tracking')).statusCode).toBe(200)

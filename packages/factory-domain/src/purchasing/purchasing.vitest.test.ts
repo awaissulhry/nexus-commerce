@@ -270,7 +270,7 @@ describe('the document and the mails (SCM-054, SCM-055)', () => {
   it('stores the mail without the link and sends it with the link; the cancellation tells the supplier', () => {
     const mail = purchaseOrderMail({ language: 'it', number: 'PO-00012', recipientName: 'Ufficio Ordini', linkUntil: '2026-12-18', message: null, resend: false })
     expect(mail.subject).toBe('Ordine di acquisto PO-00012')
-    expect(mail.stored).toBe("Gentile Ufficio Ordini,\n\nle inviamo il nostro ordine di acquisto PO-00012: il documento è in allegato.\n\nPer confermare l'ordine (quantità e date) o per rifiutarlo usi il link personale contenuto nell'e-mail inviata, valido fino al 18/12/2026.")
+    expect(mail.stored).toBe("Gentile Ufficio Ordini,\n\nvi inviamo il nostro ordine di acquisto PO-00012: il documento è in allegato.\n\nPer confermare l'ordine (quantità e date) o per rifiutarlo usate il link personale contenuto nell'e-mail inviata, valido fino al 18/12/2026.")
     expect(mail.withLink('https://factory.example/l#token=abc')).toMatch(/valido fino al 18\/12\/2026:\nhttps:\/\/factory\.example\/l#token=abc$/)
     expect(mail.stored).not.toContain('token')
     expect(purchaseOrderMail({ language: 'en', number: 'PO-00012', recipientName: null, linkUntil: '2026-12-18', message: 'Our own words.', resend: true }).stored).toBe(

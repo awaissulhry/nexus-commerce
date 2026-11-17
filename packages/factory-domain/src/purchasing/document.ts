@@ -160,12 +160,12 @@ const MAIL = {
   it: {
     subject: (number: string) => `Ordine di acquisto ${number}`,
     hello: (name: string | null) => (name ? `Gentile ${name},` : 'Buongiorno,'),
-    intro: (number: string) => `le inviamo il nostro ordine di acquisto ${number}: il documento è in allegato.`,
-    again: (number: string) => `le inviamo un nuovo link per confermare il nostro ordine di acquisto ${number}, di nuovo in allegato. I link inviati prima non sono più validi.`,
-    linkStored: (until: string) => `Per confermare l'ordine (quantità e date) o per rifiutarlo usi il link personale contenuto nell'e-mail inviata, valido fino al ${until}.`,
-    link: (until: string) => `Per confermare l'ordine (quantità e date) o per rifiutarlo usi questo link personale, valido fino al ${until}:`,
+    intro: (number: string) => `vi inviamo il nostro ordine di acquisto ${number}: il documento è in allegato.`,
+    again: (number: string) => `vi inviamo un nuovo link per confermare il nostro ordine di acquisto ${number}, di nuovo in allegato. I link inviati prima non sono più validi.`,
+    linkStored: (until: string) => `Per confermare l'ordine (quantità e date) o per rifiutarlo usate il link personale contenuto nell'e-mail inviata, valido fino al ${until}.`,
+    link: (until: string) => `Per confermare l'ordine (quantità e date) o per rifiutarlo usate questo link personale, valido fino al ${until}:`,
     cancelSubject: (number: string) => `Annullamento ordine di acquisto ${number}`,
-    cancelled: (number: string) => `il nostro ordine di acquisto ${number} è annullato: la preghiamo di non evaderlo. Il link di conferma non è più valido.`,
+    cancelled: (number: string) => `il nostro ordine di acquisto ${number} è annullato: vi preghiamo di non evaderlo. Il link di conferma non è più valido.`,
   },
   en: {
     subject: (number: string) => `Purchase order ${number}`,

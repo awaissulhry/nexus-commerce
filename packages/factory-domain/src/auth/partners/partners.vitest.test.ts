@@ -143,7 +143,7 @@ describe('the partner mails', () => {
 
   it('tell an ending access in Italian', () => {
     const mail = composePartnerMail({ template: 'auth.portal_access_ending', recipientName: 'Anna', portalName: 'Esempio', accessUntil: new Date(NOW.getTime() + 3 * DAY), contact: 'Esempio (info@esempio.example)' }, { ...context, locale: 'it' as const })
-    expect(mail.subject).toBe('Il tuo accesso al portale Esempio sta per finire')
-    expect(mail.text).toContain('Se ti serve ancora, scrivi a Esempio (info@esempio.example).')
+    expect(mail.subject).toBe('Il vostro accesso al portale Esempio sta per finire')
+    expect(mail.text).toContain('Se vi serve ancora, scrivete a Esempio (info@esempio.example).')
   })
 })

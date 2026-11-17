@@ -202,7 +202,7 @@ describe('terms by customer (SAL-194)', () => {
       "Prezzi al netto dell'IVA.",
       'Offerta valida fino al 28/11/2026.',
       `Acconto all'accettazione: 30% del totale, € 2.283,84, da versare con bonifico bancario entro ${DEPOSIT_DUE_DAYS} giorni dall'accettazione.`,
-      "Per accettare l'offerta apra il link personale ricevuto per e-mail e digiti nome e cognome, oppure ci restituisca una copia firmata.",
+      "Per accettare l'offerta aprite il link personale ricevuto per e-mail e digitate nome e cognome, oppure restituiteci una copia firmata.",
     ])
   })
 

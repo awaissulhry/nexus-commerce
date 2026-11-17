@@ -292,7 +292,7 @@ describe('e-mail templates (PLT-232)', () => {
     expect(saved.status, JSON.stringify(saved.body)).toBe(200)
     const preview = await owner.post(`/templates/mail/${made.body.template.id}/preview`, {})
     expect(preview.status).toBe(200)
-    expect(preview.body).toEqual({ subject: 'Esempio Moto · pratica SVC-2026-0042', body: 'Gentile Anna Esempio,\nla pratica SVC-2026-0042 è in lavorazione.\n\nIl tecnico la chiamerà domani in mattinata.\n\nTest company C1', missing: [] })
+    expect(preview.body).toEqual({ subject: 'Esempio Moto · pratica SVC-2026-0042', body: 'Gentile Anna Esempio,\nla pratica SVC-2026-0042 è in lavorazione.\n\nIl tecnico vi chiamerà domani in mattinata.\n\nTest company C1', missing: [] })
     const published = await owner.post(`/templates/mail/${made.body.template.id}/publish`, { version: saved.body.template.version })
     expect(published.status).toBe(200)
   })

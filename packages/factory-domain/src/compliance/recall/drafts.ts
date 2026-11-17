@@ -51,13 +51,13 @@ const W = {
     distributorSubject: (kind: RecallKind | null, style: string) => (kind ? `${kind === 'RECALL' ? 'Richiamo' : 'Ritiro'} del prodotto ${style}` : `Informazione di sicurezza sul prodotto ${style}`),
     distributorOpen: 'Gentile cliente,',
     distributorBody: (facts: DraftFacts, what: string) =>
-      `la informiamo che il prodotto ${facts.styleCode} ${facts.styleName} (${what}) è oggetto della pratica ${facts.entryReference} del nostro registro DPI.`,
-    distributorAsk: 'Le chiediamo di sospendere la vendita dei capi interessati ancora in magazzino, di informare i suoi clienti se necessario e di confermarci la ricezione di questo messaggio rispondendo a questa e-mail.',
+      `vi informiamo che il prodotto ${facts.styleCode} ${facts.styleName} (${what}) è oggetto della pratica ${facts.entryReference} del nostro registro DPI.`,
+    distributorAsk: 'Vi chiediamo di sospendere la vendita dei capi interessati ancora in magazzino, di informare i vostri clienti se necessario e di confermarci la ricezione di questo messaggio rispondendo a questa e-mail.',
     distributorClose: 'Cordiali saluti',
     publicTitle: (kind: RecallKind, style: string) => `${kind === 'RECALL' ? 'Richiamo' : 'Ritiro'} di sicurezza: ${style}`,
     publicAction: (kind: RecallKind) =>
-      kind === 'RECALL' ? 'Smetta di usare il capo e lo restituisca al venditore o a noi: sarà riparato, sostituito o rimborsato.' : 'Il prodotto è ritirato dalla vendita. Se lo ha acquistato, ci contatti per sapere cosa fare.',
-    publicContact: (company: string) => `Contatti ${company} usando il modulo "Segnala un problema" su questa pagina.`,
+      kind === 'RECALL' ? 'Smettete di usare il capo e restituitelo al venditore o a noi: sarà riparato, sostituito o rimborsato.' : 'Il prodotto è ritirato dalla vendita. Se lo avete acquistato, contattateci per sapere cosa fare.',
+    publicContact: (company: string) => `Contattate ${company} usando il modulo "Segnala un problema" su questa pagina.`,
   },
   en: {
     decision: { NOT_CONFORMING: 'PPE not in conformity', RISK: 'PPE presenting a risk' } satisfies Record<NoticeDecision, string>,
