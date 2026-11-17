@@ -42,6 +42,8 @@ import {
 } from './model'
 import type { RecordVerb } from './record-model'
 import { useInquiry } from './use-inquiry'
+// B-TH-228: which receipts stay on the page when the queue moves on.
+import { receiptStays } from './model'
 import { useNewRequest } from './use-new-request'
 import type { PictureLoader } from './view/cells'
 import { InquiriesView, type BulkDialog } from './view/InquiriesView'
@@ -192,7 +194,8 @@ export function InquiriesPage() {
   const detailNotice = record.model.notice
   useEffect(() => {
     // A decision's receipt stays on the page when the queue moves on to the next inquiry.
-    if (detailNotice && (detailNotice.key.startsWith('done.quote') || detailNotice.key === 'done.decline' || detailNotice.key === 'done.lost')) setNotice(detailNotice)
+    // B-TH-228: Make order's receipt (confirmed, or waiting for approval and why) stays too (model receiptStays).
+    if (detailNotice && receiptStays(detailNotice.key)) setNotice(detailNotice)
   }, [detailNotice])
 
   const onRowVerb = useCallback(

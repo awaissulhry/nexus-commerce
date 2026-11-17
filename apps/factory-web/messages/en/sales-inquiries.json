@@ -798,7 +798,8 @@
     "noFiles": "The request has no files.",
     "checks": "The order goes through the normal checks: a customer on hold, its PO where the terms ask for one, minimum quantities, the deposit, the credit limit and the approval rules. It comes out Confirmed, or Waiting for approval — the receipt says which.",
     "closes": "The request closes as Ordered and names the order.",
-    "badPrice": "Line {n}: the price is not a number"
+    "badPrice": "Line {n}: the price is not a number",
+    "poRequired": "This customer's terms ask for their PO number on every order: type it here."
   },
   "styleDraft": {
     "title": "Make style draft",
@@ -818,10 +819,9 @@
       "OTHER": "Other"
     },
     "scale": "Size scale",
-    "scaleHint": "Optional: without one the product type gives the sizes",
-    "scaleNone": "From the product type",
+    "scaleHint": "The style's sizes come from this scale",
     "scalesLoading": "Reading the size scales…",
-    "scalesFailed": "The size scales could not be read: the product type gives the sizes",
+    "scalesFailed": "The size scales could not be read: close and try again",
     "season": "Season",
     "seasonHint": "Optional, for example SS27",
     "brand": "Brand (the label on the garment)",
@@ -833,7 +833,8 @@
     "stays": "The request stays open (In progress) and names the draft.",
     "held": {
       "code": "Type a style code: 1 to 24 capital letters or digits",
-      "type": "Choose the product type"
+      "type": "Choose the product type",
+      "scale": "Choose the size scale"
     }
   }
 }

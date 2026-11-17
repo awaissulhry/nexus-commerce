@@ -798,7 +798,8 @@
     "noFiles": "La richiesta non ha file.",
     "checks": "L'ordine passa i controlli normali: cliente bloccato, il suo PO quando le condizioni lo chiedono, quantità minime, acconto, fido e regole di approvazione. Risulta Confermato oppure In attesa di approvazione — la conferma dice quale.",
     "closes": "La richiesta si chiude come Ordinata e nomina l'ordine.",
-    "badPrice": "Riga {n}: il prezzo non è un numero"
+    "badPrice": "Riga {n}: il prezzo non è un numero",
+    "poRequired": "Le condizioni di questo cliente chiedono il loro numero d'ordine (PO) su ogni ordine: scrivilo qui."
   },
   "styleDraft": {
     "title": "Crea bozza di modello",
@@ -818,10 +819,9 @@
       "OTHER": "Altro"
     },
     "scale": "Scala taglie",
-    "scaleHint": "Facoltativa: senza, le taglie vengono dal tipo di prodotto",
-    "scaleNone": "Dal tipo di prodotto",
+    "scaleHint": "Le taglie del modello vengono da questa scala",
     "scalesLoading": "Lettura delle scale taglie…",
-    "scalesFailed": "Non è stato possibile leggere le scale taglie: le taglie vengono dal tipo di prodotto",
+    "scalesFailed": "Non è stato possibile leggere le scale taglie: chiudi e riprova",
     "season": "Stagione",
     "seasonHint": "Facoltativa, per esempio SS27",
     "brand": "Marchio (l'etichetta sul capo)",
@@ -833,7 +833,8 @@
     "stays": "La richiesta resta aperta (In lavorazione) e nomina la bozza.",
     "held": {
       "code": "Scrivi un codice modello: da 1 a 24 lettere maiuscole o cifre",
-      "type": "Scegli il tipo di prodotto"
+      "type": "Scegli il tipo di prodotto",
+      "scale": "Scegli la scala taglie"
     }
   }
 }

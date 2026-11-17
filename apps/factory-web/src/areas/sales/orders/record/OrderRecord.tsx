@@ -393,15 +393,18 @@ function RecordContainer({ orderId }: { orderId: string }) {
 
   // ---- B-TH-228: the request an order was made from straight (no quote between) — the band's "Made from INQ-… — Open". The source
   // read answers nothing to a person who may not read that request (office only: the portal never reads it).
-  const [madeFrom, setMadeFrom] = useState<{ id: string; number: string } | null>(null)
+  // undefined: still reading (the band says nothing yet — never "Typed by the office" before it knows); null: none.
+  const [madeFrom, setMadeFrom] = useState<{ id: string; number: string } | null | undefined>(undefined)
   const readsRequests = session.permissions.includes('sales.inquiries.view')
   const straightId = order.status === 'ready' && order.value.chain.quote === null ? order.value.id : null
   useEffect(() => {
     if (!straightId || !readsRequests) return setMadeFrom(null)
+    setMadeFrom(undefined)
     const abort = new AbortController()
     getTechPack(api, straightId, abort.signal)
       .then((answer) => setMadeFrom(answer.inquiry ? { id: answer.inquiry.id, number: answer.inquiry.number } : null))
-      .catch(() => setMadeFrom(null))
+      // A failed read claims nothing (never "Typed by the office" for an order that may have come from a request).
+      .catch(() => !abort.signal.aborted && setMadeFrom(undefined))
     return () => abort.abort()
   }, [api, straightId, readsRequests])
   // ---- end B-TH-228
@@ -420,7 +423,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
     sdi,
     versions,
     personId: session.user.id, // B-TH-214
-    madeFrom, // B-TH-228
+    madeFrom: madeFrom ?? null, // B-TH-228
+    madeFromReading: madeFrom === undefined,
     changed,
     notice,
     busy,

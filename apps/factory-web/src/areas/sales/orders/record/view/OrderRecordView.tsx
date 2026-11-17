@@ -252,7 +252,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, delivered }: 
                   {t('record.madeFrom', { number: model.madeFrom.number })}
                 </Link>
               )}
-              {!order.chain.quote && !model.madeFrom && <Tag tone="neutral">{t('record.typed')}</Tag>}
+              {!order.chain.quote && !model.madeFrom && !model.madeFromReading && <Tag tone="neutral">{t('record.typed')}</Tag>}
               {order.chain.quote &&
                 (model.can.viewQuotes ? (
                   <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/quotes/${order.chain.quote.id}`}>

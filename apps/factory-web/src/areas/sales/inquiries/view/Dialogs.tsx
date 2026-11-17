@@ -386,7 +386,8 @@ export function OrderDialog({ model, actions }: { model: OrderModel; actions?: O
           <Field label={t('order.promise')} hint={t('order.promiseHint')}>
             <DateField value={model.draft.promiseDate ?? ''} clearable onChange={(value) => actions?.onDraft?.({ promiseDate: value || null })} />
           </Field>
-          <Field label={t('order.customerRef')} hint={t('order.customerRefHint')}>
+          {/* A refusal naming their PO (the customer's terms want one on every order) marks this field, in words. */}
+          <Field label={t('order.customerRef')} hint={t('order.customerRefHint')} error={model.notice?.lines?.some((line) => line.key.endsWith('.customerRef')) ? t('order.poRequired') : undefined}>
             <Input size="sm" value={model.draft.customerRef} maxLength={100} onChange={(event) => actions?.onDraft?.({ customerRef: event.target.value })} />
           </Field>
         </div>
@@ -505,9 +506,9 @@ export function StyleDraftDialog({ model, actions }: { model: StyleDraftModel; a
               ))}
             </Select>
           </Field>
-          <Field label={t('styleDraft.scale')} hint={model.scales.status === 'error' ? t('styleDraft.scalesFailed') : model.scales.status === 'loading' ? t('styleDraft.scalesLoading') : t('styleDraft.scaleHint')}>
+          <Field label={t('styleDraft.scale')} required hint={model.scales.status === 'error' ? t('styleDraft.scalesFailed') : model.scales.status === 'loading' ? t('styleDraft.scalesLoading') : t('styleDraft.scaleHint')}>
             <Select size="sm" value={model.draft.sizeScaleId} disabled={model.scales.status !== 'ready'} onChange={(event) => actions?.onDraft?.({ sizeScaleId: event.target.value })}>
-              <option value="">{t('styleDraft.scaleNone')}</option>
+              <option value="">{t('styleDraft.typeChoose')}</option>
               {model.scales.status === 'ready' &&
                 model.scales.value.map((scale) => (
                   <option key={scale.id} value={scale.id}>

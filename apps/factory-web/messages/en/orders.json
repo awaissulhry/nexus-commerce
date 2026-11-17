@@ -340,7 +340,8 @@
     "shipments": "Shipments",
     "invoices": "Invoices",
     "count_one": "{count}",
-    "count_other": "{count}"
+    "count_other": "{count}",
+    "fromRequest": "Made from request {number} (no quote)"
   },
   "gate": {
     "title": "Deposit gate",
@@ -677,7 +678,10 @@
     "document": "The signed PDF",
     "matches": "Matches the PDF sent",
     "differs": "Differs from the PDF sent",
-    "terms": "Terms version"
+    "terms": "Terms version",
+    "fromRequest": {
+      "title": "Made from request {number} — no quote"
+    }
   },
   "part": {
     "loading": "Loading {part}…",

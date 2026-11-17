@@ -340,7 +340,8 @@
     "shipments": "Spedizioni",
     "invoices": "Fatture",
     "count_one": "{count}",
-    "count_other": "{count}"
+    "count_other": "{count}",
+    "fromRequest": "Creato dalla richiesta {number} (senza preventivo)"
   },
   "gate": {
     "title": "Blocco acconto",
@@ -677,7 +678,10 @@
     "document": "Il PDF firmato",
     "matches": "Uguale al PDF inviato",
     "differs": "Diverso dal PDF inviato",
-    "terms": "Versione delle condizioni"
+    "terms": "Versione delle condizioni",
+    "fromRequest": {
+      "title": "Creato dalla richiesta {number} — senza preventivo"
+    }
   },
   "part": {
     "loading": "Caricamento di {part}…",

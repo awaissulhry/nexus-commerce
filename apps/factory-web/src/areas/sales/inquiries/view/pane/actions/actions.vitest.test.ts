@@ -5,7 +5,7 @@ import type { InquiryView } from '../../../api'
 import { paneActions, paneHeld } from './model'
 // B-TH-228
 import { ORDERABLE_VIEW, ORDERED_VIEW } from '../../../demo/fixtures'
-import { orderBodyOf, orderDonePhrase, orderDraftOf, orderHeld, priceOf, styleDraftBodyOf, styleDraftDialogHeld, styleDraftOf } from '../../../model'
+import { orderBodyOf, orderDonePhrase, orderDraftOf, orderHeld, priceOf, receiptStays, styleDraftBodyOf, styleDraftDialogHeld, styleDraftOf } from '../../../model'
 
 /**
  * B-TH-218 (threads plan TH-1b; O-SAL-INQ-LIST.pane-actions; wall W20, W21, W37): ONE main button that follows the request, the
@@ -115,6 +115,9 @@ describe('B-TH-228 — Make order and Make style draft from a request', () => {
       expect(catalogue['done.orderCredit']).not.toMatch(/confirmed|confermato/i)
       expect(catalogue['done.orderApproval']).not.toMatch(/confirmed|confermato/i)
     }
+    // The receipt stays on the page when the queue moves on to the next request (found by the browser check: it was dropped).
+    for (const key of ['done.orderConfirmed', 'done.orderCredit', 'done.orderApproval', 'done.quote', 'done.decline', 'done.lost']) expect(receiptStays(key), key).toBe(true)
+    expect(receiptStays('done.styleDraft')).toBe(false)
     // A closed request made straight into an order shows the order with ITS own status.
     expect(paneActions(ORDERED_VIEW, owner, false).outcome).toEqual({ key: 'pane.outcome.orderedStatus', params: { order: 'SO-2026-0142', status: 'orderStatus.PENDING_APPROVAL' } })
   })
@@ -125,10 +128,12 @@ describe('B-TH-228 — Make order and Make style draft from a request', () => {
     expect(draft.fileIds).toEqual([...VIEW.files, ...VIEW.mailFiles].map((file) => file.id))
     expect(styleDraftDialogHeld(VIEW, draft, owner, false)).toEqual({ key: 'styleDraft.held.code' })
     expect(styleDraftDialogHeld(VIEW, { ...draft, code: 'gl-ss27' }, owner, false)).toEqual({ key: 'styleDraft.held.type' })
-    const ready = { ...draft, code: 'gl-ss27', productType: 'GLOVES' }
+    // The size scale is asked (the style library takes the range from it; most product types give none).
+    expect(styleDraftDialogHeld(VIEW, { ...draft, code: 'gl-ss27', productType: 'GLOVES' }, owner, false)).toEqual({ key: 'styleDraft.held.scale' })
+    const ready = { ...draft, code: 'gl-ss27', productType: 'GLOVES', sizeScaleId: 'scale-1' }
     expect(styleDraftDialogHeld(VIEW, ready, canFor('production'), false)).toBeNull()
     const body = styleDraftBodyOf(VIEW, ready)
-    expect(body).toMatchObject({ version: VIEW.version, code: 'GL-SS27', productType: 'GLOVES' })
+    expect(body).toMatchObject({ version: VIEW.version, code: 'GL-SS27', productType: 'GLOVES', sizeScaleId: 'scale-1' })
     expect(Object.keys(body)).not.toEqual(expect.arrayContaining(['brandPartyId']))
     expect(JSON.stringify(body)).not.toMatch(/brand|party|company/i)
   })

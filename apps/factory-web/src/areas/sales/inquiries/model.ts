@@ -488,6 +488,13 @@ export function orderBodyOf(view: InquiryView, draft: OrderDraft, can: Inquiries
   return { version: view.version, ...(lines.length > 0 ? { lines } : {}), ...(draft.promiseDate !== view.wantedDate ? { promiseDate: draft.promiseDate } : {}), ...(ref ? { customerRef: ref } : {}), carryFiles: draft.carryFiles }
 }
 
+/**
+ * A decision's receipt stays on the page when the queue moves on to the next request (the pane then shows another one): Make quote,
+ * Make order (confirmed, or waiting for approval and why), Decline, Mark lost. A style draft leaves the request open: its receipt
+ * stays in the pane.
+ */
+export const receiptStays = (key: string): boolean => key.startsWith('done.quote') || key.startsWith('done.order') || key === 'done.decline' || key === 'done.lost'
+
 /** The request's files that may go with what is made from it (its own and its mail's), as the dialogs list them. */
 export const carriableFiles = (view: Pick<InquiryView, 'files' | 'mailFiles'>): InquiryFile[] => [...view.files, ...view.mailFiles]
 
@@ -525,6 +532,8 @@ export function styleDraftDialogHeld(view: InquiryView, draft: StyleDraftDraft, 
   if (held) return held
   if (!STYLE_CODE.test(draft.code.trim().toUpperCase())) return { key: 'styleDraft.held.code' }
   if (!draft.productType) return { key: 'styleDraft.held.type' }
+  // The style library takes its range from a size scale (a product type alone gives none for most types): asked, never guessed.
+  if (!draft.sizeScaleId) return { key: 'styleDraft.held.scale' }
   return null
 }
 
