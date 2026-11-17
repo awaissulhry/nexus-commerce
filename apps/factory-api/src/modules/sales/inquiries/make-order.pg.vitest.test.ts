@@ -146,7 +146,7 @@ describe('B-TH-025 Make order from a request', () => {
     )
     const seen = await ok('ada', 'GET', `/sales/inquiries/${inquiry.id}`)
     expect(seen.inquiry.actions.order).toEqual({ allowed: true, refusal: null })
-    made = await ok('ada', 'POST', `/sales/inquiries/${inquiry.id}/order`, { version: seen.inquiry.version, prices: [{ seq: 10, unitPrice: '150' }], customerRef: 'MADE-UP-PO-77' }, 201)
+    made = await ok('ada', 'POST', `/sales/inquiries/${inquiry.id}/order`, { version: seen.inquiry.version, lines: [{ seq: 10, unitPrice: '150' }], customerRef: 'MADE-UP-PO-77' }, 201)
     expect(made.order).toMatchObject({ number: expect.stringMatching(/^SO-/), status: 'CONFIRMED', waitsFor: null })
     expect(made.said.en).toBe(`Order ${made.order.number} was made from ${inquiry.number} and is confirmed.`)
     expect(made.said.it).toContain('confermato')
@@ -174,7 +174,7 @@ describe('B-TH-025 Make order from a request', () => {
     // Replayed with its own key: the stored answer, no second order.
     const fresh = await request(P1, [{ styleId: jacket, colourwayId: black, sizes: { '54': 2 } }])
     const key = `mo-replay-${run}`
-    const body = { version: fresh.version, prices: [{ seq: 10, unitPrice: '140' }], customerRef: 'MADE-UP-PO-78' }
+    const body = { version: fresh.version, lines: [{ seq: 10, unitPrice: '140' }], customerRef: 'MADE-UP-PO-78' }
     const first = await ok('ada', 'POST', `/sales/inquiries/${fresh.id}/order`, body, 201, key)
     const replay = await ok('ada', 'POST', `/sales/inquiries/${fresh.id}/order`, body, 201, key)
     expect(replay.order.id).toBe(first.order.id)
@@ -187,7 +187,7 @@ describe('B-TH-025 Make order from a request', () => {
     await admin(`UPDATE "ApprovalRule" SET active = true WHERE "tenantId" = $1 AND kind = 'CREDIT_OVERRIDE'`, [T])
     await ok('olivia', 'PUT', `/sales/credit/limits/${P3}/${companyA}`, { amount: 100, currency: 'EUR', reason: 'Made-up: a new customer starts small.' })
     const asked = await request(P3, [{ styleId: liner, colourwayId: grey, sizes: { '52': 3 } }])
-    const waiting = await ok('ada', 'POST', `/sales/inquiries/${asked.id}/order`, { version: asked.version, prices: [{ seq: 10, unitPrice: '150' }] }, 201)
+    const waiting = await ok('ada', 'POST', `/sales/inquiries/${asked.id}/order`, { version: asked.version, lines: [{ seq: 10, unitPrice: '150' }] }, 201)
     expect(waiting.order).toMatchObject({ status: 'PENDING_APPROVAL', waitsFor: 'CREDIT' })
     expect(waiting.said.en).toContain('waits for approval')
     expect(waiting.said.en).not.toContain('confirmed')
@@ -197,7 +197,7 @@ describe('B-TH-025 Make order from a request', () => {
 
   it('the customer’s terms want its PO number: an order without one is refused in words (the normal order checks)', async () => {
     const ready = await request(P1, [{ styleId: jacket, colourwayId: black, sizes: { '50': 1 } }])
-    const refused = await no('ada', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, prices: [{ seq: 10, unitPrice: '120' }] }, 400)
+    const refused = await no('ada', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, lines: [{ seq: 10, unitPrice: '120' }] }, 400)
     expect(refused.message).toContain('purchase order number')
     expect((await one('SELECT status FROM "Inquiry" WHERE id = $1', [ready.id])).status).toBe('NEW')
   })
@@ -219,7 +219,7 @@ describe('B-TH-025 Make order from a request', () => {
     expect(fromProspect.message).toContain('make the customer first')
     // A price for a line the request does not have.
     const ready = await request(P1, [{ styleId: jacket, colourwayId: black, sizes: { '50': 1 } }])
-    expect((await no('ada', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, prices: [{ seq: 99, unitPrice: '1' }] }, 400)).message).toContain('no line 99')
+    expect((await no('ada', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, lines: [{ seq: 99, unitPrice: '1' }] }, 400)).message).toContain('no line 99')
     expect((await admin('SELECT id FROM "Inquiry" WHERE id = ANY($1::uuid[]) AND status = \'ORDERED\'', [[words.id, sizeless.id, bare.id, prospect.id, ready.id]])).length).toBe(0)
   })
 
@@ -237,7 +237,7 @@ describe('B-TH-025 Make order from a request', () => {
     for (const extra of [{ partyId: P3 }, { companyId: companyA }, { shipToAddressId: newId() }]) {
       expect((await call('ada', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, ...extra })).statusCode).toBe(400)
     }
-    const fine = await ok('ada', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, prices: [{ seq: 10, unitPrice: '120' }], customerRef: 'MADE-UP-PO-79' }, 201)
+    const fine = await ok('ada', 'POST', `/sales/inquiries/${ready.id}/order`, { version: ready.version, lines: [{ seq: 10, unitPrice: '120' }], customerRef: 'MADE-UP-PO-79' }, 201)
     expect((await one('SELECT "partyId" FROM "SalesOrder" WHERE id = $1', [fine.order.id])).partyId).toBe(P1)
   })
 })

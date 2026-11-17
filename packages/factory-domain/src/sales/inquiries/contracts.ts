@@ -195,7 +195,8 @@ export type QuoteBody = z.output<typeof quoteBody>
  */
 export const orderBody = input({
   version: version(),
-  prices: z
+  /** A unit price typed for a line of the request (by its seq; on the order's basis); a line not named takes the list price. */
+  lines: z
     .array(input({ seq: z.number().int().min(1), unitPrice: money.price(unitPrice()) }))
     .max(INQUIRY_LIMITS.lines)
     .optional(),

@@ -72,7 +72,7 @@ async function ok(session: string, method: Method, url: string, payload?: unknow
   expect(response.statusCode, response.body).toBe(status)
   return response.json()
 }
-const contextOf = (session: string): RequestContext => ({ ...(SESSIONS[session] as SessionContext), requestId: newId() }) as RequestContext
+const contextOf = (session: string) => ({ ...(SESSIONS[session] as SessionContext), requestId: newId() }) as RequestContext & { actorId: string }
 
 let inquiry = ''
 const M = {} as Record<'adaNote' | 'question' | 'answer' | 'brunoNote', string>
@@ -132,8 +132,8 @@ describe('B-TH-027 each person’s own read mark (office)', () => {
 
   it('reading up to the newest clears it for that person only; unread from a message brings it back; the mark only moves forward', async () => {
     expect((await ok('bruno', 'POST', `/threads/Inquiry/${inquiry}/read`, {})).reading).toEqual({ lastReadMessageId: M.brunoNote, newCount: 0, firstNewMessageId: null })
-    expect((await unread('bruno'))[0].newCount).toBe(0)
-    expect((await unread('ada'))[0].newCount).toBe(2)
+    expect((await unread('bruno'))[0]!.newCount).toBe(0)
+    expect((await unread('ada'))[0]!.newCount).toBe(2)
     // Read up to an older message: the mark stays where it is.
     expect((await ok('bruno', 'POST', `/threads/Inquiry/${inquiry}/read`, { messageId: M.question })).reading.lastReadMessageId).toBe(M.brunoNote)
     // Unread from the answer: the answer is new again (his own note after it never counts).
@@ -157,7 +157,7 @@ describe('B-TH-027 each person’s own read mark (office)', () => {
 
 describe('T08 portal people: shared messages only, their own mark only, another brand nothing', () => {
   it('a portal person of P1 counts only the messages shared with P1 — an internal note never counts nor is named', async () => {
-    expect((await unread('anna'))[0].newCount).toBe(2)
+    expect((await unread('anna'))[0]!.newCount).toBe(2)
     const read = await ok('anna', 'GET', `/threads/Inquiry/${inquiry}`)
     expect(read.reading).toEqual({ lastReadMessageId: null, newCount: 2, firstNewMessageId: M.question })
     const text = JSON.stringify(read)
@@ -168,17 +168,17 @@ describe('T08 portal people: shared messages only, their own mark only, another 
 
   it('their mark is theirs: Anna reads up to the answer (the portal’s own write, in the partner scope); Alba still counts 2', async () => {
     const context = contextOf('anna')
-    const thread = await one('SELECT id, "companyId", "siteId", "partyId" FROM "Thread" WHERE "recordType" = $1 AND "recordId" = $2', ['Inquiry', inquiry])
-    const answer = await one('SELECT id, at FROM "Message" WHERE id = $1', [M.answer])
+    const thread = (await one('SELECT id, "companyId", "siteId", "partyId" FROM "Thread" WHERE "recordType" = $1 AND "recordId" = $2', ['Inquiry', inquiry])) as { id: string; companyId: string | null; siteId: string | null; partyId: string | null }
+    const answer = (await one('SELECT id, at FROM "Message" WHERE id = $1', [M.answer])) as { id: string; at: Date }
     await command(callerFor(h.database, context), { name: 'threads.markRead', input: { messageId: M.answer } }, async (tools) => ({ moved: await moveMark(tools, thread, { userId: PEOPLE.anna, office: false }, answer, true) }))
-    expect((await unread('anna'))[0].newCount).toBe(0)
-    expect((await unread('alba'))[0].newCount).toBe(2)
+    expect((await unread('anna'))[0]!.newCount).toBe(0)
+    expect((await unread('alba'))[0]!.newCount).toBe(2)
     expect(await one('SELECT "partyId", "lastReadMessageId" FROM "ThreadRead" WHERE "userId" = $1', [PEOPLE.anna])).toEqual({ partyId: P1, lastReadMessageId: M.answer })
     // The database refuses a portal person's mark on an internal note (never counted as read or unread for a customer).
-    const note = await one('SELECT id, at FROM "Message" WHERE id = $1', [M.brunoNote])
+    const note = (await one('SELECT id, at FROM "Message" WHERE id = $1', [M.brunoNote])) as { id: string; at: Date }
     await expect(command(callerFor(h.database, contextOf('alba')), { name: 'threads.markRead', input: { messageId: M.brunoNote } }, async (tools) => ({ moved: await moveMark(tools, thread, { userId: PEOPLE.alba, office: false }, note, true) }))).rejects.toThrow()
     // Office counts never move with a portal person's mark.
-    expect((await unread('ada'))[0].newCount).toBe(2)
+    expect((await unread('ada'))[0]!.newCount).toBe(2)
   })
 
   it('a portal person of P3 (Brand B) counts 0 on P1’s request and reads nothing of its thread', async () => {

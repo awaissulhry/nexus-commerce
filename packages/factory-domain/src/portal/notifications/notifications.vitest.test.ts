@@ -53,6 +53,26 @@ describe('partner notifications (B-W2b-167, PLT-148)', () => {
     expect(partnerSentence({ messageKey: 'portal.task.reminded', recordLabel: 'PO-1', params: { kind: 'CONFIRM_PO', dueAt: '2026-11-05T11:00:00.000Z' } }, 'it', 'Factory Spa')).toBe("Promemoria: Conferma l'ordine PO-1 (entro il 5 nov)")
   })
 
+  // th2-backend step 7 (threads plan §0.5, counts do not leak): a customer's request, quote or order by its OWN number.
+  it("names a customer's request, quote or order by its own number in the reader's language, never the office's series", () => {
+    const order = { recordLabel: '#12', params: { yourKind: 'ORDER', yourSeq: 12 } }
+    expect(partnerSentence({ messageKey: 'portal.order.confirmed', ...order }, 'en', 'Factory Spa')).toBe('Your order 12 is confirmed')
+    expect(partnerSentence({ messageKey: 'portal.order.confirmed', ...order }, 'it', 'Factory Spa')).toBe('Il vostro ordine 12 è confermato')
+    expect(partnerSentence({ messageKey: 'portal.order.received', ...order }, 'en', 'Factory Spa')).toBe('We received your order 12: it is waiting for our approval')
+    expect(partnerSentence({ messageKey: 'portal.order.dates_changed', recordLabel: '#12', params: { ...order.params, dueAt: '2026-12-12T11:00:00.000Z' } }, 'it', 'Factory Spa')).toBe('Nuova data di consegna per il vostro ordine 12 (entro il 12 dic)')
+    const request = { recordLabel: '#7', params: { yourKind: 'REQUEST', yourSeq: 7 } }
+    expect(partnerSentence({ messageKey: 'portal.request.received', ...request }, 'en', 'Factory Spa')).toBe('We received your request 7')
+    expect(partnerSentence({ messageKey: 'portal.request.need_info', ...request }, 'it', 'Factory Spa')).toBe('Ci serve qualcosa da voi per la vostra richiesta 7')
+    expect(partnerSentence({ messageKey: 'portal.request.declined', ...request }, 'en', 'Factory Spa')).toBe('Your request 7 was declined')
+    // A request notice made before (yourSeq only) still reads as a request; a supplier's record keeps its label.
+    expect(partnerSentence({ messageKey: 'portal.request.received', recordLabel: '#7', params: { yourSeq: 7 } }, 'en', 'Factory Spa')).toBe('We received your request 7')
+    expect(partnerSentence({ messageKey: 'portal.message.posted', recordLabel: '#3', params: { yourKind: 'QUOTE', yourSeq: 3 } }, 'it', 'Factory Spa')).toBe('Nuovo messaggio da Factory Spa per il vostro preventivo 3')
+    expect(partnerSentence({ messageKey: 'portal.message.posted', recordLabel: 'PO-2026-0007', params: {} }, 'en', 'Factory Spa')).toBe('New message from Factory Spa on PO-2026-0007')
+    for (const messageKey of ['portal.order.confirmed', 'portal.request.received', 'portal.order.change_accepted'] as const) {
+      for (const locale of ['it', 'en'] as const) expect(partnerSentence({ messageKey, ...order }, locale, 'Factory Spa')).not.toMatch(/SO-|INQ-|QT-/)
+    }
+  })
+
   it("takes a new request's e-mail topic from its kind, every other from its key", () => {
     const kindTopic = (kind: string) => KIND_RULES[kind as keyof typeof KIND_RULES]?.topic ?? null
     expect(topicOfNotice({ messageKey: 'portal.task.opened', recordLabel: 'x', params: { kind: 'PAY_INVOICE' } }, kindTopic)).toBe('INVOICES')
@@ -153,8 +173,10 @@ describe('our check of a delivery address the person added (B-W2b-F15)', () => {
 // ── B-TH-006 (L2-G06) ─────────────────────────────────────────────────────────────────────────────────────────────────
 describe('an order that waits for our yes (B-TH-006)', () => {
   it('is received, waiting for our approval, never confirmed; it is mailed at once as order news', () => {
-    expect(partnerSentence({ messageKey: 'portal.order.received', recordLabel: 'SO-2026-0042', params: {} }, 'en', 'Factory Spa')).toBe('We received your order SO-2026-0042: it is waiting for our approval')
-    expect(partnerSentence({ messageKey: 'portal.order.received', recordLabel: 'SO-2026-0042', params: {} }, 'it', 'Factory Spa')).toBe('Abbiamo ricevuto il tuo ordine SO-2026-0042: è in attesa della nostra approvazione')
+    // th2-backend step 7 (§0.5): the order by the customer's own number.
+    const order = { recordLabel: '#42', params: { yourKind: 'ORDER', yourSeq: 42 } }
+    expect(partnerSentence({ messageKey: 'portal.order.received', ...order }, 'en', 'Factory Spa')).toBe('We received your order 42: it is waiting for our approval')
+    expect(partnerSentence({ messageKey: 'portal.order.received', ...order }, 'it', 'Factory Spa')).toBe('Abbiamo ricevuto il vostro ordine 42: è in attesa della nostra approvazione')
     for (const locale of ['it', 'en'] as const) expect(partnerSentence({ messageKey: 'portal.order.received', recordLabel: 'SO-1', params: {} }, locale, 'Factory Spa')).not.toMatch(/confirm|conferm/i)
     expect(topicOfNotice({ messageKey: 'portal.order.received', recordLabel: 'SO-1', params: {} }, () => null)).toBe('ORDERS')
   })

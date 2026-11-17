@@ -44,7 +44,7 @@ const orderable = (lines: readonly LineData[]): OrderableLine[] => lines.map((li
 
 /** The manual order the request becomes: the request's customer, contact, delivery address and lines; the body's prices, date and PO. */
 function orderOf(row: InquiryData, lines: readonly LineData[], body: OrderBody, today: BusinessDate): ManualOrderBody {
-  const prices = new Map((body.prices ?? []).map((entry) => [entry.seq, entry.unitPrice as unknown as string]))
+  const prices = new Map((body.lines ?? []).map((entry) => [entry.seq, entry.unitPrice as unknown as string]))
   const wanted = dayOrNull(row.wantedDate) as BusinessDate | null
   const ahead = wanted !== null && wanted >= today ? wanted : null
   return {
@@ -79,8 +79,8 @@ export async function orderInquiry(caller: CommandCaller, inquiryId: string, bod
   // The request's own refusals are said inside the command (after its lock): a repeat of a call that made the order (the same
   // Idempotency-Key) answers the stored order instead of "it is ordered".
   if (inquiry.partyId !== null && !can(actorOf(context), ORDERS_MANAGE, { companyId: inquiry.companyId, partyId: inquiry.partyId })) throw new ForbiddenError('Making the order needs the right to make orders for this company and customer.')
-  const unknown = (body.prices ?? []).filter((entry) => !lines.some((line) => line.seq === entry.seq))
-  if (unknown.length > 0) throw new ValidationError(`The request has no line ${unknown.map((entry) => entry.seq).join(', ')}.`, unknown.map((entry) => ({ path: `body/prices/${entry.seq}`, message: `The request has no line ${entry.seq}.` })))
+  const unknown = (body.lines ?? []).filter((entry) => !lines.some((line) => line.seq === entry.seq))
+  if (unknown.length > 0) throw new ValidationError(`The request has no line ${unknown.map((entry) => entry.seq).join(', ')}.`, unknown.map((entry) => ({ path: `body/lines/${entry.seq}`, message: `The request has no line ${entry.seq}.` })))
 
   const { result } = await command(caller, { name: 'sales.inquiries.order', idempotencyKey, input: { inquiryId, ...body } }, async (tools) => {
     // Locked first, then the request's own refusal (an ordered request says so whatever version was read), then the version.

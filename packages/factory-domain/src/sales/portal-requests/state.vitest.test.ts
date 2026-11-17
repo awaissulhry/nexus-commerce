@@ -61,11 +61,13 @@ describe('the words the customer sends (B-TH-010)', () => {
 })
 
 describe("a request's news in the customer's language (B-TH-011)", () => {
-  it('names the office number and the customer’s own number, never an office person', () => {
-    const notice = (messageKey: string, yourSeq: number | null) => ({ messageKey, recordLabel: 'INQ-2026-0042', params: { yourSeq } }) as never
-    expect(partnerSentence(notice('portal.request.received', 7), 'en', 'Seed A')).toBe('We received your request INQ-2026-0042 (your request 7)')
-    expect(partnerSentence(notice('portal.request.need_info', 7), 'it', 'Seed A')).toBe('Ci serve qualcosa da voi sulla richiesta INQ-2026-0042 (la vostra richiesta 7)')
-    expect(partnerSentence(notice('portal.request.declined', null), 'en', 'Seed A')).toBe('Your request INQ-2026-0042 was declined')
+  // th2-backend step 7 (threads plan §0.5, counts do not leak): the customer's own number only, never the office's series.
+  it('names the customer’s own number only — never the office number, never an office person', () => {
+    const notice = (messageKey: string, yourSeq: number | null) => ({ messageKey, recordLabel: yourSeq === null ? '—' : `#${yourSeq}`, params: { yourKind: 'REQUEST', yourSeq } }) as never
+    expect(partnerSentence(notice('portal.request.received', 7), 'en', 'Seed A')).toBe('We received your request 7')
+    expect(partnerSentence(notice('portal.request.need_info', 7), 'it', 'Seed A')).toBe('Ci serve qualcosa da voi per la vostra richiesta 7')
+    expect(partnerSentence(notice('portal.request.declined', 7), 'it', 'Seed A')).toBe('La vostra richiesta 7 non è stata accettata')
+    for (const key of ['portal.request.received', 'portal.request.need_info', 'portal.request.declined']) expect(partnerSentence(notice(key, 7), 'en', 'Seed A')).not.toMatch(/INQ-/)
   })
 })
 

@@ -65,7 +65,7 @@ export function orderNamed(order: { readonly id: string; readonly customerSeq: n
 }
 
 /** A record of a customer by its own number (SalesOrder, Quote, Inquiry), read in the fan-out's scope; null: not one of those. */
-async function customerNamed(tx: CommandTx, recordType: string, recordId: string): Promise<{ label: string; params: Record<string, unknown> } | null> {
+async function customerNamed(tx: CommandTx, recordType: string, recordId: string): Promise<{ label: string; params: Record<string, string | number | null> } | null> {
   const kind = CUSTOMER_KINDS[recordType]
   if (!kind) return null
   const row =

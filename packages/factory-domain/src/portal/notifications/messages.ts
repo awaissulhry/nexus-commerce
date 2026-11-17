@@ -89,8 +89,8 @@ export function partnerSentence(notice: PartnerNotice, locale: PortalLocale, com
   // B-TH-011/105 and th2-backend step 7 (§0.5): the customer's own words of its request, quote or order ("your request 7", "il
   // vostro ordine 12"), in the reader's language; a notice of no such record (a supplier's PO) reads its label instead. A request
   // notice made before step 7 named only yourSeq (REQUEST).
-  const kind: CustomerNumberKind = typeof params.yourKind === 'string' && (CUSTOMER_NUMBER_KINDS as readonly string[]).includes(params.yourKind) ? (params.yourKind as CustomerNumberKind) : 'REQUEST'
-  const yourNumber = customerNumberOf(kind, typeof params.yourSeq === 'number' ? params.yourSeq : null)
+  const yourKind: CustomerNumberKind = typeof params.yourKind === 'string' && (CUSTOMER_NUMBER_KINDS as readonly string[]).includes(params.yourKind) ? (params.yourKind as CustomerNumberKind) : 'REQUEST'
+  const yourNumber = customerNumberOf(yourKind, typeof params.yourSeq === 'number' ? params.yourSeq : null)
   const own = yourNumber ? yourNumber.words[locale] : null
   const yours = own ? `${own.charAt(0).toLowerCase()}${own.slice(1)}` : notice.recordLabel
   const Yours = own ?? notice.recordLabel
