@@ -203,6 +203,18 @@ describe("B-PR-22a the customer's Urgent list (PUT /portal/production/urgent-ord
     expect(JSON.stringify(error)).not.toContain(A.alpha)
     expect(await states([A.so2, A.alpha])).toEqual(aBefore)
   })
+
+  // ── F-PR-11: a drag on a list read before a change says who changed it (its own side, or us) and when, never a person ──
+  it('F-PR-11: a list read before its own change: the refusal names its side and the time ("Changed at hh:mm"), never a name', async () => {
+    const before = await states([B.b2, B.b3, B.b4])
+    const error = await refused('beta', 'PUT', '/portal/production/urgent-order', { orderIds: [B.b3, B.b4], asOf: '2026-01-01T00:00:00.000Z' }, 409)
+    const changed = (error.issues as Json[]).find((issue) => String(issue.path).startsWith('body/orderIds/CHANGED_SINCE/'))
+    expect(changed?.path).toMatch(/^body\/orderIds\/CHANGED_SINCE\/YOU\/\d{2}:\d{2}$/)
+    expect(changed?.message).toMatch(/^Changed at \d{2}:\d{2}: read the list again\.$/)
+    expect(JSON.stringify(error)).not.toContain(people.beta)
+    expect(await states([B.b2, B.b3, B.b4])).toEqual(before)
+  })
+  // ── end F-PR-11
 })
 
 describe('B-PR-22a Undo of a batch (POST /portal/production/urgency/undo; R-49)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
