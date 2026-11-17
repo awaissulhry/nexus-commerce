@@ -397,16 +397,16 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
       { colId: 'picture', headerName: t('col.picture'), minWidth: 88, maxWidth: 92, sortable: false, suppressHeaderMenuButton: true, valueGetter: (params) => (params.data?.picture ? `${params.data.picture.styleCode}` : ''), cellRenderer: PictureRender },
       { colId: 'customer', headerName: t('col.customer'), minWidth: 150, flex: 1, valueGetter: (params) => (params.data ? customerName(params.data) : ''), cellRenderer: CustomerCell },
       { colId: 'subject', headerName: t('col.subject'), minWidth: 200, flex: 1.8, valueGetter: (params) => params.data?.summary ?? '', cellRenderer: SubjectCell },
-      { colId: 'files', headerName: t('col.files'), minWidth: 120, flex: 0.6, valueGetter: (params) => (params.data ? joined(filesPhrases(params.data) ?? [], say) || '—' : ''), cellRenderer: FilesCell },
+      { colId: 'files', headerName: t('col.files'), minWidth: 110, flex: 0.5, valueGetter: (params) => (params.data ? joined(filesPhrases(params.data) ?? [], say) || '—' : ''), cellRenderer: FilesCell },
       { colId: 'pieces', headerName: t('col.quantity'), minWidth: 100, flex: 0.5, hide: !wide, valueGetter: (params) => params.data?.pieces ?? null, cellRenderer: QuantityCell },
-      { colId: 'wantedDate', headerName: t('col.wanted'), minWidth: 110, flex: 0.5, valueGetter: (params) => (params.data ? day(params.data.wantedDate) : '') },
+      { colId: 'wantedDate', headerName: t('col.wanted'), minWidth: 100, flex: 0.5, valueGetter: (params) => (params.data ? day(params.data.wantedDate) : '') },
       { colId: 'received', headerName: t('col.received'), minWidth: 150, flex: 0.6, hide: !wide, valueGetter: (params) => (params.data ? when(params.data.receivedAt) : '') },
-      { colId: 'waitingHours', headerName: t('col.waiting'), minWidth: 150, flex: 0.7, valueGetter: (params) => params.data?.waiting.workingMinutes ?? null, cellRenderer: WaitingCell },
-      { colId: 'owner', headerName: t('col.owner'), minWidth: 130, flex: 0.6, valueGetter: (params) => (params.data ? (say(assigneePhrase(params.data)) ?? '') : '') },
-      { colId: 'status', headerName: t('col.state'), minWidth: 170, flex: 0.8, valueGetter: (params) => (params.data ? t(`status.${params.data.status}`) : ''), cellRenderer: StateCell },
+      { colId: 'waitingHours', headerName: t('col.waiting'), minWidth: 185, flex: 0.8, valueGetter: (params) => params.data?.waiting.workingMinutes ?? null, cellRenderer: WaitingCell },
+      { colId: 'owner', headerName: t('col.owner'), minWidth: 120, flex: 0.5, valueGetter: (params) => (params.data ? (say(assigneePhrase(params.data)) ?? '') : '') },
+      { colId: 'status', headerName: t('col.state'), minWidth: 150, flex: 0.7, valueGetter: (params) => (params.data ? t(`status.${params.data.status}`) : ''), cellRenderer: StateCell },
       { colId: 'source', headerName: t('col.source'), minWidth: 110, flex: 0.5, hide: !wide, valueGetter: (params) => (params.data ? t(`source.${params.data.source}`) : ''), cellRenderer: SourceCell },
       { colId: 'number', headerName: t('col.number'), minWidth: 140, flex: 0.6, hide: !wide, valueGetter: (params) => params.data?.number ?? '', cellRenderer: NumberCell },
-      ...(manyCompanies ? [{ colId: 'company', headerName: t('col.company'), minWidth: 120, flex: 0.5, valueGetter: (params: { data?: InquiryRow }) => (params.data ? (companyName(params.data.companyId) ?? '') : ''), cellRenderer: CompanyCell } satisfies ColDef<InquiryRow>] : []),
+      ...(manyCompanies ? [{ colId: 'company', headerName: t('col.company'), minWidth: 100, flex: 0.4, valueGetter: (params: { data?: InquiryRow }) => (params.data ? (companyName(params.data.companyId) ?? '') : ''), cellRenderer: CompanyCell } satisfies ColDef<InquiryRow>] : []),
       ...(m.can.price
         ? [
             {

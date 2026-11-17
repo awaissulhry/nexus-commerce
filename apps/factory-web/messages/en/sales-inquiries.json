@@ -45,7 +45,7 @@
     "withheldPrice": "needs the price right"
   },
   "col": {
-    "number": "Request",
+    "number": "Number",
     "from": "From",
     "summary": "Summary",
     "source": "Source",
