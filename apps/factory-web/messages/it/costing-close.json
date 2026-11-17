@@ -338,27 +338,6 @@
       "reversed": "Lo scostamento di {material} su {document} è stato stornato."
     }
   },
-  "scrapRework": {
-    "title": "Costo di scarti e rilavorazioni",
-    "hint": "Per motivo: i capi scartati a un'operazione o in una rilavorazione e il loro valore, il materiale scartato dal magazzino per questo ordine di lavoro e i capi rilavorati ai loro minuti standard.",
-    "loading": "Lettura del costo di scarti e rilavorazioni…",
-    "failed": "Impossibile caricare il costo di scarti e rilavorazioni",
-    "none": "Su questo ordine di lavoro non è stato scartato né rilavorato nulla.",
-    "noReason": "Nessun motivo indicato",
-    "reworked_one": "{count} capo · {minutes} min",
-    "reworked_other": "{count} capi · {minutes} min",
-    "noRate": "Nessun costo al minuto in vigore",
-    "totalUnknown": "Non noto: una rilavorazione non ha un costo al minuto",
-    "total": "Totale",
-    "never": "Per ordine di lavoro e motivo: mai per persona.",
-    "col": {
-      "reason": "Motivo",
-      "scrapped": "Capi scartati",
-      "stock": "Materiale scartato dal magazzino",
-      "rework": "Rilavorati",
-      "total": "Costo"
-    }
-  },
   "variancesList": {
     "title": "Scostamenti per ordine di lavoro",
     "hint": "Le righe di scostamento delle chiusure fatte dal {from} al {to} ancora valide.",

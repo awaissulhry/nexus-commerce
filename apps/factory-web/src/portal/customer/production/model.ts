@@ -1,11 +1,16 @@
 import type { Locale } from '../../../lib/i18n/locales'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { countWords } from '@nexus/factory-domain/production-brand/portal-read' // F-PR-12a
-import type { HealthInput, HealthState, HoldInput, PlainStage, WaitingInput } from '../../../lib/production/model'
+import type { HealthInput, HealthState, HoldInput, PiecesColourway, PlainStage, WaitingInput } from '../../../lib/production/model'
 import { PORTAL_AREAS } from '../../shell/nav/portal-nav' // F-PR-12a
 import { recordHref } from '../orders/model'
 import type { BrandUrgencyCode, ProductionChip, ProductionHealth, ProductionList, ProductionOrder, ProductionRow, ProductionWaiting, Urgency, UrgencyAnswer, UrgencyOutcome, UrgentUse, Words } from './api'
+import type { ApprovalState, BrandGateState, ProductionGates } from './api' // F-PR-12b
 import { isProductionChip, URGENCY_OUTCOMES } from './api'
+// ---- F-PR-12c
+import { shares } from '@nexus/factory-domain/production-brand/levels'
+import type { FinalInspection, FinalState, ProductionQuality, QualityCheck } from './api'
+// ---- end F-PR-12c
 
 /**
  * F-PR-11 — the customer's My production (production plan §3 "Customer urgency", §4, §5 Portal › Production; 17-web-r2 §1.4;
@@ -289,3 +294,106 @@ export function waitingHrefOf(prefix: string, areas = PORTAL_AREAS): string {
   return built ? `${prefix}/waiting` : `${prefix}/`
 }
 // ── end F-PR-12a
+
+// ── F-PR-12b: + Progress and + Gates & dates on the order's Status & progress ─────────────────────────────────────────────
+/**
+ * Whether the order's production read draws its progress (and its gates) by the customer's level: while it is read or being
+ * read. Otherwise (no production right, not in production, its read failed) the order keeps today's progress card (C1).
+ */
+export const productionOwnsProgress = (production: { readonly state: 'loading' | 'error' | 'ready' | 'hidden' } | null | undefined): boolean => production?.state === 'ready' || production?.state === 'loading'
+
+/**
+ * The pieces of + Progress as the shared PiecesGrid reads them: one block per order line ("Line 1 · JK-210 Black"), its sizes in the
+ * scale's order, a size-less piece (made to measure) under its own word. Its own cells only, as the API counted them (Cut = cut and
+ * bundled; a stage the site does not count stays null: "—", never 0). `t` is the order page's words (`portal-orders`).
+ */
+export function piecesOf(progress: NonNullable<ProductionOrder['progress']>, t: Translate): PiecesColourway[] {
+  return progress.lines.map((line) => ({
+    id: line.lineId,
+    label: t('progress.line', { seq: line.seq, style: line.style?.code ?? '—', colour: line.colourway?.name ?? '' }).trim(),
+    sizes: line.sizes.map((size) => ({ size: size.size ?? t('production.pieces.oneSize'), ordered: size.ordered, cut: size.cut, sewn: size.sewn, inspected: size.inspected, packed: size.packed })),
+  }))
+}
+
+/** A gate's state as a chip: the customer's turn warns, ours is plain, passed is good, started before approval warns. */
+export const GATE_STATE_TONE: Readonly<Record<BrandGateState, Tone>> = Object.freeze({ WAITING_YOU: 'warning', WAITING_US: 'neutral', PASSED: 'success', STARTED_BEFORE: 'warning' })
+
+/** A swatch answer's state as a chip. */
+export const APPROVAL_STATE_TONE: Readonly<Record<ApprovalState, Tone>> = Object.freeze({ WAITING_YOU: 'warning', APPROVED: 'success', APPROVED_WITH_COMMENTS: 'success', REFUSED: 'danger' })
+
+/** Nothing to draw in Gates & dates: no gate, no swatch answer and no day in the published plan ("No steps planned yet"). */
+export const gatesEmpty = (gates: ProductionGates): boolean => gates.gates.length === 0 && gates.approvals.length === 0 && !gates.planned.cutStart && !gates.planned.sewStart && !gates.planned.finish
+
+/** Something waits on the customer here (a gate or a swatch answer): the section offers the way to what waits. */
+export const gatesWaitOnYou = (gates: ProductionGates): boolean => gates.gates.some((gate) => gate.state === 'WAITING_YOU') || gates.approvals.some((answer) => answer.state === 'WAITING_YOU')
+// ── end F-PR-12b
+
+// ── F-PR-12c: + Quality & photos on the order's Status & progress ─────────────────────────────────────────────────────────
+/**
+ * Whether the customer's level shares Quality & photos (plan §4: the last level). Only then is the order's quality read asked
+ * (below it the API answers 404 and the section is not drawn): a level that does not share it costs no call.
+ */
+export const qualityShared = (read: Pick<ProductionOrder, 'level'> | null | undefined): boolean => (read ? shares(read.level, 'quality') : false)
+
+/** A final inspection's or a check's result as a chip: passed is good, failed is bad, waiting is plain. */
+export const FINAL_STATE_TONE: Readonly<Record<FinalState, Tone>> = Object.freeze({ PASSED: 'success', FAILED: 'danger', WAITING: 'neutral' })
+
+export interface QualityLineRow {
+  readonly id: string
+  /** "Line 1 · JK-210 Black" (the order page's own words, as + Progress names its lines). */
+  readonly label: string
+  readonly ordered: number
+  readonly released: number
+  readonly reversed: number
+  /** Its sizes in the scale's order; a line without sizes reads one row under its own word. */
+  readonly sizes: readonly { readonly size: string; readonly ordered: number; readonly released: number; readonly reversed: number }[]
+  /** Part of it is made on a work order that is not the customer's alone: the API's words (its results stay ours), else null. */
+  readonly shared: string | null
+}
+
+/**
+ * The pieces released by quality and taken back, per line and size of its own order, as the API counted them on its own cells
+ * (never above what it ordered). `t` is the order page's words (`portal-orders`).
+ */
+export function qualityLinesOf(quality: Pick<ProductionQuality, 'lines'>, locale: Locale, t: Translate): QualityLineRow[] {
+  return quality.lines.map((line) => ({
+    id: line.lineId,
+    label: t('progress.line', { seq: line.seq, style: line.style?.code ?? '—', colour: line.colourway?.name ?? '' }).trim(),
+    ordered: line.ordered,
+    released: line.released,
+    reversed: line.reversed,
+    sizes: line.sizes.map((size) => ({ size: size.size ?? t('production.pieces.oneSize'), ordered: size.ordered, released: size.released, reversed: size.reversed })),
+    shared: line.sharedWork && line.sharedWorkWords ? say(line.sharedWorkWords, locale) : null,
+  }))
+}
+
+/** Nothing to show yet: no piece released or taken back, no inspection, no check, no hold and no photo (said in one line). */
+export const qualityNothing = (quality: ProductionQuality): boolean =>
+  quality.lines.every((line) => line.released === 0 && line.reversed === 0) && quality.finals.length === 0 && quality.checks.length === 0 && quality.holds.length === 0 && quality.photos.length === 0
+
+/** Some released pieces were taken back since: the column's meaning is said once under the table. */
+export const anyTakenBack = (quality: Pick<ProductionQuality, 'lines'>): boolean => quality.lines.some((line) => line.reversed > 0)
+
+/** "Lines 1, 2" (or "Line 1") of a final inspection, by their numbers on the order. */
+export const finalLinesText = (final: Pick<FinalInspection, 'lines'>, t: Translate): string =>
+  final.lines.length === 0 ? t('production.quality.finals.allLines') : t('production.quality.finals.lines', { count: final.lines.length, lines: final.lines.join(', ') })
+
+/** The report viewer's title and the name a download takes: our words and its day, never the office's number of the inspection. */
+export function reportNamesOf(final: Pick<FinalInspection, 'lines' | 'decidedOn' | 'report'>, day: (iso: string) => string, t: Translate): { title: string; fileName: string } {
+  const made = final.report?.madeOn ?? final.decidedOn
+  const title = made ? t('production.quality.finals.reportTitle', { lines: finalLinesText(final, t), date: day(made) }) : t('production.quality.finals.reportTitleNoDate', { lines: finalLinesText(final, t) })
+  return { title, fileName: `${t('production.quality.finals.fileName', { date: made ?? '' }).trim()}.pdf` }
+}
+
+/** A check's pieces with a defect, once any piece was looked at ("2 of 40 pieces with a defect"), else null. */
+export const checkPiecesText = (check: Pick<QualityCheck, 'pieces' | 'defectivePieces'>, t: Translate): string | null =>
+  check.pieces > 0 ? t('production.quality.checks.pieces', { count: check.pieces, defective: check.defectivePieces, pieces: check.pieces }) : null
+
+/** The photo viewer's Previous / Next: held at the ends with why (it never wraps), else null. */
+export function photoStepHeld(index: number, count: number, direction: -1 | 1, t: Translate): string | null {
+  const next = index + direction
+  if (next >= 0 && next < count) return null
+  if (count <= 1) return t('production.quality.photos.only')
+  return t(direction < 0 ? 'production.quality.photos.first' : 'production.quality.photos.last')
+}
+// ── end F-PR-12c

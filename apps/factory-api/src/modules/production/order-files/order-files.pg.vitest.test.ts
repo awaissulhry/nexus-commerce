@@ -239,8 +239,10 @@ describe('GET /production/work-orders/:id/order-files: the order’s own files, 
     expect(list.ordersLeftOut).toBe(0)
     expect((list.groups as Json[]).map((group) => group.order.id)).toEqual([w.b.salesOrderId])
     const group = groupOf(list, w.b.salesOrderId)
-    const [order] = await admin<{ number: string; customerRef: string | null }>(`SELECT number, "customerRef" FROM "SalesOrder" WHERE id = $1`, [w.b.salesOrderId])
-    expect(group.order).toMatchObject({ id: w.b.salesOrderId, number: order!.number, customerRef: order!.customerRef })
+    // F-PR-25 (threads ask): each order carries its own company (the docked order thread's record scope), never a party id.
+    const [order] = await admin<{ number: string; customerRef: string | null; companyId: string }>(`SELECT number, "customerRef", "companyId" FROM "SalesOrder" WHERE id = $1`, [w.b.salesOrderId])
+    expect(group.order).toMatchObject({ id: w.b.salesOrderId, number: order!.number, customerRef: order!.customerRef, companyId: order!.companyId })
+    expect(Object.keys(group.order).sort()).toEqual(['companyId', 'customerRef', 'id', 'number', 'orderDate', 'status'])
     expect(group.thread).toEqual({ recordType: 'SalesOrder', recordId: w.b.salesOrderId, threadId: w.second.threadId })
     expect(names(group)).toEqual(['Seed second brand label artwork.pdf', 'T-PR2B-B company two notes.pdf', 'T-PR2B-B logo artwork.pdf', 'T-PR2B-B measurement sheet.pdf', 'T-PR2B-B order sheet.pdf'])
     const byName = (name: string): Json => (group.files as Json[]).find((file) => file.name === name) ?? {}

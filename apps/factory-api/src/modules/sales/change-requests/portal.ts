@@ -41,6 +41,10 @@ import {
   type OrderRequestKind,
 } from '@nexus/factory-domain/sales/change-requests/rules'
 import { readWork, workOf } from '../../production/brand-portal/access'
+// B-PR-26: a partly shipped order's lines shipped in full (the cancel of what is still to ship).
+import type { FactoryClient } from '@nexus/factory-db'
+import { shortLinesOf } from '../orders/close-lines'
+import { readOrder as readOfficeOrder, readOrderFacts } from '../orders/store'
 import { earliestAskOf, earliestOf, freezeOf, impactAskOf, impactFrom, impactLinesOf, readImpactFacts } from './impact'
 import { feeView, impactOut } from './store'
 import { commandOn } from '../../../platform/portal/tasks/clock'
@@ -62,6 +66,7 @@ import {
   reasonWordsOf,
   REQUEST_COLUMNS,
   requestView,
+  readCounterStates,
   ruleLinesOf,
   feeLinesOf,
   type AddressRow,
@@ -139,6 +144,16 @@ interface ProductionFacts {
 
 const NO_LIMITS: AskLimits = Object.freeze({ productionUrgencyOn: false, productionAskKinds: [] })
 
+/**
+ * B-PR-26 (plan §3 "A partly shipped order may still ask to cancel unshipped lines (close short)"; R-35): the lines of the order
+ * that shipped in full (every piece left in a shipment), read in the tenant's scope after the partner read found the order.
+ */
+async function readShippedInFull(db: FactoryClient, orderId: string): Promise<Set<string>> {
+  const order = await readOfficeOrder(db, orderId)
+  if (!order) return new Set()
+  return new Set(shortLinesOf(await readOrderFacts(db, order)).filter((line) => line.quantity > 0 && line.shipped >= line.quantity).map((line) => line.id))
+}
+
 async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: string, now: Date): Promise<AskFacts> {
   const order = await partnerOrder(request, reader, orderId)
   const lines = await request.withClient((client) => readLines(client, [order.id]))
@@ -156,6 +171,8 @@ async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: 
   const tenant = await reader.inTenant(async (client) => ({
     settings: await readCutoffs(client, reader.session.tenantId, order.companyId),
     cuts: await readCuts(client, lines.map((line) => line.id)),
+    // B-PR-26: a partly shipped order's lines that shipped in full (nothing of them is left to cancel).
+    shippedInFull: order.status === 'PARTLY_SHIPPED' ? await readShippedInFull(client, order.id) : new Set<string>(),
     catalogue: await readCatalogue(client, lines),
     reasons: await readCancelReasons(client),
     // B-PR-25: the customer's limits (office-only settings, its own row) and whether a pause holds its work.
@@ -165,7 +182,7 @@ async function askFacts(request: FastifyRequest, reader: PortalReader, orderId: 
   const rule: RuleOrder = {
     status: order.status,
     promiseDate: dayOrNull(order.promiseDate),
-    lines: ruleLinesOf(lines, tenant.cuts),
+    lines: ruleLinesOf(lines, tenant.cuts).map((line) => (tenant.shippedInFull.has(line.id) ? { ...line, shippedInFull: true } : line)),
     openRequestDay: open ? businessDate(open.createdAt) : null,
   }
   // B-PR-25
@@ -414,7 +431,8 @@ async function askInCommand(tools: CommandTools, input: { readonly requestId: st
   const open = await tx.orderChangeRequest.findFirst({ where: { orderId: order.id, kind: { in: kinds }, status: { in: [...WAITING_REQUEST_STATUSES] } }, select: { id: true, createdAt: true } })
   if (open) throw new DomainError('invalid_state', production ? 'This ask waits for our answer already: withdraw it first, or wait for the answer.' : 'A request on this order waits for our answer: withdraw it first, or wait for the answer.', [{ path: production ? 'body/WAITING' : 'body/OPEN_REQUEST', message: 'A request waits.' }])
   const current = await tx.salesOrder.findUnique({ where: { id: order.id }, select: { status: true } })
-  const statuses: readonly string[] = production ? ASK_RULES[body.kind].statuses : ['CONFIRMED', 'IN_PRODUCTION', 'READY']
+  // B-PR-26: each kind's own statuses (a cancel of what is still to ship is asked of a PARTLY_SHIPPED order too).
+  const statuses: readonly string[] = ASK_RULES[body.kind].statuses
   if (!current || !statuses.includes(current.status)) throw new DomainError('invalid_state', production ? 'The order can no longer take this ask from the portal.' : 'The order can no longer be changed or cancelled from the portal.', [{ path: 'body/NOT_ASKABLE', message: 'The order moved on.' }])
   // B-PR-25: the impact kept as shown (the database checks it holds no number: never an amount).
   const kept = impactKeepable(input.impact) ? (input.impact as unknown as Prisma.InputJsonObject) : undefined
@@ -487,6 +505,8 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
   const lines = await request.withClient((client) => readLines(client, [order.id]))
   const cells = await request.withClient((client) => readCells(client, rows.map((row) => row.id)))
   const addresses = await request.withClient((client) => addressesOf(client, rows.map((row) => row.shipToAddressId)))
+  // B-PR-26: where each of our counter-offers stands (the customer reads its own approval requests).
+  const counters = await request.withClient((client) => readCounterStates(client, rows))
   const tenant = await reader.inTenant(async (client) => ({
     catalogue: await readCatalogue(client, lines),
     reasons: await reasonWordsOf(client, rows.flatMap((row) => (row.reasonCode ? [row.reasonCode] : []))),
@@ -511,6 +531,9 @@ async function viewFacts(request: FastifyRequest, reader: PortalReader, order: P
       reasons: tenant.reasons,
       // B-PR-25: a reader without prices (the Production role) reads no fee at all (neither the amounts nor the percent).
       fee: reader.seesPrices ? { pct: tenant.cancelFeePct, currency: order.currency, lines: feeLinesOf(lines) } : null,
+      // B-PR-26: our counter-offers, in the customer's words (its fee a price: dropped without the grain).
+      counters,
+      audience: 'customer' as const,
     },
   }
 }
@@ -544,6 +567,8 @@ export async function withdrawRequest(app: FastifyInstance, request: FastifyRequ
     const row = await tx.orderChangeRequest.findUnique({ where: { id: requestId }, select: REQUEST_COLUMNS })
     if (!row || row.orderId !== order.id) throw new NotFoundError('Request not found.')
     // B-PR-25: a production ask is withdrawn here too while it waits (B-PR-23 sent it to the order's thread until then).
+    // B-PR-26: a countered request is answered through our counter-offer (Waiting for you): yes carries it out, no withdraws it.
+    if (row.status === 'COUNTERED') throw new InvalidStateError('We sent you a counter-offer on this request: answer it in Waiting for you (no withdraws the request).')
     if (row.status !== 'OPEN') throw new InvalidStateError(row.status === 'WITHDRAWN' ? 'This request was already withdrawn.' : 'We already answered this request: it can no longer be withdrawn.')
     if (row.version !== version) throw new ConflictError(`This request changed since you read it (now version ${row.version}). Read it again.`)
     await tx.orderChangeRequest.update({ where: { id: requestId }, data: { status: 'WITHDRAWN', withdrawnAt: now, updatedAt: now, version: { increment: 1 } }, select: { id: true } })

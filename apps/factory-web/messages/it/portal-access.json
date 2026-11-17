@@ -79,7 +79,8 @@
     "invite": "Invitare persone dei partner",
     "manage": "Cambiare l'accesso delle persone dei partner e le impostazioni del portale",
     "preview": "Vedere in anteprima il portale di un partner",
-    "requests": "Chiedere qualcosa ai partner"
+    "requests": "Chiedere qualcosa ai partner",
+    "productionManage": "Impostare i limiti di produzione dei clienti"
   },
   "held": {
     "needs": "Serve il permesso: {right}.",
@@ -131,7 +132,8 @@
       "invite": "Invitare persone dei partner (o fermare un invito) chiede un codice nuovo della tua app di autenticazione.",
       "settings": "Cambiare il portale di un partner chiede un codice nuovo della tua app di autenticazione.",
       "person": "Cambiare l'accesso di una persona di un partner chiede un codice nuovo della tua app di autenticazione.",
-      "status": "Sospendere, riattivare o disattivare persone dei partner chiede un codice nuovo della tua app di autenticazione."
+      "status": "Sospendere, riattivare o disattivare persone dei partner chiede un codice nuovo della tua app di autenticazione.",
+      "production": "Cambiare cosa un cliente vede e può fare in produzione chiede un codice nuovo della tua app di autenticazione."
     },
     "problem": {
       "wrong": "Il codice è sbagliato o già usato. Scrivi il prossimo.",
@@ -169,8 +171,6 @@
     "portalOn": "Portale attivo",
     "portalOnHint": "Le sue persone possono accedere, vedere ciò che è loro e ricevere le nostre e-mail.",
     "portalOffHint": "Spento: nessuna sua persona accede e dal portale non arriva loro nulla; i link funzionano ancora.",
-    "progress": "Avanzamento di produzione",
-    "progressHint": "Mostra nel suo portale le fasi di produzione di ogni ordine. Spento per impostazione.",
     "maxUsers": "Persone al massimo",
     "maxUsersHint": "Vuoto: nessun limite. Ora {taken} invitate o attive.",
     "noLimit": "Nessun limite",
@@ -317,7 +317,13 @@
     "reactivate_one": "1 persona riattivata",
     "reactivate_other": "{count} persone riattivate",
     "deactivate_one": "1 persona disattivata",
-    "deactivate_other": "{count} persone disattivate"
+    "deactivate_other": "{count} persone disattivate",
+    "production": "I limiti di produzione di {name} sono salvati.",
+    "supervisor": "Il supervisore di {name} è salvato.",
+    "productionAndSupervisor": "I limiti di produzione e il supervisore di {name} sono salvati.",
+    "freeze": "La regola di blocco di {name} è salvata.",
+    "freezeReset": "{name} segue di nuovo i punti di blocco dell'azienda per questo campo.",
+    "previewProduction": "La mia produzione di {name} si è aperta in una nuova scheda, in sola lettura, per un'ora."
   },
   "notice": {
     "refused_one": "1 rifiutata",
@@ -462,5 +468,172 @@
     "failed": "Impossibile caricare l'organizzazione",
     "notFound": "Questa persona non è più nell'organizzazione",
     "notFoundHint": "Rileggi la pagina; forse qualcun altro l'ha spostata."
+  },
+  "limits": {
+    "title": "Produzione",
+    "intro": "Cosa vede {name} dei suoi ordini in produzione e cosa può fare. All'inizio è tutto spento: solo lo stato, nessun ordine urgente, nessuna richiesta di produzione.",
+    "loading": "Lettura dei limiti di produzione…",
+    "readFailed": "Non è stato possibile leggere i limiti di produzione.",
+    "preset": "Partner di produzione",
+    "presetHint": "Partner di produzione imposta + Avanzamento, ordini urgenti attivi (al massimo 3) e tutte le richieste di produzione con un clic; Applica salva.",
+    "presetFilled": "Partner di produzione impostato: + Avanzamento, ordini urgenti attivi (al massimo 3), tutte le richieste di produzione. Applica per salvare.",
+    "preview": {
+      "saveFirst": "Prima salva: l'anteprima mostra i limiti salvati."
+    },
+    "previewOpen": "Apri La mia produzione come {name}",
+    "portalOff": "Il suo portale è spento: questi limiti valgono quando sarà attivo. Un supervisore lavora senza portale: salvarlo non apre nulla per il cliente.",
+    "limitsSavedNotSupervisor": "I limiti sono salvati; il supervisore non è cambiato.",
+    "sees": {
+      "title": "Cosa vede {name}",
+      "always": "Ogni livello mostra la fase, la data prevista e i suoi spostamenti, lo stato di salute, chi deve agire, i blocchi e le richieste. In più:",
+      "shown": "{what}: visibile",
+      "hidden": "{what}: non visibile"
+    },
+    "level": {
+      "STATUS": "Solo lo stato",
+      "PROGRESS": "+ Avanzamento",
+      "GATES": "+ Tappe e date",
+      "QUALITY": "+ Qualità e foto"
+    },
+    "levelLine": {
+      "STATUS": "La fase, la data prevista e i suoi spostamenti, lo stato di salute e chi deve agire. Il punto di partenza per ogni cliente.",
+      "PROGRESS": "+ i capi di ogni riga e taglia: tagliati, cuciti, controllati, imballati.",
+      "GATES": "+ le sue tappe (campione PP, size set, pelle, accessori, laboratorio) con date previste e fatte, solo dal piano pubblicato.",
+      "QUALITY": "+ esiti dei controlli e foto della sua merce (solo ordini di produzione solo suoi)."
+    },
+    "section": {
+      "progress": "Capi",
+      "gates": "Tappe e date",
+      "quality": "Qualità e foto"
+    },
+    "mayDo": {
+      "title": "Cosa può fare {name}"
+    },
+    "urgency": {
+      "label": "Ordini urgenti",
+      "rule": "Segna urgenti i propri ordini. Entro il limite e prima del taglio un segno vale subito; oltre il limite, o dal taglio in poi, un segno diventa una richiesta a cui rispondiamo noi. Tornare a normale è sempre libero.",
+      "offHint": "Spento: non può segnare ordini urgenti.",
+      "max": "Urgenti insieme, al massimo",
+      "maxHint": "Al massimo {max} urgenti insieme · {now} urgenti ora.",
+      "maxRange": "Un numero intero da 0 a 20.",
+      "less": "Uno in meno",
+      "more": "Uno in più"
+    },
+    "asks": {
+      "title": "Richieste di produzione che può fare",
+      "rules": "«Urgente – richiesto» arriva con gli ordini urgenti. Modifiche e annullamenti seguono le scadenze dell'azienda, non questo elenco.",
+      "open": "Il suo menu Chiedi offre ora: {list}.",
+      "openNone": "Il suo menu Chiedi ora non offre richieste di produzione."
+    },
+    "ask": {
+      "RUSH": "Urgente – richiesto",
+      "HOLD": "Chiedere una pausa",
+      "RESUME": "Chiedere di riprendere",
+      "SPLIT_SHIPMENT": "Chiedere di spedire ciò che è pronto",
+      "SAMPLE_ROUND": "Chiedere un altro giro di campioni"
+    },
+    "askLine": {
+      "HOLD": "Ci chiede di mettere in pausa un ordine; accettiamo o rifiutiamo.",
+      "RESUME": "Ci chiede di riprendere un ordine messo in pausa su sua richiesta.",
+      "SPLIT_SHIPMENT": "Ci chiede di spedire ora ciò che è pronto e il resto dopo.",
+      "SAMPLE_ROUND": "Chiede un altro giro di campioni prima della produzione."
+    },
+    "approver": {
+      "title": "Chi risponde dalla sua parte",
+      "ANYONE": "Chiunque abbia il ruolo Produzione",
+      "NAMED": "Una persona indicata",
+      "person": "Persona che risponde",
+      "search": "Cerca tra le sue persone…",
+      "pick": "Scegli la persona che risponde.",
+      "inactive": "non più attiva",
+      "inactiveSaved": "{name} non è più attiva: vale come nessuno indicato finché non ne scegli un'altra.",
+      "none": "Nessuna sua persona è ancora attiva nel portale: prima invita qualcuno.",
+      "covers": "Per le sue approvazioni di produzione: campione PP, size set, primo capo di produzione, tessuto e accessori. La grafica resta ai suoi Designer, le concessioni alla sua Qualità."
+    },
+    "approverLine": {
+      "ANYONE": "Risponde ogni sua persona che può approvare.",
+      "NAMED": "Risponde solo questa persona; le altre leggono «In attesa di» e il nome."
+    },
+    "fourEyes": {
+      "title": "Le forzature chiedono una seconda persona",
+      "label": "Una seconda persona",
+      "onHint": "Attivo: quando decidiamo per {name} o annulliamo ciò che ha fatto, lo concede una seconda persona nostra.",
+      "offHint": "Spento: chi ha il permesso di forzare decide per {name} da solo, con un motivo che il cliente legge."
+    },
+    "freeze": {
+      "title": "Punti di blocco",
+      "intro": "Da quale fase di produzione si blocca un campo dei suoi ordini, presso {company}. Le sue regole sostituiscono quelle dell'azienda per quel campo.",
+      "reading": "Lettura dei punti di blocco…",
+      "failed": "Non è stato possibile leggere i punti di blocco.",
+      "noCompany": "Apri questo cliente da un'azienda per vederne i punti di blocco.",
+      "col": {
+        "field": "Campo",
+        "company": "Azienda",
+        "more": "Cambia"
+      },
+      "rule": "{stage}: {action}",
+      "action": {
+        "CHANGE_REQUEST": "una modifica con prezzo che accetta",
+        "BLOCKED": "nessuna modifica"
+      },
+      "stage": {
+        "RELEASED": "Rilasciato in produzione",
+        "CUT": "Taglio iniziato",
+        "SEWING": "Cucitura iniziata",
+        "FINISHED": "Capi finiti",
+        "SHIPPED": "Spedito"
+      },
+      "open": "Modificabile in ogni fase",
+      "follows": "Segue l'azienda",
+      "theirs": "Decidono le sue",
+      "set": "Imposta…",
+      "setFor": "Imposta il blocco di {field} per {name}",
+      "dialog": {
+        "title": "Blocco di {field} per {name}",
+        "company": "Dell'azienda ({company})",
+        "own": "Di {name}",
+        "add": "Una regola di {name}",
+        "stage": "Da",
+        "action": "Poi",
+        "note": "Parole accanto al campo (facoltative)",
+        "noteHint": "Una riga, al massimo 200 caratteri; il cliente la legge sull'ordine.",
+        "save": "Salva la regola",
+        "reset": "Torna a quelle dell'azienda",
+        "resetHint": "Torna a quelle dell'azienda spegne le sue regole di questo campo: decidono di nuovo quelle dell'azienda.",
+        "atOnce": "Una regola si salva subito, a parte Applica."
+      },
+      "problem": {
+        "twin": "Ha già una sua regola da questa fase: prima spegnila.",
+        "loosens": "Dopo un blocco, una fase successiva non può riaprire il campo a una modifica con prezzo.",
+        "note": "Le parole sono una riga di al massimo 200 caratteri."
+      }
+    },
+    "supervisor": {
+      "title": "Chi segue {name} da noi",
+      "officeOnly": "Solo ufficio",
+      "intro": "Mai nel suo portale né nell'anteprima, e al cliente non si dice chi è. Visibile anche con il portale spento: un supervisore non ha bisogno del portale.",
+      "label": "Supervisore di produzione",
+      "backup": "Sostituto",
+      "backupHint": "Riceve i problemi senza risposta dopo 1 giorno lavorativo.",
+      "none": "Nessuno",
+      "notListed": "{name} (ora non è nell'elenco)",
+      "moves_one": "Cambiare il supervisore sposta {count} ordine che non ha un supervisore proprio.",
+      "moves_other": "Cambiare il supervisore sposta {count} ordini che non hanno un supervisore proprio.",
+      "clears_one": "{count} ordine senza un supervisore proprio non ne avrà nessuno.",
+      "clears_other": "{count} ordini senza un supervisore proprio non ne avranno nessuno.",
+      "movesNone": "Ora nessun ordine aperto segue il predefinito del cliente.",
+      "backupAlone": "Un sostituto si indica solo accanto a un supervisore.",
+      "backupSame": "Il sostituto è un'altra persona rispetto al supervisore.",
+      "heldEveryCompany": "Impostare il supervisore di questo cliente richiede il permesso di gestirne la produzione in ogni azienda con cui lavora.",
+      "readFailed": "Non è stato possibile leggere chi può supervisionare."
+    },
+    "problem": {
+      "onlyCustomers": "I limiti di produzione si impostano solo per un cliente.",
+      "approver": "La persona che risponde deve essere attiva nel suo portale: scegline un'altra.",
+      "nothing": "Non cambia nulla: questi sono già i limiti."
+    },
+    "unsaved_one": "1 modifica ai limiti di produzione non salvata",
+    "unsaved_other": "{count} modifiche ai limiti di produzione non salvate",
+    "apply": "Applica"
   }
 }

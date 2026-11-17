@@ -10,7 +10,7 @@ import { I18nProvider } from '../../../../lib/i18n/provider'
 import { designScreen as listScreen } from '../fixtures'
 import { designScreen as recordScreen } from '../record/fixtures'
 import { designScreen as cuttingScreen } from '../cutting/fixtures'
-import { designScreen as bundlesScreen } from '../bundles/fixtures'
+import { designScreen as operationsScreen } from '../progress/fixtures'
 import { designScreen as codesScreen } from '../../settings/codes/fixtures'
 import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { READINESS_WORDS, WORK_ORDER_STATUSES } from '../../_shared/api'
@@ -23,7 +23,6 @@ import {
   dailyProblem,
   finishHeld,
   finishRows,
-  flowSteps,
   hideHeld,
   holdHeld,
   placeHeld,
@@ -109,7 +108,7 @@ describe('report finished to stock', () => {
   })
 })
 
-describe('yield, scrap, the flow, reserve and split', () => {
+describe('yield, scrap, reserve and split', () => {
   it('marks a hide below plan; groups scrap and rework per operation and reason', () => {
     const bars = yieldBars(YIELD)
     expect(bars.map((bar) => bar.low)).toEqual([false, true, false])
@@ -122,12 +121,6 @@ describe('yield, scrap, the flow, reserve and split', () => {
     expect(groups[0]!.reason).toBe('Torn leather')
     expect(scrapGroups(SCRAP, 'it')[0]!.reason).toBe('Pelle strappata')
     expect(scrapTotals(SCRAP)).toEqual({ scrap: 2, rework: 3, reworkOpen: 2 })
-  })
-
-  it('marks the biggest pile as the bottleneck (totals only)', () => {
-    const steps = flowSteps({ operations: [{ seq: 10, code: 'A', name: 'a', waiting: 2, good: 5, scrap: 0, rework: 0, final: false }, { seq: 20, code: 'B', name: 'b', waiting: 7, good: 1, scrap: 1, rework: 0, final: true }] } as never)
-    expect(steps.map((step) => step.bottleneck)).toEqual([false, true])
-    expect(flowSteps(null)).toEqual([])
   })
 
   it('lets a reserve take only free hides, saying why not', () => {
@@ -195,7 +188,7 @@ function renderCase(screen: DesignScreen<unknown>, model: unknown, locale: (type
 }
 
 describe('every W2a design case draws in both languages with no key left on screen', () => {
-  for (const screen of [listScreen, recordScreen, cuttingScreen, bundlesScreen, codesScreen] as unknown as DesignScreen<unknown>[]) {
+  for (const screen of [listScreen, recordScreen, cuttingScreen, operationsScreen, codesScreen] as unknown as DesignScreen<unknown>[]) {
     const cases = screen.cases.filter((item) => item.id.startsWith('w2a-') || screen.screen === 'SCR-088')
     it(`${screen.screen}: ${cases.length} W2a cases × it, en`, () => {
       expect(cases.length).toBeGreaterThan(0)

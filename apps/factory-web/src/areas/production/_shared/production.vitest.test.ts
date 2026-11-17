@@ -14,7 +14,7 @@ import { I18nProvider } from '../../../lib/i18n/provider'
 import { designScreen as listScreen } from '../work-orders/fixtures'
 import { designScreen as recordScreen } from '../work-orders/record/fixtures'
 import { designScreen as cuttingScreen } from '../work-orders/cutting/fixtures'
-import { designScreen as bundlesScreen } from '../work-orders/bundles/fixtures'
+import { designScreen as operationsScreen } from '../work-orders/progress/fixtures'
 import { designScreen as floorScreen } from '../wip/fixtures'
 import { CHECK_STATES, HIDE_STATES, RELEASE_CHECKS, UNUSABLE_REASONS, WORK_CENTRE_KINDS, WORK_ORDER_STATUSES } from './api'
 import { bundlesOf, canOf, cutLogOf, LIST_ROWS, releaseCheck, wipOf, workOrder } from './fixtures'
@@ -234,7 +234,7 @@ function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof L
 }
 
 describe('every design case draws in both languages with no key left on screen', () => {
-  for (const screen of [listScreen, recordScreen, cuttingScreen, bundlesScreen, floorScreen] as unknown as DesignScreen<unknown>[]) {
+  for (const screen of [listScreen, recordScreen, cuttingScreen, operationsScreen, floorScreen] as unknown as DesignScreen<unknown>[]) {
     it(`${screen.screen}: ${screen.cases.length} cases × it, en`, () => {
       for (const item of screen.cases) {
         for (const locale of LOCALES) {

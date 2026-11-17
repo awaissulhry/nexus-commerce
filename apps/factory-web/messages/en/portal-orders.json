@@ -613,6 +613,117 @@
     "ask": "Ask a question",
     "health": "Health",
     "waitingOn": "Waiting on",
-    "failed": "Could not load the production of this order"
+    "failed": "Could not load the production of this order",
+    "gates": {
+      "title": "Gates and dates",
+      "label": "Gates of this order",
+      "step": "Gate",
+      "state": "State",
+      "planned": "Planned",
+      "done": "Done on",
+      "review": "See what waits for you",
+      "none": "No gates or dates planned for this order yet.",
+      "states": {
+        "WAITING_YOU": "Waiting on you",
+        "WAITING_US": "Waiting on us",
+        "PASSED": "Passed",
+        "STARTED_BEFORE": "Started before approval"
+      }
+    },
+    "approvals": {
+      "label": "Your material approvals",
+      "material": "Material",
+      "sent": "Sent",
+      "answered": "Answered on",
+      "states": {
+        "WAITING_YOU": "Waiting on you",
+        "APPROVED": "Approved",
+        "APPROVED_WITH_COMMENTS": "Approved with comments",
+        "REFUSED": "Refused"
+      }
+    },
+    "planned": {
+      "label": "Our production days",
+      "cutStart": "Cutting starts",
+      "sewStart": "Sewing starts",
+      "finish": "Production ends",
+      "hint": "From our published production plan; these days may still move.",
+      "none": "No production days in our plan yet."
+    },
+    "pieces": {
+      "oneSize": "Made to measure"
+    },
+    "quality": {
+      "title": "Quality and photos",
+      "label": "Quality of this order",
+      "failed": "Could not load the quality of this order",
+      "none": "Nothing on this order has been checked by quality yet.",
+      "released": {
+        "title": "Released by quality",
+        "label": "Pieces released by quality, per line",
+        "line": "Line",
+        "released": "Released",
+        "reversed": "Taken back",
+        "reversedHint": "Taken back: pieces released earlier that we took back to check again.",
+        "shared": "{line}: {words}",
+        "sizesOf": "{title}: per size"
+      },
+      "checks": {
+        "title": "Checks during production",
+        "check": "Check",
+        "result": "Last result",
+        "soFar": "So far",
+        "lastOn": "Last on",
+        "pieces_one": "{defective} of {pieces} piece with a defect",
+        "pieces_other": "{defective} of {pieces} pieces with a defect"
+      },
+      "finals": {
+        "title": "Final inspection",
+        "lines_one": "Line {lines}",
+        "lines_other": "Lines {lines}",
+        "allLines": "This order",
+        "decidedOn": "Decided on {date}",
+        "waiting": "Being checked: the result comes once it is decided.",
+        "sample": "Sample",
+        "sampleOf": "{sample} of {garments} garments",
+        "level": "Inspection level",
+        "aql": "Accepted (AQL)",
+        "aqlValue": "Major {major}: up to {acceptMajor} · Minor {minor}: up to {acceptMinor}",
+        "defects": "Garments with a defect",
+        "defectsValue": "Critical {critical} · Major {major} · Minor {minor}",
+        "foundOf": "Defects found: {lines}",
+        "defect": "Defect",
+        "class": "Class",
+        "garments": "Garments",
+        "openReport": "Open the report",
+        "noReport": "No report has been issued for this inspection yet.",
+        "reportTitle": "Inspection report · {lines} · {date}",
+        "reportTitleNoDate": "Inspection report · {lines}",
+        "fileName": "Inspection report {date}",
+        "reportMissing": "This report is not available."
+      },
+      "holds": {
+        "title": "Holds",
+        "reason": "Reason",
+        "state": "State",
+        "since": "Since",
+        "until": "Until"
+      },
+      "photos": {
+        "title": "Photos",
+        "sharedOn": "Shared on {date}",
+        "view": "View",
+        "count": "{n} of {count}",
+        "previous": "Previous photo",
+        "next": "Next photo",
+        "only": "This is the only photo.",
+        "first": "This is the first photo.",
+        "last": "This is the last photo.",
+        "loading": "Opening the photo…",
+        "failed": "The photo could not be opened.",
+        "gone": "This photo is no longer shared.",
+        "alt": "Photo {name}"
+      }
+    }
   }
 }

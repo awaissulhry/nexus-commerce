@@ -19,6 +19,8 @@ import {
   removeRefusal,
   shapeRefusal,
   handPassRefusal, // B-PR-38
+  roundChangeRefusal, // B-PR-30a
+  waitsForCustomer, // B-PR-30a
   startBeforeRefusal,
   tileCounts,
   tileOf,
@@ -101,6 +103,30 @@ describe('gates', () => {
   it('a passed or started-before gate is kept', () => {
     expect(removeRefusal(facts())).toBeNull()
     expect(removeRefusal(facts({ overriddenAt: new Date() }))?.code).toBe('KEPT')
+  })
+
+  it("B-PR-30a: a gate waiting for the customer's open round is neither re-pointed nor removed (the hand pass's words); a gate with no round stays ours", () => {
+    const theirs = { number: 'SR-7', decision: null, kind: 'PRE_PRODUCTION', customerDecides: true }
+    const words = "The gate waits for the customer's answer on sample round SR-7: it passes by itself when they approve it. To decide for them, use Decide for the customer on the round (a reason they read)."
+    const gate = facts({ kind: 'PP_SAMPLE', round: theirs })
+    expect(waitsForCustomer(gate)).toBe(true)
+    expect(roundChangeRefusal(gate)).toEqual({ code: 'CUSTOMER_DECIDES', message: words })
+    expect(removeRefusal(gate)).toEqual({ code: 'CUSTOMER_DECIDES', message: words })
+    // The same words as the hand pass.
+    expect(handPassRefusal(gate, '2026-11-17', '2026-11-17')?.message).toBe(words)
+    // (a) no round named: the factory's own gate, as before.
+    expect(roundChangeRefusal(facts({ kind: 'PP_SAMPLE', round: null }))).toBeNull()
+    expect(removeRefusal(facts({ kind: 'PP_SAMPLE', round: null }))).toBeNull()
+    // Once the customer decided (approved or refused), or the round was cancelled, or the round is internal / portal off: as before.
+    for (const round of [{ ...theirs, decision: 'APPROVED' }, { ...theirs, decision: 'REJECTED' }, { ...theirs, cancelled: true }, { ...theirs, customerDecides: false }]) {
+      expect(waitsForCustomer(facts({ kind: 'PP_SAMPLE', round })), JSON.stringify(round)).toBe(false)
+      expect(roundChangeRefusal(facts({ kind: 'PP_SAMPLE', round })), JSON.stringify(round)).toBeNull()
+      expect(removeRefusal(facts({ kind: 'PP_SAMPLE', round })), JSON.stringify(round)).toBeNull()
+    }
+    // A passed gate keeps its own refusals first.
+    expect(roundChangeRefusal(facts({ kind: 'PP_SAMPLE', round: theirs, passedAt: new Date() }))?.code).toBe('PASSED')
+    expect(removeRefusal(facts({ kind: 'PP_SAMPLE', round: theirs, overriddenAt: new Date() }))?.code).toBe('KEPT')
+    expect(roundChangeRefusal(facts({ kind: 'PP_SAMPLE', round: theirs, orderStatus: 'CLOSED' }))?.code).toBe('ORDER_CLOSED')
   })
 
   it("the leather of an order and the tiles: orders waiting per group, each counted once", () => {

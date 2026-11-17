@@ -5,8 +5,12 @@ import { SALES_SAMPLES_DECIDE } from '@nexus/factory-domain/sales/sample-decisio
 import { answerHeldWords, askRefusal, decisionOfAnswer, noCompanyRefusal, swatchAnswerHeldWords, swatchAskRefusal, SWATCH_WORDS, type SwatchKind } from '@nexus/factory-domain/sales/sample-decisions/rules'
 import { SALES_SAMPLES_VIEW } from '@nexus/factory-domain/sales/samples/permissions'
 import { cellsOf, isOpenStage, roundLabel, type SampleKind, type SampleStage } from '@nexus/factory-domain/sales/samples/rules'
+import { RECORD_KEPT_WORDS } from '@nexus/factory-domain/production-brand/override'
+import type { CutStart } from '@nexus/factory-domain/sales/change-requests/rules'
+import { OPEN_ORDER_STATUSES } from '@nexus/factory-domain/planning/milestones/rules'
 import type { CommandTools } from '../../../core/command'
-import { words, type ApprovalRecord, type RecordAdapter, type RequestRef } from '../../../platform/approvals-out/adapter'
+import { words, type ApprovalRecord, type RecordAdapter, type RecordReverseFacts, type RequestRef } from '../../../platform/approvals-out/adapter'
+import { readCuts } from '../change-requests/store'
 import { readRoundRow, type Reader } from '../samples/store'
 import { readSwatchRow, swatchCompanyOf, swatchFacts, waitingRequest } from './store'
 
@@ -30,6 +34,13 @@ import { readSwatchRow, swatchCompanyOf, swatchFacts, waitingRequest } from './s
  *              the comments are the brand's words; decidedAt = the answer's time; PORTAL (decidedById = the portal person) or
  *              LINK (nobody named); a round goes DECIDED — the database checks it is that request's answer. A round or
  *              swatch decided meanwhile in the office keeps its decision (the settle says so in its audit row).
+ *              B-PR-30a: decided FOR the brand by the office (Decide for the customer: a reason it reads, step-up, a second
+ *              person when its switch is on) → OFFICE, decidedById = the office person who decided (the request's
+ *              decidedForPartyById), the comments our words — the same request, so the gate passes by its round's event.
+ *   reverseFacts B-PR-30b: the live cut of the brand's open lines of the style (a cut of leather logged, a bundle made), the
+ *              gate the round passed — and, until the database lets a decided round or swatch change again (a schema change:
+ *              factory_sample_round_guard, factory_sample_swatch_guard, factory_order_gate_guard), `held` KEPT: the brand's
+ *              decision stays as it is and the office makes a new round or swatch to ask again.
  * The answer itself lands on the round's thread (the brand's own signed message), the engine's settle.
  */
 
@@ -45,13 +56,50 @@ const roundWords = (round: { number: string; kind: string; roundNo: number }) =>
 
 /** The brand's answer as a decision's columns, from the request (its time, its person or link, its words). */
 async function answerOf(tools: CommandTools, request: RequestRef) {
-  const row = await tools.tx.approvalRequest.findUnique({ where: { id: request.id }, select: { status: true, answer: true, typedName: true, answeredAt: true, answeredByUserId: true, answeredViaLinkId: true } })
+  const row = await tools.tx.approvalRequest.findUnique({ where: { id: request.id }, select: { status: true, answer: true, typedName: true, answeredAt: true, answeredByUserId: true, answeredViaLinkId: true, decidedForPartyById: true } })
   const decision = row ? decisionOfAnswer(row.status) : null
   if (!row || !decision || !row.answeredAt) return null
-  const via = row.answeredViaLinkId ? ('LINK' as const) : ('PORTAL' as const)
+  // B-PR-30a: decided for the brand by an office person → OFFICE, by that person (the database's rule for an office decision).
+  const via = row.decidedForPartyById ? ('OFFICE' as const) : row.answeredViaLinkId ? ('LINK' as const) : ('PORTAL' as const)
   // A refusal and an approval with changes always carry the brand's words (approvals-out answerProblems); a word for safety.
   const comments = row.answer?.trim() || (decision === 'APPROVED' ? null : 'No words given.')
-  return { decision, via, comments, decidedAt: row.answeredAt, decidedById: via === 'PORTAL' ? row.answeredByUserId : null, typedName: row.typedName }
+  const decidedById = via === 'OFFICE' ? row.decidedForPartyById : via === 'PORTAL' ? row.answeredByUserId : null
+  return { decision, via, comments, decidedAt: row.answeredAt, decidedById, typedName: row.typedName }
+}
+
+// ---- B-PR-30b: what putting the brand's answer back would do --------------------------------------------------------------
+
+/** The first cut, read live, of the brand's open order lines of this style (null: nothing cut yet, or an internal record). */
+async function cutOfStyle(client: Reader, styleId: string, partyId: string | null, orderIds: readonly string[] = []): Promise<CutStart | null> {
+  if (partyId === null) return null
+  const lines = await client.salesOrderLine.findMany({ where: { partyId, OR: [{ styleId, order: { status: { in: [...OPEN_ORDER_STATUSES] } } }, ...(orderIds.length ? [{ orderId: { in: [...orderIds] } }] : [])] }, select: { id: true } })
+  const cuts = [...(await readCuts(client, lines.map((line) => line.id))).values()]
+  return cuts.reduce<CutStart | null>((first, cut) => (first === null || cut.day < first.day || (cut.day === first.day && cut.leather && !first.leather) ? cut : first), null)
+}
+
+async function roundReverseFacts(client: Reader, request: RequestRef): Promise<RecordReverseFacts> {
+  const round = await readRoundRow(client, request.recordId)
+  const gates = round ? await client.orderGate.findMany({ where: { sampleRoundId: round.id, passedAt: { not: null } }, select: { salesOrderId: true } }) : []
+  return {
+    sampleKind: round?.kind ?? null,
+    cut: round ? await cutOfStyle(client, round.styleId, round.partyId, gates.map((gate) => gate.salesOrderId)) : null,
+    passedGate: gates.length > 0,
+    applied: false,
+    // Until the round guard lets a decided round go back under review (a schema change), the brand's decision stays.
+    held: { code: 'KEPT', words: RECORD_KEPT_WORDS.SampleRound },
+  }
+}
+
+async function swatchReverseFacts(client: Reader, request: RequestRef): Promise<RecordReverseFacts> {
+  const swatch = await readSwatchRow(client, request.recordId)
+  return {
+    sampleKind: null,
+    cut: swatch ? await cutOfStyle(client, swatch.styleId, swatch.partyId) : null,
+    passedGate: false,
+    applied: false,
+    // Until the swatch guard lets a decided swatch be undecided again (a schema change), the brand's decision stays.
+    held: { code: 'KEPT', words: RECORD_KEPT_WORDS.SampleSwatch },
+  }
 }
 
 export const SAMPLE_ROUND_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>({
@@ -128,6 +176,7 @@ export const SAMPLE_ROUND_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>(
     })
     return { decided: true, decision: answer.decision, via: answer.via }
   },
+  reverseFacts: roundReverseFacts, // B-PR-30b
 })
 
 // ---- swatches -------------------------------------------------------------------------------------------------------------
@@ -237,6 +286,7 @@ export const SAMPLE_SWATCH_ADAPTER: RecordAdapter = Object.freeze<RecordAdapter>
     })
     return { decided: true, decision: answer.decision, via: answer.via }
   },
+  reverseFacts: swatchReverseFacts, // B-PR-30b
 })
 
 export const SAMPLE_DECISION_ADAPTERS: readonly RecordAdapter[] = Object.freeze([SAMPLE_ROUND_ADAPTER, SAMPLE_SWATCH_ADAPTER])

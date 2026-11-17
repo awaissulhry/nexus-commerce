@@ -195,10 +195,31 @@ export function trackerSteps(order: Order, t: Translate, day: (iso: string) => s
   }))
 }
 
-/** The gate kinds an order may still get (one per kind; Other always). */
+// ---- F-PR-19: the gate-kind picker reads Other last; a sample gate offers only the rounds it accepts ----------------------------
+/** The gate kinds in the picker's order: the domain's, with Other ("something else, in words") last. */
+export const GATE_PICKER_KINDS: readonly GateKind[] = [...GATE_KINDS.filter((kind) => kind !== 'OTHER'), 'OTHER']
+
+/**
+ * Whether a sample round of this kind may pass a gate of this kind (the API's own rule, factory-domain milestones
+ * `shapeRefusal`, said here first so the dialog never offers a round the API refuses): a pre-production sample gate waits for a
+ * pre-production round, a size set gate for a size set round, "sample approved" for any round but a top-of-production one — a
+ * TOP round gates nothing (plan Appendix C). A gate that is not a sample gate names no round.
+ */
+export function roundFitsGate(kind: GateKind, roundKind: string): boolean {
+  if (!isSampleGate(kind) || roundKind === 'TOP_OF_PRODUCTION') return false
+  if (kind === 'PP_SAMPLE') return roundKind === 'PRE_PRODUCTION'
+  if (kind === 'SIZE_SET') return roundKind === 'SIZE_SET'
+  return true
+}
+
+/** The rounds of the order's choices a gate of this kind may name. */
+export const roundsForGate = <R extends { readonly kind: string }>(kind: GateKind, rounds: readonly R[]): R[] => rounds.filter((round) => roundFitsGate(kind, round.kind))
+// ---- end F-PR-19
+
+/** The gate kinds an order may still get (one per kind; Other always, last — F-PR-19). */
 export function kindsLeft(order: Order): GateKind[] {
   const taken = new Set(order.gates.map((gate) => gate.kind))
-  return GATE_KINDS.filter((kind) => kind === 'OTHER' || !taken.has(kind))
+  return GATE_PICKER_KINDS.filter((kind) => kind === 'OTHER' || !taken.has(kind))
 }
 
 export interface GateDraft {
@@ -209,11 +230,16 @@ export interface GateDraft {
   readonly ownerId: string
 }
 
-/** What the Add gate / Change gate dialog holds the Save by (our words), null when it may go. */
-export function draftHeld(draft: GateDraft, t: Translate): string | null {
+/**
+ * What the Add gate / Change gate dialog holds the Save by (our words), null when it may go. F-PR-19: with the order's rounds,
+ * a named round the gate's kind does not accept (a gate kept from before) holds it with the rule's words.
+ */
+export function draftHeld(draft: GateDraft, t: Translate, rounds: readonly { readonly id: string; readonly kind: string }[] = []): string | null {
   if (draft.kind === 'OTHER' && draft.label.trim() === '') return t('refusal.LABEL_NEEDED')
   if (draft.label.length > GATE_LIMITS.label) return t('held.labelLong', { max: GATE_LIMITS.label })
   if (draft.sampleRoundId && !isSampleGate(draft.kind)) return t('refusal.ROUND_ONLY_SAMPLE')
+  const round = draft.sampleRoundId ? rounds.find((entry) => entry.id === draft.sampleRoundId) : undefined
+  if (round && !roundFitsGate(draft.kind, round.kind)) return t('refusal.ROUND_KIND') // F-PR-19
   return null
 }
 

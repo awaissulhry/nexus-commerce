@@ -1,0 +1,79 @@
+{
+  "fact": {
+    "label": "Supervisor {name}",
+    "from": {
+      "ORDER": "this order",
+      "BRAND": "customer default"
+    },
+    "notSet": "Supervisor: not set",
+    "inactive": "no longer active",
+    "muted": "You muted this order",
+    "mutedHint": "A muted follow stays muted: this order's messages reach you again only when you unmute it in its thread.",
+    "change": "Change…"
+  },
+  "mark": {
+    "ME": "Me",
+    "SOMEONE_ELSE": "Someone else",
+    "NOT_SET": "Not set"
+  },
+  "dialog": {
+    "titleOne": "Production supervisor of {number}",
+    "titleMany": "Production supervisor for {count} orders",
+    "orderWithPo": "{number} (PO {po})",
+    "showAll": "Show all ({count})",
+    "showFewer": "Show fewer",
+    "customers_one": "{count} customer",
+    "customers_other": "{count} customers",
+    "leftOut_one": "{count} work order has no one customer: its supervisor is not set here.",
+    "leftOut_other": "{count} work orders have no one customer: their supervisor is not set here.",
+    "now": "Now: {name} · {from}",
+    "nowNone": "Now: each order follows its own supervisor or its customer's default.",
+    "me": "Me ({name})",
+    "default": "Customer default — takes the order's own away",
+    "listLabel": "People who may supervise these orders",
+    "search": "Search people…",
+    "reading": "Reading who may supervise…",
+    "nobody": "No one can be supervisor here yet. A supervisor must be active, allowed on the customer and hold the measurements right.",
+    "nobodyMany": "No one can be supervisor of all these orders. A supervisor must be active, allowed on every customer of the selection and hold the measurements right.",
+    "partial": "Some people may be missing: the list holds the first 500.",
+    "busy": "Setting the supervisor…",
+    "hint": "The supervisor follows the order's thread and its work orders' threads. The customer is not told who it is."
+  },
+  "result": {
+    "label": "One result per order",
+    "person": "{name} supervises them now.",
+    "default": "They follow their customer's default again.",
+    "changed": "Done",
+    "unchanged": "Already so",
+    "notDone": "Not done: {why}",
+    "unknown_one": "{count} more order was not changed.",
+    "unknown_other": "{count} more orders were not changed."
+  },
+  "skip": {
+    "noRight": "your role does not set this order's production supervisor.",
+    "notInProduction": "this order is no longer in production.",
+    "noState": "this order has no production state yet: try again in a moment.",
+    "NOT_OFFICE": "only a person of the office can supervise production.",
+    "NOT_ACTIVE": "this person is no longer active.",
+    "NO_REACH": "this person may not work on this customer's production.",
+    "NO_MEASUREMENTS": "this person cannot open measurement sheets, and a supervisor must.",
+    "NO_THREAD": "this person cannot read this customer's order threads, and a supervisor answers there.",
+    "other": "not changed."
+  },
+  "problem": {
+    "failed": "The supervisor could not be set: try again.",
+    "invalid": "This person cannot be the supervisor here: nothing was changed.",
+    "notFound": "None of these orders is one you may change.",
+    "forbidden": "You may not set the supervisor of these orders.",
+    "offline": "No connection: nothing was sent. Try again.",
+    "people": "Who may supervise could not be read."
+  },
+  "held": {
+    "noRight": "Setting a production supervisor needs the right to manage customers' production.",
+    "noCustomerOrder": "These work orders have no one customer order: there is no supervisor to set.",
+    "nothing": "Select work orders first.",
+    "tooMany": "{count} orders: at most {max} at a time."
+  },
+  "close": "Close",
+  "retry": "Try again"
+}

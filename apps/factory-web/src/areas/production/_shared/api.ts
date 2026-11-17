@@ -44,6 +44,12 @@ export const BLOCKED_BY = ['HOLD', 'CUSTOMER', 'MATERIAL'] as const
 export type BlockedBy = (typeof BLOCKED_BY)[number]
 /** Who an open work order's order waits on (factory-domain production-brand/waiting WAITING_ON): the customer, a supplier, a workshop, us. */
 export { WAITING_ON, type WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
+// F-PR-21: a list row's supervisor mark (the API's SUPERVISOR_MARKS).
+import { SUPERVISOR_MARKS } from '@nexus/factory-domain/production-brand/supervisor'
+// F-PR-18: the customer's urgency per row (B-PR-22b) and the Customer urgency column's state and filter.
+import { BRAND_URGENCIES } from '@nexus/factory-domain/production-brand/urgency'
+import { CUSTOMER_URGENCY_STATES, type CustomerUrgencyState } from '@nexus/factory-domain/production-brand/urgency-state'
+export { CUSTOMER_URGENCY_STATES, type CustomerUrgencyState }
 const riskSchema = z.object({
   state: z.enum(WORK_ORDER_RISKS),
   daysLate: z.number().nullable(),
@@ -91,6 +97,13 @@ export const workOrderRowSchema = z.object({
   // F-PR-03 (B-PR-34): its risk (null: finished) and what its order waits on (null: finished, or nothing known).
   risk: riskSchema.nullable().optional(),
   waitingOn: waitingSchema.nullable().optional(),
+  // F-PR-21 (B-PR-42a): its production supervisor for the reader — Me / Someone else / Not set, never a name on a list (null: no customer).
+  supervisor: z.enum(SUPERVISOR_MARKS).nullable().optional(),
+  // F-PR-18 (B-PR-22b): its customer's urgency that counts, its place in the customer's OWN Urgent list (never a place in our plan),
+  // and the Customer urgency column's state (Urgent n / Urgent – asked / Regular / Set to regular by us; null: none).
+  customerUrgency: z.enum(BRAND_URGENCIES).nullable().optional(),
+  urgentRank: z.number().nullable().optional(),
+  urgencyState: z.enum(CUSTOMER_URGENCY_STATES).nullable().optional(),
 })
 export type WorkOrderRow = z.infer<typeof workOrderRowSchema>
 
@@ -121,6 +134,10 @@ export interface ListQuery {
   /** Open work orders blocked by a hold, the customer or material. */
   blockedBy?: BlockedBy | undefined
   // ── end F-PR-03
+  /** F-PR-21 (B-PR-42a): `me` — the work orders the reader supervises ("Mine"); there is no filter by another person. */
+  supervisor?: 'me' | undefined
+  /** F-PR-18: the work orders of one Customer urgency state (a computed filter of the API). */
+  customerUrgency?: CustomerUrgencyState | undefined
 }
 type WaitingOnTerm = (typeof WAITING_ON_LIST)[number]
 
@@ -142,6 +159,10 @@ export function listWorkOrders(api: ApiClient, query: ListQuery, signal?: AbortS
       waitingOn: query.waitingOn,
       risk: query.risk,
       blockedBy: query.blockedBy,
+      // F-PR-21: Mine.
+      supervisor: query.supervisor,
+      // F-PR-18: the Customer urgency filter.
+      customerUrgency: query.customerUrgency,
     },
     schema: listSchema,
     signal,
@@ -149,7 +170,7 @@ export function listWorkOrders(api: ApiClient, query: ListQuery, signal?: AbortS
 }
 
 // B-W2a-46: onHold (design wo-metrics "On hold (W2a)"). F-PR-03 (B-PR-34): atRisk and waitingOnCustomer (open work orders).
-const countsSchema = z.object({ counts: z.object({ draft: z.number(), released: z.number(), inProgress: z.number(), completed: z.number(), open: z.number(), late: z.number(), onHold: z.number().optional(), atRisk: z.number().optional(), waitingOnCustomer: z.number().optional() }) })
+const countsSchema = z.object({ counts: z.object({ draft: z.number(), released: z.number(), inProgress: z.number(), completed: z.number(), open: z.number(), late: z.number(), onHold: z.number().optional(), atRisk: z.number().optional(), waitingOnCustomer: z.number().optional(), /* F-PR-21: Mine (open, the reader supervises) */ mine: z.number().optional() }) })
 export type WorkOrderCounts = z.infer<typeof countsSchema>['counts']
 
 export async function countWorkOrders(api: ApiClient, signal?: AbortSignal, partyId?: string): Promise<WorkOrderCounts> {
@@ -243,6 +264,10 @@ export const workOrderSchema = z.object({
   partyId: z.string().nullable().optional(),
   customer: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable().optional(),
   mixedCustomers: z.boolean().optional(),
+  // F-PR-21 (B-PR-42a, GET of one work order only): its supervisor by name inside this one record, and — only for the supervisor
+  // himself — whether he muted its thread ("You muted this order").
+  supervisor: z.object({ id: z.string(), name: z.string(), active: z.boolean(), from: z.enum(['ORDER', 'BRAND']), me: z.boolean() }).nullable().optional(),
+  youMuted: z.boolean().nullable().optional(),
   spec: z.object({
     frozen: z.boolean(),
     frozenAt: z.string().nullable(),

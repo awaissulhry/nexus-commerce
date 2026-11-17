@@ -240,12 +240,13 @@ export async function readOrderFiles(caller: CommandCaller, workOrderId: string)
   })
 }
 
-/** The answer of the list route (no company or party ids beyond what the office screens draw). */
+/** The answer of the list route (no party ids; each order's company, which the docked order thread needs: F-PR-25). */
 export function orderFilesView(read: WorkOrderOrderFiles) {
   return {
     workOrder: read.workOrder,
     groups: read.groups.map((group) => ({
-      order: { id: group.order.id, number: group.order.number, customerRef: group.order.customerRef, status: group.order.status, orderDate: dayOf(group.order.orderDate) },
+      // F-PR-25 (threads ask): the order's company (a company the reader reads files of: the group is shown), never its customer's id.
+      order: { id: group.order.id, number: group.order.number, customerRef: group.order.customerRef, status: group.order.status, orderDate: dayOf(group.order.orderDate), companyId: group.order.companyId },
       thread: group.thread,
       files: group.files.map(({ companyId: _companyId, at, ...file }) => ({ ...file, at: toUtcIso(at) })),
       worksheets: group.worksheets.map(({ createdAt, ...sheet }) => ({ ...sheet, createdAt: toUtcIso(createdAt) })),

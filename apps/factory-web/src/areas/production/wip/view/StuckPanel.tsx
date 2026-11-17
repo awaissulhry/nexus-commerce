@@ -44,7 +44,7 @@ export function StuckPanel({ model, actions }: { model: StuckPanelModel; actions
       ) : null
     const WorkOrderCell = ({ data }: ICellRendererParams<TrackedBundle>) =>
       data ? (
-        <Link className="fw-pr-link" href={`${model.prefix}/production/work-orders/${data.workOrder.id}?tab=bundles`}>
+        <Link className="fw-pr-link" href={`${model.prefix}/production/work-orders/${data.workOrder.id}?tab=cutting`}>
           {data.workOrder.number}
         </Link>
       ) : null

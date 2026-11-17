@@ -34,6 +34,9 @@ import { SUPPLIER_CHANGES_DECIDE, SUPPLIER_DOCUMENTS_REVIEW } from '../purchasin
 import { Dec } from '../tax/decimal'
 import { TASKS_MANAGE } from '../tasks/permissions'
 import { HOME_VIEW } from './permissions'
+// B-PR-26: a customer's request goes to the people who answer its kind.
+import { PRODUCTION_BRAND_MANAGE } from '../production-brand/permissions'
+import { SALES_SAMPLES_MANAGE } from '../sales/samples/permissions'
 import { phrase, whyKey, type Phrase, type WordParams } from './words'
 
 /**
@@ -355,14 +358,17 @@ export const KIND_RULES: Readonly<Record<AttentionKind, KindRule>> = Object.free
   }),
   // B-W2b-183: a customer's change or cancel request from the portal (modules/insights/sources/portal-change-requests.ts),
   // answered on the order (accept: the amendment or the cancel; refuse with words) by whoever manages the customer's orders.
+  // B-PR-26: every kind a customer asks, each row acted on by the kind's own permission (the source names it per row:
+  // CHANGE, CANCEL, SPLIT_SHIPMENT orders.manage; RUSH, HOLD, RESUME production.brand.manage; SAMPLE_ROUND
+  // sales.samples.manage); a batch is one row; a countered request comes back once the customer said yes or the counter lapsed.
   ORDER_CHANGE_REQUEST: rule({
     kind: 'ORDER_CHANGE_REQUEST',
     category: 'APPROVAL',
-    label: "Customers' change and cancel requests waiting for your answer",
+    label: "Customers' requests waiting for your answer",
     view: ORDERS_VIEW,
-    act: [ORDERS_MANAGE],
+    act: [ORDERS_MANAGE, PRODUCTION_BRAND_MANAGE, SALES_SAMPLES_MANAGE],
     decide: 'OPEN',
-    live: ['order_change_request.asked', 'order_change_request.withdrawn', 'order_change_request.answered'],
+    live: ['order_change_request.asked', 'order_change_request.withdrawn', 'order_change_request.answered', 'order_change_request.countered', 'order_change_request.counter_answered', 'approval_request.expired', 'approval_request.withdrawn'],
   }),
   // B-W2b-189: a supplier's change of its addresses and contacts sent in the portal (modules/insights/sources/
   // supplier-changes.ts); decided on the supplier's record (it applies only on this yes).

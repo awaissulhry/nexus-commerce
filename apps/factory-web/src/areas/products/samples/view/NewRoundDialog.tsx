@@ -140,7 +140,8 @@ export function NewRoundDialog({ model, can, actions }: { model: NewRoundModel; 
                 ))}
             </Select>
           </Field>
-          <Field label={t('new.kind')} required>
+          {/* F-PR-19: each kind says what it is for — the size set before bulk (it passes the size set gate), TOP gates nothing. */}
+          <Field label={t('new.kind')} required hint={t(`new.kindHint.${draft.kind}`)}>
             <Select size="sm" value={draft.kind} onChange={(event) => actions?.onDraft?.({ kind: event.target.value as SampleKind })}>
               {SAMPLE_KINDS.map((kind) => (
                 <option key={kind} value={kind}>

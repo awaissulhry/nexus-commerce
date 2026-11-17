@@ -29,4 +29,13 @@ describe('the BRAND_OVERRIDE kind (B-PR-38)', () => {
     for (const own of ['CONCESSION', 'REVISED_ORDER', 'SIGNATURE', 'PROOF']) expect(offered).not.toContain(own)
     expect(offered).toEqual(expect.arrayContaining(['SAMPLE', 'COLOUR', 'LEATHER', 'FABRIC', 'TRIM', 'REPROMISE', 'COUNTER_OFFER']))
   })
+
+  // B-PR-30a/30b: the yes carries out the act named on the preview; a no, a withdrawal or a stale request write nothing.
+  it('carries out the act on the yes only (B-PR-30a/30b)', () => {
+    const kind = kindOf(OVERRIDE_TASK_KIND)!
+    expect(typeof kind.onApproved).toBe('function')
+    expect(kind.onRejected).toBeUndefined()
+    expect(kind.onWithdrawn).toBeUndefined()
+    expect(kind.onStale).toBeUndefined()
+  })
 })

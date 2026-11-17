@@ -137,6 +137,19 @@ const CHOICES: GateChoices = {
   ],
 }
 
+// ---- F-PR-19: the order's rounds of every kind — a size set gate offers only its size set round (never TOP, PP or fit).
+const ROUND_SIZE_SET = { id: uid('5555', 3), number: 'SR-DEMO-0034', kind: 'SIZE_SET' }
+const ROUND_TOP = { id: uid('5555', 4), number: 'SR-DEMO-0036', kind: 'TOP_OF_PRODUCTION' }
+const CHOICES_ALL_KINDS: GateChoices = {
+  ...CHOICES,
+  rounds: [
+    ...CHOICES.rounds,
+    { id: ROUND_SIZE_SET.id, number: ROUND_SIZE_SET.number, kind: ROUND_SIZE_SET.kind, roundNo: 1, decision: null, stage: 'SENT', style: { id: uid('6666', 1), code: 'JKT-DEMO-07' } },
+    { id: ROUND_TOP.id, number: ROUND_TOP.number, kind: ROUND_TOP.kind, roundNo: 1, decision: null, stage: 'REQUESTED', style: { id: uid('6666', 1), code: 'JKT-DEMO-07' } },
+  ],
+}
+// ---- end F-PR-19
+
 export interface MilestonesCase {
   model: MilestonesModel
   permissions: readonly string[]
@@ -230,6 +243,8 @@ export const designScreen = defineDesignScreen<MilestonesCase>({
     { id: 'start-before-planner', label: 'The planner: Start before the gate held (needs a production manager)', model: make({ controls: { open: `gate:${ARTWORK.id}` } }) },
     { id: 'add', label: 'Add a gate: pick the order', model: make({ dialog: { kind: 'add', orderId: null, draft: emptyDraft(), choices: null, busy: false, problem: null } }) },
     { id: 'add-order', label: 'Add a gate to SO-DEMO-2042: a pre-production sample with its round', model: make({ dialog: { kind: 'add', orderId: ORDERS[1]!.id, draft: { ...emptyDraft('PP_SAMPLE'), sampleRoundId: ROUND_PP.id, targetDate: '2026-11-27' }, choices: { status: 'ready', value: CHOICES }, busy: false, problem: null } }) },
+    // F-PR-19: a size set gate lists only the order's size set round; the kind picker reads Other last.
+    { id: 'add-size-set', label: 'Add a size set gate to SO-DEMO-2042: only its size set round is offered (a TOP round gates nothing)', model: make({ dialog: { kind: 'add', orderId: ORDERS[1]!.id, draft: { ...emptyDraft('SIZE_SET'), sampleRoundId: ROUND_SIZE_SET.id }, choices: { status: 'ready', value: CHOICES_ALL_KINDS }, busy: false, problem: null } }) },
     { id: 'add-other', label: 'Add a gate of kind Other: held until it says what it is', model: make({ dialog: { kind: 'add', orderId: ORDERS[1]!.id, draft: emptyDraft('OTHER'), choices: { status: 'ready', value: CHOICES }, busy: false, problem: null } }) },
     { id: 'add-refused', label: 'Add refused: the order has that kind already', model: make({ dialog: { kind: 'add', orderId: ORDERS[1]!.id, draft: emptyDraft('LAB_PASSED'), choices: { status: 'ready', value: CHOICES }, busy: false, problem: 'refusal.GATE_EXISTS' } }) },
     { id: 'edit', label: 'Change the gate: target date and planner', model: make({ dialog: { kind: 'edit', gateId: LAB.id, draft: draftOfGate(gateIn(LAB.id)), choices: { status: 'ready', value: CHOICES }, busy: false, problem: null } }) },
@@ -246,4 +261,4 @@ export const designScreen = defineDesignScreen<MilestonesCase>({
   ],
 })
 
-export const FIXTURES = { WORLD, ORDERS, CHOICES, PP_WAITING, ARTWORK, LEATHER_PASSED, TRIMS_STARTED, LEATHER_WAITING, LAB }
+export const FIXTURES = { WORLD, ORDERS, CHOICES, PP_WAITING, ARTWORK, LEATHER_PASSED, TRIMS_STARTED, LEATHER_WAITING, LAB, CHOICES_ALL_KINDS, ROUND_SIZE_SET, ROUND_TOP } // F-PR-19: + the rounds of every kind
