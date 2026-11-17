@@ -82,6 +82,10 @@ describe('the partner views', () => {
     expect(viewFits(partnerViewOf('Project')!, ['SUPPLIER'])).toBe(true)
     expect(viewFits(partnerViewOf('Project')!, ['GUEST'])).toBe(false)
     for (const view of PARTNER_VIEWS.filter((entry) => entry.kinds.includes('SUPPLIER') || entry.kinds.includes('SUBCONTRACTOR'))) expect(view.grain).toBeUndefined()
+    // B-TH-081: a customer's repair, in the Returns group of a customer's portal only (its thread on the portal repair page).
+    expect(partnerViewOf('RepairOrder')?.group).toBe('returns')
+    expect(viewFits(partnerViewOf('RepairOrder')!, ['CUSTOMER'])).toBe(true)
+    expect(viewFits(partnerViewOf('RepairOrder')!, ['SUPPLIER', 'SUBCONTRACTOR', 'GUEST'])).toBe(false)
   })
 
   it('refuses a view without a model name or a partner kind', () => {

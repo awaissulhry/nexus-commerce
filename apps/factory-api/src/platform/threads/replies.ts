@@ -11,6 +11,8 @@ import { mayOnThread, mayShare, notShareableRefusal, wallScopeOf } from './recor
 import { attachmentProblems, contextOf, ensureThread, messageViewOf, officeRecord, scopeOfThread, THREAD_OFFICE, threadViewOf, visibleAttachments, writeMessage, type RecordRef, type ThreadRow } from './threads'
 // B-TH-050: a reply names the shared message it answers, or corrects a portal reply of ours.
 import { messageLinkProblems, messageLinksOf } from './threads'
+// B-TH-092: the sender's draft of the record goes with the reply.
+import { clearDraftInCommand } from './draft-keys'
 
 /**
  * B-TH-044 (threads plan TH-3, G15; T5-F07 "Reply in the portal only"; wall W08): POST /threads/<type>/<id>/replies — a reply to
@@ -102,6 +104,7 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
         ...(input.batchId ? { batchId: input.batchId } : {}),
         ...links, // B-TH-050
       })
+      await clearDraftInCommand(tools, context.actorId, record) // B-TH-092
       const current = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: THREAD_OFFICE })
       const attachments = await visibleAttachments(tools.tx, context, message.attachmentFileIds)
       return { thread: threadViewOf(current), message: messageViewOf(message, attachments, true, await messageLinksOf(tools.tx, thread.id, [message], { sharedOnly: false, workerShown: true })) }

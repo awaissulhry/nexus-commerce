@@ -7,7 +7,7 @@ import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import { formatDate } from '@nexus/factory-domain/documents/format'
 import { eventFor } from '@nexus/factory-domain/events/define'
 import { events as templateEvents, type ReplyChange } from '@nexus/factory-domain/templates/events'
-import { isTemplateLanguage, type TemplateLanguage } from '@nexus/factory-domain/templates/language'
+import type { TemplateLanguage } from '@nexus/factory-domain/templates/language'
 import { companyValues } from '@nexus/factory-domain/templates/mail'
 import { EMAIL_REPLIES_SHARE } from '@nexus/factory-domain/templates/permissions'
 import { fillPlaceholders, missingValues, type PlaceholderValues } from '@nexus/factory-domain/templates/placeholders'
@@ -19,6 +19,14 @@ import { officeRecord } from '../threads/threads'
 import { mayOnThread } from '../threads/records'
 import type { ReplyView } from './contract'
 import { mayOver, namesOf, officeOf, person, refuseProblems, templateRefusal, type Reader } from './store'
+// ---- B-TH-098 / B-TH-279: the five message languages; a mail's starting words in the recipient's language, a drafted text only once
+// read or with the office's tick.
+import { DomainError } from '@nexus/factory-domain/core/errors'
+import { codeWordsOf, fillMail, MAIL_EVENT_DEFINITIONS, type MailEvent } from '@nexus/factory-domain/templates/mail'
+import { isDraftedLanguage, isMessageLanguage, MESSAGE_LANGUAGE_WORDS, messageLanguageOf, unreadWords, type MessageLanguage } from '@nexus/factory-domain/templates/message-languages'
+import { isReplyRecordType } from '@nexus/factory-domain/templates/replies'
+import { mailTemplateOf } from './active'
+// ---- end B-TH-098 / B-TH-279
 
 /**
  * Saved replies (B-W2b-422; COL-016; the send panel's "Message (template per language)"): a person's own, or shared with the
@@ -87,7 +95,7 @@ async function changeable(caller: CommandCaller, replyId: string): Promise<{ con
 }
 
 /** GET /templates/replies */
-export async function listReplies(caller: CommandCaller, query: { readonly language?: TemplateLanguage | undefined; readonly recordType?: ReplyRecordType | undefined; readonly companyId?: string | undefined }) {
+export async function listReplies(caller: CommandCaller, query: { readonly language?: MessageLanguage | undefined; readonly recordType?: ReplyRecordType | undefined; readonly companyId?: string | undefined }) {
   const context = officeOf(caller)
   const actor = actorOf(context)
   return caller.withClient(async (db) => {
@@ -114,7 +122,7 @@ export async function listReplies(caller: CommandCaller, query: { readonly langu
 
 interface ReplyBody {
   readonly name: string
-  readonly language: TemplateLanguage
+  readonly language: MessageLanguage // B-TH-098
   readonly body: string
   readonly recordType: ReplyRecordType | null
   readonly companyId: string | null
@@ -160,7 +168,7 @@ export async function updateReply(caller: CommandCaller, replyId: string, body: 
   const actor = actorOf(context)
   const words = checked({
     name: body.name ?? before.name,
-    language: body.language ?? (before.language as TemplateLanguage),
+    language: body.language ?? (before.language as MessageLanguage), // B-TH-098
     body: body.body ?? before.body,
     recordType: body.recordType !== undefined ? body.recordType : (before.recordType as ReplyRecordType | null),
     companyId: body.companyId !== undefined ? body.companyId : before.companyId,
@@ -192,7 +200,9 @@ export async function deleteReply(caller: CommandCaller, replyId: string, versio
   return result
 }
 
-const day = (value: Date | null | undefined, language: TemplateLanguage): string | null => (value ? formatDate(businessDate(value, 'UTC'), language) : null)
+// B-TH-098: dates in German, French and Spanish texts are written as numbers (dd/mm/yyyy), as Italian ones are.
+const dateLanguageOf = (language: MessageLanguage): TemplateLanguage => (language === 'en' ? 'en' : 'it')
+const day = (value: Date | null | undefined, language: MessageLanguage): string | null => (value ? formatDate(businessDate(value, 'UTC'), dateLanguageOf(language)) : null)
 
 /** B-TH-046: what a request is about — its mail's subject, else the first line of its words, at most 120 characters (null: none). */
 export function inquirySubjectOf(mailSubject: string | null, request: string): string | null {
@@ -202,7 +212,7 @@ export function inquirySubjectOf(mailSubject: string | null, request: string): s
 }
 
 /** The record's own values (its number, dates), its party and the contact it names, for its record type. */
-async function recordValues(db: Reader, type: ReplyRecordType, id: string, language: TemplateLanguage): Promise<{ values: PlaceholderValues; partyId: string | null; contactId: string | null; companyId: string | null; prospect?: { readonly name: string | null; readonly company: string | null } }> {
+async function recordValues(db: Reader, type: ReplyRecordType, id: string, language: MessageLanguage): Promise<{ values: PlaceholderValues; partyId: string | null; contactId: string | null; companyId: string | null; prospect?: { readonly name: string | null; readonly company: string | null } }> {
   switch (type) {
     case 'SalesOrder': {
       const row = await db.salesOrder.findUnique({ where: { id }, select: { number: true, customerRef: true, promiseDate: true, partyId: true, companyId: true } })
@@ -239,13 +249,47 @@ async function recordValues(db: Reader, type: ReplyRecordType, id: string, langu
     // B-TH-046: a request of Sales › Incoming — its number, what it is about, the wanted date; the contact is the customer's
     // own who wrote it (fill reads a contact of the request's customer only: brand A's request never names brand B's contact).
     case 'Inquiry': {
-      const row = await db.inquiry.findUnique({ where: { id }, select: { number: true, request: true, wantedDate: true, partyId: true, contactId: true, companyId: true, sourceEmailId: true, prospectName: true, prospectCompany: true } })
+      const row = await db.inquiry.findUnique({ where: { id }, select: { number: true, request: true, wantedDate: true, partyId: true, contactId: true, companyId: true, sourceEmailId: true, prospectName: true, prospectCompany: true, customerSeq: true } })
       if (!row) break
       const mail = row.sourceEmailId ? await db.inboundEmail.findUnique({ where: { id: row.sourceEmailId }, select: { subject: true } }) : null
-      return { values: { 'inquiry.number': row.number, 'inquiry.subject': inquirySubjectOf(mail?.subject ?? null, row.request), 'inquiry.wantedDate': day(row.wantedDate, language) }, partyId: row.partyId, contactId: row.contactId, companyId: row.companyId, ...(row.partyId === null ? { prospect: { name: row.prospectName, company: row.prospectCompany } } : {}) }
+      // B-TH-098: `inquiry.yourNumber` — the customer's own number of the request (§0.5: the counts never leak), the office's for a prospect.
+      const yourNumber = row.customerSeq !== null ? String(row.customerSeq) : row.number
+      return { values: { 'inquiry.number': row.number, 'inquiry.yourNumber': yourNumber, 'inquiry.subject': inquirySubjectOf(mail?.subject ?? null, row.request), 'inquiry.wantedDate': day(row.wantedDate, language) }, partyId: row.partyId, contactId: row.contactId, companyId: row.companyId, ...(row.partyId === null ? { prospect: { name: row.prospectName, company: row.prospectCompany } } : {}) }
     }
   }
   throw new NotFoundError('Record not found.')
+}
+
+/**
+ * The values a record gives a reply or a mail, read with the caller's client (email.send over the record, else 404): its own values,
+ * the contact (the one named, else the record's), the party, the person, today, the company. B-TH-098: in the message language.
+ */
+async function fillValues(db: Reader, context: OfficeContext, body: { readonly recordType: ReplyRecordType; readonly recordId: string; readonly contactId?: string | undefined }, language: MessageLanguage): Promise<{ values: PlaceholderValues; partyId: string | null; contact: { language: string | null } | null; companyId: string | null }> {
+  const actor = actorOf(context)
+  const { scope } = await officeRecord(db, { type: body.recordType, id: body.recordId })
+  if (!mayOnThread(actor, EMAIL_SEND, body.recordType, scope)) throw new NotFoundError('Record not found.')
+  const record = await recordValues(db, body.recordType, body.recordId, language)
+  const contactId = body.contactId ?? record.contactId
+  const contact = contactId && record.partyId ? await db.partyContact.findFirst({ where: { id: contactId, partyId: record.partyId, status: 'ACTIVE' }, select: { name: true, language: true } }) : null
+  if (body.contactId && !contact) throw new ValidationError('Pick an active contact of the record’s customer or supplier.', [{ path: 'body/contactId', message: 'Pick an active contact of the record’s customer or supplier.' }])
+  const party = record.partyId ? await db.party.findUnique({ where: { id: record.partyId }, select: { legalName: true, tradeName: true } }) : null
+  const companyId = record.companyId ?? scope.companyId ?? null
+  const company = companyId ? await db.company.findUnique({ where: { id: companyId }, select: { legalName: true, tradeName: true } }) : null
+  const me = await db.user.findUnique({ where: { id: context.actorId }, select: { displayName: true, email: true } })
+  return {
+    values: {
+      ...record.values,
+      // B-TH-046: a prospect's request (no customer yet) names the prospect and its company.
+      'contact.name': contact?.name?.trim() || record.prospect?.name?.trim() || null,
+      'party.name': party ? party.tradeName?.trim() || party.legalName.trim() : record.prospect?.company?.trim() || null,
+      'me.name': me ? me.displayName?.trim() || me.email.split('@')[0]! : null,
+      today: formatDate(businessDate(serverClock.now()), dateLanguageOf(language)), // B-TH-098
+      ...(company ? companyValues(company) : {}),
+    } satisfies PlaceholderValues,
+    partyId: record.partyId,
+    contact: contact ? { language: contact.language } : null,
+    companyId,
+  }
 }
 
 /**
@@ -255,30 +299,76 @@ async function recordValues(db: Reader, type: ReplyRecordType, id: string, langu
  */
 export async function fillReply(caller: CommandCaller, replyId: string, body: { readonly recordType: ReplyRecordType; readonly recordId: string; readonly contactId?: string | undefined }) {
   const { context, row } = await seen(caller, replyId)
-  const actor = actorOf(context)
   if (row.recordType !== null && row.recordType !== body.recordType) throw new ValidationError('This saved reply is for another kind of record.', [{ path: 'body/recordType', message: 'This saved reply is for another kind of record.' }])
-  if (!isTemplateLanguage(row.language)) throw new ValidationError('Saved replies are written in Italian or English.', [{ path: 'params/replyId', message: 'Saved replies are written in Italian or English.' }])
+  if (!isMessageLanguage(row.language)) throw new ValidationError(MESSAGE_LANGUAGE_WORDS.en, [{ path: 'params/replyId', message: MESSAGE_LANGUAGE_WORDS.en }]) // B-TH-098
   const language = row.language
-  const values = await caller.withClient(async (db) => {
-    const { scope } = await officeRecord(db, { type: body.recordType, id: body.recordId })
-    if (!mayOnThread(actor, EMAIL_SEND, body.recordType, scope)) throw new NotFoundError('Record not found.')
-    const record = await recordValues(db, body.recordType, body.recordId, language)
-    const contactId = body.contactId ?? record.contactId
-    const contact = contactId && record.partyId ? await db.partyContact.findFirst({ where: { id: contactId, partyId: record.partyId, status: 'ACTIVE' }, select: { name: true } }) : null
-    if (body.contactId && !contact) throw new ValidationError('Pick an active contact of the record’s customer or supplier.', [{ path: 'body/contactId', message: 'Pick an active contact of the record’s customer or supplier.' }])
-    const party = record.partyId ? await db.party.findUnique({ where: { id: record.partyId }, select: { legalName: true, tradeName: true } }) : null
-    const companyId = record.companyId ?? scope.companyId ?? null
-    const company = companyId ? await db.company.findUnique({ where: { id: companyId }, select: { legalName: true, tradeName: true } }) : null
-    const me = await db.user.findUnique({ where: { id: context.actorId }, select: { displayName: true, email: true } })
-    return {
-      ...record.values,
-      // B-TH-046: a prospect's request (no customer yet) names the prospect and its company.
-      'contact.name': contact?.name?.trim() || record.prospect?.name?.trim() || null,
-      'party.name': party ? party.tradeName?.trim() || party.legalName.trim() : record.prospect?.company?.trim() || null,
-      'me.name': me ? me.displayName?.trim() || me.email.split('@')[0]! : null,
-      today: formatDate(businessDate(serverClock.now()), language),
-      ...(company ? companyValues(company) : {}),
-    } satisfies PlaceholderValues
-  })
+  const { values } = await caller.withClient((db) => fillValues(db, context, body, language))
   return { body: fillPlaceholders(row.body, values), language, missing: missingValues(row.body, values) }
 }
+
+// ---- B-TH-098 / B-TH-279 (threads plan TH-9 thread-G07, TH-6 O-ADM-MAILTPL.events-F01) ------------------------------------------------
+export const MAIL_FILL_WORDS = Object.freeze({
+  NOT_FOR_THIS_RECORD: {
+    it: 'Queste parole sono per un altro tipo di documento.',
+    en: 'These words are for another kind of record.',
+  },
+  SENT_BY_NEXUS: {
+    it: 'Questa e-mail la manda Nexus da sola: non ha parole di partenza da compilare.',
+    en: 'Nexus sends this mail by itself: it has no starting words to fill.',
+  },
+})
+
+/**
+ * POST /templates/mail/events/:event/fill: a mail's starting words for a record (the dialogs' "Ask for info" and "Decline", the receipt
+ * of a request; a service case's and a shipment's mail too), filled with the record's values, in the recipient's message language
+ * (their contact's, their organisation's, the company's — or the one asked):
+ *   1. the company's version in use in that language, else every company's (a person wrote it: it needs no reading);
+ *   2. else the code's words — Italian and English as they are; a German, French or Spanish draft by Claude only once that language was
+ *      read, or with the office's tick "Send it anyway" (`sendUnread`, recorded in the history with who ticked); otherwise English,
+ *      said with `fellBack` and the words why. Nothing is sent here: the person reads, changes and sends the text from the composer.
+ */
+export async function fillMailEvent(
+  caller: CommandCaller,
+  event: MailEvent,
+  body: { readonly recordType: ReplyRecordType; readonly recordId: string; readonly contactId?: string | undefined; readonly language?: MessageLanguage | undefined; readonly sendUnread?: boolean | undefined },
+  idempotencyKey?: string,
+) {
+  const context = officeOf(caller)
+  const definition = MAIL_EVENT_DEFINITIONS[event]
+  if (!isReplyRecordType(definition.recordType)) throw new DomainError('conflict', MAIL_FILL_WORDS.SENT_BY_NEXUS.en, [{ path: 'refusal/SENT_BY_NEXUS', message: MAIL_FILL_WORDS.SENT_BY_NEXUS.en }])
+  if (definition.recordType !== body.recordType) throw new ValidationError(MAIL_FILL_WORDS.NOT_FOR_THIS_RECORD.en, [{ path: 'body/recordType', message: MAIL_FILL_WORDS.NOT_FOR_THIS_RECORD.en }])
+  const read = await caller.withClient(async (db) => {
+    // The language first (the record's contact, else its party, else its company), then the values in it.
+    const first = await fillValues(db, context, body, 'en')
+    const party = first.partyId ? await db.party.findUnique({ where: { id: first.partyId }, select: { language: true } }) : null
+    const company = first.companyId ? await db.company.findUnique({ where: { id: first.companyId }, select: { locale: true } }) : null
+    const language: MessageLanguage = body.language ?? messageLanguageOf({ contact: first.contact?.language, party: party?.language, company: company?.locale }).language
+    const filled = language === 'en' ? first : await fillValues(db, context, body, language)
+    const template = first.companyId ? await mailTemplateOf(db, context, { companyId: first.companyId, event, language }) : null
+    return { language, values: filled.values, template, companyId: first.companyId }
+  })
+  if (read.template) {
+    const words = fillMail(read.template, read.values)
+    return { ...words, language: read.language, source: 'TEMPLATE' as const, read: true, fellBack: false, words: null, missing: [...new Set([...missingValues(read.template.subject, read.values), ...missingValues(read.template.body, read.values)])] }
+  }
+  const code = codeWordsOf(event, read.language, { sendUnread: body.sendUnread === true })
+  // The office's tick on a drafted text not read yet is recorded: who used which language's words, on which record.
+  if (isDraftedLanguage(read.language) && !code.read && body.sendUnread === true) {
+    await command(caller, { name: 'templates.useUnreadText', idempotencyKey, input: { event, language: read.language, recordType: body.recordType, recordId: body.recordId } }, async (tools) => {
+      tools.audit({ action: 'templates.useUnreadText', recordType: body.recordType, recordId: body.recordId, companyId: read.companyId, after: { event, language: read.language, drafted: 'CLAUDE', read: false } })
+      return null
+    })
+  }
+  const values = code.language === read.language ? read.values : (await caller.withClient((db) => fillValues(db, context, body, code.language))).values
+  const words = fillMail(code.words, values)
+  return {
+    ...words,
+    language: code.language,
+    source: 'CODE' as const,
+    read: code.read,
+    fellBack: code.fellBack,
+    words: code.fellBack && isDraftedLanguage(read.language) ? { it: unreadWords(read.language, 'it'), en: unreadWords(read.language, 'en') } : null,
+    missing: [...new Set([...missingValues(code.words.subject, values), ...missingValues(code.words.body, values)])],
+  }
+}
+// ---- end B-TH-098 / B-TH-279

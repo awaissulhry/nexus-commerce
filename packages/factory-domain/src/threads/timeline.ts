@@ -17,6 +17,14 @@ export const TIMELINE_ASKABLE_KINDS = [...TIMELINE_KINDS, ...ASKED_ONLY_TIMELINE
 export type TimelineKind = (typeof TIMELINE_ASKABLE_KINDS)[number]
 // ---- end B-TH-072
 
+// ---- B-TH-079 (threads plan TH-6, N3; T1-F05 "View ▾ All · With the customer · Office notes · Changes"): the feed's audience view —
+// ALL every message; PARTNER only the messages shared with the record's party ("With the customer"); OFFICE only the office notes.
+// "Changes" is kinds=change. A view only narrows what the reader may read anyway: a portal or link reader reads shared messages only,
+// whatever it asks (OFFICE gives it none).
+export const FEED_AUDIENCES = ['ALL', 'PARTNER', 'OFFICE'] as const
+export type FeedAudience = (typeof FEED_AUDIENCES)[number]
+// ---- end B-TH-079
+
 export interface Positioned {
   readonly at: Date
   readonly id: string
