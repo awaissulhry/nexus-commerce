@@ -134,7 +134,8 @@
     "archive": "Archivia il modello…",
     "reactivate": "Riattiva il modello",
     "copyCode": "Copia il codice",
-    "duplicate": "Duplica…"
+    "duplicate": "Duplica…",
+    "startProject": "Avvia un progetto…"
   },
   "save": {
     "saving": "Salvataggio…",
@@ -152,7 +153,8 @@
     "checking": "Il controllo di rilascio è ancora in lettura.",
     "blockers_one": "{count} cosa da sistemare prima (r apre il controllo)",
     "blockers_other": "{count} cose da sistemare prima (r apre il controllo)",
-    "long": "Al massimo 500 caratteri."
+    "long": "Al massimo 500 caratteri.",
+    "noProjects": "Per avviare un progetto serve il permesso {right}."
   },
   "problem": {
     "read": {

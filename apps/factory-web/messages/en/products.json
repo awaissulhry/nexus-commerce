@@ -134,7 +134,8 @@
     "archive": "Archive style…",
     "reactivate": "Reactivate style",
     "copyCode": "Copy code",
-    "duplicate": "Duplicate…"
+    "duplicate": "Duplicate…",
+    "startProject": "Start a project…"
   },
   "save": {
     "saving": "Saving…",
@@ -152,7 +153,8 @@
     "checking": "The release check is still being read.",
     "blockers_one": "{count} thing to fix first (r opens the check)",
     "blockers_other": "{count} things to fix first (r opens the check)",
-    "long": "At most 500 characters."
+    "long": "At most 500 characters.",
+    "noProjects": "Starting a project needs the right {right}."
   },
   "problem": {
     "read": {

@@ -106,6 +106,17 @@ describe('the style on RecordFrame', () => {
     }
   })
 
+  it('"Start a project…" in the band menu opens a new project with this style linked — a private-label style’s with its brand, held without projects.manage', () => {
+    const source = readFileSync(new URL('./record/view/StyleRecordView.tsx', import.meta.url), 'utf8')
+    expect(source).toContain("t('action.startProject')")
+    expect(source).toContain('/products/projects?new=1&link=${encodeURIComponent(`Style:${style.id}`)}&linkLabel=${encodeURIComponent(style.code)}')
+    expect(source).toContain('&party=${encodeURIComponent(style.brand.id)}')
+    expect(source).toContain("t('held.noProjects', { right: rightRef('projects.manage') })")
+    for (const locale of ['it', 'en'] as const) for (const key of ['action.startProject', 'held.noProjects']) expect(CATALOGUE[locale].products![key], `${locale} ${key}`).toBeTruthy()
+    expect(recordModel('owner').projects).toEqual({ view: true, manage: true })
+    expect(recordModel('sales').projects).toEqual({ view: true, manage: false })
+  })
+
   it('one notice: the most serious shows, the rest wait behind "N more notices" (never above the thread)', () => {
     const html = draw('notices')
     const dockAt = html.indexOf('class="fw-rcf-dock"')

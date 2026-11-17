@@ -6,6 +6,8 @@ import { FileX, Inbox, Lock, ShieldOff } from 'lucide-react'
 import { Banner, Card, EmptyState, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
 import { Button, Pill, Select, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatTime } from '../../../../../lib/i18n/format'
+// B-TH-261: a held "Start a project" names the missing right in words.
+import { rightRef } from '../../../../../lib/i18n/rights'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { BomView, StyleView } from '../../api'
@@ -245,6 +247,19 @@ function ReadyRecord({ style, model, actions, thread, printThread, techPack, dep
     ...(model.changes?.request ? [{ id: 'changeNew', label: tc('style.newRequest'), href: `${model.prefix}/products/changes?new=1&style=${encodeURIComponent(style.id)}` }] : []),
     // B-W2b-245 (design pop:styles.compare "Versions tab · band overflow").
     ...(model.versions && style.revisions.length > 1 ? [{ id: 'compare', label: tv('cmp.open'), onSelect: () => actions?.versions?.onCompareOpen?.() }] : []),
+    // B-TH-261 (TH-5's Projects, #1582): a new project with this style linked; a private-label style's project is its brand's (a
+    // project never mixes customers), our own collection's an office project.
+    ...(model.projects?.view
+      ? [
+          {
+            id: 'project',
+            label: t('action.startProject'),
+            href: model.projects.manage ? `${model.prefix}/products/projects?new=1&link=${encodeURIComponent(`Style:${style.id}`)}&linkLabel=${encodeURIComponent(style.code)}${style.brand ? `&party=${encodeURIComponent(style.brand.id)}` : ''}` : undefined,
+            disabled: !model.projects.manage,
+            description: model.projects.manage ? undefined : t('held.noProjects', { right: rightRef('projects.manage') }),
+          },
+        ]
+      : []),
     {
       id: 'copy',
       label: t('action.copyCode'),

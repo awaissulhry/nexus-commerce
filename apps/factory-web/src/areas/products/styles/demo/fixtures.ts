@@ -764,8 +764,10 @@ export function recordModel(role: keyof typeof GRAINS, overrides: Partial<StyleR
     busy: false,
     notice: null,
     changed: null,
-    // B-TH-261: the person whose thread width the frame remembers.
+    // B-TH-261: the person whose thread width the frame remembers; "Start a project" (threads.read reads projects; making one is
+    // projects.manage — the product office here).
     personId: uid('3333', 1),
+    projects: { view: can.thread, manage: can.manage },
     duplicate: null,
     bomImport: null,
     ...overrides,

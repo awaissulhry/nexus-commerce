@@ -623,6 +623,7 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
     // B-TH-261
     personId: session.user.id,
     madeFrom,
+    projects: { view: session.permissions.includes('threads.read'), manage: session.permissions.includes('projects.manage') },
     duplicate: duplicate.model,
     bomImport: bomImport.model,
     exporting,

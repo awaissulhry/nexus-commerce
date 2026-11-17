@@ -135,6 +135,8 @@ export interface StyleRecordViewModel {
   // draft was made from (GET /sales/inquiries/source?styleId=, read only with sales.inquiries.view; null: none or not read).
   personId?: string | null
   madeFrom?: { inquiryId: string; number: string } | null
+  /** Products › Development › Projects: "Start a project" with this style linked (threads.read reads projects, projects.manage makes one). */
+  projects?: { view: boolean; manage: boolean }
   // ---- end B-TH-261
   /** The fields the last refused write named (`hsCode`, `body/netMassKg` …), for a form to point at. */
   refused?: string[]
