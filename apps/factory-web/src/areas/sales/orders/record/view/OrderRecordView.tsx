@@ -246,7 +246,13 @@ function ReadyRecord({ order, model, actions, thread, printThread, delivered }: 
           meta: (
             <>
               {order.customerRef && <Tag tone="neutral">{t('record.customerRef', { ref: order.customerRef })}</Tag>}
-              {!order.chain.quote && <Tag tone="neutral">{t('record.typed')}</Tag>}
+              {/* B-TH-228: an order made straight from a request names it (office only), else "Typed by the office". */}
+              {!order.chain.quote && model.madeFrom && (
+                <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/incoming/${encodeURIComponent(model.madeFrom.id)}`}>
+                  {t('record.madeFrom', { number: model.madeFrom.number })}
+                </Link>
+              )}
+              {!order.chain.quote && !model.madeFrom && !model.madeFromReading && <Tag tone="neutral">{t('record.typed')}</Tag>}
               {order.chain.quote &&
                 (model.can.viewQuotes ? (
                   <Link className="fw-so-link fw-so-hint" href={`${model.prefix}/sales/quotes/${order.chain.quote.id}`}>

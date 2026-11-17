@@ -82,5 +82,10 @@
     "bar_other": "{count} nuovi messaggi",
     "arrived_one": "{count} nuovo messaggio nella conversazione",
     "arrived_other": "{count} nuovi messaggi nella conversazione"
+  },
+  "unread": {
+    "line_one": "Nuovo dalla tua ultima visita · {count} messaggio",
+    "line_other": "Nuovo dalla tua ultima visita · {count} messaggi",
+    "lineMany": "Nuovo dalla tua ultima visita · oltre 200 messaggi"
   }
 }

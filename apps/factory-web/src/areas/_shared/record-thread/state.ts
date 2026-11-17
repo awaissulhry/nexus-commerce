@@ -4,6 +4,7 @@ import type { ComposerDraft, SwitchNote } from '../../../lib/record-thread/compo
 import { settleOutbox, type OutboxItem } from '../../../lib/record-thread/model'
 import type { Recipient } from '../../../lib/record-thread/send-check/model'
 import type { ApiMessage } from '../../../record-panels/api'
+import type { Reading, ThreadHead } from './api'
 
 /**
  * The office thread's state and its pure steps (B-TH-212): what the server said (the messages, page by page) and what the person
@@ -19,6 +20,10 @@ export interface ServerThread {
   cursor: string | null
   more: boolean
   older: 'idle' | 'loading' | 'failed'
+  // ---- B-TH-229: the reader's own reading (B-TH-027) and the office head (B-TH-028), as the newest read said
+  reading?: Reading | null
+  head?: ThreadHead
+  // ---- end B-TH-229
 }
 
 export interface Work {
@@ -39,7 +44,7 @@ const byTime = (a: ApiMessage, b: ApiMessage) => (a.at === b.at ? a.id.localeCom
  * The newest page read again (on arrival, after a send, on a live hint): the newest messages are replaced, the older pages the
  * person already loaded stay; the work is not part of it.
  */
-export function applyNewest(server: ServerThread, page: { thread: ServerThread['thread']; messages: readonly ApiMessage[]; nextCursor: string | null }): ServerThread {
+export function applyNewest(server: ServerThread, page: { thread: ServerThread['thread']; messages: readonly ApiMessage[]; nextCursor: string | null; reading?: Reading | null; head?: ThreadHead }): ServerThread {
   const fresh = new Map(page.messages.map((message) => [message.id, message]))
   const oldestFresh = page.messages.length > 0 ? [...page.messages].sort(byTime)[0].at : null
   const kept = server.status === 'ready' && oldestFresh !== null ? server.messages.filter((message) => !fresh.has(message.id) && message.at < oldestFresh) : []
@@ -51,6 +56,9 @@ export function applyNewest(server: ServerThread, page: { thread: ServerThread['
     cursor: loadedOlder ? server.cursor : page.nextCursor,
     more: loadedOlder ? server.more : page.nextCursor !== null,
     older: 'idle',
+    // B-TH-229
+    reading: page.reading === undefined ? server.reading : page.reading,
+    head: page.head ?? server.head,
   }
 }
 
@@ -66,6 +74,56 @@ export function afterRead(work: Work, server: ServerThread): Work {
   const outbox = settleOutbox(work.outbox, ids)
   return outbox.length === work.outbox.length ? work : { ...work, outbox }
 }
+
+// ---- B-TH-229 (T1-F04): marking the thread read for the person, forward only, once --------------------------------------------
+
+const ahead = (a: { id: string; at: string }, b: { id: string; at: string } | null): boolean => b === null || a.at > b.at || (a.at === b.at && a.id > b.id)
+
+export interface ReadMarker {
+  /** A message was on screen for a second: mark read up to it when it is later than the mark (one call at a time; the latest wins). */
+  seen: (message: { id: string; at: string }) => void
+  /** The mark the server holds (its reading's last read message), so an older message never sends. */
+  known: (message: { id: string; at: string } | null) => void
+}
+
+/**
+ * The person's read mark as the container moves it: only forward, never twice for the same message, one call in flight (a later
+ * message seen meanwhile goes right after). A failed call is forgotten quietly (the next message seen tries again): a mark is the
+ * reader's own convenience, never a "seen by" record.
+ */
+export function readMarker(send: (messageId: string) => Promise<void>): ReadMarker {
+  let mark: { id: string; at: string } | null = null
+  let flying: { id: string; at: string } | null = null
+  let next: { id: string; at: string } | null = null
+  const go = (target: { id: string; at: string }) => {
+    flying = target
+    send(target.id)
+      .then(() => {
+        if (ahead(target, mark)) mark = target
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        flying = null
+        const queued = next
+        next = null
+        if (queued && ahead(queued, mark)) go(queued)
+      })
+  }
+  return {
+    seen: (message) => {
+      if (!ahead(message, mark)) return
+      if (flying) {
+        if (ahead(message, flying) && ahead(message, next)) next = message
+        return
+      }
+      go(message)
+    },
+    known: (message) => {
+      if (message && ahead(message, mark)) mark = message
+    },
+  }
+}
+// ---- end B-TH-229
 
 /** A failed first read: no right (the thread is not drawn) or a fault (Try again; the box keeps the text). */
 export const readStatusOf = (error: unknown): 'forbidden' | 'error' => (isApiError(error) && (error.kind === 'forbidden' || error.kind === 'step_up') ? 'forbidden' : 'error')

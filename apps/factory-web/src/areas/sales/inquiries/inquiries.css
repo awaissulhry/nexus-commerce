@@ -350,9 +350,6 @@
   white-space: nowrap;
 }
 
-.fw-inq-late {
-  color: var(--nds-danger-text);
-}
 
 @media (max-width: 1023px) {
   .fw-inq-pane {
@@ -391,4 +388,21 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--nds-space-6);
+}
+
+/* B-TH-228 (pane-facts-F03): what was made from the request — the order and the style drafts, one line each. */
+.fw-inq-made {
+  margin: var(--nds-space-6) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+}
+
+/* B-TH-230: a wait past the one rule's threshold is amber (the design kit's "amber waiting"), never the danger tone. */
+.fw-inq-amber {
+  color: var(--nds-warning-text);
+  font-weight: 600;
 }

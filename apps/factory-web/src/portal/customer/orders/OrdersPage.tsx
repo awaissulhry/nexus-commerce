@@ -1,6 +1,6 @@
 'use client'
 
-import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../lib/api/errors'
 import { WithMessages } from '../../../record-panels/i18n'
@@ -11,6 +11,10 @@ import { listBandOf } from './band'
 import { CLOSED_REQUESTS, isListChip, listCsv, listQuery, listRows, NAV_KEY, NS, opens, ordersInChip, recordHref, rowHref, type ListChip } from './model'
 import { saveText, useOffline } from './hooks'
 import { OrdersListView } from './view/OrdersListView'
+// B-TH-230: the New messages column — one read of the rows shown (the portal's own client: its party's shared messages only).
+import { readUnreadWith } from '../../../lib/last-message-cell/api'
+import { useUnread } from '../../../lib/last-message-cell/use-unread'
+import { threadOf } from './model'
 import { OrdersPrintView } from './view/OrdersPrintView'
 import { NotInAccess } from './view/parts'
 import { useOrderWords } from './words'
@@ -174,6 +178,14 @@ function ListContainer() {
     if (read) setLoadedAt(read.asOf)
   }, [read])
 
+  // ---- B-TH-230: the person's own new messages on the rows shown (threads.read; ONE POST /threads/unread of ≤ 200), again live ----
+  const readsThreads = frame.me.permissions.includes('threads.read')
+  const [unreadTick, setUnreadTick] = useState(0)
+  usePortalLive({ onChange: (change) => (change.type.startsWith('thread.') || change.type === 'partner_notification.created' ? setUnreadTick((tick) => tick + 1) : undefined), onReconnect: () => setUnreadTick((tick) => tick + 1) }, readsThreads)
+  const unreadRows = useMemo(() => shownRows.flatMap((row) => { const thread = threadOf(row); return thread ? [{ recordType: thread.recordType, id: row.id }] : [] }), [shownRows])
+  const unread = useUnread(readsThreads ? readUnreadWith(api) : null, unreadRows, unreadTick)
+  // ---- end B-TH-230
+
   if (state === 'forbidden') return <NotInAccess admins={(frame.access?.admins ?? []).map((admin) => admin.displayName)} homeHref={frame.prefix} />
 
   return (
@@ -193,6 +205,7 @@ function ListContainer() {
         transit,
         // B-W2b-194: the empty state's New order.
         newOrderHref: newOrder,
+        unread: readsThreads ? unread : null, // B-TH-230
       }}
       actions={{
         onChip: (next) => go(next, q),

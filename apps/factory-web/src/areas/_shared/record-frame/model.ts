@@ -60,7 +60,19 @@ export function arrivalOf(search: string | { get(name: string): string | null } 
   const params = typeof search === 'string' ? new URLSearchParams(search.startsWith('?') ? search : `?${search}`) : search
   const activity = params.get('tab') === 'activity'
   const approvals = params.get('panel') === 'approvals'
-  return { openThread: activity || approvals, door: approvals ? 'approve' : null }
+  // B-TH-230: a list's New messages cell (`?thread=new`) opens the thread, which opens at "New since your last visit" (B-TH-229).
+  const fresh = params.get('thread') === 'new'
+  return { openThread: activity || approvals || fresh, door: approvals ? 'approve' : null }
+}
+
+/**
+ * B-TH-229 (band-F05, PL1-F04): the band's Thread button — "Thread", or "Thread · 2 new" with the reader's own new messages (99+
+ * above 99), the same number as the thread's Head; the screen reader hears "Thread, 2 new messages".
+ */
+export function threadButtonWords(count: number): { readonly key: 'thread.button' | 'thread.buttonNew' | 'thread.buttonMany'; readonly count?: number; readonly label: { readonly key: 'thread.buttonNewLabel'; readonly count: number } | null } {
+  if (count <= 0) return { key: 'thread.button', label: null }
+  const shown = Math.min(count, 99)
+  return { key: count > 99 ? 'thread.buttonMany' : 'thread.buttonNew', count: shown, label: { key: 'thread.buttonNewLabel', count: shown } }
 }
 
 /** ⌘J (Ctrl J on other systems): show or hide the docked thread, open or close the full-width one. Never with Alt or Shift. */

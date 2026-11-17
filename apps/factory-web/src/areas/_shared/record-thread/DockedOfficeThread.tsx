@@ -12,6 +12,11 @@ import { useLocale, useT } from '../../../lib/i18n/provider'
 import { feedForView, feedKinds } from '../../../lib/record-thread/model'
 import { RecordThread, type RecordThreadActions, type RecordThreadModel } from '../../../lib/record-thread/RecordThread'
 import { doorHolds, viewsOffered, whoAnswers, type HeadAbilities, type HeadDoor, type HeadModel, type ThreadView } from '../../../lib/record-thread/head/model'
+// B-TH-229: the API's waiting and owner (B-TH-028), "Change owner…".
+import { answersOf } from '../../../lib/record-thread/head/model'
+import { OwnerDialog } from '../../../lib/record-thread/head/view/OwnerDialog'
+import { setThreadOwner } from './api'
+import { isApiError } from '../../../lib/api/errors'
 import { HEAD_NS, RecordThreadHead } from '../../../lib/record-thread/head/view/RecordThreadHead'
 import { fileSeries, fromApiFile, recordFiles, toViewerFile, type FilesParty, type ThreadFile } from '../../../lib/record-thread/files/model'
 import { useStripOpen } from '../../../lib/record-thread/files/use-strip-open'
@@ -375,6 +380,24 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     }
   }
 
+  // ── B-TH-229: who answers the thread (B-TH-028), changed by whoever may write on it; the band's "Thread · 2 new" ──────────
+  const [owning, setOwning] = useState<{ busy: boolean; problem: string | null } | null>(null)
+  const pickOwner = async (ownerId: string | null) => {
+    setOwning({ busy: true, problem: null })
+    try {
+      const owner = await setThreadOwner(api, key, ownerId)
+      setOwning(null)
+      base.notify(owner && ownerId ? { ns: HEAD_NS, key: 'owner.done', params: { name: owner.name }, tone: 'success' } : { ns: HEAD_NS, key: 'owner.doneRecord', tone: 'success' })
+      void base.loadThread()
+    } catch (error) {
+      const kind = isApiError(error) ? error.kind : 'network'
+      setOwning({ busy: false, problem: th(`owner.problem.${kind === 'forbidden' || kind === 'step_up' ? 'forbidden' : kind === 'invalid' ? 'invalid' : kind === 'not_found' ? 'notFound' : kind === 'network' || kind === 'unavailable' ? 'network' : 'failed'}`) })
+    }
+  }
+  const reportNew = frame?.reportNew
+  useEffect(() => reportNew?.(base.newCount), [reportNew, base.newCount])
+  useEffect(() => () => reportNew?.(0), [reportNew])
+
   // ── the Head (T1, R-ACT) ──────────────────────────────────────────────────────────────────────────────────────────────
   const abilities: HeadAbilities = {
     task: addTaskHeld(held, true) === null,
@@ -403,7 +426,11 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const head: HeadModel = {
     record: host.recordLabel,
     party: party ? { name: party.name, role } : null,
-    answers: whoAnswers(base.server.messages, partyId !== null),
+    // B-TH-229: the API's one waiting rule and owner; a thread read without them (a design case) keeps the clock-time reading.
+    answers: base.server.head ? answersOf(base.server.head.waiting) : whoAnswers(base.server.messages, partyId !== null),
+    owner: base.server.head ? base.server.head.owner : undefined,
+    ownerHeld: base.server.head ? (offline ? { key: 'held.offline' } : can.post ? null : { key: 'held.noRight', params: { right: rightRef('threads.post') } }) : undefined,
+    newCount: base.newCount,
     closed,
     offline: base.offline ? { asOf: base.offline.since } : null,
     view: shown,
@@ -509,6 +536,7 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           onPrint: () => host.printHref && window.open(host.printHref, '_blank', 'noopener'),
           onCloseThread: () => setClosing({ problem: null }),
           onReopen: () => actions.onReopen?.(),
+          onOwner: () => setOwning({ busy: false, problem: null }),
         }}
       />
       {followersOpen && followers.data && (
@@ -620,6 +648,14 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       {approvals.model?.ask && <AskDialog model={approvals.model} actions={approvals.actions} />}
       {shares.model?.invite && <InviteDialog model={shares.model} actions={shares.actions} />}
       {closing && <CloseThreadConfirm record={host.recordLabel} party={party?.name ?? null} problem={closing.problem} onClose={() => void closeThread()} onCancel={() => setClosing(null)} />}
+      {owning && (
+        <OwnerDialog
+          model={{ record: host.recordLabel, owner: base.server.head?.owner ?? null, people: base.people, peopleState: base.peopleState, meId: session.user.id, busy: owning.busy, problem: owning.problem }}
+          onPick={(ownerId) => void pickOwner(ownerId)}
+          onClose={() => setOwning(null)}
+          onRetry={() => void base.loadPeople()}
+        />
+      )}
       {reminder.dialog}
     </>
   )

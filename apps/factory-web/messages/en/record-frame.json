@@ -3,7 +3,12 @@
     "button": "Thread",
     "hintDocked": "Show or hide the thread beside the record (⌘J)",
     "hintView": "Open the thread (⌘J); Back returns to the same tab",
-    "back": "Back to the record"
+    "back": "Back to the record",
+    "buttonNew_one": "Thread · {count} new",
+    "buttonNew_other": "Thread · {count} new",
+    "buttonMany": "Thread · 99+ new",
+    "buttonNewLabel_one": "Thread, {count} new message",
+    "buttonNewLabel_other": "Thread, {count} new messages"
   },
   "more": "More actions",
   "details": {

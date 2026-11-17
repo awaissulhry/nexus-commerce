@@ -27,6 +27,64 @@ describe('oldest at the top, newest at the bottom', () => {
   })
 })
 
+// ---- B-TH-229 (TH-2, on B-TH-027): the reader's own reading ----------------------------------------------------------------
+describe('B-TH-229 — New since your last visit, and read messages fold', () => {
+  // The demo thread in the feed's order (time, then id).
+  const T = [...THREAD].sort((a, b) => (a.at === b.at ? a.id.localeCompare(b.id) : a.at < b.at ? -1 : 1))
+  const ids = (rows: readonly FeedRow[]) => rows.flatMap((row) => (row.kind === 'new' ? ['NEW'] : row.kind === 'message' ? [row.message.id] : row.kind === 'folded' ? [`~${row.message.id}`] : row.kind === 'fold' ? [`fold:${row.count}`] : []))
+
+  it('the line sits right above the first new message; the read ones before it fold, except the one they answer', () => {
+    const firstNew = T[T.length - 2]
+    const rows = feedRows({ messages: T, events: [], firstNewId: firstNew.id, newCount: 2 })
+    const order = ids(rows)
+    expect(order.slice(-4)).toEqual([T[T.length - 3].id, 'NEW', firstNew.id, T[T.length - 1].id])
+    expect(rows.find((row) => row.kind === 'new')).toMatchObject({ count: 2 })
+    // Every read message before the one they answer folds (the old run in one line, the two before it one line each).
+    expect(foldedIds(T, [], null, firstNew.id, 2)).toHaveLength(T.length - 3)
+    expect(rows.filter((row) => row.kind === 'message')).toHaveLength(3)
+  })
+
+  it('many new: every new message stays open (never folded by age), however old', () => {
+    const firstNew = T[5]
+    const rows = feedRows({ messages: T, events: [], firstNewId: firstNew.id, newCount: T.length - 5 })
+    const open = rows.flatMap((row) => (row.kind === 'message' ? [row.message.id] : []))
+    expect(open).toEqual(T.slice(4).map((message) => message.id))
+    expect(ids(rows).indexOf('NEW')).toBe(ids(rows).indexOf(firstNew.id) - 1)
+  })
+
+  it('nothing new: no line, and the feed folds by age as before (all but the last 3)', () => {
+    const rows = feedRows({ messages: T, events: [], firstNewId: null, newCount: 0 })
+    expect(rows.some((row) => row.kind === 'new')).toBe(false)
+    expect(foldedIds(T, [], null, null, 0)).toEqual(foldedIds(T))
+  })
+
+  it('the first new message is older than the page read: the line tops the page, nothing folds, 200+ is said by the view', () => {
+    const rows = feedRows({ messages: T, events: [], firstNewId: 'not-on-this-page', newCount: 240 })
+    expect(rows.find((row) => row.kind !== 'day')).toMatchObject({ kind: 'new', count: 240 })
+    expect(rows.some((row) => row.kind === 'folded' || row.kind === 'fold')).toBe(false)
+  })
+
+  it('a link to a message still opens it among read ones; a message on its way never folds', () => {
+    const firstNew = T[T.length - 1]
+    expect(foldedIds(T, [], T[3].id, firstNew.id, 1)).not.toContain(T[3].id)
+    const sending = [...T.slice(0, 4).map((message, index) => (index === 1 ? { ...message, outbox: { state: 'sending' as const } } : message))]
+    expect(foldedIds(sending as CardMessage[], [], null, sending[3].id, 1)).not.toContain(sending[1].id)
+  })
+
+  it('every case draws the line in words (it + en), "200+" above 200, and the bar beside it', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = renderView(FeedCase, designScreen.cases.find((entry) => entry.id === 'unread')!.model, locale)
+      expect(textOf(html)).toMatch(locale === 'en' ? /New since your last visit · 2 messages/ : /Nuovo dalla tua ultima visita · 2 messaggi/)
+      expect(html).toContain('data-feed-new')
+      const many = renderView(FeedCase, designScreen.cases.find((entry) => entry.id === 'unread-many')!.model, locale)
+      expect(textOf(many)).toMatch(locale === 'en' ? /200\+ messages/ : /oltre 200 messaggi/)
+      const bar = renderView(FeedCase, designScreen.cases.find((entry) => entry.id === 'unread-bar')!.model, locale)
+      expect(textOf(bar)).toMatch(locale === 'en' ? /8 new messages/ : /8 nuovi messaggi/)
+    }
+  })
+})
+// ---- end B-TH-229
+
 describe('older messages fold by age (PR-08: all but the last 3)', () => {
   it('the oldest run is one line, the two before the open ones one line each, the last three open', () => {
     const rows = feedRows({ messages: THREAD, events: [] })

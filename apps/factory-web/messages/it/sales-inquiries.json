@@ -195,7 +195,8 @@
     "right": "Serve il permesso delle vendite ({right})",
     "offline": "Offline — aspetta che torni la connessione",
     "offlineKept": "Offline — le modifiche restano su questa pagina",
-    "notNow": "Non possibile ora per questa richiesta"
+    "notNow": "Non possibile ora per questa richiesta",
+    "needs": "Serve il permesso per {right}"
   },
   "right": {
     "sales": {
@@ -212,6 +213,14 @@
     },
     "files": {
       "upload": "aggiungere file"
+    },
+    "orders": {
+      "manage": "creare ordini"
+    },
+    "product": {
+      "styles": {
+        "manage": "creare modelli"
+      }
     }
   },
   "refusal": {
@@ -301,7 +310,16 @@
     "quoteWarnings_other": "{quote} creato da {number}: {count} cose da controllare sul preventivo",
     "openQuote": "Apri {quote}",
     "askInfoPortal": "Chiesto a {customer} nel portale: {number} aspetta la risposta (Servono informazioni); riprende quando risponde",
-    "askInfoMail": "Chiesto a {customer} per e-mail: {number} aspetta la risposta (Servono informazioni); riprende quando risponde"
+    "askInfoMail": "Chiesto a {customer} per e-mail: {number} aspetta la risposta (Servono informazioni); riprende quando risponde",
+    "orderConfirmed": "{order} creato da {number} e confermato",
+    "orderCredit": "{order} creato da {number}: è in attesa di approvazione — il cliente supera il fido o ha un blocco del credito",
+    "orderApproval": "{order} creato da {number}: è in attesa di approvazione — una regola di approvazione degli ordini chiede prima un sì",
+    "openOrder": "Apri {order}",
+    "filesCarried_one": "{count} file della richiesta è andato con l'ordine",
+    "filesCarried_other": "{count} file della richiesta sono andati con l'ordine",
+    "fileNotCarried": "{name} non è stato copiato: {reason}",
+    "styleDraft": "Bozza di modello {style} creata da {number}; la richiesta resta aperta",
+    "openStyle": "Apri {style}"
   },
   "closed": {
     "quoted": "Preventivata come {quote} il {when}",
@@ -612,8 +630,8 @@
     "customer": "Apri il cliente {name}",
     "files": "Apri i file di {number}",
     "quote": "Apri il preventivo {number}",
-    "parties": "Serve il permesso sui clienti (parties.view)",
-    "quotes": "Serve il permesso sui preventivi (quotes.view)"
+    "parties": "Serve il permesso sui clienti",
+    "quotes": "Serve il permesso sui preventivi"
   },
   "funnel": {
     "state": "Mostra solo: {status}",
@@ -707,14 +725,19 @@
       "lines": "Righe",
       "packVersion": "Versione {version}",
       "madeFrom": "Nato da questa richiesta",
-      "nothingMade": "Ancora niente nato da questa richiesta"
+      "nothingMade": "Ancora niente nato da questa richiesta",
+      "madeOrder": "Ordine {order} · {status}",
+      "madeStyle": "Bozza di modello {code} · {name} · {status}",
+      "madeQuote": "Preventivo"
     },
     "action": {
       "quote": "Crea preventivo",
       "askInfo": "Chiedi informazioni",
       "decline": "Rifiuta",
       "match": "Abbina a un cliente…",
-      "matchHint": "Scegli o crea il cliente; poi si può rispondere"
+      "matchHint": "Scegli o crea il cliente; poi si può rispondere",
+      "order": "Crea ordine",
+      "styleDraft": "Crea bozza di modello"
     },
     "held": {
       "prospect": "Crea prima il cliente: per rispondere serve la scheda del cliente"
@@ -724,11 +747,94 @@
       "quoted": "Preventivata · {quote}",
       "declined": "Rifiutata · {reason}",
       "lost": "Persa: il cliente non è andato avanti",
-      "ordered": "Ordinata: diventata un ordine"
+      "ordered": "Ordinata: diventata un ordine",
+      "orderedStatus": "Ordinata · {order} {status}"
     },
     "ask": {
       "portal": "Chiedi a {customer}: la domanda va nel suo portale (riceve l'avviso del portale per e-mail). La richiesta poi aspetta la risposta.",
       "mail": "Chiedi a {customer}: la domanda parte per e-mail dalla richiesta dopo il controllo di invio. La richiesta poi aspetta la risposta."
+    }
+  },
+  "orderStatus": {
+    "CONFIRMED": "Confermato",
+    "IN_PRODUCTION": "In produzione",
+    "READY": "Pronto",
+    "PARTLY_SHIPPED": "Spedito in parte",
+    "SHIPPED": "Spedito",
+    "CLOSED": "Chiuso",
+    "CANCELLED": "Annullato",
+    "PENDING_APPROVAL": "In attesa di approvazione",
+    "DELIVERED": "Consegnato"
+  },
+  "styleStatus": {
+    "DRAFT": "Bozza",
+    "ACTIVE": "Attivo",
+    "ARCHIVED": "Archiviato"
+  },
+  "order": {
+    "title": "Crea ordine",
+    "go": "Crea ordine",
+    "customer": "Cliente",
+    "contact": "Contatto",
+    "promise": "Data promessa",
+    "promiseHint": "La data voluta, se è ancora avanti; cambiala se serve",
+    "customerRef": "Il loro ordine (PO)",
+    "customerRefHint": "Obbligatorio quando le condizioni del cliente lo chiedono",
+    "lines_one": "{count} riga va nell'ordine",
+    "lines_other": "{count} righe vanno nell'ordine",
+    "linesLabel": "Le righe dell'ordine",
+    "col": {
+      "n": "Riga",
+      "style": "Modello · variante colore",
+      "pieces": "Pezzi",
+      "price": "Prezzo unitario"
+    },
+    "pricePlaceholder": "Listino",
+    "priceHint": "Vuoto: il prezzo di listino del cliente. Il prezzo mostrato al cliente è già compilato.",
+    "priceHidden": "Prezzi: il listino del cliente (il tuo ruolo non vede i prezzi).",
+    "files_one": "{count} file della richiesta",
+    "files_other": "{count} file della richiesta",
+    "carry": "Copia i file della richiesta nell'ordine (condivisi come ora)",
+    "noFiles": "La richiesta non ha file.",
+    "checks": "L'ordine passa i controlli normali: cliente bloccato, il suo PO quando le condizioni lo chiedono, quantità minime, acconto, fido e regole di approvazione. Risulta Confermato oppure In attesa di approvazione — la conferma dice quale.",
+    "closes": "La richiesta si chiude come Ordinata e nomina l'ordine.",
+    "badPrice": "Riga {n}: il prezzo non è un numero",
+    "poRequired": "Le condizioni di questo cliente chiedono il loro numero d'ordine (PO) su ogni ordine: scrivilo qui."
+  },
+  "styleDraft": {
+    "title": "Crea bozza di modello",
+    "go": "Crea bozza di modello",
+    "code": "Codice modello",
+    "codeHint": "Da 1 a 24 lettere maiuscole o cifre, con . _ - all'interno",
+    "name": "Nome",
+    "nameHint": "Dalla prima riga della richiesta; cambialo come vuoi",
+    "type": "Tipo di prodotto",
+    "typeChoose": "Scegli…",
+    "types": {
+      "JACKET": "Giacca",
+      "TROUSERS": "Pantaloni",
+      "SUIT": "Tuta",
+      "GLOVES": "Guanti",
+      "VEST": "Gilet",
+      "OTHER": "Altro"
+    },
+    "scale": "Scala taglie",
+    "scaleHint": "Le taglie del modello vengono da questa scala",
+    "scalesLoading": "Lettura delle scale taglie…",
+    "scalesFailed": "Non è stato possibile leggere le scale taglie: chiudi e riprova",
+    "season": "Stagione",
+    "seasonHint": "Facoltativa, per esempio SS27",
+    "brand": "Marchio (l'etichetta sul capo)",
+    "brandValue": "{customer} — il cliente della richiesta",
+    "files_one": "{count} file da copiare",
+    "files_other": "{count} file da copiare",
+    "noFiles": "La richiesta non ha file.",
+    "released": "Un modello ha bisogno di una versione rilasciata e di una variante colore attiva prima che un ordine lo prenda: Crea ordine resta in attesa finché le righe della richiesta non lo nominano.",
+    "stays": "La richiesta resta aperta (In lavorazione) e nomina la bozza.",
+    "held": {
+      "code": "Scrivi un codice modello: da 1 a 24 lettere maiuscole o cifre",
+      "type": "Scegli il tipo di prodotto",
+      "scale": "Scegli la scala taglie"
     }
   }
 }

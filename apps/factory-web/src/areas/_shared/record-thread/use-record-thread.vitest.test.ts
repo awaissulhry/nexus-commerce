@@ -5,6 +5,9 @@ import type { ApiClient } from '../../../lib/api/client'
 import type { ApiMessage } from '../../../record-panels/api'
 import { checkReply, officeOnly, postNoteKeyed, readContacts, removeFile, sendReplyKeyed, shareWithParty } from './api'
 import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type Work } from './state'
+// B-TH-229
+import { markThreadRead, setThreadOwner } from './api'
+import { readMarker } from './state'
 
 /** B-TH-212 — the office container of RecordThread v1: its calls, a live read that never drops the draft, the errors in words. */
 
@@ -50,6 +53,93 @@ describe('a live read never drops the draft (T4-F06)', () => {
     expect(source).not.toContain("addEventListener('beforeunload'")
   })
 })
+
+// ---- B-TH-229 (TH-2, on B-TH-027): reading marks the thread read for this person, once ----------------------------------------
+describe('B-TH-229 — reading marks the thread read once, forward only', () => {
+  const at = (minute: number) => `2026-11-17T10:${String(minute).padStart(2, '0')}:00.000Z`
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+  it('one call per message seen later than the mark; the same or an older message never sends again', async () => {
+    const sent: string[] = []
+    const marker = readMarker(async (id) => void sent.push(id))
+    marker.seen({ id: 'm2', at: at(2) })
+    await settle()
+    marker.seen({ id: 'm2', at: at(2) })
+    marker.seen({ id: 'm1', at: at(1) })
+    await settle()
+    expect(sent).toEqual(['m2'])
+    marker.seen({ id: 'm3', at: at(3) })
+    await settle()
+    expect(sent).toEqual(['m2', 'm3'])
+  })
+
+  it('the server’s own mark is known first: nothing at or before it sends', async () => {
+    const sent: string[] = []
+    const marker = readMarker(async (id) => void sent.push(id))
+    marker.known({ id: 'm5', at: at(5) })
+    marker.seen({ id: 'm4', at: at(4) })
+    marker.seen({ id: 'm5', at: at(5) })
+    await settle()
+    expect(sent).toEqual([])
+  })
+
+  it('one call in flight: the newest message seen meanwhile goes right after, the ones between never', async () => {
+    const sent: string[] = []
+    let release: () => void = () => undefined
+    const marker = readMarker((id) => {
+      sent.push(id)
+      return id === 'm1' ? new Promise<void>((resolve) => (release = resolve)) : Promise.resolve()
+    })
+    marker.seen({ id: 'm1', at: at(1) })
+    marker.seen({ id: 'm2', at: at(2) })
+    marker.seen({ id: 'm3', at: at(3) })
+    expect(sent).toEqual(['m1'])
+    release()
+    await settle()
+    await settle()
+    expect(sent).toEqual(['m1', 'm3'])
+  })
+
+  it('a failed call is forgotten quietly: the next message seen tries again', async () => {
+    const sent: string[] = []
+    const marker = readMarker(async (id) => {
+      sent.push(id)
+      if (id === 'm1') throw new Error('offline')
+    })
+    marker.seen({ id: 'm1', at: at(1) })
+    await settle()
+    await settle()
+    marker.seen({ id: 'm1', at: at(1) })
+    await settle()
+    expect(sent).toEqual(['m1', 'm1'])
+  })
+
+  it('the calls: POST …/read names the message; PUT …/owner names a person or null (the record’s own); never anyone else’s mark (W08)', async () => {
+    const calls: Array<{ method: string; path: string; body: unknown }> = []
+    const api = {
+      post: async (path: string, options: { body: unknown }) => (calls.push({ method: 'POST', path, body: options.body }), { reading: { lastReadMessageId: 'm9', newCount: 0, firstNewMessageId: null } }),
+      request: async (method: string, path: string, options: { body: unknown }) => (calls.push({ method, path, body: options.body }), { owner: null }),
+    } as unknown as ApiClient
+    expect(await markThreadRead(api, { type: 'SalesOrder', id: 'o1' }, 'm9')).toEqual({ lastReadMessageId: 'm9', newCount: 0, firstNewMessageId: null })
+    expect(await setThreadOwner(api, { type: 'SalesOrder', id: 'o1' }, null)).toBeNull()
+    expect(calls).toEqual([
+      { method: 'POST', path: '/threads/SalesOrder/o1/read', body: { messageId: 'm9' } },
+      { method: 'PUT', path: '/threads/SalesOrder/o1/owner', body: { ownerId: null } },
+    ])
+    // The body never names a person for the mark: the API takes the reader from the session.
+    expect(JSON.stringify(calls[0]!.body)).not.toMatch(/user|person|reader/i)
+  })
+
+  it('a live re-read keeps the reading and head when the page has none, and takes them when it has', () => {
+    const reading = { lastReadMessageId: 'm1', newCount: 1, firstNewMessageId: 'm2' }
+    const head = { owner: null, waiting: null }
+    const first = applyNewest(EMPTY_SERVER, { thread, messages: [msg('m2', '2026-11-17T09:00:00Z'), msg('m1', '2026-11-16T09:00:00Z')], nextCursor: null, reading, head })
+    expect(first).toMatchObject({ reading, head })
+    expect(applyNewest(first, { thread, messages: [msg('m2', '2026-11-17T09:00:00Z')], nextCursor: null })).toMatchObject({ reading, head })
+    expect(applyNewest(first, { thread, messages: [msg('m2', '2026-11-17T09:00:00Z')], nextCursor: null, reading: { ...reading, newCount: 0, firstNewMessageId: null } }).reading?.newCount).toBe(0)
+  })
+})
+// ---- end B-TH-229
 
 describe('errors in this app’s words', () => {
   it('a first read: no right, or a fault', () => {

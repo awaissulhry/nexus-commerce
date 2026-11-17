@@ -64,6 +64,20 @@ test('th1a-sheet', async () => {
 })
 // ── end B-TH-302 ──
 
+// ── B-TH-227 (threads plan TH-1b): a request like an e-mail from customer A's portal to a quote draft, behind the brand wall ──
+test('th1b-request', async () => {
+  test.skip(only.size > 0 && !only.has('th1b-request'), 'not in --stages')
+  const { default: stage } = (await import('./golden-flow/th1b-request')) as { default: { proves: string; run: (flow: Flow) => Promise<void> } }
+  test.info().annotations.push({ type: 'extra', description: 'TH-1b: not a stage of PLAN §4.7' }, { type: 'proves', description: stage.proves })
+  flow.stage = 'th1b-request'
+  try {
+    await stage.run(flow)
+  } finally {
+    flow.save()
+  }
+})
+// ── end B-TH-227 ──
+
 test('end checks', async () => {
   test.skip(only.size > 0 && !only.has('end-checks'), 'not in --stages')
   flow.stage = 'end-checks'

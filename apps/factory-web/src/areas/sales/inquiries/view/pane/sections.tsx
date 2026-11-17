@@ -24,6 +24,9 @@ import {
 import { useWords } from '../../parts'
 import type { InquiryRecordActions, InquiryRecordModel } from '../../record-model'
 import { AssignDialog, DeclineDialog, LostDialog, QuoteDialog } from '../Dialogs'
+// B-TH-228: Make order, Make style draft.
+import { OrderDialog, StyleDraftDialog } from '../Dialogs'
+import { carriableFiles, orderHeld, styleDraftDialogHeld } from '../../model'
 import { LinesEditor, LinesRead } from '../LinesEditor'
 
 const INTL = { it: 'it-IT', en: 'en-GB' } as const
@@ -398,6 +401,40 @@ export function MadeFrom({ model, view, actions }: { model: InquiryRecordModel; 
   )
 }
 
+// ---- B-TH-228 (pane-facts-F03): the order made straight from it and the style drafts, each with its OWN status; each opens -------
+
+export function MadeThings({ model, view }: { model: InquiryRecordModel; view: InquiryView }) {
+  const { t } = useWords()
+  const drafts = view.styleDrafts ?? []
+  if (!view.order && drafts.length === 0) return null
+  return (
+    <ul className="fw-inq-made">
+      {view.order && (
+        <li>
+          {model.can.ordersView ? (
+            <Link className="fw-inq-link" href={`${model.prefix}/sales/orders/${encodeURIComponent(view.order.id)}`}>
+              {t('pane.facts.madeOrder', { order: view.order.number, status: t(`orderStatus.${view.order.status}`) })}
+            </Link>
+          ) : (
+            t('pane.facts.madeOrder', { order: view.order.number, status: t(`orderStatus.${view.order.status}`) })
+          )}
+        </li>
+      )}
+      {drafts.map((draft) => (
+        <li key={draft.id}>
+          {model.can.styles ? (
+            <Link className="fw-inq-link" href={`${model.prefix}/products/styles/${encodeURIComponent(draft.id)}`} target="_blank" rel="noopener">
+              {t('pane.facts.madeStyle', { code: draft.code, name: draft.name, status: t(`styleStatus.${draft.status}`) })}
+            </Link>
+          ) : (
+            t('pane.facts.madeStyle', { code: draft.code, name: draft.name, status: t(`styleStatus.${draft.status}`) })
+          )}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
 // ---- the dialogs ------------------------------------------------------------------------------------------------------------
 
 export function RecordDialogs({ model, view, actions }: { model: InquiryRecordModel; view: InquiryView; actions?: InquiryRecordActions }) {
@@ -412,6 +449,34 @@ export function RecordDialogs({ model, view, actions }: { model: InquiryRecordMo
   if (dialog.kind === 'decline')
     return <DeclineDialog model={{ subject, draft: dialog.draft, message: messageReach(view, model.can), busy: dialog.busy, notice: dialog.notice, offline }} actions={{ onDraft: actions?.dialog?.onDecline, onSubmit: actions?.dialog?.onSubmit, onClose: close }} />
   if (dialog.kind === 'lost') return <LostDialog model={{ subject, note: dialog.note, busy: dialog.busy, notice: dialog.notice, offline }} actions={{ onNote: actions?.dialog?.onLostNote, onSubmit: actions?.dialog?.onSubmit, onClose: close }} />
+  // ---- B-TH-228
+  if (dialog.kind === 'order')
+    return (
+      <OrderDialog
+        model={{
+          subject,
+          customer: view.party ? `${view.party.code} · ${view.party.name}` : fromLine(view, t),
+          contact: view.contact?.name ?? null,
+          lines: view.lines,
+          draft: dialog.draft,
+          prices: model.can.price,
+          currency: view.currency,
+          files: carriableFiles(view),
+          held: orderHeld(view, dialog.draft, model.can, offline),
+          busy: dialog.busy,
+          notice: dialog.notice,
+        }}
+        actions={{ onDraft: actions?.dialog?.onOrderDraft, onSubmit: actions?.dialog?.onSubmit, onClose: close }}
+      />
+    )
+  if (dialog.kind === 'styleDraft')
+    return (
+      <StyleDraftDialog
+        model={{ subject, customer: view.party?.name ?? fromLine(view, t), draft: dialog.draft, scales: dialog.scales, files: carriableFiles(view), held: styleDraftDialogHeld(view, dialog.draft, model.can, offline), busy: dialog.busy, notice: dialog.notice }}
+        actions={{ onDraft: actions?.dialog?.onStyleDraft, onSubmit: actions?.dialog?.onSubmit, onClose: close }}
+      />
+    )
+  // ---- end B-TH-228
   return (
     <QuoteDialog
       model={{

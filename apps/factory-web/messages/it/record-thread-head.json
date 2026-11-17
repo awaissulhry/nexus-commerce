@@ -89,5 +89,58 @@
     "frame718": "Dock largo, circa 718 px",
     "frame375": "Telefono, 375 px",
     "frameLabel": "Colonna del thread larga {width} px"
+  },
+  "new": {
+    "count_one": "{count} nuovo",
+    "count_other": "{count} nuovi",
+    "many": "99+ nuovi"
+  },
+  "owner": {
+    "label": "Responsabile: {name}",
+    "nobody": "Nessun responsabile",
+    "inactive": "{name} (non attivo)",
+    "change": "Cambia responsabile…",
+    "now": "Ora: {name}",
+    "title": "Cambia responsabile",
+    "subtitle": "Chi risponde nella conversazione di {record}",
+    "hint": "Le persone dell'ufficio che leggono questa conversazione. Se non scegli nessuno risponde il responsabile del record (l'assegnatario della richiesta, il supervisore dell'ordine, altrimenti chi l'ha creato).",
+    "search": "Cerca persone",
+    "listLabel": "Persone che possono essere responsabili della conversazione",
+    "recordOwn": "Il responsabile del record",
+    "me": "{name} (io)",
+    "noPeople": "Nessun altro legge ancora questa conversazione.",
+    "done": "Ora risponde {name}.",
+    "doneRecord": "Risponde di nuovo il responsabile del record.",
+    "failed": "Non è stato possibile cambiare il responsabile: {reason}",
+    "source": {
+      "SET": "scelto",
+      "ASSIGNEE": "assegnatario della richiesta",
+      "SUPERVISOR": "supervisore dell'ordine",
+      "MAKER": "chi ha creato il record"
+    },
+    "cancel": "Annulla",
+    "problem": {
+      "forbidden": "non puoi scrivere in questa conversazione.",
+      "invalid": "questa persona non legge la conversazione o non è più attiva.",
+      "notFound": "il record non c'è più.",
+      "network": "la rete non risponde; riprova.",
+      "failed": "qualcosa è andato storto; riprova."
+    },
+    "loading": "Lettura di chi legge questa conversazione…",
+    "peopleFailed": "Non è stato possibile leggere chi legge questa conversazione.",
+    "retry": "Riprova"
+  },
+  "rule": {
+    "sinceUs": "Tocca a noi dal {when}.",
+    "since": {
+      "customer": "Tocca al cliente dal {when}.",
+      "supplier": "Tocca al fornitore dal {when}.",
+      "partner": "Tocca al partner dal {when}."
+    },
+    "working": "Contato in ore lavorative sul calendario dell'azienda.",
+    "clock": "Nessun calendario aziendale: contato in ore di orologio.",
+    "amber_one": "Diventa ambra dopo {count} giorno lavorativo che tocca a noi.",
+    "amber_other": "Diventa ambra dopo {count} giorni lavorativi che tocca a noi.",
+    "notAmber": "Mai ambra quando tocca all'altra parte."
   }
 }
