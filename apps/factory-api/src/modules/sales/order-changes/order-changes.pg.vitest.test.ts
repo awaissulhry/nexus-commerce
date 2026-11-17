@@ -392,7 +392,11 @@ describe("the customer's own materials (SAL-306)", () => {
 describe("a customer's own freeze rules beat the company's for that customer (B-PR-14)", () => {
   let p3: string
   let p2: string
-  const field = (reading: Json, name: string) => (reading.order.fields as Json[]).find((entry) => entry.field === name)
+  const field = (reading: Json, name: string): Json => {
+    const entry = (reading.order.fields as Json[]).find((candidate) => candidate.field === name)
+    if (!entry) throw new Error(`The freeze reading has no ${name} field.`)
+    return entry
+  }
   const limited = (role: string, actorId: string, parties: string[]): SessionContext => ({ audience: 'office', tenantId: A.tenant, actorId, grants: grantsOf(role).map((grant) => ({ ...grant, parties })) })
 
   beforeAll(async () => {

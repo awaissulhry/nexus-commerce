@@ -6,6 +6,7 @@ import { readUnsubscribeToken } from '@nexus/factory-domain/portal/notifications
 import {
   allNonEssentialOff,
   changeProblems,
+  isTopic,
   LOCKED_REASON,
   NON_ESSENTIAL_TOPICS,
   rowsOfChange,
@@ -43,10 +44,13 @@ type Client = FactoryClient | CommandTx
 
 const ROW = { id: true, topic: true, frequency: true, version: true, updatedAt: true } as const
 
-/** The person's stored frequencies (the newest row of a topic wins, should two exist). */
+/**
+ * The person's stored frequencies (the newest row of a topic wins, should two exist). Only the topics this list knows: the
+ * database's enum may name a topic before its words and rules are here (PRODUCTION, B-PR-15's schema; its topic is B-PR-31's).
+ */
 export async function preferencesOf(client: Client, userId: string): Promise<Map<PartnerEmailTopic, PartnerEmailFrequency>> {
   const rows = await client.partnerEmailPreference.findMany({ where: { userId }, orderBy: [{ updatedAt: 'asc' }, { id: 'asc' }], select: ROW })
-  return new Map(rows.map((row) => [row.topic, row.frequency]))
+  return new Map(rows.flatMap((row) => (isTopic(row.topic) ? [[row.topic, row.frequency] as const] : [])))
 }
 
 function view(stored: ReadonlyMap<PartnerEmailTopic, PartnerEmailFrequency>) {

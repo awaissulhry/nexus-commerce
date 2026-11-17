@@ -9,7 +9,7 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { excerptOf, type MessageAudience } from '@nexus/factory-domain/threads/rules'
 import { partnerThreadWords } from '@nexus/factory-domain/threads/partner/rules'
 import { command, type CommandCaller, type CommandTx } from '../../core/command'
-import { actorOf, type RequestContext } from '../../core/context'
+import { actorOf, type OfficeContext, type RequestContext } from '../../core/context'
 import { partnerCallerOf, partnerReaderOf } from '../search/partner/session'
 import type { AttachmentView } from './contract'
 import { openPartnerRecord } from './partner/service'
@@ -168,7 +168,7 @@ async function listOwn(caller: CommandCaller, userId: string, recordType?: strin
 // ---- the office ---------------------------------------------------------------------------------------------------------------
 
 /** The office person and the record they may write on (threads.post over it), or the refusal. */
-async function officeWriter(caller: CommandCaller, record: RecordRef): Promise<RequestContext> {
+async function officeWriter(caller: CommandCaller, record: RecordRef): Promise<OfficeContext> {
   const context = contextOf(caller)
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)

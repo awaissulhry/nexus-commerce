@@ -23,7 +23,7 @@ import {
 } from '@nexus/factory-domain/threads/rules'
 import { decodeCursor, encodeCursor, type TimelineCursor } from '@nexus/factory-domain/threads/timeline'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../core/command'
-import { actorOf, type RequestContext } from '../../core/context'
+import { actorOf, type OfficeContext, type RequestContext } from '../../core/context'
 import { ApiError } from '../../core/errors'
 import { workerGatesFor } from '../../modules/people/privacy/worker-gate'
 import { heldRoles } from '../auth/roles/access'
@@ -157,7 +157,7 @@ export function contextOf(caller: CommandCaller): RequestContext {
   return caller.factoryContext
 }
 
-const isOffice = (context: RequestContext): boolean => context.audience === 'office'
+const isOffice = (context: RequestContext): context is OfficeContext => context.audience === 'office'
 const iso = (date: Date | null): string | null => (date === null ? null : toUtcIso(date))
 const recordWhere = (record: RecordRef) => ({ recordType: record.type, recordId: record.id })
 export const scopeOfThread = (thread: Pick<SeenThread, 'companyId' | 'siteId' | 'partyId'>): ScopedRecord => ({
