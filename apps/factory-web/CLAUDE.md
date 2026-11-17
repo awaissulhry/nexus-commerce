@@ -485,7 +485,12 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
 - `src/areas/production/` — Production (SCR-069 … SCR-073): `work-orders/` the list (list frame; Export N, Release N) and
   New work order (`?new=1`); F-PR-03 `work-orders/list/model.ts`: sorted by risk (`?sort=risk|due|newest`, always written; the export
   is given `sort=risk` when the address names none), `?waitingOn=` `?risk=` `?blockedBy=` (quick filter `choice` kind) `?party=`
-  `?group=party` (groups of the loaded rows, each header the server's counts for that customer), `work-orders/record/` the work order studio (`?tab=overview|materials|cutting|bundles|
+  `?group=party` (groups of the loaded rows, each header the server's counts for that customer); F-PR-05a the record's band facts
+  (`record/view/BandFacts.tsx`: customer, SO + PO, % done, health and waiting on as tags — ONE status pill), Report finished as the
+  primary while released garments wait (`record/overview/model.ts reportFirst`; the Bundles card's button then hides), ⋯ Preview as
+  <customer> (partners.preview), the Overview's `record/gates/` (GET /planning/milestones?orderId=, planning.view), ONE progress
+  table (`record/overview/view/ProgressTable.tsx`, the layer switch went) and `record/health/` (GET/PUT/DELETE
+  /production/brand-orders/:orderId/health, Raise to At risk; the note office-only), `work-orders/record/` the work order studio (`?tab=overview|materials|cutting|bundles|
   operations|quality|activity`, `?at=<seq>`; tabs in `cutting/`, `bundles/`, `progress/`), `wip/` Floor now
   (`/production/floor`); `_shared/` api, rules (`model.ts`), hooks, made-up fixtures. Totals per work order, operation
   and line only: no person's output and no station anywhere (Statuto art. 4, Owner F2); worker names only inside one record.

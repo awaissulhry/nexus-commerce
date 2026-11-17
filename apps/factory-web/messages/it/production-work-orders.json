@@ -150,7 +150,8 @@
     "open_other": "{count} ancora a magazzino",
     "noReports": "Nessun capo caricato nei prodotti finiti finora.",
     "hint": "Vanno a magazzino solo i capi rilasciati dalla qualità, per taglia, con il numero di lotto di produzione.",
-    "hintSerial": "Vanno a magazzino solo i capi rilasciati dalla qualità, per taglia; ognuno mantiene la sua matricola."
+    "hintSerial": "Vanno a magazzino solo i capi rilasciati dalla qualità, per taglia; ognuno mantiene la sua matricola.",
+    "inBand": "«Carica capi finiti» è il pulsante principale in cima all'ordine finché ci sono capi rilasciati in attesa."
   },
   "finish": {
     "title": "Carica a magazzino i capi finiti di {number}",

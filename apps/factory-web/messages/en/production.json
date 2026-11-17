@@ -403,7 +403,9 @@
       "cutToMax": "{cell}: at most {max} pieces in one cell.",
       "pasted": "Pasted {applied}; skipped {skipped}.",
       "issues": "To check in this grid"
-    }
+    },
+    "table": "Pieces by colourway, step and size",
+    "step": "Step"
   },
   "materials": {
     "planned": "Planned materials",
@@ -1123,5 +1125,66 @@
   },
   "board": {
     "customer": "Customer"
+  },
+  "band": {
+    "done": "{percent} % done",
+    "doneUnknown": "Finished not counted here",
+    "customerOpen": "Open the customer {name}",
+    "preview": "Preview as {name}",
+    "theCustomer": "the customer",
+    "previewHint": "The customer's portal as it sees it: read-only, for an hour, recorded.",
+    "previewNoRight": "Previewing a customer's portal needs the right to preview it.",
+    "previewNoCustomer": "This work order has no one customer to preview.",
+    "previewFailed": "The customer's portal could not be opened: try again.",
+    "previewForbidden": "You may not preview this customer's portal.",
+    "mixedBanner": "Made before the one-customer rule: customer views go per cell only, and no report goes to a customer."
+  },
+  "health": {
+    "title": "Health",
+    "order": "Order {number}",
+    "failed": "Couldn't read the health of {number}",
+    "notKept": "Not followed yet: an order's production state starts when it is confirmed.",
+    "computed": "From the dates: {health}",
+    "raised": "Raised to At risk by a person: {reason}",
+    "until": "Stands until {date}, or until the dates change the health.",
+    "raise": "Raise to At risk…",
+    "change": "Change the raise…",
+    "clear": "Clear the raise",
+    "customerReads": "The customer reads the chip and the reason; never the note.",
+    "raisedNotice": "Raised to At risk: the customer reads it with its reason.",
+    "clearedNotice": "The raise is cleared: the dates speak again."
+  },
+  "raise": {
+    "title": "Raise {number} to At risk",
+    "body": "The customer reads \"At risk\" with the reason you pick. Your note stays in the office; to tell the customer more, write in the order's thread.",
+    "reason": "Reason (the customer reads it)",
+    "reasonPick": "Pick a reason",
+    "note": "Note (office only)",
+    "noteHint": "One line, at most {max} characters; the customer never reads it.",
+    "days": "It stands 7 days, or until the dates change the health.",
+    "go": "Raise to At risk",
+    "refused": "The order's health changed meanwhile: it was read again.",
+    "invalid": "Pick a reason; the note is one line.",
+    "held": {
+      "noRight": "Raising an order's health needs the right to steer customers' production.",
+      "notKept": "The order is not followed yet: nothing to raise.",
+      "nothingLeft": "Nothing is left to make on this order: there is no health to raise.",
+      "late": "The order is already late: raising it to At risk would change nothing.",
+      "atRisk": "The dates already say At risk.",
+      "pick": "Pick a reason first.",
+      "note": "The note is one line of at most {max} characters.",
+      "noRaise": "No raise to clear."
+    }
+  },
+  "gates": {
+    "title": "Gates & readiness",
+    "waiting_one": "{count} gate waiting",
+    "waiting_other": "{count} gates waiting",
+    "allPassed": "Every gate passed",
+    "failed": "Couldn't load the gates",
+    "loading": "Reading the gates…",
+    "none": "No gates on this order.",
+    "gate": "Gate",
+    "materials": "Materials: planned, issued and still to issue"
   }
 }

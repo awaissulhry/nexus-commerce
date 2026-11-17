@@ -239,6 +239,10 @@ export const workOrderSchema = z.object({
   progress: z.object({ counted: z.boolean() }),
   /** B-W2a-46: while ON_HOLD, why, since when and the status it goes back to. */
   hold: z.object({ reason: z.string().nullable(), at: z.string().nullable(), fromStatus: z.string().nullable(), recordType: z.string().nullable(), recordId: z.string().nullable() }).nullable().optional(),
+  // F-PR-05a (B-PR-03's record): its one customer (null: none), or one made before the one-customer rule with several.
+  partyId: z.string().nullable().optional(),
+  customer: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable().optional(),
+  mixedCustomers: z.boolean().optional(),
   spec: z.object({
     frozen: z.boolean(),
     frozenAt: z.string().nullable(),

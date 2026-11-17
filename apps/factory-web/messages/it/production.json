@@ -403,7 +403,9 @@
       "cutToMax": "{cell}: al massimo {max} pezzi in una cella.",
       "pasted": "Incollati {applied}; saltati {skipped}.",
       "issues": "Da controllare in questa griglia"
-    }
+    },
+    "table": "Pezzi per variante colore, fase e taglia",
+    "step": "Fase"
   },
   "materials": {
     "planned": "Materiali pianificati",
@@ -1123,5 +1125,66 @@
   },
   "board": {
     "customer": "Cliente"
+  },
+  "band": {
+    "done": "{percent}% fatto",
+    "doneUnknown": "Finiti non contati qui",
+    "customerOpen": "Apri il cliente {name}",
+    "preview": "Anteprima come {name}",
+    "theCustomer": "il cliente",
+    "previewHint": "Il portale del cliente come lo vede: sola lettura, per un'ora, registrata.",
+    "previewNoRight": "L'anteprima del portale di un cliente richiede il permesso di anteprima.",
+    "previewNoCustomer": "Questo ordine di produzione non ha un solo cliente di cui fare l'anteprima.",
+    "previewFailed": "Impossibile aprire il portale del cliente: riprova.",
+    "previewForbidden": "Non puoi vedere l'anteprima del portale di questo cliente.",
+    "mixedBanner": "Creato prima della regola di un solo cliente: le viste per il cliente vanno solo per cella e nessun rapporto va a un cliente."
+  },
+  "health": {
+    "title": "Andamento",
+    "order": "Ordine {number}",
+    "failed": "Impossibile leggere l'andamento di {number}",
+    "notKept": "Non ancora seguito: lo stato di produzione di un ordine parte quando è confermato.",
+    "computed": "Dalle date: {health}",
+    "raised": "Portato a A rischio da una persona: {reason}",
+    "until": "Vale fino al {date}, o finché le date non cambiano l'andamento.",
+    "raise": "Porta a A rischio…",
+    "change": "Cambia la segnalazione…",
+    "clear": "Togli la segnalazione",
+    "customerReads": "Il cliente legge lo stato e il motivo; mai la nota.",
+    "raisedNotice": "Portato a A rischio: il cliente lo legge con il motivo.",
+    "clearedNotice": "Segnalazione tolta: parlano di nuovo le date."
+  },
+  "raise": {
+    "title": "Porta {number} a A rischio",
+    "body": "Il cliente legge \"A rischio\" con il motivo che scegli. La tua nota resta in ufficio; per dire di più al cliente, scrivi nel thread dell'ordine.",
+    "reason": "Motivo (il cliente lo legge)",
+    "reasonPick": "Scegli un motivo",
+    "note": "Nota (solo ufficio)",
+    "noteHint": "Una riga, al massimo {max} caratteri; il cliente non la legge mai.",
+    "days": "Vale 7 giorni, o finché le date non cambiano l'andamento.",
+    "go": "Porta a A rischio",
+    "refused": "L'andamento dell'ordine è cambiato nel frattempo: è stato riletto.",
+    "invalid": "Scegli un motivo; la nota è di una riga.",
+    "held": {
+      "noRight": "Segnalare l'andamento di un ordine richiede il permesso di gestire la produzione dei clienti.",
+      "notKept": "L'ordine non è ancora seguito: niente da segnalare.",
+      "nothingLeft": "Non resta niente da fare su questo ordine: nessun andamento da segnalare.",
+      "late": "L'ordine è già in ritardo: portarlo a A rischio non cambierebbe niente.",
+      "atRisk": "Le date dicono già A rischio.",
+      "pick": "Scegli prima un motivo.",
+      "note": "La nota è una riga di al massimo {max} caratteri.",
+      "noRaise": "Nessuna segnalazione da togliere."
+    }
+  },
+  "gates": {
+    "title": "Gate e disponibilità",
+    "waiting_one": "{count} gate in attesa",
+    "waiting_other": "{count} gate in attesa",
+    "allPassed": "Tutti i gate superati",
+    "failed": "Impossibile caricare i gate",
+    "loading": "Lettura dei gate…",
+    "none": "Nessun gate su questo ordine.",
+    "gate": "Gate",
+    "materials": "Materiali: pianificati, prelevati e da prelevare"
   }
 }
