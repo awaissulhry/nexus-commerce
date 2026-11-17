@@ -96,6 +96,9 @@ export const JOB_CATALOGUE: readonly JobEntry[] = Object.freeze([
   job('insights.reportMail', '*/15 * * * *', 'schedule'),
   // B-W2b-415: the error queue's collector (platform/admin/errors/collect.ts).
   job('integrations.collectErrors', '* * * * *', 'check'),
+  // B-PR-17: every kept order's customer stage, health and waiting-on computed again (an early run changes nothing the next
+  // would not: it moves on facts, and a stage is told once per order).
+  job('production.brandKeeper', '35 0 * * *', 'check'),
 ])
 
 export function jobEntryOf(key: string): JobEntry | null {
