@@ -5,6 +5,7 @@ import { can } from '@nexus/factory-domain/core/permissions'
 import { command, type CommandCaller } from '../../core/command'
 import { actorOf } from '../../core/context'
 import { mayOnThread, resolveRecord } from '../threads/records'
+import { wallPartyOf } from '../threads/records' // B-PR-08a part 2
 import type { FileView } from './contract'
 import { contextOf, mayWrite, prepareFileCopy, readVisible, recordGeneratedFile, withRecordParty } from './files'
 import { ownerOf, readsThroughModule } from './owned'
@@ -63,8 +64,10 @@ export async function useFileOn(runtime: FilesRuntime, caller: CommandCaller, fi
   if (!target || !mayOnThread(actor, FILES_READ, body.recordType, target)) throw new NotFoundError('Record not found.')
   if (!can(actor, FILES_UPLOAD, target)) throw new ForbiddenError('Adding files to this record needs the right to upload files over it.')
   // The brand wall: the source's customer (its record's; else the party the file is shared with) is the target's, or either has none.
-  const sourceParty = from?.partyId ?? source.partyId ?? null
-  if (sourceParty !== null && target.partyId !== null && sourceParty !== target.partyId) {
+  // B-PR-08a part 2: a work order's, hold's or NCR's customer is its wall party (records.ts; several or none: the every-party marker).
+  const sourceParty = wallPartyOf(from) ?? source.partyId ?? null
+  const targetParty = wallPartyOf(target)
+  if (sourceParty !== null && targetParty !== null && sourceParty !== targetParty) {
     const words = USE_ON_WORDS.otherParty(source.originalName)
     throw new DomainError('conflict', words, [{ path: 'refusal/OTHER_PARTY', message: words }])
   }

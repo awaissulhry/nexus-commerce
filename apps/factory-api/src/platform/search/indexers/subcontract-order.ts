@@ -3,9 +3,9 @@ import { bySubjectIn, defineIndexer, idWhere, partyName } from '../indexer'
 /**
  * Subcontract orders (modules/purchasing/subcontracting; purchasing.view; opens in Purchasing › Subcontract orders): by
  * number, the workshop's name and code, the work order's number and batch, the style's code and name, the workshop's
- * stock location. Scope as the subcontract list: company, site and workshop. NEVER its amount. Every move of the order
- * (made, changed, issued, kit sent and returned, received, closed, reopened, cancelled) re-reads it; a workshop or a style
- * renamed re-indexes its orders.
+ * stock location. Scope as the subcontract list: company, site and workshop (B-PR-08a: every party, below). NEVER its amount.
+ * Every move of the order (made, changed, issued, kit sent and returned, received, closed, reopened, cancelled) re-reads it; a
+ * workshop or a style renamed re-indexes its orders.
  */
 export default defineIndexer({
   recordType: 'SubcontractOrder',
@@ -33,7 +33,6 @@ export default defineIndexer({
         id: true,
         companyId: true,
         siteId: true,
-        partyId: true,
         number: true,
         status: true,
         party: { select: { code: true, legalName: true, tradeName: true } },
@@ -45,7 +44,12 @@ export default defineIndexer({
       recordId: row.id,
       companyId: row.companyId,
       siteId: row.siteId,
-      partyId: row.partyId,
+      // ---- B-PR-08a part 2 (the brand wall): a subcontract order names TWO parties — its workshop and its work order's customer
+      // (or a work order of none: every customer's) — and an entry holds one: several → everyParty, only a reader who reaches every
+      // party finds it (a reader limited to the workshop and another customer never finds a customer's order and its style).
+      partyId: null,
+      everyParty: true,
+      // ---- end B-PR-08a
       number: row.number,
       title: partyName(row.party) ?? row.number,
       subtitle: row.workOrder.number,
