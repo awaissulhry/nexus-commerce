@@ -24,14 +24,17 @@ export const PARTNER_SEARCH_GROUPS = [
   // thread (Samples & tech packs).
   'samples',
   // ---- end B-TH-073
+  // ---- B-TH-069 (threads plan TH-5, PROJ-G07): the projects of the organisation the person was added to (members only).
+  'projects',
+  // ---- end B-TH-069
 ] as const
 export type PartnerSearchGroup = (typeof PARTNER_SEARCH_GROUPS)[number]
 
 /** The groups of each partner kind's portal, in the order its rail shows them (an empty group is left out). */
 export const GROUPS_OF_KIND: Readonly<Record<PartnerKind, readonly PartnerSearchGroup[]>> = Object.freeze({
-  CUSTOMER: ['orders', 'documents', 'returns', /* B-TH-073 */ 'samples'],
-  SUPPLIER: ['pos', 'documents', 'returns'],
-  SUBCONTRACTOR: ['jobs', 'documents'],
+  CUSTOMER: ['orders', 'documents', 'returns', /* B-TH-073 */ 'samples', /* B-TH-069 */ 'projects'],
+  SUPPLIER: ['pos', 'documents', 'returns', /* B-TH-069 */ 'projects'],
+  SUBCONTRACTOR: ['jobs', 'documents', /* B-TH-069 */ 'projects'],
   GUEST: ['documents'],
 })
 

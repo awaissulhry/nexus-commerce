@@ -18,6 +18,9 @@ import subcontractOrder from './views/subcontract-order'
 import sampleRound from './views/sample-round'
 import style from './views/style'
 // ---- end B-TH-073
+// ---- B-TH-069: a project of the organisation, to its members only (its thread, the Projects group of the portal search).
+import project from './views/project'
+// ---- end B-TH-069
 
 /**
  * The partner views (./view.ts) of the records a partner may open: the portal's search finds them, the portal's record
@@ -44,6 +47,9 @@ export const PARTNER_VIEWS: readonly PartnerView[] = Object.freeze([
   style,
   sampleRound,
   // ---- end B-TH-073
+  // ---- B-TH-069
+  project,
+  // ---- end B-TH-069
 ])
 
 const byType = new Map<string, PartnerView>()

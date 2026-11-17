@@ -77,6 +77,10 @@ describe('the partner views', () => {
       expect(viewFits(partnerViewOf(type)!, ['CUSTOMER']), type).toBe(true)
       expect(viewFits(partnerViewOf(type)!, ['SUPPLIER', 'SUBCONTRACTOR', 'GUEST']), type).toBe(false)
     }
+    // B-TH-069: a project, in the Projects group of a customer's, a supplier's and a workshop's portal (one outside company each).
+    expect(partnerViewOf('Project')?.group).toBe('projects')
+    expect(viewFits(partnerViewOf('Project')!, ['SUPPLIER'])).toBe(true)
+    expect(viewFits(partnerViewOf('Project')!, ['GUEST'])).toBe(false)
     for (const view of PARTNER_VIEWS.filter((entry) => entry.kinds.includes('SUPPLIER') || entry.kinds.includes('SUBCONTRACTOR'))) expect(view.grain).toBeUndefined()
   })
 
