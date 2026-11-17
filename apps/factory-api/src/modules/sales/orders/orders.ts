@@ -22,6 +22,8 @@ import type { InvoicedState } from '@nexus/factory-domain/sales/orders/invoiced'
 import { customerUrgencyWhere, type CustomerUrgency } from './customer-urgency'
 import { orderLaterColumns } from './later-columns'
 import { atRiskWhere, invoicedByOrder, riskRulesOf } from './view-facts'
+import { piecesOf } from './view-facts' // B-TH-244
+import { shippedNotInvoiced } from '@nexus/factory-domain/sales/orders/invoiced' // B-TH-244
 import { officeOrder, recordAfter } from './moves'
 import { asDay, dayOf, dayOrNull, LEFT } from './store'
 import type { OrderView } from './views'
@@ -72,6 +74,8 @@ export interface ListFilters {
   /** The order's currency (a money total per currency opens its own rows). */
   readonly currency?: string | undefined
   // ── end B-TH-058 / B-TH-059 ──
+  /** B-TH-244: shipped goods no issued invoice bills yet (factory-domain sales/orders/invoiced shippedNotInvoiced). */
+  readonly shippedNotInvoiced?: 'true' | 'false' | undefined
 }
 
 export interface ListQuery extends ListFilters {
@@ -160,10 +164,14 @@ export async function viewWhere(client: Reader, context: OfficeContext, filters:
   const base: Prisma.SalesOrderWhereInput = {
     AND: [whereOf(context, filters, today), await customWhere(client, context, filters.cf), filters.atRisk === 'true' ? atRiskWhere(await riskRulesOf(client), today) : {}],
   }
-  if (!filters.invoiced) return base
+  // B-TH-244: + shipped goods not invoiced yet (the Orders sheet's built-in view "Shipped, not invoiced").
+  const uninvoiced = filters.shippedNotInvoiced === 'true'
+  if (!filters.invoiced && !uninvoiced) return base
   const states = await invoicedByOrder(client, base)
+  const pieces = uninvoiced ? await piecesOf(client, base) : null
   const ids = (await client.salesOrder.findMany({ where: base, select: { id: true } })).map((row) => row.id)
-  return { AND: [base, { id: { in: ids.filter((id) => (states.get(id)?.state ?? 'NONE') === filters.invoiced) } }] }
+  const kept = ids.filter((id) => (!filters.invoiced || (states.get(id)?.state ?? 'NONE') === filters.invoiced) && (!pieces || shippedNotInvoiced(pieces.get(id)?.shipped ?? 0, states.get(id))))
+  return { AND: [base, { id: { in: kept } }] }
 }
 // ── end B-TH-058 / B-TH-059 ──
 
@@ -360,7 +368,7 @@ const TILES = ['late', 'waitingForDeposit', 'inProduction', 'readyToShip', 'wait
  * state under the list's filters (scope, company, party, promise range, search), the board's lanes, and the tiles with
  * the filter each stands for.
  */
-export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */ | 'cf' /* B-TH-057 */ | 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency' /* B-TH-058 / B-TH-059 */>) {
+export async function orderBoard(caller: CommandCaller, filters: Pick<ListFilters, 'companyId' | 'partyId' | 'promiseFrom' | 'promiseTo' | 'q' | 'brand' /* B-TH-225 */ | 'cf' /* B-TH-057 */ | 'invoiced' | 'atRisk' | 'customerUrgency' | 'currency' /* B-TH-058 / B-TH-059 */ | 'shippedNotInvoiced' /* B-TH-244 */>) {
   const context = officeContextOf(caller)
   const today = todayNow()
   return caller.withClient(async (client) => {

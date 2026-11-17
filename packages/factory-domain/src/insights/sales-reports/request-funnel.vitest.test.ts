@@ -25,9 +25,18 @@ const ENTRIES: RequestEntry[] = [
 
 describe('the request-to-order figure (B-TH-052)', () => {
   it('counts received, open, quoted, ordered, declined, lost; "Not an order" apart and out of the rates', () => {
-    expect(requestFiguresOf(ENTRIES)).toEqual({ received: 8, open: 2, quoted: 2, ordered: 2, declined: 1, lost: 1, notAnOrder: 1, quotedPct: '28.6', orderedPct: '28.6' })
+    expect(requestFiguresOf(ENTRIES)).toEqual({ received: 8, open: 2, quoted: 2, ordered: 2, declined: 1, lost: 1, withdrawn: 0, notAnOrder: 1, quotedPct: '28.6', orderedPct: '28.6' })
     expect(requestFiguresOf([])).toMatchObject({ received: 0, quotedPct: null, orderedPct: null })
     expect(requestFiguresOf([entry('A', '2026-11-02', 'DECLINED', { declineReason: 'NOT_AN_ORDER' })])).toMatchObject({ received: 1, notAnOrder: 1, declined: 0, quotedPct: null })
+  })
+
+  it('B-TH-095: a request its customer withdrew is a part of its own, in the rates’ whole; the parts add up to Received', () => {
+    const withdrawn = [...ENTRIES, entry('B', '2026-11-26', 'WITHDRAWN')]
+    const figures = requestFiguresOf(withdrawn)
+    expect(figures).toMatchObject({ received: 9, withdrawn: 1, lost: 1, open: 2, quotedPct: '25.0', orderedPct: '25.0' })
+    // Every request is in exactly one end part: open, quoted (or ordered straight), declined, lost, withdrawn, not an order.
+    const straight = withdrawn.filter((one) => one.status === 'ORDERED').length
+    expect(figures.open + figures.quoted + straight + figures.declined + figures.lost + figures.withdrawn + figures.notAnOrder).toBe(figures.received)
   })
 
   it('folds by week of arrival and by customer, the prospects in one group, the most requests first', () => {

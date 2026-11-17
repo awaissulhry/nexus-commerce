@@ -20,7 +20,8 @@
     "ORDER_WAITING": "The order waits for our approval. It is not confirmed yet.",
     "ORDER_CONFIRMED": "Your order is confirmed. Follow it in Orders & requests.",
     "DECLINED": "We cannot take this request. Our message, if we wrote one, is below.",
-    "CLOSED": "This request is closed. Write below if you still need something."
+    "CLOSED": "This request is closed. Write below if you still need something.",
+    "WITHDRAWN": "You withdrew this request. Write below if you still need something."
   },
   "question": {
     "title": "We need something from you",

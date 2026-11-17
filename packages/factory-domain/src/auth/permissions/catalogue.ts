@@ -419,6 +419,9 @@ import { HOME_DIGEST_DEFINITIONS, HOME_DIGEST_PERMISSIONS } from '../../insights
 import { INTEGRATION_ERRORS_DEFINITIONS, INTEGRATION_HEALTH_PERMISSIONS, JOBS_RUN_DEFINITIONS } from '../../integration-health/permissions'
 // B-PR-13: a customer's own production (partners.production.manage, production.brand.manage | override; portal.production.*, partner).
 import { PORTAL_PRODUCTION_DEFINITIONS, PORTAL_PRODUCTION_PERMISSIONS, PRODUCTION_BRAND_DEFINITIONS, PRODUCTION_BRAND_PERMISSIONS } from '../../production-brand/permissions'
+// ---- B-TH-066: projects (projects.manage, the office's; portal.projects.view, partner).
+import { PORTAL_PROJECTS_DEFINITIONS, PORTAL_PROJECTS_PERMISSIONS, PROJECTS_DEFINITIONS, PROJECTS_PERMISSIONS } from '../../projects/permissions'
+// ---- end B-TH-066
 
 /**
  * Every permission of the factory, assembled (feature PLT-029). A module that adds routes declares its permissions
@@ -1151,6 +1154,10 @@ export const FACTORY_PERMISSIONS = permissionRegistry([
   // B-PR-13: a customer's own production (areas `partners`, `production`; the portal's in `portal`, flagged partner; all declared above).
   PRODUCTION_BRAND_DEFINITIONS,
   PORTAL_PRODUCTION_DEFINITIONS,
+  // ---- B-TH-066: projects (area `projects`; the portal's in `portal`, flagged partner).
+  PROJECTS_DEFINITIONS,
+  PORTAL_PROJECTS_DEFINITIONS,
+  // ---- end B-TH-066
 ])
 
 /** The area of the permissions only floor roles hold (and floor roles hold no other, but FLOOR_SHARED_PERMISSIONS). */
@@ -1572,6 +1579,10 @@ for (const name of INTEGRATION_HEALTH_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDe
 // B-PR-13: a customer's own production; the portal's flagged partner.
 for (const name of PRODUCTION_BRAND_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
 for (const name of PORTAL_PRODUCTION_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// ---- B-TH-066: projects; the portal's flagged partner.
+for (const name of PROJECTS_PERMISSIONS) if (!FACTORY_PERMISSIONS.isDeclared(name)) throw new Error(`${name} is used by a module but not declared`)
+for (const name of PORTAL_PROJECTS_PERMISSIONS) if (FACTORY_PERMISSIONS.get(name)?.partner !== true) throw new Error(`${name} is a partner permission but not declared as one`)
+// ---- end B-TH-066
 for (const name of LINK_SESSION_NAMES) {
   if (FACTORY_PERMISSIONS.get(name)?.link !== true) throw new Error(`${name} is a link-session permission but not declared as one`)
 }

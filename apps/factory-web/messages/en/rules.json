@@ -16,7 +16,8 @@
     "EXIT_PROOF_MISSING": "Exports without their proof of exit",
     "MARGIN_BELOW_FLOOR": "Orders below their margin floor",
     "STAMP_DUTY_DUE": "Stamp duty quarters near their due day",
-    "REQUEST_NUMBERING_MISSING": "Companies whose requests have no numbering"
+    "REQUEST_NUMBERING_MISSING": "Companies whose requests have no numbering",
+    "PROJECT_STALE": "Projects past their target date and quiet for 14 days"
   },
   "when": {
     "ORDER_LATE_RISK": "When an order is promised within {daysBeforePromise} and is not ready, or is late",
@@ -35,7 +36,8 @@
     "EXIT_PROOF_MISSING": "When an export's proof of exit is still missing after its declaration's days",
     "MARGIN_BELOW_FLOOR": "When an order's margin, as estimated now or final, falls below its margin floor",
     "STAMP_DUTY_DUE": "{daysBefore} before a quarter's stamp duty is due and not paid yet",
-    "REQUEST_NUMBERING_MISSING": "When a company receives requests (a portal or inquiry addresses) without an active request numbering"
+    "REQUEST_NUMBERING_MISSING": "When a company receives requests (a portal or inquiry addresses) without an active request numbering",
+    "PROJECT_STALE": "When an open project is past its target date and has had no message for 14 days (its lead is told)"
   },
   "sentence": {
     "full": "{when} {place}, tell {recipient} by {channels} {cooldown}.",

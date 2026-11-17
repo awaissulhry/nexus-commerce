@@ -31,7 +31,7 @@ import { WithMessages } from '../record-panels/i18n'
 import { usePrintMode } from '../shell/print/print-mode'
 import { ListKeysInfo } from './ListKeysInfo'
 import { FIT_ROWS, gridLayout, isListKey, listKeys, nextRowIndex, ownsKeys, sameIds, toggleId, type ListKey } from './model'
-import { ListToolsBar, type ExportAbout, type WithheldColumn } from './tools/ListToolsBar'
+import { ListToolsBar, type ExportAbout, type ListBuiltInViews, type WithheldColumn } from './tools/ListToolsBar'
 import { useListTools } from './tools/useListTools'
 import { BulkEditButton, BulkEditFlow, ExportSelected } from './w2b/bulk'
 import { useInlineEdit } from './w2b/edit'
@@ -40,6 +40,14 @@ import { offeredModes, type ListCards, type ListEdit, type ListModes, type ListQ
 import { QuickChips, QuickMenu } from './w2b/quick'
 import { MODE_NAMESPACES, useModeWords } from './w2b/words'
 import type { BulkValue } from '@nexus/factory-domain/views/bulk/rules'
+// ---- B-TH-241 (threads plan TH-4: custom columns and group rows) ----
+import { useListToolsTransport } from './tools/transport'
+import { shownCustomIds, withCustomColumns, type ListCustom } from './custom/model'
+import { useCustomFields, useCustomValues } from './custom/use-custom-columns'
+import { cellValueOf, editFieldOf, fieldLabel } from './custom/model' // B-TH-245
+import type { ListEditField } from './w2b/model' // B-TH-245
+import { groupedRows, isGroupMarker, markerId, type GroupMarker, type ListGroups } from './groups/model'
+import { GroupLine } from './groups/GroupLine'
 import './list-frame.css'
 import './tools/tools.css'
 import './w2b/w2b.css'
@@ -158,6 +166,28 @@ export interface ListFrameProps<T> {
    */
   onSortChanged?: (colId: string | null, direction: 'asc' | 'desc' | null) => void
   // ── end B-TH-057 ──
+  // ── B-TH-241 (threads plan TH-4, SHEET-G04, SHEET-G08), each opt-in ──
+  /**
+   * The record type's custom fields as columns `cf:<code>` (GET /fields in the list's scope; the loaded rows' values while one is
+   * in view): hidden until a view shows them, written by Export when shown. A field for one customer shows only on its rows.
+   */
+  custom?: ListCustom<T> | null
+  /**
+   * Group rows: a header per group with the list's own figures for the whole group (the server's), its rows under it, "Show more
+   * of …", and a grand total pinned under the grid. Never a figure summed from the loaded rows. Absent: no groups, as before.
+   */
+  groups?: ListGroups<T> | null
+  // ── end B-TH-241 ──
+  // ── B-TH-243 (threads plan TH-4, ORD-G10; SHEET.brand-view-F01), each opt-in ──
+  /** The list's own built-in views on top of Views ▾ (one menu of views; the list's Rows ▾ joins it). */
+  builtInViews?: ListBuiltInViews | null
+  /** A new saved view's name to start from ("Brand Alpha — tracking" on a customer's sheet). */
+  viewName?: string | null
+  // ── end B-TH-243 ──
+  // ── B-TH-244 (threads plan TH-4: a column that costs a read is read only while shown), opt-in ──
+  /** The columns on screen changed (their ids, left to right): a list reads a costly column's data only while it is shown. */
+  onShownColumns?: (ids: readonly string[]) => void
+  // ── end B-TH-244 ──
 }
 
 /** Today in the site's zone (YYYY-MM-DD). */
@@ -191,7 +221,7 @@ export function ListFrame<T>(props: ListFrameProps<T>) {
   )
 }
 
-function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick, onSortChanged }: ListFrameProps<T>) {
+function Frame<T>({ label, rows, rowId: ownRowId, columns: ownColumns, count, search, tools, right, selection, isRowSelectable, updates, more, keys, onHelp, onOpen, state, rowKind = 'two-line', endless, listKey, title, focusRow, keysOpen, modes, cards, edit, quick, withheld, today, design, exportAbout, onRowClick, onSortChanged, custom, groups, builtInViews, viewName, onShownColumns }: ListFrameProps<T>) {
   const t = useT('lists')
   const locale = useLocale()
   const ds = useDsLabels()
@@ -201,12 +231,66 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
   // B-W2b-05 (PLT-171): the print view draws every loaded row for paper, without the list's controls.
   const printing = usePrintMode()
   const frameRef = useRef<HTMLDivElement>(null)
+  // B-TH-241: one row id for the frame's own work (a list passes a new function each render).
+  const rowIdRef = useRef(ownRowId)
+  rowIdRef.current = ownRowId
+  const rowId = useCallback((row: T) => rowIdRef.current(row), [])
+  const groupsRef = useRef(groups)
+  groupsRef.current = groups
+  // B-TH-241: the custom columns (hidden until a view shows them) after the list's own, before its trailing ⋯.
+  const toolsTransport = useListToolsTransport()
+  const [customWanted, setCustomWanted] = useState(false)
+  const customValues = useCustomValues(custom, toolsTransport, rows, rowId, customWanted && !state)
+  const customColumns = useCustomFields(custom, toolsTransport, customValues.values, customValues.reading, rowId, locale, t)
+  const columns = useMemo(() => withCustomColumns(ownColumns, customColumns.columns), [ownColumns, customColumns.columns])
   // Saved views and export: the layout on screen is applied to the columns the grid draws.
   const listTools = useListTools({ frame: frameRef, listKey, columns, title: title ?? label })
+  useEffect(() => setCustomWanted(shownCustomIds(listTools.columns as never).length > 0), [listTools.columns])
+  // B-TH-244: the columns on screen, told to a list that asks (once per change of what is shown).
+  const shownRef = useRef(onShownColumns)
+  shownRef.current = onShownColumns
+  const shownKey = listTools.columns.filter((column) => !column.hide).map((column) => column.colId ?? (typeof column.field === 'string' ? column.field : '')).join('|')
+  useEffect(() => shownRef.current?.(shownKey === '' ? [] : shownKey.split('|')), [shownKey])
   const apiRef = useRef<GridApi<T> | null>(null)
   const [ready, setReady] = useState(false)
+  // ── B-TH-245 (threads plan TH-4, SHEET-G09): the custom values edit in their cells beside the list's own fields (one bulk target) ──
+  const customFields = customColumns.fields
+  const customEdit = custom?.edit
+  const partyOfRef = useRef(custom?.partyOf)
+  partyOfRef.current = custom?.partyOf
+  const valuesRef = useRef(customValues.values)
+  valuesRef.current = customValues.values
+  const putValues = customValues.put
+  const editWithCustom = useMemo<ListEdit<T> | null | undefined>(() => {
+    if (!edit || !customEdit || !customFields || customFields.length === 0) return edit
+    const fields: Record<string, ListEditField<T>> = {}
+    for (const field of customFields) {
+      const spec = editFieldOf<T>(
+        field,
+        {
+          valueOf: (row) => cellValueOf(field, valuesRef.current.get(rowId(row))?.[field.code]),
+          ...(partyOfRef.current ? { partyOf: (row: T) => partyOfRef.current?.(row) ?? null } : {}),
+          ...(customEdit.held ? { held: customEdit.held } : {}),
+          label: fieldLabel(field, locale),
+          words: { notThisCustomer: t('custom.notThisCustomer'), yes: t('custom.yes'), no: t('custom.no') },
+        },
+        locale,
+      )
+      if (spec) fields[field.columnId] = spec
+    }
+    return {
+      ...edit,
+      fields: { ...edit.fields, ...fields },
+      // A saved cell's custom values go on the row in the frame; the list keeps its own fields and the row's new version.
+      onSaved: (savedId, after, version) => {
+        putValues(savedId, customFields, after)
+        edit.onSaved(savedId, after, version)
+      },
+    }
+  }, [edit, customEdit, customFields, rowId, locale, t, putValues])
+  // ── end B-TH-245 ──
   // B-W2b-13: inline edit (the cells save through the list's bulk target), the modes, the bulk edit.
-  const inline = useInlineEdit<T>({ edit: printing ? undefined : (edit ?? undefined), transport: listTools.transport, listKey: listTools.listKey, rowId, api: () => apiRef.current, t, markLabels: ds.cellSaveMark })
+  const inline = useInlineEdit<T>({ edit: printing ? undefined : (editWithCustom ?? undefined), transport: listTools.transport, listKey: listTools.listKey, rowId, api: () => apiRef.current, t, markLabels: ds.cellSaveMark })
   const gridColumns = useMemo(() => inline.columns(listTools.columns), [inline.columns, listTools.columns])
   // B-W2b-18: the phone card list is on unless the list says `cards={null}`.
   const cardsOn = cards !== null
@@ -234,7 +318,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
     const on: IRowNode<T>[] = []
     const off: IRowNode<T>[] = []
     api.forEachNode((node) => {
-      if (!node.data) return
+      if (!node.data || isGroupMarker(node.data)) return // B-TH-241: a group's line is no row of the list
       const should = want.has(rowId(node.data))
       if (should !== node.isSelected()) (should ? on : off).push(node)
     })
@@ -245,7 +329,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
   // The grid's ticks (a box, shift-click range, the header, Space) → the page.
   const onSelectionChanged = useCallback(
     (event: { api: GridApi<T> }) => {
-      const ids = event.api.getSelectedNodes().flatMap((node) => (node.data ? [rowId(node.data)] : []))
+      const ids = event.api.getSelectedNodes().flatMap((node) => (node.data && !isGroupMarker(node.data) ? [rowId(node.data)] : []))
       if (!sameIds(ids, selectedRef.current)) onChangeRef.current?.(ids)
     },
     [rowId],
@@ -300,7 +384,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
         if (next !== null) focusRowAt(next)
       } else if (event.key === 'x' && selection && api && focused !== null) {
         const node = api.getDisplayedRowAtIndex(focused)
-        if (!node?.data || (isRowSelectable && isRowSelectable(node.data) !== null)) return
+        if (!node?.data || isGroupMarker(node.data) || (isRowSelectable && isRowSelectable(node.data) !== null)) return
         event.preventDefault()
         selection.onChange(toggleId(selectedRef.current, rowId(node.data)))
       }
@@ -315,22 +399,36 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
       const key = (event.event as KeyboardEvent | null | undefined)?.key
       const colId = event.column?.getColId()
       if (key !== 'Enter' || !event.data || colId === SELECTION_COLUMN) return
+      // B-TH-241: Enter on a group's header folds or opens it; on its "Show more" reads more.
+      if (isGroupMarker(event.data)) {
+        const marker = event.data as GroupMarker
+        if (marker.fwGroup === 'header') groupsRef.current?.onToggle(marker.key)
+        else if (marker.fwGroup === 'more') groupsRef.current?.groups.find((group) => group.key === marker.key)?.more?.onMore()
+        return
+      }
       if (colId && inline.editableFor(event.data, colId)) return
       onOpen?.(event.data)
     },
     [onOpen, inline],
   )
 
-  const getRowId = useCallback((params: { data: T }) => rowId(params.data), [rowId])
+  // B-TH-241: a group's line has an id of its own (never one of the list's).
+  const getRowId = useCallback((params: { data: T }) => (isGroupMarker(params.data) ? markerId(params.data) : rowId(params.data)), [rowId])
 
+  // B-TH-245: the row click reads the cells that edit (they keep their own click).
+  const inlineRef = useRef(inline)
+  inlineRef.current = inline
   // B-TH-225: the rest of the row opens the record; a link, a button, a box or a field in the cell keeps its own click.
   const rowClickRef = useRef(onRowClick)
   rowClickRef.current = onRowClick
   const onRowClicked = useCallback((event: { data?: T; event?: Event | null }) => {
     const click = event.event as MouseEvent | null | undefined
     const target = click?.target as HTMLElement | null | undefined
-    if (!event.data || !click || !rowClickRef.current) return
+    if (!event.data || !click || !rowClickRef.current || isGroupMarker(event.data)) return
     if (target?.closest('a, button, input, select, textarea, label, [role="button"], [role="checkbox"], .ag-selection-checkbox, [contenteditable="true"]')) return
+    // B-TH-245 (one rule: door = link, editable cell = its editor, the rest of the row = the record): a click on a cell that edits stays.
+    const cellCol = target?.closest('.ag-cell')?.getAttribute('col-id')
+    if (cellCol && inlineRef.current?.editableFor(event.data, cellCol)) return
     rowClickRef.current(event.data, click)
   }, [])
 
@@ -360,10 +458,10 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
             checkboxes: true,
             headerCheckbox: false,
             enableClickSelection: false,
-            ...(isRowSelectable ? { isRowSelectable: (node: IRowNode<T>) => !node.data || isRowSelectable(node.data) === null } : {}),
+            ...(isRowSelectable || groups ? { isRowSelectable: (node: IRowNode<T>) => !node.data || (!isGroupMarker(node.data) && (!isRowSelectable || isRowSelectable(node.data) === null)) } : {}),
           } as const)
         : undefined,
-    [selection, isRowSelectable],
+    [selection, isRowSelectable, !!groups],
   )
   const selectionColumnDef = useMemo(
     () => ({
@@ -373,7 +471,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
       headerComponent: LoadedRowsSelectionHeader,
       headerName: t('selectAll'),
       // A row that may not be selected says why on its disabled box.
-      ...(isRowSelectable ? { tooltipValueGetter: (params: { data?: T }) => (params.data ? isRowSelectable(params.data) : null) } : {}),
+      ...(isRowSelectable ? { tooltipValueGetter: (params: { data?: T }) => (params.data && !isGroupMarker(params.data) ? isRowSelectable(params.data) : null) } : {}),
     }),
     [t, isRowSelectable],
   )
@@ -402,7 +500,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
   const frameTools = printing ? null : (
     <>
       {quick && quick.filters.length > 0 && <QuickMenu quick={quick} t={t} />}
-      {listTools.transport && <ListToolsBar state={listTools} withheld={withheld} about={exportAbout} />}
+      {listTools.transport && <ListToolsBar state={listTools} withheld={withheld} about={exportAbout} builtIns={builtInViews} suggested={viewName} /* B-TH-243 */ />}
       {modes && <ModeSwitch modes={offered} mode={mode} onMode={modes.onMode} t={t} />}
     </>
   )
@@ -460,6 +558,22 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
     </GridFooterStrip>
   )
 
+  // ── B-TH-241: group rows (only when the list asks, in the table) ──
+  const groupedOn = !!groups && !printing && rows !== null && !state && mode === 'table'
+  const grouped = useMemo(() => (groupedOn && groups && rows ? groupedRows(rows, groups) : null), [groupedOn, groups, rows])
+  const isGroupLine = useCallback((params: { rowNode: IRowNode<T> }) => isGroupMarker(params.rowNode.data), [])
+  const GroupCell = useCallback(
+    (params: { data?: unknown }) => {
+      const marker = params.data
+      const current = groupsRef.current
+      if (!isGroupMarker(marker) || !current) return null
+      return <GroupLine marker={marker} group={current.groups.find((group) => group.key === marker.key)} folded={current.collapsed.includes(marker.key)} onToggle={current.onToggle} t={t} />
+    },
+    [t],
+  )
+  const groupTotal = groupedOn && groups?.total ? <div className="fw-list-total">{groups.total}</div> : null
+  // ── end B-TH-241 ──
+
   let body: ReactNode
   if (state) body = <div className="fw-list-state">{state}</div>
   else if (rows === null)
@@ -498,10 +612,12 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
       />
     )
   } else {
+    // B-TH-241: a grouped list's grid holds each group's header, its rows, its "Show more" or reading line.
+    const gridRows = grouped ?? rows
     // The long grid keeps its fixed height only while it has more than one page or more to read: a short, complete ledger
     // is as tall as its rows, like every list (no empty band).
     const long = !printing && !!endless && !(endless.done && rows.length <= FIT_ROWS)
-    const layout = long ? { domLayout: 'normal' as const, fit: false } : gridLayout(rows.length)
+    const layout = long ? { domLayout: 'normal' as const, fit: false } : gridLayout(gridRows.length)
     body = (
       <div className={printing ? 'fw-list-grid printing' : long ? 'fw-list-grid endless' : layout.fit ? 'fw-list-grid fit' : 'fw-list-grid'} role="region" aria-label={label}>
         <NexusGrid<T>
@@ -509,7 +625,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
           {...(printing ? { height: 'auto' } : {})}
           {...(long ? { onBodyScroll, onModelUpdated: onBodyScroll } : {})}
           rows={rowKind}
-          rowData={rows as T[]}
+          rowData={gridRows as T[]}
           columnDefs={gridColumns}
           {...(listTools.layout.density ? { density: listTools.layout.density } : {})}
           getRowId={getRowId}
@@ -520,6 +636,7 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
           onCellKeyDown={onCellKeyDown}
           {...(onRowClick ? { onRowClicked } : {}) /* B-TH-225 */}
           {...(onSortChanged ? { onSortChanged: onGridSortChanged } : {}) /* B-TH-057 */}
+          {...(grouped ? { isFullWidthRow: isGroupLine, fullWidthCellRenderer: GroupCell } : {}) /* B-TH-241 */}
           suppressCellFocus={false}
           {...(inline.active ? { readOnlyEdit: true, onCellEditRequest: inline.onCellEditRequest, cellSelection: true } : {})}
         />
@@ -529,11 +646,11 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
 
   const chips = quick && !printing ? <QuickChips quick={quick} t={t} /> : null
   const bulk =
-    bulkOpen && edit?.bulk && listTools.transport && listTools.listKey ? (
+    bulkOpen && editWithCustom?.bulk && listTools.transport && listTools.listKey ? (
       <BulkEditFlow<T>
         rows={pickedRows}
         rowId={rowId}
-        edit={edit}
+        edit={editWithCustom /* B-TH-245: Edit N offers the custom values too */}
         columns={listTools.columns}
         transport={listTools.transport}
         listKey={listTools.listKey}
@@ -548,6 +665,44 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
 
   // The long grid's next page on a phone: the cards have no scroll of their own to read it by, so they get "Show more".
   const endlessMore = endless && !endless.done && rows ? { label: t('morePage'), onMore: endless.onNearEnd, held: endless.loading ? t('loading') : null } : null
+
+  // ── B-TH-241: a grouped list on a phone — each group a section (its header as the section's title, its cards), the total last ──
+  if (asCards && groups && groupedOn && rows && groups.groups.length > 0) {
+    const byGroup = (key: string) => rows.filter((row) => groups.keyOf(row) === key)
+    return (
+      <div className="fw-list" ref={frameRef}>
+        {chips}
+        {groups.groups.map((group, index) => {
+          const folded = groups.collapsed.includes(group.key)
+          return (
+            <section key={group.key} className="fw-list-group-section" aria-label={group.name}>
+              <GroupLine marker={{ fwGroup: 'header', key: group.key }} group={group} folded={folded} onToggle={groups.onToggle} t={t} />
+              {!folded && (
+                <GridCardList<T>
+                  label={`${label} · ${group.name}`}
+                  rows={byGroup(group.key)}
+                  rowId={rowId}
+                  columns={listTools.columns}
+                  fields={cardFields}
+                  className="fw-list-cards"
+                  {...(cards?.hrefOf ? { hrefOf: cards.hrefOf } : {})}
+                  {...(index === 0 ? { count: picked > 0 ? t('selected', { count: picked }) : count, search, tools: <>{tools}{frameTools}{saveStatus}</> } : {})}
+                  {...(selection ? { selection: { selected, onChange: selection.onChange, actions: frameActions } } : {})}
+                  {...(isRowSelectable ? { isRowSelectable } : {})}
+                  labels={ds.cardList}
+                />
+              )}
+              {!folded && group.state && <GroupLine marker={{ fwGroup: 'state', key: group.key }} group={group} folded={false} onToggle={groups.onToggle} t={t} />}
+              {!folded && !group.state && group.more && <GroupLine marker={{ fwGroup: 'more', key: group.key }} group={group} folded={false} onToggle={groups.onToggle} t={t} />}
+            </section>
+          )
+        })}
+        {groupTotal}
+        {bulk}
+      </div>
+    )
+  }
+  // ── end B-TH-241 ──
 
   if (asCards) {
     // The phone card list (PLT-170) and the Cards mode: the same rows, columns, search, filters and selection as cards
@@ -602,6 +757,8 @@ function Frame<T>({ label, rows, rowId, columns, count, search, tools, right, se
       <GridCard toolbar={toolbar} footer={footer}>
         {chips}
         {body}
+        {/* B-TH-241: the grand total, pinned under the grid (the list's own figures, from the server). */}
+        {groupTotal}
       </GridCard>
       {bulk}
     </div>

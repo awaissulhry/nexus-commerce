@@ -9,6 +9,8 @@ import { partyReaders } from '../portal/tasks/people'
 import type { MessageView, ThreadView } from './contract'
 import { mayOnThread, mayShare, notShareableRefusal, wallScopeOf } from './records'
 import { attachmentProblems, contextOf, ensureThread, messageViewOf, officeRecord, scopeOfThread, THREAD_OFFICE, threadViewOf, visibleAttachments, writeMessage, type RecordRef, type ThreadRow } from './threads'
+// B-TH-050: a reply names the shared message it answers, or corrects a portal reply of ours.
+import { messageLinkProblems, messageLinksOf } from './threads'
 
 /**
  * B-TH-044 (threads plan TH-3, G15; T5-F07 "Reply in the portal only"; wall W08): POST /threads/<type>/<id>/replies — a reply to
@@ -28,6 +30,9 @@ export interface ReplyInput {
   readonly body: string
   readonly attachments?: readonly string[] | undefined
   readonly batchId?: string | undefined
+  // ---- B-TH-050
+  readonly replyToMessageId?: string | undefined
+  readonly correctsMessageId?: string | undefined
 }
 
 /** The 409 of a refused reply: the words at `refusal/<code>`. */
@@ -73,7 +78,7 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
 
   const { result } = await command(
     caller,
-    { name: 'threads.postReply', idempotencyKey, input: { recordType: record.type, recordId: record.id, bodyText: draft.bodyText, attachments: draft.attachments, batchId: input.batchId ?? null } },
+    { name: 'threads.postReply', idempotencyKey, input: { recordType: record.type, recordId: record.id, bodyText: draft.bodyText, attachments: draft.attachments, batchId: input.batchId ?? null, replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null } },
     async (tools) => {
       const { thread } = await ensureThread(tools, record, context.actorId)
       // The thread as it is now (made by this command or a racing one): its scope decides — with its wall party, as the note route
@@ -84,7 +89,8 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
       if (thread.partyId === null) throw replyRefusal('NO_PARTY')
       if (thread.status !== 'OPEN') throw replyRefusal('CLOSED')
       if (!(await portalReaderExists(tools.tx, context.tenantId, thread, tools.now))) throw replyRefusal('NO_PORTAL')
-      const issues = await attachmentProblems(tools.tx, context, thread, draft.attachments, 'PARTNER')
+      const links = { replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null } // B-TH-050
+      const issues = [...(await attachmentProblems(tools.tx, context, thread, draft.attachments, 'PARTNER')), ...(await messageLinkProblems(tools.tx, thread, links, { direction: 'OUTBOUND', channel: 'PORTAL' }))]
       if (issues.length > 0) throw new ValidationError('The reply is not valid.', issues)
       const author = await tools.tx.user.findUnique({ where: { id: context.actorId }, select: { displayName: true } })
       const message = await writeMessage(tools, thread, {
@@ -94,10 +100,11 @@ export async function postPortalReply(caller: CommandCaller, record: RecordRef, 
         bodyText: draft.bodyText,
         attachments: draft.attachments,
         ...(input.batchId ? { batchId: input.batchId } : {}),
+        ...links, // B-TH-050
       })
       const current = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: THREAD_OFFICE })
       const attachments = await visibleAttachments(tools.tx, context, message.attachmentFileIds)
-      return { thread: threadViewOf(current), message: messageViewOf(message, attachments) }
+      return { thread: threadViewOf(current), message: messageViewOf(message, attachments, true, await messageLinksOf(tools.tx, thread.id, [message], { sharedOnly: false, workerShown: true })) }
     },
   )
   return result

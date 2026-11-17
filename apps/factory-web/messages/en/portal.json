@@ -44,7 +44,9 @@
       "documents": "Documents",
       "returns": "Returns",
       "jobs": "Jobs",
-      "pos": "Purchase orders"
+      "pos": "Purchase orders",
+      "samples": "Samples",
+      "projects": "Projects"
     }
   },
   "bell": {

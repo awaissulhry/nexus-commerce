@@ -1,4 +1,5 @@
 import type { BusinessDate } from '../../core/time'
+import type { BrandUrgency } from '../../production-brand/urgency'
 
 /**
  * The backlog ranked (B-W2b-317; PLN-177 "Backlog ranking drives allocation"; B-W2b-286's SalesOrder.backlogRank, 1 first,
@@ -11,6 +12,13 @@ import type { BusinessDate } from '../../core/time'
  *   2. then every other open order by the rule: priority level (URGENT, HIGH, NORMAL, LOW; B-W2b-281), W1's priority number
  *      (higher first), the promise (the earliest current promise of its open lines, else the order's; none last), the
  *      customer (its code: a customer's orders of one day sit together), the order date, the number.
+ *   3. B-PR-41 (production plan §3 "Brand-slot rule"; review fixes R-40, R-46): then the customer's own urgency, by the
+ *      brand-slot pass — never a key of the rule. Per customer and per office level, that customer's urgent orders (by its
+ *      urgentRank) take the earliest places ITS OWN orders already hold in that level; the orders a planner ranked by hand keep
+ *      their places; another customer's places never change; a mark counts only while the customer's urgency switch is on
+ *      (switched off, the marks are kept but order nothing). Putting an order ahead of other customers stays our act: accept
+ *      its "Urgent – asked", raise its level, or rank it by hand. Scarce material reads only the hand rank (backlogRank); the
+ *      places feed the promise engine.
  */
 
 export const PRIORITY_LEVELS = ['URGENT', 'HIGH', 'NORMAL', 'LOW'] as const
@@ -31,6 +39,13 @@ export interface BacklogOrder {
   readonly promise: BusinessDate | null
   readonly customerCode: string
   readonly orderDate: BusinessDate
+  // B-PR-41: the customer's own urgency (BrandOrderProduction, B-PR-15; read by B-PR-22b). Left out: Regular, switch off.
+  /** The customer's mark of the order (left out: REGULAR). */
+  readonly customerUrgency?: BrandUrgency
+  /** Its place in the customer's own Urgent list (1 first; null or left out: not urgent). */
+  readonly urgentRank?: number | null
+  /** The customer's urgency switch (PortalSettings.productionUrgencyOn; left out: off, the mark is dormant). */
+  readonly urgencyOn?: boolean
 }
 
 const text = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
@@ -59,17 +74,54 @@ export function backlogCompare(a: BacklogOrder, b: BacklogOrder): number {
   return ruleCompare(a, b)
 }
 
-/** The orders in the backlog's order, each with its place (1 first) and its place by the rule alone. */
-export function rankedBacklog<T extends BacklogOrder>(orders: readonly T[]): (T & { readonly position: number; readonly rulePosition: number })[] {
-  const byRule = new Map([...orders].sort(ruleCompare).map((order, index) => [order.id, index + 1]))
-  return [...orders].sort(backlogCompare).map((order, index) => ({ ...order, position: index + 1, rulePosition: byRule.get(order.id)! }))
+// ---- B-PR-41: the brand-slot pass ----------------------------------------------------------------------------------------------
+
+/** The customer's mark counts in the backlog: Urgent, while its switch is on, and not ranked by hand (that place is ours). */
+export const urgencyCounts = (order: BacklogOrder): boolean => order.rank === null && order.urgencyOn === true && order.customerUrgency === 'URGENT'
+
+/**
+ * The brand-slot pass over orders already in the backlog's order (hand rank, then the rule): per customer (its code: unique in
+ * the tenant) and office level, the places that customer's orders not ranked by hand hold are filled again — its counted
+ * urgent orders first (by urgentRank, then as they stood), then its other orders as they stood. Every other place keeps its
+ * order: a hand-ranked one, and every order of another customer.
+ */
+export function brandSlots<T extends BacklogOrder>(ordered: readonly T[]): T[] {
+  const groups = new Map<string, number[]>()
+  ordered.forEach((order, index) => {
+    if (order.rank !== null) return
+    const key = `${levelRank(order.priorityLevel)}|${order.customerCode}`
+    const places = groups.get(key)
+    if (places) places.push(index)
+    else groups.set(key, [index])
+  })
+  const out = [...ordered]
+  for (const places of groups.values()) {
+    const members = places.map((index) => ({ order: ordered[index]!, index }))
+    const urgent = members.filter((member) => urgencyCounts(member.order))
+    if (urgent.length === 0) continue
+    const rankOf = (order: T) => order.urgentRank ?? Number.MAX_SAFE_INTEGER
+    urgent.sort((a, b) => rankOf(a.order) - rankOf(b.order) || a.index - b.index)
+    const rest = members.filter((member) => !urgencyCounts(member.order))
+    const refilled = [...urgent, ...rest]
+    places.forEach((place, k) => {
+      out[place] = refilled[k]!.order
+    })
+  }
+  return out
 }
 
-/** "By hand 1" · "By the rule (urgent, promised 4 Dec)". */
+/** The orders in the backlog's order, each with its place (1 first) and its place by the rule alone (no hand rank, no urgency). */
+export function rankedBacklog<T extends BacklogOrder>(orders: readonly T[]): (T & { readonly position: number; readonly rulePosition: number })[] {
+  const byRule = new Map([...orders].sort(ruleCompare).map((order, index) => [order.id, index + 1]))
+  return brandSlots([...orders].sort(backlogCompare)).map((order, index) => ({ ...order, position: index + 1, rulePosition: byRule.get(order.id)! }))
+}
+
+/** "By hand 1" · "By the rule (urgent, promised 4 Dec)" · B-PR-41: "…; customer urgency: own places (urgent 1)". */
 export function whyWords(order: BacklogOrder, dayWords: (date: BusinessDate) => string): string {
   if (order.rank !== null) return `Ranked by hand: ${order.rank}.`
   const promise = order.promise ? `promised ${dayWords(order.promise)}` : 'no promise yet'
-  return `By the rule: ${order.priorityLevel.toLowerCase()} priority${order.priority !== 0 ? ` (${order.priority})` : ''}, ${promise}, customer ${order.customerCode}.`
+  const urgency = urgencyCounts(order) ? `; customer urgency: own places${order.urgentRank ? ` (urgent ${order.urgentRank})` : ''}` : ''
+  return `By the rule: ${order.priorityLevel.toLowerCase()} priority${order.priority !== 0 ? ` (${order.priority})` : ''}, ${promise}, customer ${order.customerCode}${urgency}.`
 }
 
 export const RULE_WORDS =

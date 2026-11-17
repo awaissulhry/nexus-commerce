@@ -14,14 +14,27 @@ import { PARTNER_MATCHES } from './match'
  */
 
 /** The groups results come in (plan: orders, documents, returns, jobs, POs). */
-export const PARTNER_SEARCH_GROUPS = ['orders', 'documents', 'returns', 'jobs', 'pos'] as const
+export const PARTNER_SEARCH_GROUPS = [
+  'orders',
+  'documents',
+  'returns',
+  'jobs',
+  'pos',
+  // ---- B-TH-073 (threads plan TH-5, PROJ-G16): a brand's own private-label styles and its sample rounds, each opened on its own
+  // thread (Samples & tech packs).
+  'samples',
+  // ---- end B-TH-073
+  // ---- B-TH-069 (threads plan TH-5, PROJ-G07): the projects of the organisation the person was added to (members only).
+  'projects',
+  // ---- end B-TH-069
+] as const
 export type PartnerSearchGroup = (typeof PARTNER_SEARCH_GROUPS)[number]
 
 /** The groups of each partner kind's portal, in the order its rail shows them (an empty group is left out). */
 export const GROUPS_OF_KIND: Readonly<Record<PartnerKind, readonly PartnerSearchGroup[]>> = Object.freeze({
-  CUSTOMER: ['orders', 'documents', 'returns'],
-  SUPPLIER: ['pos', 'documents', 'returns'],
-  SUBCONTRACTOR: ['jobs', 'documents'],
+  CUSTOMER: ['orders', 'documents', 'returns', /* B-TH-073 */ 'samples', /* B-TH-069 */ 'projects'],
+  SUPPLIER: ['pos', 'documents', 'returns', /* B-TH-069 */ 'projects'],
+  SUBCONTRACTOR: ['jobs', 'documents', /* B-TH-069 */ 'projects'],
   GUEST: ['documents'],
 })
 

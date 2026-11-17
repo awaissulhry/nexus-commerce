@@ -108,6 +108,12 @@ export const INQUIRY_COLUMNS = {
   closedById: true,
   closeNote: true,
   note: true,
+  // ---- B-TH-094 (N17): production's answer (office only: the partner role cannot read these four columns).
+  productionAnswer: true,
+  productionNotBefore: true,
+  productionAnsweredAt: true,
+  productionAnsweredById: true,
+  // ---- end B-TH-094
   version: true,
   createdAt: true,
   createdById: true,

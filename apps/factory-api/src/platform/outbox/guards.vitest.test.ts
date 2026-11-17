@@ -125,7 +125,12 @@ describe('check-event-contract', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
     // resume handler): 948, 1497 → 1498.
     // B-TH-042: no event and one literal emit (a contact the prospect becomes of an existing customer: party.contacts_changed):
     // 948, 1498 → 1499.
-    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(948 declared event version\(s\), 1499 literal emit/) })
+    // TH-5 back end (B-TH-066…072, B-TH-094): nine events (project.created, .changed, .status_changed, .linked, .unlinked,
+    // .person_added, .person_removed; thread.follower_added; inquiry.production_answered, emitted through eventFor) and eleven literal
+    // emits (a project made, changed, moved; a person added twice-told (thread.follower_added + project.person_added) and by the
+    // portal path; a person removed with thread.followers_changed; linked, unlinked; an invitation ended at close): 948 → 957,
+    // 1499 → 1510.
+    expect(ok).toMatchObject({ status: 0, output: expect.stringMatching(/ok \(957 declared event version\(s\), 1510 literal emit/) })
   })
 
   it.each<[string, Plants, RegExp]>([

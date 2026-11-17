@@ -1,6 +1,7 @@
 import type { FactoryClient } from '@nexus/factory-db'
 import type { PartnerKind } from '@nexus/factory-domain/auth/partners/kinds'
 import type { Grain } from '@nexus/factory-domain/auth/grains/grains'
+import type { Actor } from '@nexus/factory-domain/core/permissions'
 import type { PartnerSearchGroup } from '@nexus/factory-domain/search/partner/contracts'
 
 /**
@@ -41,12 +42,29 @@ export interface PartnerRecord {
   readonly words: readonly (string | null | undefined)[]
 }
 
+// ---- B-TH-069 / B-TH-073 (threads plan TH-5): who reads, for the views that need more than the party wall.
+/**
+ * The portal person a view reads for (every caller passes it: the portal search, the portal thread, the conversations list):
+ *   userId     the person — a project opens only to its MEMBERS (B-TH-069: RecordFollower rows that name the party, which the
+ *              partner role reads by party; the per-person list is this check on top of the party wall)
+ *   actor      the session's actor (a view's own portal permission over the record: portal.projects.view)
+ *   inTenant   a read in the tenant's system scope, AFTER the partner scope's own (B-TH-073: a brand's own private-label styles,
+ *              which the partner role cannot read; only rows that name the session's party, never a caller's word)
+ */
+export interface PartnerReader {
+  readonly userId: string
+  readonly actor: Actor
+  inTenant<T>(work: (client: FactoryClient) => Promise<T>): Promise<T>
+}
+// ---- end B-TH-069 / B-TH-073
+
 export interface PartnerView {
   readonly recordType: string
   readonly group: PartnerSearchGroup | null
   readonly kinds: readonly PartnerKind[]
   readonly grain?: Grain
-  read(client: FactoryClient, ids: readonly string[]): Promise<PartnerRecord[]>
+  /** B-TH-069: `reader` is the portal person (./view PartnerReader); a view that needs only the party wall ignores it. */
+  read(client: FactoryClient, ids: readonly string[], reader?: PartnerReader): Promise<PartnerRecord[]>
   lookup?(client: FactoryClient, typed: string, take: number): Promise<string[]>
 }
 

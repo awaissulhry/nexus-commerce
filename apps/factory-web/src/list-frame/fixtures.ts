@@ -82,5 +82,13 @@ export const designScreen = defineDesignScreen<ListFrameLabModel>({
     { id: 'failed', label: 'The read failed (never drawn as empty)', model: lab({ state: 'failed' }) },
     { id: 'empty', label: 'Nothing yet', model: lab({ rows: [], total: 0, state: 'empty' }) },
     { id: 'no-match', label: 'No rows match these filters', model: lab({ rows: [], total: 0, state: 'no-match' }) },
+    // B-TH-241 (threads plan TH-4): group rows with the server's figures per group and a grand total pinned under the grid.
+    {
+      id: 'th4-grouped',
+      label: 'Grouped: a header per group with its server figures, the grand total pinned under the grid',
+      model: lab({ grouped: { figures: { IT: 18, DE: 4, FR: 3, AT: 1, ES: 2, PT: 1, NL: 1, BE: 1 }, total: 31 } }),
+      note: 'The figures are the server\'s for the whole group (18 in Italy while 5 rows are loaded): never summed from the rows on screen. The chevron folds a group.',
+    },
+    { id: 'th4-grouped-folded', label: 'Grouped, some groups folded', model: lab({ grouped: { figures: { IT: 18, DE: 4, FR: 3, AT: 1, ES: 2, PT: 1, NL: 1, BE: 1 }, total: 31, collapsed: ['IT', 'DE'] } }) },
   ],
 })

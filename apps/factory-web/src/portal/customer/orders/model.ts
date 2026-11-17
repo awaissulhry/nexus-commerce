@@ -584,3 +584,59 @@ export function confirmationFileOf(items: readonly { kind: string; current: bool
   const doc = items.find((item) => item.kind === 'ORDER_CONFIRMATION' && item.current)
   return doc?.files.find((file) => file.format === 'PDF')?.fileId ?? doc?.files[0]?.fileId ?? null
 }
+
+// ── B-TH-246 (threads plan TH-4, picture 28; SHEET-G10, Owner decision 13; features SHEET.portal-sheet, portal-sheet-F07; wall W10,
+// W17, W39): the customer's own sheet — the columns the office ticked for its portal (the API sends every customer's portal fields
+// and this customer's own, never another's), read-only, each cell said in the customer's words and opening the customer's OWN page
+// of the row (never an office page), and "Download all" written by the server in the customer's scope. ──
+import { isMoneyValue, storedOf } from '@nexus/factory-domain/fields/values'
+import { minorUnitsOf } from '@nexus/factory-domain/money/currency/currencies'
+import type { PortalCell, PortalColumn } from './api'
+
+/** A portal column's name in the person's language, with its unit. */
+export const portalColumnLabel = (column: Pick<PortalColumn, 'labelIt' | 'labelEn' | 'unit'>, locale: Locale): string => `${locale === 'it' ? column.labelIt : column.labelEn}${column.unit ? ` (${column.unit})` : ''}`
+
+/**
+ * A cell in words: the API's words first (a list value's label, a linked record's name), else the value by its type — a number,
+ * a day, an amount in its currency (the API sends it only with the price grain), yes / no in the page's words. Null: nothing.
+ */
+export function portalCellText(column: Pick<PortalColumn, 'type' | 'options'>, cell: PortalCell | undefined, locale: Locale, words: { yes: string; no: string; day: (value: string) => string }): string | null {
+  if (!cell) return null
+  const said = locale === 'it' ? cell.wordsIt : cell.wordsEn
+  if (said) return said
+  const stored = storedOf(cell.value)
+  if (stored === null || stored === undefined) return null
+  switch (column.type) {
+    case 'MONEY': {
+      if (!isMoneyValue(stored)) return null
+      try {
+        return formatNumber(stored.amount / 10 ** minorUnitsOf(stored.currency), locale, { style: 'currency', currency: stored.currency })
+      } catch {
+        return null
+      }
+    }
+    case 'DATE':
+      return typeof stored === 'string' ? words.day(stored) : null
+    case 'YES_NO':
+      return stored === true ? words.yes : words.no
+    case 'NUMBER':
+      return typeof stored === 'number' ? formatNumber(stored, locale, { maximumFractionDigits: 6 }) : null
+    case 'SELECT': {
+      const option = typeof stored === 'string' ? column.options?.find((entry) => entry.code === stored) : undefined
+      return option ? (locale === 'it' ? option.labelIt : option.labelEn) : typeof stored === 'string' ? stored : null
+    }
+    case 'MULTI_SELECT': {
+      const codes = Array.isArray(stored) ? stored.filter((code): code is string => typeof code === 'string') : []
+      return codes.length === 0 ? null : codes.map((code) => { const option = column.options?.find((entry) => entry.code === code); return option ? (locale === 'it' ? option.labelIt : option.labelEn) : code }).join(', ')
+    }
+    default:
+      return typeof stored === 'string' ? stored : typeof stored === 'number' ? String(stored) : null
+  }
+}
+
+/** The portal columns of a read (none for the list's plain read). */
+export const portalColumnsOf = (read: { readonly columns?: readonly PortalColumn[] | undefined } | null): readonly PortalColumn[] => read?.columns ?? []
+
+/** "Download all": the file's name when the server names none (the list's name and the format). */
+export const sheetFileName = (base: string, format: 'XLSX' | 'CSV'): string => `${base}.${format === 'XLSX' ? 'xlsx' : 'csv'}`
+// ── end B-TH-246 ──

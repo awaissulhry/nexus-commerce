@@ -49,7 +49,11 @@
     "empty": "Nothing here yet",
     "noMatch": "No rows match these filters",
     "clearFilters": "Clear filters",
-    "blockedReason": "Blocked: unblock it before acting on it"
+    "blockedReason": "Blocked: unblock it before acting on it",
+    "groupFigure_one": "{count} record in all",
+    "groupFigure_other": "{count} records in all",
+    "groupTotal_one": "All countries · {count} record",
+    "groupTotal_other": "All countries · {count} records"
   },
   "tools": {
     "columns": "Columns",
@@ -272,7 +276,11 @@
     "pinProblem": {
       "notFollowable": "This list has no count to follow yet.",
       "tooMany": "You pinned the most views already: unpin one first."
-    }
+    },
+    "builtIn": "Built-in views",
+    "viewsTrigger": "View: {name}",
+    "saveOwn": "Changed · Save as your own",
+    "saveOwnHint": "{name} is someone else's: your changes never alter it. Save them as a view of your own."
   },
   "quick": {
     "trigger": "Quick filters",
@@ -306,7 +314,8 @@
       "min": "At least {min}.",
       "max": "At most {max}.",
       "long": "Too long.",
-      "choice": "Not one of the choices."
+      "choice": "Not one of the choices.",
+      "number": "A number is needed."
     },
     "refusal": {
       "held": "Not changed: in its present state this field stays as it is.",
@@ -389,5 +398,20 @@
     "move": "Move",
     "moving": "Moving…",
     "pickDay": "Pick another day first"
+  },
+  "custom": {
+    "reading": "Reading the value…",
+    "hint": "{label} — a custom field (Admin › Fields & lists)",
+    "toolLabel": "{label} (custom field)",
+    "yes": "Yes",
+    "no": "No",
+    "notThisCustomer": "This field belongs to another customer: it is not on this row."
+  },
+  "groups": {
+    "show": "Show the rows of {name}",
+    "hide": "Hide the rows of {name}",
+    "reading": "Reading the rows of {name}…",
+    "retry": "Retry",
+    "counting": "Counting…"
   }
 }

@@ -300,6 +300,11 @@
         "assigned": "{actor} ti ha affidato la richiesta {record}",
         "newRequest": "È arrivata la nuova richiesta {record}: prendila o affidala a qualcuno"
       },
+      "projects": {
+        "addedYou": "{actor} ti ha aggiunto a {record}",
+        "removedYou": "{actor} ti ha tolto da {record}",
+        "stale": "{record} ha superato la data obiettivo e non ha messaggi da 14 giorni: chiudilo o aggiornalo"
+      },
       "mail": {
         "assigned": "{actor} ti ha affidato una mail di {title}: {record}",
         "followUpDue": "Ancora nessuna risposta a {record} ({title}): è di nuovo nella tua coda"

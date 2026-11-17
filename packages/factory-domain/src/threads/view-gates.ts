@@ -71,6 +71,11 @@ export const THREAD_VIEW_GATES: Readonly<Record<string, Permission>> = Object.fr
   ProductSafetyReport: 'sales.safety.view',
   MeasurementProfile: 'sales.measurements.view',
   PortalOrderRequest: 'orders.view',
+  // B-TH-066: a project is read as its thread (threads.read over its company and outside company): no record view of its own.
+  Project: 'threads.read',
+  // B-TH-075's technical file (a thread record since #1571) had no gate: its page reads with the certificate register's view
+  // (modules/compliance/techfiles manifest), so its conversation is listed with it (closes "every thread type has a view gate").
+  TechnicalFile: 'compliance.certificates.view',
 } satisfies Record<string, Permission>)
 
 /** A record type's own view permission, or null: none known (never listed). */
@@ -103,7 +108,8 @@ export const CUSTOMER_SIDE_TYPES = Object.freeze([
 export const SUPPLIER_SIDE_TYPES = Object.freeze(['PurchaseOrder', 'SubcontractOrder', 'SupplierClaim', 'SupplierInvoice', 'GoodsReceipt', 'Lot'] as const)
 
 /** Records of either side: the side is the party's (its roles). */
-export const EITHER_SIDE_TYPES = Object.freeze(['Party', 'ChangeRequest', 'ApprovalRequest', 'PpeRegisterEntry', 'DistributorNotice'] as const)
+// B-TH-066: a project with an outside company waits on that company's side (an office-only project has no shared message: never listed).
+export const EITHER_SIDE_TYPES = Object.freeze(['Party', 'ChangeRequest', 'ApprovalRequest', 'PpeRegisterEntry', 'DistributorNotice', 'Project'] as const)
 
 /** Incoming's own rows (a request, a catalogue order, a change request): they wait there, never in "Customer replies". */
 export const INCOMING_OWN_TYPES = Object.freeze(['Inquiry', 'PortalOrderRequest', 'OrderChangeRequest'] as const)

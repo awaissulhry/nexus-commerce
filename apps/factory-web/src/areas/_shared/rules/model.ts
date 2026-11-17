@@ -52,6 +52,8 @@ export const THRESHOLD_FIELDS: Readonly<Record<RuleKind, { readonly numbers: rea
   STAMP_DUTY_DUE: { numbers: [{ key: 'daysBefore', min: 0, max: 60, unit: 'days' }], workingDays: false },
   // B-TH-012: no numbers (a company with no request numbering).
   REQUEST_NUMBERING_MISSING: { numbers: [], workingDays: false },
+  // B-TH-071: no numbers (14 quiet days past the target date, the project's own rule).
+  PROJECT_STALE: { numbers: [], workingDays: false },
 })
 
 /** The kind's one number edited in the rules list itself (inline), or null (none, as "Material short"). */

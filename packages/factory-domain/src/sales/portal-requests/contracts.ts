@@ -97,7 +97,14 @@ export const portalRequestView = portalRequestRow.extend({
   lines: z.array(lineView),
   made,
   closedAt: instant().nullable(),
+  // ---- B-TH-095 (N20): the version a withdrawal names, and whether Withdraw is offered (before the office decided, to who sends
+  // requests) or why not, in the person's words. Optional for the web's typed demo data.
+  version: z.number().int().optional(),
+  withdraw: output({ allowed: z.boolean(), words: z.string().nullable() }).optional(),
 })
+
+/** B-TH-095: POST /portal/inquiries/:inquiryId/withdraw — the request's version as read. */
+export const withdrawRequestBody = input({ version: z.number().int().min(1) })
 
 export const portalRequestList = output({
   rows: z.array(portalRequestRow),
@@ -114,4 +121,12 @@ export const sendRequestAnswer = output({
 })
 
 /** GET /portal/inquiries/open (B-TH-012): whether "New order" takes a request for the session's company, with the reason. */
-export const requestsOpenAnswer = output({ open: z.boolean(), reason: words.nullable() })
+export const requestsOpenAnswer = output({
+  open: z.boolean(),
+  reason: words.nullable(),
+  /**
+   * B-TH-085 (P-CUS-NEW.files, T6-F07): whether files may go with the request after Send, and why not in the person's words (the
+   * outside uploads' sentence while the virus scanner does not run here, or their access). Optional for the web's typed demo data.
+   */
+  files: output({ open: z.boolean(), words: z.string().nullable() }).optional(),
+})

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { customerNumberOf } from '../customer-numbers'
 import { partnerSentence } from '../../portal/notifications/messages'
 import { requestProblems, requestTextOf, subjectOf } from './rules'
-import { isOpenRequest, PORTAL_REQUEST_STATES, REQUEST_STATE_WORDS, requestStateOf } from './state'
+import { isOpenRequest, PORTAL_REQUEST_STATES, REQUEST_STATE_WORDS, requestStateOf, WITHDRAW_REFUSALS, WITHDRAW_WORDS, withdrawRefusal } from './state'
 
 /** B-TH-010/011/105: the customer's request, its state from the real states, its own numbers (pure). */
 
@@ -29,6 +29,19 @@ describe('the state the customer reads (B-TH-011, R-01)', () => {
     expect(requestStateOf({ status: 'DECLINED', quoteStatus: null, orderStatus: null, declineReason: 'NOT_AN_ORDER' })).toBe('CLOSED')
     for (const declineReason of ['PRICE', 'CAPACITY', 'OTHER', null]) expect(requestStateOf({ status: 'DECLINED', quoteStatus: null, orderStatus: null, declineReason })).toBe('DECLINED')
     expect(REQUEST_STATE_WORDS.CLOSED.en).toBe('Closed')
+  })
+
+  it('reads a request the customer withdrew as Withdrawn, closed (B-TH-095)', () => {
+    expect(state('WITHDRAWN')).toBe('WITHDRAWN')
+    expect(REQUEST_STATE_WORDS.WITHDRAWN).toEqual({ en: 'Withdrawn', it: 'Ritirata' })
+    expect(isOpenRequest('WITHDRAWN')).toBe(false)
+  })
+
+  it('lets the customer withdraw only before the office decided, in words (B-TH-095)', () => {
+    for (const status of ['NEW', 'ASSIGNED', 'NEED_INFO'] as const) expect(withdrawRefusal(status), status).toBeNull()
+    expect(withdrawRefusal('WITHDRAWN')).toBe('ALREADY_WITHDRAWN')
+    for (const status of ['QUOTED', 'ORDERED', 'DECLINED', 'LOST'] as const) expect(withdrawRefusal(status), status).toBe('DECIDED')
+    for (const code of WITHDRAW_REFUSALS) expect(WITHDRAW_WORDS[code].en.length * WITHDRAW_WORDS[code].it.length, code).toBeGreaterThan(0)
   })
 
   it('reads the order made straight from the request by its own state (B-TH-022)', () => {

@@ -399,10 +399,13 @@ describe('the W2b-3 golden flow: a customer, a tannery and a workshop online, an
     G.so2Line = record.lines[0]
     const off = await as(R.buyer, 'GET', `/portal/sales-orders/${so2}/progress`, undefined, 404)
     expect(off.error.message).toMatch(/not shared/)
+    // B-PR-14: the sales office shares progress through the customer's limits card (the share level; progressShared derived).
     const share = async (progressShared: boolean) => {
-      const tab = await ok(P.sales, 'GET', `/partners/${id('party:P1')}`)
+      const card = await ok(P.sales, 'GET', `/partners/${id('party:P1')}/production`)
       await stepped(w, P.sales)
-      await ok(P.sales, 'POST', `/partners/${id('party:P1')}/settings`, { progressShared, version: tab.settings.version })
+      const changed = await ok(P.sales, 'PUT', `/partners/${id('party:P1')}/production`, { productionLevel: progressShared ? 'PROGRESS' : 'STATUS', version: card.production.version })
+      expect(changed.production).toMatchObject({ level: progressShared ? 'PROGRESS' : 'STATUS', progressShared })
+      expect((await ok(P.sales, 'GET', `/partners/${id('party:P1')}`)).settings).toMatchObject({ progressShared })
     }
     await share(true)
     const progress = await as(R.buyer, 'GET', `/portal/sales-orders/${so2}/progress`)

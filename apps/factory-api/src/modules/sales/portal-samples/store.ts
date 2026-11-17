@@ -107,3 +107,18 @@ export function nameIn(style: Pick<StyleRow, 'name' | 'nameI18n'>, locale: 'it' 
   const local = names && typeof names[locale] === 'string' ? (names[locale] as string).trim() : ''
   return local || style.name
 }
+
+// ---- B-TH-069 (threads plan TH-5, PROJ.portal-F03): the projects of the portal's company the person is a MEMBER of (their own
+// RecordFollower rows; the partner role reads its party's member rows and projects only), open ones first, then by target date.
+// Number, name, status and target date only: never the lead, the goal or the outcome (hidden columns).
+export async function readMemberProjects(client: FactoryClient, companyId: string, userId: string) {
+  const mine = await client.recordFollower.findMany({ where: { recordType: 'Project', userId }, select: { recordId: true }, take: 200 })
+  if (mine.length === 0) return []
+  const rows = await client.project.findMany({
+    where: { id: { in: mine.map((row) => row.recordId) }, companyId },
+    orderBy: [{ targetDate: 'asc' }, { id: 'asc' }],
+    select: { id: true, number: true, name: true, status: true, targetDate: true },
+  })
+  return [...rows.filter((row) => row.status !== 'CLOSED'), ...rows.filter((row) => row.status === 'CLOSED')]
+}
+// ---- end B-TH-069

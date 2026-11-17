@@ -54,4 +54,14 @@ export const events = [
     payload: z.strictObject({ recordType: z.string(), recordId: z.uuid() }),
     live: { permission: 'threads.read', fields: ['recordType', 'recordId'] },
   }),
+  // ---- B-TH-068 (threads plan TH-5, PROJ-G05): a colleague added by hand to a record (reason ADDED) — the notification centre
+  // tells the person added ("Marco added you to …", platform/notifications/rules/projects.ts). No live rule: the bell's own
+  // notification.created refreshes the screens. Ids only.
+  defineEvent({
+    type: 'thread.follower_added',
+    context: 'threads',
+    description: 'An office person was added by a colleague to the followers of a record (a project, an order …).',
+    payload: z.strictObject({ recordType: z.string(), recordId: z.uuid(), userId: z.uuid(), byId: z.uuid() }),
+  }),
+  // ---- end B-TH-068
 ] as const

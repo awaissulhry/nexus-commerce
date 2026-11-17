@@ -7,6 +7,8 @@ import { REQUEST_OUTCOMES, type RequestOutcome } from '@nexus/factory-domain/sal
 import { defineExportSource } from '../../../platform/exports/source'
 // B-TH-039 (threads plan L2-G07, PR-11): the list key stays `sales.inquiries`; the file reads Sales › Incoming's one read.
 import { listIncoming } from '../incoming/incoming'
+// B-TH-094: the Production column's words.
+import { PRODUCTION_EXPORT_WORDS } from '@nexus/factory-domain/sales/inquiries/production-answer'
 
 /**
  * Sales › Incoming (`/sales/incoming`, the list of SCR-105; once Sales › Inquiries — the list key stays `sales.inquiries`, PR-11,
@@ -44,6 +46,7 @@ const wordsOf = (locale: 'it' | 'en') => ({
   ...Object.fromEntries(INQUIRY_SOURCES.map((source) => [`source.${source}`, sourceWordsOf('REQUEST', source)[locale]])),
   ...prefixed('decline', DECLINE_WORDS, locale),
   ...stateEntries(locale),
+  ...prefixed('production', PRODUCTION_EXPORT_WORDS, locale), // B-TH-094
 })
 
 export const inquiries = defineExportSource<IncomingListQuery, IncomingRow>({
@@ -101,6 +104,16 @@ export const inquiries = defineExportSource<IncomingListQuery, IncomingRow>({
     waitingHours: { value: (row) => hours(row.waiting.workingMinutes) },
     // B-TH-016 (Owner decision 4): the assignee by name, as the list says it.
     assignedTo: { value: (row) => row.request?.assignee?.name ?? null },
+    // ---- B-TH-094 (N17; screen = file): production's answer as the list's Production column says it ("OK", "Not before week
+    // 2026-W14"); empty when not answered, and for the kinds that take none (a catalogue order, a change request).
+    production: {
+      value: (row, words) => {
+        const answer = row.request?.production
+        if (!answer) return null
+        return answer.answer === 'OK' ? words('production.OK') : `${words('production.NOT_BEFORE')} ${answer.week ?? ''}`.trim()
+      },
+    },
+    // ---- end B-TH-094
     // The kind's own state in the file's language (a request's decline with its reason, a change request's kind).
     status: {
       value: (row, words) => {

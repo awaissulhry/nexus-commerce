@@ -1,5 +1,7 @@
 
-import { defineContract, id, input } from '@nexus/factory-domain/core/contracts'
+import { businessDate, defineContract, id, input, output } from '@nexus/factory-domain/core/contracts'
+import { z } from 'zod' // B-TH-071
+import { projectOutput } from '../../product/projects/contract' // B-TH-071
 import {
   assignBody,
   assigneesView,
@@ -33,7 +35,12 @@ import {
   customerCheckView,
   makeCustomerAnswer,
   makeCustomerBody,
+  // B-TH-071
+  carriedFiles,
 } from '@nexus/factory-domain/sales/inquiries/contracts'
+// ---- B-TH-094
+import { productionAnswerBody, productionSuggestionQuery, productionSuggestionView } from '@nexus/factory-domain/sales/inquiries/production-answer'
+// ---- end B-TH-094
 
 /** The inquiries' contracts (B-W2b-295): the bodies and answers are factory-domain's sales/inquiries/contracts. */
 
@@ -64,3 +71,22 @@ export const inquiryPictureContract = defineContract({ params: inquiryParams, re
 // B-TH-042: answer a new customer — the check, and the customer made or matched.
 export const customerCheckContract = defineContract({ params: inquiryParams, response: { 200: customerCheckView } })
 export const makeCustomerContract = defineContract({ params: inquiryParams, body: makeCustomerBody, response: { 200: makeCustomerAnswer } })
+// ---- B-TH-094: production's answer on a request (the request as answered), and planning's suggestion (nothing written).
+export const productionAnswerContract = defineContract({ params: inquiryParams, body: productionAnswerBody, response: answer })
+export const productionSuggestionContract = defineContract({ params: inquiryParams, querystring: productionSuggestionQuery, response: { 200: productionSuggestionView } })
+// ---- end B-TH-094
+// ---- B-TH-071: "Start a project" from a request (the project as made, the request's files carried to it).
+export const startProjectContract = defineContract({
+  params: inquiryParams,
+  body: input({
+    name: z.string().max(210).optional(),
+    targetDate: businessDate(),
+    leadId: id().optional(),
+    goal: z.string().max(4010).nullable().optional(),
+    seasonCode: z.string().max(40).nullable().optional(),
+    colleagueIds: z.array(id()).max(20).optional(),
+    fileIds: z.array(id()).max(50).optional(),
+  }),
+  response: { 201: output({ project: projectOutput, files: carriedFiles }) },
+})
+// ---- end B-TH-071

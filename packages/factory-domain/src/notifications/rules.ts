@@ -126,6 +126,13 @@ export const MESSAGE_TEMPLATES = {
   'notifications.inquiries.assigned': { en: '{actor} gave you request {record}', it: '{actor} ti ha affidato la richiesta {record}' },
   // B-TH-015: a new request, to the people who answer requests (its company and customer), not to who made it.
   'notifications.inquiries.newRequest': { en: 'New request {record} came in: take it or give it to someone', it: 'È arrivata la nuova richiesta {record}: prendila o affidala a qualcuno' },
+  // ---- B-TH-068 / B-TH-071 (threads plan TH-5, PROJ-G05, PROJ-G14): a person added to a record by a colleague (a project, an order
+  // …: "added by Marco", told once), taken out of a project by its lead, and the lead's nudge for a project past its target date and
+  // quiet for 14 days (it suggests, never acts).
+  'notifications.projects.addedYou': { en: '{actor} added you to {record}', it: '{actor} ti ha aggiunto a {record}' },
+  'notifications.projects.removedYou': { en: '{actor} took you out of {record}', it: '{actor} ti ha tolto da {record}' },
+  'notifications.projects.stale': { en: '{record} is past its target date and quiet for 14 days: close or update it', it: '{record} ha superato la data obiettivo e non ha messaggi da 14 giorni: chiudilo o aggiornalo' },
+  // ---- end B-TH-068 / B-TH-071
   'notifications.safety.productReport': { en: 'Product-safety report {record} came in: assess it', it: 'È arrivata la segnalazione di sicurezza {record}: valutala' },
   'notifications.safety.productAccident': { en: 'Product-safety report {record} came in with an accident: assess it and see whether the authority must be told', it: 'È arrivata la segnalazione di sicurezza {record} con un incidente: valutala e verifica se va informata l’autorità' },
   // B-W2b-394 (COL-027): a team-inbox mail given to a person ({record}: its subject, {title}: the inbox), and its follow-up that came

@@ -484,3 +484,76 @@ describe('B-TH-238 — the tiles of Orders & requests', () => {
   })
 })
 // ---- end B-TH-238
+
+// ── B-TH-246 (threads plan TH-4, picture 28; SHEET-G10, Owner decision 13; features SHEET.portal-sheet, portal-sheet-F07; wall W10,
+// W17, W39): the customer's own sheet — the ticked columns only, read-only, every cell its own page, "Download all" by the server ──
+import { downloadSheet, fetchSheet, fileNameOf } from './api'
+import { listBandOf } from './band'
+import { portalCellText, portalColumnLabel, portalColumnsOf, sheetFileName } from './model'
+import { SHEET_COLUMNS, sheetRead } from './fixtures'
+
+describe('B-TH-246 — the customer\'s own sheet in its portal', () => {
+  const said = { yes: 'Yes', no: 'No', day: (value: string) => `day ${value}` }
+  it('the columns are the ones the API sends for this portal (the office ticked them; never another customer\'s): none on the plain read', () => {
+    expect(portalColumnsOf(sheetRead(ordersRead('OPEN'))).map((column) => column.columnId)).toEqual(['cf:box_type', 'cf:fair_date'])
+    expect(portalColumnsOf(ordersRead('OPEN'))).toEqual([])
+    expect(portalColumnsOf(null)).toEqual([])
+    expect(portalColumnLabel({ labelIt: 'Peso', labelEn: 'Weight', unit: 'kg' }, 'en')).toBe('Weight (kg)')
+  })
+  it('a cell in the customer\'s words: the API\'s words first, a list value, a day, yes / no, money in its currency; nothing as nothing', () => {
+    const [box, fair] = SHEET_COLUMNS
+    expect(portalCellText(box!, { value: 'GIFT', wordsIt: null, wordsEn: null }, 'en', said)).toBe('Gift box')
+    expect(portalCellText(box!, { value: 'GIFT', wordsIt: 'Regalo!', wordsEn: 'Gift!' }, 'en', said)).toBe('Gift!')
+    expect(portalCellText(fair!, { value: '2027-02-10', wordsIt: null, wordsEn: null }, 'en', said)).toBe('day 2027-02-10')
+    expect(portalCellText({ type: 'YES_NO', options: null }, { value: true, wordsIt: null, wordsEn: null }, 'en', said)).toBe('Yes')
+    expect(portalCellText({ type: 'MONEY', options: null }, { value: { amount: 12345, currency: 'EUR' }, wordsIt: null, wordsEn: null }, 'en', said)).toContain('123.45')
+    expect(portalCellText(box!, undefined, 'en', said)).toBeNull()
+  })
+  it('the sheet is read from GET /portal/sales-orders/sheet with the view\'s chip and search (the same Open count as the list)', async () => {
+    const asked: string[] = []
+    const api = { get: async (path: string, options: { query?: Record<string, unknown>; schema: { parse: (value: unknown) => unknown } }) => { asked.push(`${path}?${new URLSearchParams(Object.entries(options.query ?? {}).filter(([, value]) => value !== undefined).map(([key, value]) => [key, String(value)])).toString()}`); return options.schema.parse(sheetRead(ordersRead('OPEN'))) } } as unknown as ApiClient
+    const read = await fetchSheet(api, { chip: 'OPEN', q: ' gloves ' })
+    expect(asked[0]).toBe('/portal/sales-orders/sheet?chip=OPEN&q=gloves&limit=50&offset=0')
+    expect(read.columns?.length).toBe(2)
+    expect(read.count).toBe(ordersRead('OPEN').count)
+  })
+  it('"Download all (Excel)": the server\'s file in the customer\'s scope (never the office\'s export job), named as the server names it', async () => {
+    const asked: Array<{ path: string; query: unknown }> = []
+    const api = {
+      bytes: async (path: string, options: { query?: unknown; onHeaders?: (headers: Headers) => void }) => {
+        asked.push({ path, query: options.query })
+        options.onHeaders?.(new Headers({ 'content-disposition': "attachment; filename*=UTF-8''Your%20orders.xlsx", 'content-type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }))
+        return new Uint8Array([1, 2, 3])
+      },
+    } as unknown as ApiClient
+    const file = await downloadSheet(api, { chip: 'OPEN', q: null, format: 'XLSX', locale: 'en' })
+    expect(asked).toEqual([{ path: '/portal/sales-orders/sheet/download', query: { chip: 'OPEN', q: undefined, format: 'XLSX', locale: 'en' } }])
+    expect(file.fileName).toBe('Your orders.xlsx')
+    expect(file.bytes.length).toBe(3)
+    expect(fileNameOf('attachment; filename="orders.xlsx"')).toBe('orders.xlsx')
+    expect(fileNameOf(null)).toBeNull()
+    expect(sheetFileName('orders', 'XLSX')).toBe('orders.xlsx')
+  })
+  it('the band\'s ⋯ offers Download all (and says while the file is prepared)', () => {
+    const words = { t, locale: 'en', time: (value: string) => value, day } as unknown as Parameters<typeof listBandOf>[0]['words']
+    const band = listBandOf({ words, asOf: null, rows: 3, chip: null, q: '', prefix: '/p/BETA', onDownloadAll: () => undefined })
+    expect(band.more?.find((item) => item.id === 'download-all')?.label).toBe('Download all (Excel)')
+    expect(listBandOf({ words, asOf: null, rows: 3, chip: null, q: '', prefix: '/p/BETA', onDownloadAll: () => undefined, downloading: true }).more?.find((item) => item.id === 'download-all')?.disabled).toBe(true)
+    expect(listBandOf({ words, asOf: null, rows: 3, chip: null, q: '', prefix: '/p/BETA' }).more?.some((item) => item.id === 'download-all')).toBe(false)
+  })
+  it('W10 / W17 / W39: Brand Beta\'s sheet holds nothing of Brand Alpha and no office series, in both languages; each cell opens Beta\'s own page', () => {
+    const screen = listScreen as unknown as DesignScreen<unknown>
+    for (const locale of ['it', 'en'] as const) {
+      for (const id of ['th-246-sheet', 'th-246-download-failed']) {
+        const html = renderToStaticMarkup(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell', 'portal']) }, createElement(screen.view, { model: screen.cases.find((item) => item.id === id)!.model })))
+        expect(scanText(html, BRAND_ALPHA), `${id} (${locale})`).toEqual([])
+        expect(html.match(/\b(?:SO|QT)-\d{4}-\d+/)?.[0] ?? null, `${id} (${locale})`).toBeNull()
+        expect(html).not.toMatch(/\/w\/[A-Z0-9-]+\//)
+      }
+    }
+  })
+  it('the words in it and en', () => {
+    for (const locale of ['it', 'en'] as const) for (const key of ['band.downloadAll', 'band.downloading', 'band.downloadAllHint', 'sheet.yes', 'sheet.no', 'sheet.columnHint', 'sheet.downloadFailed']) expect(CATALOGUE[locale][NS]?.[key], `${locale} ${key}`).toBeTruthy()
+  })
+})
+// ── end B-TH-246 ──
