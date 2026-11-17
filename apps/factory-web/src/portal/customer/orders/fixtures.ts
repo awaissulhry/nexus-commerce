@@ -69,7 +69,7 @@ function betaCase(build: (locale: Locale) => Partial<OrdersListViewModel> = () =
 export const requestCountsOf = (rows: readonly RequestRow[]) => ({ needsYou: rows.filter((row) => row.state.needsYou).length, open: rows.filter((row) => row.state.open).length })
 /** B-TH-238: a tile's own rows (the two request tiles read no order; "Open orders" reads the API's Open). */
 const betaTile = (chip: TileChip) => betaCase(() => (chip === OPEN_ORDERS ? { chip, read: ordersRead('OPEN'), rows: ordersRead('OPEN').items } : { chip, read: { ...ordersRead('OPEN'), items: [], count: 0 }, rows: [] }))
-const betaChip = (chip: OrderChip | typeof CLOSED_REQUESTS) => betaCase( // a tile's own rows: betaTile() => ({ chip, read: chip === CLOSED_REQUESTS ? { ...ordersRead('OPEN'), items: [], count: 0 } : ordersRead(chip), rows: chip === CLOSED_REQUESTS ? [] : ordersRead(chip).items }))
+const betaChip = (chip: OrderChip | typeof CLOSED_REQUESTS) => betaCase(() => ({ chip, read: chip === CLOSED_REQUESTS ? { ...ordersRead('OPEN'), items: [], count: 0 } : ordersRead(chip), rows: chip === CLOSED_REQUESTS ? [] : ordersRead(chip).items }))
 const all = ordersRead('ALL')
 
 // ── B-TH-246 (threads plan TH-4, picture 28): Brand Beta's own sheet — the columns the office ticked for its portal ──
