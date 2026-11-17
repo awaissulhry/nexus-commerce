@@ -20,7 +20,7 @@ import { ApiError } from '../../../core/errors'
 import type { z } from 'zod'
 import type { applyBulkContract, ApplyBulkBody, previewBulkContract, PreviewBulkBody } from './contract'
 import { bulkTargetOf } from './registry'
-import { BulkRowRefused, type AnyBulkTarget } from './target'
+import { BulkRowRefused, type AnyBulkTarget, type BulkTargetField } from './target'
 
 /**
  * Bulk edit with preview and inline edit (B-W2b-13; PLT-182, PLT-166). The preview reads the asked rows as they are now
@@ -52,25 +52,31 @@ function targetFor(caller: CommandCaller, listKey: string): AnyBulkTarget {
   return target
 }
 
+// B-TH-060: a target's fields for this person — its own and, when it has them, the ones known only now (a list's custom values).
+type Fields = Readonly<Record<string, BulkTargetField<unknown>>>
+async function fieldsOf(caller: CommandCaller, target: AnyBulkTarget): Promise<Fields> {
+  return target.fieldsFor ? { ...target.fields, ...(await target.fieldsFor(caller)) } : target.fields
+}
+
 /** The asked values as written (the field's kind), checked; a money field needs its grain. */
-function checkedChanges(caller: CommandCaller, target: AnyBulkTarget, changes: Readonly<Record<string, BulkValue>>, rowCount: number, path: string): { values: Record<string, BulkValue>; issues: Issue[] } {
+function checkedChanges(caller: CommandCaller, fields: Fields, changes: Readonly<Record<string, BulkValue>>, rowCount: number, path: string): { values: Record<string, BulkValue>; issues: Issue[] } {
   const values: Record<string, BulkValue> = {}
-  for (const [name, value] of Object.entries(changes)) values[name] = Object.hasOwn(target.fields, name) ? normaliseValue(target.fields[name]!, value) : value
-  const issues = askProblems(target.fields, values, rowCount, path)
+  for (const [name, value] of Object.entries(changes)) values[name] = Object.hasOwn(fields, name) ? normaliseValue(fields[name]!, value) : value
+  const issues = askProblems(fields, values, rowCount, path)
   if (issues.length === 0) {
     const grains = heldGrains(actorOf(officeOf(caller)))
     for (const name of Object.keys(values)) {
-      const held = fieldHeld(target.fields[name]!, grains)
+      const held = fieldHeld(fields[name]!, grains)
       if (held) throw new ForbiddenError(held)
     }
   }
   return { values, issues }
 }
 
-function factsOf(caller: CommandCaller, target: AnyBulkTarget, row: unknown): BulkRowFacts {
+function factsOf(caller: CommandCaller, target: AnyBulkTarget, fields: Fields, row: unknown): BulkRowFacts {
   const values: Record<string, BulkValue> = {}
   const held: Record<string, BulkRefusal | null> = { '*': target.rowHeld?.(caller, row) ?? null }
-  for (const [name, field] of Object.entries(target.fields)) {
+  for (const [name, field] of Object.entries(fields)) {
     values[name] = field.read(row)
     held[name] = field.held?.(row) ?? null
   }
@@ -90,14 +96,15 @@ function assertRows(target: AnyBulkTarget, count: number, path: string): void {
 export async function previewBulk(caller: CommandCaller, body: PreviewBulkBody): Promise<z.infer<(typeof previewBulkContract.response)[200]>> {
   const target = targetFor(caller, body.listKey)
   assertRows(target, body.ids.length, 'body/ids')
-  const { values, issues } = checkedChanges(caller, target, body.changes, body.ids.length, 'body')
+  const fields = await fieldsOf(caller, target) // B-TH-060
+  const { values, issues } = checkedChanges(caller, fields, body.changes, body.ids.length, 'body')
   if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
   const rows = await target.load(caller, body.ids)
   const byId = new Map(rows.map((row) => [target.idOf(row), row]))
   return {
     rows: body.ids.map((id) => {
       const row = byId.get(id)
-      const preview = row === undefined ? missingRow(id) : previewRow(factsOf(caller, target, row), values)
+      const preview = row === undefined ? missingRow(id) : previewRow(factsOf(caller, target, fields, row), values)
       return { ...preview, changes: [...preview.changes], refusal: refusalView(preview.refusal) }
     }),
   }
@@ -131,8 +138,9 @@ type ResultView = Omit<BulkResult, 'refusal'> & { refusal: RefusalView | null }
 export async function applyBulk(caller: CommandCaller, body: ApplyBulkBody, idempotencyKey?: string): Promise<z.infer<(typeof applyBulkContract.response)[200]>> {
   const target = targetFor(caller, body.listKey)
   assertRows(target, body.rows.length, 'body/rows')
+  const fields = await fieldsOf(caller, target) // B-TH-060
   const asked = body.rows.map((row, index) => {
-    const { values, issues } = checkedChanges(caller, target, row.changes, 1, `body/rows/${index}`)
+    const { values, issues } = checkedChanges(caller, fields, row.changes, 1, `body/rows/${index}`)
     return { row, values, issues }
   })
   const issues = asked.flatMap((entry) => entry.issues)
@@ -150,7 +158,7 @@ export async function applyBulk(caller: CommandCaller, body: ApplyBulkBody, idem
       results.push({ id: row.id, label: '', ok: false, refusal: { code: 'missing', field: null, status: null }, before: {}, after: {}, version: 0 })
       continue
     }
-    const facts = factsOf(caller, target, current)
+    const facts = factsOf(caller, target, fields, current)
     const before = Object.fromEntries(fields.map((field) => [field, facts.values[field] ?? null]))
     const refused = (refusal: BulkRefusal): ResultView => ({ id: row.id, label: facts.label, ok: false, refusal: refusalView(refusal), before, after: before, version: facts.version })
     const whole = facts.held['*'] ?? null
@@ -177,7 +185,7 @@ export async function applyBulk(caller: CommandCaller, body: ApplyBulkBody, idem
     }
     try {
       const after = await target.write(caller, current, values, row.version, idempotencyKey ? `${idempotencyKey.slice(0, 90)}:${row.id}` : undefined)
-      const now = factsOf(caller, target, after)
+      const now = factsOf(caller, target, fields, after)
       results.push({ id: row.id, label: now.label, ok: true, refusal: null, before, after: Object.fromEntries(fields.map((field) => [field, now.values[field] ?? null])), version: now.version })
     } catch (error) {
       // B-W2b-51: a refusal the target words in its own codes, as it is.

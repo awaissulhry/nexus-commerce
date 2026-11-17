@@ -108,7 +108,11 @@ export const incomingRow = output({
 
 export const incomingList = output({
   rows: z.array(incomingRow),
-  /** Each tile's number under the filters, every kind the reader may see (null: not counted, "—"). */
+  /**
+   * Each tile's number under the filters, every kind the reader may see (null: not counted, "—"). B-TH-047: also CUSTOMER_REPLIES,
+   * the "Customer replies" saved row — the conversations on the customer's other records that wait on us and the reader may open,
+   * under the company and customer filters (its rows: GET /threads/waiting?side=CUSTOMER).
+   */
   counts: z.record(z.string(), z.number().int().nullable()),
   /** The rows of the tile asked, per kind (null: the reader may not see that kind, or the filters leave it out). */
   kinds: output({ REQUEST: z.number().int().nullable(), CATALOGUE_ORDER: z.number().int().nullable(), CHANGE_REQUEST: z.number().int().nullable() }),

@@ -4,7 +4,7 @@ import { TECHFILES_MANAGE, TECHFILES_VIEW } from '@nexus/factory-domain/complian
 import { retainUntilOf, testPlanProblems, testRecordProblems, type Frequency, type TestKind, type TestPlanInput, type TestRecordInput, type TestResult } from '@nexus/factory-domain/compliance/techfiles/rules'
 import { ConflictError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can } from '@nexus/factory-domain/core/permissions'
+import { can, type Actor } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { runCommand, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
@@ -13,6 +13,8 @@ import { normaliseContentType } from '../../../platform/files/rules'
 import { processFiles } from '../../../platform/files/service'
 import { assertMay, companyReach, dateOfDay, dayOf, guarded, officeOf, settings, techfilesClock, todayOf, type Reader } from './common'
 import { TEST_SELECT, testView, type TestRow, type TestView } from './production'
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
+import { reachesBrand, styleWorkWall } from '../wall' // B-PR-10
 
 /**
  * Production-control tests (B-W2b-251; QHS-048, PRD-302, QHS-110; design compliance.techfiles › Production control "Record
@@ -67,7 +69,7 @@ export async function listTests(request: FastifyRequest, query: ListTestsQuery) 
   const now = techfilesClock().now()
   const today = todayOf(now)
   return request.withClient(async (db) => {
-    const where: Prisma.ProductionControlTestWhereInput[] = [companyReach(actor) as Prisma.ProductionControlTestWhereInput]
+    const where: Prisma.ProductionControlTestWhereInput[] = [companyReach(actor) as Prisma.ProductionControlTestWhereInput, styleWorkWall(actor, TECHFILES_VIEW) as Prisma.ProductionControlTestWhereInput] // B-PR-10
     if (query.styleId) where.push({ styleId: query.styleId })
     if (query.workOrderId) where.push({ workOrderId: query.workOrderId })
     if (query.state === 'DUE') where.push({ result: null })
@@ -77,14 +79,15 @@ export async function listTests(request: FastifyRequest, query: ListTestsQuery) 
   })
 }
 
-async function readTest(db: Reader, testId: string): Promise<TestRow> {
-  const row = isUuid(testId) ? await db.productionControlTest.findUnique({ where: { id: testId }, select: TEST_SELECT }) : null
+/** B-PR-10: with the caller's actor, a test of another customer's style or work order is not found, as an unknown id. */
+async function readTest(db: Reader, testId: string, actor?: Actor): Promise<TestRow> {
+  const row = isUuid(testId) ? await db.productionControlTest.findFirst({ where: { id: testId, ...((actor ? styleWorkWall(actor, TECHFILES_VIEW) : {}) as Prisma.ProductionControlTestWhereInput) }, select: TEST_SELECT }) : null
   if (!row) throw new NotFoundError(NOT_FOUND)
   return row
 }
 
 async function lockedTest(tx: CommandTx, context: OfficeContext, testId: string): Promise<TestRow> {
-  const row = await readTest(tx, testId)
+  const row = await readTest(tx, testId, actorOf(context))
   if (!can(actorOf(context), TECHFILES_VIEW, { companyId: row.companyId })) throw new NotFoundError(NOT_FOUND)
   assertMay(context, TECHFILES_MANAGE, row.companyId, 'Keeping a production-control test')
   return row
@@ -132,8 +135,9 @@ export async function planTest(caller: CommandCaller, body: PlanBody, key: strin
   const actor = actorOf(context)
   const problems = testPlanProblems(body)
   if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'The test is not valid.', problems)
-  const style = await caller.withClient((db) => db.style.findUnique({ where: { id: body.styleId }, select: { id: true, code: true, companyId: true } }))
-  if (!style || !can(actor, TECHFILES_VIEW, { companyId: style.companyId })) throw new NotFoundError('Style not found.')
+  const style = await caller.withClient((db) => db.style.findUnique({ where: { id: body.styleId }, select: { id: true, code: true, companyId: true, brandPartyId: true } }))
+  // B-PR-10: another customer's private-label style is not found (as an unknown id).
+  if (!style || !can(actor, TECHFILES_VIEW, { companyId: style.companyId }) || !reachesBrand(actor, TECHFILES_VIEW, style.brandPartyId)) throw new NotFoundError('Style not found.')
   const companyId = style.companyId ?? body.companyId ?? null
   if (companyId === null) throw new ValidationError('Say which company the test is of.', [{ path: 'body/companyId', message: `Style ${style.code} is every company's: say which company's production was tested.` }])
   assertMay(context, TECHFILES_MANAGE, companyId, 'Planning a production-control test')
@@ -145,7 +149,9 @@ export async function planTest(caller: CommandCaller, body: PlanBody, key: strin
         const { tx, now, audit } = tools
         let siteId: string | null = null
         if (body.workOrderId) {
-          const order = await tx.workOrder.findUnique({ where: { id: body.workOrderId }, select: { siteId: true, styleId: true, companyId: true, number: true } })
+          const found = await tx.workOrder.findUnique({ where: { id: body.workOrderId }, select: { siteId: true, styleId: true, companyId: true, partyId: true, number: true } })
+          // B-PR-10: another customer's work order answers as an unknown one.
+          const order = found && reachesWorkOrder(actor, TECHFILES_VIEW, found) ? found : null
           if (!order || order.styleId !== style.id) throw new ValidationError('The work order is not of this style.', [{ path: 'body/workOrderId', message: `Name a work order of style ${style.code}.` }])
           if (order.companyId !== companyId) throw new ValidationError('The work order is of another company.', [{ path: 'body/workOrderId', message: `Work order ${order.number} is another company's.` }])
           siteId = order.siteId
@@ -196,7 +202,7 @@ export interface LabReportUpload {
 /** The test a lab report goes onto: in reach, kept by this person, not recorded yet (a recorded test's report was named then). */
 async function reportable(caller: CommandCaller, testId: string): Promise<TestRow> {
   const context = officeOf(caller)
-  const row = await caller.withClient((db) => readTest(db, testId))
+  const row = await caller.withClient((db) => readTest(db, testId, actorOf(context)))
   if (!can(actorOf(context), TECHFILES_VIEW, { companyId: row.companyId })) throw new NotFoundError(NOT_FOUND)
   assertMay(context, TECHFILES_MANAGE, row.companyId, 'Keeping a production-control test')
   if (row.result !== null) throw new ConflictError(`This test is recorded already (${row.result} on ${dayOf(row.testedOn)}): its lab report was named when it was recorded. Plan and record another test.`)
@@ -227,6 +233,8 @@ export async function completeLabReport(caller: CommandCaller, testId: string, f
 /** POST /compliance/production-tests/:testId/record {version, result, testedOn, testedBy, reportNumber?, resultNote?, labReportFileId?} */
 export async function recordTest(caller: CommandCaller, testId: string, body: RecordBody & { readonly version: number }, key: string | null | undefined): Promise<{ test: TestView }> {
   const context = officeOf(caller)
+  // B-PR-10: the wall before the record's version guard (another customer's test is not found, never "changed since").
+  await caller.withClient((db) => readTest(db, testId, actorOf(context)))
   await guarded(() =>
     runCommand(
       caller,
@@ -262,6 +270,8 @@ export interface EditTestBody {
 /** PATCH /compliance/production-tests/:testId */
 export async function editTest(caller: CommandCaller, testId: string, body: EditTestBody, key: string | null | undefined): Promise<{ test: TestView }> {
   const context = officeOf(caller)
+  // B-PR-10: the wall before the record's version guard (another customer's test is not found, never "changed since").
+  await caller.withClient((db) => readTest(db, testId, actorOf(context)))
   await guarded(() =>
     runCommand(
       caller,

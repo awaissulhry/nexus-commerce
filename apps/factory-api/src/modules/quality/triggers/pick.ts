@@ -8,6 +8,7 @@ import { actorOf } from '../../../core/context'
 import { chipLabels, chipsOf, chipViews } from '../plans/store'
 import { lotSubjects, workOrderFacts, workshopSubject } from './facts'
 import { becauseWords, officeOf, plansOf, TRIGGER_COLUMNS, type Db, type PlanFacts } from './store'
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * Which plan the rules pick (B-W2b-101; QHS-010 "Plan assignment"; design quality.inspections qi-new "Plan: picked by the
@@ -82,6 +83,10 @@ export async function pickRoute(caller: CommandCaller, query: PickQuery) {
     const db = client as unknown as Db
     const subject = await subjectOf(db, query)
     if (!subject || !can(actorOf(context), QUALITY_INSPECTIONS_VIEW, { companyId: subject.companyId, siteId: subject.siteId })) throw new NotFoundError('What is inspected was not found.')
+    // B-PR-10 (the brand wall): goods of another customer's work order (its own, or a workshop's receipt of it) answer as unknown.
+    const workOrderId = query.lotId ? null : query.subcontractReceiptId ? ((await client.subcontractReceipt.findUnique({ where: { id: query.subcontractReceiptId }, select: { workOrderId: true } }))?.workOrderId ?? null) : (query.workOrderId ?? null)
+    const work = workOrderId ? await client.workOrder.findUnique({ where: { id: workOrderId }, select: { companyId: true, siteId: true, partyId: true } }) : null
+    if (workOrderId && (!work || !reachesWorkOrder(actorOf(context), QUALITY_INSPECTIONS_VIEW, work))) throw new NotFoundError('What is inspected was not found.')
     const pick = await pickFor(db, subject.companyId, query.stage, subject.facts)
     if (!pick) {
       const stage = STAGE_WORDS[query.stage]

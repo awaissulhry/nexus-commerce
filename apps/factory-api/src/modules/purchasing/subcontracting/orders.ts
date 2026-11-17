@@ -1,7 +1,7 @@
 import type { Prisma, Uom } from '@nexus/factory-db'
 import { ConflictError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { isCurrencyCode } from '@nexus/factory-domain/core/money'
 import { baseQuantityOf } from '@nexus/factory-domain/inventory/ledger/units'
@@ -67,6 +67,7 @@ import { settleJobInCommand } from '../portal-jobs/tasks'
 import { kitLinesOf } from './kit-lines'
 import { NO_NEW_ORDER, type SupplierStatus } from '@nexus/factory-domain/purchasing/suppliers-depth/rules'
 import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-37
+import { reachesWorkOrder, viaWorkOrder } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * Subcontract orders (B-W2a-25; SCM-138; design purchasing.subcontracting "New subcontract order", record tab
@@ -145,7 +146,11 @@ export interface ListQuery {
   readonly limit: number
 }
 
-const scopeOf = (context: OfficeContext) => scopeWhere(actorOf(context), PURCHASING_VIEW, { company: 'companyId', site: 'siteId', party: 'partyId' }) as Prisma.SubcontractOrderWhereInput
+// B-PR-10 (the brand wall): the workshop (party) AND the work order's customer — an order for another customer's work order is
+// not listed nor counted, whatever workshop the person reaches.
+const scopeOf = (context: OfficeContext): Prisma.SubcontractOrderWhereInput => ({
+  AND: [scopeWhere(actorOf(context), PURCHASING_VIEW, { company: 'companyId', site: 'siteId', party: 'partyId' }) as Prisma.SubcontractOrderWhereInput, viaWorkOrder(actorOf(context), PURCHASING_VIEW) as Prisma.SubcontractOrderWhereInput],
+})
 
 /** The last day of the week of `day` (Sunday): "due back this week". */
 function sundayOf(day: BusinessDate): Date {
@@ -300,7 +305,8 @@ export async function outsideOperations(caller: CommandCaller, workOrderId: stri
 }
 
 /** The caller sees work going out of this work order's site (purchasing.view over its company and site, any workshop). */
-const actorReaches = (context: OfficeContext, workOrder: Pick<WorkOrderFacts, 'companyId' | 'siteId'>): boolean => can(actorOf(context), PURCHASING_VIEW, { companyId: workOrder.companyId, siteId: workOrder.siteId })
+// B-PR-10: and the work order's customer (another customer's work order is not found).
+const actorReaches = (context: OfficeContext, workOrder: Pick<WorkOrderFacts, 'companyId' | 'siteId' | 'partyId'>): boolean => reachesWorkOrder(actorOf(context), PURCHASING_VIEW, workOrder)
 
 /** Pieces on live (not cancelled) orders per work order operation, leaving one order out. */
 async function orderedPieces(db: Reader, workOrderId: string, except: string | null): Promise<Map<string, number>> {
@@ -504,7 +510,7 @@ export async function createOrder(caller: CommandCaller, input: CreateInput, ide
   const context = officeContextOf(caller)
   const facts = await caller.withClient(async (client) => {
     const workOrder = await readWorkOrderFacts(client, input.workOrderId)
-    if (!workOrder) throw new NotFoundError('Work order not found.')
+    if (!workOrder || !actorReaches(context, workOrder)) throw new NotFoundError('Work order not found.') // B-PR-10: its customer too
     const steps = await outsideStepsOf(client, workOrder.operations)
     const firstStep = input.operations.map((operation) => steps.get(operation.workOrderOperationId)).find((step) => step !== undefined)
     const partyId = input.partyId ?? firstStep?.supplierId

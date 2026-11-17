@@ -196,3 +196,27 @@ describe('answer a new customer (B-TH-042, W23)', () => {
     expect(makeCustomerBody.safeParse({ version: 1, make: { partyId: 'x' } }).success).toBe(false)
   })
 })
+
+// ---- B-TH-043: Decline with one message, and Not an order
+import { declineMessageRefusal, messageRefusal } from './rules'
+import { bulkDeclineBody, declineBody } from './contracts'
+
+describe('decline with one message, and Not an order (B-TH-043)', () => {
+  it('a message goes with a decline of a customer’s request; never with “Not an order”, never to a prospect', () => {
+    expect(declineMessageRefusal(facts({ partyId: A }), 'PRICE')).toBeNull()
+    expect(declineMessageRefusal(facts({ partyId: A }), 'NOT_AN_ORDER')?.code).toBe('SENDS_NOTHING')
+    expect(declineMessageRefusal(facts({ partyId: A }), 'NOT_AN_ORDER')?.message).toContain('Closed')
+    expect(declineMessageRefusal(facts(), 'CAPACITY')?.code).toBe('NEEDS_CUSTOMER')
+    expect(messageRefusal(facts())?.code).toBe('NEEDS_CUSTOMER')
+    expect(messageRefusal(facts({ partyId: A }))).toBeNull()
+  })
+  it('“Not an order” needs no words; a single decline takes the message, a decline of several never does', () => {
+    expect(declineRefusal(facts(), 'NOT_AN_ORDER', null)).toBeNull()
+    expect(declineBody.safeParse({ version: 1, reason: 'PRICE', message: { body: 'Made-up: thank you, not this season.' } }).success).toBe(true)
+    expect(declineBody.safeParse({ version: 1, reason: 'PRICE', message: { body: ' ' } }).success).toBe(false)
+    const items = [{ inquiryId: A, version: 1 }]
+    expect(bulkDeclineBody.safeParse({ items, reason: 'PRICE' }).success).toBe(true)
+    expect(bulkDeclineBody.safeParse({ items, reason: 'PRICE', message: { body: 'Made-up: hello' } }).success).toBe(false)
+  })
+})
+// ---- end B-TH-043

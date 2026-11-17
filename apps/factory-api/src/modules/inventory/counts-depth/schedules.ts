@@ -10,7 +10,7 @@ import { command, type CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { createCount } from '../counts/counts'
 import { siteLocations, type LocationNode } from '../counts/ledger-at'
-import { officeContextOf, siteFor } from '../ledger/access'
+import { officeContextOf, siteFor, assertWholeWarehouse } from '../ledger/access'
 import { auditedSchedule, dayColumn, dayText, lockSchedule, SCHEDULE_COLUMNS, scheduleChanged, type Db, type ScheduleRow } from './store'
 
 /**
@@ -124,6 +124,7 @@ const refuse = (issues: readonly Issue[]): void => {
 /** POST /inventory/count-schedules */
 export async function createSchedule(caller: CommandCaller, body: { readonly siteId: string; readonly name: string; readonly locationId?: string | null | undefined; readonly abcClass?: AbcClass | null | undefined; readonly itemKind?: string | null | undefined; readonly everyDays: number; readonly nextDueOn?: string | undefined; readonly note?: string | null | undefined }, idempotencyKey?: string, now: Date = new Date()) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const site = await siteFor(caller, body.siteId, INVENTORY_COUNTS_MANAGE, 'body/siteId')
   const today = businessDate(now)
   const draft = { name: body.name, locationId: body.locationId ?? null, abcClass: body.abcClass ?? null, itemKind: body.itemKind ?? null, everyDays: body.everyDays, nextDueOn: body.nextDueOn ?? today }

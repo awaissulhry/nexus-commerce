@@ -31,6 +31,8 @@ import { methodInForce } from '../method/method'
 // B-W2b-407: a customer's own lots marked (FIN-045); posted landed cost in its lots' value (FIN-044).
 import { withLanded } from '../landed/lot-cost'
 import { markCustomerOwned } from './customer-owned'
+import { assertEveryParty } from '../../production/work-orders/scope' // B-PR-10
+import { COSTING_VIEW } from '@nexus/factory-domain/costing/permissions' // B-PR-10
 
 /**
  * Stock valuation at any date (B-W2a-29; FIN-039; design finance.reports "Stock valuation"): value on hand by category,
@@ -277,6 +279,8 @@ export async function valueStockAsOf(db: Reader, filters: StockValuationFilters,
 /** The sites the caller may see the stock of (a company or a site asked for narrows them). */
 export async function visibleSites(caller: CommandCaller, db: Reader, filters: { readonly companyId?: string | undefined; readonly siteId?: string | undefined }): Promise<string[]> {
   const context = officeContextOf(caller)
+  // B-PR-10 (the warehouse decision): the stock's value adds up every customer's stock and work: every customer only.
+  assertEveryParty(actorOf(context), COSTING_VIEW)
   const sites = await db.site.findMany({
     where: { AND: [scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, SITE_SCOPE) as Prisma.SiteWhereInput, filters.companyId ? { companyId: filters.companyId } : {}, filters.siteId ? { id: filters.siteId } : {}] },
     select: { id: true },

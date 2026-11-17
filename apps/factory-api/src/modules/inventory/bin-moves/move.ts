@@ -7,7 +7,7 @@ import { databaseWarehouseRefusal, WAREHOUSE_REFUSAL_ISSUES } from '@nexus/facto
 import { Dec, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { postMoves, type MoveDraft, type PostedMove } from '../ledger/post-moves'
-import { stockContextOf } from '../ledger/access'
+import { stockContextOf, assertWholeWarehouse } from '../ledger/access'
 import type { Reader } from '../issue/store'
 import { moveRoll } from '../rolls/stock'
 import { settleMoveTasksInCommand, type MovedStock } from '../tasks/lifecycle'
@@ -132,6 +132,7 @@ async function impliedFrom(db: Reader, hand: Hand, taskId: string | null | undef
 /** POST /inventory/bin-moves and POST /inventory/putaway: the move by its two scans. */
 export async function moveByScan(caller: CommandCaller, body: MoveByScanBody, purpose: MovePurpose, idempotencyKey?: string) {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const occurredAt = body.occurredAt ? (parseInstant(body.occurredAt) ?? undefined) : undefined
   const hand = await caller.withClient((db) => handOf(db, context, body.code, INVENTORY_TRANSFER))
   const name = NAMES[purpose]

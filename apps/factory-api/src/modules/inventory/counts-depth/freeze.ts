@@ -4,7 +4,7 @@ import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { INVENTORY_COUNTS_VIEW } from '@nexus/factory-domain/inventory/counts/permissions'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { officeContextOf } from '../ledger/access'
+import { officeContextOf, assertWholeWarehouse } from '../ledger/access'
 
 /**
  * Frozen lines (B-W2b-299; SCM-226 "a started count freezes its lines and their moves until each is counted"; design
@@ -24,6 +24,7 @@ export const FROZEN_WORDS = {
 /** GET /inventory/stock-counts/frozen */
 export async function frozenLines(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly locationId?: string | undefined; readonly itemId?: string | undefined }) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const counts = scopeWhere(actorOf(context), INVENTORY_COUNTS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.StockCountWhereInput
   return caller.withClient(async (db) => {
     const lines = await db.stockCountLine.findMany({

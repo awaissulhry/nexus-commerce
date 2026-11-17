@@ -12,7 +12,7 @@ import { PLANNING_VIEW } from '@nexus/factory-domain/planning/permissions'
 import { command, StaleVersionError, type CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
-import { assertMayAt, officeContextOf, siteFor } from '../access'
+import { assertMayAt, everyPartySiteFor, officeContextOf } from '../access'
 import type { Reader } from '../store'
 
 /**
@@ -170,7 +170,7 @@ export interface ListExceptionsQuery {
 /** GET /planning/exceptions: the site's queue (open by default), newest sighting first, with its tiles. */
 export async function listExceptions(caller: CommandCaller, query: ListExceptionsQuery) {
   const context = officeContextOf(caller)
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW) // B-PR-10: the plan's exceptions name every customer's orders
   const statuses = (query.status ?? 'NEW,ACKNOWLEDGED').split(',').map((value) => value.trim()).filter((value) => value !== '')
   if (statuses.length === 0 || statuses.some((value) => !(EXCEPTION_STATUSES as readonly string[]).includes(value))) {
     throw new ValidationError('Name statuses among NEW, ACKNOWLEDGED and RESOLVED.', [{ path: 'querystring/status', message: 'Comma-separated: NEW, ACKNOWLEDGED, RESOLVED.' }])

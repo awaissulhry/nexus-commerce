@@ -13,6 +13,8 @@ import type { Reader, SiteRow } from '../store'
 import { siteViewOf } from '../schedule/publish'
 import { publishedOf, userNamesOf, workingPlanOf } from '../schedule/store'
 import type { ChangeEntry, ChangesQuery } from './contract'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-10
+import { actorOf } from '../../../core/context' // B-PR-10
 
 /**
  * The board's change log (B-W2b-329; PLN-149; design planning.board sec:log "Changes": "Move, pin, publish, apply what-if;
@@ -232,7 +234,9 @@ export async function changes(caller: CommandCaller, query: ChangesQuery) {
       ...(query.slotId ? { slotId: query.slotId } : {}),
       ...(at && isUuid(cursor![2]!) ? { AND: [{ OR: [{ changedAt: { lt: at } }, { changedAt: at, id: { lt: cursor![2]! } }] }] } : {}),
     }
-    const rows = await db.scheduleChange.findMany({ where, select: CHANGE_COLUMNS, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }], take: limit + 1 })
+    // B-PR-10 (a named leftover): the changes of the customers' work orders the caller reaches (one of no work order names none).
+    const wall: Prisma.ScheduleChangeWhereInput = { OR: [{ workOrderId: null }, { workOrder: { is: workOrderWhere(actorOf(officeContextOf(caller)), PLANNING_VIEW) } }] }
+    const rows = await db.scheduleChange.findMany({ where: { AND: [where, wall] }, select: CHANGE_COLUMNS, orderBy: [{ changedAt: 'desc' }, { id: 'desc' }], take: limit + 1 })
     const page = rows.slice(0, limit)
     const last = page.at(-1)
     return {

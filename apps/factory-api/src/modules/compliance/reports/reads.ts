@@ -99,7 +99,7 @@ export async function expiriesAnswer(caller: CommandCaller, query: ExpiriesQuery
 /** GET /compliance/reports/cr6 — the chromium VI results of the period per supplier (lots are not per brand: no brand). */
 export async function cr6Answer(caller: CommandCaller, query: Cr6Query) {
   return caller.withClient(async (db) => {
-    const place: Place = { ...(await placeOf(db, caller, query)), brand: null }
+    const place: Place = { ...(await placeOf(db, caller, { ...query, brandId: undefined }, { everyCustomer: false })), brand: null } // B-PR-10: lots name no customer
     if (!place.sight.lots) return { ...headOf(place), sight: place.sight, unit: 'mg/kg' as const, results: 0, suppliers: [] }
     const { results, parties } = await crViResults(db, place)
     return {

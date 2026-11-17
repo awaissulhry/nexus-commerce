@@ -18,6 +18,7 @@ import { serverClock } from '../../../core/time'
 import { contextOf } from '../../product/materials/store'
 import { officeContextOf } from '../../production/work-orders/access'
 import { officeWorkOrder } from '../../production/work-orders/work-orders'
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
 import { ENTRY_COLUMNS, ratesOf, readWorkOrder, romeDay, unique, type CostedWorkOrder, type Reader } from '../actual/store'
 import { ledgerViews } from '../actual/views'
 // B-W2b-F46: the costs that arrived after the close, in words, until a reopen.
@@ -45,7 +46,8 @@ const SCOPE = (row: { readonly companyId: string; readonly siteId: string }) => 
 /** The work order for a costing read: costing.view over its company and site (else 404), never a DRAFT. */
 async function costedWorkOrder(caller: CommandCaller, db: Reader, workOrderId: string): Promise<CostedWorkOrder> {
   const workOrder = isUuid(workOrderId) ? await readWorkOrder(db, workOrderId) : null
-  if (!workOrder || workOrder.status === 'DRAFT' || !can(actorOf(contextOf(caller)), COSTING_VIEW, SCOPE(workOrder))) throw new NotFoundError('Work order not found.')
+  // B-PR-10: another customer's work order is not found, as an unknown one (its company, site AND customer).
+  if (!workOrder || workOrder.status === 'DRAFT' || !reachesWorkOrder(actorOf(contextOf(caller)), COSTING_VIEW, workOrder)) throw new NotFoundError('Work order not found.')
   return workOrder
 }
 

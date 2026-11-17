@@ -8,7 +8,7 @@ import { INVENTORY_STOCK_VIEW } from '@nexus/factory-domain/inventory/permission
 import { availabilityOf, openOf, type Availability } from '@nexus/factory-domain/inventory/reservations/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { mayAt, officeContextOf, siteFor } from '../ledger/access'
+import { mayAt, officeContextOf, siteFor, assertWholeWarehouse } from '../ledger/access'
 import type { Reader } from '../issue/store'
 import type { ReservationView } from './contract'
 import { demandOpen, readDemands, readKeyFacts, RESERVATION_COLUMNS, type ReservationRow } from './store'
@@ -102,6 +102,7 @@ export interface ListReservationsQuery {
 /** GET /inventory/reservations: newest first (UUIDv7 ids), in pages with a cursor. */
 export async function listReservations(caller: CommandCaller, query: ListReservationsQuery) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const where: Prisma.ReservationWhereInput = {
     AND: [
       scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, SCOPE) as Prisma.ReservationWhereInput,
@@ -149,6 +150,7 @@ const figures = (value: Availability) => ({
 /** GET /inventory/reservations/:id: one reservation, and the figures of its stock now (the item and colour at the site, and its lot). */
 export async function reservationRecord(caller: CommandCaller, reservationId: string) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const row = isUuid(reservationId) ? await caller.withClient((client) => client.reservation.findUnique({ where: { id: reservationId }, select: RESERVATION_COLUMNS })) : null
   if (!row || !mayAt(context, INVENTORY_STOCK_VIEW, row)) throw new NotFoundError('Reservation not found.')
   return caller.withClient(async (client) => {
@@ -176,7 +178,7 @@ export interface AvailabilityQuery {
  * reservations behind the reserved figure.
  */
 export async function availability(caller: CommandCaller, query: AvailabilityQuery) {
-  officeContextOf(caller)
+  assertWholeWarehouse(officeContextOf(caller)) // B-PR-10: the warehouse needs every customer
   const site = await siteFor(caller, query.siteId, INVENTORY_STOCK_VIEW, 'query/siteId')
   return caller.withClient(async (client) => {
     const item = await client.item.findUnique({ where: { id: query.itemId }, select: { id: true, code: true, name: true, baseUom: true, tracking: true } })

@@ -270,7 +270,7 @@ export async function bomSizes(caller: CommandCaller, materialId: string) {
         itemColourId: true,
         revisionId: true,
         styleId: true,
-        revision: { select: { revision: true, status: true, style: { select: { code: true, companyId: true } } } },
+        revision: { select: { revision: true, status: true, style: { select: { code: true, companyId: true, brandPartyId: true } } } },
         sizes: { select: { size: true, qty: true }, orderBy: [{ size: 'asc' }] },
         colours: { select: { itemColourId: true } },
       },
@@ -279,7 +279,7 @@ export async function bomSizes(caller: CommandCaller, materialId: string) {
     })
     return {
       material: { id: material.id, code: material.code },
-      lines: lines.filter((line) => can(actor, PRODUCT_STYLES_VIEW, { companyId: line.revision.style.companyId })).map((line) => {
+      lines: lines.filter((line) => can(actor, PRODUCT_STYLES_VIEW, { companyId: line.revision.style.companyId, partyId: line.revision.style.brandPartyId })).map((line) => { // B-PR-10: its brand too
         const colourIds = line.itemColourId ? [line.itemColourId] : [...new Set(line.colours.map((cell) => cell.itemColourId))]
         return {
           styleId: line.styleId,
