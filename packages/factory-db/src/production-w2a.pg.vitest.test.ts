@@ -345,7 +345,7 @@ describe('repair work orders, lines and bundle splits', () => {
     const [revision] = await admin('SELECT "routingSeq", code, name, "standardMinutes", "workCentreId" FROM "WorkOrderOperation" WHERE id = $1', [seeded.production.operationIds.sew])
     const make = async (kind: string) => {
       const id = randomUUID()
-      await insert(office(), 'WorkOrder', { id, companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind, styleId: seeded.production.styleId, styleRevisionId: seeded.production.revisionId, labelTemplateId: seeded.production.labelTemplateId })
+      await insert(office(), 'WorkOrder', { id, companyId: A.companyA, siteId: A.siteA, number: `T-WO-${tag()}`, kind, styleId: seeded.production.styleId, styleRevisionId: seeded.production.revisionId, labelTemplateId: seeded.production.labelTemplateId, partyId: cell!.partyId /* B-PR-01 */ })
       await insert(office(), 'WorkOrderSize', { id: randomUUID(), siteId: A.siteA, workOrderId: id, styleId: seeded.production.styleId, colourwayId: cell!.colourwayId, size: cell!.size, quantity: 1, salesOrderLineId: cell!.salesOrderLineId, partyId: cell!.partyId })
       await insert(office(), 'WorkOrderOperation', { id: randomUUID(), siteId: A.siteA, workOrderId: id, styleRevisionId: seeded.production.revisionId, seq: 10, ...revision })
       return id

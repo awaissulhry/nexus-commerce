@@ -298,7 +298,7 @@ export async function seed(context: SeedContext): Promise<QualitySeed> {
     client.$transaction(async (tx) => {
       if (await tx.workOrder.findUnique({ where: { id: serialWorkOrderId }, select: { id: true } })) return
       await tx.workOrder.create({
-        data: { id: serialWorkOrderId, companyId: companyA, siteId: siteA, number: 'SEED-WO-0003', kind: WorkOrderKind.SIZE_GRID, styleId: serialStyleId, styleRevisionId: serialRevisionId, dueDate: DAY.due, ...stamp(T.planned) },
+        data: { id: serialWorkOrderId, companyId: companyA, siteId: siteA, number: 'SEED-WO-0003', kind: WorkOrderKind.SIZE_GRID, styleId: serialStyleId, styleRevisionId: serialRevisionId, dueDate: DAY.due, /* B-PR-01 */ partyId: brandId, ...stamp(T.planned) },
         select: { id: true },
       })
       await tx.workOrderSize.create({

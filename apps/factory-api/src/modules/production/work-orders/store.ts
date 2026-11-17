@@ -57,6 +57,8 @@ export const HEADER = {
   // B-W2b-51 (MES-009, MES-010): the rush flag, and the work order it was split from.
   rush: true,
   splitFromId: true,
+  // B-PR-01 (production plan): its one customer (null: a SAMPLE of a round for no customer, or a mixed one made before the rule).
+  partyId: true,
   version: true,
   createdAt: true,
   updatedAt: true,

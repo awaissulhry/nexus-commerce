@@ -2,7 +2,7 @@ import { InvalidStateError, ValidationError } from '@nexus/factory-domain/core/e
 import { newId } from '@nexus/factory-domain/core/ids'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
 import { WORKORDERS_MANAGE } from '@nexus/factory-domain/production/work-orders/permissions'
-import { splitPlan, splitProblems, splitRefusal, type SplitAsk, type SplitCell, type SplitPlan } from '@nexus/factory-domain/production/work-orders/split'
+import { splitParty, splitPlan, splitProblems, splitRefusal, type SplitAsk, type SplitCell, type SplitPlan } from '@nexus/factory-domain/production/work-orders/split'
 import type { PlannedMaterial } from '@nexus/factory-domain/production/work-orders/spec'
 import { decimalText } from '@nexus/factory-domain/product/units/units'
 import { ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
@@ -33,6 +33,10 @@ import { actorIdOf, blankToNull, changedEvent, numberPreview, officeWorkOrder, t
  * Only a DRAFT size grid is split (the WorkOrderSize guard freezes a work order's cells at its release); the order
  * lines' pieces stay the same, on two work orders. Stock reserved for the parent, its kit and its operations on the
  * planning board stay with the parent; the new one is on no line until the planner allocates it.
+ *
+ * B-PR-01 (one customer per work order): the new one is its parent's customer's; a mixed draft made before the rule (no
+ * customer) gives its cells away one customer at a time (B-PR-02's splitParty), and once the cells it keeps are of one
+ * customer it takes that customer (the database lets it, once).
  */
 
 export interface SplitInput {
@@ -107,7 +111,7 @@ export async function previewSplit(caller: CommandCaller, workOrderId: string, b
   return caller.withClient(async (client) => {
     const basics = await readBasics(client, workOrder)
     const refusal = splitRefusal(workOrder)
-    const problems = refusal ? [] : splitProblems(basics.cells.map(splitCellOf), body.cells)
+    const problems = refusal ? [] : [...splitProblems(basics.cells.map(splitCellOf), body.cells), ...splitParty(workOrder, basics.cells, body.cells).problems] // B-PR-01
     const answer = {
       workOrderId: workOrder.id,
       number: workOrder.number,
@@ -141,7 +145,9 @@ export async function splitWorkOrder(caller: CommandCaller, workOrderId: string,
       if (again) throw new InvalidStateError(again)
       const style = await tx.style.findUniqueOrThrow({ where: { id: parent.styleId }, select: STYLE_COLUMNS })
       const cells = await readCells(tx, parent.id, style.sizes)
-      const problems = splitProblems(cells.map(splitCellOf), body.cells)
+      // B-PR-01: the new work order's customer (its parent's, or the one customer a mixed draft gives away).
+      const party = splitParty(parent, cells, body.cells)
+      const problems = [...splitProblems(cells.map(splitCellOf), body.cells), ...party.problems]
       if (problems.length > 0) throw new ValidationError(problems.length === 1 ? problems[0]!.message : 'These sizes cannot be split off.', problems)
       const plan = splitPlan(cells.map(splitCellOf), body.cells)
       const byId = new Map(cells.map((cell) => [cell.id, cell]))
@@ -176,6 +182,7 @@ export async function splitWorkOrder(caller: CommandCaller, workOrderId: string,
           rush,
           note: blankToNull(body.note),
           splitFromId: parent.id,
+          partyId: party.partyId, // B-PR-01
           createdById: actorIdOf(tools),
         },
         select: { id: true },
@@ -211,6 +218,7 @@ export async function splitWorkOrder(caller: CommandCaller, workOrderId: string,
           styleId: parent.styleId,
           styleRevisionId: parent.styleRevisionId,
           splitFromId: parent.id,
+          partyId: party.partyId, // B-PR-01
           dueDate,
           priority,
           rush,
@@ -225,7 +233,14 @@ export async function splitWorkOrder(caller: CommandCaller, workOrderId: string,
         siteId: parent.siteId,
         payload: { workOrderId: id, number: number.formatted, siteId: parent.siteId, styleId: parent.styleId, salesOrderIds, cells: childCells.length, pieces: plan.moved, splitFromId: parent.id },
       })
-      const left = await tx.workOrderSize.findMany({ where: { workOrderId: parent.id }, select: { quantity: true } })
+      const left = await tx.workOrderSize.findMany({ where: { workOrderId: parent.id }, select: { quantity: true, partyId: true } })
+      // B-PR-01: a mixed draft whose cells left are now of one customer takes that customer (once; the guard checks it).
+      const leftParties = new Set(left.map((cell) => cell.partyId))
+      const settled = parent.partyId === null && left.length > 0 && leftParties.size === 1 && !leftParties.has(null) ? [...leftParties][0]! : null
+      if (settled !== null) {
+        await tx.workOrder.update({ where: { id: parent.id }, data: { partyId: settled }, select: { id: true } })
+        tools.audit({ recordType: 'WorkOrder', recordId: parent.id, companyId: parent.companyId, siteId: parent.siteId, before: { partyId: null }, after: { partyId: settled } })
+      }
       changedEvent(tools, parent, ['cells', 'split'], left)
       const today = todayOfCommand(tools)
       return {

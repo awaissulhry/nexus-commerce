@@ -11,9 +11,9 @@
       }
     },
     "WorkOrder": {
-      "about": "The office makes work orders from sales order lines, releases them with their frozen specification and batch number, moves them on and cancels them (the worker's handlers move a released one to IN_PROGRESS after the first floor work). The floor reads its own site's work orders (never changes one).",
+      "about": "The office makes work orders from sales order lines, releases them with their frozen specification and batch number, moves them on and cancels them (the worker's handlers move a released one to IN_PROGRESS after the first floor work). The floor reads its own site's work orders (never changes one). B-PR-01: each is of one customer (partyId, the party key, never changed); the partner still reads none.",
       "kind": "tenant",
-      "keyColumns": { "tenant": "tenantId", "site": "siteId" },
+      "keyColumns": { "tenant": "tenantId", "site": "siteId", "party": "partyId" },
       "access": {
         "factory_runtime": { "privileges": ["select", "insert", "update"] },
         "factory_floor_runtime": { "privileges": ["select"], "scopedBy": ["site"] }
