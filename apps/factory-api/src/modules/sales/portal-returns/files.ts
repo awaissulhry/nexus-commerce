@@ -17,6 +17,7 @@ import { assertOutsideUploadsOpen } from '../../../platform/files/multipart/outs
 import { normaliseContentType } from '../../../platform/files/rules'
 import type { FilesRuntime } from '../../../platform/files/service'
 import { keyShownTo } from '../../../platform/files/thumbs/outside'
+import { contentWalledFor } from '../../../platform/files/content-wall' // fix-wall-1
 import { renderEightD } from '../../quality/capa/report-pdf'
 import { policyOf } from '../returns/policy'
 import { COMPLAINT_RECORD, LINE_RECORD, readLines, RETURN_RECORD, type CaseRma, type Place, type Reader } from './store'
@@ -114,6 +115,8 @@ export async function sharedFile(db: Reader, place: Place, records: readonly { r
   const row = await db.storedFile.findUnique({ where: { id: fileId }, select: STORE })
   if (!row || row.partyId !== place.partyId || (!row.visibility.includes('PARTNER') && !row.visibility.includes('LINK'))) return null
   if (!records.some((record) => record.type === row.recordType && record.id === row.recordId)) return null
+  // fix-wall-1: by id, a file whose content is another customer's is as unknown as a wrong id.
+  if ((await contentWalledFor(db, place.partyId, [row.id])).has(row.id)) return null
   return row
 }
 

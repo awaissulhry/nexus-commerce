@@ -14,6 +14,7 @@ import {
 import { partnerOrder, portalReader } from './access'
 import { latestByShipment, progressOfLines } from './orders'
 import { dayOrNull, hasLeft, liveDdts, namesOf, readLines, readOrders, readPapers, readParcels, readShipmentLines, readShipments, readTracking, shippedPieces, type PortalShipmentRow, type PortalTrackingRow } from './store'
+import { walledForOutside } from '../../../platform/files/content-wall' // fix-wall-1
 
 /**
  * Shipments and tracking for the customer (B-W2b-175; SAL-080, SAL-081; design portal.customer.orders › Shipments &
@@ -61,6 +62,8 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
       papers: await readPapers(client, ids),
     }
   })
+  // fix-wall-1: a paper whose content is another customer's (an old copy of a mixed lot's photo on the shipment) is not listed.
+  const walled = await walledForOutside(request, read.papers.map((file) => file.id))
   const names = await reader.inTenant((client) => namesOf(client, [...new Set(read.lines.map((line) => line.styleId))], [...new Set(read.lines.map((line) => line.colourwayId))]))
   const lineOf = new Map(read.lines.map((line) => [line.id, line]))
   const styleOf = (lineId: string) => {
@@ -115,7 +118,7 @@ export async function orderShipments(app: FastifyInstance, request: FastifyReque
         .filter((row) => row.shipmentId === shipment.id)
         .map((row) => ({ lineSeq: lineOf.get(row.salesOrderLineId)?.seq ?? 0, style: styleOf(row.salesOrderLineId), colourway: colourwayOf(row.salesOrderLineId), size: sizeless.has(row.salesOrderLineId) ? null : row.size, quantity: row.quantity }))
         .sort((a, b) => a.lineSeq - b.lineSeq),
-      papers: read.papers.filter((file) => file.recordId === shipment.id).map((file) => ({ fileId: file.id, name: file.originalName, contentType: file.contentType, sizeBytes: file.sizeBytes, versionNo: file.versionNo })),
+      papers: read.papers.filter((file) => file.recordId === shipment.id && !walled.has(file.id)).map((file) => ({ fileId: file.id, name: file.originalName, contentType: file.contentType, sizeBytes: file.sizeBytes, versionNo: file.versionNo })),
     }
   })
 
