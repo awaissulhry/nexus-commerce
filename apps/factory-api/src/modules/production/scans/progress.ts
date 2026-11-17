@@ -1,4 +1,6 @@
+import type { Prisma } from '@nexus/factory-db'
 import { workOrderWhere } from '../work-orders/scope' // B-PR-03
+import { customerOfRow, workOrderCustomers } from '../work-orders/customers' // F-PR-17
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { daysLate } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
@@ -115,16 +117,22 @@ export async function workOrderWip(caller: CommandCaller, workOrderId: string) {
  * arrived, waiting, good, scrap and rework, its bundles, and the good per line (F2: output per line only). B-PR-03: only
  * the work orders of the customers the caller reaches (the brand wall), or one customer's when asked.
  */
-export async function siteWip(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly partyId?: string | undefined; readonly limit: number }) {
+export async function siteWip(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly partyId?: string | undefined; readonly limit: number; readonly offset?: number | undefined }) {
   const context = officeOf(caller)
   const today = businessDate(serverClock.now())
   return caller.withClient(async (db) => {
+    // F-PR-17 (production plan §5 "Floor now: held work shown; no silent cap", 09-design R11): held work orders are on the floor
+    // too (with their reason), and the answer says how many there are in all, so the page writes "100 of 143 · Show more".
+    const where: Prisma.WorkOrderWhereInput = { AND: [workOrderWhere(actorOf(context), WORKORDERS_VIEW), { status: { in: [...OPEN, 'ON_HOLD' as const] } }, query.siteId ? { siteId: query.siteId } : {}, query.partyId ? { partyId: query.partyId } : {}] }
+    const total = await db.workOrder.count({ where })
     const workOrders = await db.workOrder.findMany({
-      where: { AND: [workOrderWhere(actorOf(context), WORKORDERS_VIEW), { status: { in: [...OPEN] } }, query.siteId ? { siteId: query.siteId } : {}, query.partyId ? { partyId: query.partyId } : {}] },
-      select: { ...SCAN_HEADER, dueDate: true, priority: true, site: { select: { code: true } }, style: { select: { code: true, name: true } }, sizes: { select: { quantity: true } } },
-      orderBy: [{ dueDate: 'asc' }, { number: 'asc' }],
+      where,
+      select: { ...SCAN_HEADER, dueDate: true, priority: true, holdReason: true, site: { select: { code: true } }, style: { select: { code: true, name: true } }, sizes: { select: { quantity: true } } },
+      orderBy: [{ dueDate: 'asc' }, { number: 'asc' }, { id: 'asc' }],
+      skip: query.offset ?? 0,
       take: query.limit,
     })
+    const customers = await workOrderCustomers(db, workOrders.map((workOrder) => workOrder.id)) // F-PR-17: the Customer on each row
     const lines = new Map<string, Map<string, { id: string; code: string; name: string }>>()
     const rows = []
     for (const workOrder of workOrders) {
@@ -135,6 +143,9 @@ export async function siteWip(caller: CommandCaller, query: { readonly siteId?: 
       const finished = wip.cells.some((cell) => cell.finished !== null) ? wip.cells.reduce((sum, cell) => sum + (cell.finished ?? 0), 0) : null
       rows.push({
         workOrder: { id: workOrder.id, number: workOrder.number, status: workOrder.status, siteId: workOrder.siteId },
+        // F-PR-17: why a held one waits (its hold's reason, as the work order keeps it), and its one customer.
+        holdReason: workOrder.status === 'ON_HOLD' ? workOrder.holdReason : null,
+        ...customerOfRow(customers, workOrder.id),
         siteCode: workOrder.site.code,
         style: { code: workOrder.style.code, name: workOrder.style.name },
         dueDate,
@@ -161,6 +172,6 @@ export async function siteWip(caller: CommandCaller, query: { readonly siteId?: 
         allFinished: wip.allFinished,
       })
     }
-    return { workOrders: rows }
+    return { workOrders: rows, total }
   })
 }

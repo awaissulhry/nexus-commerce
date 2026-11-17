@@ -17,6 +17,9 @@ import { LaysTab, PiecesTab, TicketsTab, YieldTab } from './tabs'
 import '../../../cutting.css'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
 import { rightRef } from '../../../../../../lib/i18n/rights'
+// F-PR-02: "Customers: A, B" on the band.
+import { useProductionWords } from '../../../../../../lib/production/words'
+import { customersText } from '../../../../_shared/customer/model'
 
 export type OrderDialog =
   | { readonly kind: 'rolls'; readonly layId: string }
@@ -46,6 +49,8 @@ export interface CutOrderRecordModel {
   readonly busy: boolean
   readonly problem: Phrase | null
   readonly notice: { readonly tone: 'success' | 'danger' | 'info' | 'warning'; readonly words: Phrase } | null
+  /** F-PR-02: the band names its customers (with parties.view) rather than their codes. */
+  readonly customerNames?: boolean
   /** Design cases: the rolls ticked in Allocate rolls, the tickets selected. */
   readonly rollsPicked?: readonly string[]
   readonly ticketsSelected?: readonly string[]
@@ -135,6 +140,7 @@ function Ready({ record, model, actions }: { record: CutOrderRecord; model: CutO
   const t = useT(ORDERS_NAMESPACE)
   const say = useSay()
   const locale = useLocale()
+  const words = useProductionWords()
   const order = record.cutOrder
   const recordHref = `${model.prefix}/production/cutting/orders/${order.id}`
   const lays = liveLays(record)
@@ -161,6 +167,7 @@ function Ready({ record, model, actions }: { record: CutOrderRecord; model: CutO
       },
     },
   ]
+  const customers = customersText(order.customers, model.customerNames ?? false)
   return (
     <div className="fw-ct">
       <div className="fw-ct-band">
@@ -199,7 +206,11 @@ function Ready({ record, model, actions }: { record: CutOrderRecord; model: CutO
             </span>
           }
         />
-        <p className="fw-ct-hint">{t('record.workOrders', { list: order.workOrders.map((workOrder) => workOrder.number).join(', '), styles: order.styles.map((style) => style.code).join(', ') })}</p>
+        <p className="fw-ct-hint">
+          {t('record.workOrders', { list: order.workOrders.map((workOrder) => workOrder.number).join(', '), styles: order.styles.map((style) => style.code).join(', ') })}
+          {/* F-PR-02 (06-tree A.5 O-CO-rec): its customers, names only to readers who may see them (else their codes). */}
+          {customers ? ` · ${words.t('customer.facts', { names: customers })}` : ''}
+        </p>
         <Tabs ariaLabel={t('record.tabs')} tabs={tabs} active={model.tab} size="sm" />
       </div>
 

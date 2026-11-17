@@ -1,4 +1,6 @@
 import type { LoadBarWords, PlanningBoardWords, PlanningBucket, PlanningCard, PlanningLane, PlanningMark, PlanningPlace } from '@nexus/ui/patterns/planning-board/index'
+// F-PR-02: the production pages' one customer filter, and the every-customer refusal.
+import { isEveryCustomerRefusal, PARTY_KEY, partyTerm } from '../_shared/customer/model'
 import { DISPATCH_REFUSALS, REST_CARD } from '@nexus/factory-domain/production/dispatch/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import { formatDate, formatNumber, type FormatPlace } from '../../../lib/i18n/format'
@@ -44,13 +46,15 @@ export interface DispatchAddress {
   readonly line: string | null
   /** The day (null: the site's today). */
   readonly date: string | null
+  /** F-PR-02: the production pages' customer filter, kept in the address while passing through (the board needs every customer). */
+  readonly party?: string | null
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/
 
 export function addressOf(params: { get: (name: string) => string | null } | null | undefined): DispatchAddress {
   const date = params?.get('date') ?? null
-  return { site: params?.get('site') || null, line: params?.get('line') || null, date: date && DAY.test(date) ? date : null }
+  return { site: params?.get('site') || null, line: params?.get('line') || null, date: date && DAY.test(date) ? date : null, ...partyTerm(params) }
 }
 
 export function addressText(address: DispatchAddress): string {
@@ -58,6 +62,7 @@ export function addressText(address: DispatchAddress): string {
   if (address.site) terms.set('site', address.site)
   if (address.line) terms.set('line', address.line)
   if (address.date) terms.set('date', address.date)
+  if (address.party) terms.set(PARTY_KEY, address.party)
   const text = terms.toString()
   return text ? `?${text}` : ''
 }
@@ -220,7 +225,8 @@ export const namedOnCard = (card: Pick<DispatchCard, 'operators'>): LaneOperator
 function planningCard(entry: PlacedCard, laneIds: ReadonlySet<string>, board: DispatchBoard, words: Words): PlanningCard {
   const { card } = entry
   const { t } = words
-  const details = [card.operation.name, card.workOrder.style.name, bundleWords(card, t), t('card.pieces', { count: card.pieces }), card.workOrder.dueDate ? t('card.due', { date: dayWords(card.workOrder.dueDate, words) }) : null]
+  // F-PR-02 (06-tree A.5 O-DSP-board): the customer's code first (a floor surface: the code, never the name, L13).
+  const details = [card.workOrder.customerCode ?? null, card.operation.name, card.workOrder.style.name, bundleWords(card, t), t('card.pieces', { count: card.pieces }), card.workOrder.dueDate ? t('card.due', { date: dayWords(card.workOrder.dueDate, words) }) : null]
   const named = namedOnCard(card)
   const minutes = Number(card.minutes)
   return {
@@ -425,8 +431,12 @@ export function refusalOf(error: unknown): Phrase {
   }
 }
 
+/** F-PR-02: the board was refused because it adds up every customer (B-PR-07): the page draws the honest words. */
+export const EVERY_CUSTOMER_PROBLEM = 'error.everyCustomer'
+
 export function readProblemOf(error: unknown): string {
   if (!isApiError(error)) return 'error.read'
+  if (isEveryCustomerRefusal(error)) return EVERY_CUSTOMER_PROBLEM
   if (error.kind === 'forbidden') return 'error.forbidden'
   if (error.kind === 'not_found') return 'error.noSite'
   if (error.kind === 'unavailable') return 'error.offline'

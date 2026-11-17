@@ -12,6 +12,8 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { BOARD_KIT_NAMESPACE, useBoardWords } from '../../../_shared/planning-board/words'
 import type { Phrase } from '../../_shared/model'
+// F-PR-02: the honest words when the board needs every customer.
+import { EveryCustomerNotice } from '../../_shared/customer/view/CustomerFilter'
 import type { DispatchBoard, DispatchLine, LaneOperator, StationLane } from '../api'
 import {
   absentOf,
@@ -21,6 +23,7 @@ import {
   DISPATCH_NAMESPACE,
   drawBoard,
   dropHeldOf,
+  EVERY_CUSTOMER_PROBLEM,
   loadPhrase,
   operatorWords,
   plannedWhy,
@@ -56,6 +59,14 @@ const say = (t: (key: string, params?: Phrase['params']) => string, phrase: Phra
 function Body({ model, actions }: { model: DispatchViewModel; actions?: DispatchActions }) {
   const t = useT(DISPATCH_NAMESPACE)
   if (!model.can.view) return <EmptyState title={t('noPermission.title')} description={t('noPermission.body')} />
+  // F-PR-02: the board adds up every customer (B-PR-07): a person limited to some reads the honest words, not an empty board.
+  if (model.read.status === 'error' && model.read.problem === EVERY_CUSTOMER_PROBLEM) {
+    return (
+      <div className="fw-dp">
+        <EveryCustomerNotice />
+      </div>
+    )
+  }
   if (model.read.status === 'error') {
     return (
       <div className="fw-dp">

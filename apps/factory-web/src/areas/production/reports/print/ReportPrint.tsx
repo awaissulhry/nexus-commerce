@@ -19,7 +19,8 @@ export function ReportPrint() {
   const [daily, setDaily] = useState<{ value: DailyReport | null; problem: string | null }>({ value: null, problem: null })
   useEffect(() => {
     let live = true
-    getDaily(api, { siteId: address.site, date: address.date })
+    // F-PR-02: the print follows the page's customer filter (the style × size tables of that customer).
+    getDaily(api, { siteId: address.site, date: address.date, partyId: address.party ?? undefined })
       .then((value) => live && setDaily({ value, problem: null }))
       .catch((error: unknown) => live && setDaily({ value: null, problem: readProblem(error) }))
     return () => {

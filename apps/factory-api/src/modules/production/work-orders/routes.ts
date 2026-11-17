@@ -16,6 +16,8 @@ import { previewSplit, splitWorkOrder } from './split'
 import { inlineDisposition, travellerPdf, travellersPdf } from './traveller'
 // B-W2b-411: the work order close.
 import { closeContract, closeWorkOrder } from './close'
+// F-PR-02: the customer filter's options.
+import { productionCustomers, productionCustomersContract } from './customers'
 
 /**
  * Work orders from sales order lines with a frozen specification (B-W1-38; MES-001, MES-002, MES-005, MES-007,
@@ -79,4 +81,7 @@ export default defineRoutes('production.work-orders', manifest, async (app) => {
     const { pdf, fileName } = await travellerPdf(request, request.params.workOrderId, request.query.language)
     return reply.type('application/pdf').header('content-disposition', inlineDisposition(fileName)).header('cache-control', 'no-store').send(pdf)
   })
+
+  // F-PR-02 (06-tree A.0): the customers in the reader's scope for one production page (its permission, the brand wall).
+  app.get('/production/customers', { schema: productionCustomersContract }, async (request) => productionCustomers(request, request.query))
 })

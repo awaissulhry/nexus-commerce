@@ -28,6 +28,8 @@ import {
 } from './api'
 import { addressOf, addressText, CALLS_NAMESPACE, CALLS_NAMESPACES, callsCanOf, isCallChange, readProblem, solveBody, typeLabel, writeProblem, type CallsAddress, type ChartBy, type Phrase } from './model'
 import { CallsView, type CallDialog, type CallsModel } from './view/CallsView'
+// F-PR-02: the customer filter.
+import { useProductionCustomers } from '../_shared/customer/use-customers'
 
 const TIME_ZONE = 'Europe/Rome'
 const PAGE = 50
@@ -61,6 +63,9 @@ function Container() {
   const prefix = pathname.replace(/\/production\/calls\/?$/, '')
   const can = useMemo(() => callsCanOf(session.permissions), [session.permissions])
   const address = addressOf(params)
+  // F-PR-02: the customer filter (the inbox and its tiles follow it; the chart stays the site's day).
+  const customers = useProductionCustomers('calls')
+  const partyId = customers.partyId
   const siteId = scope.siteId
   const chartSite = useMemo(() => {
     const site = scope.site ?? scope.sites[0] ?? session.sites[0] ?? null
@@ -90,7 +95,7 @@ function Container() {
     if (!can.view) return
     const id = ++readId.current
     try {
-      const [page, tiles] = await Promise.all([listCalls(api, { siteId, view: address.view, tile: address.tile, kind: address.kind, limit: PAGE }), callCounts(api, siteId)])
+      const [page, tiles] = await Promise.all([listCalls(api, { siteId, view: address.view, tile: address.tile, kind: address.kind, limit: PAGE, partyId }), callCounts(api, siteId, undefined, partyId)])
       if (id !== readId.current) return
       setRows({ items: page.calls, problem: null })
       setCursor(page.nextCursor)
@@ -100,7 +105,7 @@ function Container() {
       if (id !== readId.current) return
       setRows({ items: null, problem: readProblem(error) })
     }
-  }, [api, can.view, siteId, address.view, address.tile, address.kind])
+  }, [api, can.view, siteId, address.view, address.tile, address.kind, partyId])
 
   const loadSite = useCallback(async () => {
     if (!can.view || !chartSite) return
@@ -310,6 +315,7 @@ function Container() {
     prefix,
     can,
     address,
+    customers: customers.state,
     timeZone: TIME_ZONE,
     rows,
     hasMore: cursor !== null,
@@ -340,7 +346,7 @@ function Container() {
         onMore: () => {
           if (!cursor || loadingMore) return
           setLoadingMore(true)
-          listCalls(api, { siteId, view: address.view, tile: address.tile, kind: address.kind, cursor, limit: PAGE })
+          listCalls(api, { siteId, view: address.view, tile: address.tile, kind: address.kind, cursor, limit: PAGE, partyId })
             .then((page) => {
               setRows((current) => ({ items: [...(current.items ?? []), ...page.calls.filter((call) => !(current.items ?? []).some((row) => row.id === call.id))], problem: null }))
               setCursor(page.nextCursor)
