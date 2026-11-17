@@ -6,7 +6,7 @@ import { listBandOf } from './band'
 import { at, inTransitRead, orderWords, ordersRead, PREFIX, ROWS, shellOf, words } from './design-data'
 // B-TH-223: Orders & requests read by Brand Beta (brand B), the made-up reader of every wall scan.
 import { betaShellOf, PREFIX as BETA, REQUESTS } from '../requests/design-data'
-import { CLOSED_REQUESTS, listRows, type ListChip } from './model'
+import { CLOSED_REQUESTS, listRows } from './model'
 // B-TH-238: the tiles above the list.
 import { listTiles, NEEDS_YOU, OPEN_ORDERS, OPEN_REQUESTS, type TileChip } from './model'
 import type { RequestRow } from '../requests/api'
@@ -69,7 +69,7 @@ function betaCase(build: (locale: Locale) => Partial<OrdersListViewModel> = () =
 export const requestCountsOf = (rows: readonly RequestRow[]) => ({ needsYou: rows.filter((row) => row.state.needsYou).length, open: rows.filter((row) => row.state.open).length })
 /** B-TH-238: a tile's own rows (the two request tiles read no order; "Open orders" reads the API's Open). */
 const betaTile = (chip: TileChip) => betaCase(() => (chip === OPEN_ORDERS ? { chip, read: ordersRead('OPEN'), rows: ordersRead('OPEN').items } : { chip, read: { ...ordersRead('OPEN'), items: [], count: 0 }, rows: [] }))
-const betaChip = (chip: ListChip) => betaCase(() => ({ chip, read: chip === CLOSED_REQUESTS ? { ...ordersRead('OPEN'), items: [], count: 0 } : ordersRead(chip), rows: chip === CLOSED_REQUESTS ? [] : ordersRead(chip).items }))
+const betaChip = (chip: OrderChip | typeof CLOSED_REQUESTS) => betaCase(() => ({ chip, read: chip === CLOSED_REQUESTS ? { ...ordersRead('OPEN'), items: [], count: 0 } : ordersRead(chip), rows: chip === CLOSED_REQUESTS ? [] : ordersRead(chip).items }))
 const all = ordersRead('ALL')
 
 // ── B-TH-246 (threads plan TH-4, picture 28): Brand Beta's own sheet — the columns the office ticked for its portal ──

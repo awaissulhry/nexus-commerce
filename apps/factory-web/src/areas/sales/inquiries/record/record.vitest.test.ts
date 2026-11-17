@@ -28,7 +28,6 @@ const record = (view: InquiryView | null, over: Partial<InquiryRecordModel> = {}
   draft: null,
   saving: false,
   busy: false,
-  customers: null,
   contacts: { items: CONTACTS, problem: null },
   styles: { items: STYLE_OPTIONS, problem: null },
   details: { [JACKET_DETAIL.id]: { status: 'ready', value: JACKET_DETAIL } },

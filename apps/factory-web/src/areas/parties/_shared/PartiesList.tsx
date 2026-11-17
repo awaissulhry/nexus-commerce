@@ -215,7 +215,8 @@ function PartiesListContainer({ side, headActions, columns, depth }: { side: Sid
         }
       }
       closeDialog()
-      const tab = side === 'customers' && (party.invoiceBlocked || party.taxMode === 'EU_B2B') ? 'tax' : undefined
+      // B-TH-260: a customer's Tax & terms is inside Terms & requirements.
+      const tab = side === 'customers' && (party.invoiceBlocked || party.taxMode === 'EU_B2B') ? 'terms' : undefined
       router.push(`${recordHref(prefix, config, party.id, tab)}${viesProblem ? `${tab ? '&' : '?'}vies=failed` : ''}`)
       return true
     } catch (error) {

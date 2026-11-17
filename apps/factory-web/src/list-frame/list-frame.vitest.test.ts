@@ -197,7 +197,7 @@ describe('custom columns (B-TH-241)', () => {
     const own = [{ colId: 'number' }, { colId: 'more', pinned: 'right' as const }]
     const custom = [{ colId: 'cf:heat', hide: true }]
     expect(withCustomColumns(own, custom).map((column) => column.colId)).toEqual(['number', 'cf:heat', 'more'])
-    expect(withCustomColumns([{ colId: 'a' }], custom).map((column) => column.colId)).toEqual(['a', 'cf:heat'])
+    expect(withCustomColumns<{ colId: string; hide?: boolean; pinned?: 'right' }>([{ colId: 'a' }], custom).map((column) => column.colId)).toEqual(['a', 'cf:heat'])
     expect(withCustomColumns(own, []).map((column) => column.colId)).toEqual(['number', 'more'])
     expect(shownCustomIds([{ colId: 'cf:heat', hide: true }, { colId: 'cf:lot', hide: false }, { colId: 'number' }])).toEqual(['cf:lot'])
   })

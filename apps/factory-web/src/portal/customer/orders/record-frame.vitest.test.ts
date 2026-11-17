@@ -53,7 +53,7 @@ describe('tabs 5 → 4: the conversation docks, never a Messages tab', () => {
     expect(band.refs).toEqual({ theirs: record.order.customerRef, ours: null })
     expect(band.tabs?.items.map((item) => item.id)).toEqual(['status', 'lines', 'shipments', 'documents'])
     expect(band.ask).toEqual({ type: 'SalesOrder', id: record.order.id, label: 'Your order 11' })
-    expect(JSON.stringify(band, (key, value) => (typeof value === 'function' ? undefined : value))).not.toMatch(/\bSO-\d{4}-\d+/)
+    expect(JSON.stringify(band, (_key, value) => (typeof value === 'function' ? undefined : value))).not.toMatch(/\bSO-\d{4}-\d+/)
   })
 })
 
