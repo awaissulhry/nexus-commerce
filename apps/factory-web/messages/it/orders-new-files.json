@@ -1,0 +1,34 @@
+{
+  "fold": {
+    "title": "File del cliente",
+    "count_one": "{count} file",
+    "count_other": "{count} file",
+    "hint": "Aggiunti all’ordine quando confermi, solo per l’ufficio. Foto, PDF, schede misure, file Illustrator, EPS, Photoshop o ZIP.",
+    "drop": "Trascina qui i file del cliente, incollali o sfoglia",
+    "noRight": "Per aggiungere file serve il diritto di caricare file: l’ordine viene creato senza."
+  },
+  "file": {
+    "sheet": "È una scheda misure",
+    "sheetHint": "Dati del corpo: la aprono solo le persone che possono leggere le misure.",
+    "remove": "Togli {name}",
+    "attaching": "In aggiunta…",
+    "attached": "Aggiunto",
+    "failed": "Non aggiunto",
+    "leftOut_one": "{count} file è stato escluso: con un ordine vanno al massimo 20 file.",
+    "leftOut_other": "{count} file sono stati esclusi: con un ordine vanno al massimo 20 file."
+  },
+  "problem": {
+    "page": "un file SVG, HTML o uno script non è mai accettato: invia un PDF o un PNG",
+    "type": "questo tipo non è accettato (PDF, foto, documenti Office, CSV, testo, o file Illustrator, EPS, Photoshop e ZIP)",
+    "empty": "il file è vuoto",
+    "size": "troppo grande: al massimo {max} MB per questo tipo di file"
+  },
+  "outcome": {
+    "title_one": "Ordine {number} creato; {count} file non è stato aggiunto",
+    "title_other": "Ordine {number} creato; {count} file non sono stati aggiunti",
+    "body": "L’ordine è salvato. Riprova con i file, oppure apri l’ordine e aggiungili nei suoi File.",
+    "retry": "Riprova",
+    "open": "Apri l’ordine",
+    "attaching": "Ordine {number} creato: aggiunta dei file…"
+  }
+}

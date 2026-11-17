@@ -15,6 +15,9 @@ import { setThreadOwner } from './owner'
 // B-TH-044: a reply the record's party reads in its portal (no mail).
 import { postReplyContract } from './contract'
 import { postPortalReply } from './replies'
+// B-TH-047: conversations waiting on us across records.
+import { waitingContract } from './contract'
+import { listWaiting } from './waiting-list'
 
 /**
  * Record threads and the record timeline (platform part; plan A1 §2.3, §3.7; features COL-001, COL-002, COL-003): read
@@ -27,6 +30,10 @@ export default defineRoutes('threads', manifest, async (app) => {
     const { recordType, recordId } = request.params
     return readThread(request, { type: recordType, id: recordId }, request.query)
   })
+
+  // ---- B-TH-047
+  app.get('/threads/waiting', { schema: waitingContract }, async (request) => listWaiting(request, request.query))
+  // ---- end B-TH-047
 
   // ---- B-TH-027
   app.post('/threads/unread', { schema: unreadContract }, async (request) => unreadCounts(request, request.body.records.map((record) => ({ type: record.recordType, id: record.recordId }))))

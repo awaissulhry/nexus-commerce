@@ -415,7 +415,7 @@ export async function groupViewOf(db: Db, row: GroupRow, context: RequestContext
   )
   const offers = await db.styleOptionGroup.findMany({ where: { groupId: row.id }, select: OFFER_COLUMNS, orderBy: [{ status: 'asc' }, { seq: 'asc' }, { createdAt: 'asc' }] })
   const styles = new Map(
-    (await db.style.findMany({ where: { id: { in: [...new Set(offers.map((offer) => offer.styleId))] } }, select: { id: true, code: true, name: true, companyId: true, status: true } })).map((style) => [style.id, style]),
+    (await db.style.findMany({ where: { id: { in: [...new Set(offers.map((offer) => offer.styleId))] } }, select: { id: true, code: true, name: true, companyId: true, brandPartyId: true, status: true } })).map((style) => [style.id, style]),
   )
   const counts = (await countsOf(db, [row.id])).get(row.id)!
   const outside = new Set(effects.filter((effect) => effect.kind === 'CERTIFICATE').map((effect) => effect.valueId))
@@ -443,7 +443,7 @@ export async function groupViewOf(db: Db, row: GroupRow, context: RequestContext
     effects: effects.map((effect) => effectViewOf(effect, refs, price)),
     styles: offers.flatMap((offer) => {
       const style = styles.get(offer.styleId)
-      if (!style || !can(actor, PRODUCT_STYLES_VIEW, { companyId: style.companyId })) return []
+      if (!style || !can(actor, PRODUCT_STYLES_VIEW, { companyId: style.companyId, partyId: style.brandPartyId })) return [] // B-PR-10: its brand too
       return [
         {
           id: offer.id,

@@ -25,6 +25,12 @@ describe('the state the customer reads (B-TH-011, R-01)', () => {
     expect(state('QUOTED', 'ACCEPTED', 'CANCELLED')).toBe('CLOSED')
   })
 
+  it('reads “Not an order” as Closed, every other decline as Declined (B-TH-043)', () => {
+    expect(requestStateOf({ status: 'DECLINED', quoteStatus: null, orderStatus: null, declineReason: 'NOT_AN_ORDER' })).toBe('CLOSED')
+    for (const declineReason of ['PRICE', 'CAPACITY', 'OTHER', null]) expect(requestStateOf({ status: 'DECLINED', quoteStatus: null, orderStatus: null, declineReason })).toBe('DECLINED')
+    expect(REQUEST_STATE_WORDS.CLOSED.en).toBe('Closed')
+  })
+
   it('reads the order made straight from the request by its own state (B-TH-022)', () => {
     expect(state('ORDERED', null, 'PENDING_APPROVAL')).toBe('ORDER_WAITING')
     for (const going of ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'CLOSED']) expect(state('ORDERED', null, going)).toBe('ORDER_CONFIRMED')

@@ -216,6 +216,15 @@ describe('a designer invited to an order: shared fields, files and the thread, c
     const page = await viaLink(token, 'GET', '/link/share')
     expect(page.files.find((file: Json) => file.id === announced.file.id)).toMatchObject({ mine: true })
     expect((await as(owner, 'GET', `/files?recordType=SalesOrder&recordId=${order}`)).files.map((file: Json) => file.id)).toContain(announced.file.id)
+    // ---- B-TH-083: the invited person ticks "This is a measurement sheet": filed MEASUREMENTS, still shared back with its links.
+    const sheet = Buffer.from('%PDF-1.4\n% made-up rider measurement sheet\n%%EOF\n')
+    const ticked = await viaLink(token, 'POST', '/link/share/files', { originalName: 'Rider sheet.pdf', contentType: 'application/pdf', sizeBytes: sheet.length, sha256: createHash('sha256').update(sheet).digest('hex'), measurementSheet: true }, 201)
+    expect((await h.app.inject({ method: 'PUT', url: ticked.upload.url, headers: ticked.upload.headers, payload: sheet })).statusCode).toBeLessThan(300)
+    expect((await viaLink(token, 'POST', `/link/share/files/${ticked.file.id}/complete`)).file).toMatchObject({ status: 'AVAILABLE' })
+    expect(await one('SELECT category::text AS category, visibility::text[] AS visibility FROM "StoredFile" WHERE id = $1', [ticked.file.id])).toEqual({ category: 'MEASUREMENTS', visibility: ['OFFICE', 'LINK'] })
+    // B-TH-084: an SVG is refused in words that name the way out.
+    expect(pathsOf(await viaLink(token, 'POST', '/link/share/files', { originalName: 'Logo.svg', contentType: 'image/svg+xml', sizeBytes: 10, sha256: 'a'.repeat(64) }, 400))).toEqual(['body/contentType'])
+    // ---- end B-TH-083
   })
 
   it('"E-mail me": a post of another invited person mails the designer, never the writer; switched off, nothing', async () => {

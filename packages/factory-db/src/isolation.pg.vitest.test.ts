@@ -70,6 +70,7 @@ import { seed as seedPrivacy } from '../seed/privacy'
 import { seed as seedPrivacyOps } from '../seed/privacy-ops'
 import { seed as seedProduct } from '../seed/product'
 import { seed as seedProduction } from '../seed/production'
+import { seed as seedProjects } from '../seed/projects' // B-TH-065
 import { seed as seedQuality } from '../seed/quality'
 import { seed as seedQualityLab } from '../seed/quality-lab'
 import { seed as seedReturns } from '../seed/returns'
@@ -100,6 +101,7 @@ import { seed as seedTax } from '../seed/tax'
 import { seed as seedTechfiles } from '../seed/techfiles'
 import { seed as seedThreads } from '../seed/threads'
 import { seed as seedThreadReads } from '../seed/thread-reads' // B-TH-023
+import { seed as seedThreadsLater } from '../seed/threads-later' // B-TH-090
 import { seed as seedTime } from '../seed/time'
 import { seed as seedViews } from '../seed/views'
 import { seed as seedConfig } from '../seed/w2b6-config'
@@ -523,6 +525,18 @@ beforeAll(async () => {
   // Quality at plant A1), daily and hourly facts (the first a company's orders in): the plain ones a copy may repeat.
   await seedInsightsDepth({ db: factory, namespace: 'iso-a' })
   await seedInsightsDepth({ db: factory, namespace: 'iso-b' })
+  // ---- B-TH-065 (threads schema wave 8/9): projects (an ACTIVE one of P1's with its style link and people, the first rows a
+  // copy may repeat; an office-only one on hold; a CLOSED one of P1's) and P1's portal buyer as a member (the partner rows of
+  // RecordFollower).
+  await seedProjects({ db: factory, namespace: 'iso-a' })
+  await seedProjects({ db: factory, namespace: 'iso-b' })
+  // ---- end B-TH-065
+  // ---- B-TH-090 (threads schema wave 9/9): pins on the quote thread (the message sent to P1: P1's partner rows; the office's
+  // note: no party) and drafts (the owner's office note, the first row a copy may repeat; P1's buyer's reply in its account
+  // conversation and its New order: the partner rows).
+  await seedThreadsLater({ db: factory, namespace: 'iso-a' })
+  await seedThreadsLater({ db: factory, namespace: 'iso-b' })
+  // ---- end B-TH-090
   // ---- B-TH-001: a second brand in tenant A (WALL-G17): its thread, messages, order, file and notification, so "rows of
   // another party" exist inside the same tenant too and every generated partner case is proven against them by data.
   second = await seedSecondBrand({ db: factory, namespace: 'iso-a' })
@@ -611,6 +625,7 @@ it('covers every classified table and every runtime role', () => {
     'ComplianceDocument',
     'ComplianceDocumentBatch',
     'ComplianceRequirement',
+    'ComposerDraft',
     'CostOfSalesEntry',
     'CostPerMinuteCalc',
     'CostSheet',
@@ -919,6 +934,8 @@ it('covers every classified table and every runtime role', () => {
     'ProductTypeProfile',
     'ProductionControlTest',
     'ProductionSettings',
+    'Project',
+    'ProjectLink',
     'PromiseRecord',
     'ProtectedView',
     'ProtectorPlacement',
@@ -1115,6 +1132,7 @@ it('covers every classified table and every runtime role', () => {
     'Tenant',
     'TestPlanRule',
     'Thread',
+    'ThreadPin',
     'ThreadRead',
     'TimesheetApproval',
     'TodayLayout',

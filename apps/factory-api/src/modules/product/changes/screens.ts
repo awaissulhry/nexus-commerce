@@ -28,7 +28,8 @@ const MAX_PEOPLE = 500
 export async function listReleased(caller: CommandCaller, query: ReleasedQuery): Promise<ReleasedList> {
   const context = officeOf(caller)
   const limit = query.limit ?? RELEASED_LIMIT
-  const styleScope = scopeWhere(actorOf(context), PRODUCT_CHANGES_VIEW, { company: { field: 'companyId', nullable: true } }) as Prisma.StyleWhereInput
+  // B-PR-10: and by brand (another customer's private-label style is not listed).
+  const styleScope = scopeWhere(actorOf(context), PRODUCT_CHANGES_VIEW, { company: { field: 'companyId', nullable: true }, party: { field: 'brandPartyId', nullable: true } }) as Prisma.StyleWhereInput
   const q = query.q
   const where: Prisma.StyleRevisionWhereInput = {
     AND: [

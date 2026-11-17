@@ -1144,7 +1144,8 @@
       "lines": "Add a line with at least one piece",
       "pricing": "Pricing the order first",
       "previewFailed": "The order could not be priced: try again",
-      "problems": "Fix what the summary lists first"
+      "problems": "Fix what the summary lists first",
+      "made": "The order is made: retry its files, or open it."
     },
     "pageTitle": "New order",
     "reading": "Reading the customer…",

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { businessDate, defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
-import { money, notMoney } from '@nexus/factory-domain/money/marked'
+import { grainedJson, money, notMoney } from '@nexus/factory-domain/money/marked'
 import { SALES_LINE_KINDS, STORED_DEPOSIT_KINDS } from '@nexus/factory-domain/sales/quotes/quotes'
 import { PROGRESS_STAGES } from '@nexus/factory-domain/sales/portal-orders/progress'
 import { PROMISE_REASON_CODES } from '@nexus/factory-domain/sales/portal-orders/promise'
@@ -258,3 +258,50 @@ export const inTransitContract = defineContract({
     }),
   },
 })
+
+// ---- B-TH-061 (SHEET-G10, Owner decision 13; wall W39 / T39): the customer's own sheet — the list's rows with the columns the office
+// ticked for the portal, and "Download all" written by the server in the partner scope (never the export job).
+const portalColumn = output({
+  /** The column id (`cf:<code>`, a money one `cf:price:<code>`). */
+  columnId: z.string(),
+  code: z.string(),
+  type: z.string(),
+  labelIt: z.string(),
+  labelEn: z.string(),
+  unit: z.string().nullable(),
+  grain: z.string().nullable(),
+  /** A list's values the rows use (null: not a list field). */
+  options: z.array(output({ code: z.string(), labelIt: z.string(), labelEn: z.string() })).nullable(),
+})
+const portalCell = output({ value: grainedJson(), wordsIt: z.string().nullable(), wordsEn: z.string().nullable() })
+
+export const sheetContract = defineContract({
+  querystring: listContract.querystring,
+  response: {
+    200: output({
+      asOf: instant(),
+      seesPrices: notMoney(z.boolean()),
+      progressShared: z.boolean(),
+      chip: z.enum(ORDER_CHIPS),
+      chips: z.array(output({ chip: z.enum(ORDER_CHIPS), count: z.number().int(), words })),
+      count: z.number().int(),
+      /** The portal columns: every customer's fields shown in the portal and this customer's own. */
+      columns: z.array(portalColumn),
+      /** The list's rows (an order's `number` is null: the customer reads its own `yourNumber`), each with its cells by column id. */
+      items: z.array(row.extend({ values: z.record(z.string(), portalCell) })),
+      live,
+    }),
+  },
+})
+
+export const sheetDownloadContract = defineContract({
+  querystring: input({
+    chip: z.enum(ORDER_CHIPS).default('OPEN'),
+    q: z.string().trim().max(80).optional(),
+    format: z.enum(['XLSX', 'CSV']).default('XLSX'),
+    /** Default: the person's language. */
+    locale: z.enum(['it', 'en']).optional(),
+  }),
+  response: {},
+})
+// ---- end B-TH-061

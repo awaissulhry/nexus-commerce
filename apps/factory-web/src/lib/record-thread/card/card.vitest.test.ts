@@ -115,7 +115,7 @@ describe('files on a card', () => {
   })
 
   it('a reader without the files right sees them counted, never dropped', () => {
-    expect(cardFiles(OURS.files, false)).toEqual({ photos: [], others: [], held: [], more: 0, hidden: 3 })
+    expect(cardFiles(OURS.files, false)).toEqual({ photos: [], others: [], held: [], more: 0, hidden: 3, sheets: 0 }) // B-TH-231: sheets
     expect(textOf(card(OURS, { ...CONTEXT, canReadFiles: false }))).toContain('3 files you cannot open')
     expect(textOf(card(OURS, { ...CONTEXT, canReadFiles: false }, 'it'))).toContain('3 file che non puoi aprire')
   })
@@ -168,3 +168,25 @@ describe('SCR-006-card in both languages', () => {
     }
   })
 })
+
+// ---- B-TH-231 (B-TH-029, B-TH-083): files the reader may not see are counted, a locked sheet is named, "Use on another record…"
+describe('B-TH-231: hidden files counted, a sheet named as locked, “Use on another record…”', () => {
+  it('the message’s files the API left out and its locked sheets show as lines, never by name, in it and en', () => {
+    const counted = { ...OURS, hiddenFiles: 1, lockedSheets: 1 }
+    expect(cardFiles(counted.files, true, false, { hidden: 1, sheets: 1 })).toMatchObject({ hidden: 1, sheets: 1 })
+    const text = textOf(card(counted))
+    expect(text).toContain('1 file you cannot open')
+    expect(text).toContain('Measurement sheet — you cannot open it')
+    expect(textOf(card(counted, CONTEXT, 'it'))).toContain('Scheda misure — non puoi aprirla')
+    expect(leftKeys(card(counted), ['files', 'menu'])).toEqual([])
+    expect(scanText(card(counted), BRAND_BETA)).toEqual([])
+  })
+
+  it('“Use on another record…” only for a reader who may add files and a message with a file they open', () => {
+    expect(cardActions(OURS, { ...CONTEXT, canUseOn: true })).toEqual(['task', 'useOn', 'link'])
+    expect(cardActions(OURS, { ...CONTEXT, canUseOn: false })).toEqual(['task', 'link'])
+    expect(cardActions({ ...OURS, files: [] }, { ...CONTEXT, canUseOn: true })).toEqual(['task', 'link'])
+    expect(cardActions(OURS, { ...CONTEXT, canUseOn: true, canReadFiles: false })).toEqual(['task', 'link'])
+  })
+})
+// ---- end B-TH-231

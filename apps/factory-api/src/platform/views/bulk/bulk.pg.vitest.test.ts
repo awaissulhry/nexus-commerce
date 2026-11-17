@@ -123,7 +123,8 @@ describe('the preview (old → new per row, nothing written)', () => {
     const badDay = await preview([W.d1], { due: '2026-13-01', priority: 2000 })
     expect(badDay.statusCode).toBe(400)
     expect(badDay.json().error.issues.map((issue: Json) => issue.path)).toEqual(['body/changes/due', 'body/changes/priority'])
-    expect((await call('planner', 'POST', '/views/bulk/preview', { listKey: 'sales.orders', ids: [W.d1], changes: { due: null } })).statusCode).toBe(404)
+    // B-TH-060: Sales › Orders is edited in cells now; Sales › Quotes is still a list without bulk edit.
+    expect((await call('planner', 'POST', '/views/bulk/preview', { listKey: 'sales.quotes', ids: [W.d1], changes: { due: null } })).statusCode).toBe(404)
     expect((await preview([W.d1], { due: null }, 'viewer')).statusCode).toBe(403)
     expect((await preview([W.d1], { due: null }, 'stranger')).statusCode).toBe(403)
     expect((await preview([W.d1, W.d1], { due: null })).statusCode).toBe(400)

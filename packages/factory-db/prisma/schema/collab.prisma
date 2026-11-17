@@ -132,13 +132,22 @@ enum NotificationDeliveryOutcome {
 }
 
 /// Who follows a record, and why. Unfollowing removes the row; muting keeps it, so the person is not added again.
+/// TH-5 (threads plan, schema wave 8/9, B-TH-065; PROJ-G04, PROJ-G06): a project's people are its followers: office people
+/// (added by hand with reason ADDED) and, on a project shared with an outside company, that company's portal people, added
+/// one by one by the office (reason ADDED; the row names their party).
 model RecordFollower {
   id          String       @id @db.Uuid
   tenantId    String       @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   recordType  String
   recordId    String       @db.Uuid
-  /// The office user who follows it.
+  /// The person who follows it: an office user; TH-5 (B-TH-065): or a portal user who is a member of a project of their
+  /// own party.
   userId      String       @db.Uuid
+  /// TH-5 (schema wave 8/9, B-TH-065; PROJ-G06): a portal person's party, set exactly when the person is a portal user (and
+  /// then theirs), as Notification.partyId: only on a Project whose outside company it is, added by the office (reason
+  /// ADDED). The partner policy's key: a portal session reads its own party's members of its own projects, never the office's
+  /// followers (no party) nor who in the office added them. Null for an office person. Never changes.
+  partyId     String?      @db.Uuid
   /// Why they first followed it. Never changes.
   reason      FollowReason
   /// Muted (M): no news of the record reaches them; a mention of them still does.
@@ -153,6 +162,8 @@ model RecordFollower {
   @@unique([tenantId, recordType, recordId, userId])
   // What a person follows.
   @@index([tenantId, userId])
+  // TH-5 (B-TH-065): a party's members (the partner policy reads by it).
+  @@index([tenantId, partyId])
 }
 
 enum FollowReason {
@@ -164,6 +175,9 @@ enum FollowReason {
   MENTIONED
   /// Chose to follow it.
   CHOSE
+  /// TH-5 (threads plan, schema wave 8/9, B-TH-065; PROJ-G04): was added by a colleague ("added by Marco"), who is named in
+  /// createdById; the only reason of a portal person's row (only the office adds people of the outside company).
+  ADDED
 }
 
 /// One @mention of an office user in an internal note: the note's own thread, record, author and time, and one of the
@@ -253,4 +267,49 @@ enum TaskStatus {
   OPEN
   DONE
   CANCELLED
+}
+
+/// TH-9 (threads plan, schema wave 9/9, B-TH-090; gaps N6 = L2-G14, features T5-F10, T8-F07, P-CUS-NEW.message-F02,
+/// P-HOME.actions-F02, O-SAL-ORD-NEW.form-F07): what one person typed in a composer and has not sent, kept on the server: one
+/// draft per person and record (an office note or a reply on the record's thread), or the portal's New order (no record yet).
+/// Kept until it is sent or discarded (then removed) and removed with the person's erasure (the …_threads_later_th_guards
+/// trigger on ErasureRecord). The writer's own: the office writes an office person's, a portal session its own party's people's
+/// (the API keeps each person to their own: nobody reads another person's draft); the floor none.
+model ComposerDraft {
+  id                String           @id @db.Uuid
+  tenantId          String           @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  /// The writer: an office user, or a portal user of the row's party (never a floor worker: they are no user). Never changes.
+  userId            String           @db.Uuid
+  /// A portal writer's party, set exactly when the writer is a portal user (and then theirs): the partner policy's key. Null for
+  /// an office person. Never changes.
+  partyId           String?          @db.Uuid
+  /// The record whose thread it is for (model name and id), both or neither; neither: the portal's New order. A portal writer's
+  /// record is one of their own party's. Never changes.
+  recordType        String?
+  recordId          String?          @db.Uuid
+  /// `draft:<recordType>:<recordId>:<userId>`, or `draft:new-request:<userId>`: one draft per person and record (the unique
+  /// key; the isolation tests' copies add a `-…` suffix). Never changes.
+  key               String
+  /// The composer's mode when it was saved: OFFICE (an office note) or PARTNER (a reply to the record's party); null: not chosen
+  /// (the portal's New order). A portal writer's is PARTNER or none.
+  audience          MessageAudience?
+  /// What was typed (up to 20 000 characters; empty while nothing is typed yet).
+  bodyText          String           @default("")
+  /// The composer's other fields as they were (subject, wanted date, To and Cc, order lines …): a JSON object up to 64 kB, read
+  /// back by the composer that wrote it.
+  fields            Json             @default("{}")
+  /// The files added to it, in order (StoredFile ids; at most 50, each once): each reader sees only those its file rules let it.
+  attachmentFileIds String[]         @default([]) @db.Uuid
+  version           Int              @default(1)
+  createdAt         DateTime         @default(now()) @db.Timestamptz(3)
+  /// When it was last saved ("Draft saved 10:42").
+  updatedAt         DateTime         @default(now()) @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [tenantId, userId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One draft per person and record (the key).
+  @@unique([tenantId, key])
+  // A person's drafts ("Draft" in the lists; the erasure).
+  @@index([tenantId, userId])
+  @@index([tenantId, partyId])
 }

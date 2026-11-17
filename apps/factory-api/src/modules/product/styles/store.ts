@@ -1,7 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { ForbiddenError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, type Permission, type ScopeColumns } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere, type Actor, type Permission, type ScopeColumns, type ScopedRecord } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { LocalisedNames } from '@nexus/factory-domain/product/materials/rules'
 import { scaleOrder, type BodyMeasures, type MasterStatus } from '@nexus/factory-domain/product/sizes/rules'
@@ -28,7 +28,14 @@ import { contextOf, mayWrite } from '../materials/store'
 
 export { contextOf }
 
-export const STYLE_SCOPE: ScopeColumns = { company: { field: 'companyId', nullable: true } }
+// B-PR-10 (the brand wall; Owner rule 2026-11-16: "One brand must not be able to see anything related to any other brand"): a
+// private-label style is its customer's (`brandPartyId`): a person limited to other customers neither lists nor finds it; a
+// style of our own collection names no customer and stays everyone's (the column is nullable).
+export const STYLE_SCOPE: ScopeColumns = { company: { field: 'companyId', nullable: true }, party: { field: 'brandPartyId', nullable: true } }
+/** B-PR-10: a style's scope for can(): its company and its brand (none for our own collection). */
+export const styleScope = (row: { readonly companyId: string | null; readonly brandPartyId: string | null }): ScopedRecord => ({ companyId: row.companyId, partyId: row.brandPartyId })
+/** B-PR-10: the styles `permission` reaches by brand alone (our own collection and the brands its grants reach), for a relation filter. */
+export const styleBrandWhere = (actor: Actor, permission: Permission): Prisma.StyleWhereInput => scopeWhere(actor, permission, { party: { field: 'brandPartyId', nullable: true } }) as Prisma.StyleWhereInput
 export const SCALE_SCOPE: ScopeColumns = { company: { field: 'companyId', nullable: true } }
 
 const FIELD_COLUMNS = {
@@ -420,7 +427,7 @@ export async function readStyle(caller: CommandCaller, styleId: string): Promise
   const context = contextOf(caller)
   if (!isUuid(styleId)) throw new NotFoundError('Style not found.')
   const row = await caller.withClient((client) => findStyleRow(client, styleId))
-  if (!row || !can(actorOf(context), PRODUCT_STYLES_VIEW, { companyId: row.companyId })) throw new NotFoundError('Style not found.')
+  if (!row || !can(actorOf(context), PRODUCT_STYLES_VIEW, styleScope(row))) throw new NotFoundError('Style not found.') // B-PR-10
   return row
 }
 

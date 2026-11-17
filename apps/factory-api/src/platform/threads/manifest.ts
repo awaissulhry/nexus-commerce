@@ -27,4 +27,7 @@ export const manifest = defineManifest({
   // ---- end B-TH-027
   // ---- B-TH-028: who answers the conversation — whoever may write on it (threads.post over the record).
   'PUT /threads/:recordType/:recordId/owner': { audiences: ['office'], permission: 'threads.post', scope: 'record' },
+  // ---- B-TH-047: the conversations waiting on us across records (Customer replies, Supplier replies) — office only; each row also
+  // asks its record type's own view permission over the record (factory-domain threads/view-gates).
+  'GET /threads/waiting': { audiences: ['office'], permission: 'threads.read', scope: 'record' },
 })

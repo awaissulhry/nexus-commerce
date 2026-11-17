@@ -17,6 +17,7 @@ import {
   declineRefusal,
   editRefusal,
   loseRefusal,
+  messageRefusal, // B-TH-043
   orderRefusal,
   styleDraftRefusal,
   overdue,
@@ -227,6 +228,20 @@ export async function techPackOf(db: Reader, row: Pick<InquiryData, 'techPackFil
  */
 const action = (allowedByRole: boolean, refusal: InquiryRefusal | null, readsOnly = false) => ({ allowed: allowedByRole && refusal === null, refusal: readsOnly ? readOnlyRefusal() : refusal })
 
+// ---- B-TH-043: where a message from this request goes (the Decline and Ask for info dialogs name it before anything is sent) --
+async function messageToOf(db: Reader, row: InquiryData, contact: { readonly email: string | null; readonly erasedAt: Date | null } | null) {
+  const refusal = messageRefusal(factsOf(row))
+  if (refusal) return { via: null, to: [], language: null, refusal }
+  const [party, person] = await Promise.all([
+    db.party.findUnique({ where: { id: row.partyId! }, select: { language: true } }),
+    row.contactId ? db.partyContact.findUnique({ where: { id: row.contactId }, select: { language: true } }) : Promise.resolve(null),
+  ])
+  const language = person?.language ?? party?.language ?? null
+  if (row.source === 'PORTAL') return { via: 'PORTAL' as const, to: [], language, refusal: null }
+  return { via: 'MAIL' as const, to: contact?.email && contact.erasedAt === null ? [contact.email] : [], language, refusal: null }
+}
+// ---- end B-TH-043
+
 /** The inquiry's record: the row, what is asked, the mail, the files and tech pack, the quote, the actions for this reader. */
 export async function inquiryViewOf(db: Reader, context: OfficeContext, row: InquiryData, now: Date) {
   const [view] = await rowsOf(db, context, [row], now)
@@ -308,6 +323,7 @@ export async function inquiryViewOf(db: Reader, context: OfficeContext, row: Inq
     closedBy: person(row.closedById),
     createdBy: person(row.createdById),
     createdAt: toUtcIso(row.createdAt as Date),
+    messageTo: await messageToOf(db, row, contact), // B-TH-043
     actions: {
       edit: action(manage, editRefusal(facts), !manage),
       assign: action(manage, editRefusal(facts), !manage),

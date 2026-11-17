@@ -30,7 +30,8 @@ describe('who sees the samples page', () => {
     const holders = PARTNER_ROLE_TEMPLATES.filter((template) => template.permissions.includes(PORTAL_SAMPLES_VIEW))
       .map((template) => template.key)
       .sort()
-    expect(holders).toEqual(['customer-admin', 'customer-buyer', 'customer-designer', 'customer-quality', 'customer-viewer'])
+    // B-PR-13: + the customer Production role (it answers the PP, size set and TOP samples).
+    expect(holders).toEqual(['customer-admin', 'customer-buyer', 'customer-designer', 'customer-production', 'customer-quality', 'customer-viewer'])
   })
 })
 

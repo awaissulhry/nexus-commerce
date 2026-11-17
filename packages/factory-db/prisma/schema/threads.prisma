@@ -31,6 +31,12 @@
 // message of a mail waiting in its 10-second undo window, or taken back, which the partner role never reads. Message stays
 // append-only: the one change is the database's own release of `held` when its mail leaves the window (…_threads_composer_th_
 // guards). collab.prisma's Task names the message it came from; email.prisma's EmailOutbound holds the window and the take-back.
+//
+// TH-9 (threads plan, schema wave 9/9, B-TH-090; gaps N4, N18): a thread may be Done, a work state apart from CLOSED (an office
+// person marked it done for everyone: it leaves the "waiting" views, the customer can still write, and a new shared message
+// opens it again: B-TH-093), hidden from the record's party; and ThreadPin keeps the messages pinned on it (who, when, which
+// message: "2 pinned"), the office's, of which the party reads only the pins of messages shared with it (B-TH-091).
+// collab.prisma's ComposerDraft keeps each person's unsent text per record (B-TH-092).
 
 /// The one conversation of one record (COL-001), made when its first message is written.
 model Thread {
@@ -65,11 +71,19 @@ model Thread {
   /// person of the tenant (active when named); null: the record's own owner (a request's assignee, else the record's maker:
   /// B-TH-028). Changed by whoever may post on the thread. Hidden from the partner role (the portal shows no owner).
   ownerId       String?      @db.Uuid
+  /// TH-9 (schema wave 9/9, B-TH-090; N18, feature T1-F13): Done, a work state apart from CLOSED: when an office person marked
+  /// the conversation done for everyone (not in the future) and who (an active office person when set or changed), both or
+  /// neither; null: open work. Never set when the thread is made; the customer can still write (B-TH-093 opens it again on a
+  /// new shared message). Hidden from the partner role (the work state is the office's).
+  doneAt        DateTime?    @db.Timestamptz(3)
+  doneById      String?      @db.Uuid
 
   company        Company?  @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // TH-2 (B-TH-023): who answers it (Restrict, not Prisma's SetNull default for an optional relation: that would also clear
   // tenantId).
   owner          User?     @relation("ThreadOwner", fields: [tenantId, ownerId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // TH-9 (B-TH-090): who marked it done (Restrict, as above).
+  doneBy         User?     @relation("ThreadDoneBy", fields: [tenantId, doneById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
   // A site-bound record belongs to a company, and the site is one of its sites.
   site           Site?     @relation(fields: [tenantId, companyId, siteId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   messages       Message[] @relation("ThreadMessages")
@@ -83,6 +97,8 @@ model Thread {
   // TH-2 (B-TH-023): how far each person has read it, and the portal people's marks (they name its party).
   reads          ThreadRead[] @relation("ThreadReads")
   sharedReads    ThreadRead[] @relation("ThreadSharedReads")
+  // TH-9 (B-TH-090): the messages pinned on it.
+  pins           ThreadPin[]
 
   @@unique([tenantId, recordType, recordId])
   @@unique([replyToken])
@@ -186,6 +202,8 @@ model Message {
   corrections  Message[] @relation("MessageCorrections")
   // collab.prisma (TH-3, B-TH-038): the tasks made from it.
   tasks        Task[]
+  // TH-9 (B-TH-090): its pin, when it is pinned.
+  pins         ThreadPin[]
 
   @@unique([tenantId, emailMessageId])
   // The target of the mentions' tenant-safe reference.
@@ -266,5 +284,38 @@ model ThreadRead {
   @@unique([tenantId, key])
   // A person's marks (the lists' new-message counts, the erasure).
   @@index([tenantId, userId])
+  @@index([tenantId, partyId])
+}
+
+/// TH-9 (threads plan, schema wave 9/9, B-TH-090; gap N4, features T2-F07, T3-F12, PROJ.thread-F06): a message pinned on its
+/// thread ("2 pinned"; a project's outcome and key decisions): which message, who pinned it and when. One pin per message; never
+/// changed (unpinning removes it, the audit keeps who did what). Pinned by the office (B-TH-091); the record's party reads the
+/// pins of the messages shared with it, never a pin of an internal note nor who pinned it.
+model ThreadPin {
+  id         String   @id @db.Uuid
+  tenantId   String   @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
+  threadId   String   @db.Uuid
+  /// The message pinned: a message of this thread (the reference includes the thread), never a held one (a mail in its undo
+  /// window or taken back).
+  messageId  String   @db.Uuid
+  /// The message's party, copied by the database at insert (the app never writes it): set exactly when the pinned message is
+  /// shared with the thread's party (the partner policy's key); null for a pinned internal note.
+  partyId    String?  @db.Uuid
+  /// `pin:<threadId>:<messageId>`: a message is pinned once (the unique key; the isolation tests' copies add a `-…` suffix, as a
+  /// read mark's key takes one).
+  key        String
+  /// Who pinned it (an active office person) and when (server time, not in the future). Hidden from the partner role.
+  pinnedById String   @db.Uuid
+  pinnedAt   DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+
+  thread   Thread  @relation(fields: [tenantId, threadId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  message  Message @relation(fields: [tenantId, threadId, messageId], references: [tenantId, threadId, id], onDelete: Restrict, onUpdate: Restrict)
+  pinnedBy User    @relation("ThreadPinPinnedBy", fields: [tenantId, pinnedById], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+
+  // One pin per message (the key).
+  @@unique([tenantId, key])
+  // A thread's pins (the T2 line).
+  @@index([tenantId, threadId])
   @@index([tenantId, partyId])
 }

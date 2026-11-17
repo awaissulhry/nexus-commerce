@@ -11,12 +11,13 @@ import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { askApproval, type Requester } from '../../../platform/approvals/engine'
 import { asTenantSystem } from '../../production/bundles/codes'
-import { mayAt, stockContextOf, type StockContext } from '../ledger/access'
+import { stockContextOf, type StockContext } from '../ledger/access'
 import { lockWorkOrderIssues, readPickHeader } from '../issue/store'
 import { heldByQualityHolds } from '../../quality/holds/stock'
 import { certificateCovering } from '../../quality/lab/store'
 import { loadLine, ratioOf, standingOf } from './options'
 import { changed, refuse, substitutionViews, SUBSTITUTION_COLUMNS, unitsOf } from './store'
+import { mayPick } from '../issue/picking' // B-PR-10
 
 /**
  * Ask for a substitute (B-W2b-298; MES-139; follow-up PK1:01: "alternateUse is called with the work order's facts; the use is a
@@ -203,7 +204,7 @@ export async function askSubstitute(caller: CommandCaller, body: AskInput, idemp
   if (context.audience === 'system') throw new NotFoundError('Work order not found.')
   if (!isUuid(body.workOrderId)) throw new NotFoundError('Work order not found.')
   const header = await caller.withClient((db) => readPickHeader(db, body.workOrderId))
-  if (!header || !mayAt(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Work order not found.')
+  if (!header || !mayPick(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Work order not found.') // B-PR-10: and its customer
   if ([...body.reason.trim()].length === 0 || [...body.reason].length > SUBSTITUTION_LIMITS.reason) throw new ValidationError('Say why in words (1 to 1000 characters).', [{ path: 'body/reason', message: '1 to 1000 characters.' }])
   if (context.audience === 'floor') {
     // The floor's request is written by the tenant's system caller (the approval engine's rule), naming the worker.

@@ -54,12 +54,13 @@ export async function pictureBytes(request: FastifyRequest, fileId: string): Pro
     ? await request.withClient(async (client) => {
         const picture = await client.styleImage.findFirst({ where: { fileId }, select: { styleId: true } })
         if (!picture) return null
-        const style = await client.style.findUnique({ where: { id: picture.styleId }, select: { companyId: true } })
+        const style = await client.style.findUnique({ where: { id: picture.styleId }, select: { companyId: true, brandPartyId: true } })
         const file = await client.storedFile.findUnique({ where: { id: fileId }, select: { id: true, status: true, contentType: true, originalName: true, storeAccountId: true, storageKey: true, sizeBytes: true } })
-        return style && file ? { companyId: style.companyId, file } : null
+        return style && file ? { companyId: style.companyId, partyId: style.brandPartyId, file } : null
       })
     : null
-  if (!found || !can(actorOf(context), PRODUCT_STYLES_VIEW, { companyId: found.companyId }) || found.file.status !== 'AVAILABLE' || !isPictureType(found.file.contentType)) {
+  if (!found || !can(actorOf(context), PRODUCT_STYLES_VIEW, { companyId: found.companyId, partyId: found.partyId }) || // B-PR-10: its brand too
+    found.file.status !== 'AVAILABLE' || !isPictureType(found.file.contentType)) {
     throw new NotFoundError('Picture not found.')
   }
   return storedPictureBytes(request, found)

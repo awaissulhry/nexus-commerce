@@ -11,7 +11,9 @@
     "forbidden": "You may not do this here.",
     "failed": "Something went wrong. Try again.",
     "openFailed": "The file could not be opened. Try again.",
-    "partyUnread": "The customer’s contacts could not be read: type the address yourself."
+    "partyUnread": "The customer’s contacts could not be read: type the address yourself.",
+    "cannotOpen": "One file you cannot open: it is out of your reach (its record, or a measurement sheet without the right to open it).",
+    "copied": "Copied to {target}: the copy names where it came from."
   },
   "pane": {
     "label": "Reading pane",

@@ -50,6 +50,15 @@ export const fileView = output({
    * may open that record; null: not a copy, or a record out of reach).
    */
   origin: output({ fileId: id(), recordType: z.string(), recordId: id(), originalName: z.string(), versionNo: z.number().int() }).nullable().optional(),
+  // ---- B-TH-083 (TH-7, N11): measurement sheets are body data
+  /** What the file is evidence of (StoredFile.category: CLAIM_PHOTO, ARTWORK …; MEASUREMENTS a measurement sheet); null: not said. */
+  category: z.string().nullable().optional(),
+  /**
+   * MEASUREMENTS: a measurement sheet this office reader may not open (no sales.measurements.view): its name and checksum are
+   * left empty — "Measurement sheet — you cannot open it"; the file itself answers 404 to them.
+   */
+  locked: z.literal('MEASUREMENTS').optional(),
+  // ---- end B-TH-083
 })
 export type FileView = z.infer<typeof fileView>
 
@@ -64,6 +73,20 @@ export const useOnContract = defineContract({
   }),
   response: { 201: output({ file: fileView }) },
 })
+
+// ---- B-TH-231: GET /files/:fileId/use-on/targets — the records a file may be carried to (same customer or none; ./use-on.ts).
+export const useOnTargetsContract = defineContract({
+  params: input({ fileId: id() }),
+  querystring: input({ q: z.string().max(200), type: z.string().regex(RECORD_TYPE).max(60).optional() }),
+  response: {
+    200: output({
+      /** Too short to search: nothing was looked up. */
+      tooShort: z.boolean(),
+      targets: z.array(output({ recordType: z.string(), recordId: id(), number: z.string().nullable(), title: z.string(), subtitle: z.string().nullable(), area: z.string(), partyId: id().nullable() })),
+    }),
+  },
+})
+// ---- end B-TH-231
 
 /** A request to make straight to the store: send exactly these headers (they are signed) before `expiresAt`. */
 export const presignedView = output({
@@ -98,6 +121,8 @@ export const requestUploadContract = defineContract({
     partyId: id().nullable().optional(),
     /** Keep it at least until then (a fiscal archive file: ten years from now, or later). */
     retainUntil: instant().nullable().optional(),
+    /** B-TH-083: "This is a measurement sheet" — filed as MEASUREMENTS, opened only with sales.measurements.view (never for a floor). */
+    measurementSheet: z.boolean().optional(),
   }),
   response: { 201: output({ file: fileView, upload: presignedView }) },
 })

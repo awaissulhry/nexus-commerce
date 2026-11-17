@@ -20,6 +20,7 @@ import { contextOf, findRevision } from '../../product/bom/store'
 import { companyFor, readStyleFor, STYLE_COLUMNS, type CostingStyleRow } from '../store'
 import { componentRefusalOf, refused } from './refusals'
 import { loadComponentFacts, type ComponentOptions } from './store'
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * The cost sheet's components (B-W2b-418; FIN-003, FIN-006, FIN-008, FIN-009, FIN-011, FIN-020; design products.styles ›
@@ -250,9 +251,10 @@ export async function workOrderCostSplit(caller: CommandCaller, workOrderId: str
   const context = contextOf(caller)
   return caller.withClient(async (db) => {
     const workOrder = isUuid(workOrderId)
-      ? await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, companyId: true, siteId: true, styleId: true, styleRevisionId: true, status: true } })
+      ? await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true, styleId: true, styleRevisionId: true, status: true } })
       : null
-    if (!workOrder || workOrder.status === 'DRAFT' || !can(actorOf(context), COSTING_VIEW, { companyId: workOrder.companyId, siteId: workOrder.siteId })) throw new NotFoundError('Work order not found.')
+    // B-PR-10: another customer's work order is not found, as an unknown one (its company, site AND customer).
+    if (!workOrder || workOrder.status === 'DRAFT' || !reachesWorkOrder(actorOf(context), COSTING_VIEW, workOrder)) throw new NotFoundError('Work order not found.')
     const company = await db.company.findUniqueOrThrow({ where: { id: workOrder.companyId }, select: { currency: true } })
     const currency = costingCurrency(company.currency)
     const cells = await db.workOrderSize.findMany({ where: { workOrderId }, select: { colourwayId: true, size: true, quantity: true } })

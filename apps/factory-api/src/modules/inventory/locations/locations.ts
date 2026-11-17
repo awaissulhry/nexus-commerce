@@ -11,7 +11,7 @@ import { customerPlaceProblems, placementProblems, retypeProblems } from '@nexus
 import { blockViewOf } from '../locations-depth/places'
 import { command, type CommandCaller, type CommandTools, type CommandTx } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { mayAt, officeContextOf, postedBy, siteFor, stockContextOf, type SiteRow } from '../ledger/access'
+import { mayAt, officeContextOf, postedBy, siteFor, stockContextOf, type SiteRow, assertWholeWarehouse } from '../ledger/access'
 import type { LocationView, SiteLocations } from './contract'
 
 /**
@@ -95,6 +95,7 @@ export interface ListQuery {
 /** The location trees the caller may see: a floor device its own site's, the office every site its grants reach. */
 export async function listLocations(caller: CommandCaller, query: ListQuery): Promise<{ sites: SiteLocations[] }> {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const where: Prisma.LocationWhereInput = {
     AND: [
       scopeWhere(actorOf(context), INVENTORY_LOCATIONS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.LocationWhereInput,
@@ -117,6 +118,7 @@ export async function listLocations(caller: CommandCaller, query: ListQuery): Pr
 /** A location the caller may see (floor: of its own site), or not found. */
 export async function readLocation(caller: CommandCaller, locationId: string): Promise<LocationRow> {
   const context = stockContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const row = isUuid(locationId) ? await caller.withClient((client) => client.location.findUnique({ where: { id: locationId }, select: LOCATION_SELECT })) : null
   if (!row || !mayAt(context, INVENTORY_LOCATIONS_VIEW, row)) throw new NotFoundError('Location not found.')
   return row
@@ -182,6 +184,7 @@ async function checkWorkshop(client: Pick<CommandTx, 'party' | 'location'>, site
 /** inventory.locations.create */
 export async function createLocation(caller: CommandCaller, input: CreateInput, idempotencyKey?: string): Promise<LocationView> {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const site = await siteFor(caller, input.siteId, INVENTORY_LOCATIONS_MANAGE, 'body/siteId')
   const code = normalizeLocationCode(input.code)
   const name = input.name.trim()

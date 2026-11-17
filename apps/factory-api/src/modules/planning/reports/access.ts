@@ -5,7 +5,7 @@ import { PLANNING_REPORTS_VIEW } from '@nexus/factory-domain/planning/reports/pe
 import { periodOf, periodProblems, type Period } from '@nexus/factory-domain/planning/reports/rules'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { siteFor } from '../access'
+import { everyPartySiteFor } from '../access'
 import type { Reader, SiteRow } from '../store'
 
 /**
@@ -24,7 +24,8 @@ export interface Place {
 }
 
 export async function placeOf(caller: CommandCaller, query: { readonly siteId: string; readonly from?: string | undefined; readonly to?: string | undefined }, db?: Reader): Promise<Place> {
-  const site = await siteFor(caller, query.siteId, PLANNING_REPORTS_VIEW, db)
+  // B-PR-10: the planning reports count every customer's work orders (adherence, lead times): every customer only.
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_REPORTS_VIEW, db)
   const now = serverClock.now()
   const today = businessDate(now, site.timezone)
   const period = periodOf(query, today)

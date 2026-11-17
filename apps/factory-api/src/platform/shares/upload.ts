@@ -7,7 +7,7 @@ import type { CommandCaller } from '../../core/command'
 import { SYSTEM_ACTOR_ID, type SystemContext } from '../../core/context'
 import { completeUpload, requestUpload } from '../files/files'
 import { assertOutsideUploadsOpen } from '../files/multipart/outside'
-import { normaliseContentType, type FileStatus } from '../files/rules'
+import { isPageType, normaliseContentType, PAGE_TYPE_WORDS, type FileStatus } from '../files/rules' // B-TH-084: isPageType, PAGE_TYPE_WORDS
 import { processFiles } from '../files/service'
 import { linkCommand, useLink } from '../links/use'
 import { inviteLinkOf, mayOf, requireLiveShare, SHARE_UPLOAD_ACTION, UPLOAD_RULE } from './page'
@@ -35,6 +35,8 @@ export interface ShareUpload {
   readonly contentType: string
   readonly sizeBytes: number
   readonly sha256: string
+  /** B-TH-083: the tick "This is a measurement sheet" (filed MEASUREMENTS). */
+  readonly measurementSheet?: boolean | undefined
 }
 
 function uploader(request: FastifyRequest, tenantId: string, companyId: string, partyId: string): CommandCaller {
@@ -63,14 +65,20 @@ export async function announceShareUpload(request: FastifyRequest, body: ShareUp
   const { link, share } = await uploadingShare(request)
   const contentType = normaliseContentType(body.contentType)
   const problems = [
-    ...((UPLOAD_RULE.contentTypes as readonly string[]).includes(contentType) ? [] : [{ path: 'body/contentType', message: 'A PDF, a picture, an office document, a CSV or a text file.' }]),
+    // B-TH-084: an SVG, HTML or script file is never taken (the way out named); design files (Illustrator, EPS, Photoshop) are.
+    ...(isPageType(contentType)
+      ? [{ path: 'body/contentType', message: PAGE_TYPE_WORDS }]
+      : (UPLOAD_RULE.contentTypes as readonly string[]).includes(contentType)
+        ? []
+        : [{ path: 'body/contentType', message: 'A PDF, a picture, an office document, a CSV or a text file, or an Illustrator, EPS or Photoshop file.' }]),
     ...(body.sizeBytes <= UPLOAD_RULE.maxBytes ? [] : [{ path: 'body/sizeBytes', message: 'At most 25 MB.' }]),
   ]
   if (problems.length > 0) throw new ValidationError('The upload is not valid.', problems)
   const answer = await requestUpload(
     processFiles(),
     uploader(request, link.tenantId, share.companyId, share.partyId),
-    { companyId: share.companyId, recordType: share.recordType, recordId: share.recordId, kind: 'ATTACHMENT', originalName: body.originalName, contentType, sizeBytes: body.sizeBytes, sha256: body.sha256, visibility: ['OFFICE', 'LINK'], partyId: share.partyId },
+    // B-TH-083: the tick files it as a measurement sheet.
+    { companyId: share.companyId, recordType: share.recordType, recordId: share.recordId, kind: 'ATTACHMENT', originalName: body.originalName, contentType, sizeBytes: body.sizeBytes, sha256: body.sha256, visibility: ['OFFICE', 'LINK'], partyId: share.partyId, ...(body.measurementSheet ? { measurementSheet: true } : {}) },
     idempotencyKey,
   )
   return { file: fileOf(answer.file), upload: answer.upload }

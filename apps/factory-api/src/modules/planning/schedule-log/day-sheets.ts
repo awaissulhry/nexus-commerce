@@ -14,7 +14,7 @@ import { serverClock } from '../../../core/time'
 import { PDF_CREATOR } from '../../../platform/documents/pdf'
 // B-W2b-GF2 (G076): embedded fonts, so every European letter prints (the standard fonts printed "?").
 import { FONT, printableText, useFonts } from '../../../platform/documents/fonts'
-import { siteFor } from '../access'
+import { everyPartySiteFor } from '../access'
 import { capacityAnswer } from '../capacity/service'
 import { dayOf, type Reader, type SiteRow } from '../store'
 import { capacityWith, scheduleWorld, type ScheduleWorld } from '../schedule/service'
@@ -74,7 +74,8 @@ async function lanesAsked(db: Reader, site: SiteRow, query: SheetQuery): Promise
 
 /** What the sheets are made of, read for the person at the site. */
 async function sheetFacts(caller: CommandCaller, query: SheetQuery): Promise<SheetFacts> {
-  const site = await siteFor(caller, query.siteId, PLANNING_VIEW)
+  // B-PR-10 (a named leftover): a line's day sheet lists every customer's work on it: every customer only.
+  const site = await everyPartySiteFor(caller, query.siteId, PLANNING_VIEW)
   const now = serverClock.now()
   return caller.withClient(async (db) => {
     const day = query.date ?? businessDate(now, site.timezone)

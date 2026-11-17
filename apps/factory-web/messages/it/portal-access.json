@@ -31,6 +31,7 @@
     "customer-finance": "Amministrazione",
     "customer-quality": "Qualità",
     "customer-designer": "Stilista",
+    "customer-production": "Produzione",
     "customer-viewer": "Consultazione",
     "customer-admin": "Amministratore",
     "supplier-orders": "Ordini",
@@ -45,11 +46,12 @@
     "partner-approve": "Può approvare"
   },
   "roleLine": {
-    "customer-buyer": "Ordini e riordini, preventivi, consegne e documenti.",
+    "customer-buyer": "Ordini e riordini, produzione e ordini urgenti, preventivi, consegne e documenti.",
     "customer-finance": "Fatture, estratti conto e pagamenti.",
-    "customer-quality": "Certificati, rapporti di prova, reclami e resi.",
+    "customer-quality": "Certificati, rapporti di prova, reclami e resi; legge gli ordini in produzione.",
     "customer-designer": "Campioni, grafiche e approvazioni dei modelli.",
-    "customer-viewer": "Legge ordini e consegne; non cambia nulla.",
+    "customer-production": "Ordini in produzione: fasi, date e cosa aspetta da loro; approvazioni e ordini urgenti; senza prezzi.",
+    "customer-viewer": "Legge ordini, produzione e consegne; non cambia nulla.",
     "customer-admin": "Tutto il portale clienti, e l'accesso dei colleghi.",
     "supplier-orders": "Ordini d'acquisto da confermare, avvisi di spedizione e consegne.",
     "supplier-invoices": "Le sue fatture e i nostri pagamenti, senza prezzi sugli ordini.",

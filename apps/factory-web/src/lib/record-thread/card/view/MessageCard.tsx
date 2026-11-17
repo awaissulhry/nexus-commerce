@@ -35,6 +35,8 @@ export interface CardActions {
   onOpenFile?: (fileId: string) => void
   /** "+14": the message's other files (the Files view, TH-1c); without it the card shows them all in place. */
   onMoreFiles?: (messageId: string) => void
+  /** B-TH-231: "Use on another record…" with the message's files. */
+  onUseOn?: (messageId: string) => void
 }
 
 const MARK_ICON = { lock: Lock, mail: Mail, globe: Globe, tablet: Tablet } as const
@@ -64,7 +66,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
   const { text, quoted } = splitQuoted(message.body, message.kind)
   const fold = longFold(text)
   const folded = fold.folds && !allShown
-  const files = cardFiles(message.files, context.canReadFiles, allFiles)
+  const files = cardFiles(message.files, context.canReadFiles, allFiles, { hidden: message.hiddenFiles ?? 0, sheets: message.lockedSheets ?? 0 })
   const menu = cardActions(message, context)
   const failed = message.outbox?.state === 'failed'
   const sending = message.outbox?.state === 'sending'
@@ -108,6 +110,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
                   if (action === 'reply') actions?.onReply?.(message.id)
                   if (action === 'task') actions?.onTask?.(message.id)
                   if (action === 'link') actions?.onCopyLink?.(message.id)
+                  if (action === 'useOn') actions?.onUseOn?.(message.id)
                 },
               }))}
             />
@@ -138,7 +141,7 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
         </p>
       )}
 
-      {(files.photos.length > 0 || files.others.length > 0 || files.held.length > 0 || files.more > 0 || files.hidden > 0) && (
+      {(files.photos.length > 0 || files.others.length > 0 || files.held.length > 0 || files.more > 0 || files.hidden > 0 || files.sheets > 0) && (
         <div className="fw-rt-attach">
           {(files.photos.length > 0 || files.more > 0) && (
             <ul className="fw-rt-photos" aria-label={t('files.label')}>
@@ -181,6 +184,12 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
               </span>
             </p>
           ))}
+          {files.sheets > 0 && (
+            <p className="fw-rt-held-file">
+              <Lock size={13} aria-hidden />
+              <span>{t('files.sheetLocked', { count: files.sheets })}</span>
+            </p>
+          )}
           {files.hidden > 0 && (
             <p className="fw-rt-held-file">
               <Lock size={13} aria-hidden />

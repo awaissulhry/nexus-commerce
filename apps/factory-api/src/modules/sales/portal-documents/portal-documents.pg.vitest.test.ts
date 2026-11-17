@@ -13,6 +13,7 @@ import { seed as seedMoney } from '../../../../../../packages/factory-db/seed/mo
 import { seed as seedNumbering } from '../../../../../../packages/factory-db/seed/numbering'
 import { seed as seedShipping, type ShippingSeed } from '../../../../../../packages/factory-db/seed/shipping'
 import { seedUuid } from '../../../../../../packages/factory-db/src/seeding'
+import { seedFile } from '../../../../../../packages/factory-db/src/seed-files' // B-PR-44
 import { buildApp } from '../../../core/app'
 import { testAuthenticator, type SessionContext } from '../../../core/context'
 import { LOCAL_COOKIE_SECRET } from '../../../env'
@@ -387,3 +388,41 @@ describe('conformity per style received (SAL-087) and Home', { timeout: SLOW_TES
     expect((await counts(browsers.designer))['documents.new']).toBeNull()
   })
 })
+
+// ---- B-PR-44 (production plan L16; PW-16 "the portal tab shows only P2's shared files"): the files shared on an order's lines -----
+describe("B-PR-44: an order line's files and its quote line's artwork under the line's order (PW-16)", { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it("lists them on the order's tab for the customer's buyer; another customer never sees them", async () => {
+    // A line of the customer's made from its quote (the sales seed's SEED-SO-0001), and the file store.
+    const line = await one<{ id: string; orderId: string; quoteLineId: string; number: string }>(
+      `SELECT l.id, l."orderId", l."quoteLineId", o.number FROM "SalesOrderLine" l JOIN "SalesOrder" o ON o.id = l."orderId" WHERE l."tenantId" = $1 AND l."partyId" = $2 AND l."quoteLineId" IS NOT NULL ORDER BY o.number, l.seq LIMIT 1`,
+      [T, P1],
+    )
+    const store = await one<{ id: string }>(`SELECT id FROM "IntegrationAccount" WHERE "tenantId" = $1 AND provider = 'R2' ORDER BY code LIMIT 1`, [T])
+    // Artwork shown to the customer (as the order's "show in the portal" shares it: PARTNER, the record's own party).
+    const shared = async (recordType: string, recordId: string, originalName: string): Promise<string> => {
+      const id = newId()
+      const at = new Date()
+      await h.database.withScope({ audience: 'office', tenantId: T, actorId: qualityActor }, (client) =>
+        client.storedFile.create({
+          data: seedFile(T, { id, companyId: companyA, recordType, recordId, kind: 'DOCUMENT', category: 'ARTWORK', originalName, contentType: 'application/pdf', sizeBytes: 2048, storeAccountId: store.id, storageKey: `t/${T}/c/${companyA}/2026/${newId()}`, status: 'AVAILABLE', availableAt: at, visibility: ['OFFICE', 'PARTNER'], partyId: P1, createdAt: at, updatedAt: at }),
+          select: { id: true },
+        }),
+      )
+      return id
+    }
+    const lineFile = await shared('SalesOrderLine', line.id, 'pr2b line artwork.pdf')
+    const quoteFile = await shared('QuoteLine', line.quoteLineId, 'pr2b quote line artwork.pdf')
+    const ofOrder = await ok(browsers.buyer, `/portal/customer-documents?orderId=${line.orderId}`)
+    const entry = (id: string): Json => (ofOrder.items as Json[]).find((item) => item.id === id) ?? {}
+    expect(entry(lineFile)).toMatchObject({ kind: 'OTHER', group: 'OTHER', for: { type: 'SalesOrderLine', id: line.id, label: line.number, order: { id: line.orderId, number: line.number } } })
+    expect(entry(quoteFile)).toMatchObject({ kind: 'OTHER', group: 'OTHER', for: { type: 'QuoteLine', id: line.quoteLineId, label: line.number, order: { id: line.orderId, number: line.number } } })
+    // Another customer: not on the order's tab, not in its library, not by id.
+    expect((await ok(browsers.other, `/portal/customer-documents?orderId=${line.orderId}`)).count).toBe(0)
+    const theirs = JSON.stringify(await ok(browsers.other, '/portal/customer-documents?versions=all'))
+    for (const id of [lineFile, quoteFile]) {
+      expect(theirs).not.toContain(id)
+      expect((await browsers.other.get(`/portal/customer-documents/${id}`)).status).toBe(404)
+    }
+  })
+})
+// ---- end B-PR-44

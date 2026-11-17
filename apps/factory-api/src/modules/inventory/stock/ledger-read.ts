@@ -15,7 +15,7 @@ import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { workerGateFor } from '../../people/privacy/worker-gate'
 import { scanSubjectFor } from '../../production/settings/subject'
-import { mayAt, officeContextOf, seesCost } from '../ledger/access'
+import { mayAt, officeContextOf, seesCost, assertWholeWarehouse } from '../ledger/access'
 import { fixed, SCOPE } from './read-kit'
 import type { LedgerRow } from './reads-contract'
 
@@ -265,6 +265,7 @@ async function balanceOf(client: FactoryClient, where: Prisma.StockMoveWhereInpu
 /** The ledger the caller may see, newest first (UUIDv7 ids: the posting order), up to `limit` a page. */
 export async function readLedger(caller: CommandCaller, query: LedgerQuery) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const scope = scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, SCOPE) as Prisma.StockMoveWhereInput
   const key = keyWhere(query)
   const where: Prisma.StockMoveWhereInput = {
@@ -306,6 +307,7 @@ export async function readLedger(caller: CommandCaller, query: LedgerQuery) {
 /** The tiles of the Movements page: adjustments of 7 days, scraps, count differences and reversals of 30 days; moves not valued yet (cost grain). */
 export async function ledgerCounts(caller: CommandCaller, query: { readonly siteId?: string | undefined }, now: Date = new Date()) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const scope: Prisma.StockMoveWhereInput = { AND: [scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, SCOPE) as Prisma.StockMoveWhereInput, query.siteId ? { siteId: query.siteId } : {}] }
   const since = (days: number) => new Date(now.getTime() - days * 24 * 60 * 60 * 1000)
   const withCost = seesCost(context)
@@ -327,6 +329,7 @@ export async function ledgerCounts(caller: CommandCaller, query: { readonly site
 /** One move (the DetailModal): every field, its value, its reversal or original, and the worker where the site names one and its PERFORMANCE gate is on. */
 export async function ledgerMove(caller: CommandCaller, moveId: string) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const move = isUuid(moveId) ? await caller.withClient((client) => client.stockMove.findUnique({ where: { id: moveId }, select: ROW_SELECT })) : null
   if (!move || !mayAt(context, INVENTORY_STOCK_VIEW, move)) throw new NotFoundError('Stock move not found.')
   return caller.withClient(async (client) => {
@@ -374,6 +377,7 @@ const REASON_ORDER: readonly StockMoveReason[] = [...W1_ORDER, ...BRIDGE_ORDER.f
  */
 export async function explainFigure(caller: CommandCaller, query: ExplainQuery) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const scope = scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, SCOPE) as Prisma.StockMoveWhereInput
   const locationId = query.locationId ?? null
   const asOf = query.asOf ? parseInstant(query.asOf) : null

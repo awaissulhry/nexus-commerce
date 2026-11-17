@@ -152,11 +152,12 @@
       "no": "no prices"
     },
     "sees": {
-      "customer-buyer": "Orders, documents and approvals",
+      "customer-buyer": "Orders, production, documents and approvals",
       "customer-finance": "Invoices, payments and documents",
-      "customer-quality": "Quality, certificates and complaints",
+      "customer-quality": "Quality, certificates and complaints; orders in production, read only",
       "customer-designer": "Samples, the catalogue and approvals of designs",
-      "customer-viewer": "Orders and documents, read only",
+      "customer-production": "Orders in production, approvals and urgent orders",
+      "customer-viewer": "Orders, production and documents, read only",
       "customer-admin": "Everything, and invites and removes colleagues",
       "withPrices": "What the role covers",
       "noPrices": "What the role covers"

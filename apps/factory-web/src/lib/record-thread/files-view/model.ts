@@ -61,7 +61,8 @@ export interface BulkReach {
 
 /** What each bulk action reaches among the chosen files (the files in force of the chosen documents). */
 export function bulkReach(chosen: readonly ThreadFile[], party: FilesParty | null, can: FilesAbilities): BulkReach {
-  const available = chosen.filter((file) => file.status === 'AVAILABLE')
+  // B-TH-231: a sheet locked for this reader is neither downloaded nor shared by them (they cannot open it).
+  const available = chosen.filter((file) => file.status === 'AVAILABLE' && !file.locked)
   const sharedWithParty = (file: ThreadFile) => file.visibility.includes('PARTNER') && party !== null && file.partyId === party.id
   return {
     download: available.map((file) => file.id),

@@ -1144,7 +1144,8 @@
       "lines": "Aggiungi una riga con almeno un pezzo",
       "pricing": "Prima il calcolo dei prezzi",
       "previewFailed": "Non è stato possibile calcolare i prezzi: riprova",
-      "problems": "Prima sistema ciò che il riepilogo elenca"
+      "problems": "Prima sistema ciò che il riepilogo elenca",
+      "made": "L’ordine è creato: riprova con i suoi file, o aprilo."
     },
     "pageTitle": "Nuovo ordine",
     "reading": "Lettura del cliente…",
