@@ -17,7 +17,8 @@ import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers'
  *   inquiry.received   a request the customer sent from the portal: "We received your request 7" — the copy of what was sent
  *                      (the receipt mail, P-CUS-NEW.receipt-F02), the one news a partner gets of its own act
  *   inquiry.changed    NEED_INFO: "We need something from you on your request 7" (the question is the thread's message)
- *   inquiry.closed     DECLINED: "Your request 7 was declined" (our message, if any, is the thread's)
+ *   inquiry.closed     DECLINED: "Your request 7 was declined" (our message, if any, is the thread's); B-TH-043: never for "Not
+ *                      an order" (nothing is sent; the request reads "Closed")
  * th2-backend step 7 (threads plan §0.5, counts do not leak): the customer reads only its own number — the notice's record chip is
  * "#7" (customerRefOf), the sentence "your request 7" in the reader's language; never the office's series (INQ-…).
  *   portal_order_request.refused   a catalogue order we did not accept (its words are on its page), to who may order
@@ -26,7 +27,7 @@ import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers'
 const payloadOf = <T>(list: readonly { readonly type: string; readonly payload: { parse(value: unknown): unknown } }[], type: string) => (raw: unknown) => list.find((event) => event.type === type)!.payload.parse(raw) as T
 const received = payloadOf<{ inquiryId: string; source: string; partyId: string | null }>(inquiryEvents, 'inquiry.received')
 const changed = payloadOf<{ inquiryId: string; status: string; change: string; partyId: string | null }>(inquiryEvents, 'inquiry.changed')
-const closed = payloadOf<{ inquiryId: string; status: string; partyId: string | null }>(inquiryEvents, 'inquiry.closed')
+const closed = payloadOf<{ inquiryId: string; status: string; partyId: string | null; declineReason: string | null }>(inquiryEvents, 'inquiry.closed')
 const refused = payloadOf<{ requestId: string; number: string; partyId: string }>(portalOrderingEvents, 'portal_order_request.refused')
 
 type RequestKey = 'portal.request.received' | 'portal.request.need_info' | 'portal.request.declined'
@@ -73,7 +74,7 @@ export const REQUEST_NEWS_RULES: readonly PartnerRule[] = Object.freeze([
     events: ['inquiry.closed'],
     async drafts(context, raw) {
       const event = closed(raw)
-      if (event.status !== 'DECLINED') return []
+      if (event.status !== 'DECLINED' || event.declineReason === 'NOT_AN_ORDER') return [] // B-TH-043: "Not an order" sends nothing
       return requestNews(context, event.inquiryId, 'portal.request.declined', (status) => status === 'DECLINED')
     },
   },

@@ -26,6 +26,7 @@ import { OPEN_STATUSES, summaryOf, WORKING_DAY_MINUTES } from '@nexus/factory-do
 import { ORDERS_VIEW } from '@nexus/factory-domain/sales/orders/permissions'
 import { QUOTES_VIEW } from '@nexus/factory-domain/sales/quotes/permissions'
 import { relativeRange } from '@nexus/factory-domain/views/quick/relative'
+import { THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue' // B-TH-047
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { serverClock } from '../../../core/time'
@@ -33,6 +34,8 @@ import { baseWhere } from '../inquiries/inquiries'
 import { INQUIRY_COLUMNS, officeOf, type InquiryData, type Reader } from '../inquiries/store'
 import { rowsOf, waitingMinutesOf } from '../inquiries/views'
 import { readLines } from '../portal-ordering/store'
+// B-TH-047: "Customer replies", the conversations waiting on us across the customer's other records.
+import { waitingRowsOf } from '../../../platform/threads/waiting-list'
 
 /**
  * Sales › Incoming over every door (B-TH-039; threads plan G2, L2-G07): GET /sales/incoming — requests, catalogue orders and
@@ -536,6 +539,12 @@ export async function listIncoming(caller: CommandCaller, query: IncomingListQue
         counts[each] = listed.length === 0 ? null : Object.values(perKind).reduce((sum, value) => sum + (value ?? 0), 0)
         if (each === tile) for (const kind of INCOMING_KINDS) kinds[kind] = sees.has(kind) && listed.includes(kind) ? (perKind[kind] ?? 0) : null
       }
+      // ---- B-TH-047: the "Customer replies" saved row (GET /threads/waiting?side=CUSTOMER lists them): every conversation on the
+      // customer's other records (orders, quotes, returns …) whose newest shared message is the customer's, that this reader may
+      // open, under the company and customer filters; null when the reader reads no conversation ("—").
+      const replies = await waitingRowsOf(db, context, { side: 'CUSTOMER', companyId: query.companyId, partyId: query.partyId })
+      counts.CUSTOMER_REPLIES = grantsFor(actor, THREADS_READ).length === 0 ? null : replies.rows.length
+      // ---- end B-TH-047
     }
     return { rows, counts, kinds, next: page.next ? encodeCursor(page.next) : null, complete: waiting.complete }
   })
