@@ -33,9 +33,9 @@ import { recordDocuments, setDocument } from './required/record'
 import { createMarkupContract, fileHistoryContract, listMarkupsContract } from './markup/contract'
 import { fileHistory } from './markup/history'
 import { createMarkup, listMarkups } from './markup/markup'
-// B-TH-024: carry a file to another record.
-import { useOnContract } from './contract'
-import { useFileOn } from './use-on'
+// B-TH-024: carry a file to another record. B-TH-231: the records it may go to.
+import { useOnContract, useOnTargetsContract } from './contract'
+import { useFileOn, useOnTargets } from './use-on'
 
 /**
  * Files on R2 (platform part; plan A1 §3.6, features COL-045, COL-050): announce an upload, confirm it, list a record's
@@ -80,6 +80,8 @@ export default defineRoutes('files', manifest, async (app) => {
   app.post('/files/:fileId/use-on', { schema: useOnContract }, async (request, reply) => {
     return reply.code(201).send(await useFileOn(processFiles(), request, request.params.fileId, request.body, idempotencyKeyFrom(request)))
   })
+  // B-TH-231: the records the file may be carried to (same customer or none).
+  app.get('/files/:fileId/use-on/targets', { schema: useOnTargetsContract }, async (request) => useOnTargets(request, request.params.fileId, request.query))
 
   app.get('/files/:fileId', { schema: getFileContract }, async (request) => {
     return { file: await getFile(request, request.params.fileId) }

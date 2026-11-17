@@ -722,6 +722,16 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   /files/:fileId/markups` (a picture: its marked copy announced as the next version, then PUT + the usual confirm; a PDF page: an
   overlay), `GET …/markups`, `GET /files/:fileId/history` (the Versions pop-up: who, uses by sourceFileId, the markup a version
   came from). Event `file.marked_up`.
+- Threads TH-7 (B-TH-083, B-TH-084, B-TH-231; factory-domain `files/{measurements,design}`): a MEASUREMENTS file (a measurement
+  sheet: the tick `measurementSheet` at POST /files and POST /link/share/files) opens in the office only with
+  sales.measurements.view over its RECORD's scope: everyone else gets 404 (by id, download, preview, versions, history,
+  document tag, use-on) and sees it LOCKED in a record's list and on a message (`locked: MEASUREMENTS`, no name, no checksum);
+  a writer without it cannot attach it; each download or preview writes `files.measurementSheetOpened` (office, portal, link).
+  Design files (Illustrator, EPS, Photoshop: ATTACHMENT or DOCUMENT; ZIP: DOCUMENT) are download-only (never inline, never a
+  picture to strip: `isPicture` leaves them out), scanned like every file; SVG, HTML and scripts are refused in words naming
+  the way out (PAGE_TYPE_WORDS). A message counts the files its reader may not see (`hiddenAttachments`). `GET
+  /files/:fileId/use-on/targets?q=` offers the records a file may be carried to (search's entries read again by the thread
+  resolver: same customer or none, files.upload over them); POST …/use-on shared outside needs files.manage.
 - Error tracking (B-W2a-42; PLT-218; `src/observability/`): `reportError(error, context)` from the 500 handler
   (core/errors.ts), a job's last failed attempt (outbox/dispatch.ts) and a failed cron tick (core/cron.ts). Every report is
   factory-domain `observability/report` (allow-listed context, scrubbed text: no person, secret or money). Sinks:
