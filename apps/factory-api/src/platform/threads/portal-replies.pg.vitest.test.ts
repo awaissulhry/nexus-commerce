@@ -19,6 +19,7 @@ import { applySystemRoleChanges, systemRoleChanges } from '../auth/roles/system-
 import { startHarness, type Browser, type Harness } from '../auth/sessions/testing/harness'
 import { systemContext } from '../outbox/system'
 import { partnerFanOut } from '../portal/notifications/fan-out'
+import { textOf } from '../../adapters/ses/fake' // th-backend-g step 2
 import { unsubscribeKeyOf } from '../portal/notifications/mail'
 
 /**
@@ -195,6 +196,34 @@ describe('B-TH-044: reply in the portal without e-mail', { timeout: SLOW_TEST_TI
     expect(grouped[0]!.group).toMatchObject({ count: 2, records: 2 })
     expect(JSON.stringify(await bell('bBuyer'))).not.toMatch(new RegExp(`${orders[1]!.id}|${orders[2]!.id}`))
   })
+
+  // ---- th-backend-g step 2 (B-TH-279: the new mail templates are read): the portal's new-message mail is the e-mail template
+  // thread.message_posted — the code's words, then the company's own once one is in use — filled per reader: who wrote, the customer's
+  // own order number (never the office's series), the shared message, the portal link.
+  it('th-backend-g step 2: the new-message mail reads its template (the code’s words, then the company’s own), per reader', async () => {
+    const order = orders[0]!
+    const mailsTo = (address: string) => h.ses.mails.filter((mail) => mail.templateKey === 'portal.notification' && mail.to.includes(address))
+    const first = mailsTo(people.aBuyer).map((mail) => textOf(mail.raw)).find((text) => text.includes('Made-up: your jackets leave on Friday.'))
+    expect(first, 'the T08 reply’s mail to A').toBeDefined()
+    expect(first).toContain(`Made-up writer wrote on your order ${order.customerSeq}:`)
+    expect(first).toContain('Answer in the portal: ')
+    expect(first).not.toContain(order.number)
+    expect(mailsTo(people.bBuyer).map((mail) => textOf(mail.raw)).join('\n')).not.toContain('jackets leave')
+    // The company's own words, once in use (written past the template guards: test data only).
+    await admin(`DO $$ BEGIN
+      SET LOCAL session_replication_role = replica;
+      INSERT INTO "EmailTemplate" (id, "tenantId", "companyId", event, language, revision, key, status, subject, body, "publishedAt", "publishedById", "createdAt", "updatedAt", "createdById")
+      VALUES ('${newId()}', '${T}', '${companyA}', 'thread.message_posted', 'en', 1, 'mail:thread.message_posted:${companyA}:en:1', 'ACTIVE', 'Made-up news on {{record.label}}', 'Hi {{contact.name}}, {{author.name}} says: {{message}} Read it here: {{link}}', now(), '${OFFICE.writer}', now(), now(), '${OFFICE.writer}');
+    END $$`)
+    const before = mailsTo(people.aBuyer).length
+    const made = await reply('writer', 'SalesOrder', order.id, { body: 'Made-up: the labels are sewn.' })
+    await partnerNews([made.message.id])
+    const added = mailsTo(people.aBuyer).slice(before).map((mail) => textOf(mail.raw))
+    expect(added).toHaveLength(1)
+    expect(added[0]).toContain(`Made-up writer says: Made-up: the labels are sewn. Read it here: `)
+    expect(added[0]).not.toContain(order.number)
+  })
+  // ---- end th-backend-g step 2
 
   it('W08: without threads.post 403; a person limited to customer B finds A’s order not found and writes nothing', async () => {
     const order = orders[3]!

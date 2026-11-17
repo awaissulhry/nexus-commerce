@@ -10,6 +10,9 @@ import type { Assignees, InquiryFile, InquiryLine, ScaleOption } from '../api'
 import type { OrderDraft, StyleDraftDraft } from '../model'
 import { DECLINE_REASONS, declineHeld, lostHeld, type DeclineDraft, type DeclineReason, type Loaded, type Notice, type Phrase, type QuotePreview } from '../model'
 import type { MessageReach } from '../model' // B-TH-234
+// th-backend-g step 2: the decline's message starts from the mail template (the reason where "…" stands); the five languages' names.
+import { hasBlank, type DeclineStart } from '../model'
+import { MESSAGE_LANGUAGES } from '@nexus/factory-domain/templates/message-languages'
 import { NoticeLine, useWords } from '../parts'
 import { ListboxPanel } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
 
@@ -121,6 +124,8 @@ export interface DeclineModel {
   readonly draft: DeclineDraft
   /** Who the optional message reaches, or why it is held (a selection, a prospect, no e-mail, no right). B-TH-234: how (portal or mail) and in which language. */
   readonly message: Pick<MessageReach, 'to' | 'held'> & Partial<Pick<MessageReach, 'via' | 'language'>>
+  /** th-backend-g step 2: the message started from the mail template request.declined (null: not read, or typed by the person). */
+  readonly start?: DeclineStart | null
   readonly busy: boolean
   readonly notice: Notice | null
   readonly offline: boolean
@@ -138,7 +143,7 @@ export interface DeclineActions {
  * inquiry's thread after the decline (the decline itself sends nothing; B-W2b-295). ⌘↵ declines.
  */
 export function DeclineDialog({ model, actions }: { model: DeclineModel; actions?: DeclineActions }) {
-  const { t, say } = useWords()
+  const { t, say, locale } = useWords()
   const heldPhrase = model.busy ? { key: 'common.working' } : declineHeld(model.draft, model.offline)
   const held = say(heldPhrase)
   const submit = () => actions?.onSubmit?.()
@@ -184,9 +189,14 @@ export function DeclineDialog({ model, actions }: { model: DeclineModel; actions
               <Checkbox checked={!!model.draft.send && !held} disabled={!!held} onChange={(event) => actions?.onDraft?.({ send: event.target.checked })} label={t('decline.send')} />
               <p className="fw-inq-hint">{held ? say(held) : reader}</p>
               {model.draft.send && !held && (
-                <Field label={t('decline.messageLabel')} hint={model.message.language ? t('decline.messageLanguage', { language: model.message.language === 'it' ? t('decline.language.it') : model.message.language === 'en' ? t('decline.language.en') : model.message.language.toUpperCase() }) : reader}>
+                <Field label={t('decline.messageLabel')} hint={model.message.language ? t('decline.messageLanguage', { language: (MESSAGE_LANGUAGES as readonly string[]).includes(model.message.language) ? t(`decline.language.${model.message.language}`) : model.message.language.toUpperCase() }) : reader}>
                   <Textarea value={model.draft.message} rows={4} honourRows maxLength={4000} onChange={(event) => actions?.onDraft?.({ message: event.target.value })} />
                 </Field>
+              )}
+              {/* th-backend-g step 2 (B-TH-279): the message starts from the company's e-mail template; the reason goes where "…" stands. */}
+              {model.draft.send && !held && hasBlank(model.draft.message) && <p className="fw-inq-hint">{t('decline.blankHint')}</p>}
+              {model.draft.send && !held && model.start?.fellBack && (
+                <p className="fw-inq-hint">{model.start.fellBack[locale === 'it' ? 'it' : 'en']}</p>
               )}
               {model.draft.send && !held && model.draft.message.trim() && (
                 <Banner tone="info" title={portal ? t('decline.previewPortal') : t('decline.preview', { to: model.message.to ?? '' })}>
