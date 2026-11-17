@@ -136,7 +136,8 @@ describe('GET /email/delivery', () => {
     expect(body.mails.find((row) => row.id === mail.linked)).toMatchObject({ state: 'DELIVERED', link: 'DOCUMENT_VIEW', record: { type: 'Shipment' } })
     expect(body.mails.find((row) => row.id === mail.digest)).toMatchObject({ kind: 'DIGEST', record: { type: 'User', label: null }, notifications: 0 })
     expect(body.mails.find((row) => row.id === mail.failed)).toMatchObject({ state: 'FAILED', record: { type: 'Party', label: 'CLI-1 Cliente Esempio' } })
-    expect(body.counts).toEqual({ WAITING: 1, SENT: 2, DELIVERED: 1, PROBLEM: 1, FAILED: 1 })
+    // B-TH-048: a sixth state, WITHDRAWN (taken back in its 10 seconds); none here (undo-send.pg counts one).
+    expect(body.counts).toEqual({ WAITING: 1, SENT: 2, DELIVERED: 1, PROBLEM: 1, FAILED: 1, WITHDRAWN: 0 })
     expect(body.blocked).toBe(2)
     expect(JSON.stringify(body)).not.toMatch(/b@other\.example|Fattura|reply\.mail-a/)
   })
