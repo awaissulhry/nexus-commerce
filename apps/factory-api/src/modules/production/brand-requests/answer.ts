@@ -35,8 +35,8 @@ import { brandRequestViews, brandRequestWhere, readableRequest } from './read'
  * words. A batch is answered request by request (B-PR-46a loops these per row).
  */
 
-/** The kind's permission over the order, or 403 in words (the request was found through the wall already). */
-function assertAnswers(actor: Actor, row: Pick<OfficeRequestRow, 'kind' | 'companyId' | 'partyId'>): void {
+/** The kind's permission over the order, or 403 in words (the request was found through the wall already). B-PR-27a: the accept's too. */
+export function assertAnswers(actor: Actor, row: Pick<OfficeRequestRow, 'kind' | 'companyId' | 'partyId'>): void {
   const kind = row.kind as OrderRequestKind
   const permission = ASK_RULES[kind].answeredWith
   if (!can(actor, permission, { companyId: row.companyId, partyId: row.partyId })) {
@@ -44,7 +44,8 @@ function assertAnswers(actor: Actor, row: Pick<OfficeRequestRow, 'kind' | 'compa
   }
 }
 
-async function viewAfter(caller: CommandCaller, requestId: string) {
+/** The request's office view after an answer (B-PR-27a: the accept's too). */
+export async function viewAfter(caller: CommandCaller, requestId: string) {
   const context = officeContextOf(caller)
   return caller.withClient(async (client) => {
     const row = await readableRequest(client, actorOf(context), requestId)

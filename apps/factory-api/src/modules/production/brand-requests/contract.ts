@@ -130,3 +130,36 @@ export const counterContract = defineContract({
   }),
   response: { 200: output({ request: brandRequest, approvalRequestId: id() }) },
 })
+
+// ── B-PR-27a: accepting carries the ask out (./accept.ts) ───────────────────────────────────────────────────────────────────────
+const acceptedWorkOrder = output({
+  id: id(),
+  number: z.string(),
+  status: z.string(),
+  /** HOLD: it went ON_HOLD now (false: held already by another hold, the pause stands beside it). RESUME: it left ON_HOLD now. */
+  changed: z.boolean(),
+})
+
+export const acceptContract = defineContract({
+  params: requestParams,
+  body: input({
+    version,
+    /** Our words to the customer (optional on an accept). */
+    answer: z.string().trim().max(MAX_ANSWER).nullable().optional(),
+  }),
+  response: {
+    200: output({
+      request: brandRequest,
+      /** What accepting did (the order's own work orders only). */
+      done: output({
+        kind: z.enum(ORDER_REQUEST_KINDS),
+        /** HOLD: the work orders paused now. */
+        paused: z.array(acceptedWorkOrder),
+        /** RESUME: the work orders whose pause was lifted now. */
+        resumed: z.array(acceptedWorkOrder),
+        words,
+      }),
+    }),
+  },
+})
+// ── end B-PR-27a ──

@@ -1,6 +1,7 @@
 import { toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import type { HoldFact, MaterialReadinessFact } from '@nexus/factory-domain/production/work-orders/blockers'
 import type { WorkOrderReadiness } from '@nexus/factory-domain/planning/readiness/readiness'
+import { plainHoldWordsOf } from '@nexus/factory-domain/production-brand/accept' // B-PR-27a
 import { reasonWords } from '../../../../platform/reasons/service'
 import { livePlanOf, readinessFor, type LivePlan } from '../../../planning/readiness/service'
 import { SITE_COLUMNS as PLANNING_SITE_COLUMNS } from '../../../planning/store'
@@ -42,7 +43,7 @@ export async function readHoldFacts(db: Reader, workOrderId: string): Promise<Ho
   const plain = await db.workOrderHold.findMany({ where: { workOrderId, status: 'ACTIVE' }, select: { id: true, kind: true, reasonCode: true, placedAt: true }, orderBy: [{ placedAt: 'asc' }, { id: 'asc' }] })
   const plainWords = plain.length > 0 ? await reasonWords(db, 'PRODUCTION_HOLD') : new Map()
   for (const hold of plain) {
-    facts.push({ holdId: null, reason: plainWords.get(hold.reasonCode)?.labelEn ?? hold.reasonCode, placedAt: toUtcIso(hold.placedAt), liftedBy: hold.kind === 'BRAND' ? 'The customer asked to pause: lift the hold when it resumes.' : 'Lift the production hold first.' })
+    facts.push({ holdId: null, reason: plainHoldWordsOf(hold, plainWords.get(hold.reasonCode)?.labelEn) /* B-PR-27a */, placedAt: toUtcIso(hold.placedAt), liftedBy: hold.kind === 'BRAND' ? 'The customer asked to pause: lift the hold when it resumes.' : 'Lift the production hold first.' })
   }
   // ── end B-PR-21 ──
   // ON_HOLD under a record that is not one of these quality holds (an NCR): the work order's own reason.

@@ -5,6 +5,8 @@ import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { AmendLineInput } from '@nexus/factory-domain/sales/amendments/amendments'
 import { cancelFeeFor, type CancelFee } from '@nexus/factory-domain/sales/change-requests/fee'
 import { amendmentLinesOf, answerProblems, isSalesRequestKind, ORDER_REQUEST_KIND_WORDS, rulesOf, type AskedCell, type OrderRequestKind } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-PR-27a: a line in another colourway (a new line, the old one closed short).
+import { colourInWorkWords, colourKeepsTotal, colourLinesOf } from '@nexus/factory-domain/sales/change-requests/rules'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { cancelImpact, closeShortPlan } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON } from '@nexus/factory-domain/sales/orders/orders'
@@ -27,6 +29,7 @@ import type { RequestStatus } from '@nexus/factory-domain/sales/change-requests/
 import { answerableIn, counterOfRow, counterStateIn } from './counter'
 import {
   readCounterStates,
+  askedColourwayNames, // B-PR-27a
   addressesOf,
   dayOrNull,
   feeLinesOf,
@@ -90,6 +93,8 @@ export async function officeViews(db: Reader, context: ReturnType<typeof officeC
     if (entry?.colourway) colourways.set(line.colourwayId, entry.colourway)
   }
   const cells = await readCells(db, rows.map((row) => row.id))
+  // B-PR-27a: the colourways the changes ask, by name.
+  for (const [colourwayId, name] of await askedColourwayNames(db, cells.values())) colourways.set(colourwayId, name)
   const addresses = await addressesOf(db, rows.map((row) => row.shipToAddressId))
   const reasons = await reasonWordsOf(db, rows.flatMap((row) => (row.reasonCode ? [row.reasonCode] : [])))
   const people = [...new Set(rows.flatMap((row) => [row.createdById, row.answeredById]).filter((id): id is string => id !== null))]
@@ -195,9 +200,33 @@ function amendmentOf(row: OfficeRequestRow, cells: readonly AskedCell[], order: 
   const asked = row.status === 'COUNTERED' ? acceptedWithCounter({ requestedDate: dayOrNull(row.requestedDate) }, counterOfRow(row)).date : dayOrNull(row.requestedDate)
   const dateChanges = asked !== null && asked !== dayOrNull(order.requestedDate)
   if (!changed && !dateChanges) return null
+  // B-PR-27a: a line asked in another colourway: a new line of its style in that colourway, the sizes asked, at the old line's
+  // prices (the old line is closed short after the amendment: a line a request names is never removed).
+  const byId = new Map(lines.map((line) => [line.id, line]))
+  for (const colour of colourLinesOf(cells)) {
+    const from = byId.get(colour.fromLineId)
+    if (!from || colour.sizes.length === 0) continue
+    const own = new Map(from.sizes.map((size) => [size.size, size.unitPrice === null ? null : size.unitPrice.toString()]))
+    amendLines.push({ styleId: from.styleId, colourwayId: colour.colourwayId, unitPrice: from.unitPrice.toString(), sizes: colour.sizes.map((size) => ({ size: size.size, quantity: size.quantity, unitPrice: own.get(size.size) ?? null })), description: from.description, note: from.note })
+  }
   const body: { version: number; reason: string; lines: AmendLineInput[]; requestedDate?: string } = { version: order.version, reason, lines: amendLines }
   if (dateChanges) body.requestedDate = asked
   return body
+}
+
+/**
+ * B-PR-27a: why a line asked in another colourway cannot change now — a work order makes it (not cancelled): a colour change is
+ * then cancel-and-remake, answered by hand (409 `request/COLOUR_IN_WORK`); null when every such line is free.
+ */
+async function colourInWorkProblem(db: Reader, cells: readonly AskedCell[], lines: readonly Pick<LineRecord, 'id' | 'seq'>[]): Promise<Issue | null> {
+  const asked = colourLinesOf(cells).map((colour) => colour.fromLineId)
+  if (asked.length === 0) return null
+  const made = await db.workOrderSize.findMany({ where: { salesOrderLineId: { in: asked }, workOrder: { status: { not: 'CANCELLED' } } }, select: { salesOrderLineId: true, workOrder: { select: { number: true } } }, orderBy: { workOrderId: 'asc' } })
+  const first = asked.find((lineId) => made.some((cell) => cell.salesOrderLineId === lineId))
+  if (!first) return null
+  const numbers = [...new Set(made.filter((cell) => cell.salesOrderLineId === first).map((cell) => cell.workOrder.number))]
+  const words = colourInWorkWords(lines.find((line) => line.id === first)?.seq ?? 0, numbers)
+  return { path: 'request/COLOUR_IN_WORK', message: words.en }
 }
 
 /** Why the delivery address asked cannot be written on the order now; null when it can. */
@@ -245,6 +274,9 @@ export async function officeRecord(caller: CommandCaller, requestId: string, now
         if (Array.isArray(plan)) problems.push(...plan)
         else closes = plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity }))
       } else {
+        // B-PR-27a: a line asked in another colourway changes only while no work order makes it.
+        const inWork = await colourInWorkProblem(client, cells, lines)
+        if (inWork) problems.push(inWork)
         const body = amendmentOf(row, cells, order, lines, reasonOf(row, undefined))
         if (body) {
           const plan = await planAmendment(client, order, order.status, await readOrderFacts(client, order), body, now)
@@ -339,8 +371,16 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     } else {
       // The order and its lines as they are, read in this transaction: the amendment locks the order at this version.
       const fresh = (await readOrder(tx, order.id))!
-      const amend = amendmentOf(row, cells, fresh, await readLines(tx, order.id), reason)
-      if (amend) amendmentId = (await amendInCommand(tools, context.tenantId, fresh, amend)).amendmentId
+      const freshLines = await readLines(tx, order.id)
+      // B-PR-27a: a line asked in another colourway: only while no work order makes it (else answered by hand, nothing written).
+      const inWork = await colourInWorkProblem(tx, cells, freshLines)
+      if (inWork) throw new DomainError('invalid_state', inWork.message, [inWork])
+      const amend = amendmentOf(row, cells, fresh, freshLines, reason)
+      // B-PR-27a: the same pieces in another colourway at the old line's prices move no money: no re-acceptance (as a split).
+      if (amend) amendmentId = (await amendInCommand(tools, context.tenantId, fresh, amend, colourKeepsTotal(cells) ? { reacceptance: false } : {})).amendmentId
+      // B-PR-27a: then each old line closed short (a line a request names is never removed: W2a's close, with our reason).
+      const coloured = colourLinesOf(cells).filter((colour) => colour.sizes.length > 0).map((colour) => colour.fromLineId)
+      if (coloured.length > 0) await closeLinesInCommand(tools, context, (await readOrder(tx, order.id))!, { reason, lineIds: coloured })
       if (row.shipToAddressId) {
         if (!amend) await lockOrder(tx, order.id, fresh.version)
         // B-W2b-F13b: a delivery address the customer added for this request waits for our check: accepting approves it.
