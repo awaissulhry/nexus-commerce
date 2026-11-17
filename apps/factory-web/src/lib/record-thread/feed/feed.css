@@ -72,6 +72,25 @@
   background: var(--nds-border-subtle);
 }
 
+/* B-TH-229 (T4-F04): "New since your last visit" — the day line's form in the link colour, above the first new message. */
+.fw-rt-newline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 0;
+  font-size: var(--nds-font-size-xs);
+  font-weight: 700;
+  color: var(--nds-text-link);
+}
+
+.fw-rt-newline::before,
+.fw-rt-newline::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--nds-info);
+}
+
 .fw-rt-fold {
   display: flex;
   align-items: center;

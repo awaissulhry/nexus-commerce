@@ -8,6 +8,8 @@ import { BRAND_ALPHA, BRAND_BETA } from '../../testing/two-brands'
 import { scanText } from '../../testing/brand-scan'
 import { designScreen } from './fixtures'
 import { DEFAULT_DOCK_WIDTH, doorHolds, menuRows, R_ACT_ORDER, viewsOffered, waitWords, whoAnswers, widthKey, type HeadAbilities, type HeadModel } from './model'
+// B-TH-229
+import { answersOf, newWords, waitingWords } from './model'
 import { readWidth, writeWidth } from './use-thread-width'
 import { PortalHeadLine } from './view/PortalHeadLine'
 
@@ -17,7 +19,8 @@ import { PortalHeadLine } from './view/PortalHeadLine'
  * office count (W08, W34), the width remembered per person and record type, every case drawn in it and en.
  */
 
-const KEY_ON_SCREEN = /\b(answers|wait|closed|view|count|width|more|act|held|portal|design)\.[a-zA-Z]/
+// B-TH-229: + owner, new, rule.
+const KEY_ON_SCREEN = /\b(answers|wait|closed|view|count|width|more|act|held|portal|design|owner|new|rule)\.[a-zA-Z]/
 const ALL: HeadAbilities = { task: true, approve: true, share: true, follow: true, remind: true, manage: false, audit: false }
 const NOW = Date.UTC(2026, 10, 17, 10, 42)
 
@@ -62,6 +65,69 @@ describe('who answers next', () => {
     expect(waitWords('2026-11-15T09:00:00.000Z', NOW)).toEqual({ key: 'wait.days', n: 2 })
   })
 })
+
+// ---- B-TH-229 (TH-2, on B-TH-028): the one waiting rule, the owner, "2 new" ------------------------------------------------
+describe('B-TH-229 — waiting words and the amber rule, the owner, 2 new', () => {
+  const render = (model: HeadModel, locale: 'it' | 'en' = 'en') => renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: { head: model, frames: [718], dialogs: designScreen.cases[0]!.model.dialogs, open: null } })))
+  const us = (workingMinutes: number, amber: boolean, thresholdDays = 1, calendar = true) => answersOf({ on: 'US', since: '2026-11-13T08:10:00.000Z', workingMinutes, calendar, amber, thresholdDays })
+
+  it('the API’s waiting is the pill: working time on the calendar (a working day = 8 h), clock time without one', () => {
+    expect(answersOf(null)).toBeNull()
+    expect(answersOf({ on: 'CUSTOMER', since: 'x', workingMinutes: 5, calendar: true, amber: false, thresholdDays: 3 })).toMatchObject({ on: 'party', workingMinutes: 5 })
+    expect(waitingWords(us(242, false)!, NOW)).toEqual({ key: 'wait.hours', n: 4 })
+    expect(waitingWords(us(12, false)!, NOW)).toEqual({ key: 'wait.minutes', n: 12 })
+    expect(waitingWords(us(1460, true)!, NOW)).toEqual({ key: 'wait.days', n: 3 })
+    // No calendar: the API's minutes are clock minutes; the words follow the clock since the message.
+    expect(waitingWords(us(242, false, 1, false)!, NOW)).toEqual(waitWords('2026-11-13T08:10:00.000Z', NOW))
+  })
+
+  it('amber only by the rule: past the threshold while it waits on US; waiting on the customer is never amber', () => {
+    const amber = render(base({ answers: us(1460, true) }))
+    expect(amber).toMatch(/nds-pill warning[^"]*"[^>]*>(<span[^>]*>)?Waiting on us · 3 d/)
+    expect(amber).toContain('Amber after 1 working day waiting on us.')
+    const calm = render(base({ answers: us(242, false, 3) }))
+    expect(calm).toMatch(/nds-pill neutral[^"]*"[^>]*>(<span[^>]*>)?Waiting on us · 4 h/)
+    expect(calm).toContain('Amber after 3 working days waiting on us.')
+    const theirs = render(base({ answers: answersOf({ on: 'CUSTOMER', since: '2026-11-11T09:00:00.000Z', workingMinutes: 2380, calendar: true, amber: false, thresholdDays: 3 }) }))
+    expect(theirs).toContain('Waiting on customer · 4 d')
+    expect(theirs).toContain('Never amber while it waits on the other side.')
+    expect(render(base({ answers: us(242, false, 3, false) }))).toContain('No company calendar: counted in clock hours.')
+    expect(render(base({ answers: us(242, false) }), 'it')).toContain('Tocca a noi · 4 h')
+  })
+
+  it('the owner: a tile named on hover and for screen readers; inactive said; nobody "—"; Change owner held with the right', () => {
+    const owner = { id: 'u1', name: 'Bea Esempio', active: true, source: 'ASSIGNEE' as const }
+    const html = render(base({ owner, ownerHeld: null }))
+    expect(html).toContain('aria-label="Owner: Bea Esempio · Change owner…"')
+    expect(render(base({ owner: { ...owner, active: false }, ownerHeld: null }))).toContain('Owner: Bea Esempio (inactive)')
+    expect(render(base({ owner: null, ownerHeld: null }))).toContain('No owner yet')
+    // Without the head read (a design case of before): no tile at all.
+    expect(render(base())).not.toContain('fw-rth-owner')
+    const rows = menuRows(base({ ownerHeld: { key: 'held.noRight', params: { right: 'Write in threads' } } }))
+    expect(rows.find((row) => row.kind === 'owner')).toEqual({ kind: 'owner', held: { key: 'held.noRight', params: { right: 'Write in threads' } } })
+    expect(menuRows(base()).some((row) => row.kind === 'owner')).toBe(false)
+    const held = render(base({ owner, ownerHeld: { key: 'held.noRight', params: { right: 'Write in threads' } } }))
+    expect(held).toContain('role="img" aria-label="Owner: Bea Esempio"')
+  })
+
+  it('"2 new": the reader’s own new messages, 99+ above 99, nothing at 0', () => {
+    expect(newWords(0)).toBeNull()
+    expect(newWords(2)).toEqual({ key: 'new.count', n: 2 })
+    expect(newWords(120)).toEqual({ key: 'new.many', n: 99 })
+    expect(render(base({ newCount: 2 }))).toContain('2 new')
+    expect(render(base({ newCount: 2 }), 'it')).toContain('2 nuovi')
+    expect(render(base({ newCount: 120 }))).toContain('99+ new')
+    expect(render(base({ newCount: 0 }))).not.toMatch(/\d+ new/)
+  })
+
+  it('every B-TH-229 case keeps the brand wall: only Brand Alpha’s own thread (W08)', () => {
+    for (const item of designScreen.cases.filter((entry) => entry.id.startsWith('th-229'))) {
+      const html = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: item.model })))
+      expect(scanText(html, BRAND_BETA), item.id).toEqual([])
+    }
+  })
+})
+// ---- end B-TH-229
 
 describe('the doors (R-ACT)', () => {
   it('always offers the five tools in the same order, also at count 0', () => {

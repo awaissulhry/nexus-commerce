@@ -138,6 +138,8 @@ export const partnerThreadSchema = z.object({
   messages: z.array(partnerMessage),
   nextCursor: z.string().nullable(),
   composer: z.object({ canPost: z.boolean(), reason: z.string().nullable(), words: z.string().nullable(), replyByEmail: z.boolean(), hint: z.string().nullable() }),
+  // B-TH-229 (B-TH-027): the person's own reading — what is new to them since their own last visit (never anyone else's).
+  reading: z.object({ lastReadMessageId: z.string().nullable(), newCount: z.number().int(), firstNewMessageId: z.string().nullable() }).nullable().optional(),
 })
 export type PartnerThreadRead = z.infer<typeof partnerThreadSchema>
 
@@ -146,6 +148,9 @@ export const fetchThread = (api: ApiClient, type: string, id: string, cursor?: s
   api.get(recordPath(type, id), { query: { limit: 50, ...(cursor ? { cursor } : {}) }, schema: partnerThreadSchema, signal })
 export const postMessage = (api: ApiClient, type: string, id: string, body: string, idempotencyKey: string) =>
   api.post(`${recordPath(type, id)}/messages`, { body: { body }, schema: z.object({ message: partnerMessage }), idempotencyKey })
+// B-TH-229: the person read the conversation up to a message (a preview of the portal by the office writes nothing: the API's rule).
+export const markThreadRead = (api: ApiClient, type: string, id: string, messageId: string) =>
+  api.post(`${recordPath(type, id)}/read`, { body: { messageId }, schema: z.object({ reading: z.object({ newCount: z.number().int() }).passthrough() }), idempotencyKey: newIdempotencyKey() })
 
 // ── the portal terms (B-W2b-159) ─────────────────────────────────────────────────────────────────────────────────────────
 export const termsSchema = z.object({
