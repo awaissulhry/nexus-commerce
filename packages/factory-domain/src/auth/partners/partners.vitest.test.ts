@@ -60,8 +60,12 @@ describe('the partner role templates (SAL-060, SCM-092, PLT-021)', () => {
     expect(systemTemplateOf('customer-buyer')?.audience).toBe('partner')
     expect(templateOf('customer-buyer')).toBeUndefined()
     expect(FACTORY_PERMISSIONS.assignable.some((definition) => definition.partner === true)).toBe(false)
-    // B-W2b-201: + portal.accounting.view; B-W2b-262: + portal.samples.view; B-PR-13: + portal.production.view, .urgency (last).
-    expect(FACTORY_PERMISSIONS.partnerAssignable.map((definition) => definition.name)).toEqual(['portal.colleagues.view', 'portal.colleagues.manage', 'portal.comment', 'portal.upload', 'portal.approve', 'portal.home.view', 'portal.salesOrders.view', 'portal.purchaseOrders.view', 'portal.customerDocuments.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.catalogue.view', 'portal.orderRequests.manage', 'portal.addresses.view', 'portal.addresses.manage', 'portal.salesOrders.ask', 'portal.search', 'portal.payments.view', 'portal.payments.pay', 'portal.jobs.view', 'portal.shipNotices.view', 'portal.supplierDocuments.view', 'portal.supplierProfile.view', 'portal.supplierProfile.change', 'portal.returns.view', 'portal.returns.request', 'portal.complaints.view', 'portal.approvals.view', 'portal.accounting.view', 'portal.samples.view', 'portal.supplierBank.view', 'portal.supplierBank.propose', 'portal.production.view', 'portal.production.urgency'])
+    // B-W2b-201: + portal.accounting.view; B-W2b-262: + portal.samples.view; B-PR-13: + portal.production.view, .urgency;
+    // B-TH-066: + portal.projects.view (last; a read, held only by the partner templates — the line below holds it off the office's).
+    expect(FACTORY_PERMISSIONS.partnerAssignable.map((definition) => definition.name)).toEqual(['portal.colleagues.view', 'portal.colleagues.manage', 'portal.comment', 'portal.upload', 'portal.approve', 'portal.home.view', 'portal.salesOrders.view', 'portal.purchaseOrders.view', 'portal.customerDocuments.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.catalogue.view', 'portal.orderRequests.manage', 'portal.addresses.view', 'portal.addresses.manage', 'portal.salesOrders.ask', 'portal.search', 'portal.payments.view', 'portal.payments.pay', 'portal.jobs.view', 'portal.shipNotices.view', 'portal.supplierDocuments.view', 'portal.supplierProfile.view', 'portal.supplierProfile.change', 'portal.returns.view', 'portal.returns.request', 'portal.complaints.view', 'portal.approvals.view', 'portal.accounting.view', 'portal.samples.view', 'portal.supplierBank.view', 'portal.supplierBank.propose', 'portal.production.view', 'portal.production.urgency', /* B-TH-066 */ 'portal.projects.view'])
+    // B-TH-066: the projects read is a read, on partner templates only.
+    expect(FACTORY_PERMISSIONS.get('portal.projects.view')?.risk).toBe('read')
+    expect(PARTNER_ROLE_TEMPLATES.filter((template) => template.permissions.includes('portal.projects.view')).length).toBeGreaterThan(0)
     expect(ROLE_TEMPLATES.some((template) => template.permissions.some((name) => name.startsWith('portal.')))).toBe(false)
     for (const key of ['admin', 'sales', 'buyer', 'owner']) expect(templateOf(key)?.permissions).toEqual(expect.arrayContaining(['partners.view', 'partners.invite', 'partners.manage', 'partners.preview']))
     expect(templateOf('read_only')?.permissions).toContain('partners.view')
@@ -113,8 +117,9 @@ describe('kinds, choices and limits (PLT-006, PLT-021, PLT-022)', () => {
 
   it('let an office preview read what the party\'s people could read, never a write', () => {
     // B-W2b-185: the customer's open items too (a preview holds no grain: no amount); B-W2b-262: the samples page (it opens nothing);
-    // B-PR-13: its production read (never the urgency mark: a write).
-    expect(previewPermissions(['CUSTOMER'])).toEqual(['files.read', 'portal.addresses.view', 'portal.approvals.view', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.complaints.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.customerDocuments.view', 'portal.home.view', 'portal.payments.view', 'portal.production.view', 'portal.returns.view', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'threads.read'])
+    // B-PR-13: its production read (never the urgency mark: a write). B-TH-066: its projects read (a read; a portal person still
+    // sees only the projects it was added to, the API's check).
+    expect(previewPermissions(['CUSTOMER'])).toEqual(['files.read', 'portal.addresses.view', 'portal.approvals.view', 'portal.catalogue.view', 'portal.colleagues.view', 'portal.complaints.view', 'portal.customerDocuments.conformity', 'portal.customerDocuments.finance', 'portal.customerDocuments.view', 'portal.home.view', 'portal.payments.view', 'portal.production.view', /* B-TH-066 */ 'portal.projects.view', 'portal.returns.view', 'portal.salesOrders.view', 'portal.samples.view', 'portal.search', 'threads.read'])
     // B-W2b-201: an office preview of the accountant's firm reads the room (it never downloads: the API refuses a preview's).
     expect(previewPermissions(['GUEST'])).toEqual(['files.read', 'portal.accounting.view', 'portal.home.view', 'portal.search', 'threads.read'])
     expect(previewPermissions([])).toEqual([])

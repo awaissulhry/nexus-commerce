@@ -225,7 +225,9 @@ describe('saved replies (COL-016)', () => {
     expect(replyPlaceholdersOf('SalesOrder')).toContain('order.promiseDate')
     expect(replyPlaceholdersOf(null)).not.toContain('order.number')
     expect(replyProblems({ name: 'Delay notice', language: 'en', body: 'Dear {{contact.name}}, order {{order.number}}.', recordType: 'SalesOrder' })).toEqual([])
-    expect(replyProblems({ name: 'x\ny', language: 'fr', body: '{{order.number}}', recordType: null }).map((problem) => problem.path)).toEqual(['body/name', 'body/language', 'body/body'])
+    // B-TH-098: saved replies are written in the five message languages (it, en, de, fr, es); one outside them is refused.
+    expect(replyProblems({ name: 'Avis de retard', language: 'fr', body: 'Bonjour {{contact.name}}.', recordType: null })).toEqual([])
+    expect(replyProblems({ name: 'x\ny', language: 'pt', body: '{{order.number}}', recordType: null }).map((problem) => problem.path)).toEqual(['body/name', 'body/language', 'body/body'])
     expect(replyProblems({ name: 'A', language: 'it', body: 'x', recordType: 'Lot' }).map((problem) => problem.path)).toEqual(['body/recordType'])
   })
 })
