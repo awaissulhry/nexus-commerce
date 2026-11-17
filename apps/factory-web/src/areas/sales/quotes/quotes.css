@@ -1,6 +1,6 @@
 /*
- * Quotes (SCR-034 list, SCR-035 record) LAYOUT: the record's band and tabs, the body with the optional thread beside it,
- * the style blocks and the summary rail, the list's toolbar and table. The controls are the design system's; this file
+ * Quotes (SCR-034 list, SCR-035 record) LAYOUT: the record's body on RecordFrame (B-TH-257: the frame draws the band and docks
+ * the thread), the style blocks and the summary rail, the list's toolbar and table. The controls are the design system's; this file
  * places them with semantic tokens only (no colours of its own but the DS's).
  */
 .fw-q,
@@ -8,22 +8,6 @@
   display: flex;
   flex-direction: column;
   gap: var(--nds-space-14);
-  min-width: 0;
-}
-
-.fw-q-band {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nds-space-8);
-  min-width: 0;
-}
-
-.fw-q-meta-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--nds-space-8) var(--nds-space-16);
   min-width: 0;
 }
 
@@ -36,7 +20,6 @@
   color: var(--nds-text-2);
 }
 
-.fw-q-meta,
 .fw-q-actions,
 .fw-q-tags,
 .fw-q-inline {
@@ -49,12 +32,6 @@
 
 .fw-q-actions {
   gap: var(--nds-space-8);
-}
-
-.fw-q-keys {
-  display: inline-flex;
-  gap: 2px;
-  margin-left: var(--nds-space-4);
 }
 
 .fw-q-save {
@@ -84,25 +61,12 @@
   background: var(--nds-warning);
 }
 
-.fw-q-body {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+/* B-TH-257: a merged tab (Approval & sending) shows its parts one after the other. */
+.fw-q-merged {
+  display: flex;
+  flex-direction: column;
   gap: var(--nds-space-16);
   min-width: 0;
-}
-
-.fw-q-body.has-dock {
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px);
-}
-
-@media (max-width: 1279px) {
-  .fw-q-body.has-dock {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .fw-q-dock {
-    display: none;
-  }
 }
 
 .fw-q-main,
@@ -431,6 +395,12 @@ p.fw-q-hint[role='status'] {
   line-height: 1.3;
 }
 
+/* B-TH-257: the status pill keeps its own width above the order's line. */
+.fw-ql-cell.is-status {
+  align-items: flex-start;
+  gap: 2px;
+}
+
 .fw-ql-ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -473,11 +443,6 @@ p.fw-q-tablefoot {
 }
 
 @media (max-width: 720px) {
-  .fw-q-keys,
-  .fw-q-hide-phone {
-    display: none;
-  }
-
   .fw-q-rail {
     position: static;
   }

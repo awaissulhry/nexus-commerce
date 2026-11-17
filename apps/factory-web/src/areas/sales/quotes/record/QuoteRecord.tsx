@@ -30,6 +30,7 @@ import {
   getStyle,
   listApprovals,
   listVersions,
+  makeOrderFromQuote,
   previewBytes,
   previewHref,
   rejectQuote,
@@ -51,14 +52,15 @@ import type { ComposerState, Loaded, QuoteDialog, QuoteNotice, QuoteRecordViewMo
 import { sendItems } from './send-model'
 import { QuoteRecordView } from './view/QuoteRecordView'
 import { QuoteProofs } from './proofs/QuoteProofs'
+// ---- B-TH-257: the docked thread on the quote (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 // B-W2b-316: the quote record's W2b parts (warnings, table view, paste, fill by curve, line drawer, target price, terms in
 // depth, compare versions, the deposit's pay-online page) fill the view's slots.
 import { useQuoteDepth } from './lines-depth/use-depth'
 // B-W2b-343: prices on screen (Pricing by line, a block's discount and price by size; the drawer's waterfall is a drawer section).
 import { usePriceDepth } from './price-depth/use-price-depth'
 
-const WIDE = '(min-width: 1280px)'
-const DOCK_KEY = 'fw.sales.dock.Quote'
 const SAVE_DELAY_MS = 700
 const NO_COMPOSER: ComposerState = { query: '', results: null, problem: null, chosen: null, picked: [] }
 
@@ -86,6 +88,7 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
   const router = useRouter()
   const pathname = usePathname()
   const params = useSearchParams()
+  // B-TH-257: the five tabs; an old address lands on the tab it merged into (Activity → Lines with the thread opened by the frame).
   const tab = tabOf(params?.get('tab'))
   const prefix = pathname.replace(/\/sales\/quotes\/[^/]+\/?$/, '')
   const grains = useMemo(() => grainsOf(session.permissions), [session.permissions])
@@ -114,7 +117,6 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<QuoteNotice | null>(null)
   const [changed, setChanged] = useState<{ at: string } | null>(null)
-  const [dockOpen, setDockOpen] = useState(false)
   const inFlight = useRef(0)
   const queue = useRef<Promise<unknown>>(Promise.resolve())
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>())
@@ -236,12 +238,12 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
     }
   }, [api, styleIds, styles])
 
-  // The Documents tab's PDF: the live preview of a draft, else the version's frozen PDF from the file store.
+  // Approval & sending's PDF (B-TH-257: Documents merged into it): the live preview of a draft, else the version's frozen PDF.
   const sentDocument = versions.items?.find((version) => version.revision === value?.currentRevision)?.document ?? null
   const frozen = !!value && !['DRAFT', 'PENDING_APPROVAL', 'APPROVED'].includes(value.current.status) && sentDocument !== null
   const docKey = value ? `${value.id}:${value.version}:${previewLanguage}:${frozen ? sentDocument?.fileId : 'live'}` : null
   useEffect(() => {
-    if (tab !== 'documents' || !value || !docKey) return
+    if (tab !== 'approval' || !value || !docKey) return
     let gone = false
     setDoc((current) => ({ ...current, src: null, problem: null }))
     if (frozen && sentDocument) {
@@ -258,35 +260,6 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
     }
     // The key holds everything the PDF depends on.
   }, [tab, docKey])
-
-  // The thread beside the tab (Owner O1), remembered on this device (a per-viewer convenience).
-  useEffect(() => {
-    try {
-      setDockOpen(window.localStorage.getItem(DOCK_KEY) === '1' && window.matchMedia(WIDE).matches)
-    } catch {
-      setDockOpen(false)
-    }
-  }, [])
-  const toggleDock = () => {
-    let wide = false
-    try {
-      wide = window.matchMedia(WIDE).matches
-    } catch {
-      wide = false
-    }
-    if (!wide) {
-      router.push(tabHref('activity'))
-      return
-    }
-    setDockOpen((current) => {
-      try {
-        window.localStorage.setItem(DOCK_KEY, current ? '0' : '1')
-      } catch {
-        // Not kept on this device; the dock still toggles.
-      }
-      return !current
-    })
-  }
 
   // ---- live ---------------------------------------------------------------------------------------------------------
   const unsaved = Object.keys(drafts).length > 0 || Object.keys(prices).length > 0
@@ -557,7 +530,10 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
     notice,
     changed,
     today: romeToday(),
-    dockOpen,
+    // ---- B-TH-257
+    personId: session.user.id,
+    readsRequests: session.permissions.includes('sales.inquiries.view'),
+    orders: { view: session.permissions.includes('orders.view'), make: session.permissions.includes('orders.manage') },
     library: { ...library, allowed: termsAllowed },
     duplicate: duplicate.model,
   }
@@ -567,7 +543,22 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
       model={model}
       depth={{ ...depth, ...priceDepth }}
       proofs={value ? <QuoteProofs api={api} quoteId={value.id} /> : null}
-      panels={value ? <RecordPanels record={{ type: 'Quote', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName, emails: value.contact?.email ? [value.contact.email] : [] }} /> : null}
+      // B-TH-257: the docked thread (Head with Activity's doors, files line, Files view, feed, box) of THIS quote and its customer only;
+      // the print view keeps the panels' print form.
+      thread={
+        value ? (
+          <OfficeRecordThread
+            docked
+            record={{ type: 'Quote', id: value.id, companyId: value.companyId, siteId: null }}
+            title={`${value.number} · ${value.party.legalName}`}
+            recordLabel={value.number}
+            party={{ id: value.partyId, name: value.party.legalName }}
+            partyRole="customer"
+            printHref={printHref(pathname, params?.toString() ?? '')}
+          />
+        ) : null
+      }
+      printThread={value ? <RecordPanels record={{ type: 'Quote', id: value.id, companyId: value.companyId, siteId: null }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName, emails: value.contact?.email ? [value.contact.email] : [] }} /> : null}
       actions={{
         onRetry: loadAll,
         onReload: loadAll,
@@ -617,7 +608,20 @@ function QuoteRecordContainer({ quoteId }: { quoteId: string }) {
             .catch((error: unknown) => setNotice({ key: readProblem(error), tone: 'danger' }))
         },
         onDismissNotice: () => setNotice(null),
-        onDock: toggleDock,
+        // B-TH-257 (O-SAL-QUO-REC.band-F03): the accepted quote's order, made now from its accepted version (orders.manage).
+        onMakeOrder: () => {
+          const current = quoteRef.current
+          if (!current || busy || current.order?.state !== 'WAITS') return
+          setBusy(true)
+          setNotice(null)
+          makeOrderFromQuote(api, current.current.id)
+            .then((answer) => setNotice({ key: 'notice.orderMade', tone: 'success', params: { number: answer.order.number } }))
+            .catch((error: unknown) => setNotice({ key: writeProblem(error).key, tone: 'danger' }))
+            .finally(() => {
+              setBusy(false)
+              void loadQuote()
+            })
+        },
         ...duplicate.actions,
         onDuplicateStart: () => {
           const current = quoteRef.current
