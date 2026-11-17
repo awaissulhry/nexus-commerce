@@ -25,7 +25,8 @@ export const STATUSES_OF: Readonly<Record<DeliveryState, readonly OutboundStatus
   SENT: ['SENT'],
   DELIVERED: ['DELIVERED'],
   PROBLEM: ['BOUNCED', 'COMPLAINED'],
-  FAILED: ['FAILED'],
+  // B-TH-038: a mail taken back in its undo window never left either (its own word comes with undo send, B-TH-048).
+  FAILED: ['FAILED', 'WITHDRAWN'],
 })
 
 export function deliveryStateOf(status: OutboundStatus): DeliveryState {

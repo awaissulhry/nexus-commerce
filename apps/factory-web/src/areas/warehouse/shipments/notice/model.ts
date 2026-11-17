@@ -45,7 +45,8 @@ export function mailState(mail: Notice['mails'][number]): { state: Notice['mails
   return { state: mail.status, at: mail.failedAt ?? mail.bouncedAt ?? mail.deliveredAt ?? mail.sentAt ?? mail.queuedAt }
 }
 
-export const MAIL_TONE = { QUEUED: 'neutral', SENDING: 'info', SENT: 'info', DELIVERED: 'success', BOUNCED: 'danger', COMPLAINED: 'danger', FAILED: 'danger' } as const
+// B-TH-038: WITHDRAWN, a thread mail taken back in its undo window (a notice mail never waits in one; listed for the full status).
+export const MAIL_TONE = { QUEUED: 'neutral', SENDING: 'info', SENT: 'info', DELIVERED: 'success', BOUNCED: 'danger', COMPLAINED: 'danger', FAILED: 'danger', WITHDRAWN: 'neutral' } as const
 
 /** The send's outcome, said: sent n, failed n, skipped addresses (suppressed). */
 export function sentWords(sent: NoticeSent): Words {

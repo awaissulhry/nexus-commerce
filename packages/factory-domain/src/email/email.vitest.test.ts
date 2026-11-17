@@ -84,6 +84,9 @@ describe('the status machine', () => {
     expect(canMove('SENT', 'QUEUED')).toBe(false)
     expect(canMove('FAILED', 'QUEUED')).toBe(false)
     expect(canMove('COMPLAINED', 'BOUNCED')).toBe(false)
+    // B-TH-038: taken back only while it waits.
+    expect(OUTBOUND_STATUSES.filter((status) => canMove(status, 'WITHDRAWN'))).toEqual(['QUEUED'])
+    expect(OUTBOUND_STATUSES.filter((status) => canMove('WITHDRAWN', status))).toEqual([])
     expect(OUTBOUND_STATUSES.filter((status) => canMove(status, 'DELIVERED'))).toEqual(['SENT'])
     expect(statusAfter('SENT', 'DELIVERED')).toBe('DELIVERED')
     expect(statusAfter('BOUNCED', 'DELIVERED')).toBe('BOUNCED')

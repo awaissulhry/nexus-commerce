@@ -1,4 +1,5 @@
 import type { CommandTx } from '../../../core/command'
+import { EVERY_PARTY_MARKER, holdCustomersOf, NO_CUSTOMER, partyOfCustomers } from '../../../modules/quality/wall' // B-PR-08a part 2
 import { defineIndexer, idWhere, type RecordsOf } from '../indexer'
 
 /**
@@ -6,7 +7,7 @@ import { defineIndexer, idWhere, type RecordsOf } from '../indexer'
  * a hold placed before has none: found by what it holds), the codes of the records it holds — lots, hides, work orders,
  * bundles, garment serials, shipments, parcels — and its NCR's number. Scope as the holds list: company and site. NEVER
  * who placed or released it (a worker, Statuto art. 4) and never the reason's words. Placed, changed, released, and closed
- * by its NCR re-read it.
+ * by its NCR re-read it. B-PR-08a: and the customer of what it holds (the quality wall, B-PR-06).
  */
 const holdOfNcr: RecordsOf = (event) => {
   const id = (event.payload as { holdId?: unknown } | null)?.holdId
@@ -73,14 +74,18 @@ export default defineIndexer({
       select: { id: true, companyId: true, siteId: true, number: true, subjectType: true, subjectIds: true, status: true, ncr: { select: { number: true } } },
     })
     const labels = await labelsOf(tx, rows)
+    const customers = await holdCustomersOf(tx, rows) // B-PR-08a part 2
     return rows.map((row) => {
       // In the order the hold names them; a record gone since is left out.
       const held = row.subjectIds.map((id) => labels.get(`${row.subjectType}:${id}`)).filter((label): label is string => Boolean(label))
+      // B-PR-08a part 2: one customer's goods: it; goods of several, or customer work of none: every customer; a lot or a hide: none.
+      const party = partyOfCustomers(customers.get(row.id) ?? NO_CUSTOMER)
       return {
         recordId: row.id,
         companyId: row.companyId,
         siteId: row.siteId,
-        partyId: null,
+        partyId: party === EVERY_PARTY_MARKER ? null : party,
+        everyParty: party === EVERY_PARTY_MARKER,
         number: row.number,
         title: [...held.slice(0, SHOWN), ...(held.length > SHOWN ? [`+${held.length - SHOWN}`] : [])].join(', '),
         subtitle: row.ncr?.number ?? null,

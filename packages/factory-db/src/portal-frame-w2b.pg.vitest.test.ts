@@ -78,8 +78,9 @@ async function newTask(changes: Record<string, unknown> = {}): Promise<string> {
   await copyAs(office(), 'PartnerTask', seeded.tasks.acceptQuote, { id, sourceKey: `Test:${id}`, ...changes })
   return id
 }
-/** The partner's own columns of a message (its grant leaves out the author id, the mentions and the floor flag). */
-const NOT_THE_PARTNERS = ['authorId', 'mentionedUserIds', 'forFloor']
+/** The partner's own columns of a message (its grant leaves out the author id, the mentions and the floor flag; B-TH-038: and the
+ * typed amount with its currency). */
+const NOT_THE_PARTNERS = ['authorId', 'mentionedUserIds', 'forFloor', 'amount', 'amountCurrency']
 /** A portal post of the buyer, made from the seed's post with `changes`. */
 const post = (changes: Record<string, unknown> = {}, scope: FactoryScope = portal()) =>
   copyAs(scope, 'Message', seeded.postId, { id: randomUUID(), bodyText: 'Test portal post.', ...changes }, NOT_THE_PARTNERS)
@@ -116,7 +117,8 @@ describe('grants and the seed', () => {
     const access = (name: string) => all.find(({ model }) => model.name === name)!.ownership.access
     expect(access('PartnerTask').factory_partner_runtime).toEqual({ privileges: ['select', 'update'], scopedBy: ['party'], hiddenColumns: ['askedById'] })
     expect(access('Notification').factory_partner_runtime).toEqual({ privileges: ['select'], scopedBy: ['party'], hiddenColumns: ['actorId'] })
-    expect(access('Message').factory_partner_runtime).toEqual({ privileges: ['select', 'insert'], scopedBy: ['party'], hiddenColumns: NOT_THE_PARTNERS })
+    // B-TH-038: and never a held message (a mail waiting in its undo window or taken back).
+    expect(access('Message').factory_partner_runtime).toEqual({ privileges: ['select', 'insert'], scopedBy: ['party'], hiddenColumns: NOT_THE_PARTNERS, onlyValues: { held: ['false'] } })
     for (const name of ['NotificationDelivery', 'RecordFollower', 'MessageMention', 'Task']) expect(Object.keys(access(name)), name).toEqual(['factory_runtime'])
     expect(access('Thread').factory_partner_runtime!.privileges).toEqual(['select'])
   })

@@ -502,7 +502,26 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    party names its record's own, read from the record's "partyId" or the resolver's column (Party id, Style brandPartyId,
    Invoice buyerPartyId, Certificate holderPartyId, Lot and GoodsReceipt supplierId, Capa customerId); a record of none
    shares with none; a table with no party column, a row or column the session cannot read is left to the API; a NOTICE
-   counts older files that disagree; no earlier function redefined):
+   counts older files that disagree; no earlier function redefined),
+   `…_threads_composer_th_guards` (wave 5/9, B-TH-038, the composer in depth: its own triggers `Message_composer_check` (a typed
+   amount with its currency, 0 or more, only on an office note not for the floor; at most one reply or correction, of its own
+   thread, written before, one the writer reads; a shared message points only at a shared one that is not held; a correction keeps
+   the direction; `held` only on a mail sent's message), the deferred `Message_held_has_mail` (a held message has its mail with a
+   send-after time by commit), `EmailOutbound_undo_check` (a window only on a thread mail, from its queueing for at most a minute,
+   exactly with a held message; taken back only from QUEUED, never claimed, by an office person, with when and by whom set once;
+   never born WITHDRAWN), `EmailOutbound_release_message` (SECURITY DEFINER `factory_message_release`: a mail with a window that
+   leaves QUEUED for SENDING or FAILED releases its message) and `Task_message_check` (a task's message is of its record's thread,
+   named once); it redefines threads' `factory_refuse_message_change` (the release of `held`, nothing else) and email's
+   `factory_email_outbound_guard` (sendAfter fixed, QUEUED → WITHDRAWN), each from its latest body (…_privacy_erasure_w2b_guards),
+   word for word but for the lines marked B-TH-038),
+   `…_files_measurements_th_guards` (wave 6/9, B-TH-082: its own triggers `StoredFile_th_kinds_check` / `StoredFile_th_kinds_change`:
+   a MEASUREMENTS file is a document, an attachment or a photo, never shared with a floor; a design file (Illustrator, EPS, Photoshop,
+   ZIP) an attachment or a document, never a photo, never a thumbnail; no HTML, SVG or script type at all; a NOTICE counts older
+   files that break it; no earlier function redefined),
+   `…_config_brand_fields_th_guards` (wave 7/9, B-TH-055: its own triggers `CustomField_party_check` (a field for one customer: an
+   active CUSTOMER of the tenant, of the field's company or every company, on a record type whose records name their customer;
+   never changed) and `CustomFieldValue_party_check` (its values only on that customer's records, read with the files step's
+   `factory_file_record_party`); no earlier function redefined):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

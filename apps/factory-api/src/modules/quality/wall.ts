@@ -209,3 +209,19 @@ export async function reachesNcr(db: Reader, actor: Actor, permission: Permissio
   if (!facts) return false
   return reachesCustomers(actor, permission, place, (await ncrCustomersOf(db, [facts])).get(ncrId) ?? NO_CUSTOMER)
 }
+
+// ---- B-PR-08a part 2 (production plan §2; the threads' wall party and the alerts' party, B-PR-37): ONE party for what names
+// customers, where only one id fits — a fixed id that is no party's stands for "several customers, or customer work of none".
+/**
+ * The every-party marker: only a grant that reaches EVERY customer reaches it (can(), scopeWhere and roleReaches find it in no
+ * customer list). An alert of goods of several customers carries it (platform/alerts/evaluators.ts), and so does the office's
+ * wall party of a work order, hold or NCR thread of several customers or of none (platform/threads/records.ts).
+ */
+export const EVERY_PARTY_MARKER = 'ffffffff-ffff-8fff-bfff-ffffffffffff'
+
+/** The one party of what these customers name: none → null (company and site only), one → it, several or unnamed → the marker. */
+export function partyOfCustomers(customers: Customers): string | null {
+  if (customers.parties.length === 0 && !customers.unnamed) return null
+  return customers.parties.length === 1 && !customers.unnamed ? customers.parties[0]! : EVERY_PARTY_MARKER
+}
+// ---- end B-PR-08a

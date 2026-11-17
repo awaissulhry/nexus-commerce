@@ -13,7 +13,8 @@ import { actorOf } from '../../core/context'
 import { heldRoles } from '../auth/roles/access'
 import { ownerKey, workingCalendarsFor } from '../calendars/service'
 import { mayOnThread } from './records'
-import { contextOf, ensureThread, officeRecord, scopeOfThread, type RecordRef } from './threads'
+import { wallScopeOf } from './records' // B-PR-08a part 2
+import { contextOf, ensureThread, officeRecord, type RecordRef } from './threads' // B-PR-08a part 2: scopeOfThread → wallScopeOf
 
 /**
  * B-TH-028 (threads plan TH-2, N1, N2, X-G05; production lane agreement T8; design T1-F01..F03, O-SAL-INQ-LIST.pane-head):
@@ -147,7 +148,8 @@ export async function setThreadOwner(caller: CommandCaller, record: RecordRef, b
       const user = await tools.tx.user.findUnique({ where: { id: body.ownerId }, select: { id: true, status: true, audience: true } })
       if (!user || user.status !== 'ACTIVE' || user.audience !== 'OFFICE') throw new ValidationError(words, [{ path: 'body/ownerId', message: words }])
       const reader: Actor = { audience: 'office', tenantId: context.tenantId, grants: sessionGrants({ requireMfa: false }, await heldRoles(tools.tx, user.id, tools.now), true) }
-      if (!mayOnThread(reader, THREADS_READ, record.type, scopeOfThread(thread))) throw new ValidationError(words, [{ path: 'body/ownerId', message: words }])
+      // B-PR-08a part 2: a work order's, hold's or NCR's thread is answered only by someone who reaches its customer (its wall party).
+      if (!mayOnThread(reader, THREADS_READ, record.type, await wallScopeOf(tools.tx, thread))) throw new ValidationError(words, [{ path: 'body/ownerId', message: words }])
     }
     const before = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: { ownerId: true, version: true } })
     if (before.ownerId !== body.ownerId) {

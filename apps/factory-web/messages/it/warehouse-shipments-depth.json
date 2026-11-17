@@ -92,7 +92,8 @@
     "DELIVERED": "Recapitata",
     "BOUNCED": "Respinta",
     "COMPLAINED": "Segnalata come spam",
-    "FAILED": "Non riuscita"
+    "FAILED": "Non riuscita",
+    "WITHDRAWN": "Invio annullato"
   },
   "taskState": {
     "OPEN": "aperta",

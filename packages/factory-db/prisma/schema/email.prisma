@@ -13,6 +13,10 @@
 // partner reads the mail it got as the thread's OUTBOUND message (threads.prisma), never these rows, never the
 // thread's reply address. Rows are never deleted; an EmailOutbound row's content never changes and its status only
 // moves forward (the …_email_guards trigger, for every login).
+//
+// TH-3 (threads plan, schema wave 5/9, B-TH-038; Owner decision 6): undo send. A thread mail may wait 10 seconds before it
+// leaves (sendAfter) and be taken back in that time (WITHDRAWN, with when and by whom); while it waits, and for good once taken
+// back, its OUTBOUND message is held, so the partner role never reads it. The …_threads_composer_th_guards triggers hold it.
 
 /// One address a company sends from (PLT-230: a domain verified in SES, with DKIM): mail on records goes out from its
 /// CONVERSATION identity, sign-in and notification mail from its NOTIFICATION one (A1 §3.7: `mail.<domain>` keeps
@@ -148,6 +152,16 @@ model EmailOutbound {
   bounceKind     EmailBounceKind?
   complainedAt   DateTime?           @db.Timestamptz(3)
   failedAt       DateTime?           @db.Timestamptz(3)
+  /// TH-3 (threads plan, schema wave 5/9, B-TH-038; thread-G08, feature T7-F06, Owner decision 6 "undo send, 10 seconds"): a
+  /// thread mail waits until then before the worker sends it (queued + 10 s; never before it was queued, at most a minute
+  /// after), so it can be taken back; its OUTBOUND message is held while it waits (threads.prisma Message.held). Null: it
+  /// leaves at once (a sign-in mail, and every mail written before). Written with the mail, never changed.
+  sendAfter      DateTime?           @db.Timestamptz(3)
+  /// TH-3 (B-TH-038): taken back in its window (status WITHDRAWN): when and by whom (an office person), both exactly then.
+  /// Only a mail with a window that was never claimed for sending (QUEUED, no attempt) is taken back; it never leaves, and
+  /// its message stays held for good (the customer never sees it). Set once.
+  withdrawnAt    DateTime?           @db.Timestamptz(3)
+  withdrawnById  String?             @db.Uuid
   version        Int                 @default(1)
   createdAt      DateTime            @default(now()) @db.Timestamptz(3)
   updatedAt      DateTime            @default(now()) @updatedAt @db.Timestamptz(3)
@@ -166,7 +180,7 @@ model EmailOutbound {
 
 /// Where a mail is (A1 §2.3). QUEUED → SENDING → SENT → DELIVERED; SENT or DELIVERED → BOUNCED → COMPLAINED (a later
 /// notification may only make it worse); SENDING → QUEUED (a failed try, retried); QUEUED or SENDING → FAILED (refused:
-/// suppressed, no verified identity, out of tries).
+/// suppressed, no verified identity, out of tries); TH-3 (B-TH-038): QUEUED → WITHDRAWN (taken back in its undo window).
 enum EmailOutboundStatus {
   QUEUED
   SENDING
@@ -175,6 +189,8 @@ enum EmailOutboundStatus {
   BOUNCED
   COMPLAINED
   FAILED
+  /// TH-3 (B-TH-038): taken back by a person before it left (a mail with a window, never claimed). Final.
+  WITHDRAWN
 }
 
 /// W2b (wave 47/57): SES's bounce type (bounceType Permanent, Transient, Undetermined).
