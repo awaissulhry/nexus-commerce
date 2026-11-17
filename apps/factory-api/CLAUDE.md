@@ -475,6 +475,12 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   who has it (`assigned`). Deactivating a partner person (`auth/partners/people.ts statusInCommand`, `auth/users/lifecycle.ts`)
   gives their OPEN tasks back to everyone in the same command (`tasks/people.ts handBackInCommand`). PG tests:
   `portal/tasks/assign.pg.vitest.test.ts`.
+- B-PR-20 (production plan §5 Portal › Home; PW-P07): source `portal/home/sources/production.ts` (customers, area `production`
+  — factory-domain PORTAL_AREAS gained it): `production.waiting_on_you`, `production.at_risk`, `production.on_hold` of the
+  customer's OWN orders in production, the same rules and read as My production's chips (`modules/production/brand-portal/read.ts
+  productionCounts`); null without portal.production.view. A source may declare `live` events: the Home's `live.events` adds
+  those of every shown source (production: brand_production.stage_reached | health_changed | urgency_changed | hold_changed,
+  each reaching only its own party through PARTNER_LIVE_EVENTS). PG test `portal/home/production-home.pg.vitest.test.ts`.
 
 ## Supplier orders in the portal (`src/modules/purchasing/portal-orders/`, B-W2b-174; SCM-094, SCM-086; Owner answers C2, P2)
 - Partner routes (in purchasing's routes.ts/manifest.ts; `portal.purchaseOrders.view`, scope party, no grain): `GET
