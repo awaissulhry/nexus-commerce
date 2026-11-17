@@ -4,6 +4,12 @@ import type { Finding, RulePlace } from '@nexus/factory-domain/alerts/rules'
 import type { CommandTx } from '../../../core/command'
 import { PORTAL_REQUESTS_CLOSED, type Words } from '@nexus/factory-domain/sales/portal-requests/rules'
 import { portalReader } from '../portal-orders/access'
+// ---- B-TH-085: whether files go with the request after Send (the outside-upload gate, the person's upload capability).
+import { PORTAL_UPLOAD } from '@nexus/factory-domain/auth/partners/permissions'
+import { can } from '@nexus/factory-domain/core/permissions'
+import { portalUploadWords } from '@nexus/factory-domain/threads/partner/uploads'
+import { outsideUploadsWords } from '../../../platform/files/multipart/outside'
+// ---- end B-TH-085
 
 /**
  * Whether a company takes requests now (B-TH-012; threads plan L2-G03): a request is numbered from the company's INQUIRY series
@@ -19,11 +25,15 @@ export async function takesRequests(client: FactoryClient, companyId: string): P
 }
 
 /** GET /portal/inquiries/open */
-export async function requestsOpen(app: FastifyInstance, request: FastifyRequest): Promise<{ open: boolean; reason: Words | null }> {
+export async function requestsOpen(app: FastifyInstance, request: FastifyRequest): Promise<{ open: boolean; reason: Words | null; files: { open: boolean; words: string | null } }> {
   const reader = portalReader(app, request)
   const company = reader.session.company
   const open = await reader.inTenant((client) => takesRequests(client, company.id))
-  return { open, reason: open ? null : PORTAL_REQUESTS_CLOSED(company.name) }
+  // B-TH-085: said before the customer drops a file (T6-F07), the first reason that holds.
+  const mayUpload = !reader.session.preview && can(reader.actor, PORTAL_UPLOAD, { companyId: company.id, partyId: reader.session.partyId })
+  const closed = outsideUploadsWords()
+  const files = !mayUpload ? { open: false, words: portalUploadWords('NO_UPLOAD', reader.session.person.locale) } : closed ? { open: false, words: closed } : { open: true, words: null }
+  return { open, reason: open ? null : PORTAL_REQUESTS_CLOSED(company.name), files }
 }
 
 // ---- the alert REQUEST_NUMBERING_MISSING (B-TH-012; factory-domain alerts/kinds; platform/alerts/evaluators FINDERS) -------

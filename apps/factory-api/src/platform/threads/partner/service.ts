@@ -21,6 +21,18 @@ import type { AttachmentView } from '../contract'
 import { afterCursor, cursorOf, ensureThread, type RecordRef } from '../threads'
 // ---- B-TH-050: what a shared message answers or corrects, as the partner may see it.
 import { messageLinksOf, NO_LINKS, type MessageLinks } from '../threads'
+// ---- B-TH-085: the customer attaches files to its own record from the portal (behind the outside-upload gate and the scanner).
+import { PORTAL_UPLOAD } from '@nexus/factory-domain/auth/partners/permissions'
+import { FILES_MANAGE, FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
+import type { Grant } from '@nexus/factory-domain/core/permissions'
+import { isMeasurementSheet } from '@nexus/factory-domain/files/measurements'
+import { PORTAL_FILES_PER_RECORD, portalFileKindOf, portalUploadWords } from '@nexus/factory-domain/threads/partner/uploads'
+import { SYSTEM_ACTOR_ID, type SystemContext } from '../../../core/context'
+import { completeUpload, requestUpload } from '../../files/files'
+import { assertOutsideUploadsOpen, outsideUploadsWords } from '../../files/multipart/outside'
+import { normaliseContentType } from '../../files/rules'
+import type { FilesRuntime } from '../../files/service'
+// ---- end B-TH-085
 import type { PartnerMessageView } from './contract'
 // ---- B-TH-027: the person's own read mark (their post moves it; "New since your last visit"; the list's new counts).
 import { markThreadRead, moveMark, readingOf, unreadCounts } from '../reads'
@@ -161,8 +173,19 @@ async function composerFor(client: FactoryClient, caller: PartnerCaller, scope: 
     words: state.reason ? partnerThreadWords(state.reason, locale, company) : null,
     replyByEmail,
     hint: replyByEmail ? partnerThreadWords('REPLY_BY_EMAIL', locale, company) : null,
+    uploads: uploadsFor(caller, scope, state), // B-TH-085
   }
 }
+
+// ---- B-TH-085: whether the composer takes files now, and why not (the first reason that holds), in the person's language.
+function uploadsFor(caller: PartnerCaller, scope: ScopedRecord, state: ReturnType<typeof composerOf>): { open: boolean; words: string | null } {
+  const locale = caller.session.person.locale
+  if (!state.canPost) return { open: false, words: state.reason ? partnerThreadWords(state.reason, locale, caller.session.company.name) : null }
+  if (!can(caller.actor, PORTAL_UPLOAD, scope)) return { open: false, words: portalUploadWords('NO_UPLOAD', locale) }
+  const closed = outsideUploadsWords()
+  return closed ? { open: false, words: closed } : { open: true, words: null }
+}
+// ---- end B-TH-085
 
 /** GET /portal/threads/<type>/<id>: the record's thread as the partner sees it, one page of messages newest first. */
 export async function readPartnerThread(request: FastifyRequest, ref: RecordRef, page: { readonly cursor?: string | undefined; readonly limit: number }) {
@@ -310,6 +333,8 @@ export interface PartnerPostInput {
  */
 export interface PartnerPostOptions {
   readonly firstOfRequest?: boolean
+  /** B-TH-085: the person who sends requests attaches the files they uploaded to their own open request (portal.orderRequests.manage, checked by its route). */
+  readonly requester?: boolean
 }
 // ---- end B-TH-010
 
@@ -322,7 +347,7 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
   const opened = await request.withClient(async (client) => {
     const { scope } = await openRecord(client, caller, ref)
     if (caller.session.preview) throw new ForbiddenError(partnerThreadWords('PREVIEW', caller.session.person.locale, caller.session.company.name))
-    if (!options.firstOfRequest && !can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', caller.session.person.locale, caller.session.company.name))
+    if (!options.firstOfRequest && !options.requester && !can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', caller.session.person.locale, caller.session.company.name))
     return threadOf(client, ref)
   })
   let thread = opened
@@ -414,3 +439,125 @@ async function touchThread(request: FastifyRequest, caller: PartnerCaller, threa
     client.thread.updateMany({ where: { id: threadId, OR: [{ lastMessageAt: null }, { lastMessageAt: { lt: at } }] }, data: { lastMessageAt: at } }),
   )
 }
+
+// ---- B-TH-085 (threads plan TH-7, the rest of G1; T6-F01…F08, P-CUS-NEW.files, X-P-CUS-REQ.thread; walls W25 and W37) ------------
+/**
+ * The customer attaches a file to a record of its own from the portal: the thread composer of any record its portal opens
+ * (POST /portal/threads/<type>/<id>/files, then …/files/<fileId>/complete), and — through modules/sales/portal-requests — its own
+ * request right after Send. The checks, in order:
+ *   1. outside uploads are open here (staging and production: only with the virus scanner, B-W2b-160 GATE-SPEND; a 503 in words);
+ *   2. the record is one the partner may open (its partner view, threads.read over it): another party's record is not found (W25);
+ *   3. not an office preview; the person may write here (portal.comment — or, `requester`, the request's sender) and holds the upload
+ *      capability (portal.upload); the conversation is not closed (refused in the person's words);
+ *   4. at most PORTAL_FILES_PER_RECORD of the party's own uploads on the record.
+ * Then the files module is called as the tenant's system with files.upload and files.manage over the record's company and the
+ * party only (the partner role writes no file): the file goes on the record, shared with the party (OFFICE, PARTNER), its kind
+ * from its type (factory-domain threads/partner/uploads: a picture a PHOTO, a ZIP a DOCUMENT, else an ATTACHMENT; the files module
+ * refuses a page type or a design file as a photo in words), filed MEASUREMENTS when ticked. With the scanner a file stays
+ * QUARANTINED until its scan says CLEAN: nobody outside the office sees it before (the files' own rule). The completion records,
+ * in the person's own scope, who of the party sent it.
+ */
+export interface PartnerFileBody {
+  readonly originalName: string
+  readonly contentType: string
+  readonly sizeBytes: number
+  readonly sha256: string
+  readonly measurementSheet?: boolean | undefined
+}
+
+export interface PartnerFileOptions {
+  /** The request's sender adds files to its own request (portal.orderRequests.manage, checked by modules/sales/portal-requests). */
+  readonly requester?: boolean
+}
+
+/** The audit action of a portal upload (its actor is the person who sent it). */
+export const UPLOAD_ACTION = 'portal.attachFile'
+
+/** The tenant's system holding files.upload and files.manage over the record's company and the party only. */
+function partnerUploader(request: FastifyRequest, tenantId: string, companyId: string | null, partyId: string): CommandCaller {
+  const view = Object.create(request) as FastifyRequest
+  const grant: Grant = { permissions: [FILES_UPLOAD, FILES_MANAGE], companies: companyId ? [companyId] : 'all', sites: 'all', parties: [partyId] }
+  const context: SystemContext = Object.freeze({ audience: 'system', tenantId, actorId: SYSTEM_ACTOR_ID, requestId: String(request.id), grants: [grant] })
+  view.factoryContext = context
+  return view as CommandCaller
+}
+
+/** The record as the partner may upload onto it now (steps 2 and 3 above), or the refusal. */
+async function uploadPlace(request: FastifyRequest, caller: PartnerCaller, ref: RecordRef, options: PartnerFileOptions): Promise<{ readonly companyId: string | null; readonly partyId: string }> {
+  const locale = caller.session.person.locale
+  const company = caller.session.company.name
+  return request.withClient(async (client) => {
+    const { record, scope } = await openRecord(client, caller, ref)
+    if (caller.session.preview) throw new ForbiddenError(partnerThreadWords('PREVIEW', locale, company))
+    if (!options.requester && !can(caller.actor, PORTAL_COMMENT, scope)) throw new ForbiddenError(partnerThreadWords('NO_COMMENT', locale, company))
+    if (!can(caller.actor, PORTAL_UPLOAD, scope)) {
+      const words = portalUploadWords('NO_UPLOAD', locale)
+      throw new DomainError('forbidden', words, [{ path: 'refusal/NO_UPLOAD', message: words }])
+    }
+    const thread = await threadOf(client, ref)
+    if (thread?.status === 'CLOSED') throw closedRefusal(caller)
+    return { companyId: record.companyId, partyId: caller.context.partyId }
+  })
+}
+
+const fileViewOf = (file: { readonly id: string; readonly originalName: string; readonly kind: string; readonly sizeBytes: number; readonly status: string; readonly category?: string | null }) => ({
+  id: file.id,
+  originalName: file.originalName,
+  kind: file.kind,
+  sizeBytes: file.sizeBytes,
+  status: file.status,
+  measurementSheet: isMeasurementSheet(file),
+})
+
+/** POST /portal/threads/<type>/<id>/files (and a request's own, `requester`): the file announced, and where to PUT its bytes. */
+export async function announcePartnerFile(files: FilesRuntime, request: FastifyRequest, ref: RecordRef, body: PartnerFileBody, idempotencyKey?: string, options: PartnerFileOptions = {}) {
+  assertOutsideUploadsOpen()
+  const caller = partnerCallerOf(request)
+  const place = await uploadPlace(request, caller, ref, options)
+  const tenantId = caller.context.tenantId
+  const uploader = partnerUploader(request, tenantId, place.companyId, place.partyId)
+  // The party's own uploads on the record (made by the system for the portal: no office person made them).
+  const held = await uploader.withClient((client) => client.storedFile.count({ where: { recordType: ref.type, recordId: ref.id, partyId: place.partyId, createdById: null, status: { not: 'DELETED' } } }))
+  if (held >= PORTAL_FILES_PER_RECORD) {
+    const words = portalUploadWords('TOO_MANY_FILES', caller.session.person.locale)
+    throw new DomainError('conflict', words, [{ path: 'refusal/TOO_MANY_FILES', message: words }])
+  }
+  const contentType = normaliseContentType(body.contentType)
+  const answer = await requestUpload(
+    files,
+    uploader,
+    {
+      companyId: place.companyId,
+      recordType: ref.type,
+      recordId: ref.id,
+      kind: portalFileKindOf(contentType),
+      originalName: body.originalName,
+      contentType,
+      sizeBytes: body.sizeBytes,
+      sha256: body.sha256,
+      visibility: ['OFFICE', 'PARTNER'],
+      partyId: place.partyId,
+      measurementSheet: body.measurementSheet === true,
+    },
+    idempotencyKey,
+  )
+  return { file: fileViewOf({ ...answer.file, category: body.measurementSheet === true ? 'MEASUREMENTS' : null }), upload: answer.upload }
+}
+
+/** POST /portal/threads/<type>/<id>/files/<fileId>/complete: the bytes arrived (with the scanner: held for the scan). */
+export async function completePartnerFile(files: FilesRuntime, request: FastifyRequest, ref: RecordRef, fileId: string, idempotencyKey?: string, options: PartnerFileOptions = {}) {
+  const caller = partnerCallerOf(request)
+  const place = await uploadPlace(request, caller, ref, options)
+  const uploader = partnerUploader(request, caller.context.tenantId, place.companyId, place.partyId)
+  // Only the party's own upload on this record (another's, or another record's, reads as not found).
+  const file = await uploader.withClient((client) => client.storedFile.findFirst({ where: { id: fileId, recordType: ref.type, recordId: ref.id, partyId: place.partyId, createdById: null }, select: { id: true, companyId: true, category: true } }))
+  if (!file) throw new NotFoundError('File not found.')
+  const view = await completeUpload(files, uploader, fileId, idempotencyKey)
+  // Who of the party sent it, in the person's own scope (the files module's rows name the system).
+  await command(request as CommandCaller, { name: UPLOAD_ACTION, idempotencyKey: idempotencyKey ? `${idempotencyKey}:by` : undefined, input: { recordType: ref.type, recordId: ref.id, fileId } }, async (tools) => {
+    tools.audit({ action: UPLOAD_ACTION, recordType: 'StoredFile', recordId: fileId, companyId: file.companyId, after: { recordType: ref.type, recordId: ref.id, status: view.status, measurementSheet: isMeasurementSheet(file) } })
+    return null
+  })
+  return { file: fileViewOf({ ...view, category: file.category }) }
+}
+// ---- end B-TH-085

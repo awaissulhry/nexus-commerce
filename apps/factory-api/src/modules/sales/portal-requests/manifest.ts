@@ -15,4 +15,8 @@ export const manifest = defineManifest({
   'GET /portal/inquiries/open': send,
   'GET /portal/inquiries': read,
   'GET /portal/inquiries/:inquiryId': read,
+  // ---- B-TH-085: files after Send — who sends requests; the handler also asks the upload capability (portal.upload).
+  'POST /portal/inquiries/:inquiryId/files': send,
+  'POST /portal/inquiries/:inquiryId/files/:fileId/complete': send,
+  'POST /portal/inquiries/:inquiryId/files/attach': send,
 })

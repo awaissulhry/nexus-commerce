@@ -114,4 +114,12 @@ export const sendRequestAnswer = output({
 })
 
 /** GET /portal/inquiries/open (B-TH-012): whether "New order" takes a request for the session's company, with the reason. */
-export const requestsOpenAnswer = output({ open: z.boolean(), reason: words.nullable() })
+export const requestsOpenAnswer = output({
+  open: z.boolean(),
+  reason: words.nullable(),
+  /**
+   * B-TH-085 (P-CUS-NEW.files, T6-F07): whether files may go with the request after Send, and why not in the person's words (the
+   * outside uploads' sentence while the virus scanner does not run here, or their access). Optional for the web's typed demo data.
+   */
+  files: output({ open: z.boolean(), words: z.string().nullable() }).optional(),
+})

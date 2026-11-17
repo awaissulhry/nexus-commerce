@@ -32,6 +32,13 @@ function scannerKind(): ScannerKind {
   }
 }
 
+// ---- B-TH-085: the portal says it before the customer drops a file (T6-F07: "held before typing, in the API's own words").
+/** The sentence that closes uploads from outside here now, or null when they are open. */
+export function outsideUploadsWords(environment: string | undefined = readFactoryVariables().FACTORY_ENV): string | null {
+  return outsideUploadsRefusal(environment, scannerKind())
+}
+// ---- end B-TH-085
+
 /** 503 when uploads from outside are closed (above). */
 export function assertOutsideUploadsOpen(environment: string | undefined = readFactoryVariables().FACTORY_ENV): void {
   const refusal = outsideUploadsRefusal(environment, scannerKind())

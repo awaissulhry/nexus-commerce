@@ -65,6 +65,9 @@ const composerView = output({
   replyByEmail: z.boolean(),
   /** That sentence in the person's language, or null. */
   hint: z.string().nullable(),
+  // ---- B-TH-085 (T6-F07): whether the person may attach files now, and why not in words (the outside uploads' sentence while the
+  // virus scanner does not run here, their access, a closed conversation). Optional for the web's typed demo data.
+  uploads: output({ open: z.boolean(), words: z.string().nullable() }).optional(),
 })
 
 export const partnerThreadView = output({
@@ -95,6 +98,24 @@ export const readPartnerThreadContract = defineContract({
   }),
   response: { 200: partnerThreadView },
 })
+
+// ---- B-TH-085 (threads plan TH-7, G1; T6, P-CUS-NEW.files): the customer attaches files from its portal ------------------------
+/** A file the portal announces: its name, type, size and SHA-256; "This is a measurement sheet" ticked or not. */
+export const partnerFileBody = {
+  originalName: z.string().trim().min(1).max(255),
+  contentType: z.string().trim().min(1).max(100),
+  sizeBytes: z.number().int().min(1),
+  sha256: z.string().regex(/^[0-9a-f]{64}$/),
+  /** T6-F08: "This is a measurement sheet" — body data, opened in the office only by who holds the measurements right. */
+  measurementSheet: z.boolean().optional(),
+}
+/** The file as the portal follows it (PENDING_UPLOAD → after the virus scan AVAILABLE; QUARANTINED: held). */
+export const partnerFileView = output({ id: id(), originalName: z.string(), kind: z.string(), sizeBytes: z.number().int(), status: z.string(), measurementSheet: z.boolean() })
+/** The announce's answer: the file and where to PUT its bytes (5 minutes). */
+export const partnerUploadAnswer = output({ file: partnerFileView, upload: output({ method: z.string(), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }) })
+export const announcePartnerFileContract = defineContract({ params: recordParams, body: input(partnerFileBody), response: { 201: partnerUploadAnswer } })
+export const completePartnerFileContract = defineContract({ params: input({ recordType: z.string().regex(RECORD_TYPE), recordId: id(), fileId: id() }), response: { 200: output({ file: partnerFileView }) } })
+// ---- end B-TH-085
 
 export const postPartnerMessageContract = defineContract({
   params: recordParams,
