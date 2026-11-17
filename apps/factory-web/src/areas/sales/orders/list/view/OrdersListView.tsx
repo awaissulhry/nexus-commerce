@@ -32,6 +32,9 @@ import '../../orders.css'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet, every cell a door; the Customer switcher) ----
 import { brandCell, customerDoor, depositDoor, exportAbout, invoicedCell, invoicedDoor, linesDoor, NAMESPACE as SHEET, orderDoor, orderHref, quoteDoor, shippedDoor, type Door } from '../sheet/model'
 import { CustomerSwitcher, DoorCell, FunnelButton, PeekCard, PeekLink, PictureThumb, PictureViewer, SheetChips, useSmallPicture, type SheetChip } from '../sheet/parts'
+// B-TH-230: the New messages column (LastMessageCell).
+import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../../lib/last-message-cell/view/LastMessageCell'
+import { unreadValue } from '../../../../../lib/last-message-cell/model'
 
 export type { OrdersListActions, OrdersListModel } from '../list-model'
 
@@ -48,7 +51,7 @@ export type { OrdersListActions, OrdersListModel } from '../list-model'
  */
 export function OrdersListView({ model, actions }: { model: OrdersListModel; actions?: OrdersListActions }) {
   return (
-    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */]}>
+    <WithMessages namespaces={['orders', 'lists', DEPTH /* B-W2b-323 */, SHEET /* B-TH-225 */, LAST_MESSAGE_NS /* B-TH-230 */]}>
       <OrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -59,6 +62,7 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   const lists = useT('lists')
   const d = useT(DEPTH) // B-W2b-323
   const s = useT(SHEET) // B-TH-225
+  const l = useT(LAST_MESSAGE_NS) // B-TH-230
   const locale = useLocale()
   const wide = useWide(model.wide) // B-TH-225: Ordered, Margin %, Priority, Season and From quote at 1920
   const [viewer, setViewer] = useState<string | null>(model.viewerOpen ?? null)
@@ -165,9 +169,9 @@ function OrdersList({ model, actions }: { model: OrdersListModel; actions?: Orde
   // ── end B-TH-057 ──
 
   const columns = useMemo<ColDef<OrderRow>[]>(
-    () => sheetColumns({ t, s, d, locale, model, wide, latest, onViewer: setViewer }),
+    () => sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer: setViewer }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the cells read the latest model and actions through `latest`
-    [t, s, d, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */],
+    [t, s, d, l, locale, wide, model.prefix, model.today, model.can, model.margins, model.depth, model.companies, model.demoPictures, actions?.depth, model.sort /* B-TH-057 */, model.unread /* B-TH-230 */],
   )
 
   const narrowed = model.q.trim() !== '' || (model.rows !== 'open' && model.rows !== 'all') || !!model.customer || !!model.brand || !!model.company || !!model.cf // B-TH-201, B-TH-225, B-TH-057
@@ -434,6 +438,8 @@ interface ColumnsInput {
   t: Translate
   s: Translate
   d: Translate
+  /** B-TH-230: the New messages column's words. */
+  l?: Translate
   locale: Locale
   model: OrdersListModel
   wide: boolean
@@ -457,8 +463,8 @@ function PictureViewerFor({ row, model, actions, t, onClose }: { row: OrderRow; 
  * tab); Brand, Status and Company narrow the sheet (the funnel mark); a cell the reader may not open says why on hover; the
  * rest of the row opens the order. Money columns are absent without their grain, never zero.
  */
-function sheetColumns({ t, s, d, locale, model, wide, latest, onViewer }: ColumnsInput): ColDef<OrderRow>[] {
-  const input: ColumnsInput = { t, s, d, locale, model, wide, latest, onViewer }
+function sheetColumns({ t, s, d, l, locale, model, wide, latest, onViewer }: ColumnsInput): ColDef<OrderRow>[] {
+  const input: ColumnsInput = { t, s, d, l, locale, model, wide, latest, onViewer }
   const { prefix, can } = model
   const day = (value: string | null) => (value ? formatDate(dayInstant(value), { locale }) : '—')
   const act = () => latest.current.actions
@@ -469,6 +475,8 @@ function sheetColumns({ t, s, d, locale, model, wide, latest, onViewer }: Column
   )
 
   const PictureColumn = ({ data }: ICellRendererParams<OrderRow>) => (data ? <PictureCell row={data} input={input} /> : null)
+  // B-TH-230 (grid-F15): the reader's own new messages; the cell is a door to the order's thread at the first new message.
+  const NewMessagesCell = ({ data }: ICellRendererParams<OrderRow>) => (data ? <LastMessageCell unread={latest.current.model.unread?.[data.id]} href={`${orderHref(prefix, data)}?thread=new`} record={data.number} /> : null)
   const NumberCell = ({ data }: ICellRendererParams<OrderRow>) => {
     if (!data) return null
     const opened = orderDoor(prefix, data) as { href: string }
@@ -666,6 +674,8 @@ function sheetColumns({ t, s, d, locale, model, wide, latest, onViewer }: Column
     { colId: 'customer', headerName: t('col.customer'), field: 'partyName', minWidth: 112, flex: 1.2, cellRenderer: CustomerCell },
     { colId: 'brand', headerName: s('col.brand'), headerTooltip: s('col.brandHint'), minWidth: 100, flex: 1, sortable: false, cellRenderer: BrandCell },
     { colId: 'status', headerName: t('col.status'), field: 'status', minWidth: 112, flex: 0.9, cellRenderer: StatusCell },
+    // B-TH-230: only for a reader of threads (the API counts only what the reader may open).
+    ...(model.unread && l ? [{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 116, flex: 0.7, sortable: false, valueGetter: ({ data }: { data?: OrderRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell } as ColDef<OrderRow>] : []),
     { colId: 'deposit', headerName: t('col.deposit'), minWidth: 96, flex: 0.8, cellRenderer: DepositCell },
     { colId: 'units', headerName: t('col.units'), field: 'units', minWidth: 72, flex: 0.5, cellRenderer: UnitsCell },
     { colId: 'orderDate', headerName: t('col.orderDate'), field: 'orderDate', minWidth: 104, flex: 0.8, hide: !wide, cellRenderer: OrderedCell, context: also('requested', s('col.requested')) },
