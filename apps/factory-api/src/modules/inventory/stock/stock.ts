@@ -21,7 +21,7 @@ import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { workerGateFor } from '../../people/privacy/worker-gate'
-import { officeContextOf, seesCost, siteFor } from '../ledger/access'
+import { officeContextOf, seesCost, siteFor, assertWholeWarehouse } from '../ledger/access'
 import { demandOpen, readDemands, RESERVATION_COLUMNS } from '../reservations/store'
 // B-W2a-26: stock under an ACTIVE quality hold is held too.
 import { heldByQualityHolds, heldForTotals, NOTHING_HELD } from '../../quality/holds/stock'
@@ -85,6 +85,7 @@ const keyOfSite = (row: { siteId: string; itemId: string; itemColourId: string |
  */
 export async function stockOverview(caller: CommandCaller, query: OverviewQuery) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const asOf = query.asOf ? parseInstant(query.asOf) : null
   const where: Prisma.StockMoveWhereInput = {
     AND: [
@@ -357,6 +358,7 @@ export interface Check {
  */
 export async function reconcile(caller: CommandCaller, query: { readonly siteId?: string | undefined }) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   if (query.siteId) await siteFor(caller, query.siteId, INVENTORY_STOCK_VIEW, 'query/siteId')
   const scope = scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, { company: 'companyId', site: 'id' }) as Prisma.SiteWhereInput
   return caller.withClient(async (client) => {

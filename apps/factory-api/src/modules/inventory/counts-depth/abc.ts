@@ -4,7 +4,7 @@ import { INVENTORY_COUNTS_VIEW } from '@nexus/factory-domain/inventory/counts/pe
 import { Dec, ZERO } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
-import { officeContextOf, siteFor } from '../ledger/access'
+import { officeContextOf, siteFor, assertWholeWarehouse } from '../ledger/access'
 import type { Db } from './store'
 
 /**
@@ -39,6 +39,7 @@ export async function classesOfSite(db: Db, siteId: string, now: Date): Promise<
 /** GET /inventory/count-schedules/abc */
 export async function abcOfSite(caller: CommandCaller, query: { readonly siteId: string }, now: Date = new Date()) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const site = await siteFor(caller, query.siteId, INVENTORY_COUNTS_VIEW, 'siteId')
   const withCost = heldGrains(actorOf(context)).has('cost')
   return caller.withClient(async (db) => {

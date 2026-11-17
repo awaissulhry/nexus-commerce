@@ -1,6 +1,7 @@
 import type { ApiFile } from '../../../record-panels/api'
 import type { FileAudience, FileKind, QuarantineReason } from '../../../record-panels/model'
 import type { ViewerFile } from '../popups/model'
+import type { FileSource } from './use-on' // B-TH-231
 
 /**
  * B-TH-210 — the thread's files line (threads plan T2; features T2-F01, F02, F04, F05, F06, F09): "Files (12)" with the
@@ -43,6 +44,14 @@ export interface ThreadFile {
   readonly messageId?: string | null
   /** Where it came from, when the API says so (WALL-G13, B-TH-029): the Files view groups by it. */
   readonly origin?: FileOrigin | null
+  // ---- B-TH-231
+  /** A copy carried from another record names its source file (B-TH-024): "Copied from …". */
+  readonly sourceFileId?: string | null
+  /** The source's record, name and version (null: the reader may not open that record). */
+  readonly source?: FileSource | null
+  /** B-TH-083: a measurement sheet this reader may not open — no name; "Measurement sheet — you cannot open it". */
+  readonly locked?: 'MEASUREMENTS'
+  // ---- end B-TH-231
 }
 
 export type FileOrigin = 'party' | 'ours' | 'made' | 'floor'
@@ -74,6 +83,9 @@ export function fromApiFile(file: ApiFile, previewUrl: string | null = null, ext
     retainUntil: file.retainUntil,
     ...(file.legalHold !== undefined ? { legalHold: file.legalHold } : {}),
     previewUrl,
+    // B-TH-231: the copy's source; B-TH-083: a sheet locked for this reader.
+    ...(file.sourceFileId ? { sourceFileId: file.sourceFileId, source: file.origin ? { recordType: file.origin.recordType, recordId: file.origin.recordId, name: file.origin.originalName, versionNo: file.origin.versionNo } : null } : {}),
+    ...(file.locked ? { locked: file.locked } : {}),
     ...extra,
   }
 }
@@ -137,11 +149,11 @@ export function audienceMarks(file: Pick<ThreadFile, 'visibility' | 'partyId'>, 
   return { marks: ordered.slice(0, 2), more: Math.max(0, ordered.length - 2) }
 }
 
-/** The file as the viewer opens it (the container adds the signed addresses when it opens). */
-export function toViewerFile(file: ThreadFile, links: { readonly src: string | Uint8Array | null; readonly downloadHref: string | null } = { src: null, downloadHref: null }): ViewerFile {
+/** The file as the viewer opens it (the container adds the signed addresses when it opens). B-TH-231: a locked sheet never opens. */
+export function toViewerFile(file: ThreadFile, links: { readonly src: string | Uint8Array | null; readonly downloadHref: string | null } = { src: null, downloadHref: null }, lockedName = ''): ViewerFile {
   return {
     id: file.id,
-    name: file.name,
+    name: file.locked ? lockedName : file.name,
     contentType: file.contentType,
     kind: file.kind,
     sizeBytes: file.sizeBytes,
@@ -149,7 +161,7 @@ export function toViewerFile(file: ThreadFile, links: { readonly src: string | U
     quarantineReason: file.quarantineReason,
     src: links.src,
     downloadHref: links.downloadHref,
-    mayOpen: true,
+    mayOpen: !file.locked,
     messageId: file.messageId ?? null,
     versionNo: file.versionNo ?? null,
   }

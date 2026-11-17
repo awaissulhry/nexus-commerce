@@ -1,4 +1,4 @@
-import { FILES_READ, FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
+import { FILES_MANAGE, FILES_READ, FILES_UPLOAD } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
@@ -11,6 +11,11 @@ import { contextOf, mayWrite, prepareFileCopy, readVisible, recordGeneratedFile,
 import { ownerOf, readsThroughModule } from './owned'
 import { normaliseVisibility, type FileAudience, type FileKind } from './rules'
 import type { FilesRuntime } from './service'
+// B-TH-231: the records a file may be carried to, found as global search finds them.
+import { MESSAGE_TYPE, searchRecords } from '../search/search'
+import { fileRecordParty, fileRecordScope } from './record-scope' // B-PR-44
+import { SEARCH_LIMITS } from '@nexus/factory-domain/search/text'
+import { THREAD_RECORDS } from '../threads/records'
 
 /**
  * B-TH-024 (threads plan TH-2, N8; sections T9, the record threads' "Use on…"; wall test T25 extended): carry a file to another
@@ -56,14 +61,15 @@ export async function useFileOn(runtime: FilesRuntime, caller: CommandCaller, fi
   if (body.recordType === source.recordType && body.recordId === source.recordId) throw new ValidationError(USE_ON_WORDS.sameRecord, [{ path: 'body/recordId', message: USE_ON_WORDS.sameRecord }])
   const { target, from, category } = await caller.withClient(async (client) => ({
     target: isUuid(body.recordId) ? await resolveRecord(client, body.recordType, body.recordId) : null,
-    from: await resolveRecord(client, source.recordType, source.recordId),
+    // B-PR-44: the source's record read as file reads read it (a line through its order or quote, a work order's record …).
+    from: await fileRecordScope(client, context.tenantId, source),
     category: (await client.storedFile.findUnique({ where: { id: source.id }, select: { category: true } }))?.category ?? null,
   }))
   if (!target || !mayOnThread(actor, FILES_READ, body.recordType, target)) throw new NotFoundError('Record not found.')
   if (!can(actor, FILES_UPLOAD, target)) throw new ForbiddenError('Adding files to this record needs the right to upload files over it.')
   // The brand wall: the source's customer (its record's; else the party the file is shared with) is the target's, or either has none.
   // B-PR-08a part 2: a work order's, hold's or NCR's customer is its wall party (records.ts; several or none: the every-party marker).
-  const sourceParty = wallPartyOf(from) ?? source.partyId ?? null
+  const sourceParty = fileRecordParty(from) ?? source.partyId ?? null
   const targetParty = wallPartyOf(target)
   if (sourceParty !== null && targetParty !== null && sourceParty !== targetParty) {
     const words = USE_ON_WORDS.otherParty(source.originalName)
@@ -71,6 +77,8 @@ export async function useFileOn(runtime: FilesRuntime, caller: CommandCaller, fi
   }
   const sharing = await withRecordParty(caller, body, { visibility: normaliseVisibility(body.visibility ?? ['OFFICE']), companyId: target.companyId ?? null, floorSiteId: null, partyId: null })
   mayWrite(caller, FILES_UPLOAD, sharing)
+  // B-TH-231: shared beyond the office it is files.manage, as at upload and afterwards (COL-050).
+  if (sharing.visibility.length > 1) mayWrite(caller, FILES_MANAGE, sharing)
   const prepared = await prepareFileCopy(runtime, caller, source.id, { companyId: sharing.companyId, recordType: body.recordType, recordId: body.recordId, kind, visibility: sharing.visibility, floorSiteId: null, partyId: sharing.partyId })
   const { result } = await command(caller, { name: 'files.useOn', idempotencyKey, input: { fileId, ...body } }, async (tools) => {
     const file = await recordGeneratedFile(tools, prepared, {
@@ -81,3 +89,56 @@ export async function useFileOn(runtime: FilesRuntime, caller: CommandCaller, fi
   })
   return result
 }
+
+// ---- B-TH-231 (threads plan TH-2, T9-F05; walls W25 / W26): "Use on another record…" offers only what the API takes ------------
+/** A record a file may be carried to, as the picker lists it. `partyId`: the target record's customer or supplier (null: none). */
+export interface UseOnTarget {
+  readonly recordType: string
+  readonly recordId: string
+  readonly number: string | null
+  readonly title: string
+  readonly subtitle: string | null
+  readonly area: string
+  readonly partyId: string | null
+}
+
+/** At most this many targets in one answer. */
+export const USE_ON_TARGETS = 20
+
+/**
+ * GET /files/:fileId/use-on/targets?q=&type= — the records this file may be carried to, found by number or name as global search
+ * finds them (the reader's own entries), then each read again with its thread resolver: a record the person may write files on
+ * (files.read over it and its gate, files.upload), not this file's own record, not one whose files its module keeps, and — the
+ * brand wall — of the SAME customer as the file's record, or of none (a file of no customer may go to any of them). So the picker
+ * never offers another customer's record; the carry (POST …/use-on) checks it all again.
+ */
+export async function useOnTargets(caller: CommandCaller, fileId: string, query: { readonly q: string; readonly type?: string | undefined }): Promise<{ tooShort: boolean; targets: UseOnTarget[] }> {
+  const context = contextOf(caller)
+  if (context.audience !== 'office') throw new ForbiddenError()
+  const actor = actorOf(context)
+  const source = await readVisible(caller, fileId)
+  const kind: FileKind = source.kind === 'FISCAL_ARCHIVE' ? 'DOCUMENT' : (source.kind as FileKind)
+  if (query.type === MESSAGE_TYPE) return { tooShort: false, targets: [] }
+  // Among the record types a thread resolver knows (a file's record always has one): the first page is then the records it may go to.
+  const types = Object.keys(THREAD_RECORDS).filter((type) => type !== MESSAGE_TYPE && !readsThroughModule(type) && !ownerOf(type, kind))
+  const found = await searchRecords(caller, { q: query.q, type: query.type, types, limit: SEARCH_LIMITS.maxPage, offset: 0 })
+  if (found.tooShort) return { tooShort: true, targets: [] }
+  return caller.withClient(async (client) => {
+    // As the carry compares them (B-PR-08a part 2: a work order's, hold's or NCR's customer is its wall party; B-PR-44: a line's
+    // through its order or quote).
+    const sourceParty = fileRecordParty(await fileRecordScope(client, context.tenantId, source)) ?? source.partyId ?? null
+    const targets: UseOnTarget[] = []
+    for (const result of found.results) {
+      if (targets.length >= USE_ON_TARGETS) break
+      if (result.recordType === MESSAGE_TYPE || (result.recordType === source.recordType && result.recordId === source.recordId)) continue
+      if (readsThroughModule(result.recordType) || ownerOf(result.recordType, kind)) continue
+      const target = await resolveRecord(client, result.recordType, result.recordId)
+      if (!target || !mayOnThread(actor, FILES_READ, result.recordType, target) || !can(actor, FILES_UPLOAD, target)) continue
+      const targetParty = wallPartyOf(target)
+      if (sourceParty !== null && targetParty !== null && targetParty !== sourceParty) continue
+      targets.push({ recordType: result.recordType, recordId: result.recordId, number: result.number, title: result.title, subtitle: result.subtitle, area: result.area, partyId: targetParty })
+    }
+    return { tooShort: false, targets }
+  })
+}
+// ---- end B-TH-231

@@ -3,6 +3,8 @@ import { defineMachine } from '@nexus/factory-domain/state/machine'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 // B-W2a-42: the virus scan's reasons (held for the scan, a virus found, the scan failed).
 import { SCAN_QUARANTINE_REASONS } from './scan/rules'
+// B-TH-084: design files (download-only) and the page types never stored, as the database says them.
+import { ARTWORK_TYPES, designKindsOf, DESIGN_TYPES, isDesignType, isPageType } from '@nexus/factory-domain/files/design'
 
 /**
  * The rules of files on R2 (plan A1 §3.6; PLAN §2.8; features COL-045, COL-050), pure: what each kind may hold and how
@@ -35,11 +37,14 @@ const OFFICE_DOCUMENTS = [
 /**
  * What each kind may hold, and its size limit. Nothing a browser would run or render as a page (HTML, SVG, scripts)
  * is accepted at all; every download is an attachment anyway.
+ * B-TH-084 (G12): design files are download-only — Illustrator, EPS and Photoshop (ARTWORK_TYPES) attachments or documents, a ZIP
+ * (any of its aliases) a document only (T6-F05).
  */
 export const KIND_RULES: Readonly<Record<FileKind, { readonly contentTypes: readonly string[]; readonly maxBytes: number }>> = Object.freeze({
-  ATTACHMENT: { contentTypes: [PDF, ...IMAGES, ...OFFICE_DOCUMENTS, 'text/csv', 'text/plain'], maxBytes: 25 * MIB },
+  ATTACHMENT: { contentTypes: [PDF, ...IMAGES, ...OFFICE_DOCUMENTS, 'text/csv', 'text/plain', ...ARTWORK_TYPES], maxBytes: 25 * MIB },
   // B-W2b-278 (FU4:01): a ZIP is a DOCUMENT (an evidence pack's ZIP, made by the API, through putGeneratedFile like its PDF).
-  DOCUMENT: { contentTypes: [PDF, ...OFFICE_DOCUMENTS, 'text/csv', 'application/zip'], maxBytes: 25 * MIB },
+  // B-TH-084: and every design file (the ZIP's aliases included).
+  DOCUMENT: { contentTypes: [PDF, ...OFFICE_DOCUMENTS, 'text/csv', ...DESIGN_TYPES], maxBytes: 25 * MIB },
   PHOTO: { contentTypes: [...IMAGES], maxBytes: 15 * MIB },
   CERTIFICATE: { contentTypes: [PDF, 'image/jpeg', 'image/png'], maxBytes: 20 * MIB },
   // FatturaPA XML, its signed .p7m form, and PDF copies of invoices, DDTs and signed quotes.
@@ -77,7 +82,11 @@ export function uploadProblems(input: { kind: FileKind; contentType: string; siz
   const rule = KIND_RULES[input.kind]
   const problems: Issue[] = []
   const types = input.clip && input.kind === 'PHOTO' ? [...rule.contentTypes, ...FLOOR_CLIP_TYPES] : rule.contentTypes
-  if (!types.includes(normaliseContentType(input.contentType))) {
+  const type = normaliseContentType(input.contentType)
+  // B-TH-084: the page types and design files are refused in words that name the way out (the database says the same).
+  if (isPageType(type)) problems.push({ path: 'body/contentType', message: PAGE_TYPE_WORDS })
+  else if (isDesignType(type) && !designKindsOf(type).includes(input.kind)) problems.push({ path: 'body/contentType', message: DESIGN_KIND_WORDS })
+  else if (!types.includes(type)) {
     problems.push({ path: 'body/contentType', message: `A ${input.kind} file may be ${types.join(', ')}.` })
   }
   if (!Number.isSafeInteger(input.sizeBytes) || input.sizeBytes < 1 || input.sizeBytes > rule.maxBytes) {
@@ -86,6 +95,14 @@ export function uploadProblems(input: { kind: FileKind; contentType: string; siz
   if (!SHA256.test(input.sha256)) problems.push({ path: 'body/sha256', message: 'Expected the SHA-256 of the content, 64 lower-case hex digits.' })
   return problems
 }
+
+// ---- B-TH-084 (threads plan TH-7, G12): design files download-only, never a page type --------------------------------------
+/** An SVG, HTML or script file: never stored (a browser would run it). The way out is named. */
+export const PAGE_TYPE_WORDS = 'An SVG, HTML or script file is never accepted (a browser would run it): send a PDF or PNG instead.'
+/** A design file filed as a photo (or another kind): it is download-only. */
+export const DESIGN_KIND_WORDS = 'A design file is download-only: an Illustrator, EPS or Photoshop file goes as a file or a document, a ZIP as a document — never as a photo.'
+export { isDesignType, isPageType }
+// ---- end B-TH-084
 
 /** The name as stored: no folders, no control characters, at most 200 characters; null when nothing is left. */
 export function cleanFileName(name: string): string | null {

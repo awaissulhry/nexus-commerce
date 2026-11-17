@@ -9,13 +9,14 @@ import type { AlternateUse } from '@nexus/factory-domain/product/bom-lines/rules
 import { Dec, ZERO, type Decimal } from '@nexus/factory-domain/tax/decimal'
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
-import { mayAt, stockContextOf, type StockContext } from '../ledger/access'
+import { stockContextOf, type StockContext } from '../ledger/access'
 import { readLocations, readLots, readPickHeader, readSiteStock, type PickHeader, type Reader } from '../issue/store'
 import { heldByQualityHolds } from '../../quality/holds/stock'
 import { certificateCovering } from '../../quality/lab/store'
 import { asTenantSystem } from '../../production/bundles/codes'
 import { SUBSTITUTION_FIELDS, substitutionFacts } from './facts'
 import { lineFactsOf, readItemsOf, revisionOf, substitutionViews, unitsOf, type LineFacts, type SubstituteItemRow, type SubstitutionRow, SUBSTITUTION_COLUMNS } from './store'
+import { mayPick } from '../issue/picking' // B-PR-10
 
 /**
  * "Use a substitute" (B-W2b-298; MES-139; design warehouse.picking pop:pk-sub, production.workorders Materials "Substitute…"):
@@ -44,7 +45,7 @@ export interface Loaded {
 /** The work order, its line, the line's alternates and materials, the substitutions standing on the line. */
 export async function loadLine(db: Reader, context: StockContext, workOrderId: string, bomLineId: string): Promise<Loaded> {
   const header = await readPickHeader(db, workOrderId)
-  if (!header || !mayAt(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Work order not found.')
+  if (!header || !mayPick(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Work order not found.') // B-PR-10: and its customer
   const revisionId = (await revisionOf(db, header.id))!
   const line = await lineFactsOf(db, context, header, revisionId, bomLineId)
   if (!line) throw new NotFoundError('BOM line not found on this work order.')
@@ -146,7 +147,7 @@ export async function substituteOptions(caller: CommandCaller, query: { readonly
   let reader: CommandCaller = caller
   if (context.audience === 'floor') {
     const header = await caller.withClient((db) => readPickHeader(db, query.workOrderId))
-    if (!header || !mayAt(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Work order not found.')
+    if (!header || !mayPick(context, INVENTORY_ISSUE, header)) throw new NotFoundError('Work order not found.') // B-PR-10: and its customer
     reader = asTenantSystem(caller, context)
   }
   return reader.withClient(async (client) => {

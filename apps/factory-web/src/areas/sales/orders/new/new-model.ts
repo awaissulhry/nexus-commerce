@@ -4,6 +4,8 @@ import type { ManualOrderBody, ManualPreview } from '../api'
 import { badPrice, manualLines, piecesOf, type DraftLine } from '../daily-model'
 import type { OrderAbilities, Phrase } from '../model'
 import type { ComposerState } from '../record/record-model'
+// B-TH-231: the fold "Customer files" (held in the page, attached right after Confirm).
+import type { CustomerFilesActions, CustomerFilesModel } from './view/CustomerFiles'
 
 /**
  * The typed New order (design pop:orders.new → "Create draft order → Lines tab editable until 'Confirm order'";
@@ -153,6 +155,8 @@ export interface NewOrderModel {
   problem: Phrase | null
   /** B-W2b-374 (XF3:02): a line's Options (the page mounts NewLineOptions). */
   newLineOptions?: (line: DraftLine) => ReactNode
+  /** B-TH-231: the customer's files held until Confirm (absent: no fold). */
+  files?: CustomerFilesModel
 }
 
 export interface NewOrderActions {
@@ -166,4 +170,6 @@ export interface NewOrderActions {
   onConfirm?: () => void
   onDiscard?: () => void
   onRetry?: () => void
+  /** B-TH-231: the fold's own actions. */
+  files?: CustomerFilesActions
 }

@@ -1,6 +1,6 @@
 import { InvalidStateError } from '@nexus/factory-domain/core/errors'
 import { dispositionOf, PREVIEW_URL_SECONDS, previewModeOf, type PreviewMode } from '@nexus/factory-domain/files/preview/rules'
-import { contextOf, presignedView, readVisible, storeCall, tenantOf, type Callers } from '../files'
+import { contextOf, presignedView, readVisible, recordSheetOpening, storeCall, tenantOf, type Callers } from '../files' // B-TH-083: recordSheetOpening
 import type { FilesRuntime } from '../service'
 import { keyShownTo } from '../thumbs/outside'
 
@@ -15,6 +15,8 @@ export async function previewFile(runtime: FilesRuntime, callers: Callers, fileI
   const context = contextOf(callers.caller)
   const row = await readVisible(callers.caller, fileId)
   if (row.status !== 'AVAILABLE') throw new InvalidStateError(`This file is ${row.status}; only an available file can be opened.`)
+  // B-TH-083: a measurement sheet's opening is recorded. B-TH-084: a design file is never shown in place (previewModeOf: download).
+  await recordSheetOpening(callers.caller, row, 'preview')
   const storeCaller = context.audience === 'office' ? callers.caller : callers.system(tenantOf(context))
   const key = await keyShownTo(runtime, context, storeCaller, row)
   const mode = previewModeOf(row.contentType)

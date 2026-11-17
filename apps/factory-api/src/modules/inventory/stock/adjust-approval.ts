@@ -10,7 +10,7 @@ import type { CommandCaller, CommandTools, CommandTx } from '../../../core/comma
 import { actorOf } from '../../../core/context'
 import { askApproval } from '../../../platform/approvals/engine'
 import { adjustmentChanges, STOCK_ADJUSTMENT_RECORD, storedOf, valueFactOf, withPendingAdjustment, type PendingAdjustment, type StoredAdjustment } from '../../../platform/approvals/kinds/stock-adjustment'
-import { officeContextOf } from '../ledger/access'
+import { officeContextOf, assertWholeWarehouse } from '../ledger/access'
 import { readBalances, type MoveDraft, type PostOptions, type postMoves } from '../ledger/post-moves'
 import type { WaitingAdjustmentView } from '../posting/contract'
 import { rulesOf } from '../posting/store'
@@ -229,6 +229,7 @@ export async function waitingAdjustments(
   query: { readonly siteId?: string | undefined; readonly itemId?: string | undefined; readonly locationId?: string | undefined; readonly status?: WaitingAdjustmentView['status'] | undefined; readonly limit: number },
 ) {
   const context = officeContextOf(caller)
+  assertWholeWarehouse(context) // B-PR-10: the warehouse needs every customer
   const scope = scopeWhere(actorOf(context), INVENTORY_STOCK_VIEW, SCOPE) as Prisma.ApprovalTaskWhereInput
   const where: Prisma.ApprovalTaskWhereInput = {
     AND: [

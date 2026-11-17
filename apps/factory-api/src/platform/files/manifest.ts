@@ -39,6 +39,8 @@ export const manifest = defineManifest({
   'GET /files/:fileId/history': { audiences: ['office'], permission: 'files.read', scope: 'record' },
   // B-TH-024: carry a file to another record (files.upload over the target; files.read over the source, checked in use-on.ts).
   'POST /files/:fileId/use-on': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
+  // B-TH-231: the records a file may be carried to (files.read over the file, files.upload over each record, same customer or none).
+  'GET /files/:fileId/use-on/targets': { audiences: ['office'], permission: 'files.upload', scope: 'record' },
   'PUT /local-files': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
   'GET /local-files': { audiences: PUBLIC, permission: PUBLIC, scope: 'none' },
 })

@@ -567,3 +567,9 @@ fieldset.fw-so-colours {
   margin-top: var(--nds-space-4);
   white-space: normal;
 }
+
+/* B-TH-231 — New order's fold "Customer files": held in the page, attached right after Confirm. */
+.fw-so-files-body { display: flex; flex-direction: column; gap: var(--nds-space-10); padding-top: var(--nds-space-8); min-width: 0; }
+.fw-so-files-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-8); min-width: 0; }
+.fw-so-files-list > li { display: flex; flex-direction: column; gap: var(--nds-space-4); min-width: 0; }
+.fw-so-files-sheet { padding-left: var(--nds-space-4); }

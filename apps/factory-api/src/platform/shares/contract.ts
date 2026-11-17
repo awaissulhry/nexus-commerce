@@ -142,6 +142,8 @@ export const linkAnnounceContract = defineContract({
     contentType: z.string().trim().min(1).max(100),
     sizeBytes: z.number().int().min(1),
     sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    /** B-TH-083: "This is a measurement sheet" — filed as MEASUREMENTS (body data: the office opens it only with sales.measurements.view). */
+    measurementSheet: z.boolean().optional(),
   }),
   response: { 201: output({ file: uploadedFile, upload: output({ method: z.string(), url: z.string(), headers: z.record(z.string(), z.string()), expiresAt: instant() }) }) },
 })

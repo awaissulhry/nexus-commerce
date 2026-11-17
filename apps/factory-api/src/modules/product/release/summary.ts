@@ -7,6 +7,7 @@ import { actorOf } from '../../../core/context'
 import { contextOf, REVISION_COLUMNS, STYLE_COLUMNS } from '../bom/store'
 import { loadGate, readScopeRow } from './facts'
 import { todayNow } from './gate'
+import { styleScope } from '../styles/store' // B-PR-10
 
 /**
  * The styles list's completeness column and the side panel's compact check (B-W2b-231; PRD-232; design products.styles
@@ -19,7 +20,7 @@ export async function releaseSummary(caller: CommandCaller, query: SummaryQuery)
   const actor = actorOf(contextOf(caller))
   const today = todayNow()
   return caller.withClient(async (client) => {
-    const styles = (await client.style.findMany({ where: { id: { in: [...query.styleIds] } }, select: STYLE_COLUMNS })).filter((style) => can(actor, PRODUCT_STYLES_VIEW, { companyId: style.companyId }))
+    const styles = (await client.style.findMany({ where: { id: { in: [...query.styleIds] } }, select: STYLE_COLUMNS })).filter((style) => can(actor, PRODUCT_STYLES_VIEW, styleScope(style))) // B-PR-10: its brand too
     const byId = new Map(styles.map((style) => [style.id, style]))
     const rows: SummaryView['styles'] = []
     for (const styleId of query.styleIds) {

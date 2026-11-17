@@ -14,6 +14,8 @@ import { SITE_COLUMNS, type Reader } from '../store'
 import { siteViewOf } from '../schedule/publish'
 import { scheduleWorld, type BoardWorkOrder, type ScheduleWorld } from '../schedule/service'
 import type { MaterialQuery } from './contract'
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
+import { actorOf } from '../../../core/context' // B-PR-10
 
 /**
  * Moves that know the material (B-W2b-312; PLN-134): THE place the board, a move's answer, the drop's check, forward
@@ -108,7 +110,9 @@ export async function workOrderMaterial(caller: CommandCaller, workOrderId: stri
   const context = officeContextOf(caller)
   if ((query.laneKind === undefined) !== (query.laneId === undefined)) throw new ValidationError('Name the lane by its kind and id together.', [{ path: query.laneKind === undefined ? 'querystring/laneKind' : 'querystring/laneId', message: 'Give both, or neither.' }])
   return caller.withClient(async (db) => {
-    const row = isUuid(workOrderId) ? await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, companyId: true, siteId: true, site: { select: SITE_COLUMNS } } }) : null
+    const found = isUuid(workOrderId) ? await db.workOrder.findUnique({ where: { id: workOrderId }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true, site: { select: SITE_COLUMNS } } }) : null
+    // B-PR-10: another customer's work order answers as an unknown one (its customer too).
+    const row = found && reachesWorkOrder(actorOf(context), PLANNING_VIEW, found) ? found : null
     assertMayAt(context, PLANNING_VIEW, row ? { companyId: row.companyId, siteId: row.siteId } : null, 'Work order')
     const now = serverClock.now()
     const today = businessDate(now, row!.site.timezone)

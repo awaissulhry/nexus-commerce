@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { AudioLines, BadgeCheck, Download, FileText, FolderOpen, Image as ImageIcon, Lock, Paperclip, Receipt, RotateCcw, Share2, ShieldOff, Trash2 } from 'lucide-react'
+import { AudioLines, BadgeCheck, Copy, Download, FileText, FolderOpen, Image as ImageIcon, Lock, Paperclip, Receipt, RotateCcw, Share2, ShieldOff, Trash2 } from 'lucide-react'
 import { Banner, Disclosure, EmptyState, Field } from '@nexus/ui/components'
 import { BulkActionBar } from '@nexus/ui/patterns'
 import { Button, Checkbox, RadioCard, Select, Skeleton, Tag } from '@nexus/ui/primitives'
@@ -14,6 +14,9 @@ import type { FileAudience, FileKind } from '../../../../record-panels/model'
 import { sizeWords } from '../../popups/view/FileViewer'
 import { audienceMarks, versionMark, type FileSeries, type FilesParty, type ThreadFile } from '../../files/model'
 import { bulkReach, filesGroups, keepLines, rangeOf, type FilesAbilities, type MissingDocument, type UploadAsk } from '../model'
+// B-TH-231: "Use on another record…" and the copy's source line.
+import { carriable, sourceLine } from '../../files/use-on'
+import { typeKey } from '../../../../areas/search/model'
 import '../files-view.css'
 
 export const FILES_VIEW_NS = 'record-thread-files-view'
@@ -58,6 +61,8 @@ export interface FilesViewActions {
   onUploadConfirm?: () => void
   onUploadCancel?: () => void
   onDismissRefused?: () => void
+  /** B-TH-231: "Use on another record…" for these files (one row's, or the chosen ones). */
+  onUseOn?: (fileIds: readonly string[]) => void
 }
 
 const KIND_ICON: Readonly<Record<FileKind, ReactNode>> = {
@@ -79,7 +84,7 @@ const KIND_ICON: Readonly<Record<FileKind, ReactNode>> = {
  */
 export function FilesView({ model, actions }: { model: FilesViewModel; actions?: FilesViewActions }) {
   return (
-    <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists']}>
+    <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists', /* B-TH-231 */ 'search']}>
       <View model={model} actions={actions} />
     </WithMessages>
   )
@@ -91,12 +96,15 @@ function View({ model, actions }: { model: FilesViewModel; actions?: FilesViewAc
   const place = { locale, ...(model.timeZone ? { timeZone: model.timeZone } : {}) }
   const listRef = useRef<HTMLDivElement>(null)
   const [anchor, setAnchor] = useState<string | null>(null)
+  const useOnWords = useT('record-thread-files')
 
   const groups = model.files ? filesGroups(model.files, model.record) : []
   const order = groups.flatMap((group) => group.series.map((one) => one.latest.id))
   const latest = new Map(groups.flatMap((group) => group.series.map((one) => [one.latest.id, one.latest] as const)))
   const chosen = model.selected.filter((fileId) => latest.has(fileId)).map((fileId) => latest.get(fileId)!)
   const reach = bulkReach(chosen, model.party, model.can)
+  // B-TH-231: the chosen files a carry may take (available, not a sheet locked for this reader).
+  const carry = model.can.upload && actions?.onUseOn ? carriable(chosen).map((file) => file.id) : []
   const allChosen = order.length > 0 && chosen.length === order.length
 
   const choose = (fileId: string, on: boolean, range: boolean) => {
@@ -206,6 +214,11 @@ function View({ model, actions }: { model: FilesViewModel; actions?: FilesViewAc
                       <Button size="sm" variant="danger" heldReason={!model.can.delete ? t('bulk.noDeleteRight') : reach.remove.length === 0 ? t('bulk.allHeld') : null} onClick={() => actions?.onBulk?.('remove', reach.remove)}>
                         <Trash2 size={14} aria-hidden /> {t('bulk.remove', { count: reach.remove.length })}
                       </Button>
+                      {model.can.upload && actions?.onUseOn && (
+                        <Button size="sm" heldReason={carry.length === 0 ? t('bulk.noneDownload') : null} onClick={() => actions.onUseOn?.(carry)}>
+                          <Copy size={14} aria-hidden /> {useOnWords('useOn.bulk', { count: carry.length })}
+                        </Button>
+                      )}
                       {reach.onHold > 0 && <span className="fw-rtv-muted">{t('bulk.onHold', { count: reach.onHold })}</span>}
                     </BulkActionBar>
                   )}
@@ -243,8 +256,12 @@ function groupWords(group: ReturnType<typeof filesGroups>[number]['group'], part
 function Row({ series, model, actions, place, chosen, onChoose }: { series: FileSeries; model: FilesViewModel; actions?: FilesViewActions | undefined; place: { locale: 'it' | 'en'; timeZone?: string }; chosen: boolean; onChoose: (on: boolean, range: boolean) => void }) {
   const t = useT(FILES_VIEW_NS)
   const fileWords = useT('record-thread-files')
+  const searchWords = useT('search')
   const file = series.latest
   const version = versionMark(series)
+  // B-TH-231: a copy says where it came from; a sheet locked for this reader is named as such, never by its own name.
+  const source = sourceLine(file)
+  const name = file.locked ? fileWords('locked.sheet') : file.name
   const { marks, more } = audienceMarks(file, model.party)
   const held = file.status === 'QUARANTINED'
   const lines = keepLines(file, model.now)
@@ -259,19 +276,20 @@ function Row({ series, model, actions, place, chosen, onChoose }: { series: File
           }
         }}
       >
-        <Checkbox label={<span className="nds-vh">{t('select.one', { name: file.name })}</span>} checked={chosen} onChange={(event) => onChoose(event.target.checked, false)} />
+        <Checkbox label={<span className="nds-vh">{t('select.one', { name })}</span>} checked={chosen} onChange={(event) => onChoose(event.target.checked, false)} />
       </span>
       <span className={`fw-rtv-pic${held ? ' is-held' : ''}`} aria-hidden>
         {file.previewUrl && !held ? <img src={file.previewUrl} alt="" /> : held ? <Lock size={18} /> : KIND_ICON[file.kind]}
       </span>
       <span className="fw-rtv-main">
         <button type="button" className="fw-rtv-name" data-row={file.id} onClick={(event) => actions?.onOpen?.(file.id, event.currentTarget)}>
-          {file.name}
+          {file.locked && <Lock size={13} aria-hidden />} {name}
         </button>
         <span className="fw-rtv-meta">
           {fileWords(`kind.${file.kind}`)} · {sizeWords(file.sizeBytes, place.locale)} · {formatDate(file.createdAt, place)}
           {version && <> · {t('version.inForce', { n: version })}</>}
         </span>
+        {source && <span className="fw-rtv-meta">{fileWords(source.key, source.params ? { ...source.params, type: file.source ? searchWords(typeKey(file.source.recordType)) : '' } : undefined)}</span>}
         <span className="fw-rtv-marks">
           {marks.map((mark) => (
             <Tag key={mark} tone={mark === 'otherParty' ? 'danger' : mark === 'office' ? 'neutral' : mark === 'floor' ? 'warning' : 'info'}>
@@ -285,6 +303,13 @@ function Row({ series, model, actions, place, chosen, onChoose }: { series: File
             </Tag>
           ))}
         </span>
+        {model.can.upload && actions?.onUseOn && carriable([file]).length > 0 && (
+          <span className="fw-rtv-row-actions">
+            <Button size="sm" variant="quiet" heldReason={model.uploadHeld} aria-label={fileWords('useOn.actionFor', { name })} onClick={() => actions.onUseOn?.([file.id])}>
+              <Copy size={14} aria-hidden /> {fileWords('useOn.action')}
+            </Button>
+          </span>
+        )}
         {series.earlier.length > 0 && (
           <Disclosure className="fw-rtv-versions" summary={t('version.earlier', { count: series.earlier.length })}>
             <ul className="fw-rtv-version-list">

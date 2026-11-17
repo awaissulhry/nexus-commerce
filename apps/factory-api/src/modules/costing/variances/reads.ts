@@ -12,6 +12,7 @@ import { contextOf } from '../../product/materials/store'
 import { textOrNull, unique } from '../actual/store'
 import { itemsOf, VARIANCE_COLUMNS } from '../close/views'
 import { actualSettingsOf } from '../ppv/settings'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * GET /costing/variances (B-W2b-411; FIN-030): the variance lines of the work orders' closes the caller may see
@@ -24,6 +25,7 @@ export async function listVariances(caller: CommandCaller, query: VariancesQuery
   const where: Prisma.WorkOrderVarianceWhereInput = {
     AND: [
       scopeWhere(actor, COSTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderVarianceWhereInput,
+      { close: { workOrder: { is: workOrderWhere(actor, COSTING_VIEW) } } }, // B-PR-10: the customers' work orders it reaches
       query.companyId ? { companyId: query.companyId } : {},
       query.siteId ? { siteId: query.siteId } : {},
       query.workOrderId ? { workOrderId: query.workOrderId } : {},

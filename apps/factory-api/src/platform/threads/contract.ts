@@ -45,6 +45,8 @@ export const attachmentView = output({
   contentType: z.string(),
   sizeBytes: z.number().int(),
   status: z.enum(FILE_STATUSES),
+  /** B-TH-083: a measurement sheet this office reader may not open — no name ("Measurement sheet — you cannot open it"). */
+  locked: z.literal('MEASUREMENTS').optional(),
 })
 export type AttachmentView = z.infer<typeof attachmentView>
 
@@ -71,6 +73,8 @@ export const messageView = output({
   mentions: z.array(id()).optional(),
   /** The attached files the reader may see, in order; the others are left out. */
   attachments: z.array(attachmentView),
+  /** B-TH-231 (B-TH-029): how many attached files the reader may not see (left out above; absent when none): "One file you cannot open". */
+  hiddenAttachments: z.number().int().min(1).optional(),
   at: instant(),
 })
 export type MessageView = z.infer<typeof messageView>

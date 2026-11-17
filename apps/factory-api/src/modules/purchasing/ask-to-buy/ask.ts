@@ -35,6 +35,7 @@ import { assertMay, officeContextOf, unitsOf, type Reader } from '../store'
 import { askedRaws, buildRequests } from '../requests/build'
 import { markConverted } from './convert'
 import { ASKED_COLUMNS, namesOf, type AskedRow } from './store'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * Ask to buy (B-W2b-332; SCM-035, SCM-037; design purchasing.requests pop-up "Ask to buy", planning.mrp "Short on open work
@@ -175,7 +176,8 @@ async function checkAsked(tools: Tools, site: { id: string; companyId: string },
   const factor = baseFactor(asked.uom, unitsOf(item))
   if (factor === null || factor.lte(0)) throw new ValidationError(ASK_REFUSALS.UNIT_NOT_CONVERTED, [{ path: 'body/uom', message: ASK_REFUSALS.UNIT_NOT_CONVERTED }])
   if (asked.workOrderId) {
-    const order = await tools.tx.workOrder.findFirst({ where: { id: asked.workOrderId, siteId: site.id, status: { in: [...OPEN_WORK_ORDER_STATUSES] } }, select: { id: true } })
+    // B-PR-10: another customer's work order answers as one that is gone (the words of an unknown one).
+    const order = await tools.tx.workOrder.findFirst({ where: { AND: [{ id: asked.workOrderId, siteId: site.id, status: { in: [...OPEN_WORK_ORDER_STATUSES] } }, tools.context.audience === 'office' ? workOrderWhere(actorOf(tools.context), PURCHASING_REQUESTS_ASK) : {}] }, select: { id: true } })
     if (!order) throw new ValidationError(ASK_REFUSALS.WORK_ORDER_GONE, [{ path: 'body/workOrderId', message: ASK_REFUSALS.WORK_ORDER_GONE }])
   }
   const description = asked.description?.trim() ? asked.description.trim() : null
@@ -385,8 +387,10 @@ export async function listAsked(caller: CommandCaller, query: ListInput) {
     const reach = scopeWhere(actor, PURCHASING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.PurchaseRequestWhereInput
     const visible: Prisma.PurchaseRequestWhereInput = query.mine ? { requestedById: context.actorId } : Object.keys(reach).length === 0 ? {} : { OR: [{ requestedById: context.actorId }, reach] }
     const status: Prisma.PurchaseRequestWhereInput = query.status === 'ALL' ? {} : query.status === 'LIVE' ? { status: { in: [...LIVE_REQUEST_STATUSES] } } : { status: query.status }
+    // B-PR-10: a request for another customer's work order is not listed (one of no work order names no customer).
+    const wall: Prisma.PurchaseRequestWhereInput = { OR: [{ workOrderId: null }, { workOrder: { is: workOrderWhere(actor, PURCHASING_VIEW) } }] }
     const where: Prisma.PurchaseRequestWhereInput = {
-      AND: [visible, status, query.siteId ? { siteId: query.siteId } : {}, query.source ? { source: query.source } : {}, query.workOrderId ? { workOrderId: query.workOrderId } : {}, query.cursor && isUuid(query.cursor) ? { id: { lt: query.cursor } } : {}],
+      AND: [visible, wall, status, query.siteId ? { siteId: query.siteId } : {}, query.source ? { source: query.source } : {}, query.workOrderId ? { workOrderId: query.workOrderId } : {}, query.cursor && isUuid(query.cursor) ? { id: { lt: query.cursor } } : {}],
     }
     const rows = await db.purchaseRequest.findMany({ where, select: ASKED_COLUMNS, orderBy: [{ id: 'desc' }], take: query.limit + 1 })
     const page = rows.slice(0, query.limit)
@@ -442,7 +446,7 @@ export async function askOptions(caller: CommandCaller, query: { readonly siteId
         })
       : []
     const workOrders = site
-      ? await db.workOrder.findMany({ where: { siteId: site.id, status: { in: [...OPEN_WORK_ORDER_STATUSES] } }, select: { id: true, number: true, dueDate: true, style: { select: { code: true } } }, orderBy: [{ number: 'desc' }, { id: 'desc' }], take: ASK_LIMITS.options })
+      ? await db.workOrder.findMany({ where: { AND: [{ siteId: site.id, status: { in: [...OPEN_WORK_ORDER_STATUSES] } }, workOrderWhere(actor, PURCHASING_REQUESTS_ASK)] }, select: { id: true, number: true, dueDate: true, style: { select: { code: true } } }, orderBy: [{ number: 'desc' }, { id: 'desc' }], take: ASK_LIMITS.options }) // B-PR-10: the customers' work orders it reaches
       : []
     return {
       sites: sites.map((entry) => ({ id: entry.id, companyId: entry.companyId, code: entry.code, name: entry.name })),

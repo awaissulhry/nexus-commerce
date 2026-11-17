@@ -130,6 +130,8 @@ export interface SearchParams {
   /** B-TH-097: with type=Message, the messages of this record's thread only. */
   readonly recordType?: string | undefined
   readonly recordId?: string | undefined
+  /** B-TH-231: only these record types (the files' "Use on" picker: the types a thread resolver knows). */
+  readonly types?: readonly string[] | undefined
 }
 
 // ---- B-TH-097 (threads plan TH-9, G11: search inside messages, office only) -----------------------------------------------------
@@ -174,7 +176,9 @@ export async function searchRecords(caller: CommandCaller, params: SearchParams)
       asked && params.recordType && params.recordId
         ? ` AND EXISTS (SELECT 1 FROM "Message" m JOIN "Thread" t ON t."tenantId" = m."tenantId" AND t.id = m."threadId" WHERE m.id = e."recordId" AND t."recordType" = ${values.add(params.recordType)} AND t."recordId" = ${values.add(params.recordId)}::uuid)`
         : ''
-    const where = `${visible} AND ${sql.match}${asked ? thread : ` AND e."recordType" <> '${MESSAGE_TYPE}'`}`
+    // B-TH-231: a caller may keep to some record types (the picker of a file's other record).
+    const among = params.types && params.types.length > 0 ? ` AND e."recordType" = ANY(${values.textArray(params.types)})` : ''
+    const where = `${visible} AND ${sql.match}${asked ? thread : ` AND e."recordType" <> '${MESSAGE_TYPE}'`}${among}`
     const countValues = values.list.length
     const typed = params.type ? ` AND e."recordType" = ${values.add(params.type)}` : ''
     // B-W2b-36: with no company chosen this term is left out (a bare `true DESC` is a constant ORDER BY: PostgreSQL refuses it).

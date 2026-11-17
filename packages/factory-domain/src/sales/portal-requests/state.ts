@@ -67,6 +67,9 @@ export function requestStateOf(facts: RequestStateFacts): PortalRequestState {
       return facts.declineReason === 'NOT_AN_ORDER' ? 'CLOSED' : 'DECLINED' // B-TH-043
     case 'LOST':
       return 'CLOSED'
+    // B-TH-090 (schema wave 9/9): withdrawn by the customer reads "Closed" until B-TH-095 gives it its own word.
+    case 'WITHDRAWN':
+      return 'CLOSED'
     // TH-2 (B-TH-022): made straight into an order: the order's own state (B-TH-025 reads it into orderStatus).
     case 'ORDERED':
       if (facts.orderStatus === 'PENDING_APPROVAL') return 'ORDER_WAITING'

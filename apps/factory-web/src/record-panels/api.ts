@@ -40,6 +40,8 @@ export const attachmentSchema = z.object({
   contentType: z.string(),
   sizeBytes: z.number().int(),
   status: z.enum(FILE_STATUSES),
+  // B-TH-231 (B-TH-083): a measurement sheet this reader may not open (no name).
+  locked: z.literal('MEASUREMENTS').optional(),
 })
 
 export const messageSchema = z.object({
@@ -54,6 +56,8 @@ export const messageSchema = z.object({
   bodyHtml: z.string().nullable(),
   mentions: z.array(z.string()).optional(),
   attachments: z.array(attachmentSchema),
+  // B-TH-231 (B-TH-029): files of the message the reader may not see, counted ("One file you cannot open").
+  hiddenAttachments: z.number().int().optional(),
   at: z.string(),
 })
 export type ApiMessage = z.infer<typeof messageSchema>
@@ -83,6 +87,12 @@ export const fileSchema = z.object({
   versionNo: z.number().int().optional(),
   seriesId: z.string().nullable().optional(),
   supersededAt: z.string().nullable().optional(),
+  // ---- B-TH-231: a copy names its source (B-TH-024); B-TH-083: what the file is, and a sheet this reader may not open.
+  sourceFileId: z.string().nullable().optional(),
+  origin: z.object({ fileId: z.string(), recordType: z.string(), recordId: z.string(), originalName: z.string(), versionNo: z.number().int() }).nullable().optional(),
+  category: z.string().nullable().optional(),
+  locked: z.literal('MEASUREMENTS').optional(),
+  // ---- end B-TH-231
 })
 export type ApiFile = z.infer<typeof fileSchema>
 
@@ -203,6 +213,8 @@ export interface UploadAnnouncement {
   visibility: readonly FileAudience[]
   floorSiteId: string | null
   partyId: string | null
+  /** B-TH-231 (B-TH-083): "This is a measurement sheet" (filed MEASUREMENTS: opened only with sales.measurements.view). */
+  measurementSheet?: boolean
 }
 
 /** POST /files: announce an upload; the answer holds the presigned request to send the bytes with. */
@@ -221,6 +233,7 @@ export function requestUpload(api: ApiClient, input: UploadAnnouncement): Promis
       visibility: ['OFFICE', ...shared],
       ...(shared.includes('FLOOR') ? { floorSiteId: input.floorSiteId } : {}),
       ...(shared.includes('PARTNER') || shared.includes('LINK') ? { partyId: input.partyId } : {}),
+      ...(input.measurementSheet ? { measurementSheet: true } : {}),
     },
     schema: z.object({ file: fileSchema, upload: presignedSchema }),
     idempotencyKey: newIdempotencyKey(),

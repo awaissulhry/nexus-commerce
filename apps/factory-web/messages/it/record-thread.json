@@ -11,7 +11,9 @@
     "forbidden": "Qui non puoi farlo.",
     "failed": "Qualcosa non è andato. Riprova.",
     "openFailed": "Non è stato possibile aprire il file. Riprova.",
-    "partyUnread": "Non è stato possibile leggere i contatti del cliente: scrivi tu l'indirizzo."
+    "partyUnread": "Non è stato possibile leggere i contatti del cliente: scrivi tu l'indirizzo.",
+    "cannotOpen": "Un file che non puoi aprire: è fuori dalla tua portata (il suo record, o una scheda misure senza il diritto di aprirla).",
+    "copied": "Copiato su {target}: la copia indica da dove viene."
   },
   "pane": {
     "label": "Riquadro di lettura",

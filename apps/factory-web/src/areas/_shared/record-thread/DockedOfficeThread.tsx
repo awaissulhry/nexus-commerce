@@ -52,6 +52,10 @@ import { TaskNewDialog } from '../../../record-panels/view/TaskNewDialog'
 import { fillReply, listReplies } from '../document-send/template/api'
 import { useRecordFrame } from '../record-frame/RecordFrame'
 import { officeOnly, removeFile, shareWithParty } from './api'
+// B-TH-231: carry a file to another record (same customer or none); a refused file read in words.
+import { readUseOnTargets, useFileOn } from './api'
+import { carriable, offeredTargets, openRefusal, queryReady, targetLabel, useOnRefusal } from '../../../lib/record-thread/files/use-on'
+import { UseOnDialog, type UseOnModel } from '../../../lib/record-thread/files/view/UseOnDialog'
 import type { RecordThreadBase, RecordThreadHost } from './use-record-thread'
 
 /** What the docked thread needs of its record beyond RecordThread v1's host (B-TH-300). */
@@ -207,7 +211,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const asked = useRef(new Set<string>())
   const fetchLinks = useCallback(
     async (file: ThreadFile) => {
-      if (asked.current.has(file.id) || file.status !== 'AVAILABLE') return
+      // B-TH-231: a sheet locked for this reader is never asked for (the viewer says it cannot be opened).
+      if (asked.current.has(file.id) || file.status !== 'AVAILABLE' || file.locked) return
       asked.current.add(file.id)
       try {
         const { download } = await downloadLink(api, file.id)
@@ -215,9 +220,10 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
         const pdf = file.contentType.toLowerCase() === 'application/pdf'
         const src = pdf ? await readFromStore(download) : file.contentType.toLowerCase().startsWith('image/') ? href : null
         setLinks((known) => ({ ...known, [file.id]: { src, downloadHref: href } }))
-      } catch {
+      } catch (error) {
         asked.current.delete(file.id)
-        notify({ ns: 'record-thread', key: 'notice.openFailed', tone: 'danger' })
+        // B-TH-231 (B-TH-029): a file out of the reader's reach says so ("One file you cannot open").
+        notify({ ns: 'record-thread', key: openRefusal(error), tone: 'danger' })
       }
     },
     [api, notify],
@@ -231,7 +237,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   useEffect(() => {
     if (current) void fetchLinks(current)
   }, [current, fetchLinks])
-  const viewerFiles: ViewerFile[] = viewer ? viewer.files.map((file) => toViewerFile(file, links[file.id] ?? { src: null, downloadHref: null })) : []
+  const fw = useT(FILES_NS)
+  const viewerFiles: ViewerFile[] = viewer ? viewer.files.map((file) => toViewerFile(file, links[file.id] ?? { src: null, downloadHref: null }, fw('locked.sheet'))) : []
 
   const [filesOpen, setFilesOpen] = useState(false)
   const [selected, setSelected] = useState<readonly string[]>([])
@@ -309,8 +316,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
           document.body.appendChild(anchor)
           anchor.click()
           anchor.remove()
-        } catch {
-          base.notify({ ns: 'record-thread', key: 'notice.openFailed', tone: 'danger' })
+        } catch (error) {
+          base.notify({ ns: 'record-thread', key: openRefusal(error), tone: 'danger' })
         }
       }
       return
@@ -330,6 +337,75 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       void base.loadFiles()
     }
   }
+
+  // ── B-TH-231: "Use on another record…" (a message's files, a Files view row, the chosen files) ───────────────────────────
+  const emptyUseOn = (files: readonly ThreadFile[]): UseOnModel => ({ files: files.map((file) => ({ id: file.id, name: file.name })), party: party ? { name: party.name } : null, query: '', targets: null, searching: false, chosen: null, share: false, canShare: can.share, busy: false, problem: null, failed: [], copied: 0 })
+  const [useOn, setUseOn] = useState<UseOnModel | null>(null)
+  const useOnKeys = useRef(new Map<string, string>())
+  const useOnSeq = useRef(0)
+  const openUseOn = (ids: readonly string[]) => {
+    const files = carriable(threadFiles.filter((file) => ids.includes(file.id)))
+    if (files.length === 0) return
+    useOnKeys.current = new Map()
+    setUseOn(emptyUseOn(files))
+  }
+  const useOnQuery = useOn?.query ?? ''
+  const useOnFirst = useOn?.files[0]?.id ?? null
+  useEffect(() => {
+    if (!useOnFirst) return
+    const mine = ++useOnSeq.current
+    if (!queryReady(useOnQuery)) {
+      setUseOn((now) => (now ? { ...now, targets: null, searching: false } : now))
+      return
+    }
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      setUseOn((now) => (now ? { ...now, searching: true } : now))
+      readUseOnTargets(api, useOnFirst, useOnQuery, controller.signal)
+        .then((answer) => {
+          if (mine !== useOnSeq.current) return
+          const targets = answer.tooShort ? null : offeredTargets(answer.targets, { recordType: key.type, recordId: key.id, partyId })
+          setUseOn((now) => (now ? { ...now, targets, searching: false, chosen: targets?.some((target) => target.key === now.chosen) ? now.chosen : null } : now))
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted || mine !== useOnSeq.current) return
+          setUseOn((now) => (now ? { ...now, searching: false, targets: [], problem: useOnRefusal(error) } : now))
+        })
+    }, 300)
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [api, key.type, key.id, partyId, useOnFirst, useOnQuery])
+  const confirmUseOn = async () => {
+    const asked = useOn
+    const target = asked?.targets?.find((one) => one.key === asked.chosen)
+    if (!asked || !target || asked.busy) return
+    setUseOn({ ...asked, busy: true, problem: null })
+    const failed: { name: string; reason: string }[] = []
+    const left: { id: string; name: string }[] = []
+    let copied = asked.copied
+    for (const file of asked.files) {
+      // One key per file and target: "Copy" again after a lost answer never copies twice.
+      const keyOf = `${file.id}:${target.key}:${asked.share ? 'shared' : 'office'}`
+      const idempotencyKey = useOnKeys.current.get(keyOf) ?? globalThis.crypto.randomUUID()
+      useOnKeys.current.set(keyOf, idempotencyKey)
+      try {
+        await useFileOn(api, file.id, { recordType: target.recordType, recordId: target.recordId, share: asked.share && target.partyId !== null }, idempotencyKey)
+        copied += 1
+      } catch (error) {
+        failed.push({ name: file.name, reason: useOnRefusal(error) })
+        left.push(file)
+      }
+    }
+    if (failed.length === 0) {
+      setUseOn(null)
+      base.notify({ ns: 'record-thread', key: 'notice.copied', params: { target: targetLabel(target) }, tone: 'success' })
+      return
+    }
+    setUseOn((now) => (now ? { ...now, busy: false, files: left, failed, copied, problem: failed.length === asked.files.length && failed.every((one) => one.reason === failed[0]!.reason) ? failed[0]!.reason : null } : now))
+  }
+  // ── end B-TH-231
 
   // ── saved replies beside the box (B-TH-208; GET /templates/replies, POST …/fill from THIS record) ──────────────────────
   const mayReply = can.email && isReplyRecordType(key.type)
@@ -457,7 +533,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     else reminder.open(null)
   }
 
-  const feed = feedForView({ ...model.feed, context: { ...model.feed.context, canTask: abilities.task && !offline } }, shown)
+  // B-TH-231: "Use on another record…" on a message's ⋯ for a person who may add files (files.upload), online.
+  const feed = feedForView({ ...model.feed, context: { ...model.feed.context, canTask: abilities.task && !offline, canUseOn: can.upload && !offline } }, shown)
   const shownModel: RecordThreadModel = { ...model, feed }
   const fileOf = (fileId: string) => threadFiles.find((file) => file.id === fileId)
   const threadActions: RecordThreadActions = {
@@ -477,6 +554,8 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
       else actions.onOpenFile?.(fileId)
     },
     onMoreFiles: () => setFilesOpen(true),
+    // B-TH-231: the message's files the reader opens, carried to another record.
+    onUseOn: (messageId) => openUseOn(model.feed.messages.find((item) => item.id === messageId)?.files.map((file) => file.id) ?? []),
   }
 
   const doorResults = (
@@ -614,6 +693,20 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
               setUploadFiles([])
             },
             onDismissRefused: () => setRefused([]),
+            // B-TH-231: one row's file, or the chosen ones.
+            onUseOn: (ids) => openUseOn(ids),
+          }}
+        />
+      )}
+      {useOn && (
+        <UseOnDialog
+          model={useOn}
+          actions={{
+            onQuery: (query) => setUseOn((now) => (now ? { ...now, query, problem: null } : now)),
+            onChoose: (choice) => setUseOn((now) => (now ? { ...now, chosen: choice, problem: null } : now)),
+            onShare: (share) => setUseOn((now) => (now ? { ...now, share } : now)),
+            onConfirm: () => void confirmUseOn(),
+            onClose: () => setUseOn(null),
           }}
         />
       )}

@@ -153,6 +153,13 @@ model User {
   supervisedPortalSettings PortalSettings[] @relation("PortalSettingsSupervisor")
   backupPortalSettings     PortalSettings[] @relation("PortalSettingsBackup")
   approverPortalSettings   PortalSettings[] @relation("PortalSettingsApprover")
+  // TH-5 projects.prisma (threads plan, schema wave 8/9, B-TH-065): the projects they lead (an office person).
+  ledProjects              Project[]        @relation("ProjectLead")
+  // TH-9 threads.prisma, collab.prisma (threads plan, schema wave 9/9, B-TH-090): the conversations they marked done and the
+  // messages they pinned (an office person), and their own unsent drafts (office or portal).
+  doneThreads              Thread[]         @relation("ThreadDoneBy")
+  pinnedMessages           ThreadPin[]      @relation("ThreadPinPinnedBy")
+  composerDrafts           ComposerDraft[]
 
   @@unique([tenantId, email])
   // The target of the tenant-safe references from the auth rows.

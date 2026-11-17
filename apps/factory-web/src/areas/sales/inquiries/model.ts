@@ -341,6 +341,8 @@ export const STATUS_TONE: Readonly<Record<InquiryStatus, Tone>> = {
   LOST: 'neutral',
   // B-TH-022: made straight into an order.
   ORDERED: 'success',
+  // B-TH-090: withdrawn by the customer before the office decided.
+  WITHDRAWN: 'neutral',
 }
 
 export const isClosed = (status: InquiryStatus): boolean => (CLOSED_STATUSES as readonly string[]).includes(status)

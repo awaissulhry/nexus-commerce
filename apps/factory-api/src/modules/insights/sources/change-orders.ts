@@ -4,6 +4,7 @@ import type { AttentionCandidate } from '@nexus/factory-domain/insights/attentio
 import { changeOrderWords } from '@nexus/factory-domain/insights/words'
 import { PRODUCT_CHANGES_VIEW } from '@nexus/factory-domain/product/changes/permissions'
 import { capped, dayOrNull, SOURCE_LIMIT, type Source } from './common'
+import { orderWall } from '../../product/changes/store' // B-PR-10
 
 /**
  * Change orders that wait for the viewer's approval (B-W2b-307, follow-up AW2:01; B-W2b-226's and B-W2b-244's gap "Home ›
@@ -23,6 +24,7 @@ export const changeOrderApproval: Source = async ({ caller, viewer }) => {
       where: {
         AND: [
           scope,
+          orderWall(viewer.actor, PRODUCT_CHANGES_VIEW), // B-PR-10: another customer's style or work orders: not listed
           {
             status: 'SUBMITTED',
             // B-W2b-F24: an approval the viewer named themselves (SELF_NAMED) and an order carrying a request they raised

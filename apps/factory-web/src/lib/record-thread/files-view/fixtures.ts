@@ -2,6 +2,7 @@ import { defineDesignScreen } from '../../design/design-screen'
 import { demoPdf } from '../../../shell/design-data'
 import { BRAND_ALPHA } from '../../testing/two-brands'
 import type { ThreadFile } from '../files/model'
+import { offeredTargets } from '../files/use-on' // B-TH-231
 import type { FilesViewModel } from './view/FilesView'
 import { FilesViewCase, type FilesViewCaseModel } from './view/FilesViewCase'
 
@@ -81,6 +82,20 @@ const view = (over: Partial<FilesViewModel> = {}): FilesViewModel => ({
 })
 const c = (over: Partial<FilesViewModel> = {}): FilesViewCaseModel => ({ view: view(over), sources: SOURCES })
 
+// ---- B-TH-231: "Use on another record…" — records of the same customer or none (made up); a copy naming its source; a sheet locked.
+const TARGETS = offeredTargets(
+  [
+    { recordType: 'Quote', recordId: id(301), number: 'QT-2026-0088', title: `${BRAND_ALPHA.tradeName} winter jackets`, subtitle: 'Revision 2', area: 'sales', partyId: PARTY.id },
+    { recordType: 'Inquiry', recordId: id(302), number: 'INQ-2026-0041', title: `${BRAND_ALPHA.tradeName} AX-100 reorder`, subtitle: null, area: 'sales', partyId: PARTY.id },
+    { recordType: 'Style', recordId: id(303), number: 'AX-100', title: 'Touring jacket AX-100 (our block)', subtitle: null, area: 'products', partyId: null },
+  ],
+  { recordType: 'SalesOrder', recordId: ORDER, partyId: PARTY.id },
+)
+const COPY = file(13, { name: 'Rider photo front.jpg', contentType: 'image/jpeg', kind: 'PHOTO', sizeBytes: 1_400_000, sourceFileId: id(302), source: { recordType: 'Inquiry', recordId: id(302), name: 'Rider photo front.jpg', versionNo: 1 }, previewUrl: picture('rider front', '#cdd3db') })
+const LOCKED = file(14, { name: '', locked: 'MEASUREMENTS' })
+const WITH_COPIES = [...WITHOUT_ORIGIN, COPY, LOCKED]
+// ---- end B-TH-231
+
 export const designScreen = defineDesignScreen<FilesViewCaseModel>({
   screen: 'SCR-006-filesview',
   title: 'Files view of one record (B-TH-299)',
@@ -90,7 +105,17 @@ export const designScreen = defineDesignScreen<FilesViewCaseModel>({
     { id: 'chosen', label: 'Three chosen: the counted bulk bar', model: c({ selected: [id(12), id(7), id(9)] }), note: 'Download 3 · Share with Brand Alpha (1: the others are shared already) · Make office only (2) · Delete 2 — the declaration is under a legal hold, said in words.' },
     { id: 'by-origin', label: 'By origin (once WALL-G13 lands)', model: c({ files: FILES }), note: 'From the customer · Ours · Made by us · Floor — drawn when every file says where it came from.' },
     { id: 'upload-ask', label: 'Add 2 files: kind and audience', model: c({ upload: { files: [{ name: 'Fit photo 1.jpg', sizeBytes: 2_400_000 }, { name: 'Fit photo 2.jpg', sizeBytes: 2_100_000 }], kind: 'PHOTO', audience: 'OFFICE', kinds: ['ATTACHMENT', 'DOCUMENT', 'PHOTO', 'CERTIFICATE'], audiences: ['OFFICE', 'FLOOR', 'PARTNER', 'LINK'] } }), note: 'Asked once in the system’s words; the audience starts on Office; "Office and Brand Alpha" reaches only this record’s customer.' },
-    { id: 'refused', label: 'A refused upload', model: c({ refused: [{ name: 'Design.ai', reason: 'This kind of file is not taken: PDF, pictures and Office files only.' }] }), note: 'The file’s name and the reason.' },
+    { id: 'refused', label: 'A refused upload', model: c({ refused: [{ name: 'Logo.svg', reason: 'An SVG, HTML or script file is never accepted: send a PDF or PNG.' }] }), note: 'The file’s name and the reason, naming the way out (B-TH-084: design files are taken, download-only).' },
+    // ---- B-TH-231
+    { id: 'use-on', label: 'Use on another record…: a row’s action, a copy naming its source, a measurement sheet locked', model: { ...c({ files: WITH_COPIES }), targets: TARGETS }, note: 'Each row offers "Use on another record…"; the copy says "Copied from Inquiry · …"; a sheet the reader may not open is named, never by its own name.' },
+    {
+      id: 'use-on-window',
+      label: 'Use on another record…: the window — the same customer’s records or none',
+      model: { ...c({ files: WITH_COPIES, selected: [id(3), id(5)] }), targets: TARGETS, useOn: { files: [{ id: id(3), name: 'Collar detail.jpg' }, { id: id(5), name: BRAND_ALPHA.fileName }], party: { name: PARTY.name }, query: 'AX-100', targets: TARGETS, searching: false, chosen: TARGETS[0]!.key, share: false, canShare: true, busy: false, problem: null, failed: [], copied: 0 } },
+      note: 'Another customer’s record is never offered (the API answers only these); "Also share the copy" only for a customer’s record.',
+    },
+    { id: 'use-on-refused', label: 'Use on another record…: refused in words (another customer’s record)', model: { ...c({ files: WITH_COPIES }), targets: TARGETS, useOn: { files: [{ id: id(3), name: 'Collar detail.jpg' }], party: { name: PARTY.name }, query: 'AX-100', targets: TARGETS, searching: false, chosen: TARGETS[0]!.key, share: false, canShare: true, busy: false, problem: 'useOn.refused.otherParty', failed: [], copied: 0 } } },
+    // ---- end B-TH-231
     { id: 'no-upload', label: 'No right to upload', model: c({ can: { upload: false, share: false, delete: false }, uploadHeld: null }), note: 'The upload is held with the reason; the bulk actions say the right they need.' },
     { id: 'block', label: 'A required document refuses the move', model: c({ missing: [{ id: 'm2', document: 'Test report EN 17092-3', before: 'Shipped', level: 'BLOCK' }] }) },
     { id: 'empty', label: 'No files yet', model: c({ files: [] }), note: 'An empty view never looks like an error: the drop area says what to do.' },

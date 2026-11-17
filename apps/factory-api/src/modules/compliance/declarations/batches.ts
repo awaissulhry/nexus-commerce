@@ -4,7 +4,7 @@ import { DECLARATIONS_RECORD, DECLARATIONS_VIEW } from '@nexus/factory-domain/co
 import { NOTE_MAX } from '@nexus/factory-domain/compliance/declarations/rules'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import type { CommandCaller, CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
@@ -12,6 +12,8 @@ import { readDocuments } from '../../shipping/documents/read'
 import { readShipment, type ShipmentHeader } from '../../shipping/store'
 import { assertMayWriteDocument, dateDay, dateOf, declarationsCommand, mayRead, namesFor, officeOf, readVisibleDocument, refused, type Reader } from './common'
 import { unrecordedPairs } from './read'
+import { reachesWorkOrder } from '../../production/work-orders/scope' // B-PR-10
+import { styleWorkWall } from '../wall' // B-PR-10
 
 /**
  * Versions by batch (B-W2b-257; PRD-295; Reg. (EU) 2016/425 art. 8(8), art. 15(2); QHS-110): which signed revision of a DoC
@@ -88,12 +90,13 @@ export async function listBatches(caller: CommandCaller, query: BatchesQuery) {
   const context = officeOf(caller)
   const actor = actorOf(context)
   return caller.withClient(async (db) => {
-    const filters: Prisma.ComplianceDocumentBatchWhereInput[] = [scopeWhere(actor, DECLARATIONS_VIEW, { company: 'companyId' }) as Prisma.ComplianceDocumentBatchWhereInput]
+    // B-PR-10: the records of the styles and work orders the caller reaches; a shipment's records only when it reaches its customer.
+    const filters: Prisma.ComplianceDocumentBatchWhereInput[] = [scopeWhere(actor, DECLARATIONS_VIEW, { company: 'companyId' }) as Prisma.ComplianceDocumentBatchWhereInput, styleWorkWall(actor, DECLARATIONS_VIEW) as Prisma.ComplianceDocumentBatchWhereInput]
     if (query.styleId) filters.push({ styleId: query.styleId })
     if (query.batchNumber) filters.push({ batchNumber: query.batchNumber })
     if (query.workOrderId) filters.push({ workOrderId: query.workOrderId })
     if (query.shipmentId) filters.push({ shipmentId: query.shipmentId })
-    const rows = await db.complianceDocumentBatch.findMany({ where: { AND: filters }, select: RECORD_SELECT, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1000 })
+    const rows = await reachedShipmentsOnly(db, actor, await db.complianceDocumentBatch.findMany({ where: { AND: filters }, select: RECORD_SELECT, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 1000 }))
     const records = await recordViews(db, rows)
     let timeline = null
     if (query.styleId) {
@@ -159,12 +162,13 @@ export async function recordBatch(caller: CommandCaller, body: RecordBody, idemp
   const prepared = await caller.withClient(async (db) => {
     const document = await readVisibleDocument(db, context, body.documentId)
     const order = body.workOrderId
-      ? await db.workOrder.findUnique({ where: { id: body.workOrderId }, select: { id: true, number: true, companyId: true, siteId: true, styleId: true, batchNumber: true, styleRevisionId: true } })
+      ? await db.workOrder.findUnique({ where: { id: body.workOrderId }, select: { id: true, number: true, companyId: true, siteId: true, partyId: true, styleId: true, batchNumber: true, styleRevisionId: true } })
       : null
-    if (body.workOrderId && (!order || !mayRead(context, order.companyId))) throw new NotFoundError('There is no such work order.')
+    // B-PR-10: another customer's work order or shipment is not found (as an unknown id).
+    if (body.workOrderId && (!order || !mayRead(context, order.companyId) || !reachesWorkOrder(actorOf(context), DECLARATIONS_VIEW, order))) throw new NotFoundError('There is no such work order.')
     const frozen = order?.styleRevisionId ? await db.styleRevision.findUnique({ where: { id: order.styleRevisionId }, select: { revision: true } }) : null
-    const shipment = body.shipmentId && isUuid(body.shipmentId) ? await db.shipment.findUnique({ where: { id: body.shipmentId }, select: { id: true, number: true, status: true, companyId: true } }) : null
-    if (body.shipmentId && (!shipment || !mayRead(context, shipment.companyId))) throw new NotFoundError('There is no such shipment.')
+    const shipment = body.shipmentId && isUuid(body.shipmentId) ? await db.shipment.findUnique({ where: { id: body.shipmentId }, select: { id: true, number: true, status: true, companyId: true, partyId: true } }) : null
+    if (body.shipmentId && (!shipment || !mayRead(context, shipment.companyId) || !can(actorOf(context), DECLARATIONS_VIEW, { companyId: shipment.companyId, partyId: shipment.partyId }))) throw new NotFoundError('There is no such shipment.')
     const carries = shipment && order ? (await db.shipmentLine.count({ where: { shipmentId: shipment.id, workOrderId: order.id } })) > 0 : null
     // B-W2b-288 (FU2:04): this batch recorded with this document before (while it was in force).
     const batchAsked = order?.batchNumber ?? body.batchNumber?.trim() ?? null
@@ -210,9 +214,21 @@ export async function recordBatch(caller: CommandCaller, body: RecordBody, idemp
 /** The shipment as the caller may see it (its company), or not found. */
 export async function visibleShipment(db: Reader, context: OfficeContext, shipmentId: string): Promise<ShipmentHeader> {
   const shipment = await readShipment(db as Parameters<typeof readShipment>[0], shipmentId)
-  if (!shipment || !mayRead(context, shipment.companyId)) throw new NotFoundError('There is no such shipment.')
+  // B-PR-10: another customer's shipment is not found (as an unknown id).
+  if (!shipment || !mayRead(context, shipment.companyId) || !can(actorOf(context), DECLARATIONS_VIEW, { companyId: shipment.companyId, partyId: shipment.partyId })) throw new NotFoundError('There is no such shipment.')
   return shipment
 }
+
+// ── B-PR-10 ──
+/** The records whose shipment (if any) is of a customer the caller reaches (a record of no shipment stays). */
+async function reachedShipmentsOnly<Row extends { readonly shipmentId: string | null }>(db: Reader, actor: Actor, rows: Row[]): Promise<Row[]> {
+  const ids = [...new Set(rows.flatMap((row) => (row.shipmentId ? [row.shipmentId] : [])))]
+  if (ids.length === 0) return rows
+  const shipments = await db.shipment.findMany({ where: { id: { in: ids } }, select: { id: true, companyId: true, partyId: true } })
+  const reached = new Set(shipments.filter((shipment) => can(actor, DECLARATIONS_VIEW, { companyId: shipment.companyId, partyId: shipment.partyId })).map((shipment) => shipment.id))
+  return rows.filter((row) => row.shipmentId === null || reached.has(row.shipmentId))
+}
+// ── end B-PR-10 ──
 
 export interface Travelled {
   readonly toMake: NewRecord[]

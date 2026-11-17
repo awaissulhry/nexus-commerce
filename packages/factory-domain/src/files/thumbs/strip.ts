@@ -17,6 +17,9 @@
  * the step's notes). The database records that the copy was made (StoredFile.exifStrippedAt); it cannot check the bytes.
  */
 
+// B-TH-084: a design file is never a picture to strip (download-only).
+import { isDesignType } from '../design'
+
 export const STRIPPABLE_TYPES: readonly string[] = Object.freeze(['image/jpeg', 'image/png', 'image/webp'])
 
 const normalised = (contentType: string): string => contentType.split(';')[0]!.trim().toLowerCase()
@@ -24,8 +27,11 @@ const normalised = (contentType: string): string => contentType.split(';')[0]!.t
 /** A picture this module can strip. */
 export const isStrippable = (contentType: string): boolean => STRIPPABLE_TYPES.includes(normalised(contentType))
 
-/** A picture: what a portal or a link is shown only through its stripped copy. */
-export const isPicture = (contentType: string): boolean => normalised(contentType).startsWith('image/')
+/**
+ * A picture: what a portal or a link is shown only through its stripped copy. B-TH-084: a design file announced as an image
+ * (Photoshop, EPS: files/design.ts) is no picture here — it is download-only and served as it was sent, like a document.
+ */
+export const isPicture = (contentType: string): boolean => normalised(contentType).startsWith('image/') && !isDesignType(contentType)
 
 export type StripResult =
   | {
