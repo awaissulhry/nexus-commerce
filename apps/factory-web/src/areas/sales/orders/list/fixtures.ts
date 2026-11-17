@@ -16,6 +16,7 @@ import type { OrderCustomer } from '../api'
 import type { OrderSummary, SummaryFigures } from '../api'
 import { ListToolsContext, type ListField, type ListFieldValue } from '../../../../list-frame/tools/transport'
 import { memoryStore, memoryTransport, type MemoryToolsModel } from '../../../_shared/list-tools/memory'
+import type { BulkRowFacts } from '@nexus/factory-domain/views/bulk/rules' // B-TH-245: the cells' bulk rows
 
 /**
  * SCR-038 — Orders (design sales.orders) with made-up data only: every state of the list (loading, error, empty, nothing
@@ -103,7 +104,7 @@ const tools = (over: Partial<MemoryToolsModel> = {}): MemoryToolsModel => ({ pag
 
 /** Made-up figures of a view ("every order"): the doors as the API makes them (the view's terms + the figure's own). */
 function figures(party: string | null, rows: typeof ALL_ROWS, price: boolean): SummaryFigures {
-  const view = party ? { partyId: party } : {}
+  const view: Record<string, string> = party ? { partyId: party } : {}
   const door = (count: number, extra: Record<string, string> = {}) => ({ count, filter: { ...view, ...extra } })
   const sum = (pick: (entry: (typeof ALL_ROWS)[number]) => number) => rows.reduce((total, entry) => total + pick(entry), 0)
   return {
@@ -293,7 +294,7 @@ export const designScreen = defineDesignScreen<ListCase>({
         tools: tools({
           fields: { list: FIELDS.slice(0, 1), values: FIELD_VALUES },
           layout: { columns: { order: ['picture', 'number', 'customer', 'status', 'note', 'cf:hang_tag'], hidden: [], pinned: [] } },
-          bulk: LIST_ROWS.map((entry) => ({ id: entry.id, label: entry.number, version: entry.version, values: { note: null, 'cf:hang_tag': FIELD_VALUES[entry.id]?.hang_tag?.value as string | null ?? null }, held: entry.status === 'CLOSED' || entry.status === 'CANCELLED' ? { '*': { code: 'held', status: entry.status } } : {} })),
+          bulk: LIST_ROWS.map((entry): BulkRowFacts => ({ id: entry.id, label: entry.number, version: entry.version, values: { note: null, 'cf:hang_tag': FIELD_VALUES[entry.id]?.hang_tag?.value as string | null ?? null }, held: entry.status === 'CLOSED' || entry.status === 'CANCELLED' ? { '*': { code: 'held', status: entry.status } } : {} })),
         }),
       },
       note: 'Double-click a cell or press F2: it saves by itself (↻ then ✓); someone else\'s change meanwhile is refused in words, never overwritten. The pencil cells are the only ones that edit: the rest of the row opens the order.',

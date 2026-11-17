@@ -552,9 +552,9 @@ function CountRecordContainer({ countId }: { countId: string }) {
   }
   // B-TH-264: the count's thread docked beside every tab (notes only: a count has no party; its company and site), with threads.read;
   // Activity's tools are in its "⋯" (R-ACT). The print view prints the thread with ThreadPrint (B-TH-280).
-  const record = value ? { type: 'StockCount', id: value.id, companyId: value.companyId, siteId: value.site.id } : null
-  const thread = value && record && can.threads ? <OfficeRecordThread docked record={record} title={value.number} recordLabel={value.number} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = value && record && can.threads ? <ThreadPrint record={record} title={value.number} /> : null
+  const threadRecord = value ? { type: 'StockCount', id: value.id, companyId: value.companyId, siteId: value.site.id } : null // not `record`: that is the count's read
+  const thread = value && threadRecord && can.threads ? <OfficeRecordThread docked record={threadRecord} title={value.number} recordLabel={value.number} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = value && threadRecord && can.threads ? <ThreadPrint record={threadRecord} title={value.number} /> : null
 
   return (
     <CountRecordView

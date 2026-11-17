@@ -5,7 +5,7 @@ import { DECLINE_REASONS, INQUIRY_REFUSALS, INQUIRY_SOURCES, INQUIRY_STATUSES, I
 // B-TH-235: what a request became (Sales › Reports' request figure opens this list with it).
 import { REQUEST_OUTCOMES } from '@nexus/factory-domain/sales/inquiries/rules'
 import { isFiltered, queryOf } from './model'
-import { declineHeld, emptyDecline, hasBlank } from './model' // th-backend-g step 2
+import { emptyDecline, hasBlank } from './model' // th-backend-g step 2 (declineHeld: in the list below)
 import { ApiError } from '../../../lib/api/errors'
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'

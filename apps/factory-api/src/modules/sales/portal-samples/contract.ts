@@ -5,6 +5,7 @@ import { businessDate, defineContract, id, input, instant, output } from '@nexus
 import { SCAN_STATES } from '@nexus/factory-domain/product/techpack/scan'
 import { BRAND_ROUND_STATUSES, STYLE_STAGES, WAITING_RECORD_TYPES } from '@nexus/factory-domain/sales/portal-samples/rules'
 import { SAMPLE_DECISIONS, SAMPLE_KINDS, SAMPLE_STAGES } from '@nexus/factory-domain/sales/samples/rules'
+import { SWATCH_KINDS } from '@nexus/factory-domain/sales/sample-decisions/rules' // B-PR-23: fabric and trim swatches too
 
 /**
  * The brand's samples and tech packs in the portal (B-W2b-262; PRD-245; design portal.customer.samples, SCR-225). Codes only
@@ -48,7 +49,7 @@ const waiting = output({
   label: words,
   style: style.nullable(),
   round: roundRef.nullable(),
-  swatch: output({ id: id(), kind: z.enum(['COLOUR', 'LEATHER']) }).nullable(),
+  swatch: output({ id: id(), kind: z.enum(SWATCH_KINDS) }).nullable(),
   question: z.string(),
   askedAt: instant(),
   dueAt: instant(),

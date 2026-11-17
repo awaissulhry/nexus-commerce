@@ -153,27 +153,27 @@ export async function applyBulk(caller: CommandCaller, body: ApplyBulkBody, idem
   const results: ResultView[] = []
   for (const { row, values } of asked) {
     const current = byId.get(row.id)
-    const fields = Object.keys(values)
+    const names = Object.keys(values) // B-TH-060: the asked fields' names (`fields` is the target's fields for this person)
     if (current === undefined) {
       results.push({ id: row.id, label: '', ok: false, refusal: { code: 'missing', field: null, status: null }, before: {}, after: {}, version: 0 })
       continue
     }
     const facts = factsOf(caller, target, fields, current)
-    const before = Object.fromEntries(fields.map((field) => [field, facts.values[field] ?? null]))
+    const before = Object.fromEntries(names.map((field) => [field, facts.values[field] ?? null]))
     const refused = (refusal: BulkRefusal): ResultView => ({ id: row.id, label: facts.label, ok: false, refusal: refusalView(refusal), before, after: before, version: facts.version })
     const whole = facts.held['*'] ?? null
     if (whole) {
       results.push(refused(whole))
       continue
     }
-    const changed = fields.filter((field) => !sameValue(facts.values[field] ?? null, values[field] ?? null))
+    const changed = names.filter((field) => !sameValue(facts.values[field] ?? null, values[field] ?? null))
     const held = changed.map((field) => facts.held[field] ?? null).find((refusal) => refusal !== null) ?? null
     if (held) {
       results.push(refused(held))
       continue
     }
     // Already there on a record whose state keeps the field: nothing to write (its command would refuse the field).
-    if (changed.length === 0 && fields.some((field) => facts.held[field])) {
+    if (changed.length === 0 && names.some((field) => facts.held[field])) {
       results.push({ id: row.id, label: facts.label, ok: true, refusal: null, before, after: before, version: facts.version })
       continue
     }
@@ -186,10 +186,10 @@ export async function applyBulk(caller: CommandCaller, body: ApplyBulkBody, idem
     try {
       const after = await target.write(caller, current, values, row.version, idempotencyKey ? `${idempotencyKey.slice(0, 90)}:${row.id}` : undefined)
       const now = factsOf(caller, target, fields, after)
-      results.push({ id: row.id, label: now.label, ok: true, refusal: null, before, after: Object.fromEntries(fields.map((field) => [field, now.values[field] ?? null])), version: now.version })
+      results.push({ id: row.id, label: now.label, ok: true, refusal: null, before, after: Object.fromEntries(names.map((field) => [field, now.values[field] ?? null])), version: now.version })
     } catch (error) {
       // B-W2b-51: a refusal the target words in its own codes, as it is.
-      results.push(refused(error instanceof BulkRowRefused ? error.refusal : refusalOfError(kindOf(error), fieldOf(error, fields), target.statusOf?.(current) ?? null)))
+      results.push(refused(error instanceof BulkRowRefused ? error.refusal : refusalOfError(kindOf(error), fieldOf(error, names), target.statusOf?.(current) ?? null)))
     }
   }
   return { results }

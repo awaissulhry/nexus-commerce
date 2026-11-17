@@ -93,8 +93,8 @@ const round = (n: number, s: { id: string; code: string; name: string }, kind: R
     ...over,
   }
 }
-const kindIt: Record<RoundRead['kind'], string> = { PROTO: 'Prototipo', FIT: 'Fit', SALESMAN: 'Campionario vendita', PRE_PRODUCTION: 'Pre-produzione', CERTIFICATION: 'Campione per prova CE', BRAND: 'Campione del brand' }
-const kindEn: Record<RoundRead['kind'], string> = { PROTO: 'Proto', FIT: 'Fit', SALESMAN: 'Salesman', PRE_PRODUCTION: 'Pre-production', CERTIFICATION: 'CE test sample', BRAND: 'Brand sample' }
+const kindIt: Record<RoundRead['kind'], string> = { PROTO: 'Prototipo', FIT: 'Fit', SALESMAN: 'Campionario vendita', PRE_PRODUCTION: 'Pre-produzione', CERTIFICATION: 'Campione per prova CE', BRAND: 'Campione del brand', SIZE_SET: 'Set di taglie', TOP_OF_PRODUCTION: 'Primi capi di produzione (TOP)' } // B-PR-23: size set, top of production
+const kindEn: Record<RoundRead['kind'], string> = { PROTO: 'Proto', FIT: 'Fit', SALESMAN: 'Salesman', PRE_PRODUCTION: 'Pre-production', CERTIFICATION: 'CE test sample', BRAND: 'Brand sample', SIZE_SET: 'Size set', TOP_OF_PRODUCTION: 'Top of production' }
 
 const ROUNDS: RoundRead[] = [
   round(1, JACKET, 'FIT', 2, 'WAITING'),

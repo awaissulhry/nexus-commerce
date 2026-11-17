@@ -156,7 +156,7 @@ export async function requestRowsOf(db: Reader, rows: readonly RequestData[]): P
 /** The request the caller may see with the permission (else 404 / 403). */
 export async function readRequestFor(caller: CommandCaller, changeRequestId: string, permission: Permission = PRODUCT_CHANGES_VIEW): Promise<{ context: OfficeContext; row: RequestData }> {
   const context = officeOf(caller)
-  const row = isUuid(changeRequestId) ? await caller.withClient((client) => client.changeRequest.findUnique({ where: { id: changeRequestId, ...requestWall(actorOf(context), PRODUCT_CHANGES_VIEW) }, select: REQUEST_COLUMNS })) : null
+  const row = isUuid(changeRequestId) ? await caller.withClient((client) => client.changeRequest.findUnique({ where: { id: changeRequestId, AND: [requestWall(actorOf(context), PRODUCT_CHANGES_VIEW)] }, select: REQUEST_COLUMNS })) : null
   if (!row || !may(context, PRODUCT_CHANGES_VIEW, row.companyId)) throw new NotFoundError('Change request not found.') // B-PR-10: and the wall
   assertMay(context, permission, row.companyId)
   return { context, row }
@@ -236,7 +236,7 @@ export async function orderRowsOf(db: Reader, rows: readonly OrderData[]): Promi
 /** The change order the caller may see with the permission (else 404 / 403). */
 export async function readOrderFor(caller: CommandCaller, changeOrderId: string, permission: Permission = PRODUCT_CHANGES_VIEW): Promise<{ context: OfficeContext; row: OrderData }> {
   const context = officeOf(caller)
-  const row = isUuid(changeOrderId) ? await caller.withClient((client) => client.changeOrder.findUnique({ where: { id: changeOrderId, ...orderWall(actorOf(context), PRODUCT_CHANGES_VIEW) }, select: ORDER_COLUMNS })) : null
+  const row = isUuid(changeOrderId) ? await caller.withClient((client) => client.changeOrder.findUnique({ where: { id: changeOrderId, AND: [orderWall(actorOf(context), PRODUCT_CHANGES_VIEW)] }, select: ORDER_COLUMNS })) : null
   if (!row || !may(context, PRODUCT_CHANGES_VIEW, row.companyId)) throw new NotFoundError('Change order not found.') // B-PR-10: and the wall
   assertMay(context, permission, row.companyId)
   return { context, row }

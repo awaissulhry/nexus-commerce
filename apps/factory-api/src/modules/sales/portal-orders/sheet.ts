@@ -59,7 +59,8 @@ export async function orderSheet(app: FastifyInstance, request: FastifyRequest, 
   const { columns, rows } = await portalRowValues(request, 'ORDER', list.items.filter((item) => item.kind === 'ORDER').map((item) => item.id), reader.session.company.id)
   return {
     ...list,
-    columns,
+    // The contract's arrays are mutable; the shared read's are readonly (copied at this boundary).
+    columns: columns.map((column) => ({ ...column, options: column.options && [...column.options] })),
     // Plan §0.5: an order shows the customer's own number only (`yourNumber`), never the office's series.
     items: list.items.map((item) => ({ ...item, number: item.kind === 'ORDER' ? null : item.number, values: rows.get(item.id) ?? {} })),
   }
