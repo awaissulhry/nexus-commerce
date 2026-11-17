@@ -529,7 +529,8 @@
     "forbidden": "Your role cannot do this.",
     "gone": "This is gone, or belongs to a site you cannot reach.",
     "invalid": "Something in this is not valid: check it and try again.",
-    "offline": "No connection: nothing was sent."
+    "offline": "No connection: nothing was sent.",
+    "everyCustomer": "This view adds up every customer; it needs access to all customers."
   },
   "notice": {
     "corrected": "Correction approved: a correction row was added, nothing overwritten.",

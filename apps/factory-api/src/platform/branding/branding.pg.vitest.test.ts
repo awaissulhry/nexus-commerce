@@ -332,7 +332,8 @@ describe('mail to partners goes out under the branding\'s sender name', () => {
     const row = await first(`SELECT "fromName", "fromAddress" FROM "EmailOutbound" WHERE id = $1`, [outboundId])
     expect(row.fromAddress).toBe('noreply@brand-a.example.com')
     expect(row.fromName).toMatch(/ via Esempio Moto Ordini$/)
-    expect(await deliverOutbound(h.email, system(), outboundId, { retry: true, build: threadMailBuilder(h.email, system()) })).toBe('sent')
+    // B-TH-048: delivered on a clock past the mail's 10 s undo window.
+    expect(await deliverOutbound(h.email, system(), outboundId, { retry: true, clock: { now: () => new Date(Date.now() + 11_000) }, build: threadMailBuilder(h.email, system()) })).toBe('sent')
     const mail = h.ses.mails.find((entry) => entry.outboundId === outboundId)!
     expect(headerOf(mail.raw, 'From')).toMatch(/via Esempio Moto Ordini" <noreply@brand-a\.example\.com>$/)
     expect(textOf(mail.raw)).toContain('Esempio Moto Ordini')

@@ -305,7 +305,7 @@ describe('the list, the tiles and the record', () => {
     // B-W2a-67: the owner by name (an office user), as the Holds list shows it.
     const [named] = await admin<{ displayName: string }>('SELECT "displayName" FROM "User" WHERE id = $1', [qa2.id])
     expect(hold.owner.name).toBe(named!.displayName)
-    expect((await events('quality.hold_changed')).at(-1)).toEqual({ holdId: lot!.id, fields: ['ownerId', 'note'] })
+    expect((await events('quality.hold_changed')).at(-1)).toEqual({ holdId: lot!.id, partyIds: [] /* B-PR-09: a lot names no customer */, fields: ['ownerId', 'note'] })
     expect((await refused('placer', 'PATCH', `/quality/holds/${lot!.id}`, { version: lot!.version, note: 'stale' }, 409)).code).toBe('conflict')
   })
 })

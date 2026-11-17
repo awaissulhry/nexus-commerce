@@ -147,9 +147,11 @@ export interface DailyRead {
 
 /** The report of one site and day, with the names the answers need. */
 export async function readDaily(db: Reader, site: ReportSite, day: BusinessDate): Promise<DailyRead> {
-  const built = await dailyFactsOf(db, site, day)
-  return { report: dailyReport(built.facts, built.laneOrder), lanes: built.lanes, styles: built.styles, people: built.people, scans: built.facts.scans, stationLanes: built.facts.stationLanes }
+  return readOf(await dailyFactsOf(db, site, day))
 }
+
+/** The report of facts already read (F-PR-02: the customer filter counts the same facts again, narrowed). */
+const readOf = (built: DailyBuilt): DailyRead => ({ report: dailyReport(built.facts, built.laneOrder), lanes: built.lanes, styles: built.styles, people: built.people, scans: built.facts.scans, stationLanes: built.facts.stationLanes })
 
 /** B-W2b-428: what the day's report is counted from (the reads above), for the report and the metric layer's facts alike. */
 export interface DailyBuilt {
@@ -290,7 +292,12 @@ export async function dailyAnswer(caller: CommandCaller, query: DailyQuery) {
     if (!site) throw new NotFoundError('No site where you may read the production reports.')
     const today = businessDate(now, site.timezone)
     const day = query.date ?? today
-    const read = await readDaily(db, site, day)
+    const built = await dailyFactsOf(db, site, day)
+    const read = readOf(built)
+    // F-PR-02: the customer filter narrows each lane's style × size table to that customer's work orders; the lanes' own
+    // figures stay the line's (this report needs every customer, B-PR-07: the reader sees them all anyway).
+    const narrowed = query.partyId ? await customerRowsOf(db, built, query.partyId) : null
+    const view = dailyView(read)
     const calendars = await workingCalendarsFor(db, [{ scope: 'SITE', id: site.id }], { from: day, to: day })
     const calendar = calendars.get(ownerKey({ scope: 'SITE', id: site.id }))
     const next = plusDays(day, 1)
@@ -303,7 +310,18 @@ export async function dailyAnswer(caller: CommandCaller, query: DailyQuery) {
       nextDay: next <= today ? next : null,
       workingDay: calendar ? (workingTimeOf(calendar.calendar, day, day).workingDays ?? 0) > 0 : true,
       asOf: toUtcIso(now),
-      ...dailyView(read),
+      ...view,
+      lanes: narrowed ? view.lanes.map((lane) => ({ ...lane, rows: narrowed.get(laneKey({ kind: lane.kind, id: lane.id })) ?? [] })) : view.lanes,
     }
   })
 }
+
+// ── F-PR-02 (production plan, the customer filter on Production reports) ──────────────────────────────────────────────────
+/** Each lane's style × size rows counted over one customer's work orders only (the same calculation, fewer facts). */
+async function customerRowsOf(db: Reader, built: DailyBuilt, partyId: string) {
+  const ofCustomer = new Set((await db.workOrder.findMany({ where: { id: { in: [...built.facts.workOrders.keys()] }, partyId }, select: { id: true } })).map((row) => row.id))
+  const facts: DailyFacts = { ...built.facts, scans: built.facts.scans.filter((scan) => ofCustomer.has(scan.workOrderId)), extras: built.facts.extras.filter((extra) => ofCustomer.has(extra.workOrderId)) }
+  const view = dailyView(readOf({ ...built, facts }))
+  return new Map(view.lanes.map((lane) => [laneKey({ kind: lane.kind, id: lane.id }), lane.rows]))
+}
+// ── end F-PR-02 ──

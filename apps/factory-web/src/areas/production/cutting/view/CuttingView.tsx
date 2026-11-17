@@ -22,6 +22,10 @@ import { AllocateHidesDialog, say, type AllocModel } from './CutDialogs'
 import '../cutting.css'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
 import { rightRef } from '../../../../lib/i18n/rights'
+// F-PR-02: the customer filter and the Customer column.
+import { useProductionWords } from '../../../../lib/production/words'
+import { customersText, type CustomerFilterState } from '../../_shared/customer/model'
+import { CustomerFilter, useCustomerCell } from '../../_shared/customer/view/CustomerFilter'
 
 export interface CuttingModel {
   readonly prefix: string
@@ -52,9 +56,13 @@ export interface CuttingModel {
   readonly selected?: readonly string[]
   readonly focusRow?: number
   readonly helpOpen?: boolean
+  /** F-PR-02: the customer filter (`?party=`); absent: none drawn. */
+  readonly customers?: CustomerFilterState
 }
 
 export interface CuttingActions extends NewOrderActions {
+  /** F-PR-02: a customer picked (null: every customer). */
+  onCustomer?: (party: string | null) => void
   onView?: (view: CutView) => void
   onSearch?: (q: string) => void
   onMore?: () => void
@@ -235,8 +243,18 @@ function CutsList({
     return () => clearTimeout(timer)
   }, [query])
   const items = model.rows.items
+  // F-PR-02: a cut's customer (its work order's), a cut order's (one, or "2 customers" with the names on hover).
+  const words = useProductionWords()
+  const names = model.customers?.names ?? false
+  const customerCell = useCustomerCell(names)
 
   const columns = useMemo<ColDef<ListRow>[]>(() => {
+    const customerOf = (row: ListRow): { text: string; all: string | null } => {
+      if (!row.order) return { text: customerCell(row.cut), all: null }
+      const all = customersText(row.order.customers, names)
+      const count = row.order.customers?.length ?? 0
+      return { text: count > 1 ? words.t('customer.several', { count }) : (all ?? '—'), all: count > 1 ? all : null }
+    }
     const cutHref = (workOrderId: string) => `${model.prefix}/production/cutting/${workOrderId}`
     const CutCell = ({ data }: ICellRendererParams<ListRow>) => {
       if (!data) return null
@@ -402,6 +420,8 @@ function CutsList({
     return [
       { colId: 'cut', headerName: t('col.cut'), minWidth: 135, flex: 1.1, cellRenderer: CutCell, valueGetter: (params) => (params.data ? (params.data.order?.number ?? params.data.cut?.workOrder.number ?? '') : '') },
       { colId: 'kind', headerName: t('col.kind'), minWidth: 84, flex: 0.45, valueGetter: (params) => (params.data ? t(`kind.${params.data.order?.kind ?? 'LEATHER'}`) : '') },
+      // F-PR-02: the Customer column (production plan §5; a mixed cut order says how many, the names on hover).
+      { colId: 'customer', headerName: words.t('customer.column'), minWidth: 120, flex: 0.8, valueGetter: (params) => (params.data ? customerOf(params.data).text : ''), tooltipValueGetter: (params) => (params.data ? customerOf(params.data).all : null) },
       { colId: 'material', headerName: t('col.material'), minWidth: 150, flex: 1.1, cellRenderer: MaterialCell },
       { colId: 'lot', headerName: t('col.lot'), minWidth: 110, flex: 0.8, valueGetter: (params) => (params.data?.cut ? lotLine(params.data.cut) : '—') },
       { colId: 'state', headerName: t('col.state'), minWidth: 120, flex: 0.9, cellRenderer: StateCell },
@@ -412,9 +432,9 @@ function CutsList({
       { colId: 'date', headerName: o('col.date'), minWidth: 105, flex: 0.7, cellRenderer: WhenCell },
       { colId: 'more', headerName: t('col.more'), minWidth: 64, maxWidth: 64, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, o, locale, model.prefix, model.can.workOrders, model.timeZone, actions])
+  }, [t, o, locale, model.prefix, model.can.workOrders, model.timeZone, actions, words, names, customerCell])
 
-  const filtered = model.address.q.trim() !== '' || model.address.view !== 'open'
+  const filtered = model.address.q.trim() !== '' || model.address.view !== 'open' || !!model.customers?.party
   const state = model.rows.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
   ) : items && items.length === 0 ? (
@@ -429,6 +449,7 @@ function CutsList({
               setQuery('')
               actions?.onSearch?.('')
               actions?.onView?.('open')
+              if (model.customers?.party) actions?.onCustomer?.(null)
             }}
           >
             {t('common.clearFilters')}
@@ -471,13 +492,16 @@ function CutsList({
           />
         }
         tools={
-          <Select size="sm" aria-label={t('list.viewLabel')} value={model.address.view} onChange={(event) => actions?.onView?.(event.target.value as CutView)}>
-            {CUT_VIEWS.map((view) => (
-              <option key={view} value={view}>
-                {t(`view.${view}`)}
-              </option>
-            ))}
-          </Select>
+          <>
+            <Select size="sm" aria-label={t('list.viewLabel')} value={model.address.view} onChange={(event) => actions?.onView?.(event.target.value as CutView)}>
+              {CUT_VIEWS.map((view) => (
+                <option key={view} value={view}>
+                  {t(`view.${view}`)}
+                </option>
+              ))}
+            </Select>
+            {model.customers && <CustomerFilter state={model.customers} onPick={actions?.onCustomer} />}
+          </>
         }
         selection={{
           selected,

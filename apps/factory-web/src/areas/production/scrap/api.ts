@@ -40,6 +40,9 @@ export const downgradeSchema = z.object({
   withdrawn: z.object({ at: z.string(), reason: z.string() }).nullable(),
   version: z.number(),
   createdAt: z.string(),
+  // F-PR-02: its work order's one customer (null: none), or one made before the one-customer rule with several.
+  customer: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable().optional(),
+  mixedCustomers: z.boolean().optional(),
 })
 export type Downgrade = z.infer<typeof downgradeSchema>
 
@@ -65,6 +68,9 @@ export const scrapRowSchema = z.object({
   currency: z.string().nullable().optional(),
   /** B-W2b-126: a SECOND row's downgrade (the list's own field, never the API's scrap rows). */
   downgrade: downgradeSchema.nullable().optional(),
+  // F-PR-02: its work order's one customer (null: none), or one made before the one-customer rule with several.
+  customer: z.object({ id: z.string(), code: z.string(), name: z.string() }).nullable().optional(),
+  mixedCustomers: z.boolean().optional(),
 })
 export type ScrapRow = z.infer<typeof scrapRowSchema>
 
@@ -75,8 +81,9 @@ const scrapSchema = z.object({ rows: z.array(scrapRowSchema), tiles: scrapTilesS
 export type ScrapPage = z.infer<typeof scrapSchema>
 
 /** The latest rows (at most 500) since `from`, with the tiles of the same scope. */
-export function getScrap(api: ApiClient, query: { from: string | null }, signal?: AbortSignal): Promise<ScrapPage> {
-  return api.get('/production/scrap', { query: { from: query.from ?? undefined, limit: 500 }, schema: scrapSchema, signal })
+export function getScrap(api: ApiClient, query: { from: string | null; partyId?: string | undefined }, signal?: AbortSignal): Promise<ScrapPage> {
+  // F-PR-02: partyId = the customer filter (`?party=`): the rows and the tiles of that customer.
+  return api.get('/production/scrap', { query: { from: query.from ?? undefined, limit: 500, partyId: query.partyId }, schema: scrapSchema, signal })
 }
 
 /** The lower-quantity requests waiting for a decision (their version and who asked: never the one who decides). */
@@ -118,8 +125,8 @@ const downgradesSchema = z.object({ downgrades: z.array(downgradeSchema), garmen
 export type DowngradePage = z.infer<typeof downgradesSchema>
 
 /** production.scrap.view: the downgrades of the period, newest first, with today's and the period's garments (not withdrawn). */
-export function getDowngrades(api: ApiClient, query: { from: string | null }, signal?: AbortSignal): Promise<DowngradePage> {
-  return api.get('/production/downgrades', { query: { from: query.from ?? undefined, limit: 500 }, schema: downgradesSchema, signal })
+export function getDowngrades(api: ApiClient, query: { from: string | null; partyId?: string | undefined }, signal?: AbortSignal): Promise<DowngradePage> {
+  return api.get('/production/downgrades', { query: { from: query.from ?? undefined, limit: 500, partyId: query.partyId }, schema: downgradesSchema, signal })
 }
 
 export const downgradeOptionsSchema = z.object({

@@ -48,6 +48,16 @@ export const emailView = output({
   bouncedAt: instant().nullable(),
   complainedAt: instant().nullable(),
   failedAt: instant().nullable(),
+  // ---- B-TH-048 (undo send): a mail from the thread's composer waits 10 s (sendAfter); until undoUntil its sender may take it
+  // back ("Sending… · Undo"); null when it can no longer be (it left, failed, or had no window). A mail taken back is
+  // WITHDRAWN, with when and by whom.
+  sendAfter: instant().nullable(),
+  undoUntil: instant().nullable(),
+  /** The person who sent it (the Undo is theirs); null for a mail of the system. */
+  sentById: id().nullable(),
+  withdrawnAt: instant().nullable(),
+  withdrawnById: id().nullable(),
+  // ---- end B-TH-048
 })
 export type EmailView = z.infer<typeof emailView>
 
@@ -71,6 +81,18 @@ export const sendEmailContract = defineContract({
   }),
   response: { 201: output({ thread: threadView, messageId: id(), email: emailView }) },
 })
+
+// ---- B-TH-048: take a mail back in its 10 seconds (its sender); the answer gives its text back to the composer.
+export const takeBackEmailContract = defineContract({
+  params: input({ recordType: z.string().regex(RECORD_TYPE), recordId: id(), emailId: id() }),
+  response: {
+    200: output({
+      email: emailView,
+      text: output({ to: z.array(z.string()), cc: z.array(z.string()), bcc: z.array(z.string()), subject: z.string(), body: z.string(), attachments: z.array(id()) }),
+    }),
+  },
+})
+// ---- end B-TH-048
 
 export const listEmailsContract = defineContract({
   params: recordParams,

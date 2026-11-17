@@ -10,6 +10,7 @@ import { cutOrderWall, may, notFound, officeOf, partiesOf } from './access'
 import { workOrderWhere } from '../work-orders/scope' // B-PR-04b
 import { CUT_ORDER_COLUMNS, garmentsElsewhere, readCutOrder, readLayRolls, readLays, readLines, readPlyRuns, readTickets, type CutOrderRow, type Reader } from './store'
 import { recordView, summaryView } from './views'
+import { customerFacts } from '../work-orders/customers' // F-PR-02
 
 /**
  * Reading cut orders (B-W2b-112; design production.cutting "Cut orders", pop "New cut order", the Cut record): the list of the
@@ -81,6 +82,9 @@ export async function listCutOrders(caller: CommandCaller, query: ListQuery) {
       db.cutOrder.groupBy({ by: ['status'], where: base, _count: { _all: true } }),
     ])
     const tiles = Object.fromEntries(['PLANNED', 'RELEASED', 'IN_PROGRESS', 'CUT', 'RECONCILED', 'CANCELLED'].map((status) => [status, counts.find((row) => row.status === status)?._count._all ?? 0]))
+    // F-PR-02: the customers of each cut order's cells (every one is the reader's: a cut order shows only when all are reached).
+    const customers = await customerFacts(db, page.flatMap(partiesOf))
+    const customersOf = (row: CutOrderRow) => partiesOf(row).flatMap((partyId) => (partyId && customers.has(partyId) ? [customers.get(partyId)!] : [])).sort((a, b) => a.name.localeCompare(b.name))
     return {
       rows: page.map((row) =>
         summaryView(
@@ -88,6 +92,7 @@ export async function listCutOrders(caller: CommandCaller, query: ListQuery) {
           lines.filter((line) => line.cutOrderId === row.id),
           lays.filter((lay) => lay.cutOrderId === row.id),
           tickets.filter((ticket) => ticket.cutOrderId === row.id),
+          customersOf(row),
         ),
       ),
       nextCursor: rows.length > query.limit ? (page.at(-1)?.id ?? null) : null,
@@ -101,7 +106,9 @@ export async function recordOf(db: Reader, context: OfficeContext | FloorContext
   const [lines, lays, tickets] = await Promise.all([readLines(db, [order.id]), readLays(db, [order.id]), readTickets(db, [order.id])])
   const layIds = lays.map((lay) => lay.id)
   const [layRolls, plyRuns] = await Promise.all([readLayRolls(db, layIds), readPlyRuns(db, layIds)])
-  return recordView({ order, lines, lays, layRolls, tickets, plyRuns, manage: context.audience === 'office' && may(context, PRODUCTION_CUTORDERS_MANAGE, order, partiesOf(order)) })
+  // F-PR-02: "Customers: A, B" on the office's band; a floor screen names no customer here (L13).
+  const customers = context.audience === 'office' ? [...(await customerFacts(db, partiesOf(order))).values()].sort((a, b) => a.name.localeCompare(b.name)) : []
+  return recordView({ order, lines, lays, layRolls, tickets, plyRuns, manage: context.audience === 'office' && may(context, PRODUCTION_CUTORDERS_MANAGE, order, partiesOf(order)), customers })
 }
 
 /** The record of one cut order (production.cutting.view at its company and site). */

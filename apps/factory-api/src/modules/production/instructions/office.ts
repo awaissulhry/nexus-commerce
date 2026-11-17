@@ -9,6 +9,7 @@ import type { OfficeContext } from '../../../core/context'
 import { userNames } from '../../people/employees/employees'
 import { workerGatesFor } from '../../people/privacy/worker-gate'
 import { settingsOf } from './lookup'
+import { customerFacts } from '../work-orders/customers' // F-PR-02
 import {
   classesOf,
   editorsOf,
@@ -101,6 +102,8 @@ export interface ListQuery {
   readonly styleRevisionId?: string | undefined
   readonly status?: 'ACTIVE' | 'ARCHIVED' | undefined
   readonly q?: string | undefined
+  /** F-PR-02: one customer's private-label instructions (the style's brand; inside the caller's reach). */
+  readonly partyId?: string | undefined
 }
 
 export async function listInstructions(caller: CommandCaller, query: ListQuery) {
@@ -117,6 +120,8 @@ export async function listInstructions(caller: CommandCaller, query: ListQuery) 
         ...(query.styleRevisionId ? [{ styleRevisionId: query.styleRevisionId }] : []),
         ...(query.status ? [{ status: query.status }] : []),
         ...(q ? [{ OR: [{ number: { contains: q, mode: 'insensitive' as const } }, { operationId: { in: matchedOperations } }] }] : []),
+        // F-PR-02: the customer filter (B-PR-37's wall above keeps another customer's out either way).
+        ...(query.partyId ? [{ styleRevision: { is: { style: { is: { brandPartyId: query.partyId } } } } }] : []),
       ],
     }
     const rows = await db.workInstruction.findMany({ where, select: INSTRUCTION, orderBy: [{ number: 'asc' }], take: LIST_LIMIT + 1 })
@@ -130,6 +135,14 @@ export async function listInstructions(caller: CommandCaller, query: ListQuery) 
     const seen = await seenCounts(db, currentIds)
     const operations = await operationsOf(db, shown.map((row) => row.operationId))
     const revisions = await revisionsOf(db, shown.map((row) => row.styleRevisionId))
+    // F-PR-02: the Customer column = the style's brand (a private label; our own collection or every style: none).
+    const brands = new Map((await db.style.findMany({ where: { id: { in: [...new Set([...revisions.values()].map((revision) => revision.styleId))] } }, select: { id: true, brandPartyId: true } })).map((row) => [row.id, row.brandPartyId]))
+    const customers = await customerFacts(db, [...brands.values()])
+    const customerOf = (row: Pick<InstructionRow, 'styleRevisionId'>) => {
+      const revision = row.styleRevisionId ? revisions.get(row.styleRevisionId) : undefined
+      const brand = revision ? brands.get(revision.styleId) : null
+      return brand ? (customers.get(brand) ?? null) : null
+    }
     const used = await revisionsUsing(db, context, context.companyId ?? null, shown.filter((row) => row.styleRevisionId === null).map((row) => row.operationId))
     const languagesByCompany = new Map<string, string[]>()
     for (const companyId of new Set(shown.map((row) => row.companyId))) languagesByCompany.set(companyId, await floorLanguagesOf(db, companyId))
@@ -163,6 +176,7 @@ export async function listInstructions(caller: CommandCaller, query: ListQuery) 
           draft: draft ? { versionId: draft.id, number: draft.number } : null,
           usedIn: row.styleRevisionId ? 1 : (used.get(row.operationId)?.length ?? 0),
           updatedAt: toUtcIso(row.updatedAt),
+          customer: customerOf(row), // F-PR-02
         }
       }),
       truncated: rows.length > LIST_LIMIT,

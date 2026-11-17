@@ -113,7 +113,8 @@ beforeAll(async () => {
   const srcShipmentLine = await id(`SELECT id FROM "ShipmentLine" WHERE "tenantId" = $1 AND "shipmentId" = $2 LIMIT 1`, [srcShipment])
 
   const order = async (orderId: string, number: string, partyId: string, status: string, orderDate: string, netAmount: number, extra: Record<string, unknown> = {}) =>
-    copy('SalesOrder', srcOrder, { id: orderId, number, companyId: COMPANY_B, partyId, status, orderDate, netAmount, promiseDate: null, originalPromiseDate: null, seasonId: null, quoteVersionId: null, backlogRank: null, closedAt: null, priorityLevel: 'NORMAL', ...extra })
+    // th3b (B-TH-052 area): customerSeq null — the customer numbers (B-TH-104) are once per company and customer, and every copy is of one seed order.
+    copy('SalesOrder', srcOrder, { id: orderId, number, companyId: COMPANY_B, partyId, customerSeq: null, status, orderDate, netAmount, promiseDate: null, originalPromiseDate: null, seasonId: null, quoteVersionId: null, backlogRank: null, closedAt: null, priorityLevel: 'NORMAL', ...extra })
   const line = async (lineId: string, orderId: string, partyId: string, seq: number, style: { styleId: string; colourwayId: string }, sizes: Record<string, number>, netAmount: number, extra: Record<string, unknown> = {}) => {
     const quantity = Object.values(sizes).reduce((sum, value) => sum + value, 0)
     await copy('SalesOrderLine', srcLine.id, { id: lineId, orderId, companyId: COMPANY_B, partyId, seq, kind: 'SIZE_GRID', feeKind: null, styleId: style.styleId, colourwayId: style.colourwayId, styleRevisionId: null, quoteLineId: null, quantity, netAmount, promiseDate: null, siteId: null, closedShortAt: null, closedShortQuantity: null, ...extra })
@@ -158,13 +159,13 @@ beforeAll(async () => {
   await copy('ShipmentLine', srcShipmentLine, { id: newId(), siteId: siteB, partyId: c2, shipmentId: x.s2, salesOrderLineId: x.l2, size: '50', quantity: 20, parcelId: null })
 
   const quote = async (quoteId: string, number: string, status: string, createdAt: Date, sentAt: Date, closedAt: Date | null, netAmount: number) => {
-    await copy('Quote', srcQuote, { id: quoteId, number, companyId: COMPANY_B, partyId: c1, status, createdAt, templateId: null, contactId: null })
+    await copy('Quote', srcQuote, { id: quoteId, number, companyId: COMPANY_B, partyId: c1, customerSeq: null, status, createdAt, templateId: null, contactId: null })
     await copy('QuoteVersion', srcVersion, { id: newId(), quoteId, partyId: c1, revision: 1, status, sentAt, closedAt, netAmount, currency: 'EUR', seasonId: null, priceListVersionId: null, taxIdentityId: null, billToAddressId: null, shipToAddressId: null, paymentTermsId: null })
   }
   await quote(x.q1!, 'T348-Q-1', 'ACCEPTED', new Date('2026-11-02T08:00:00Z'), new Date('2026-11-03T10:00:00Z'), new Date('2026-11-05T10:00:00Z'), 300_000)
   await quote(x.q2!, 'T348-Q-2', 'DECLINED', new Date('2026-11-10T08:00:00Z'), new Date('2026-11-10T14:00:00Z'), new Date('2026-11-12T14:00:00Z'), 100_000)
   await quote(x.q3!, 'T348-Q-3', 'EXPIRED', new Date('2026-10-19T08:00:00Z'), new Date('2026-10-20T10:00:00Z'), new Date('2026-11-15T03:00:00Z'), 80_000)
-  await copy('Inquiry', srcInquiry, { id: newId(), number: 'T348-INQ-1', companyId: COMPANY_B, quoteId: x.q1, receivedAt: new Date('2026-11-02T07:00:00Z'), partyId: c1, contactId: null, status: 'QUOTED', sourceEmailId: null, assigneeId: null })
+  await copy('Inquiry', srcInquiry, { id: newId(), number: 'T348-INQ-1', companyId: COMPANY_B, customerSeq: null, quoteId: x.q1, receivedAt: new Date('2026-11-02T07:00:00Z'), partyId: c1, contactId: null, status: 'QUOTED', sourceEmailId: null, assigneeId: null })
 
   SESSIONS.sales = session(grantsOf('sales'))
   SESSIONS.manager = session(grantsOf('production_manager'))

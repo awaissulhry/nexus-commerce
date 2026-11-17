@@ -1,4 +1,6 @@
 import type { Tone } from '@nexus/ui/primitives'
+// F-PR-02: the production pages' one customer filter.
+import { PARTY_KEY, partyTerm } from '../_shared/customer/model'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { BundleRow, CutEntry, CutLog, WorkOrder, WorkOrderBundles } from '../_shared/api'
 import { CUT_VIEWS, type CutRow, type CutState, type CutTiles, type CutView, type Replacement, type WorkOrderYield, type YieldFigures, type YieldHide } from './api'
@@ -86,6 +88,8 @@ export interface CutAddress {
   readonly newCut: boolean
   /** Allocate hides is open for this work order. */
   readonly alloc: string | null
+  /** F-PR-02: the customer filter (`?party=`, the production pages' one filter); absent or null: every customer. */
+  readonly party?: string | null
 }
 
 export function addressOf(params: { get(name: string): string | null } | null): CutAddress {
@@ -96,6 +100,7 @@ export function addressOf(params: { get(name: string): string | null } | null): 
     q: (params?.get('q') ?? '').trim().slice(0, 60),
     newCut: params?.get('new') === '1',
     alloc: UUID.test(alloc) ? alloc : null,
+    ...partyTerm(params),
   }
 }
 
@@ -105,6 +110,7 @@ export function addressText(address: CutAddress): string {
   if (address.q.trim()) query.set('q', address.q.trim())
   if (address.newCut) query.set('new', '1')
   if (address.alloc) query.set('alloc', address.alloc)
+  if (address.party) query.set(PARTY_KEY, address.party)
   const text = query.toString()
   return text ? `?${text}` : ''
 }

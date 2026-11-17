@@ -24,6 +24,10 @@ import { TargetsDialog, type TargetsDialogModel } from './TargetsDialog'
 // B-W2b-130: the Cutting room section (fn-cutting).
 import { CuttingRoomPanel, type CuttingRoomModel } from '../cutting/view/CuttingRoomPanel'
 import '../wip.css'
+// F-PR-17: the customer filter, the Customer on each row, held work, no silent cap, line totals only with every customer.
+import { withParty, type CustomerFilterState } from '../../_shared/customer/model'
+import { CustomerFilter, EveryCustomerNotice, useCustomerCell } from '../../_shared/customer/view/CustomerFilter'
+import { heldPhrase, shownOf } from '../model'
 
 /** SCR-073 — Floor now's view model (FloorNowView draws it and fetches nothing). */
 export interface FloorNowModel {
@@ -42,6 +46,12 @@ export interface FloorNowModel {
   boards?: FloorBoardsModel
   /** B-W2b-130: the Cutting room (production.cutting.view); absent: not drawn. */
   cutting?: CuttingRoomModel
+  /** F-PR-17: the customer filter (`?party=`); absent: none drawn. */
+  customers?: CustomerFilterState
+  /** F-PR-17: the person reaches only some customers: the line totals are not drawn and the page says why, once. */
+  mixedWithheld?: boolean
+  /** F-PR-17: Show more is reading the next work orders. */
+  moreWip?: boolean
 }
 
 /** B-W2b-66: what the W2b sections draw (each only for a person who may read it). */
@@ -55,6 +65,10 @@ export interface FloorBoardsModel extends BoardsState {
 
 export interface FloorNowActions {
   onRetry?: () => void
+  /** F-PR-17: a customer picked (null: every customer). */
+  onCustomer?: (party: string | null) => void
+  /** F-PR-17: the next work orders on the floor (no silent cap). */
+  onMoreWip?: () => void
   /** B-W2a-38: a line card sets the line scope (null: all lines). */
   onLine?: (lineId: string | null) => void
   onRetryLines?: () => void
@@ -110,6 +124,13 @@ function FloorNow({ model, actions }: { model: FloorNowModel; actions?: FloorNow
   const stuckLimit = boards?.tiles?.stuckLimitHours ?? null
   const openCalls = scoped ? scoped.openCalls : (boards?.openCalls ?? null)
   const lineCards = model.lines?.value?.lines ?? null
+  // F-PR-17: how many work orders the floor holds beyond those shown, and how many late ones beyond the 20 listed.
+  const customerCell = useCustomerCell(model.customers?.names ?? false)
+  const wipMore = model.wip.value ? shownOf(model.wip.value.workOrders.length, model.wip.value.total) : null
+  const lateMore = model.late.items && model.counts && !onLine ? shownOf(model.late.items.length, model.counts.late) : null
+  const partial = wipMore ? { hint: t('floor.tile.shownOnly', { count: wipMore.shown }) } : null
+  const party = model.customers?.party ?? null
+  const stuckHref = bundlesHref(model.prefix, '?stuck=true')
 
   return (
     <div className="fw-pr">
@@ -120,6 +141,7 @@ function FloorNow({ model, actions }: { model: FloorNowModel; actions?: FloorNow
           {t(`live.${model.live}`)}
         </span>
         <span className="fw-pr-hint">{t('floor.privacy')}</span>
+        {model.customers && <CustomerFilter state={model.customers} onPick={actions?.onCustomer} />}
         {boards?.can.boards && <LineTvAction prefix={model.prefix} lines={lineCards} scope={model.lineScope ?? null} />}
       </div>
 
@@ -128,16 +150,26 @@ function FloorNow({ model, actions }: { model: FloorNowModel; actions?: FloorNow
           { label: t('floor.tile.inProgress'), value: model.counts ? String(model.counts.inProgress) : '—', href: listHref('IN_PROGRESS') },
           { label: t('floor.tile.released'), value: model.counts ? String(model.counts.released) : '—', href: listHref('RELEASED') },
           { label: t('floor.tile.late'), value: model.counts ? String(model.counts.late) : '—', href: listHref('late') },
-          { label: t('floor.tile.waiting'), value: waiting === null ? '—' : String(waiting), hint: t('floor.tile.waitingHint') },
-          { label: t('floor.tile.scrap'), value: scrap === null ? '—' : String(scrap), hint: t('floor.tile.scrapHint') },
-          ...(boards?.can.bundles ? [{ label: stuckLimit === null ? tf('tile.stuckAny') : tf('tile.stuck', { count: stuckLimit }), value: stuckRows ? String(stuckRows.length) : '—', href: bundlesHref(model.prefix, '?stuck=true') ?? '#fn-stuck' }] : []),
-          ...(boards?.can.calls ? [{ label: tf('tile.calls'), value: openCalls === null ? '—' : String(openCalls), href: `${model.prefix}/production/calls` }] : []),
+          // F-PR-17: held work is on the floor too (09-design R11).
+          { label: t('floor.tile.onHold'), value: model.counts?.onHold === undefined ? '—' : String(model.counts.onHold), href: listHref('ON_HOLD') },
+          { label: t('floor.tile.waiting'), value: waiting === null ? '—' : String(waiting), hint: partial?.hint ?? t('floor.tile.waitingHint') },
+          { label: t('floor.tile.scrap'), value: scrap === null ? '—' : String(scrap), hint: partial?.hint ?? t('floor.tile.scrapHint') },
+          // F-PR-17: Bundles and Help calls open narrowed to the same customer.
+          ...(boards?.can.bundles ? [{ label: stuckLimit === null ? tf('tile.stuckAny') : tf('tile.stuck', { count: stuckLimit }), value: stuckRows ? String(stuckRows.length) : '—', href: stuckHref ? withParty(stuckHref, party) : '#fn-stuck' }] : []),
+          ...(boards?.can.calls ? [{ label: tf('tile.calls'), value: openCalls === null ? '—' : String(openCalls), href: withParty(`${model.prefix}/production/calls`, party) }] : []),
         ]}
       />
 
       {model.lines && (
         <Card padded className="fw-pr-card">
           <LinesPanel model={{ lines: model.lines, scope: model.lineScope ?? null }} actions={{ onLine: actions?.onLine, onRetry: actions?.onRetryLines }} />
+        </Card>
+      )}
+      {/* F-PR-17: Lines, the heat map, hour by hour and the cutting room add up every customer (B-PR-07). */}
+      {model.mixedWithheld && (
+        <Card padded className="fw-pr-card">
+          <h2 className="fw-pr-h2">{t('floor.lineTotals')}</h2>
+          <EveryCustomerNotice compact />
         </Card>
       )}
 
@@ -165,11 +197,22 @@ function FloorNow({ model, actions }: { model: FloorNowModel; actions?: FloorNow
             }
           />
         ) : (
-          <div className="fw-pr-floor">
-            {rows.map((row) => (
-              <FloorRow key={row.workOrder.id} row={row} prefix={model.prefix} showSite={sites > 1} />
-            ))}
-          </div>
+          <>
+            <div className="fw-pr-floor">
+              {rows.map((row) => (
+                <FloorRow key={row.workOrder.id} row={row} prefix={model.prefix} showSite={sites > 1} customer={customerCell(row)} />
+              ))}
+            </div>
+            {/* F-PR-17: no silent cap — "100 of 143 · Show more". */}
+            {wipMore && (
+              <p className="fw-pr-inline">
+                <span className="fw-pr-hint">{t('floor.shownOf', { shown: wipMore.shown, total: wipMore.total })}</span>
+                <Button size="sm" onClick={() => actions?.onMoreWip?.()} heldReason={model.moreWip ? t('common.loading') : undefined}>
+                  {model.moreWip ? <Spinner size={12} /> : null} {t('floor.showMore')}
+                </Button>
+              </p>
+            )}
+          </>
         )}
       </Card>
 
@@ -212,7 +255,8 @@ function FloorNow({ model, actions }: { model: FloorNowModel; actions?: FloorNow
                     {row.number}
                   </Link>,
                   `${row.styleCode} · ${row.styleName}`,
-                  [...new Set(row.orders.map((order) => order.partyName))].join(', ') || '—',
+                  // F-PR-17: the work order's one customer (B-PR-03), by name or code; a mixed one made before the rule says so.
+                  row.customer !== undefined || row.mixedCustomers !== undefined ? customerCell(row) : [...new Set(row.orders.map((order) => order.partyName))].join(', ') || '—',
                   <span key="d" className="fw-pr-inline">
                     {row.dueDate ? formatDate(`${row.dueDate}T12:00:00Z`, { locale }) : '—'}
                     {row.daysLate ? <Tag tone="danger">{t('list.daysLate', { count: row.daysLate })}</Tag> : null}
@@ -222,6 +266,15 @@ function FloorNow({ model, actions }: { model: FloorNowModel; actions?: FloorNow
               }
             })}
           />
+        )}
+        {/* F-PR-17: no silent cap on the late work orders either — "20 of 26 · Show all in Work orders". */}
+        {lateMore && (
+          <p className="fw-pr-inline">
+            <span className="fw-pr-hint">{t('floor.shownOf', { shown: lateMore.shown, total: lateMore.total })}</span>
+            <Link className="fw-pr-link" href={listHref('late')}>
+              {t('floor.showAll')}
+            </Link>
+          </p>
         )}
       </Card>
 
@@ -276,10 +329,11 @@ function LineTvAction({ prefix, lines, scope }: { prefix: string; lines: readonl
   )
 }
 
-function FloorRow({ row, prefix, showSite }: { row: SiteWipRow; prefix: string; showSite: boolean }) {
+function FloorRow({ row, prefix, showSite, customer }: { row: SiteWipRow; prefix: string; showSite: boolean; customer: string }) {
   const t = useT('production')
   const locale = useLocale()
   const href = `${prefix}/production/work-orders/${row.workOrder.id}`
+  const held = heldPhrase(row)
   const pile = row.operations.filter((op) => op.scanRequired && op.waiting > 0).sort((a, b) => b.waiting - a.waiting)[0] ?? null
   return (
     <div className="fw-pr-floor-row">
@@ -289,7 +343,10 @@ function FloorRow({ row, prefix, showSite }: { row: SiteWipRow; prefix: string; 
             {row.workOrder.number}
           </Link>
           {row.daysLate ? <Tag tone="danger">{t('list.daysLate', { count: row.daysLate })}</Tag> : null}
+          {held && <Tag tone="warning">{t(held.key, held.params)}</Tag>}
         </span>
+        {/* F-PR-17: the work order's customer (the floor's Customer column). */}
+        <span className="fw-pr-cell-sub">{customer}</span>
         <span className="fw-pr-cell-sub">
           {row.style.code} · {row.style.name}
           {showSite ? ` · ${row.siteCode}` : ''}

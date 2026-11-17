@@ -38,8 +38,8 @@ export const AUTHOR_KINDS = ['USER', 'WORKER', 'PARTY', 'SYSTEM'] as const
 export type AuthorKind = (typeof AUTHOR_KINDS)[number]
 export const THREAD_STATUSES = ['OPEN', 'CLOSED'] as const
 export type ThreadStatus = (typeof THREAD_STATUSES)[number]
-/** factory-domain email/rules.ts OUTBOUND_STATUSES. */
-export const EMAIL_STATUSES = ['QUEUED', 'SENDING', 'SENT', 'DELIVERED', 'BOUNCED', 'COMPLAINED', 'FAILED'] as const
+/** factory-domain email/rules.ts OUTBOUND_STATUSES (B-TH-048: WITHDRAWN, a mail taken back in its 10 seconds after Send). */
+export const EMAIL_STATUSES = ['QUEUED', 'SENDING', 'SENT', 'DELIVERED', 'BOUNCED', 'COMPLAINED', 'FAILED', 'WITHDRAWN'] as const
 export type EmailStatus = (typeof EMAIL_STATUSES)[number]
 /** factory-domain threads/timeline.ts TIMELINE_KINDS, plus "all". */
 export const TIMELINE_KINDS = ['message', 'change', 'file'] as const

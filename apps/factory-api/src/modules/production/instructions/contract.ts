@@ -49,10 +49,13 @@ const listRow = output({
   /** The released style revisions it is used on (1 for a revision's own). */
   usedIn: z.number().int(),
   updatedAt: instant(),
+  /** F-PR-02: the style's brand, a customer's private label (null: our own collection, or an operation on every style). */
+  customer: output({ id: id(), code: z.string(), name: z.string() }).nullable(),
 })
 
 export const listContract = defineContract({
-  querystring: input({ companyId: id().optional(), operationId: id().optional(), styleRevisionId: id().optional(), status: z.enum(['ACTIVE', 'ARCHIVED']).optional(), q: z.string().max(80).optional() }),
+  // F-PR-02: partyId = one customer's private-label instructions (inside the caller's reach).
+  querystring: input({ companyId: id().optional(), operationId: id().optional(), styleRevisionId: id().optional(), status: z.enum(['ACTIVE', 'ARCHIVED']).optional(), q: z.string().max(80).optional(), partyId: id().optional() }),
   response: { 200: output({ instructions: z.array(listRow), truncated: z.boolean(), counts: output({ active: z.number().int(), archived: z.number().int(), drafts: z.number().int() }), canManage: z.boolean() }) },
 })
 

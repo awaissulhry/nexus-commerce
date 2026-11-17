@@ -42,6 +42,9 @@ export interface EventHandler {
   readonly events: readonly string[]
   /** Tries before the dead-letter queue. Default 5. */
   readonly attempts: number
+  // B-TH-048 (undo send): how long the handler job of this event waits before it runs (BullMQ `delay`), from the event alone;
+  // 0 or absent: at once. A handler still checks the time itself (a job may run early: a retry, another clock).
+  readonly delayMs?: (event: EventEnvelope, now: Date) => number
   handle(event: EventEnvelope, tools: HandlerTools): Promise<void>
 }
 
@@ -55,7 +58,7 @@ export function defineHandler(spec: Omit<EventHandler, 'attempts'> & { readonly 
   if (!Array.isArray(spec.events) || spec.events.length === 0) throw new HandlerConfigError(`Handler ${spec.name} handles no event type`)
   const attempts = spec.attempts ?? 5
   if (!Number.isSafeInteger(attempts) || attempts < 1 || attempts > 25) throw new HandlerConfigError(`Handler ${spec.name}: attempts must be 1 to 25`)
-  return Object.freeze({ name: spec.name, events: Object.freeze([...spec.events]), attempts, handle: spec.handle })
+  return Object.freeze({ name: spec.name, events: Object.freeze([...spec.events]), attempts, handle: spec.handle, ...(spec.delayMs ? { delayMs: spec.delayMs } : {}) })
 }
 
 export interface DispatchSettings {
@@ -78,10 +81,13 @@ export const handlerJobId = (handler: EventHandler, event: EventEnvelope): strin
  */
 export async function dispatchEvent(event: EventEnvelope, settings: DispatchSettings): Promise<void> {
   for (const handler of settings.handlers.filter((entry) => entry.events.includes(event.type))) {
+    // B-TH-048: a handler may ask its job to wait (a thread mail leaves 10 s after Send); a bad answer runs it at once.
+    const wait = handler.delayMs?.(event, new Date()) ?? 0
     await settings.kit.add('event-handlers', handler.name, event, {
       jobId: handlerJobId(handler, event),
       attempts: handler.attempts,
       backoff: { type: 'exponential', delay: settings.handlerBackoffMs ?? 1_000 },
+      ...(Number.isFinite(wait) && wait > 0 ? { delay: Math.round(wait) } : {}),
     })
   }
   const catalogue = settings.catalogue ?? EVENT_CATALOGUE

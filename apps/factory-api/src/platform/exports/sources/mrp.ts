@@ -6,7 +6,7 @@ import { officeContextOf } from '../../../modules/planning/access'
 import type { LineView } from '../../../modules/planning/contract'
 import { shortages } from '../../../modules/planning/readiness/readiness'
 import { latestPlan } from '../../../modules/planning/requirements'
-import { defineExportSource } from '../source'
+import { defineExportSource, /* B-PR-09 */ everyCustomerRefusal } from '../source'
 
 /**
  * Planning › What to buy & make (SCR-055, `/planning/mrp`): the export of the list as the screen shows it. The page
@@ -97,6 +97,8 @@ const qty = (value: string, locale: ExportLocale): string => decimalText(value, 
 export const mrp = defineExportSource<Query, Row>({
   listKey: 'planning.mrp',
   permission: PLANNING_VIEW,
+  // B-PR-09 (the brand wall): it adds up every customer's work: the production unit's file alone (403 in words otherwise).
+  refusal: everyCustomerRefusal(PLANNING_VIEW),
   query(address) {
     return { site: address.get('site') || null, view: viewOf(address.get('view')), q: address.get('q')?.trim().slice(0, 100) ?? '' }
   },

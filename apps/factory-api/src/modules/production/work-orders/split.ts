@@ -231,7 +231,7 @@ export async function splitWorkOrder(caller: CommandCaller, workOrderId: string,
         subject: id,
         companyId: parent.companyId,
         siteId: parent.siteId,
-        payload: { workOrderId: id, number: number.formatted, siteId: parent.siteId, styleId: parent.styleId, salesOrderIds, cells: childCells.length, pieces: plan.moved, splitFromId: parent.id },
+        payload: { workOrderId: id, number: number.formatted, partyId: party.partyId /* B-PR-09 */, siteId: parent.siteId, styleId: parent.styleId, salesOrderIds, cells: childCells.length, pieces: plan.moved, splitFromId: parent.id },
       })
       const left = await tx.workOrderSize.findMany({ where: { workOrderId: parent.id }, select: { quantity: true, partyId: true } })
       // B-PR-01: a mixed draft whose cells left are now of one customer takes that customer (once; the guard checks it).
@@ -241,7 +241,7 @@ export async function splitWorkOrder(caller: CommandCaller, workOrderId: string,
         await tx.workOrder.update({ where: { id: parent.id }, data: { partyId: settled }, select: { id: true } })
         tools.audit({ recordType: 'WorkOrder', recordId: parent.id, companyId: parent.companyId, siteId: parent.siteId, before: { partyId: null }, after: { partyId: settled } })
       }
-      changedEvent(tools, parent, ['cells', 'split'], left)
+      changedEvent(tools, { ...parent, partyId: settled ?? parent.partyId } /* B-PR-09: its customer after the split */, ['cells', 'split'], left)
       const today = todayOfCommand(tools)
       return {
         workOrder: await workOrderView(tx, (await readWorkOrder(tx, id))!, today),

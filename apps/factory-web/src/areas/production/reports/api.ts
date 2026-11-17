@@ -98,8 +98,9 @@ const subscriptionsSchema = z.object({ subscriptions: z.array(subscriptionSchema
 const recipientsSchema = z.object({ people: z.array(z.object({ id: z.string(), name: z.string(), me: z.boolean(), subscribed: z.boolean() })) })
 export type Recipient = z.infer<typeof recipientsSchema>['people'][number]
 
-export function getDaily(api: ApiClient, query: { siteId?: string | null; date?: string | null }, signal?: AbortSignal): Promise<DailyReport> {
-  return api.get('/production/reports/daily', { query: { siteId: query.siteId ?? undefined, date: query.date ?? undefined }, schema: dailySchema, signal })
+export function getDaily(api: ApiClient, query: { siteId?: string | null; date?: string | null; partyId?: string | undefined }, signal?: AbortSignal): Promise<DailyReport> {
+  // F-PR-02: partyId = the customer filter: the lanes' style × size tables of that customer only.
+  return api.get('/production/reports/daily', { query: { siteId: query.siteId ?? undefined, date: query.date ?? undefined, partyId: query.partyId }, schema: dailySchema, signal })
 }
 
 export function getLines(api: ApiClient, siteId?: string | null, signal?: AbortSignal): Promise<LinesOverview> {

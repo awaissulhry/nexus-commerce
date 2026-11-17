@@ -24,6 +24,10 @@ import { startHarness, type Browser, type Harness } from '../../auth/sessions/te
 import { systemContext } from '../../outbox/system'
 import { partnerFanOut, partnerFanOutEvents } from './fan-out'
 import { unsubscribeKeyOf } from './mail'
+// th3b follow-up 5: a task opened as the office's ask opens it, and the office's own view of it.
+import { command } from '../../../core/command'
+import { openTaskInCommand, taskById } from '../tasks/store'
+import { taskView } from '../tasks/views'
 
 /**
  * T06 (B-TH-006, research.md §8 bug L2-G06; wall surface W06) on the local stack with EVERY factory-db seed and the app's real
@@ -83,7 +87,10 @@ async function partnerPerson(email: string, partyId: string, roleKeys: string[])
     await client.user.create({ data: { id, email, displayName: email.split('@')[0]!, locale: 'en', status: 'ACTIVE', audience: 'PARTNER', partyId, partnerKind: 'CUSTOMER' }, select: { id: true } })
     for (const key of roleKeys) {
       const role = await client.role.findUniqueOrThrow({ where: { tenantId_key: { tenantId: T, key } }, select: { id: true } })
-      await client.roleAssignment.create({ data: { id: newId(), userId: id, roleId: role.id, allCompanies: true, partyIds: [partyId], validFrom: new Date(h.clock.now().getTime() - 60_000) }, select: { id: true } })
+      // th3b fix: started by BOTH clocks — the portal reads roles on the harness clock (which each sign-in moves 61 s on), the
+      // worker's fan-out on the server clock: a person made after the sign-ins (follow-up 5's uploader) must be a reader to both.
+      const started = Math.min(h.clock.now().getTime(), Date.now()) - 60_000
+      await client.roleAssignment.create({ data: { id: newId(), userId: id, roleId: role.id, allCompanies: true, partyIds: [partyId], validFrom: new Date(started) }, select: { id: true } })
     }
   })
   return id
@@ -276,3 +283,116 @@ describe('T06: the portal says "confirmed" only for a confirmed order (B-TH-006,
     await switchRule(false)
   })
 })
+
+// ── th3b follow-up 5 (threads plan §0.5, "counts do not leak"): a shipment notice and a customer's task list ─────────────────
+/** A copy of a seed row with some columns changed (test data past the guards: replica mode, one connection). */
+async function copyRow(table: string, sourceId: string, changes: Record<string, unknown>): Promise<void> {
+  await admin('SET session_replication_role = replica')
+  try {
+    await admin(`CREATE TEMP TABLE _copy AS SELECT * FROM "${table}" WHERE id = $1`, [sourceId])
+    const keys = Object.keys(changes)
+    await admin(`UPDATE _copy SET ${keys.map((key, index) => `"${key}" = $${index + 1}`).join(', ')}`, Object.values(changes))
+    await admin(`INSERT INTO "${table}" SELECT * FROM _copy`)
+  } finally {
+    await admin('DROP TABLE IF EXISTS _copy')
+    await admin('SET session_replication_role = DEFAULT')
+  }
+}
+
+describe('th3b follow-up 5: the customer reads its own order number in shipment news and in its tasks — never SH- or SO-', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const SHIP_NO = `SH-TH3B-${run}`
+  const uploader = `uma.uploader.${run}@brand-alpha.example`
+  let order: Json
+  let seq = 0
+  let uploaderId = ''
+  let taskId = ''
+
+  it('a delivery that shipped: "A delivery of your order N has shipped" to A’s people only, chip "#N", never the shipment or order series', async () => {
+    // Its own start, whatever T06 left: company A's credit rule off, so the order is made CONFIRMED.
+    if ((await one<{ active: boolean }>('SELECT active FROM "ApprovalRule" WHERE id = $1', [ruleId])).active) await switchRule(false)
+    order = await madeOrder('PO-TH3B-SHIP')
+    expect(order.status).toBe('CONFIRMED')
+    seq = (await one<{ customerSeq: number }>('SELECT "customerSeq" FROM "SalesOrder" WHERE id = $1', [order.id])).customerSeq
+    expect(seq).toBeGreaterThan(0)
+    const source = await one<{ id: string }>('SELECT id FROM "Shipment" WHERE "tenantId" = $1 AND "companyId" = $2 ORDER BY number LIMIT 1', [T, companyA])
+    const shipmentId = newId()
+    await copyRow('Shipment', source.id, { id: shipmentId, number: SHIP_NO, companyId: companyA, partyId: partyA, salesOrderId: order.id, status: 'SHIPPED', shippedAt: h.clock.now() })
+    const before = h.ses.mails.length
+    const event = { eventId: newId(), type: 'shipment.status_changed', tenantId: T, companyId: companyA, siteId: null, payload: { shipmentId, number: SHIP_NO, from: 'PACKED', to: 'SHIPPED' } }
+    await partnerFanOut(system(), event as never, { clock: h.clock, unsubscribeKey: unsubscribeKeyOf(h.auth.secrets) })
+    const news = await admin<{ userId: string; partyId: string; messageKey: string; recordLabel: string }>('SELECT "userId", "partyId", "messageKey", "recordLabel" FROM "Notification" WHERE "recordType" = \'Shipment\' AND "recordId" = $1', [shipmentId])
+    expect(news.map((row) => row.userId)).toContain(ids.aBuyer)
+    expect(news.map((row) => row.userId)).not.toContain(ids.bBuyer)
+    for (const row of news) expect(row).toMatchObject({ partyId: partyA, messageKey: 'portal.shipment.shipped', recordLabel: `#${seq}` })
+    const mails = h.ses.mails.slice(before).filter((mail) => mail.templateKey === 'portal.notification' && mail.to[0] === brandA.buyer)
+    expect(mails).toHaveLength(1)
+    const text = textOf(mails[0]!.raw)
+    expect(text).toContain(`A delivery of your order ${seq} has shipped`)
+    expect(text).not.toContain(SHIP_NO)
+    expect(text).not.toContain(order.number)
+    expect(h.ses.mails.slice(before).some((mail) => mail.to[0] === brandB.buyer)).toBe(false)
+  })
+
+  it('a task on A’s order: the office reads its own number; A’s task list, its notice and mail read "#N", never SO-', async () => {
+    uploaderId = await partnerPerson(uploader, partyA, ['customer-buyer', 'partner-upload', 'partner-approve'])
+    // The office's "Ask the customer for…" on its order, as POST /partners/:partyId/tasks opens it (its label: the office's own
+    // number, recordLabelOf). This test's app has no office sign-in (the route runs on the app's clock), so the task opens here.
+    const opened = await command(system(), { name: 'partnerTasks.open', input: { orderId: order.id } }, async (tools) => ({
+      taskId: (await openTaskInCommand(tools, { companyId: companyA, partyId: partyA, kind: 'UPLOAD_DOCUMENT', record: { type: 'SalesOrder', id: order.id, label: order.number }, sourceKey: `Ask:${newId()}`, dueAt: new Date(h.clock.now().getTime() + 3 * 86_400_000), askedBy: { id: PEOPLE.sales, name: 'Made-up sales' } })).task.id,
+    }))
+    taskId = opened.result.taskId
+    // The office keeps reading its own number (its view of the task, as the office's list and answer give it).
+    const row = await h.database.withScope({ audience: 'office', tenantId: T, actorId: PEOPLE.sales }, (client) => taskById(client, taskId))
+    expect(taskView(row!, h.clock.now()).record).toMatchObject({ type: 'SalesOrder', id: order.id, label: order.number })
+    const before = h.ses.mails.length
+    await fanOutAll()
+    const news = await admin<{ userId: string; partyId: string; recordLabel: string }>('SELECT "userId", "partyId", "recordLabel" FROM "Notification" WHERE "recordType" = \'SalesOrder\' AND "recordId" = $1 AND "messageKey" = \'portal.task.opened\'', [order.id])
+    expect(news.map((row) => row.userId)).toContain(uploaderId)
+    for (const row of news) expect(row).toMatchObject({ partyId: partyA, recordLabel: `#${seq}` })
+    for (const mail of h.ses.mails.slice(before).filter((one) => one.to[0] === uploader)) expect(textOf(mail.raw)).not.toContain(order.number)
+    // The portal: the list, Home's waiting items, the notifications.
+    const portal = await signedIn(uploader)
+    const list = await portal.get('/portal/tasks')
+    expect(list.status, JSON.stringify(list.body)).toBe(200)
+    const item = (list.body.items as Json[]).find((entry) => entry.id === taskId)!
+    expect(item.record).toMatchObject({ type: 'SalesOrder', id: order.id, label: `#${seq}` })
+    expect(item.words.en).toContain(`#${seq}`)
+    for (const url of ['/portal/tasks', '/portal/home', '/portal/notifications']) {
+      const answer = await portal.get(url)
+      expect(answer.status, url).toBe(200)
+      expect(JSON.stringify(answer.body), url).not.toContain(order.number)
+    }
+  })
+
+  it('an approval asked on A’s order (approvals-out’s task: "<kind> · <record>") reads the kind and "#N" on the portal; B reads none', async () => {
+    const requestId = newId()
+    const approvalTaskId = newId()
+    await admin('SET session_replication_role = replica')
+    try {
+      await admin(
+        `INSERT INTO "ApprovalRequest" (id, "tenantId", "companyId", "recordType", "recordId", "partyId", kind, question, "dueAt", "createdAt", "updatedAt") VALUES ($1, $2, $3, 'SalesOrder', $4, $5, 'SAMPLE', 'Made-up: is the sample right?', now() + interval '5 days', now(), now())`,
+        [requestId, T, companyA, order.id, partyA],
+      )
+      await admin(
+        `INSERT INTO "PartnerTask" (id, "tenantId", "companyId", "partyId", kind, "recordType", "recordId", "recordLabel", "sourceKey", "dueAt", status, "createdAt", "updatedAt") VALUES ($1, $2, $3, $4, 'APPROVE', 'ApprovalRequest', $5, $6, $7, now() + interval '5 days', 'OPEN', now(), now())`,
+        [approvalTaskId, T, companyA, partyA, requestId, `Sample · ${order.number}`, `ApprovalRequest:${requestId}`],
+      )
+    } finally {
+      await admin('SET session_replication_role = DEFAULT')
+    }
+    const portal = await signedIn(uploader)
+    const list = await portal.get('/portal/tasks')
+    expect(list.status, JSON.stringify(list.body)).toBe(200)
+    const item = (list.body.items as Json[]).find((entry) => entry.id === approvalTaskId)!
+    expect(item.record.label).toBe(`Sample · #${seq}`)
+    expect(item.words.en).toBe(`Approve Sample · #${seq}`)
+    expect(JSON.stringify(list.body)).not.toContain(order.number)
+    // Customer B's list holds none of A's requests.
+    const other = await signedIn(brandB.buyer)
+    const theirs = JSON.stringify((await other.get('/portal/tasks')).body)
+    expect(taskId).not.toBe('')
+    expect(theirs).not.toContain(approvalTaskId)
+    expect(theirs).not.toContain(taskId)
+  })
+})
+// ── end th3b follow-up 5

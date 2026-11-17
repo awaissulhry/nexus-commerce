@@ -39,4 +39,8 @@ export const manifest = defineManifest({
   'PUT /sales/inquiries/addresses': { audiences: ['office'], permission: 'sales.settings.manage', scope: 'record' },
   // B-TH-221 (wall W23): New request's customer picker — the customers this person may make a request for (also parties.view).
   'GET /sales/inquiries/customers': manage,
+  // B-TH-042 (wall W23): answer a new customer — the check and the match whoever keeps the request (the customer within their
+  // rights); making a customer also parties.manage over the request's company (checked in the handler).
+  'GET /sales/inquiries/:inquiryId/customer': manage,
+  'POST /sales/inquiries/:inquiryId/customer': manage,
 })

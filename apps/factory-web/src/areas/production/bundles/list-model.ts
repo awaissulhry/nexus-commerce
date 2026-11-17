@@ -1,4 +1,5 @@
 import type { LiveState } from '../_shared/hooks'
+import type { CustomerFilterState } from '../_shared/customer/model'
 import type { Phrase } from '../_shared/model'
 import type { WhoAnswer, BundleTiles, Finding, FindingsSummary, TrackedBundle } from './api'
 import type { BundlesCan, BundleView, FindingsAsk, WhoPurpose } from './model'
@@ -62,10 +63,14 @@ export interface BundlesModel {
   focusRow?: number
   helpOpen?: boolean
   whoPurpose?: WhoPurpose
+  /** F-PR-02: the customer filter (`?party=`); absent: none drawn. */
+  customers?: CustomerFilterState
 }
 
 export interface BundlesActions {
   onView?: (view: BundleView) => void
+  /** F-PR-02: a customer picked (null: every customer). */
+  onCustomer?: (party: string | null) => void
   onSearch?: (q: string) => void
   /** Enter in the search (a scanner ends with Enter): one hit opens it. */
   onScan?: (q: string) => void

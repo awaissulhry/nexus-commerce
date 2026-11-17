@@ -33,6 +33,7 @@ export const STATE_TONE: Readonly<Record<DeliveryState, 'neutral' | 'info' | 'su
   DELIVERED: 'success',
   PROBLEM: 'danger',
   FAILED: 'warning',
+  WITHDRAWN: 'neutral', // B-TH-048: taken back by its sender in its 10 seconds (no failure)
 }
 
 /** The record types the log names in words (`conn.delivery.recordType.<type>`); another one is "a record". */

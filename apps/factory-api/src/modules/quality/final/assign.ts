@@ -165,7 +165,7 @@ export async function assignInspections(caller: CommandCaller, body: AssignBody,
       if (!row || !can(actorOf(context), 'quality.inspections.view', { companyId: row.companyId, siteId: row.siteId }) || !(await reachesInspectionWork(tx, context, 'quality.inspections.view', row))) throw new NotFoundError('Inspection not found.')
       if (!can(actorOf(context), QUALITY_INSPECTIONS_RECORD, { companyId: row.companyId, siteId: row.siteId }) || !(await reachesInspectionWork(tx, context, QUALITY_INSPECTIONS_RECORD, row))) throw new ForbiddenError("Assigning an inspector needs the right to record inspections over the inspection's company and site.")
       if (row.version !== entry.version) throw new StaleVersionError('Inspection', row.id, row.version, entry.version)
-      const order = await tx.workOrder.findUnique({ where: { id: row.workOrderId }, select: { number: true } })
+      const order = await tx.workOrder.findUnique({ where: { id: row.workOrderId }, select: { number: true, /* B-PR-09 */ partyId: true } })
       const label = row.number ?? order?.number ?? row.id
       if (row.status !== 'OPEN') {
         problems.push({ path: `inspections/${index}`, message: `${label} is ${row.status.toLowerCase()}: only an open inspection is assigned.` })
@@ -189,7 +189,7 @@ export async function assignInspections(caller: CommandCaller, body: AssignBody,
         subject: row.id,
         companyId: row.companyId,
         siteId: row.siteId,
-        payload: { inspectionId: row.id, workOrderId: row.workOrderId, number: order?.number ?? '', assigned: isAssigned(assignee) },
+        payload: { inspectionId: row.id, workOrderId: row.workOrderId, number: order?.number ?? '', partyId: order?.partyId ?? null /* B-PR-09 */, assigned: isAssigned(assignee) },
       })
       changed.push(updated)
     }

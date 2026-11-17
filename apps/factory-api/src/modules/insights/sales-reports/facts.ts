@@ -16,6 +16,7 @@ import {
   type IntakeLine,
   type QuoteDecision,
   type QuoteOutcome,
+  type RequestEntry,
   type ReturnEntry,
 } from '@nexus/factory-domain/insights/sales-reports/rules'
 import { ownerKey, workingCalendarsFor } from '../../../platform/calendars/service'
@@ -364,3 +365,53 @@ export async function quoteSpeedOf(db: Reader, place: Place): Promise<{ answers:
   )
   return { answers, decisions, complete: quotes.length <= SALES_REPORT_LIMITS.read && versions.length <= SALES_REPORT_LIMITS.read }
 }
+
+// ---- B-TH-052 (threads plan L2-G10): the request-to-order figure ---------------------------------------------------------------
+
+export interface RequestRead {
+  readonly entries: RequestEntry[]
+  /** The customers the requests name (code and name), by id. */
+  readonly customers: Map<string, Ref>
+  readonly complete: boolean
+}
+
+/**
+ * The requests received in the period that the caller reaches (`place.requests`: sales.inquiries.view over their company and
+ * customer, a prospect's request too, as Sales › Incoming lists them) and what each became: its own state; quoted (a quote was
+ * made from it); ordered — the request ORDERED (an order made straight from it), or an order of one of its quote's versions
+ * that is not cancelled, counted only for a caller who reaches that order (orders.view: `place.orders`). Without
+ * sales.inquiries.view: none. No prospect's name, address or e-mail is read.
+ */
+export async function requestsOf(db: Reader, place: Place): Promise<RequestRead> {
+  if (!place.sight.requests) return { entries: [], customers: new Map(), complete: true }
+  const rows = await db.inquiry.findMany({
+    where: { AND: [place.requests, { receivedAt: { gte: place.span.start, lt: place.span.end } }] },
+    select: { id: true, partyId: true, status: true, declineReason: true, quoteId: true, receivedAt: true, party: { select: { id: true, code: true, legalName: true, tradeName: true } } },
+    orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }],
+    take: SALES_REPORT_LIMITS.read + 1,
+  })
+  const shown = rows.slice(0, SALES_REPORT_LIMITS.read)
+  const quoteIds = unique(shown.map((row) => row.quoteId))
+  const ordered = new Set<string>()
+  if (place.sight.orders && quoteIds.length > 0) {
+    const orders = await db.salesOrder.findMany({
+      where: { AND: [place.orders, { status: { not: 'CANCELLED' } }, { quoteVersion: { quoteId: { in: quoteIds } } }] },
+      select: { quoteVersion: { select: { quoteId: true } } },
+    })
+    for (const order of orders) if (order.quoteVersion) ordered.add(order.quoteVersion.quoteId)
+  }
+  const customers = new Map<string, Ref>()
+  for (const row of shown) if (row.party) customers.set(row.party.id, partyRef(row.party))
+  const entries = shown.map(
+    (row): RequestEntry => ({
+      partyId: row.partyId,
+      receivedOn: businessDate(row.receivedAt),
+      status: row.status,
+      declineReason: row.declineReason,
+      quoted: row.quoteId !== null,
+      ordered: row.status === 'ORDERED' || (row.quoteId !== null && ordered.has(row.quoteId)),
+    }),
+  )
+  return { entries, customers, complete: rows.length <= SALES_REPORT_LIMITS.read }
+}
+// ---- end B-TH-052

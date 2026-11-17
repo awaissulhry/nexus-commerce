@@ -113,7 +113,8 @@ export async function viewInCommand(tools: CommandTools, inquiryId: string) {
 
 // ---- the list ----------------------------------------------------------------------------------------------------------
 
-function baseWhere(context: OfficeContext, query: InquiryListQuery): Prisma.InquiryWhereInput {
+// B-TH-039: Sales › Incoming's one read (modules/sales/incoming) filters its requests with the same words.
+export function baseWhere(context: OfficeContext, query: Omit<InquiryListQuery, 'tile' | 'limit'>): Prisma.InquiryWhereInput {
   const q = query.q?.trim()
   // B-TH-016 (PR-30): a prospect's e-mail is searched only for a reader who keeps inquiries (a reader who only reads them never
   // finds a request by an address it is not shown).
@@ -239,7 +240,8 @@ export async function inquiryAssignees(caller: CommandCaller, query: { readonly 
 // ---- what an inquiry names ---------------------------------------------------------------------------------------------
 
 /** The customer an inquiry is from: a CUSTOMER or BRAND party of the company (or tenant-wide), not archived, that the caller may see. */
-async function assertCustomer(db: Reader, context: OfficeContext, partyId: string, companyId: string, path = 'partyId'): Promise<void> {
+// B-TH-042: exported for the match of ./make-customer.ts.
+export async function assertCustomer(db: Reader, context: OfficeContext, partyId: string, companyId: string, path = 'partyId'): Promise<void> {
   const party = await db.party.findUnique({ where: { id: partyId }, select: { companyId: true, roles: true, status: true } })
   if (!party || (party.companyId !== null && party.companyId !== companyId) || !may(context, SALES_INQUIRIES_VIEW, { companyId, partyId })) badBody(path, 'No such customer or brand for this company.')
   if (!party.roles.some((role) => role === 'CUSTOMER' || role === 'BRAND')) badBody(path, 'This party is not a customer or a brand.')
@@ -255,7 +257,8 @@ async function assertShipTo(db: Reader, partyId: string | null, addressId: strin
 // ---- end B-TH-221
 
 /** The person at the customer who asked: an active contact of that party, not erased. */
-async function assertContact(db: Reader, partyId: string, contactId: string, path = 'contactId'): Promise<void> {
+// B-TH-042: exported for ./make-customer.ts.
+export async function assertContact(db: Reader, partyId: string, contactId: string, path = 'contactId'): Promise<void> {
   const contact = await db.partyContact.findUnique({ where: { id: contactId }, select: { partyId: true, status: true, erasedAt: true } })
   if (!contact || contact.partyId !== partyId || contact.status !== 'ACTIVE' || contact.erasedAt !== null) badBody(path, 'Not an active contact of this customer.')
 }
@@ -488,7 +491,8 @@ export async function writeInquiry(tools: CommandTools, row: InquiryData, data: 
 }
 
 type Change = 'UPDATED' | 'MATCHED' | 'ASSIGNED' | 'UNASSIGNED' | 'NEED_INFO' | 'RESUMED'
-function emitChanged(tools: CommandTools, row: InquiryData, status: InquiryStatus, change: Change, partyId: string | null, assigneeId: string | null): void {
+// B-TH-042: exported for ./make-customer.ts (MATCHED).
+export function emitChanged(tools: CommandTools, row: InquiryData, status: InquiryStatus, change: Change, partyId: string | null, assigneeId: string | null): void {
   tools.emit({ type: 'inquiry.changed', subject: row.id, companyId: row.companyId, payload: { inquiryId: row.id, number: row.number, status, previousStatus: row.status, change, partyId, assigneeId } })
 }
 

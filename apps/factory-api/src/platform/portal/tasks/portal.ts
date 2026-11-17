@@ -11,6 +11,8 @@ import { partyReaders } from './people'
 import { assignInCommand, closeOne, reopenInCommand, taskById, TASK_COLUMNS, type AssignWhy, type TaskRow } from './store'
 import { sourceOf } from './sources'
 import { assigneeNames, partnerTaskView, taskView } from './views'
+// th3b follow-up 5 (threads plan §0.5): the customer's own numbers in its task list, never the office's series.
+import { partnerLabelsOf } from './partner-label'
 
 /**
  * The partner's one task list (B-W2b-167, COL-043; design portal.frame action-needed "What waits for you", the rail's badges,
@@ -59,7 +61,9 @@ export async function myTasks(request: FastifyRequest, state: 'OPEN' | 'DONE', n
   const code = await partyCode(request, session)
   // B-W2b-F14: the names of the colleagues tasks are handed to (the partner reads its own party's people).
   const names = await request.withClient((client) => assigneeNames(client, mine))
-  const facts = { partyCode: code, personId: session.userId, preview: session.preview, names, partnerKind: session.person.partnerKind }
+  // th3b follow-up 5: the records as the party reads them (its own tasks' records only, read in the tenant scope as the person).
+  const labels = await partnerLabels(request, session, mine)
+  const facts = { partyCode: code, personId: session.userId, preview: session.preview, names, partnerKind: session.person.partnerKind, labels }
   const open = state === 'OPEN' ? mine : []
   // "Mine": only the ones handed to this person; the badges and counts stay the whole list's.
   const shown = onlyMine ? mine.filter((row) => row.assigneeId === session.userId) : mine
@@ -118,8 +122,21 @@ async function viewOf(request: FastifyRequest, session: PortalSession, taskId: s
     const found = (await taskById(client, taskId))!
     return { row: found, names: await assigneeNames(client, [found]) }
   })
-  return partnerTaskView(row, now, { partyCode: code, personId: session.userId, preview: session.preview, names, partnerKind: session.person.partnerKind })
+  const labels = await partnerLabels(request, session, [row]) // th3b follow-up 5
+  return partnerTaskView(row, now, { partyCode: code, personId: session.userId, preview: session.preview, names, partnerKind: session.person.partnerKind, labels })
 }
+
+// ── th3b follow-up 5 (threads plan §0.5) ──
+/**
+ * What the party reads of its tasks' records (./partner-label.ts). The partner role does not read every record a task may name (a
+ * revised order's amendment, a concession), so the labels are read in the tenant's scope as the person — of these tasks only,
+ * which the session already read in its own party scope, and only of rows of its own party.
+ */
+function partnerLabels(request: FastifyRequest, session: PortalSession, rows: readonly TaskRow[]): Promise<Map<string, string>> {
+  if (rows.length === 0) return Promise.resolve(new Map())
+  return portalOf(request.server).auth.inTenant(session.tenantId, session.userId, (client) => partnerLabelsOf(client, session.partyId, rows))
+}
+// ── end th3b follow-up 5
 
 export async function undoDone(app: FastifyInstance, request: FastifyRequest, taskId: string, idempotencyKey: string | undefined, now: Date) {
   const session = portalSessionOf(request)
@@ -203,12 +220,13 @@ export async function handover(app: FastifyInstance, request: FastifyRequest, us
   const colleagues = others
     .map((reader) => ({ id: reader.personId, displayName: reader.displayName, count: theirs.filter((task) => isTaskFor(reader.actor, task)).length }))
     .filter((entry) => entry.count > 0)
+  const labels = await partnerLabels(request, session, alone) // th3b follow-up 5: the party's own numbers
   return {
     open: theirs.length,
     kept: theirs.length - alone.length,
     assigned,
     alone: alone.map((task) => {
-      const view = taskView(task, now)
+      const view = taskView({ ...task, recordLabel: labels.get(task.id) ?? task.recordLabel }, now)
       return { id: view.id, kind: view.kind, words: view.words, record: view.record, dueAt: view.dueAt }
     }),
     colleagues,

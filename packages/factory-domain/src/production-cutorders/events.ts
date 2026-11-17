@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-PR-09 */ livePartyIds } from '../events/define'
 import { CUT_ORDER_KINDS, CUT_ORDER_STATUSES, CUT_TICKET_STATUSES, PLY_RUN_STATUSES } from '../production/cutorders/rules'
 
 /**
@@ -15,7 +15,9 @@ import { CUT_ORDER_KINDS, CUT_ORDER_STATUSES, CUT_TICKET_STATUSES, PLY_RUN_STATU
  *   ply_run.changed     a run of ply stickers was made (and printed), printed again, or voided
  *
  * They reach the Cutting page (production.cutting.view) and the cutting tablets of the site (production.cut). Ids, numbers,
- * states and counts only: no person, no money, no words a person typed.
+ * states and counts only: no person, no money, no words a person typed. B-PR-09 (the brand wall): `partyIds`, the customers of
+ * the work orders the cut order cuts (each once; [] when one names none), so the office's live screens send them only to people
+ * who reach every one of them (events/live.ts partyIdsOf).
  */
 
 const live = { permission: 'production.cutting.view', floor: 'production.cut', fields: ['cutOrderId', 'number', 'status', 'change'] } as const
@@ -35,6 +37,7 @@ export const events = [
     payload: z.strictObject({
       cutOrderId: z.uuid(),
       number: z.string(),
+      partyIds: livePartyIds(), // B-PR-09
       kind: z.enum(CUT_ORDER_KINDS),
       status: z.enum(CUT_ORDER_STATUSES),
       change: z.enum(CUT_ORDER_CHANGES),
@@ -55,6 +58,7 @@ export const events = [
       ticketNumber: z.string(),
       cutOrderId: z.uuid(),
       number: z.string(),
+      partyIds: livePartyIds(), // B-PR-09
       layId: z.uuid().nullable(),
       ticketStatus: z.enum(CUT_TICKET_STATUSES),
       status: z.enum(CUT_ORDER_STATUSES),
@@ -73,6 +77,7 @@ export const events = [
       layId: z.uuid(),
       cutOrderId: z.uuid(),
       number: z.string(),
+      partyIds: livePartyIds(), // B-PR-09
       runStatus: z.enum(PLY_RUN_STATUSES),
       change: z.enum(PLY_RUN_CHANGES),
       firstPly: z.number().int().min(1),

@@ -2,6 +2,8 @@ import { OPEN_REASONS, type OpenReason } from '@nexus/factory-domain/people/priv
 import { EDIT_KINDS, INBOX_KINDS, LABOUR_LIMITS, LINE_DAY_STATES, type DisputeOutcome, type EditKind, type InboxKind, type LineDayState } from '@nexus/factory-domain/production/labour/rules'
 import { OFF_STANDARD_LIMITS, UNUSUAL_REASONS } from '@nexus/factory-domain/production/offstandard/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
+// F-PR-02: the refusal of a view that adds up every customer.
+import { isEveryCustomerRefusal } from '../_shared/customer/model'
 import type { BlockRecord, Change, CorrectionRequest, DayRecord, Dispute, FigureAccess, InboxItem, LabourCounts, LabourRecord, LineDay, OffStandardCode } from './api'
 
 /**
@@ -574,6 +576,8 @@ export function writeProblem(error: unknown): Phrase {
 /** A failed read in words. */
 export function readProblem(error: unknown): string {
   if (!isApiError(error)) return 'problem.read'
+  // F-PR-02: labour adds up every customer's floor (B-PR-07): a person limited to some reads why, not "your role cannot".
+  if (isEveryCustomerRefusal(error)) return 'problem.everyCustomer'
   if (error.kind === 'forbidden' || error.kind === 'step_up') return 'problem.forbidden'
   if (error.kind === 'unavailable') return 'problem.offline'
   if (error.kind === 'not_found') return 'problem.gone'

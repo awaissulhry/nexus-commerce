@@ -35,8 +35,35 @@ export interface WorkOrderReach {
  * (a plain column: `partyId IN (…)` leaves out a work order of no customer unless a grant reaches every customer).
  */
 export function workOrderWhere(actor: Actor, permission: Permission): Prisma.WorkOrderWhereInput {
-  return scopeWhere(actor, permission, WORK_ORDER) as Prisma.WorkOrderWhereInput
+  return nullSafe(scopeWhere(actor, permission, WORK_ORDER)) as Prisma.WorkOrderWhereInput // B-PR-09: null-safe
 }
+
+// ── B-PR-09 ──
+/**
+ * B-PR-09 (found by PW-04's cut order file): a customer clause `partyId IN (…)` made null-safe (`… AND partyId IS NOT NULL`).
+ * Asked as it is, nothing changes (a work order of no customer is left out either way); under a negation — `every` (allPartsWhere:
+ * a cut order, a trolley), `none`, `NOT` — SQL's NULL made `partyId IN (…)` neither true nor false, so a part whose work order
+ * names no customer did not count as missed: a person limited to brand B saw the cut order of a work order mixed before the rule.
+ * Now such a part counts as not reached (fail closed); a grant over every customer has no customer clause, so it still reaches it.
+ * The same object comes back when nothing changes (NO_ROWS is compared by reference).
+ */
+function nullSafe(where: unknown): unknown {
+  if (where === null || typeof where !== 'object') return where
+  if (Array.isArray(where)) {
+    const items = where.map(nullSafe)
+    return items.some((item, index) => item !== where[index]) ? items : where
+  }
+  let changed = false
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(where)) {
+    const party = key === WORK_ORDER.party && value !== null && typeof value === 'object' && !Array.isArray(value) && 'in' in value && !('not' in value)
+    const safe = party ? { ...value, not: null } : nullSafe(value)
+    if (safe !== value) changed = true
+    out[key] = safe
+  }
+  return changed ? out : where
+}
+// ── end B-PR-09 ──
 
 /**
  * A row of a work order (an operation, a bundle, a call on a work order): reached through its work order, by the relation

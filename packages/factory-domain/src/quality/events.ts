@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, /* B-PR-09 */ livePartyId, livePartyIds } from '../events/define'
 import { CR_VI_EVIDENCE, EVIDENCE_RULES, LAB_TESTS, LOT_DOCUMENT_KINDS } from './lab/rules'
 import { FOUR_EYES_RULES, REVERSAL_REASONS, SECOND_PERSON_REASONS, SERIALS_TO } from './release/rules'
 // B-W2a-26: the defect library, the disposition codes and quality holds.
@@ -62,6 +62,10 @@ import { ASSIGNMENT_CHANGES, PROFILE_CHANGES, PROFILE_SOURCES } from './aql/prof
  * a style or both, replaces the pair's earlier one, or an assignment ends (the profiles card and the calculator read them
  * again: quality.aql.view); `quality.inspection_sampling_set` when an open final inspection takes its sampling plan from a
  * profile (code letter, sample, acceptance numbers: the inspection screens and the bench read it again). Ids and codes only.
+ *
+ * B-PR-09 (the brand wall): the inspection and release events carry `partyId`, their work order's one customer's id (null:
+ * none); the hold events carry `partyIds`, the customers of the goods held (each once; [] when the goods name none or one of
+ * them names no customer). So the office's live screens send them only to people who reach those customers (events/live.ts).
  */
 const complaintLive = { permission: 'quality.complaints.view', fields: ['complaintId', 'number'] } as const
 const complaintStatus = z.enum(COMPLAINT_STATUSES)
@@ -142,7 +146,7 @@ export const events = [
     context: 'quality',
     description: "A final inspection of a work order's finished garments was opened (at the bench or in the office).",
     // number: the work order's; inspectionNumber: the inspection's own (its company's INSPECTION series).
-    payload: z.strictObject({ inspectionId: z.uuid(), inspectionNumber: z.string(), workOrderId: z.uuid(), number: z.string(), lotSize: z.number().int(), postedBy: z.enum(['FLOOR', 'OFFICE']) }),
+    payload: z.strictObject({ inspectionId: z.uuid(), inspectionNumber: z.string(), workOrderId: z.uuid(), number: z.string(), /* B-PR-09 */ partyId: livePartyId(), lotSize: z.number().int(), postedBy: z.enum(['FLOOR', 'OFFICE']) }),
     live: { permission: 'quality.inspections.view', floor: 'quality.inspections.view', fields: ['inspectionId', 'inspectionNumber', 'workOrderId', 'number'] },
   }),
   defineEvent({
@@ -153,6 +157,7 @@ export const events = [
       inspectionId: z.uuid(),
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       status: z.enum(['PASSED', 'FAILED']),
       computedResult: z.enum(['PASS', 'FAIL']),
       overridden: z.boolean(),
@@ -164,7 +169,7 @@ export const events = [
     type: 'quality.inspection_cancelled',
     context: 'quality',
     description: 'An open final inspection was abandoned (started by mistake), with the reason.',
-    payload: z.strictObject({ inspectionId: z.uuid(), workOrderId: z.uuid(), number: z.string() }),
+    payload: z.strictObject({ /* B-PR-09 */ partyId: livePartyId(), inspectionId: z.uuid(), workOrderId: z.uuid(), number: z.string() }),
     live: { permission: 'quality.inspections.view', floor: 'quality.inspections.view', fields: ['inspectionId', 'workOrderId', 'number'] },
   }),
   defineEvent({
@@ -178,6 +183,7 @@ export const events = [
       inspectionId: z.uuid(),
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       workOrderSizeId: z.uuid(),
       quantity: z.number().int(),
       serialIds: z.array(z.uuid()),
@@ -195,6 +201,7 @@ export const events = [
       releaseId: z.uuid(),
       workOrderId: z.uuid(),
       number: z.string(),
+      partyId: livePartyId(), // B-PR-09
       workOrderSizeId: z.uuid(),
       quantity: z.number().int(),
       reasonCode: z.enum(REVERSAL_REASONS),
@@ -238,6 +245,7 @@ export const events = [
     context: 'quality',
     description: 'Goods were put on hold (QHS-074, MES-008): lots, hides, work orders, bundles, garment serials, shipments or parcels of one site; the work orders it put ON_HOLD.',
     payload: z.strictObject({
+      partyIds: livePartyIds(), // B-PR-09
       holdId: z.uuid(),
       subjectType: z.enum(HOLD_SUBJECT_TYPES),
       subjectIds: z.array(z.uuid()).min(1).max(100),
@@ -255,6 +263,7 @@ export const events = [
     context: 'quality',
     description: 'A hold was released with an e-signature by someone other than who placed it (and, for garments, who made them); the work orders it lifted back to where they were.',
     payload: z.strictObject({
+      partyIds: livePartyIds(), // B-PR-09
       holdId: z.uuid(),
       subjectType: z.enum(HOLD_SUBJECT_TYPES),
       subjectIds: z.array(z.uuid()).min(1).max(100),
@@ -266,7 +275,7 @@ export const events = [
     type: 'quality.hold_changed',
     context: 'quality',
     description: "A hold's owner, expected release or notes changed.",
-    payload: z.strictObject({ holdId: z.uuid(), fields: z.array(z.enum(HOLD_CHANGED_FIELDS)).min(1) }),
+    payload: z.strictObject({ /* B-PR-09 */ partyIds: livePartyIds(), holdId: z.uuid(), fields: z.array(z.enum(HOLD_CHANGED_FIELDS)).min(1) }),
     live: { permission: 'quality.holds.view', fields: ['holdId', 'fields'] },
   }),
   // ---- B-W2a-47: nonconformances ----------------------------------------------------------------------------------------
@@ -341,7 +350,7 @@ export const events = [
     type: 'quality.inspection_assigned',
     context: 'quality',
     description: 'An open final inspection was assigned to its inspector before it is decided, or its assignment was cleared (no name: who is in the inspection).',
-    payload: z.strictObject({ inspectionId: z.uuid(), workOrderId: z.uuid(), number: z.string(), assigned: z.boolean() }),
+    payload: z.strictObject({ inspectionId: z.uuid(), workOrderId: z.uuid(), number: z.string(), /* B-PR-09 */ partyId: livePartyId(), assigned: z.boolean() }),
     live: { permission: 'quality.inspections.view', fields: ['inspectionId', 'workOrderId', 'number'] },
   }),
   // B-W2a-65: customer complaints (ids, numbers and codes; never the customer's words, a name or an amount).
@@ -439,6 +448,7 @@ export const events = [
     context: 'quality',
     description: 'An open final inspection took its sampling plan from an AQL profile (ISO 2859-1): the code letter, the sample and the acceptance numbers, and where the profile came from.',
     payload: z.strictObject({
+      partyId: livePartyId(), // B-PR-09
       inspectionId: z.uuid(),
       workOrderId: z.uuid(),
       profileId: z.uuid(),

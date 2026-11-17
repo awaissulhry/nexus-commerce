@@ -43,18 +43,24 @@
 /// What freezes on an order at one production stage (SAL-218): a field of a company's orders, the stage from which it is
 /// frozen, and what a change needs from then on. Several rules per field, one per stage (a CHANGE_REQUEST from cutting, a
 /// BLOCKED from finishing); a later stage never loosens an earlier BLOCKED. Switched off (active false), never deleted.
+/// B-PR-12 (production plan, schema wave 2/5; L7): a rule may hold one customer's orders only (partyId); while a customer
+/// has an active rule of a field, its rules replace the company's for that field on its orders (the orders module's
+/// rulesForParty). One set per company, customer (or none) and field.
 model OrderFreezeRule {
   id          String            @id @db.Uuid
   tenantId    String            @default(dbgenerated("(NULLIF(current_setting('factory.tenant_id'::text, true), ''::text))::uuid")) @db.Uuid
   /// The company whose orders it holds. A company with no rule leaves every field open (the orders module's defaults).
   companyId   String            @db.Uuid
+  /// B-PR-12: the customer whose orders it holds (a party with the CUSTOMER or BRAND role), fixed; null: the company's
+  /// default for every customer.
+  partyId     String?           @db.Uuid
   field       OrderFreezeField
   /// The production stage of the order line's cells from which the field is frozen (RELEASED < CUT < SEWING < FINISHED <
   /// SHIPPED, in this order).
   frozenFrom  OrderFreezeStage
   /// What a change of the field needs from that stage on.
   action      OrderFreezeAction
-  /// Off: the rule holds nothing (kept for the history). One active rule per company, field and stage.
+  /// Off: the rule holds nothing (kept for the history). One active rule per company, customer (or none), field and stage.
   active      Boolean           @default(true)
   /// The words the order shows beside a frozen field ("Cutting started — size frozen"), when the default ones do not fit;
   /// one line, at most 200.
@@ -67,9 +73,13 @@ model OrderFreezeRule {
   createdById String?           @db.Uuid
 
   company Company @relation(fields: [tenantId, companyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
+  // B-PR-12: the customer of a customer's own rule.
+  party   Party?  @relation(fields: [tenantId, partyId], references: [tenantId, id], onDelete: Restrict, onUpdate: Restrict)
 
   // A company's rules of a field (the order's "What is frozen" panel, the amend command).
   @@index([tenantId, companyId, field])
+  // B-PR-12: a customer's own rules of a field.
+  @@index([tenantId, partyId, field])
 }
 
 /// What a freeze rule holds on an order (SAL-218).

@@ -228,6 +228,19 @@ enum OrderChangeRequestKind {
   CHANGE
   /// The whole order, or some of its lines.
   CANCEL
+  // B-PR-12 (production plan, schema wave 2/5; lead picks L7, L18, R-50): the production asks. RUSH is open to a customer
+  // exactly while its urgency switch is on (PortalSettings.productionUrgencyOn); the other four while its limits list them
+  // (PortalSettings.productionAskKinds). Their own columns and rules come with B-PR-23.
+  /// "Urgent – asked": the order sooner than the quota or the stage lets the customer mark it (an optional need-by date).
+  RUSH
+  /// Pause the order's production.
+  HOLD
+  /// Go on with a paused order.
+  RESUME
+  /// Ship the order in more than one delivery.
+  SPLIT_SHIPMENT
+  /// One more sample round before production.
+  SAMPLE_ROUND
 }
 
 /// OPEN → ACCEPTED | REFUSED (the office) | WITHDRAWN (the customer).

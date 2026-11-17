@@ -35,7 +35,8 @@
     "DELIVERED": "Delivered",
     "BOUNCED": "Bounced",
     "COMPLAINED": "Marked as spam",
-    "FAILED": "Not sent"
+    "FAILED": "Not sent",
+    "WITHDRAWN": "Taken back"
   },
   "menu": {
     "label": "More for the message of {author} at {time}",

@@ -19,8 +19,11 @@ export type CardKind = (typeof CARD_KINDS)[number]
 export const CARD_CHANNELS = ['APP', 'EMAIL', 'PORTAL'] as const
 export type CardChannel = (typeof CARD_CHANNELS)[number]
 
-/** The mail's state, the code's own words (message.email.*): Waiting to send · Sending · Sent · Delivered · Bounced · Marked as spam · Not sent. */
-export const DELIVERY_STATES = ['QUEUED', 'SENDING', 'SENT', 'DELIVERED', 'BOUNCED', 'COMPLAINED', 'FAILED'] as const
+/**
+ * The mail's state, the code's own words (message.email.*): Waiting to send · Sending · Sent · Delivered · Bounced · Marked as
+ * spam · Not sent · (B-TH-048) Taken back.
+ */
+export const DELIVERY_STATES = ['QUEUED', 'SENDING', 'SENT', 'DELIVERED', 'BOUNCED', 'COMPLAINED', 'FAILED', 'WITHDRAWN'] as const
 export type Delivery = (typeof DELIVERY_STATES)[number]
 
 /** "Delivered" is the DS success pill only after the mail service's webhook said so; amber while it waits. */
@@ -32,6 +35,7 @@ export const DELIVERY_TONE: Readonly<Record<Delivery, Tone>> = {
   BOUNCED: 'danger',
   COMPLAINED: 'danger',
   FAILED: 'danger',
+  WITHDRAWN: 'neutral', // B-TH-048: taken back by its sender in its 10 seconds (no failure)
 }
 
 export const CARD_FILE_STATUSES = ['PENDING_UPLOAD', 'AVAILABLE', 'QUARANTINED', 'DELETED'] as const

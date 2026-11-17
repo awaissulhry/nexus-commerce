@@ -26,6 +26,8 @@ export const dailyContract = defineContract({
     siteId: id().optional(),
     /** Default: today at the site. */
     date: businessDate().optional(),
+    /** F-PR-02: the lanes' style × size tables of one customer's work orders only (the lanes' own figures stay the line's). */
+    partyId: id().optional(),
   }),
   response: {
     200: output({

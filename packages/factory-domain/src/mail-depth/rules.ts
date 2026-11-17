@@ -199,16 +199,16 @@ export function bounceKindOf(type: string): BounceKind {
 /**
  * Where a mail we sent is, for the person who reads its thread (COL-031; design shell.preview "Queued → Sent → Delivered /
  * Bounced"): WAITING (queued or being sent), SENT, DELIVERED, SOFT_BOUNCE (not delivered for now: the receiving server said
- * a full mailbox, too large, or could not decide), BOUNCED (the address does not take mail), COMPLAINED, FAILED (never left).
+ * a full mailbox, too large, or could not decide), BOUNCED (the address does not take mail), COMPLAINED, FAILED (never left),
+ * WITHDRAWN (B-TH-048: taken back in its undo window; never left either).
  */
-export const DELIVERY_STATES = ['WAITING', 'SENT', 'DELIVERED', 'SOFT_BOUNCE', 'BOUNCED', 'COMPLAINED', 'FAILED'] as const
+// B-TH-048: WITHDRAWN, taken back by its sender in the 10 seconds after Send (it never left; the card says "Taken back").
+export const DELIVERY_STATES = ['WAITING', 'SENT', 'DELIVERED', 'SOFT_BOUNCE', 'BOUNCED', 'COMPLAINED', 'FAILED', 'WITHDRAWN'] as const
 export type DeliveryState = (typeof DELIVERY_STATES)[number]
 
 export function deliveryStateOf(status: OutboundStatus, bounceKind: BounceKind | null): DeliveryState {
   if (status === 'QUEUED' || status === 'SENDING') return 'WAITING'
   if (status === 'SENT') return bounceKind === 'TRANSIENT' || bounceKind === 'UNDETERMINED' ? 'SOFT_BOUNCE' : 'SENT'
-  // B-TH-038: a mail taken back in its undo window never left (its own word comes with undo send, B-TH-048 / B-TH-236).
-  if (status === 'WITHDRAWN') return 'FAILED'
   return status
 }
 

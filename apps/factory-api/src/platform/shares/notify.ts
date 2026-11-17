@@ -20,6 +20,8 @@ import { shareRecordOf } from './records'
  *   PUT /link/share/notify {on}   the link's command in its own partner scope (the database lets a partner session change
  *                                 notifyByEmail only), version + 1, `record_share.changed` (by PARTNER).
  *   the worker's handler `shares.notify` on `thread.message_posted` of a shared message (audience PARTNER) of a shareable
+ *   record (B-TH-048: our mail from a thread's composer on its `email.status_changed` SENT or FAILED, once it left its undo
+ *   window; never one taken back)
  *   record: every LIVE share of that record with the switch on, but the one whose link wrote the message, gets one mail
  *   (who wrote, the first lines; never the link: the invitation's mail is the only one that carries it), unless a mail about
  *   that record already reached that address in the last 10 minutes (our own mail of the message: its recipients have it).
@@ -54,10 +56,32 @@ interface PostedPayload {
   readonly audience: string
 }
 
+// ---- B-TH-048 (undo send): our mail from a thread's composer waits 10 s and may be taken back; the invited people hear of it
+// when it leaves (email.status_changed SENT or FAILED: its message is no longer held), never of one taken back.
+async function postedOf(caller: CommandCaller, event: Pick<EventEnvelope, 'type' | 'payload'>): Promise<PostedPayload | null> {
+  if (event.type === 'thread.message_posted') {
+    const posted = event.payload as PostedPayload
+    if (posted.direction !== 'OUTBOUND') return posted
+    const windowed = await caller.withClient((client) => client.emailOutbound.findFirst({ where: { messageId: posted.messageId, sendAfter: { not: null } }, select: { id: true } }))
+    return windowed ? null : posted
+  }
+  const left = event.payload as { outboundId?: string; status?: string }
+  if (event.type !== 'email.status_changed' || (left.status !== 'SENT' && left.status !== 'FAILED') || !left.outboundId) return null
+  const outboundId = left.outboundId
+  return caller.withClient(async (client) => {
+    const mail = await client.emailOutbound.findUnique({ where: { id: outboundId }, select: { threadId: true, messageId: true, sendAfter: true, recordType: true, recordId: true } })
+    if (!mail?.threadId || !mail.messageId || mail.sendAfter === null || !mail.recordType || !mail.recordId) return null
+    const message = await client.message.findUnique({ where: { id: mail.messageId }, select: { direction: true, audience: true, held: true } })
+    if (!message || message.held) return null
+    return { threadId: mail.threadId, messageId: mail.messageId, recordType: mail.recordType, recordId: mail.recordId, direction: message.direction, audience: message.audience }
+  })
+}
+// ---- end B-TH-048
+
 /** One event's "E-mail me" mails (the handler's work; tests call it). How many mails went. */
 export async function notifyShares(caller: CommandCaller, event: Pick<EventEnvelope, 'eventId' | 'type' | 'payload'>, clock: Clock = serverClock): Promise<number> {
-  const payload = event.payload as PostedPayload
-  if (payload.audience !== 'PARTNER' || !SHARE_RECORD_TYPES.includes(payload.recordType)) return 0
+  const payload = await postedOf(caller, event) // B-TH-048
+  if (!payload || payload.audience !== 'PARTNER' || !SHARE_RECORD_TYPES.includes(payload.recordType)) return 0
   const adapter = shareRecordOf(payload.recordType)!
   const now = clock.now()
   const facts = await caller.withClient(async (client) => {
@@ -110,7 +134,7 @@ export async function notifyShares(caller: CommandCaller, event: Pick<EventEnvel
 export function sharesNotifyHandler(): EventHandler {
   return defineHandler({
     name: SHARES_NOTIFY_HANDLER,
-    events: ['thread.message_posted'],
+    events: ['thread.message_posted', 'email.status_changed'], // B-TH-048: email.status_changed, our mail that left its undo window
     async handle(event, tools) {
       await notifyShares(tools.caller, event)
     },

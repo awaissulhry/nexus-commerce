@@ -131,7 +131,7 @@ export async function closeWorkOrder(caller: CommandCaller, workOrderId: string,
         ...(body.reasonNote ? { reason: body.reasonNote } : {}),
       })
       const event = { subject: current.id, companyId: current.companyId, siteId: current.siteId }
-      tools.emit({ ...event, type: 'workorder.status_changed', payload: { workOrderId: current.id, number: current.number, from: current.status, to: 'CLOSED' } })
+      tools.emit({ ...event, type: 'workorder.status_changed', payload: { workOrderId: current.id, number: current.number, partyId: current.partyId /* B-PR-09 */, from: current.status, to: 'CLOSED' } })
       tools.emit({ ...event, type: 'work_order_close.changed', payload: { closeId, workOrderId: current.id, number: current.number, change: 'closed', settled: settlement !== null, beyond: facts.beyond.any } })
       if (settlement) {
         tools.emit({ ...event, type: 'work_order_cost.posted', payload: { workOrderId: current.id, number: current.number, entryIds: [...settlement.entryIds], kinds: settlement.varianceIds.length > 0 ? ['VARIANCE', 'CLOSE'] : ['CLOSE'], reversals: 0 } })

@@ -29,6 +29,10 @@ import {
   styleDraftAnswer,
   styleDraftBody,
   inquiryPictureView,
+  // B-TH-042
+  customerCheckView,
+  makeCustomerAnswer,
+  makeCustomerBody,
 } from '@nexus/factory-domain/sales/inquiries/contracts'
 
 /** The inquiries' contracts (B-W2b-295): the bodies and answers are factory-domain's sales/inquiries/contracts. */
@@ -57,3 +61,6 @@ export const styleDraftContract = defineContract({ params: inquiryParams, body: 
 export const assigneesContract = defineContract({ querystring: input({ companyId: id(), partyId: id().optional() }), response: { 200: assigneesView } })
 // B-TH-216 (Sales › Incoming): the Picture cell's small preview.
 export const inquiryPictureContract = defineContract({ params: inquiryParams, response: { 200: inquiryPictureView } })
+// B-TH-042: answer a new customer — the check, and the customer made or matched.
+export const customerCheckContract = defineContract({ params: inquiryParams, response: { 200: customerCheckView } })
+export const makeCustomerContract = defineContract({ params: inquiryParams, body: makeCustomerBody, response: { 200: makeCustomerAnswer } })

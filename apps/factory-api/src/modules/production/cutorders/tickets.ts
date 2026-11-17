@@ -202,8 +202,8 @@ export async function startTicket(caller: CommandCaller, body: { readonly code: 
     if (first) await tx.cutOrder.update({ where: { id: order.id }, data: { status: 'IN_PROGRESS', updatedAt: now, version: { increment: 1 } }, select: { id: true } })
     const after = (await readCutOrder(tx, order.id))!
     tools.audit({ action: 'production.startCutTicket', recordType: 'CutTicket', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { status: current.status }, after: { status: 'STARTED', cutOrder: after.number, cutOrderStatus: after.status } })
-    emitTicket(tools, after, { ...current, status: 'STARTED' }, 'STARTED', null)
-    if (first) emitOrder(tools, after, 'STARTED', workOrderIds)
+    await emitTicket(tools, after, { ...current, status: 'STARTED' }, 'STARTED', null)
+    if (first) await emitOrder(tools, after, 'STARTED', workOrderIds)
     return cardOf(tx, await ticketInCommand(tx, current.id))
   })
   return { ...result, replayed }
@@ -235,8 +235,8 @@ export async function finishTicket(caller: CommandCaller, body: { readonly code:
       before: { status: current.status, lay: lay ? lay.status : null },
       after: { status: 'DONE', lay: lay ? 'CUT' : null, cutOrder: after.number, cutOrderStatus: after.status },
     })
-    emitTicket(tools, after, { ...current, status: 'DONE' }, 'DONE', null)
-    if (cut) emitOrder(tools, after, 'CUT', [...new Set((await readLines(tx, [order.id])).map((line) => line.workOrderId))])
+    await emitTicket(tools, after, { ...current, status: 'DONE' }, 'DONE', null)
+    if (cut) await emitOrder(tools, after, 'CUT', [...new Set((await readLines(tx, [order.id])).map((line) => line.workOrderId))])
     return cardOf(tx, await ticketInCommand(tx, current.id))
   })
   return { ...result, replayed }
@@ -275,8 +275,8 @@ export async function voidTicket(caller: CommandCaller, ticketId: string, body: 
       replacement = await makeTicket(tools, order, current.layId)
     }
     tools.audit({ action: 'production.voidCutTicket', recordType: 'CutTicket', recordId: ticketId, companyId: current.companyId, siteId: current.siteId, before: { status: current.status }, after: { status: 'VOID', replacedBy: replacement?.number ?? null }, reason })
-    emitTicket(tools, order, { ...current, status: 'VOID' }, 'VOIDED', replacement?.id ?? null)
-    if (replacement) emitTicket(tools, order, replacement, 'MADE', null)
+    await emitTicket(tools, order, { ...current, status: 'VOID' }, 'VOIDED', replacement?.id ?? null)
+    if (replacement) await emitTicket(tools, order, replacement, 'MADE', null)
     const tickets = await tx.cutTicket.findMany({ where: { id: { in: [ticketId, ...(replacement ? [replacement.id] : [])] } }, select: TICKET_COLUMNS })
     const laySeq = current.layId ? ((await readLays(tx, [order.id])).find((row) => row.id === current.layId)?.seq ?? null) : null
     return { voided: ticketView(tickets.find((row) => row.id === ticketId)!, laySeq), replacement: replacement ? ticketView(tickets.find((row) => row.id === replacement!.id)!, laySeq) : null }
@@ -330,7 +330,7 @@ export async function printTicket(caller: CommandCaller, ticketId: string, body:
       const { tx, now } = tools
       await tx.cutTicket.update({ where: { id: ticket.id }, data: { printedAt: now, updatedAt: now }, select: { id: true } })
       tools.audit({ action: 'production.printCutTicket', recordType: 'CutTicket', recordId: ticket.id, companyId: ticket.companyId, siteId: ticket.siteId, after: { printedAt: now.toISOString(), jobId: queued.job!.id, copies } })
-      emitTicket(tools, order, ticket, 'PRINTED', null)
+      await emitTicket(tools, order, ticket, 'PRINTED', null)
       return ticketView(await ticketInCommand(tx, ticket.id), laySeq)
     })
     printed = result
