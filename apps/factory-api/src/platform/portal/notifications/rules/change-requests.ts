@@ -26,7 +26,9 @@ export const CHANGE_REQUEST_RULES: readonly PartnerRule[] = Object.freeze([
     name: 'portalNews.changeRequestAnswered',
     events: ['order_change_request.answered'],
     async drafts(context, raw) {
-      const event = answered.payload.parse(raw) as { requestId: string; orderId: string; kind: 'CHANGE' | 'CANCEL'; answer: 'ACCEPTED' | 'REFUSED' }
+      const event = answered.payload.parse(raw) as { requestId: string; orderId: string; kind: string; answer: 'ACCEPTED' | 'REFUSED' }
+      // B-PR-24: the event's kinds widened to the production asks; their answers are told by their own rule (B-PR-31).
+      if (event.kind !== 'CHANGE' && event.kind !== 'CANCEL') return []
       const order = await context.tx.salesOrder.findUnique({ where: { id: event.orderId }, select: { id: true, number: true, companyId: true, partyId: true, customerSeq: true } })
       if (!order) return []
       const place = { companyId: order.companyId, partyId: order.partyId }

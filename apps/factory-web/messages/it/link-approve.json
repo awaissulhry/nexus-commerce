@@ -25,7 +25,11 @@
     "ARTWORK": "Grafica",
     "PROOF": "Bozza del design",
     "REVISED_ORDER": "Ordine modificato",
-    "SIGNATURE": "Firma"
+    "SIGNATURE": "Firma",
+    "FABRIC": "Tessuto",
+    "TRIM": "Accessorio",
+    "REPROMISE": "Nuova data",
+    "COUNTER_OFFER": "Controproposta"
   },
   "state": {
     "OPEN": "In attesa di risposta",
@@ -53,7 +57,11 @@
         "SAMPLE": "Campione",
         "COLOUR": "Colore",
         "LEATHER": "Pellame",
-        "ARTWORK": "Grafica"
+        "ARTWORK": "Grafica",
+        "FABRIC": "Tessuto",
+        "TRIM": "Accessorio",
+        "REPROMISE": "Nuova data",
+        "COUNTER_OFFER": "Controproposta"
       },
       "hint": "Le foto e la scheda di ciò che {company} vi chiede di approvare. Aprite una foto a tutto schermo; segnatela per indicarci un punto."
     },

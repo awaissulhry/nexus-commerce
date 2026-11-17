@@ -3,6 +3,8 @@ import { daysFrom, plusDays } from '../../calendars/dates'
 import { businessDate as businessDateField, id, input, instant, output } from '../../core/contracts'
 import { isBusinessDate, type BusinessDate } from '../../core/time'
 import { isoWeekKey, weekStart } from '../../planning/settings/buckets'
+// B-PR-24: the one reading of planning's answer that leaves planning — a date only, never a load (shared with the customer's ask).
+import { dateOnly, type DatedLine } from '../../planning/promise/date-only'
 
 /**
  * B-TH-094 (threads plan TH-9, N17, X-G04; features O-SAL-INQ-LIST.list-F10 "a 'Production' column with his answer",
@@ -108,11 +110,8 @@ export type ProductionRefusalCode = keyof typeof PRODUCTION_REFUSAL_WORDS
 // ---- the suggestion from planning's promise read ----------------------------------------------------------------------
 
 /** One line as the promise engine answered it (its date: every size asked ready; null: none promised). */
-export interface DatedLine {
-  readonly date: BusinessDate | null
-  readonly complete: boolean
-  readonly meetsWanted: boolean | null
-}
+// B-PR-24: declared once in planning/promise/date-only, kept exported here.
+export type { DatedLine }
 
 /**
  * What planning's answer suggests: OK when every line was dated, completely, by the wanted date (or, with no wanted date, this
@@ -120,9 +119,9 @@ export interface DatedLine {
  * alone). A line left out (asked in words, no colour, no sizes) makes the suggestion partial: said, never OK.
  */
 export function suggestedAnswer(lines: readonly DatedLine[], leftOut: number, wantedDate: BusinessDate | null, today: BusinessDate): { readonly answer: ProductionAnswer | null; readonly notBefore: BusinessDate | null; readonly readyDate: BusinessDate | null; readonly partial: boolean; readonly words: Words } {
-  const dated = lines.flatMap((line) => (line.date ? [line.date] : []))
-  const partial = leftOut > 0 || lines.some((line) => !line.complete || line.date === null)
-  if (dated.length === 0) {
+  // B-PR-24: the shared reading — the latest line's date and whether it is partial, nothing else of planning's answer.
+  const { date: readyDate, partial } = dateOnly(lines, leftOut)
+  if (readyDate === null) {
     return {
       answer: null,
       notBefore: null,
@@ -131,7 +130,6 @@ export function suggestedAnswer(lines: readonly DatedLine[], leftOut: number, wa
       words: { it: 'La pianificazione non può datare questa richiesta (nessuna riga con modello, colore e taglie): rispondi tu.', en: 'Planning cannot date this request (no line with a style, a colour and sizes): answer it yourself.' },
     }
   }
-  const readyDate = dated.reduce((a, b) => (a > b ? a : b))
   const inTime = wantedDate !== null ? readyDate <= wantedDate : weekStart(readyDate) <= weekStart(today)
   const said = partial ? { it: ' Solo alcune righe sono datate.', en: ' Only some lines are dated.' } : { it: '', en: '' }
   if (inTime && !partial) {

@@ -26,8 +26,10 @@ import { APPROVAL_TASK_KINDS } from '@nexus/factory-domain/approvals/rules' // B
 import { GATE_KINDS } from '@nexus/factory-domain/planning/milestones/rules' // B-PR-23
 import { SWATCH_KINDS } from '@nexus/factory-domain/sales/sample-decisions/rules' // B-PR-23
 import { SAMPLE_KINDS } from '@nexus/factory-domain/sales/samples/rules' // B-PR-23
+import { APPROVAL_KINDS } from '@nexus/factory-domain/approvals-out/kinds' // B-PR-24
 import { DOCUMENT_TEMPLATE_KINDS } from '@nexus/factory-domain/templates/documents'
 import {
+  ApprovalKind, // B-PR-24
   ApprovalTaskKind,
   BrandHealth,
   BrandStage,
@@ -171,4 +173,6 @@ export const MIRRORS: readonly Mirror[] = Object.freeze([
   mirror('SwatchKind', SwatchKind, 'sales/sample-decisions/rules SWATCH_KINDS', SWATCH_KINDS, true),
   mirror('GateKind', GateKind, 'planning/milestones/rules GATE_KINDS', GATE_KINDS, true),
   mirror('ApprovalTaskKind', ApprovalTaskKind, 'approvals/rules APPROVAL_TASK_KINDS', APPROVAL_TASK_KINDS, true),
+  // B-PR-24: ApprovalKind (+ FABRIC, TRIM, REPROMISE, COUNTER_OFFER), one rule per kind in approvals-out/kinds KIND_RULES.
+  mirror('ApprovalKind', ApprovalKind, 'approvals-out/kinds APPROVAL_KINDS', APPROVAL_KINDS, true),
 ])
