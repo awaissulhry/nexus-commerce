@@ -15,7 +15,7 @@ import { floorOf, may } from './access'
 import { materialView, sortCards } from './board'
 import { attendanceOfDay, lineLoads, lineMinutesOf } from './facts'
 import { lineRowOf, siteRowOf, type Reader } from './store'
-import { cardAt, dispatchWorld, materialFlags, planView, type DayCard, type DispatchWorld, type MaterialFlags } from './world'
+import { cardAt, customerCodesOf, dispatchWorld, materialFlags, planView, type CustomerCodes, type DayCard, type DispatchWorld, type MaterialFlags } from './world'
 
 /**
  * The floor's side of dispatch (B-W2b-49):
@@ -34,11 +34,11 @@ import { cardAt, dispatchWorld, materialFlags, planView, type DayCard, type Disp
  * the clock through the tenant's system view, after the checks: the floor role reads none of them.
  */
 
-/** A card as a list entry (the W2a dispatch list's shape; a card with no slot names its row). */
-export function entryOfCard(card: DayCard, world: Pick<DispatchWorld, 'start' | 'end'>, flags: MaterialFlags) {
+/** A card as a list entry (the W2a dispatch list's shape; a card with no slot names its row); B-PR-11: its customer's code. */
+export function entryOfCard(card: DayCard, world: Pick<DispatchWorld, 'start' | 'end'>, flags: MaterialFlags, codes: CustomerCodes) {
   return {
     slotId: card.slot?.id ?? card.rows[0]?.id ?? card.operation.id,
-    workOrder: { id: card.workOrder.id, number: card.workOrder.number, status: card.workOrder.status, priority: card.workOrder.priority, rush: card.workOrder.rush, dueDate: card.workOrder.dueDate ? card.workOrder.dueDate.toISOString().slice(0, 10) : null, style: card.workOrder.style, holdReason: card.workOrder.holdReason },
+    workOrder: { id: card.workOrder.id, number: card.workOrder.number, status: card.workOrder.status, priority: card.workOrder.priority, rush: card.workOrder.rush, dueDate: card.workOrder.dueDate ? card.workOrder.dueDate.toISOString().slice(0, 10) : null, style: card.workOrder.style, holdReason: card.workOrder.holdReason, customerCode: codes.get(card.workOrder.id) ?? null },
     operation: { id: card.operation.id, seq: card.operation.seq, code: card.operation.code, name: card.operation.name },
     previous: card.previous ? { seq: card.previous.seq, code: card.previous.code, name: card.previous.name } : null,
     startAt: toUtcIso(card.slot?.startAt ?? world.start),
@@ -90,6 +90,8 @@ export async function myWork(caller: CommandCaller) {
   const { stationFor } = person
   const cards = sortCards(person.cards)
   const flags = await systemView(caller).withClient((db: Reader) => materialFlags(db, site, cards.map((card) => card.workOrder.id)))
+  // B-PR-11: the customers' codes through the tenant's system view (the floor role reads no party).
+  const codes = await systemView(caller).withClient((db: Reader) => customerCodesOf(db, cards.map((card) => card.workOrder.id)))
   // Their running or paused work comes first ("current one on top").
   const running = new Set(
     read.open.flatMap((place) => {
@@ -100,7 +102,7 @@ export async function myWork(caller: CommandCaller) {
   const entries = cards
     .map((card) => {
       const station = world.stations.find((row) => row.id === card.stationId) ?? stationFor(card)
-      return { ...entryOfCard(card, world, flags), station: station ? { id: station.id, code: station.code, name: station.name } : null, bundles: card.bundleIds.length, current: running.has(card.operation.id) }
+      return { ...entryOfCard(card, world, flags, codes), station: station ? { id: station.id, code: station.code, name: station.name } : null, bundles: card.bundleIds.length, current: running.has(card.operation.id) }
     })
     .sort((a, b) => Number(b.current) - Number(a.current))
   return { ...base, current: entries.find((entry) => entry.current) ?? null, next: nextOf(entries), entries, words: entries.length > 0 ? null : 'Everything assigned to you today is done.' }

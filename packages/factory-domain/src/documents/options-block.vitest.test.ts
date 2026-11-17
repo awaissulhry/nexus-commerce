@@ -113,6 +113,7 @@ describe('the options as paper prints them (B-W2b-374; XF3:03)', () => {
       style: { code: 'DEMO-JKT-05', name: 'Demo jacket' },
       revision: 1,
       orders: [],
+      customer: null, // B-PR-11
       splitFrom: null,
       note: null,
       holdReason: null,

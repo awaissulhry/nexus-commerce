@@ -43,6 +43,8 @@ const entryView = output({
     dueDate: businessDate().nullable(),
     style: output({ code: z.string(), name: z.string() }),
     holdReason: z.string().nullable(),
+    /** B-PR-11 (L13): the customer's CODE, never its name (several on a mixed work order made before the rule); null: none. */
+    customerCode: z.string().nullable(),
   }),
   operation: output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string() }),
   /** The operation before it on the work order (B-W2a-74: the floor says "Waiting for Op 20 …" in its own words); null: the first. */
@@ -137,7 +139,8 @@ const cardView = output({
   id: z.string(),
   /** What a move names as `from`. */
   key: z.string(),
-  workOrder: output({ id: id(), number: z.string(), status: z.string(), priority: z.number().int(), rush: z.boolean(), dueDate: businessDate().nullable(), style: output({ code: z.string(), name: z.string() }), holdReason: z.string().nullable() }),
+  /** B-PR-11 (L13): `customerCode` is the customer's CODE, never its name; null: none. */
+  workOrder: output({ id: id(), number: z.string(), status: z.string(), priority: z.number().int(), rush: z.boolean(), dueDate: businessDate().nullable(), style: output({ code: z.string(), name: z.string() }), holdReason: z.string().nullable(), customerCode: z.string().nullable() }),
   operation: output({ id: id(), seq: z.number().int(), code: z.string(), name: z.string(), workCentreId: id() }),
   previous: output({ seq: z.number().int(), code: z.string(), name: z.string() }).nullable(),
   /** B-W2b-88 (MES-025): the operations it runs side by side with (its parallel group); null: in sequence. */

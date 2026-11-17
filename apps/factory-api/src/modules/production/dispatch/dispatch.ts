@@ -19,7 +19,8 @@ import { materialView } from './board'
 import type { OfficeDispatchQuery } from './contract'
 import { entryOfCard, nextOf } from './mine'
 import { assignmentsOf } from './store'
-import { cardAt, dispatchWorld, materialFlags, NO_MATERIAL_FLAGS, plannedOperations, WORK_ORDER_SELECT, type MaterialFlags, type WorkOrderRow } from './world'
+import { assertEveryCustomer } from './access' // B-PR-07
+import { cardAt, customerCodesOf, dispatchWorld, materialFlags, NO_MATERIAL_FLAGS, plannedOperations, WORK_ORDER_SELECT, type CustomerCodes, type MaterialFlags, type WorkOrderRow } from './world'
 
 /**
  * The dispatch list per line or station (B-W2a-34; MES-021; design floor.mywork "Next" and "Then"; Owner answer P3): what
@@ -65,9 +66,11 @@ async function centreName(db: Reader, id: string | null) {
 }
 
 type FlagsOf = (workOrderIds: readonly string[]) => Promise<MaterialFlags>
+/** B-PR-11: the customers' codes of the listed work orders, read where the Party table is readable. */
+type CodesOf = (workOrderIds: readonly string[]) => Promise<CustomerCodes>
 
 /** The list of one target. */
-async function listFor(db: Reader, target: Target, now: Date, flagsOf: FlagsOf) {
+async function listFor(db: Reader, target: Target, now: Date, flagsOf: FlagsOf, codesOf: CodesOf) {
   const site = target.site
   const { current, upcoming } = await floorVersionsOf(db, site.id, now)
   const base = {
@@ -144,13 +147,15 @@ async function listFor(db: Reader, target: Target, now: Date, flagsOf: FlagsOf) 
   const touched = new Set((await assignmentsOf(db, site.id, today)).flatMap((row) => (row.workOrderOperationId ? [row.workOrderOperationId] : [])))
   const world = touched.size > 0 ? await dispatchWorld(db, site, today, now) : null
   const placed = world ? world.cards.filter((card) => touched.has(card.operation.id) && cardAt(card, target, stations)) : []
-  const flags = await flagsOf([...new Set([...entries.map((entry) => entry.view.workOrder.id), ...placed.map((card) => card.workOrder.id)])])
+  const listed = [...new Set([...entries.map((entry) => entry.view.workOrder.id), ...placed.map((card) => card.workOrder.id)])]
+  const flags = await flagsOf(listed)
+  const codes = await codesOf(listed) // B-PR-11: each work order's customer code (L13)
   const rows = [
-    ...entries.filter((entry) => !touched.has(entry.view.operation.id)).map((entry) => ({ key: entry.key, order: null as number | null, view: { ...entry.view, material: materialView(flags.of(entry.view.workOrder.id, entry.view.operation.id)) } })),
+    ...entries.filter((entry) => !touched.has(entry.view.operation.id)).map((entry) => ({ key: entry.key, order: null as number | null, view: { ...entry.view, workOrder: { ...entry.view.workOrder, customerCode: codes.get(entry.view.workOrder.id) ?? null }, material: materialView(flags.of(entry.view.workOrder.id, entry.view.operation.id)) } })),
     ...placed.map((card) => ({
       key: { rush: card.workOrder.rush, priority: card.workOrder.priority, dueDate: card.workOrder.dueDate ? dayOf(card.workOrder.dueDate) : null, startAt: card.slot?.startAt.getTime() ?? 0, seq: card.operation.seq, workOrderNumber: card.workOrder.number },
       order: card.order,
-      view: entryOfCard(card, world!, flags),
+      view: entryOfCard(card, world!, flags, codes),
     })),
   ]
   rows.sort((a, b) => laneFirst({ rush: a.key.rush ?? false, order: a.order }, { rush: b.key.rush ?? false, order: b.order }) || dispatchOrder(a.key, b.key))
@@ -189,8 +194,9 @@ export async function officeDispatch(caller: CommandCaller, query: OfficeDispatc
       if (row) target = { kind: 'STATION', id: row.id, code: row.code, name: row.name, lineId: row.lineId, workCentreId: row.workCentreId, site: row.site }
     }
     if (!target || !can(actorOf(context), WORKORDERS_VIEW, { companyId: target.site.companyId, siteId: target.site.id })) throw new NotFoundError(`${asked[0] === 'lineId' ? 'Line' : asked[0] === 'workCentreId' ? 'Work centre' : 'Station'} not found.`)
+    assertEveryCustomer(context, WORKORDERS_VIEW, { companyId: target.site.companyId, siteId: target.site.id }) // B-PR-07: a lane's list holds every customer's work
     const site = target.site
-    return listFor(db, target, now, (ids) => materialFlags(db, site, ids))
+    return listFor(db, target, now, (ids) => materialFlags(db, site, ids), (ids) => customerCodesOf(db, ids))
   })
 }
 
@@ -225,6 +231,6 @@ export async function stationDispatch(caller: CommandCaller, options: { readonly
         words: 'This tablet is not placed at a station: ask the office to place it at one. Scan a bundle to work on it.',
       }
     }
-    return listFor(db, { kind: 'STATION', id: station.id, code: station.code, name: station.name, lineId: station.lineId, workCentreId: station.workCentreId, site: device.site }, now, (ids) => (options.material === false ? Promise.resolve(NO_MATERIAL_FLAGS) : systemView(caller).withClient((system: Reader) => materialFlags(system, device.site, ids))))
+    return listFor(db, { kind: 'STATION', id: station.id, code: station.code, name: station.name, lineId: station.lineId, workCentreId: station.workCentreId, site: device.site }, now, (ids) => (options.material === false ? Promise.resolve(NO_MATERIAL_FLAGS) : systemView(caller).withClient((system: Reader) => materialFlags(system, device.site, ids))), (ids) => systemView(caller).withClient((system: Reader) => customerCodesOf(system, ids)))
   })
 }

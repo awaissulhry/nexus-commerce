@@ -6,6 +6,7 @@ import { pageLabel } from '@nexus/factory-domain/documents/compose'
 import type { DocumentLanguage } from '@nexus/factory-domain/documents/model'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { travellerPaper, type TravellerPaper, type TravellerTable } from '@nexus/factory-domain/production/work-orders/traveller'
+import { floorCustomer } from '@nexus/factory-domain/production/floor-customer' // B-PR-11
 import type { CommandCaller } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { PDF_CREATOR } from '../../../platform/documents/pdf'
@@ -31,7 +32,7 @@ import { cellsPrinted } from '../../sales/configurator/printed'
  *                                                                one the caller may not see → 404, nothing printed
  *
  * Made on request, stored nowhere (application/pdf, inline): the record is the truth and a new print is always current.
- * Per work order, operation and station: no person, no customer name, no money.
+ * Per work order, operation and station: no person, no customer name (its code only, B-PR-11), no money.
  */
 
 const REGULAR = FONT.regular
@@ -58,7 +59,10 @@ async function paperOf(db: Reader, row: Header, language: DocumentLanguage, now:
   const site = await db.site.findUniqueOrThrow({ where: { id: row.siteId }, select: { timezone: true } })
   const colourway = (code: string, name: string) => (name && name !== code ? `${code} · ${name}` : code)
   // B-W2b-374 (XF3:03): the options each cell is made with (its order line's, else the values it names), grouped by colour.
-  const cells = await db.workOrderSize.findMany({ where: { workOrderId: row.id }, select: { id: true, colourwayId: true, size: true, quantity: true, salesOrderLineId: true, optionValueIds: true } })
+  const cells = await db.workOrderSize.findMany({ where: { workOrderId: row.id }, select: { id: true, colourwayId: true, size: true, quantity: true, salesOrderLineId: true, optionValueIds: true, /* B-PR-11 */ partyId: true } })
+  // B-PR-11 (L13): the customer's CODE only — its one customer, else its cells' (a mixed work order made before the rule).
+  const customerIds = row.partyId ? [row.partyId] : [...new Set(cells.flatMap((cell) => (cell.partyId ? [cell.partyId] : [])))]
+  const customer = floorCustomer(customerIds.length === 0 ? [] : await db.party.findMany({ where: { id: { in: customerIds } }, select: { code: true } }))
   const printed = await cellsPrinted(db, cells, language)
   const colourwayNames = new Map(view.cells.map((cell) => [cell.colourwayId, colourway(cell.colourwayCode, cell.colourwayName)]))
   const options = groupCellsByOptions(
@@ -78,6 +82,7 @@ async function paperOf(db: Reader, row: Header, language: DocumentLanguage, now:
       style: { code: view.style.code, name: view.style.name },
       revision: view.revision?.revision ?? null,
       orders: view.orders.map((order) => order.number),
+      customer, // B-PR-11
       splitFrom: view.splitFrom?.number ?? null,
       note: view.note,
       holdReason: view.hold?.reason ?? null,
@@ -102,9 +107,16 @@ export async function travellerPdf(caller: CommandCaller, workOrderId: string, l
 
 /** GET …/travellers?ids=: the travellers of several work orders in one PDF, each one the caller may see (else 404). */
 export async function travellersPdf(caller: CommandCaller, workOrderIds: readonly string[], language: DocumentLanguage = 'it'): Promise<{ pdf: Buffer; fileName: string }> {
+  const papers = await travellerPapers(caller, workOrderIds, language)
+  const fileName = papers.length === 1 ? `${papers[0]!.meta.title}.pdf` : `${papers[0]!.title} (${papers.length}).pdf`
+  return { pdf: await renderTravellers(papers), fileName }
+}
+
+/** What the travellers of the work orders print (the PDF's content: B-PR-11's floor test reads it), each one the caller may see. */
+export async function travellerPapers(caller: CommandCaller, workOrderIds: readonly string[], language: DocumentLanguage = 'it'): Promise<TravellerPaper[]> {
   const context = officeContextOf(caller)
   const now = serverClock.now()
-  const papers = await caller.withClient(async (client) => {
+  return caller.withClient(async (client) => {
     const out: TravellerPaper[] = []
     for (const workOrderId of workOrderIds) {
       const row = await readWorkOrder(client, workOrderId)
@@ -118,8 +130,6 @@ export async function travellersPdf(caller: CommandCaller, workOrderIds: readonl
     }
     return out
   })
-  const fileName = papers.length === 1 ? `${papers[0]!.meta.title}.pdf` : `${papers[0]!.title} (${papers.length}).pdf`
-  return { pdf: await renderTravellers(papers), fileName }
 }
 
 /** The PDF of one or more travellers (each from a new page; page numbers count per traveller). */
