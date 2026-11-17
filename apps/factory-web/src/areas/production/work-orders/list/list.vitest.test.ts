@@ -300,3 +300,33 @@ describe('F-PR-18 — Work orders: the Customer urgency column and filter', () =
   })
 })
 // ---- end F-PR-18
+
+// ---- F-PR-04: the Overview's numbers open this list with their filters (B-PR-33's list terms gate, mixed; F-PR-04's noCustomer) ----
+describe('F-PR-04 — the Overview’s flags: blocked by a gate, made before the rule, the work of no customer', () => {
+  it('reads them, writes them by the API’s names (the export follows), and sends them to the API', () => {
+    const read = terms('gate=true&mixed=true&noCustomer=true&risk=LATE')
+    expect(read).toMatchObject({ gate: true, mixed: true, noCustomer: true, risk: 'LATE' })
+    expect(terms('gate=yes&mixed=1')).toMatchObject({ gate: false, mixed: false, noCustomer: false })
+    expect(listAddress('/p', read)).toBe('/p?sort=risk&risk=LATE&gate=true&mixed=true&noCustomer=true')
+    expect(terms(listAddress('/p', read).split('?')[1]!)).toEqual(read)
+    expect(listQueryOf(read)).toMatchObject({ open: true, gate: true, mixed: true, noCustomer: true, risk: 'LATE' })
+    expect(listQueryOf(terms(''))).toMatchObject({ gate: undefined, mixed: undefined, noCustomer: undefined })
+  })
+
+  it('each is a chip: it narrows the list, Clear filters takes it off, a second press takes it away', () => {
+    expect(narrowed(terms('gate=true'))).toBe(true)
+    expect(narrowed(terms('noCustomer=true'))).toBe(true)
+    expect(cleared(terms('gate=true&mixed=true&noCustomer=true'))).toMatchObject({ gate: false, mixed: false, noCustomer: false })
+    expect(filterChange('gate', 'true')).toEqual({ gate: true })
+    expect(filterChange('mixed', null)).toEqual({ mixed: false })
+    expect(filterChange('noCustomer', 'true')).toEqual({ noCustomer: true })
+  })
+
+  it('the API takes the same terms (B-PR-33’s gate and mixed, F-PR-04’s noCustomer) and the export reads them', () => {
+    const contract = readFileSync(new URL('../../../../../../factory-api/src/modules/production/work-orders/contract.ts', import.meta.url), 'utf8')
+    for (const term of ['gate', 'mixed', 'noCustomer']) expect(contract, term).toContain(`${term}: z.enum(['true', 'false'])`)
+    const exported = readFileSync(new URL('../../../../../../factory-api/src/platform/exports/sources/work-orders.ts', import.meta.url), 'utf8')
+    for (const term of ['gate', 'mixed', 'noCustomer']) expect(exported, term).toContain(`address.get('${term}') === 'true'`)
+  })
+})
+// ---- end F-PR-04

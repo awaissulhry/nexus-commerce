@@ -138,6 +138,14 @@ export interface ListQuery {
   supervisor?: 'me' | undefined
   /** F-PR-18: the work orders of one Customer urgency state (a computed filter of the API). */
   customerUrgency?: CustomerUrgencyState | undefined
+  // ── F-PR-04 (the Overview's numbers open this list with their filters; B-PR-33's list terms) ──
+  /** Production work orders not started whose open order waits on a gate. */
+  gate?: boolean | undefined
+  /** Made before the one-customer rule with cells of several customers ("Mixed customers (made before the rule)"). */
+  mixed?: boolean | undefined
+  /** The work of no customer (a sample for no customer). */
+  noCustomer?: boolean | undefined
+  // ── end F-PR-04
 }
 type WaitingOnTerm = (typeof WAITING_ON_LIST)[number]
 
@@ -163,6 +171,10 @@ export function listWorkOrders(api: ApiClient, query: ListQuery, signal?: AbortS
       supervisor: query.supervisor,
       // F-PR-18: the Customer urgency filter.
       customerUrgency: query.customerUrgency,
+      // F-PR-04: the Overview's gate, mixed and no-customer numbers.
+      gate: query.gate ? 'true' : undefined,
+      mixed: query.mixed ? 'true' : undefined,
+      noCustomer: query.noCustomer ? 'true' : undefined,
     },
     schema: listSchema,
     signal,

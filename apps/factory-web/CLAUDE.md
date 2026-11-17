@@ -562,6 +562,13 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (band ⋯ and the supervisor fact's Ask) and Note to N (Work orders: row ⋯, "Note to N…" ≤ 100): the threads MentionInput (people read
   once per customer + company), `POST /production/notes/check` before Send (who cannot read, customers, the other-customer hold until
   the tick), ONE `POST /production/notes`, one result per record (the rest counted); the bell's batch row "mentioned you on N orders".
+- F-PR-04 `src/areas/production/overview/` (catalogue `production` `ovw.*`, CSS `fw-pov-`, SCR-069-overview) — Production › Overview,
+  the area's FIRST page (`/production/overview`; `/production` opens it as the first built row): GET /production/overview (B-PR-33) +
+  the open issues (GET /production/issues, B-PR-45). Six tiles, Exceptions by customer (+ the mixed row, the no-customer row, the Total =
+  the API's `overall`, never a sum made here), WIP by stage × customer, Most urgent "10 of N · Show all" (row ⋯ Ask the supervisor = THE
+  note dialog over that work order, read once), open issues. `?party=` (the one customer filter) and Only mine `?supervisor=me` are
+  carried to every door: `model.ts workOrdersDoor` = the Work orders list's own address (`list/model.ts listAddress`: + `?gate=true`,
+  `?mixed=true`, `?noCustomer=true`, each a chip there); Customer requests opens Home › Approvals `?kind=ORDER_CHANGE_REQUEST`.
 - F-PR-05b `src/areas/production/work-orders/record/customer/` (catalogue `production` `customerCard.*`, the level and section words
   `portal-access`; CSS `fw-pcc-`) — the work order record's Customer card on Overview, one block per customer of the work order (PW-07):
   its requests (`GET /production/brand-requests?orderId=`, Answer in Approvals = `/home/approvals?open=<id>`), what we asked it to
