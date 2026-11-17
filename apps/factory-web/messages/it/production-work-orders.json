@@ -133,7 +133,6 @@
     "title": "Capi finiti a magazzino",
     "report_one": "Carica {count} capo finito",
     "report_other": "Carica {count} capi finiti",
-    "reportNone": "Carica capi finiti",
     "pieces": "Capi",
     "released": "Rilasciati dalla qualità",
     "inStock": "Nei prodotti finiti",
@@ -224,17 +223,6 @@
     "hint": "Contati dalle scansioni del reparto e dagli ordini di rilavorazione; per operazione, mai per persona."
   },
   "flow": {
-    "title": "Flusso delle operazioni",
-    "hint": "La pila in attesa davanti a ogni operazione.",
-    "waiting": "in attesa",
-    "waitingLabel_one": "{count} capo in attesa davanti a {code}",
-    "waitingLabel_other": "{count} capi in attesa davanti a {code}",
-    "good_one": "{count} buono",
-    "good_other": "{count} buoni",
-    "scrap_one": "{count} scarto",
-    "scrap_other": "{count} scarti",
-    "rework_one": "{count} da rilavorare",
-    "rework_other": "{count} da rilavorare",
     "bottleneck": "Pila più grande"
   },
   "reserve": {

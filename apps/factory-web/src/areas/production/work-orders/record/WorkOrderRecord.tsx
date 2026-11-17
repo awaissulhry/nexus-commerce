@@ -72,6 +72,9 @@ import { openPreview } from '../../../admin/users/partners/preview'
 // F-PR-21: the band's supervisor fact and its Change… (THE assign dialog over the work order's orders).
 import { targetsOfRecord } from '../../../_shared/production-supervisor/model'
 import { useAssignSupervisor } from '../../../_shared/production-supervisor/use-assign-supervisor'
+// ---- F-PR-06: Cutting & bundles — the Cut record's recuts (Mark cut) and the cut orders of this work order ----
+import { useCutParts } from '../cutting/use-cut-parts'
+// ---- end F-PR-06
 
 /**
  * `/w/<company>/production/work-orders/<id>` (SCR-070 … SCR-072): loads the work order (workorders.view; the API checks
@@ -431,6 +434,13 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   // theirs: the record frame's slot (the tab bodies stay the production lane's).
   const fields = value && tab === 'overview' ? <RecordCustomFields record={{ type: 'WorkOrder', id: value.id }} title={value.number} /> : null
   // ---- end B-TH-280
+  // ---- F-PR-06: what the Cut record read beside the work order's parts, read while Cutting & bundles shows (only this work order's
+  // id and number are sent); a recut marked cut says so and reads the work order again.
+  const cutParts = useCutParts(api, value, session.permissions, tab === 'cutting', (words) => {
+    setNotice({ tone: 'success', words })
+    reread()
+  })
+  // ---- end F-PR-06
 
   const model: WorkOrderRecordModel = {
     prefix,
@@ -478,6 +488,9 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
     partiesView: session.permissions.includes('parties.view'),
     // F-PR-21
     supervisor: { can: session.permissions.includes('production.brand.manage'), assign: assign.model },
+    // F-PR-06
+    cut: cutParts.model,
+    shareReports: session.permissions.includes('quality.documents.share'),
   }
 
   return (
@@ -625,13 +638,16 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         onPreview: preview,
         // F-PR-21
         supervisor: { ...assign.actions, onOpen: openAssign },
+        // ---- F-PR-06: the recuts' Mark cut; the bundles waiting at an operation are on Cutting & bundles (was ?tab=bundles) ----
+        cut: cutParts.actions,
         onWaitingAt: (seq) => {
           const query = new URLSearchParams(params?.toString() ?? '')
-          query.set('tab', 'bundles')
+          query.set('tab', 'cutting')
           if (seq === null) query.delete('at')
           else query.set('at', String(seq))
           router.replace(`${pathname}?${query.toString()}`)
         },
+        // ---- end F-PR-06
       }}
     />
   )

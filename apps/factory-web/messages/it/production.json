@@ -201,8 +201,7 @@
   "tab": {
     "overview": "Riepilogo e rilascio",
     "materials": "Materiali",
-    "cutting": "Taglio",
-    "bundles": "Fasci",
+    "cutting": "Taglio e fasci",
     "operations": "Fasi e WIP",
     "quality": "Qualità",
     "labour": "Manodopera e costo",
@@ -437,9 +436,6 @@
   },
   "cutting": {
     "what": "Il registro di taglio per pelle inizia",
-    "plan": "Taglio rispetto al piano",
-    "planHint": "Un capo conta come tagliato quando ogni parte da pelle è tagliata.",
-    "readyToBundle": "Pronto per i fasci",
     "partPieces": "{part} {pieces}",
     "hides": "Pelli",
     "noHides": "Ancora nessuna pelle prelevata.",
@@ -462,7 +458,6 @@
       "cell": "Variante · taglia",
       "quantity": "Da fare",
       "cut": "Tagliati",
-      "toCut": "Da tagliare",
       "parts": "Pezzi per parte",
       "pieces": "Pezzi",
       "area": "Area usata",
@@ -496,7 +491,24 @@
     "correctionOf": "Questa voce corregge il taglio del {when}; il motivo è nella cronologia.",
     "noWorker": "Non registrato in questa sede",
     "workerHidden": "Su questo dato c'è una persona. Il nome compare solo dove la base giuridica della sede è in vigore.",
-    "workerHiddenShort": "Su questo dato c'è una persona"
+    "workerHiddenShort": "Su questo dato c'è una persona",
+    "cells": {
+      "title": "Tagliato e in fasci per taglia × colore",
+      "col": {
+        "planned": "Previsti",
+        "short": "Mancanti"
+      },
+      "part": "{part} {cut} di {planned}",
+      "partExtra": "{part} {cut}, fuori piano",
+      "partShort": "{count} mancanti",
+      "partRecut": "{count} da ritagliare",
+      "toBundle": "{count} da mettere in fasci",
+      "cutInFull": "Tagliato tutto",
+      "total": "Totale",
+      "hint": "Mancanti: capi non ancora tagliati rispetto al piano. In fasci: capi nei fasci attivi; un fascio di parti conta i suoi pezzi a parte."
+    },
+    "sharedWith_one": "Condiviso con un altro ordine di lavoro: {numbers}",
+    "sharedWith_other": "Condiviso con altri {count} ordini di lavoro: {numbers}"
   },
   "hideState": {
     "FULL": "Intera",
@@ -517,12 +529,8 @@
     "go": "Correggi voce"
   },
   "bundles": {
-    "what": "I fasci si creano al tavolo di taglio",
-    "cells": "Tagliati e in fasci",
-    "cellsHint": "Capi interi; un fascio di parti conta i suoi pezzi a parte.",
     "col": {
       "bundled": "In fasci",
-      "toBundle": "Da affasciare",
       "code": "Fascio",
       "where": "Dove si trova",
       "last": "Ultima scansione",
@@ -647,9 +655,6 @@
     "plannedHint": "Ogni passo del ciclo su un centro di lavoro della sede; congelato al rilascio.",
     "readyToComplete": "Ogni capo è finito: completa l'ordine.",
     "title": "Fasi e lavoro in corso",
-    "viewLabel": "Conta per",
-    "byOperation": "Per fase",
-    "bySize": "Buoni per taglia",
     "final": "Finale",
     "sewn": "Cucito qui",
     "bundleCounts": "{done} fatti · {waiting} in attesa · {notReached} non ancora",
@@ -665,7 +670,12 @@
     "toToday": "Apri Oggi",
     "toLabour": "Apri Manodopera e rettifiche",
     "correctionsHint": "La scansione originale resta; una correzione approvata aggiunge una riga.",
-    "unplanned": "Fuori ciclo"
+    "unplanned": "Fuori ciclo",
+    "sizes": "Per taglia ({count})",
+    "sizesOf": "{operation} per taglia",
+    "noSizes": "Non scansionata: nessun conteggio per taglia.",
+    "outsourced": "Presso un laboratorio",
+    "outsourcedHint": "Contata dalle scansioni di ciò che è rientrato."
   },
   "quality": {
     "what": "I controlli finali iniziano",
@@ -689,10 +699,19 @@
       "size": "Variante · taglia",
       "pieces": "Pezzi",
       "labels": "Etichette stampate",
-      "releasable": "Rilasciabili"
+      "releasable": "Rilasciabili",
+      "report": "Rapporto"
     },
     "sizes": "Rilasciati per taglia",
-    "hint": "I capi rilasciati si possono spedire. Controllo e rilascio si fanno in Qualità e al banco di controllo."
+    "hint": "I capi rilasciati si possono spedire. Controllo e rilascio si fanno in Qualità e al banco di controllo.",
+    "share": {
+      "open": "Condividi con il cliente…",
+      "mixed": "Ordine misto: non per un cliente",
+      "noCustomer": "Ordine per magazzino: nessun cliente con cui condividere",
+      "noResult": "Si condivide quando il controllo ha un esito",
+      "noRight": "Il tuo ruolo non può condividere i rapporti di qualità"
+    },
+    "scrapPage": "Sostituisci i capi scartati in Scarti e rilavorazioni"
   },
   "release": {
     "title": "Rilascia {number}",
@@ -740,7 +759,8 @@
     "cancelled": "Annullato.",
     "saved": "Salvato.",
     "sizesSaved": "Taglie salvate.",
-    "corrected": "Corretto: una voce speculare è nel registro."
+    "corrected": "Corretto: una voce speculare è nel registro.",
+    "recutDone": "Il ritaglio risulta tagliato."
   },
   "error": {
     "read": "Nexus Factory non ha risposto come previsto: riprova.",
@@ -1203,5 +1223,13 @@
     "menu": "Conversazioni degli ordini ({count})",
     "menuLabel": "Scegli la conversazione di uno dei {count} ordini",
     "hint": "Mostra la conversazione dell'ordine accanto all'ordine di produzione: condivisa con {customer}."
+  },
+  "scrapValue": {
+    "title": "Valore degli scarti",
+    "loading": "Lettura del valore degli scarti…",
+    "failed": "Impossibile leggere il valore degli scarti.",
+    "none": "Niente scartato né rilavorato.",
+    "unknown": "Non noto: una rilavorazione non ha un costo al minuto in vigore.",
+    "toQuality": "Scarti e motivi: Qualità"
   }
 }

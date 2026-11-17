@@ -284,7 +284,6 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
             { id: 'open', label: t('list.open'), href: href(data) },
             { id: 'tab', label: t('list.openNewTab'), href: href(data), target: '_blank' },
             { id: 'cutting', label: t('tab.cutting'), href: `${href(data)}?tab=cutting` },
-            { id: 'bundles', label: t('tab.bundles'), href: `${href(data)}?tab=bundles` },
             { id: 'traveller', label: ts('docs.openTraveller'), href: travellersHref(model.prefix, [data.id]), target: '_blank' },
           ]}
         />

@@ -10,9 +10,11 @@ import { useLocale, useScopedT, useT } from '../../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../../record-panels/i18n'
 import type { WorkOrder } from '../../../_shared/api'
 import { isWideTab, mayCancel, nextStep, openChecks, RECORD_TABS, STATUS_TONE, type RecordTab } from '../../../_shared/model'
-import { BundlesTab } from '../../bundles/view/BundlesTab'
+// ---- F-PR-06: the tabs 7 → 6 — Cutting & bundles (one tab; the Cut record merged in), Operations & WIP (one table) ----
 import { CuttingTab } from '../../cutting/view/CuttingTab'
+import { cuttingTabCount } from '../../cutting/model'
 import { OperationsTab } from '../../progress/view/OperationsTab'
+// ---- end F-PR-06
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 import { RecordDialogs } from './Dialogs'
 import { DAILY_NAMESPACE, holdHeld, holdReasonWords } from '../../daily/model'
@@ -55,10 +57,11 @@ export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-mod
  * — Release → Start → Complete → Close, held with its reason — beside Put on hold / Release the hold; the thread (⌘J); ⋯ Split, Print
  * traveller, the style revision, Change request, Cancel, Copy number and the Keyboard line), the work order's thread docked beside
  * every tab (its own notes, never shareable with a customer, a note may go to the floor; one of its orders' threads picked beside it;
- * Activity's tools in the thread's "⋯", R-ACT), ONE notice in the body column, and the tabs 9 → 7: Overview (release check or frozen
- * spec, facts, the size run with cut / bundled / sewn / finished per cell), Materials (planned and issued, the pick list), Cutting
- * (SCR-071), Bundles and Operations (SCR-072), Quality (read-only), Labour & cost. Documents went into the band's ⋯ (R-7), Activity
- * into the docked thread; every old ?tab= keeps working (R-8). Totals per work order, operation or line only; no money.
+ * Activity's tools in the thread's "⋯", R-ACT), ONE notice in the body column, and the tabs 9 → 7 → 6 (F-PR-06): Overview (release
+ * check or frozen spec, facts, the size run with cut / bundled / sewn / finished per cell), Materials (planned and issued, the pick
+ * list), Cutting & bundles (SCR-071: Cutting and Bundles as one tab, the Cut record merged in), Operations & WIP (SCR-072, one
+ * table), Quality (the one scrap home), Labour & cost. Documents went into the band's ⋯ (R-7), Activity into the docked thread;
+ * every old ?tab= keeps working (R-8; ?tab=bundles opens Cutting & bundles). Totals per work order, operation or line only; no money.
  */
 // B-TH-265: `thread` is the docked thread (the container's WorkOrderThreads with the office's OfficeRecordThread, or a design case's);
 // `printThread` what the print view shows of it.
@@ -159,12 +162,11 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
   })
 
   const checksOpen = workOrder.status === 'DRAFT' ? openChecks(model.check.value) : 0
-  const liveEntries = model.cutLog.value?.entries.filter((entry) => entry.live && !entry.reversalOfId).length ?? null
-  const activeBundles = model.bundles.value?.bundles.filter((bundle) => bundle.status === 'ACTIVE').length ?? null
   const tabCount = (tab: RecordTab): number | null => {
     if (tab === 'materials') return workOrder.spec.materials.length
-    if (tab === 'cutting') return liveEntries
-    if (tab === 'bundles') return activeBundles
+    // ---- F-PR-06: Cutting & bundles counts the bundles live on the floor (the cut log is a history: no count of its own).
+    if (tab === 'cutting') return cuttingTabCount(model.bundles.value)
+    // ---- end F-PR-06
     if (tab === 'operations') return workOrder.spec.operations.length
     if (tab === 'quality') return model.quality?.value?.inspections.length ?? null
     return null
@@ -370,8 +372,9 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
 
         {model.tab === 'overview' && <OverviewTab workOrder={workOrder} model={model} actions={actions} />}
         {model.tab === 'materials' && <MaterialsTab workOrder={workOrder} model={model} actions={actions} />}
+        {/* ---- F-PR-06: Cutting & bundles is ONE tab (an old ?tab=bundles lands here) ---- */}
         {model.tab === 'cutting' && <CuttingTab workOrder={workOrder} model={model} actions={actions} />}
-        {model.tab === 'bundles' && <BundlesTab workOrder={workOrder} model={model} actions={actions} />}
+        {/* ---- end F-PR-06 */}
         {model.tab === 'operations' && <OperationsTab workOrder={workOrder} model={model} actions={actions} />}
         {model.tab === 'quality' && <QualityTab workOrder={workOrder} model={model} actions={actions} />}
         {model.tab === 'labour' && (
@@ -384,6 +387,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }:
             minutes={minutesOf(workOrder, model.wip.value)}
             labourHref={model.can.labour ? `${model.prefix}/production/labour` : null}
             variance={model.variance ? <VarianceAtClose model={model.variance} onRetry={actions?.onRetryVariance} /> : null}
+            qualityHref={`${recordHref}?tab=quality` /* F-PR-06: the one scrap value line's door to the scrap home */}
           />
         )}
       </div>

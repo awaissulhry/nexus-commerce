@@ -33,7 +33,7 @@ import type { HealthModel } from './health/model'
  * the docked thread beside every tab (B-TH-265: the work order's own notes, or an order's thread picked beside it; Activity went,
  * its tools in the thread's "⋯"), Order files (agreement T9), a change while editing, and the states (loading, error, not found, no
  * permission). Roles: Owner, Production manager, Team leader (floor supervisor in the Office), Sales (read-only).
- * Cutting is SCR-071, Bundles and Operations SCR-072. B-W2b-130: Materials › Leather — each leather's shade lots with the hides
+ * Cutting & bundles is SCR-071, Operations & WIP SCR-072 (F-PR-06: Cutting and Bundles are one tab). B-W2b-130: Materials › Leather — each leather's shade lots with the hides
  * held, reserved and cut, and the one shade lot rule in words (one lot, none yet, mixed against the rule, mixed where the rule is
  * per garment, out of shade), with its states.
  */
@@ -244,7 +244,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     // ---- B-TH-265: the docked thread (the rule of picture 38) and the order files (agreement T9) ----
     {
       id: 'thread-docked',
-      label: 'B-TH-265 · The work order’s notes docked beside Overview (40 %; one third on Cutting and Bundles under 1600 px)',
+      label: 'B-TH-265 · The work order’s notes docked beside Overview (40 %; one third on Cutting & bundles under 1600 px)',
       model: recordCase('manager', 'IN_PROGRESS'),
       note: 'The band sits in the shell’s band row with ONE status pill; the thread is docked, sticky, ⌘J hides it. The work order’s own thread has no party: Office notes only (never shared with a customer), a note may go to the tablets with its “For the floor” tick. Its “⋯” holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me). An old ?tab=activity opens Overview with the thread; ?tab=documents opens Overview (the traveller and the style revision are in the band’s ⋯).',
     },
@@ -327,6 +327,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'w2a-scrap-none', label: 'W2a · Quality: no scrap and no rework yet', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', daily: dailyFor('manager', 'IN_PROGRESS', { scrap: { value: [], problem: null } }) }) },
     { id: 'w2a-scrap-loading', label: 'W2a · Quality: scrap and rework loading', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', daily: dailyFor('manager', 'IN_PROGRESS', { scrap: { value: null, problem: null } }) }) },
     { id: 'w2a-scrap-error', label: 'W2a · Quality: scrap and rework could not be read (Try again)', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', daily: dailyFor('manager', 'IN_PROGRESS', { scrap: { value: null, problem: 'problem.read' } }) }) },
+    // ---- F-PR-06: Quality is the one scrap home; Share with the customer held on a mixed work order ----
+    { id: 'quality-share', label: 'F-PR-06 · Quality: a final inspection’s report — Share with the customer… (its window, a new tab); the scrap home with its door to Scrap & rework', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', shareReports: true }) },
+    { id: 'quality-share-mixed', label: 'F-PR-06 · A work order of several customers (made before the rule): Share held — “Mixed work order: not for a customer”', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality', shareReports: true, workOrder: { status: 'ready', value: workOrder('IN_PROGRESS', { partyId: null, customer: null, mixedCustomers: true }) } }) },
+    { id: 'quality-share-no-right', label: 'F-PR-06 · Without quality.documents.share: Share held, said in words', model: recordCase('manager', 'IN_PROGRESS', { tab: 'quality' }) },
+    // ---- end F-PR-06
     // ---- B-W2a-72: Labour & cost (the work order's cost from the ledger; the cost grain only; never per person) ----
     { id: 'w2a-labour', label: 'W2a · Labour & cost: planned · actual · variance · per garment, the bridge, materials per lot, labour per operation', model: recordCase('owner', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('finance', LABOUR) }), note: 'Standard 4,600.00, actual so far 5,028.00 (+428.00): material +508.00 (price +196.00, usage +312.00), labour −80.00 (3,680 of 4,000 standard minutes earned).' },
     { id: 'w2a-labour-no-cost', label: 'W2a · Labour & cost · Production manager (no cost grain): the whole section needs money.cost, said in words', model: recordCase('manager', 'IN_PROGRESS', { tab: 'labour', labour: labourAs('manager', null) }) },

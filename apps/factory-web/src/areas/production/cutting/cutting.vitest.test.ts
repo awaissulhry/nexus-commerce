@@ -9,37 +9,29 @@ import { createTranslator, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
 import { LIST_PAGES, listAddress } from '../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
-import { CUT_STATES, CUT_VIEWS, getRecuts, listCuts, recutDone, voidBundle } from './api'
-import { AVAILABILITY, BUNDLES, canAs, CUT_LOG, CUTTING, EMPTY_LOG, EMPTY_YIELD, HELD, HELD_WORK_ORDER, RECUTS, TILES, WAITING, WORK_ORDER, WORK_ORDER_YIELD, YIELD_TODAY } from './demo/fixtures'
+import { CUT_STATES, CUT_VIEWS, getRecuts, listCuts, recutDone } from './api'
+import { AVAILABILITY, canAs, CUT_LOG, CUTTING, EMPTY_LOG, HELD, RECUTS, TILES, WAITING, WORK_ORDER_YIELD, YIELD_TODAY } from './demo/fixtures'
 import { designScreen as listScreen } from './fixtures'
 import {
   addressOf,
   addressText,
   allocateHeld,
-  cutOf,
-  cutStateOf,
   lotYields,
   piecesMatrix,
   recutEntries,
   recutHeld,
-  reprintHeld,
   romeDayStart,
-  tabOf,
-  ticketLines,
   ticketsHeld,
   tileValue,
   usedText,
-  voidHeld,
   writeProblem,
 } from './model'
-import { designScreen as recordScreen } from './record/fixtures'
 import { rightRef } from '../../../lib/i18n/rights'
 
 /**
- * Production › Cutting (SCR-238 and the Cut record; B-W2a-60): the pure rules (the address, the tiles, a cut's state,
- * New cut order and Allocate hides held with why, the pieces matrix with its recuts, a recut's entries, the yield per
- * lot summed before the percentage, the tickets' print state and what holds a reprint or a void, refusals in our
- * words), the calls as the API of B-W1-40 / B-W2a-13 / B-W2a-60 takes them, the page in the map, and every design case
+ * Production › Cutting (SCR-238; B-W2a-60): the pure rules (the address, the tiles, New cut order and Allocate hides held
+ * with why, the pieces matrix with its recuts and a recut's entries — F-PR-06: drawn on the work order's Cutting & bundles
+ * tab, where the Cut record merged —, the yield per lot summed before the percentage, refusals in our words), the calls as the API of B-W1-40 / B-W2a-13 / B-W2a-60 takes them, the page in the map, and every design case
  * drawn in Italian and English with no message key or placeholder left on screen.
  */
 
@@ -69,12 +61,7 @@ describe('the cutting office: address, tiles, states', () => {
     expect(usedText([], 'en')).toBe('—')
   })
 
-  it('a cut stands where the API says (held, cut, waiting, cutting)', () => {
-    expect(cutStateOf('ON_HOLD', [{ toCut: 0 }], 3)).toBe('HELD')
-    expect(cutStateOf('COMPLETED', [{ toCut: 4 }], 0)).toBe('CUT')
-    expect(cutStateOf('IN_PROGRESS', [{ toCut: 0 }, { toCut: null }], 2)).toBe('CUT')
-    expect(cutStateOf('RELEASED', [{ toCut: 2 }], 0)).toBe('WAITING')
-    expect(cutStateOf('IN_PROGRESS', [{ toCut: 2 }], 1)).toBe('CUTTING')
+  it('a cut stands where the API says (waiting, cutting, cut, held)', () => {
     expect(CUT_STATES).toEqual(['WAITING', 'CUTTING', 'CUT', 'HELD'])
   })
 
@@ -103,17 +90,7 @@ describe('Allocate hides and Print tickets', () => {
   })
 })
 
-describe('the cut record', () => {
-  it('builds the cut from its work order, cut log and yield', () => {
-    const cut = cutOf(WORK_ORDER, CUT_LOG, WORK_ORDER_YIELD, 2)
-    expect(cut).toMatchObject({ state: 'CUTTING', garments: { planned: 24, cut: 10, toCut: 14 }, pieces: { planned: 72, cut: 31 }, allocated: 2, hides: { count: 4 }, stations: [{ code: 'TAV-01' }] })
-    expect(cut.materials).toEqual([expect.objectContaining({ code: 'DEMO-LEA-100', colourCode: 'NER', baseUom: 'FT2' })])
-    expect(cutOf(HELD_WORK_ORDER, CUT_LOG, WORK_ORDER_YIELD, 0)).toMatchObject({ state: 'HELD', workOrder: { holdReason: 'Shade differs from the approved sample' } })
-    expect(cutOf(WORK_ORDER, EMPTY_LOG, EMPTY_YIELD, 0).state).toBe('WAITING')
-    expect(tabOf('yield')).toBe('yield')
-    expect(tabOf('nonsense')).toBe('lay')
-  })
-
+describe('a work order\'s cut (F-PR-06: its Cutting & bundles tab)', () => {
   it('pieces by part and size: cut / planned, short, and the open recuts of a part', () => {
     const matrix = piecesMatrix(CUT_LOG, RECUTS)
     expect(matrix.map((row) => row.part)).toEqual(['back', 'front', 'sleeve'])
@@ -143,19 +120,6 @@ describe('the cut record', () => {
     expect(lotYields([])).toEqual([])
   })
 
-  it('tickets: the last print state; a reprint and a void held with why', () => {
-    const lines = ticketLines(BUNDLES)
-    expect(lines.map((line) => line.print)).toEqual(['PRINTED', 'PRINTED', 'FAILED', 'PRINTED'])
-    expect(lines[1]!.reprints).toBe(1)
-    const can = canAs('manager')
-    expect(voidHeld(BUNDLES.bundles[0]!, can, false)).toEqual({ key: 'held.ticket.scanned', params: { count: 2 } })
-    expect(voidHeld(BUNDLES.bundles[2]!, can, false)).toBeNull()
-    expect(voidHeld(BUNDLES.bundles[3]!, can, false)).toEqual({ key: 'held.ticket.voided' })
-    expect(reprintHeld(BUNDLES.bundles[0]!, canAs('supervisor'), false)).toEqual({ key: 'held.permission', params: { right: rightRef('production.bundles') } })
-    expect(ticketLines({ ...BUNDLES, bundles: [{ ...BUNDLES.bundles[0]!, tickets: null }] })[0]!.print).toBe('UNKNOWN')
-    expect(ticketLines({ ...BUNDLES, bundles: [{ ...BUNDLES.bundles[0]!, tickets: [] }] })[0]!.print).toBe('PDF')
-  })
-
   it('a refused write in our words', () => {
     const refused = (path: string) => new ApiError('conflict', 409, 'refused', 'x', null, [{ path, message: 'English words' }])
     expect(writeProblem(refused('refusal/CUT_NOT_OF_CELL'))).toEqual({ key: 'problem.recut.notOfCell' })
@@ -183,12 +147,11 @@ describe('the calls', () => {
     return { api, calls }
   }
 
-  it('lists the cuts of a view, reads the recuts, marks one cut and voids a bundle with their keys', async () => {
+  it('lists the cuts of a view, reads the recuts and marks one cut with its key', async () => {
     const { api, calls } = recorder({
       '/production/cutting/cuts': { cuts: [CUTTING], more: false, tiles: TILES, asOf: '2026-10-30T08:40:00.000Z' },
       '/production/replacements': { replacements: RECUTS, nextCursor: null },
       '/done': { replacement: { ...RECUTS[0]!, status: 'DONE' } },
-      '/void': { bundle: { id: 'b1' } },
     })
     expect((await listCuts(api, { view: 'held', q: ' 0031 ', limit: 50 })).cuts).toHaveLength(1)
     expect(calls[0]!.url).toContain('/production/cutting/cuts?')
@@ -199,8 +162,6 @@ describe('the calls', () => {
     expect(calls[1]!.url).toContain('status=OPEN%2CDONE')
     await recutDone(api, 'r1', { version: 1, cutLogId: 'c1' }, 'key-1')
     expect(calls[2]).toMatchObject({ method: 'POST', key: 'key-1', body: { version: 1, cutLogId: 'c1' } })
-    await voidBundle(api, 'b1', 'Made by mistake', 'key-2')
-    expect(calls[3]).toMatchObject({ method: 'POST', key: 'key-2', body: { reason: 'Made by mistake' } })
   })
 })
 
@@ -224,7 +185,7 @@ function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof L
 }
 
 describe('every design case draws in both languages with no key left on screen', () => {
-  for (const screen of [listScreen, recordScreen] as unknown as DesignScreen<unknown>[]) {
+  for (const screen of [listScreen] as unknown as DesignScreen<unknown>[]) {
     it(`${screen.screen}: ${screen.cases.length} cases × it, en`, () => {
       for (const item of screen.cases) {
         for (const locale of LOCALES) {
@@ -237,7 +198,7 @@ describe('every design case draws in both languages with no key left on screen',
     })
   }
 
-  it('has words for every state, view, tile, hide state, print state and tab in both languages', () => {
+  it('has words for every state, view, tile and hide state in both languages', () => {
     for (const locale of LOCALES) {
       const t = createTranslator(locale, messagesFor(locale, ['cutting']).cutting ?? {})
       const has = (key: string, count?: number) => expect(t(key, count === undefined ? undefined : { count }), `${locale}: ${key}`).not.toBe(key)
@@ -245,10 +206,7 @@ describe('every design case draws in both languages with no key left on screen',
       for (const view of CUT_VIEWS) has(`view.${view}`)
       for (const tile of ['waiting', 'cutting', 'piecesToday', 'areaToday', 'yieldToday']) has(`tile.${tile}`)
       for (const state of ['FULL', 'PARTLY_CUT', 'REMNANT', 'CONSUMED', 'SCRAPPED']) has(`hideState.${state}`)
-      for (const state of ['QUEUED', 'SENT', 'PRINTED', 'FAILED', 'PDF', 'UNKNOWN']) has(`tickets.print.${state}`)
-      for (const tab of ['lay', 'pieces', 'yield', 'tickets']) has(`tab.${tab}`)
       for (const why of ['held', 'mine', 'other', 'empty']) has(`alloc.reserve.why.${why}`)
-      for (const status of ['forbidden', 'missing', 'error']) has(`record.state.${status}.title`)
       has('common.count', 2)
       has('common.countMore', 2)
     }

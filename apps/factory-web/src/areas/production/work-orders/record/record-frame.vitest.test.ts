@@ -13,7 +13,7 @@ import { OrderFilesBody } from './order-files/view/OrderFiles'
  * B-TH-265 — the work order on RecordFrame (O-PRO-WO; the rule of picture 38, 08-tabs O-PRO-WO; agreement T9 with the production
  * lane): the band in the shell's row with ONE status pill, ONE thread docked beside every tab (the work order's own notes, never
  * shareable with a customer; an order's thread picked beside it), Activity's tools in the thread's "⋯" (R-ACT), one notice, tabs
- * 9 → 7 with every old address kept (R-8), Documents' doors in the band's ⋯ (R-7), "Order files (n)" through the work order's own
+ * 9 → 7 → 6 (F-PR-06: Cutting & bundles) with every old address kept (R-8), Documents' doors in the band's ⋯ (R-7), "Order files (n)" through the work order's own
  * route only. Wall W16, W27: the work order's thread has no customer audience; nothing of another customer is named.
  */
 
@@ -25,28 +25,32 @@ const WO = workOrder('IN_PROGRESS')
 const body = (model: OrderFilesModel, locale: 'it' | 'en' = 'en') => textOf(render(createElement(OrderFilesBody, { model, choices: threadChoices(WO.orders, model.files) }), locale))
 
 describe('B-TH-265 — the work order on RecordFrame', () => {
-  it('tabs 9 → 7: Overview · Materials · Cutting · Bundles · Operations · Quality · Labour & cost; no Documents, no Activity', () => {
-    expect(RECORD_TABS).toEqual(['overview', 'materials', 'cutting', 'bundles', 'operations', 'quality', 'labour'])
+  it('tabs 9 → 7 → 6 (F-PR-06): Overview · Materials · Cutting & bundles · Operations · Quality · Labour & cost; no Documents, no Activity, no Bundles of its own', () => {
+    expect(RECORD_TABS).toEqual(['overview', 'materials', 'cutting', 'operations', 'quality', 'labour'])
     const text = textOf(draw('thread-docked'))
-    for (const tab of ['Overview & release', 'Materials', 'Cutting', 'Bundles', 'Operations & WIP', 'Quality', 'Labour & cost']) expect(text).toContain(tab)
+    for (const tab of ['Overview & release', 'Materials', 'Cutting & bundles', 'Operations & WIP', 'Quality', 'Labour & cost']) expect(text).toContain(tab)
     expect(text).not.toMatch(/\bActivity\b/)
     expect(text).not.toMatch(/\bDocuments\b/)
-    for (const tab of ['Riepilogo e rilascio', 'Materiali', 'Taglio', 'Fasci']) expect(textOf(draw('thread-docked', 'it'))).toContain(tab)
+    // The tab list links six tabs; none to a Bundles tab of its own.
+    expect(draw('thread-docked')).toContain('?tab=cutting')
+    expect(draw('thread-docked')).not.toContain('?tab=bundles')
+    for (const tab of ['Riepilogo e rilascio', 'Materiali', 'Taglio e fasci']) expect(textOf(draw('thread-docked', 'it'))).toContain(tab)
   })
 
-  it('every old ?tab= keeps working (R-8): Documents → Overview (its doors in the band’s ⋯), Activity → Overview with the thread opened', () => {
-    expect(MERGED_TABS).toEqual({ documents: 'overview', activity: 'overview' })
+  it('every old ?tab= keeps working (R-8): Documents → Overview (its doors in the band’s ⋯), Activity → Overview with the thread opened, Bundles → Cutting & bundles', () => {
+    expect(MERGED_TABS).toEqual({ documents: 'overview', activity: 'overview', bundles: 'cutting' })
     expect(tabOf('documents')).toBe('overview')
     expect(tabOf('activity')).toBe('overview')
+    expect(tabOf('bundles')).toBe('cutting')
     for (const tab of RECORD_TABS) expect(tabOf(tab)).toBe(tab)
     expect(tabOf(null)).toBe('overview')
     expect(tabOf('nope')).toBe('overview')
     expect(tabOf('constructor')).toBe('overview')
   })
 
-  it('a wide grid tab (Cutting, Bundles) gives the thread one third under 1600 px; the others 40 %', () => {
+  it('a wide grid tab (Cutting & bundles) gives the thread one third under 1600 px; the others 40 %', () => {
     expect(isWideTab('cutting')).toBe(true)
-    expect(isWideTab('bundles')).toBe(true)
+    expect(isWideTab('operations')).toBe(false)
     expect(isWideTab('overview')).toBe(false)
     expect(isWideTab('labour')).toBe(false)
   })

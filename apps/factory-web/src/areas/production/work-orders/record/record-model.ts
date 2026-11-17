@@ -21,6 +21,8 @@ import type { HealthActions, HealthModel } from './health/model'
 import type { GatesPart } from './gates/use-gates'
 // F-PR-21: the supervisor fact's Change… opens THE assign dialog (areas/_shared/production-supervisor).
 import type { AssignSupervisorActions, AssignSupervisorModel } from '../../../_shared/production-supervisor/model'
+// F-PR-06: Cutting & bundles — the Cut record merged in (its recuts with Mark cut, the cut orders of this work order).
+import type { CutPartsActions, CutPartsModel } from '../cutting/use-cut-parts'
 
 /** SCR-070 … SCR-072 — the work order studio's view model (WorkOrderRecordView draws it and fetches nothing). */
 
@@ -119,8 +121,14 @@ export interface WorkOrderRecordModel {
   // ---- end F-PR-05a
   /** F-PR-21: the supervisor fact (absent: not drawn); `can` = production.brand.manage (Change… held without); the dialog while open. */
   supervisor?: { readonly can: boolean; readonly assign: AssignSupervisorModel | null }
+  // ---- F-PR-06: Cutting & bundles and Quality ----
+  /** The Cut record's parts on Cutting & bundles: the recuts and Mark cut, the cut orders of this work order (absent: not drawn). */
+  cut?: CutPartsModel
+  /** quality.documents.share: a final inspection's report may be shared with the work order's one customer (in its window). */
+  shareReports?: boolean
+  // ---- end F-PR-06
   /** Design cases: a dialog's typed reason, the overview's fields in edit, a draft's grid being edited. */
-  draft?: { reason?: string; override?: boolean; dueDate?: string; priority?: string; editing?: boolean; grid?: Record<string, Record<string, number>>; opsBySize?: boolean }
+  draft?: { reason?: string; override?: boolean; dueDate?: string; priority?: string; editing?: boolean; grid?: Record<string, Record<string, number>> }
 }
 
 export interface WorkOrderRecordActions {
@@ -168,4 +176,7 @@ export interface WorkOrderRecordActions {
   // ---- end F-PR-05a
   /** F-PR-21: Change… (the work order's orders) and THE assign dialog's actions. */
   supervisor?: AssignSupervisorActions & { readonly onOpen?: () => void }
+  // ---- F-PR-06 ----
+  cut?: CutPartsActions
+  // ---- end F-PR-06
 }
