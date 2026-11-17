@@ -3,8 +3,7 @@
 import { type ReactNode } from 'react'
 import Link from 'next/link'
 import { FileX, ShieldOff } from 'lucide-react'
-import { Card, EmptyState, Tabs, type TabItem } from '@nexus/ui/components'
-import { DetailHeader } from '@nexus/ui/patterns'
+import { Card, EmptyState } from '@nexus/ui/components'
 import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { Modal } from '../../../lib/i18n/ds-parts'
 import { listKeys, type ListKey } from '../../../list-frame/model'
@@ -83,79 +82,45 @@ export function NoListsAccess() {
 
 export type Loaded<T> = { status: 'loading' } | { status: 'ready'; value: T } | { status: 'error'; problem: string } | { status: 'not_found' } | { status: 'forbidden' }
 
-export interface RecordFrameProps {
-  backHref: string
-  loaded: Loaded<unknown>
-  title?: ReactNode
-  meta?: ReactNode
-  actions?: ReactNode
-  status?: ReactNode
-  tabs?: TabItem[]
-  tab?: string
-  onRetry?: () => void
-  children?: ReactNode
-}
-
-/** The price list's band and its states: loading skeleton, not found, no right, a failed read with Try again. */
-export function RecordFrame({ backHref, loaded, title, meta, actions, status, tabs, tab, onRetry, children }: RecordFrameProps) {
+/**
+ * B-TH-258: the price list's states (loading skeleton, not found, no right, a failed read with Try again) — the body of the shared
+ * RecordFrame while the list is not there (its band says "Price list", no thread). The ready band is RecordFrame's.
+ */
+export function RecordState({ backHref, loaded, onRetry }: { backHref: string; loaded: Exclude<Loaded<unknown>, { status: 'ready' }>; onRetry?: () => void }) {
   const t = useWords()
-  const back = <Link href={backHref}>{t('record.back')}</Link>
-  if (loaded.status !== 'ready') {
+  if (loaded.status === 'loading') {
     return (
-      <div className="fw-pl">
-        <div className="fw-pl-band">
-          <DetailHeader backAsChild backLabel={back} title={loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('record.name')} />
+      <Card padded aria-busy="true">
+        <p className="fw-pl-hint" role="status">
+          <Spinner size={14} /> {t('record.loading')}
+        </p>
+        <div className="fw-pl-stack tight">
+          {Array.from({ length: 6 }, (_, index) => (
+            <Skeleton key={index} height={22} />
+          ))}
         </div>
-        {loaded.status === 'loading' ? (
-          <Card padded aria-busy="true">
-            <p className="fw-pl-hint" role="status">
-              <Spinner size={14} /> {t('record.loading')}
-            </p>
-            <div className="fw-pl-stack tight">
-              {Array.from({ length: 6 }, (_, index) => (
-                <Skeleton key={index} height={22} />
-              ))}
-            </div>
-          </Card>
-        ) : (
-          <Card padded>
-            <EmptyState
-              icon={loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
-              title={t(loaded.status === 'error' ? 'record.failed' : loaded.status === 'forbidden' ? 'noAccess.title' : 'record.notFound')}
-              description={loaded.status === 'error' ? t(loaded.problem) : loaded.status === 'forbidden' ? t('noAccess.body') : t('record.notFoundBody')}
-              action={
-                loaded.status === 'error' ? (
-                  <Button size="sm" onClick={onRetry}>
-                    {t('common.retry')}
-                  </Button>
-                ) : (
-                  <Button size="sm" asChild>
-                    <Link href={backHref}>{t('record.backToList')}</Link>
-                  </Button>
-                )
-              }
-            />
-          </Card>
-        )}
-      </div>
+      </Card>
     )
   }
   return (
-    <div className="fw-pl">
-      <div className="fw-pl-band">
-        <DetailHeader backAsChild backLabel={back} title={title} actions={actions} />
-        <div className="fw-pl-meta">
-          <span className="fw-pl-chips">{meta}</span>
-          {status && (
-            <span className="fw-pl-status" role="status">
-              {status}
-            </span>
-          )}
-        </div>
-        {tabs && tab && <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={tab} size="sm" overflow="scroll" />}
-      </div>
-      {children}
-    </div>
+    <Card padded>
+      <EmptyState
+        icon={loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
+        title={t(loaded.status === 'error' ? 'record.failed' : loaded.status === 'forbidden' ? 'noAccess.title' : 'record.notFound')}
+        description={loaded.status === 'error' ? t(loaded.problem) : loaded.status === 'forbidden' ? t('noAccess.body') : t('record.notFoundBody')}
+        action={
+          loaded.status === 'error' ? (
+            <Button size="sm" onClick={onRetry}>
+              {t('common.retry')}
+            </Button>
+          ) : (
+            <Button size="sm" asChild>
+              <Link href={backHref}>{t('record.backToList')}</Link>
+            </Button>
+          )
+        }
+      />
+    </Card>
   )
 }
 

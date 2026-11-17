@@ -1,16 +1,16 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { businessDayStart } from '@nexus/factory-domain/core/time'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { formatTime } from '../../../../lib/i18n/format'
-import { useLocale } from '../../../../lib/i18n/provider'
+import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { storeUrl } from '../../../../record-panels/store'
-import { liveMatches, useLive, useRecordTab } from '../../../quality/_shared/hooks'
+import { liveMatches, useLive } from '../../../quality/_shared/hooks'
 import {
   bookFitting,
   cancelAppointment,
@@ -49,13 +49,14 @@ import {
   proofLines,
   quoteHref,
   readProblem,
-  RECORD_TABS,
   resultBodyOf,
   resultDraftFor,
   resultProblem,
   reviewBodyOf,
   reviewDraftFor,
   reviewedNotice,
+  tabOf,
+  threadRecordOf,
   todayOf,
   unitQuotes,
   writeProblem,
@@ -70,6 +71,9 @@ import { ProfileRecordView } from './view/ProfileRecordView'
 // B-W2b-371: the office's and the fittings' photos (XF2:01), the rider's thread (XF2:02).
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { useOfficePhotos } from '../photos/use-photos'
+// ---- B-TH-258: the rider's thread docked on RecordFrame (Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 /**
  * `/w/<company>/sales/made-to-measure/<profileId>` (SCR-036-record; `?tab=`, `&do=revision|review|fitting|link|quote|repeat|compare`
@@ -91,14 +95,17 @@ function Container({ profileId }: { profileId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const router = useRouter()
+  const pathname = usePathname()
   const params = useSearchParams()
   const locale = useLocale()
+  const words = useT('sales-mtm') // B-TH-258: the thread's record label
   const language = locale === 'en' ? 'en' : 'it'
   const prefix = companyPrefix(session.company?.code ?? '')
   const companyId = session.company?.id ?? null
   const me = useMemo(() => ({ id: session.user.id, name: session.user.displayName }), [session.user.id, session.user.displayName])
   const can = useMemo(() => mtmCan(session.permissions), [session.permissions])
-  const tab = useRecordTab(RECORD_TABS)
+  // B-TH-258: the five tabs; an old ?tab=activity lands on Measurements (the frame opens the thread).
+  const tab = tabOf(params?.get('tab'))
   const todo = doOf(params?.get('do'))
   const [today] = useState(() => todayOf())
 
@@ -248,11 +255,24 @@ function Container({ profileId }: { profileId: string }) {
 
   // B-W2b-371: the office's and the fittings' photos when the Photos or the Fittings tab is on screen.
   const photos = useOfficePhotos({ api, profileId: record?.latestId ?? null, partyId: record?.partyId ?? null, shown: !!record && (tab === 'photos' || tab === 'fittings'), can, offline, today })
-  const firstId = record?.revisions.at(-1)?.id ?? null
+  // B-TH-258: the rider's thread docked beside every tab — ONE per rider and garment type, on the chain's first revision; only for a
+  // reader of measurements who reads threads (body data). Its record label — what a task or a reminder made from it carries — names
+  // no rider, as the API's label ("Measurements <garment type>"); the party is the rider's customer only (the brand wall: no other
+  // customer's thread or files).
+  const firstId = record ? threadRecordOf(record, session.permissions) : null
   const thread =
-    record && firstId && tab === 'activity' && session.permissions.includes('threads.read') ? (
-      <RecordPanels record={{ type: 'MeasurementProfile', id: firstId, companyId: null, siteId: null }} title={`${record.riderName} · ${record.garmentType}`} party={{ id: record.partyId, name: record.customer.name, emails: [] }} />
+    record && firstId ? (
+      <OfficeRecordThread
+        docked
+        record={{ type: 'MeasurementProfile', id: firstId, companyId: null, siteId: null }}
+        title={`${record.riderName} · ${record.garmentType}`}
+        recordLabel={words('record.threadLabel', { garment: record.garmentType })}
+        party={{ id: record.partyId, name: record.customer.name }}
+        partyRole="customer"
+        printHref={printHref(pathname, params?.toString() ?? '')}
+      />
     ) : null
+  const printThread = record && firstId ? <RecordPanels record={{ type: 'MeasurementProfile', id: firstId, companyId: null, siteId: null }} title={`${record.riderName} · ${record.garmentType}`} party={{ id: record.partyId, name: record.customer.name, emails: [] }} /> : null
 
   // ---- the shared dialogs (New revision, Send a measurement link, Use in a new quote) -----------------------------------------
   const measurements = useMeasurementsDialog({
@@ -542,6 +562,7 @@ function Container({ profileId }: { profileId: string }) {
     lastResult,
     photos: photos.model,
     thread,
+    printThread, // B-TH-258
   }
 
   return (
