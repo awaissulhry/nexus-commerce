@@ -1,6 +1,7 @@
 import { BUSINESS_TIME_ZONE } from '../../core/time'
 import { CUSTOMER_NUMBER_KINDS, customerNumberOf, type CustomerNumberKind } from '../../sales/customer-numbers'
 import { isPartnerTaskKind, taskWords, type PortalLocale } from '../tasks/kinds'
+import { GATE_WORDS, isBrandGate } from '../../production-brand/portal-read' // B-PR-31: {gate}
 import type { PartnerEmailTopic } from './topics'
 
 /**
@@ -56,6 +57,13 @@ export const PARTNER_MESSAGE_TEMPLATES = {
   'portal.production.sample_refused': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'Your request for another sample on {yours} was not accepted', it: 'La vostra richiesta di un altro campione per {yours} non è stata accettata' },
   'portal.production.countered': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'We answered your request on {yours} with a counter-offer: it waits for your answer', it: 'Abbiamo risposto alla vostra richiesta per {yours} con una controproposta: attende la vostra risposta' },
   'portal.order.countered': { topic: 'ORDERS', category: 'FOLLOWING', en: 'We answered your request on {yours} with a counter-offer: it waits for your answer', it: 'Abbiamo risposto alla vostra richiesta per {yours} con una controproposta: attende la vostra risposta' },
+  // F-PR-15's ask (06-tree §0.5): a gate passed or started before, only at + Gates & dates ({gate}: ": PP sample", the gate in the
+  // customer's words; never the reason we went ahead); a final inspection's result, only at + Quality & photos and only of work made
+  // for it alone ({more}: its other orders the same work order makes). Never a work order, a lot, a sample size or a person.
+  'portal.production.gate_passed': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'A gate of {yours} is passed{gate}', it: 'Una tappa per {yours} è superata{gate}' },
+  'portal.production.gate_started_before': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'We started work on {yours} before a gate was passed{gate}', it: 'Abbiamo avviato la lavorazione per {yours} prima che una tappa fosse superata{gate}' },
+  'portal.production.qc_passed': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'The final inspection of {yours}{more} passed', it: "L'ispezione finale per {yours}{more} è superata" },
+  'portal.production.qc_failed': { topic: 'PRODUCTION', category: 'FOLLOWING', en: 'The final inspection of {yours}{more} did not pass', it: "L'ispezione finale per {yours}{more} non è superata" },
   // ---- end B-PR-31
   // th3b follow-up 5 (§0.5): a delivery of the customer's own order ({yours}: "your order 12"), never the office's SH-… series.
   'portal.shipment.shipped': { topic: 'SHIPPED', category: 'FOLLOWING', en: 'A delivery of {yours} has shipped', it: 'È stata spedita una consegna per {yours}' },
@@ -135,13 +143,16 @@ export function yoursOf(notice: PartnerNotice, locale: PortalLocale): { readonly
  * how many more of its own orders one act of ours named (params.more: " and 2 more" / " e altri 2"; none: nothing). Both name only
  * the customer's own orders, by its own count.
  */
-export function productionWordsOf(params: unknown, locale: PortalLocale): { readonly inYours: string; readonly more: string } {
+export function productionWordsOf(params: unknown, locale: PortalLocale): { readonly inYours: string; readonly more: string; readonly gate: string } {
   const values = paramsOf(params)
   const inSeq = typeof values.inSeq === 'number' && Number.isInteger(values.inSeq) && values.inSeq > 0 ? values.inSeq : null
   const more = typeof values.more === 'number' && Number.isInteger(values.more) && values.more > 0 ? values.more : 0
+  const gateKind = values.gate // F-PR-15's ask
   return {
     inYours: inSeq !== null ? (locale === 'it' ? `del vostro ordine ${inSeq}` : `your order ${inSeq}`) : locale === 'it' ? 'di un altro vostro ordine' : 'another of your orders',
     more: more === 0 ? '' : locale === 'it' ? ` e altri ${more}` : ` and ${more} more`,
+    // F-PR-15's ask: {gate} (params.gate, one of the customer's gate kinds): ": PP sample"; any other value names nothing.
+    gate: typeof gateKind === 'string' && isBrandGate(gateKind) ? `: ${GATE_WORDS[gateKind][locale]}` : '',
   }
 }
 // ---- end B-PR-31
@@ -161,7 +172,7 @@ export function partnerSentence(notice: PartnerNotice, locale: PortalLocale, com
   // vostro ordine 12"), in the reader's language; a notice of no such record (a supplier's PO) reads its label instead. A request
   // notice made before step 7 named only yourSeq (REQUEST).
   const { yours, Yours } = yoursOf(notice, locale) // th-backend-g step 2: one rule, shared with the new-message mail's template
-  const { inYours, more } = productionWordsOf(notice.params, locale) // B-PR-31
+  const { inYours, more, gate } = productionWordsOf(notice.params, locale) // B-PR-31
   return PARTNER_MESSAGE_TEMPLATES[notice.messageKey][locale]
     .replace('{yours}', () => yours)
     .replace('{Yours}', () => Yours)
@@ -173,4 +184,5 @@ export function partnerSentence(notice: PartnerNotice, locale: PortalLocale, com
     // B-PR-31
     .replace('{inYours}', () => inYours)
     .replace('{more}', () => more)
+    .replace('{gate}', () => gate)
 }

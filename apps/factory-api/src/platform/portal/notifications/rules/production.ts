@@ -10,6 +10,12 @@ import { HOLD_CAUSE_OF_EVENT, healthNoticeKey, holdNoticeKey, problemNotice, sta
 import { PORTAL_PRODUCTION_VIEW } from '@nexus/factory-domain/production-brand/permissions'
 import type { BrandStage } from '@nexus/factory-domain/production-brand/stages'
 import type { UrgencyActor } from '@nexus/factory-domain/production-brand/urgency'
+// B-PR-31 (F-PR-15's ask): a gate passed or started before (+ Gates & dates), a final inspection's result (+ Quality & photos).
+import { events as gateEvents } from '@nexus/factory-domain/planning-milestones/events'
+import { events as qualityEvents } from '@nexus/factory-domain/quality/events'
+import type { ProductionShareLevel } from '@nexus/factory-domain/production-brand/levels'
+import { gateNoticeKey, qualityNoticeKey } from '@nexus/factory-domain/production-brand/notices'
+import { workOrderAlone } from '@nexus/factory-domain/production-brand/quality-read'
 import { PORTAL_SALES_ORDERS_VIEW } from '@nexus/factory-domain/sales/portal-orders/permissions'
 import type { CommandTx } from '../../../../core/command'
 import type { PartnerReader } from '../../tasks/people'
@@ -30,6 +36,11 @@ import type { PartnerDraft, PartnerRule, PartnerRuleContext } from './types'
  *                                      on; ONE notice per act (the first of the orders named, "and 2 more"), never the
  *                                      customer's own marks (PW-18), never our yes to its "Urgent – asked"
  *   production_issue.answered          a problem the customer reported: answered, or answered in another order's conversation
+ *   order_gate.changed                 (F-PR-15's ask) a gate of its order passed, or "missed" — its work started before the gate
+ *                                      was passed — only its real gates and only while its level shares gates (+ Gates & dates)
+ *   quality.inspection_decided         (F-PR-15's ask) a final inspection of work made for it ALONE passed or not, only at + Quality
+ *                                      & photos; ONE notice per act and company (the first of its orders the work order makes,
+ *                                      "and 2 more"); a shared work order's result never reaches a customer
  *
  * The answers to its production asks and our counter-offers are the change-request source's (./change-requests.ts, the keys of
  * every kind); "waiting on you" of a counter-offer or a new date is the one task list's notice (./tasks.ts: the APPROVE task the
@@ -75,10 +86,10 @@ async function productionRowOf(tx: CommandTx, order: OwnOrder) {
 }
 
 /** One notice of the customer's own order. */
-function draftOf(order: OwnOrder, messageKey: PartnerMessageKey, extra: Record<string, number | null> = {}, batchId: string | null = null): PartnerDraft {
+function draftOf(order: OwnOrder, messageKey: PartnerMessageKey, extra: Record<string, number | null> = {}, batchId: string | null = null, codes: Record<string, string> = {} /* B-PR-31: a gate's kind */): PartnerDraft {
   const named = orderNamed(order)
   const place = { companyId: order.companyId, partyId: order.partyId }
-  return { partyId: order.partyId, companyId: order.companyId, record: named.record, messageKey, params: { ...named.params, ...extra }, anchor: null, forReader: productionReader(place), batchId }
+  return { partyId: order.partyId, companyId: order.companyId, record: named.record, messageKey, params: { ...named.params, ...extra, ...codes }, anchor: null, forReader: productionReader(place), batchId }
 }
 
 /** What moved a hold: the event the keeper followed (the envelope's causation), when the outbox knows it. */
@@ -89,6 +100,70 @@ async function holdCauseOf(context: PartnerRuleContext): Promise<HoldCause | nul
   const cause = await context.tx.outboxEvent.findUnique({ where: { id: causationId }, select: { type: true } })
   return cause && Object.hasOwn(HOLD_CAUSE_OF_EVENT, cause.type) ? HOLD_CAUSE_OF_EVENT[cause.type]! : null
 }
+
+// ---- B-PR-31 (F-PR-15's ask): a gate and a final inspection, each at the level that shares it ---------------------------------
+/** The customer's level of what it sees of its production (its own PortalSettings row: one per party), or null (no portal row). */
+async function levelOf(tx: CommandTx, partyId: string): Promise<ProductionShareLevel | null> {
+  const row = await tx.portalSettings.findUnique({ where: { id: partyId }, select: { partyId: true, productionLevel: true } })
+  return row && row.partyId === partyId ? (row.productionLevel as ProductionShareLevel) : null
+}
+
+/** One notice per company of the customer's own orders, the first named and "and N more" (one act tells a person once). */
+function oncePerCompany(orders: readonly OwnOrder[], key: PartnerMessageKey): PartnerDraft[] {
+  const byCompany = new Map<string, OwnOrder[]>()
+  for (const order of orders) byCompany.set(order.companyId, [...(byCompany.get(order.companyId) ?? []), order])
+  return [...byCompany.values()].map((own) => draftOf(own[0]!, key, { more: own.length - 1 }))
+}
+
+const GATE_AND_QUALITY_RULES: readonly PartnerRule[] = [
+  {
+    name: 'portalProduction.gateChanged',
+    events: ['order_gate.changed'],
+    async drafts(context, raw) {
+      const event = gateEvents.find((entry) => entry.type === 'order_gate.changed')!.payload.parse(raw) as { gateId: string; salesOrderId: string; partyId: string; kind: string; change: string; passed: boolean; startedBefore: boolean }
+      // Decided on the payload first (another change, another kind: nothing to read), as if the level shared gates.
+      if (gateNoticeKey(event, { passed: event.passed, startedBefore: event.startedBefore }, 'GATES') === null) return []
+      // The gate by its own row: still of this order and kind, of the same customer; its state now, not the event's.
+      const gate = await context.tx.orderGate.findUnique({ where: { id: event.gateId }, select: { salesOrderId: true, partyId: true, kind: true, passedAt: true, overriddenAt: true } })
+      if (!gate || gate.salesOrderId !== event.salesOrderId || gate.kind !== event.kind) return []
+      const order = await ownOrder(context.tx, gate.salesOrderId, event.partyId)
+      if (!order || gate.partyId !== order.partyId) return []
+      // An order the customer reads in production (its keeper's row), at a level that shares its gates.
+      if (!(await productionRowOf(context.tx, order))) return []
+      const key = gateNoticeKey(event, { passed: gate.passedAt !== null, startedBefore: gate.overriddenAt !== null }, await levelOf(context.tx, order.partyId))
+      return key ? [draftOf(order, key, {}, null, { gate: gate.kind })] : []
+    },
+  },
+  {
+    name: 'portalProduction.qualityResult',
+    events: ['quality.inspection_decided'],
+    async drafts(context, raw) {
+      const event = qualityEvents.find((entry) => entry.type === 'quality.inspection_decided')!.payload.parse(raw) as { inspectionId: string; workOrderId: string; status: 'PASSED' | 'FAILED' }
+      // The inspection and its work order by their own rows (never the event's party word): a work order of one customer only.
+      const inspection = await context.tx.inspection.findUnique({ where: { id: event.inspectionId }, select: { workOrderId: true, status: true } })
+      if (!inspection || inspection.workOrderId !== event.workOrderId) return []
+      const workOrder = await context.tx.workOrder.findUnique({ where: { id: inspection.workOrderId }, select: { partyId: true, kind: true, status: true } })
+      if (!workOrder?.partyId || workOrder.kind === 'REPAIR' || workOrder.status === 'CANCELLED') return []
+      const partyId = workOrder.partyId
+      const cells = await context.tx.workOrderSize.findMany({ where: { workOrderId: inspection.workOrderId }, select: { partyId: true, salesOrderLineId: true } })
+      const level = await levelOf(context.tx, partyId)
+      // Its ALONE (every cell that names a customer names it) and at + Quality & photos: else its result judges other goods too.
+      const alone = level !== null && workOrderAlone(level, { partyId, cellParties: cells.map((cell) => cell.partyId) }, partyId)
+      const key = qualityNoticeKey(event, inspection.status, alone)
+      if (key === null) return []
+      const lineIds = [...new Set(cells.flatMap((cell) => (cell.salesOrderLineId ? [cell.salesOrderLineId] : [])))]
+      if (lineIds.length === 0) return []
+      const lines = await context.tx.salesOrderLine.findMany({ where: { id: { in: lineIds } }, select: { orderId: true } })
+      const orderIds = [...new Set(lines.map((line) => line.orderId))]
+      const found = await context.tx.salesOrder.findMany({ where: { id: { in: orderIds } }, select: ORDER, orderBy: [{ customerSeq: 'asc' }, { id: 'asc' }] })
+      // Only its own orders it reads in production (its keeper's row).
+      const own: OwnOrder[] = []
+      for (const order of found) if (order.partyId === partyId && (await productionRowOf(context.tx, order))) own.push(order)
+      return oncePerCompany(own, key)
+    },
+  },
+]
+// ---- end B-PR-31 (gates and QC)
 
 export const PRODUCTION_RULES: readonly PartnerRule[] = Object.freeze([
   {
@@ -171,4 +246,6 @@ export const PRODUCTION_RULES: readonly PartnerRule[] = Object.freeze([
       return [draftOf(order, decided.key, { inSeq: inOrder.customerSeq }, issue.batchId)]
     },
   },
+  // B-PR-31 (F-PR-15's ask)
+  ...GATE_AND_QUALITY_RULES,
 ])
