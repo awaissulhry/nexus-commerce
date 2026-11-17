@@ -111,6 +111,23 @@ describe('B-TH-268: the invoice on RecordFrame — Lines & VAT · Deposits & pay
     expect(view).not.toContain('frame.choose(')
   })
 
+  it('end check: the answer to the person’s own action is the notice that shows; test mode, Send copy and changed wait behind “N more”', () => {
+    const found = screen.cases.find((item) => item.id === 'thread-send-copy')!
+    const model = found.model as { record: Record<string, unknown> }
+    const withNotice = { ...model, record: { ...model.record, notice: { tone: 'success', words: { key: 'notice.sent' } } } }
+    const View = screen.view as ComponentType<{ model: unknown }>
+    const html = renderToString(createElement(I18nProvider, { locale: 'en', messages: messagesFor('en', ['shell']) }, createElement(View, { model: withNotice })))
+    const words = text(html)
+    expect(words).toContain('Sent to SDI: its answer comes by itself.')
+    expect(words.indexOf('Sent to SDI: its answer comes by itself.')).toBeLessThan(words.indexOf('SDI could not deliver this invoice'))
+    // In the source too: the notice is the first child of the one notice, before the test-mode banner (depth.banner).
+    const view = readFileSync(new URL('./record/view/InvoiceRecordView.tsx', import.meta.url), 'utf8')
+    const notices = view.slice(view.indexOf('<RecordNotices>'), view.indexOf('</RecordNotices>'))
+    expect(notices.indexOf('{model.notice && (')).toBeGreaterThan(-1)
+    expect(notices.indexOf('{model.notice && (')).toBeLessThan(notices.indexOf('{depth?.banner}'))
+    expect(notices.indexOf('{model.notice && (')).toBeLessThan(notices.indexOf('{model.changed && ('))
+  })
+
   it('the band holds ONE pill (a draft’s state, else where it is at SDI); the pay state and the deadline travel as tags', () => {
     const view = readFileSync(new URL('./record/view/InvoiceRecordView.tsx', import.meta.url), 'utf8')
     const band = view.slice(view.indexOf('band={{', view.indexOf('function ReadyRecord')), view.indexOf('primary:', view.indexOf('function ReadyRecord')))
