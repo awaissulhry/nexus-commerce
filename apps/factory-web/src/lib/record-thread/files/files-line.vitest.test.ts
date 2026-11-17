@@ -147,3 +147,66 @@ describe('B-TH-283: measurement sheets on the files line', () => {
   })
 })
 // ---- end B-TH-283
+
+// ---- B-TH-286 (B-TH-091; T2-F07 "2 pinned", T2-F09; wall W08) ----------------------------------------------------------------------
+import { lineShown, pinLinesOf, pinText, type PinLine } from './model'
+import { render as drawAll, textOf } from '../parts/testing'
+
+describe('B-TH-286 — pins on the files line', () => {
+  const apiPin = (n: number, over: { removed?: boolean; excerpt?: string; audience?: 'OFFICE' | 'PARTNER'; files?: number; by?: string | null } = {}) => ({
+    messageId: `m-${n}`,
+    pinnedAt: '2026-11-12T10:00:00.000Z',
+    ...(over.by !== null ? { pinnedBy: { id: 'u-1', name: over.by ?? 'Alex Demo' } } : {}),
+    message: { authorName: 'Dora Bianchi', excerpt: over.excerpt ?? 'Collar in yellow piping', at: '2026-11-10T09:12:00.000Z', ...(over.audience ? { audience: over.audience } : {}), attachmentCount: over.files ?? 0, removed: over.removed ?? false },
+  })
+  const pins: PinLine[] = pinLinesOf([apiPin(1, { audience: 'PARTNER', files: 1 }), apiPin(2, { audience: 'OFFICE' })])
+
+  it('turns the API’s pins into lines: who wrote it, an office note marked, who pinned it (office only)', () => {
+    expect(pins.map((pin) => [pin.messageId, pin.office, pin.pinnedBy])).toEqual([
+      ['m-1', false, 'Alex Demo'],
+      ['m-2', true, 'Alex Demo'],
+    ])
+    // A portal reader's answer has no pinnedBy and no audience: nothing is made up.
+    expect(pinLinesOf([apiPin(3, { by: null })])[0]).toMatchObject({ pinnedBy: null, office: false })
+  })
+
+  it('a pin is a pointer: one line of its words, "2 files" for files only, "removed" for an erased message (never its words)', () => {
+    expect(pinText(pins[0]!)).toEqual({ text: 'Collar in yellow piping' })
+    expect(pinText(pinLinesOf([apiPin(4, { excerpt: '', files: 2 })])[0]!)).toEqual({ key: 'pins.filesOnly', params: { count: 2 } })
+    const removed = pinLinesOf([apiPin(5, { removed: true })])[0]!
+    expect(removed.author).toBeNull()
+    expect(removed.excerpt).toBe('')
+    expect(pinText(removed)).toEqual({ key: 'pins.removed' })
+  })
+
+  it('the line shows with pins or files, and is absent with neither (T2-F09)', () => {
+    expect(lineShown([], [])).toBe(false)
+    expect(lineShown([], null)).toBe(false)
+    expect(lineShown([], pins)).toBe(true)
+    expect(lineShown([file({})], [])).toBe(true)
+    expect(lineShown(null, null)).toBe(true)
+  })
+
+  it('draws “2 pinned” before the files chip, in it and en, and a pins-only line', () => {
+    for (const locale of LOCALES) {
+      const html = drawAll(createElement(FileStrip, { model: { files: [file({})], party: PARTY, open: false, pins } }), locale)
+      const text = textOf(html)
+      expect(text).toContain(locale === 'en' ? '2 pinned' : '2 fissati')
+      expect(text.indexOf(locale === 'en' ? '2 pinned' : '2 fissati')).toBeLessThan(text.indexOf(locale === 'en' ? 'Files (1)' : 'File (1)'))
+      expect(text).not.toMatch(/\bpins\.[a-zA-Z]/)
+      const only = textOf(drawAll(createElement(FileStrip, { model: { files: [], party: PARTY, open: false, pins: [pins[0]!] } }), locale))
+      expect(only).toContain(locale === 'en' ? '1 pinned' : '1 fissato')
+    }
+    expect(drawAll(createElement(FileStrip, { model: { files: [], party: PARTY, open: false, pins: [] } }))).toBe('')
+  })
+
+  it('every pins design case draws in both languages without a key on screen', () => {
+    for (const locale of LOCALES) {
+      for (const item of designScreen.cases.filter((one) => one.id.startsWith('th9-286'))) {
+        const html = drawAll(createElement(designScreen.view as ComponentType<{ model: unknown }>, { model: item.model }), locale)
+        expect(textOf(html)).not.toMatch(/\bpins\.[a-zA-Z]/)
+      }
+    }
+  })
+})
+// ---- end B-TH-286

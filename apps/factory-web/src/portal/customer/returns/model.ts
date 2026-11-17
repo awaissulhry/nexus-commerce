@@ -325,12 +325,21 @@ export const pickable = (item: Pick<ReturnableItem, 'canReturn'>): boolean => it
 /** An item's line under its name: order and line, size, colourway. */
 export function itemFacts(item: ReturnableItem, t: Translate): string[] {
   return [
-    item.order ? t('start.orderLine', { number: item.order.number, line: item.order.lineSeq }) : null,
+    item.order ? orderFact(item.order, t) : null, // follow-up (th9-web-b)
     item.invoice?.number ? t('start.invoice', { number: item.invoice.number }) : null,
     item.size ? t('item.size', { size: item.size }) : null,
     item.colourway ? item.colourway.name : null,
   ].filter((part): part is string => part !== null)
 }
+
+// ---- follow-up (th9-web-b; plan §0.5 "counts do not leak"): the order an item came on, by the customer's OWN number ("your order 7,
+// line 2"), else the PO they gave ("your PO BA-PO-771, line 2"), else "one of your orders" — never the office series (SO-…).
+export function orderFact(order: NonNullable<ReturnableItem['order']>, t: Translate): string {
+  if (order.yourNumber) return t('start.orderLine', { seq: order.yourNumber.seq, line: order.lineSeq })
+  if (order.yourRef) return t('start.orderRefLine', { ref: order.yourRef, line: order.lineSeq })
+  return t('start.orderLineOnly', { line: order.lineSeq })
+}
+// ---- end follow-up
 
 // ── a refusal in our words ───────────────────────────────────────────────────────────────────────────────────────────
 /** The key of what went wrong with a write (the API's English message is for logs). */

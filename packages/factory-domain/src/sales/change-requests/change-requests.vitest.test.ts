@@ -31,6 +31,14 @@ import {
   type RuleLine,
   type RuleOrder,
 } from './rules'
+// B-PR-24: the production asks, the impact, the counter-offer, the one date-only helper.
+import { DATE_ONLY_KEYS, dateOnly } from '../../planning/promise/date-only'
+import { ASK_NOT_OPEN_WORDS } from '../../production-brand/words'
+import { suggestedAnswer } from '../inquiries/production-answer'
+import type { FreezeRuleFacts } from '../order-changes/freeze'
+import { acceptedWithCounter, counterAnswerHeld, counterAnswerOf, counteredWords, counterForReader, counterOutcome, counterPriced, counterProblems, counterQuestion, isCounterable } from './counter'
+import { blockedProblems, earliestWords, IMPACT_NOTES, impactKeepable, impactNamesOnly, impactOf, PRICED_WORDS, type ImpactLine } from './impact'
+import { acceptWayProblems, ASK_RULES, askLineVerdict, askVerdict, changeAcceptWays, FLOOR_TASK_WORDS, productionAskProblems, productionCellsOf, productionColumnsOf, type ProductionAskFacts } from './rules'
 
 const TODAY = '2026-11-07'
 const line = (id: string, seq: number, overrides: Partial<RuleLine> = {}): RuleLine => ({
@@ -227,5 +235,297 @@ describe('B-PR-23: every kind of request on an order, and a countered one', () =
   it('a production ask asks no sizes and is never a whole-order cancel', () => {
     expect(askedSummary('RUSH', [], { requestedDate: '2026-12-04', shipToAddressId: null })).toEqual({ sizes: 0, lines: 0, date: true, address: false, wholeOrder: false })
     expect(askedSummary('CANCEL', [], { requestedDate: null, shipToAddressId: null }).wholeOrder).toBe(true)
+  })
+})
+
+// ---- B-PR-24 (production plan §3 "Brand asks, we decide"; 08-backend §4.2; review fixes R-09, R-12, R-14, R-32, R-35, R-50) ---
+describe('B-PR-24: what each production ask needs, when it is asked, what accepting it does and who answers it', () => {
+  const OPEN_ALL = { productionUrgencyOn: true, productionAskKinds: ['HOLD', 'RESUME', 'SPLIT_SHIPMENT', 'SAMPLE_ROUND'] }
+  const askFacts = (overrides: Partial<ProductionAskFacts> = {}): ProductionAskFacts => ({
+    order: order({ status: 'IN_PRODUCTION' }),
+    limits: OPEN_ALL,
+    waitingDay: null,
+    ready: false,
+    pauseOn: false,
+    urgency: null,
+    shipComplete: true,
+    today: TODAY,
+    ...overrides,
+  })
+  const paths = (issues: readonly { path: string }[]) => issues.map((issue) => issue.path)
+
+  it('one rule per kind: the database\'s columns, who answers it (plan §3), what accepting it does; a resume is never countered', () => {
+    expect(Object.keys(ASK_RULES)).toEqual([...ORDER_REQUEST_KINDS])
+    const by = (test: (kind: (typeof ORDER_REQUEST_KINDS)[number]) => boolean) => ORDER_REQUEST_KINDS.filter(test)
+    expect(by((kind) => ASK_RULES[kind].answeredWith === 'orders.manage')).toEqual(['CHANGE', 'CANCEL', 'SPLIT_SHIPMENT'])
+    expect(by((kind) => ASK_RULES[kind].answeredWith === 'production.brand.manage')).toEqual(['RUSH', 'HOLD', 'RESUME'])
+    expect(by((kind) => ASK_RULES[kind].answeredWith === 'sales.samples.manage')).toEqual(['SAMPLE_ROUND'])
+    // R-35: a partly shipped order may still ask a cancel (its unshipped lines), a rush, a pause and a resume.
+    expect(by((kind) => ASK_RULES[kind].statuses.includes('PARTLY_SHIPPED'))).toEqual(['CANCEL', 'RUSH', 'HOLD', 'RESUME'])
+    // The database: a date only on a change, a rush (need-by) or a split (first part); a code only on a cancel or a pause.
+    expect(by((kind) => ASK_RULES[kind].date)).toEqual(['CHANGE', 'RUSH', 'SPLIT_SHIPMENT'])
+    expect(by((kind) => ASK_RULES[kind].reasonCode !== 'NONE')).toEqual(['CANCEL', 'HOLD'])
+    expect(by((kind) => ASK_RULES[kind].lines === 'NONE')).toEqual(['RUSH', 'HOLD', 'RESUME'])
+    expect(ASK_RULES.SAMPLE_ROUND).toMatchObject({ lines: 'ONE', sampleKind: true, accept: ['SAMPLE_ROUND'] })
+    expect(ASK_RULES.RUSH.accept).toEqual(['MARK_URGENT', 'REPROMISE', 'RUSH_FLOOR'])
+    expect(ASK_RULES.HOLD.accept).toEqual(['BRAND_HOLD'])
+    expect(ASK_RULES.RESUME.accept).toEqual(['LIFT_BRAND_HOLDS'])
+    expect(ASK_RULES.SPLIT_SHIPMENT.accept).toEqual(['SHIP_AS_READY', 'REPROMISE'])
+    expect(ASK_RULES.CHANGE.accept).toEqual(['AMEND', 'CANCEL_AND_REMAKE', 'CLOSE_SHORT'])
+    expect(by((kind) => !isCounterable(kind))).toEqual(['RESUME'])
+    for (const kind of ORDER_REQUEST_KINDS) expect(ASK_RULES[kind].acceptWords.it, kind).not.toBe(ASK_RULES[kind].acceptWords.en)
+  })
+
+  it('R-50: "Urgent – asked" is open exactly while the urgency switch is on, never through the list; a closed ask says so neutrally', () => {
+    expect(askVerdict('RUSH', askFacts({ limits: { productionUrgencyOn: false, productionAskKinds: ['RUSH', 'HOLD'] } }))).toMatchObject({ possible: false, code: 'NOT_OPEN', words: ASK_NOT_OPEN_WORDS })
+    expect(askVerdict('RUSH', askFacts({ limits: { productionUrgencyOn: true, productionAskKinds: [] } })).possible).toBe(true)
+    expect(askVerdict('HOLD', askFacts({ limits: { productionUrgencyOn: true, productionAskKinds: [] } })).code).toBe('NOT_OPEN')
+    expect(askVerdict('SAMPLE_ROUND', askFacts({ limits: { productionUrgencyOn: true, productionAskKinds: ['HOLD'] } })).code).toBe('NOT_OPEN')
+    expect(ASK_NOT_OPEN_WORDS.en).not.toMatch(/other customer|another customer|other brand/i)
+    expect(paths(productionAskProblems({ kind: 'RUSH' }, askFacts({ limits: { productionUrgencyOn: false, productionAskKinds: [] } })))).toEqual(['body/NOT_OPEN'])
+  })
+
+  it('when: a rush or a pause not once everything is ready, a rush not while we locked the order, a pause not twice, a resume only while paused, a split only of an order that ships complete', () => {
+    expect(askVerdict('RUSH', askFacts({ order: order({ status: 'PARTLY_SHIPPED' }) })).possible).toBe(true)
+    expect(askVerdict('RUSH', askFacts({ order: order({ status: 'SHIPPED' }) }))).toMatchObject({ code: 'NOT_ASKABLE', words: { en: 'Not possible: the order is already shipped' } })
+    expect(askVerdict('RUSH', askFacts({ ready: true })).code).toBe('READY')
+    expect(askVerdict('RUSH', askFacts({ urgency: { urgency: 'REGULAR', locked: true, lockReason: 'Capacity is full this month' } }))).toMatchObject({ code: 'LOCKED', words: { en: 'Set to Regular by us: Capacity is full this month' } })
+    expect(askVerdict('RUSH', askFacts({ waitingDay: '2026-11-02' }))).toMatchObject({ code: 'WAITING', day: '2026-11-02', words: { en: 'Your request of 2 Nov waits for our answer' } })
+    expect(askVerdict('HOLD', askFacts({ order: order({ status: 'READY' }), ready: true }))).toMatchObject({ code: 'READY', words: { en: expect.stringMatching(/write to us in the order's thread/) } })
+    expect(askVerdict('HOLD', askFacts({ pauseOn: true })).code).toBe('PAUSED')
+    expect(askVerdict('HOLD', askFacts({ order: order({ status: 'PARTLY_SHIPPED' }) })).possible).toBe(true)
+    expect(askVerdict('RESUME', askFacts()).code).toBe('NOT_PAUSED')
+    expect(askVerdict('RESUME', askFacts({ pauseOn: true })).possible).toBe(true)
+    expect(askVerdict('SPLIT_SHIPMENT', askFacts({ shipComplete: false })).code).toBe('SHIPS_AS_READY')
+    expect(askVerdict('SPLIT_SHIPMENT', askFacts({ order: order({ status: 'PARTLY_SHIPPED' }) })).code).toBe('NOT_ASKABLE')
+    expect(askVerdict('SAMPLE_ROUND', askFacts()).possible).toBe(true)
+    // A pre-production or size set round only before the line's cutting started; a top-of-production round any time.
+    const cutLine = line(L1, 10, { cut: { day: '2026-10-12', leather: true } })
+    expect(askLineVerdict('SAMPLE_ROUND', cutLine, askFacts(), 'PRE_PRODUCTION')).toMatchObject({ code: 'LEATHER_CUT', words: { en: expect.stringMatching(/^Not possible: the leather was cut on 12 Oct\. You can ask for a top-of-production sample/) } })
+    expect(askLineVerdict('SAMPLE_ROUND', cutLine, askFacts(), 'SIZE_SET').possible).toBe(false)
+    expect(askLineVerdict('SAMPLE_ROUND', cutLine, askFacts(), 'TOP_OF_PRODUCTION').possible).toBe(true)
+    expect(askLineVerdict('SPLIT_SHIPMENT', line(L1, 10, { closedShort: true }), askFacts()).code).toBe('CLOSED_SHORT')
+  })
+
+  it('what each needs: a rush\'s need-by date earlier than the promise, a pause\'s why, a split\'s first part, a sample\'s line and kind', () => {
+    // RUSH: the whole order, an optional need-by date (today on, earlier than the promise of 20 Dec), their words.
+    expect(productionAskProblems({ kind: 'RUSH', requestedDate: '2026-12-01', note: 'For the fair.' }, askFacts())).toEqual([])
+    expect(productionAskProblems({ kind: 'RUSH' }, askFacts())).toEqual([])
+    expect(paths(productionAskProblems({ kind: 'RUSH', requestedDate: '2026-11-01' }, askFacts()))).toEqual(['body/requestedDate'])
+    expect(productionAskProblems({ kind: 'RUSH', requestedDate: '2026-12-21' }, askFacts())[0]?.message).toBe('The order is promised for 20 Dec already: the date you need it by is earlier than that.')
+    expect(paths(productionAskProblems({ kind: 'RUSH' }, askFacts({ urgency: { urgency: 'URGENT', locked: false, lockReason: null } })))).toEqual(['body/ALREADY_URGENT'])
+    expect(productionAskProblems({ kind: 'RUSH', requestedDate: '2026-12-01' }, askFacts({ urgency: { urgency: 'URGENT', locked: false, lockReason: null } }))).toEqual([])
+    expect(paths(productionAskProblems({ kind: 'RUSH', lineId: L1, reasonCode: 'LEAD_TIME', cells: [{ lineId: L1, size: '50', quantity: 1 }], sampleKind: 'BRAND' }, askFacts()))).toEqual(['body/reasonCode', 'body/cells', 'body/lineId', 'body/sampleKind'])
+    // HOLD: why — their words, or a code of the list when one is offered; never a date.
+    expect(paths(productionAskProblems({ kind: 'HOLD' }, askFacts()))).toEqual(['body/note'])
+    expect(productionAskProblems({ kind: 'HOLD', note: 'Our store opening moved.' }, askFacts())).toEqual([])
+    expect(paths(productionAskProblems({ kind: 'HOLD', note: 'x', requestedDate: '2026-12-01' }, askFacts()))).toEqual(['body/requestedDate'])
+    expect(paths(productionAskProblems({ kind: 'HOLD', reasonCode: 'NOPE' }, askFacts({ holdReasons: reasons })))).toEqual(['body/reasonCode'])
+    expect(productionAskProblems({ kind: 'HOLD', reasonCode: 'LEAD_TIME' }, askFacts({ holdReasons: reasons }))).toEqual([])
+    expect(paths(productionAskProblems({ kind: 'HOLD', reasonCode: 'OTHER' }, askFacts({ holdReasons: reasons })))).toEqual(['body/note'])
+    // RESUME: nothing more, while paused.
+    expect(productionAskProblems({ kind: 'RESUME' }, askFacts({ pauseOn: true }))).toEqual([])
+    // SPLIT_SHIPMENT: the first part, 1 to the pieces of each size of the order's own lines, never the whole order.
+    expect(productionAskProblems({ kind: 'SPLIT_SHIPMENT', cells: [{ lineId: L1, size: '52', quantity: 2 }], requestedDate: '2026-11-20' }, askFacts())).toEqual([])
+    expect(paths(productionAskProblems({ kind: 'SPLIT_SHIPMENT' }, askFacts()))).toEqual(['body/cells'])
+    expect(paths(productionAskProblems({ kind: 'SPLIT_SHIPMENT', cells: [{ lineId: L1, size: '52', quantity: 0 }] }, askFacts()))).toEqual(['body/cells/0/quantity'])
+    expect(paths(productionAskProblems({ kind: 'SPLIT_SHIPMENT', cells: [{ lineId: L1, size: '52', quantity: 4 }] }, askFacts()))).toEqual(['body/cells/0/quantity'])
+    expect(paths(productionAskProblems({ kind: 'SPLIT_SHIPMENT', cells: [{ lineId: L1, size: '56', quantity: 1 }] }, askFacts()))).toEqual(['body/cells/0/size'])
+    expect(paths(productionAskProblems({ kind: 'SPLIT_SHIPMENT', cells: [{ lineId: '00000000-0000-4000-8000-0000000000ff', size: '52', quantity: 1 }] }, askFacts()))).toEqual(['body/cells/0/lineId'])
+    const whole = [L1, L2].flatMap((id) => [{ lineId: id, size: '50', quantity: 2 }, { lineId: id, size: '52', quantity: 3 }])
+    expect(productionAskProblems({ kind: 'SPLIT_SHIPMENT', cells: whole }, askFacts())[0]?.message).toMatch(/^That is the whole order/)
+    // SAMPLE_ROUND: one line of the order and the kind of round.
+    expect(productionAskProblems({ kind: 'SAMPLE_ROUND', lineId: L2, sampleKind: 'SIZE_SET', note: 'Check the 52.' }, askFacts())).toEqual([])
+    expect(paths(productionAskProblems({ kind: 'SAMPLE_ROUND', lineId: L2 }, askFacts()))).toEqual(['body/sampleKind'])
+    expect(paths(productionAskProblems({ kind: 'SAMPLE_ROUND', lineId: L2, sampleKind: 'PROTO' }, askFacts()))).toEqual(['body/sampleKind'])
+    expect(paths(productionAskProblems({ kind: 'SAMPLE_ROUND', sampleKind: 'BRAND' }, askFacts()))).toEqual(['body/lineId'])
+    expect(paths(productionAskProblems({ kind: 'SAMPLE_ROUND', lineId: L1, sampleKind: 'PRE_PRODUCTION', requestedDate: '2026-12-01' }, askFacts({ order: order({ status: 'IN_PRODUCTION', lines: [line(L1, 10, { cut: { day: '2026-11-03', leather: false } }), line(L2, 20)] }) })))).toEqual(['body/requestedDate', 'body/lineId/CUT'])
+  })
+
+  it('what it stores: a split\'s first part, the sample round\'s one line (one piece), each column only on its kind', () => {
+    const asked = order()
+    expect(productionCellsOf({ kind: 'SPLIT_SHIPMENT', cells: [{ lineId: L1, size: '52', quantity: 2 }] }, asked)).toEqual([{ orderLineId: L1, size: '52', quantityBefore: 3, quantity: 2 }])
+    expect(productionCellsOf({ kind: 'SAMPLE_ROUND', lineId: L2, sampleKind: 'BRAND' }, asked)).toEqual([{ orderLineId: L2, size: null, quantityBefore: 5, quantity: 1 }])
+    expect(productionCellsOf({ kind: 'RUSH', requestedDate: '2026-12-01' }, asked)).toEqual([])
+    expect(productionColumnsOf({ kind: 'RUSH', requestedDate: '2026-12-01', reasonCode: 'LEAD_TIME' })).toEqual({ requestedDate: '2026-12-01', reasonCode: null, reason: null, sampleKind: null })
+    expect(productionColumnsOf({ kind: 'HOLD', reasonCode: ' LEAD_TIME ', note: ' Store moved. ', requestedDate: '2026-12-01' })).toEqual({ requestedDate: null, reasonCode: 'LEAD_TIME', reason: 'Store moved.', sampleKind: null })
+    expect(productionColumnsOf({ kind: 'SAMPLE_ROUND', lineId: L1, sampleKind: 'TOP_OF_PRODUCTION' })).toEqual({ requestedDate: null, reasonCode: null, reason: null, sampleKind: 'TOP_OF_PRODUCTION' })
+  })
+
+  it('R-12: after release a size or quantity change is accepted only as cancel-and-remake or close short; the pieces made are a task for the floor lead', () => {
+    const lines = [
+      { id: L1, seq: 10, released: true },
+      { id: L2, seq: 20, released: false },
+    ]
+    // A line still in a draft work order (or none), or the date and address alone: the amendment.
+    expect(changeAcceptWays([{ orderLineId: L2, size: '52', quantityBefore: 3, quantity: 1 }], lines)).toMatchObject({ ways: ['AMEND'], releasedLineIds: [], floorTask: null })
+    expect(changeAcceptWays([], lines).ways).toEqual(['AMEND'])
+    // Down only on a released line: close short or cancel-and-remake.
+    expect(changeAcceptWays([{ orderLineId: L1, size: '52', quantityBefore: 3, quantity: 1 }], lines)).toEqual({
+      ways: ['CLOSE_SHORT', 'CANCEL_AND_REMAKE'],
+      releasedLineIds: [L1],
+      words: { it: 'La riga 10 è già in produzione: si accetta solo chiudendo prima o annullando e rifacendo.', en: 'Line 10 is in production already: accepted only by closing short, or by cancelling and remaking.' },
+      floorTask: FLOOR_TASK_WORDS,
+    })
+    // More pieces, or another colourway, of a released line: only cancel-and-remake.
+    expect(changeAcceptWays([{ orderLineId: L1, size: '52', quantityBefore: 3, quantity: 5 }], lines).ways).toEqual(['CANCEL_AND_REMAKE'])
+    expect(changeAcceptWays([{ orderLineId: L1, size: '50', quantityBefore: 2, quantity: 2, colourwayId: '00000000-0000-4000-8000-0000000000c1' }], lines).ways).toEqual(['CANCEL_AND_REMAKE'])
+    expect(FLOOR_TASK_WORDS.en).toMatch(/floor lead/)
+    expect(acceptWayProblems('AMEND', { ways: ['CANCEL_AND_REMAKE'] })[0]?.message).toMatch(/only as cancel-and-remake or close short/)
+    expect(acceptWayProblems('CLOSE_SHORT', { ways: ['CLOSE_SHORT', 'CANCEL_AND_REMAKE'] })).toEqual([])
+    expect(paths(acceptWayProblems('CANCEL_AND_REMAKE', { ways: ['AMEND'] }))).toEqual(['body/way'])
+  })
+})
+
+describe('B-PR-24: the impact before Send — what is frozen, priced or not, the earliest date (a date only)', () => {
+  const RULES: FreezeRuleFacts[] = [
+    { id: 'rule-size-0042', field: 'SIZE_QUANTITY', frozenFrom: 'CUT', action: 'CHANGE_REQUEST', active: true, note: null },
+    { id: 'rule-date-0043', field: 'DELIVERY_DATE', frozenFrom: 'SEWING', action: 'BLOCKED', active: true, note: null },
+  ]
+  const LINES: ImpactLine[] = [
+    { id: L1, seq: 10, closedShort: false, stage: 'CUT', sizeStages: { '50': 'CUT', '52': null } },
+    { id: L2, seq: 20, closedShort: false, stage: null },
+  ]
+  const facts = (overrides: Partial<Parameters<typeof impactOf>[1]> = {}): Parameters<typeof impactOf>[1] => ({ lines: LINES, orderStage: 'CUT', rules: RULES, cancelFeePct: null, earliest: null, ...overrides })
+
+  it('lists what the ask touches that is frozen (per size, line or order), priced yes or no, never an amount', () => {
+    const change = impactOf({ kind: 'CHANGE', cells: [{ lineId: L1, size: '50' }, { lineId: L1, size: '52' }, { lineId: L2, size: '50' }] }, facts())
+    expect(change.frozen).toEqual([
+      { field: 'SIZE_QUANTITY', lineId: L1, line: '10', size: '50', state: 'CHANGE_REQUEST', words: { it: 'Riga 10, taglia 50: Taglio iniziato — taglia bloccata: una modifica è una richiesta di modifica con prezzo che il cliente accetta', en: 'Line 10, size 50: Cutting started — size frozen: a change is a priced change request the customer accepts' } },
+    ])
+    expect(change).toMatchObject({ priced: true, blocked: false, pricedWords: PRICED_WORDS, notes: [], words: { en: 'Part of what you ask is frozen: it becomes a priced change' } })
+    expect(PRICED_WORDS.en).toBe('A price may apply: we will tell you')
+    const rush = impactOf({ kind: 'RUSH', requestedDate: '2026-12-01' }, facts({ orderStage: 'SEWING' }))
+    expect(rush).toMatchObject({ priced: false, blocked: true, pricedWords: null, notes: [IMPACT_NOTES.RUSH] })
+    expect(blockedProblems(rush)).toEqual([{ path: 'body/DELIVERY_DATE', message: 'Sewing started — delivery date frozen: it cannot change any more.' }])
+    expect(impactOf({ kind: 'CANCEL' }, facts({ cancelFeePct: '15' })).priced).toBe(true)
+    expect(impactOf({ kind: 'CANCEL' }, facts({ cancelFeePct: '0' })).priced).toBe(false)
+    expect(impactOf({ kind: 'CANCEL' }, facts()).priced).toBe(false)
+    expect(impactOf({ kind: 'HOLD' }, facts())).toMatchObject({ frozen: [], priced: false, notes: [{ it: 'Una pausa può spostare la tua data', en: 'A pause may move your date' }], words: { en: 'Nothing you ask is frozen' } })
+    for (const impact of [change, rush]) expect(impactKeepable(impact)).toBe(true)
+  })
+
+  it('says the earliest date as an estimate: "From about 12 Dec — we confirm it", later than asked, partial, or none yet', () => {
+    expect(earliestWords(dateOnly([{ date: '2026-12-12', complete: true, meetsWanted: null }]))).toEqual({ it: 'Dal 12 dic circa — te lo confermiamo noi', en: 'From about 12 Dec — we confirm it' })
+    expect(earliestWords(dateOnly([{ date: '2026-12-12', complete: false, meetsWanted: false }])).en).toBe('From about 12 Dec, later than the date you asked — we confirm it (some lines are not dated yet)')
+    expect(earliestWords(dateOnly([])).en).toBe('We give you a date once we have planned it')
+    expect(impactOf({ kind: 'SAMPLE_ROUND' }, facts({ earliest: dateOnly([{ date: '2026-12-12', complete: true, meetsWanted: true }]) })).earliest).toEqual({ date: '2026-12-12', partial: false, meetsWanted: true, words: { it: 'Dal 12 dic circa — te lo confermiamo noi', en: 'From about 12 Dec — we confirm it' } })
+  })
+
+  it('wall (pure, PW-P06): impact words never carry a load, a line, another order or another brand; no number, no rule id', () => {
+    const FOREIGN = '00000000-0000-4000-8000-0000000000ff'
+    // Planning's answer as the engine gives it: lanes, steps and minutes, a load, another customer's order in its words.
+    const engine = [
+      {
+        key: L1,
+        date: '2026-12-12',
+        earliest: '2026-12-10',
+        complete: true,
+        meetsWanted: false,
+        daysLate: 3,
+        style: { id: L2, code: 'AX-100', name: 'Racer jacket' },
+        steps: [{ lane: { code: 'LINE-3', name: 'Sewing line 3' }, minutes: 840 }],
+        groups: [{ sizes: ['50'], load: 0.93 }],
+        bridgeWords: 'Waits behind SO-2026-0099 of Brand Beta',
+        warnings: [{ words: 'Sewing line 3 is 93% loaded' }],
+        words: 'Sewing line 3 · 840 min',
+      },
+    ]
+    const earliest = dateOnly(engine, 0)
+    expect(Object.keys(earliest).sort()).toEqual([...DATE_ONLY_KEYS].sort())
+    const impact = impactOf({ kind: 'CHANGE', cells: [{ lineId: L1, size: '50' }, { lineId: FOREIGN, size: '50' }], requestedDate: '2026-12-01' }, facts({ earliest, orderStage: 'SEWING' }))
+    const text = JSON.stringify(impact)
+    for (const leak of ['LINE-3', 'Sewing line', '840', '0.93', '93%', 'SO-2026-0099', 'Brand Beta', 'AX-100', 'Racer', FOREIGN, 'rule-size-0042', 'rule-date-0043', '"load"', '"minutes"', '"lane"', '"steps"']) expect(text, leak).not.toContain(leak)
+    expect(impact.frozen.map((item) => item.lineId)).toEqual([L1, null])
+    expect(impactNamesOnly(impact, new Set([L1, L2]))).toBe(true)
+    expect(impactNamesOnly({ frozen: [{ ...impact.frozen[0]!, lineId: FOREIGN }] }, new Set([L1, L2]))).toBe(false)
+    // The database's check, said first: an object of words, codes, dates and yes or no — no number anywhere, at most 8000.
+    expect(impactKeepable(impact)).toBe(true)
+    expect(impactKeepable({ priced: true, fee: 2500 })).toBe(false)
+    expect(impactKeepable({ frozen: [{ line: 10 }] })).toBe(false)
+    expect(impactKeepable({ words: 'x'.repeat(8001) })).toBe(false)
+    expect(impactKeepable([])).toBe(false)
+    expect(impactKeepable(null)).toBe(false)
+  })
+})
+
+describe('B-PR-24: the one date-only helper (shared with threads B-TH-094)', () => {
+  const dated = (date: string | null, complete = true, meetsWanted: boolean | null = null) => ({ date, complete, meetsWanted })
+
+  it('the latest line\'s date, partial when a line is undated, incomplete or left out, whether the wanted date is met — nothing else', () => {
+    expect(dateOnly([])).toEqual({ date: null, partial: true, meetsWanted: null })
+    expect(dateOnly([dated('2026-12-12', true, true), dated('2026-12-20', true, true)])).toEqual({ date: '2026-12-20', partial: false, meetsWanted: true })
+    expect(dateOnly([dated('2026-12-12', true, true), dated(null, false, null)])).toEqual({ date: '2026-12-12', partial: true, meetsWanted: null })
+    expect(dateOnly([dated('2026-12-12', true, false), dated('2026-12-01', true, true)]).meetsWanted).toBe(false)
+    expect(dateOnly([dated('2026-12-12')], 1).partial).toBe(true)
+    expect(Object.isFrozen(dateOnly([]))).toBe(true)
+  })
+
+  it('production\'s answer on a request reads the same date through it', () => {
+    const lines = [dated('2026-12-12'), dated('2026-12-03', false)]
+    expect(suggestedAnswer(lines, 1, null, TODAY)).toMatchObject({ readyDate: dateOnly(lines, 1).date, partial: dateOnly(lines, 1).partial })
+    expect(suggestedAnswer([], 0, null, TODAY)).toMatchObject({ readyDate: null, partial: true })
+  })
+})
+
+describe('B-PR-24: our counter-offer — a date, a price or words; answered by the customer; a priced one only by its buyer', () => {
+  const COUNTER = { date: '2026-12-10', fee: 2500, note: 'Only lines 10 and 20.' }
+
+  it('counters an OPEN request once, of a kind we counter, with at least a date, a price or words', () => {
+    expect(counterProblems({ kind: 'HOLD', status: 'OPEN' }, COUNTER, TODAY)).toEqual([])
+    expect(counterProblems({ kind: 'HOLD', status: 'OPEN' }, {}, TODAY)[0]?.message).toBe('Say what you offer instead: a date, a price or words.')
+    expect(counterProblems({ kind: 'HOLD', status: 'OPEN' }, { note: '   ' }, TODAY).map((issue) => issue.path)).toEqual(['body'])
+    expect(counterProblems({ kind: 'RUSH', status: 'COUNTERED' }, COUNTER, TODAY)[0]?.message).toMatch(/countered this request already/)
+    expect(counterProblems({ kind: 'RUSH', status: 'ACCEPTED' }, COUNTER, TODAY)[0]?.message).toMatch(/accepted/)
+    expect(counterProblems({ kind: 'RESUME', status: 'OPEN' }, COUNTER, TODAY)[0]?.message).toMatch(/resume is accepted or refused/)
+    expect(counterProblems({ kind: 'CHANGE', status: 'OPEN' }, { date: '2026-11-01' }, TODAY).map((issue) => issue.path)).toEqual(['body/date'])
+    expect(counterProblems({ kind: 'CHANGE', status: 'OPEN' }, { fee: -1 }, TODAY).map((issue) => issue.path)).toEqual(['body/fee'])
+    expect(counterProblems({ kind: 'CHANGE', status: 'OPEN' }, { fee: 12.5 }, TODAY).map((issue) => issue.path)).toEqual(['body/fee'])
+    expect(counterProblems({ kind: 'CHANGE', status: 'OPEN' }, { note: 'x'.repeat(2001) }, TODAY).map((issue) => issue.path)).toEqual(['body/note'])
+    expect(counterProblems({ kind: 'CANCEL', status: 'OPEN' }, { fee: 0 }, TODAY)).toEqual([])
+  })
+
+  it('R-09: the question never names the amount; a reader without the price grain sees only that a price applies, and its buyer answers', () => {
+    const question = counterQuestion('RUSH', COUNTER, 'en')
+    expect(question).toBe('Our counter-offer to your request “Urgent – asked”. The date we offer: 10 Dec. A price applies: your buyer sees it. Only lines 10 and 20.')
+    expect(counterQuestion('RUSH', COUNTER, 'it')).toBe('La nostra controproposta alla tua richiesta «Urgente – richiesto». La data che proponiamo: 10 dic. È previsto un costo: lo vede il tuo buyer. Only lines 10 and 20.')
+    for (const text of [question, counterQuestion('RUSH', COUNTER, 'it'), counteredWords(COUNTER).en, counteredWords(COUNTER).it]) expect(text).not.toMatch(/2500|25[.,]00|€/)
+    expect(counterQuestion('HOLD', { date: null, fee: 0, note: null }, 'en')).toBe('Our counter-offer to your request “Pause request”.')
+    expect(counterPriced(COUNTER)).toBe(true)
+    expect(counterPriced({ fee: 0 })).toBe(false)
+    expect(counterPriced({ fee: null })).toBe(false)
+    expect(counterForReader(COUNTER, false)).toEqual({ date: '2026-12-10', note: 'Only lines 10 and 20.', priced: true })
+    expect(counterForReader(COUNTER, true)).toEqual({ date: '2026-12-10', note: 'Only lines 10 and 20.', priced: true, fee: 2500 })
+    expect(counterAnswerHeld({ priced: true, maySeePrices: false, mayAnswer: true })).toBe('A price may apply: your buyer answers this counter-offer.')
+    expect(counterAnswerHeld({ priced: true, maySeePrices: true, mayAnswer: true })).toBeNull()
+    expect(counterAnswerHeld({ priced: false, maySeePrices: false, mayAnswer: true })).toBeNull()
+    expect(counterAnswerHeld({ priced: false, maySeePrices: true, mayAnswer: false }, 'it')).toMatch(/^Puoi leggere questa controproposta/)
+    expect(counteredWords(COUNTER).en).toBe('Our counter-offer · 10 Dec · a price applies')
+  })
+
+  it('the answer: yes carries the request out with the counter (ACCEPTED), no withdraws it', () => {
+    expect(counterOutcome('APPROVED')).toBe('ACCEPTED')
+    expect(counterOutcome('REFUSED')).toBe('WITHDRAWN')
+    expect(counterAnswerOf('APPROVED_WITH_CHANGES')).toBe('ACCEPTED')
+    expect(counterAnswerOf('REFUSED')).toBe('REFUSED')
+    expect(acceptedWithCounter({ requestedDate: '2026-12-20' }, { date: null, fee: 0, note: null })).toEqual({ date: '2026-12-20', fee: 0, note: null })
+    expect(acceptedWithCounter({ requestedDate: '2026-12-20' }, COUNTER)).toEqual({ date: '2026-12-10', fee: 2500, note: 'Only lines 10 and 20.' })
+  })
+
+  it('the events: every kind on asked, withdrawn and answered; countered and counter_answered carry ids, the kind and the answer only', () => {
+    const ids = { requestId: L1, orderId: L2, partyId: L1 }
+    for (const kind of ORDER_REQUEST_KINDS) {
+      expect(() => EVENT_CATALOGUE.parse('order_change_request.asked', 1, { ...ids, kind, lines: 0, wholeOrder: false }), kind).not.toThrow()
+      expect(() => EVENT_CATALOGUE.parse('order_change_request.withdrawn', 1, { ...ids, kind }), kind).not.toThrow()
+      expect(() => EVENT_CATALOGUE.parse('order_change_request.answered', 1, { ...ids, kind, answer: 'ACCEPTED', amendmentId: null, orderCancelled: false }), kind).not.toThrow()
+    }
+    expect(() => EVENT_CATALOGUE.parse('order_change_request.countered', 1, { ...ids, kind: 'HOLD', approvalRequestId: L2 })).not.toThrow()
+    expect(() => EVENT_CATALOGUE.parse('order_change_request.countered', 1, { ...ids, kind: 'HOLD', approvalRequestId: L2, counterFee: 2500 })).toThrow()
+    expect(() => EVENT_CATALOGUE.parse('order_change_request.counter_answered', 1, { ...ids, kind: 'RUSH', answer: 'REFUSED' })).not.toThrow()
+    expect(() => EVENT_CATALOGUE.parse('order_change_request.counter_answered', 1, { ...ids, kind: 'RUSH', answer: 'APPROVED' })).toThrow()
+    for (const type of ['order_change_request.countered', 'order_change_request.counter_answered']) {
+      expect(EVENT_CATALOGUE.get(type, 1).context, type).toBe('sales-change-requests')
+      expect(EVENT_CATALOGUE.get(type, 1).live?.permission, type).toBe('orders.view')
+    }
   })
 })

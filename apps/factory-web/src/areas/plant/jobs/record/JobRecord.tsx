@@ -7,7 +7,7 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { moveJob, photoAddress, plantTechnicians, signSafe, updateJob, type JobChange, type JobMove } from '../../_shared/api'
 import { isStepUpCancelled, useLive, useStepUp } from '../../_shared/hooks'
 import { assigneeFields, assigneeValue, instantOf, localOf, plantCan, readProblem, TIME_ZONE } from '../../_shared/model'
@@ -294,12 +294,12 @@ function JobRecordContainer({ jobId }: { jobId: string }) {
   }
 
   // B-TH-265: the job's thread docked beside both tabs (notes only: a maintenance job has no party; its company and site), with
-  // threads.read; Activity's tools are in its "⋯" (R-ACT). The print view keeps the record panels' print form.
+  // threads.read; Activity's tools are in its "⋯" (R-ACT). The print view prints the thread with ThreadPrint (B-TH-280).
   const record = value ? { type: 'MaintenanceJob', id: value.job.id, companyId: value.job.companyId, siteId: value.job.siteId } : null
   const title = value ? `${value.job.number} · ${value.job.machine.assetNumber}` : ''
   const readsThreads = session.permissions.includes('threads.read')
   const thread = value && record && readsThreads ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.job.number} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = value && record && readsThreads ? <RecordPanels record={record} title={title} /> : null
+  const printThread = value && record && readsThreads ? <ThreadPrint record={record} title={title} /> : null
 
   return (
     <JobRecordView

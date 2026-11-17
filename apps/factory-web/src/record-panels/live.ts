@@ -12,19 +12,6 @@ import type { LiveChange } from './model'
  * B-W2b-05: one connection per browser tab (shell/live/bus.ts), whoever listens.
  */
 
-/** A `change` message's data, or null when it is not one. */
-export function parseLiveData(text: string): LiveChange | null {
-  try {
-    const value = JSON.parse(text) as unknown
-    if (typeof value !== 'object' || value === null) return null
-    const { type, fields } = value as { type?: unknown; fields?: unknown }
-    if (typeof type !== 'string') return null
-    return { type, fields: typeof fields === 'object' && fields !== null ? (fields as Record<string, unknown>) : {} }
-  } catch {
-    return null
-  }
-}
-
 export interface LiveHandlers {
   onChange: (change: LiveChange) => void
   /** The stream came back after a break (or the tab's fallback poll while it is down): read everything again. */

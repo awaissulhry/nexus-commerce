@@ -73,7 +73,17 @@ const returnableItem = output({
   salesOrderLineId: id().nullable(),
   size: z.string().nullable(),
   description: z.string(),
-  order: output({ id: id(), number: z.string(), lineSeq: z.number().int() }).nullable(),
+  // ---- follow-up (th9-web-b; plan §0.5 "counts do not leak"): the customer reads its OWN order — "Your order 7" (the order's
+  // customerSeq), else its PO reference — never the office series (SO-…), which counts every customer's orders. Portal and claim link alike.
+  order: output({
+    id: id(),
+    /** "Your order 7" with its words (null: the order has no number of its own yet). */
+    yourNumber: output({ seq: z.number().int(), words }).nullable(),
+    /** Their purchase order number, when they gave one. */
+    yourRef: z.string().nullable(),
+    lineSeq: z.number().int(),
+  }).nullable(),
+  // ---- end follow-up
   invoice: output({ id: id(), number: z.string().nullable(), issueDate: day.nullable() }).nullable(),
   style: named.nullable(),
   colourway: named.nullable(),

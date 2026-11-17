@@ -33,7 +33,11 @@
       "ARTWORK": "Una grafica o un logo, sul suo file.",
       "PROOF": "Il design finale prima del taglio (su misura).",
       "REVISED_ORDER": "L'ordine modificato, riga per riga: si accetta così com'è o si rifiuta.",
-      "SIGNATURE": "Una firma esterna su questa versione del documento."
+      "SIGNATURE": "Una firma esterna su questa versione del documento.",
+      "FABRIC": "Un tessuto, sulle sue foto.",
+      "TRIM": "Un accessorio, sulle sue foto.",
+      "REPROMISE": "Una nuova data promessa: si accetta o si rifiuta; la data resta comunque.",
+      "COUNTER_OFFER": "La nostra controproposta alla richiesta del cliente: si accetta o si rifiuta."
     },
     "question": "Cosa gli chiedete?",
     "questionHint": "Con le vostre parole: è la prima cosa che legge.",
@@ -155,5 +159,6 @@
     "withdrawn": "La richiesta ({kind}) è stata ritirata.",
     "copied": "Link copiato.",
     "copyFailed": "Non siamo riusciti a copiare il link: selezionatelo e copiatelo."
-  }
+  },
+  "close": "Chiudi"
 }

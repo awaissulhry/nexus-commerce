@@ -7,7 +7,8 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { useLiveChanges } from '../../../../record-panels/live'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
+import { RecordCustomFields } from '../../../../record-panels/custom-fields/RecordCustomFields' // B-TH-280
 // ---- B-TH-261: the style's thread docked beside every tab (RecordFrame; Activity's tools in its "⋯") ----
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
 import { printHref } from '../../../../shell/print/print-model'
@@ -654,22 +655,26 @@ function StyleRecordContainer({ styleId }: { styleId: string }) {
   // B-W2b-283 (FU1:01): read while the Overview shows; saved through the one queue above.
   const markets = useStyleMarkets({ api, style: value, tab, permissions: session.permissions, write: run, reloadStyle: () => void loadStyle() })
 
-  // ---- B-TH-261: the docked thread beside every tab (its Head holds Activity's doors, R-ACT), with threads.read; the print view keeps the
-  // record panels' print form. Brand wall (W08, W12, W20, W25, W34): a private-label style's thread is its brand's only (Reply to
+  // ---- B-TH-261: the docked thread beside every tab (its Head holds Activity's doors, R-ACT), with threads.read; the print view prints
+  // the thread with ThreadPrint (B-TH-280). Brand wall (W08, W12, W20, W25, W34): a private-label style's thread is its brand's only (Reply to
   // that brand); our own collection has no party — office notes only, never shared with a customer.
   const record = value ? { type: 'Style', id: value.id, companyId: value.companyId, siteId: null } : null
   const title = value ? `${value.code} · ${value.name}` : ''
   const party = value?.brand ? { id: value.brand.id, name: value.brand.name } : null
   const thread =
     value && record && can.thread ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.code} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = value && record && can.thread ? <RecordPanels record={record} title={title} party={party ? { ...party, emails: [] } : null} /> : null
+  const printThread = value && record && can.thread ? <ThreadPrint record={record} title={title} party={party} /> : null
   // ---- end B-TH-261
+  // ---- B-TH-280: the style's custom fields at the end of its first tab (Overview & variants), as the old panels drew them above theirs.
+  const fields = value && tab === 'overview' ? <RecordCustomFields record={{ type: 'Style', id: value.id }} title={value.code} /> : null
+  // ---- end B-TH-280
 
   return (
     <StyleRecordView
       model={model}
       thread={thread}
       printThread={printThread}
+      fields={fields /* B-TH-280 */}
       depth={
         depth.model && tab === 'overview'
           ? { ...depthSlots(depth.model, depth.actions, value?.skus ?? []), markets: markets.model ? <MarketsCard model={markets.model} actions={markets.actions} /> : null /* B-W2b-283 */ }

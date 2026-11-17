@@ -481,6 +481,11 @@ export const recordSummaryContract = defineContract({
         state: output({ code: z.string(), words: summaryWords }).nullable(),
         /** The record it belongs to (a delivery's order, a receipt's PO), only when the reader may open it; null: none or not theirs. */
         parent: summaryLink.nullable(),
+        // ---- follow-up (th9-web-b)
+        /** OFFICE ONLY: the record's party (the customer or supplier its shared messages reach), so "Reply to <party>" is offered before the
+         *  first message; null: the record has none (or is never shared). The portal answer never carries it. */
+        party: output({ id: id(), name: z.string() }).nullable().optional(),
+        // ---- end follow-up (th9-web-b)
       }),
     }),
   },

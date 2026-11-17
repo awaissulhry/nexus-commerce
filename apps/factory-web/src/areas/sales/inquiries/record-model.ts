@@ -58,6 +58,9 @@ export interface InquiryRecordModel {
   readonly startProject?: { readonly held: string | null; readonly dialog: StartProjectModel | null }
   // ---- B-TH-290: production's answer — the answer, who types it (held with why) and the editor in Details; absent: not read.
   readonly production?: ProductionModel | null
+  // ---- B-TH-286 (B-TH-091; pane-facts-F06): "Move to the thread as a pinned note" on the Request note — offered with
+  // sales.inquiries.manage and threads.post (held with why when offline); busy while it goes. Absent: not offered.
+  readonly pinNote?: { readonly busy: boolean; readonly held: string | null } | null
 }
 
 export interface InquiryRecordActions {
@@ -79,6 +82,8 @@ export interface InquiryRecordActions {
   startProject?: StartProjectActions & { readonly onOpen?: () => void }
   // ---- B-TH-290: production's answer (open the editor, the draft, ask planning, use its suggestion, save, take back, close).
   production?: ProductionActions
+  // ---- B-TH-286: the Request note becomes the thread's first pinned office note (the field emptied, one command).
+  onPinNote?: () => void
   dialog?: {
     onAssign?: (assigneeId: string | null) => void
     onRetryPeople?: () => void

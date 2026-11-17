@@ -85,6 +85,10 @@ const THREADS_STAGES: readonly (readonly [string, string, () => Promise<ThreadsS
   ['th7-files', 'TH-7', () => import('./golden-flow/th7-files') as Promise<ThreadsStage>],
   ['th4-sheet', 'TH-4', () => import('./golden-flow/th4-sheet') as Promise<ThreadsStage>],
   ['th5-projects', 'TH-5', () => import('./golden-flow/th5-projects') as Promise<ThreadsStage>],
+  // ---- B-TH-281 (threads plan TH-6): the record pages on the record frame — customer A's portal order and claim with the docked
+  // conversation, the office's order and quote with the docked thread and R-ACT, customer B and a supplier behind the brand wall
+  ['th6-records', 'TH-6', () => import('./golden-flow/th6-records') as Promise<ThreadsStage>],
+  // ---- end B-TH-281
 ]
 for (const [name, slice, load] of THREADS_STAGES) {
   test(name, async () => {

@@ -7,7 +7,7 @@ import { formatTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { useLive } from '../../../quality/_shared/hooks'
 // ---- B-TH-259: the case's thread docked beside every tab (RecordFrame; Activity's tools in its "⋯") ----
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
@@ -353,14 +353,14 @@ function Container({ caseId }: { caseId: string }) {
 
   const model: ServiceRecordModel = { prefix, me, today, can, tab, loaded, live, asOf, owners, customers, contacts, draft, saving, dialog, notice, stale, busy, copied }
   // ---- B-TH-259: the case's thread docked beside every tab (its Head holds Activity's doors, R-ACT), with threads.read; the print view
-  // keeps the record panels' print form. Brand wall (W08, W20, W25, W34): the case's own customer only (a rider's case: notes only).
+  // prints the thread with ThreadPrint (B-TH-280). Brand wall (W08, W20, W25, W34): the case's own customer only (a rider's case: notes only).
   const threadRecord = record ? { type: 'ServiceCase', id: record.id, companyId: record.companyId, siteId: null } : null
   const threadParty = record?.party ? { id: record.party.id, name: record.party.legalName } : null
   const thread =
     record && threadRecord && can.threads ? (
       <OfficeRecordThread docked record={threadRecord} title={threadParty ? `${record.number} · ${threadParty.name}` : record.number} recordLabel={record.number} party={threadParty} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
     ) : null
-  const printThread = record && threadRecord && can.threads ? <RecordPanels record={threadRecord} title={record.number} party={threadParty ? { ...threadParty, emails: record.contact?.email ? [record.contact.email] : [] } : null} /> : null
+  const printThread = record && threadRecord && can.threads ? <ThreadPrint record={threadRecord} title={record.number} party={threadParty} /> : null
   // ---- end B-TH-259
 
   return (

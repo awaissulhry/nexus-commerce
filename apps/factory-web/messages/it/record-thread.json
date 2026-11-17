@@ -23,7 +23,20 @@
       "CLOSED": "Non pubblicato: questa conversazione è chiusa. Riaprila per rispondere; il tuo testo è di nuovo nel riquadro.",
       "NOT_SHAREABLE": "Non pubblicato: la conversazione di questo record resta in fabbrica e non si condivide mai con un cliente. Scrivi una nota d'ufficio; il tuo testo è di nuovo nel riquadro.",
       "other": "Non pubblicato nel portale: la fabbrica lo ha rifiutato così com'è. Il tuo testo è di nuovo nel riquadro."
-    }
+    },
+    "pinned": "Fissato per tutti su questo record.",
+    "unpinned": "Tolto dai fissati: il messaggio resta nella conversazione.",
+    "pin": {
+      "HELD": "Una mail ancora nei 10 secondi per annullare l’invio, o ripresa, non si fissa.",
+      "FULL": "Questa conversazione ha già 50 messaggi fissati: togline uno prima.",
+      "forbidden": "Per fissare serve il permesso di scrivere in questa conversazione.",
+      "gone": "Quel messaggio non è più in questa conversazione.",
+      "failed": "Il fissato non è stato cambiato. Riprova."
+    },
+    "messageGone": "Quel messaggio non è più in questa conversazione, oppure non puoi vederlo.",
+    "done": "Segnata come fatta. Si riapre da sola quando arriva un nuovo messaggio.",
+    "openAgain": "Riaperta: la conversazione torna negli elenchi di lavoro.",
+    "doneFailed": "Non è stato possibile cambiare «Fatta». Riprova."
   },
   "pane": {
     "label": "Riquadro di lettura",

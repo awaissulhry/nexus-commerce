@@ -278,3 +278,36 @@ describe('B-TH-274 — the portal’s generic page: a record’s conversation as
     }
   })
 })
+
+// ---- B-TH-286 (B-TH-091; T2-F07; wall W08): the customer sees the pins of messages shared with it, above the conversation ---------
+describe('B-TH-286 — pins in the portal conversation', () => {
+  const pins = [
+    { id: 'm2', author: 'Marco Prova', words: 'We confirm the new chart for #7.', date: '16/11/2026' },
+    { id: 'm9', author: null, words: 'Message removed after a privacy request', date: '10/11/2026' },
+  ]
+
+  it('draws one line per pin (who, when, one line of its words) in it and en; nothing when nothing is pinned', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = render(createElement(ThreadView, { model: betaThread({ pins }) }), locale)
+      const text = textOf(html)
+      expect(text).toContain(locale === 'en' ? '2 pinned messages' : '2 messaggi fissati')
+      expect(text).toContain('We confirm the new chart for #7.')
+      // A pin with no author (removed) names the factory, never someone made up.
+      expect(text).toContain('Pelletteria Esempio · 10/11/2026')
+      expect(text).not.toMatch(/\bthread\.pins\./)
+      expect(scanText(text, BRAND_ALPHA)).toEqual([])
+    }
+    expect(render(createElement(ThreadView, { model: betaThread() }))).not.toContain('fw-pthread-pins')
+    expect(render(createElement(ThreadView, { model: betaThread({ pins: [] }) }))).not.toContain('fw-pthread-pins')
+  })
+
+  it('reads the pins through the API’s partner answer only (its own customer’s, never an office note’s, never who pinned)', () => {
+    const api = readFileSync(new URL('../api.ts', import.meta.url), 'utf8')
+    const block = api.slice(api.indexOf('---- B-TH-286'), api.indexOf('---- end B-TH-286'))
+    expect(block).toContain('/pins')
+    expect(block).not.toMatch(/pinnedBy|audience/)
+    const thread = readFileSync(new URL('../thread/PortalThread.tsx', import.meta.url), 'utf8')
+    expect(thread).toContain('fetchPins(frame.api, type, id, signal)')
+  })
+})
+// ---- end B-TH-286

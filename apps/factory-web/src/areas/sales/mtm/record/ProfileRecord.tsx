@@ -69,7 +69,7 @@ import type { Read } from '../view-model'
 import type { Loaded, ProfileRecordModel, RangeModel, RecordDialog } from './view-model'
 import { ProfileRecordView } from './view/ProfileRecordView'
 // B-W2b-371: the office's and the fittings' photos (XF2:01), the rider's thread (XF2:02).
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { useOfficePhotos } from '../photos/use-photos'
 // ---- B-TH-258: the rider's thread docked on RecordFrame (Activity's tools in its "⋯") ----
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
@@ -272,7 +272,7 @@ function Container({ profileId }: { profileId: string }) {
         printHref={printHref(pathname, params?.toString() ?? '')}
       />
     ) : null
-  const printThread = record && firstId ? <RecordPanels record={{ type: 'MeasurementProfile', id: firstId, companyId: null, siteId: null }} title={`${record.riderName} · ${record.garmentType}`} party={{ id: record.partyId, name: record.customer.name, emails: [] }} /> : null
+  const printThread = record && firstId ? <ThreadPrint record={{ type: 'MeasurementProfile', id: firstId, companyId: null, siteId: null }} title={`${record.riderName} · ${record.garmentType}`} party={{ id: record.partyId, name: record.customer.name }} /> : null
 
   // ---- the shared dialogs (New revision, Send a measurement link, Use in a new quote) -----------------------------------------
   const measurements = useMeasurementsDialog({

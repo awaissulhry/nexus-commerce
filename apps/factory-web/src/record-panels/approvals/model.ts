@@ -3,7 +3,7 @@ import { isApiError, issuePath } from '../../lib/api/errors'
 import type { OfficeRequest } from './api'
 
 /**
- * The record panels' Approvals tab (B-W2b-188; design links.approve conn "Office: sales.orders › Changes, sales.mtm ›
+ * A record's requests to its partner (B-W2b-188; B-TH-280: the docked thread's Ask door and Approvals window; design links.approve conn "Office: sales.orders › Changes, sales.mtm ›
  * Proofs, quality.ncr, products.samples › Approval"; COL-064): the record's approval requests to its partner, "Ask a
  * partner to approve" (the dialog), the link given once to pass on, and Withdraw. Pure, so the tests hold it.
  */
@@ -189,9 +189,6 @@ export function statusTone(status: ApprovalStatus): 'neutral' | 'info' | 'succes
       return 'neutral'
   }
 }
-
-/** The tab's count: the requests that still wait for an answer (null while unknown). */
-export const openCount = (model: Pick<ApprovalsPanelModel, 'read'>): number | null => (model.read.status === 'ready' ? model.read.requests.filter((request) => request.status === 'OPEN').length : null)
 
 /** The files a request may take: current ones only (a superseded version never goes). */
 export function askFilesOf(files: ReadonlyArray<{ id: string; name: string; contentType: string; status: string; supersededAt?: string | null }> | null): AskFile[] | null {

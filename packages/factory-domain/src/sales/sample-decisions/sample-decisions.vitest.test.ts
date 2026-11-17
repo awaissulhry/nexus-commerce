@@ -64,9 +64,9 @@ describe('the decision of a round (SAL-312)', () => {
     expect(answerHeldWords({ stage: 'UNDER_REVIEW', approvalRequestId: null }, 'r1', 'en')).toBeNull()
     expect(answerHeldWords({ stage: 'DECIDED', approvalRequestId: 'r1' }, 'r1', 'it')).toBe('Questo campione è già stato deciso.')
     expect(answerHeldWords({ stage: 'SENT', approvalRequestId: 'r2' }, 'r1', 'en')).toBe('We sent you a newer request for this sample.')
-    // A sample round is asked as a SAMPLE, a swatch as its own COLOUR or LEATHER.
+    // A sample round is asked as a SAMPLE, a swatch as its own COLOUR or LEATHER (B-PR-24: or FABRIC or TRIM).
     expect(kindsFor('SampleRound')).toEqual(['SAMPLE'])
-    expect(kindsFor('SampleSwatch')).toEqual(['COLOUR', 'LEATHER'])
+    expect(kindsFor('SampleSwatch')).toEqual(['COLOUR', 'LEATHER', 'FABRIC', 'TRIM'])
   })
 })
 

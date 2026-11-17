@@ -9,8 +9,9 @@ import type { FileSource } from './use-on' // B-TH-231
  * lock), and "All files" (T9). The line is absent with no files. The pure part, shared with the Files view (T9). No React,
  * no API.
  *
- * Not drawn until the back end has it: pins (N4, B-TH-091), the measurement-sheet lock (N11, B-TH-083), "files not kept on
- * arrival" (thread-G10). Small previews come with B-TH-063: until a file has one, its kind's icon (never the original).
+ * B-TH-286: the pins (N4, B-TH-091) lead the line ("2 pinned"; below). The measurement-sheet lock (N11, B-TH-083) and "files not
+ * kept on arrival" (thread-G10) are drawn by their own steps. Small previews come with B-TH-063: until a file has one, its kind's icon
+ * (never the original).
  *
  * Brand wall (W25, W26): the line lists only this record's files (POST /files files the API lets the reader see; the count
  * is "files you can see", never a total) with their audience; "Customer" / "Supplier" marks a file shared with THIS
@@ -173,3 +174,50 @@ export function toViewerFile(file: ThreadFile, links: { readonly src: string | U
 
 /** Where the strip's open or closed state is remembered on this device (per person). */
 export const stripKey = (personId: string | null) => `factory.thread.filesStrip.${personId ?? 'anyone'}`
+
+// ---- B-TH-286 (B-TH-091; T2-F07 "2 pinned", T2-F09): the pins on the files line ------------------------------------------------
+/**
+ * One pin as the line's popover lists it: a pointer to the message (never a copy of its words: one line of them), who wrote it and
+ * when, an office note marked as such, how many files it carries, "removed" when the message was erased after a privacy request.
+ * The office alone reads who pinned it (the API never tells a portal reader).
+ */
+export interface PinLine {
+  readonly messageId: string
+  readonly author: string | null
+  readonly excerpt: string
+  readonly at: string
+  /** An office note (the customer never reads it, nor its pin). */
+  readonly office: boolean
+  readonly files: number
+  readonly removed: boolean
+  readonly pinnedBy: string | null
+  readonly pinnedAt: string
+}
+
+/** The API's pins (GET …/pins) as the line's popover lists them, oldest pin first (as the API orders them). */
+export function pinLinesOf(
+  pins: readonly { readonly messageId: string; readonly pinnedAt: string; readonly pinnedBy?: { readonly name: string | null } | undefined; readonly message: { readonly authorName: string | null; readonly excerpt: string; readonly at: string; readonly audience?: 'OFFICE' | 'PARTNER' | undefined; readonly attachmentCount: number; readonly removed: boolean } }[],
+): PinLine[] {
+  return pins.map((pin) => ({
+    messageId: pin.messageId,
+    author: pin.message.removed ? null : pin.message.authorName,
+    excerpt: pin.message.removed ? '' : pin.message.excerpt,
+    at: pin.message.at,
+    office: pin.message.audience === 'OFFICE',
+    files: pin.message.attachmentCount,
+    removed: pin.message.removed,
+    pinnedBy: pin.pinnedBy?.name ?? null,
+    pinnedAt: pin.pinnedAt,
+  }))
+}
+
+/** What a pin line says for its message: its words; "Message removed after a privacy request"; "2 files" for a message of files only. */
+export function pinText(line: Pick<PinLine, 'excerpt' | 'files' | 'removed'>): { readonly key: 'pins.removed' | 'pins.filesOnly'; readonly params?: Readonly<Record<string, number>> } | { readonly text: string } {
+  if (line.removed) return { key: 'pins.removed' }
+  if (line.excerpt.trim() === '') return { key: 'pins.filesOnly', params: { count: line.files } }
+  return { text: line.excerpt }
+}
+
+/** T2-F09: the line is drawn when it holds pins or files (nothing empty takes a band); null pins: not read (yet), not counted. */
+export const lineShown = (files: readonly ThreadFile[] | null, pins: readonly PinLine[] | null | undefined): boolean => files === null || fileSeries(files).length > 0 || (pins?.length ?? 0) > 0
+// ---- end B-TH-286

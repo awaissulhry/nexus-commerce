@@ -6,7 +6,7 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { downloadLink } from '../../../../record-panels/api'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { storeUrl } from '../../../../record-panels/store'
 import { romeToday } from '../../costing/model'
 import { useCoalesced, useLive } from '../../_shared/hooks'
@@ -233,7 +233,7 @@ export function SupplierInvoiceRecord({ invoiceId }: { invoiceId: string }) {
           : undefined
       }
       thread={value && record ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.number} party={{ id: value.supplier.id, name: value.supplier.name }} partyRole="supplier" printHref={printHref(pathname, params?.toString() ?? '')} /> : null}
-      printThread={value && record ? <RecordPanels record={record} title={title} party={{ id: value.supplier.id, name: value.supplier.name, emails: [] }} /> : null}
+      printThread={value && record ? <ThreadPrint record={record} title={title} party={{ id: value.supplier.id, name: value.supplier.name }} partyRole="supplier" /> : null}
       actions={{
         onRetry: () => void load(),
         onRetryCandidates: () => value && readCandidates(value),

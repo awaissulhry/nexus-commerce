@@ -54,6 +54,10 @@ import { designScreen as repairScreen } from './repair/fixtures'
 import { portalArrivalOf } from '../../shell/record/model'
 // ---- end B-TH-275
 import { designScreen as recordScreen } from './record/fixtures'
+// ---- follow-up (th9-web-b)
+import { returnableSchema } from './api'
+import { itemFacts, orderFact } from './model'
+// ---- end follow-up
 
 /**
  * SCR-187 (B-W2b-197): the customer's Returns & claims, pure — the addresses and tabs, the steps of a return and of a
@@ -388,3 +392,33 @@ describe('B-TH-275 — returns, complaints and repairs dock their conversation',
   })
 })
 // ---- end B-TH-275
+
+// ---- follow-up (th9-web-b; plan §0.5 "counts do not leak"): the start dialog names the customer's OWN order, never the office series.
+describe('the order an item came on, in the customer’s own number', () => {
+  const base = returnableRead().items[0]!
+  const withOrder = (order: NonNullable<typeof base.order>) => ({ ...base, order })
+
+  it('says “your order 12, line 1” from the customer’s own number, in both languages, and never an office number', () => {
+    const own = withOrder({ id: 'o', yourNumber: { seq: 12, words: { en: 'Your order 12', it: 'Il vostro ordine 12' } }, yourRef: 'BA-PO-771', lineSeq: 1 })
+    expect(orderFact(own.order, t)).toBe('your order 12, line 1')
+    expect(orderFact(own.order, createTranslator('it', CATALOGUE.it[NS] ?? {}))).toBe('tuo ordine 12, riga 1')
+    expect(itemFacts(own, t)[0]).toBe('your order 12, line 1')
+    expect(itemFacts(own, t).join(' · ')).not.toMatch(/SO-/)
+  })
+
+  it('falls back to the PO they gave, then to “one of your orders”', () => {
+    expect(orderFact({ id: 'o', yourNumber: null, yourRef: 'BA-PO-771', lineSeq: 2 }, t)).toBe('your PO BA-PO-771, line 2')
+    expect(orderFact({ id: 'o', yourNumber: null, yourRef: null, lineSeq: 3 }, t)).toBe('one of your orders, line 3')
+  })
+
+  it('reads an answer with the customer’s number and refuses one that names only the office series', () => {
+    const answer = { ...returnableRead(), items: [{ ...base, order: { id: 'o', yourNumber: { seq: 7, words: { en: 'Your order 7', it: 'Il vostro ordine 7' } }, yourRef: null, lineSeq: 1 } }] }
+    expect(returnableSchema.parse(answer).items[0]!.order).toEqual({ id: 'o', yourNumber: { seq: 7, words: { en: 'Your order 7', it: 'Il vostro ordine 7' } }, yourRef: null, lineSeq: 1 })
+    expect(returnableSchema.safeParse({ ...answer, items: [{ ...base, order: { id: 'o', number: 'SO-2026-0141', lineSeq: 1 } }] }).success).toBe(false)
+  })
+
+  it('has the three words in Italian and English', () => {
+    for (const locale of ['it', 'en'] as const) for (const key of ['start.orderLine', 'start.orderRefLine', 'start.orderLineOnly']) expect(has(locale, key), `${locale} ${key}`).toBe(true)
+  })
+})
+// ---- end follow-up

@@ -7,6 +7,9 @@ import { isApiError } from '../../../lib/api/errors'
 import { formatDate, formatTime } from '../../../lib/i18n/format'
 import { useT } from '../../../lib/i18n/provider'
 import { composeDraftKey, readKeptCompose, subjectUsed } from '../../../lib/request-compose/model'
+// B-TH-287: the New order draft on the server (the newer of it and this device's copy).
+import { fromServerDraft, newerDraft } from '../../../lib/request-compose/server-draft'
+import { fetchNewRequestDraft } from '../neworder/api'
 import { fetchRequests, type RequestList } from '../requests/api'
 // B-TH-238: the Messages card — the waiting requests' new messages (POST /threads/unread, the portal's own client).
 import { readUnreadWith } from '../../../lib/last-message-cell/api'
@@ -136,7 +139,11 @@ function HomeContainer() {
   const [why, setWhy] = useState<Record<string, PromiseWhy>>({})
   const [slow, setSlow] = useState(false)
   // B-TH-223 (P-HOME.actions-F02): the unsent New order kept on this device ("Draft: … · Continue"), read after mounting.
-  const [draft, setDraft] = useState<{ subject: string; at: string } | null>(null)
+  // ---- B-TH-287: … and on the server ("Draft: … · saved 10:42 · Continue"): the newer of the two; a device copy the server no longer
+  // keeps (sent or discarded on another computer) is not offered. Asked of the server only by a buyer outside a preview (the New
+  // order draft is theirs: portal.orderRequests.manage); a failed read shows the device's copy as before.
+  const [draft, setDraft] = useState<{ subject: string; at: string; where: 'server' | 'device' } | null>(null)
+  const asksServer = can('portal.orderRequests.manage') && !frame.me.preview
   useEffect(() => {
     let storage: Storage | null = null
     try {
@@ -145,8 +152,28 @@ function HomeContainer() {
       storage = null
     }
     const kept = readKeptCompose(storage, composeDraftKey(frame.me.user.id, frame.me.party.code), Date.now())
-    setDraft(kept ? { subject: subjectUsed(kept.draft) || kept.draft.customerRef || '…', at: formatTime(new Date(kept.savedAt).toISOString(), { locale }) } : null)
-  }, [frame.me.user.id, frame.me.party.code, locale])
+    const line = (found: { draft: { subject: string; message: string; customerRef: string }; savedAt: number }, where: 'server' | 'device') => ({ subject: subjectUsed(found.draft) || found.draft.customerRef || '…', at: formatTime(new Date(found.savedAt).toISOString(), { locale }), where })
+    const deviceLine = kept ? line(kept, 'device') : null
+    if (!asksServer) {
+      setDraft(deviceLine)
+      return
+    }
+    let gone = false
+    fetchNewRequestDraft(api).then(
+      (read) => {
+        if (gone) return
+        const chosen = newerDraft(fromServerDraft(read), kept, true)
+        setDraft(chosen && !chosen.forget ? line(chosen, chosen.source) : null)
+      },
+      () => {
+        if (!gone) setDraft(deviceLine)
+      },
+    )
+    return () => {
+      gone = true
+    }
+  }, [api, asksServer, frame.me.user.id, frame.me.party.code, locale])
+  // ---- end B-TH-287
 
   const keep = <T,>(set: (update: (current: Async<T>) => Async<T>) => void) => () => set((current) => ({ state: current.value ? 'ready' : 'error', value: current.value }))
   const readHome = useCallback(() => {

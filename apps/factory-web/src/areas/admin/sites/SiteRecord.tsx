@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../lib/api/errors'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
-import { RecordPanels } from '../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../_shared/record-thread/ThreadPrint'
 import {
   createLine,
   createStation,
@@ -116,12 +116,12 @@ export function SiteRecord({ siteId }: { siteId: string }) {
   }
 
   // B-TH-269: the site's thread docked beside every tab (notes only: no party on an admin record, W03), with threads.read (the API asks
-  // nothing more of a Site thread); Activity's tools are in its "⋯" (R-ACT). The print view keeps the record panels' print form.
+  // nothing more of a Site thread); Activity's tools are in its "⋯" (R-ACT). The print view prints the thread with ThreadPrint (B-TH-280).
   const site = structure?.site ?? null
   const record = site ? { type: 'Site', id: site.id, companyId: site.companyId, siteId: site.id } : null
   const mayThread = held.has('threads.read')
   const thread = site && record && mayThread ? <OfficeRecordThread docked record={record} title={`${site.code} · ${site.name}`} recordLabel={site.code} party={null} printHref={printHref(pathname ?? '', params?.toString() ?? '')} /> : null
-  const printThread = site && record && mayThread ? <RecordPanels record={record} title={site.name} /> : null
+  const printThread = site && record && mayThread ? <ThreadPrint record={record} title={site.name} /> : null
 
   return (
     <SiteRecordView

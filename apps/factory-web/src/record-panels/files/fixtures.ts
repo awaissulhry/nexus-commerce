@@ -1,21 +1,20 @@
-import { createElement } from 'react'
 import { defineDesignScreen } from '../../lib/design/design-screen'
-import { DEMO_COMPANIES, DEMO_SITES } from '../../shell/design-data'
-import type { PanelFile, RecordPanelsViewModel } from '../model'
-import { RecordPanelsView } from '../view/RecordPanelsView'
+import type { PanelFile } from '../model'
 import type { DocumentsState, FileDepthModel, MarkupItem, VersionRow } from './model'
+import { FilesDepthCase, type FilesDepthCaseModel } from './view/FilesDepthCase'
 
 /**
- * SCR-006-files — the record panels' Files tab in depth (B-W2b-177; design shell.panels › Files, pop:file-versions
- * "Versions of JK-210-pattern.pdf", sec:guards; COL-048, COL-049, COL-055, COL-046) with made-up data only: a demo
- * purchase order whose move to Confirmed waits for the supplier's certificate, documents with their expiry, the Versions
- * pop-up (who, when, size, which records use it, restore, side by side of two pictures), what a file is and until when,
- * markup of a picture and of a PDF page, and the states: reading, unreadable, no right (held with the reason).
+ * SCR-006-files — the files in depth (B-W2b-177; design shell.panels › Files, pop:file-versions "Versions of
+ * JK-210-pattern.pdf", sec:guards; COL-048, COL-049, COL-055, COL-046), B-TH-280: in the docked thread's Files view (the old
+ * record panels' Files tab went), with made-up data only: a demo purchase order whose move to Confirmed waits for the
+ * supplier's certificate (the view's "Missing before …" lines), documents with their type and expiry, the Versions pop-up (who,
+ * when, size, which records use it, restore, side by side of two pictures), what a file is and until when, markup of a picture
+ * and of a PDF page, and the states: reading, unreadable, no right (held with the reason).
  */
 
 const at = (day: number, hour: number, minute = 0) => new Date(Date.UTC(2026, 9, day, hour, minute)).toISOString()
 const fid = (n: number) => `0190f0e2-7a7a-7000-8000-${String(n).padStart(12, '0')}`
-const RECORD = { type: 'PurchaseOrder', id: '0190f0e2-5555-7000-8000-000000000177', companyId: DEMO_COMPANIES[0].id, siteId: DEMO_SITES[0].id }
+const RECORD = { type: 'PurchaseOrder', id: '0190f0e2-5555-7000-8000-000000000177', label: 'PO-000177' }
 
 const file = (n: number, name: string, extra: Partial<PanelFile> = {}): PanelFile => ({
   id: fid(n),
@@ -110,37 +109,26 @@ const MARKUPS: MarkupItem[] = [
 
 const depth = (over: Partial<FileDepthModel> = {}): FileDepthModel => ({ documents: { status: 'ready', value: DOCUMENTS }, canUpload: true, versions: null, tag: null, markup: null, notice: null, ...over })
 
-const base = (over: Partial<FileDepthModel> = {}, model: Partial<RecordPanelsViewModel> = {}): RecordPanelsViewModel => ({
+const base = (over: Partial<FileDepthModel> = {}, model: Partial<FilesDepthCaseModel> = {}): FilesDepthCaseModel => ({
   record: RECORD,
-  title: 'Ordine di acquisto PO-000177',
-  party: { id: '0190f0e2-6666-7000-8000-000000000177', name: 'Conceria Esempio S.r.l.', emails: ['ordini@conceria-esempio.example.com'] },
-  can: { post: true, email: true, manage: true, readFiles: true, upload: true, share: true },
-  thread: null,
-  messages: { items: [], more: false },
-  files: { items: FILES, more: false },
-  uploads: [],
-  timeline: { items: [], more: false },
-  timelineFilter: 'all',
-  people: [],
-  tab: 'files',
+  party: { id: '0190f0e2-6666-7000-8000-000000000177', role: 'supplier', name: 'Conceria Esempio S.r.l.' },
+  files: FILES,
   depth: depth(over),
+  canUpload: true,
+  now: Date.parse(at(29, 9)),
   ...model,
 })
 
-function FilesDepthDesign({ model }: { model: RecordPanelsViewModel }) {
-  return createElement(RecordPanelsView, { model })
-}
-
-export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
+export const designScreen = defineDesignScreen<FilesDepthCaseModel>({
   screen: 'SCR-006-files',
-  title: 'Record panels › Files in depth: required documents, expiry, versions, markup',
-  view: FilesDepthDesign,
+  title: 'Files view › in depth: required documents, type and expiry, versions, markup',
+  view: FilesDepthCase,
   cases: [
     {
       id: 'required',
       label: 'What the next moves need: Confirmed blocked by an expired supplier certificate, Received warned',
       model: base(),
-      note: "The certificate counts from the supplier's own files. Each file says its kind and expiry; Versions, Mark up and What it is sit on each row.",
+      note: "The Files view's lines say what Confirmed and Received still need (an expired document says when it expired); the supplier's own certificate counts too. Each file says its type and expiry beside who sees it; Versions, Mark up and What it is sit on each row.",
     },
     { id: 'all-met', label: 'Everything on file: no banner', model: base({ documents: { status: 'ready', value: { ...DOCUMENTS, moves: [], partyDocuments: [] } } }) },
     { id: 'documents-loading', label: 'Reading the documents: What it is waits with the reason', model: base({ documents: { status: 'loading' } }) },
@@ -148,7 +136,7 @@ export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
     {
       id: 'no-right',
       label: 'Read only (files.read): Mark up and What it is held with the reason',
-      model: base({ canUpload: false, documents: { status: 'ready', value: { ...DOCUMENTS, mayTag: false } } }, { can: { post: false, email: false, manage: false, readFiles: true, upload: false, share: false } }),
+      model: base({ canUpload: false, documents: { status: 'ready', value: { ...DOCUMENTS, mayTag: false } } }, { canUpload: false }),
     },
     { id: 'versions-loading', label: 'Versions pop-up: reading', model: base({ versions: { fileId: PATTERN_V2.id, name: PATTERN_V2.name, read: { status: 'loading' }, picked: [], compare: null, busy: false, problem: null } }) },
     {

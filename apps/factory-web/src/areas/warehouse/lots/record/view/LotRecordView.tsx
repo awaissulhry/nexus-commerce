@@ -45,10 +45,10 @@ export type { LotRecordActions, LotRecordModel } from '../../model'
  * trace reports), Moves (the ledger filtered by the lot with the running balance). ONE notice in the body column: a rejected lot with
  * stock asks what happens to it (return to the supplier — a claim — or write it off per place), then the rest behind "N more".
  */
-export function LotRecordView({ model, actions, thread, printThread }: { model: LotRecordModel; actions?: LotRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
+export function LotRecordView({ model, actions, thread, printThread, fields }: { model: LotRecordModel; actions?: LotRecordActions; thread?: ReactNode; printThread?: ReactNode; /** B-TH-280: the custom fields (Overview & quality only). */ fields?: ReactNode }) {
   return (
     <LotsMessages>
-      <LotRecordBody model={model} actions={actions} thread={thread} printThread={printThread} />
+      <LotRecordBody model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} />
     </LotsMessages>
   )
 }
@@ -92,7 +92,7 @@ function LotState({ record, listHref, onRetry }: { record: Exclude<LotRecordMode
   )
 }
 
-function LotRecordBody({ model, actions, thread, printThread }: { model: LotRecordModel; actions?: LotRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
+function LotRecordBody({ model, actions, thread, printThread, fields }: { model: LotRecordModel; actions?: LotRecordActions; thread?: ReactNode; printThread?: ReactNode; fields?: ReactNode }) {
   const t = useWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -170,6 +170,7 @@ function LotRecordBody({ model, actions, thread, printThread }: { model: LotReco
       threadLabel={t('lt.record.dockLabel')}
       thread={thread ?? null}
       printThread={printThread}
+      fields={fields /* B-TH-280 */}
       wide={model.tab === 'moves'}
       band={{
         back,

@@ -6,7 +6,7 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { useLocale } from '../../../../lib/i18n/provider'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { liveMatches, useLive } from '../../../quality/_shared/hooks'
 import { problemKey } from '../../../quality/_shared/model'
 import { RecordProblem, RecordSkeleton } from '../../../quality/_shared/parts'
@@ -488,11 +488,11 @@ function Container({ returnId }: { returnId: string }) {
     )
 
   // ---- B-TH-259: the return's thread docked beside every tab (its Head holds Activity's doors, R-ACT), with threads.read; the print
-  // view keeps the record panels' print form. Brand wall (W08, W14, W20, W25, W34): the return's own customer only.
+  // view prints the thread with ThreadPrint (B-TH-280). Brand wall (W08, W14, W20, W25, W34): the return's own customer only.
   const record = { type: 'ReturnAuthorisation', id: rma.id, companyId: rma.companyId, siteId: rma.siteId }
   const party = rma.party ? { id: rma.party.id, name: rma.party.legalName } : null
   const thread = can.threadsRead ? <OfficeRecordThread docked record={record} title={rma.party ? `${rma.number} · ${rma.party.legalName}` : rma.number} recordLabel={rma.number} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = can.threadsRead ? <RecordPanels record={record} title={rma.number} party={party ? { ...party, emails: [] } : null} /> : null
+  const printThread = can.threadsRead ? <ThreadPrint record={record} title={rma.number} party={party} /> : null
   // ---- end B-TH-259
 
   const model: RmaModel = {

@@ -197,7 +197,7 @@ export function returnableRead(over: Partial<ReturnableRead> = {}): ReturnableRe
     salesOrderLineId: id(100 + n),
     size,
     description: n === 1 ? JACKET : TROUSERS,
-    order: { id: id(90), number: 'SO-2026-0141', lineSeq: n },
+    order: { id: id(90), yourNumber: { seq: 12, words: { en: 'Your order 12', it: 'Il vostro ordine 12' } }, yourRef: 'BA-PO-771', lineSeq: n }, // follow-up (th9-web-b): never the office series
     invoice: { id: id(91), number: 'FT-2026-0088', issueDate: dayAt(-25) },
     style: n === 1 ? { code: 'JKT-DEMO-01', name: 'Giacca Demo Touring' } : { code: 'PNT-DEMO-02', name: 'Pantalone Demo Touring' },
     colourway: { code: 'NER', name: n === 1 ? 'Nero' : 'Sabbia' },

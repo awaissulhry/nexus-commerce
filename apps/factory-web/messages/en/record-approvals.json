@@ -33,7 +33,11 @@
       "ARTWORK": "An artwork or a logo, on its file.",
       "PROOF": "The final design before cutting (made to measure).",
       "REVISED_ORDER": "The order as revised, line by line: accepted as it stands or refused.",
-      "SIGNATURE": "An outside signature on this document's version."
+      "SIGNATURE": "An outside signature on this document's version.",
+      "FABRIC": "A fabric, on its photos.",
+      "TRIM": "A trim, on its photos.",
+      "REPROMISE": "A new promise date: accepted or refused; the date stands either way.",
+      "COUNTER_OFFER": "Our counter-offer to the customer's request: accepted or refused."
     },
     "question": "What do you ask them?",
     "questionHint": "In your words: it is the first thing they read.",
@@ -155,5 +159,6 @@
     "withdrawn": "The {kind} request was withdrawn.",
     "copied": "The link is copied.",
     "copyFailed": "The link could not be copied: select it and copy it."
-  }
+  },
+  "close": "Close"
 }

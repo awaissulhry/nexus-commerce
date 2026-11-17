@@ -3,7 +3,7 @@ import { isApiError, issuePath } from '../../lib/api/errors'
 import type { InviteAnswer, OfficeShare, RecordShares } from './api'
 
 /**
- * The record panels' Partners tab (B-W2b-200; COL-061, COL-062; design shell.panels "the record's followers and external
+ * Who outside is invited to a record (B-W2b-200; B-TH-280: the docked thread's Share door and Partners window; COL-061, COL-062; design shell.panels "the record's followers and external
  * participants"), pure: who may be invited, the invitation's own checks (the API checks again), what holds each button, and
  * the API's refusals as message keys of the `record-shares` catalogue. Nothing here fetches.
  */
@@ -127,9 +127,6 @@ export function shareActionHeld(share: Pick<OfficeShare, 'state' | 'may'>, canMa
   if (busy) return 'held.busy'
   return null
 }
-
-/** The invitations that still live (the tab's count). */
-export const liveCount = (model: Pick<SharesPanelModel, 'read'>): number | null => (model.read.status === 'ready' ? model.read.data.shares.filter((share) => share.state === 'LIVE').length : null)
 
 /** What the person sees after an invitation: mailed, mail failed (the link is still made), or the link to pass on. */
 export function invitedNotice(answer: InviteAnswer): SharesPanelModel['notice'] {

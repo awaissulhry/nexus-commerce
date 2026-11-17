@@ -49,7 +49,11 @@
     "useOn": "Usa su un altro record…",
     "useOnHint": "Copia i suoi file su un ordine, un preventivo o un modello dello stesso cliente",
     "correct": "Correggi",
-    "correctHint": "un nuovo messaggio legato a questo; nulla viene modificato"
+    "correctHint": "un nuovo messaggio legato a questo; nulla viene modificato",
+    "pin": "Fissa per tutti",
+    "pinHint": "tutti su questo record lo trovano tra i «fissati»; non è un segnalibro personale",
+    "unpin": "Togli dai fissati",
+    "unpinHint": "esce dai «fissati» per tutti; il messaggio resta"
   },
   "body": {
     "showAll": "Mostra tutto ({count} righe)",
@@ -140,5 +144,8 @@
   "filesOnly": {
     "line_one": "{count} file",
     "line_other": "{count} file"
+  },
+  "pin": {
+    "pinned": "Fissato per tutti su questo record"
   }
 }

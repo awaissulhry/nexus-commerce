@@ -152,3 +152,48 @@ describe('B-TH-076 / T09: the portal’s summary row, through the partner views 
     neutral404(await asPortal(alpha, 'Shipment', newId()))
   })
 })
+
+// ---- follow-up (th9-web-b): the record's party in the OFFICE summary, so the docked thread offers "Reply to <party>" before the first
+// message (the thread, and so its party, exists only after one). The portal answer never carries it (brand wall).
+describe('follow-up (th9-web-b): the record’s party, office only', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const nameOf = async (partyId: string): Promise<string> => {
+    const party = await one<{ legalName: string; tradeName: string | null }>('SELECT "legalName", "tradeName" FROM "Party" WHERE id = $1', [partyId])
+    return party.tradeName ?? party.legalName
+  }
+
+  it('an order with no message yet names its customer (no thread to learn it from); a delivery names the same customer', async () => {
+    const customer = { id: world.p1, name: await nameOf(world.p1) }
+    const quiet = await admin<{ id: string }>(
+      `SELECT so.id FROM "SalesOrder" so WHERE so."tenantId" = $1 AND so."partyId" = $2
+          AND NOT EXISTS (SELECT 1 FROM "Thread" t WHERE t."tenantId" = so."tenantId" AND t."recordType" = 'SalesOrder' AND t."recordId" = so.id)
+        ORDER BY so.number LIMIT 1`,
+      [world.tenantId, world.p1],
+    )
+    expect(quiet.length, 'a seeded order of P1 without a thread').toBe(1)
+    const before = await asOffice('all', 'SalesOrder', quiet[0]!.id)
+    expect(before.status, JSON.stringify(before.body)).toBe(200)
+    expect(before.body.summary.party).toEqual(customer)
+    const delivery = await asOffice('all', 'Shipment', ids.shipment)
+    expect(delivery.body.summary.party).toEqual(customer)
+  })
+
+  it('a record never shared (a work order: its customer is a wall party only) and a record with no party name none', async () => {
+    const workOrder = await asOffice('all', 'WorkOrder', ids.workOrder)
+    expect(workOrder.status, JSON.stringify(workOrder.body)).toBe(200)
+    expect(workOrder.body.summary.party).toBeNull()
+    const company = await asOffice('all', 'Company', world.companyA)
+    expect(company.status, JSON.stringify(company.body)).toBe(200)
+    expect(company.body.summary.party).toBeNull()
+  })
+
+  it('the portal’s summary never carries a party, of its own customer or another', async () => {
+    const own = await asPortal(alpha, 'Shipment', ids.shipment)
+    expect(own.status, JSON.stringify(own.body)).toBe(200)
+    expect('party' in own.body.summary).toBe(false)
+    const order = await asPortal(alpha, 'SalesOrder', ids.order)
+    expect(order.status, JSON.stringify(order.body)).toBe(200)
+    expect('party' in order.body.summary).toBe(false)
+    expect(JSON.stringify(order.body)).not.toContain(world.p1)
+  })
+})
+// ---- end follow-up

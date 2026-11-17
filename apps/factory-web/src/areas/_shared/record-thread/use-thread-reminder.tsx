@@ -10,9 +10,9 @@ import { RemindMeDialog } from '../../../shell/panels/remind-me/view/RemindMeDia
 const REMINDER_EVENTS = new Set(['reminder.set', 'reminder.came_back', 'reminder.changed'])
 
 /**
- * B-TH-300 — Remind me in the office thread (T1 "Remind me", the cards' own Remind me, B-W2b-388): the record panels' Remind me control
- * (RecordRemindMe) is not on a page that shows RecordThread, so a message's "Remind me" (it sends `factory:remind-me`) and the Head's
- * door open the SAME existing dialog here, and the person's next open reminder on the record is read for the Head's line ("Reminder
+ * B-TH-300 — Remind me in the office thread (T1 "Remind me", the cards' own Remind me, B-W2b-388; B-TH-280: the old record panels'
+ * Remind me control went with them): a message's "Remind me" (it sends `factory:remind-me`) and the Head's door open the SAME
+ * existing dialog here, and the person's next open reminder on the record is read for the Head's line ("Reminder
  * set for 18 Nov"). Reminders are Home's (home.view): without it the door is held and nothing is read.
  */
 export function useThreadReminder(record: { readonly type: string; readonly id: string }, label: string, allowed: boolean): { readonly mine: Reminder | null; readonly open: (messageId: string | null) => void; readonly dialog: ReactNode } {

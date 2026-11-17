@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
-import { ANSWER_CHANNELS, APPROVAL_KINDS } from './kinds'
+import { ANSWER_CHANNELS, APPROVAL_DECISIONS, APPROVAL_KINDS } from './kinds' // B-PR-24: APPROVAL_DECISIONS
 
 /**
  * Approval requests to partners (B-W2b-184). apps/factory-api's platform/approvals-out emits them; the office screens of the
@@ -11,6 +11,14 @@ import { ANSWER_CHANNELS, APPROVAL_KINDS } from './kinds'
  *   approval_request.answered   the partner answered (APPROVED, APPROVED_WITH_CHANGES or REFUSED), by its link or portal
  *   approval_request.withdrawn  the office withdrew an open request (its link stops, its task is cancelled)
  *   approval_request.expired    nobody answered by the due time (the expiry job)
+ *
+ * B-PR-24 (production plan §3 "Full control: decide for a brand or undo, always with a reason it reads"; 08-backend §4.6, §6):
+ *   approval_request.decided_for_party  an office person decided an open request for its party (production.brand.override,
+ *                                       step-up; never the person who asked it; never a concession, a revised order, a
+ *                                       signature or a proof) — the party reads why
+ *   approval_request.reversed           an office person put the party's answer back, once, with why the party reads (the
+ *                                       answer itself never changes; never on those four kinds)
+ * Ids, kinds and the decision only: never the reason, the typed name or the person.
  */
 
 const live = (fields: readonly string[]) => ({ permission: 'partners.approvals.view', fields }) as const
@@ -44,6 +52,21 @@ export const events = [
     type: 'approval_request.expired',
     context: 'approvals-out',
     description: 'Nobody answered an approval request by its due time: it expired, its link stopped, its task was cancelled.',
+    payload: z.strictObject({ ...about }),
+    live: live([...FIELDS]),
+  }),
+  // ---- B-PR-24: decided for the party, and its answer put back ---------------------------------------------------------------
+  defineEvent({
+    type: 'approval_request.decided_for_party',
+    context: 'approvals-out',
+    description: 'An office person decided an open approval request for its party, with a reason the party reads (never on a concession, a revised order, a signature or a proof).',
+    payload: z.strictObject({ ...about, decision: z.enum(APPROVAL_DECISIONS) }),
+    live: live([...FIELDS, 'decision']),
+  }),
+  defineEvent({
+    type: 'approval_request.reversed',
+    context: 'approvals-out',
+    description: "An office person put a party's answer to an approval request back, once, with a reason the party reads; the answer itself is kept.",
     payload: z.strictObject({ ...about }),
     live: live([...FIELDS]),
   }),

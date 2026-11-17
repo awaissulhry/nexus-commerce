@@ -196,6 +196,6 @@ export interface PriceListRecordProps {
    * customers), or null where the person reads no threads (no dock, no Thread button). A design case passes its made-up one.
    */
   thread?: ReactNode
-  /** B-TH-258: what the print view (`?print=1`) shows of the thread under the body (the record panels' print form). */
+  /** B-TH-258: what the print view (`?print=1`) shows of the thread under the body (ThreadPrint: the thread for paper, B-TH-280). */
   printThread?: ReactNode
 }

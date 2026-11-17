@@ -53,15 +53,15 @@ export type { OrderRecordActions, OrderRecordModel } from '../record-model'
  */
 // B-W2b-398: `delivered` is the Shipments tab's card "Delivered (from carrier)". B-TH-214: `thread` the docked thread (the
 // office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
-export function OrderRecordView({ model, actions, thread, printThread, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; delivered?: ReactNode }) {
+export function OrderRecordView({ model, actions, thread, printThread, fields, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /* B-TH-280: the custom fields (Lines only) */ fields?: ReactNode; delivered?: ReactNode }) {
   return (
     <WithMessages namespaces={['orders', 'sales', 'lists', 'records', DEPTH /* B-W2b-323 */]}>
-      <OrderRecord model={model} actions={actions} thread={thread} printThread={printThread} delivered={delivered} />
+      <OrderRecord model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} delivered={delivered} />
     </WithMessages>
   )
 }
 
-function OrderRecord({ model, actions, thread, printThread, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; delivered?: ReactNode }) {
+function OrderRecord({ model, actions, thread, printThread, fields, delivered }: { model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; fields?: ReactNode; delivered?: ReactNode }) {
   const t = useT('orders')
   const listHref = `${model.prefix}/sales/orders`
   const loaded = model.order
@@ -109,10 +109,10 @@ function OrderRecord({ model, actions, thread, printThread, delivered }: { model
       </RecordFrame>
     )
   }
-  return <ReadyRecord order={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} delivered={delivered} />
+  return <ReadyRecord order={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} delivered={delivered} />
 }
 
-function ReadyRecord({ order, model, actions, thread, printThread, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; delivered?: ReactNode }) {
+function ReadyRecord({ order, model, actions, thread, printThread, fields, delivered }: { order: Order; model: OrderRecordModel; actions?: OrderRecordActions; thread?: ReactNode; printThread?: ReactNode; fields?: ReactNode; delivered?: ReactNode }) {
   const t = useT('orders')
   const d = useT(DEPTH) // B-W2b-323
   const locale = useLocale()
@@ -235,6 +235,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, delivered }: 
         threadLabel={t('record.dockLabel')}
         thread={thread ?? null}
         printThread={printThread}
+        fields={fields /* B-TH-280 */}
         wide={isWideTab(model.tab)}
         band={{
           back: <Link href={ordersHref(model.prefix)}>{t('record.back')}</Link>,

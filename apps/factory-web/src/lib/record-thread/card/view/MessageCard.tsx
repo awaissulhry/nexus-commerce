@@ -4,6 +4,8 @@ import { useEffect, useId, useState, type ReactNode } from 'react'
 import { CornerDownRight, Globe, ImageIcon, Lock, Mail, MoreHorizontal, PencilLine, RotateCw, Tablet, Trash2, Undo2 } from 'lucide-react'
 // B-TH-255: the erased card and the files an e-mail did not keep.
 import { EyeOff, FileX } from 'lucide-react'
+// B-TH-286: a pinned card's pin.
+import { Pin } from 'lucide-react'
 import { Menu } from '@nexus/ui/components'
 import { Button, Pill } from '@nexus/ui/primitives'
 import { FileRow } from '../../../i18n/ds-parts'
@@ -52,6 +54,10 @@ export interface CardActions {
   /** "Undo" in a mail's 10 seconds: take it back; its text comes back into the box. */
   onUndo?: (messageId: string) => void
   // ---- end B-TH-236
+  // ---- B-TH-286 (B-TH-091): "Pin for everyone" / "Unpin".
+  onPin?: (messageId: string) => void
+  onUnpin?: (messageId: string) => void
+  // ---- end B-TH-286
 }
 
 const MARK_ICON = { lock: Lock, mail: Mail, globe: Globe, tablet: Tablet } as const
@@ -122,6 +128,13 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
           <Pill tone={DELIVERY_TONE[message.email.status]}>{t(`delivery.${message.email.status}`)}</Pill>
         )}
         <span className="fw-rt-msg-end">
+          {/* B-TH-286 (T3-F12): pinned for everyone — said in words for a screen reader, the files line lists it. */}
+          {message.pinned && (
+            <span className="fw-rt-pinned" title={t('pin.pinned')}>
+              <Pin size={13} aria-hidden />
+              <span className="nds-vh">{t('pin.pinned')}</span>
+            </span>
+          )}
           <time dateTime={message.at}>{time}</time>
           {!message.outbox && remind}
           {menu.length > 0 && (
@@ -140,6 +153,8 @@ export function MessageCard({ message, context, actions, remind }: { message: Ca
                   if (action === 'task') actions?.onTask?.(message.id)
                   if (action === 'link') actions?.onCopyLink?.(message.id)
                   if (action === 'useOn') actions?.onUseOn?.(message.id)
+                  if (action === 'pin') actions?.onPin?.(message.id) // B-TH-286
+                  if (action === 'unpin') actions?.onUnpin?.(message.id) // B-TH-286
                 },
               }))}
             />

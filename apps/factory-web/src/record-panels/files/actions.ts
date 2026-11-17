@@ -1,7 +1,7 @@
 import type { CapturedPhoto } from '@nexus/ui/components/PhotoCapture/index'
 
 /**
- * What the files panel in depth asks of its container (use-file-depth.ts; B-W2b-177). In the design index none is
+ * What the files in depth ask of their container (use-file-depth.ts; B-W2b-177; B-TH-280: in the docked thread's Files view). In the design index none is
  * passed: the parts draw and nothing is sent.
  */
 export interface FileDepthActions {

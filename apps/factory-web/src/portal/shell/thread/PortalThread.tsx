@@ -9,6 +9,9 @@ import { useLocale, useT } from '../../../lib/i18n/provider'
 import { fetchThread, postMessage, type PartnerMessageRead, type PartnerRecord, type PartnerThreadRead } from '../api'
 // B-TH-229: reading marks the conversation read for this portal person.
 import { markThreadRead } from '../api'
+// B-TH-286: the pins of messages shared with this customer (never an office note's, never who pinned).
+import { fetchPins, type PartnerPinRead } from '../api'
+import { formatDate } from '../../../lib/i18n/format'
 import { usePortalFrame, usePortalLive, usePortalUnsaved } from '../frame'
 // ---- B-TH-273: docked in the portal record frame — the person's own new count goes to its "Messages (2 new)" button, and the
 // conversation is marked read only while it is on screen (never behind the narrow page's button).
@@ -53,6 +56,8 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
   const [failed, setFailed] = useState<string | null>(null)
   const key = useRef<string | null>(null)
   const box = useRef<HTMLDivElement>(null)
+  // ---- B-TH-286: the pins, read with the conversation (a failed read shows none: they are a pointer, never the only copy).
+  const [pins, setPins] = useState<PartnerPinRead[]>([])
   const told = useRef({ onRecord, onMissing, onMessages })
   told.current = { onRecord, onMissing, onMessages }
   // ---- B-TH-273
@@ -73,6 +78,10 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
         setOlder([])
         setCursor(answer.nextCursor)
         setState('ready')
+        // B-TH-286: the pins of this conversation, as this customer may see them.
+        void fetchPins(frame.api, type, id, signal)
+          .then(setPins)
+          .catch(() => undefined)
       } catch (error) {
         if ((error as { name?: string } | null)?.name === 'AbortError') return
         if (isApiError(error) && error.kind === 'not_found') told.current.onMissing?.()
@@ -213,6 +222,13 @@ export function PortalThread({ type, id, focus = false, headingLevel = 2, title,
           loadMore: cursor ? { busy: moreBusy } : null,
           accessLine,
           failed,
+          // B-TH-286: one line per pin — who wrote it, when, one line of its words (or why not).
+          pins: pins.map((pin) => ({
+            id: pin.messageId,
+            author: pin.message.removed ? null : pin.message.authorName,
+            words: pin.message.removed ? t('thread.pins.removed') : pin.message.excerpt.trim() !== '' ? pin.message.excerpt : t('thread.pins.filesOnly', { count: pin.message.attachmentCount }),
+            date: formatDate(pin.message.at, { locale }),
+          })),
         }}
         headingLevel={headingLevel}
         onChange={(value) => {

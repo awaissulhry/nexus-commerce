@@ -32,6 +32,18 @@ import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readS
 // B-TH-229: the person's own read mark (B-TH-027).
 import { markThreadRead } from './api'
 import { readMarker } from './state'
+// B-TH-286: pins (B-TH-091).
+import { pinMessage, readPins, unpinMessage, type ApiPin } from './api'
+import { pinRefusalKey } from './state'
+// B-TH-287: the draft on the server (B-TH-092).
+import { discardServerDraft, readServerDraft, saveServerDraft } from './api'
+import { draftFromServer, draftToSave, DRAFT_SAVE_MS, newerCopy, type DraftSaved } from '../../../lib/record-thread/composer/server-draft'
+// B-TH-289: "Remind me in 3 days if no answer" (B-TH-096) — the person's own reminder on the message that went.
+import { followUpAt, followUpOffered } from '../../../lib/record-thread/helpers/model'
+import { removeReminder, setReminder, type Reminder } from '../../../shell/panels/remind-me/api'
+import { rightRef } from '../../../lib/i18n/rights'
+import { formatDate } from '../../../lib/i18n/format'
+import { useLocale } from '../../../lib/i18n/provider'
 
 /**
  * The office container of RecordThread v1 (B-TH-212): it reads a record's thread (page by page), its mail states and bounce tasks,
@@ -54,6 +66,10 @@ export interface RecordThreadHost {
   /** The record's own address, for Copy link (default: this page). */
   recordHref?: string
   onMakeCustomer?: () => void
+  // ---- B-TH-280: the print form (ThreadPrint) has no box — no draft is read or written (on this device or on the server, B-TH-287)
+  // and no leave guard runs (a draft kept for the record stays untouched; the print tab's own links and closing are never held).
+  readOnly?: boolean
+  // ---- end B-TH-280
 }
 
 type Notice = NonNullable<RecordThreadModel['notice']>
@@ -83,6 +99,12 @@ export interface RecordThreadBase {
   /** B-TH-229: the people (Change owner's list) — read, being read, or failed; and the read again. */
   readonly peopleState: 'loading' | 'ready' | 'failed'
   readonly loadPeople: () => Promise<void>
+  // ---- B-TH-286 (B-TH-091): the conversation's pins (null: not read yet), Unpin from the files line.
+  readonly pins: readonly ApiPin[] | null
+  readonly unpin: (messageId: string) => Promise<void>
+  // ---- B-TH-288 (B-TH-097): a message found by the Head's search, or a pin's line — older pages read until it is on screen, then
+  // unfolded and focused (false: it is not in this conversation any more, or out of reach).
+  readonly jumpTo: (messageId: string) => Promise<boolean>
 }
 
 const EMPTY_WORK = (draft: ComposerDraft = { mode: 'note', body: '', forFloor: false }): Work => ({ draft, notes: [], files: [], to: [], cc: [], subject: '', outbox: [] })
@@ -98,6 +120,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     [held],
   )
   const prefix = companyPrefix(session.company?.code ?? '')
+  const locale = useLocale() // B-TH-289: the follow-up's day in words
 
   const [server, setServer] = useState<ServerThread>(EMPTY_SERVER)
   const [emails, setEmails] = useState<ReadonlyMap<string, ThreadApiEmail>>(new Map())
@@ -128,6 +151,13 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   // ---- B-TH-236 (B-TH-048): the mails this screen just sent, until the mail list says when they may be taken back.
   const [undoable, setUndoable] = useState<ReadonlyMap<string, { emailId: string; until: string }>>(new Map())
   // ---- end B-TH-236 / B-TH-237
+  // ---- B-TH-286: the conversation's pins (null until read; read again with the thread).
+  const [pins, setPins] = useState<ApiPin[] | null>(null)
+  useEffect(() => setPins(null), [key])
+  // ---- B-TH-287: the draft on the server — its state for the line, the version last read, the arrival read done.
+  const [saved, setSaved] = useState<DraftSaved | null>(null)
+  // ---- B-TH-289: the follow-ups set on messages this screen sent (a mail taken back in its 10 seconds takes its follow-up with it).
+  const followUps = useRef(new Map<string, Reminder>())
   const lastRead = useRef(new Date().toISOString())
   const uploads = useRef(new Map<string, File>())
   const workRef = useRef(work)
@@ -144,7 +174,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       // B-TH-229: the reading on arrival draws "New since your last visit" for the whole visit (marking read does not move it).
       setArrival((seen) => seen ?? { firstNewId: page.reading?.firstNewMessageId ?? null, newCount: page.reading?.newCount ?? 0 })
       setServer((current) => {
-        const next = applyNewest(current, { thread: page.thread ? { status: page.thread.status, version: page.thread.version, partyId: page.thread.partyId } : null, messages: page.messages, nextCursor: page.nextCursor, reading: page.reading, head: page.head, waitingMail: page.waitingMail /* B-TH-255 */ })
+        const next = applyNewest(current, { thread: page.thread ? { status: page.thread.status, version: page.thread.version, partyId: page.thread.partyId } : null, messages: page.messages, nextCursor: page.nextCursor, reading: page.reading, head: page.head, waitingMail: page.waitingMail /* B-TH-255 */, done: page.done /* B-TH-288 */ })
         setWork((now) => afterRead(now, next))
         return next
       })
@@ -207,12 +237,24 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     }
   }, [api, key, can.post])
 
+  // ---- B-TH-286 (B-TH-091): the pins, as the reader may see them (every pin and who pinned it: the office).
+  const loadPins = useCallback(async () => {
+    if (!can.read) return
+    try {
+      setPins(await readPins(api, key))
+    } catch {
+      // The pins are a detail of the files line: without them the thread still shows.
+    }
+  }, [api, key, can.read])
+  // ---- end B-TH-286
+
   const loadAll = useCallback(() => {
     void loadThread()
     void loadEmails()
     void loadFiles()
     void loadTimeline()
-  }, [loadThread, loadEmails, loadFiles, loadTimeline])
+    void loadPins() // B-TH-286
+  }, [loadThread, loadEmails, loadFiles, loadTimeline, loadPins])
 
   useEffect(() => {
     if (!can.read) {
@@ -239,7 +281,10 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   useLiveChanges({
     onChange: (change) => {
       for (const part of liveParts(change, key)) {
-        if (part === 'thread') void loadThread()
+        if (part === 'thread') {
+          void loadThread()
+          void loadPins() // B-TH-286: a pin of a colleague, a message erased
+        }
         if (part === 'emails') void loadEmails()
         if (part === 'files') void loadFiles()
         if (part === 'timeline') void loadTimeline()
@@ -276,18 +321,21 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   }
   const personId = session.user.id
   useEffect(() => {
+    if (host.readOnly) return // B-TH-280
     const now = Date.now()
     const note = readDraft(storage(), draftKey(personId, key, 'note'), now)
     const reply = note ? null : readDraft(storage(), draftKey(personId, key, 'reply'), now)
     // B-TH-237: a message for the portal kept on this device comes back as an office note (the box always starts there).
     const portal = note || reply ? null : readDraft(storage(), draftKey(personId, key, 'portal'), now)
     const found = note ?? reply ?? portal
+    arrivalLocal.current = found // B-TH-287: compared with the server's draft when it is read
     if (!found) return
     setKept(found)
     setWork((latest) => (latest.draft.body === '' ? { ...latest, draft: { ...latest.draft, mode: reply && can.email && partyId ? 'reply' : 'note', body: found.text } } : latest))
     // Only on arrival: the record's draft.
   }, [personId, key])
   useEffect(() => {
+    if (host.readOnly) return // B-TH-280: the print form never writes (an empty box would forget the kept draft)
     const id = setTimeout(() => {
       const now = Date.now()
       // The other audiences' drafts are forgotten (the text survives a switch); B-TH-237: three audiences.
@@ -302,12 +350,168 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     writeDraft(storage(), draftKey(personId, key, 'reply'), '', now)
     writeDraft(storage(), draftKey(personId, key, 'portal'), '', now) // B-TH-237
     setKept(null)
+    stopSaving() // B-TH-287: what was typed went (the send's own command clears the server's draft) or was discarded
   }
+
+  // ---- B-TH-287 (B-TH-092; T5-F10, T8-F07): the draft on the server — one per person and record, so another computer finds it ("Draft
+  // saved 10:42"). Read on arrival (the newer of it and the device copy goes in the box, while nothing was typed yet), saved a pause
+  // after typing stops (DRAFT_SAVE_MS) and at once when the page is hidden or left, with the version last read (two tabs: the newest
+  // wins, and the line says it replaced a newer one); an empty box discards it. A send clears it in the send's own command: a save
+  // still on its way then is followed by a discard, so a sent text never comes back. The device copy stays as the fallback (offline,
+  // a failed save).
+  const arrivalLocal = useRef<LocalDraft | null>(null)
+  const draftVersion = useRef<number | undefined>(undefined)
+  const draftReady = useRef(false)
+  const lastSaved = useRef('')
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const saveSeq = useRef(0)
+  const stoppedAt = useRef(0)
+  const inflight = useRef(0)
+  const offlineRef = useRef(offline !== null)
+  offlineRef.current = offline !== null
+  const canReplyRef = useRef(false)
+  canReplyRef.current = can.email && partyId !== null
+  const partsOf = (now: Work) => draftToSave({ draft: now.draft, to: now.to, cc: now.cc, subject: now.subject, files: now.files })
+  const saveNow = async (force = false) => {
+    if (!draftReady.current || !can.post) return
+    const parts = partsOf(workRef.current)
+    const signature = parts ? JSON.stringify(parts) : ''
+    if (!force && signature === lastSaved.current) return
+    if (offlineRef.current) {
+      setSaved({ state: 'offline' })
+      return
+    }
+    if (!parts) {
+      // An empty box: the server's draft goes — also one a save still on its way would make (none known: nothing to do).
+      const known = draftVersion.current !== undefined || inflight.current > 0
+      stopSaving()
+      if (!known) return
+      try {
+        await discardServerDraft(api, key)
+      } catch {
+        // Kept on the server for now: the next visit reads it back, and the person may empty the box again.
+      }
+      return
+    }
+    const seq = ++saveSeq.current
+    setSaved({ state: 'saving' })
+    inflight.current += 1
+    try {
+      const answer = await saveServerDraft(api, key, { ...parts, ...(draftVersion.current !== undefined ? { version: draftVersion.current } : {}) })
+      if (seq <= stoppedAt.current) {
+        // Sent or discarded while this save was on its way: it never comes back (unless a newer save already started).
+        if (saveSeq.current === stoppedAt.current) void discardServerDraft(api, key).catch(() => undefined)
+        return
+      }
+      draftVersion.current = answer.draft.version
+      lastSaved.current = signature
+      setSaved(answer.replacedNewer ? { state: 'replaced', at: answer.draft.savedAt } : { state: 'saved', at: answer.draft.savedAt })
+    } catch {
+      if (seq > stoppedAt.current) setSaved({ state: 'failed' })
+    } finally {
+      inflight.current -= 1
+    }
+  }
+  const saveRef = useRef(saveNow)
+  saveRef.current = saveNow
+  const scheduleSave = () => {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => {
+      saveTimer.current = null
+      void saveRef.current()
+    }, DRAFT_SAVE_MS)
+  }
+  /** After a send or a discard: no save is waiting, one on its way is followed by a discard, the next starts a new draft. */
+  function stopSaving() {
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = null
+    stoppedAt.current = ++saveSeq.current
+    draftVersion.current = undefined
+    lastSaved.current = ''
+    setSaved(null)
+  }
+  // The arrival read: the newer of the server's draft and the device copy goes in the box, while nothing was typed since.
+  useEffect(() => {
+    // Another record: a save still waiting for the one before is not sent under this one.
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = null
+    draftReady.current = false
+    draftVersion.current = undefined
+    lastSaved.current = ''
+    setSaved(null)
+    // B-TH-280: the print form (ThreadPrint) neither reads nor saves the server's draft: never ready, so nothing is ever saved.
+    if (host.readOnly) return
+    if (!can.post) {
+      draftReady.current = true
+      return
+    }
+    const controller = new AbortController()
+    readServerDraft(api, key, controller.signal)
+      .then((found) => {
+        draftVersion.current = found?.version
+        const local = arrivalLocal.current
+        const choice = newerCopy(local, found)
+        const now = workRef.current
+        const untouched = (now.draft.body === '' || now.draft.body === (local?.text ?? '')) && now.files.length === 0
+        if (found && choice === 'server' && untouched) {
+          const parts = draftFromServer(found, { reply: canReplyRef.current })
+          setWork((latest) => ({ ...latest, draft: parts.draft, notes: [], to: [...parts.to], cc: [...parts.cc], subject: parts.subject, files: [...parts.files] }))
+          const restored = draftToSave(parts)
+          lastSaved.current = restored ? JSON.stringify(restored) : ''
+          setSaved({ state: 'saved', at: found.savedAt })
+        }
+        draftReady.current = true
+        // A newer copy on this device (typed offline, or here before the server had it) goes to the server.
+        if (choice === 'local' || (found && choice === 'server' && !untouched)) scheduleSave()
+      })
+      .catch(() => {
+        // Not read (a fault, no right): the device copy stays; saving still tries (and says "Not saved" if it fails).
+        draftReady.current = true
+      })
+    return () => controller.abort()
+    // Only on arrival: the record's draft.
+  }, [api, key, can.post])
+  // A pause after the box changes: the draft is saved (a box the arrival read is still filling waits for it).
+  const draftFiles = work.files.filter((file) => file.phase === 'done' && file.fileId).map((file) => `${file.fileId}:${file.audience}`).join(',')
+  const draftLines = [...work.to, ...work.cc].map((item) => item.address).join(',')
+  useEffect(() => {
+    if (!draftReady.current || !can.post) return
+    scheduleSave()
+    // The box's own fields: scheduleSave reads the newest work.
+  }, [work.draft.body, work.draft.mode, work.draft.forFloor, work.draft.link?.messageId, work.subject, draftLines, draftFiles, can.post])
+  // Hidden, closed or left (the thread leaves the page): what waits is saved at once.
+  useEffect(() => {
+    const flush = () => {
+      if (!saveTimer.current) return
+      clearTimeout(saveTimer.current)
+      saveTimer.current = null
+      void saveRef.current()
+    }
+    const onHidden = () => document.visibilityState === 'hidden' && flush()
+    document.addEventListener('visibilitychange', onHidden)
+    window.addEventListener('pagehide', flush)
+    return () => {
+      document.removeEventListener('visibilitychange', onHidden)
+      window.removeEventListener('pagehide', flush)
+      flush()
+    }
+  }, [])
+  // Back online: what waited is saved.
+  useEffect(() => {
+    if (offline === null && draftReady.current && saved?.state === 'offline') void saveRef.current(true)
+  }, [offline, saved?.state])
+  // ---- end B-TH-287
 
   // ── the leave guard (T5-F10; TH-1c's useLeaveGuard): the browser's own question on close; a link of this app outside the
   // thread waits for "Leave with unsent text?" (Stay / Discard; Discard forgets the draft, then the move goes on) ────────────
   const unsentFiles = work.files.filter((file) => file.phase !== 'refused').length
-  const leave = useLeaveGuard({ text: work.draft.body, files: unsentFiles })
+  // ---- B-TH-287: with the draft on the server (saved, or being saved — leaving saves what waits) nothing is lost by leaving: no
+  // question; only files still going up are not kept (a draft keeps the files that went up).
+  const keptOnServer = saved !== null && (saved.state === 'saved' || saved.state === 'replaced' || saved.state === 'saving')
+  const notKept = work.files.filter((file) => file.phase === 'uploading' || file.phase === 'failed').length
+  // B-TH-280: the print form (ThreadPrint) has no box: no guard at all.
+  const leave = useLeaveGuard(host.readOnly ? { text: '', files: 0 } : keptOnServer ? { text: '', files: notKept } : { text: work.draft.body, files: unsentFiles })
+  // ---- end B-TH-287
   const askRef = useRef(leave.ask)
   askRef.current = leave.ask
   const discardRef = useRef<() => void>(() => undefined)
@@ -352,10 +556,12 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
 
   // ── what the column draws ──────────────────────────────────────────────────────────────────────────────────────────
   const names = useMemo(() => new Map<string, string>([...people.map((person) => [person.id, person.name] as const), [session.user.id, session.user.displayName]]), [people, session.user])
+  // B-TH-286: the pinned messages (the card's pin and its ⋯ "Unpin").
+  const pinnedIds = useMemo(() => new Set((pins ?? []).map((pin) => pin.messageId)), [pins])
   const cards = useMemo<CardMessage[]>(
     // B-TH-255 (T3-F14, T3-F15): each card also says whether its writer was erased and which files of its mail were not kept.
-    () => server.messages.map((message) => ({ ...cardOf(message, { emails, deliveries, names, taskHref: (taskId) => `${prefix}/home/tasks?open=${encodeURIComponent(taskId)}`, me: session.user.id, undo: undoable }), ...cardDepth(message) })),
-    [server.messages, emails, deliveries, names, prefix, session.user.id, undoable],
+    () => server.messages.map((message) => ({ ...cardOf(message, { emails, deliveries, names, taskHref: (taskId) => `${prefix}/home/tasks?open=${encodeURIComponent(taskId)}`, me: session.user.id, undo: undoable }), ...cardDepth(message), ...(pinnedIds.has(message.id) ? { pinned: true } : {}) /* B-TH-286 */ })),
+    [server.messages, emails, deliveries, names, prefix, session.user.id, undoable, pinnedIds],
   )
   const closed = server.thread?.status === 'CLOSED' ? closedBy(changes, names) : null
   const lastSubject = useMemo(() => {
@@ -394,6 +600,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       anchorId: anchor,
       // B-TH-236 (B-TH-050): Correct on one's own message, by the way it went.
       canCorrect: { note: can.post, email: can.email && party !== null, portal: context.portal === true },
+      // B-TH-286 (B-TH-091): pin for everyone — whoever may write on the conversation, online.
+      canPin: can.post && offline === null,
     },
     more: server.more,
     older: server.older,
@@ -424,12 +632,17 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       cc: work.cc,
       subject: work.subject || defaultSubject(lastSubject, host.recordLabel),
       contacts,
+      // B-TH-289 (B-TH-096; T8-F05): on a message to the customer — reminders are Home's (home.view), held offline.
+      followUp: followUpOffered(work.draft.mode, { remind: true })
+        ? { on: work.followUp === true, held: !held.has('home.view') ? { key: 'followUp.held', params: { right: rightRef('home.view') } } : offline ? { key: 'followUp.offline' } : null, party: party?.name ?? host.prospect?.name ?? '' }
+        : null,
     },
     pickerOpen,
     check,
     leaving: leave.asking,
     kept,
     notice,
+    saved, // B-TH-287
   }
 
   // ── doing ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -494,6 +707,19 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     }
   }
 
+  // ---- B-TH-289 (B-TH-096): the follow-up on a message that went to the customer — the person's own reminder at the message, three
+  // days on; the API stops it when the customer answers (or the conversation closes). Said in words; a failure keeps the message sent.
+  const setFollowUp = async (messageId: string) => {
+    try {
+      const reminder = await setReminder(api, { record: key, messageId, kind: 'AT_TIME', remindAt: followUpAt(Date.now()), note: null })
+      followUps.current.set(messageId, reminder)
+      setNotice({ ns: 'record-thread-helpers', key: 'followUp.set', params: { date: reminder.remindAt ? formatDate(reminder.remindAt, { locale }) : '' }, tone: 'success' })
+    } catch {
+      setNotice({ ns: 'record-thread-helpers', key: 'followUp.failed', tone: 'warning' })
+    }
+  }
+  // ---- end B-TH-289
+
   const sendNote = async (item: { key: string; idempotencyKey: string; body: string; mentions: string[]; attachments: string[]; forFloor: boolean; card: CardMessage; amount?: { value: number; currency: string } | null; links?: MessageLinks; snapshot?: Work }) => {
     setSending(true)
     try {
@@ -523,6 +749,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       const messageId = await postPortalReplyKeyed(api, key, { body: item.body, attachments: item.attachments, ...item.links }, item.idempotencyKey)
       setWork((now) => ({ ...now, outbox: now.outbox.map((entry) => (entry.key === item.key ? { ...entry, messageId } : entry)) }))
       setNotice({ ns: 'record-thread', key: 'notice.portalPosted', tone: 'success' })
+      if (item.snapshot.followUp && item.snapshot.draft.mode === 'portal') void setFollowUp(messageId) // B-TH-289
       void loadThread()
     } catch (error) {
       const refusal = portalRefusal(error)
@@ -560,7 +787,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       const card: CardMessage = { id: outboxKey, kind: 'ours', channel: 'PORTAL', author: session.user.displayName, authorKind: 'USER', at: new Date().toISOString(), body: now.draft.body, mentions: [], files: [] }
       const item = { key: outboxKey, idempotencyKey, body: now.draft.body, attachments, links, snapshot: now }
       retries.current.set(outboxKey, () => sendPortal(item))
-      setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: false }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
+      setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: false }, notes: [], files: [], followUp: false /* B-TH-289 */, outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
       forgetDraft()
       void sendPortal(item)
       return
@@ -603,6 +830,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
       try {
         const { messageId, email } = await sendReplyKeyed(api, key, body, idempotencyKey)
         setWork((latest) => ({ ...latest, outbox: latest.outbox.map((entry) => (entry.key === outboxKey ? { ...entry, messageId } : entry)) }))
+        if (snapshot.followUp) void setFollowUp(messageId) // B-TH-289
         // B-TH-236 (B-TH-048): "Sending to <customer>… · Undo" from the answer, before the next read of the mail list.
         if (email?.undoUntil) setUndoable((known) => new Map(known).set(messageId, { emailId: email.id, until: email.undoUntil! }))
         setNotice({ ns: 'record-thread', key: 'notice.emailQueued', tone: 'success' })
@@ -612,7 +840,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
         const refusal = replyRefusal(error)
         if (refusal) {
           // The person must change it: the text, files and recipients come back into the box, with why.
-          setWork((latest) => ({ ...latest, draft: snapshot.draft, files: snapshot.files, to: snapshot.to, cc: snapshot.cc, subject: snapshot.subject, outbox: latest.outbox.filter((entry) => entry.key !== outboxKey) }))
+          setWork((latest) => ({ ...latest, draft: snapshot.draft, files: snapshot.files, to: snapshot.to, cc: snapshot.cc, subject: snapshot.subject, followUp: snapshot.followUp, outbox: latest.outbox.filter((entry) => entry.key !== outboxKey) }))
           setNotice({ ns: 'record-thread-send', key: refusal, tone: 'danger' })
         } else {
           setWork((latest) => ({ ...latest, outbox: latest.outbox.map((entry) => (entry.key === outboxKey ? { ...entry, state: 'failed', reason: sendReason(error) } : entry)) }))
@@ -624,7 +852,7 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     retries.current.set(outboxKey, go)
     setCheck(null)
     // After a send the mode stays as used while the person stays on the record (T5-F02); its link goes with the message.
-    setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: latest.draft.forFloor }, notes: [], files: [], outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
+    setWork((latest) => ({ ...latest, draft: { mode: latest.draft.mode, body: '', forFloor: latest.draft.forFloor }, notes: [], files: [], followUp: false /* B-TH-289 */, outbox: [...latest.outbox, { key: outboxKey, card, state: 'sending' }] }))
     forgetDraft()
     void go()
   }
@@ -652,9 +880,58 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     [server.messages, marker, can.read],
   )
 
+  // ---- B-TH-286 (B-TH-091): pin for everyone, unpin — the answer is the conversation's pins again; a refusal in words.
+  const pinOrUnpin = async (messageId: string, pin: boolean) => {
+    try {
+      setPins(await (pin ? pinMessage(api, key, messageId) : unpinMessage(api, key, messageId)))
+      setNotice({ ns: 'record-thread', key: pin ? 'notice.pinned' : 'notice.unpinned', tone: 'success' })
+    } catch (error) {
+      setNotice({ ns: 'record-thread', key: pinRefusalKey(error), tone: 'warning' })
+      void loadPins()
+    }
+  }
+  // ---- end B-TH-286
+
+  // ---- B-TH-288 (B-TH-097): to a message — older pages read until it is there (a search hit, a pin), then unfolded and focused.
+  const serverRef = useRef(server)
+  serverRef.current = server
+  const jumpTo = useCallback(
+    async (messageId: string): Promise<boolean> => {
+      let current = serverRef.current
+      for (let pages = 0; !current.messages.some((message) => message.id === messageId) && current.cursor && pages < 20; pages += 1) {
+        try {
+          const page = await readThreadPage(api, key, current.cursor)
+          current = applyOlder(current, page)
+          setServer((now) => applyOlder(now, page))
+        } catch {
+          break
+        }
+      }
+      if (!current.messages.some((message) => message.id === messageId)) {
+        setNotice({ ns: 'record-thread', key: 'notice.messageGone', tone: 'warning' })
+        return false
+      }
+      setAnchor(messageId)
+      requestAnimationFrame(() => {
+        const target = document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`)
+        target?.scrollIntoView({ block: 'center' })
+        target?.focus({ preventScroll: true })
+      })
+      return true
+    },
+    [api, key],
+  )
+  // ---- end B-TH-288
+
   const actions: RecordThreadActions = {
     onSeen,
     onDraft: (draft, notes) => patch({ draft, notes }),
+    // ---- B-TH-286 / B-TH-287 / B-TH-289
+    onPin: (messageId) => void pinOrUnpin(messageId, true),
+    onUnpin: (messageId) => void pinOrUnpin(messageId, false),
+    onRetryDraft: () => void saveRef.current(true),
+    onFollowUp: (on) => patch({ followUp: on }),
+    // ---- end B-TH-286 / B-TH-287 / B-TH-289
     onSend: send,
     onReopen: async () => {
       if (!server.thread) return
@@ -781,6 +1058,12 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
           next.delete(messageId)
           return next
         })
+        // B-TH-289: a mail taken back takes its follow-up with it (nothing went to wait for an answer to).
+        const followUp = followUps.current.get(messageId)
+        if (followUp) {
+          followUps.current.delete(messageId)
+          void removeReminder(api, followUp).catch(() => undefined)
+        }
         setNotice({ ns: 'record-thread-send', key: 'notice.takenBack', tone: 'success' })
       } catch (error) {
         setNotice({ ns: 'record-thread-send', key: undoRefusalKey(error), tone: 'warning' })
@@ -818,9 +1101,11 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   discardRef.current = () => {
     setWork((now) => ({ ...EMPTY_WORK(startDraft(context)), outbox: now.outbox }))
     forgetDraft()
+    // B-TH-287: Discard is the person's word: the server's draft goes too.
+    if (can.post) void discardServerDraft(api, key).catch(() => undefined)
   }
 
-  const base: RecordThreadBase = { key, server, files, filesRead, closed, offline, held, can, partyId, people, loadFiles, loadThread, loadTimeline, notify: setNotice, newCount: server.reading?.newCount ?? 0, peopleState, loadPeople }
+  const base: RecordThreadBase = { key, server, files, filesRead, closed, offline, held, can, partyId, people, loadFiles, loadThread, loadTimeline, notify: setNotice, newCount: server.reading?.newCount ?? 0, peopleState, loadPeople, pins, unpin: (messageId) => pinOrUnpin(messageId, false) /* B-TH-286 */, jumpTo /* B-TH-288 */ }
   return { model, actions, kept, guard: { ask: leave.ask }, base }
 }
 
