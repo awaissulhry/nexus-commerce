@@ -183,17 +183,23 @@
     "more": "Altro per questo lotto",
     "tab": {
       "results": "Risultati e limiti",
-      "documents": "Documenti",
-      "release": "Rilascio",
-      "activity": "Attività"
+      "release": "Documenti e rilascio"
     },
-    "noPanels": "La discussione, i file e la cronologia richiedono il permesso di leggere le discussioni.",
     "youReceived": "Hai ricevuto tu questo lotto: puoi registrarne risultati e documenti, e lo rilascia un’altra persona della qualità.",
     "facts": {
       "status": "Stato del lotto",
       "crVi": "Cromo VI",
       "receipt": "Ricevimento"
-    }
+    },
+    "name": "Lotto",
+    "loading": "Lettura del lotto…",
+    "notFound": "Lotto non trovato",
+    "notFoundBody": "Non c’è più, o appartiene a un’altra azienda.",
+    "forbidden": "Non per il tuo ruolo",
+    "failed": "Il lotto non si è potuto leggere",
+    "dockLabel": "La conversazione del lotto",
+    "tabsLabel": "Parti del lotto",
+    "sameThread": "Stessa conversazione di Magazzino › Lotti e tracciabilità"
   },
   "results": {
     "title": "Risultati del cromo VI",

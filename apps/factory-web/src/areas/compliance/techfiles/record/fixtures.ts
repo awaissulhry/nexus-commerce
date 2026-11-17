@@ -1,8 +1,7 @@
-import { createElement, type ReactNode } from 'react'
+import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
-import { RecordPanelsView } from '../../../../record-panels/view/RecordPanelsView'
+// B-TH-267: the technical file's docked thread (made-up; the page mounts the office's OfficeRecordThread docked).
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import { STEP_UP_CLOSED } from '../../../quality/_shared/hooks'
 import { inShell, PREFIX, ROLE_PERMISSIONS, type RoleCase } from '../../../quality/_shared/fixtures'
 import { ARCHIVED_RECORD, BUILDING_PACK, BUILT_PACK, COMPLETE_RECORD, FAILED_PACK, NOW, OPEN_RECORD, PACKS, PEOPLE, PRODUCTION, REPORTS, RISK, RISK_EMPTY, RISK_SIGNED, TODAY } from '../_demo/fixtures'
@@ -14,7 +13,8 @@ import { RecordLoadingView, RecordProblemView, TechFileRecordView } from './view
 
 /**
  * SCR-120-file — a technical file (design compliance.techfiles › Technical file) with made-up data only: each tab (Annex III,
- * Risk assessment, Test reports, Production control, Evidence pack, Activity), each tab loading and failing on its own, the
+ * Risk assessment, Test reports, Production control, Evidence pack; B-TH-267: the thread docked beside each — RecordFrame, Activity's
+ * tools in the thread's "⋯"), each tab loading and failing on its own, the
  * file open, complete and archived, every pop-up (link evidence, not applicable, edit, reopen, archive, sign with the code,
  * record and schedule a test, send by link and its answer, withdraw a link, build a pack), a refusal in words with the API's
  * lines, a change by someone else, offline, and the roles (quality inspector, production manager, read only).
@@ -27,12 +27,9 @@ export interface RecordDesignModel {
   readonly record?: RecordModel
 }
 
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-
-function panelsOf(record: FileRecord): ReactNode {
-  const model: RecordPanelsViewModel = { ...conversation, record: { type: 'TechnicalFile', id: record.file.id, companyId: record.file.companyId, siteId: null }, title: `${record.file.number} · ${record.file.style.code}`, party: null }
-  return createElement(RecordPanelsView, { model })
-}
+/** B-TH-267: the file's thread as the page draws it — the office's notes (the file's read names no party: the API keeps the style's
+ * brand as the thread's party, never shown here); none for a role that does not read threads. */
+const threadOf = (role: RoleCase, record: FileRecord) => ((ROLE_PERMISSIONS[role] as readonly string[]).includes('threads.read') ? designDockedThread({ recordType: 'TechnicalFile', record: record.file.number, party: null }) : null)
 
 function base(role: RoleCase, record: FileRecord, over: Partial<RecordModel> = {}): RecordDesignModel {
   return {
@@ -49,7 +46,6 @@ function base(role: RoleCase, record: FileRecord, over: Partial<RecordModel> = {
       today: TODAY,
       notice: null,
       changedAt: null,
-      dockOpen: false,
       fileDialog: null,
       keepers: null,
       certificates: null,
@@ -74,9 +70,9 @@ const tab = (role: RoleCase, value: RecordTab, over: Partial<RecordModel> = {}, 
 
 function RecordDesign({ model }: { model: RecordDesignModel }) {
   const path = '/compliance/techfiles'
-  if (model.state === 'loading') return inShell(path, createElement(RecordLoadingView), model.role)
+  if (model.state === 'loading') return inShell(path, createElement(RecordLoadingView, { prefix: PREFIX }), model.role)
   if (model.state === 'problem' || !model.record) return inShell(path, createElement(RecordProblemView, { problem: model.problem ?? 'problem.unavailable', prefix: PREFIX }), model.role)
-  return inShell(path, createElement(TechFileRecordView, { model: model.record, panels: panelsOf(model.record.record) }), model.role)
+  return inShell(path, createElement(TechFileRecordView, { model: model.record, thread: threadOf(model.role, model.record.record) }), model.role)
 }
 
 const OPTIONS = ready([
@@ -137,8 +133,16 @@ export const designScreen = defineDesignScreen<RecordDesignModel>({
     { id: 'share-done', label: 'Sent without e-mail: the address shown once, Copy', model: tab('owner', 'pack', { share: { packId: BUILT_PACK.id, draft: emptyShare(TODAY, 'it'), parties: null, writing: IDLE, done: { pack: BUILT_PACK, linkId: BUILT_PACK.links[0]!.id, url: 'https://factory.example/l#token=DEMO-ONLY', delivery: null } } }) },
     { id: 'withdraw', label: 'Withdraw a link', model: tab('owner', 'pack', { withdraw: { packId: BUILT_PACK.id, linkId: BUILT_PACK.links[0]!.id, reason: '', writing: IDLE } }) },
     { id: 'packs-failed-only', label: 'A failed pack: why, Remove', model: tab('owner', 'pack', { packs: ready({ ...PACKS, packs: [FAILED_PACK] }) }) },
-    { id: 'activity', label: 'Activity: the thread, files and history', model: tab('owner', 'activity') },
-    { id: 'dock', label: 'The thread beside the file on a wide screen (⌘J)', model: tab('owner', 'annex', { dockOpen: true }) },
+    // ---- B-TH-267: the thread docked beside every tab (TechnicalFile is a thread record now, B-TH-075 / N14)
+    {
+      id: 'thread-docked',
+      label: 'TH-6 · Annex III with the thread docked (40 %): Activity’s tools in its "⋯"; the office’s notes',
+      model: tab('owner', 'annex'),
+      note: 'The band sits in the shell’s band row with ONE pill; the file’s thread is docked at 40 % (519 px at 1440, 711 px at 1920), sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me. An old ?tab=activity lands here with the thread opened. Below 1280 px the band’s Thread button opens it full width.',
+    },
+    { id: 'thread-risk', label: 'TH-6 · Risk assessment with the thread: one third under 1600 px (the grid needs the room)', model: tab('owner', 'risk') },
+    { id: 'thread-production', label: 'TH-6 · Production control with the thread: one third under 1600 px', model: tab('owner', 'production') },
+    // ---- end B-TH-267
     { id: 'changed', label: 'Changed by someone else while a pop-up was open: Read it again', model: tab('owner', 'annex', { changedAt: NOW }) },
     { id: 'offline', label: 'Offline: every write held with the reason', model: tab('owner', 'annex', { online: false, live: 'offline' }) },
     { id: 'inspector', label: 'Quality inspector (keeps, signs, sends)', model: tab('inspector', 'annex') },

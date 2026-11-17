@@ -29,6 +29,11 @@ import {
   viewRows,
 } from './model'
 import { designScreen as lotScreen } from './record/fixtures'
+// B-TH-267: the lot on RecordFrame (tabs 4 → 2, the docked thread).
+import { readFileSync } from 'node:fs'
+import { MERGED_TABS, RECORD_TABS, tabOf } from './model'
+import { arrivalOf } from '../../_shared/record-frame/model'
+import { textOf } from '../../../lib/record-thread/parts/testing'
 
 const address = (query: string) => new URLSearchParams(query)
 
@@ -211,5 +216,93 @@ describe('every design case draws in both languages with no key left on screen',
     for (const screen of [listScreen, lotScreen] as DesignScreen<unknown>[]) {
       for (const item of screen.cases) if (!priced(item.id)) expect(render(screen, item.model, 'en'), item.id).not.toMatch(/€|EUR\b/)
     }
+  })
+})
+
+// ---- B-TH-267: the lot of Tests & substances on RecordFrame (O-CMP-TST; the rule of picture 38, the tabs of 08-tabs) ----
+describe('B-TH-267: the lot on RecordFrame — Results & limits · Documents & release, the thread docked (the same as Warehouse › Lots)', () => {
+  const screen = lotScreen as unknown as DesignScreen<unknown>
+  const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const found = screen.cases.find((item) => item.id === id)
+    if (!found) throw new Error(`no case ${id}`)
+    const View = screen.view as ComponentType<{ model: unknown }>
+    return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model: found.model })))
+  }
+
+  it('two tabs; every old ?tab= keeps working (R-8): documents → Documents & release, activity → Results & limits with the thread opened', () => {
+    expect(RECORD_TABS).toEqual(['results', 'release'])
+    expect(MERGED_TABS).toEqual({ documents: 'release', activity: 'results' })
+    expect(tabOf('documents')).toBe('release')
+    expect(tabOf('release')).toBe('release')
+    expect(tabOf('activity')).toBe('results')
+    expect(tabOf('results')).toBe('results')
+    expect(tabOf('constructor')).toBe('results')
+    expect(tabOf(null)).toBe('results')
+    expect(arrivalOf('?tab=activity')).toEqual({ openThread: true, door: null })
+    // The warehouse's lot list and lot record link ?tab=release: it is still the merged tab's own address.
+    expect(readFileSync(new URL('../../warehouse/lots/record/view/LotRecordView.tsx', import.meta.url), 'utf8')).toContain('?tab=release')
+  })
+
+  it('Documents & release keeps both tabs’ work: the checklist and the decisions, then the documents with Add document right under it', () => {
+    const page = html('documents')
+    const text = textOf(page)
+    expect(text).toContain('Documents & release')
+    expect(text).toContain('Release checklist')
+    expect(text).toContain("Supplier's documents")
+    expect(text).toContain('Add document')
+    expect(text).toContain('What this lot needs')
+    expect(page.indexOf('id="lab-release"')).toBeGreaterThan(-1)
+    expect(page.indexOf('id="lab-release"')).toBeLessThan(page.indexOf('id="lab-documents"'))
+    expect(textOf(html('documents', 'it'))).toContain('Documenti e rilascio')
+    expect(textOf(html('thread-docked'))).not.toMatch(/\bActivity\b/)
+  })
+
+  it('Add document stays the typed lot document route the release counts (R-2), never the generic upload', () => {
+    const container = readFileSync(new URL('./record/LotRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toContain('attachDocument(api, lot.id, { kind: documentDraft.kind')
+    expect(container).not.toContain('requestUpload')
+    expect(readFileSync(new URL('./api.ts', import.meta.url), 'utf8')).toContain('api.post(`${lotPath(lotId)}/documents`')
+    expect(textOf(html('document-dialog'))).toContain('demo-ppe-declaration.pdf')
+  })
+
+  it('ONE thread docked beside both tabs, its "⋯" (R-ACT); no Activity tab, no record panels, no dock hook; none while reading or missing', () => {
+    for (const id of ['thread-docked', 'thread-release', 'documents', 'release-open', 'later-fail']) {
+      const page = html(id)
+      expect(page.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(page, id).toContain('aria-label="Thread tools"')
+      expect(page, id).not.toContain('fw-rp-tabs')
+      expect(page, id).not.toContain('tab=activity')
+    }
+    for (const id of ['loading', 'error', 'not-found', 'no-permission']) expect(html(id), id).not.toContain('class="fw-rcf-dock"')
+    const container = readFileSync(new URL('./record/LotRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain('lot && lotRef && can.threadsRead ?')
+    expect(container).toContain('partyRole="supplier"')
+    expect(container).not.toMatch(/router\.push\([^)]*activity/)
+    expect(container).not.toContain('fw.lab.dock')
+    const view = readFileSync(new URL('./record/view/LotRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("from '../../../../_shared/record-frame/RecordFrame'")
+    expect(view).not.toMatch(/RecordFrame, RecordProblem|dockOpen|onDock/)
+  })
+
+  it('says once that the thread is the same conversation as Warehouse › Lots (a link with the stock read, words without)', () => {
+    const page = html('thread-docked')
+    expect(textOf(page)).toContain('Same conversation as Warehouse › Lots & traceability')
+    expect(page).toMatch(/\/warehouse\/lots\/[^"?]+"/)
+    expect(textOf(html('thread-docked', 'it'))).toContain('Stessa conversazione di Magazzino › Lotti e tracciabilità')
+    const words = html('thread-notes-only')
+    expect(textOf(words)).toContain('Same conversation as Warehouse › Lots & traceability')
+    expect(words).not.toMatch(/\/warehouse\/lots\/[^"?]+"/)
+  })
+
+  it('the wall (W13, W16, W34): the lot’s thread reaches its own supplier only — never a customer; without the stock read, notes only', () => {
+    const page = html('thread-docked')
+    const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
+    expect(dock).toContain('Conceria Demo S.r.l.')
+    expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
+    const notes = html('thread-notes-only')
+    const notesDock = textOf(notes.slice(notes.indexOf('class="fw-rcf-dock"')))
+    expect(notesDock).not.toMatch(/Reply to (?!the customer)/)
+    expect(notesDock).not.toContain('Conceria Demo S.r.l.')
   })
 })

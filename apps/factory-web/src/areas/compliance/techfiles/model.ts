@@ -244,8 +244,18 @@ export function reportKind(report: Pick<Report, 'source' | 'title'>): { test: Te
 
 // ---- the record's actions ------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['annex', 'risk', 'tests', 'production', 'pack', 'activity'] as const
+// ---- B-TH-267 (threads plan TH-6; 08-tabs O-CMP-TF; the rule of picture 38): tabs 6 → 5. Activity goes: TechnicalFile is a thread
+// record now (B-TH-075, N14), so its thread docks beside every tab (RecordFrame) and Activity's tools are in the thread's "⋯" (R-ACT).
+export const RECORD_TABS = ['annex', 'risk', 'tests', 'production', 'pack'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
+/** Every old `?tab=` keeps working (R-8): Activity lands on the Annex III checklist with the thread opened (RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = Object.freeze({ activity: 'annex' })
+export const tabOf = (value: string | null | undefined): RecordTab => {
+  const asked = value ?? ''
+  if ((RECORD_TABS as readonly string[]).includes(asked)) return asked as RecordTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'annex'
+}
+// ---- end B-TH-267
 
 /** Why the file cannot be changed now (a key), or null: an OPEN file, a person who manages, online. */
 export function fileWriteHeld(status: TechnicalFileStatus, can: Pick<TechfilesCan, 'manage'>, online: boolean): string | null {

@@ -88,6 +88,10 @@ import {
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
 import { designScreen as windowScreen } from './window/fixtures'
+// B-TH-267: the technical file on RecordFrame (tabs 6 → 5, its thread docked).
+import { MERGED_TABS, RECORD_TABS, recordAddress, tabOf } from './model'
+import { arrivalOf } from '../../_shared/record-frame/model'
+import { textOf } from '../../../lib/record-thread/parts/testing'
 
 const MANAGER = techfilesCan(['compliance.certificates.view', 'compliance.techfiles.manage', 'compliance.techfiles.sign', 'compliance.techfiles.share', 'files.read'])
 const READER = techfilesCan(['compliance.certificates.view'])
@@ -342,7 +346,7 @@ describe('technical files: the words', () => {
         ['content', PACK_CONTENTS],
         ['linkState', ['LIVE', 'ENDED', 'REVOKED']],
         ['share.delivery', ['SENT', 'FAILED', 'QUEUED']],
-        ['tab', ['annex', 'risk', 'tests', 'production', 'pack', 'activity']],
+        ['tab', ['annex', 'risk', 'tests', 'production', 'pack']],
         ['live', ['connecting', 'live', 'offline']],
         ['done.item', ['review', 'unreview', 'clear', 'remove', 'na', 'linked']],
         ['refused.test', ['schedule', 'record']],
@@ -370,5 +374,66 @@ describe('technical files: the words', () => {
     expect(recordScreen.cases.map((entry) => entry.id)).toEqual(expect.arrayContaining(['annex', 'risk', 'tests', 'production', 'packs', 'sign-code', 'share-code', 'offline', 'read-only', 'loading', 'error', 'forbidden']))
     expect(windowScreen.screen).toBe('SCR-326')
     expect(authorityScreen.screen).toBe('SCR-327')
+  })
+})
+
+// ---- B-TH-267: the technical file on RecordFrame (O-CMP-TF; the rule of picture 38, the tabs of 08-tabs) ----
+describe('B-TH-267: the technical file on RecordFrame — five tabs, its thread docked (TechnicalFile is a thread record, N14)', () => {
+  const screen = recordScreen as unknown as DesignScreen<unknown>
+  const html = (id: string, locale: (typeof LOCALES)[number] = 'en') => {
+    const found = screen.cases.find((entry) => entry.id === id)
+    if (!found) throw new Error(`no case ${id}`)
+    return render(screen, found.model, locale)
+  }
+
+  it('five tabs; every old ?tab= keeps working (R-8): Activity → the Annex III checklist with the thread opened', () => {
+    expect(RECORD_TABS).toEqual(['annex', 'risk', 'tests', 'production', 'pack'])
+    expect(MERGED_TABS).toEqual({ activity: 'annex' })
+    expect(tabOf('activity')).toBe('annex')
+    expect(tabOf('risk')).toBe('risk')
+    expect(tabOf('pack')).toBe('pack')
+    expect(tabOf('constructor')).toBe('annex')
+    expect(tabOf(null)).toBe('annex')
+    expect(arrivalOf('?tab=activity')).toEqual({ openThread: true, door: null })
+    expect(recordAddress('/w/demo', 'f1', 'production')).toBe('/w/demo/compliance/techfiles/f1?tab=production')
+  })
+
+  it('ONE thread docked beside every tab, its "⋯" (R-ACT) on each; no Activity tab, no record panels; none while reading or missing', () => {
+    for (const id of ['thread-docked', 'thread-risk', 'thread-production', 'tests', 'packs', 'complete', 'archived']) {
+      const page = html(id)
+      expect(page.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(page, id).toContain('aria-label="Thread tools"')
+      expect(page, id).not.toContain('fw-rp-tabs')
+      expect(page, id).not.toContain('tab=activity')
+    }
+    const text = textOf(html('thread-docked'))
+    for (const tab of ['Annex III checklist', 'Risk assessment', 'Test reports', 'Production control', 'Evidence pack']) expect(text).toContain(tab)
+    expect(text).not.toMatch(/\bActivity\b/)
+    expect(textOf(html('thread-docked', 'it'))).toContain('Elenco Allegato III')
+    for (const id of ['loading', 'not-found', 'error', 'forbidden']) expect(html(id), id).not.toContain('class="fw-rcf-dock"')
+    expect(textOf(html('not-found'))).toContain('Technical file not found')
+    expect(textOf(html('error'))).toContain('The technical file could not be read')
+  })
+
+  it('the container docks the thread for a reader of threads only and pushes no ?tab=activity; the dock hook copy is gone', () => {
+    const container = readFileSync(new URL('./record/TechFileRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain("const threads = session.permissions.includes('threads.read')")
+    expect(container).toContain('const thread = threads ?')
+    expect(container).toContain("type: 'TechnicalFile'")
+    expect(container).not.toContain("'activity'")
+    expect(container).not.toContain('fw.techfiles.dock')
+    expect(container).not.toContain('onDock')
+    const view = readFileSync(new URL('./record/view/TechFileRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("from '../../../../_shared/record-frame/RecordFrame'")
+    expect(view).not.toMatch(/\bRecordFrame, RecordProblem|RecordSkeleton|dockOpen/)
+  })
+
+  it('the wall (W13, W16, W34): the docked thread names no customer — the office’s notes only, no "Reply to"', () => {
+    const page = html('thread-docked')
+    const dock = textOf(page.slice(page.indexOf('class="fw-rcf-dock"')))
+    expect(dock).not.toMatch(/Reply to (?!the customer)/)
+    expect(dock).not.toMatch(/@[a-z0-9-]+\.example/)
+    expect(dock).not.toMatch(/Brand Alpha|Brand Beta/)
   })
 })

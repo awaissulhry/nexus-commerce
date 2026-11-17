@@ -2,15 +2,15 @@
 
 import { useEffect, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { CheckCheck, MoreHorizontal, PackagePlus } from 'lucide-react'
-import { Banner, Field, Menu, type MenuItemDef } from '@nexus/ui/components'
-import { Button, Select } from '@nexus/ui/primitives'
+import { CheckCheck, FileX, PackagePlus, ShieldOff } from 'lucide-react'
+import { Banner, Card, EmptyState, Field, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Select, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { DateField, Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { recordAddress as recordPage } from '../../../../../lib/records/record-links'
 import { OFFICE_PAGES } from '../../../../../shell/nav/office-nav'
 import { evidenceAddress } from '../../../../quality/_shared/model'
-import { Freshness, RecordFrame, RecordProblem, RecordSkeleton } from '../../../../quality/_shared/parts'
-import { archiveHeld, completeHeldWords, FILE_TONE, listAddress, reasonProblem, recordAddress, reopenHeld, valueOf, type RecordTab } from '../../model'
+import { Freshness } from '../../../../quality/_shared/parts'
+import { archiveHeld, completeHeldWords, FILE_TONE, listAddress, reasonProblem, recordAddress, reopenHeld, valueOf, RECORD_TABS, type RecordTab } from '../../model'
 import { PackDialog } from '../../view/PackDialog'
 import { KeysModal, NoticeBanner, RECORD_KEYS, StatePill, TechfilesMessages, TechfilesStepUp, useDay, useWhen, useWords } from '../../view/parts'
 import type { FileDialog, RecordActions, RecordModel } from '../view-model'
@@ -19,37 +19,46 @@ import { PacksTab, ShareDialog, WithdrawDialog } from './PacksTab'
 import { ProductionTab, TestDialogView } from './ProductionTab'
 import { RiskTab, SignDialog } from './RiskTab'
 import { TestsTab } from './TestsTab'
+// ---- B-TH-267: the technical file on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+
+/** The record type the frame remembers the thread's width by (the thread's own type). */
+const RECORD_TYPE = 'TechnicalFile'
 
 /**
- * SCR-120-file — a technical file (design compliance.techfiles › Technical file; PPE Reg. (EU) 2016/425 Annex III): the band
- * (‹ Technical files, the file's number and its style, the PPE category, the certificate it supports, who keeps it, the status
- * and the Annex III count; Complete — held with the open points in words — or Build evidence pack as the primary; ⋯ Edit,
- * Reopen, Archive, the evidence trail of the newest batch), then Annex III checklist · Risk assessment · Test reports ·
- * Production control · Evidence pack · Activity as link tabs, each reading and failing on its own. Fetches nothing:
- * TechFileRecord.tsx reads and writes; the record panels come in as `panels`.
+ * SCR-120-file — a technical file (design compliance.techfiles › Technical file; PPE Reg. (EU) 2016/425 Annex III), on RecordFrame
+ * (B-TH-267; the rule of picture 38, the tabs of 08-tabs O-CMP-TF): the band in the shell's band row (‹ Technical files, the file's
+ * number and its style, ONE pill — its status —, the PPE category, the certificate it supports, who keeps it and the Annex III count
+ * in its details; Complete — held with the open points in words — or Build evidence pack as the primary; ⋯ Edit, Reopen, Archive,
+ * the evidence trail of the newest batch, the style, Copy, the page's keys; the frame's Thread button ⌘J and Keyboard line), the
+ * docked thread beside every tab (TechnicalFile is a thread record now, B-TH-075 / N14: Activity's tools in its "⋯", R-ACT), the
+ * tabs 6 → 5: Annex III checklist · Risk assessment · Test reports · Production control · Evidence pack, each reading and failing on
+ * its own; every banner in the ONE notice of the body column. Fetches nothing: TechFileRecord.tsx reads and writes; the thread comes
+ * in as `thread` (the office's OfficeRecordThread docked, or a design case's) and `printThread` (what the print view shows of it).
  */
-export function TechFileRecordView({ model, actions, panels }: { model: RecordModel; actions?: RecordActions; panels?: ReactNode }) {
+export function TechFileRecordView({ model, actions, thread, printThread }: { model: RecordModel; actions?: RecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <TechfilesMessages>
-      <RecordPage model={model} actions={actions} panels={panels} />
+      <RecordPage model={model} actions={actions} thread={thread} printThread={printThread} />
     </TechfilesMessages>
   )
 }
 
-function RecordPage({ model, actions, panels }: { model: RecordModel; actions?: RecordActions | undefined; panels?: ReactNode }) {
+function RecordPage({ model, actions, thread, printThread }: { model: RecordModel; actions?: RecordActions | undefined; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useWords()
   const day = useDay()
   const when = useWhen()
   const [keysOpen, setKeysOpen] = useState(model.keysOpen ?? false)
   const { record, prefix, can } = model
   const file = record.file
-  const tab: RecordTab = model.tab === 'activity' && !panels ? 'annex' : model.tab
+  const tab: RecordTab = model.tab
   const dialogOpen = !!model.fileDialog || !!model.evidence || !!model.testDialog || !!model.share || !!model.withdraw || !!model.pack || !!model.riskUi.sign || keysOpen || model.stepUp.open
   const completeWords = completeHeldWords(record, can, model.online)
   const packHeld = !can.manage ? t('held.manage') : !model.online ? t('held.offline') : null
   const trail = file.latestBatch?.batchNumber ? evidenceAddress(prefix, { batch: file.latestBatch.batchNumber }) : null
 
-  // p: Build evidence pack; ? the keys (not in a field, a menu or a dialog).
+  // p: Build evidence pack; ? the keys (not in a field, a menu or a dialog). ⌘J is the frame's (the thread).
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (dialogOpen || event.metaKey || event.ctrlKey || event.altKey) return
@@ -71,14 +80,15 @@ function RecordPage({ model, actions, panels }: { model: RecordModel; actions?: 
   const production = valueOf(model.production)
   const packs = valueOf(model.packs)
   const reports = valueOf(model.reports)
-  const tabs = [
-    { id: 'annex', label: t('tab.annex'), count: file.status === 'OPEN' ? openPoints : null },
-    { id: 'risk', label: t('tab.risk') },
-    { id: 'tests', label: t('tab.tests'), count: reports ? reports.reports.length : file.testReports.count },
-    { id: 'production', label: t('tab.production'), count: production ? production.summary.missing + production.summary.failed : file.production.missing + file.production.failed },
-    { id: 'pack', label: t('tab.pack'), count: packs ? packs.packs.length : null },
-    ...(panels ? [{ id: 'activity', label: t('tab.activity') }] : []),
-  ]
+  // B-TH-267: the five tabs (Activity gone: the thread is docked beside each), each counting what it lists.
+  const counts: Readonly<Record<RecordTab, number | null>> = {
+    annex: file.status === 'OPEN' ? openPoints : null,
+    risk: null,
+    tests: reports ? reports.reports.length : file.testReports.count,
+    production: production ? production.summary.missing + production.summary.failed : file.production.missing + file.production.failed,
+    pack: packs ? packs.packs.length : null,
+  }
+  const tabs: TabItem[] = RECORD_TABS.map((id) => ({ id, label: t(`tab.${id}`), count: counts[id], href: recordAddress(prefix, file.id, id) }))
 
   const more: MenuItemDef[] = [
     { id: 'pack', label: t('band.pack'), disabled: !!packHeld, description: packHeld ?? undefined, onSelect: () => actions?.onPack?.() },
@@ -98,85 +108,87 @@ function RecordPage({ model, actions, panels }: { model: RecordModel; actions?: 
     { id: 'keys', label: t('keys.title'), onSelect: () => setKeysOpen(true) },
   ]
 
+  const primary =
+    file.status === 'OPEN' ? (
+      <Button size="sm" variant="primary" heldReason={completeWords ? t(completeWords.key, completeWords.params) : null} onClick={() => actions?.onComplete?.()}>
+        <CheckCheck size={14} aria-hidden /> {t('band.complete')}
+      </Button>
+    ) : (
+      <Button size="sm" variant="primary" aria-keyshortcuts="p" heldReason={packHeld} onClick={() => actions?.onPack?.()}>
+        <PackagePlus size={14} aria-hidden /> {t('band.pack')}
+      </Button>
+    )
+
   return (
     <RecordFrame
-      back={{ href: listAddress(prefix), label: t('record.back') }}
-      title={
-        <>
-          <span className="fw-tf-code">{file.number}</span> · {file.style.code} {file.style.name}
-        </>
-      }
-      meta={
-        <span className="fw-tf-row">
-          <span>{t(`ppe.${file.style.ppeCategory}`)}</span>
-          {file.certificate ? (
-            <Link className="fw-tf-link" href={`${prefix}${recordPage({ type: 'Certificate', id: file.certificate.id }, OFFICE_PAGES)}`}>
-              {t('record.certificate', { number: file.certificate.number, standard: file.certificate.standard })}
-            </Link>
-          ) : (
-            <span className="fw-tf-muted">{t('record.noCertificate')}</span>
-          )}
-          <span className="fw-tf-muted">{file.keeper ? t('record.keeper', { name: file.keeper.name }) : t('record.noKeeper')}</span>
-          <Freshness asOf={model.asOf} live={model.live} />
-        </span>
-      }
-      status={
-        <span className="fw-tf-row">
-          <StatePill group="status" state={file.status} tone={FILE_TONE[file.status]} />
-          <span className="fw-tf-muted">{t('cell.annex', { done: file.annex.done, outOf: file.annex.outOf })}</span>
-        </span>
-      }
-      actions={
-        <>
-          {file.status === 'OPEN' ? (
-            <Button size="sm" variant="primary" heldReason={completeWords ? t(completeWords.key, completeWords.params) : null} onClick={() => actions?.onComplete?.()}>
-              <CheckCheck size={14} aria-hidden /> {t('band.complete')}
-            </Button>
-          ) : (
-            <Button size="sm" variant="primary" aria-keyshortcuts="p" heldReason={packHeld} onClick={() => actions?.onPack?.()}>
-              <PackagePlus size={14} aria-hidden /> {t('band.pack')}
-            </Button>
-          )}
-          <Menu align="right" label={<MoreHorizontal size={16} aria-hidden />} triggerProps={{ 'aria-label': t('band.more') }} items={more} />
-        </>
-      }
-      tabs={tabs}
-      active={tab}
-      tabHref={(id) => recordAddress(prefix, file.id, id as RecordTab)}
-      dock={tab === 'activity' ? undefined : panels}
-      dockOpen={model.dockOpen}
-      onDock={actions?.onDock}
+      recordType={RECORD_TYPE}
+      personId={model.personId ?? null}
+      threadLabel={t('record.dockLabel', { number: file.number })}
+      thread={thread ?? null}
+      printThread={printThread}
+      wide={tab === 'risk' || tab === 'production'}
+      band={{
+        back: <Link href={listAddress(prefix)}>{t('record.back')}</Link>,
+        title: (
+          <>
+            <span className="fw-tf-code">{file.number}</span> · {file.style.code} {file.style.name}
+          </>
+        ),
+        status: <StatePill group="status" state={file.status} tone={FILE_TONE[file.status]} />,
+        meta: (
+          <span className="fw-tf-row">
+            <span>{t(`ppe.${file.style.ppeCategory}`)}</span>
+            {file.certificate ? (
+              <Link className="fw-tf-link" href={`${prefix}${recordPage({ type: 'Certificate', id: file.certificate.id }, OFFICE_PAGES)}`}>
+                {t('record.certificate', { number: file.certificate.number, standard: file.certificate.standard })}
+              </Link>
+            ) : (
+              <span className="fw-tf-muted">{t('record.noCertificate')}</span>
+            )}
+            <span className="fw-tf-muted">{file.keeper ? t('record.keeper', { name: file.keeper.name }) : t('record.noKeeper')}</span>
+            <span className="fw-tf-muted">{t('cell.annex', { done: file.annex.done, outOf: file.annex.outOf })}</span>
+            <Freshness asOf={model.asOf} live={model.live} />
+          </span>
+        ),
+        primary,
+        more,
+        moreLabel: t('band.more'),
+      }}
     >
-      <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
-      {model.changedAt && (
-        <Banner
-          tone="info"
-          title={t('record.changed', { time: when(model.changedAt) })}
-          action={
-            <Button size="sm" onClick={() => actions?.onReload?.()}>
-              {t('record.reload')}
-            </Button>
-          }
-        />
-      )}
-      {!model.online && <Banner tone="warning" title={t('offline.title')}>{t('offline.body')}</Banner>}
-      {file.status === 'COMPLETE' && (
-        <Banner tone="success" title={t('record.completeSince', { date: day(file.completedAt), name: file.completedBy?.name ?? '—' })}>
-          {t('record.completeBody')}
-        </Banner>
-      )}
-      {file.status === 'ARCHIVED' && (
-        <Banner tone="neutral" title={t('record.archivedSince', { date: day(file.archivedAt), until: day(file.retainUntil) })}>
-          {file.archiveReason ? t('record.archivedReason', { reason: file.archiveReason }) : t('record.archivedBody')}
-        </Banner>
-      )}
+      <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={tab} size="sm" overflow="scroll" />
+
+      {/* B-TH-267: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+      <RecordNotices>
+        <NoticeBanner notice={model.notice} onDismiss={actions?.onDismissNotice} />
+        {model.changedAt && (
+          <Banner
+            tone="info"
+            title={t('record.changed', { time: when(model.changedAt) })}
+            action={
+              <Button size="sm" onClick={() => actions?.onReload?.()}>
+                {t('record.reload')}
+              </Button>
+            }
+          />
+        )}
+        {!model.online && <Banner tone="warning" title={t('offline.title')}>{t('offline.body')}</Banner>}
+        {file.status === 'COMPLETE' && (
+          <Banner tone="success" title={t('record.completeSince', { date: day(file.completedAt), name: file.completedBy?.name ?? '—' })}>
+            {t('record.completeBody')}
+          </Banner>
+        )}
+        {file.status === 'ARCHIVED' && (
+          <Banner tone="neutral" title={t('record.archivedSince', { date: day(file.archivedAt), until: day(file.retainUntil) })}>
+            {file.archiveReason ? t('record.archivedReason', { reason: file.archiveReason }) : t('record.archivedBody')}
+          </Banner>
+        )}
+      </RecordNotices>
 
       {tab === 'annex' && <AnnexTab model={model} actions={actions} />}
       {tab === 'risk' && <RiskTab model={model} actions={actions} />}
       {tab === 'tests' && <TestsTab model={model} actions={actions} />}
       {tab === 'production' && <ProductionTab model={model} actions={actions} />}
       {tab === 'pack' && <PacksTab model={model} actions={actions} />}
-      {tab === 'activity' && panels}
 
       {model.fileDialog && <FileDialogView model={model} actions={actions} />}
       {model.evidence && <EvidenceDialogView model={model} state={model.evidence} actions={actions} />}
@@ -290,35 +302,65 @@ function FileDialogView({ model, actions }: { model: RecordModel; actions?: Reco
   )
 }
 
-/** The file could not be read (missing, another company's, not for the role, or the read failed): said in words with a way back. */
+/**
+ * The file could not be read (missing, another company's, not for the role, or the read failed): said in words with a way back, inside
+ * the frame (B-TH-267: the band stays in the shell's row; no thread — nothing of the file was read).
+ */
 export function RecordProblemView({ problem, prefix, onRetry }: { problem: string; prefix: string; onRetry?: () => void }) {
   return (
     <TechfilesMessages>
-      <ProblemInner problem={problem} prefix={prefix} onRetry={onRetry} />
+      <StateInner prefix={prefix} problem={problem} onRetry={onRetry} />
     </TechfilesMessages>
   )
 }
 
-function ProblemInner({ problem, prefix, onRetry }: { problem: string; prefix: string; onRetry?: (() => void) | undefined }) {
-  const t = useWords()
-  return (
-    <RecordProblem
-      problem={problem}
-      back={
-        <Link className="fw-tf-link" href={listAddress(prefix)}>
-          {t('record.back')}
-        </Link>
-      }
-      onRetry={onRetry}
-    />
-  )
-}
-
-/** The record being read: its shape (band, tabs, body) in the page's words. */
-export function RecordLoadingView() {
+/** The record being read: the band and the body's shape, inside the frame (no thread until the file is read). */
+export function RecordLoadingView({ prefix = '' }: { prefix?: string }) {
   return (
     <TechfilesMessages>
-      <RecordSkeleton />
+      <StateInner prefix={prefix} problem={null} />
     </TechfilesMessages>
+  )
+}
+
+function StateInner({ prefix, problem, onRetry }: { prefix: string; problem: string | null; onRetry?: (() => void) | undefined }) {
+  const t = useWords()
+  const back = <Link href={listAddress(prefix)}>{t('record.back')}</Link>
+  const missing = problem === 'problem.notFound'
+  const forbidden = problem === 'problem.forbidden'
+  return (
+    <RecordFrame recordType={RECORD_TYPE} personId={null} band={{ back, title: problem === null ? <Skeleton width={260} height={22} /> : t('record.name'), moreLabel: t('band.more') }} thread={null} threadLabel={t('record.name')}>
+      {problem === null ? (
+        <Card padded aria-busy="true">
+          <p className="fw-tf-muted" role="status">
+            <Spinner size={14} /> {t('common.reading')}
+          </p>
+          <div className="fw-tf-form">
+            {Array.from({ length: 5 }, (_, index) => (
+              <Skeleton key={index} height={22} />
+            ))}
+          </div>
+        </Card>
+      ) : (
+        <Card padded>
+          <EmptyState
+            icon={forbidden ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
+            title={t(missing ? 'record.notFound' : forbidden ? 'record.forbidden' : 'record.failed')}
+            description={t(problem)}
+            action={
+              missing || forbidden || !onRetry ? (
+                <Button size="sm" asChild>
+                  {back}
+                </Button>
+              ) : (
+                <Button size="sm" onClick={onRetry}>
+                  {t('common.retry')}
+                </Button>
+              )
+            }
+          />
+        </Card>
+      )}
+    </RecordFrame>
   )
 }

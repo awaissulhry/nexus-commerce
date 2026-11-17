@@ -7,17 +7,22 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { StoreError } from '../../../../record-panels/store'
-import { liveMatches, useLive, useRecordTab } from '../../../quality/_shared/hooks'
+import { liveMatches, useLive } from '../../../quality/_shared/hooks'
 import { failedRead, problemKey, qualityCan, reading, ready, refusalLines, type Notice, type Read } from '../../../quality/_shared/model'
 import { attachDocument, decideLot, downloadAddress, getLot, pickedFile, recordResult, type LotDecision, type LotDetail, type PickedFile, type RecordAnswer, type WorkOrderUse } from '../api'
-import { blankDocument, blankResult, decimalText, RECORD_TABS, recordResultHeld, type DocumentDraft, type RecordDialog, type ResultDraft } from '../model'
+import { blankDocument, blankResult, decimalText, recordResultHeld, tabOf, type DocumentDraft, type RecordDialog, type ResultDraft } from '../model'
 import { LabMessages } from '../view/parts'
 import { LotRecordView } from './view/LotRecordView'
 // B-W2b-288 (FU2:03): the lab's price of a result (the cost grain).
 import { holdsCostGrain, labCostBody } from '../lab-cost/lab-cost'
+// ---- B-TH-267: the lot on RecordFrame (its ONE thread docked beside both tabs — the same as Warehouse › Lots'; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
+import { listLots as listStockLots } from '../../../_shared/stock/api'
 
 /**
- * The lot record container (`/w/<company>/compliance/tests/<lotId>?tab=results|documents|release|activity`, SCR-054):
+ * The lot record container (`/w/<company>/compliance/tests/<lotId>?tab=results|release`, SCR-054; B-TH-267: an old `?tab=documents`
+ * lands on Documents & release, `?tab=activity` on Results & limits with the docked thread opened):
  * reads the lot (`GET /quality/lots/:lotId`: its results, documents, the rule in force and the release checklist for the
  * viewer), records a Cr VI result with its report (announce → the store → record), attaches a supplier document, takes
  * the decisions with the lot's version (release and reject with the typed code), and re-reads on the lot's live events.
@@ -32,8 +37,6 @@ export function LotRecord({ lotId }: { lotId: string }) {
   )
 }
 
-const WIDE = '(min-width: 1280px)'
-const DOCK_KEY = 'fw.lab.dock'
 const today = (): string => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const ACTS: readonly string[] = ['result', 'document', 'release', 'reject', 'block', 'unblock', 'clearHold']
 
@@ -48,7 +51,7 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
   const params = useSearchParams()
   const can = useMemo(() => qualityCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(RECORD_TABS)
+  const tab = tabOf(params?.get('tab')) // B-TH-267: every old ?tab= lands (MERGED_TABS)
   const [detail, setDetail] = useState<Read<LotDetail>>(reading())
   const [asOf, setAsOf] = useState<string | null>(null)
   const [notice, setNotice] = useState<Notice | null>(null)
@@ -61,7 +64,8 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
   const [dialogLines, setDialogLines] = useState<readonly string[]>([])
   const [answer, setAnswer] = useState<Pick<RecordAnswer, 'effect' | 'trace'> | null>(null)
   const [blocked, setBlocked] = useState<readonly WorkOrderUse[] | null>(null)
-  const [dockOpen, setDockOpen] = useState(false)
+  // B-TH-267: the lot's supplier as the thread names it (the lab's read carries its id only).
+  const [supplier, setSupplier] = useState<{ id: string; name: string } | null>(null)
   const resultFile = useRef<PickedFile | null>(null)
   const documentFile = useRef<PickedFile | null>(null)
   const acted = useRef(false)
@@ -80,14 +84,6 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
   useEffect(() => {
     void load()
   }, [load])
-
-  useEffect(() => {
-    try {
-      setDockOpen(window.localStorage.getItem(DOCK_KEY) === '1' && window.matchMedia(WIDE).matches)
-    } catch {
-      setDockOpen(false)
-    }
-  }, [])
 
   const live = useLive(
     (change) => {
@@ -253,31 +249,45 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
     }
   }
 
-  const toggleDock = () => {
-    let wide = false
-    try {
-      wide = window.matchMedia(WIDE).matches
-    } catch {
-      wide = false
-    }
-    if (!wide) {
-      router.push(`${pathname}?tab=activity`)
-      return
-    }
-    setDockOpen((current) => {
-      const next = !current
-      try {
-        window.localStorage.setItem(DOCK_KEY, next ? '1' : '0')
-      } catch {
-        // Not kept on this device; the dock still toggles.
-      }
-      return next
-    })
-  }
-
   const lot = value?.lot ?? null
-  const panels =
-    lot && session.permissions.includes('threads.read') ? <RecordPanels record={{ type: 'Lot', id: lot.id, companyId: lot.companyId, siteId: lot.siteId }} title={lot.code} /> : null
+
+  // ---- B-TH-267: the lot's ONE thread, docked beside both tabs — the same conversation as Warehouse › Lots (the Lot record), whose
+  // supplier is the only party it may reach. The lab's lot read carries the supplier's id only: its name (the thread's "Reply to …")
+  // comes from the stock read of the same lot, for a person who reads stock; without it the thread still opens — the office's notes,
+  // and a reply from Warehouse › Lots. The print view keeps the record panels' print form.
+  const supplierId = lot?.supplierId ?? null
+  const lotCode = lot?.code ?? null
+  const siteId = lot?.siteId ?? null
+  useEffect(() => {
+    if (!lotCode || !supplierId || !can.stockView || !can.threadsRead) return
+    if (supplier?.id === supplierId) return
+    let current = true
+    listStockLots(api, { q: lotCode, supplierId, siteId, limit: 5 })
+      .then((page) => {
+        const row = page.lots.find((entry) => entry.id === lotId)
+        if (current && row?.supplier) setSupplier({ id: row.supplier.id, name: row.supplier.name })
+      })
+      .catch(() => undefined) // Only the thread's party name: the notes still work without it.
+    return () => {
+      current = false
+    }
+  }, [api, can.stockView, can.threadsRead, lotCode, lotId, siteId, supplier?.id, supplierId])
+  const lotRef = lot ? { type: 'Lot', id: lot.id, companyId: lot.companyId, siteId: lot.siteId } : null
+  const party = supplier && supplier.id === supplierId ? supplier : null
+  const thread =
+    lot && lotRef && can.threadsRead ? (
+      <OfficeRecordThread
+        docked
+        record={lotRef}
+        title={party ? `${lot.code} · ${party.name}` : lot.code}
+        recordLabel={lot.code}
+        party={party}
+        partyRole="supplier"
+        printHref={printHref(pathname, params?.toString() ?? '')}
+      />
+    ) : null
+  const printThread = lot && lotRef && can.threadsRead ? <RecordPanels record={lotRef} title={lot.code} /> : null
+  // ---- end B-TH-267
 
   return (
     <LotRecordView
@@ -300,11 +310,12 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
         dialogLines,
         answer,
         blocked,
-        dockOpen,
+        personId: session.user.id /* B-TH-267 */,
         // B-W2b-288 (FU2:03)
         costGrain: holdsCostGrain(session.permissions),
       }}
-      panels={panels}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onDialog: openDialog,
         onResultDraft: setResultDraft,
@@ -327,7 +338,6 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
         onCopy: (text) => void copy(text),
         onRetry: () => void load(),
         onDismissNotice: () => setNotice(null),
-        onDock: toggleDock,
       }}
     />
   )

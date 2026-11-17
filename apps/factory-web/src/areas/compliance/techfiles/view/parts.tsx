@@ -167,9 +167,9 @@ export const LIST_KEYS = (t: Translate): ListKey[] => [
 ]
 
 /** The record's keys. */
+// B-TH-267: ⌘J (the thread) is the record frame's: its band menu's Keyboard line lists it.
 export const RECORD_KEYS = (t: Translate): ListKey[] => [
   { keys: ['p'], does: t('keys.pack') },
-  { keys: ['⌘', 'J'], does: t('keys.dock') },
   { keys: ['Esc'], does: t('keys.close') },
 ]
 
