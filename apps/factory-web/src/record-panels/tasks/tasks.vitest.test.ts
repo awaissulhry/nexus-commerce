@@ -1,11 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { createApiClient } from '../../lib/api/client'
 import { apiErrorFrom } from '../../lib/api/errors'
-import { completeMention, mentionQuery, mentionsInText, mentionSuggestions } from '../model'
 import { addFollower, bulkTasks, createTask, listAssignees, listTasks, setMyFollow, setTaskStatus, taskWriteProblem } from './api'
-import { addTaskHeld, changeHeld, checklistLines, createBody, draftProblem, emptyDraft, followersChangeFor, taskChangeFor, taskDueWords, type TaskItem } from './model'
+import { addTaskHeld, checklistLines, createBody, draftProblem, emptyDraft, followersChangeFor, taskChangeFor, taskDueWords, type TaskItem } from './model'
 
-/** Tasks and followers on any record, and @mention typed in a note (B-W2a-40 on B-W2a-20's API): the shared rules and calls. */
+/** Tasks and followers on any record (B-W2a-40 on B-W2a-20's API): the shared rules and calls. */
 
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
 function client(answer: () => Response) {
@@ -17,12 +16,6 @@ function client(answer: () => Response) {
   }
   return { api, sent }
 }
-
-const PEOPLE = [
-  { id: 'p1', name: 'Bea Esempio' },
-  { id: 'p2', name: 'Bea' },
-  { id: 'p3', name: 'Carlo Prova' },
-]
 
 const TASK: TaskItem = {
   id: '0190f0e2-4444-7000-8000-000000000001',
@@ -54,28 +47,6 @@ const TASK: TaskItem = {
   canChange: true,
 }
 
-describe('@mention typed in a note (COL-006; the admin records’ activity feeds)', () => {
-  it('a whole name after @ mentions that person; a shorter name inside a longer one at the same @ does not', () => {
-    expect(mentionsInText('@Bea Esempio can you look? cc @carlo prova.', PEOPLE)).toEqual(['p1', 'p3'])
-    expect(mentionsInText('Ask @Bea, please', PEOPLE)).toEqual(['p2'])
-    expect(mentionsInText('mail bea@example.com or @Beatrice', PEOPLE)).toEqual([])
-    expect(mentionsInText('no mention here', PEOPLE)).toEqual([])
-  })
-
-  it('the @word being typed suggests whom it names, and a pick writes the whole name', () => {
-    expect(mentionQuery('Please @Car')).toBe('Car')
-    expect(mentionQuery('done.')).toBeNull()
-    expect(mentionSuggestions('car', PEOPLE, []).map((person) => person.id)).toEqual(['p3'])
-    expect(mentionSuggestions('pro', PEOPLE, []).map((person) => person.id)).toEqual(['p3'])
-    expect(mentionSuggestions('bea', PEOPLE, ['p1']).map((person) => person.id)).toEqual(['p2'])
-    expect(completeMention('Please @Car', PEOPLE[2]!)).toBe('Please @Carlo Prova ')
-    // A name of several words: "@Carlo Pr" still asks for Carlo Prova, and completes to the whole name.
-    expect(mentionQuery('Please @Carlo Pr')).toBe('Carlo Pr')
-    expect(mentionSuggestions('carlo pr', PEOPLE, []).map((person) => person.id)).toEqual(['p3'])
-    expect(completeMention('Please @Carlo Pr', PEOPLE[2]!)).toBe('Please @Carlo Prova ')
-  })
-})
-
 describe('the tasks’ rules (shared by a record’s panels and My tasks)', () => {
   it('due words: overdue N days, today, in N days, a date, none', () => {
     expect(taskDueWords({ date: '2026-10-27', days: -2, word: 'OVERDUE' })).toEqual({ key: 'tasks.due.overdue', count: 2, date: '2026-10-27', late: true })
@@ -102,8 +73,6 @@ describe('the tasks’ rules (shared by a record’s panels and My tasks)', () =
     expect(addTaskHeld(new Set(['tasks.manage']), true)).toBe('tasks.held.noPost')
     expect(addTaskHeld(new Set(['tasks.manage', 'threads.post']), true)).toBeNull()
     expect(addTaskHeld(new Set(['tasks.manage']), false)).toBeNull()
-    expect(changeHeld({ canChange: false, status: 'OPEN' }, { busy: false, offline: false })).toBe('tasks.held.readOnly')
-    expect(changeHeld({ canChange: true, status: 'OPEN' }, { busy: false, offline: true })).toBe('tasks.held.offline')
     const record = { type: 'Quote', id: 'q1' }
     expect(taskChangeFor({ type: 'task.completed', fields: { recordType: 'Quote', recordId: 'q1' } }, record)).toBe(true)
     expect(taskChangeFor({ type: 'task.completed', fields: { recordType: 'Quote', recordId: 'q2' } }, record)).toBe(false)

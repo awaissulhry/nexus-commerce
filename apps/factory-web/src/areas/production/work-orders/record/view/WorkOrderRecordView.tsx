@@ -55,15 +55,15 @@ export type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-mod
  */
 // B-TH-265: `thread` is the docked thread (the container's WorkOrderThreads with the office's OfficeRecordThread, or a design case's);
 // `printThread` what the print view shows of it.
-export function WorkOrderRecordView({ model, actions, thread, printThread }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
+export function WorkOrderRecordView({ model, actions, thread, printThread, fields }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; thread?: ReactNode; printThread?: ReactNode; /** B-TH-280: the custom fields (Overview & release only). */ fields?: ReactNode }) {
   return (
     <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', 'records', /* B-W2b-245 */ SPEC_NS, /* B-W2b-424 */ CLOSE_NS]}>
-      <WorkOrderRecord model={model} actions={actions} thread={thread} printThread={printThread} />
+      <WorkOrderRecord model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} />
     </WithMessages>
   )
 }
 
-function WorkOrderRecord({ model, actions, thread, printThread }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
+function WorkOrderRecord({ model, actions, thread, printThread, fields }: { model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; thread?: ReactNode; printThread?: ReactNode; fields?: ReactNode }) {
   const t = useT('production')
   const listHref = `${model.prefix}/production/work-orders`
   const loaded = model.workOrder
@@ -114,10 +114,10 @@ function WorkOrderRecord({ model, actions, thread, printThread }: { model: WorkO
       </RecordFrame>
     )
   }
-  return <ReadyRecord workOrder={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} />
+  return <ReadyRecord workOrder={loaded.value} model={model} actions={actions} thread={thread} printThread={printThread} fields={fields} />
 }
 
-function ReadyRecord({ workOrder, model, actions, thread, printThread }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
+function ReadyRecord({ workOrder, model, actions, thread, printThread, fields }: { workOrder: WorkOrder; model: WorkOrderRecordModel; actions?: WorkOrderRecordActions; thread?: ReactNode; printThread?: ReactNode; fields?: ReactNode }) {
   const t = useT('production')
   const locale = useLocale()
   const recordHref = `${model.prefix}/production/work-orders/${workOrder.id}`
@@ -242,6 +242,7 @@ function ReadyRecord({ workOrder, model, actions, thread, printThread }: { workO
       threadLabel={t('record.dockLabel')}
       thread={thread ?? null}
       printThread={printThread}
+      fields={fields /* B-TH-280 */}
       wide={isWideTab(model.tab)}
       band={{
         back: <Link href={`${model.prefix}/production/work-orders`}>{t('record.back')}</Link>,

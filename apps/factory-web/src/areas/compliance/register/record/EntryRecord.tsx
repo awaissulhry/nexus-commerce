@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { liveMatches, useLive } from '../../../quality/_shared/hooks'
 import { problemKey, qualityCan, refusalLines, type Notice } from '../../../quality/_shared/model'
 import { closeEntry, completeAction, getEntry, informDistributors, listReporters, listReversedReleases, notifyAuthority, updateEntry, type EntryDetail, type PartyOption, type ReversedRelease } from '../api'
@@ -147,13 +147,13 @@ function EntryContainer({ entryId }: { entryId: string }) {
   if (!entry) return <EntryRecordState prefix={prefix} problem={problem} personId={session.user.id} onRetry={() => void load()} />
 
   // B-TH-267: the docked thread (Head with Activity's doors, files line, Files view, feed, box), mounted only with threads.read — its
-  // only party is the one that reported the entry (none: office notes only); the print view keeps the panels' print form.
+  // only party is the one that reported the entry (none: office notes only); the print view prints the thread with ThreadPrint (B-TH-280).
   const record = { type: 'PpeRegisterEntry', id: entry.id, companyId: entry.companyId, siteId: null }
   const party = entry.party ? { id: entry.party.id, name: entry.party.name } : null
   const thread = threads ? (
     <OfficeRecordThread docked record={record} title={party ? `${entry.reference} · ${party.name}` : entry.reference} recordLabel={entry.reference} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
   ) : null
-  const printThread = threads ? <RecordPanels record={record} title={entry.reference} party={party ? { ...party, emails: [] } : null} /> : null
+  const printThread = threads ? <ThreadPrint record={record} title={entry.reference} party={party} /> : null
 
   return (
     <WithDepth entry={entry} prefix={prefix} onEntryChanged={() => void load()}>

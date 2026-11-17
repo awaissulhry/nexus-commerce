@@ -1,7 +1,4 @@
-/* B-W2b-177: the files panel in depth (layout only, DS tokens). */
-.fw-rf-guards { display: grid; gap: var(--nds-space-8); margin-block-end: var(--nds-space-12); }
-.fw-rf-guard-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--nds-space-4); }
-.fw-rf-guard { display: flex; flex-wrap: wrap; align-items: center; gap: var(--nds-space-8); }
+/* B-W2b-177: the files in depth (layout only, DS tokens); B-TH-280: inside the docked thread's Files view. */
 .fw-rf-versions, .fw-rf-form, .fw-rf-markup { display: grid; gap: var(--nds-space-12); min-width: 0; }
 .fw-rf-version { display: grid; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
 .fw-rf-uses { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
@@ -25,3 +22,8 @@
 @media (max-width: 760px) {
   .fw-rf-markup-grid, .fw-rf-compare { grid-template-columns: minmax(0, 1fr); }
 }
+/* B-TH-280: the depth parts' own text styles (the old record panels' stylesheet went with them). */
+.fw-fd-note { margin: 0; color: var(--nds-text-2); font-size: var(--nds-font-size-sm); line-height: 1.45; }
+.fw-fd-small { margin: 0; font-size: var(--nds-font-size-sm); line-height: 1.45; }
+.fw-fd-muted { color: var(--nds-text-2); }
+.fw-fd-loading { display: inline-flex; align-items: center; gap: var(--nds-space-6); margin: 0; color: var(--nds-text-2); font-size: var(--nds-font-size-sm); }

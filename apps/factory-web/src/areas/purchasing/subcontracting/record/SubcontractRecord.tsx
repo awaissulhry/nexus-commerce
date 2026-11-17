@@ -6,7 +6,7 @@ import { isApiError } from '../../../../lib/api/errors'
 import { newIdempotencyKey } from '../../../../lib/api/client'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { readFromStore, storeUrl } from '../../../../record-panels/store'
 import { findMaterials, getMaterial } from '../../../_shared/buying/api'
 import { todayIn } from '../../../_shared/buying/model'
@@ -535,7 +535,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const model: SubcontractRecordModel = { prefix, can, tab, order, live, personId: session.user.id /* B-TH-263 */, changed, notice, busy, dialog, dialogProblem, marks, pdf, timeZone: TIME_ZONE, today, workshop, depth }
 
   // B-TH-263: the docked thread (Head with Activity's doors, files line, Files view, feed, box), the order's own workshop only; the
-  // print view keeps the panels' print form.
+  // print view prints the thread with ThreadPrint (B-TH-280).
   const value = order.status === 'ready' ? order.value : null
   const record = value ? { type: 'SubcontractOrder', id: value.id, companyId: value.companyId, siteId: value.site.id } : null
   const title = value ? `${value.number} · ${value.workshop.name}` : ''
@@ -544,7 +544,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     <SubcontractRecordView
       model={model}
       thread={value && record ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.number} party={{ id: value.workshop.id, name: value.workshop.name }} partyRole="supplier" printHref={printHref(pathname, params?.toString() ?? '')} /> : null}
-      printThread={value && record ? <RecordPanels record={record} title={title} party={{ id: value.workshop.id, name: value.workshop.name, emails: [] }} /> : null}
+      printThread={value && record ? <ThreadPrint record={record} title={title} party={{ id: value.workshop.id, name: value.workshop.name }} partyRole="supplier" /> : null}
       actions={{
         onRetry: () => void load(),
         onReload: () => void load(),

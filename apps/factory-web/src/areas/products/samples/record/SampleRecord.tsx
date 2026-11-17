@@ -8,7 +8,7 @@ import { formatTime } from '../../../../lib/i18n/format'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { useLiveBus } from '../../../../shell/live/use-live'
 import {
   addComment,
@@ -423,7 +423,7 @@ export function SampleRecord({ roundId }: { roundId: string }) {
     dialog,
   }
 
-  // B-TH-262: the docked thread beside every tab (its Head holds Activity's doors, R-ACT); the print view keeps the panels' print form.
+  // B-TH-262: the docked thread beside every tab (its Head holds Activity's doors, R-ACT); the print view prints the thread with ThreadPrint (B-TH-280).
   // Brand wall (W08, W12, W20, W25, W34): the round's own customer only; an internal round has none (notes only).
   const record = round ? { type: 'SampleRound', id: round.id, companyId: round.companyId, siteId: null } : null
   const title = round ? `${round.number} · ${round.style.code}` : ''
@@ -431,7 +431,7 @@ export function SampleRecord({ roundId }: { roundId: string }) {
     round && record ? (
       <OfficeRecordThread docked record={record} title={title} recordLabel={round.number} party={round.party ? { id: round.party.id, name: round.party.name } : null} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
     ) : null
-  const printThread = round && record ? <RecordPanels record={record} title={title} party={round.party ? { id: round.party.id, name: round.party.name, emails: [] } : null} /> : null
+  const printThread = round && record ? <ThreadPrint record={record} title={title} party={round.party ? { id: round.party.id, name: round.party.name } : null} /> : null
 
   return (
     <SampleRecordView

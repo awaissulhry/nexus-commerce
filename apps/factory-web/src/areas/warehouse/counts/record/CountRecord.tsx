@@ -41,7 +41,7 @@ import { countProblem, countsCan, isCountEvent, readCount, readProblem, recordTa
 import { openPdf, openStored, saveXlsx } from '../papers'
 import { CountsMessages } from '../parts'
 import type { CellSave, CountRecordModel, FoundDraft, FoundModel, LinesPart, Loaded, Notice, PlaceChoice, RecordDialog } from '../view-model'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { CountRecordView } from './view/CountRecordView'
 // ---- B-TH-264: the docked thread on the count (RecordFrame; Activity's tools in its "⋯") ----
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
@@ -551,10 +551,10 @@ function CountRecordContainer({ countId }: { countId: string }) {
     personId: session.user.id, // B-TH-264
   }
   // B-TH-264: the count's thread docked beside every tab (notes only: a count has no party; its company and site), with threads.read;
-  // Activity's tools are in its "⋯" (R-ACT). The print view keeps the record panels' print form.
+  // Activity's tools are in its "⋯" (R-ACT). The print view prints the thread with ThreadPrint (B-TH-280).
   const record = value ? { type: 'StockCount', id: value.id, companyId: value.companyId, siteId: value.site.id } : null
   const thread = value && record && can.threads ? <OfficeRecordThread docked record={record} title={value.number} recordLabel={value.number} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = value && record && can.threads ? <RecordPanels record={record} title={value.number} /> : null
+  const printThread = value && record && can.threads ? <ThreadPrint record={record} title={value.number} /> : null
 
   return (
     <CountRecordView

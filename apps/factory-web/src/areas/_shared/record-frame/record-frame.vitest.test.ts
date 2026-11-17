@@ -10,6 +10,8 @@ import { threadButtonWords } from './model'
 import { askedFiles } from './model'
 import { RecordFrame } from './RecordFrame'
 import { RecordNotices } from './RecordNotices'
+// B-TH-280: the print view of the custom fields
+import { PrintModeProvider } from '../../../shell/print/print-mode'
 
 /** B-TH-213 — RecordFrame: 40 % / one third / full by width, one thread per page, the old addresses (R-8), the keys (PR-14). */
 
@@ -204,3 +206,56 @@ describe('TH-6 part B — the record’s own keys join the band menu’s ONE Key
   })
 })
 // ---- end B-TH-269 / B-TH-264 follow-up
+
+// ---- B-TH-280: the record's custom fields (Admin › Fields & lists) left with the old record panels; the frame draws them again at the
+// end of the body column, on the tab the page passes them (its first) — and in the print view after the body, before the thread.
+describe('B-TH-280 — the custom fields at the end of the body column', () => {
+  const band = { back: createElement('a', { href: '/w/demo/sales/orders' }, 'Orders'), title: 'SO-2026-0101 · Brand Alpha' }
+  const page = (fields: unknown, printing = false) =>
+    render(
+      createElement(
+        PrintModeProvider,
+        { printing },
+        createElement(RecordFrame, {
+          recordType: 'SalesOrder',
+          personId: 'u1',
+          band,
+          thread: createElement('div', { className: 'stand-in-thread' }, 'messages'),
+          threadLabel: 'The order’s thread',
+          printThread: createElement('p', { className: 'stand-in-print' }, 'Printed thread'),
+          ...(fields === undefined ? {} : { fields: fields as never }),
+          children: createElement('p', null, 'The body'),
+        }),
+      ),
+    )
+
+  it('drawn inside the body column, after the tab’s body and before the dock', () => {
+    const html = page(createElement('section', { className: 'stand-in-fields' }, 'Custom fields'))
+    const body = html.indexOf('class="fw-rcf-body"')
+    const fields = html.indexOf('class="stand-in-fields"')
+    expect(body).toBeGreaterThan(-1)
+    expect(fields).toBeGreaterThan(html.indexOf('The body'))
+    expect(fields).toBeLessThan(html.indexOf('<aside'))
+    expect(html.match(/class="stand-in-fields"/g)?.length).toBe(1)
+  })
+
+  it('absent (another tab, or a record type without custom fields): nothing is drawn', () => {
+    expect(page(undefined)).not.toContain('stand-in-fields')
+    expect(page(null)).not.toContain('stand-in-fields')
+  })
+
+  it('the print view prints them after the body and before the thread’s print form; no dock', () => {
+    const html = page(createElement('section', { className: 'stand-in-fields' }, 'Custom fields'), true)
+    expect(html).toContain('class="fw-rcf-print"')
+    expect(html).not.toContain('<aside')
+    expect(html.indexOf('The body')).toBeLessThan(html.indexOf('class="stand-in-fields"'))
+    expect(html.indexOf('class="stand-in-fields"')).toBeLessThan(html.indexOf('class="stand-in-print"'))
+  })
+
+  it('one optional slot in the frame’s props, marked with its step', () => {
+    const frame = readFileSync(new URL('./RecordFrame.tsx', import.meta.url), 'utf8')
+    expect(frame.match(/readonly fields\?: ReactNode/g)?.length).toBe(1)
+    expect(frame.match(/\{fields \/\* B-TH-280 \*\/\}/g)?.length).toBe(2)
+  })
+})
+// ---- end B-TH-280

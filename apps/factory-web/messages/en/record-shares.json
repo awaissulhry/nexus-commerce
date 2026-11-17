@@ -139,5 +139,6 @@
     "revoked": "{email} can no longer open this record.",
     "copied": "Link copied.",
     "copyFailed": "The link could not be copied: select it and copy it by hand."
-  }
+  },
+  "close": "Close"
 }

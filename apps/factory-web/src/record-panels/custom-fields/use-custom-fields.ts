@@ -13,7 +13,8 @@ import type { CustomFieldsActions, CustomFieldsModel } from './view/CustomFields
 const LINK_PAUSE_MS = 250
 
 /**
- * The record panels' custom-fields section (B-W2b-431): the container side. It reads the record's values (`GET
+ * The record's custom-fields section (B-W2b-431; B-TH-280: drawn by RecordCustomFields at the end of the record frame's first
+ * tab): the container side. It reads the record's values (`GET
  * /fields/values/:type/:id` with the record's own view permission), keeps the section's draft while the person edits,
  * sends the changed values in ONE `PUT` (each at its version, a cleared one as null) and says each refusal at its field.
  * A linked record is found through global search (`GET /search?type=<model>`). custom_field.changed of its type reads the

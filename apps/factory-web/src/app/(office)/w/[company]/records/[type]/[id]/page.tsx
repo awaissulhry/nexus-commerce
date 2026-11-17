@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
-import { RecordPage } from '../../../../../../../record-panels/RecordPage'
+import { RecordPage } from '../../../../../../../areas/_shared/record-summary/RecordPage'
 
 export const metadata: Metadata = { title: 'Record · Nexus Factory' }
 

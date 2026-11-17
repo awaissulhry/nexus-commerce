@@ -1,0 +1,94 @@
+/*
+ * The tasks module's own parts (B-W2a-40; B-TH-280 moved them out of the old record panels): Follow / Followers (N) and the
+ * New task dialog, as the docked thread's Head, My tasks, a project and a style's compliance open them. Layout only, with
+ * semantic tokens; the look of every control is the design system's.
+ */
+.fw-rtask-follow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+
+.fw-rtask-follow-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+}
+
+.fw-rtask-followers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: min(340px, 80vw);
+  max-width: 420px;
+}
+
+.fw-rtask-followers-title {
+  margin: 0;
+  font-weight: 600;
+}
+
+.fw-rtask-note {
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-rtask-follower-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.fw-rtask-follower {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--nds-space-4) var(--nds-space-8);
+}
+
+.fw-rtask-follower-name {
+  font-weight: 500;
+}
+
+.fw-rtask-followers-me,
+.fw-rtask-followers-add-row,
+.fw-rtask-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-8);
+}
+
+.fw-rtask-followers-add {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-rtask-legend {
+  padding: 0;
+  margin-bottom: var(--nds-space-4);
+  font-size: var(--nds-font-size-sm);
+  color: var(--nds-text-2);
+}
+
+.fw-rtask-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-rtask-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--nds-space-12);
+}

@@ -1,0 +1,120 @@
+/*
+ * B-TH-280 — the record's thread on paper (record frame print view). The docked thread's feed and cards keep their own look;
+ * here the feed stops scrolling (it grows with the paper), every message is open, the field changes are listed, and nothing to
+ * act on shows. Layout only, semantic tokens.
+ */
+.fw-rtp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+}
+
+.fw-rtp-title {
+  margin: 0;
+  font-size: var(--nds-font-size-xl);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rtp-part {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-rtp-head {
+  margin: 0;
+  padding-bottom: var(--nds-space-4);
+  border-bottom: 1px solid var(--nds-border);
+  font-size: var(--nds-font-size-lg);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rtp-notes {
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  margin: 0;
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+.fw-rtp-meta {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+}
+
+.fw-rtp-files {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-rtp-file {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-2);
+  padding: var(--nds-space-8) 0;
+  border-top: 1px solid var(--nds-border);
+  break-inside: avoid;
+}
+
+.fw-rtp-file:first-child {
+  border-top: 0;
+}
+
+.fw-rtp-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+
+/* The feed grows with the paper instead of scrolling in a column. */
+.fw-rtp-feed .fw-rt-feedwrap,
+.fw-rtp-feed .fw-rt-feed {
+  flex: none;
+  min-height: 0;
+  height: auto;
+  overflow: visible;
+}
+
+.fw-rtp-feed .fw-rt-feed {
+  padding: 0;
+}
+
+/* Every message whole, every field change listed; the per-message menu and the folding links are for the screen. */
+.fw-rtp-feed .fw-rt-body.is-folded {
+  max-height: none;
+  overflow: visible;
+  -webkit-mask-image: none;
+  mask-image: none;
+}
+
+.fw-rtp-feed .fw-rt-changes[hidden] {
+  display: block;
+}
+
+.fw-rtp-feed .fw-rt-msg-menu,
+.fw-rtp-feed .fw-rt-showall,
+.fw-rtp-feed .fw-rt-event button,
+.fw-rtp-feed .fw-rt-newbar {
+  display: none;
+}
+
+@media print {
+  /* Buttons do nothing on paper (Show 50 earlier, Try again, the "…" of quoted text). */
+  .fw-rtp button {
+    display: none !important;
+  }
+
+  /* Long threads break between messages, never inside one. */
+  .fw-rtp-feed .fw-rt-msg {
+    break-inside: avoid;
+  }
+}

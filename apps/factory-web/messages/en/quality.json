@@ -36,8 +36,6 @@
     "internal": "Something went wrong on our side. Try again."
   },
   "record": {
-    "dock": "Thread",
-    "dockHint": "Keep the thread beside the record (⌘J)",
     "dockLabel": "Thread",
     "tabsLabel": "Sections of the record",
     "loading": "Reading the record…",

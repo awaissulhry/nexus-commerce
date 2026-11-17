@@ -4,7 +4,7 @@ import { SHARE_PERMISSIONS, SHARE_STATES } from '@nexus/factory-domain/shares/ru
 import { ApiError } from '../../lib/api/errors'
 import { recordSharesSchema } from './api'
 import { designScreen } from './fixtures'
-import { dayOf, expiresAtOf, inviteDraftProblems, inviteHeld, inviteRefusal, invitedNotice, latestUntil, liveCount, newInviteDraft, permissionsOfDraft, shareActionHeld, shareActionRefusal, takesShares } from './model'
+import { dayOf, expiresAtOf, inviteDraftProblems, inviteHeld, inviteRefusal, invitedNotice, latestUntil, newInviteDraft, permissionsOfDraft, shareActionHeld, shareActionRefusal, takesShares } from './model'
 
 const NOW = new Date(2026, 10, 10, 9, 0, 0).getTime()
 const DAY = 86_400_000
@@ -58,9 +58,7 @@ describe('record panels › Partners (share with a partner)', () => {
     expect(invitedNotice({ share: { email: 'a@b.example' } as never, url: 'https://x/l#token=t', delivery: null })?.key).toBe('note.linkOnce')
   })
 
-  it('counts the invitations that still live, and its cases are what the API could answer', () => {
-    const list = designScreen.cases.find((item) => item.id === 'list')!.model.shares!
-    expect(liveCount(list)).toBe(2)
+  it('its cases are what the API could answer', () => {
     for (const item of designScreen.cases) {
       const read = item.model.shares!.read
       if (read.status === 'ready') expect(() => recordSharesSchema.parse(read.data), item.id).not.toThrow()
@@ -77,3 +75,24 @@ describe('record panels › Partners (share with a partner)', () => {
     }
   })
 })
+
+// ---- B-TH-280: the old record panels' Partners tab went; the invitations (Change, Revoke) live in the Partners window the docked
+// thread's Share door opens once someone is invited.
+describe('B-TH-280 — the Partners window', () => {
+  it('draws the window over the docked thread, from its own parts only (no record panels)', () => {
+    expect(designScreen.view.name).toBe('SharesWindowCase')
+    for (const name of ['fixtures.ts', 'view/SharesWindow.tsx', 'view/SharesWindowCase.tsx']) {
+      const source = readFileSync(new URL(`./${name}`, import.meta.url), 'utf8')
+      expect(source, name).not.toMatch(/RecordPanels|record-panels\/view\/|from '\.\.\/fixtures'/)
+    }
+    expect(readFileSync(new URL('./view/SharesWindow.tsx', import.meta.url), 'utf8')).toContain('<SharesPanel model={model} actions={actions} title={record} />')
+  })
+
+  it('names the window and its Close in both languages', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const words = flat(catalogue(locale))
+      for (const key of ['tab', 'close']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+  })
+})
+// ---- end B-TH-280

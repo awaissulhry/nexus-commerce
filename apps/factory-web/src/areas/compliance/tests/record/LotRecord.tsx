@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError, issuePath } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { StoreError } from '../../../../record-panels/store'
 import { liveMatches, useLive } from '../../../quality/_shared/hooks'
 import { failedRead, problemKey, qualityCan, reading, ready, refusalLines, type Notice, type Read } from '../../../quality/_shared/model'
@@ -250,7 +250,7 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
 
   // ---- B-TH-267: the lot's ONE thread, docked beside both tabs — the same conversation as Warehouse › Lots (the Lot record), whose
   // supplier is the only party it may reach; the lab's lot read names it (TH-6 part B), a lot without a supplier has the office's
-  // notes only. The print view keeps the record panels' print form.
+  // notes only. The print view prints the thread with ThreadPrint (B-TH-280).
   const lotRef = lot ? { type: 'Lot', id: lot.id, companyId: lot.companyId, siteId: lot.siteId } : null
   const party = value?.supplier && value.supplier.id === lot?.supplierId ? value.supplier : null
   const thread =
@@ -265,7 +265,7 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
         printHref={printHref(pathname, params?.toString() ?? '')}
       />
     ) : null
-  const printThread = lot && lotRef && can.threadsRead ? <RecordPanels record={lotRef} title={lot.code} /> : null
+  const printThread = lot && lotRef && can.threadsRead ? <ThreadPrint record={lotRef} title={lot.code} partyRole="supplier" /> : null
   // ---- end B-TH-267
 
   return (

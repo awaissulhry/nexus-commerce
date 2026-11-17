@@ -27,17 +27,18 @@ export interface SharesOptions {
   /** partners.shares.view / partners.shares.manage. */
   readonly can: { readonly view: boolean; readonly manage: boolean }
   /** Reads the record's thread and history again after an invitation or a revoke (the API writes there too). */
-  readonly reloadPanels?: () => void
+  readonly reloadThread?: () => void
 }
 
 /**
- * The record panels' Partners tab as RecordPanels mounts it (B-W2b-200): null for a record nobody outside can be invited to,
- * or a person without partners.shares.view (no tab). It reads the record's partner and invitations, invites (one idempotent
+ * Who outside is invited to a record, as the docked thread mounts it (B-W2b-200; B-TH-280: the Share door, the counts and the
+ * Partners window — the old record panels' tab went): null for a record nobody outside can be invited to, or a person
+ * without partners.shares.view. It reads the record's partner and invitations, invites (one idempotent
  * write per draft; the link given once is kept in memory only, until dismissed), changes what one invited person may do and
  * revokes (each with the share's version), and reads again when the live stream says an invitation of this record changed
  * (record_share.invited / changed / revoked) or the stream came back.
  */
-export function useShares({ api, record, can, reloadPanels }: SharesOptions): { model: SharesPanelModel | null; actions: SharesPanelActions } {
+export function useShares({ api, record, can, reloadThread }: SharesOptions): { model: SharesPanelModel | null; actions: SharesPanelActions } {
   const enabled = can.view && takesShares(record.type)
   const [read, setRead] = useState<SharesPanelModel['read']>({ status: 'loading' })
   const [invite, setInvite] = useState<SharesPanelModel['invite']>(null)
@@ -107,7 +108,7 @@ export function useShares({ api, record, can, reloadPanels }: SharesOptions): { 
       setNotice(invitedNotice(answer))
       if (answer.url) setLink({ url: answer.url, email: answer.share.email })
       await load()
-      reloadPanels?.()
+      reloadThread?.()
     } catch (error) {
       const refusal = inviteRefusal(error)
       setInvite((now) => (now ? { ...now, problems: refusal.problems, problem: refusal.problem } : now))
@@ -151,7 +152,7 @@ export function useShares({ api, record, can, reloadPanels }: SharesOptions): { 
       setRevoke(null)
       setNotice({ key: 'note.revoked', tone: 'success', params: { email: share.email } })
       await load()
-      reloadPanels?.()
+      reloadThread?.()
     } catch (error) {
       const refusal = shareActionRefusal(error)
       setRevoke((now) => (now ? { ...now, problem: refusal.key } : now))

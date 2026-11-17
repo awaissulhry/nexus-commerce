@@ -8,7 +8,8 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { downloadLink } from '../../../../record-panels/api'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
+import { RecordCustomFields } from '../../../../record-panels/custom-fields/RecordCustomFields' // B-TH-280
 import { findMaterials, getMaterial } from '../../../_shared/buying/api'
 import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { buyingCan, part, PART_LOADING, phrase, readProblem, todayIn, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
@@ -641,7 +642,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
   }
 
   // B-TH-263: the docked thread (Head with Activity's doors, files line — the frozen PDFs among the order's files —, Files view, feed,
-  // box), the order's own supplier only; the print view keeps the panels' print form.
+  // box), the order's own supplier only; the print view prints the thread with ThreadPrint (B-TH-280).
   const value = order.status === 'ready' ? order.value : null
   const record = value ? { type: 'PurchaseOrder', id: value.id, companyId: value.companyId, siteId: value.siteId } : null
   const title = value ? `${value.number} · ${value.supplier.name}` : ''
@@ -650,7 +651,9 @@ function RecordContainer({ orderId }: { orderId: string }) {
     <OrderRecordView
       model={model}
       thread={value && record ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.number} party={{ id: value.partyId, name: value.supplier.name }} partyRole="supplier" printHref={printHref(pathname, params?.toString() ?? '')} /> : null}
-      printThread={value && record ? <RecordPanels record={record} title={title} party={{ id: value.partyId, name: value.supplier.name, emails: value.contact?.email ? [value.contact.email] : [] }} /> : null}
+      printThread={value && record ? <ThreadPrint record={record} title={title} party={{ id: value.partyId, name: value.supplier.name }} partyRole="supplier" /> : null}
+      // B-TH-280: the order's custom fields at the end of its first tab (Lines), as the old panels drew them above theirs.
+      fields={value && tab === 'lines' ? <RecordCustomFields record={{ type: 'PurchaseOrder', id: value.id }} title={value.number} /> : null}
       invoices={order.status === 'ready' && session.permissions.includes('payables.view') ? <PoInvoices orderId={order.value.id} prefix={prefix} /> : null}
       actions={{
         onRetry: () => void load(),

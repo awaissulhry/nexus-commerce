@@ -6,7 +6,7 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { isStepUpCancelled, liveMatches, useLive, useStepUp } from '../../../quality/_shared/hooks'
 import { problemKey } from '../../../quality/_shared/model'
 import { RecordProblem, RecordSkeleton } from '../../../quality/_shared/parts'
@@ -358,12 +358,12 @@ function Container({ repairId }: { repairId: string }) {
     )
 
   // ---- B-TH-259: the repair's thread docked beside every tab (its Head holds Activity's doors, R-ACT), with threads.read — shared with
-  // its customer since B-TH-081 (the portal repair page reads the same thread); the print view keeps the record panels' print form.
+  // its customer since B-TH-081 (the portal repair page reads the same thread); the print view prints the thread with ThreadPrint (B-TH-280).
   // Brand wall (W08, W14, W20, W25, W34): the repair's own customer only.
   const record = { type: 'RepairOrder', id: repair.id, companyId: repair.companyId, siteId: repair.site.id }
   const party = { id: repair.party.id, name: repair.party.legalName }
   const thread = can.threadsRead ? <OfficeRecordThread docked record={record} title={`${repair.number} · ${repair.party.legalName}`} recordLabel={repair.number} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = can.threadsRead ? <RecordPanels record={record} title={repair.number} party={{ ...party, emails: [] }} /> : null
+  const printThread = can.threadsRead ? <ThreadPrint record={record} title={repair.number} party={party} /> : null
   // ---- end B-TH-259
 
   const model: RepairModel = {

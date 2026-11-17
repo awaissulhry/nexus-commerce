@@ -6,7 +6,7 @@ import { newIdempotencyKey } from '../../../lib/api/client'
 import { isApiError } from '../../../lib/api/errors'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
-import { RecordPanels } from '../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../_shared/record-thread/ThreadPrint'
 import { editDevice, listDevices, renewEnrolment, revokeDevice, type Device } from '../shared/api'
 import { problemKey, problemNotice, type Notice } from '../shared/model'
 import { personChoices, siteChoices, useEnrolWatch } from './DevicesPage'
@@ -78,11 +78,11 @@ export function DeviceRecord({ deviceId }: { deviceId: string }) {
   useEnrolWatch(api, enrol, onReady, onExpired)
 
   // B-TH-269: the device's thread docked beside both tabs (notes only: no party on an admin record, W03), with threads.read AND
-  // devices.view (B-TH-005); Activity's tools are in its "⋯" (R-ACT). The print view keeps the record panels' print form.
+  // devices.view (B-TH-005); Activity's tools are in its "⋯" (R-ACT). The print view prints the thread with ThreadPrint (B-TH-280).
   const record = device ? { type: 'Device', id: device.id, companyId: site?.companyId ?? null, siteId: device.siteId } : null
   const mayThread = mayReadDeviceThread(held)
   const thread = device && record && mayThread ? <OfficeRecordThread docked record={record} title={device.name} recordLabel={device.name} party={null} printHref={printHref(pathname ?? '', params?.toString() ?? '')} /> : null
-  const printThread = device && record && mayThread ? <RecordPanels record={record} title={device.name} /> : null
+  const printThread = device && record && mayThread ? <ThreadPrint record={record} title={device.name} /> : null
 
   return (
     <DeviceRecordView

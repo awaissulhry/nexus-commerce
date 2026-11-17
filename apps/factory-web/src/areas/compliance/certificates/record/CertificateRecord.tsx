@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { liveMatches, useLive } from '../../../quality/_shared/hooks'
 import { failedRead, problemKey, reading, ready, type Notice, type Read } from '../../../quality/_shared/model'
 import {
@@ -502,7 +502,7 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
   }
 
   // B-TH-267: the docked thread (Head with Activity's doors, files line, Files view, feed, box) — mounted only with threads.read; its only
-  // party is the brand that holds the certificate (none: office notes only); the print view keeps the panels' print form.
+  // party is the brand that holds the certificate (none: office notes only); the print view prints the thread with ThreadPrint (B-TH-280).
   const record = value ? { type: 'Certificate', id: value.id, companyId: value.companyId, siteId: null } : null
   const party = value ? threadPartyOf(value, brands) : null
   const title = value ? (party ? `${value.number} · ${party.name}` : value.number) : ''
@@ -510,7 +510,7 @@ function CertificateRecordContainer({ certificateId }: { certificateId: string }
     value && record && can.threads ? (
       <OfficeRecordThread docked record={record} title={title} recordLabel={value.number} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
     ) : null
-  const printThread = value && record && can.threads ? <RecordPanels record={record} title={value.number} party={party ? { ...party, emails: [] } : null} /> : null
+  const printThread = value && record && can.threads ? <ThreadPrint record={record} title={value.number} party={party} /> : null
 
   return (
     <CertificateRecordView

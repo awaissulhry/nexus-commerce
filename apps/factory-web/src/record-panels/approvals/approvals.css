@@ -1,8 +1,9 @@
 /*
- * The record panels' Approvals tab (B-W2b-188) and the "approve from e-mail" switch (PLT-089): layout only, semantic
- * tokens only; controls are the design system's.
+ * A record's requests to its partner (B-W2b-188; B-TH-280: in the docked thread's Approvals window, the old record panels'
+ * tab went) and the "approve from e-mail" switch (PLT-089): layout only, semantic tokens only; controls are the design system's.
  */
 .fw-ra,
+.fw-ra-window,
 .fw-ra-dialog {
   display: flex;
   flex-direction: column;

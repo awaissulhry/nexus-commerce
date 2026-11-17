@@ -1,19 +1,15 @@
 'use client'
 
 import { RemindMeDialog } from './RemindMeDialog'
-import { RemindersISet, type RemindersISetModel } from './RemindersISet'
 
-/** A design-review case of SCR-543: the record's Remind me part, and the Remind me pop-up open over it (or not). */
+/**
+ * A design-review case of SCR-543: the Remind me pop-up (the docked thread's Head door and each message's own Remind me open it;
+ * B-TH-280: the old record panels' "Reminders I set" beside Follow went — the Head says the next reminder, Home lists them all).
+ */
 export interface RemindMeCaseModel {
-  readonly set: RemindersISetModel
-  readonly dialog: { readonly what: string; readonly aboutMessage: boolean; readonly now: number; readonly held: string | null; readonly problem: string | null } | null
+  readonly dialog: { readonly what: string; readonly aboutMessage: boolean; readonly now: number; readonly held: string | null; readonly problem: string | null }
 }
 
 export function RemindMeCase({ model }: { model: RemindMeCaseModel }) {
-  return (
-    <>
-      <RemindersISet model={model.set} />
-      {model.dialog && <RemindMeDialog {...model.dialog} onSet={() => Promise.resolve(true)} onClose={() => undefined} />}
-    </>
-  )
+  return <RemindMeDialog {...model.dialog} onSet={() => Promise.resolve(true)} onClose={() => undefined} />
 }

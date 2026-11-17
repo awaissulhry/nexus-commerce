@@ -229,7 +229,7 @@ export interface HeadModel {
   readonly width: DockWidth | null
   /** The phone head: the record and the pill; the View and the rest in the "⋯". */
   readonly compact?: boolean
-  /** "Print or save as PDF" (record-panels' print view), when the page has it. */
+  /** "Print or save as PDF" (the record frame's print view, the thread by ThreadPrint — B-TH-280), when the page has it. */
   readonly print?: boolean
   readonly now: number
   readonly timeZone?: string

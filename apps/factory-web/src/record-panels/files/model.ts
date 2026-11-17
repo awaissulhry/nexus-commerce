@@ -1,14 +1,15 @@
 import type { PhotoMark } from '@nexus/ui/components/PhotoCapture/index'
 import { DOCUMENT_CATEGORIES } from '@nexus/factory-domain/files/required/rules'
 import { expiryDateProblem } from '@nexus/factory-domain/files/expiry/rules'
+import type { ApiFile } from '../api'
 import type { PanelFile } from '../model'
 
 /**
- * The files panel in depth (B-W2b-177; design shell.panels › Files, pop:file-versions, admin.documents › Required
- * documents "feeds the record frame's GuardList"; COL-048, COL-049, COL-055, COL-046), pure: what each document is and
- * until when, what each status move still needs, the Versions pop-up's rows and its side-by-side, the document dialog's
- * draft, the markup dialog. The container (use-file-depth.ts) reads and writes the API; the views draw this model.
- * Words are message keys of the `record-files` catalogue.
+ * The files in depth (B-W2b-177; design shell.panels › Files, pop:file-versions, admin.documents › Required documents;
+ * COL-048, COL-049, COL-055, COL-046), pure: what each document is and until when, what each status move still needs, the
+ * Versions pop-up's rows and its side-by-side, the document dialog's draft, the markup dialog. B-TH-280: they live in the
+ * docked thread's Files view now (the old record panels' Files tab went). The container (use-file-depth.ts) reads and
+ * writes the API; the views draw this model. Words are message keys of the `record-files` catalogue.
  */
 
 export const CATEGORY_CHOICES = DOCUMENT_CATEGORIES
@@ -138,33 +139,30 @@ export interface FileDepthModel {
 
 // ---- grouping by series (B-W2b-160: a version names its series' first version) ---------------------------------------
 
-export interface SeriesGroup {
-  readonly key: string
-  readonly latest: PanelFile
-  readonly earlier: readonly PanelFile[]
-}
+// ---- B-TH-280: a file as the depth parts read it (the old record panels' fileOf, moved here when the panels went) ----------
 
-const nameKey = (file: PanelFile) => `${file.kind}:${file.name.normalize('NFC').toLowerCase().replace(/\s+/g, ' ').trim()}`
-
-/**
- * The record's files as the panel lists them: a series (its versions, the newest number on top) once the API names it,
- * else W0's rule (same kind and name). Deleted files are left out.
- */
-export function seriesGroups(files: readonly PanelFile[]): SeriesGroup[] {
-  const groups = new Map<string, PanelFile[]>()
-  for (const file of files) {
-    if (file.status === 'DELETED') continue
-    const key = file.versionNo !== undefined ? `series:${file.seriesId ?? file.id}` : nameKey(file)
-    groups.set(key, [...(groups.get(key) ?? []), file])
+/** The record's file (GET /files) as the depth parts take it: its kind, state, audience, version in its series and row version. */
+export function panelFileOf(file: ApiFile): PanelFile {
+  return {
+    id: file.id,
+    name: file.originalName,
+    kind: file.kind,
+    contentType: file.contentType,
+    sizeBytes: file.sizeBytes,
+    status: file.status,
+    visibility: file.visibility,
+    partyId: file.partyId ?? null,
+    retainUntil: file.retainUntil,
+    legalHold: file.legalHold ?? false,
+    quarantineReason: file.quarantineReason,
+    availableAt: file.availableAt,
+    createdAt: file.createdAt,
+    // B-W2b-177: the version in its series, and the row's version (what a file is is saved at it).
+    ...(file.versionNo !== undefined ? { versionNo: file.versionNo, seriesId: file.seriesId ?? null, supersededAt: file.supersededAt ?? null } : {}),
+    version: file.version,
   }
-  const newest = (a: PanelFile, b: PanelFile) => (b.versionNo ?? 0) - (a.versionNo ?? 0) || b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id)
-  return [...groups.entries()]
-    .map(([key, list]) => {
-      const sorted = [...list].sort(newest)
-      return { key, latest: sorted[0]!, earlier: sorted.slice(1) }
-    })
-    .sort((a, b) => b.latest.createdAt.localeCompare(a.latest.createdAt) || b.latest.id.localeCompare(a.latest.id))
 }
+// ---- end B-TH-280
 
 // ---- documents ---------------------------------------------------------------------------------------------------------
 
@@ -176,19 +174,30 @@ export function expiryTag(info: DocumentInfo | undefined): { readonly key: strin
   return { key: 'expiry.valid', tone: 'neutral', params: { date: info.expiresOn } }
 }
 
-/** A move's state: what blocks it, what only warns, all met. */
-export function moveState(move: MoveView): { readonly blocks: number; readonly warnings: number } {
-  const open = move.requirements.filter((requirement) => requirement.reason !== 'MET')
-  return { blocks: open.filter((requirement) => requirement.level === 'BLOCK').length, warnings: open.filter((requirement) => requirement.level === 'WARN').length }
+// ---- B-TH-280: what each move still needs, as the Files view's lines ("Missing before Shipped: …", threads plan T9-F10) -------
+
+/** A document a status move still needs (missing, or there but expired): its kind, the status, whether it blocks the move. */
+export interface MissingRequirement {
+  readonly id: string
+  readonly category: string
+  readonly toStatus: string
+  readonly level: 'BLOCK' | 'WARN'
+  /** The day it expired, when the document is there but expired. */
+  readonly expiredOn: string | null
 }
 
-/** The tone of one requirement's row. */
-export const requirementTone = (requirement: RequirementView): 'success' | 'warning' | 'danger' => (requirement.reason === 'MET' ? 'success' : requirement.level === 'BLOCK' ? 'danger' : 'warning')
-
-/** The moves that still need something, the ones that block first; all met: none. */
-export function openMoves(moves: readonly MoveView[]): MoveView[] {
-  return moves.filter((move) => moveState(move).blocks + moveState(move).warnings > 0).sort((a, b) => moveState(b).blocks - moveState(a).blocks)
+/** Every requirement of the record's next moves that is not met, the blocking ones first; none while the documents are read. */
+export function missingOf(documents: Read<DocumentsState>): MissingRequirement[] {
+  if (documents.status !== 'ready') return []
+  return documents.value.moves
+    .flatMap((move) =>
+      move.requirements
+        .filter((requirement) => requirement.reason !== 'MET')
+        .map((requirement) => ({ id: `${move.toStatus}:${requirement.ruleId}`, category: requirement.category, toStatus: move.toStatus, level: requirement.level, expiredOn: requirement.reason === 'EXPIRED' ? requirement.expiresOn : null })),
+    )
+    .sort((a, b) => (a.level === b.level ? 0 : a.level === 'BLOCK' ? -1 : 1))
 }
+// ---- end B-TH-280
 
 // ---- what a file may do here (held with the reason) ------------------------------------------------------------------
 

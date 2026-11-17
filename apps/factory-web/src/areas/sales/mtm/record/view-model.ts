@@ -77,7 +77,7 @@ export interface ProfileRecordModel {
    * design case's made-up one), or null: the person reads no measurements or no threads (body data) — no dock, no Thread button.
    */
   readonly thread?: ReactNode
-  /** B-TH-258: what the print view (`?print=1`) shows of the thread under the body (the record panels' print form). */
+  /** B-TH-258: what the print view (`?print=1`) shows of the thread under the body (ThreadPrint: the thread for paper, B-TH-280). */
   readonly printThread?: ReactNode
 }
 

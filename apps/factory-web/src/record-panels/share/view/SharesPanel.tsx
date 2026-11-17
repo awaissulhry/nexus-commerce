@@ -15,7 +15,7 @@ import '../shares.css'
 export type { SharesPanelModel, SharesPanelActions } from '../model'
 
 /**
- * The record panels' Partners tab (B-W2b-200; COL-061, COL-062; design shell.panels "the record's followers and external
+ * Who outside is invited to a record (B-W2b-200; COL-061, COL-062; B-TH-280: drawn in the docked thread's Partners window; design shell.panels "the record's followers and external
  * participants"; "Share with a partner"): who outside is invited to this record — the contact or address, what they may do
  * (read · write · upload), until when, whether it still lives, who invited them and when they last opened it — with Change
  * (what they may do now) and Revoke (the invitation and its link stop together). "Share with a partner" opens the invitation

@@ -5,7 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { PartnerOrganisation } from '../partners/organisation/PartnerOrganisation'
 import { UserSessions } from './sessions/UserSessions'
 import { changeUser, endAssignment, giveRole, listAssignments, listCompanies, listRoles, listUsers, type Assignment, type Role, type User } from '../../shared/api'
@@ -96,11 +96,11 @@ export function UserRecord({ userId }: { userId: string }) {
     }
   }
 
-  // B-TH-269: the person's thread (notes only, docked closed by the view) with threads.read and users.view; the print view keeps the
-  // panels' print form.
+  // B-TH-269: the person's thread (notes only, docked closed by the view) with threads.read and users.view; the print view prints
+  // the thread with ThreadPrint (B-TH-280).
   const record = user && personThreadMounted('User', held) ? { type: 'User', id: user.id, companyId: null } : null
   const thread = user && record ? <OfficeRecordThread docked record={record} title={user.displayName} recordLabel={user.displayName} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = user && record ? <RecordPanels record={record} title={user.displayName} /> : null
+  const printThread = user && record ? <ThreadPrint record={record} title={user.displayName} /> : null
 
   return (
     <UserRecordView

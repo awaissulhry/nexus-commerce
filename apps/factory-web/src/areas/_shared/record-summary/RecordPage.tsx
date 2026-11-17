@@ -2,19 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation'
-import { useLocale } from '../lib/i18n/provider'
-import { recordAddress } from '../lib/records/record-links'
-import { useOfficeApi, useOfficeSession } from '../lib/session/context'
-import { companyPrefix } from '../lib/session/session'
-import { OFFICE_PAGES } from '../shell/nav/office-nav'
-import { printHref } from '../shell/print/print-model'
-import { OfficeRecordThread } from '../areas/_shared/record-thread/OfficeRecordThread'
+import { useLocale } from '../../../lib/i18n/provider'
+import { recordAddress } from '../../../lib/records/record-links'
+import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
+import { companyPrefix } from '../../../lib/session/session'
+import { OFFICE_PAGES } from '../../../shell/nav/office-nav'
+import { printHref } from '../../../shell/print/print-model'
+import { OfficeRecordThread } from '../record-thread/OfficeRecordThread'
 // ---- B-TH-272: the generic record page (PL5) — a summary and the full-page thread replace the six inner panels ----
-import { readPartyFacts, readRecordSummary, readThreadParty, type RecordSummary } from '../areas/_shared/record-summary/api'
-import { namesRecord, openerOf, parentHrefOf, partyRoleOf, recordLabelOf, recordName, summaryStateOf, type SummaryState } from '../areas/_shared/record-summary/model'
-import { GenericRecordView } from '../areas/_shared/record-summary/view/GenericRecordView'
-import { useLiveChanges } from './live'
-import { RecordPanels } from './RecordPanels'
+// B-TH-280: moved here from the old record-panels folder (it is an office page); the print view prints the thread with ThreadPrint.
+import { readPartyFacts, readRecordSummary, readThreadParty, type RecordSummary } from './api'
+import { namesRecord, openerOf, parentHrefOf, partyRoleOf, recordLabelOf, recordName, summaryStateOf, type SummaryState } from './model'
+import { GenericRecordView } from './view/GenericRecordView'
+import { useLiveChanges } from '../../../record-panels/live'
+import { ThreadPrint } from '../record-thread/ThreadPrint'
 // ---- end B-TH-272
 
 /**
@@ -121,7 +122,7 @@ function GenericRecord({ type, id }: { type: string; id: string }) {
       printHref={printHref(pathname, search?.toString() ?? '')}
     />
   ) : null
-  const printThread = ready ? <RecordPanels record={threadRecord} title={name} party={party ? { id: party.id, name: party.name, emails: [] } : null} /> : null
+  const printThread = ready ? <ThreadPrint record={threadRecord} title={name} party={party ? { id: party.id, name: party.name } : null} {...(party ? { partyRole: party.role } : {})} /> : null
 
   return (
     <GenericRecordView

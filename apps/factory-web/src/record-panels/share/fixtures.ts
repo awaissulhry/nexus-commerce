@@ -1,20 +1,18 @@
-import { createElement } from 'react'
 import { defineDesignScreen } from '../../lib/design/design-screen'
-import type { RecordPanelsViewModel } from '../model'
-import { RecordPanelsView } from '../view/RecordPanelsView'
 import type { OfficeShare, RecordShares } from './api'
 import { newInviteDraft, type SharesPanelModel } from './model'
+import { SharesWindowCase, type SharesWindowCaseModel } from './view/SharesWindowCase'
 
 /**
- * SCR-006-share — the record panels' Partners tab (B-W2b-200; COL-061, COL-062; "Share with a partner"; design shell.panels
- * "the record's followers and external participants"): made-up order, customer, people and addresses only. Invitations in
- * every state (active with each set of rights, ended, revoked), nobody invited yet, loading, a read error, a person who may
- * only see (production manager), a record with no partner, the invitation dialog (a contact on file, another address, its
- * checks, a refusal), the link given once, mailed, Change what they may do, and the revoke confirm.
+ * SCR-006-share — who outside is invited to a record (B-W2b-200; COL-061, COL-062; "Share with a partner"; design shell.panels
+ * "the record's followers and external participants"), B-TH-280: in the Partners window the docked thread's Share door opens
+ * once someone is invited (the old record panels' tab went). Made-up order, customer, people and addresses only. Invitations in
+ * every state (active with each set of rights, ended, revoked), nobody invited yet, loading, a read error, a person who may only
+ * see (production manager), a record with no partner, the invitation dialog (a contact on file, another address, its checks, a
+ * refusal) stacked over the window, the link given once, mailed, Change what they may do, and the revoke confirm.
  */
 
 const id = (n: number) => `0190f0e2-5200-7000-8000-${String(n).padStart(12, '0')}`
-const RECORD = { type: 'SalesOrder', id: id(1), companyId: id(2), siteId: null }
 const NOW = Date.parse('2026-11-10T09:00:00.000Z')
 
 function share(n: number, over: Partial<OfficeShare> = {}): OfficeShare {
@@ -61,33 +59,15 @@ function panel(over: Partial<SharesPanelModel> = {}): SharesPanelModel {
 
 const DRAFT = { ...newInviteDraft(DATA, NOW), until: '2026-12-10', note: 'Guardate le foto del campione e diteci se il collo va bene.' }
 
-const base = (over: Partial<SharesPanelModel> = {}): RecordPanelsViewModel => ({
-  record: RECORD,
-  title: 'Ordine SO-2026-0042',
-  party: { id: id(3), name: DATA.party!.name, emails: ['marco@squadra-fittizia.example.com'] },
-  can: { post: true, email: true, manage: true, readFiles: true, upload: true, share: true },
-  thread: null,
-  messages: { items: [], more: false },
-  files: { items: [], more: false },
-  uploads: [],
-  timeline: { items: [], more: false },
-  timelineFilter: 'all',
-  people: [],
-  tab: 'shares',
-  shares: panel(over),
-})
+const base = (over: Partial<SharesPanelModel> = {}): SharesWindowCaseModel => ({ shares: panel(over), record: 'SO-2026-0042' })
 
-function SharesDesign({ model }: { model: RecordPanelsViewModel }) {
-  return createElement(RecordPanelsView, { model })
-}
-
-export const designScreen = defineDesignScreen<RecordPanelsViewModel>({
+export const designScreen = defineDesignScreen<SharesWindowCaseModel>({
   screen: 'SCR-006-share',
-  title: 'Record panels › Partners: share with a partner',
-  view: SharesDesign,
+  title: 'The Partners window: share with a partner, change, revoke',
+  view: SharesWindowCase,
   cases: [
-    { id: 'list', label: 'Invitations in every state', model: base(), note: 'Active with every right (Change, Revoke), active read-and-write with e-mails off, ended, revoked with who and when. The tab counts the active ones.' },
-    { id: 'empty', label: 'Nobody invited yet', model: base({ read: { status: 'ready', data: { ...DATA, shares: [] } } }) },
+    { id: 'list', label: 'Invitations in every state', model: base(), note: 'Active with every right (Change, Revoke), active read-and-write with e-mails off, ended, revoked with who and when. The Head’s count chip counts the active ones.' },
+    { id: 'empty', label: 'Nobody invited yet', model: base({ read: { status: 'ready', data: { ...DATA, shares: [] } } }), note: 'The Share door opens the invitation at once then; the window shows this only after the last invitation is gone.' },
     { id: 'loading', label: 'Loading', model: base({ read: { status: 'loading' } }) },
     { id: 'error', label: 'The invitations could not be read', model: base({ read: { status: 'failed', problem: 'problem.read' } }), note: 'Our words and Try again; never an empty list.' },
     { id: 'no-right', label: 'A person who may only see (production manager)', model: base({ can: { manage: false }, read: { status: 'ready', data: { ...DATA, may: { invite: false } } } }), note: 'Share with a partner, Change and Revoke held with the reason.' },

@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../lib/api/errors'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
-import { RecordPanels } from '../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../_shared/record-thread/ThreadPrint'
 import { editCompany, getCompany, type Company, type Site } from '../shared/api'
 import { adminHref, failed, loaded, loading, problemKey, problemNotice, type Loaded, type Notice } from '../shared/model'
 import { CompanyCalendarsTab } from './calendars/CompanyCalendarsTab'
@@ -74,11 +74,11 @@ export function CompanyRecord({ companyId }: { companyId: string }) {
   }
 
   // B-TH-269: the company's thread docked beside every tab (notes only: no party on an admin record, W03), with threads.read (the
-  // API asks nothing more of a Company thread); Activity's tools are in its "⋯" (R-ACT). The print view keeps the record panels' form.
+  // API asks nothing more of a Company thread); Activity's tools are in its "⋯" (R-ACT). The print view prints the thread with ThreadPrint (B-TH-280).
   const record = company ? { type: 'Company', id: company.id, companyId: company.id } : null
   const mayThread = held.has('threads.read')
   const thread = company && record && mayThread ? <OfficeRecordThread docked record={record} title={`${company.code} · ${company.legalName}`} recordLabel={company.code} party={null} printHref={printHref(pathname ?? '', params?.toString() ?? '')} /> : null
-  const printThread = company && record && mayThread ? <RecordPanels record={record} title={company.legalName} /> : null
+  const printThread = company && record && mayThread ? <ThreadPrint record={record} title={company.legalName} /> : null
 
   return (
     <CompanyRecordView

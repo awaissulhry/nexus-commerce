@@ -155,5 +155,6 @@
     "withdrawn": "The {kind} request was withdrawn.",
     "copied": "The link is copied.",
     "copyFailed": "The link could not be copied: select it and copy it."
-  }
+  },
+  "close": "Close"
 }

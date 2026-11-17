@@ -9,7 +9,7 @@ import { useSafetyPhotos } from '../../../../../lib/safety-reports/use-photos'
 import { companyPrefix } from '../../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../../lib/session/context'
 import { readFromStore } from '../../../../../record-panels/store'
-import { RecordPanels } from '../../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../../_shared/record-thread/ThreadPrint'
 import { liveMatches, useLive } from '../../../../quality/_shared/hooks'
 import {
   changeReport,
@@ -271,7 +271,7 @@ function RecordContainer({ reportId }: { reportId: string }) {
     report && threadRecord && can.threads ? (
       <OfficeRecordThread docked record={threadRecord} title={party ? `${report.number} · ${party.name}` : report.number} recordLabel={report.number} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} />
     ) : null
-  const printThread = report && threadRecord && can.threads ? <RecordPanels record={threadRecord} title={report.number} party={party ? { ...party, emails: [] } : null} /> : null
+  const printThread = report && threadRecord && can.threads ? <ThreadPrint record={threadRecord} title={report.number} party={party} /> : null
 
   return (
     <ReportRecordView

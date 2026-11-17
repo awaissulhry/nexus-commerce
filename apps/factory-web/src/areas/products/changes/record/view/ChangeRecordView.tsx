@@ -30,7 +30,7 @@ export type { ChangeRecordActions, ChangeRecordModel } from '../view-model'
  * address: ⌘-click on a row opens it in a new tab (design tab:changes.record, beside the style's draft revision).
  */
 // B-TH-262: `thread` is the docked thread (the office's OfficeRecordThread docked, or a design case's), `printThread` what the print view
-// shows of it (the record panels' print form).
+// shows of it (ThreadPrint: the thread for paper, B-TH-280).
 export function ChangeRecordView({ model, actions, thread, printThread }: { model: ChangeRecordModel; actions?: ChangeRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <ChangesMessages>
