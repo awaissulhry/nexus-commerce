@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify'
+import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers' // follow-up (th9-web-b)
 import { DomainError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
@@ -100,18 +101,22 @@ export interface ClaimRecord {
   readonly label: string
 }
 
-/** The shipment (left us) or the order a claim link names, read in the caller's scope; null when it is not one. */
+/**
+ * The shipment (left us) or the order a claim link names, read in the caller's scope; null when it is not one. Its label goes to the
+ * customer (the claim mail, the link page): follow-up (th9-web-b; plan §0.5 "counts do not leak") — the order is named by the customer's
+ * own reference and its own number ("#7"), never the office series (SO-…); a shipment keeps its delivery note's legal number.
+ */
 export async function claimRecordOf(db: Reader, recordType: ClaimRecordType, recordId: string): Promise<ClaimRecord | null> {
   if (!isUuid(recordId)) return null
   if (recordType === 'Shipment') {
     const row = await db.shipment.findUnique({ where: { id: recordId }, select: { companyId: true, partyId: true, siteId: true, number: true, status: true, salesOrderId: true } })
     if (!row || !['SHIPPED', 'DELIVERED'].includes(row.status)) return null
-    const order = row.salesOrderId ? await db.salesOrder.findUnique({ where: { id: row.salesOrderId }, select: { number: true, customerRef: true } }) : null
-    return { companyId: row.companyId, partyId: row.partyId, siteId: row.siteId, label: [row.number, order?.customerRef ?? order?.number].filter(Boolean).join(' · ') }
+    const order = row.salesOrderId ? await db.salesOrder.findUnique({ where: { id: row.salesOrderId }, select: { customerSeq: true, customerRef: true } }) : null
+    return { companyId: row.companyId, partyId: row.partyId, siteId: row.siteId, label: [row.number, order?.customerRef ?? (order ? customerRefOf('ORDER', order.customerSeq) : null)].filter(Boolean).join(' · ') }
   }
-  const row = await db.salesOrder.findUnique({ where: { id: recordId }, select: { companyId: true, partyId: true, number: true, customerRef: true, status: true } })
+  const row = await db.salesOrder.findUnique({ where: { id: recordId }, select: { companyId: true, partyId: true, customerSeq: true, customerRef: true, status: true } })
   if (!row || row.status === 'CANCELLED') return null
-  return { companyId: row.companyId, partyId: row.partyId, siteId: null, label: [row.customerRef, row.number].filter(Boolean).join(' · ') }
+  return { companyId: row.companyId, partyId: row.partyId, siteId: null, label: [row.customerRef, customerRefOf('ORDER', row.customerSeq)].filter(Boolean).join(' · ') }
 }
 
 export function claimMail(locale: Locale, input: { readonly companyName: string; readonly label: string; readonly expiresAt: Date }, url: string) {

@@ -1,6 +1,7 @@
 import { DomainError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { businessDate, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
+import { customerNumberOf } from '@nexus/factory-domain/sales/customer-numbers' // follow-up (th9-web-b)
 import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
 import { COMPLAINT_NUMBER_KIND, COMPLAINT_RECORD } from '@nexus/factory-domain/quality/complaints/rules'
 import { ANSWER_WORKING_DAYS, complaintRequestProblems, returnRequestProblems, type OutcomeWanted, type RequestLine } from '@nexus/factory-domain/sales/portal-returns/rules'
@@ -295,7 +296,7 @@ export async function createComplaintInCommand(tools: CommandTools, place: Place
   return { complaintId: id, number: number.formatted }
 }
 
-/** The items a page offers: what may come back, without a price unless the person sees prices. */
+/** The items a page the customer reads offers (the portal, the claim link): what may come back, without a price unless the person sees prices. */
 export function itemsOf(rows: readonly ReturnableRow[], seesPrices: boolean) {
   return rows.map((row) => ({
     key: soldKeyOf(row),
@@ -303,7 +304,8 @@ export function itemsOf(rows: readonly ReturnableRow[], seesPrices: boolean) {
     salesOrderLineId: row.salesOrderLineId,
     size: row.size,
     description: row.description,
-    order: row.order ? { id: row.order.id, number: row.order.number, lineSeq: row.order.lineSeq } : null,
+    // follow-up (th9-web-b; plan §0.5): the customer's own order number and PO reference, never the office series.
+    order: row.order ? { id: row.order.id, yourNumber: customerNumberOf('ORDER', row.order.customerSeq), yourRef: row.order.customerRef, lineSeq: row.order.lineSeq } : null,
     invoice: row.invoice ? { id: row.invoice.id, number: row.invoice.number, issueDate: row.invoice.issueDate } : null,
     style: row.style ? { code: row.style.code, name: row.style.name } : null,
     colourway: row.colourway ? { code: row.colourway.code, name: row.colourway.name } : null,

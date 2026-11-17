@@ -5,7 +5,7 @@ import { useT } from '../../../i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { FileViewer } from '../../popups/view/FileViewer'
 import { FilesView } from '../../files-view/view/FilesView'
-import { toViewerFile, type FilesParty, type ThreadFile } from '../model'
+import { toViewerFile, type FilesParty, type PinLine, type ThreadFile } from '../model'
 import { FILES_NS, FileStrip } from './FileStrip'
 
 /**
@@ -23,6 +23,9 @@ export interface FileStripCaseModel {
   readonly record: { readonly type: string; readonly id: string; readonly label: string }
   readonly partyName: string | null
   readonly now: number
+  /** B-TH-286: the pins on the line (absent: none). */
+  readonly pins?: readonly PinLine[]
+  readonly canUnpin?: boolean
 }
 
 export function FileStripCase({ model }: { model: FileStripCaseModel }) {
@@ -39,6 +42,7 @@ function Case({ model }: { model: FileStripCaseModel }) {
   const [viewing, setViewing] = useState<string | null>(null)
   const [all, setAll] = useState(false)
   const [selected, setSelected] = useState<readonly string[]>([])
+  const [pins, setPins] = useState<readonly PinLine[]>(model.pins ?? [])
   const viewerFiles = (model.files ?? []).filter((file) => file.status !== 'DELETED').map((file) => toViewerFile(file, { src: model.sources[file.id] ?? null, downloadHref: file.status === 'AVAILABLE' ? '#download' : null }))
   const index = viewerFiles.filter((file) => file.status !== 'PENDING_UPLOAD').findIndex((file) => file.id === viewing)
   return (
@@ -47,7 +51,10 @@ function Case({ model }: { model: FileStripCaseModel }) {
         <div key={frame}>
           <p className="fw-rtf-frame-label">{t(`design.frame${frame}`)}</p>
           <section className={`fw-rtf-frame is-${frame}`} aria-label={t('design.frameLabel', { width: frame })}>
-            <FileStrip model={{ files: model.files, party: model.party, open }} actions={{ onToggle: setOpen, onOpen: setViewing, onAllFiles: () => setAll(true) }} />
+            <FileStrip
+              model={{ files: model.files, party: model.party, open, pins, canUnpin: model.canUnpin ?? false }}
+              actions={{ onToggle: setOpen, onOpen: setViewing, onAllFiles: () => setAll(true), onUnpin: (messageId) => setPins((now) => now.filter((pin) => pin.messageId !== messageId)) }}
+            />
             <div className="fw-rtf-feed" aria-hidden />
           </section>
         </div>

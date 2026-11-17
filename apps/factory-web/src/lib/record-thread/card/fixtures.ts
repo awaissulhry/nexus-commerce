@@ -166,6 +166,14 @@ export const designScreen = defineDesignScreen<CardGalleryModel>({
       note: '“2 files in this e-mail were not kept: logo.ai (type not accepted), clip.mov (too large)” under the customer’s mail — the office only; a signature logo is never listed.',
     },
     // ---- end B-TH-255
+    // ---- B-TH-286 (B-TH-091; T3-F12)
+    {
+      id: 'th9-286-pinned',
+      label: 'Pinned for everyone; ⋯ Pin / Unpin',
+      model: alpha([{ ...mail, pinned: true }, cards[1]!, ours], { canPin: true }),
+      note: 'The pinned card shows its pin beside the time (said in words for a screen reader); the files line’s “2 pinned” lists it. Open “⋯”: “Pin for everyone” (not a personal bookmark) or “Unpin”. A mail in its 10 seconds to take it back is never pinned.',
+    },
+    // ---- end B-TH-286
     {
       id: 'brand-beta',
       label: 'Brand Beta’s copy (brand wall)',

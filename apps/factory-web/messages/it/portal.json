@@ -169,7 +169,14 @@
       "other": "Il messaggio non è stato inviato. Il testo è ancora qui; invialo di nuovo.",
       "more": "Non è stato possibile leggere i messaggi precedenti."
     },
-    "erased": "Messaggio rimosso dopo una richiesta per la privacy"
+    "erased": "Messaggio rimosso dopo una richiesta per la privacy",
+    "pins": {
+      "title_one": "{count} messaggio fissato",
+      "title_other": "{count} messaggi fissati",
+      "removed": "Messaggio rimosso dopo una richiesta di privacy",
+      "filesOnly_one": "{count} file",
+      "filesOnly_other": "{count} file"
+    }
   },
   "record": {
     "tabs": "Sezioni del documento",

@@ -111,6 +111,9 @@ describe('the container (ThreadPrint.tsx) and the pages', () => {
     expect(container).not.toContain('onSeen')
     expect(hook).toContain('if (host.readOnly) return // B-TH-280')
     expect(hook).toContain("useLeaveGuard(host.readOnly ? { text: '', files: 0 }")
+    // B-TH-287's server draft too: the print form never reads it and never becomes ready to save (four guards in all).
+    expect(hook).toMatch(/B-TH-280: the print form \(ThreadPrint\) neither reads nor saves the server's draft[^\n]*\n\s*if \(host\.readOnly\) return/)
+    expect(hook.match(/host\.readOnly/g)?.length).toBeGreaterThanOrEqual(4)
   })
 
   it('no file mounts the old record panels or their views any more (B-TH-280)', () => {

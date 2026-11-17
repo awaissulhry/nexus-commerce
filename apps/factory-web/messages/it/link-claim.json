@@ -104,7 +104,8 @@
     "whole": "Non un articolo: tutta la consegna",
     "wholeBody": "Il problema riguarda la consegna nel suo insieme, o qualcosa che non è nell'elenco.",
     "size": "taglia {size}",
-    "order": "ordine {number}",
+    "order": "tuo ordine {seq}",
+    "orderRef": "tuo ordine d’acquisto {ref}",
     "delivered": "consegnato il {day}",
     "unknown": "Un articolo non più nell'elenco"
   },

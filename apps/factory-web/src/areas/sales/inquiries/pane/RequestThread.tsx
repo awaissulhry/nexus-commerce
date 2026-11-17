@@ -80,8 +80,9 @@ export function RequestThread({ host, ask = null, onAsk, replyLanguage = null }:
     actions.onDraft({ mode: 'note', body: '', forFloor: false }, [])
   }
 
+  const askingNow = asking.current !== null && thread.model.composer.draft.mode === 'reply'
   const actions =
-    asking.current && thread.model.composer.draft.mode === 'reply'
+    askingNow
       ? {
           ...thread.actions,
           // A portal request: no address to check; any other: the send check first, then the request's own route.
@@ -94,7 +95,10 @@ export function RequestThread({ host, ask = null, onAsk, replyLanguage = null }:
           },
         }
       : thread.actions
-  return <RecordThread model={thread.model} actions={actions} remind={(messageId) => <MessageRemindMe record={host.record} messageId={messageId} />} slots={replies ? { helpers: replies } : undefined} />
+  // B-TH-289: the question of Ask for info goes through the request's own route (Need info: the request waits on the customer by its
+  // state) — no follow-up tick there; any other reply keeps it.
+  const model = askingNow ? { ...thread.model, composer: { ...thread.model.composer, followUp: null } } : thread.model
+  return <RecordThread model={model} actions={actions} remind={(messageId) => <MessageRemindMe record={host.record} messageId={messageId} />} slots={replies ? { helpers: replies } : undefined} />
 }
 
 /**

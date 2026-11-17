@@ -234,3 +234,81 @@ describe('B-TH-236: the amount field and the floor’s price check', () => {
   })
 })
 // ---- end B-TH-236
+
+// ---- B-TH-287 (B-TH-092 drafts on the server, B-TH-098 languages) and B-TH-289 (B-TH-096 "Remind me in 3 days if no answer") --------
+import { MESSAGE_LANGUAGES } from '@nexus/factory-domain/templates/message-languages'
+import { FOLLOW_UP_DAYS, followUpAt, followUpOffered, REPLY_LANGUAGES, replyLanguageOf } from './model'
+import { DraftLine } from './view/SavedReplies'
+import { FollowUpTick } from './view/FollowUp'
+import { render as drawAll, textOf } from '../parts/testing'
+
+describe('B-TH-287 — saved replies in five languages, the draft line on the server', () => {
+  it('lists the five languages written to a customer (never more, never a machine-translated one)', () => {
+    expect([...REPLY_LANGUAGES]).toEqual([...MESSAGE_LANGUAGES])
+    expect(REPLY_LANGUAGES).toEqual(['it', 'en', 'de', 'fr', 'es'])
+    expect(replyLanguageOf('de')).toBe('de')
+    expect(replyLanguageOf('pt')).toBeNull()
+    expect(replyLanguageOf(null)).toBeNull()
+  })
+
+  it('puts the customer’s language first among German, French and Spanish replies too', () => {
+    const lines = [
+      { id: 'a', name: 'Quote follow-up', language: 'en' as const, shared: true },
+      { id: 'b', name: 'Angebot nachfassen', language: 'de' as const, shared: true },
+      { id: 'c', name: 'Relance devis', language: 'fr' as const, shared: false },
+    ]
+    expect(replyGroups(lines, 'de', 'en').shared.map((line) => line.id)).toEqual(['b', 'a'])
+    expect(replyGroups(lines, 'fr', 'en').mine.map((line) => line.id)).toEqual(['c'])
+    for (const locale of LOCALES) {
+      const html = drawAll(createElement(SavedReplies, { model: { status: 'ready', replies: lines, language: 'de' } }), locale)
+      expect(textOf(html)).not.toMatch(/\blanguage\.[a-z]/)
+    }
+  })
+
+  it('the draft line says where the draft is: “Draft saved 10:42”, saving, “Not saved · Retry”, offline, replaced — in it and en', () => {
+    const at = '2026-11-17T09:42:00.000Z'
+    for (const locale of LOCALES) {
+      const saved = textOf(drawAll(createElement(DraftLine, { draft: null, saved: { state: 'saved', at }, timeZone: 'Europe/Rome' }), locale))
+      expect(saved).toContain(locale === 'en' ? 'Draft saved 10:42' : 'Bozza salvata alle 10:42')
+      const failed = drawAll(createElement(DraftLine, { draft: null, saved: { state: 'failed' }, onRetry: () => undefined }), locale)
+      expect(textOf(failed)).toContain(locale === 'en' ? 'Not saved' : 'Non salvata')
+      expect(textOf(failed)).toContain(locale === 'en' ? 'Retry' : 'Riprova')
+      expect(textOf(drawAll(createElement(DraftLine, { draft: null, saved: { state: 'offline' } }), locale))).toContain(locale === 'en' ? 'You are offline' : 'Sei offline')
+      expect(textOf(drawAll(createElement(DraftLine, { draft: null, saved: { state: 'replaced', at } }), locale))).toContain(locale === 'en' ? 'a newer draft' : 'una bozza più recente')
+      for (const state of [{ state: 'saving' as const }]) expect(textOf(drawAll(createElement(DraftLine, { draft: null, saved: state }), locale))).not.toMatch(/\bdraft\.[a-z]/)
+    }
+    // Without a server state the device line stays (as before N6); with neither, nothing.
+    expect(textOf(drawAll(createElement(DraftLine, { draft: { text: 'x', savedAt: Date.UTC(2026, 10, 17, 9, 42) }, timeZone: 'Europe/Rome' })))).toContain('Draft kept on this device')
+    expect(drawAll(createElement(DraftLine, { draft: null }))).toBe('')
+  })
+})
+
+describe('B-TH-289 — “Remind me in 3 days if no answer”', () => {
+  it('is offered on a message to the customer only (a reply or the portal), never on an office note, and held offline', () => {
+    expect(followUpOffered('reply', { remind: true })).toBe(true)
+    expect(followUpOffered('portal', { remind: true })).toBe(true)
+    expect(followUpOffered('note', { remind: true })).toBe(false)
+    expect(followUpOffered('reply', { remind: false })).toBe(false)
+    expect(followUpOffered('reply', { remind: true, offline: true })).toBe(false)
+  })
+
+  it('comes back three days after the send', () => {
+    expect(FOLLOW_UP_DAYS).toBe(3)
+    expect(followUpAt(Date.UTC(2026, 10, 17, 10, 0))).toBe('2026-11-20T10:00:00.000Z')
+  })
+
+  it('the tick says who stops it (only the customer’s answer), held with why, in it and en', () => {
+    for (const locale of LOCALES) {
+      const html = drawAll(createElement(FollowUpTick, { model: { on: true, held: null, party: BRAND_BETA.tradeName } }), locale)
+      const text = textOf(html)
+      expect(text).toContain(locale === 'en' ? 'Remind me in 3 days if no answer' : 'Ricordamelo tra 3 giorni se non rispondono')
+      expect(text).toContain(BRAND_BETA.tradeName)
+      expect(html).toContain('checked')
+      const held = drawAll(createElement(FollowUpTick, { model: { on: true, held: { key: 'followUp.offline' }, party: BRAND_BETA.tradeName } }), locale)
+      expect(held).toContain('disabled')
+      expect(held).not.toContain('checked=""')
+      expect(textOf(held)).not.toMatch(/\bfollowUp\.[a-z]/)
+    }
+  })
+})
+// ---- end B-TH-287 / B-TH-289

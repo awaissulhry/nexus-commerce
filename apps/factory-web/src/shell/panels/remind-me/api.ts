@@ -30,6 +30,8 @@ export const reminderSchema = z.object({
   state: z.enum(REMINDER_STATES),
   version: z.number().int(),
   createdAt: z.string(),
+  // B-TH-289 (B-TH-096): a follow-up — on a message its person sent to the customer; it stops by itself when they answer.
+  followUp: z.boolean().optional(),
 })
 export type Reminder = z.infer<typeof reminderSchema>
 

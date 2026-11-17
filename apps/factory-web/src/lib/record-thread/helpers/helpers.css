@@ -29,3 +29,6 @@
 .fw-rtm-amount-value { width: 9rem; max-width: 100%; }
 .fw-rtm-amount-hint { flex: 1 1 100%; margin: 0; color: var(--nds-text-muted); font-size: var(--nds-font-size-xs-plus); line-height: 1.4; }
 .fw-rtm-amount-hint.is-problem { color: var(--nds-danger-text); font-weight: 600; }
+
+/* B-TH-289 (T8-F05): "Remind me in 3 days if no answer" beside the box on a message to the customer. */
+.fw-rtm-followup { display: inline-flex; align-items: center; gap: var(--nds-space-4); color: var(--nds-text-2); font-size: var(--nds-font-size-sm); white-space: nowrap; }

@@ -16,6 +16,9 @@ import { Avatar } from '../../parts/Avatar'
 import Link from 'next/link'
 import { FolderKanban } from 'lucide-react'
 import { inProjectWords } from '../model'
+// B-TH-288: Done and "Search in the thread".
+import { CheckCircle2, Search } from 'lucide-react'
+import { ThreadSearch, type ThreadSearchActions } from './ThreadSearch'
 import '../head.css'
 
 export const HEAD_NS = 'record-thread-head'
@@ -32,6 +35,11 @@ export interface HeadActions {
   onReopen?: () => void
   /** B-TH-229: "Change owner…" — the container opens the picker of the office people who read the thread. */
   onOwner?: () => void
+  // ---- B-TH-288: "Mark done" (true) / "Open again" (false); "Search in the thread" opened or closed, and its field's actions.
+  onDone?: (done: boolean) => void
+  onSearch?: (open: boolean) => void
+  search?: ThreadSearchActions
+  // ---- end B-TH-288
 }
 
 /** The door a count popover's one action opens. */
@@ -110,6 +118,11 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
       moreItems.push({ id: 'print', label: t('act.print'), onSelect: () => actions?.onPrint?.() })
     } else if (row.kind === 'owner') {
       moreItems.push({ id: 'owner', label: t('owner.change'), disabled: row.held !== null, ...(row.held ? { description: words(row.held) } : model.owner ? { description: t('owner.now', { name: model.owner.name }) } : {}), onSelect: () => actions?.onOwner?.() })
+    } else if (row.kind === 'done') {
+      // B-TH-288: Done is not Close — said in the line under it.
+      moreItems.push({ id: 'done', label: t(row.done ? 'act.openAgain' : 'act.done'), disabled: row.held !== null, description: row.held ? words(row.held) : t(row.done ? 'act.openAgainHint' : 'act.doneHint'), onSelect: () => actions?.onDone?.(!row.done) })
+    } else if (row.kind === 'search') {
+      moreItems.push({ id: 'search', label: t('act.search'), onSelect: () => actions?.onSearch?.(true) })
     } else if (row.kind === 'close') {
       moreItems.push({ id: 'close', label: t('act.close'), description: t('act.closeHint'), tone: 'danger', onSelect: () => actions?.onCloseThread?.() })
     } else {
@@ -138,6 +151,17 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
   const ownerLabel = owner === undefined ? null : ownerName ? t('owner.label', { name: ownerName }) : t('owner.nobody')
   const ownerOpens = model.ownerHeld === null && !compact
   const inProject = inProjectWords(model.projects) // B-TH-251
+  // B-TH-288 (T1-F13): Done — off the work lists, not closed (a new message opens it again).
+  const done = model.done && !model.closed ? model.done : null
+  const doneWords = done ? (done.by ? t('done.by', { name: done.by, date: formatDate(done.at, place) }) : t('done.noName', { date: formatDate(done.at, place) })) : null
+  // B-TH-288 (T1-F08): the search field lies over the Head row while it is open.
+  if (model.search?.open) {
+    return (
+      <div ref={ref} className={`fw-rth is-searching${compact ? ' is-compact' : ''}`} role="group" aria-label={t('label', { record: model.record })}>
+        <ThreadSearch record={model.record} model={model.search} actions={{ ...actions?.search, onClose: () => actions?.onSearch?.(false) }} />
+      </div>
+    )
+  }
 
   return (
     <div ref={ref} className={`fw-rth${compact ? ' is-compact' : ''}`} role="group" aria-label={t('label', { record: model.record })}>
@@ -153,6 +177,15 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
             </Button>
           )}
         </span>
+      ) : doneWords ? (
+        // B-TH-288: done in words, with why it is not closed.
+        <Tooltip label={t('done.tip')} portal>
+          <span className="fw-rth-pillwrap" tabIndex={0}>
+            <Pill tone="success" icon={<CheckCircle2 size={12} aria-hidden />} truncate>
+              {doneWords}
+            </Pill>
+          </span>
+        </Tooltip>
       ) : pillWords && tip ? (
         <Tooltip label={tip} portal>
           <span className="fw-rth-pillwrap" tabIndex={0} aria-describedby={tipId}>
@@ -226,6 +259,14 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
         </span>
       )}
       <span className="fw-rth-grow" />
+      {/* B-TH-288 (T1-F08): "Search in the thread" — office only, offered once the server indexes messages (B-TH-097). */}
+      {!compact && model.search && (
+        <Tooltip label={t('search.open')} portal>
+          <Button size="sm" variant="quiet" className="icon" aria-label={t('search.open')} aria-keyshortcuts="/" onClick={() => actions?.onSearch?.(true)}>
+            <Search size={16} aria-hidden />
+          </Button>
+        </Tooltip>
+      )}
       {!compact && model.views.length > 1 && (
         <Menu
           align="right"

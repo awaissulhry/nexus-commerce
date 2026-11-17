@@ -1,7 +1,7 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { AlertTriangle, Lock, Paperclip, WifiOff } from 'lucide-react'
+import { AlertTriangle, Cloud, Lock, Paperclip, WifiOff } from 'lucide-react'
 import { Banner, Card, Disclosure, Field } from '@nexus/ui/components'
 import { Button, Input, Select } from '@nexus/ui/primitives'
 import { DateField, Textarea } from '../../i18n/ds-parts'
@@ -31,7 +31,15 @@ export interface RequestComposeModel {
   shipTo: { state: 'loading' | 'error' | 'ready' | 'none'; choices: readonly ShipToChoice[] }
   detailsOpen: boolean
   /** The draft on this device: kept (when, written), the device refused it, or nothing kept yet. */
-  kept: { state: 'kept'; at: string } | { state: 'failed' } | { state: 'none' }
+  kept:
+    | { state: 'kept'; at: string }
+    | { state: 'failed' }
+    | { state: 'none' }
+    // ---- B-TH-287: the portal's New order on the server — saved (when; another tab's newer draft replaced), or not saved (Retry;
+    // `device`: the text still stays on this device). The office's New request passes none of these.
+    | { state: 'saved'; at: string; replaced?: boolean }
+    | { state: 'notSaved'; device: boolean }
+  // ---- end B-TH-287
   offline: boolean
   /** Read-only (an office person previewing the portal): the fields do not change. */
   readOnly: boolean
@@ -109,7 +117,29 @@ export function RequestCompose({ model, actions, words, to, aside, below, slots 
           </Button>
         ) : null}
       </span>
-    ) : null
+    ) : model.kept.state === 'saved' ? (
+      // ---- B-TH-287: "Draft saved 10:42" (P-CUS-NEW.message-F02); two tabs: the newest wins, said.
+      <>
+        <span className="fw-rqc-kept">
+          <Cloud size={14} aria-hidden /> {t('kept.saved', { time: model.kept.at })}
+        </span>
+        {model.kept.replaced ? (
+          <span className="fw-rqc-kept is-warning">
+            <AlertTriangle size={14} aria-hidden /> {t('kept.replaced')}
+          </span>
+        ) : null}
+      </>
+    ) : model.kept.state === 'notSaved' ? (
+      <span className="fw-rqc-kept is-warning">
+        <AlertTriangle size={14} aria-hidden /> {t(model.kept.device ? 'kept.notSavedDevice' : 'kept.notSaved')}
+        {actions?.onRetryKeep ? (
+          <Button size="sm" variant="quiet" onClick={() => actions.onRetryKeep?.()}>
+            {t('kept.retry')}
+          </Button>
+        ) : null}
+      </span>
+    ) : // ---- end B-TH-287
+    null
 
   return (
     <div className={aside ? 'fw-rqc fw-rqc-with-aside' : 'fw-rqc'}>

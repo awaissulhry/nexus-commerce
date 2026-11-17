@@ -6,6 +6,7 @@ import type { Recipient } from '../../../lib/record-thread/send-check/model'
 import type { ApiMessage } from '../../../record-panels/api'
 import type { Reading, ThreadHead } from './api'
 import type { OfficeMessage, WaitingMail } from './api' // B-TH-255
+import type { ThreadDone } from './api' // B-TH-288
 
 /**
  * The office thread's state and its pure steps (B-TH-212): what the server said (the messages, page by page) and what the person
@@ -27,6 +28,8 @@ export interface ServerThread {
   // ---- end B-TH-229
   /** B-TH-255 (B-TH-079, T4-F10): the mail for this conversation that waits for a person, as the newest read said (null: none). */
   waitingMail?: WaitingMail | null
+  /** B-TH-288 (B-TH-093, T1-F13): marked done — when and by whom (null: open work; undefined: the read did not say). Office only. */
+  done?: ThreadDone | null
 }
 
 export interface Work {
@@ -37,6 +40,8 @@ export interface Work {
   cc: Recipient[]
   subject: string
   outbox: OutboxItem[]
+  /** B-TH-289 (B-TH-096): "Remind me in 3 days if no answer" ticked for the message being written (to the customer only). */
+  followUp?: boolean
 }
 
 export const EMPTY_SERVER: ServerThread = { status: 'loading', thread: null, messages: [], cursor: null, more: false, older: 'idle' }
@@ -47,7 +52,7 @@ const byTime = (a: ApiMessage, b: ApiMessage) => (a.at === b.at ? a.id.localeCom
  * The newest page read again (on arrival, after a send, on a live hint): the newest messages are replaced, the older pages the
  * person already loaded stay; the work is not part of it.
  */
-export function applyNewest(server: ServerThread, page: { thread: ServerThread['thread']; messages: readonly OfficeMessage[]; nextCursor: string | null; reading?: Reading | null; head?: ThreadHead; /* B-TH-255 */ waitingMail?: WaitingMail | null }): ServerThread {
+export function applyNewest(server: ServerThread, page: { thread: ServerThread['thread']; messages: readonly OfficeMessage[]; nextCursor: string | null; reading?: Reading | null; head?: ThreadHead; /* B-TH-255 */ waitingMail?: WaitingMail | null; /* B-TH-288 */ done?: ThreadDone | null }): ServerThread {
   const fresh = new Map(page.messages.map((message) => [message.id, message]))
   const oldestFresh = page.messages.length > 0 ? [...page.messages].sort(byTime)[0].at : null
   const kept = server.status === 'ready' && oldestFresh !== null ? server.messages.filter((message) => !fresh.has(message.id) && message.at < oldestFresh) : []
@@ -64,6 +69,8 @@ export function applyNewest(server: ServerThread, page: { thread: ServerThread['
     head: page.head ?? server.head,
     // B-TH-255: a read that says nothing of it keeps what the last one said.
     waitingMail: page.waitingMail === undefined ? server.waitingMail : page.waitingMail,
+    // B-TH-288: the same for Done.
+    done: page.done === undefined ? server.done : page.done,
   }
 }
 
@@ -225,3 +232,13 @@ export function undoRefusalKey(error: unknown): string {
 /** B-TH-237: the record types whose thread is never shared with a customer (factory-api platform/threads/records NOT_SHAREABLE). */
 export const NOT_SHAREABLE_TYPES: ReadonlySet<string> = new Set(['WorkOrder', 'QualityHold', 'Nonconformance'])
 // ---- end B-TH-236 / B-TH-237
+
+// ---- B-TH-286 (B-TH-091): why a pin was refused, as a key of record-thread `notice.pin.*` (the API's refusal/<CODE>), else a fault.
+export function pinRefusalKey(error: unknown): string {
+  const code = refusalCode(error)
+  if (code === 'HELD' || code === 'FULL') return `notice.pin.${code}`
+  if (isApiError(error) && (error.kind === 'forbidden' || error.kind === 'step_up')) return 'notice.pin.forbidden'
+  if (isApiError(error) && error.kind === 'not_found') return 'notice.pin.gone'
+  return 'notice.pin.failed'
+}
+// ---- end B-TH-286

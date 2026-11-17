@@ -25,7 +25,11 @@
     "at": "Draft kept on this device · {time}",
     "failed": "Not kept on this device.",
     "retry": "Retry",
-    "offline": "You are offline: your text stays on this device."
+    "offline": "You are offline: your text stays on this device.",
+    "saved": "Draft saved {time}",
+    "notSaved": "Not saved",
+    "notSavedDevice": "Not saved — your text stays on this device",
+    "replaced": "A newer draft from another tab or computer was replaced."
   },
   "files": {
     "title": "Files",

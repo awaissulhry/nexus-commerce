@@ -49,7 +49,11 @@
     "useOn": "Use on another record…",
     "useOnHint": "Copy its files to an order, a quote or a style of the same customer",
     "correct": "Correct",
-    "correctHint": "a new message linked to this one; nothing is edited"
+    "correctHint": "a new message linked to this one; nothing is edited",
+    "pin": "Pin for everyone",
+    "pinHint": "everyone on this record finds it under “pinned”; not a personal bookmark",
+    "unpin": "Unpin",
+    "unpinHint": "it leaves “pinned” for everyone; the message stays"
   },
   "body": {
     "showAll": "Show all ({count} lines)",
@@ -140,5 +144,8 @@
   "filesOnly": {
     "line_one": "{count} file",
     "line_other": "{count} files"
+  },
+  "pin": {
+    "pinned": "Pinned for everyone on this record"
   }
 }
