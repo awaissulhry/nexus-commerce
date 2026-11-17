@@ -24,6 +24,8 @@ import { FILES_NS, FileStrip } from '../../../lib/record-thread/files/view/FileS
 import { START_AUDIENCE, type MissingDocument, type UploadAsk } from '../../../lib/record-thread/files-view/model'
 import { FILES_VIEW_NS, FilesView, type BulkAction } from '../../../lib/record-thread/files-view/view/FilesView'
 import type { SavedRepliesModel, SavedReplyLine } from '../../../lib/record-thread/helpers/model'
+import { savedReplyLines } from '../../../lib/record-thread/helpers/model' // th-backend-g step 3
+import { replyAudienceOf, withSavedReply } from '../../../lib/record-thread/composer/model' // th-backend-g step 1
 import { HELPERS_NS } from '../../../lib/record-thread/helpers/view/MentionInput'
 import { SavedReplies } from '../../../lib/record-thread/helpers/view/SavedReplies'
 import type { CountPopoverModel, ViewerFile } from '../../../lib/record-thread/popups/model'
@@ -444,9 +446,10 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
     const recordType = key.type
     const controller = new AbortController()
     setReplies((now) => ({ ...now, status: 'loading' }))
-    Promise.all((['it', 'en'] as const).map((language) => listReplies(api, { language, recordType, companyId: host.record.companyId }, controller.signal)))
-      .then((lists) => {
-        const lines: SavedReplyLine[] = lists.flat().flatMap((reply) => (reply.language === 'it' || reply.language === 'en' ? [{ id: reply.id, name: reply.name, language: reply.language, shared: reply.shared }] : []))
+    // th-backend-g step 3 (B-TH-098 web half): the replies of every one of the five languages, in one read.
+    listReplies(api, { recordType, companyId: host.record.companyId }, controller.signal)
+      .then((list) => {
+        const lines: SavedReplyLine[] = savedReplyLines(list)
         setReplies((now) => ({ ...now, status: 'ready', replies: lines }))
       })
       .catch(() => !controller.signal.aborted && setReplies((now) => ({ ...now, status: 'failed' })))
@@ -455,10 +458,11 @@ function Docked({ host, model, actions, base, reminder, remind }: { host: Docked
   const pickReply = (replyId: string) => {
     if (!isReplyRecordType(key.type)) return
     setReplies((now) => ({ ...now, filling: true, missing: [] }))
-    fillReply(api, replyId, { recordType: key.type, recordId: key.id })
+    // th-backend-g step 1 (§0.5): an office note names the office's numbers; a text to the customer its own ("#7"). A note that later
+    // becomes a reply swaps them (the draft keeps the pairs).
+    fillReply(api, replyId, { recordType: key.type, recordId: key.id, audience: replyAudienceOf(model.composer.draft.mode) })
       .then((filled) => {
-        const before = model.composer.draft.body.trim()
-        actions.onDraft({ ...model.composer.draft, body: before ? `${model.composer.draft.body}\n\n${filled.body}` : filled.body }, model.composer.notes)
+        actions.onDraft(withSavedReply(model.composer.draft, filled), model.composer.notes)
         setReplies((now) => ({ ...now, filling: false, missing: filled.missing }))
       })
       .catch(() => {

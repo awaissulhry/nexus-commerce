@@ -98,7 +98,8 @@ describe('B-TH-098: saved replies in the customer’s language', () => {
     expect(listed.body.replies.map((reply: Json) => reply.name)).toEqual(['Anfrage erhalten'])
     const filled = await owner.post(`/templates/replies/${made.body.reply.id}/fill`, { recordType: 'Inquiry', recordId: germanRequest })
     expect(filled.status, JSON.stringify(filled.body)).toBe(200)
-    expect(filled.body).toEqual({ body: `Guten Tag ${BRAND_ALPHA.contact.name},\nIhre Anfrage 7 ist bei uns.`, language: 'de', missing: [] })
+    // th-backend-g step 1: filled for the customer (the default), naming no record number.
+    expect(filled.body).toEqual({ body: `Guten Tag ${BRAND_ALPHA.contact.name},\nIhre Anfrage 7 ist bei uns.`, language: 'de', missing: [], audience: 'CUSTOMER', numbers: [] })
     const refused = await owner.post('/templates/replies', { name: 'Pedido', language: 'pt', body: 'Olá', recordType: null, companyId, shared: true })
     expect(refused.status).toBe(400)
   })

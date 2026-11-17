@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import { RecordThread } from '../../../../lib/record-thread/RecordThread'
 // B-TH-234 (B-TH-046): saved replies for requests beside the box, filled from THIS request (its number, subject, wanted date, contact).
 import type { SavedRepliesModel, SavedReplyLine } from '../../../../lib/record-thread/helpers/model'
+import { isReplyLanguage, savedReplyLines } from '../../../../lib/record-thread/helpers/model' // th-backend-g step 3
+import { replyAudienceOf, switchMode, withSavedReply } from '../../../../lib/record-thread/composer/model' // th-backend-g step 1
 import { SavedReplies } from '../../../../lib/record-thread/helpers/view/SavedReplies'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi } from '../../../../lib/session/context'
@@ -58,8 +60,10 @@ export function RequestThread({ host, ask = null, onAsk, replyLanguage = null }:
     if (!ask || ask.token === seen.current) return
     seen.current = ask.token
     asking.current = ask
-    const typed = latest.current.model.composer.draft.body.trim()
-    latest.current.actions.onDraft({ mode: 'reply', body: typed || ask.question, forFloor: false }, [])
+    // th-backend-g step 1: the switch to the customer runs the composer's own rule (mentions out, the office's numbers swapped, said).
+    const composer = latest.current.model.composer
+    const switched = switchMode(composer.draft, 'reply', composer.context.people)
+    latest.current.actions.onDraft({ ...switched.draft, body: switched.draft.body.trim() || ask.question, forFloor: false }, switched.notes)
   }, [ask])
 
   const send = async () => {
@@ -91,7 +95,7 @@ export function RequestThread({ host, ask = null, onAsk, replyLanguage = null }:
 
 /**
  * B-TH-234 (B-TH-046, O-SAL-INQ-LIST.pane-thread-T01): Saved replies ▾ beside the request's box — the office's shared replies and the
- * person's own for requests (GET /templates/replies, record type Inquiry, Italian and English, the customer's language first). Picking
+ * person's own for requests (GET /templates/replies, record type Inquiry, in the five message languages — th-backend-g step 3 —, the customer's language first). Picking
  * one fills the box from THIS request (POST …/fill: its number, what it is about, the wanted date, the customer's contact who wrote —
  * never another customer's); nothing is sent by picking, and the blanks the request could not fill are said under the box.
  */
@@ -99,7 +103,8 @@ function useRequestReplies(host: RecordThreadHost, thread: ReturnType<typeof use
   const api = useOfficeApi()
   const locale = useLocale()
   const mayReply = thread.base.held.has('email.send') || thread.base.held.has('threads.post')
-  const first = language === 'en' || language === 'it' ? language : locale === 'en' ? 'en' : 'it'
+  // th-backend-g step 3 (B-TH-098 web half): the customer's language first — any of the five (it, en, de, fr, es).
+  const first = isReplyLanguage(language) ? language : locale === 'en' ? 'en' : 'it'
   const [model, setModel] = useState<SavedRepliesModel>({ status: 'loading', replies: [], language: first })
   const [seq, setSeq] = useState(0)
   const companyId = host.record.companyId
@@ -107,9 +112,9 @@ function useRequestReplies(host: RecordThreadHost, thread: ReturnType<typeof use
     if (!mayReply) return
     const controller = new AbortController()
     setModel((now) => ({ ...now, status: 'loading', language: first }))
-    Promise.all((['it', 'en'] as const).map((one) => listReplies(api, { language: one, recordType: 'Inquiry', companyId }, controller.signal)))
-      .then((lists) => {
-        const lines: SavedReplyLine[] = lists.flat().flatMap((reply) => (reply.language === 'it' || reply.language === 'en' ? [{ id: reply.id, name: reply.name, language: reply.language, shared: reply.shared }] : []))
+    listReplies(api, { recordType: 'Inquiry', companyId }, controller.signal)
+      .then((list) => {
+        const lines: SavedReplyLine[] = savedReplyLines(list)
         setModel((now) => ({ ...now, status: 'ready', replies: lines }))
       })
       .catch(() => !controller.signal.aborted && setModel((now) => ({ ...now, status: 'failed' })))
@@ -120,11 +125,11 @@ function useRequestReplies(host: RecordThreadHost, thread: ReturnType<typeof use
   if (!mayReply) return null
   const pick = (replyId: string) => {
     setModel((now) => ({ ...now, filling: true, missing: [] }))
-    fillReply(api, replyId, { recordType: 'Inquiry', recordId: host.record.id })
+    // th-backend-g step 1 (§0.5): filled for who reads it — the office's numbers in an office note, the customer's own in a reply.
+    fillReply(api, replyId, { recordType: 'Inquiry', recordId: host.record.id, audience: replyAudienceOf(latest.current.model.composer.draft.mode) })
       .then((filled) => {
         const { model: now, actions } = latest.current
-        const before = now.composer.draft.body.trim()
-        actions.onDraft({ ...now.composer.draft, body: before ? `${now.composer.draft.body}\n\n${filled.body}` : filled.body }, now.composer.notes)
+        actions.onDraft(withSavedReply(now.composer.draft, filled), now.composer.notes)
         setModel((one) => ({ ...one, filling: false, missing: filled.missing }))
       })
       .catch(() => setModel((one) => ({ ...one, filling: false, status: 'failed' })))

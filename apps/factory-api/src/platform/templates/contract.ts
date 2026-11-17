@@ -4,7 +4,7 @@ import { COLUMN_KEYS } from '@nexus/factory-domain/documents/layouts'
 import { DOCUMENT_TEMPLATE_KINDS, MANDATORY_PARTS } from '@nexus/factory-domain/templates/documents'
 import { LANGUAGE_SOURCES, TEMPLATE_LANGUAGES } from '@nexus/factory-domain/templates/language'
 import { MAIL_EVENTS } from '@nexus/factory-domain/templates/mail'
-import { REPLY_RECORD_TYPES } from '@nexus/factory-domain/templates/replies'
+import { REPLY_AUDIENCES, REPLY_RECORD_TYPES } from '@nexus/factory-domain/templates/replies' // th-backend-g step 1: REPLY_AUDIENCES
 // ---- B-TH-098: saved replies and the fixed mail texts in the five message languages (DE, FR, ES drafted by Claude, read once).
 import { MESSAGE_LANGUAGES } from '@nexus/factory-domain/templates/message-languages'
 const messageLanguage = z.enum(MESSAGE_LANGUAGES)
@@ -286,7 +286,13 @@ export const deleteReplyContract = defineContract({ params: replyParams, queryst
 
 export const fillReplyContract = defineContract({
   params: replyParams,
-  body: input({ recordType: z.enum(REPLY_RECORD_TYPES), recordId: id(), contactId: id().optional() }),
+  body: input({
+    recordType: z.enum(REPLY_RECORD_TYPES),
+    recordId: id(),
+    contactId: id().optional(),
+    /** th-backend-g step 1 (§0.5): who reads the text — CUSTOMER (default: a mail or a portal message) or OFFICE (an office note). */
+    audience: z.enum(REPLY_AUDIENCES).optional(),
+  }),
   response: {
     200: output({
       /** The body with the record's values (the person reads and changes it before sending). */
@@ -294,6 +300,10 @@ export const fillReplyContract = defineContract({
       language: messageLanguage, // B-TH-098
       /** The placeholders the record had no value for (left empty in the body). */
       missing: z.array(z.string()),
+      // ---- th-backend-g step 1: the reader filled for, and the record numbers the reply uses as the office and the customer write them
+      // (customer null: none of its own yet) — a composer swaps them when an office note becomes a text to the customer.
+      audience: z.enum(REPLY_AUDIENCES),
+      numbers: z.array(output({ placeholder: z.string(), office: z.string(), customer: z.string().nullable() })),
     }),
   },
 })

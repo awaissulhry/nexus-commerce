@@ -125,8 +125,18 @@ function mentionsInAll(text: string, people: readonly MentionPerson[]): string[]
 
 // ── saved replies ───────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The languages saved replies are written in (factory-domain templates TEMPLATE_LANGUAGES; C17). */
-export type ReplyLanguage = 'it' | 'en'
+/**
+ * The languages saved replies are written in. th-backend-g step 3 (B-TH-098 web half): the five message languages — Italian, English,
+ * German, French, Spanish (factory-domain templates/message-languages MESSAGE_LANGUAGES); a person writes them (never translated).
+ */
+export const REPLY_LANGUAGES = ['it', 'en', 'de', 'fr', 'es'] as const
+export type ReplyLanguage = (typeof REPLY_LANGUAGES)[number]
+export const isReplyLanguage = (value: unknown): value is ReplyLanguage => typeof value === 'string' && (REPLY_LANGUAGES as readonly string[]).includes(value)
+
+/** th-backend-g step 3: the menu's lines of the replies read (GET /templates/replies), in the five languages (any other is left out). */
+export function savedReplyLines(replies: readonly { id: string; name: string; language: string; shared: boolean }[]): SavedReplyLine[] {
+  return replies.flatMap((reply) => (isReplyLanguage(reply.language) ? [{ id: reply.id, name: reply.name, language: reply.language, shared: reply.shared }] : []))
+}
 
 /** A saved reply as the menu lists it (GET /templates/replies: name, language, shared or mine). Never its text. */
 export interface SavedReplyLine {
