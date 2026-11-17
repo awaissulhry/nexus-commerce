@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from 'node:fs'
 import { expect, type BrowserContext, type Locator, type Page } from '@playwright/test'
 import type { Flow } from './flow'
 import { answerOf, dialog, press } from './ui'
+import { startsWith, words } from './words'
 
 /**
  * The floor of the browser golden flow (B-W1-06): the tablets (one browser context each, 1024×768, its own device
@@ -98,9 +99,14 @@ async function enrol(flow: Flow, tablet: Tablet, spec: TabletSpec): Promise<void
   const url = new URL(answer.enrolment.url as string)
   floorState(flow).tablets[tablet.key] = { deviceId: answer.device.id as string }
   await tablet.page.goto(`/floor/enrol${url.hash}`)
-  await press(tablet.page.getByRole('button', { name: 'Continue' }))
-  await press(tablet.page.getByRole('button', { name: 'Continue' }))
-  await expect(tablet.page.getByText('Ready').first()).toBeVisible()
+  const f = words('floor')
+  // The binding (step 2 of 5), the install (3 of 5), the kiosk lock (4 of 5: a tablet, never a person's phone), done.
+  for (const n of [2, 3, 4]) {
+    await expect(tablet.page.getByText(f('enrol.step', { n, total: 5 })).first()).toBeVisible()
+    if (n === 4) await expect(tablet.page.getByRole('heading', { name: f('enrol.kiosk.title') })).toBeVisible()
+    await press(tablet.page.getByRole('button', { name: f('enrol.continue'), exact: true }))
+  }
+  await expect(tablet.page.getByText(f('enrol.done.title'), { exact: true }).first()).toBeVisible()
   await press(tablet.page.getByRole('button', { name: 'Go to sign-in' }))
   await expect(form.getByText(/is ready$/).first()).toBeVisible({ timeout: 30_000 })
   await press(form.getByRole('button', { name: 'Done' }))
@@ -117,14 +123,15 @@ export async function worker(flow: Flow, key: keyof typeof WORKERS): Promise<Flo
   await admin.go('/admin/users?audience=floor&new=worker')
   const form = dialog(page)
   await form.getByRole('combobox', { name: 'Site', exact: true }).selectOption({ label: 'Seed plant A1' })
-  await form.getByRole('combobox', { name: 'Language on the tablet', exact: true }).selectOption({ label: 'English' })
+  const language = form.getByRole('combobox', { name: 'Language on the tablet', exact: true })
+  await language.selectOption({ label: 'English' })
   for (const role of spec.roles) await form.getByRole('checkbox', { name: new RegExp(`^${role}\\b`) }).check()
-  // The name last: the form settles its site and roles first (a name typed at once is lost while it loads).
   const name = form.getByRole('textbox', { name: 'Name', exact: true })
-  await expect(async () => {
-    await name.fill(spec.name)
-    await expect(name).toHaveValue(spec.name, { timeout: 1_000 })
-  }).toPass({ timeout: 15_000 })
+  await name.fill(spec.name)
+  // What was typed and picked holds (the form keeps it when its site list arrives): English on the tablet, the name, the roles.
+  await expect(language.locator('option:checked')).toHaveText('English')
+  await expect(name).toHaveValue(spec.name)
+  for (const role of spec.roles) await expect(form.getByRole('checkbox', { name: new RegExp(`^${role}\\b`) })).toBeChecked()
   const made = await answerOf(page, 'POST', /^\/auth\/floor\/workers$/, async () => {
     await press(form.getByRole('button', { name: 'Add worker' }))
     await flow.stepUp(page, admin.person, 6_000)
@@ -160,7 +167,12 @@ export async function home(page: Page): Promise<void> {
 /** Opens a tile of Home by the start of its name (a tile's name is its label and its hint), and lets the task settle. */
 export async function tile(page: Page, label: string): Promise<void> {
   await home(page)
-  await press(page.getByRole('group', { name: 'What you can do here' }).getByRole('button', { name: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) }).first())
+  const tiles = page.getByRole('group', { name: 'What you can do here' })
+  const wanted = tiles.getByRole('button', { name: new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`) }).first()
+  // More than six tiles: the More tile opens the next page of them (B-W2b-73); a tile may sit on a later page.
+  const more = tiles.getByRole('button', { name: startsWith(words('floor')('tile.more')) })
+  for (let turn = 0; turn < 5 && !(await wanted.isVisible()) && (await more.isVisible()); turn++) await more.click()
+  await press(wanted)
   await page.waitForURL((url) => url.pathname !== '/floor')
   await page.locator('input.nds-floor-scan-input:visible').first().waitFor()
   await quiet(page)
@@ -240,7 +252,7 @@ export async function signIn(flow: Flow, tablet: Tablet, who: FloorWorker): Prom
     if ((await chip.getAttribute('aria-label').catch(() => null))?.startsWith(who.name) || (await chip.innerText().catch(() => '')).includes(who.name)) {
       if ((await page.locator('[aria-description="Read the notice first"]').count()) > 0) {
         await page.goto('/floor/notice')
-        await acknowledgeNotice(page)
+        await arriveHome(page)
       }
       return
     }
@@ -261,19 +273,33 @@ export async function signIn(flow: Flow, tablet: Tablet, who: FloorWorker): Prom
     state.signedOnce.push(who.key)
     flow.save()
   }
-  const notice = page.getByRole('button', { name: 'I have read it' }).or(page.getByRole('button', { name: 'Next', exact: true })).first()
-  await expect(home.or(notice).first()).toBeVisible({ timeout: 30_000 })
-  if (!(await home.isVisible())) await acknowledgeNotice(page)
+  await arriveHome(page)
+}
+
+/**
+ * From a sign-in to Home: the worker notice when it is due, then sign-in's welcome cards (B-W2b-67: the line's handover note
+ * read — "Seen"; a bundle paused at clock-out left for later — "Not now"; a refusal — "Go on"), then Home.
+ */
+async function arriveHome(page: Page): Promise<void> {
+  const f = words('floor')
+  const home = page.getByRole('group', { name: 'What you can do here' })
+  const notice = page.getByRole('button', { name: 'I have read it' }).or(page.getByRole('button', { name: 'Next', exact: true }))
+  const welcome = page.getByRole('button', { name: f('signIn.welcome.seen'), exact: true }).or(page.getByRole('button', { name: f('signIn.welcome.later'), exact: true })).or(page.getByRole('button', { name: f('signIn.welcome.onward'), exact: true }))
+  for (let turn = 0; turn < 10; turn++) {
+    await expect(home.or(notice).or(welcome).first()).toBeVisible({ timeout: 30_000 })
+    if (await home.isVisible()) return
+    if (await notice.first().isVisible()) await acknowledgeNotice(page)
+    else await press(welcome.first())
+  }
   await expect(home).toBeVisible()
 }
 
-/** The worker notice, page by page, then "I have read it" (the scans wait for it). */
+/** The worker notice, page by page, then "I have read it" (the scans wait for it), then on. */
 async function acknowledgeNotice(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'I have read it' }).or(page.getByRole('button', { name: 'Next', exact: true })).first()).toBeVisible()
   for (let turn = 0; turn < 30 && !(await page.getByRole('button', { name: 'I have read it' }).isVisible()); turn++) await press(page.getByRole('button', { name: 'Next', exact: true }))
   await answerOf(page, 'POST', /^\/privacy\/floor\/notice\/acknowledge$/, () => press(page.getByRole('button', { name: 'I have read it' })))
   await press(page.getByRole('button', { name: 'Go to Home' }))
-  await expect(page.getByRole('group', { name: 'What you can do here' })).toBeVisible()
 }
 
 /** Every queued floor action of the tablet recorded by the office (the dev build's queue; the screen says the same). */

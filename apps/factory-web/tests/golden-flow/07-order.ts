@@ -2,6 +2,9 @@ import { expect } from '@playwright/test'
 import { STYLE } from './02-style'
 import { SIZES } from './05-quote'
 import { defineStage } from './_harness/stages'
+import { words } from './_harness/words'
+
+const O = words('orders')
 
 export default defineStage({
   proves: 'order from the accepted version: confirmed, lines per size, the deposit paid with its TD02 in the chain; sales sees no cost',
@@ -15,7 +18,9 @@ export default defineStage({
       await page.getByRole('link', { name: order.number, exact: true }).first().click()
       await page.waitForURL(new RegExp(`/sales/orders/${order.id}`))
       await expect(page.getByText('Confirmed').first()).toBeVisible()
-      await expect(page.getByText('Deposit paid').first()).toBeVisible()
+      // The deposit's state reads in the record's chain (the band's deposit chip went with the docked thread, B-TH-214).
+      const chain = page.getByRole('list', { name: O('chain.title') })
+      await expect(chain.getByRole('listitem').filter({ hasText: O('chain.deposit') })).toContainText(O('gate.state.PAID'))
       await expect(page.getByText(new RegExp(`From quote ${flow.state.quote.number}`)).first()).toBeVisible()
       const lines = page.getByRole('table', { name: `${STYLE.code}: Ordered by colour and size` })
       const row = lines.getByRole('row', { name: /RED · Rosso/ })
