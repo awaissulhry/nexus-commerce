@@ -8,8 +8,13 @@ import { mintPortalToken, portalTokenHash } from '@nexus/factory-domain/auth/por
 import { partnerTemplateOf, PARTNER_ROLE_TEMPLATES } from '@nexus/factory-domain/auth/roles/templates'
 import { ConflictError, DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
-import { can, grantsFor, type Permission } from '@nexus/factory-domain/core/permissions'
+import { can, grantsFor, type Actor, type Permission } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
+import { askKindsProblems, openAskKinds, PRODUCTION_ASK_KINDS, type ProductionAskKind } from '@nexus/factory-domain/production-brand/kinds'
+import { progressSharedOf } from '@nexus/factory-domain/production-brand/levels'
+import { CUSTOMER_PRODUCTION_ROLE, PARTNERS_PRODUCTION_MANAGE } from '@nexus/factory-domain/production-brand/permissions'
+import { URGENT_MAX } from '@nexus/factory-domain/production-brand/urgency'
+import { dormantMarksWords, overQuotaWords, PRODUCTION_ROLE_NOT_OFFERED_WORDS } from '@nexus/factory-domain/production-brand/words'
 import { StaleVersionError } from '../../../core/command'
 import { actorOf, requireContext, type OfficeContext } from '../../../core/context'
 import { requireStepUp } from '../office/account'
@@ -19,10 +24,10 @@ import { csrfCookieOf, newCsrfToken } from '../sessions/cookies'
 import type { OfficeAuth } from '../sessions/office-auth'
 import { adminFacts, userStatus } from '../users/status'
 import { emailOrThrow } from '../users/email'
-import type { ChangeBody, InviteBody, SettingsBody, StatusBody } from './contract'
+import type { ChangeBody, InviteBody, ProductionBody, SettingsBody, StatusBody } from './contract'
 import { partnerMailerOf } from './mail'
 import { changeInCommand, inviteInCommand, revokeInCommand, statusInCommand, STATUS_TARGET, type InvitedResult, type StatusChange } from './people'
-import { lockParty, partyById, peopleOf, personOf, settingsOf, type PartnerParty, type PartnerPerson, type PortalSettingsView } from './store'
+import { lockParty, namedPeopleOf, partyById, peopleOf, personOf, settingsOf, urgentNowOf, type PartnerParty, type PartnerPerson, type PortalSettingsView } from './store'
 import { clientAddressOf } from '../../../core/client-address'
 
 /**
@@ -36,16 +41,20 @@ import { clientAddressOf } from '../../../core/client-address'
 
 const officeContextOf = (request: FastifyRequest): OfficeContext => requireContext(request) as OfficeContext
 
+/** The actor may change the party with `permission` (a tenant-wide party: only by a grant over every company). */
+function mayChange(actor: Actor, party: PartnerParty, permission: Permission): boolean {
+  return party.companyId !== null
+    ? can(actor, permission, { companyId: party.companyId, partyId: party.id })
+    : grantsFor(actor, permission).some((grant) => grant.companies === 'all' && (grant.parties === 'all' || grant.parties.includes(party.id)))
+}
+
 /** The party as the caller may see it (else 404), and may change with `permission` (else 403). */
 async function reachParty(request: FastifyRequest, partyId: string, permission: Permission = PARTNERS_VIEW): Promise<PartnerParty> {
   const actor = actorOf(officeContextOf(request))
   const party = await request.withClient((client) => partyById(client, partyId))
   if (!party || !can(actor, PARTNERS_VIEW, { companyId: party.companyId, partyId: party.id })) throw new NotFoundError('Organisation not found.')
-  if (permission !== PARTNERS_VIEW) {
-    const reaches = party.companyId !== null
-      ? can(actor, permission, { companyId: party.companyId, partyId: party.id })
-      : grantsFor(actor, permission).some((grant) => grant.companies === 'all' && (grant.parties === 'all' || grant.parties.includes(party.id)))
-    if (!reaches) throw new ForbiddenError(party.companyId === null ? 'An organisation of every company is changed only by a role over every company.' : undefined)
+  if (permission !== PARTNERS_VIEW && !mayChange(actor, party, permission)) {
+    throw new ForbiddenError(party.companyId === null ? 'An organisation of every company is changed only by a role over every company.' : undefined)
   }
   return party
 }
@@ -111,7 +120,8 @@ export function rolesView(kinds: readonly PartnerKind[], allowedRoleKeys: readon
   })
 }
 
-const settingsBody = (settings: PortalSettingsView) => ({ portalOn: settings.portalOn, progressShared: settings.progressShared, maxUsers: settings.maxUsers, allowedRoleKeys: [...settings.allowedRoleKeys], version: settings.version })
+// B-PR-14: progressShared kept in every contract, derived from the level (the database keeps the two in step until B-PR-40).
+const settingsBody = (settings: PortalSettingsView) => ({ portalOn: settings.portalOn, progressShared: progressSharedOf(settings.productionLevel), maxUsers: settings.maxUsers, allowedRoleKeys: [...settings.allowedRoleKeys], version: settings.version })
 const partyBody = (party: PartnerParty) => ({ id: party.id, code: party.code, name: party.name, roles: [...party.roles], status: party.status, companyId: party.companyId })
 
 /** GET /partners/:partyId — the party's Portal access tab. */
@@ -140,7 +150,7 @@ export async function organisations(auth: OfficeAuth, request: FastifyRequest) {
   const now = auth.clock.now()
   const soon = new Date(now.getTime() + PARTNER_PEOPLE.accessEndingNoticeMs)
   return request.withClient(async (client) => {
-    const settings = await client.portalSettings.findMany({ select: { partyId: true, portalOn: true, progressShared: true, maxUsers: true }, take: 2000 })
+    const settings = await client.portalSettings.findMany({ select: { partyId: true, portalOn: true, productionLevel: true, maxUsers: true }, take: 2000 })
     const people = await client.user.groupBy({ by: ['partyId', 'status'], where: { audience: 'PARTNER' }, _count: { _all: true } })
     const ending = await client.user.groupBy({ by: ['partyId'], where: { audience: 'PARTNER', status: { in: ['ACTIVE', 'SUSPENDED'] }, accessUntil: { gt: now, lte: soon } }, _count: { _all: true } })
     const ids = [...new Set([...settings.map((row) => row.partyId), ...people.map((row) => row.partyId).filter((value): value is string => value !== null)])]
@@ -154,7 +164,7 @@ export async function organisations(auth: OfficeAuth, request: FastifyRequest) {
           party: { id: row.id, code: row.code, name: row.tradeName ?? row.legalName, roles: row.roles, status: row.status, companyId: row.companyId },
           kinds: partnerKindsOf(row.roles),
           portalOn: own?.portalOn ?? false,
-          progressShared: own?.progressShared ?? false,
+          progressShared: own ? progressSharedOf(own.productionLevel) : false,
           maxUsers: own?.maxUsers ?? null,
           people: { active: count(row.id, 'ACTIVE'), invited: count(row.id, 'INVITED'), suspended: count(row.id, 'SUSPENDED') },
           accessEndingSoon: ending.find((entry) => entry.partyId === row.id)?._count._all ?? 0,
@@ -214,13 +224,174 @@ export async function changeSettings(auth: OfficeAuth, request: FastifyRequest, 
       before: before.exists ? Object.fromEntries(fields.map((field) => [field, before[field]])) : null,
       after: Object.fromEntries(fields.map((field) => [field, next[field]])),
     })
-    emit({ type: 'partner_portal.settings_changed', subject: party.id, companyId: party.companyId, payload: { partyId: party.id, fields, portalOn: next.portalOn, progressShared: next.progressShared } })
+    // B-PR-14: the event carries the production limits as they are after the write (the old switch moves the level).
     const settings = await settingsOf(tx, party.id)
+    emit({ type: 'partner_portal.settings_changed', subject: party.id, companyId: party.companyId, payload: { partyId: party.id, fields, ...settingsEventFields(settings) } })
     const seats = (await peopleOf(tx, party.id, now)).filter((person) => person.seat).length
     return { settings: settingsBody(settings), seats: { taken: seats, max: settings.maxUsers } }
   })
   return result
 }
+
+// ── B-PR-14: a customer's production limits (the limits card; plan §3, §7.1, §7.7; lead picks L18, L21; review fixes R-46, R-66) ──
+
+/**
+ * The settings event's fields after a change (partner_portal.settings_changed): the portal switch, progressShared derived from
+ * the level, and the production limits — never the supervisor, the backup or the approver (PW-15).
+ */
+export function settingsEventFields(settings: PortalSettingsView) {
+  return {
+    portalOn: settings.portalOn,
+    progressShared: progressSharedOf(settings.productionLevel),
+    productionLevel: settings.productionLevel,
+    productionUrgencyOn: settings.productionUrgencyOn,
+    productionUrgentMax: settings.productionUrgentMax,
+    productionAskKinds: [...settings.productionAskKinds],
+  }
+}
+
+/** The preset "Production partner" (plan §3): Progress, urgency on with a quota of 3, every production ask. */
+const PRODUCTION_PARTNER = Object.freeze({ productionLevel: 'PROGRESS' as const, productionUrgencyOn: true, productionUrgentMax: URGENT_MAX.byDefault, productionAskKinds: [...PRODUCTION_ASK_KINDS] })
+
+/** Production limits are a customer's (or a brand's): its production, its orders. */
+const PRODUCTION_ONLY_CUSTOMERS = 'Production limits are set only for a customer or a brand.'
+
+/** The asks in the limits card's order, each once. */
+const inCardOrder = (kinds: readonly string[]): ProductionAskKind[] => PRODUCTION_ASK_KINDS.filter((kind) => kinds.includes(kind))
+
+type SettingsReader = Parameters<typeof settingsOf>[0]
+
+/** The card as the office reads it: the limits, "n urgent now", the names of the supervisor, backup and approver. */
+async function productionAnswer(client: SettingsReader, party: PartnerParty, actor: Actor) {
+  const settings = await settingsOf(client, party.id)
+  const urgentNow = await urgentNowOf(client, party.id)
+  const names = await namedPeopleOf(client, [settings.productionApproverId, settings.productionSupervisorId, settings.productionBackupId])
+  const person = (userId: string | null) => {
+    if (userId === null) return null
+    const named = names.get(userId)
+    return { id: userId, name: named?.name ?? '', active: named?.active ?? false }
+  }
+  const offered = offeredTemplates('CUSTOMER', settings.allowedRoleKeys).some((template) => template.key === CUSTOMER_PRODUCTION_ROLE)
+  return {
+    party: partyBody(party),
+    production: {
+      level: settings.productionLevel,
+      progressShared: progressSharedOf(settings.productionLevel),
+      urgency: {
+        on: settings.productionUrgencyOn,
+        max: settings.productionUrgentMax,
+        now: urgentNow,
+        dormant: settings.productionUrgencyOn ? null : dormantMarksWords(urgentNow),
+        overQuota: settings.productionUrgencyOn ? overQuotaWords(urgentNow, settings.productionUrgentMax) : null,
+      },
+      askKinds: [...settings.productionAskKinds],
+      openAsks: openAskKinds(settings),
+      approver: person(settings.productionApproverId),
+      overrideFourEyes: settings.overrideFourEyes,
+      supervisor: person(settings.productionSupervisorId),
+      backup: person(settings.productionBackupId),
+      productionRoleOffered: offered,
+      productionRoleWords: offered ? null : PRODUCTION_ROLE_NOT_OFFERED_WORDS,
+      version: settings.version,
+    },
+    mayManage: mayChange(actor, party, PARTNERS_PRODUCTION_MANAGE),
+  }
+}
+
+/** GET /partners/:partyId/production — the customer's limits card (partners.view over it; another customer's: 404). */
+export async function productionLimits(request: FastifyRequest, partyId: string) {
+  const party = await reachParty(request, partyId)
+  const actor = actorOf(officeContextOf(request))
+  return request.withClient((client) => productionAnswer(client, party, actor))
+}
+
+/**
+ * PUT /partners/:partyId/production — the level, the urgency switch, the urgent quota, the production asks, the named approver
+ * and the second-person switch (partners.production.manage over the customer, step-up; the supervisor and the backup are
+ * B-PR-42a's route). ONE command: the party locked, the version compared, the row written (made with the portal OFF when the
+ * customer has none: limits need no portal), one audit row and one event. progressShared is written with the level it derives
+ * from. Switching urgency off keeps the marks (dormant: not cleared, the audit says so); a quota lowered below today's urgent
+ * count keeps the marked orders and only stops new marks.
+ */
+export async function changeProduction(auth: OfficeAuth, request: FastifyRequest, partyId: string, body: ProductionBody, idempotencyKey?: string) {
+  const context = officeContextOf(request)
+  const party = await reachParty(request, partyId, PARTNERS_PRODUCTION_MANAGE)
+  requireStepUp(auth, request)
+  if (!kindFits('CUSTOMER', party.roles)) throw new DomainError('conflict', PRODUCTION_ONLY_CUSTOMERS, [{ path: 'body', message: PRODUCTION_ONLY_CUSTOMERS }])
+  const preset = body.preset === 'PRODUCTION_PARTNER' ? PRODUCTION_PARTNER : null
+  const askKinds = body.productionAskKinds ?? preset?.productionAskKinds
+  if (askKinds) {
+    const issues = askKindsProblems(askKinds)
+    if (issues.length > 0) throw new ValidationError(issues[0]!.message, issues)
+  }
+  const asked = {
+    productionLevel: body.productionLevel ?? preset?.productionLevel,
+    productionUrgencyOn: body.productionUrgencyOn ?? preset?.productionUrgencyOn,
+    productionUrgentMax: body.productionUrgentMax ?? preset?.productionUrgentMax,
+    productionAskKinds: askKinds === undefined ? undefined : inCardOrder(askKinds),
+    productionApproverId: body.productionApproverId,
+    overrideFourEyes: body.overrideFourEyes,
+  }
+  if (Object.values(asked).every((value) => value === undefined)) throw new ValidationError('Nothing to change.', [{ path: 'body', message: 'Send at least one limit, or the preset.' }])
+  const now = auth.clock.now()
+  if (asked.productionApproverId) {
+    const approverId = asked.productionApproverId
+    const approver = await request.withClient((client) => personOf(client, party.id, approverId, now))
+    // Neutral: a person of another organisation reads as no person of this one.
+    if (!approver || approver.status !== 'ACTIVE') {
+      const message = "The approver is an active person of this customer's portal."
+      throw new ValidationError(message, [{ path: 'body/productionApproverId', message }])
+    }
+  }
+  const { result } = await auth.command(context, { name: 'partners.changeProduction', idempotencyKey, input: { partyId, ...body } }, async ({ tx, audit, emit }) => {
+    await lockParty(tx, party.id)
+    const before = await settingsOf(tx, party.id)
+    if (body.version !== before.version) throw new StaleVersionError('PortalSettings', party.id, before.version, body.version)
+    const next = {
+      productionLevel: asked.productionLevel ?? before.productionLevel,
+      productionUrgencyOn: asked.productionUrgencyOn ?? before.productionUrgencyOn,
+      productionUrgentMax: asked.productionUrgentMax ?? before.productionUrgentMax,
+      productionAskKinds: asked.productionAskKinds ?? inCardOrder(before.productionAskKinds),
+      productionApproverId: asked.productionApproverId === undefined ? before.productionApproverId : asked.productionApproverId,
+      overrideFourEyes: asked.overrideFourEyes ?? before.overrideFourEyes,
+    }
+    const was = { ...next, productionLevel: before.productionLevel, productionUrgencyOn: before.productionUrgencyOn, productionUrgentMax: before.productionUrgentMax, productionAskKinds: inCardOrder(before.productionAskKinds), productionApproverId: before.productionApproverId, overrideFourEyes: before.overrideFourEyes }
+    const fields = (Object.keys(next) as (keyof typeof next)[]).filter((field) => JSON.stringify(next[field]) !== JSON.stringify(was[field]))
+    if (fields.length === 0) throw new InvalidStateError('Nothing changes: these are the limits already.')
+    const progressShared = progressSharedOf(next.productionLevel)
+    const data = { ...next, progressShared }
+    if (before.exists) {
+      await tx.portalSettings.update({ where: { id: party.id }, data: { ...data, version: { increment: 1 } }, select: { id: true } })
+    } else {
+      // One row per party, its id the party's (B-W2b-152); the portal stays OFF (R-53: limits need no portal).
+      await tx.portalSettings.create({ data: { id: party.id, partyId: party.id, portalOn: false, ...data, createdAt: now, createdById: context.actorId }, select: { id: true } })
+    }
+    const urgentNow = await urgentNowOf(tx, party.id)
+    const switchedOff = before.productionUrgencyOn && !next.productionUrgencyOn
+    const quotaBelow = next.productionUrgencyOn && next.productionUrgentMax < before.productionUrgentMax && urgentNow > next.productionUrgentMax
+    const progressMoved = progressShared !== before.progressShared
+    audit({
+      recordType: 'PortalSettings',
+      recordId: party.id,
+      companyId: party.companyId,
+      before: before.exists ? { ...Object.fromEntries(fields.map((field) => [field, was[field]])), ...(progressMoved ? { progressShared: before.progressShared } : {}) } : null,
+      after: {
+        ...Object.fromEntries(fields.map((field) => [field, next[field]])),
+        ...(progressMoved ? { progressShared } : {}),
+        ...(preset ? { preset: body.preset } : {}),
+        // R-46: the marks are kept, not cleared; they order nothing while urgency is off.
+        ...(switchedOff ? { urgencyMarksKept: urgentNow, urgencyMarks: 'kept, not used while urgency is off' } : {}),
+        // A lower quota never un-marks an order: today's marks stay, only new marks stop.
+        ...(quotaBelow ? { urgencyMarksOverQuota: urgentNow, urgencyMarks: 'kept; new marks only below the quota' } : {}),
+      },
+    })
+    const after = await settingsOf(tx, party.id)
+    emit({ type: 'partner_portal.settings_changed', subject: party.id, companyId: party.companyId, payload: { partyId: party.id, fields: progressMoved ? [...fields, 'progressShared'] : [...fields], ...settingsEventFields(after) } })
+    return productionAnswer(tx, party, actorOf(context))
+  })
+  return result
+}
+// ── end B-PR-14 ──
 
 /** The kind of a new person: the one asked, else the only one the party's roles give. */
 function kindFor(party: PartnerParty, asked: PartnerKind | undefined): PartnerKind {

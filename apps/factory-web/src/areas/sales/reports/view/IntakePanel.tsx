@@ -9,6 +9,8 @@ import { INTAKE_BUCKETS, INTAKE_SPLITS, type Intake } from '../api'
 import { bucketLabel, countText, groupName, intakeChartRows, intakeMeasure, OTHERS, pctText, stackParts, valueText } from '../model'
 import { Head, NAMESPACE, Opens, stateOf } from './Parts'
 import type { ReportsActions, ReportsModel } from './types'
+// B-TH-235: the request figure.
+import { RequestsFigure } from './RequestsFigure'
 
 type Props = { model: ReportsModel; actions?: ReportsActions | undefined }
 
@@ -20,6 +22,7 @@ const STACK_COLOURS = [palette.blue[600], palette.green[600], palette.amber[600]
  * month; split by customer / style / season"; "Click a bar → Orders filtered to it"; empty "No orders in this period"): the
  * orders booked in the period — the value (price grain) or the pieces per week or month as bars, stacked by the split's largest
  * groups, the orders booked as a line; each bucket below the chart and each group of the table opens the orders behind it.
+ * B-TH-235: below them, the requests received, quoted and ordered (RequestsFigure), each number a door to Sales › Incoming.
  */
 export function IntakePanel({ model, actions }: Props) {
   const t = useT(NAMESPACE)
@@ -44,12 +47,15 @@ export function IntakePanel({ model, actions }: Props) {
       </Select>
     </Head>
   )
+  // B-TH-235: the request figure (requests received, quoted, ordered) under the intake, whatever the orders' own state.
+  const requests = <RequestsFigure model={model} actions={actions} />
   const waiting = stateOf(read, t('intake.failed'), () => actions?.onRetry?.('intake'), { axes: t('intake.axes') })
   if (waiting || read.status !== 'ready') {
     return (
       <section className="fw-slr-panel" aria-labelledby="slr-intake">
         {head}
         {waiting}
+        {requests}
       </section>
     )
   }
@@ -59,6 +65,7 @@ export function IntakePanel({ model, actions }: Props) {
       <section className="fw-slr-panel" aria-labelledby="slr-intake">
         {head}
         <EmptyState title={t('common.ordersOutside')} description={t('common.ordersOutsideBody')} />
+        {requests}
       </section>
     )
   }
@@ -67,6 +74,7 @@ export function IntakePanel({ model, actions }: Props) {
       <section className="fw-slr-panel" aria-labelledby="slr-intake">
         {head}
         <EmptyState title={t('intake.empty')} description={t('intake.emptyHint')} />
+        {requests}
       </section>
     )
   }
@@ -151,6 +159,7 @@ export function IntakePanel({ model, actions }: Props) {
         />
       ) : null}
       <p className="fw-slr-muted">{[t('intake.definition'), answer.split === 'style' ? t('intake.styleNote') : null, answer.more > 0 ? t('common.moreGroups', { count: answer.more }) : null, price ? null : t('common.noPrice'), answer.complete ? null : t('common.incomplete')].filter(Boolean).join(' ')}</p>
+      {requests}
     </section>
   )
 }

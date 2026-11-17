@@ -30,6 +30,8 @@ import { TechPackCard } from '../../confirmation/view/ConfirmationCard'
 // ---- B-TH-214: the order on RecordFrame (the band in the shell's row, the docked thread, one notice) ----
 import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
 import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
+// ---- B-TH-256: what points at the order (its complaints and returns, planning's re-promises, the gates' refusals) ----
+import { DeclineDialog, GateNotices, LinksSaid, PointsAtOrder, RePromiseNotices } from '../links/view/OrderLinks'
 import '../../orders.css'
 
 export type { OrderRecordActions, OrderRecordModel } from '../record-model'
@@ -46,6 +48,8 @@ export type { OrderRecordActions, OrderRecordModel } from '../record-model'
  * bank-details page, the payment, the TD02 and its SDI state —, the invoices, the balance), Confirmation & changes (the order
  * confirmation and the accepted quote's evidence; the amendments), Margin (the margin grain only). ONE notice in the body column,
  * the most serious first, the rest behind "N more notices".
+ * B-TH-256: Shipments & invoices also lists the order's complaints and returns; the notices hold the compliance gates' refusals that
+ * still block its work orders or shipments and planning's re-promises (Accept / Decline).
  */
 // B-W2b-398: `delivered` is the Shipments tab's card "Delivered (from carrier)". B-TH-214: `thread` the docked thread (the
 // office's OfficeRecordThread, or a design case's), `printThread` what the print view shows of it.
@@ -284,6 +288,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, delivered }: 
               }
             />
           )}
+          {/* B-TH-256: the result of an Accept / Decline of a re-promise. */}
+          <LinksSaid model={model.links} actions={actions?.links} />
           {model.depth && <DepthNotice model={model.depth} actions={actions?.depth} />}
           {order.status === 'CANCELLED' && <Banner tone="danger" title={t('record.cancelled', { reason: order.cancelReason ?? '—' })} />}
           {/* B-W2b-323: the yes the order waits for. */}
@@ -305,8 +311,12 @@ function ReadyRecord({ order, model, actions, thread, printThread, delivered }: 
           )}
           {depositOverdue && depositRequest && <Banner tone="danger" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toShipments} />}
           {gate.state === 'MISSING' && !isFinal(order) && <Banner tone="danger" title={t('record.depositMissing')} action={toShipments} />}
+          {/* B-TH-256: a compliance gate still blocks a work order or a shipment of this order (the gate's own words). */}
+          <GateNotices model={model.links} prefix={model.prefix} />
           {late && <Banner tone="warning" title={t('record.late', { count: order.daysLate ?? 0 })} />}
           {gate.state === 'WAITING' && !depositOverdue && depositRequest && <Banner tone="info" title={t('record.depositOpen', { date: formatDate(dayInstant(depositRequest.dueDate), { locale }) })} action={toShipments} />}
+          {/* B-TH-256: planning proposes new dates: Accept / Decline (orders.manage, never the proposer), "Tell the customer" only ticked. */}
+          <RePromiseNotices model={model.links} actions={actions?.links} />
           {model.changed && (
             <Banner
               tone="info"
@@ -336,6 +346,8 @@ function ReadyRecord({ order, model, actions, thread, printThread, delivered }: 
             <div className="fw-so-merged">
               <ShipmentsTab order={order} model={model} actions={actions} delivered={delivered} />
               <MoneyTab order={order} model={model} actions={actions} />
+              {/* B-TH-256: the order's complaints and returns (each by its own right). */}
+              <PointsAtOrder model={model.links} actions={actions?.links} prefix={model.prefix} />
             </div>
           )}
           {model.tab === 'changes' && (
@@ -350,6 +362,7 @@ function ReadyRecord({ order, model, actions, thread, printThread, delivered }: 
 
       <OrderDialogs order={order} model={model} actions={actions} />
       {model.depth && <DepthDialogs order={order} model={model.depth} actions={actions?.depth} prefix={model.prefix} />}
+      <DeclineDialog model={model.links} actions={actions?.links} />
       {/* W1 browser repair: no labels here — ds-parts' StepUpModal takes the DS words itself (this page loads no ds-words catalogue). */}
       <StepUpModal
         open={model.stepUp.open}

@@ -1,15 +1,19 @@
 'use client'
 
 import { useEffect, useRef, type ReactNode } from 'react'
-import { CheckCheck, ClipboardList, MoreHorizontal, Play, Send, ShieldCheck, Stamp } from 'lucide-react'
-import { Banner, Menu, type TabItem } from '@nexus/ui/components'
-import { Button, Spinner, Tag } from '@nexus/ui/primitives'
+import Link from 'next/link'
+import { CheckCheck, ClipboardList, FileX, Play, Send, ShieldCheck, ShieldOff, Stamp } from 'lucide-react'
+import { Banner, Card, EmptyState, Menu, Tabs, type MenuItemDef, type TabItem } from '@nexus/ui/components'
+import { Button, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate, formatDateTime, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
-import { heldPhrase, nextStep, RECORD_TABS, type RecordTab } from '../../model'
-import { CountsMessages, KindTag, RecordFrame, say, scopeText, StatusPill, useWords } from '../../parts'
+import { rightRef } from '../../../../../lib/i18n/rights'
+import { heldPhrase, isWideTab, nextStep, RECORD_TABS, type RecordTab } from '../../model'
+import { CountsMessages, KindTag, say, scopeText, StatusPill, useWords } from '../../parts'
 import type { CountRecordActions, CountRecordModel } from '../../view-model'
-import { RecordPanelsView } from '../../../../../record-panels/view/RecordPanelsView'
+// ---- B-TH-264: the count on RecordFrame (the band in the shell's row, the docked thread — notes only —, one notice) ----
+import { RecordFrame } from '../../../../_shared/record-frame/RecordFrame'
+import { RecordNotices } from '../../../../_shared/record-frame/RecordNotices'
 import { ApprovalTab } from './ApprovalTab'
 import { DifferencesTab } from './DifferencesTab'
 import { LinesTab } from './LinesTab'
@@ -20,19 +24,22 @@ import { RecordDialogs } from './RecordDialogs'
 export type { CountRecordActions, CountRecordModel } from '../../view-model'
 
 /**
- * SCR-132 — a count (design warehouse.counts "Record: Count", opens as a record page): the band (‹ Counts, "Count
- * <number> · scope", its state and kind, the site, the inventory date or the snapshot, the team; ONE primary step — Start
- * counting, Submit, Approve, Apply N differences or Sign off — held with its reason in words; Count sheets with or without
- * the expected quantities; ⋯ edit, valued list, cancel) and the tabs: Lines (the expected snapshot against what was
- * counted, typed fast: Enter down, autosave per cell, 0 for not found, ⌘Z takes the last count back), Differences (what
- * differs, by how much, its value with the cost grain, the reason, recounts) and Approval (the steps, the decision, the
- * apply, the year-end sign-off and its frozen valued list); B-W2b-15: Activity (the count's thread, files and history: the
- * record panels). No person's name outside this one record.
+ * SCR-132 — a count (design warehouse.counts "Record: Count", opens as a record page), on RecordFrame (B-TH-264; the rule of picture
+ * 38): the band in the shell's band row (‹ Counts, "Count <number> · scope", ONE state pill, its kind, the site, the inventory date or
+ * the snapshot, the team; ONE primary step — Start counting, Submit, Approve, Apply N differences or Sign off — held with its reason
+ * in words; Count sheets with or without the expected quantities; ⋯ edit, valued list, cancel, its Keyboard line), the docked thread
+ * beside every tab (notes only: a count has no party; Activity's tools in its "⋯", R-ACT) and the tabs 4 → 3: Lines (the expected
+ * snapshot against what was counted, typed fast: Enter down, autosave per cell, 0 for not found, ⌘Z takes the last count back),
+ * Differences (what differs, by how much, its value with the cost grain, the reason, recounts) and Approval (the steps, the
+ * decision, the apply, the year-end sign-off and its frozen valued list). ONE notice in the body column. No person's name outside
+ * this one record.
  */
-export function CountRecordView({ model, actions, panels }: { model: CountRecordModel; actions?: CountRecordActions; panels?: ReactNode }) {
+// B-TH-264: `thread` is the docked thread (the office's OfficeRecordThread docked, or a design case's); `printThread` what the print
+// view shows of it.
+export function CountRecordView({ model, actions, thread, printThread }: { model: CountRecordModel; actions?: CountRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   return (
     <CountsMessages>
-      <CountRecordBody model={model} actions={actions} panels={panels} />
+      <CountRecordBody model={model} actions={actions} thread={thread} printThread={printThread} />
     </CountsMessages>
   )
 }
@@ -45,7 +52,7 @@ const STEP_ICON: Record<string, ReactNode> = {
   signOff: <Stamp size={14} aria-hidden />,
 }
 
-function CountRecordBody({ model, actions, panels }: { model: CountRecordModel; actions?: CountRecordActions; panels?: ReactNode }) {
+function CountRecordBody({ model, actions, thread, printThread }: { model: CountRecordModel; actions?: CountRecordActions; thread?: ReactNode; printThread?: ReactNode }) {
   const t = useWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -78,14 +85,16 @@ function CountRecordBody({ model, actions, panels }: { model: CountRecordModel; 
   }))
 
   let title: ReactNode = null
-  let bandActions: ReactNode = null
+  let primary: ReactNode = null
+  let more: MenuItemDef[] = []
+  let status: ReactNode = null
   let meta: ReactNode = null
   if (value) {
     const step = nextStep(value)
     const differing = value.summary.differing
     const stepHeld = step ? say(t, heldPhrase(value, step, model.can, value.inventoryDate ? formatDate(value.inventoryDate, place) : null)) : null
     const busyHeld = model.busy ? t('held.busy') : null
-    const primary =
+    const stepButton =
       step === null ? null : (
         <Button
           size="sm"
@@ -106,9 +115,10 @@ function CountRecordBody({ model, actions, panels }: { model: CountRecordModel; 
     const editHeld = say(t, heldPhrase(value, 'edit', model.can))
     const cancelHeld = say(t, heldPhrase(value, 'cancel', model.can))
     const valuedOpen = value.kind === 'YEAR_END' && ['SUBMITTED', 'APPROVED', 'APPLIED'].includes(value.status) && model.can.cost
-    bandActions = (
+    // The band's primary: the step, and Count sheets beside it (a paper the counters take to the shelves).
+    primary = (
       <span className="fw-cn-actions">
-        {primary}
+        {stepButton}
         {papers && (
           <Menu
             label={
@@ -124,43 +134,36 @@ function CountRecordBody({ model, actions, panels }: { model: CountRecordModel; 
             ]}
           />
         )}
-        <Menu
-          label={<MoreHorizontal size={16} aria-label={t('record.more')} />}
-          align="right"
-          triggerProps={{ 'aria-label': t('record.more') }}
-          items={[
-            ...(editHeld === null ? [{ id: 'edit', label: t('record.edit'), onSelect: () => actions?.onDialog?.({ kind: 'edit', team: value.countTeam ?? '', note: value.note ?? '' }) }] : []),
-            ...(value.status === 'COUNTING' && value.actions.record.allowed ? [{ id: 'found', label: t('found.open'), onSelect: () => actions?.onOpenFound?.() }] : []),
-            ...(value.status === 'SUBMITTED' && value.actions.sendBack.allowed ? [{ id: 'sendBack', label: t('record.sendBack'), onSelect: () => actions?.onDialog?.({ kind: 'sendBack', reason: '', recount: value.summary.recountSuggested > 0 }) }] : []),
-            ...(valuedOpen
-              ? [
-                  { id: 'valuedPdf', label: t('valued.previewPdf'), onSelect: () => actions?.onValuedPreview?.('pdf') },
-                  { id: 'valuedXlsx', label: t('valued.previewXlsx'), onSelect: () => actions?.onValuedPreview?.('xlsx') },
-                ]
-              : []),
-            ...(value.kind === 'YEAR_END' && value.status === 'APPLIED'
-              ? [{ id: 'signOff', label: t('step.signOff'), onSelect: () => actions?.onDialog?.({ kind: 'signOff', phrase: '', language: locale === 'en' ? 'en' : 'it' }) }]
-              : []),
-            ...(value.valuedList && model.can.files
-              ? [
-                  { id: 'frozenPdf', label: t('valued.frozenPdf'), onSelect: () => actions?.onValuedFile?.(value.valuedList!.pdfFileId) },
-                  ...(value.valuedList.sheetFileId ? [{ id: 'frozenXlsx', label: t('valued.frozenXlsx'), onSelect: () => actions?.onValuedFile?.(value.valuedList!.sheetFileId!) }] : []),
-                ]
-              : []),
-            { id: 'copy', label: t('record.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(value.number).catch(() => undefined) },
-            ...(cancelHeld === null ? [{ id: 'cancel', label: t('record.cancel'), onSelect: () => actions?.onDialog?.({ kind: 'cancel', reason: '' }) }] : []),
-          ]}
-        />
       </span>
     )
+    more = [
+      ...(editHeld === null ? [{ id: 'edit', label: t('record.edit'), onSelect: () => actions?.onDialog?.({ kind: 'edit', team: value.countTeam ?? '', note: value.note ?? '' }) }] : []),
+      ...(value.status === 'COUNTING' && value.actions.record.allowed ? [{ id: 'found', label: t('found.open'), onSelect: () => actions?.onOpenFound?.() }] : []),
+      ...(value.status === 'SUBMITTED' && value.actions.sendBack.allowed ? [{ id: 'sendBack', label: t('record.sendBack'), onSelect: () => actions?.onDialog?.({ kind: 'sendBack', reason: '', recount: value.summary.recountSuggested > 0 }) }] : []),
+      ...(valuedOpen
+        ? [
+            { id: 'valuedPdf', label: t('valued.previewPdf'), onSelect: () => actions?.onValuedPreview?.('pdf') },
+            { id: 'valuedXlsx', label: t('valued.previewXlsx'), onSelect: () => actions?.onValuedPreview?.('xlsx') },
+          ]
+        : []),
+      ...(value.kind === 'YEAR_END' && value.status === 'APPLIED' ? [{ id: 'signOff', label: t('step.signOff'), onSelect: () => actions?.onDialog?.({ kind: 'signOff', phrase: '', language: locale === 'en' ? 'en' : 'it' }) }] : []),
+      ...(value.valuedList && model.can.files
+        ? [
+            { id: 'frozenPdf', label: t('valued.frozenPdf'), onSelect: () => actions?.onValuedFile?.(value.valuedList!.pdfFileId) },
+            ...(value.valuedList.sheetFileId ? [{ id: 'frozenXlsx', label: t('valued.frozenXlsx'), onSelect: () => actions?.onValuedFile?.(value.valuedList!.sheetFileId!) }] : []),
+          ]
+        : []),
+      { id: 'copy', label: t('record.copyNumber'), onSelect: () => void navigator.clipboard?.writeText(value.number).catch(() => undefined) },
+      ...(cancelHeld === null ? [{ id: 'cancel', label: t('record.cancel'), tone: 'danger' as const, onSelect: () => actions?.onDialog?.({ kind: 'cancel', reason: '' }) }] : []),
+    ]
     title = (
       <span className="fw-cn-title">
         {t('record.title', { number: value.number })} <span className="fw-cn-title-sub">· {scopeText(t, value.scope)}</span>
       </span>
     )
+    status = <StatusPill status={value.status} />
     meta = (
       <>
-        <StatusPill status={value.status} />
         <KindTag kind={value.kind} />
         <Tag tone="neutral">{value.site.code}</Tag>
         {value.freezeMoves && <FreezeTag />}
@@ -171,73 +174,119 @@ function CountRecordBody({ model, actions, panels }: { model: CountRecordModel; 
     )
   }
 
+  const back = <Link href={listHref}>{t('record.back')}</Link>
+  const frame = {
+    recordType: 'StockCount',
+    personId: model.personId ?? null,
+    threadLabel: t('record.dockLabel'),
+  }
+
+  // Loading, not found, no right, a failed read: the band and its state, no thread yet.
+  if (model.record.status !== 'ready' || !value) {
+    const loaded = model.record
+    return (
+      <RecordFrame {...frame} thread={null} band={{ back, title: loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('record.name'), moreLabel: t('record.more') }}>
+        {loaded.status === 'loading' ? (
+          <Card padded aria-busy="true">
+            <p className="fw-cn-hint" role="status">
+              <Spinner size={14} /> {t('record.loading')}
+            </p>
+            <div className="fw-cn-stack tight">
+              {Array.from({ length: 6 }, (_, index) => (
+                <Skeleton key={index} height={22} />
+              ))}
+            </div>
+          </Card>
+        ) : (
+          <Card padded>
+            <EmptyState
+              icon={loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
+              title={t(loaded.status === 'error' ? 'record.failed' : loaded.status === 'forbidden' ? 'stock:problem.forbidden' : 'record.notFound')}
+              description={
+                loaded.status === 'error'
+                  ? t(`stock:${loaded.problem}`)
+                  : loaded.status === 'forbidden'
+                    ? t('stock:problem.noPermission', { right: rightRef('inventory.counts.view') })
+                    : t('record.notFoundBody')
+              }
+              action={
+                loaded.status === 'error' ? (
+                  <Button size="sm" onClick={actions?.onRetry}>
+                    {t('stock:problem.retry')}
+                  </Button>
+                ) : (
+                  <Button size="sm" asChild>
+                    <Link href={listHref}>{t('record.backToList')}</Link>
+                  </Button>
+                )
+              }
+            />
+          </Card>
+        )}
+      </RecordFrame>
+    )
+  }
+
   return (
-    <RecordFrame
-      backHref={listHref}
-      loaded={model.record}
-      title={title}
-      meta={meta}
-      actions={bandActions}
-      tabs={tabs}
-      tab={model.tab}
-      onRetry={actions?.onRetry}
-      status={
-        <>
-          {model.asOf ? t('stock:live.updated', { time: formatTime(model.asOf, place) }) : null}
-          {model.asOf ? ' · ' : null}
-          {t(`stock:live.${model.live}`)}
-        </>
-      }
-    >
-      {model.notice && (
-        <Banner
-          tone={model.notice.tone}
-          title={say(t, model.notice.words) ?? ''}
-          action={
-            actions?.onDismissNotice ? (
-              <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
-                {t('stock:common.close')}
-              </Button>
-            ) : undefined
-          }
-        />
-      )}
-      {model.changed && (
-        <Banner
-          tone="info"
-          title={t('record.changed', { time: formatTime(model.changed.at, place) })}
-          action={
-            <Button size="sm" onClick={() => actions?.onReload?.()}>
-              {t('record.reload')}
-            </Button>
-          }
-        />
-      )}
-      {value?.status === 'CANCELLED' && (
-        <Banner tone="info" title={t('record.cancelledBanner', { date: value.cancelledAt ? formatDate(value.cancelledAt, place) : '—' })}>
-          {value.cancelReason ?? undefined}
-        </Banner>
-      )}
-      {value?.status === 'COUNTING' && value.rejectedAt && (
-        <Banner tone="warning" title={t('record.sentBackBanner', { name: value.people.rejectedBy ?? t('record.someone'), date: formatDate(value.rejectedAt, place) })}>
-          {value.rejectReason ?? undefined}
-        </Banner>
-      )}
-      {value && value.summary.movedSinceSnapshot > 0 && (
-        <Banner tone="warning" title={t('record.moved', { count: value.summary.movedSinceSnapshot })}>
-          {t('record.movedBody')}
-        </Banner>
-      )}
-      {value?.status === 'DRAFT' && (
-        <Banner tone="info" title={t('record.draftBanner')}>
-          {value.kind === 'YEAR_END' && value.inventoryDate ? t('record.draftYearEnd', { date: formatDate(value.inventoryDate, place) }) : t('record.draftCycle')}
-        </Banner>
-      )}
-      {value && model.tab === 'lines' && <LinesTab value={value} model={model} actions={actions} />}
-      {value && model.tab === 'differences' && <DifferencesTab value={value} model={model} actions={actions} />}
-      {value && model.tab === 'approval' && <ApprovalTab value={value} model={model} actions={actions} />}
-      {value && model.tab === 'activity' && (panels ?? (model.panelsPreview ? <RecordPanelsView model={model.panelsPreview} /> : <p className="fw-cn-hint">{t(model.can.threads ? 'record.noPanels' : 'record.noThreads')}</p>))}
-      {value && model.dialog && <RecordDialogs value={value} model={model} actions={actions} />}
+    <RecordFrame {...frame} thread={thread ?? null} printThread={printThread} wide={isWideTab(model.tab)} band={{ back, title, status, meta, primary, more, moreLabel: t('record.more') }}>
+      <div className="fw-cn">
+        <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={model.tab} size="sm" overflow="scroll" />
+
+        {/* B-TH-264: ONE notice in the body column, the most serious first; the rest behind "N more notices". */}
+        <RecordNotices>
+          {model.notice && (
+            <Banner
+              tone={model.notice.tone}
+              title={say(t, model.notice.words) ?? ''}
+              action={
+                actions?.onDismissNotice ? (
+                  <Button size="sm" variant="quiet" onClick={actions.onDismissNotice}>
+                    {t('stock:common.close')}
+                  </Button>
+                ) : undefined
+              }
+            />
+          )}
+          {value.status === 'CANCELLED' && (
+            <Banner tone="info" title={t('record.cancelledBanner', { date: value.cancelledAt ? formatDate(value.cancelledAt, place) : '—' })}>
+              {value.cancelReason ?? undefined}
+            </Banner>
+          )}
+          {value.status === 'COUNTING' && value.rejectedAt && (
+            <Banner tone="warning" title={t('record.sentBackBanner', { name: value.people.rejectedBy ?? t('record.someone'), date: formatDate(value.rejectedAt, place) })}>
+              {value.rejectReason ?? undefined}
+            </Banner>
+          )}
+          {value.summary.movedSinceSnapshot > 0 && (
+            <Banner tone="warning" title={t('record.moved', { count: value.summary.movedSinceSnapshot })}>
+              {t('record.movedBody')}
+            </Banner>
+          )}
+          {model.changed && (
+            <Banner
+              tone="info"
+              title={t('record.changed', { time: formatTime(model.changed.at, place) })}
+              action={
+                <Button size="sm" onClick={() => actions?.onReload?.()}>
+                  {t('record.reload')}
+                </Button>
+              }
+            />
+          )}
+          {/* The shell's band says the tab's live state; offline, the page says since when its figures are. */}
+          {model.live === 'offline' && <Banner tone="warning" title={model.asOf ? `${t('stock:live.offline')} · ${t('stock:live.updated', { time: formatTime(model.asOf, place) })}` : t('stock:live.offline')} />}
+          {value.status === 'DRAFT' && (
+            <Banner tone="info" title={t('record.draftBanner')}>
+              {value.kind === 'YEAR_END' && value.inventoryDate ? t('record.draftYearEnd', { date: formatDate(value.inventoryDate, place) }) : t('record.draftCycle')}
+            </Banner>
+          )}
+        </RecordNotices>
+
+        {model.tab === 'lines' && <LinesTab value={value} model={model} actions={actions} />}
+        {model.tab === 'differences' && <DifferencesTab value={value} model={model} actions={actions} />}
+        {model.tab === 'approval' && <ApprovalTab value={value} model={model} actions={actions} />}
+        {model.dialog && <RecordDialogs value={value} model={model} actions={actions} />}
+      </div>
     </RecordFrame>
   )
 }

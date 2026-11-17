@@ -166,8 +166,8 @@ function Page({ model, actions }: { model: ClaimsListModel; actions?: ClaimsList
           items={[
             { id: 'open', label: t('common.open'), href: href(data) },
             { id: 'tab', label: t('common.openNewTab'), href: href(data), target: '_blank' },
+            // B-TH-263: Goods returned and Credit are one tab now, "Goods & credit".
             { id: 'goods', label: t('tab.goods'), href: `${href(data)}?tab=goods` },
-            { id: 'credit', label: t('tab.credit'), href: `${href(data)}?tab=credit` },
           ]}
         />
       ) : null

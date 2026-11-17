@@ -75,10 +75,10 @@
     "SHIP_TO_INCOMPLETE": "The delivery address needs street, postal code, city and country.",
     "SDI_IDENTITY": "An Italian business is invoiced through SDI: add its SDI code or PEC to the customer.",
     "VAT_CHANGED": "The customer's VAT treatment changed since pricing: open the Lines tab to recompute.",
-    "FIRM_OFFER_STANDS": "An earlier version is a firm offer that still stands: it cannot be replaced yet.",
+    "FIRM_OFFER_STANDS": "An earlier revision is a firm offer that still stands: it cannot be replaced yet.",
     "TERMS_VERSION": "Give your terms a version, so the acceptance records which ones were accepted.",
     "NO_BANK_DETAILS": "The company has no bank details yet: the deposit instructions follow separately.",
-    "PROOF_NOT_READY": "A proof is still uploading, being checked or was refused (Documents › Proofs): finish it or remove it.",
+    "PROOF_NOT_READY": "A proof is still uploading, being checked or was refused (Approval & sending › Proofs): finish it or remove it.",
     "BELOW_MINIMUM": "A line is under a minimum order quantity of its style, kind of garment or material (Lines): add pieces, or ask the customer.",
     "PRIVATE_LABEL": "A line is another customer's private-label style: it is made and sold for that brand only (Lines).",
     "OUTSIDE_RELEASED_SCOPE": "A line names a colourway or size its style is not released for yet: release it first, or quote what is released (Lines).",
@@ -189,7 +189,8 @@
     "noSend": "Your role cannot send quotes.",
     "checking": "Still checking the quote.",
     "needsApproval": "Needs approval first: {reasons}",
-    "cannotAsk": "Fix what stops the quote first (see the issues)."
+    "cannotAsk": "Fix what stops the quote first (see the issues).",
+    "noOrders": "Making an order needs the right to manage orders (orders.manage)."
   },
   "decide": {
     "held": {
@@ -203,7 +204,7 @@
     "noRight": "Read only: your role can view quotes, not change them.",
     "pending": "Read only while waiting for approval: withdraw the request to change it.",
     "approved": "Approved: reopen it to change it (the approval is asked again).",
-    "sent": "Version {revision} was sent and cannot change. Make version {next} to change it.",
+    "sent": "Revision {revision} was sent and cannot change. Make revision {next} to change it.",
     "accepted": "Accepted by the customer: it cannot change.",
     "closed": "Closed: it cannot change."
   },
@@ -213,7 +214,7 @@
     "approve": "Approve",
     "reject": "Reject",
     "withdraw": "Withdraw request",
-    "revise": "Make version {next}",
+    "revise": "Make revision {next}",
     "previewPdf": "Preview PDF (new tab)",
     "reopen": "Reopen to edit",
     "newLink": "Send a new link",
@@ -225,10 +226,8 @@
     "lines": "Lines",
     "price": "Price & margin",
     "terms": "Terms & delivery",
-    "versions": "Versions",
-    "approval": "Approval",
-    "documents": "Documents",
-    "activity": "Activity",
+    "versions": "Revisions",
+    "approval": "Approval & sending",
     "problems_one": "{count} problem",
     "problems_other": "{count} problems"
   },
@@ -251,12 +250,10 @@
         "body": "Try again."
       }
     },
-    "versionChip": "v{revision}",
+    "versionChip": "r{revision}",
     "validLeft_one": "Valid {count} more day",
     "validLeft_other": "Valid {count} more days",
     "validEnded": "Offer ended",
-    "dock": "Thread",
-    "dockHint": "Show the thread beside the tab (⌘J)",
     "dockLabel": "The quote's thread",
     "more": "More actions",
     "tabsLabel": "The quote's sections",
@@ -265,9 +262,22 @@
     "waitingApproval": "Waiting for approval: {reasons}",
     "waitingYours": "You asked: an approver (Finance or the Owner) decides. The lines are frozen meanwhile.",
     "waitingWho": "An approver decides here or from Home › Approvals; the person who asked never decides.",
-    "accepted": "Accepted by the customer. The evidence and the deposit request are on the Documents tab.",
-    "noPanels": "The thread and files open with the quote.",
-    "priceList": "List {code} · version {revision}"
+    "accepted": "Accepted by the customer. The evidence and the deposit request are on Approval & sending.",
+    "priceList": "List {code} · version {revision}",
+    "madeFrom": "Made from {number} — Open",
+    "madeFromPlain": "Made from {number}",
+    "customerSees": "Customer sees: {state}",
+    "order": "Order {number} — Open",
+    "orderPlain": "Order {number}",
+    "orderCancelled": "Order {number} cancelled — Open",
+    "orderCancelledPlain": "Order {number} cancelled",
+    "orderWaits": {
+      "NO_SALES_ORDER_SERIES": "Order waits: the company has no order numbering yet. An administrator sets up the series, then the order is made.",
+      "ACCOUNT_ON_HOLD": "Order waits: the customer is on hold for this company. The order is made once Finance releases the hold.",
+      "PO_NUMBER_REQUIRED": "Order waits: this customer's terms need its PO number on every order, and the quote has none.",
+      "NOT_MADE": "Order waits: the customer accepted the quote and its order is not made yet."
+    },
+    "makeOrder": "Make the order now"
   },
   "save": {
     "saving": "Saving…",
@@ -321,7 +331,7 @@
     "empty": {
       "title": "No lines yet",
       "body": "Type a style code or name above to add the first line.",
-      "bodyReadOnly": "This version has no lines."
+      "bodyReadOnly": "This revision has no lines."
     },
     "certificate": "Size {size}: no valid certificate covers it.",
     "certificateCount_one": "{count} size without certificate",
@@ -508,11 +518,11 @@
     "belowMinimum": "Under the customer's minimum order of {minimum}: {short} short."
   },
   "versions": {
-    "loading": "Reading the versions…",
-    "empty": "Only version 1 exists.",
-    "tableLabel": "Versions of the quote",
+    "loading": "Reading the revisions…",
+    "empty": "Only revision 1 exists.",
+    "tableLabel": "Revisions of the quote",
     "col": {
-      "version": "Version",
+      "version": "Revision",
       "status": "State",
       "made": "Made",
       "sent": "Sent",
@@ -524,10 +534,10 @@
     "byAt": "{who} · {at}",
     "acceptedBy": "Accepted by {name} · {at}",
     "declined": "Declined: {note}",
-    "superseded": "Replaced by a newer version",
+    "superseded": "Replaced by a newer revision",
     "openUntil": "Open until {date}",
     "download": "Download",
-    "reviseNote": "Version {revision} stays valid until you send version {next}. Then its link says it was replaced."
+    "reviseNote": "Revision {revision} stays valid until you send revision {next}. Then its link says it was replaced."
   },
   "approval": {
     "rules": {
@@ -558,12 +568,12 @@
     },
     "language": "Preview language",
     "newTab": "Open in new tab",
-    "previewNote": "Made by the server from this version, with a \"sample\" banner; the customer gets it without the banner when it is sent.",
+    "previewNote": "Made by the server from this revision, with a \"sample\" banner; the customer gets it without the banner when it is sent.",
     "sentLine": "Sent {at} · document code {sha}…",
     "loading": "Making the PDF…",
     "problem": {
       "needs": "The PDF needs the invoice and delivery addresses and a validity: fill them on Terms & delivery.",
-      "frozen": "The sent PDF couldn't be opened. Try again, or download it from Versions."
+      "frozen": "The sent PDF couldn't be opened. Try again, or download it from Revisions."
     },
     "link": {
       "title": "Accept link",
@@ -653,11 +663,11 @@
       "go": "Cancel quote"
     },
     "revise": {
-      "title": "Make version {next}?",
-      "body": "Version {revision} stays valid until you send version {next}. Then its link says it was replaced.",
+      "title": "Make revision {next}?",
+      "body": "Revision {revision} stays valid until you send revision {next}. Then its link says it was replaced.",
       "note": "What changed",
-      "noteHint": "In the customer's words, printed on the new version (optional).",
-      "go": "Make version {next}"
+      "noteHint": "In the customer's words, printed on the new revision (optional).",
+      "go": "Make revision {next}"
     },
     "newLink": {
       "title": "Send a new link?",
@@ -676,13 +686,14 @@
     "approved": "Approved. The quote can be sent.",
     "rejected": "Rejected with your reason. The quote is back in Draft.",
     "cancelled": "Quote cancelled.",
-    "revised": "Version {next} made as a draft: change it, then send it.",
+    "revised": "Revision {next} made as a draft: change it, then send it.",
     "linkSent": "A new link was sent.",
-    "linkFailed": "The new link was made but the mail could not leave: try again."
+    "linkFailed": "The new link was made but the mail could not leave: try again.",
+    "orderMade": "Order {number} made from this quote."
   },
   "send": {
     "title": "Send quote {number} v{revision} to the customer",
-    "freeze": "After sending, version {revision} can't change. A change makes version {next}.",
+    "freeze": "After sending, revision {revision} can't change. A change makes revision {next}.",
     "can": {
       "accept": "Read the quote and accept it by typing their name, or decline it.",
       "deposit": "See the deposit asked and how to pay it by bank transfer.",
@@ -775,7 +786,11 @@
     "open": "Open",
     "openNewTab": "Open in new tab",
     "more": "Show more",
-    "noMarginNote": "Margin columns are not shown for your role."
+    "noMarginNote": "Margin columns are not shown for your role.",
+    "madeFrom": "from {number}",
+    "order": "Order {number}",
+    "orderCancelled": "Order {number} cancelled",
+    "orderWaits": "Order waits"
   },
   "newQuote": {
     "title": "New quote",
@@ -823,15 +838,15 @@
     "pastNone": "No quote found",
     "pastFound_one": "{count} quote",
     "pastFound_other": "{count} quotes",
-    "pastLine": "Version {revision} · {lines} lines · {units} pieces",
+    "pastLine": "Revision {revision} · {lines} lines · {units} pieces",
     "pastOther": "Another customer"
   },
   "dup": {
     "title": "Duplicate {number}",
     "body": "A new draft quote with its own number, from today, with the lines copied. Sends, links and approvals are not copied.",
-    "version": "Version to copy",
-    "versionCurrent": "Version {revision} (current)",
-    "versionOther": "Version {revision} · {status}",
+    "version": "Revision to copy",
+    "versionCurrent": "Revision {revision} (current)",
+    "versionOther": "Revision {revision} · {status}",
     "for": "For",
     "same": "The same customer · {name}",
     "sameBody": "Keeps its terms, deposit, addresses, contact and language.",

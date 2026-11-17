@@ -306,6 +306,13 @@ export const THREAD_RECORDS: Readonly<Record<string, RecordResolver>> = Object.f
     return request && request.status !== 'DRAFT' ? { companyId: request.companyId, siteId: null, partyId: request.partyId } : null
   },
   // ---- end B-TH-040
+  // ---- B-TH-075 (N14): a technical file's thread (its page mounted one the API did not have) — the file's company and, like its style's,
+  // the brand a private-label style is made for (who in the office reaches it, and the only party a message may be shared with).
+  TechnicalFile: async (client, id) => {
+    const file = await client.technicalFile.findUnique({ where: { id }, select: { companyId: true, style: { select: { brandPartyId: true } } } })
+    return file ? { companyId: file.companyId, siteId: null, partyId: file.style.brandPartyId } : null
+  },
+  // ---- end B-TH-075
   // ---- B-TH-066 (threads plan TH-5, PROJ-G02; modules/product/projects): a project's company and its ONE outside company (none:
   // an office-only project, internal notes only), so its shared messages reach that company only (the database's
   // Thread_project_party holds the same).

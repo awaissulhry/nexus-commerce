@@ -192,7 +192,8 @@
       "branding_change": "Document branding",
       "signatures_sign": "Sign as the responsible person",
       "legal_outward": "Legal acts sent outside",
-      "security_settings": "These security settings"
+      "security_settings": "These security settings",
+      "production_override": "Decide for a customer or undo its act"
     },
     "fixed": {
       "ACCESS": "Always: a stolen session must never hand out rights.",

@@ -28,6 +28,10 @@ import {
   type Returns,
   type ValueFigures,
 } from './api'
+// B-TH-235: the request figure and its doors into Sales › Incoming (the list's own address).
+import { PROSPECTS_KEY, REQUEST_FIGURES, type RequestBucketRow, type RequestFigure, type RequestGroupRow, type Requests } from './api'
+import type { RequestOutcome } from '@nexus/factory-domain/sales/inquiries/rules'
+import { listHref as incomingHref } from '../inquiries/model'
 
 /**
  * The pure rules of Sales › Reports (B-W2b-348, SCR-250 and its print view SCR-427): what this person may open (from the
@@ -320,6 +324,54 @@ export function listHref(prefix: string, target: DrillTarget, customerId: string
   return `${prefix}/sales/orders?rows=all${party ? `&${party}` : ''}`
 }
 
+// ---- B-TH-235: the request figure's doors (every figure opens its rows in Sales › Incoming) ----------------------------------
+
+/**
+ * Where each part of the request figure opens Sales › Incoming (Owner rule "every total opens its rows"): the list's own tile,
+ * or every request with what it became (`outcome`, the API's REQUEST_OUTCOMES), always with the company counted, the days the
+ * requests came and the customer of the row (the prospects: `prospect=1`). `kind=REQUEST`: the figure counts requests, never a catalogue order or a
+ * change request (Incoming's one read and its file list every kind). apps/factory-api request-funnel.pg holds each door's rows
+ * equal to the figure: change both together.
+ */
+export const REQUEST_DOORS: Readonly<Record<RequestFigure, { readonly tile: 'ALL' | 'OPEN' | 'QUOTED' | 'LOST'; readonly outcome: RequestOutcome | null }>> = Object.freeze({
+  received: { tile: 'ALL', outcome: null },
+  open: { tile: 'OPEN', outcome: null },
+  quoted: { tile: 'QUOTED', outcome: null },
+  ordered: { tile: 'ALL', outcome: 'ORDERED' },
+  declined: { tile: 'ALL', outcome: 'DECLINED' },
+  lost: { tile: 'LOST', outcome: null },
+  notAnOrder: { tile: 'ALL', outcome: 'NOT_AN_ORDER' },
+})
+
+/**
+ * The requests a number counts: the company the figure was counted for (the top bar's: Incoming lists every company the person
+ * reaches), the days they came (a bucket's, else the period's) and one customer group (null: all).
+ */
+export interface RequestDoorScope {
+  readonly company: string | null
+  readonly from: string
+  readonly to: string
+  /** A customer's id, PROSPECTS_KEY, or null for every customer. */
+  readonly group: string | null
+}
+
+/** Sales › Incoming with exactly the requests one number of the request figure counts. */
+export function requestsDoor(prefix: string, figure: RequestFigure, scope: RequestDoorScope): string {
+  const door = REQUEST_DOORS[figure]
+  const href = incomingHref(prefix, { tile: door.tile, outcome: door.outcome, company: scope.company, from: scope.from, to: scope.to, prospect: scope.group === PROSPECTS_KEY, party: scope.group && scope.group !== PROSPECTS_KEY ? scope.group : null })
+  return `${href}${href.includes('?') ? '&' : '?'}kind=REQUEST`
+}
+
+/** A request group's name: the customer's code and name, or the prospects' words. */
+export const requestGroupName = (group: Pick<RequestGroupRow, 'key' | 'code' | 'name'>, prospects: string): string => (group.key === PROSPECTS_KEY ? prospects : [group.code, group.name].filter(Boolean).join(' · ') || prospects)
+
+/** The request figure's file: one row per bucket, then one per customer group (counts and rates, as on screen). */
+export function requestsCsvRows(answer: Requests, words: { bucket: (bucket: RequestBucketRow) => string; group: (group: RequestGroupRow) => string }): (string | number | null)[][] {
+  const cells = (figures: Requests['buckets'][number]['figures']) => [...REQUEST_FIGURES.map((figure) => figures[figure]), figures.quotedPct, figures.orderedPct]
+  return [...answer.buckets.map((bucket) => [words.bucket(bucket), '', ...cells(bucket.figures)]), ...answer.groups.map((group) => ['', words.group(group), ...cells(group.figures)])]
+}
+// ---- end B-TH-235
+
 /** Sales › Quotes for the headline's quote tiles (the accepted ones; the ones sent). */
 export const quotesHref = (prefix: string, status: 'ACCEPTED' | 'SENT'): string => `${prefix}/sales/quotes?status=${status}`
 
@@ -342,12 +394,12 @@ export function returnsCsvRows(answer: Returns, words: { reason: (code: string) 
 }
 
 /** A file's name: the panel and the period. */
-export const csvName = (panel: ReportSection | 'drill', range: { from: string; to: string }): string => `sales-${panel}-${range.from}-${range.to}.csv`
+export const csvName = (panel: ReportSection | 'drill' | 'requests', range: { from: string; to: string }): string => `sales-${panel}-${range.from}-${range.to}.csv`
 
 // ---- live --------------------------------------------------------------------------------------------------------------------
 
 /** Design: "sales_order.created / shipped → panels refresh with AsOf" (at most once a minute); quotes, returns, shipments and promises too. */
-export const LIVE_TYPES = ['sales_order.', 'quote.', 'return.', 'shipment.', 'order_promise.'] as const
+export const LIVE_TYPES = ['sales_order.', 'quote.', 'return.', 'shipment.', 'order_promise.', 'inquiry.' /* B-TH-235: the request figure */] as const
 export const LIVE_EVERY_MS = 60_000
 
 export { RETURN_GROUPS }

@@ -1268,8 +1268,8 @@
         "why": "Persone, ruoli, badge, PIN e coordinate bancarie: un codice dall'app di autenticazione."
       },
       "customerLimit": {
-        "title": "Un limite per clienti vale per i dati dei clienti",
-        "why": "Un ruolo dato per alcuni clienti mostra solo i loro clienti, richieste, preventivi, ordini, spedizioni, fatture, resi, reclami e campionature. Modelli, materiali, ordini di produzione e tabelloni di produzione non sono limitati per cliente: dai a questa persona solo i ruoli che le servono."
+        "title": "Un limite per clienti vale per i dati dei clienti e per la produzione",
+        "why": "Un ruolo dato per alcuni clienti mostra solo i loro clienti, richieste, preventivi, ordini, spedizioni, fatture, resi, reclami e campionature e, in produzione, solo i loro ordini di produzione, tagli, scansioni, dati di qualità e conversazioni. Le schermate che mescolano più clienti (tabelloni, capacità, rapporto giornaliero) si aprono solo con tutti i clienti. Modelli e materiali non sono limitati per cliente: dai a questa persona solo i ruoli che le servono."
       }
     },
     "mfa": {

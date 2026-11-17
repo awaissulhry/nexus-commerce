@@ -150,7 +150,7 @@ describe('the catalogue', () => {
   })
 })
 
-const LEFT_KEY = /\b(?:photo|rules|used|list|view|verdict|lifecycle|status|review|range|chip|tile|col|row|held|problem|common|activity|tab|band|mtm|record|kind|severity|switch|points)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+const LEFT_KEY = /\b(?:photo|rules|used|list|view|verdict|lifecycle|status|review|range|chip|tile|col|row|held|problem|common|history|tab|band|mtm|record|kind|severity|switch|points)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>

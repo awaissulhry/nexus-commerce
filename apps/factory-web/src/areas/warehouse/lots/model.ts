@@ -1,7 +1,6 @@
 import type { LiveState } from '../../_shared/buying/hooks'
 import type { LotCounts, LotQuery, LotRecord, LotRow } from '../../_shared/stock/api'
 import type { StockCan } from '../../_shared/stock/model'
-import type { RecordPanelsViewModel } from '../../../record-panels/model'
 import type { ReleaseCheck, ReleaseChecklist } from './api'
 import type { Loaded, Part } from './shared/model'
 import type { MovesPart } from './shared/parts'
@@ -139,10 +138,20 @@ export interface LotsListActions {
 
 // ---- the record ------------------------------------------------------------------------------------------------------------
 
-/** B-W2a-64: Quality status (holds and inspections) after the overview, as the design orders the tabs. */
-export const LOT_TABS = ['overview', 'quality', 'trace', 'moves', 'activity'] as const
+/**
+ * B-TH-264 (threads plan O-WH-LOT, the tabs of picture 39; 08-tabs R-5, R-8): tabs 5 → 3 — Overview & quality (the release checklist,
+ * the facts, where it is, the status and the holds and inspections that touch the lot: Quality status merged in, R-5), Trace, Moves.
+ * Activity goes: the lot's thread is docked beside every tab (RecordFrame), its tools in the thread's "⋯" (R-ACT).
+ */
+export const LOT_TABS = ['overview', 'trace', 'moves'] as const
 export type LotTab = (typeof LOT_TABS)[number]
-export const lotTabOf = (value: string | null | undefined): LotTab => ((LOT_TABS as readonly string[]).includes(value ?? '') ? (value as LotTab) : 'overview')
+/** Every old `?tab=` keeps working (R-8): Quality status lands on Overview & quality; Activity on it with the thread opened (RecordFrame reads it). */
+export const MERGED_TABS: Readonly<Record<string, LotTab>> = Object.freeze({ quality: 'overview', activity: 'overview' })
+export const lotTabOf = (value: string | null | undefined): LotTab => {
+  const asked = value ?? ''
+  if ((LOT_TABS as readonly string[]).includes(asked)) return asked as LotTab
+  return Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked]! : 'overview'
+}
 
 /**
  * A release check in our words: a key of `warehouse-lots` per code and state (the API's English is never drawn); an
@@ -177,7 +186,8 @@ export interface LotRecordModel {
   live: LiveState
   asOf: string | null
   changed: { at: string } | null
-  dockOpen: boolean
+  /** B-TH-264: who reads the page (the docked thread's width is remembered per person and record type). */
+  personId?: string | null
   timeZone: string
   /** B-W2a-64: abilities; the lot's site figures and its ACTIVE reservations (overview); the trace (Trace tab); the holds
    * of the lot and of its hides (Quality status tab; null without quality.holds.view); the HOLD reasons' words. */
@@ -188,8 +198,7 @@ export interface LotRecordModel {
   holdReasons: readonly PickerReason[]
   writeOff: WriteOffDialogModel | null
   find: TraceFindModel | null
-  /** Design cases: the record panels drawn without the API; the trace's "affected customers" on. */
-  panelsPreview?: RecordPanelsViewModel | null
+  /** Design cases: the trace's "affected customers" on. */
   affectedOnly?: boolean
   /** B-W2b-320: the lot's W2b facts, attributes, split and trace report (null: not drawn). */
   depth?: LotDepthModel | null
@@ -213,7 +222,6 @@ export interface LotRecordActions {
   onRetryMoves?: () => void
   onMoreMoves?: () => void
   onReload?: () => void
-  onDock?: () => void
   onRetryFigures?: () => void
   onRetryTrace?: () => void
   onRetryHolds?: () => void

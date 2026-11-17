@@ -3,6 +3,9 @@ import { CAPABILITIES, PARTNER_KINDS } from '@nexus/factory-domain/auth/partners
 import { defineContract, id, input, instant, output } from '@nexus/factory-domain/core/contracts'
 import { LOCALES } from '@nexus/factory-domain/email/rules'
 import { notMoney } from '@nexus/factory-domain/money/marked'
+import { PRODUCTION_ASK_KINDS, PRODUCTION_REQUEST_KINDS } from '@nexus/factory-domain/production-brand/kinds'
+import { PRODUCTION_SHARE_LEVELS } from '@nexus/factory-domain/production-brand/levels'
+import { URGENT_MAX } from '@nexus/factory-domain/production-brand/urgency'
 
 /**
  * Partner organisations, their people and roles (B-W2b-162). Office: a party's Portal access and the organisations list;
@@ -256,9 +259,83 @@ export const colleagueDeactivateContract = defineContract({
   response: { 200: changed.extend({ sessionsEnded: z.number().int() }) },
 })
 
+// --- B-PR-14: a customer's production limits (the limits card; its own route, partners.production.manage + step-up) --------
+
+const wordsView = output({ en: z.string(), it: z.string() })
+/** An office person named on the card, or the customer's approver: the name and whether the person is still active. */
+const namedView = output({ id: id(), name: z.string(), active: z.boolean() })
+
+const productionView = output({
+  /** What the customer sees of its orders in production (each level adds to the one before). */
+  level: z.enum(PRODUCTION_SHARE_LEVELS),
+  /** Kept in every contract until B-PR-40 drops it: derived from the level (PROGRESS or more). */
+  progressShared: z.boolean(),
+  urgency: output({
+    /** The customer may mark its orders Urgent (off: its marks are kept but count for nothing). */
+    on: z.boolean(),
+    /** Urgent at once without asking us, 0 to 20. */
+    max: z.number().int(),
+    /** Its OWN open orders marked Urgent now ("n urgent now"; never another customer's count). */
+    now: z.number().int(),
+    /** Off with marks kept: "3 urgent marks are kept but not used while this is off" (R-46). */
+    dormant: wordsView.nullable(),
+    /** On and over the quota (a quota lowered, an accepted ask): the marks stay; only new marks stop. */
+    overQuota: wordsView.nullable(),
+  }),
+  /** The production asks the customer may make (HOLD, RESUME, SPLIT_SHIPMENT, SAMPLE_ROUND). */
+  askKinds: z.array(z.enum(PRODUCTION_ASK_KINDS)),
+  /** Every production ask open to it now ("Urgent – asked" exactly while urgency is on: R-50). */
+  openAsks: z.array(z.enum(PRODUCTION_REQUEST_KINDS)),
+  /** The one person of the customer who answers its production approvals (null: anyone with the approve right). */
+  approver: namedView.nullable(),
+  /** Our overrides of this customer need a second person. */
+  overrideFourEyes: z.boolean(),
+  /** Shown here, saved by PUT /production/brands/:partyId/supervisor (production.brand.manage, B-PR-42a). Office only. */
+  supervisor: namedView.nullable(),
+  backup: namedView.nullable(),
+  /** The customer's allowed roles offer the Production role (none listed: every role of the kind). */
+  productionRoleOffered: z.boolean(),
+  /** Said when they do not. */
+  productionRoleWords: wordsView.nullable(),
+  /** 0: no settings row yet (the portal off, everything at its default). */
+  version: z.number().int(),
+})
+
+const productionAnswer = output({
+  party: partyView,
+  production: productionView,
+  /** The caller may change the card (partners.production.manage over the customer; the write asks a step-up). */
+  mayManage: z.boolean(),
+})
+
+/** The preset "Production partner": Progress, urgency on (quota 3) and every production ask, in one click (plan §3). */
+export const PRODUCTION_PRESETS = ['PRODUCTION_PARTNER'] as const
+
+export const productionContract = defineContract({ params: partyParams, response: { 200: productionAnswer } })
+
+export const productionChangeContract = defineContract({
+  params: partyParams,
+  body: input({
+    /** Fills what the body leaves out; a field the body names wins. */
+    preset: z.enum(PRODUCTION_PRESETS).optional(),
+    productionLevel: z.enum(PRODUCTION_SHARE_LEVELS).optional(),
+    productionUrgencyOn: z.boolean().optional(),
+    productionUrgentMax: z.number().int().min(URGENT_MAX.min).max(URGENT_MAX.max).optional(),
+    /** Checked in words (RUSH follows the urgency switch; CHANGE and CANCEL the company's cut-offs). */
+    productionAskKinds: z.array(z.string().trim().min(1).max(40)).max(10).optional(),
+    /** An active portal person of this customer; null: anyone with the approve right. */
+    productionApproverId: id().nullable().optional(),
+    overrideFourEyes: z.boolean().optional(),
+    /** The version read (0: no row yet). */
+    version: z.number().int().min(0),
+  }),
+  response: { 200: productionAnswer },
+})
+
 export type InviteBody = z.infer<typeof inviteContract.body>
 export type SettingsBody = z.infer<typeof settingsContract.body>
 export type ChangeBody = z.infer<typeof changeContract.body>
 export type StatusBody = z.infer<typeof statusContract.body>
 export type ColleagueInviteBody = z.infer<typeof colleagueInviteContract.body>
 export type ColleagueChangeBody = z.infer<typeof colleagueChangeContract.body>
+export type ProductionBody = z.infer<typeof productionChangeContract.body>

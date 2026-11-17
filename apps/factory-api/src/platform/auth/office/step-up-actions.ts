@@ -36,7 +36,8 @@ const action = (key: string, permissions: readonly Permission[], fixed: StepUpFi
 export const STEP_UP_ACTIONS: readonly StepUpAction[] = Object.freeze([
   // The design's list.
   action('bankDetails.change', ['companies.bank.manage', 'purchasing.bank.propose', 'purchasing.bank.verify', 'purchasing.bank.reveal']),
-  action('access.change', ['roles.assign', 'roles.manage', 'users.invite', 'users.suspend', 'users.reactivate', 'users.deactivate', 'users.resetPassword', 'workers.roles', 'partners.invite', 'partners.manage', 'accounting.accountants.manage'], 'ACCESS'),
+  // B-PR-14: + partners.production.manage (a customer's production limits: what it sees and may do, beside partners.manage).
+  action('access.change', ['roles.assign', 'roles.manage', 'users.invite', 'users.suspend', 'users.reactivate', 'users.deactivate', 'users.resetPassword', 'workers.roles', 'partners.invite', 'partners.manage', 'accounting.accountants.manage', 'partners.production.manage'], 'ACCESS'),
   action('approvals.aboveLimit', ['approvals.decide'], 'RULE'),
   action('records.erase', ['parties.erase']),
   action('workers.credentials', ['workers.credentials']),
@@ -54,4 +55,6 @@ export const STEP_UP_ACTIONS: readonly StepUpAction[] = Object.freeze([
   // B-W2b-405: erasing or anonymising a person (GDPR art. 17) is a decision in the company's name: always a fresh code.
   action('legal.outward', ['compliance.techfiles.share', 'compliance.recall.send', 'people.privacy.manage', 'people.piecerates.switch', 'invoices.testMode.manage', 'privacy.erase'], 'LEGAL'),
   action('security.settings', ['security.settings.manage'], 'SECURITY'),
+  // B-PR-14 (B-PR-13's permission, plan §3): deciding for a customer or undoing its act, its order back to Regular, a lock.
+  action('production.override', ['production.brand.override']),
 ])

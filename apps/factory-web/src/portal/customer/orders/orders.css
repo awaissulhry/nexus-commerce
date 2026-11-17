@@ -468,3 +468,8 @@
   white-space: normal;
   overflow-wrap: anywhere;
 }
+
+/* B-TH-238: the tiles above Orders & requests (the DS MetricStrip; each tile a filter of the list). */
+.fw-pord-tiles {
+  min-width: 0;
+}

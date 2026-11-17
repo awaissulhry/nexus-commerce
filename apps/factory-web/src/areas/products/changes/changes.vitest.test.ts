@@ -50,6 +50,10 @@ import {
   writeProblem,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
+// ---- B-TH-262: the change on RecordFrame (tabs per kind, every old ?tab=, the docked thread)
+import { readFileSync } from 'node:fs'
+import { renderView, textOf } from '../../../lib/record-thread/parts/testing'
+import { KIND_TABS, MERGED_TABS, RECORD_TABS, recordTabOf } from './model'
 
 const owner = changesCan(ROLE_PERMISSIONS.owner)
 
@@ -250,4 +254,84 @@ describe('every design case draws in both languages with no key left on screen',
       })
     }
   }
+})
+
+// ── B-TH-262 (threads plan TH-6; the rule of picture 38, the tabs of picture 39 / 08-tabs O-PRD-CHR, O-PRD-CHO) ──
+describe('B-TH-262 the change on RecordFrame: the tabs of each kind, every old ?tab=, one docked thread', () => {
+  const ask = (tab: string | null, kind: 'request' | 'order') => recordTabOf({ get: (name: string) => (name === 'tab' ? tab : null) }, kind)
+  const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(recordScreen.view as ComponentType<{ model: unknown }>, recordScreen.cases.find((item) => item.id === id)!.model, locale)
+
+  it('a change request 5 → 3 (Change · Impact & affected · Approvals); a change order 5 → 4 (Change · Impact · Approvals · Affected records)', () => {
+    expect(RECORD_TABS).toEqual(['change', 'impact', 'approvals', 'affected'])
+    expect(KIND_TABS.request).toEqual(['change', 'impact', 'approvals'])
+    expect(KIND_TABS.order).toEqual(['change', 'impact', 'approvals', 'affected'])
+    const request = textOf(draw('request-impact'))
+    for (const tab of ['Change', 'Impact & affected', 'Approvals']) expect(request).toContain(tab)
+    expect(request).not.toMatch(/\bActivity\b/)
+    const order = textOf(draw('thread-docked'))
+    for (const tab of ['Change', 'Impact', 'Approvals', 'Affected records']) expect(order).toContain(tab)
+    expect(order).not.toMatch(/\bActivity\b/)
+    expect(order).not.toContain('Impact & affected')
+    expect(textOf(draw('request-impact', 'it'))).toContain('Impatto e record coinvolti')
+  })
+
+  it('every old ?tab= keeps working (R-8): activity → Change (the frame opens the thread), a request’s affected → Impact & affected', () => {
+    expect(MERGED_TABS).toEqual({ request: { affected: 'impact', activity: 'change' }, order: { activity: 'change' } })
+    expect(ask('activity', 'request')).toBe('change')
+    expect(ask('activity', 'order')).toBe('change')
+    expect(ask('affected', 'request')).toBe('impact')
+    expect(ask('affected', 'order')).toBe('affected')
+    for (const tab of KIND_TABS.request) expect(ask(tab, 'request')).toBe(tab)
+    for (const tab of KIND_TABS.order) expect(ask(tab, 'order')).toBe(tab)
+    for (const kind of ['request', 'order'] as const) {
+      expect(ask('nope', kind)).toBe('change')
+      expect(ask('constructor', kind)).toBe('change')
+      expect(ask(null, kind)).toBe('change')
+    }
+  })
+
+  it('Impact & affected holds both halves: where it was seen and what is made, then the style and revision it is about', () => {
+    const text = textOf(draw('request-affected'))
+    expect(text.indexOf('Impact')).toBeGreaterThan(-1)
+    expect(text).toContain('Affected records')
+  })
+
+  it('ONE thread docked; R-ACT: the thread’s "⋯" on every tab of both kinds (Activity’s tools moved there)', () => {
+    const html = draw('thread-docked')
+    expect(html.match(/class="fw-rcf-dock"/g)?.length).toBe(1)
+    expect(html).toContain('class="fw-rt-column is-docked"')
+    expect(html).not.toContain('fw-rp-tabs')
+    for (const id of ['order', 'order-impact', 'order-approvals', 'order-affected', 'request', 'request-impact', 'request-approvals']) expect(draw(id), id).toContain('aria-label="Thread tools"')
+  })
+
+  it('the brand wall: a change order’s thread holds notes only; a request’s reaches only the customer or supplier who asked', () => {
+    const dock = (id: string) => {
+      const html = draw(id)
+      return textOf(html.slice(html.indexOf('class="fw-rcf-dock"')))
+    }
+    const order = dock('thread-docked')
+    expect(order).not.toContain('Demo Moto Brand')
+    expect(order).not.toContain('Demo Tannery')
+    const customer = dock('request-customer')
+    expect(customer).toContain('Demo Moto Brand')
+    expect(customer).not.toContain('Demo Tannery')
+    const supplier = dock('request-supplier')
+    expect(supplier).toContain('Demo Tannery')
+    expect(supplier).not.toContain('Demo Moto Brand')
+  })
+
+  it('one notice in the body column (never above the thread); the page mounts the office thread docked, no record panels in a tab', () => {
+    const html = draw('notices')
+    const dockAt = html.indexOf('class="fw-rcf-dock"')
+    const body = html.slice(html.indexOf('class="fw-rcf-body"'), dockAt)
+    expect((body.match(/class="nds-banner /g) ?? []).length).toBeGreaterThanOrEqual(2)
+    expect(html.slice(dockAt)).not.toContain('fw-rcf-notices')
+    const container = readFileSync(new URL('./record/ChangeRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread\s+docked/)
+    expect(container).toContain('recordTabOf(params, kind)')
+    const view = readFileSync(new URL('./record/view/ChangeRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain('<RecordFrame')
+    expect(view).not.toContain('RecordPanelsView')
+    expect(view).not.toContain('DetailHeader')
+  })
 })

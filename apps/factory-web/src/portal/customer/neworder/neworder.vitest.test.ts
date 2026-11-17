@@ -23,6 +23,9 @@ import { sendRequest, type SendAnswer } from '../requests/api'
 import { requestView } from '../requests/design-data'
 import { requestBandOf } from './band'
 import { CATALOGUE_DOOR_OPEN, closedRefusal, failedKey, goesToOf, openItems, opensCatalogueDoor, receiptOf, reorderText, shipToChoices, stylesText, withCarried } from './request-model'
+// B-TH-304: the catalogue door open again.
+import { catalogueDoorOf, catalogueStartHref } from './request-model'
+import { fromOrderText, orderLinesLabel, ownOrderRef } from './model'
 import { orderingWordsFor } from './words'
 import {
   cellsOf,
@@ -277,9 +280,8 @@ const renderCase = (locale: 'it' | 'en', id: string) => {
 }
 
 describe('B-TH-220 — New order as an e-mail', () => {
-  it('the catalogue door is closed until catalogue orders land in Incoming (B-TH-304): /orders/new is the e-mail', () => {
-    expect(CATALOGUE_DOOR_OPEN).toBe(false)
-    for (const query of ['draft=0194f0e2-1940-7000-8000-000000000901', 'way=pick&styles=abc', 'reorder=0194f0e2-1940-7000-8000-000000000601', '']) expect(opensCatalogueDoor(new URLSearchParams(query))).toBe(false)
+  it('the catalogue door switch: closed, /orders/new is always the e-mail; open (B-TH-304), only its own terms open its page', () => {
+    for (const query of ['draft=0194f0e2-1940-7000-8000-000000000901', 'way=pick&styles=abc', 'reorder=0194f0e2-1940-7000-8000-000000000601', '']) expect(opensCatalogueDoor(new URLSearchParams(query), false)).toBe(false)
     expect(opensCatalogueDoor(new URLSearchParams('way=pick'), true)).toBe(true)
     expect(opensCatalogueDoor(new URLSearchParams(''), true)).toBe(false)
   })
@@ -389,3 +391,76 @@ describe('B-TH-220 — New order as an e-mail', () => {
     expect(closedRefusal([{ path: 'body/message' }])).toBe(false)
   })
 })
+
+// ---- B-TH-304 (threads plan P-CUS-NEW.details, PR-18; W11, W37): the catalogue door opens again ---------------------------------
+describe('B-TH-304 — the catalogue door is open again: New order offers it, with no answer-time promise and own numbers only', () => {
+  const OFFICE = /\b(?:INQ|QT|SO|RQ)-\d{4}-\d{2,}/
+  const PROMISE = /working day|business day|within \d|in \d+ (?:hours?|days?)|\b24 ?h\b|we confirm by|giorno lavorativo|giorni lavorativi|entro \d|confermiamo entro|in \d+ (?:ore|giorni)/i
+  const leaves = (tree: unknown, prefix = ''): [string, string][] =>
+    typeof tree === 'string' ? [[prefix, tree]] : tree && typeof tree === 'object' ? Object.entries(tree).flatMap(([key, value]) => leaves(value, prefix ? `${prefix}.${key}` : key)) : []
+
+  it('the door is open: catalogue orders land in Incoming (B-TH-039/040), so its own terms open its page again', () => {
+    expect(CATALOGUE_DOOR_OPEN).toBe(true)
+    for (const query of ['draft=0194f0e2-1940-7000-8000-000000000901', 'way=pick&styles=abc', 'way=reorder', 'way=upload', 'reorder=0194f0e2-1940-7000-8000-000000000601']) expect(opensCatalogueDoor(new URLSearchParams(query)), query).toBe(true)
+    // Plain /orders/new stays the request like an e-mail (the door is offered beside it).
+    expect(opensCatalogueDoor(new URLSearchParams(''))).toBe(false)
+    expect(opensCatalogueDoor(new URLSearchParams('styles=abc'))).toBe(false)
+    expect(catalogueDoorOf('/p/BRAND-BETA')).toEqual({ ways: [{ way: 'pick', href: '/p/BRAND-BETA/orders/new?way=pick' }, { way: 'reorder', href: '/p/BRAND-BETA/orders/new?way=reorder' }, { way: 'upload', href: '/p/BRAND-BETA/orders/new?way=upload' }] })
+    expect(catalogueDoorOf('/p/BRAND-BETA', false)).toBeNull()
+    // The catalogue's "Start an order" opens the door's style picker while it is open.
+    expect(catalogueStartHref('/p/BRAND-BETA')).toBe('/p/BRAND-BETA/orders/new?way=pick')
+    expect(catalogueStartHref('/p/BRAND-BETA', false)).toBe('/p/BRAND-BETA/orders/new')
+  })
+
+  it('New order’s side column offers "Order from the catalogue" — its three ways, each a real link — in it and en', () => {
+    for (const locale of ['it', 'en'] as const) {
+      const html = renderCase(locale, 'th-220-compose')
+      expect(html).toContain(locale === 'en' ? 'Order from the catalogue' : 'Ordina dal catalogo')
+      for (const way of ['pick', 'reorder', 'upload']) expect(html).toContain(`href="/p/BRAND-BETA/orders/new?way=${way}"`)
+      expect(html).not.toMatch(PROMISE)
+    }
+  })
+
+  it('no answer-time promise anywhere: every word of New order, the catalogue door and the compose, in it and en', () => {
+    for (const locale of ['it', 'en'] as const) {
+      for (const namespace of [NS, 'request-compose', 'portal-requests']) {
+        for (const [key, text] of leaves(CATALOGUE[locale][namespace] ?? {})) expect(text, `${namespace}.${key} (${locale})`).not.toMatch(PROMISE)
+      }
+    }
+    for (const id of ['th-304-draft', 'th-304-sent', 'th-304-accepted', 'start', 'sent']) for (const locale of ['it', 'en'] as const) expect(renderCase(locale, id), `${id} (${locale})`).not.toMatch(PROMISE)
+  })
+
+  it('W37 (pick A): the catalogue door read by Brand Beta names its own order numbers and its PO — never an office series, nothing of Brand Alpha', () => {
+    for (const locale of ['it', 'en'] as const) {
+      for (const id of ['th-304-draft', 'th-304-reorder', 'th-304-reorder-order', 'th-304-sent', 'th-304-accepted']) {
+        const html = renderCase(locale, id)
+        expect(html.match(OFFICE)?.[0] ?? null, `${id} (${locale})`).toBeNull()
+        expect(scanText(html, BRAND_ALPHA), `${id} (${locale})`).toEqual([])
+      }
+    }
+    expect(renderCase('en', 'th-304-draft')).toContain(`from your order 12 (your PO ${BRAND_BETA.customerRef})`)
+    expect(renderCase('it', 'th-304-draft')).toContain(`dal vostro ordine 12 (tuo numero ${BRAND_BETA.customerRef})`)
+    expect(renderCase('en', 'th-304-reorder-order')).toContain('Lines of your order 12')
+    const reorder = renderCase('en', 'th-304-reorder')
+    expect(reorder).toContain('Your order')
+    expect(reorder).toContain(BRAND_BETA.customerRef)
+    const sent = renderCase('en', 'th-304-sent')
+    expect(sent).toContain(`Your PO ${BRAND_BETA.customerRef}: you find it under Orders &amp; requests as a catalogue order.`)
+    expect(renderCase('en', 'th-304-accepted')).toContain('We confirmed this request as an order: open it to follow it.')
+    // The old catalogue cases (read by Brand Alpha) draw no office series either.
+    for (const id of ['reorder', 'reorder-order', 'sent', 'closed']) expect(renderCase('en', id).match(OFFICE)?.[0] ?? null, id).toBeNull()
+  })
+
+  it('an order named in words: its own number, else its day; RefPair’s side is "Your order" · 12', () => {
+    const words = t('en')
+    const day = (date: string) => `day ${date}`
+    expect(fromOrderText({ yourNumber: customerNumberOf('ORDER', 12), customerRef: 'P-1', orderDate: '2026-09-01' }, words, day)).toBe('from your order 12 (your PO P-1)')
+    expect(fromOrderText({ yourNumber: customerNumberOf('ORDER', 12), customerRef: null, orderDate: '2026-09-01' }, words, day)).toBe('from your order 12')
+    expect(fromOrderText({ yourNumber: null, customerRef: null, orderDate: '2026-09-01' }, words, day)).toBe('from your order of day 2026-09-01')
+    expect(orderLinesLabel({ yourNumber: null, orderDate: '2026-09-01' }, words, day)).toBe('Lines of your order of day 2026-09-01')
+    expect(ownOrderRef(customerNumberOf('ORDER', 12), 'en')).toEqual({ label: 'Your order', value: '12' })
+    expect(ownOrderRef(customerNumberOf('ORDER', 12), 'it')).toEqual({ label: 'Il vostro ordine', value: '12' })
+    expect(ownOrderRef(null, 'en')).toBeNull()
+  })
+})
+// ---- end B-TH-304

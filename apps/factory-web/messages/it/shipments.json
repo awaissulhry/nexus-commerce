@@ -324,9 +324,8 @@
   "tab": {
     "lines": "Righe e colli",
     "documents": "Documenti",
-    "carrier": "Corriere ed etichetta",
+    "carrier": "Corriere e tracciamento",
     "tracking": "Tracking e consegna",
-    "activity": "Attività",
     "problem": "C'è qualcosa da fare qui",
     "export": "Estero",
     "invoice": "Fattura"
@@ -350,8 +349,6 @@
         "title": "Non è stato possibile leggere la spedizione"
       }
     },
-    "dock": "Conversazione",
-    "dockHint": "La conversazione accanto alla scheda (⌘J)",
     "dockLabel": "La conversazione della spedizione",
     "more": "Altre azioni",
     "checksOpen_one": "{count} controllo aperto",
@@ -364,8 +361,7 @@
     "shipped": "Partita il {when}: righe, colli e DDT restano come sono partiti.",
     "needsDdt": "La merce è partita senza un DDT valido: emetti subito il DDT sostitutivo.",
     "trackingProblem": "Le notizie del corriere chiedono una persona",
-    "readOnly": "Sola lettura: il tuo ruolo vede le spedizioni ma non le cambia.",
-    "noPanels": "Conversazione, file e storico non sono mostrati qui."
+    "readOnly": "Sola lettura: il tuo ruolo vede le spedizioni ma non le cambia."
   },
   "part": {
     "loading": "Lettura di {part}…",

@@ -1,6 +1,6 @@
 import type { LiveState } from '../../../../shell/live/use-live'
 import type { ApprovalView, FitView, RoundView, StyleDetail, SwatchView, WorkOrderOptions } from '../api'
-import type { ActivityPanel, Grid, ManualStage, Notice, Phrase, RecordTab, RequestDraft, SamplesCan } from '../model'
+import type { Grid, ManualStage, Notice, Phrase, RecordTab, RequestDraft, SamplesCan } from '../model'
 import type { DecideActions, DecideModel } from '../view/DecideDialog'
 
 /** A part of the record read on its own (each tab fails alone; the rest of the record stays usable). */
@@ -59,8 +59,6 @@ export interface SampleRecordModel {
   today: string
   can: SamplesCan
   tab: RecordTab
-  /** Activity's panel (`?panel=approvals` from "Ask the customer"). */
-  panel: ActivityPanel | null
   loaded: Loaded
   asOf: string | null
   live: LiveState

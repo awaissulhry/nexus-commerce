@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -27,6 +28,10 @@ import {
   readCount,
   recordTabOf,
   sameQuantity,
+  // B-TH-264
+  isWideTab,
+  MERGED_TABS,
+  RECORD_TABS,
   scopeParts,
   startsLater,
   TILES,
@@ -36,6 +41,8 @@ import {
   yearEndChoices,
 } from './model'
 import { designScreen as recordScreen } from './record/fixtures'
+// B-TH-264: the count on RecordFrame.
+import { renderView, textOf } from '../../../lib/record-thread/parts/testing'
 
 /**
  * Warehouse › Counts (SCR-132, SCR-132-record; B-W2a-28): the pure rules (saved rows ⇄ the API's filters and the part it
@@ -295,5 +302,68 @@ describe('every design case draws in both languages with no key left on screen',
       for (const column of COUNT_CSV_COLUMNS) has(`csv.${column}`)
       for (const code of ['TOO_EARLY', 'TOO_MANY_LINES', 'HELD_BY_OTHER_COUNT', 'UNCOUNTED', 'RECOUNT_DUE', 'NO_REASON', 'OWN_VARIANCE', 'ALREADY_COUNTED', 'SNAPSHOT_LINE', 'NOT_APPROVED', 'NOT_CANCELLABLE', 'SIGNED_OFF', 'NOT_APPLIED', 'NOT_STARTED']) has(`problem.${code}`)
     }
+  })
+})
+
+// ---- B-TH-264: the count on RecordFrame (the rule of picture 38; 08-tabs O-WH-CNT) ------------------------------------------------
+describe('B-TH-264 — the count on RecordFrame: tabs 4 → 3, the docked thread (notes only), Activity gone (R-ACT)', () => {
+  const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(recordScreen.view as ComponentType<{ model: unknown }>, recordScreen.cases.find((item) => item.id === id)!.model, locale)
+  const dockOf = (html: string) => html.slice(html.indexOf('class="fw-rcf-dock"'))
+
+  it('three tabs: Lines · Differences · Approval; every old ?tab= keeps working (R-8: Activity → Lines, the frame opens the thread)', () => {
+    expect(RECORD_TABS).toEqual(['lines', 'differences', 'approval'])
+    expect(MERGED_TABS).toEqual({ activity: 'lines' })
+    expect(recordTabOf('activity')).toBe('lines')
+    for (const tab of RECORD_TABS) expect(recordTabOf(tab)).toBe(tab)
+    expect(recordTabOf(null)).toBe('lines')
+    expect(recordTabOf('nope')).toBe('lines')
+    expect(isWideTab('lines')).toBe(true)
+    expect(isWideTab('approval')).toBe(false)
+    const text = textOf(draw('thread-docked'))
+    for (const tab of ['Lines', 'Differences', 'Approval']) expect(text).toContain(tab)
+    expect(text).not.toMatch(/\bActivity\b/)
+    for (const tab of ['Righe', 'Differenze', 'Approvazione']) expect(textOf(draw('thread-docked', 'it'))).toContain(tab)
+  })
+
+  it('ONE thread on the page: the docked thread, no record panels', () => {
+    const html = draw('thread-docked')
+    expect(html.match(/class="fw-rcf-dock"/g)?.length).toBe(1)
+    expect(html.match(/class="fw-rt-column[ "]/g)?.length).toBe(1)
+    expect(html).toContain('class="fw-rt-column is-docked"')
+    expect(html).not.toContain('fw-rp-tabs')
+  })
+
+  it('R-ACT: the thread’s "⋯" is reachable on every tab (Activity’s tools moved there)', () => {
+    for (const id of ['lines-owner', 'diffs-counting', 'approval-waiting', 'thread-docked']) expect(draw(id), id).toContain('aria-label="Thread tools"')
+  })
+
+  it('a count has no party: Office notes only — no "Reply to", no customer, no e-mail in its thread', () => {
+    const dock = textOf(dockOf(draw('thread-docked')))
+    expect(dock).not.toMatch(/Reply to (?!the customer)/)
+    expect(dock).not.toMatch(/@[a-z0-9-]+\.example/)
+  })
+
+  it('without threads.read there is no thread here: no dock, no Thread button', () => {
+    const html = draw('thread-no-right')
+    expect(html).not.toContain('class="fw-rcf-dock"')
+    expect(html).not.toContain('aria-label="Thread tools"')
+  })
+
+  it('one notice in the body column, never above the thread', () => {
+    const html = draw('thread-docked')
+    const dockAt = html.indexOf('class="fw-rcf-dock"')
+    expect(html.indexOf('class="fw-rcf-notices"')).toBeLessThan(dockAt)
+    expect(dockOf(html)).not.toContain('fw-rcf-notices')
+  })
+
+  it('the page mounts the office thread docked with no party; the count’s own band and Activity are gone', () => {
+    const container = readFileSync(new URL('./record/CountRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread docked record=\{record\}[^>]*party=\{null\}/)
+    expect(container).not.toMatch(/tab === 'activity'/)
+    const view = readFileSync(new URL('./record/view/CountRecordView.tsx', import.meta.url), 'utf8')
+    expect(view).toContain("from '../../../../_shared/record-frame/RecordFrame'")
+    expect(view).not.toContain('RecordPanelsView')
+    const parts = readFileSync(new URL('./parts.tsx', import.meta.url), 'utf8')
+    expect(parts).not.toContain('export function RecordFrame')
   })
 })

@@ -76,9 +76,11 @@ describe('change role', () => {
 // ── B-TH-232 (threads plan decision 17, WALL-G11, W27: the office side of the wall in words) ──
 describe('B-TH-232 the role screen says plainly what a customer limit covers', () => {
   const words = (locale: 'it' | 'en') => createTranslator(locale, CATALOGUE[locale].admin ?? {})
-  it('every role’s Scope rules hold “A customer limit covers customer records”, with what it does not limit, in it and en', () => {
+  // Agreement T4 with the production lane (B-PR-08a part 2, #1557: work orders and quality records follow the customer limit).
+  it('every role’s Scope rules hold “A customer limit covers customer records and production”, with what it does not limit, in it and en', () => {
     expect(ALWAYS_RULES).toContain('customerLimit')
-    expect(words('en')('role.rule.customerLimit.title')).toBe('A customer limit covers customer records')
+    expect(words('en')('role.rule.customerLimit.title')).toBe('A customer limit covers customer records and production')
+    expect(words('it')('role.rule.customerLimit.title')).toBe('Un limite per clienti vale per i dati dei clienti e per la produzione')
     for (const locale of ['it', 'en'] as const) {
       const t = words(locale)
       for (const rule of ALWAYS_RULES) {
@@ -86,8 +88,14 @@ describe('B-TH-232 the role screen says plainly what a customer limit covers', (
         expect(t(`role.rule.${rule}.why`), `${locale} ${rule}`).not.toMatch(/^role\.rule\./)
       }
     }
-    // It says what stays unlimited (decision 17: no full office wall), never a customer's name.
-    expect(words('en')('role.rule.customerLimit.why')).toMatch(/work orders/)
+    // It says what production follows the limit, what needs every customer and what stays unlimited (decision 17: no full
+    // office wall), never a customer's name; work orders are no longer called unlimited (#1557).
+    const why = words('en')('role.rule.customerLimit.why')
+    expect(why).toMatch(/in production only their work orders, cutting, scans, quality records and threads/)
+    expect(why).toMatch(/need every customer/)
+    expect(why).toMatch(/Styles and materials are not limited by customer/)
+    expect(why).not.toMatch(/work orders and production boards are not limited/i)
+    expect(words('it')('role.rule.customerLimit.why')).toMatch(/in produzione, solo i loro ordini di produzione/)
     for (const locale of ['it', 'en'] as const) expect(scanText(words(locale)('role.rule.customerLimit.why'), BRAND_ALPHA)).toEqual([])
   })
 

@@ -229,7 +229,7 @@
     "NO_WORK_ORDER": "The round is decided or cancelled: no work order is made for it.",
     "LINE_OF_ANOTHER_PARTY": "That order line is another customer's: the samples are made on the round's own customer's order.",
     "NOTHING_MADE": "Nothing is made yet: a requested round is decided once it is made or sent.",
-    "BRAND_ASKED": "The customer has been asked and has not answered: withdraw the request (Activity › Approvals) before deciding here.",
+    "BRAND_ASKED": "The customer has been asked and has not answered: withdraw the request (the thread's ⋯ › Ask a partner to approve) before deciding here.",
     "INTERNAL_ROUND": "An internal round has no customer to ask.",
     "NOT_REJECTED": "The next round follows a rejected round only.",
     "RESULT_ONCE": "The result is already recorded.",
@@ -483,19 +483,15 @@
     "offline": "Offline — the round as last read; every change waits.",
     "stale": "Someone changed this round at {time}",
     "reload": "Read it again",
-    "cancelledBanner": "Cancelled: {reason}"
+    "cancelledBanner": "Cancelled: {reason}",
+    "dockLabel": "The round's thread"
   },
   "tab": {
     "request": "Request",
     "sample": "Sample",
     "fit": "Fit & comments",
     "approval": "Approval",
-    "shipments": "Shipments",
-    "activity": "Activity"
-  },
-  "activity": {
-    "none": "Nothing yet. The first change or message appears here.",
-    "noRight": "Your role does not read the round's messages and history."
+    "shipments": "Shipments"
   },
   "sample": {
     "made": "What was made",

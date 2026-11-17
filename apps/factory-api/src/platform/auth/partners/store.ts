@@ -2,6 +2,9 @@ import type { FactoryClient } from '@nexus/factory-db'
 import { isPartnerKind, partnerKindsOf, type Capability, type PartnerKind } from '@nexus/factory-domain/auth/partners/kinds'
 import { holdsSeat, splitRoleKeys } from '@nexus/factory-domain/auth/partners/rules'
 import { partnerTemplateOf } from '@nexus/factory-domain/auth/roles/templates'
+import type { ProductionAskKind } from '@nexus/factory-domain/production-brand/kinds'
+import type { ProductionShareLevel } from '@nexus/factory-domain/production-brand/levels'
+import { URGENT_MAX } from '@nexus/factory-domain/production-brand/urgency'
 import type { CommandTx } from '../../../core/command'
 import { liveAssignment } from '../roles/access'
 
@@ -48,13 +51,75 @@ export interface PortalSettingsView {
   readonly maxUsers: number | null
   readonly allowedRoleKeys: readonly string[]
   readonly version: number
+  // B-PR-14: the customer's production limits (B-PR-12's columns; office only: the partner role has no grant on the table).
+  readonly productionLevel: ProductionShareLevel
+  readonly productionUrgencyOn: boolean
+  readonly productionUrgentMax: number
+  readonly productionAskKinds: readonly ProductionAskKind[]
+  readonly productionApproverId: string | null
+  readonly overrideFourEyes: boolean
+  /** Read only here: saved by B-PR-42a's route (production.brand.manage, L21). */
+  readonly productionSupervisorId: string | null
+  readonly productionBackupId: string | null
 }
 
-/** A party's portal settings (id = the party's id, B-W2b-152); no row: everything OFF, no limit. */
+const SETTINGS_SELECT = {
+  portalOn: true,
+  progressShared: true,
+  maxUsers: true,
+  allowedRoleKeys: true,
+  version: true,
+  // B-PR-14
+  productionLevel: true,
+  productionUrgencyOn: true,
+  productionUrgentMax: true,
+  productionAskKinds: true,
+  productionApproverId: true,
+  overrideFourEyes: true,
+  productionSupervisorId: true,
+  productionBackupId: true,
+} as const
+
+/** A party's portal settings (id = the party's id, B-W2b-152); no row: everything OFF, no limit (B-PR-14: Status only, urgency off, quota 3, no asks). */
 export async function settingsOf(client: Reader, partyId: string): Promise<PortalSettingsView> {
-  const rows = await client.portalSettings.findMany({ where: { partyId }, select: { portalOn: true, progressShared: true, maxUsers: true, allowedRoleKeys: true, version: true }, take: 1 })
+  const rows = await client.portalSettings.findMany({ where: { partyId }, select: SETTINGS_SELECT, take: 1 })
   const row = rows[0]
-  return row ? { exists: true, ...row } : { exists: false, portalOn: false, progressShared: false, maxUsers: null, allowedRoleKeys: [], version: 0 }
+  if (row) return { exists: true, ...row, productionAskKinds: row.productionAskKinds as ProductionAskKind[] }
+  return {
+    exists: false,
+    portalOn: false,
+    progressShared: false,
+    maxUsers: null,
+    allowedRoleKeys: [],
+    version: 0,
+    productionLevel: 'STATUS',
+    productionUrgencyOn: false,
+    productionUrgentMax: URGENT_MAX.byDefault,
+    productionAskKinds: [],
+    productionApproverId: null,
+    overrideFourEyes: false,
+    productionSupervisorId: null,
+    productionBackupId: null,
+  }
+}
+
+/**
+ * B-PR-14: how many of the customer's open orders are marked Urgent now (its OWN orders only; the limits card's "n urgent
+ * now"). The marks live on BrandOrderProduction (B-PR-15, schema wave 3/5), which is not in the schema yet: until it lands no
+ * order can carry a mark, so the true count is 0. B-PR-15 replaces this body with the count of the party's
+ * BrandOrderProduction rows with urgency URGENT whose sales order is still open (CONFIRMED, IN_PRODUCTION, READY,
+ * PARTLY_SHIPPED), read in the office scope like the rest of the card.
+ */
+export async function urgentNowOf(_client: Reader, _partyId: string): Promise<number> {
+  return 0
+}
+
+/** B-PR-14: the office people named on the limits card (supervisor, backup) and the customer's approver, by id: name and state. */
+export async function namedPeopleOf(client: Reader, ids: readonly (string | null)[]): Promise<Map<string, { readonly name: string; readonly active: boolean }>> {
+  const wanted = [...new Set(ids.filter((id): id is string => id !== null))]
+  if (wanted.length === 0) return new Map()
+  const rows = await client.user.findMany({ where: { id: { in: wanted } }, select: { id: true, displayName: true, status: true } })
+  return new Map(rows.map((row) => [row.id, { name: row.displayName, active: row.status === 'ACTIVE' }]))
 }
 
 export const PERSON_SELECT = {

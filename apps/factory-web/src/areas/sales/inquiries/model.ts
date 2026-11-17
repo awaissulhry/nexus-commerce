@@ -25,6 +25,8 @@ import {
 import type { LineBody, UpdateInquiryBody } from '@nexus/factory-domain/sales/inquiries/contracts'
 // B-TH-230: the one waiting rule (amber).
 import { amberOf, WAITING_THRESHOLD_DAYS } from '@nexus/factory-domain/threads/waiting'
+// B-TH-235: what a request became (Sales › Reports' request figure opens the list with it).
+import { REQUEST_OUTCOMES, type RequestOutcome } from '@nexus/factory-domain/sales/inquiries/rules'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { InquiryFile, InquiryLine, InquiryList, InquiryRow, InquiryView } from './api'
 
@@ -154,13 +156,22 @@ export interface ListAddress {
   readonly isNew: boolean
   /** "Make an inquiry" from a mail of Mail to sort (`?mail=<inbound mail id>`). */
   readonly mail: string | null
+  // ---- B-TH-235: Sales › Reports' request figure opens the list with the days the requests came and what each became.
+  /** The first and last day a request came (Rome days, both included; `?from=&to=`). */
+  readonly from: string | null
+  readonly to: string | null
+  /** What a request became, as the figure counts it (`?outcome=`): Ordered, Declined (not "Not an order"), Not an order. */
+  readonly outcome: RequestOutcome | null
+  // ---- end B-TH-235
 }
 
-export const HOME_ADDRESS: ListAddress = { tile: DEFAULT_TILE, status: null, source: null, company: null, party: null, prospect: false, q: '', open: null, tab: 'request', isNew: false, mail: null }
+export const HOME_ADDRESS: ListAddress = { tile: DEFAULT_TILE, status: null, source: null, company: null, party: null, prospect: false, q: '', open: null, tab: 'request', isNew: false, mail: null, from: null, to: null, outcome: null }
 
 const oneOf = <T extends string>(values: readonly T[], value: string | null): T | null => (value !== null && (values as readonly string[]).includes(value) ? (value as T) : null)
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 export const idOf = (value: string | null): string | null => (value && UUID.test(value) ? value : null)
+// B-TH-235: a day of the address, else none.
+const dayOf = (value: string | null): string | null => (value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null)
 
 export function addressOf(params: { get(name: string): string | null }): ListAddress {
   const prospect = params.get('prospect') === '1'
@@ -176,6 +187,10 @@ export function addressOf(params: { get(name: string): string | null }): ListAdd
     tab: oneOf(RECORD_TABS, params.get('tab')) ?? 'request',
     isNew: params.get('new') === '1',
     mail: idOf(params.get('mail')),
+    // B-TH-235
+    from: dayOf(params.get('from')),
+    to: dayOf(params.get('to')),
+    outcome: oneOf(REQUEST_OUTCOMES, params.get('outcome')),
   }
 }
 
@@ -188,6 +203,10 @@ export function addressText(address: ListAddress): string {
   if (address.prospect) params.set('prospect', '1')
   else if (address.party) params.set('party', address.party)
   if (address.q.trim()) params.set('q', address.q.trim())
+  // B-TH-235
+  if (address.from) params.set('from', address.from)
+  if (address.to) params.set('to', address.to)
+  if (address.outcome) params.set('outcome', address.outcome)
   if (address.open) params.set('open', address.open)
   if (address.open && address.tab !== 'request') params.set('tab', address.tab)
   if (address.isNew) params.set('new', '1')
@@ -197,7 +216,7 @@ export function addressText(address: ListAddress): string {
 }
 
 /** Anything narrowing the rows beyond the default tile. */
-export const isFiltered = (address: ListAddress): boolean => address.tile !== DEFAULT_TILE || !!address.status || !!address.source || !!address.company || !!address.party || address.prospect || !!address.q.trim()
+export const isFiltered = (address: ListAddress): boolean => address.tile !== DEFAULT_TILE || !!address.status || !!address.source || !!address.company || !!address.party || address.prospect || !!address.q.trim() || !!address.from || !!address.to || !!address.outcome /* B-TH-235 */
 
 /** B-TH-216: Sales › Incoming (renamed from Inquiries; the old address redirects, shell/nav/renamed.ts). */
 export const PAGE_PATH = '/sales/incoming'
@@ -239,6 +258,10 @@ export function queryOf(address: ListAddress) {
     partyId: address.prospect ? null : address.party,
     prospect: address.prospect,
     q: address.q.trim(),
+    // B-TH-235
+    receivedFrom: address.from,
+    receivedTo: address.to,
+    outcome: address.outcome,
   }
 }
 
@@ -260,7 +283,7 @@ export function tileValue(list: InquiryList | null, tile: InquiryTile, failed: b
 export const tilePartial = (list: InquiryList | null, tile: InquiryTile): boolean => tile === 'WAITING_US' && !!list && !list.complete
 
 export interface FilterChipModel {
-  readonly id: 'tile' | 'status' | 'source' | 'company' | 'party' | 'prospect' | 'q'
+  readonly id: 'tile' | 'status' | 'source' | 'company' | 'party' | 'prospect' | 'q' | 'received' | 'outcome' // B-TH-235
   readonly label: Phrase
   readonly clear: Partial<ListAddress>
 }
@@ -276,6 +299,9 @@ export function chipsOf(address: ListAddress, partyName: string | null, companyN
   if (address.prospect) chips.push({ id: 'prospect', label: { key: 'chip.prospect' }, clear: { prospect: false } })
   else if (address.party) chips.push({ id: 'party', label: partyName ? { key: 'chip.party', params: { name: partyName } } : { key: 'chip.partyUnknown' }, clear: { party: null } })
   if (address.q.trim()) chips.push({ id: 'q', label: { key: 'chip.q', params: { q: address.q.trim() } }, clear: { q: '' } })
+  // B-TH-235: the days the requests came and what each became (Sales › Reports' request figure opens the list with them).
+  if (address.from || address.to) chips.push({ id: 'received', label: address.from && address.to ? (address.from === address.to ? { key: 'chip.receivedOn', params: { day: address.from } } : { key: 'chip.received', params: { from: address.from, to: address.to } }) : address.from ? { key: 'chip.receivedFrom', params: { from: address.from } } : { key: 'chip.receivedTo', params: { to: address.to! } }, clear: { from: null, to: null } })
+  if (address.outcome) chips.push({ id: 'outcome', label: { key: `chip.outcome.${address.outcome}` }, clear: { outcome: null } })
   return chips
 }
 

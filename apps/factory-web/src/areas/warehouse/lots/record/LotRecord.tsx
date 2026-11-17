@@ -1,12 +1,12 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
-import { useCoalesced, useLive, useThreadDock } from '../../../_shared/buying/hooks'
+import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { pickerReasons, type PickerReason } from '../../../_shared/reasons/api'
 import { listHides, lotRecord, readLedger, stockOverview, type LotRecord as LotRecordValue } from '../../../_shared/stock/api'
 import { readProblem, stockCan, TIME_ZONE } from '../../../_shared/stock/model'
@@ -23,9 +23,13 @@ import { LotRecordView } from './view/LotRecordView'
 // B-W2b-320: the lot's W2b parts (lifecycle, attributes, incoming inspection, separation, split, trace report).
 import { useLotDepth } from '../depth/use-lot-depth'
 import { useLocale } from '../../../../lib/i18n/provider'
+// ---- B-TH-264: the lot on RecordFrame (the docked thread beside every tab; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 /**
- * The lot record container (`/w/<company>/warehouse/lots/<lotId>?tab=overview|trace|moves|activity`, SCR-201-record):
+ * The lot record container (`/w/<company>/warehouse/lots/<lotId>?tab=overview|trace|moves`, SCR-201-record; B-TH-264: an old
+ * `?tab=quality` lands on Overview & quality, `?tab=activity` on it with the docked thread opened):
  * reads the lot with its stock and trace (`GET /inventory/lots/:lotId`), the release checklist for a viewer with
  * quality.lots.view (`GET /quality/lots/:lotId/release-check`), and on the Moves tab the ledger of the lot
  * (`GET /inventory/ledger?siteId&itemId&lotId`, pages of 200); re-reads on the lot's live events. The decisions are
@@ -48,6 +52,7 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const params = useSearchParams()
+  const pathname = usePathname()
   const can = useMemo(() => stockCan(session.permissions), [session.permissions])
   const daily = useMemo(() => dailyCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
@@ -57,7 +62,6 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
   const [moves, setMoves] = useState<Part<MovesPart>>(PART_LOADING)
   const [cursor, setCursor] = useState<string | null>(null)
   const [asOf, setAsOf] = useState<string | null>(null)
-  const { dockOpen, toggleDock } = useThreadDock('Lot')
   const value = record.status === 'ready' ? record.value : null
   const movesAsked = useRef(false)
   const [figures, setFigures] = useState<Part<LotFigures>>(PART_LOADING)
@@ -158,7 +162,7 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
       asked.current.trace = true
       void loadTrace()
     }
-    if ((tab === 'quality' || tab === 'overview') && !asked.current.holds && daily.holdsView) {
+    if (tab === 'overview' && !asked.current.holds && daily.holdsView) {
       asked.current.holds = true
       void loadHolds()
     }
@@ -236,19 +240,35 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
     [api, value, daily.cost, holds, writeOff],
   )
 
-  const panels = value && can.threads ? <RecordPanels record={{ type: 'Lot', id: value.lot.id, companyId: value.lot.companyId, siteId: value.lot.siteId }} title={value.lot.code} /> : null
+  // B-TH-264: the lot's ONE thread, docked beside every tab — the same conversation as Compliance › Tests & substances (the Lot
+  // record); its supplier is the only party it may reach. The print view keeps the record panels' print form.
+  const lotRef = value ? { type: 'Lot', id: value.lot.id, companyId: value.lot.companyId, siteId: value.lot.siteId } : null
+  const supplier = value?.lot.supplier ?? null
+  const thread =
+    value && lotRef ? (
+      <OfficeRecordThread
+        docked
+        record={lotRef}
+        title={supplier ? `${value.lot.code} · ${supplier.name}` : value.lot.code}
+        recordLabel={value.lot.code}
+        party={supplier ? { id: supplier.id, name: supplier.name } : null}
+        partyRole="supplier"
+        printHref={printHref(pathname, params?.toString() ?? '')}
+      />
+    ) : null
+  const printThread = value && lotRef && can.threads ? <RecordPanels record={lotRef} title={value.lot.code} /> : null
 
   return (
     <LotRecordView
-      model={{ prefix, can, tab, record, checklist, moves, live, asOf, changed: null, dockOpen, timeZone: TIME_ZONE, daily, figures, trace, holds, holdReasons, writeOff: writeOff.model, find: find.model, depth: depth.model }}
-      panels={panels}
+      model={{ prefix, can, tab, record, checklist, moves, live, asOf, changed: null, personId: session.user.id, timeZone: TIME_ZONE, daily, figures, trace, holds, holdReasons, writeOff: writeOff.model, find: find.model, depth: depth.model }}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onRetry: () => void load(),
         onRetryChecklist: () => void loadChecklist(),
         onRetryMoves: () => void loadMoves(null),
         onMoreMoves: () => void loadMoves(cursor),
         onReload: () => void load(),
-        onDock: toggleDock,
         onRetryFigures: () => void loadFigures(),
         onRetryTrace: () => void loadTrace(),
         onRetryHolds: () => void loadHolds(),

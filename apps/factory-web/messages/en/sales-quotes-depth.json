@@ -49,17 +49,17 @@
     },
     "from": "From",
     "held": {
-      "notDraft": "Only a draft takes a change note: make version {next} first.",
+      "notDraft": "Only a draft takes a change note: make revision {next} first.",
       "reading": "Wait for the compare.",
       "same": "Nothing differs."
     },
     "noPrices": "Prices are not in your role: the compare shows pieces and terms.",
     "noteDone": "In the change note",
     "noteSaved": "The draft’s What changed now holds this difference.",
-    "option": "Version {n} · {status}",
-    "pickTwo": "Pick two different versions to compare.",
+    "option": "Revision {n} · {status}",
+    "pickTwo": "Pick two different revisions to compare.",
     "reading": "Comparing…",
-    "same": "The two versions are the same.",
+    "same": "The two revisions are the same.",
     "section": {
       "lines": "Lines",
       "margin": "Margin",
@@ -67,8 +67,8 @@
       "terms": "Terms & delivery"
     },
     "sentOn": "sent {date}",
-    "swap": "Swap the two versions",
-    "title": "Compare versions",
+    "swap": "Swap the two revisions",
+    "title": "Compare revisions",
     "to": "To",
     "total": {
       "deposit": "Deposit",
@@ -81,7 +81,7 @@
     },
     "unchanged": "The same in both: {sections}.",
     "useNote": "Use as change note",
-    "version": "Version {n}",
+    "version": "Revision {n}",
     "yes": "Yes"
   },
   "composer": {
@@ -713,7 +713,7 @@
       "found_one": "1 quote",
       "found_other": "{count} quotes",
       "hint": "Type part of its number or the customer’s name.",
-      "line": "Version {revision} · {lines} lines · {units} pieces",
+      "line": "Revision {revision} · {lines} lines · {units} pieces",
       "none": "No quote found.",
       "search": "Quote number",
       "type": "Type to find the quote."
@@ -776,7 +776,7 @@
     },
     "startBody": {
       "empty": "Type its header and add its lines here.",
-      "quote": "A quote in template mode: its current version’s lines, sections and terms."
+      "quote": "A quote in template mode: its current revision’s lines, sections and terms."
     },
     "startFrom": "Start from",
     "status": {
@@ -799,10 +799,10 @@
     "compare": "Compare",
     "compareLatest": "Compare {from} with {to}",
     "compareThese": "Compare {from} and {to}",
-    "count_one": "1 version",
-    "count_other": "{count} versions",
-    "downloadOf": "Download the PDF of version {revision}",
-    "pickTwo": "Select exactly two versions."
+    "count_one": "1 revision",
+    "count_other": "{count} revisions",
+    "downloadOf": "Download the PDF of revision {revision}",
+    "pickTwo": "Select exactly two revisions."
   },
   "view": {
     "blocks": "Blocks",

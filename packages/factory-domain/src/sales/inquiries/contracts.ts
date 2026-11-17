@@ -8,6 +8,8 @@ import { styleCode } from '../../product/styles/contracts'
 import { sizeCode } from '../../product/sizes/contracts'
 // B-TH-094: production's answer on a request (office only).
 import { productionActionView, productionView } from './production-answer'
+// B-TH-235: the list's door from Sales › Reports' request figure.
+import { REQUEST_OUTCOMES } from './rules'
 
 /**
  * Inquiries' contracts (B-W2b-295): what apps/factory-api's modules/sales/inquiries accepts and answers. A refusal is a 409 whose
@@ -276,6 +278,8 @@ export const inquiryListQuery = input({
   /** Part of the number, the request, the customer's code or name, the prospect's company or e-mail. */
   q: z.string().trim().min(1).max(100).optional(),
   limit: z.coerce.number().int().min(1).max(INQUIRY_LIMITS.list).optional(),
+  /** B-TH-235: what the request became, as Sales › Reports' request figure counts it (rules REQUEST_OUTCOMES). */
+  outcome: z.enum(REQUEST_OUTCOMES).optional(),
 })
 export type InquiryListQuery = z.output<typeof inquiryListQuery>
 

@@ -432,6 +432,12 @@ B-W2b-124 `modules/plant/statutory` (QHS-205; D.Lgs. 81/2008 art. 71: results ke
   sign-in page by mail, no token; GATE-PRIVACY `requirePortalTerms`; seats = ACTIVE + SUSPENDED + openly INVITED), resend,
   revoke, change (role, capabilities, end of access), suspend/reactivate/deactivate, preview (a PARTNER Session marked as
   the office person's preview, 1 h, the portal cookie in the office browser; audited `partners.preview`), organisations.
+- B-PR-14 (production limits card): `GET /partners/:partyId/production` (partners.view) and `PUT …/production`
+  (partners.production.manage + step-up, action `access.change`): level, urgency switch + quota ("n urgent now"), production
+  asks, named approver, second person; supervisor and backup shown by name, saved by B-PR-42a. progressShared stays in every
+  contract, derived from the level; switching urgency off keeps the marks (audited). `partner_portal.settings_changed` carries
+  the level, switch, quota and asks, never a supervisor. Freeze rules per customer: `order-changes/freeze.ts` reads the
+  company's set with `partyId: null` plus the order's customer's own (`rulesForParty`).
 - B-W2b-180 (office screens): `GET /auth/users` also says `audience`, `partyId`, `partnerKind`, `accessUntil` (Admin › Users
   keeps partner people out of Office and lists them under Partners); every portal sign-in emits `partner_user.signed_in`
   {userId, partyId, firstSignIn} (live partners.view: the Portal access tab's live line).

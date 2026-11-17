@@ -5,6 +5,8 @@ import { DEMO_COMPANIES, DEMO_SITES, rolePermissions } from '../../../shell/desi
 import { scopeOf } from '../../../shell/scope/scope-model'
 import { inShell, PREFIX, uid } from '../../quality/_shared/fixtures'
 import type { Backlog, BacklogHorizon, BacklogLine, Headline, Intake, IntakeOrder, IntakeSplit, Returns, ReturnLineRow, Sight } from './api'
+// B-TH-235: the request figure.
+import type { RequestFigures, Requests } from './api'
 import { reportsAddressOf, reportsCan, sectionSpecs } from './model'
 import { ReportsView, type Read, type ReportsModel } from './view/ReportsView'
 
@@ -256,6 +258,38 @@ export const HEADLINE: Headline = {
   complete: true,
 }
 
+// ---- B-TH-235: requests received, quoted and ordered (made-up counts, the API's shape) ----------------------------------------
+
+const figures = (received: number, quoted: number, ordered: number, declined: number, lost: number, notAnOrder: number): RequestFigures => {
+  const open = received - quoted - (ordered > quoted ? ordered - quoted : 0) - declined - lost - notAnOrder
+  const whole = received - notAnOrder
+  const pct = (part: number) => (whole > 0 ? ((part / whole) * 100).toFixed(1) : null)
+  return { received, open: Math.max(0, open), quoted, ordered, declined, lost, notAnOrder, quotedPct: pct(quoted), orderedPct: pct(ordered) }
+}
+export const REQUESTS: Requests = {
+  ...head,
+  by: 'week',
+  all: figures(14, 6, 4, 2, 1, 1),
+  buckets: [
+    { key: '2026-W44', from: '2026-11-01', to: '2026-11-01', figures: figures(1, 1, 1, 0, 0, 0) },
+    { key: '2026-W45', from: '2026-11-02', to: '2026-11-08', figures: figures(7, 4, 3, 1, 1, 0) },
+    { key: '2026-W46', from: '2026-11-09', to: '2026-11-12', figures: figures(6, 1, 0, 1, 0, 1) },
+  ],
+  groups: [
+    { key: C1.id, partyId: C1.id, code: C1.code, name: C1.name, figures: figures(6, 3, 2, 1, 0, 0) },
+    { key: C2.id, partyId: C2.id, code: C2.code, name: C2.name, figures: figures(4, 2, 1, 0, 1, 0) },
+    { key: C3.id, partyId: C3.id, code: C3.code, name: C3.name, figures: figures(2, 1, 1, 0, 0, 0) },
+    { key: 'prospects', partyId: null, code: null, name: null, figures: figures(2, 0, 0, 1, 0, 1) },
+  ],
+  more: 0,
+  complete: true,
+}
+/** A person limited to one customer (T30): only that customer and the prospects reach the answer. */
+const REQUESTS_ONE: Requests = { ...REQUESTS, all: figures(8, 3, 2, 2, 0, 1), groups: REQUESTS.groups.filter((group) => group.key === C1.id || group.key === 'prospects') }
+const REQUESTS_OUTSIDE: Requests = { ...REQUESTS, all: null, buckets: [], groups: [] }
+const REQUESTS_NONE: Requests = { ...REQUESTS, all: figures(0, 0, 0, 0, 0, 0), buckets: REQUESTS.buckets.map((bucket) => ({ ...bucket, figures: figures(0, 0, 0, 0, 0, 0) })), groups: [] }
+const REQUESTS_BY_MONTH: Requests = { ...REQUESTS, by: 'month', buckets: [{ key: '2026-11', from: '2026-11-01', to: '2026-11-12', figures: REQUESTS.all! }] }
+
 // ---- the cases ---------------------------------------------------------------------------------------------------------------
 
 const ready = <T>(value: T): Read<T> => ({ status: 'ready', value })
@@ -278,6 +312,7 @@ function model(over: Partial<ReportsModel> = {}, permissions: readonly string[] 
     intake: ready(INTAKE),
     backlog: ready(BACKLOG),
     returns: ready(RETURNS),
+    requests: ready(REQUESTS), // B-TH-235
     live: 'live',
     asOf: NOW,
     layout: defaultSectionLayout(specs),
@@ -306,7 +341,14 @@ export const designScreen = defineDesignScreen<ReportsModel>({
     { id: 'report', label: 'November so far (sales)', model: model(), note: 'The headline, the order intake by week, the backlog by promise week by customer, the return reasons with the most returned styles by size.' },
     { id: 'by-customer', label: 'Intake split by customer', model: model({ intake: ready(INTAKE_BY_CUSTOMER) }, SALES, 'split=customer') },
     { id: 'by-style', label: 'Intake split by style (fees apart)', model: model({ intake: ready(INTAKE_BY_STYLE) }, SALES, 'split=style') },
-    { id: 'by-month-season', label: 'Intake by month, split by season', model: model({ intake: ready(INTAKE_BY_MONTH) }, SALES, 'by=month&split=season') },
+    { id: 'by-month-season', label: 'Intake by month, split by season', model: model({ intake: ready(INTAKE_BY_MONTH), requests: ready(REQUESTS_BY_MONTH) }, SALES, 'by=month&split=season') },
+    // B-TH-235: the request figure under the intake — every number a link into Sales › Incoming with exactly its rows.
+    { id: 'th-235-requests', label: 'Requests received, quoted and ordered (every number opens Incoming)', model: model({ intake: ready(INTAKE_BY_CUSTOMER) }, SALES, 'split=customer'), note: 'Seven tiles (Received, Quoted, Ordered, Declined, Lost, Not an order, Still open), by week, by customer with the prospects in one group; a 0 opens nothing.' },
+    { id: 'th-235-limited', label: 'Requests for a person limited to one customer (T30)', model: model({ requests: ready(REQUESTS_ONE) }), note: 'Only the customer the person reaches and the prospects: no other customer’s name or count.' },
+    { id: 'th-235-outside', label: 'Requests not in the role', model: model({ requests: ready(REQUESTS_OUTSIDE) }), note: 'Says so; never 0.' },
+    { id: 'th-235-empty', label: 'No request came in this period', model: model({ requests: ready(REQUESTS_NONE) }) },
+    { id: 'th-235-failed', label: 'The request figure failed, the intake stands', model: model({ requests: failed() }) },
+    { id: 'th-235-orders-outside', label: 'Orders not in the role, requests are (the figure still shows)', model: model({ intake: ready({ ...INTAKE, sight: { ...SIGHT, orders: false } }) }) },
     { id: 'backlog-style', label: 'Backlog table by style', model: model({ backlog: ready(BACKLOG_BY_STYLE) }, SALES, 'backlog=style') },
     { id: 'returns-customer', label: 'Returns also by customer', model: model({}, SALES, 'also=customer') },
     { id: 'drill-bucket', label: 'Orders behind a bar (week 46)', model: model({ drill: { section: 'intake', bucket: '2026-W46', group: null } }), note: 'Each order a link; J / K open the next and previous week; Open Orders searches the list as close as it can.' },
@@ -321,7 +363,7 @@ export const designScreen = defineDesignScreen<ReportsModel>({
     { id: 'drill-heat', label: 'Return lines of a heatmap cell', model: model({ drill: { section: 'returns', by: 'style', key: S1.id, size: '52' } }) },
     { id: 'no-price', label: 'Production manager (no price grain: pieces only)', model: model({ headline: ready(noPrice(HEADLINE)), intake: ready(noPrice(INTAKE)), backlog: ready(noPrice(BACKLOG)), returns: ready(noPrice(RETURNS)) }, MANAGER) },
     { id: 'outside', label: 'Orders and returns not in the role', model: model({ headline: ready(blind), intake: ready({ ...INTAKE, sight: blind.sight }), backlog: ready({ ...BACKLOG, sight: blind.sight }), returns: ready({ ...RETURNS, sight: blind.sight }) }), note: 'Each tile and panel says the records are not in the role; never 0.' },
-    { id: 'loading', label: 'Loading (tile skeletons, chart frames)', model: model({ headline: loading(), intake: loading(), backlog: loading(), returns: loading(), asOf: null }) },
+    { id: 'loading', label: 'Loading (tile skeletons, chart frames)', model: model({ headline: loading(), intake: loading(), backlog: loading(), returns: loading(), requests: loading(), asOf: null }) },
     { id: 'error', label: 'One panel failed, the others stand', model: model({ backlog: failed() }), note: 'The panel says what failed and Try again; a failed read is never drawn as empty.' },
     { id: 'empty', label: 'Nothing booked, nothing open, no returns', model: model({ intake: ready(emptyIntake), backlog: ready(backlogOf('customer', [])), returns: ready(returnsOf([])) }) },
     { id: 'arrange', label: 'Arrange panels', model: model({ arranging: true }) },

@@ -190,6 +190,42 @@ export type ReturnLineRow = Returns['lines'][number]
 export const quoteSpeedSchema = z.object({ ...head, sight, companyCurrency: z.string().nullable(), ...speed, won: z.object(values), complete: z.boolean() })
 export type QuoteSpeed = z.infer<typeof quoteSpeedSchema>
 
+// ---- B-TH-235: requests received, quoted and ordered (the intake panel's request figure) ----------------------------------------
+
+/** The parts of the request figure, in the funnel's order (the API's requestFigures; reports.vitest.test.ts holds them equal). */
+export const REQUEST_FIGURES = ['received', 'quoted', 'ordered', 'declined', 'lost', 'notAnOrder', 'open'] as const
+export type RequestFigure = (typeof REQUEST_FIGURES)[number]
+/** The group of the requests from prospects (no customer yet): one group, named by nobody (the API's PROSPECTS_KEY). */
+export const PROSPECTS_KEY = 'prospects'
+
+const requestFigures = z.object({
+  received: z.number(),
+  open: z.number(),
+  quoted: z.number(),
+  ordered: z.number(),
+  declined: z.number(),
+  lost: z.number(),
+  notAnOrder: z.number(),
+  quotedPct: z.string().nullable(),
+  orderedPct: z.string().nullable(),
+})
+export type RequestFigures = z.infer<typeof requestFigures>
+const requestsSchema = z.object({
+  ...head,
+  by: z.enum(INTAKE_BUCKETS),
+  /** Null: requests are not in the reader's role (the panel says so, never 0). */
+  all: requestFigures.nullable(),
+  buckets: z.array(z.object({ key: z.string(), from: z.string(), to: z.string(), figures: requestFigures })),
+  /** By customer, the most requests first (at most 50; `more` the rest); `key` the customer's id or `prospects`. */
+  groups: z.array(z.object({ key: z.string(), partyId: z.string().nullable(), code: z.string().nullable(), name: z.string().nullable(), figures: requestFigures })),
+  more: z.number(),
+  complete: z.boolean(),
+})
+export type Requests = z.infer<typeof requestsSchema>
+export type RequestGroupRow = Requests['groups'][number]
+export type RequestBucketRow = Requests['buckets'][number]
+// ---- end B-TH-235
+
 // ---- the calls ---------------------------------------------------------------------------------------------------------------
 
 export interface PeriodScope {
@@ -212,3 +248,6 @@ export const getReturns = (api: ApiClient, scope: PeriodScope, signal?: AbortSig
 
 /** GET /sales/reports/quote-speed — how fast we answer and how often we win (Sales › Quotes sec quotes.speed; quotes.view). */
 export const getQuoteSpeed = (api: ApiClient, scope: PeriodScope, signal?: AbortSignal) => api.get('/sales/reports/quote-speed', { query: periodQuery(scope), schema: quoteSpeedSchema, signal })
+
+/** B-TH-235: GET /sales/reports/requests — the requests received by week or month and what each became, per customer (counts only). */
+export const getRequests = (api: ApiClient, scope: PeriodScope, by: IntakeBucket, signal?: AbortSignal) => api.get('/sales/reports/requests', { query: { ...periodQuery(scope), by }, schema: requestsSchema, signal })

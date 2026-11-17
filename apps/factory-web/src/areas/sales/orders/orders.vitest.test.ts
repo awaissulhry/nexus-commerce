@@ -207,6 +207,9 @@ describe('the record: the next step by state, held with its reason', () => {
     expect(tabOf('activity')).toBe('lines')
     for (const tab of ['lines', 'production', 'shipments', 'changes', 'margin'] as const) expect(tabOf(tab)).toBe(tab)
     expect(tabOf('nope')).toBe('lines')
+    // B-TH-301 (the 9 → 5 merge, done with B-TH-214): every address the old nine tabs had lands on its merged tab.
+    const OLD: Record<string, string> = { lines: 'lines', dates: 'production', production: 'production', shipments: 'shipments', money: 'shipments', changes: 'changes', documents: 'changes', margin: 'margin', activity: 'lines' }
+    for (const [old, merged] of Object.entries(OLD)) expect(tabOf(old), old).toBe(merged)
     const ids = knownIds(order('SHIPPED'))
     expect(ids.has(order('SHIPPED').id)).toBe(true)
     expect(ids.has(TD02.id)).toBe(true)

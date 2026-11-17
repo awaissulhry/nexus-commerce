@@ -73,6 +73,8 @@ import { CostChangedMark } from '../../_shared/cost-changed/view/CostChangedMark
 // ---- B-TH-214: the docked thread on the order (RecordFrame; Activity's tools in its "⋯") ----
 import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
 import { printHref } from '../../../../shell/print/print-model'
+// B-TH-256: what points at the order (complaints, returns, planning's re-promises, the gates' refusals).
+import { useOrderLinks } from './links/use-order-links'
 
 /**
  * `/w/<company>/sales/orders/<id>` (SCR-039): loads the order (orders.view; the API checks its company and customer),
@@ -393,6 +395,8 @@ function RecordContainer({ orderId }: { orderId: string }) {
   })
 
   const reviewBanner = useReviewBanner(api, order.status === 'ready' ? order.value : null, session.permissions, prefix) // B-W2b-368
+  // B-TH-256: read with the order and again whenever it is read again; an accepted or declined re-promise reads the order again.
+  const links = useOrderLinks(api, order.status === 'ready' ? order.value : null, () => void load())
 
   // ---- B-TH-228: the request an order was made from straight (no quote between) — the band's "Made from INQ-… — Open". The source
   // read answers nothing to a person who may not read that request (office only: the portal never reads it).
@@ -428,6 +432,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     personId: session.user.id, // B-TH-214
     madeFrom: madeFrom ?? null, // B-TH-228
     madeFromReading: madeFrom === undefined,
+    links: links.model, // B-TH-256
     changed,
     notice,
     busy,
@@ -499,6 +504,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
         },
         onRetry: () => void load(),
         onRetryMargin: margin.retry,
+        links: links.actions, // B-TH-256
         // ---- B-W2b-323 ----
         depth: depth.actions,
         onPricedOffer: () => {

@@ -2,10 +2,10 @@
 
 import { useMemo } from 'react'
 import Link from 'next/link'
-import { Download, ExternalLink, Eye, FileText, PackageCheck } from 'lucide-react'
-import { Card, EmptyState, SummaryTable } from '@nexus/ui/components'
+import { PackageCheck } from 'lucide-react'
+import { EmptyState } from '@nexus/ui/components'
 import type { ColDef, ICellRendererParams } from '@nexus/ui/grid'
-import { Button, Pill, Tag } from '@nexus/ui/primitives'
+import { Button, Pill } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
 import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
@@ -91,81 +91,6 @@ export function ReceiptsTab({ order, model, actions }: { order: PurchaseOrder; m
       <ReceiptTolerance order={order} model={model.depth ?? null} />
       {/* B-W2a-69: Close short a line — the rest will not come; planning releases it. */}
       <CloseShortCard order={order} model={model} actions={actions} />
-    </div>
-  )
-}
-
-/**
- * Documents (SCR-059): the frozen PDFs of the order (one per send of a revision, kept ten years: FISCAL_ARCHIVE), each
- * downloaded through a link that lives a minute; the confirm links with their state; the mails with theirs.
- */
-export function DocumentsTab({ order, model, actions }: { order: PurchaseOrder; model: OrderRecordModel; actions?: OrderRecordActions }) {
-  const t = useT('buying')
-  const locale = useLocale()
-  const place = { locale, timeZone: model.timeZone }
-  const docs = model.documents.value
-  if (!docs) return <PartState problem={model.documents.problem} onRetry={() => actions?.onRetryPart?.('documents')} label={t('po.tab.documents')} />
-  return (
-    <div className="fw-by-cards">
-      <Card padded>
-        <div className="fw-by-stack">
-          <h3 className="fw-by-h3">{t('po.docs.pdfs')}</h3>
-          {docs.documents.length === 0 ? (
-            <p className="fw-by-hint">{order.status === 'DRAFT' ? t('po.docs.noneDraft') : t('po.docs.none')}</p>
-          ) : null}
-          {order.status === 'DRAFT' && model.previewHref ? (
-            <div className="fw-by-check fw-by-check-wrap">
-              <Eye size={16} className="fw-by-ico" aria-hidden />
-              <span className="fw-by-check-body">
-                <b>{t('po.docs.preview')}</b>
-                <span className="fw-by-hint">{t('po.docs.previewHint')}</span>
-              </span>
-              <Button size="sm" variant="quiet" asChild>
-                <a href={model.previewHref} target="_blank" rel="noopener noreferrer" aria-label={t('po.docs.openPreview')}>
-                  <ExternalLink size={13} aria-hidden /> {t('po.docs.openTab')}
-                </a>
-              </Button>
-            </div>
-          ) : null}
-          {docs.documents.length === 0 ? null : (
-            <ul className="fw-by-checks">
-              {docs.documents.map((doc) => (
-                <li key={doc.fileId} className="fw-by-check">
-                  <FileText size={16} className="fw-by-ico" aria-hidden />
-                  <span className="fw-by-check-body">
-                    <b>{doc.name}</b>
-                    <span className="fw-by-hint">{t('po.docs.made', { date: formatDateTime(doc.createdAt, place), size: Math.max(1, Math.round(doc.sizeBytes / 1024)) })}</span>
-                  </span>
-                  <Button size="sm" variant="quiet" onClick={() => actions?.onDownload?.(doc.fileId)} aria-label={t('po.docs.download', { name: doc.name })}>
-                    <Download size={13} aria-hidden /> {t('common.download')}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="fw-by-hint">{t('po.docs.priceNote')}</p>
-        </div>
-      </Card>
-      <Card padded>
-        <div className="fw-by-stack">
-          <h3 className="fw-by-h3">{t('po.docs.mails')}</h3>
-          {docs.mails.length === 0 ? (
-            <p className="fw-by-hint">{t('po.docs.noMails')}</p>
-          ) : (
-            <SummaryTable
-              label={t('po.docs.mails')}
-              density="compact"
-              stackOnPhone
-              columns={[t('po.docs.to'), t('po.docs.queued'), t('po.docs.state')]}
-              align={['left', 'left', 'left']}
-              rows={docs.mails.map((mail) => ({
-                id: mail.id,
-                cells: [mail.to.join(', '), formatDateTime(mail.queuedAt, place), <Tag key="s" tone={mail.failedAt ? 'danger' : mail.deliveredAt || mail.sentAt ? 'success' : 'neutral'}>{t(mail.failedAt ? 'po.docs.mail.failed' : mail.deliveredAt ? 'po.docs.mail.delivered' : mail.sentAt ? 'po.docs.mail.sent' : 'po.docs.mail.queued')}</Tag>],
-              }))}
-            />
-          )}
-        </div>
-      </Card>
     </div>
   )
 }

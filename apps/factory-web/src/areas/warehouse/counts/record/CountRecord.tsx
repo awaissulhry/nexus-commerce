@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
@@ -43,12 +43,16 @@ import { CountsMessages } from '../parts'
 import type { CellSave, CountRecordModel, FoundDraft, FoundModel, LinesPart, Loaded, Notice, PlaceChoice, RecordDialog } from '../view-model'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { CountRecordView } from './view/CountRecordView'
+// ---- B-TH-264: the docked thread on the count (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 // B-W2b-320: the places the count blocks (conn "Locations (blocked during a count)").
 import { blockedPlaces, type BlockedPlace } from '../depth/api'
 import { placesOfCount } from '../depth/model'
 
 /**
- * The count record container (`/w/<company>/warehouse/counts/<id>?tab=lines|differences|approval`, SCR-132 record):
+ * The count record container (`/w/<company>/warehouse/counts/<id>?tab=lines|differences|approval`, SCR-132 record; B-TH-264 an old
+ * `?tab=activity` opens Lines with the thread):
  * reads the count (`GET /inventory/stock-counts/:id`: header, summary, approval, what the caller may do), its lines a
  * page at a time (`…/lines`, the Lines tab's filter, place and search) and the lines that differ (`…/lines?filter=
  * differs`: the Differences tab and the Apply dialog), the adjustment reasons; writes each step as one command with the
@@ -86,6 +90,7 @@ function CountRecordContainer({ countId }: { countId: string }) {
   const session = useOfficeSession()
   const locale = useLocale()
   const params = useSearchParams()
+  const pathname = usePathname()
   const can = useMemo(() => countsCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
   const tab = recordTabOf(params?.get('tab'))
@@ -543,14 +548,19 @@ function CountRecordContainer({ countId }: { countId: string }) {
     now: new Date().toISOString(),
     places,
     blocked,
+    personId: session.user.id, // B-TH-264
   }
-  // B-W2b-15: the count's thread, files and history (Activity), of its company and site.
-  const panels = value && can.threads ? <RecordPanels record={{ type: 'StockCount', id: value.id, companyId: value.companyId, siteId: value.site.id }} title={value.number} /> : null
+  // B-TH-264: the count's thread docked beside every tab (notes only: a count has no party; its company and site), with threads.read;
+  // Activity's tools are in its "⋯" (R-ACT). The print view keeps the record panels' print form.
+  const record = value ? { type: 'StockCount', id: value.id, companyId: value.companyId, siteId: value.site.id } : null
+  const thread = value && record && can.threads ? <OfficeRecordThread docked record={record} title={value.number} recordLabel={value.number} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = value && record && can.threads ? <RecordPanels record={record} title={value.number} /> : null
 
   return (
     <CountRecordView
       model={model}
-      panels={panels}
+      thread={thread}
+      printThread={printThread}
       actions={{
         onRetry: () => void load(),
         onReload: () => reread(),

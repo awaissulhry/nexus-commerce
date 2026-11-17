@@ -367,13 +367,25 @@ export const openChecks = (checks: readonly ReadyCheck[]): number => checks.filt
 
 // ---- the record's tabs ---------------------------------------------------------------------------------------------------------
 
-/** B-W2a-71 adds Export (the intra-EU transport evidence, LOG-090) and Invoice (the freight charged, LOG-105). */
-export const RECORD_TABS = ['lines', 'documents', 'carrier', 'tracking', 'export', 'invoice', 'activity'] as const
+/**
+ * B-W2a-71 adds Export (the intra-EU transport evidence, LOG-090) and Invoice (the freight charged, LOG-105). B-TH-264 (the rule of
+ * picture 38; 08-tabs O-WH-SHP): tabs 7 → 5 — Lines & cartons, Documents (the DDT work stays), Carrier & tracking (Carrier & label
+ * and Tracking & delivery in one, every action of both: `carrier`), Export, Invoice. Activity went: the shipment's thread is docked
+ * beside every tab, its tools in the thread's "⋯" (R-ACT).
+ */
+export const RECORD_TABS = ['lines', 'documents', 'carrier', 'export', 'invoice'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
+/** Every old `?tab=` keeps working (R-8): Tracking & delivery lands on Carrier & tracking; Activity on Lines & cartons, the thread open. */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { tracking: 'carrier', activity: 'lines' }
+
 export function tabOf(value: string | null | undefined): RecordTab {
-  return (RECORD_TABS as readonly string[]).includes(value ?? '') ? (value as RecordTab) : 'lines'
+  const asked = value ?? ''
+  return (RECORD_TABS as readonly string[]).includes(asked) ? (asked as RecordTab) : (MERGED_TABS[asked] ?? 'lines')
 }
+
+/** A tab whose body is a wide grid (the lines and cartons): the docked thread takes one third under 1600 px (PL1, R-18). */
+export const isWideTab = (tab: RecordTab): boolean => tab === 'lines'
 
 // ---- the DDT ----------------------------------------------------------------------------------------------------------------------
 

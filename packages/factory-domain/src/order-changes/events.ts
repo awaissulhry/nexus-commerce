@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { defineEvent } from '../events/define'
+import { defineEvent, livePartyId } from '../events/define'
 import { ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS, ORDER_FREEZE_STAGES } from '../sales/order-changes/freeze'
 
 /**
@@ -10,6 +10,8 @@ import { ORDER_FREEZE_ACTIONS, ORDER_FREEZE_FIELDS, ORDER_FREEZE_STAGES } from '
  * engine's `approval.requested`; a receipt from the customer W1's `inventory.receipt_posted` (no purchase order).
  *
  *   order_freeze_rule.changed     a company's freeze rule was made, switched off or on, or its action or words changed
+ *                                 (B-PR-14: or one customer's own rule; `partyId` names that customer, null for the
+ *                                 company's set, so the office's live wall reaches only people of that customer)
  *   sales_order.change_priced     an amendment carried its price (its parts and fee), an extra deposit, a request for a yes
  *   sales_order.change_decided    the new yes after an edit was given or refused (the approver's decision on the order)
  *   customer_material.changed     an order's customer-supplied materials were planned from the BOM or counted again
@@ -31,13 +33,15 @@ export const events = [
     payload: z.strictObject({
       ruleId: z.uuid(),
       companyId: z.uuid(),
+      /** B-PR-14: the customer whose own rule it is (null: the company's rule, for every customer without its own). */
+      partyId: livePartyId(),
       field: z.enum(ORDER_FREEZE_FIELDS),
       frozenFrom: z.enum(ORDER_FREEZE_STAGES),
       action: z.enum(ORDER_FREEZE_ACTIONS),
       active: z.boolean(),
       change: z.enum(FREEZE_RULE_CHANGES),
     }),
-    live: { permission: 'orders.view', fields: ['ruleId', 'companyId', 'field', 'frozenFrom', 'action', 'active', 'change'] },
+    live: { permission: 'orders.view', fields: ['ruleId', 'companyId', 'partyId', 'field', 'frozenFrom', 'action', 'active', 'change'] },
   }),
   defineEvent({
     type: 'sales_order.change_priced',

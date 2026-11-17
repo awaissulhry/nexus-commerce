@@ -11,6 +11,9 @@ import { useLocale, useT } from '../../../../lib/i18n/provider'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { ArrangeDialog } from '../../../quality/reports/view/ArrangeDialog'
 import { BACKLOG_HORIZONS } from '../api'
+// B-TH-235: the request figure's file.
+import { REQUEST_FIGURES } from '../api'
+import { requestGroupName, requestsCsvRows } from '../model'
 import { backlogCsvRows, bucketLabel, dateOfDay, dayOfDate, groupName, intakeCsvRows, printAddress, quickRange, QUICK_PERIODS, reasonWords, REPORT_SECTIONS, returnsCsvRows, type ReportSection } from '../model'
 import { BacklogPanel } from './BacklogPanel'
 import { DrillDialog } from './DrillDialog'
@@ -119,6 +122,17 @@ function Reports({ model, actions }: { model: ReportsModel; actions?: ReportsAct
       )
     },
   }
+  // B-TH-235: the request figure's file (counts and rates per bucket, then per customer group), as on screen.
+  const requestsReady = model.requests?.status === 'ready' && model.requests.value.all !== null
+  const exportRequests = () => {
+    if (model.requests?.status !== 'ready') return
+    const answer = model.requests.value
+    actions?.onExport?.(
+      'requests',
+      [t(`requests.col.${answer.by}`), t('requests.col.customer'), ...REQUEST_FIGURES.map((figure) => t(`requests.figure.${figure}`)), t('requests.col.quotedPct'), t('requests.col.orderedPct')],
+      requestsCsvRows(answer, { bucket: (bucket) => bucketLabel(bucket, locale), group: (group) => requestGroupName(group, t('requests.prospects')) }),
+    )
+  }
   const panels: Record<ReportSection, ReactNode> = {
     strip: <HeadlinePanel model={model} actions={actions} />,
     intake: <IntakePanel model={model} actions={actions} />,
@@ -147,6 +161,8 @@ function Reports({ model, actions }: { model: ReportsModel; actions?: ReportsAct
             triggerProps={{ 'aria-label': t('band.more') }}
             items={[
               ...(['intake', 'backlog', 'returns'] as const).map((panel) => ({ id: `csv-${panel}`, label: t(`band.csv.${panel}`), onSelect: exports[panel], ...(ready[panel] ? {} : { disabled: true, description: t('band.csvHeld') }) })),
+              // B-TH-235
+              ...(model.requests ? [{ id: 'csv-requests', label: t('band.csv.requests'), onSelect: exportRequests, ...(requestsReady ? {} : { disabled: true, description: t('band.csvHeld') }) }] : []),
               { id: 'dashboard', label: t('band.dashboard'), onSelect: () => actions?.onSaveAsDashboard?.() },
               { id: 'keys', label: t('band.keys'), onSelect: () => setKeys(true) },
             ]}
