@@ -159,7 +159,13 @@ const workerLog = {
   },
 }
 const relay = startRelay({ database, publish: queuePublisher(kit), log: workerLog, pollMs: 250 })
-const workers = startEventWorkers({ kit, handlers: handlers(), database, live: queueRedis, log: workerLog, handlerBackoffMs: 300 })
+// ── B-TH-227 (threads plan TH-1b): background.ts's handler that takes a request up again when its customer answers in its
+// thread (B-TH-013, one of its W2b-394 handlers): the UI golden flow TH-1b walks it. It reacts only to a customer's message on a
+// request's thread that waits for them (NEED_INFO), so the W1 stages are untouched. ──
+const { resumeOnReplyHandler } = await imp<typeof import('../../../../factory-api/src/modules/sales/inquiries/resume-on-reply')>('modules/sales/inquiries/resume-on-reply.ts')
+const THREADS_HANDLERS = [resumeOnReplyHandler()]
+// ── end B-TH-227 ──
+const workers = startEventWorkers({ kit, handlers: [...handlers(), ...THREADS_HANDLERS], database, live: queueRedis, log: workerLog, handlerBackoffMs: 300 })
 
 // ---- control ---------------------------------------------------------------------------------------------------------------
 interface Person {
