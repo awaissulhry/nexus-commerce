@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import type { GateMarket } from '@nexus/factory-domain/compliance/gates/gate'
 import { ValidationError } from '@nexus/factory-domain/core/errors'
-import { scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayStart, toUtcIso, type BusinessDate } from '@nexus/factory-domain/core/time'
 import { MADE_WORK_ORDER_STATUSES, OPEN_WORK_ORDER_STATUSES } from '@nexus/factory-domain/planning/explode'
 import { demandOf } from '@nexus/factory-domain/planning/planned-orders/rules'
@@ -374,7 +374,8 @@ export async function listPromises(caller: CommandCaller, query: PromiseListQuer
   const context = officeContextOf(caller)
   return caller.withClient(async (db) => {
     const site = await promiseSite(caller, query.siteId, PLANNING_PROMISE_VIEW, db)
-    if (query.partyId && !(await db.party.findUnique({ where: { id: query.partyId }, select: { id: true } }))) throw new ValidationError('No such customer.', [{ path: 'querystring/partyId', message: 'Name a customer.' }])
+    // B-PR-10: another customer than the caller's answers as an unknown one.
+    if (query.partyId && (!(await db.party.findUnique({ where: { id: query.partyId }, select: { id: true } })) || !can(actorOf(context), PLANNING_PROMISE_VIEW, { companyId: site.companyId, siteId: site.id, partyId: query.partyId }))) throw new ValidationError('No such customer.', [{ path: 'querystring/partyId', message: 'Name a customer.' }])
     const now = serverClock.now()
     const { today, lines, complete } = await promiseLinesOf(db, context, site, now, query)
     const tiles = Object.fromEntries(PROMISE_TILES.map((tile) => [tile, lines.filter((line) => line.tiles.includes(tile)).length])) as Record<PromiseTile, number>

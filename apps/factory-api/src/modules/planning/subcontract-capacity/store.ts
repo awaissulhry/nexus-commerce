@@ -184,6 +184,8 @@ export interface WorkOrderOperations {
   readonly id: string
   readonly companyId: string
   readonly siteId: string
+  /** B-PR-10: its one customer (null: none, or mixed before the rule), for the brand wall. */
+  readonly partyId: string | null
   readonly number: string
   readonly status: string
   readonly version: number
@@ -217,6 +219,7 @@ export async function readWorkOrderOperations(db: Reader, ids: readonly string[]
       id: true,
       companyId: true,
       siteId: true,
+      partyId: true, // B-PR-10
       number: true,
       status: true,
       version: true,
@@ -236,6 +239,7 @@ export async function readWorkOrderOperations(db: Reader, ids: readonly string[]
       id: row.id,
       companyId: row.companyId,
       siteId: row.siteId,
+      partyId: row.partyId, // B-PR-10
       number: row.number,
       status: row.status,
       version: row.version,

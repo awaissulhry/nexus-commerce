@@ -10,7 +10,7 @@ import { WORK_ORDER_STATES } from '@nexus/factory-domain/purchasing/subcontracti
 import { command, type CommandCaller, type CommandTools } from '../../../core/command'
 import { serverClock } from '../../../core/time'
 import { cancelOrder, createOrder, removeOperation } from '../../purchasing/subcontracting/orders'
-import { mayAt, officeContextOf, siteFor } from '../access'
+import { everyPartySiteFor, mayAt, officeContextOf } from '../access'
 import { workingPlanOf } from '../schedule/store'
 import { dayOf, type Reader, type SiteRow } from '../store'
 import { timingOf } from './kit-timing'
@@ -215,7 +215,7 @@ async function partFacts(db: Reader, site: SiteRow, slotIds: readonly string[]):
 
 /** POST /planning/allocation/subcontract-orders. */
 export async function createFromAllocation(caller: CommandCaller, body: { readonly siteId: string; readonly parts: readonly { readonly slotId: string }[]; readonly preview?: boolean | undefined }, idempotencyKey?: string) {
-  const site = await siteFor(caller, body.siteId, PLANNING_SUBCONTRACT_OUTSOURCE)
+  const site = await everyPartySiteFor(caller, body.siteId, PLANNING_SUBCONTRACT_OUTSOURCE) // B-PR-10: as the allocation board
   const preview = body.preview === true
   const slotIds = [...new Set(body.parts.map((part) => part.slotId))].slice(0, MAX_PARTS)
   const facts = await caller.withClient((db) => partFacts(db, site, slotIds))
