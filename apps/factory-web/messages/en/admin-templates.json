@@ -6,7 +6,10 @@
     "newTab": "(opens in a new tab)",
     "language": {
       "it": "Italiano",
-      "en": "English"
+      "en": "English",
+      "de": "Deutsch",
+      "fr": "Français",
+      "es": "Español"
     },
     "status": {
       "DRAFT": "Draft",
@@ -283,7 +286,9 @@
       "fallback": "A document printed earlier keeps the layout it was printed with; a new version changes only what prints from now on."
     },
     "mail": {
-      "allCompanies": "Every company"
+      "allCompanies": "Every company",
+      "draftUnread": "Draft — to be read once",
+      "draftUnreadHint": "Claude drafted these {language} words: a mail Nexus sends by itself uses them only once the Owner or a trusted customer contact has read them; until then it goes in English. A version a person writes here needs no reading."
     },
     "mailList": {
       "intro": "The words of the mails Nexus sends by itself, per event and language. This company's version wins over every company's; without either the standard words go out.",
@@ -511,7 +516,7 @@
       "deleteLeft_one": "1 selected reply is not yours to delete: it stays.",
       "deleteLeft_other": "{count} selected replies are not yours to delete: they stay.",
       "deleteSharedAck": "I understand the office loses the shared ones too",
-      "languages": "Saved replies are written in Italian or English. A contact who reads another language is offered the English one.",
+      "languages": "Saved replies are written in Italian, English, German, French or Spanish, each by a person (never translated). A contact who reads another language is offered the English one.",
       "sendsNothing": "A saved reply sends nothing by itself: it only fills the message a person then reads, changes and sends.",
       "newTitle": "New saved reply",
       "editTitle": "Saved reply: {name}",
@@ -521,7 +526,7 @@
         "name": "Name",
         "nameHint": "How it is found in the message box, e.g. \"Delay of a few days\".",
         "language": "Language",
-        "languageHint": "Italian or English: the message box offers it in that language.",
+        "languageHint": "One of the five: the message box offers it to a contact who reads that language first.",
         "record": "For",
         "recordHint": "The kind of record it is offered on, and so which values it can fill.",
         "shared": "Share with the office",

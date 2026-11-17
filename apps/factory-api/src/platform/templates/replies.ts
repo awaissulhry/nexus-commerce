@@ -27,6 +27,11 @@ import { isDraftedLanguage, isMessageLanguage, MESSAGE_LANGUAGE_WORDS, messageLa
 import { isReplyRecordType } from '@nexus/factory-domain/templates/replies'
 import { mailTemplateOf } from './active'
 // ---- end B-TH-098 / B-TH-279
+// ---- th-backend-g step 1 (threads plan §0.5, counts do not leak; lead's decision): a text to a customer names the customer's OWN number.
+import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers'
+import { placeholdersIn } from '@nexus/factory-domain/templates/placeholders'
+import { numberFor, type NumberPair, type ReplyAudience } from '@nexus/factory-domain/templates/replies'
+// ---- end th-backend-g step 1
 
 /**
  * Saved replies (B-W2b-422; COL-016; the send panel's "Message (template per language)"): a person's own, or shared with the
@@ -212,39 +217,53 @@ export function inquirySubjectOf(mailSubject: string | null, request: string): s
 }
 
 /** The record's own values (its number, dates), its party and the contact it names, for its record type. */
-async function recordValues(db: Reader, type: ReplyRecordType, id: string, language: MessageLanguage): Promise<{ values: PlaceholderValues; partyId: string | null; contactId: string | null; companyId: string | null; prospect?: { readonly name: string | null; readonly company: string | null } }> {
+// th-backend-g step 1: `audience` decides each customer record's number (the office's series, or the customer's own: §0.5), and the
+// pairs of both forms come back (`numbers`) so a composer that switches an office note to the customer can swap them.
+async function recordValues(
+  db: Reader,
+  type: ReplyRecordType,
+  id: string,
+  language: MessageLanguage,
+  audience: ReplyAudience,
+): Promise<{ values: PlaceholderValues; numbers: NumberPair[]; partyId: string | null; contactId: string | null; companyId: string | null; prospect?: { readonly name: string | null; readonly company: string | null } }> {
+  const pair = (placeholder: string, office: string, customer: string | null): NumberPair => ({ placeholder, office, customer })
   switch (type) {
     case 'SalesOrder': {
-      const row = await db.salesOrder.findUnique({ where: { id }, select: { number: true, customerRef: true, promiseDate: true, partyId: true, companyId: true } })
+      const row = await db.salesOrder.findUnique({ where: { id }, select: { number: true, customerSeq: true, customerRef: true, promiseDate: true, partyId: true, companyId: true } })
       if (!row) break
-      return { values: { 'order.number': row.number, 'order.customerRef': row.customerRef, 'order.promiseDate': day(row.promiseDate, language) }, partyId: row.partyId, contactId: null, companyId: row.companyId }
+      const order = pair('order.number', row.number, customerRefOf('ORDER', row.customerSeq))
+      return { values: { 'order.number': numberFor(audience, order), 'order.customerRef': row.customerRef, 'order.promiseDate': day(row.promiseDate, language) }, numbers: [order], partyId: row.partyId, contactId: null, companyId: row.companyId }
     }
     case 'Quote': {
-      const row = await db.quote.findUnique({ where: { id }, select: { number: true, partyId: true, contactId: true, companyId: true } })
+      const row = await db.quote.findUnique({ where: { id }, select: { number: true, customerSeq: true, partyId: true, contactId: true, companyId: true } })
       if (!row) break
       const latest = await db.quoteVersion.findFirst({ where: { quoteId: id }, orderBy: { revision: 'desc' }, select: { validUntil: true } })
-      return { values: { 'quote.number': row.number, 'quote.validUntil': day(latest?.validUntil, language) }, partyId: row.partyId, contactId: row.contactId, companyId: row.companyId }
+      const quote = pair('quote.number', row.number, customerRefOf('QUOTE', row.customerSeq))
+      return { values: { 'quote.number': numberFor(audience, quote), 'quote.validUntil': day(latest?.validUntil, language) }, numbers: [quote], partyId: row.partyId, contactId: row.contactId, companyId: row.companyId }
     }
     case 'PurchaseOrder': {
       const row = await db.purchaseOrder.findUnique({ where: { id }, select: { number: true, requestedDate: true, partyId: true, contactId: true, companyId: true } })
       if (!row) break
-      return { values: { 'order.number': row.number, 'order.deliveryDate': day(row.requestedDate, language) }, partyId: row.partyId, contactId: row.contactId, companyId: row.companyId }
+      // A supplier's purchase order keeps its own number (no customer series: the supplier reads it on the order itself).
+      return { values: { 'order.number': row.number, 'order.deliveryDate': day(row.requestedDate, language) }, numbers: [], partyId: row.partyId, contactId: row.contactId, companyId: row.companyId }
     }
     case 'ServiceCase': {
       const row = await db.serviceCase.findUnique({ where: { id }, select: { number: true, partyId: true, contactId: true, companyId: true } })
       if (!row) break
-      return { values: { 'case.number': row.number }, partyId: row.partyId, contactId: row.contactId, companyId: row.companyId }
+      return { values: { 'case.number': row.number }, numbers: [], partyId: row.partyId, contactId: row.contactId, companyId: row.companyId }
     }
     case 'Shipment': {
       const row = await db.shipment.findUnique({ where: { id }, select: { number: true, partyId: true, salesOrderId: true, companyId: true } })
       if (!row) break
-      const order = await db.salesOrder.findUnique({ where: { id: row.salesOrderId }, select: { number: true } })
-      return { values: { 'shipment.number': row.number, 'order.number': order?.number ?? null }, partyId: row.partyId, contactId: null, companyId: row.companyId }
+      const order = await db.salesOrder.findUnique({ where: { id: row.salesOrderId }, select: { number: true, customerSeq: true } })
+      // The delivery note keeps its number (the legal DDT series); its order is named by the customer's own number in their text.
+      const numbers = order ? [pair('order.number', order.number, customerRefOf('ORDER', order.customerSeq))] : []
+      return { values: { 'shipment.number': row.number, 'order.number': numbers[0] ? numberFor(audience, numbers[0]) : null }, numbers, partyId: row.partyId, contactId: null, companyId: row.companyId }
     }
     case 'Party': {
       const row = await db.party.findUnique({ where: { id }, select: { id: true, companyId: true } })
       if (!row) break
-      return { values: {}, partyId: row.id, contactId: null, companyId: row.companyId }
+      return { values: {}, numbers: [], partyId: row.id, contactId: null, companyId: row.companyId }
     }
     // B-TH-046: a request of Sales › Incoming — its number, what it is about, the wanted date; the contact is the customer's
     // own who wrote it (fill reads a contact of the request's customer only: brand A's request never names brand B's contact).
@@ -253,8 +272,11 @@ async function recordValues(db: Reader, type: ReplyRecordType, id: string, langu
       if (!row) break
       const mail = row.sourceEmailId ? await db.inboundEmail.findUnique({ where: { id: row.sourceEmailId }, select: { subject: true } }) : null
       // B-TH-098: `inquiry.yourNumber` — the customer's own number of the request (§0.5: the counts never leak), the office's for a prospect.
-      const yourNumber = row.customerSeq !== null ? String(row.customerSeq) : row.number
-      return { values: { 'inquiry.number': row.number, 'inquiry.yourNumber': yourNumber, 'inquiry.subject': inquirySubjectOf(mail?.subject ?? null, row.request), 'inquiry.wantedDate': day(row.wantedDate, language) }, partyId: row.partyId, contactId: row.contactId, companyId: row.companyId, ...(row.partyId === null ? { prospect: { name: row.prospectName, company: row.prospectCompany } } : {}) }
+      // th-backend-g step 1: a customer's request without its own number yet names none (never the office's series); `inquiry.number`
+      // is the customer's own ("#7") in a text to a customer, the office's in an office note; a prospect's keeps the office's number.
+      const yourNumber = row.partyId === null ? row.number : row.customerSeq !== null ? String(row.customerSeq) : null
+      const request = pair('inquiry.number', row.number, row.partyId === null ? row.number : customerRefOf('REQUEST', row.customerSeq))
+      return { values: { 'inquiry.number': numberFor(audience, request), 'inquiry.yourNumber': yourNumber, 'inquiry.subject': inquirySubjectOf(mail?.subject ?? null, row.request), 'inquiry.wantedDate': day(row.wantedDate, language) }, numbers: [request], partyId: row.partyId, contactId: row.contactId, companyId: row.companyId, ...(row.partyId === null ? { prospect: { name: row.prospectName, company: row.prospectCompany } } : {}) }
     }
   }
   throw new NotFoundError('Record not found.')
@@ -264,11 +286,17 @@ async function recordValues(db: Reader, type: ReplyRecordType, id: string, langu
  * The values a record gives a reply or a mail, read with the caller's client (email.send over the record, else 404): its own values,
  * the contact (the one named, else the record's), the party, the person, today, the company. B-TH-098: in the message language.
  */
-async function fillValues(db: Reader, context: OfficeContext, body: { readonly recordType: ReplyRecordType; readonly recordId: string; readonly contactId?: string | undefined }, language: MessageLanguage): Promise<{ values: PlaceholderValues; partyId: string | null; contact: { language: string | null } | null; companyId: string | null }> {
+async function fillValues(
+  db: Reader,
+  context: OfficeContext,
+  body: { readonly recordType: ReplyRecordType; readonly recordId: string; readonly contactId?: string | undefined },
+  language: MessageLanguage,
+  audience: ReplyAudience = 'CUSTOMER', // th-backend-g step 1
+): Promise<{ values: PlaceholderValues; numbers: NumberPair[]; partyId: string | null; contact: { language: string | null } | null; companyId: string | null }> {
   const actor = actorOf(context)
   const { scope } = await officeRecord(db, { type: body.recordType, id: body.recordId })
   if (!mayOnThread(actor, EMAIL_SEND, body.recordType, scope)) throw new NotFoundError('Record not found.')
-  const record = await recordValues(db, body.recordType, body.recordId, language)
+  const record = await recordValues(db, body.recordType, body.recordId, language, audience)
   const contactId = body.contactId ?? record.contactId
   const contact = contactId && record.partyId ? await db.partyContact.findFirst({ where: { id: contactId, partyId: record.partyId, status: 'ACTIVE' }, select: { name: true, language: true } }) : null
   if (body.contactId && !contact) throw new ValidationError('Pick an active contact of the record’s customer or supplier.', [{ path: 'body/contactId', message: 'Pick an active contact of the record’s customer or supplier.' }])
@@ -286,6 +314,7 @@ async function fillValues(db: Reader, context: OfficeContext, body: { readonly r
       today: formatDate(businessDate(serverClock.now()), dateLanguageOf(language)), // B-TH-098
       ...(company ? companyValues(company) : {}),
     } satisfies PlaceholderValues,
+    numbers: record.numbers, // th-backend-g step 1
     partyId: record.partyId,
     contact: contact ? { language: contact.language } : null,
     companyId,
@@ -296,14 +325,20 @@ async function fillValues(db: Reader, context: OfficeContext, body: { readonly r
  * POST /templates/replies/:replyId/fill: the reply's body with the values of a record whose thread the person writes mail on
  * (email.send over it): its number and dates, the party, the contact (the one named, else the record's), the person, today,
  * the company. The text is only returned; the person changes it and sends it from the send panel.
+ *
+ * th-backend-g step 1 (§0.5, lead's decision): `audience` — CUSTOMER (default: a mail or a portal message) names the customer's own
+ * number of its request, quote or order ("#7"), never the office's series; OFFICE (an office note) names the office's. `numbers`: the
+ * record numbers the reply uses in both forms, for a composer that later turns an office note into a text to the customer.
  */
-export async function fillReply(caller: CommandCaller, replyId: string, body: { readonly recordType: ReplyRecordType; readonly recordId: string; readonly contactId?: string | undefined }) {
+export async function fillReply(caller: CommandCaller, replyId: string, body: { readonly recordType: ReplyRecordType; readonly recordId: string; readonly contactId?: string | undefined; readonly audience?: ReplyAudience | undefined }) {
   const { context, row } = await seen(caller, replyId)
   if (row.recordType !== null && row.recordType !== body.recordType) throw new ValidationError('This saved reply is for another kind of record.', [{ path: 'body/recordType', message: 'This saved reply is for another kind of record.' }])
   if (!isMessageLanguage(row.language)) throw new ValidationError(MESSAGE_LANGUAGE_WORDS.en, [{ path: 'params/replyId', message: MESSAGE_LANGUAGE_WORDS.en }]) // B-TH-098
   const language = row.language
-  const { values } = await caller.withClient((db) => fillValues(db, context, body, language))
-  return { body: fillPlaceholders(row.body, values), language, missing: missingValues(row.body, values) }
+  const audience: ReplyAudience = body.audience ?? 'CUSTOMER'
+  const { values, numbers } = await caller.withClient((db) => fillValues(db, context, body, language, audience))
+  const used = new Set(placeholdersIn(row.body))
+  return { body: fillPlaceholders(row.body, values), language, missing: missingValues(row.body, values), audience, numbers: numbers.filter((one) => used.has(one.placeholder)) }
 }
 
 // ---- B-TH-098 / B-TH-279 (threads plan TH-9 thread-G07, TH-6 O-ADM-MAILTPL.events-F01) ------------------------------------------------
@@ -317,6 +352,13 @@ export const MAIL_FILL_WORDS = Object.freeze({
     en: 'Nexus sends this mail by itself: it has no starting words to fill.',
   },
 })
+
+// ---- th-backend-g step 2: the person's own words of a starting text (the question asked, the reason of a no) stay a visible blank on
+// their own line ("…"), named in `missing`, so the dialog's text shows where to write them (an empty value would close the gap).
+export const PERSON_BLANK = '…'
+const PERSON_PLACEHOLDERS = ['question', 'reason'] as const
+const withBlanks = (values: PlaceholderValues): PlaceholderValues => ({ ...values, ...Object.fromEntries(PERSON_PLACEHOLDERS.filter((name) => !(values[name] ?? '').trim()).map((name) => [name, PERSON_BLANK])) })
+// ---- end th-backend-g step 2
 
 /**
  * POST /templates/mail/events/:event/fill: a mail's starting words for a record (the dialogs' "Ask for info" and "Decline", the receipt
@@ -348,7 +390,7 @@ export async function fillMailEvent(
     return { language, values: filled.values, template, companyId: first.companyId }
   })
   if (read.template) {
-    const words = fillMail(read.template, read.values)
+    const words = fillMail(read.template, withBlanks(read.values))
     return { ...words, language: read.language, source: 'TEMPLATE' as const, read: true, fellBack: false, words: null, missing: [...new Set([...missingValues(read.template.subject, read.values), ...missingValues(read.template.body, read.values)])] }
   }
   const code = codeWordsOf(event, read.language, { sendUnread: body.sendUnread === true })
@@ -360,7 +402,7 @@ export async function fillMailEvent(
     })
   }
   const values = code.language === read.language ? read.values : (await caller.withClient((db) => fillValues(db, context, body, code.language))).values
-  const words = fillMail(code.words, values)
+  const words = fillMail(code.words, withBlanks(values))
   return {
     ...words,
     language: code.language,

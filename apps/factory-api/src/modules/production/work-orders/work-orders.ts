@@ -52,6 +52,9 @@ import { workOrderWhere } from './scope'
 import { optionValueIdsOf } from '../../sales/configurator/copy'
 // B-W2b-368 (XF1:01): a made-to-measure unit is made on its own work order (W1 refused it: MADE_TO_MEASURE_LATER).
 import { assertUnitCells, assertUnitStarted, unitCellProfile, unitOfRequest } from './mtm-cells'
+// B-PR-34 (production plan, the work order list by risk): risk and waiting on per row, the risk and due sorts.
+import type { WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
+import { decodeCursor, pageOf, passes, riskFactsOf, riskRank, type BlockedBy, type ListSort, type RiskRow, type RowFacts, type SortKey, type WorkOrderRisk } from './risk'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-007, MES-305; A2 SCR-069, SCR-070): the list, the record,
@@ -98,6 +101,17 @@ export interface ListQuery {
   readonly rush?: boolean | undefined
   /** B-PR-03: one customer's work orders (inside the caller's reach: another customer's gives none). */
   readonly partyId?: string | undefined
+  // ── B-PR-34 ──
+  /** The order of the rows: `newest` (default), `risk` (late, at risk, blocked, on track, then finished; by due date) or `due`. */
+  readonly sort?: ListSort | undefined
+  /** Open work orders whose order(s) wait on the customer, a supplier, a workshop or us (the keeper's, B-PR-17). */
+  readonly waitingOn?: WaitingOn | undefined
+  /** Open work orders of one risk (./risk). */
+  readonly risk?: WorkOrderRisk | undefined
+  /** Open work orders blocked by a hold, the customer or material (./risk). */
+  readonly blockedBy?: BlockedBy | undefined
+  // ── end B-PR-34 ──
+  /** `newest`: the last row's id; a computed sort: its position token (./risk decodeCursor). */
   readonly cursor?: string | undefined
   readonly limit: number
 }
@@ -131,6 +145,10 @@ function listWhere(context: ReturnType<typeof officeContextOf>, query: Omit<List
               { batchNumber: { contains: q, mode: 'insensitive' } },
               { style: { code: { contains: q, mode: 'insensitive' } } },
               { style: { name: { contains: q, mode: 'insensitive' } } },
+              // B-PR-34 (06-tree A.3 O-WOL-filters): its customer, and its orders' number and customer PO — inside the wall
+              // above (a customer the caller does not reach matches nothing).
+              { party: { is: { OR: [{ code: { contains: q, mode: 'insensitive' } }, { legalName: { contains: q, mode: 'insensitive' } }, { tradeName: { contains: q, mode: 'insensitive' } }] } } },
+              { sizes: { some: { salesOrderLine: { is: { order: { is: { OR: [{ number: { contains: q, mode: 'insensitive' } }, { customerRef: { contains: q, mode: 'insensitive' } }] } } } } } } },
             ],
           }
         : {},
@@ -138,90 +156,137 @@ function listWhere(context: ReturnType<typeof officeContextOf>, query: Omit<List
   }
 }
 
+// ── B-PR-34 ──
+/** What a list row reads (the list and the risk sort's page read the same). */
+const LIST_SELECT = {
+  id: true,
+  number: true,
+  batchNumber: true,
+  status: true,
+  kind: true,
+  version: true,
+  companyId: true,
+  siteId: true,
+  dueDate: true,
+  priority: true,
+  rush: true,
+  splitFrom: { select: { id: true, number: true } },
+  releasedAt: true,
+  createdAt: true,
+  site: { select: { code: true, timezone: true } },
+  style: { select: { id: true, code: true, name: true } },
+  styleRevision: { select: { revision: true } },
+  // B-PR-03: its one customer, each cell's, and the customer PO of each order.
+  partyId: true,
+  party: { select: { id: true, code: true, legalName: true, tradeName: true } },
+  sizes: { select: { quantity: true, partyId: true, colourway: { select: { code: true } }, salesOrderLine: { select: { order: { select: { id: true, number: true, customerRef: true, party: { select: { legalName: true, tradeName: true } } } } } } } },
+} as const satisfies Prisma.WorkOrderSelect
+
+type ListRow = Prisma.WorkOrderGetPayload<{ select: typeof LIST_SELECT }>
+
+/** A work order as the risk reads it. */
+const riskRowOf = (row: { id: string; status: string; dueDate: Date | null; siteId: string; site: { timezone: string } }): RiskRow => ({
+  id: row.id,
+  status: row.status as WorkOrderStatus,
+  dueDate: dayOrNull(row.dueDate),
+  siteId: row.siteId,
+  timezone: row.site.timezone,
+})
+
+/** The list's computed filters (they need the stored risk facts). */
+const computedFilter = (query: ListQuery) => ({ waitingOn: query.waitingOn, risk: query.risk, blockedBy: query.blockedBy })
+const hasComputedFilter = (query: ListQuery): boolean => query.waitingOn !== undefined || query.risk !== undefined || query.blockedBy !== undefined
+// ── end B-PR-34 ──
+
 /**
  * The work orders the caller may see (its companies, sites and customers: B-PR-03), newest first, with SCR-069's filters
  * (MES-305). Each row names its one customer (null: a sample of no customer, or `mixedCustomers`, made before the
- * one-customer rule) and its sales orders with their customer PO.
+ * one-customer rule) and its sales orders with their customer PO. B-PR-34: and its risk and what it waits on (./risk); sorted
+ * newest first (default), by risk or by due date; filtered by what it waits on, its risk or what blocks it. A computed sort or
+ * filter reads every row of the filters' (light), computes, sorts and pages them (no silent cap); newest first pages in the
+ * database as before.
  */
 export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
   const context = officeContextOf(caller)
   const today = todayNow()
-  const where: Prisma.WorkOrderWhereInput = { AND: [listWhere(context, query, today), query.cursor ? { id: { lt: query.cursor } } : {}] }
-  const rows = await caller.withClient((client) =>
-    client.workOrder.findMany({
-      where,
-      orderBy: { id: 'desc' },
-      take: query.limit + 1,
-      select: {
-        id: true,
-        number: true,
-        batchNumber: true,
-        status: true,
-        kind: true,
-        version: true,
-        companyId: true,
-        siteId: true,
-        dueDate: true,
-        priority: true,
-        rush: true,
-        splitFrom: { select: { id: true, number: true } },
-        releasedAt: true,
-        createdAt: true,
-        site: { select: { code: true } },
-        style: { select: { id: true, code: true, name: true } },
-        styleRevision: { select: { revision: true } },
-        // B-PR-03: its one customer, each cell's, and the customer PO of each order.
-        partyId: true,
-        party: { select: { id: true, code: true, legalName: true, tradeName: true } },
-        sizes: { select: { quantity: true, partyId: true, colourway: { select: { code: true } }, salesOrderLine: { select: { order: { select: { id: true, number: true, customerRef: true, party: { select: { legalName: true, tradeName: true } } } } } } } },
-      },
-    }),
-  )
+  // ── B-PR-34 ──
+  const sort = query.sort ?? 'newest'
+  const after = decodeCursor(sort, query.cursor)
+  if (sort !== 'newest' || hasComputedFilter(query)) return listComputed(caller, context, query, sort, after, today)
+  // ── end B-PR-34 ──
+  const where: Prisma.WorkOrderWhereInput = { AND: [listWhere(context, query, today), after ? { id: { lt: after.id } } : {}] }
+  const rows = await caller.withClient((client) => client.workOrder.findMany({ where, orderBy: { id: 'desc' }, take: query.limit + 1, select: LIST_SELECT }))
   const page = rows.slice(0, query.limit)
-  // Progress per row (SCR-069): the record's own counts, summed (null for a draft).
-  const progress = await caller.withClient(async (client) => {
-    const totals = new Map<string, Awaited<ReturnType<typeof progressTotalsOf>>>()
-    for (const row of page) totals.set(row.id, await progressTotalsOf(client, { id: row.id, siteId: row.siteId, styleId: row.style.id, status: row.status }))
-    return totals
-  })
   return {
-    workOrders: page.map((row) => {
-      // B-W2b-275: a SAMPLE cell may name no order line.
-      const orders = new Map(row.sizes.flatMap((cell) => (cell.salesOrderLine ? [[cell.salesOrderLine.order.id, cell.salesOrderLine.order] as const] : [])))
-      const dueDate = dayOrNull(row.dueDate)
-      return {
-        id: row.id,
-        number: row.number,
-        batchNumber: row.batchNumber,
-        status: row.status,
-        kind: row.kind,
-        version: row.version,
-        companyId: row.companyId,
-        siteId: row.siteId,
-        siteCode: row.site.code,
-        styleId: row.style.id,
-        styleCode: row.style.code,
-        styleName: row.style.name,
-        revision: row.styleRevision?.revision ?? null,
-        colourways: [...new Set(row.sizes.map((cell) => cell.colourway.code))].sort(),
-        // B-PR-03: the customer, and the customer PO of each order.
-        ...customerOf(row),
-        orders: [...orders.values()].map((order) => ({ id: order.id, number: order.number, customerRef: order.customerRef, partyName: order.party.tradeName ?? order.party.legalName })),
-        cells: row.sizes.length,
-        pieces: row.sizes.reduce((sum, cell) => sum + cell.quantity, 0),
-        progress: progress.get(row.id) ?? null,
-        dueDate,
-        daysLate: daysLate(row.status, dueDate, today),
-        priority: row.priority,
-        rush: row.rush,
-        splitFrom: row.splitFrom,
-        releasedAt: row.releasedAt ? toUtcIso(row.releasedAt) : null,
-        createdAt: toUtcIso(row.createdAt),
-      }
-    }),
+    workOrders: await caller.withClient(async (client) => listRowsOf(client, page, await riskFactsOf(client, page.map(riskRowOf), today), today)), // B-PR-34: risk facts
     nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,
   }
 }
+
+// ── B-PR-34 ──
+/**
+ * The list by risk or due date, or with a computed filter: every row of the list's filters (id, status, due date, site),
+ * their risk facts, the computed filters, the sort, the page after the cursor; then the page's full rows, in the sort's order.
+ */
+async function listComputed(caller: CommandCaller, context: ReturnType<typeof officeContextOf>, query: ListQuery, sort: ListSort, after: SortKey | null, today: BusinessDate) {
+  const where = listWhere(context, query, today)
+  return caller.withClient(async (client) => {
+    const light = await client.workOrder.findMany({ where, select: { id: true, status: true, dueDate: true, siteId: true, site: { select: { timezone: true } } } })
+    const facts = await riskFactsOf(client, light.map(riskRowOf), today)
+    const keyed = light.filter((row) => passes(facts.get(row.id), computedFilter(query))).map((row) => ({ key: { rank: riskRank(facts.get(row.id)?.risk ?? null), due: dayOrNull(row.dueDate), id: row.id } }))
+    const { page, next } = pageOf(keyed, sort, after, query.limit)
+    const ids = page.map((row) => row.key.id)
+    const rows = ids.length === 0 ? [] : await client.workOrder.findMany({ where: { AND: [where, { id: { in: ids } }] }, select: LIST_SELECT })
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    const ordered = ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
+    return { workOrders: await listRowsOf(client, ordered, facts, today), nextCursor: next }
+  })
+}
+
+/** The rows as the list answers them: progress per row (SCR-069: the record's own counts, summed; null for a draft), risk, waiting. */
+async function listRowsOf(client: Reader, page: readonly ListRow[], facts: ReadonlyMap<string, RowFacts>, today: BusinessDate) {
+  const progress = new Map<string, Awaited<ReturnType<typeof progressTotalsOf>>>()
+  for (const row of page) progress.set(row.id, await progressTotalsOf(client, { id: row.id, siteId: row.siteId, styleId: row.style.id, status: row.status }))
+  return page.map((row) => {
+    // B-W2b-275: a SAMPLE cell may name no order line.
+    const orders = new Map(row.sizes.flatMap((cell) => (cell.salesOrderLine ? [[cell.salesOrderLine.order.id, cell.salesOrderLine.order] as const] : [])))
+    const dueDate = dayOrNull(row.dueDate)
+    const fact = facts.get(row.id)
+    return {
+      id: row.id,
+      number: row.number,
+      batchNumber: row.batchNumber,
+      status: row.status,
+      kind: row.kind,
+      version: row.version,
+      companyId: row.companyId,
+      siteId: row.siteId,
+      siteCode: row.site.code,
+      styleId: row.style.id,
+      styleCode: row.style.code,
+      styleName: row.style.name,
+      revision: row.styleRevision?.revision ?? null,
+      colourways: [...new Set(row.sizes.map((cell) => cell.colourway.code))].sort(),
+      // B-PR-03: the customer, and the customer PO of each order.
+      ...customerOf(row),
+      orders: [...orders.values()].map((order) => ({ id: order.id, number: order.number, customerRef: order.customerRef, partyName: order.party.tradeName ?? order.party.legalName })),
+      cells: row.sizes.length,
+      pieces: row.sizes.reduce((sum, cell) => sum + cell.quantity, 0),
+      progress: progress.get(row.id) ?? null,
+      dueDate,
+      daysLate: daysLate(row.status, dueDate, today),
+      priority: row.priority,
+      rush: row.rush,
+      splitFrom: row.splitFrom,
+      releasedAt: row.releasedAt ? toUtcIso(row.releasedAt) : null,
+      createdAt: toUtcIso(row.createdAt),
+      // B-PR-34: its risk and what it waits on (null: finished, or nothing known).
+      risk: fact?.risk ?? null,
+      waitingOn: fact?.waiting ? { on: fact.waiting.on, since: fact.waiting.since ? toUtcIso(fact.waiting.since) : null } : null,
+    }
+  })
+}
+// ── end B-PR-34 ──
 
 /**
  * How many work orders the caller may see per state, for the list's tiles (SCR-069 "Work order tiles"; the floor's
@@ -237,7 +302,12 @@ export async function countWorkOrders(caller: CommandCaller, query: { readonly s
     const byStatus = await client.workOrder.groupBy({ by: ['status'], where: listWhere(context, filter, today), _count: { _all: true } })
     const of = (status: WorkOrderStatus) => byStatus.find((row) => row.status === status)?._count._all ?? 0
     const late = await client.workOrder.count({ where: listWhere(context, { ...filter, late: true }, today) })
-    return { counts: { draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: of('DRAFT') + of('RELEASED') + of('IN_PROGRESS'), late, onHold: of('ON_HOLD') } }
+    // B-PR-34 (06-tree A.3 O-WOL-tiles "At risk", "Waiting on the customer"): over the open work orders, from the stored facts.
+    const open = await client.workOrder.findMany({ where: listWhere(context, { ...filter, open: true }, today), select: { id: true, status: true, dueDate: true, siteId: true, site: { select: { timezone: true } } } })
+    const facts = [...(await riskFactsOf(client, open.map(riskRowOf), today)).values()]
+    const atRisk = facts.filter((fact) => fact.risk?.state === 'AT_RISK').length
+    const waitingOnCustomer = facts.filter((fact) => fact.waiting?.on === 'BRAND').length
+    return { counts: { draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: of('DRAFT') + of('RELEASED') + of('IN_PROGRESS'), late, onHold: of('ON_HOLD'), atRisk, waitingOnCustomer } }
   })
 }
 

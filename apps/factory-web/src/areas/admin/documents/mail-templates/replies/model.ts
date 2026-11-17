@@ -3,11 +3,12 @@ import { fillPlaceholders, type PlaceholderValues } from '@nexus/factory-domain/
 import type { CompanyChoice, ListNotice, ListRead } from '../../doc-templates/model'
 import { wordProblems, type Said } from '../../template-editor/model'
 import type { SavedRepliesAnswer, SavedReply, SavedReplyBody } from './api'
+import { isMessageLanguage, MESSAGE_LANGUAGES, type MessageLanguage } from '@nexus/factory-domain/templates/message-languages' // th-backend-g step 3
 
 /**
  * B-TH-279 — Admin › Documents › E-mail templates › Saved replies (threads plan TH-6, O-ADM-MAILTPL.replies-F01; back end B-W2b-422's
  * saved replies and B-TH-046's requests), pure: the messages a person writes again and again — a delay notice, a question about a
- * request, a certificate sent — per language (Italian and English today: decision C17) and per kind of record (or any), a person's
+ * request, a certificate sent — per language (the five message languages: th-backend-g step 3) and per kind of record (or any), a person's
  * own or shared with the office. This view keeps them; the send panel and the thread only pick one, fill it with the record's
  * values and let the person change it before sending: a saved reply sends nothing.
  *
@@ -18,9 +19,12 @@ import type { SavedRepliesAnswer, SavedReply, SavedReplyBody } from './api'
  * the preview fills them with made-up values here — never a real customer, never a record.
  */
 
-/** The languages a saved reply is written in (C17: "Italian · English", never "in their language"). */
-export const REPLY_LANGUAGES = ['it', 'en'] as const
-export type ReplyLanguage = (typeof REPLY_LANGUAGES)[number]
+/**
+ * The languages a saved reply is written in. th-backend-g step 3 (B-TH-098's web half): the five message languages — Italian, English,
+ * German, French, Spanish — each written by a person (never translated); a contact who reads none of them is offered English.
+ */
+export const REPLY_LANGUAGES = MESSAGE_LANGUAGES
+export type ReplyLanguage = MessageLanguage
 
 /** The record kinds a reply may be for, then ANY (a reply for any record). */
 export const RECORD_CHOICES = [...REPLY_RECORD_TYPES, 'ANY'] as const
@@ -71,7 +75,8 @@ export interface SavedRepliesModel {
 
 const recordOf = (type: string | null): RecordChoice => ((REPLY_RECORD_TYPES as readonly string[]).includes(type ?? '') ? (type as ReplyRecordType) : 'ANY')
 const typeOf = (record: RecordChoice): ReplyRecordType | null => (record === 'ANY' ? null : record)
-const languageOf = (language: string): ReplyLanguage => (language === 'en' ? 'en' : 'it')
+// th-backend-g step 3: a reply keeps its own language (a German one stays German when edited); none of the five reads as Italian.
+const languageOf = (language: string): ReplyLanguage => (isMessageLanguage(language) ? language : 'it')
 
 /** The rows of the filter: a language, a kind of record (ANY = the replies for any record), a search in the name and the words. */
 export function replyRowsOf(answer: SavedRepliesAnswer | null, filter: RepliesFilter = NO_FILTER): SavedReply[] {
@@ -143,8 +148,12 @@ export function deleteReach(rows: readonly SavedReply[]): { applies: SavedReply[
 /** A row that cannot be ticked, in words (null: it can). */
 export const replyRowHeld = (reply: Pick<SavedReply, 'mayChange' | 'shared'>): string | null => (reply.mayChange ? null : reply.shared ? 'tpl.replies.held.sharedNoRight' : 'tpl.replies.held.notYours')
 
-/** Made-up values of a sample record for the preview, per language (never a real customer, order or person). */
-export const SAMPLE_VALUES: Readonly<Record<ReplyLanguage, PlaceholderValues>> = Object.freeze({
+/**
+ * Made-up values of a sample record for the preview, per language (never a real customer, order or person). th-backend-g step 1
+ * (§0.5): the record numbers as the customer reads them in a text to it (its own "#12", never the office's series); step 3: German,
+ * French and Spanish take the English words with the dates written as numbers (as the API writes them).
+ */
+const SAMPLE_IT_EN: Readonly<Record<'it' | 'en', PlaceholderValues>> = Object.freeze({
   it: {
     'contact.name': 'Anna Esempio',
     'party.name': 'Cliente Esempio S.r.l.',
@@ -153,15 +162,16 @@ export const SAMPLE_VALUES: Readonly<Record<ReplyLanguage, PlaceholderValues>> =
     'company.name': 'Fabbrica Demo',
     'company.legalName': 'Fabbrica Demo S.r.l.',
     'company.tradeName': 'Fabbrica Demo',
-    'order.number': 'SO-2026-0042',
+    'order.number': '#12',
     'order.customerRef': 'PO-7781',
     'order.promiseDate': '20/11/2026',
     'order.deliveryDate': '18/11/2026',
-    'quote.number': 'QT-2026-0017',
+    'quote.number': '#3',
     'quote.validUntil': '30/11/2026',
     'case.number': 'SVC-2026-0042',
     'shipment.number': 'SH-2026-0031',
-    'inquiry.number': 'INQ-2026-0007',
+    'inquiry.number': '#7',
+    'inquiry.yourNumber': '7',
     'inquiry.subject': 'Giacca touring, 120 pezzi',
     'inquiry.wantedDate': '15/01/2027',
   },
@@ -173,23 +183,35 @@ export const SAMPLE_VALUES: Readonly<Record<ReplyLanguage, PlaceholderValues>> =
     'company.name': 'Demo Factory',
     'company.legalName': 'Fabbrica Demo S.r.l.',
     'company.tradeName': 'Demo Factory',
-    'order.number': 'SO-2026-0042',
+    'order.number': '#12',
     'order.customerRef': 'PO-7781',
     'order.promiseDate': '20 Nov 2026',
     'order.deliveryDate': '18 Nov 2026',
-    'quote.number': 'QT-2026-0017',
+    'quote.number': '#3',
     'quote.validUntil': '30 Nov 2026',
     'case.number': 'SVC-2026-0042',
     'shipment.number': 'SH-2026-0031',
-    'inquiry.number': 'INQ-2026-0007',
+    'inquiry.number': '#7',
+    'inquiry.yourNumber': '7',
     'inquiry.subject': 'Touring jacket, 120 pieces',
     'inquiry.wantedDate': '15 Jan 2027',
   },
 })
 
+const NUMERIC_DATES: PlaceholderValues = { today: '29/10/2026', 'order.promiseDate': '20/11/2026', 'order.deliveryDate': '18/11/2026', 'quote.validUntil': '30/11/2026', 'inquiry.wantedDate': '15/01/2027' }
+export const SAMPLE_VALUES: Readonly<Record<ReplyLanguage, PlaceholderValues>> = Object.freeze({
+  it: SAMPLE_IT_EN.it,
+  en: SAMPLE_IT_EN.en,
+  de: { ...SAMPLE_IT_EN.en, ...NUMERIC_DATES },
+  fr: { ...SAMPLE_IT_EN.en, ...NUMERIC_DATES },
+  es: { ...SAMPLE_IT_EN.en, ...NUMERIC_DATES },
+})
+
 /** The draft's words as a sample record fills them: only the placeholders its record offers (any other is left empty, as a record leaves it). */
 export function replyPreview(draft: Pick<ReplyDraft, 'body' | 'language' | 'record'>): string {
   const offered = new Set(placeholdersFor(draft.record))
-  const values = Object.fromEntries(Object.entries(SAMPLE_VALUES[draft.language]).filter(([name]) => offered.has(name)))
+  // th-backend-g step 1: a supplier's purchase order keeps its own number (no customer series).
+  const sample = draft.record === 'PurchaseOrder' ? { ...SAMPLE_VALUES[draft.language], 'order.number': 'PO-2026-0042' } : SAMPLE_VALUES[draft.language]
+  const values = Object.fromEntries(Object.entries(sample).filter(([name]) => offered.has(name)))
   return fillPlaceholders(draft.body, values)
 }

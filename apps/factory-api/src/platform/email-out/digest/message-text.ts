@@ -64,6 +64,18 @@ export async function officeQuotes(db: Reader, actor: Actor, notifications: read
 
 /** A customer's quotes, per notification id: only messages shared with that customer (never a note, never another's). */
 export async function partnerQuotes(db: Reader, partyId: string, notifications: readonly { readonly id: string; readonly anchor: string | null }[]): Promise<Map<string, string>> {
+  const quotes = new Map<string, string>()
+  for (const [id, message] of await partnerMessages(db, partyId, notifications)) if (message.quote) quotes.set(id, message.quote)
+  return quotes
+}
+
+// ---- th-backend-g step 2 (B-TH-279: the portal's new-message mail reads its template, which names who wrote) ---------------------
+/**
+ * A customer's messages, per notification id, under the same rule as its quotes (only a message shared with THAT customer, never a
+ * note, never another's): the quote, and who wrote it as its portal names the writer (`authorName`; null: the company, said by the
+ * caller — the portal thread shows the company's name then). A notification whose message is not theirs is absent.
+ */
+export async function partnerMessages(db: Reader, partyId: string, notifications: readonly { readonly id: string; readonly anchor: string | null }[]): Promise<Map<string, { readonly quote: string | null; readonly authorName: string | null }>> {
   const wanted = notifications.flatMap((row) => {
     const messageId = anchoredMessageOf(row.anchor)
     return messageId && UUID.test(messageId) ? [{ id: row.id, messageId }] : []
@@ -71,13 +83,14 @@ export async function partnerQuotes(db: Reader, partyId: string, notifications: 
   if (wanted.length === 0) return new Map()
   const messages = await db.message.findMany({
     where: { id: { in: [...new Set(wanted.map((entry) => entry.messageId))] }, audience: 'PARTNER', partyId, direction: { not: 'INTERNAL_NOTE' } },
-    select: { id: true, bodyText: true, partyId: true, audience: true },
+    select: { id: true, bodyText: true, authorName: true, partyId: true, audience: true },
   })
   const byId = new Map(messages.filter((message) => message.audience === 'PARTNER' && message.partyId === partyId).map((message) => [message.id, message]))
-  const quotes = new Map<string, string>()
+  const found = new Map<string, { readonly quote: string | null; readonly authorName: string | null }>()
   for (const entry of wanted) {
-    const quote = quoteOf(byId.get(entry.messageId)?.bodyText)
-    if (quote) quotes.set(entry.id, quote)
+    const message = byId.get(entry.messageId)
+    if (message) found.set(entry.id, { quote: quoteOf(message.bodyText), authorName: message.authorName?.trim() || null })
   }
-  return quotes
+  return found
 }
+// ---- end th-backend-g step 2

@@ -1,6 +1,7 @@
 import type { LiveState } from '../../../shell/live/use-live'
 import type { Assignees, ContactOption, InquiryView, ScaleOption, StyleOption } from './api'
 import type { DeclineDraft, InquiriesCan, LineDraft, Loaded, Notice, OrderDraft, RecordTab, RequestDraft, StyleDraftDraft } from './model'
+import type { DeclineStart } from './model' // th-backend-g step 2
 // B-TH-234: make or match the customer, hand the customer a task.
 import type { CustomerCheck } from './api'
 import type { CustomerChoice, TaskDraft } from './model'
@@ -19,7 +20,7 @@ import type { ProductionActions, ProductionModel } from './production-answer'
 /** A dialog the record has open. */
 export type RecordDialog =
   | { readonly kind: 'assign'; readonly people: Loaded<Assignees>; readonly busy: boolean; readonly notice: Notice | null }
-  | { readonly kind: 'decline'; readonly draft: DeclineDraft; readonly busy: boolean; readonly notice: Notice | null }
+  | { readonly kind: 'decline'; readonly draft: DeclineDraft; readonly busy: boolean; readonly notice: Notice | null; /* th-backend-g step 2 */ readonly start?: DeclineStart | null }
   | { readonly kind: 'lost'; readonly note: string; readonly busy: boolean; readonly notice: Notice | null }
   | { readonly kind: 'quote'; readonly customerRef: string; readonly busy: boolean; readonly notice: Notice | null }
   // ---- B-TH-228: Make order, Make style draft

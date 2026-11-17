@@ -3,6 +3,12 @@ import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/pe
 import { isRelativeDay } from '@nexus/factory-domain/views/quick/relative'
 import { listWorkOrders, type ListQuery } from '../../../modules/production/work-orders/work-orders'
 import { defineExportSource, /* B-PR-09: shared by the walled lists */ partyTerm } from '../source'
+// B-PR-34: the list by risk — its sort and computed filters in the address, the risk, waiting-on and blocked-by cells in words.
+import { ValidationError } from '@nexus/factory-domain/core/errors'
+import { HEALTH_REASON_CODES } from '@nexus/factory-domain/production-brand/health'
+import { WAITING_ON } from '@nexus/factory-domain/production-brand/waiting'
+import { HEALTH_REASON_WORDS, HEALTH_WORDS, OFFICE_WAITING_WORDS } from '@nexus/factory-domain/production-brand/words'
+import { BLOCKED_BY, LIST_SORTS, WORK_ORDER_RISKS } from '../../../modules/production/work-orders/risk'
 
 /**
  * Production › Work orders (SCR-069, `/production/work-orders`): the export of the list as the screen shows it. The
@@ -13,6 +19,9 @@ import { defineExportSource, /* B-PR-09: shared by the walled lists */ partyTerm
  * B-PR-03 (the brand wall): the list's own wall (its customers too) and its customer filter (`?party=`, or the API's own
  * `partyId`, as Sales › Orders' file reads it); a malformed one is refused, never dropped (a file of every customer for one
  * customer's list). The customer cell names the work order's one customer, and each order with its customer PO.
+ * B-PR-34 (the list by risk): the list's own sort (`?sort=risk|due|newest`) and its computed filters (`?waitingOn=`, `?risk=`,
+ * `?blockedBy=`), a bad value refused in words as the list refuses it; the cells `risk` ("Late · 3 d", "At risk · raised: …"),
+ * `waitingOn` (the office's words: "Waiting on the customer") and `blockedBy`, as the list's columns of the same ids.
  */
 
 type Row = Awaited<ReturnType<typeof listWorkOrders>>['workOrders'][number]
@@ -30,6 +39,43 @@ function customerText(row: Row): string | null {
 }
 // ── end B-PR-03 ──
 
+// ── B-PR-34 ──
+/** One of `values` from the address term `name` (absent: undefined); another value is refused, never dropped. */
+function termOf<Value extends string>(address: URLSearchParams, name: string, values: readonly Value[]): Value | undefined {
+  const value = address.get(name)?.trim()
+  if (!value) return undefined
+  if ((values as readonly string[]).includes(value)) return value as Value
+  throw new ValidationError('The file cannot follow this list: one of its terms is not known.', [{ path: `query/${name}`, message: `Expected one of ${values.join(', ')}.` }])
+}
+
+/** The risk cell: its state, the days late, a person's raise with its reason. */
+function riskText(row: Row, words: (code: string) => string): string | null {
+  const risk = row.risk
+  if (!risk) return null
+  const parts = [words(`risk.${risk.state}`)]
+  if (risk.daysLate !== null) parts.push(`${risk.daysLate} ${words('days')}`)
+  if (risk.raised !== null) parts.push(`${words('raised')}: ${words(`reason.${risk.raised}`)}`)
+  return parts.join(' · ')
+}
+
+/** The office's words of a risk (the customer's health chips where they say the same) and of what blocks a work order. */
+const RISK_WORDS = { LATE: HEALTH_WORDS.LATE, AT_RISK: HEALTH_WORDS.AT_RISK, BLOCKED: { it: 'Bloccato', en: 'Blocked' }, ON_TRACK: HEALTH_WORDS.ON_TRACK } as const
+const BLOCKED_WORDS = {
+  HOLD: { it: 'Blocco', en: 'Hold' },
+  CUSTOMER: { it: 'Cliente', en: 'Customer' },
+  MATERIAL: { it: 'Materiale', en: 'Material' },
+} as const
+
+const wordsOf = (locale: 'it' | 'en'): Record<string, string> => ({
+  ...Object.fromEntries(WORK_ORDER_RISKS.map((state) => [`risk.${state}`, RISK_WORDS[state][locale]])),
+  ...Object.fromEntries(HEALTH_REASON_CODES.map((code) => [`reason.${code}`, HEALTH_REASON_WORDS[code][locale]])),
+  ...Object.fromEntries(WAITING_ON.map((on) => [`waiting.${on}`, OFFICE_WAITING_WORDS[on][locale]])),
+  ...Object.fromEntries(BLOCKED_BY.map((by) => [`blocked.${by}`, BLOCKED_WORDS[by][locale]])),
+  days: locale === 'it' ? 'gg' : 'd',
+  raised: locale === 'it' ? 'segnalato' : 'raised',
+})
+// ── end B-PR-34 ──
+
 export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>, Row>({
   listKey: 'production.work-orders',
   permission: WORKORDERS_VIEW,
@@ -42,11 +88,13 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     const rushWord = address.get('rush')
     const rush = rushWord === 'true' ? true : rushWord === 'false' ? false : undefined
     const partyId = partyTerm(address) // B-PR-03
+    // B-PR-34: the list's sort and computed filters.
+    const ranked = { sort: termOf(address, 'sort', LIST_SORTS), waitingOn: termOf(address, 'waitingOn', WAITING_ON), risk: termOf(address, 'risk', WORK_ORDER_RISKS), blockedBy: termOf(address, 'blockedBy', BLOCKED_BY) }
     const view = address.get('view') ?? (address.get('late') === 'true' ? 'late' : (address.get('status') ?? 'open'))
-    if (view === 'late') return { late: true, q, due, rush, partyId }
-    if (view === 'all') return { q, due, rush, partyId }
-    if (isStatus(view)) return { status: view, q, due, rush, partyId }
-    return { open: true, q, due, rush, partyId }
+    if (view === 'late') return { late: true, q, due, rush, partyId, ...ranked }
+    if (view === 'all') return { q, due, rush, partyId, ...ranked }
+    if (isStatus(view)) return { status: view, q, due, rush, partyId, ...ranked }
+    return { open: true, q, due, rush, partyId, ...ranked }
   },
   async read(caller, query, cursor, limit) {
     const page = await listWorkOrders(caller, { ...query, cursor: cursor ?? undefined, limit })
@@ -64,9 +112,14 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     // B-W2b-51: the rush flag.
     rush: { value: (row, words) => (row.rush ? words('rush') : null) },
     site: { value: (row) => row.siteCode },
+    // B-PR-34: its risk, what it waits on (the office's words) and what blocks it.
+    risk: { value: (row, words) => riskText(row, words) },
+    waitingOn: { value: (row, words) => (row.waitingOn ? words(`waiting.${row.waitingOn.on}`) : null) },
+    blockedBy: { value: (row, words) => (row.risk?.blockedBy ? words(`blocked.${row.risk.blockedBy}`) : null) },
   },
   words: {
     it: {
+      ...wordsOf('it'), // B-PR-34
       'status.DRAFT': 'Bozza',
       'status.RELEASED': 'Rilasciato',
       'status.IN_PROGRESS': 'In lavorazione',
@@ -77,6 +130,7 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
       rush: 'Urgente',
     },
     en: {
+      ...wordsOf('en'), // B-PR-34
       'status.DRAFT': 'Draft',
       'status.RELEASED': 'Released',
       'status.IN_PROGRESS': 'In progress',

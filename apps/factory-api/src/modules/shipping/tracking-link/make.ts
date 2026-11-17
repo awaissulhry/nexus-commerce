@@ -10,6 +10,7 @@ import { trackingLinkMailValues } from '@nexus/factory-domain/shipping/tracking-
 import { TEMPLATE_LANGUAGES } from '@nexus/factory-domain/templates/language'
 import { companyValues, fillMail } from '@nexus/factory-domain/templates/mail'
 import { mailTemplateOf } from '../../../platform/templates/active'
+import { customerRefOf } from '@nexus/factory-domain/sales/customer-numbers' // th-backend-g step 1
 import { expectedDeliveryOf, makeHeld, MAKE_HELD_WORDS, TRACKING_LINK, TRACKING_NOTES, type TrackingVia } from '@nexus/factory-domain/shipping/tracking-link/rules'
 import { runCommand, COMMAND_SETTINGS, type CommandCaller, type CommandTools } from '../../../core/command'
 import type { Clock } from '../../../core/time'
@@ -107,7 +108,7 @@ async function identityFor(tools: Pick<CommandTools, 'tx'>, companyId: string, s
 /** The facts the mail says (read outside the command, in the caller's scope). */
 async function mailFactsOf(caller: CommandCaller, shipment: ShipmentHeader, to: readonly Recipient[]) {
   return caller.withClient(async (client) => {
-    const order = await client.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { number: true, customerRef: true, language: true } })
+    const order = await client.salesOrder.findUnique({ where: { id: shipment.salesOrderId }, select: { customerSeq: true /* th-backend-g step 1: never the office number */, customerRef: true, language: true } })
     const company = await client.company.findUnique({ where: { id: shipment.companyId }, select: { legalName: true, tradeName: true } })
     const party = await client.party.findUnique({ where: { id: shipment.partyId }, select: { language: true } })
     // B-W2b-422: the template in use per language (read once, filled per recipient) and the contacts' names it may say.
@@ -129,7 +130,9 @@ export async function makeTrackingLinks(request: MakeRequest): Promise<MakeResul
       locale: localeFor(recipient),
       companyName: facts.companyName,
       shipmentNumber: current.number,
-      orderNumber: facts.order?.number ?? null,
+      // th-backend-g step 1 (§0.5): the mail names the customer's own order number ("#12"), never the office's SO-… series (its
+      // reference first when it gave one; the delivery note's legal number when the order has no number of its own yet).
+      orderNumber: customerRefOf('ORDER', facts.order?.customerSeq ?? null),
       customerRef: facts.order?.customerRef ?? null,
       status: current.status,
       carrierName: current.carrierName,

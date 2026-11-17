@@ -6,6 +6,7 @@ import { LOCALES } from '../../../../../lib/i18n/locales'
 import { CATALOGUE, messagesFor } from '../../../../../lib/i18n/messages'
 import { I18nProvider } from '../../../../../lib/i18n/provider'
 import { designScreen } from './fixtures'
+import { draftBody, draftOf, REPLY_LANGUAGES, replyPreview, SAMPLE_VALUES } from './model' // th-backend-g step 3
 
 /**
  * B-TH-279 — Admin › Documents › E-mail templates › Saved replies (SCR-632-replies): every design case in both languages with no key
@@ -46,11 +47,13 @@ describe('Saved replies draw every case in both languages with no key left on sc
 
   it('says what it is: a saved reply sends nothing; Italian · English; the requests of Incoming; the held words', () => {
     expect(draw('th3-279-replies')).toContain('A saved reply sends nothing by itself')
-    expect(draw('th3-279-replies')).toContain('written in Italian or English')
+    expect(draw('th3-279-replies')).toContain('written in Italian, English, German, French or Spanish') // th-backend-g step 3
     expect(draw('th3-279-replies', 'it')).toContain('Risposte salvate')
     expect(draw('th3-279-requests')).toContain('A request (Sales › Incoming)')
     expect(draw('th3-279-new-no-share')).toContain('Sharing with the office needs the right to keep the shared replies.')
-    expect(draw('th3-279-new')).toContain('INQ-2026-0007')
+    // th-backend-g step 1 (§0.5): the sample names the request as the customer reads it (its own "#7"), never the office's series.
+    expect(draw('th3-279-new')).toContain('#7')
+    expect(draw('th3-279-new')).not.toContain('INQ-2026-0007')
     expect(draw('th3-279-problems')).toContain('{{order.number}} is not offered here')
     expect(draw('th3-279-empty')).toContain('No saved reply yet')
     expect(draw('read-only')).toContain('Keeping saved replies needs the right to send e-mail.')
@@ -65,3 +68,26 @@ describe('Saved replies draw every case in both languages with no key left on sc
     }
   })
 })
+
+// ---- th-backend-g step 3 (B-TH-098's web half): the five languages, each named right; a reply keeps its own language when edited.
+describe('th-backend-g step 3: saved replies in the five languages', () => {
+  it('offers it, en, de, fr, es; a German reply opens German (never turned into Italian); its preview fills the sample', () => {
+    expect([...REPLY_LANGUAGES]).toEqual(['it', 'en', 'de', 'fr', 'es'])
+    const german = { id: 'r-de', companyId: null, name: 'Anfrage erhalten', language: 'de', body: 'Ihre Anfrage {{inquiry.yourNumber}} ist da, {{today}}.', recordType: 'Inquiry', shared: true, owner: null, mayChange: true, updatedAt: '2026-11-17T08:00:00.000Z', version: 1 }
+    const draft = draftOf(german)
+    expect(draft.language).toBe('de')
+    expect(replyPreview(draft)).toBe('Ihre Anfrage 7 ist da, 29/10/2026.')
+    expect(draftBody(german, draft, null)).toBeNull()
+    for (const language of REPLY_LANGUAGES) expect(SAMPLE_VALUES[language]['inquiry.number']).toBe('#7')
+  })
+
+  it('names each language in both languages of the screen', () => {
+    for (const locale of LOCALES) {
+      const words = CATALOGUE[locale]['admin-templates'] ?? {}
+      for (const language of ['it', 'en', 'de', 'fr', 'es']) expect(words[`tpl.language.${language}`], `${locale} ${language}`).toBeTruthy()
+      expect(words['tpl.mail.draftUnread']).toBeTruthy()
+      expect(words['tpl.mail.draftUnreadHint']).toContain('{language}')
+    }
+  })
+})
+// ---- end th-backend-g step 3
