@@ -709,6 +709,8 @@ model SalesOrder {
   season              Season?              @relation(fields: [tenantId, companyId, seasonId], references: [tenantId, companyId, id], onDelete: Restrict, onUpdate: Restrict)
   // W2b-6 (wave 45/57): the FEE lines of the customer's other orders credited against it (the bulk order).
   feeCreditLines      SalesOrderLine[]     @relation("SalesOrderLineFeeCredit")
+  // TH-2 sales-intake.prisma (threads schema wave 3/9, B-TH-022): the request it was made from (one at most).
+  inquiries           Inquiry[]
 
   @@unique([tenantId, companyId, number])
   // TH-1b (B-TH-104): each customer's own running number, once per company and customer.

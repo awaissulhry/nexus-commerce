@@ -25,6 +25,12 @@ describe('the state the customer reads (B-TH-011, R-01)', () => {
     expect(state('QUOTED', 'ACCEPTED', 'CANCELLED')).toBe('CLOSED')
   })
 
+  it('reads the order made straight from the request by its own state (B-TH-022)', () => {
+    expect(state('ORDERED', null, 'PENDING_APPROVAL')).toBe('ORDER_WAITING')
+    for (const going of ['CONFIRMED', 'IN_PRODUCTION', 'READY', 'SHIPPED', 'CLOSED']) expect(state('ORDERED', null, going)).toBe('ORDER_CONFIRMED')
+    expect(state('ORDERED', null, 'CANCELLED')).toBe('CLOSED')
+  })
+
   it('has words in both languages for every state; open up to an order waiting for its yes', () => {
     for (const code of PORTAL_REQUEST_STATES) expect(REQUEST_STATE_WORDS[code].en.length * REQUEST_STATE_WORDS[code].it.length, code).toBeGreaterThan(0)
     expect(PORTAL_REQUEST_STATES.filter(isOpenRequest)).toEqual(['SENT', 'BEING_REVIEWED', 'NEED_INFO', 'QUOTE_BEING_PREPARED', 'QUOTE_SENT', 'QUOTE_ACCEPTED', 'ORDER_WAITING'])
