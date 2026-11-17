@@ -265,3 +265,52 @@
   color: var(--nds-text);
   font-size: var(--nds-font-size-sm);
 }
+
+/* ── B-TH-244 (threads plan TH-4, picture 26): the overall view — figures of a customer's header and of the grand total ── */
+.fw-sheet-figures {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-2) var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-sheet-figures .fw-sheet-door.danger {
+  color: var(--nds-danger-text);
+}
+
+.fw-sheet-figures .fw-sheet-door.warning {
+  color: var(--nds-warning-text);
+}
+
+.fw-sheet-total-name {
+  font-weight: var(--nds-font-weight-semibold);
+  color: var(--nds-text-strong);
+}
+
+.fw-sheet-drafts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+}
+
+.fw-sheet-draft-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-sheet-draft-list li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6) var(--nds-space-12);
+}
+
+.fw-sheet-progress {
+  font-variant-numeric: tabular-nums;
+}

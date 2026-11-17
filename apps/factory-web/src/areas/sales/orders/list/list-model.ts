@@ -11,6 +11,11 @@ import type { WeekModel } from '../week/use-promise-week'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
 import type { PictureLoader } from './sheet/parts'
 import type { SwitcherState } from './sheet/model'
+// ---- B-TH-244 (TH-4: the overall view) ----
+import type { OrderSummary } from '../api'
+import type { ExtraTerms } from '../model'
+import type { GroupRows } from './sheet/overall'
+import type { InvoiceDraftsState } from './sheet/overall-parts'
 
 /** SCR-038 — the orders list's view model (OrdersListView draws it and fetches nothing). */
 
@@ -97,6 +102,18 @@ export interface OrdersListModel {
   selected?: string[]
   focusRow?: number
   helpOpen?: boolean
+  // ---- B-TH-244 (threads plan TH-4, picture 26: the overall view) ----
+  /** `?group=party`: All customers grouped by customer (never on one customer's sheet). */
+  group?: 'party' | null
+  /** The door terms beside the rows view (a total opened exactly its rows): each a chip with ✕. */
+  extra?: ExtraTerms | null
+  /** The view's figures from the server (null while read or not asked; the problem in words when it failed). */
+  summary?: { value: OrderSummary | null; problem: string | null } | null
+  /** The grouped view: each customer's rows read so far (by customer id), and the groups folded shut. */
+  groupRows?: Readonly<Record<string, GroupRows>>
+  collapsed?: readonly string[]
+  /** "Invoice shipped goods for N" (finance only): the drafts it would open in Finance; null: closed. */
+  invoiceDrafts?: InvoiceDraftsState | null
 }
 
 export interface OrdersListActions {
@@ -138,4 +155,22 @@ export interface OrdersListActions {
   importActions?: OrdersImportActions // B-TH-293: + Use them (a customer's remembered columns)
   onWeekSite?: (siteId: string) => void
   onWeekRetry?: () => void
+  // ---- B-TH-244 (threads plan TH-4: the overall view) ----
+  onGroup?: (group: 'party' | null) => void
+  onToggleGroup?: (partyId: string) => void
+  onGroupMore?: (partyId: string) => void
+  onGroupRetry?: (partyId: string) => void
+  onSummaryRetry?: () => void
+  /** A door term's chip ✕ (or all of them: null). */
+  onClearExtra?: (key: keyof ExtraTerms | null) => void
+  /** A door term set from a cell (At risk narrows the sheet). */
+  onExtra?: (extra: ExtraTerms) => void
+  /** The columns on screen changed (the Progress column reads the floor only while shown). */
+  onShownColumns?: (ids: readonly string[]) => void
+  onInvoiceShipped?: (ids: readonly string[]) => void
+  onInvoiceShippedRetry?: () => void
+  onCloseInvoiceDrafts?: () => void
+  // ---- B-TH-245 (threads plan TH-4: the sheet's cells edit) ----
+  /** A cell (or Edit N) saved: the row's new note and version (custom values stay in the list frame). */
+  onCellSaved?: (id: string, after: Readonly<Record<string, string | number | null>>, version: number) => void
 }

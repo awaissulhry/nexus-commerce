@@ -205,6 +205,7 @@ describe('B-TH-235 requests received, quoted and ordered — every number a door
       ordered: ['ALL', 'ORDERED'],
       declined: ['ALL', 'DECLINED'],
       lost: ['LOST', null],
+      withdrawn: ['ALL', 'WITHDRAWN'], // B-TH-095
       notAnOrder: ['ALL', 'NOT_AN_ORDER'],
       open: ['OPEN', null],
     })

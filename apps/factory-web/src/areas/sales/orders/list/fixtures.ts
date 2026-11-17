@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useMemo, useRef, useState, type ReactNode } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { BOARD_LANES } from '../api'
 import { DEMO_COMPANIES } from '../../../../shell/design-data'
@@ -12,6 +12,10 @@ import { demoOrdersImport, listDepth, weekModel } from '../depth/demo/fixtures'
 import { LIST_ROWS as ALL_ROWS } from '../_demo/fixtures'
 // ---- B-TH-225 / B-TH-226 (TH-1a: the Orders sheet and the Customer switcher) ----
 import type { OrderCustomer } from '../api'
+// ---- B-TH-243 / B-TH-244 (TH-4: Views ▾, the overall view, custom and later columns) ----
+import type { OrderSummary, SummaryFigures } from '../api'
+import { ListToolsContext, type ListField, type ListFieldValue } from '../../../../list-frame/tools/transport'
+import { memoryStore, memoryTransport, type MemoryToolsModel } from '../../../_shared/list-tools/memory'
 
 /**
  * SCR-038 — Orders (design sales.orders) with made-up data only: every state of the list (loading, error, empty, nothing
@@ -26,6 +30,8 @@ import type { OrderCustomer } from '../api'
 interface ListCase {
   role: Role
   list: OrdersListModel
+  /** B-TH-243 / B-TH-244: the list tools in memory (Views ▾ with the built-ins, Customise, custom fields, a layout). */
+  tools?: MemoryToolsModel
 }
 
 const rowsFor = (role: Role, items = OPEN_ROWS) => forRole(items, role)
@@ -71,8 +77,72 @@ const newOrder = (over: Partial<NewOrderDialogModel> = {}): NewOrderDialogModel 
 })
 
 function OrdersDesign({ model }: { model: ListCase }) {
-  return inShell('/sales/orders', createElement(OrdersListView, { model: model.list }), model.role)
+  const view = createElement(OrdersListView, { model: model.list })
+  return inShell('/sales/orders', model.tools ? createElement(MemoryTools, { tools: model.tools }, view) : view, model.role)
 }
+
+// ── B-TH-243 / B-TH-244: the list tools in memory for the design cases (nothing leaves the page) ──
+function MemoryTools({ tools, children }: { tools: MemoryToolsModel; children?: ReactNode }) {
+  const [query, setQuery] = useState('')
+  const store = useRef(memoryStore(tools))
+  const transport = useMemo(() => memoryTransport(tools, store.current, query, setQuery), [tools, query])
+  return createElement(ListToolsContext.Provider, { value: transport }, children)
+}
+
+const VIEWS_ANSWER: MemoryToolsModel['answer'] = { views: [], roleDefaultId: null, personalDefaultId: null, roles: [{ id: '0190f0e2-7a7a-7000-8000-000000000001', name: 'Account team' }], allRoles: [], can: { save: true, manage: false, export: true }, exports: { formats: ['XLSX', 'CSV'] } }
+
+/** Made-up custom fields of orders: one for every customer, one for the first demo customer only (it shows on its rows alone). */
+const FIELDS: ListField[] = [
+  { code: 'hang_tag', columnId: 'cf:hang_tag', type: 'TEXT', labelIt: 'Cartellino', labelEn: 'Hang tag', unit: null, companyId: null, partyId: null, options: [] },
+  { code: 'alpha_box', columnId: 'cf:alpha_box', type: 'SELECT', labelIt: 'Scatola del cliente', labelEn: 'Customer box', unit: null, companyId: null, partyId: ALL_ROWS[0]!.partyId, options: [{ code: 'GIFT', labelIt: 'Regalo', labelEn: 'Gift box', active: true }] },
+]
+const FIELD_VALUES: Record<string, Record<string, ListFieldValue>> = Object.fromEntries(
+  ALL_ROWS.map((entry, index) => [entry.id, { hang_tag: { value: `HT-${index + 1}`, wordsIt: null, wordsEn: null }, ...(entry.partyId === ALL_ROWS[0]!.partyId ? { alpha_box: { value: 'GIFT', wordsIt: null, wordsEn: null } } : {}) }]),
+)
+const tools = (over: Partial<MemoryToolsModel> = {}): MemoryToolsModel => ({ pageKey: 'sales.orders', locale: 'en', answer: VIEWS_ANSWER, jobs: [], ...over })
+
+/** Made-up figures of a view ("every order"): the doors as the API makes them (the view's terms + the figure's own). */
+function figures(party: string | null, rows: typeof ALL_ROWS, price: boolean): SummaryFigures {
+  const view = party ? { partyId: party } : {}
+  const door = (count: number, extra: Record<string, string> = {}) => ({ count, filter: { ...view, ...extra } })
+  const sum = (pick: (entry: (typeof ALL_ROWS)[number]) => number) => rows.reduce((total, entry) => total + pick(entry), 0)
+  return {
+    orders: door(rows.length),
+    pieces: { ordered: door(sum((entry) => entry.units)), shipped: door(sum((entry) => entry.shippedUnits)), open: door(sum((entry) => (['SHIPPED', 'CLOSED', 'CANCELLED'].includes(entry.status) ? 0 : entry.units - entry.shippedUnits)), { open: 'true' }) },
+    late: door(rows.filter((entry) => (entry.daysLate ?? 0) > 0).length, { late: 'true' }),
+    atRisk: door(1, { atRisk: 'true' }),
+    invoiced: { NONE: door(rows.filter((entry) => entry.invoiced?.state === 'NONE').length, { invoiced: 'NONE' }), PART: door(rows.filter((entry) => entry.invoiced?.state === 'PART').length, { invoiced: 'PART' }), ALL: door(rows.filter((entry) => entry.invoiced?.state === 'ALL').length, { invoiced: 'ALL' }) },
+    ...(price ? { net: [{ currency: 'EUR', amount: sum((entry) => entry.netAmount ?? 0), filter: { ...view, currency: 'EUR' } }] } : {}),
+  }
+}
+function summaryOf(role: Role): OrderSummary {
+  const price = canOf(role).price
+  const parties = [...new Map(ALL_ROWS.map((entry) => [entry.partyId, entry.partyName])).entries()]
+  return {
+    all: figures(null, ALL_ROWS, price),
+    groups: parties.map(([partyId, name], index) => ({ partyId, code: `C-${index + 1}`, name, invoiceTiming: index === 1 ? 'MONTHLY' : 'PER_SHIPMENT', figures: figures(partyId, ALL_ROWS.filter((entry) => entry.partyId === partyId), price) })),
+    limited: false,
+    asOf: at(29, 9, 42),
+  }
+}
+/** The grouped view (Owner, every order): the first customer's group read, the second still reading, the third folded. */
+function grouped(role: Role, over: Partial<OrdersListModel> = {}): ListCase {
+  const summary = summaryOf(role)
+  const [first, second, third] = summary.groups!
+  const rowsOfFirst = forRole(ALL_ROWS.filter((entry) => entry.partyId === first!.partyId), role)
+  return base(role, {
+    rows: 'all',
+    group: 'party',
+    summary: { value: summary, problem: null },
+    groupRows: { [first!.partyId]: { items: rowsOfFirst, cursor: null, more: true, problem: null, loading: false }, [second!.partyId]: { items: null, cursor: null, more: false, problem: null, loading: true } },
+    collapsed: [third!.partyId],
+    list: { items: rowsOfFirst, more: false, problem: null },
+    demoPictures: PICTURES,
+    switcher: switcherOf(CUSTOMERS),
+    ...over,
+  })
+}
+// ── end B-TH-243 / B-TH-244 ──
 
 // ── B-TH-225 / B-TH-226: the sheet's design data (made up) ──
 /** A small made-up garment drawing as each row's picture (the page reads the store's small previews). */
@@ -200,6 +270,36 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'th-226-unavailable', label: 'TH-1a · A link to a customer the reader may not open: “not available”, no name, no row (W27)', model: sheet('sales', { customer: { id: '0190f0e2-6666-7000-8000-00000000ffff', name: null }, rows: 'all', list: { items: [], more: false, problem: null } }) },
     { id: 'th-226-reading', label: 'TH-1a · Customer ▾ while the customers are read: — never 0', model: sheet('sales', { switcher: { ...switcherOf(CUSTOMERS), customers: null }, switcherOpen: true }) },
     // ── end B-TH-225 / B-TH-226 ──
+    // ── B-TH-243 (threads plan TH-4, picture 25): one Views menu; a customer's own sheet ──
+    { id: 'th4-views', label: 'TH-4 · Sales · Views ▾: the built-in views on top (Open, Late, Shipped, not invoiced …), then the saved ones', model: { ...sheet('sales'), tools: tools({ design: { menu: 'columns' } }) }, note: 'One menu of views: the Rows ▾ beside it went. A tile picks the same built-in view.' },
+    { id: 'th4-customer-save', label: 'TH-4 · Sales · A customer\'s sheet: Save view as starts from its name ("… — tracking"), share with a role, Pin to Today', model: { ...sheet('sales', { customer: { id: CUSTOMERS[0]!.id, name: CUSTOMERS[0]!.name }, rows: 'all', list: { items: rowsFor('sales', LIST_ROWS.filter((entry) => entry.partyId === CUSTOMERS[0]!.id)), more: false, problem: null } }), tools: tools({ design: { dialog: 'save' } }) } },
+    // ── B-TH-241 / B-TH-242 on the sheet: custom columns (a field for one customer shows on its rows only) ──
+    { id: 'th4-custom-columns', label: 'TH-4 · Sales · Custom columns shown by a view: Hang tag (every customer) and Customer box (one customer: its rows only)', model: { ...sheet('sales'), tools: tools({ fields: { list: FIELDS, values: FIELD_VALUES }, layout: { columns: { order: ['picture', 'number', 'customer', 'brand', 'status', 'cf:hang_tag', 'cf:alpha_box'], hidden: [], pinned: [] } } }) }, note: 'Customise lists them as "… (custom field)", hidden until a view shows them; Export writes the shown ones.' },
+    // ── B-TH-244 (threads plan TH-4, picture 26): the overall view ──
+    { id: 'th4-grouped', label: 'TH-4 · Owner · All customers grouped by customer: the server\'s figures per customer (each a door), the grand total pinned', model: grouped('owner'), note: 'Every number opens exactly the rows it counts (⌘-click: a new tab). A customer\'s name opens its sheet. One customer still reading, one folded.' },
+    { id: 'th4-grouped-manager', label: 'TH-4 · Production manager · The overall view without amounts (no money anywhere)', model: grouped('manager') },
+    { id: 'th4-uninvoiced', label: 'TH-4 · Finance · Shipped, not invoiced — grouped by customer', model: grouped('finance', { rows: 'uninvoiced' }) },
+    { id: 'th4-door', label: 'TH-4 · Sales · A total opened: Invoiced in part, at risk — chips with ✕, the count is the total\'s', model: sheet('sales', { extra: { invoiced: 'PART', atRisk: true }, summary: { value: { ...summaryOf('sales'), all: { ...summaryOf('sales').all, orders: { count: 1, filter: { invoiced: 'PART', atRisk: 'true' } } } }, problem: null }, list: { items: rowsFor('sales', LIST_ROWS.filter((entry) => entry.invoiced?.state === 'PART')), more: false, problem: null } }) },
+    { id: 'th4-later-columns', label: 'TH-4 · Owner · The later columns shown by a view: Open pcs, Progress, Paid, Balance, Site, Order note, At risk, Customer\'s mark', model: { ...sheet('owner', { list: { items: rowsFor('owner', OPEN_ROWS.map((entry, index) => ({ ...entry, openUnits: entry.units - entry.shippedUnits, progress: index === 0 ? null : { inWork: entry.units, cut: entry.units, sewn: Math.floor(entry.units / 2), finished: null }, paid: index % 2 === 0 ? 120000 : 0, balance: index % 2 === 0 ? 640000 : 761280, sites: [{ id: '0190f0e2-1212-7000-8000-000000000001', code: 'PLT', name: 'Stabilimento Demo' }], internalNote: index === 1 ? 'Call before shipping' : null, atRisk: index === 2 ? { daysLeft: 2, daysBeforePromise: 5 } : null, customerUrgency: index === 3 ? ('URGENT' as const) : null }))), more: false, problem: null } }), tools: tools({ layout: { columns: { order: ['picture', 'number', 'customer', 'status', 'openUnits', 'progress', 'paid', 'balance', 'site', 'note', 'atRisk', 'customerUrgency'], hidden: [], pinned: [] } } }) } },
+    { id: 'th4-invoice-drafts', label: 'TH-4 · Finance · Invoice shipped goods for 3: two drafts (one per customer and company), one order waits', model: sheet('finance', { selected: OPEN_ROWS.slice(0, 3).map((entry) => entry.id), invoiceDrafts: { count: 3, problem: null, value: { asOf: TODAY, drafts: [{ partyId: CUSTOMERS[0]!.id, companyId: DEMO_COMPANIES[0].id, code: 'C-1', legalName: CUSTOMERS[0]!.name, month: '2026-11', currency: 'EUR', orders: [{ id: OPEN_ROWS[0]!.id, number: OPEN_ROWS[0]!.number }], ddts: [{ ddtId: '0190f0e2-dd01-7000-8000-000000000001', number: 'DDT-2026-0101' }, { ddtId: '0190f0e2-dd01-7000-8000-000000000002', number: 'DDT-2026-0102' }], garments: '14', valueAmount: 624000, body: { ddtIds: ['0190f0e2-dd01-7000-8000-000000000001', '0190f0e2-dd01-7000-8000-000000000002'] } }, { partyId: CUSTOMERS[1]!.id, companyId: DEMO_COMPANIES[0].id, code: 'C-2', legalName: CUSTOMERS[1]!.name, month: '2026-11', currency: 'EUR', orders: [{ id: OPEN_ROWS[1]!.id, number: OPEN_ROWS[1]!.number }], ddts: [{ ddtId: '0190f0e2-dd01-7000-8000-000000000003', number: 'DDT-2026-0103' }], garments: '6', valueAmount: 270000, body: { ddtIds: ['0190f0e2-dd01-7000-8000-000000000003'] } }], held: [{ orderId: OPEN_ROWS[2]!.id, number: OPEN_ROWS[2]!.number, reason: 'NOTHING_SHIPPED' }] } } }) },
+    { id: 'th4-totals-failed', label: 'TH-4 · The figures could not be read: in words with Try again (never 0)', model: base('owner', { rows: 'all', group: 'party', summary: { value: null, problem: 'problem.read.unavailable' }, list: { items: null, more: false, problem: 'problem.read.unavailable' } }) },
+    // ── end B-TH-243 / B-TH-244 ──
+    // ── B-TH-245 (threads plan TH-4, picture 27): the sheet's cells edit — the order note and the custom values; Edit N ──
+    {
+      id: 'th4-cells',
+      label: 'TH-4 · Sales · Cells that edit: Order note and Hang tag (save mark, version checked); a closed order keeps its cells; Edit 2',
+      model: {
+        ...sheet('sales', { rows: 'all', list: { items: rowsFor('sales', LIST_ROWS), more: false, problem: null }, selected: OPEN_ROWS.slice(0, 2).map((entry) => entry.id) }),
+        tools: tools({
+          fields: { list: FIELDS.slice(0, 1), values: FIELD_VALUES },
+          layout: { columns: { order: ['picture', 'number', 'customer', 'status', 'note', 'cf:hang_tag'], hidden: [], pinned: [] } },
+          bulk: LIST_ROWS.map((entry) => ({ id: entry.id, label: entry.number, version: entry.version, values: { note: null, 'cf:hang_tag': FIELD_VALUES[entry.id]?.hang_tag?.value as string | null ?? null }, held: entry.status === 'CLOSED' || entry.status === 'CANCELLED' ? { '*': { code: 'held', status: entry.status } } : {} })),
+        }),
+      },
+      note: 'Double-click a cell or press F2: it saves by itself (↻ then ✓); someone else\'s change meanwhile is refused in words, never overwritten. The pencil cells are the only ones that edit: the rest of the row opens the order.',
+    },
+    { id: 'th4-cells-manager', label: 'TH-4 · Production manager · Every cell reads only (no right to change orders: said on Edit N)', model: { ...sheet('manager', { selected: OPEN_ROWS.slice(0, 1).map((entry) => entry.id) }), tools: tools({ layout: { columns: { order: ['picture', 'number', 'customer', 'status', 'note'], hidden: [], pinned: [] } } }) } },
+    // ── end B-TH-245 ──
   ],
 })
 

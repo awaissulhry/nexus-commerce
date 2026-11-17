@@ -46,6 +46,9 @@ import {
   type Mark,
 } from './model'
 import { FieldsView, type FieldCell, type FieldsDialogState, type FieldsViewModel } from './view/FieldsView'
+// B-TH-242: the "For: one customer" picker reads the active customers of the field's company.
+import { findCustomers } from '../../sales/quotes/api'
+import { customerSearchFault } from './model'
 
 const SAVED_FADE_MS = 1500
 const LIVE_PAUSE_MS = 400
@@ -86,6 +89,30 @@ export function FieldsPage() {
   dialogRef.current = dialog
   const queues = useRef(new Map<string, Promise<unknown>>())
   const reading = useRef(0)
+
+  // ── B-TH-242: the customer picker (only while a new field is "For: one customer" and none is picked yet) ──
+  const [customerQuery, setCustomerQuery] = useState('')
+  const [customerFound, setCustomerFound] = useState<{ results: { id: string; code: string; legalName: string }[] | null; problem: string | null } | null>(null)
+  const picking = dialog?.kind === 'field' && dialog.mode === 'new' && dialog.draft.forCustomer === 'one' && dialog.draft.partyId === null
+  const pickCompany = dialog?.kind === 'field' ? dialog.draft.companyId : null
+  useEffect(() => {
+    if (!picking) {
+      setCustomerFound(null)
+      return
+    }
+    const abort = new AbortController()
+    setCustomerFound({ results: null, problem: null })
+    const timer = setTimeout(() => {
+      findCustomers(api, customerQuery, pickCompany, abort.signal)
+        .then((rows) => !abort.signal.aborted && setCustomerFound({ results: rows.filter((row) => row.status === 'ACTIVE').map((row) => ({ id: row.id, code: row.code, legalName: row.legalName })), problem: null }))
+        .catch((error: unknown) => !abort.signal.aborted && setCustomerFound({ results: [], problem: customerSearchFault(error) }))
+    }, 250)
+    return () => {
+      clearTimeout(timer)
+      abort.abort()
+    }
+  }, [api, picking, customerQuery, pickCompany])
+  // ── end B-TH-242 ──
 
   const go = useCallback((next: Partial<FieldsAddress>) => router.replace(`${pathname}${fieldsQuery({ ...addressRef.current, ...next })}`, { scroll: false }), [router, pathname])
 
@@ -368,6 +395,7 @@ export function FieldsPage() {
     notice,
     busy,
     dialog,
+    customers: customerFound ? { query: customerQuery, ...customerFound } : null, // B-TH-242
   }
 
   return (
@@ -396,6 +424,7 @@ export function FieldsPage() {
         field: {
           onSave: () => void saveField(),
           onState: (status) => void fieldState(status),
+          onCustomerSearch: setCustomerQuery, // B-TH-242
           onPicklists: () => {
             setDialog(null)
             go({ tab: 'picklists', field: null })

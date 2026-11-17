@@ -11,6 +11,7 @@ import { useLocale, useT } from '../../lib/i18n/provider'
 import { WithMessages } from '../../record-panels/i18n'
 import { ListFrame } from '../ListFrame'
 import { listKeys, type ListKey } from '../model'
+import { toggleGroup, type ListGroups } from '../groups/model' // B-TH-241
 
 /**
  * The list frame's design lab (`/design/list-frame`): made-up records in the frame, live in the browser — tick rows,
@@ -42,6 +43,8 @@ export interface ListFrameLabModel {
   focusRow?: number
   keysOpen?: boolean
   helpOpen?: boolean
+  /** B-TH-241: grouped by country — a header per group with made-up server figures, a grand total pinned under the grid. */
+  grouped?: { readonly figures: Readonly<Record<string, number>>; readonly total: number; readonly collapsed?: readonly string[] }
 }
 
 const TONE = { ACTIVE: 'success', PROSPECT: 'info', BLOCKED: 'danger' } as const
@@ -117,6 +120,23 @@ function Lab({ model }: { model: ListFrameLabModel }) {
       <EmptyState title={t('lab.noMatch')} action={<Button size="sm">{t('lab.clearFilters')}</Button>} />
     ) : undefined
   const rows = model.rows
+  // B-TH-241: the lab's groups — each header's figure is the made-up server's (never counted from the rows on screen).
+  const [collapsed, setCollapsed] = useState<readonly string[]>(model.grouped?.collapsed ?? [])
+  const grouped = model.grouped
+  const groups: ListGroups<LabRow> | null = grouped
+    ? {
+        keyOf: (row) => row.country,
+        groups: Object.keys(grouped.figures).map((country) => ({
+          key: country,
+          name: country,
+          label: <a href={`#country-${country}`}>{country}</a>,
+          summary: <span>{t('lab.groupFigure', { count: grouped.figures[country] ?? 0 })}</span>,
+        })),
+        collapsed,
+        onToggle: (key) => setCollapsed((current) => toggleGroup(current, key)),
+        total: <span>{t('lab.groupTotal', { count: grouped.total })}</span>,
+      }
+    : null
 
   return (
     <div className="fw-list-lab">
@@ -163,6 +183,7 @@ function Lab({ model }: { model: ListFrameLabModel }) {
         state={state}
         focusRow={model.focusRow}
         keysOpen={model.keysOpen}
+        groups={groups}
       />
       <Modal open={help} onClose={() => setHelp(false)} title={t('keys.title')} size="sm">
         <ul className="fw-list-lab-help">

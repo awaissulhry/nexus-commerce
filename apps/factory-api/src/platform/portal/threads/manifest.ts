@@ -12,4 +12,8 @@ export const manifest = defineManifest({
   'POST /portal/threads/:recordType/:recordId/messages': { audiences: ['partner'], permission: 'portal.comment', scope: 'party' },
   // B-TH-027: the person's own read mark (whoever reads the conversation).
   'POST /portal/threads/:recordType/:recordId/read': { audiences: ['partner'], permission: 'threads.read', scope: 'party' },
+  // ---- B-TH-085: the composer's files — whoever may write here (portal.comment); the handler also asks the upload capability
+  // (portal.upload) over the record, the outside-upload gate and the record's partner view.
+  'POST /portal/threads/:recordType/:recordId/files': { audiences: ['partner'], permission: 'portal.comment', scope: 'party' },
+  'POST /portal/threads/:recordType/:recordId/files/:fileId/complete': { audiences: ['partner'], permission: 'portal.comment', scope: 'party' },
 })

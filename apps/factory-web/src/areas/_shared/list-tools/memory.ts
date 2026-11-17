@@ -1,6 +1,7 @@
 import { normaliseState } from '@nexus/factory-domain/views/state'
 import { missingRow, previewRow, type BulkResult, type BulkRowFacts } from '@nexus/factory-domain/views/bulk/rules'
 import { ToolsError, type ExportJob, type ListToolsTransport, type SavedView, type ToolsDesignState, type ViewsAnswer, type WorkingLayout } from '../../../list-frame/tools/transport'
+import type { ListField, ListFieldValue } from '../../../list-frame/tools/transport' // B-TH-241
 
 /**
  * The list tools in memory (B-W2a-23): the same seam as the Office's ListToolsProvider, over made-up views and exports
@@ -26,6 +27,11 @@ export interface MemoryToolsModel {
   readonly bulk?: readonly BulkRowFacts[]
   /** B-W2b-13: every bulk write is refused (a design case of a failed save). */
   readonly bulkFails?: boolean
+  /**
+   * B-TH-241: the custom fields the list frame draws (made-up), and their values by record id then field code. A field for one
+   * customer is listed only for that customer's scope (`partyId`), as the API answers; absent: no custom columns.
+   */
+  readonly fields?: { readonly list: readonly ListField[]; readonly values: Readonly<Record<string, Readonly<Record<string, ListFieldValue>>>> }
 }
 
 export interface MemoryStore {
@@ -150,6 +156,16 @@ export function memoryTransport(model: MemoryToolsModel, store: MemoryStore, que
     },
     newKey: () => id('dddd'),
     ...(model.design ? { design: model.design } : {}),
+    // B-TH-241: the made-up custom fields, scoped as the API scopes them (a customer's own fields only on its sheet or overall).
+    ...(model.fields
+      ? {
+          fields: {
+            read: async (_recordType: string, scope: { companyId?: string | null; partyId?: string | null }) =>
+              model.fields!.list.filter((field) => (!scope.partyId || field.partyId === null || field.partyId === scope.partyId) && (!scope.companyId || field.companyId === null || field.companyId === scope.companyId)),
+            rows: async (_recordType: string, ids: readonly string[]) => new Map(ids.filter((rowId) => model.fields!.values[rowId]).map((rowId) => [rowId, model.fields!.values[rowId]!])),
+          },
+        }
+      : {}),
     bulkPreview: async (ask) => {
       if (!model.bulk) throw new ToolsError('offline')
       await pause()

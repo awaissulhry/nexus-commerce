@@ -37,7 +37,8 @@ import {
   type Mark,
   type ValueDraft,
 } from '../model'
-import { FieldDialog, TYPE_ICONS, type FieldDialogActions } from './FieldDialog'
+import { FieldDialog, TYPE_ICONS, type FieldDialogActions, type FieldDialogModel } from './FieldDialog'
+import { customerChoiceOn, customerLineOf } from '../model' // B-TH-242
 import { FormPreview } from './FormPreview'
 import { KeysDialog, LookDialog, NewListDialog, NewValueDialog, RenameListDialog } from './ListDialogs'
 import { PicklistsPanel, type PicklistsActions } from './PicklistsPanel'
@@ -75,6 +76,8 @@ export interface FieldsViewModel {
   notice: { key: string; tone: 'success' | 'info' | 'warning' | 'danger'; params?: Record<string, string | number> } | null
   busy: boolean
   dialog: FieldsDialogState | null
+  /** B-TH-242: the "For: one customer" picker's search while the field dialog is open. */
+  customers?: FieldDialogModel['customers']
   /** Design cases: rows selected, the search typed, the "Still loading…" note at once. */
   selected?: readonly string[]
   query?: string
@@ -298,6 +301,24 @@ function Fields({ model, actions }: { model: FieldsViewModel; actions?: FieldsAc
         suppressKeyboardEvent: cellKeys(),
       },
       switchColumn('shownInPortal', t('col.portal')),
+      // B-TH-242 (X-ADM-FIELDS.dialog-F01): the field's line shows its customer ("Brand Alpha only"), on the record types that take one.
+      ...(model.recordType && customerChoiceOn(model.recordType)
+        ? [
+            {
+              colId: 'customer',
+              headerName: t('col.customer'),
+              minWidth: 140,
+              flex: 1.1,
+              valueGetter: ({ data }: { data?: EditorField }) => (data ? t(customerLineOf(data).key, customerLineOf(data).params) : ''),
+              cellRenderer: ({ data }: ICellRendererParams<EditorField>) => {
+                if (!data) return null
+                const line = customerLineOf(data)
+                return data.partyId ? <Tag tone="info">{t(line.key, line.params)}</Tag> : <span className="fw-flds-muted">{t(line.key)}</span>
+              },
+              suppressKeyboardEvent: cellKeys(),
+            } as ColDef<EditorField>,
+          ]
+        : []),
       {
         colId: 'status',
         headerName: t('col.state'),
@@ -514,6 +535,8 @@ function Fields({ model, actions }: { model: FieldsViewModel; actions?: FieldsAc
             portalRecord,
             busy: model.busy,
             canManage,
+            customerChoice: customerChoiceOn(record.key), // B-TH-242
+            customers: model.customers ?? null,
           }}
           actions={{ ...actions?.field, onDraft: (draft) => actions?.onDialog?.({ ...fieldDialog, draft }), onClose: () => actions?.onDialog?.(null), onPicklists: () => actions?.field?.onPicklists?.() }}
         />

@@ -88,6 +88,8 @@ export const TASK_COLUMNS = {
   createdAt: true,
   updatedAt: true,
   createdById: true,
+  // B-TH-050 (thread-G19): the message it was made from.
+  messageId: true,
 } as const satisfies Prisma.TaskSelect
 export type TaskRow = Prisma.TaskGetPayload<{ select: typeof TASK_COLUMNS }>
 
@@ -213,6 +215,7 @@ export function taskView(row: TaskRow, names: ReadonlyMap<string, string>, conte
     version: row.version,
     relation: access.relation,
     canChange: access.canChange,
+    messageId: row.messageId, // B-TH-050
   }
 }
 export type TaskView = ReturnType<typeof taskView>
@@ -326,7 +329,15 @@ export interface CreateBody {
   readonly dueDate?: BusinessDate | null | undefined
   readonly dueTime?: string | null | undefined
   readonly checklist?: readonly ChecklistInput[] | undefined
+  // ---- B-TH-050 (thread-G19): "Make a task" on a message: a message of the record's own conversation.
+  readonly messageId?: string | null | undefined
 }
+
+/** B-TH-050: the words of a task's message that is not one of its record's conversation. */
+export const TASK_MESSAGE_WORDS = Object.freeze({
+  noRecord: 'A task made from a message is on the message’s record: name the record.',
+  notFound: 'Not a message of this record’s conversation.',
+})
 
 const fieldsAudit = (row: Pick<TaskRow, 'title' | 'dueDate' | 'dueTime' | 'assigneeId' | 'status'> & { checklist: unknown }) => ({
   title: row.title,
@@ -362,6 +373,7 @@ export async function createTask(caller: CommandCaller, body: CreateBody, idempo
   if (problems.length > 0) throw new ValidationError('The task is not valid.', problems)
   const record = body.record ?? null
   if (record && body.companyId) throw new ValidationError('A task on a record takes the record’s company.', [{ path: 'body/companyId', message: 'Leave it out for a task on a record.' }])
+  if (body.messageId && !record) throw new ValidationError(TASK_MESSAGE_WORDS.noRecord, [{ path: 'body/messageId', message: TASK_MESSAGE_WORDS.noRecord }]) // B-TH-050
 
   const { result } = await command(caller, { name: 'tasks.create', idempotencyKey, input: body }, async (tools) => {
     const { tx, now } = tools
@@ -374,6 +386,13 @@ export async function createTask(caller: CommandCaller, body: CreateBody, idempo
       scope = found
       label = await recordLabelOf(tx, record.type, record.id)
       if (label === null) throw new NotFoundError('Record not found.')
+      // ---- B-TH-050: the message is one of this record's conversation (its reader reads every message of it: threads.read above).
+      if (body.messageId) {
+        const thread = await tx.thread.findFirst({ where: { recordType: record.type, recordId: record.id }, select: { id: true } })
+        const message = thread ? await tx.message.findFirst({ where: { id: body.messageId, threadId: thread.id }, select: { id: true } }) : null
+        if (!message) throw new ValidationError(TASK_MESSAGE_WORDS.notFound, [{ path: 'body/messageId', message: TASK_MESSAGE_WORDS.notFound }])
+      }
+      // ---- end B-TH-050
     } else if (body.companyId) {
       if (!(await tx.company.findUnique({ where: { id: body.companyId }, select: { id: true } })) || !can(actor, TASKS_MANAGE, { companyId: body.companyId })) throw new NotFoundError('Company not found.')
     } else if (!holds(actor, TASKS_MANAGE)) throw new ForbiddenError()
@@ -402,10 +421,11 @@ export async function createTask(caller: CommandCaller, body: CreateBody, idempo
         createdAt: now,
         updatedAt: now,
         createdById: context.actorId,
+        ...(body.messageId ? { messageId: body.messageId } : {}), // B-TH-050
       },
       select: TASK_COLUMNS,
     })
-    tools.audit({ recordType: 'Task', recordId: id, companyId: row.companyId, siteId: row.siteId, after: { ...fieldsAudit(row), recordType: row.recordType, recordId: row.recordId } })
+    tools.audit({ recordType: 'Task', recordId: id, companyId: row.companyId, siteId: row.siteId, after: { ...fieldsAudit(row), recordType: row.recordType, recordId: row.recordId, ...(row.messageId ? { messageId: row.messageId } : {}) } })
     if (row.recordType && row.recordId) tools.audit({ action: 'tasks.create', recordType: row.recordType, recordId: row.recordId, companyId: row.companyId, siteId: row.siteId, after: { taskId: id, title: row.title } })
     const emit = emitAbout(tools, row)
     emit.created(assigneeId)

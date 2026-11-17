@@ -286,6 +286,9 @@ function editorOf<T>(field: ListEditField<T>, value: BulkValue, onChange: (value
       return <DateField value={typeof value === 'string' ? value : ''} onChange={(next) => onChange(next || null)} clearable={field.nullable} locale={INTL_LOCALE[locale]} labels={dateWords} />
     case 'integer':
       return <Input size="sm" type="number" step={1} {...(field.min !== undefined ? { min: field.min } : {})} {...(field.max !== undefined ? { max: field.max } : {})} value={value === null ? '' : String(value)} onChange={(event) => onChange(typedValue(field, event.target.value))} />
+    // B-TH-245: a number with decimals (a custom NUMBER field of Sales › Orders).
+    case 'number':
+      return <Input size="sm" type="number" step="any" value={value === null ? '' : String(value)} onChange={(event) => onChange(typedValue(field, event.target.value))} />
     case 'choice':
       return (
         <Select size="sm" value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value || null)}>
