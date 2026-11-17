@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { LINE_KINDS as DOMAIN_LINE_KINDS, MATCH_STATUSES as DOMAIN_MATCH } from '@nexus/factory-domain/payables/match'
 import { approvalProblems, INVOICE_SOURCES as DOMAIN_SOURCES, INVOICE_STATUSES as DOMAIN_STATUSES, TILES as DOMAIN_TILES } from '@nexus/factory-domain/payables/rules'
 import { ApiError } from '../../../lib/api/errors'
+import { textOf } from '../../../lib/record-thread/parts/testing'
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'
 import { createTranslator, messagesFor } from '../../../lib/i18n/messages'
@@ -298,7 +299,8 @@ describe('B-TH-268: the supplier invoice on RecordFrame — Lines · Match · Ap
     if (!found) throw new Error(`no case ${id}`)
     return render(recordScreen as unknown as DesignScreen<unknown>, found.model, locale)
   }
-  const text = (markup: string) => markup.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ')
+  // The words a reader sees: renderToString writes `&` as `&amp;` ("Approval &amp; payment"), so the entities come back (textOf).
+  const text = (markup: string) => textOf(markup)
   const dockOf = (markup: string) => markup.slice(markup.indexOf('class="fw-rcf-dock"'))
 
   it('three tabs; every old ?tab= keeps working (R-8): Payment → Approval & payment, Activity → Lines with the thread opened', () => {
@@ -319,7 +321,7 @@ describe('B-TH-268: the supplier invoice on RecordFrame — Lines · Match · Ap
   it('Approval & payment keeps both tabs’ work: who approves and why it waits, then Mark paid (held until approved) and the paid reference', () => {
     const approved = text(html('approval-approved'))
     expect(approved).toContain('Approval & payment')
-    const held = html('payment-held')
+    const held = text(html('payment-held'))
     expect(held).toContain('Approval & payment')
     const paid = text(html('payment-paid'))
     expect(paid.length).toBeGreaterThan(200)

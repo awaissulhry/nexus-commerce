@@ -312,10 +312,15 @@ describe('B-TH-264: the lot on RecordFrame — tabs 5 → 3, the docked thread, 
 
   it('three tabs: Overview & quality · Trace · Moves (Activity and Quality status gone)', () => {
     expect(LOT_TABS).toEqual(['overview', 'trace', 'moves'])
-    const text = textOf(drawLot('thread-docked'))
+    const html = drawLot('thread-docked')
+    const text = textOf(html)
     for (const tab of ['Overview & quality', 'Trace', 'Moves']) expect(text).toContain(tab)
     expect(text).not.toMatch(/\bActivity\b/)
-    expect(text).not.toContain('Quality status')
+    // The tab strip has no "Quality status" tab any more; the Overview's own card keeps its heading "Quality status" (it was there before).
+    const nav = html.lastIndexOf('<nav', html.indexOf('aria-label="Parts of the lot"'))
+    const strip = textOf(html.slice(nav, html.indexOf('</nav>', nav)))
+    expect(strip).toBe('Overview & quality Trace 2 Moves 6')
+    expect(strip).not.toContain('Quality status')
     expect(textOf(drawLot('thread-docked', 'it'))).toContain('Panoramica e qualità')
   })
 
