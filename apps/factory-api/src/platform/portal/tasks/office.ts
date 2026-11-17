@@ -1,12 +1,12 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { PARTNERS_VIEW } from '@nexus/factory-domain/auth/partners/permissions'
-import { ConflictError, ForbiddenError, NotFoundError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
+import { ConflictError, DomainError, ForbiddenError, NotFoundError, UnauthenticatedError, ValidationError } from '@nexus/factory-domain/core/errors'
 import { newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import type { PartnerTaskKind } from '@nexus/factory-domain/portal/tasks/kinds'
 import { PARTNERS_TASKS_MANAGE } from '@nexus/factory-domain/portal/tasks/permissions'
-import { askProblems, byDue, dueProblems } from '@nexus/factory-domain/portal/tasks/rules'
+import { askProblems, byDue, dueProblems, REQUEST_TASK_WORDS, requestTaskRefusal } from '@nexus/factory-domain/portal/tasks/rules'
 import type { CommandTools } from '../../../core/command'
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { appClock, commandOn } from './clock'
@@ -22,7 +22,9 @@ import { assigneeNames, taskView } from './views'
  *   GET   /partners/:partyId/tasks                 the party's requests (partners.view over each request's company), with the
  *                                                  colleague each was handed to (B-W2b-F14)
  *   POST  /partners/:partyId/tasks                 ask the party for a document, an answer, measurements or progress on a
- *                                                  record of theirs, by a date (partners.tasks.manage over the record)
+ *                                                  record of theirs, by a date (partners.tasks.manage over the record);
+ *                                                  B-TH-051: on its open request (Inquiry) a document, an answer or
+ *                                                  measurements — a prospect's or a closed request refused in words
  *   POST  /partner-tasks/:taskId/cancel|reopen     withdraw a request, or open it again (any source's)
  *   PATCH /partner-tasks/:taskId                   move its due date
  * Each write is a command with the request's version (409 when it moved meanwhile).
@@ -75,8 +77,19 @@ export async function askPartner(app: FastifyInstance, request: FastifyRequest, 
     const party = await tx.party.findUnique({ where: { id: partyId }, select: { id: true, companyId: true } })
     if (!party || !can(actor, PARTNERS_VIEW, { companyId: party.companyId, partyId })) throw new NotFoundError('Partner not found.')
     const scope = await resolveRecord(tx, body.recordType, body.recordId)
+    // ---- B-TH-051: a prospect's request has no portal to hand a task in (the office reads why; another customer's request stays
+    // "not a record of this partner" below, naming no one).
+    const request = scope !== null && body.recordType === 'Inquiry' ? await tx.inquiry.findUnique({ where: { id: body.recordId }, select: { partyId: true, status: true } }) : null
+    if (request && request.partyId === null) throw requestTaskError('REQUEST_PROSPECT')
+    // ---- end B-TH-051
     const ofParty = scope !== null && (scope.partyId === partyId || (body.recordType === 'Party' && body.recordId === partyId))
     if (!scope || !ofParty) throw new ValidationError('Ask on a record of this partner: an order, a quote, a document of theirs, or the partner itself.', [{ path: 'body/recordId', message: 'Not a record of this partner.' }])
+    // ---- B-TH-051: on the customer's own request, only while it is open, and only a document, an answer or measurements.
+    if (request) {
+      const refusal = requestTaskRefusal(request, body.kind)
+      if (refusal) throw requestTaskError(refusal)
+    }
+    // ---- end B-TH-051
     const companyId = scope.companyId ?? party.companyId ?? body.companyId ?? null
     if (companyId === null) throw new ValidationError('Name the company whose portal shows the request.', [{ path: 'body/companyId', message: 'A tenant-wide partner: name the company.' }])
     if (scope.companyId !== null && body.companyId !== undefined && body.companyId !== scope.companyId) throw new ValidationError("The record is the other company's.", [{ path: 'body/companyId', message: "The record is the other company's." }])
@@ -98,6 +111,14 @@ export async function askPartner(app: FastifyInstance, request: FastifyRequest, 
   })
   return result
 }
+
+// ---- B-TH-051: why a task may not be handed on a request, in words at `refusal/<code>` (a kind a request never needs: 400 on the kind).
+function requestTaskError(code: 'REQUEST_PROSPECT' | 'REQUEST_CLOSED' | 'REQUEST_KIND'): DomainError {
+  const words = REQUEST_TASK_WORDS[code].en
+  if (code === 'REQUEST_KIND') return new ValidationError(words, [{ path: 'body/kind', message: words }])
+  return new DomainError('conflict', words, [{ path: `refusal/${code}`, message: words }])
+}
+// ---- end B-TH-051
 
 /** A request the office person may change: they hold partners.tasks.manage over its company and party. */
 async function managedTask(request: FastifyRequest, taskId: string, version: number): Promise<TaskRow> {

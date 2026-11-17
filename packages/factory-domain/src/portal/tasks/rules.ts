@@ -89,6 +89,38 @@ export function askProblems(input: { readonly kind: string; readonly dueAt: Date
   return problems
 }
 
+// ---- B-TH-051 (threads plan TH-3, L2-G13; design sales.incoming "Ask for info" › an optional portal task, portal.customer.home
+// "We need something from you"): the office hands the customer a task on its REQUEST (an Inquiry): a document, an answer or
+// measurements, by a date. Only on a customer's own open request: a prospect has no portal yet, and a closed request (declined, lost,
+// answered with a quote) waits for nothing. The words are the office's (it + en): the customer never reads them.
+export const REQUEST_TASK_KINDS: readonly PartnerTaskKind[] = Object.freeze(['UPLOAD_DOCUMENT', 'ANSWER_MESSAGE', 'SEND_MEASUREMENTS'])
+export const REQUEST_OPEN_STATES: readonly string[] = Object.freeze(['NEW', 'ASSIGNED', 'NEED_INFO'])
+export type RequestTaskRefusal = 'REQUEST_PROSPECT' | 'REQUEST_CLOSED' | 'REQUEST_KIND'
+
+export const REQUEST_TASK_WORDS: Readonly<Record<RequestTaskRefusal, { readonly it: string; readonly en: string }>> = Object.freeze({
+  REQUEST_PROSPECT: {
+    it: 'Questa richiesta viene da un potenziale cliente: crea prima il cliente, poi assegnagli un compito nel suo portale.',
+    en: 'This request is from a prospect: make the customer first, then hand them a task in their portal.',
+  },
+  REQUEST_CLOSED: {
+    it: "Questa richiesta è chiusa (rifiutata, persa o diventata un'offerta): un compito qui non avrebbe risposta. Chiedi sull'offerta o sull'ordine.",
+    en: 'This request is closed (declined, lost or answered with a quote): a task on it would go unanswered. Ask on the quote or the order instead.',
+  },
+  REQUEST_KIND: {
+    it: 'Su una richiesta chiedi un documento, una risposta o le misure.',
+    en: 'On a request, ask for a document, an answer or measurements.',
+  },
+})
+
+/** Why a task may not be handed on this request (null: it may): a prospect's, a closed one, a kind a request never needs. */
+export function requestTaskRefusal(request: { readonly partyId: string | null; readonly status: string }, kind: string): RequestTaskRefusal | null {
+  if (request.partyId === null) return 'REQUEST_PROSPECT'
+  if (!REQUEST_OPEN_STATES.includes(request.status)) return 'REQUEST_CLOSED'
+  if (!(REQUEST_TASK_KINDS as readonly string[]).includes(kind)) return 'REQUEST_KIND'
+  return null
+}
+// ---- end B-TH-051
+
 /** A due time: in the future, at most 180 days away (null: no date). */
 export function dueProblems(dueAt: Date | null, now: Date): Issue[] {
   if (dueAt === null) return []
