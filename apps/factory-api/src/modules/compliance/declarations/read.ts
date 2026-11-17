@@ -15,6 +15,7 @@ import { readComposition, readPhraseBook, readRevision } from './facts'
 import { renderDeclaration } from './pdf'
 // B-W2b-288 (FU2:01): a generated DoC reads GATE-PPE-TEXTS from the PPE consultant's yes per template.
 import { ppeGateFor } from '../ppe-texts/store'
+import { workOrderWhere } from '../../production/work-orders/scope' // B-PR-10
 
 /**
  * The declarations, read side (B-W2b-257; design compliance.declarations): the grid (every DoC and leaflet per style,
@@ -165,7 +166,7 @@ export async function listDeclarations(caller: CommandCaller, query: ListQuery) 
   const limit = Math.min(query.limit ?? LIST_MAX, LIST_MAX)
   return caller.withClient(async (db) => {
     const reach = scopeWhere(actor, DECLARATIONS_VIEW, { company: { field: 'companyId', nullable: true } }) as Prisma.ComplianceDocumentWhereInput
-    const styleReach = scopeWhere(actor, DECLARATIONS_VIEW, { company: { field: 'companyId', nullable: true } }) as Prisma.StyleWhereInput
+    const styleReach = scopeWhere(actor, DECLARATIONS_VIEW, { company: { field: 'companyId', nullable: true }, party: { field: 'brandPartyId', nullable: true } }) as Prisma.StyleWhereInput // B-PR-10: by brand too
     const filters: Prisma.ComplianceDocumentWhereInput[] = [reach, { style: styleReach }]
     if (query.styleId) filters.push({ styleId: query.styleId })
     if (query.kind) filters.push({ kind: query.kind })
@@ -265,7 +266,7 @@ export async function declarationsCoverage(caller: CommandCaller, query: { reado
   const context = officeOf(caller)
   const actor = actorOf(context)
   return caller.withClient(async (db) => {
-    const styleReach = scopeWhere(actor, DECLARATIONS_VIEW, { company: { field: 'companyId', nullable: true } }) as Prisma.StyleWhereInput
+    const styleReach = scopeWhere(actor, DECLARATIONS_VIEW, { company: { field: 'companyId', nullable: true }, party: { field: 'brandPartyId', nullable: true } }) as Prisma.StyleWhereInput // B-PR-10: by brand too
     const styles = await db.style.findMany({
       where: { AND: [styleReach, { status: 'ACTIVE', ppeCategory: { not: 'NOT_PPE' } }, ...(query.styleId ? [{ id: query.styleId }] : [])] },
       select: { id: true, code: true, name: true, companyId: true },
@@ -300,11 +301,12 @@ export async function declarationsCoverage(caller: CommandCaller, query: { reado
 /** The shipment × batch pairs that left (SHIPPED or DELIVERED) carrying PPE with no version recorded for that shipment. */
 export async function unrecordedPairs(db: Reader, context: OfficeContext, limit = 200) {
   const actor = actorOf(context)
-  const reach = scopeWhere(actor, DECLARATIONS_VIEW, { company: 'companyId' }) as Prisma.ShipmentWhereInput
+  // B-PR-10: the shipments of the customers the caller reaches (a shipment is its customer's), then only reached work orders.
+  const reach = scopeWhere(actor, DECLARATIONS_VIEW, { company: 'companyId', party: 'partyId' }) as Prisma.ShipmentWhereInput
   const shipments = await db.shipment.findMany({ where: { AND: [reach, { status: { in: ['SHIPPED', 'DELIVERED'] } }] }, select: { id: true, number: true, companyId: true, shippedAt: true }, orderBy: [{ shippedAt: 'desc' }, { id: 'desc' }], take: 2000 })
   if (shipments.length === 0) return []
   const lines = await db.shipmentLine.findMany({ where: { shipmentId: { in: shipments.map((entry) => entry.id) } }, select: { shipmentId: true, workOrderId: true } })
-  const orders = await db.workOrder.findMany({ where: { id: { in: [...new Set(lines.map((line) => line.workOrderId))] } }, select: { id: true, number: true, batchNumber: true, styleId: true } })
+  const orders = await db.workOrder.findMany({ where: { AND: [{ id: { in: [...new Set(lines.map((line) => line.workOrderId))] } }, workOrderWhere(actor, DECLARATIONS_VIEW)] }, select: { id: true, number: true, batchNumber: true, styleId: true } })
   const styles = new Map((await db.style.findMany({ where: { id: { in: [...new Set(orders.map((order) => order.styleId))] } }, select: { id: true, code: true, ppeCategory: true } })).map((style) => [style.id, style]))
   const recorded = await db.complianceDocumentBatch.findMany({ where: { shipmentId: { in: shipments.map((entry) => entry.id) } }, select: { shipmentId: true, batchNumber: true } })
   const has = new Set(recorded.map((entry) => `${entry.shipmentId}|${entry.batchNumber}`))
