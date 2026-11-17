@@ -46,8 +46,8 @@ const partyB = seedUuid(NS, 'party:P3')
 const OFFICE = { everyone: newId(), alphaDesk: newId() } as const
 type OfficePerson = keyof typeof OFFICE
 const SESSIONS: Record<string, SessionContext> = {
-  everyone: { audience: 'office', tenantId: T, actorId: OFFICE.everyone, grants: [{ permissions: ['threads.read'], companies: 'all', sites: 'all', parties: 'all' }] },
-  alphaDesk: { audience: 'office', tenantId: T, actorId: OFFICE.alphaDesk, grants: [{ permissions: ['threads.read'], companies: 'all', sites: 'all', parties: [partyA] }] },
+  everyone: { audience: 'office', tenantId: T, actorId: OFFICE.everyone, grants: [{ permissions: ['threads.read', 'home.view'], companies: 'all', sites: 'all', parties: 'all' }] },
+  alphaDesk: { audience: 'office', tenantId: T, actorId: OFFICE.alphaDesk, grants: [{ permissions: ['threads.read', 'home.view'], companies: 'all', sites: 'all', parties: [partyA] }] },
 }
 
 let h: Harness
