@@ -57,7 +57,7 @@ describe('every old address keeps working (R-8)', () => {
 describe('the frame on the page', () => {
   const band = { back: createElement('a', { href: '/w/demo/sales/orders' }, 'Orders'), title: 'SO-2026-0101 · Brand Alpha', status: createElement('span', null, 'In production'), meta: createElement('span', null, 'From Q-2026-0101') }
   const page = (thread: unknown) =>
-    render(createElement(RecordFrame, { recordType: 'SalesOrder', personId: 'u1', band, thread: thread as never, threadLabel: 'The order’s thread' }, createElement('p', null, 'The body')))
+    render(createElement(RecordFrame, { recordType: 'SalesOrder', personId: 'u1', band, thread: thread as never, threadLabel: 'The order’s thread', children: createElement('p', null, 'The body') }))
 
   it('ONE thread, in a named region beside the body; the Thread button says ⌘J; the band draws itself without a shell slot', () => {
     const html = page(createElement('div', { className: 'stand-in-thread' }, 'messages'))

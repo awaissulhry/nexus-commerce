@@ -17,7 +17,8 @@ const draw = (id: string, locale: 'it' | 'en' = 'en') => renderView(view, design
 describe('the order on RecordFrame', () => {
   it('ONE thread on the page: the docked thread, no Activity tab and no record panels', () => {
     const html = draw('thread-docked')
-    expect(html.match(/<aside/g)?.length).toBe(1)
+    expect(html.match(/class="fw-rcf-dock"/g)?.length).toBe(1)
+    expect(html.match(/class="fw-rt-column[ "]/g)?.length).toBe(1)
     expect(html).toContain('class="fw-rt-column is-docked"')
     expect(html).not.toContain('fw-rp-tabs')
     expect(textOf(html)).not.toMatch(/\bActivity\b/)
@@ -48,11 +49,12 @@ describe('the order on RecordFrame', () => {
   it('one notice: the most serious shows, the rest wait behind "N more notices" (never above the thread)', () => {
     const html = draw('notices')
     expect(html).toContain('class="fw-rcf-notices"')
-    const body = html.slice(html.indexOf('class="fw-rcf-body"'), html.indexOf('<aside'))
+    const dockAt = html.indexOf('class="fw-rcf-dock"')
+    const body = html.slice(html.indexOf('class="fw-rcf-body"'), dockAt)
     expect(body).toContain('fw-rcf-notices-list')
     const notices = html.slice(html.indexOf('fw-rcf-notices-list'), html.indexOf('class="fw-so-main"'))
     expect((notices.match(/class="nds-banner /g) ?? []).length).toBeGreaterThanOrEqual(2)
-    const dock = html.slice(html.indexOf('<aside'))
+    const dock = html.slice(dockAt)
     expect(dock).not.toContain('fw-rcf-notices')
   })
 
