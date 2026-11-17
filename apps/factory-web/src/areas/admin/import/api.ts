@@ -138,6 +138,8 @@ export interface StartImport {
   companyId: string | null
   numberFormat: NumberFormat
   sheetName?: string | null
+  /** B-TH-293: header overrides ({ "<header in the sheet>": "<column>" | null to leave it out }), e.g. a customer's remembered columns. */
+  mapping?: Readonly<Record<string, string | null>> | null
 }
 
 /** A sheet's content type from its name (a browser leaves it empty for .csv on some systems). */
@@ -157,6 +159,7 @@ export const startImport = (api: ApiClient, input: StartImport, file: { original
       mode: 'DRY_RUN',
       numberFormat: input.numberFormat,
       ...(input.sheetName ? { sheetName: input.sheetName } : {}),
+      ...(input.mapping ? { mapping: input.mapping } : {}), // B-TH-293
       file,
     },
     idempotencyKey,
