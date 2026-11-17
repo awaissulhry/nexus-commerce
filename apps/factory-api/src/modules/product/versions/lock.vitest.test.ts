@@ -21,8 +21,9 @@ describe('a write that reaches the lock of a released revision (B-W2b-220, PRD-1
     expect(mapError(refused('23001', `product: revision ${REVISION} is OBSOLETE; it never changes, a change is a new revision`)).status).toBe(409)
   })
 
-  it('leaves every other database refusal as it was', () => {
-    expect(mapError(refused('23001', 'product: a row of "BomLine" never moves to another revision')).status).toBe(500)
+  it('leaves every other database refusal to the core', () => {
+    // TH-0A Open 3: another rule of the database is the core's generic 409 in its words, never refusal/REVISION_LOCKED.
+    expect(mapError(refused('23001', 'product: a row of "BomLine" never moves to another revision'))).toMatchObject({ status: 409, issues: [{ path: 'refusal/DATABASE_RULE' }] })
     expect(mapError(refused('23505', `product: revision ${REVISION} is RELEASED; its "BomLine" rows never change`)).status).toBe(500)
   })
 

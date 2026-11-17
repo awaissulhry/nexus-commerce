@@ -173,6 +173,21 @@ const issueView = output({
   size: z.string().nullable(),
 })
 
+// ---- B-TH-078 (threads plan TH-6, ORD-G03): the request a quote was made from, and the order made from it or why it waits.
+export const QUOTE_ORDER_WAITS = ['NO_SALES_ORDER_SERIES', 'ACCOUNT_ON_HOLD', 'PO_NUMBER_REQUIRED', 'NOT_MADE'] as const
+/** "Made from INQ-…": the request whose quote this is (null: made by hand). */
+export const madeFromView = output({ inquiryId: id(), number: z.string() }).nullable()
+/** An ACCEPTED quote's order (its status: CANCELLED says so), or WAITS with why in words; null while it is not accepted. */
+export const quoteOrderView = output({
+  state: z.enum(['MADE', 'WAITS']),
+  id: id().nullable(),
+  number: z.string().nullable(),
+  status: z.string().nullable(),
+  reason: z.enum(QUOTE_ORDER_WAITS).nullable(),
+  words: z.string().nullable(),
+}).nullable()
+// ---- end B-TH-078
+
 export const quoteView = output({
   id: id(),
   number: z.string(),
@@ -206,6 +221,9 @@ export const quoteView = output({
   canAskApproval: z.boolean(),
   /** What stops the send (B-W1-24's checks): empty when it could be sent. */
   sendBlockers: z.array(issueView),
+  // B-TH-078
+  madeFrom: madeFromView,
+  order: quoteOrderView,
 })
 
 const one = output({ quote: quoteView })
@@ -251,6 +269,9 @@ export const listQuotesContract = defineContract({
           createdById: id().nullable(),
           updatedAt: instant(),
           version: z.number().int(),
+          // B-TH-078: the sub-line "from INQ-…" and an accepted row's order ("SO-…", or "Order waits").
+          madeFrom: madeFromView,
+          order: quoteOrderView,
         }),
       ),
       nextCursor: id().nullable(),

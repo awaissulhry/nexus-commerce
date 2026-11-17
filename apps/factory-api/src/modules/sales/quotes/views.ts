@@ -21,6 +21,10 @@ import { quoteRulesFor } from './rules'
 // B-W2b-330 (SAL-189): the floor of the version's maker.
 import { withPersonFloor } from '../price-waterfall/floors'
 import { holdQuoteIssues } from '../../parties/holds/stops'
+// B-TH-078 (threads plan TH-6, ORD-G03): the request a quote was made from and the order made from it (or why it waits).
+import { orderWaitFor, orderWaitWords } from '../../parties/holds/stops'
+import { hasOrderSeries } from '../orders/store'
+import type { QUOTE_ORDER_WAITS } from './contract'
 import {
   APPROVAL_COLUMNS,
   dateTimeText,
@@ -87,6 +91,69 @@ export interface ReadFacts {
   readonly priced: PricedVersion
   readonly issues: QuoteIssue[]
 }
+
+// ---- B-TH-078 (threads plan TH-6, ORD-G03) -------------------------------------------------------------------------------
+/**
+ * Where a quote comes from and where it went (features O-SAL-QUO-REC.band-F01/F03, X-SAL-QUO-LIST.grid-F07/F08): "Made from
+ * INQ-…" (the request whose quote it is, Inquiry.quoteId) and, once it is ACCEPTED, the order made from its accepted version
+ * (SalesOrder.quoteVersionId; its status, so a cancelled order says so) — or, when no order exists, that the order waits and
+ * why, in words: the company has no order numbering (the order is made once a series exists, orders/make.ts), the customer is
+ * on hold, the customer's PO number is needed (parties/holds/stops), or it is simply not made yet ("Make order now"). The
+ * office record only; the quote's partner view is unchanged. Rows are read in the caller's scope (row-level security).
+ */
+export type QuoteOrderWait = (typeof QUOTE_ORDER_WAITS)[number]
+
+export interface QuoteSources {
+  readonly madeFrom: { readonly inquiryId: string; readonly number: string } | null
+  readonly order:
+    | { readonly state: 'MADE'; readonly id: string; readonly number: string; readonly status: string; readonly reason: null; readonly words: null }
+    | { readonly state: 'WAITS'; readonly id: null; readonly number: null; readonly status: null; readonly reason: QuoteOrderWait; readonly words: string }
+    | null
+}
+
+type SourceQuote = Pick<QuoteRow, 'id' | 'status' | 'companyId' | 'partyId' | 'customerRef'>
+
+export async function quoteSourcesOf(db: Reader, quotes: readonly SourceQuote[]): Promise<Map<string, QuoteSources>> {
+  const ids = quotes.map((quote) => quote.id)
+  if (ids.length === 0) return new Map()
+  const inquiries = await db.inquiry.findMany({ where: { quoteId: { in: ids } }, select: { id: true, number: true, quoteId: true }, orderBy: [{ receivedAt: 'asc' }, { id: 'asc' }] })
+  const orders = await db.salesOrder.findMany({
+    where: { quoteVersion: { quoteId: { in: ids } } },
+    select: { id: true, number: true, status: true, quoteVersion: { select: { quoteId: true } } },
+    orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+  })
+  const waiting = quotes.filter((quote) => quote.status === 'ACCEPTED' && !orders.some((order) => order.quoteVersion?.quoteId === quote.id))
+  const companies = new Map((await db.company.findMany({ where: { id: { in: [...new Set(waiting.map((quote) => quote.companyId))] } }, select: { id: true, code: true, legalName: true } })).map((company) => [company.id, company]))
+  const waits = new Map<string, { reason: QuoteOrderWait; words: string }>()
+  for (const quote of waiting) {
+    const at = { partyId: quote.partyId, companyId: quote.companyId }
+    const company = companies.get(quote.companyId)
+    if (!(await hasOrderSeries(db, quote.companyId))) {
+      waits.set(quote.id, { reason: 'NO_SALES_ORDER_SERIES', words: `Order waits: no order numbering for ${company?.legalName ?? company?.code ?? 'the company'}. Set up the series, then make the order.` })
+      continue
+    }
+    const wait = await orderWaitFor(db, at, quote.customerRef)
+    if (wait) waits.set(quote.id, { reason: wait, words: `Order waits: ${await orderWaitWords(db, at, wait, quote.customerRef)}` })
+    else waits.set(quote.id, { reason: 'NOT_MADE', words: 'Order waits: the quote is accepted and its order is not made yet. Make the order now.' })
+  }
+  return new Map(
+    quotes.map((quote) => {
+      const inquiry = inquiries.find((row) => row.quoteId === quote.id)
+      const order = orders.find((row) => row.quoteVersion?.quoteId === quote.id)
+      const wait = waits.get(quote.id)
+      const sources: QuoteSources = {
+        madeFrom: inquiry ? { inquiryId: inquiry.id, number: inquiry.number } : null,
+        order: order
+          ? { state: 'MADE', id: order.id, number: order.number, status: order.status, reason: null, words: null }
+          : wait
+            ? { state: 'WAITS', id: null, number: null, status: null, reason: wait.reason, words: wait.words }
+            : null,
+      }
+      return [quote.id, sources]
+    }),
+  )
+}
+// ---- end B-TH-078
 
 /**
  * The money computed again from the stored lines (the same function the writes store it with: deterministic), the
@@ -171,6 +238,8 @@ export async function quoteDetail(db: Reader, quote: QuoteRow, now: Date) {
   const approvals = await db.quoteApproval.findMany({ where: { versionId: version.id }, select: APPROVAL_COLUMNS, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
   const marginAmount = (value: number | null) => asMoney('margin', value)
   const pricedBySeq = new Map(priced.lines.map((line) => [line.seq, line]))
+  // B-TH-078: "Made from INQ-…" and the order made from it (or why it waits).
+  const sources = (await quoteSourcesOf(db, [quote])).get(quote.id)!
   return {
     id: quote.id,
     number: quote.number,
@@ -280,6 +349,9 @@ export async function quoteDetail(db: Reader, quote: QuoteRow, now: Date) {
     issues,
     canAskApproval: version.status === 'DRAFT' && priced.approvalNeeded && submitBlockers(issues).length === 0,
     sendBlockers: sendBlockers(issues, version.status, priced.approvalNeeded),
+    // B-TH-078
+    madeFrom: sources.madeFrom,
+    order: sources.order,
   }
 }
 

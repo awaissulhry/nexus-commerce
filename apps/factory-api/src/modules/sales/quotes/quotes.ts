@@ -21,7 +21,7 @@ import { usableTerms } from '../terms/store'
 import { termsForParty } from '../terms/terms'
 import { depositOf, quoteDefaultsOf, termsNameIn } from '@nexus/factory-domain/sales/terms/terms'
 import { assertMay, day, dayValue, decimal, grainsOf, officeContextOf, officeQuote, quotePartyOf, readCurrentVersion, readQuote, type QuoteParty, type QuoteRow, type VersionRow } from './store'
-import { forCaller, quoteDetail, type QuoteDetail } from './views'
+import { forCaller, quoteDetail, quoteSourcesOf, type QuoteDetail } from './views'
 import { withCompanyTerms } from '../../parties/company-terms/in-force'
 
 /**
@@ -407,6 +407,8 @@ export async function listQuotes(caller: CommandCaller, query: ListQuotesQuery) 
     const lines = await client.quoteLine.findMany({ where: { versionId: { in: versionIds } }, select: { versionId: true, quantity: true } })
     const approvals = await client.quoteApproval.findMany({ where: { versionId: { in: versionIds } }, select: { versionId: true, status: true }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] })
     const parties = new Map((await client.party.findMany({ where: { id: { in: [...new Set(page.map((row) => row.partyId))] } }, select: { id: true, legalName: true } })).map((party) => [party.id, party.legalName]))
+    // B-TH-078: each row's request and order (or why its order waits).
+    const sources = await quoteSourcesOf(client, page)
     return {
       quotes: page.map((row) => {
         const version = versionOf.get(row.id)
@@ -434,6 +436,9 @@ export async function listQuotes(caller: CommandCaller, query: ListQuotesQuery) 
           createdById: row.createdById,
           updatedAt: toUtcIso(row.updatedAt),
           version: row.version,
+          // B-TH-078
+          madeFrom: sources.get(row.id)?.madeFrom ?? null,
+          order: sources.get(row.id)?.order ?? null,
         }
       }),
       nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,
