@@ -115,10 +115,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   generic page (`RecordPage.tsx`, `view/RecordView.tsx`) = the summary (GET /records/:type/:id/summary, partner view) beside the
   conversation. `usePortalRecordFrame()`: PortalThread reports its new count and marks read only while on screen.
 - `src/areas/sales/customers/portal/` — Portal access in the office (B-W2b-180; SCR-033-portal, SCR-057-portal): ONE tab both party
-  records mount through the `portal` slot (`?tab=portal`; partners.view): the portal's switch, people at most, roles offered
-  and the production-progress switch (C1, customers), What they see (`POST /partners/:id/preview`, then `/p/<code>` in a new
+  records mount through the `portal` slot (`?tab=portal`; partners.view): the portal's switch, people at most, roles offered,
+  What they see (`POST /partners/:id/preview`, then `/p/<code>` in a new
   tab: `admin/users/partners/preview.ts`), People with access (list frame; invite, change, resend, revoke, suspend,
   reactivate, deactivate behind the step-up), the live line (`partner_user.signed_in`), Requests waiting for them (B-W2b-167).
+  F-PR-07 `portal/limits/` + `view/LimitsCard.tsx` (anchor `#production-limits`) — a customer's production limits card, in place of
+  the old progress switch: level, urgency + quota, production asks, named approver, second person (`PUT /partners/:id/production`,
+  step-up), freeze points (`/sales/order-freeze-rules?partyId`), the office-only supervisor + backup (`PUT /production/brands/:id/
+  supervisor`, drawn with the portal off), preset "Production partner", "Open My production as …" (`/p/<code>/production`).
   `src/areas/admin/users/partners/` — the partner client and rules every partner screen shares (`api.ts`, `model.ts`:
   the end of access as a site day, reaches, drafts, refusals in words), Admin › Users audience Partners (SCR-010-partners,
   `use-partners.ts`) and User › Partner organisation (SCR-011-partner). Catalogue `portal-access`. The order studio's ⋯

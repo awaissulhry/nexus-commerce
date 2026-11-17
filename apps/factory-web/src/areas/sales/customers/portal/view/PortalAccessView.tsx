@@ -10,8 +10,9 @@ import { EditModeBar } from '../../../../../lib/i18n/ds-parts'
 import { formatDate, formatTime } from '../../../../../lib/i18n/format'
 import { useLocale } from '../../../../../lib/i18n/provider'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
-import { previewHeld, progressApplies, settingsBody, settingsDraftOf, settingsProblems, type SettingsDraft } from '../../../../admin/users/partners/model'
+import { previewHeld, settingsBody, settingsDraftOf, settingsProblems, type SettingsDraft } from '../../../../admin/users/partners/model'
 import type { PortalAccessActions, PortalAccessModel, RequestRow } from '../model'
+import { LimitsCard } from './LimitsCard' // F-PR-07
 import { heldWords, NoticeLine, PortalAccessMessages, PortalStepUp, usePortalT } from './parts'
 import { PeopleCard } from './PeopleCard'
 import { PortalDialogs } from './PortalDialogs'
@@ -21,8 +22,11 @@ export type { PortalAccessActions, PortalAccessModel } from '../model'
 /**
  * Customer › Portal access and Supplier › Portal access (B-W2b-180; design sales.customers rec:Customer/customer.portal,
  * purchasing.suppliers rec:Supplier/portal): the portal of one partner organisation as the office runs it —
- *  - Portal: the switch (the Owner's per-partner switch, OFF by default), the people it holds at most, the roles it offers,
- *    and for a customer or a brand the production-progress switch (Owner answer C1); explicit save (⌘S), a fresh code.
+ *  - Portal: the switch (the Owner's per-partner switch, OFF by default), the people it holds at most, the roles it offers;
+ *    explicit save (⌘S), a fresh code.
+ *  - F-PR-07: for a customer or a brand, the production limits card (`view/LimitsCard.tsx`) under it — it replaces the old
+ *    production-progress switch (C1) in place: what they see, what they may do, who answers, overrides, freeze points, and
+ *    the office-only production supervisor and backup (drawn while the portal is off too).
  *  - What they see: "Open preview" opens the portal exactly as they see it, read-only, in a new tab (an hour; recorded).
  *  - People with access: invite, the invitation again or revoked, change a role and the end of access, suspend,
  *    reactivate, deactivate — one by one or over the ticked rows; the live line "… signed in" while the tab is open.
@@ -75,6 +79,10 @@ function PortalAccessTab({ model, actions }: { model: PortalAccessModel; actions
           <SettingsCard model={model} actions={actions} />
           <PreviewCard model={model} actions={actions} />
         </div>
+        {/* F-PR-07: the production limits of a customer (absent for a supplier, a workshop or an adviser). */}
+        {model.limits && (
+          <LimitsCard model={model.limits} partyName={model.access.party.name} portalOn={model.access.settings.portalOn} people={model.access.people} can={{ preview: model.can.preview }} previewing={model.previewing} actions={actions?.limits} />
+        )}
         <PeopleCard model={model} actions={actions} />
         <RequestsCard model={model} actions={actions} />
       </div>
@@ -108,7 +116,6 @@ function SettingsCard({ model, actions }: { model: PortalAccessModel; actions?: 
   const problems = settingsProblems(draft, access.seats)
   const count = body ? Object.keys(body).length - 1 : 0
   const held = model.can.manage ? (access.kinds.length === 0 ? t('held.noKind') : null) : heldWords(t, 'right.manage')
-  const progress = progressApplies(access.kinds)
   const save = () => {
     if (!body || Object.keys(problems).length > 0 || model.busy) return
     void actions?.onSaveSettings?.(draft)
@@ -145,17 +152,6 @@ function SettingsCard({ model, actions }: { model: PortalAccessModel; actions?: 
             </span>
           </div>
         </div>
-        {progress && (
-          <div className="fw-pa-switch">
-            <Toggle checked={draft.progressShared} onChange={(next) => set({ progressShared: next })} disabled={held !== null} aria-label={t('settings.progress')} aria-describedby="fw-pa-progress-hint" />
-            <div className="fw-pa-switch-text">
-              <span className="fw-pa-strong">{t('settings.progress')}</span>
-              <span id="fw-pa-progress-hint" className="fw-pa-hint">
-                {held ?? t('settings.progressHint')}
-              </span>
-            </div>
-          </div>
-        )}
         <Field label={t('settings.maxUsers')} hint={t('settings.maxUsersHint', { taken: access.seats.taken })} error={problems.maxUsers ? t(problems.maxUsers, { taken: access.seats.taken }) : undefined}>
           <Input inputMode="numeric" value={draft.maxUsers} onChange={(event) => set({ maxUsers: event.target.value.replace(/[^0-9]/g, '') })} placeholder={t('settings.noLimit')} disabled={held !== null} />
         </Field>
