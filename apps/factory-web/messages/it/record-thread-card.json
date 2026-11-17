@@ -35,7 +35,8 @@
     "DELIVERED": "Consegnata",
     "BOUNCED": "Respinta",
     "COMPLAINED": "Segnalata come spam",
-    "FAILED": "Non inviata"
+    "FAILED": "Non inviata",
+    "WITHDRAWN": "Invio annullato"
   },
   "menu": {
     "label": "Altro per il messaggio di {author} delle {time}",
