@@ -30,6 +30,8 @@ import {
   emptyDraft,
   formProblems,
   HOME_ADDRESS,
+  historyOf, // B-TH-258
+  MERGED_TABS, // B-TH-258
   MTM_PERMISSIONS,
   mtmCan,
   newProfileBodyOf,
@@ -39,6 +41,7 @@ import {
   pointProblem,
   promiseMove,
   queryOf,
+  RECORD_TABS, // B-TH-258
   recordHref,
   repeatHeld,
   resultBodyOf,
@@ -47,6 +50,7 @@ import {
   reviewDraftHeld,
   reviewHeld,
   saveProblemsOf,
+  tabOf, // B-TH-258
   tileValue,
   TILES,
   TILE_VIEW,
@@ -245,12 +249,44 @@ describe('words, lists, navigation', () => {
 })
 
 const LEFT_KEY =
-  /\b(?:common|held|list|record|tile|new|tab|live|row|col|keys|chip|view|right|problem|form|band|activity|noAccess|off|meas|reviewPanel|review|range|photos|fit|book|appt|apptKind|apptStatus|result|link|quote|repeat|orders|proofs|sheet|compare|verdict|finding|shape|proofState|zone|revision)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
+  /\b(?:common|held|list|record|tile|new|tab|live|row|col|keys|chip|view|right|problem|form|band|history|noAccess|off|meas|reviewPanel|review|range|photos|fit|book|appt|apptKind|apptStatus|result|link|quote|repeat|orders|proofs|sheet|compare|verdict|finding|shape|proofState|zone|revision)\.[a-zA-Z_]+(?:\.[a-zA-Z_]+)*\b/
 
 function render(screen: DesignScreen<unknown>, model: unknown, locale: (typeof LOCALES)[number]): string {
   const View = screen.view as ComponentType<{ model: unknown }>
   return renderToString(createElement(I18nProvider, { locale, messages: messagesFor(locale, ['shell']) }, createElement(View, { model })))
 }
+
+// ---- B-TH-258 (R1-G03): the rider timeline of the Activity tab is Measurements › History ----
+describe('B-TH-258: History in Measurements (once the Activity tab)', () => {
+  it('Measurements ends with History: each revision recorded or sent, each review, each worksheet and unit, newest first', () => {
+    const steps = historyOf(RECORD)
+    expect(steps.length).toBeGreaterThan(0)
+    expect(steps.map((step) => step.at)).toEqual([...steps.map((step) => step.at)].sort((a, b) => b.localeCompare(a)))
+    expect(steps.every((step) => step.label.key.startsWith('history.'))).toBe(true)
+    for (const locale of LOCALES) {
+      const html = render(recordScreen as DesignScreen<unknown>, recordScreen.cases.find((item) => item.id === 'history')!.model, locale)
+      expect(html).toContain('id="mtm-history"')
+      expect(html.indexOf('id="mtm-history"'), locale).toBeGreaterThan(html.indexOf('id="mtm-measures"'))
+      expect(html).toContain(locale === 'en' ? '>History</h2>' : '>Storico</h2>')
+      expect(words(locale)[steps[0]!.label.key]).toBeTruthy()
+    }
+  })
+
+  it('History is shown on Measurements only, and Activity is no tab any more (every old ?tab=activity lands on Measurements)', () => {
+    expect(RECORD_TABS).toEqual(['measurements', 'photos', 'fittings', 'proofs', 'orders'])
+    expect(MERGED_TABS).toEqual({ activity: 'measurements' })
+    expect(tabOf('activity')).toBe('measurements')
+    expect(tabOf('photos')).toBe('photos')
+    expect(tabOf('nope')).toBe('measurements')
+    expect(tabOf(null)).toBe('measurements')
+    const photos = render(recordScreen as DesignScreen<unknown>, recordScreen.cases.find((item) => item.id === 'photos')!.model, 'en')
+    expect(photos).not.toContain('id="mtm-history"')
+    for (const locale of LOCALES) {
+      expect(Object.keys(words(locale)).filter((key) => key.startsWith('tab.'))).toEqual(RECORD_TABS.map((tab) => `tab.${tab}`))
+      expect(Object.keys(words(locale)).some((key) => key.startsWith('activity.'))).toBe(false)
+    }
+  })
+})
 
 describe('every design case draws in both languages with no key left on screen', () => {
   for (const screen of [listScreen, recordScreen, worksheetScreen] as DesignScreen<unknown>[]) {

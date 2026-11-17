@@ -1,12 +1,14 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { canOf, inShell, panels, panelsModel, PREFIX, TIME_ZONE, type Role } from '../../../_shared/buying/fixtures'
+import { canOf, inShell, PREFIX, TIME_ZONE, type Role } from '../../../_shared/buying/fixtures'
 import { part } from '../../../_shared/buying/model'
 import type { LotWithHides, Receipt } from '../api'
 import { DDT_PHOTOS, DISCREPANCY_COUNTS, dailyModel } from '../demo/daily/fixtures'
 import { LOTS, lotOf, receipt } from '../demo/fixtures'
 import type { ReceiptRecordModel } from '../model'
 import { ReceiptRecordView } from './view/ReceiptRecordView'
+// B-TH-264: the receipt's docked thread (made-up; the page mounts the office's OfficeRecordThread docked).
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-062 — the lots of a goods receipt and their quality state (with SCR-061's hides one by one, read back) with
@@ -14,7 +16,7 @@ import { ReceiptRecordView } from './view/ReceiptRecordView'
  * tag, tannery number, area, grade, thickness, shade, defects and what lies of them now; a protector lot released at
  * receipt; a lot held by the receiver, a certified PPE component waiting for its certificate, a lot rejected by a
  * reversal, a Cr VI failure; the hides selected for export; and the part's states. Roles: Warehouse, Buyer (with values),
- * Read-only.
+ * Read-only. B-TH-264: every receipt case draws the receipt on RecordFrame with its supplier's thread docked beside the tab.
  */
 
 export interface LotsCase {
@@ -30,13 +32,15 @@ export function receiptCase(role: Role, value: Receipt = receipt(), over: Partia
   const shown = can.cost ? counted : { ...counted, value: undefined, lines: counted.lines.map((line) => ({ ...line, value: undefined })) }
   return {
     role,
-    record: { prefix: PREFIX, can, tab: 'lines', receipt: { status: 'ready', value: shown }, lots: part(LOTS), live: 'live', dockOpen: false, changed: null, notice: null, notes: null, busy: false, dialog: null, dialogProblem: null, panelsPreview: panelsModel('GoodsReceipt', value.id, value.number), timeZone: TIME_ZONE, ...over, daily },
+    record: { prefix: PREFIX, can, tab: 'lines', receipt: { status: 'ready', value: shown }, lots: part(LOTS), live: 'live', personId: null, changed: null, notice: null, notes: null, busy: false, dialog: null, dialogProblem: null, timeZone: TIME_ZONE, ...over, daily },
   }
 }
 
 export function ReceiptDesign({ model }: { model: { role: Role; record: ReceiptRecordModel } }) {
   const value = model.record.receipt.status === 'ready' ? model.record.receipt.value : null
-  return inShell(`/warehouse/receipts/${value?.id ?? 'x'}`, createElement(ReceiptRecordView, { model: model.record, panels: model.record.tab === 'activity' || model.record.dockOpen ? panels('GoodsReceipt', value?.id ?? 'x', value?.number ?? '') : null }), model.role)
+  // B-TH-264: the receipt's ONE thread docked beside every tab, with its own supplier only.
+  const thread = value ? designDockedThread({ recordType: 'GoodsReceipt', record: value.number, party: { name: value.supplier.name, role: 'supplier' } }) : null
+  return inShell(`/warehouse/receipts/${value?.id ?? 'x'}`, createElement(ReceiptRecordView, { model: model.record, thread }), model.role)
 }
 
 const lotsWith = (first: Partial<LotWithHides>): LotWithHides[] => [{ ...LOTS[0]!, ...first }, LOTS[1]!]

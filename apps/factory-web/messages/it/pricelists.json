@@ -233,13 +233,13 @@
     "archivedBanner": "Archiviato: non prezza nessuno. Riattivalo per modificarlo.",
     "readOnly": "Puoi vedere, non modificare",
     "copied": "{code} copiato.",
-    "copyFailed": "Impossibile copiare {code}."
+    "copyFailed": "Impossibile copiare {code}.",
+    "dockLabel": "La conversazione del listino"
   },
   "tab": {
     "prices": "Prezzi",
     "customers": "Clienti",
-    "versions": "Versioni",
-    "activity": "Attività"
+    "versions": "Versioni"
   },
   "prices": {
     "version": "Versione mostrata",

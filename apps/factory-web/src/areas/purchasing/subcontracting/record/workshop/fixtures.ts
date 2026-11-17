@@ -1,13 +1,15 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../../lib/design/design-screen'
 import type { SubcontractOrder } from '../../api'
-import { at, BUNDLES, canFor, CELLS, inShell, kitLine, order, panelsModel, PREFIX, TIME_ZONE, TODAY, uid, withoutFees, type RoleCase } from '../../demo/fixtures'
+import { at, BUNDLES, canFor, CELLS, inShell, kitLine, order, PREFIX, TIME_ZONE, TODAY, uid, withoutFees, type RoleCase } from '../../demo/fixtures'
 import { words } from '../../model'
 import type { SubcontractRecordModel } from '../record-model'
 import { SubcontractRecordView } from '../view/SubcontractRecordView'
 import type { WorkshopAnswer, WorkshopJob } from './api'
 import { answerDraft, cellKey, kitDraft, linkDraft, progressDraft, returnsDraft, type WorkshopDialog, type WorkshopPanelModel } from './model'
 import { WorkshopSection } from './view/WorkshopPanelView'
+// B-TH-263: the docked thread in the design cases.
+import { designDockedThread } from '../../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-128-workshop — what the workshop said, under the subcontract order's Kit tab (B-W2b-176; design
@@ -217,7 +219,6 @@ function workshopCase(role: RoleCase, value: SubcontractOrder, model: WorkshopPa
       tab: 'kit',
       order: { status: 'ready', value: can.cost ? value : withoutFees(value) },
       live: 'live',
-      dockOpen: false,
       changed: null,
       notice: null,
       busy: false,
@@ -225,7 +226,6 @@ function workshopCase(role: RoleCase, value: SubcontractOrder, model: WorkshopPa
       dialogProblem: null,
       marks: {},
       pdf: null,
-      panelsPreview: panelsModel(value.id, value.number),
       timeZone: TIME_ZONE,
       today: TODAY,
       workshop: createElement(WorkshopSection, { model }),
@@ -235,7 +235,8 @@ function workshopCase(role: RoleCase, value: SubcontractOrder, model: WorkshopPa
 
 function WorkshopDesign({ model }: { model: WorkshopCase }) {
   const value = model.record.order.status === 'ready' ? model.record.order.value : null
-  return inShell(`/purchasing/subcontracting/${value?.id ?? 'demo'}`, createElement(SubcontractRecordView, { model: model.record }), model.role)
+  // B-TH-263: the order's docked thread beside Kit & documents (its own workshop, made-up).
+  return inShell(`/purchasing/subcontracting/${value?.id ?? 'demo'}`, createElement(SubcontractRecordView, { model: model.record, thread: value ? designDockedThread({ recordType: 'SubcontractOrder', record: value.number, party: { name: value.workshop.name, role: 'supplier' } }) : null }), model.role)
 }
 
 const issued = order('ISSUED')

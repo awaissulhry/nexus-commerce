@@ -3,16 +3,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ListPlus, MoreHorizontal, PackageOpen, Plus, Send, Trash2, Undo2 } from 'lucide-react'
-import { Card, EmptyState, Menu, SummaryTable } from '@nexus/ui/components'
+import { EmptyState, Menu } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Pill, Tag } from '@nexus/ui/primitives'
 import { ListFrame } from '../../../../../list-frame/ListFrame'
-import { formatDate, formatDateTime } from '../../../../../lib/i18n/format'
+import { formatDateTime } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
-import { dayAt, quantity } from '../../../../_shared/buying/model'
+import { quantity } from '../../../../_shared/buying/model'
 import type { KitLine, SubcontractOrder } from '../../api'
 import { actHeld, say } from '../../model'
 import type { SubcontractRecordActions, SubcontractRecordModel } from '../record-model'
+// B-TH-263: the kit's documents (the old Documents tab) under the kit lines.
+import { KitDocuments } from './KitDocuments'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
 import { rightRef } from '../../../../../lib/i18n/rights'
 
@@ -26,7 +28,8 @@ const KIT_OPEN = new Set(['DRAFT', 'ISSUED', 'AT_WORKSHOP', 'PARTLY_RECEIVED'])
  * may still send, a buyer adds lines (typed, or planned from the work order's materials) and removes planned ones
  * (select-all, shift range, x; only planned lines may be selected, the others say why); the warehouse sends the kit
  * (the office dialog: the floor's Subcontract kits screen SCR-181 comes with B-W2a-76) and takes back a line that never
- * left (its DDT annulled first). Under the lines, the order's kit DDTs, live and annulled.
+ * left (its DDT annulled first). Under the lines, the kit's documents (B-TH-263, "Kit & documents"): the job sheet and the
+ * order's kit DDTs, live and annulled, each with its PDF, Show here, Print again and Annul.
  */
 export function KitTab({ order, model, actions }: { order: SubcontractOrder; model: SubcontractRecordModel; actions?: SubcontractRecordActions }) {
   const t = useT('subcontract-order')
@@ -178,38 +181,8 @@ export function KitTab({ order, model, actions }: { order: SubcontractOrder; mod
         }
       />
       <p className="fw-by-hint">{t('kit.floorLater')}</p>
-      <Card padded>
-        <div className="fw-by-stack">
-          <h3 className="fw-by-h3">{t('kit.ddts.title')}</h3>
-          {order.ddts.length === 0 ? (
-            <p className="fw-by-hint">{t('kit.ddts.none')}</p>
-          ) : (
-            <SummaryTable
-              label={t('kit.ddts.title')}
-              columns={[t('kit.ddts.col.number'), t('kit.ddts.col.date'), t('kit.ddts.col.lines'), t('kit.ddts.col.state'), t('kit.ddts.col.open')]}
-              align={['left', 'left', 'right', 'left', 'right']}
-              density="roomy"
-              stackOnPhone
-              rows={order.ddts.map((ddt) => ({
-                id: ddt.id,
-                cells: [
-                  <span key="n" className="fw-by-code">
-                    {ddt.number}
-                  </span>,
-                  formatDate(dayAt(ddt.documentDate), place),
-                  String(ddt.kitLineIds.length),
-                  <Pill key="s" tone={ddt.cancelled ? 'neutral' : 'success'}>
-                    {t(ddt.cancelled ? 'docs.annulled' : 'docs.live')}
-                  </Pill>,
-                  <Button key="o" size="sm" variant="quiet" heldReason={model.can.files ? null : t('docs.noFiles')} onClick={() => actions?.onOpenDdt?.(ddt.id)}>
-                    {t('docs.openPdf')}
-                  </Button>,
-                ],
-              }))}
-            />
-          )}
-        </div>
-      </Card>
+      {/* B-TH-263: Kit & documents — the job sheet and the kit DDTs (open, show here, print again, annul), the old Documents tab's work. */}
+      <KitDocuments order={order} model={model} actions={actions} />
       {/* B-W2b-176: what the workshop said (its answer, the kit it checked, progress, send-backs): the record's slot. */}
       {model.workshop ?? null}
     </div>

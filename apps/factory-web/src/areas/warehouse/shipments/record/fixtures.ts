@@ -22,7 +22,6 @@ import {
   labels,
   LINKS,
   ownVan,
-  panelsModel,
   PDF,
   PREFIX,
   PREVIEW_HELD,
@@ -37,11 +36,14 @@ import {
 import { ddtFormFor } from '../model'
 import type { ShipmentRecordModel } from './record-model'
 import { ShipmentRecordView } from './view/ShipmentRecordView'
+// ---- B-TH-264: the shipment's docked thread in the design cases (RecordFrame beside every tab) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-067 — a shipment (design warehouse.shipments "Record: Shipment") with made-up data only: every tab (Lines &
  * cartons with "Ready to ship", Documents with the DDT draft → issued → annulled, the Declaration of Conformity and the
- * user information, the customer's link; Carrier & label; Tracking & delivery; Activity), the states (loading, error,
+ * user information, the customer's link; Carrier & tracking — B-TH-264: Carrier & label and Tracking & delivery in one;
+ * Export; Invoice), the docked thread beside every tab (B-TH-264: Activity went, its tools in the thread's "⋯"), the states (loading, error,
  * not found, no permission, held with the reason, read-only, cancelled, shipped, changed meanwhile), each dialog (Issue
  * DDT, Annul DDT with the typed number, Buy labels and its outcome, Mark handed over, Cancel, Change delivery, Add
  * garments, a carton, Send the link), and the roles: Owner, Warehouse, Sales and Finance (read-only). B-W2a-71 (every
@@ -81,8 +83,6 @@ const base = (role: Role, input: Shipment, over: Partial<ShipmentRecordModel> = 
       packingLists: { value: value.status === 'DRAFT' || value.status === 'CANCELLED' ? [] : PACKING_LISTS, problem: null },
       evidence: { value: evidence(value.transportEvidence.status), problem: null },
       voided: null,
-      live: 'live',
-      dockOpen: false,
       changed: null,
       notice: null,
       busy: false,
@@ -91,7 +91,6 @@ const base = (role: Role, input: Shipment, over: Partial<ShipmentRecordModel> = 
       ddtForm: ddtFormFor(value, PREVIEW_OK),
       bought: null,
       sent: null,
-      panelsPreview: panelsModel(),
       ...over,
     },
   }
@@ -111,7 +110,10 @@ const germanCase = (role: Role, status: 'AWAITED' | 'PARTIAL' | 'COMPLETE', over
   base(role, { ...toGermany('DELIVERED', status), deliveredAt: at(2, 11, 42, 11) }, { tab: 'export', ddts: { value: [DDT_ROW], problem: null }, ddt: { value: DDT_LIVE, problem: null }, evidence: { value: evidence(status), problem: null }, ...over })
 
 function ShipmentDesign({ model }: { model: RecordCase }) {
-  return inShell('/warehouse/shipments', createElement(ShipmentRecordView, { model: model.record }), model.role)
+  const loaded = model.record.shipment
+  // B-TH-264: the made-up thread of this shipment's own customer (Reply to that customer only; this shipment's files only).
+  const thread = loaded.status === 'ready' ? designDockedThread({ recordType: 'Shipment', record: loaded.value.number, party: { name: loaded.value.party.legalName, role: 'customer' } }) : null
+  return inShell('/warehouse/shipments', createElement(ShipmentRecordView, { model: model.record, thread }), model.role)
 }
 
 export const designScreen = defineDesignScreen<RecordCase>({
@@ -133,8 +135,8 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'annulled', label: 'An annulled DDT keeps its number; the draft of the new one', model: base('warehouse', packed, { tab: 'documents', ddts: { value: [DDT_ANNULLED], problem: null } }) },
     { id: 'docs-missing', label: 'Documents: no DoC or user information on file (the goods cannot leave)', model: packedWithDdt('warehouse', { tab: 'documents', documents: { value: documents('missing'), problem: null } }) },
     { id: 'docs-fallback', label: 'Documents: the user information travels in English (warning)', model: packedWithDdt('warehouse', { tab: 'documents', documents: { value: documents('fallback'), problem: null } }) },
-    { id: 'carrier', label: 'Carrier & label: Buy 2 labels', model: packedWithDdt('warehouse', { tab: 'carrier' }) },
-    { id: 'carrier-held', label: 'Carrier & label before the DDT: Buy labels held ("Issue the DDT first")', model: base('warehouse', packed, { tab: 'carrier' }) },
+    { id: 'carrier', label: 'Carrier & tracking: Buy 2 labels (no tracking yet)', model: packedWithDdt('warehouse', { tab: 'carrier' }) },
+    { id: 'carrier-held', label: 'Carrier & tracking before the DDT: Buy labels held ("Issue the DDT first")', model: base('warehouse', packed, { tab: 'carrier' }) },
     { id: 'buy-dialog', label: 'Buy labels: outside the building, the account is charged', model: packedWithDdt('warehouse', { tab: 'carrier', dialog: { kind: 'buyLabels' } }) },
     { id: 'buy-partial', label: 'Buy labels: parcel 2 refused by the carrier (partial)', model: packedWithDdt('warehouse', { tab: 'carrier', dialog: { kind: 'buyLabels' }, bought: { ...labels({ ...packed, parcels: [ready.parcels[0]!, packed.parcels[1]!] }), outcomes: [{ parcelId: packed.parcels[0]!.id, seq: 1, ok: true }, { parcelId: packed.parcels[1]!.id, seq: 2, ok: false, problem: 'The carrier refuses 31.5 kg for this service.' }], problem: 'Parcel 2 still needs its label.' } }) },
     { id: 'labels', label: 'Labels bought and printed: Mark handed over', model: readyCase('warehouse', { tab: 'carrier' }) },
@@ -146,10 +148,10 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'ready', label: 'Ready to hand over: every check green', model: readyCase('warehouse') },
     { id: 'hand-over', label: 'Mark handed over', model: readyCase('warehouse', { dialog: { kind: 'handOver' } }) },
     { id: 'link-dialog', label: 'Send the document link to the customer\'s contacts', model: readyCase('warehouse', { tab: 'documents', dialog: { kind: 'sendLink' } }) },
-    { id: 'shipped', label: 'Shipped: tracking in transit; the link sent when the goods left', model: base('warehouse', shipped, { tab: 'tracking' }) },
+    { id: 'shipped', label: 'Carrier & tracking, shipped: the labels, then the tracking in transit; the link sent when the goods left', model: base('warehouse', shipped, { tab: 'carrier' }) },
     { id: 'shipped-docs', label: 'Shipped: the documents attached and the links (one withdrawn)', model: base('warehouse', shipped, { tab: 'documents' }) },
-    { id: 'delivered', label: 'Delivered: the carrier\'s events and the proof of delivery', model: base('owner', delivered, { tab: 'tracking' }) },
-    { id: 'own-van', label: 'Own van: no carrier label, Issue DDT and hand over together', model: base('warehouse', ownVan(), { tab: 'carrier' }) },
+    { id: 'delivered', label: 'Carrier & tracking, delivered: the carrier\'s events and the proof of delivery', model: base('owner', delivered, { tab: 'carrier' }) },
+    { id: 'own-van', label: 'Carrier & tracking, own van: no carrier label, Issue DDT and hand over together', model: base('warehouse', ownVan(), { tab: 'carrier' }) },
     { id: 'cancelled', label: 'Cancelled (with its reason)', model: base('warehouse', shipment('CANCELLED', { lines: [], parcels: [], garments: 0 })) },
     { id: 'add-lines', label: 'Add garments to the draft (from what the order can still ship)', model: base('warehouse', draftLoose(), { dialog: { kind: 'addLines' } }) },
     { id: 'carton', label: 'A carton: weight and size', model: base('warehouse', draftLoose(), { dialog: { kind: 'parcel', parcelId: draftLoose().parcels[1]!.id } }) },
@@ -157,8 +159,15 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'delivery-dialog', label: 'Change delivery', model: base('warehouse', packed, { dialog: { kind: 'delivery' } }) },
     { id: 'sales', label: 'Sales: read-only (no labels view), the order linked', model: readyCase('sales') },
     { id: 'finance', label: 'Finance: read-only, shipped', model: base('finance', shipped, { tab: 'documents' }) },
-    { id: 'owner-dock', label: 'Owner with the thread beside the tab (⌘J, wide screens)', model: readyCase('owner', { dockOpen: true }) },
-    { id: 'activity', label: 'Activity: the record panels', model: readyCase('warehouse', { tab: 'activity' }) },
+    // ---- B-TH-264: the docked thread (the rule of picture 38) ----
+    {
+      id: 'thread-docked',
+      label: 'Owner · The thread docked beside Documents (40 %)',
+      model: readyCase('owner', { tab: 'documents' }),
+      note: 'The band sits in the shell’s band row; the thread is docked at 40 % (one third on Lines & cartons under 1600 px), sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me). "Reply to" reaches this shipment’s customer only; the Files view lists this shipment’s files only. An old ?tab=activity opens Lines & cartons with the thread.',
+    },
+    { id: 'thread-lines', label: 'Warehouse · Lines & cartons with the thread: one third under 1600 px', model: readyCase('warehouse'), note: 'The lines and cartons need the room: on Lines & cartons the thread takes one third below 1600 px unless the person chose a width.' },
+    { id: 'thread-carrier', label: 'Warehouse · Carrier & tracking with the thread: the labels, then the tracking (one tab)', model: base('warehouse', shipped, { tab: 'carrier' }), note: 'Carrier & label and Tracking & delivery are one tab: every action of both (Change delivery, Buy labels, Print, Void labels; the carrier’s events, the proof of delivery, the tracking page). An old ?tab=tracking lands here.' },
     { id: 'changed', label: 'Changed by someone else while a dialog was open: Reload', model: readyCase('warehouse', { changed: { at: at(29, 11, 20) } }) },
     { id: 'notice', label: 'A refused write said above the tab', model: base('warehouse', draftLoose(), { notice: { tone: 'danger', words: { key: 'problem.write.state' }, detail: 'Parcel 2 holds garments: move them first.' } }) },
     { id: 'part-failed', label: 'A part could not be read (Documents): in words with Try again', model: base('warehouse', packed, { tab: 'documents', documents: { value: null, problem: 'problem.read.unavailable' } }) },
@@ -170,7 +179,7 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'other-documents', label: 'Documents: Other documents — the packing list\'s versions, Print all (the driver\'s pack)', model: packedWithDdt('warehouse', { tab: 'documents' }) },
     { id: 'other-none', label: 'Documents: no packing list made yet', model: packedWithDdt('warehouse', { tab: 'documents', packingLists: { value: [], problem: null } }) },
     { id: 'issue-reason', label: 'Issue DDT: the reason Repair with its hint', model: base('warehouse', packed, { dialog: { kind: 'issueDdt' }, ddtForm: { ...ddtFormFor(packed, PREVIEW_OK), reason: 'REPAIR' } }) },
-    { id: 'void-menu', label: 'Carrier & label: labels bought, Labels ⋯ Void labels', model: voidCase('warehouse') },
+    { id: 'void-menu', label: 'Carrier & tracking: labels bought, Labels ⋯ Void labels', model: voidCase('warehouse') },
     { id: 'void-dialog', label: 'Void labels: "voiding one parcel voids all 2 parcels"', model: voidCase('warehouse', { dialog: { kind: 'voidLabels' } }) },
     { id: 'void-collected', label: 'Void labels: the carrier has parcel 2 already (its label stays)', model: voidCase('warehouse', { dialog: { kind: 'voidLabels' }, tracking: { value: trackingLabelled(ready, [2]), problem: null } }) },
     { id: 'void-done', label: 'Void labels: the outcome per parcel (cancelled, queued)', model: voidCase('warehouse', { dialog: { kind: 'voidLabels' }, voided: voidedOf(ready) }) },

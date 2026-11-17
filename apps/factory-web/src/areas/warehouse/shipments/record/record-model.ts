@@ -1,6 +1,4 @@
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import type { Backorder, Bought, Ddt, DdtPreview, DdtRow, Documents, Evidence, EvidenceKind, Labels, PackingListVersion, ReadyOrder, SentLinks, Shipment, Tracking, TransportBy, Voided } from '../api'
-import type { LiveState } from '../hooks'
 import type { DdtForm, Phrase, RecordTab, ShippingAbilities } from '../model'
 
 /** SCR-067 — a shipment's view model (ShipmentRecordView draws it and fetches nothing). */
@@ -67,8 +65,9 @@ export interface ShipmentRecordModel {
   packingLists: Part<PackingListVersion[]>
   /** B-W2a-71: the intra-EU transport evidence (the Export tab). */
   evidence: Part<Evidence>
-  live: LiveState
-  dockOpen: boolean
+  /** B-TH-264: the person (the record frame remembers their thread width per record type); the tab's live state is the shell's,
+   * beside the record's band. */
+  personId?: string | null
   /** Someone changed it while a dialog with typed work was open. */
   changed: { at: string } | null
   notice: { tone: 'success' | 'warning' | 'danger' | 'info'; words: Phrase; detail?: string | null } | null
@@ -81,15 +80,12 @@ export interface ShipmentRecordModel {
   sent: SentLinks | null
   /** B-W2a-71: the last void's outcome per parcel (the Void labels dialog's receipt). */
   voided: Voided | null
-  /** Design cases: the record panels drawn as a preview. */
-  panelsPreview?: RecordPanelsViewModel
 }
 
 export interface ShipmentRecordActions {
   onRetry?: () => void
   onRetryPart?: (part: 'ddts' | 'pdf' | 'preview' | 'labels' | 'tracking' | 'documents' | 'ready' | 'backorder' | 'packingLists' | 'evidence') => void
   onReload?: () => void
-  onDock?: () => void
   onDismissNotice?: () => void
   onDialog?: (dialog: RecordDialog | null) => void
   // Lines & cartons
@@ -112,7 +108,7 @@ export interface ShipmentRecordActions {
   onAttach?: () => void
   onSendLink?: (contactIds: string[], expiresInDays: number) => void
   onOpenFile?: (fileId: string) => void
-  // Carrier & label
+  // Carrier & tracking (B-TH-264: Carrier & label and Tracking & delivery in one tab)
   onDelivery?: (next: { transportBy: TransportBy; carrierCode: string; serviceCode: string }) => void
   onBuyLabels?: () => void
   onPrintLabels?: () => void

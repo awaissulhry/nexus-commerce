@@ -248,6 +248,28 @@ describe('production progress per customer switch (SAL-076, C1)', { timeout: SLO
   })
 })
 
+// B-PR-14: the progress read asks the customer's share level (PROGRESS or more); progressShared stays in step and in the answer.
+describe('production progress by the share level (B-PR-14)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  const setLevel = (level: 'STATUS' | 'PROGRESS' | 'GATES' | 'QUALITY') => admin('UPDATE "PortalSettings" SET "productionLevel" = $2::"ProductionShareLevel", version = version + 1 WHERE "partyId" = $1', [P1, level])
+
+  it('shows the progress from PROGRESS on (GATES and QUALITY too), not at STATUS; the answers still say progressShared, derived from the level', async () => {
+    const so2 = await orderId('SEED-SO-0002')
+    await setLevel('GATES')
+    expect((await browsers.buyer.get(`/portal/sales-orders/${so2}/progress`)).status).toBe(200)
+    expect((await ok(browsers.buyer, `/portal/sales-orders/${so2}`)).progressShared).toBe(true)
+    expect((await ok(browsers.buyer, '/portal/sales-orders?limit=5&progress=true')).progressShared).toBe(true)
+    await setLevel('QUALITY')
+    expect((await browsers.buyer.get(`/portal/sales-orders/${so2}/progress`)).status).toBe(200)
+    await setLevel('STATUS')
+    expect((await browsers.buyer.get(`/portal/sales-orders/${so2}/progress`)).status).toBe(404)
+    expect((await ok(browsers.buyer, `/portal/sales-orders/${so2}`)).progressShared).toBe(false)
+    // The database keeps the old switch in step with the level (B-PR-12).
+    expect(await admin('SELECT "progressShared" FROM "PortalSettings" WHERE "partyId" = $1', [P1])).toEqual([{ progressShared: false }])
+    // Another customer's level never opens this customer's order.
+    expect((await browsers.other.get(`/portal/sales-orders/${so2}/progress`)).status).toBe(404)
+  })
+})
+
 describe('shipments, tracking and what is still to ship (SAL-080, SAL-081)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
   it('shows each shipment that left with its live DDT, parcels and tracking, and what is still to ship', async () => {
     const so2 = await orderId('SEED-SO-0002')

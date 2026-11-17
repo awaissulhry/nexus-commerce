@@ -7,6 +7,7 @@ import type { StepUpState } from '../hooks'
 import type { OrderAbilities, Phrase, RecordTab, SizeLayer } from '../model'
 import type { ScheduleStepsActions, ScheduleStepsModel } from './schedule/view/StepVerbs'
 import type { OrderDepthActions, OrderDepthModel } from '../depth/use-order-depth' // B-W2b-323
+import type { LinksActions, LinksModel } from './links/model' // B-TH-256
 
 /** SCR-039 — the order studio's view model (OrderRecordView draws it and fetches nothing). */
 
@@ -130,6 +131,8 @@ export interface OrderRecordModel {
   newLineOptions?: (line: DraftLine) => ReactNode
   /** B-W2b-368 (XF1:02): "Waits for the factory review" (./review-banner), drawn by the container; absent: nothing to say. */
   reviewBanner?: ReactNode
+  /** B-TH-256: what points at the order (./links) — its complaints and returns, planning's open re-promises, the gates' refusals; absent: not read. */
+  links?: LinksModel | null
   /** Design cases: what a dialog holds typed. */
   draft?: { date?: string; reason?: string; reasonCode?: string; lineIds?: string[]; scope?: 'order' | 'lines'; amount?: string; reference?: string; receivedOn?: string; issue?: boolean; message?: string; typed?: string }
 }
@@ -182,6 +185,8 @@ export interface OrderRecordActions {
   /** B-W2b-323: the depth's actions, and "Send as a priced change" from Review amendment (the draft's lines go with it). */
   depth?: OrderDepthActions
   onPricedOffer?: () => void
+  /** B-TH-256: Accept / Decline a re-promise, the "Tell the customer" tick, read the links again. */
+  links?: LinksActions
 }
 
 /** The lines editor's own actions (the amendment and the typed New order share it). */

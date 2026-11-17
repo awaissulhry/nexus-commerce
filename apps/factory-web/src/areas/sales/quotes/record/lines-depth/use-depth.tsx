@@ -549,7 +549,7 @@ export function useQuoteDepth(input: DepthInput): QuoteDepthSlots {
           }
         : null,
     versions: tab === 'versions' ? { items: input.versions.items, people: input.versions.people, me: input.me, grains, problem: input.versions.problem, selected: versionPick } : null,
-    deposit: tab === 'documents' && deposit ? { deposit: { id: deposit.id, status: deposit.status }, mayRecord: permissions.includes('payments.record'), to: quote.contact?.email ?? null, confirm: pay.confirm, sending: pay.sending, sent: pay.sent ? { to: pay.sent.link.to, expiresAt: pay.sent.link.expiresAt, delivery: pay.sent.delivery } : null, problem: pay.problem } : null,
+    deposit: tab === 'approval' /* B-TH-257: Approval & sending */ && deposit ? { deposit: { id: deposit.id, status: deposit.status }, mayRecord: permissions.includes('payments.record'), to: quote.contact?.email ?? null, confirm: pay.confirm, sending: pay.sending, sent: pay.sent ? { to: pay.sent.link.to, expiresAt: pay.sent.link.expiresAt, delivery: pay.sent.delivery } : null, problem: pay.problem } : null,
     drawer:
       drawerLine && (tab === 'lines' || tab === 'price' /* B-W2b-343: a Pricing by line row opens it */)
         ? {

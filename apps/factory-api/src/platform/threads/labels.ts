@@ -92,7 +92,43 @@ const LABELS: Readonly<Record<string, Labeller>> = Object.freeze({
   ProductSafetyReport: async (client, id) => (await client.productSafetyReport.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
   // B-TH-040: a catalogue order by its number (a draft has none: it has no thread either).
   PortalOrderRequest: async (client, id) => (await client.portalOrderRequest.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  // ---- B-TH-075 (threads plan TH-6, thread-G01, N14): every thread type has its words — the bell, Today and the tasks never show
+  // "SubcontractOrder 3f2a1b" again. A subcontract by its number; a supplier's invoice by the supplier's own number and its code (two
+  // suppliers may print the same number); a hold by its number (one placed before holds were numbered: "Quality hold" and the id's end);
+  // a return and a repair by their numbers; a team by its code and name (a group, never a person); a request to approve by what it is
+  // about (that record's own label); a rider's measurements by the garment type only — never the rider's name (body data: the label
+  // travels to the bell and the tasks, where the measurement gate does not reach the words); a technical file by its number.
+  SubcontractOrder: async (client, id) => (await client.subcontractOrder.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  SupplierInvoice: async (client, id) => {
+    const invoice = await client.supplierInvoice.findUnique({ where: { id }, select: { number: true, party: { select: { code: true } } } })
+    return invoice ? `${invoice.number} · ${invoice.party.code}` : null
+  },
+  QualityHold: async (client, id) => {
+    const hold = await client.qualityHold.findUnique({ where: { id }, select: { number: true } })
+    return hold ? (hold.number ?? `Quality hold ${id.slice(-6)}`) : null
+  },
+  ReturnAuthorisation: async (client, id) => (await client.returnAuthorisation.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  RepairOrder: async (client, id) => (await client.repairOrder.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  Team: async (client, id) => {
+    const team = await client.team.findUnique({ where: { id }, select: { code: true, name: true } })
+    return team ? `${team.code} ${team.name}` : null
+  },
+  ApprovalRequest: async (client, id) => {
+    const request = await client.approvalRequest.findUnique({ where: { id }, select: { recordType: true, recordId: true } })
+    if (!request) return null
+    const about = request.recordType === 'ApprovalRequest' ? null : await recordLabelOf(client, request.recordType, request.recordId)
+    return about ? `Approval request · ${about}` : 'Approval request'
+  },
+  MeasurementProfile: async (client, id) => {
+    const profile = await client.measurementProfile.findUnique({ where: { id }, select: { garmentType: true } })
+    return profile ? `Measurements ${profile.garmentType}` : null
+  },
+  TechnicalFile: async (client, id) => (await client.technicalFile.findUnique({ where: { id }, select: { number: true } }))?.number ?? null,
+  // ---- end B-TH-075
 })
+
+/** B-TH-075: the record types with a label of their own (every thread type: labels-complete.pg.vitest.test.ts holds it). */
+export const LABELLED_TYPES: ReadonlySet<string> = new Set(Object.keys(LABELS))
 
 /** The record's label, or null when it is not there for this caller. A type without its own labeller: its type and id end. */
 export async function recordLabelOf(client: Client, recordType: string, recordId: string): Promise<string | null> {

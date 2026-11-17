@@ -459,8 +459,6 @@
     "changed": "Changed by someone else at {time}",
     "copyNumber": "Copy the number",
     "created": "created {date}",
-    "dock": "Thread",
-    "dockHint": "The thread beside this tab (⌘J)",
     "dockLabel": "The claim’s thread",
     "error": {
       "title": "Couldn't load the claim"
@@ -471,7 +469,6 @@
     },
     "loading": "Loading the claim…",
     "more": "More actions",
-    "noPanels": "The thread, files and history are not available.",
     "not_found": {
       "body": "It was never made, or it belongs to another company.",
       "title": "This claim does not exist"
@@ -646,10 +643,8 @@
     "SENT": "sent, waiting for the supplier"
   },
   "tab": {
-    "activity": "Activity",
     "claim": "Claim",
-    "credit": "Credit",
-    "goods": "Goods returned"
+    "goods": "Goods & credit"
   },
   "tile": {
     "closed": "Closed this month",

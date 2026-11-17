@@ -1,7 +1,7 @@
 import { createElement, useEffect, useState } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/view/RecordPanelsView'
+// ---- B-TH-262: the round's docked thread in the design cases (RecordFrame beside every tab) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 import {
   APPROVAL,
   APPROVAL_ASKED,
@@ -37,31 +37,31 @@ import { SampleRecordView } from './view/SampleRecordView'
 /**
  * SCR-110-record — a sample round (Products › Samples & prototypes › a round), made-up data only: SR-DEMO-0003 Fit · round
  * 2 under review, every tab (Request read and changed, Sample with its work order, Fit & comments with values outside the
- * tolerance, Approval waiting / asked / rejected with the next round and a change / a CE test sample, Shipments, Activity),
- * every dialog, a requested proto (revision changeable, Make sample work order with and without order lines), a decided
+ * tolerance, Approval waiting / asked / rejected with the next round and a change / a CE test sample, Shipments), the round's thread
+ * docked beside every tab (B-TH-262: Activity's tools in its "⋯"; an internal round's thread holds notes only), every dialog, a requested proto (revision changeable, Make sample work order with and without order lines), a decided
  * round read-only, the page's states and the role cases.
  */
 
 interface RecordCase {
   readonly role: RoleCase
   readonly record: SampleRecordModel
-  readonly panels: RecordPanelsViewModel | null
 }
 
-const PANELS = (panelsScreen.cases.find((one) => one.id === 'conversation') ?? panelsScreen.cases[0]!).model
-const panelsOf = (round: RoundView): RecordPanelsViewModel => ({ ...PANELS, record: { type: 'SampleRound', id: round.id, companyId: round.companyId, siteId: null }, title: `${round.number} · ${round.style.code}` })
+/** B-TH-262: the round's made-up thread — its number, its customer (made-up) or none for an internal round (notes only). */
+const threadOf = (record: SampleRecordModel) => {
+  const round = record.loaded.status === 'ready' ? record.loaded.round : null
+  return round ? designDockedThread({ recordType: 'SampleRound', record: round.number, party: round.party ? { name: round.party.name, role: 'customer' } : null }) : null
+}
 
 function recordCase(tab: RecordTab, over: Partial<SampleRecordModel> = {}, role: RoleCase = 'owner', round: RoundView = ROUND): RecordCase {
   return {
     role,
-    panels: tab === 'activity' ? panelsOf(round) : null,
     record: {
       prefix: PREFIX,
       me: ME,
       today: TODAY,
       can: canFor(role),
       tab,
-      panel: null,
       loaded: { status: 'ready', round },
       asOf: NOW,
       live: 'live',
@@ -88,7 +88,7 @@ function RecordDesign({ model }: { model: RecordCase }) {
   useEffect(() => setRecord(model.record), [model])
   const view = createElement(SampleRecordView, {
     model: record,
-    panelsPreview: model.panels ?? undefined,
+    thread: threadOf(record),
     actions: {
       onRequestDraft: (patch) => setRecord((now) => (now.loaded.status === 'ready' ? { ...now, request: { ...now.request, draft: { ...(now.request.draft ?? requestDraftOf(now.loaded.round, 'en')), ...patch } } } : now)),
       onRequestGrid: (grid) => setRecord((now) => (now.loaded.status === 'ready' ? { ...now, request: { ...now.request, draft: { ...(now.request.draft ?? requestDraftOf(now.loaded.round, 'en')), grid } } } : now)),
@@ -172,7 +172,11 @@ export const designScreen = defineDesignScreen<RecordCase>({
     { id: 'shipments-none', label: 'Shipments: not sent yet (Add shipment)', model: recordCase('shipments', {}, 'owner', REQUESTED_ROUND) },
     { id: 'shipments-saving', label: 'Shipments: a cell saving, one refused', model: recordCase('shipments', { shipmentCells: { [`${ROUND.shipmentsList[0]!.id}/note`]: 'saving', [`${ROUND.shipmentsList[0]!.id}/trackingNumber`]: 'failed' }, notice: { key: 'refusal.RECEIVED_ONCE', tone: 'danger' } }) },
     { id: 'add-shipment', label: 'Add shipment: courier, tracking, the tracking page', model: dialog({ kind: 'shipment', direction: 'OUTBOUND', carrierName: 'Demo Courier', trackingNumber: 'DEMO654321', trackingUrl: 'http://tracking.example.com', note: '', busy: false, notice: null, lines: [] }, 'shipments') },
-    { id: 'activity', label: 'Activity: the record panels (thread, files, history, approvals)', model: recordCase('activity') },
+    // ---- B-TH-262: the thread docked (the rule of picture 38); Activity is gone, its tools are in the thread's "⋯" (R-ACT).
+    { id: 'thread-docked', label: 'TH-6 · The round’s thread docked beside the Approval (40 %): Ask the customer opens its Ask a partner to approve', model: recordCase('approval'), note: 'The band sits in the shell’s band row; the thread is docked at 40 % (one third on Fit & comments under 1600 px), sticky while the body scrolls, ⌘J hides it. Its "⋯" holds Activity’s tools (Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me). Below 1280 px the band’s Thread button opens it full width. An old ?tab=activity lands on the Request with the thread open.' },
+    { id: 'thread-fit', label: 'TH-6 · Fit & comments with the thread: one third under 1600 px (the size columns need the room)', model: recordCase('fit') },
+    { id: 'thread-internal', label: 'TH-6 · An internal proto’s thread: office notes only (no customer, no mail)', model: recordCase('request', {}, 'owner', REQUESTED_ROUND) },
+    { id: 'notices', label: 'TH-6 · One notice: a refusal shows, the offline and changed-elsewhere notices wait behind "2 more notices"', model: recordCase('request', { request: { draft: EDITED, style: { value: JACKET_DETAIL, problem: null }, saving: false }, notice: { key: 'problem.invalid', tone: 'danger' }, lines: [{ key: 'field.dueDate' }], live: 'offline', stale: '10:42' }) },
     { id: 'cancel', label: 'Cancel round: why', model: dialog({ kind: 'cancel', reason: '', busy: false, notice: null }) },
     { id: 'moved', label: 'Moved (the receipt)', model: recordCase('request', { notice: { key: 'board.moved', params: { number: ROUND.number, stage: 'stage.SENT' }, tone: 'success' } }) },
     { id: 'refused', label: 'A save refused (our words; the field named)', model: recordCase('request', { request: { draft: EDITED, style: { value: JACKET_DETAIL, problem: null }, saving: false }, notice: { key: 'problem.invalid', tone: 'danger' }, lines: [{ key: 'field.dueDate' }] }) },

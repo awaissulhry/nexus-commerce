@@ -324,9 +324,8 @@
   "tab": {
     "lines": "Lines & cartons",
     "documents": "Documents",
-    "carrier": "Carrier & label",
+    "carrier": "Carrier & tracking",
     "tracking": "Tracking & delivery",
-    "activity": "Activity",
     "problem": "Something to do here",
     "export": "Export",
     "invoice": "Invoice"
@@ -350,8 +349,6 @@
         "title": "The shipment could not be read"
       }
     },
-    "dock": "Thread",
-    "dockHint": "The thread beside the tab (⌘J)",
     "dockLabel": "The shipment's thread",
     "more": "More actions",
     "checksOpen_one": "{count} check open",
@@ -364,8 +361,7 @@
     "shipped": "Left {when}: lines, cartons and the DDT stay as they left.",
     "needsDdt": "The goods left without a live DDT: issue the replacement DDT now.",
     "trackingProblem": "The carrier's news needs a person",
-    "readOnly": "Read-only: your role sees shipments but does not change them.",
-    "noPanels": "The thread, files and history are not shown here."
+    "readOnly": "Read-only: your role sees shipments but does not change them."
   },
   "part": {
     "loading": "Reading {part}…",

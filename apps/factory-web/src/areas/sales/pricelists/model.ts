@@ -201,12 +201,21 @@ export function baseChoices(lists: readonly PriceListRow[], companyId: string | 
 // ---- the record ----------------------------------------------------------------------------------------------------------
 
 // B-W2b-343: Breaks & surcharges after Prices.
-export const RECORD_TABS = ['prices', 'breaks', 'customers', 'versions', 'activity'] as const
+// B-TH-258 (the rule of picture 38, the tabs of 08-tabs.tsv): 5 → 4 — Activity goes (its tools in the docked thread's "⋯", R-ACT).
+export const RECORD_TABS = ['prices', 'breaks', 'customers', 'versions'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
 
+/** B-TH-258: every old ?tab= keeps working (R-8): activity → Prices with the thread opened (RecordFrame reads the address on arrival). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { activity: 'prices' }
+
+/** The tab an address asks for: one of the four, an old one's new home, else Prices. */
 export function tabOf(asked: string | null | undefined): RecordTab {
-  return (RECORD_TABS as readonly string[]).includes(asked ?? '') ? (asked as RecordTab) : 'prices'
+  const value = asked ?? ''
+  return (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (MERGED_TABS[value] ?? 'prices')
 }
+
+/** B-TH-258: a tab whose body is a wide grid (the prices, the size surcharges): the docked thread takes one third under 1600 px (PL1, R-18). */
+export const isWideTab = (tab: RecordTab): boolean => tab === 'prices' || tab === 'breaks'
 
 /** The version the Prices tab shows: the one asked (`?version=`), else the draft being edited, else the one in force. */
 export function versionToShow(list: Pick<PriceListDetail, 'versions' | 'draftVersionId' | 'shownVersion'>, asked: string | null | undefined): PriceVersion | null {

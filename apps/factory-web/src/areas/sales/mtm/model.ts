@@ -10,7 +10,7 @@ import type { Appointment, AppointmentRow, FittingResult, FittingsTab, MtmCheck,
  * Sales › Made-to-measure (SCR-036, the rider profile, the worksheet tab; B-W2b-362), pure: who may do what, the list's
  * address and tiles, the measurement form (the template's points, what is typed, what is asked again, the body sent), the
  * factory review, a fitting booked and its outcome, the measurement link, a unit on a new quote, a repeat order, the
- * compare of two revisions and the record's activity — all said from codes, states and figures in this screen's catalogue
+ * compare of two revisions and the record's history — all said from codes, states and figures in this screen's catalogue
  * (`sales-mtm`), never the API's English. Made-to-measure is built switched OFF per template (Owner 11-10, GATE-MTM): every
  * part says the off state in words and where it is started (Products › Sizes & measurements › Measurement templates).
  */
@@ -73,8 +73,31 @@ export const rightHeld = (ability: MtmAbility): Phrase => phrase('held.right', {
 export const LIST_PATH = '/sales/made-to-measure'
 export const listHref = (prefix: string): string => `${prefix}${LIST_PATH}`
 
-export const RECORD_TABS = ['measurements', 'photos', 'fittings', 'proofs', 'orders', 'activity'] as const
+// ---- B-TH-258 (the rule of picture 38, the tabs of 08-tabs.tsv): 6 → 5 — Activity goes (its tools in the docked thread's "⋯", R-ACT;
+// its rider timeline is Measurements › History, R1-G03). Every old ?tab= keeps working (R-8): activity → Measurements with the
+// thread opened (RecordFrame reads the address on arrival); an unknown tab → Measurements.
+export const RECORD_TABS = ['measurements', 'photos', 'fittings', 'proofs', 'orders'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
+
+/** The tab an old address lands on (R-8). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { activity: 'measurements' }
+
+/** The tab an address asks for: one of the five, an old one's new home, else Measurements. */
+export function tabOf(asked: string | null | undefined): RecordTab {
+  const value = asked ?? ''
+  return (RECORD_TABS as readonly string[]).includes(value) ? (value as RecordTab) : (MERGED_TABS[value] ?? 'measurements')
+}
+
+/**
+ * The rider's thread lives on the chain's FIRST revision (one per rider and garment type; the API's MeasurementProfile resolver
+ * answers no thread on a later revision), and is body data: only a reader of measurements who reads threads gets it (the API's
+ * thread gate asks sales.measurements.view beside threads.read). Null: no docked thread on this page for this person.
+ */
+export function threadRecordOf(record: Pick<ProfileRecord, 'revisions'>, permissions: readonly string[]): string | null {
+  const first = record.revisions.at(-1)?.id ?? null
+  return first && permissions.includes(MTM_PERMISSIONS.view) && permissions.includes('threads.read') ? first : null
+}
+// ---- end B-TH-258
 
 /** What a record address opens besides its tab: a dialog of the row verbs (`?do=`). */
 export const RECORD_DOS = ['revision', 'review', 'fitting', 'link', 'quote', 'repeat', 'compare'] as const
@@ -868,9 +891,9 @@ export function proofLines(quotes: ReadonlyArray<{ number: string; proofs: Quote
 /** The quotes the rider's units are on (each once), for the Proofs tab. */
 export const unitQuotes = (units: readonly Unit[]): Array<{ id: string; number: string }> => [...new Map(units.filter((unit) => unit.kind === 'QUOTE').map((unit) => [unit.documentId, { id: unit.documentId, number: unit.number }])).values()]
 
-// ---- the record's activity ----------------------------------------------------------------------------------------------
+// ---- the record's history (B-TH-258: Measurements › History, once the Activity tab) ---------------------------------------
 
-export interface ActivityStep {
+export interface HistoryStep {
   readonly key: string
   readonly label: Phrase
   readonly tone: NoticeTone | 'neutral'
@@ -879,27 +902,27 @@ export interface ActivityStep {
 }
 
 /** What happened to the rider's garment type, newest first: each revision recorded or sent, its review, the worksheets, the units. */
-export function activityOf(record: ProfileRecord): ActivityStep[] {
-  const steps: ActivityStep[] = []
+export function historyOf(record: ProfileRecord): HistoryStep[] {
+  const steps: HistoryStep[] = []
   for (const revision of record.revisions) {
     steps.push({
       key: `rev-${revision.id}`,
-      label: revision.byLink ? phrase('activity.sent', { revision: revision.revision }) : phrase('activity.recorded', { revision: revision.revision, by: revision.measuredBy?.name ?? revision.takenBy }),
+      label: revision.byLink ? phrase('history.sent', { revision: revision.revision }) : phrase('history.recorded', { revision: revision.revision, by: revision.measuredBy?.name ?? revision.takenBy }),
       tone: 'info',
       at: revision.submittedAt ?? revision.createdAt,
-      detail: revision.measuredPlace ? phrase('activity.where', { place: revision.measuredPlace }) : null,
+      detail: revision.measuredPlace ? phrase('history.where', { place: revision.measuredPlace }) : null,
     })
     if (revision.review.status !== 'WAITING' && revision.review.at)
       steps.push({
         key: `review-${revision.id}`,
-        label: phrase(revision.review.status === 'CONFIRMED' ? 'activity.confirmed' : 'activity.needMore', { revision: revision.revision, by: revision.review.by?.name ?? '' }),
+        label: phrase(revision.review.status === 'CONFIRMED' ? 'history.confirmed' : 'history.needMore', { revision: revision.revision, by: revision.review.by?.name ?? '' }),
         tone: revision.review.status === 'CONFIRMED' ? 'success' : 'warning',
         at: revision.review.at,
         detail: null,
       })
   }
-  for (const sheet of record.worksheets) steps.push({ key: `sheet-${sheet.id}`, label: phrase('activity.worksheet', { version: sheet.version, revision: sheet.revision }), tone: 'neutral', at: sheet.createdAt, detail: sheet.createdBy ? phrase('activity.by', { name: sheet.createdBy }) : null })
-  for (const unit of record.units) steps.push({ key: `unit-${unit.lineId}`, label: phrase(unit.kind === 'QUOTE' ? 'activity.quoteUnit' : 'activity.orderUnit', { number: unit.number, revision: unit.revision }), tone: 'neutral', at: unit.at, detail: phrase('activity.style', { style: unit.style.code, colourway: unit.colourway.code }) })
+  for (const sheet of record.worksheets) steps.push({ key: `sheet-${sheet.id}`, label: phrase('history.worksheet', { version: sheet.version, revision: sheet.revision }), tone: 'neutral', at: sheet.createdAt, detail: sheet.createdBy ? phrase('history.by', { name: sheet.createdBy }) : null })
+  for (const unit of record.units) steps.push({ key: `unit-${unit.lineId}`, label: phrase(unit.kind === 'QUOTE' ? 'history.quoteUnit' : 'history.orderUnit', { number: unit.number, revision: unit.revision }), tone: 'neutral', at: unit.at, detail: phrase('history.style', { style: unit.style.code, colourway: unit.colourway.code }) })
   return steps.sort((a, b) => b.at.localeCompare(a.at))
 }
 

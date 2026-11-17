@@ -72,8 +72,13 @@ export interface ProfileRecordModel {
   readonly copied?: boolean
   /** B-W2b-371 (XF2:01): the office's and the fittings' photos with their delete dates (null: not read here). */
   readonly photos?: OfficePhotosModel | null
-  /** B-W2b-371 (XF2:02): the rider's thread on the Activity tab (the record panels; null: the person reads no threads). */
+  /**
+   * B-TH-258: the rider's thread docked beside every tab (the office's OfficeRecordThread docked, on the chain's first revision; a
+   * design case's made-up one), or null: the person reads no measurements or no threads (body data) — no dock, no Thread button.
+   */
   readonly thread?: ReactNode
+  /** B-TH-258: what the print view (`?print=1`) shows of the thread under the body (the record panels' print form). */
+  readonly printThread?: ReactNode
 }
 
 export interface ProfileRecordActions {

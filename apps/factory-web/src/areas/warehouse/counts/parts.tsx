@@ -1,11 +1,9 @@
 'use client'
 
 import { useMemo, type ReactNode } from 'react'
-import Link from 'next/link'
-import { FileX, ShieldOff } from 'lucide-react'
-import { Card, EmptyState, Tabs, type TabItem } from '@nexus/ui/components'
-import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Pill, Skeleton, Spinner, Tag } from '@nexus/ui/primitives'
+import { ShieldOff } from 'lucide-react'
+import { Card, EmptyState } from '@nexus/ui/components'
+import { Button, Pill, Spinner, Tag } from '@nexus/ui/primitives'
 import { CheckList as DsCheckList, type CheckItem } from '@nexus/ui/patterns/checklist/index'
 import { Modal, useDsWords } from '../../../lib/i18n/ds-parts'
 import { listKeys, type ListKey } from '../../../list-frame/model'
@@ -14,7 +12,6 @@ import { WithMessages } from '../../../record-panels/i18n'
 import { money } from '../../_shared/stock/model'
 import type { CountKind, CountRow, CountStatus } from './api'
 import { COUNTS_NAMESPACES, scopeParts, STATUS_TONE, type Phrase } from './model'
-import type { Loaded } from './view-model'
 import '../../_shared/stock/stock.css'
 import './counts.css'
 // B-W2b-F51: a refusal names the missing right in words, never its code.
@@ -23,8 +20,8 @@ import { rightRef } from '../../../lib/i18n/rights'
 /**
  * View parts Warehouse › Counts (SCR-132) shares between the list, the count record and the dialogs: the catalogue
  * wrapper and its words (`warehouse-counts`, `stock:<key>` for the shared stock words), the state pill and kind tag in
- * words, the scope in words, a cost amount (absent without the grain: the caller draws nothing), the record band with its
- * states, the steps as the DS CheckList (the design's ReadinessChecklist) and the keys list behind `?`.
+ * words, the scope in words, a cost amount (absent without the grain: the caller draws nothing) (B-TH-264: the record band
+ * and its states are the shared RecordFrame's now), the steps as the DS CheckList (the design's ReadinessChecklist) and the keys list behind `?`.
  */
 
 export function CountsMessages({ children }: { children?: ReactNode }) {
@@ -72,88 +69,6 @@ export function Money({ minor, currency, signed = false }: { minor: number | nul
 export function NoCountsAccess() {
   const t = useWords()
   return <EmptyState icon={<ShieldOff size={22} aria-hidden />} title={t('stock:problem.forbidden')} description={t('stock:problem.noPermission', { right: rightRef('inventory.counts.view') })} />
-}
-
-export interface RecordFrameProps {
-  backHref: string
-  loaded: Loaded<unknown>
-  title?: ReactNode
-  meta?: ReactNode
-  actions?: ReactNode
-  status?: ReactNode
-  tabs?: TabItem[]
-  tab?: string
-  onRetry?: () => void
-  children?: ReactNode
-}
-
-/** The count's band and its states: loading skeleton, not found, no right, a failed read with Try again. */
-export function RecordFrame({ backHref, loaded, title, meta, actions, status, tabs, tab, onRetry, children }: RecordFrameProps) {
-  const t = useWords()
-  const back = <Link href={backHref}>{t('record.back')}</Link>
-  if (loaded.status !== 'ready') {
-    return (
-      <div className="fw-cn">
-        <div className="fw-cn-band">
-          <DetailHeader backAsChild backLabel={back} title={loaded.status === 'loading' ? <Skeleton width={260} height={22} /> : t('record.name')} />
-        </div>
-        {loaded.status === 'loading' ? (
-          <Card padded aria-busy="true">
-            <p className="fw-cn-hint" role="status">
-              <Spinner size={14} /> {t('record.loading')}
-            </p>
-            <div className="fw-cn-stack tight">
-              {Array.from({ length: 6 }, (_, index) => (
-                <Skeleton key={index} height={22} />
-              ))}
-            </div>
-          </Card>
-        ) : (
-          <Card padded>
-            <EmptyState
-              icon={loaded.status === 'forbidden' ? <ShieldOff size={24} aria-hidden /> : <FileX size={24} aria-hidden />}
-              title={t(loaded.status === 'error' ? 'record.failed' : loaded.status === 'forbidden' ? 'stock:problem.forbidden' : 'record.notFound')}
-              description={
-                loaded.status === 'error'
-                  ? t(`stock:${loaded.problem}`)
-                  : loaded.status === 'forbidden'
-                    ? t('stock:problem.noPermission', { right: rightRef('inventory.counts.view') })
-                    : t('record.notFoundBody')
-              }
-              action={
-                loaded.status === 'error' ? (
-                  <Button size="sm" onClick={onRetry}>
-                    {t('stock:problem.retry')}
-                  </Button>
-                ) : (
-                  <Button size="sm" asChild>
-                    <Link href={backHref}>{t('record.backToList')}</Link>
-                  </Button>
-                )
-              }
-            />
-          </Card>
-        )}
-      </div>
-    )
-  }
-  return (
-    <div className="fw-cn">
-      <div className="fw-cn-band">
-        <DetailHeader backAsChild backLabel={back} title={title} actions={actions} />
-        <div className="fw-cn-meta">
-          <span className="fw-cn-chips">{meta}</span>
-          {status && (
-            <span className="fw-cn-status" role="status">
-              {status}
-            </span>
-          )}
-        </div>
-        {tabs && tab && <Tabs ariaLabel={t('record.tabsLabel')} tabs={tabs} active={tab} size="sm" overflow="scroll" />}
-      </div>
-      {children}
-    </div>
-  )
 }
 
 /** A failed or loading part of the record (a tab's lines), in words. */

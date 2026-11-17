@@ -1,6 +1,5 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { panels, panelsModel } from '../../../_shared/buying/fixtures'
 import type { Claim } from '../api'
 import {
   canFor,
@@ -34,6 +33,8 @@ import {
 import { answerDraftOf, formOf, goodsDraftOf, NO_RETURN, ready, sendDraftOf, withCheck, words, type ClaimRecordModel, type ClaimsListModel, type ReturnDialogModel, type ReturnDraft } from '../model'
 import { ClaimRecordView } from '../record/view/ClaimRecordView'
 import { ClaimsListView } from './view/ClaimsListView'
+// ---- B-TH-263: the claim's docked thread in the design cases (RecordFrame beside every tab; its own supplier, made-up) ----
+import { designDockedThread } from '../../../_shared/record-frame/fixtures'
 
 /**
  * SCR-131 — Returns & claims to suppliers (design purchasing.claims) with made-up data only: the tiles (open, waiting
@@ -41,8 +42,9 @@ import { ClaimsListView } from './view/ClaimsListView'
  * filter chips a receipt or a lot opens it with, the kind, the selection with Export, live updates, Return to supplier
  * (find the lot, its hides one by one or its stock per place, the reason, the remedy, an optional e-mail, the return DDT;
  * held with its reason; refused; the result), and the record: the Claim tab (facts, the fields a state allows, the
- * explicit save, the lines), Goods returned (DDTs, stock moves), Credit (expected beside the credit note Finance
- * matches), Activity, every dialog (send, answer, send the goods back, close, cancel, remove lines) and the states.
+ * explicit save, the lines), Goods & credit (DDTs, stock moves, then the credit expected beside the credit note Finance
+ * matches; B-TH-263 merged the two tabs), the docked thread (Activity went: its tools are in the thread's "⋯"), every dialog
+ * (send, answer, send the goods back, close, cancel, remove lines) and the states.
  * Roles: Buyer (with costs), Warehouse (sends goods back, no money), Read-only, Planner, Sales (no purchasing.view).
  */
 
@@ -90,7 +92,6 @@ function recordCase(role: RoleCase, value: Claim, over: Partial<ClaimRecordModel
       tab: 'claim',
       claim: { status: 'ready', value: shown },
       live: 'live',
-      dockOpen: false,
       changed: null,
       notice: null,
       busy: false,
@@ -100,7 +101,6 @@ function recordCase(role: RoleCase, value: Claim, over: Partial<ClaimRecordModel
       formProblem: null,
       saving: false,
       reasons: ready(REASON_LIST),
-      panelsPreview: panelsModel('SupplierClaim', value.id, value.number),
       timeZone: TIME_ZONE,
       ...over,
     },
@@ -111,7 +111,7 @@ function ClaimsDesign({ model }: { model: Case }) {
   if (model.kind === 'list') return inShell('/purchasing/claims', createElement(ClaimsListView, { model: model.list }), model.role)
   const value = model.record.claim.status === 'ready' ? model.record.claim.value : null
   const id = value?.id ?? 'x'
-  return inShell(`/purchasing/claims/${id}`, createElement(ClaimRecordView, { model: model.record, panels: model.record.tab === 'activity' || model.record.dockOpen ? panels('SupplierClaim', id, value?.number ?? '') : null }), model.role)
+  return inShell(`/purchasing/claims/${id}`, createElement(ClaimRecordView, { model: model.record, thread: value ? designDockedThread({ recordType: 'SupplierClaim', record: value.number, party: { name: value.supplier.name, role: 'supplier' } }) : null }), model.role)
 }
 
 const RETURN_SENT = claim('RETURN', 'SENT')
@@ -176,14 +176,19 @@ export const designScreen = defineDesignScreen<Case>({
     { id: 'record-closed', label: 'Closed: read-only with how it was settled', model: recordCase('buyer', claim('RETURN', 'CLOSED')) },
     { id: 'record-cancelled', label: 'A cancelled draft: read-only with why', model: recordCase('buyer', claim('CLAIM', 'CANCELLED', { sentAt: null })) },
     { id: 'record-read-only', label: 'Read-only role: every act held with the missing permission', model: recordCase('readOnly', RETURN_SENT) },
-    { id: 'record-goods', label: 'Goods returned: three hides out of N-STORE with DDT 146/2026 (its PDF)', model: recordCase('warehouse', RETURN_DONE, { tab: 'goods' }) },
-    { id: 'record-goods-not-yet', label: 'Goods returned: a return sent, nothing gone yet', model: recordCase('warehouse', RETURN_SENT, { tab: 'goods' }) },
-    { id: 'record-goods-claim', label: 'Goods returned on a claim: nothing returned — claim only', model: recordCase('buyer', CLAIM_SENT, { tab: 'goods' }) },
-    { id: 'record-credit', label: 'Credit: expected beside the credit note Finance matches (not built yet: held)', model: recordCase('buyer', CLAIM_ACCEPTED, { tab: 'credit' }) },
-    { id: 'record-credit-replacement', label: 'Credit for a replacement: none expected', model: recordCase('buyer', claim('RETURN', 'ACCEPTED', { remedy: 'REPLACEMENT' }), { tab: 'credit' }) },
-    { id: 'record-credit-no-cost', label: 'Credit without the cost grain (warehouse): the amounts are not drawn', model: recordCase('warehouse', RETURN_DONE, { tab: 'credit' }) },
-    { id: 'record-activity', label: 'Activity: the thread, files and history', model: recordCase('buyer', CLAIM_SENT, { tab: 'activity' }) },
-    { id: 'record-dock', label: 'The thread beside a tab (⌘J)', model: recordCase('buyer', CLAIM_SENT, { dockOpen: true }) },
+    // ---- B-TH-263: Goods & credit (Goods returned + Credit, one tab) and the docked thread (Activity went) ----
+    { id: 'record-goods', label: 'Goods & credit: three hides out of N-STORE with DDT 146/2026 (its PDF), then the credit', model: recordCase('warehouse', RETURN_DONE, { tab: 'goods' }) },
+    { id: 'record-goods-not-yet', label: 'Goods & credit: a return sent, nothing gone yet', model: recordCase('warehouse', RETURN_SENT, { tab: 'goods' }) },
+    { id: 'record-goods-claim', label: 'Goods & credit on a claim: nothing returned — claim only; the credit expected', model: recordCase('buyer', CLAIM_SENT, { tab: 'goods' }) },
+    { id: 'record-credit', label: 'Goods & credit: the credit expected beside the credit note Finance matches', model: recordCase('buyer', CLAIM_ACCEPTED, { tab: 'goods' }) },
+    { id: 'record-credit-replacement', label: 'Goods & credit for a replacement: no credit expected', model: recordCase('buyer', claim('RETURN', 'ACCEPTED', { remedy: 'REPLACEMENT' }), { tab: 'goods' }) },
+    { id: 'record-credit-no-cost', label: 'Goods & credit without the cost grain (warehouse): the amounts are not drawn', model: recordCase('warehouse', RETURN_DONE, { tab: 'goods' }) },
+    {
+      id: 'record-thread-docked',
+      label: 'The thread docked beside the claim (40 %): its "⋯" holds Activity’s tools',
+      model: recordCase('buyer', CLAIM_SENT),
+      note: 'The band sits in the shell’s band row; the thread is docked at 40 %, ⌘J hides it. Its "⋯" holds Add task, Ask a partner to approve, Share with a partner, Followers, Follow, Mute, Remind me; "Reply to" reaches this claim’s supplier only.',
+    },
     { id: 'record-changed', label: 'Changed by someone else while a dialog was open', model: recordCase('buyer', CLAIM_SENT, { changed: { at: NOW }, dialog: { kind: 'answer', draft: answerDraftOf(CLAIM_SENT) } }) },
     { id: 'record-notice', label: 'Just sent by e-mail', model: recordCase('buyer', CLAIM_SENT, { notice: { tone: 'success', words: words('notice.sentMail', { number: CLAIM_SENT.number }) } }) },
     { id: 'dialog-send', label: 'Send: the suggested contact ticked, the standard text in Italian, no price', model: recordCase('buyer', CLAIM_DRAFT, { dialog: { kind: 'send', draft: withCheck(sendDraftOf(CLAIM_DRAFT), ready(SEND_CHECK)) } }) },

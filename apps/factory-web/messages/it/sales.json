@@ -75,10 +75,10 @@
     "SHIP_TO_INCOMPLETE": "All'indirizzo di consegna mancano via, CAP, città o paese.",
     "SDI_IDENTITY": "Un'azienda italiana si fattura tramite SDI: aggiungi al cliente il codice SDI o la PEC.",
     "VAT_CHANGED": "Il trattamento IVA del cliente è cambiato dal calcolo dei prezzi: ricalcola dalla scheda Righe.",
-    "FIRM_OFFER_STANDS": "Una versione precedente è un'offerta irrevocabile ancora valida: non si può ancora sostituire.",
+    "FIRM_OFFER_STANDS": "Una revisione precedente è un'offerta irrevocabile ancora valida: non si può ancora sostituire.",
     "TERMS_VERSION": "Dai una versione alle condizioni, così l'accettazione registra quali sono state accettate.",
     "NO_BANK_DETAILS": "La società non ha ancora coordinate bancarie: le istruzioni per l'acconto seguiranno a parte.",
-    "PROOF_NOT_READY": "Una prova è ancora in caricamento, in verifica o è stata rifiutata (Documenti › Prove): completala o toglila.",
+    "PROOF_NOT_READY": "Una prova è ancora in caricamento, in verifica o è stata rifiutata (Approvazione e invio › Prove): completala o toglila.",
     "BELOW_MINIMUM": "Una riga è sotto la quantità minima d'ordine del suo modello, tipo di capo o materiale (Righe): aggiungi pezzi o chiedi al cliente.",
     "PRIVATE_LABEL": "Una riga è un modello a marchio privato di un altro cliente: si produce e si vende solo per quel marchio (Righe).",
     "OUTSIDE_RELEASED_SCOPE": "Una riga indica una variante colore o una taglia per cui il modello non è ancora rilasciato: rilasciala prima, o quota ciò che è rilasciato (Righe).",
@@ -189,7 +189,8 @@
     "noSend": "Il tuo ruolo non può inviare preventivi.",
     "checking": "Verifica del preventivo in corso.",
     "needsApproval": "Serve prima l'approvazione: {reasons}",
-    "cannotAsk": "Prima risolvi ciò che blocca il preventivo (vedi i problemi)."
+    "cannotAsk": "Prima risolvi ciò che blocca il preventivo (vedi i problemi).",
+    "noOrders": "Per creare un ordine serve il permesso di gestire gli ordini (orders.manage)."
   },
   "decide": {
     "held": {
@@ -203,7 +204,7 @@
     "noRight": "Sola lettura: il tuo ruolo può vedere i preventivi, non modificarli.",
     "pending": "Sola lettura in attesa di approvazione: ritira la richiesta per modificarlo.",
     "approved": "Approvato: riaprilo per modificarlo (l'approvazione andrà richiesta di nuovo).",
-    "sent": "La versione {revision} è stata inviata e non può cambiare. Crea la versione {next} per modificarla.",
+    "sent": "La revisione {revision} è stata inviata e non può cambiare. Crea la revisione {next} per modificarla.",
     "accepted": "Accettato dal cliente: non può cambiare.",
     "closed": "Chiuso: non può cambiare."
   },
@@ -213,7 +214,7 @@
     "approve": "Approva",
     "reject": "Rifiuta",
     "withdraw": "Ritira la richiesta",
-    "revise": "Crea la versione {next}",
+    "revise": "Crea la revisione {next}",
     "previewPdf": "Anteprima PDF (nuova scheda)",
     "reopen": "Riapri per modificare",
     "newLink": "Invia un nuovo link",
@@ -225,10 +226,8 @@
     "lines": "Righe",
     "price": "Prezzo e margine",
     "terms": "Condizioni e consegna",
-    "versions": "Versioni",
-    "approval": "Approvazione",
-    "documents": "Documenti",
-    "activity": "Attività",
+    "versions": "Revisioni",
+    "approval": "Approvazione e invio",
     "problems_one": "{count} problema",
     "problems_other": "{count} problemi"
   },
@@ -251,12 +250,10 @@
         "body": "Riprova."
       }
     },
-    "versionChip": "v{revision}",
+    "versionChip": "r{revision}",
     "validLeft_one": "Valido ancora {count} giorno",
     "validLeft_other": "Valido ancora {count} giorni",
     "validEnded": "Offerta scaduta",
-    "dock": "Conversazione",
-    "dockHint": "Mostra la conversazione accanto alla scheda (⌘J)",
     "dockLabel": "La conversazione del preventivo",
     "more": "Altre azioni",
     "tabsLabel": "Sezioni del preventivo",
@@ -265,9 +262,22 @@
     "waitingApproval": "In attesa di approvazione: {reasons}",
     "waitingYours": "L'hai chiesta tu: decide un approvatore (Amministrazione o Titolare). Nel frattempo le righe sono bloccate.",
     "waitingWho": "Decide un approvatore qui o da Home › Approvazioni; chi ha chiesto non decide mai.",
-    "accepted": "Accettato dal cliente. Le prove e la richiesta di acconto sono nella scheda Documenti.",
-    "noPanels": "Conversazione e file si aprono con il preventivo.",
-    "priceList": "Listino {code} · versione {revision}"
+    "accepted": "Accettato dal cliente. Le prove e la richiesta di acconto sono in Approvazione e invio.",
+    "priceList": "Listino {code} · versione {revision}",
+    "madeFrom": "Creato da {number} — Apri",
+    "madeFromPlain": "Creato da {number}",
+    "customerSees": "Il cliente legge: {state}",
+    "order": "Ordine {number} — Apri",
+    "orderPlain": "Ordine {number}",
+    "orderCancelled": "Ordine {number} annullato — Apri",
+    "orderCancelledPlain": "Ordine {number} annullato",
+    "orderWaits": {
+      "NO_SALES_ORDER_SERIES": "L'ordine aspetta: l'azienda non ha ancora una numerazione degli ordini. Un amministratore imposta la serie, poi l'ordine viene creato.",
+      "ACCOUNT_ON_HOLD": "L'ordine aspetta: il cliente è bloccato per questa azienda. L'ordine viene creato quando l'Amministrazione toglie il blocco.",
+      "PO_NUMBER_REQUIRED": "L'ordine aspetta: le condizioni di questo cliente chiedono il suo numero d'ordine su ogni ordine, e il preventivo non lo ha.",
+      "NOT_MADE": "L'ordine aspetta: il cliente ha accettato il preventivo e il suo ordine non è ancora stato creato."
+    },
+    "makeOrder": "Crea l'ordine ora"
   },
   "save": {
     "saving": "Salvataggio…",
@@ -321,7 +331,7 @@
     "empty": {
       "title": "Ancora nessuna riga",
       "body": "Scrivi sopra codice o nome di un modello per aggiungere la prima riga.",
-      "bodyReadOnly": "Questa versione non ha righe."
+      "bodyReadOnly": "Questa revisione non ha righe."
     },
     "certificate": "Taglia {size}: nessun certificato valido la copre.",
     "certificateCount_one": "{count} taglia senza certificato",
@@ -508,11 +518,11 @@
     "belowMinimum": "Sotto l'ordine minimo del cliente di {minimum}: mancano {short}."
   },
   "versions": {
-    "loading": "Lettura delle versioni…",
-    "empty": "Esiste solo la versione 1.",
-    "tableLabel": "Versioni del preventivo",
+    "loading": "Lettura delle revisioni…",
+    "empty": "Esiste solo la revisione 1.",
+    "tableLabel": "Revisioni del preventivo",
     "col": {
-      "version": "Versione",
+      "version": "Revisione",
       "status": "Stato",
       "made": "Creata",
       "sent": "Inviata",
@@ -524,10 +534,10 @@
     "byAt": "{who} · {at}",
     "acceptedBy": "Accettata da {name} · {at}",
     "declined": "Rifiutata: {note}",
-    "superseded": "Sostituita da una versione più nuova",
+    "superseded": "Sostituita da una revisione più nuova",
     "openUntil": "Aperta fino al {date}",
     "download": "Scarica",
-    "reviseNote": "La versione {revision} resta valida finché non invii la versione {next}. Poi il suo link dirà che è stata sostituita."
+    "reviseNote": "La revisione {revision} resta valida finché non invii la revisione {next}. Poi il suo link dirà che è stata sostituita."
   },
   "approval": {
     "rules": {
@@ -558,12 +568,12 @@
     },
     "language": "Lingua dell'anteprima",
     "newTab": "Apri in una nuova scheda",
-    "previewNote": "Creato dal server da questa versione, con la dicitura \"esempio\"; il cliente lo riceve senza dicitura quando viene inviato.",
+    "previewNote": "Creato dal server da questa revisione, con la dicitura \"esempio\"; il cliente lo riceve senza dicitura quando viene inviato.",
     "sentLine": "Inviato {at} · codice documento {sha}…",
     "loading": "Creazione del PDF…",
     "problem": {
       "needs": "Per il PDF servono gli indirizzi di fatturazione e consegna e una validità: compilali in Condizioni e consegna.",
-      "frozen": "Impossibile aprire il PDF inviato. Riprova, o scaricalo da Versioni."
+      "frozen": "Impossibile aprire il PDF inviato. Riprova, o scaricalo da Revisioni."
     },
     "link": {
       "title": "Link di accettazione",
@@ -653,11 +663,11 @@
       "go": "Annulla preventivo"
     },
     "revise": {
-      "title": "Creare la versione {next}?",
-      "body": "La versione {revision} resta valida finché non invii la versione {next}. Poi il suo link dirà che è stata sostituita.",
+      "title": "Creare la revisione {next}?",
+      "body": "La revisione {revision} resta valida finché non invii la revisione {next}. Poi il suo link dirà che è stata sostituita.",
       "note": "Cosa cambia",
-      "noteHint": "Con parole per il cliente, stampate sulla nuova versione (facoltativo).",
-      "go": "Crea la versione {next}"
+      "noteHint": "Con parole per il cliente, stampate sulla nuova revisione (facoltativo).",
+      "go": "Crea la revisione {next}"
     },
     "newLink": {
       "title": "Inviare un nuovo link?",
@@ -676,13 +686,14 @@
     "approved": "Approvato. Il preventivo si può inviare.",
     "rejected": "Rifiutato con il tuo motivo. Il preventivo è tornato in Bozza.",
     "cancelled": "Preventivo annullato.",
-    "revised": "Versione {next} creata in bozza: modificala, poi inviala.",
+    "revised": "Revisione {next} creata in bozza: modificala, poi inviala.",
     "linkSent": "È stato inviato un nuovo link.",
-    "linkFailed": "Il nuovo link è stato creato ma la mail non è partita: riprova."
+    "linkFailed": "Il nuovo link è stato creato ma la mail non è partita: riprova.",
+    "orderMade": "Ordine {number} creato da questo preventivo."
   },
   "send": {
     "title": "Invia il preventivo {number} v{revision} al cliente",
-    "freeze": "Dopo l'invio la versione {revision} non può cambiare. Una modifica crea la versione {next}.",
+    "freeze": "Dopo l'invio la revisione {revision} non può cambiare. Una modifica crea la revisione {next}.",
     "can": {
       "accept": "Leggere il preventivo e accettarlo scrivendo il proprio nome, o rifiutarlo.",
       "deposit": "Vedere l'acconto richiesto e come pagarlo con bonifico.",
@@ -775,7 +786,11 @@
     "open": "Apri",
     "openNewTab": "Apri in una nuova scheda",
     "more": "Mostra altri",
-    "noMarginNote": "Le colonne di margine non sono visibili per il tuo ruolo."
+    "noMarginNote": "Le colonne di margine non sono visibili per il tuo ruolo.",
+    "madeFrom": "da {number}",
+    "order": "Ordine {number}",
+    "orderCancelled": "Ordine {number} annullato",
+    "orderWaits": "L'ordine aspetta"
   },
   "newQuote": {
     "title": "Nuovo preventivo",
@@ -823,15 +838,15 @@
     "pastNone": "Nessun preventivo trovato",
     "pastFound_one": "{count} preventivo",
     "pastFound_other": "{count} preventivi",
-    "pastLine": "Versione {revision} · {lines} righe · {units} pezzi",
+    "pastLine": "Revisione {revision} · {lines} righe · {units} pezzi",
     "pastOther": "Altro cliente"
   },
   "dup": {
     "title": "Duplica {number}",
     "body": "Un nuovo preventivo in bozza con un numero suo, da oggi, con le righe copiate. Invii, link e approvazioni non vengono copiati.",
-    "version": "Versione da copiare",
-    "versionCurrent": "Versione {revision} (attuale)",
-    "versionOther": "Versione {revision} · {status}",
+    "version": "Revisione da copiare",
+    "versionCurrent": "Revisione {revision} (attuale)",
+    "versionOther": "Revisione {revision} · {status}",
     "for": "Per",
     "same": "Lo stesso cliente · {name}",
     "sameBody": "Tiene condizioni, acconto, indirizzi, contatto e lingua.",

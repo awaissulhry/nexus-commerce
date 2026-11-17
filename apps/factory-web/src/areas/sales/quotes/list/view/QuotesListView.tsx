@@ -20,6 +20,9 @@ import '../../quotes.css'
 // B-W2b-316: New quote › Start from Template / Inquiry, the page's ⋯ links.
 import { NewFromBody, NewFromDone, StartFromOption, useHeldWords } from '../../new-from/view/NewFrom'
 import { QuotesPageLinks } from '../../new-from/view/PageLinks'
+// ---- B-TH-257: the New messages column (B-TH-230's LastMessageCell) ----
+import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../../lib/last-message-cell/view/LastMessageCell'
+import { unreadValue } from '../../../../../lib/last-message-cell/model'
 
 export type { QuotesListViewModel, QuotesListActions } from '../list-model'
 
@@ -32,7 +35,7 @@ export type { QuotesListViewModel, QuotesListActions } from '../list-model'
  */
 export function QuotesListView({ model, actions }: { model: QuotesListViewModel; actions?: QuotesListActions }) {
   return (
-    <WithMessages namespaces={['sales', 'lists']}>
+    <WithMessages namespaces={['sales', 'lists', LAST_MESSAGE_NS /* B-TH-257 */]}>
       <QuotesList model={model} actions={actions} />
     </WithMessages>
   )
@@ -41,6 +44,7 @@ export function QuotesListView({ model, actions }: { model: QuotesListViewModel;
 function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: QuotesListActions }) {
   const t = useT('sales')
   const lists = useT('lists')
+  const l = useT(LAST_MESSAGE_NS) // B-TH-257
   const locale = useLocale()
   const [query, setQuery] = useState(model.filters.q)
   useEffect(() => setQuery(model.filters.q), [model.filters.q])
@@ -93,6 +97,15 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
             {data.number}
           </Link>
           <span className="fw-ql-row-sub">{t('record.versionChip', { revision: data.revision })}</span>
+          {/* B-TH-257 (grid-F08): "from INQ-…" — the request the quote was made from (a door with the requests right). */}
+          {data.madeFrom &&
+            (latest.current.model.readsRequests ? (
+              <Link className="fw-ql-row-sub" href={`${model.prefix}/sales/incoming/${encodeURIComponent(data.madeFrom.inquiryId)}`}>
+                {t('list.madeFrom', { number: data.madeFrom.number })}
+              </Link>
+            ) : (
+              <span className="fw-ql-row-sub">{t('list.madeFrom', { number: data.madeFrom.number })}</span>
+            ))}
         </span>
       ) : null
     const CustomerCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
@@ -102,7 +115,26 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
           {data.customerRef && <span className="fw-ql-row-sub">{t('list.ref', { ref: data.customerRef })}</span>}
         </span>
       ) : null
-    const StatusCell = ({ data }: ICellRendererParams<QuoteListRow>) => (data ? <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill> : null)
+    // B-TH-257 (grid-F07): an accepted row names its order ("SO-…", "SO-… cancelled") or says the order waits.
+    const StatusCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
+      data ? (
+        <span className="fw-ql-cell is-status">
+          <Pill tone={STATUS_TONE[data.status]}>{t(`status.${data.status}`)}</Pill>
+          {data.order?.state === 'MADE' && data.order.id && data.order.number ? (
+            latest.current.model.readsOrders ? (
+              <Link className="fw-ql-row-sub" href={`${model.prefix}/sales/orders/${encodeURIComponent(data.order.id)}`}>
+                {t(data.order.status === 'CANCELLED' ? 'list.orderCancelled' : 'list.order', { number: data.order.number })}
+              </Link>
+            ) : (
+              <span className="fw-ql-row-sub">{t(data.order.status === 'CANCELLED' ? 'list.orderCancelled' : 'list.order', { number: data.order.number })}</span>
+            )
+          ) : data.order?.state === 'WAITS' ? (
+            <span className="fw-ql-row-sub">{t('list.orderWaits')}</span>
+          ) : null}
+        </span>
+      ) : null
+    // B-TH-257 (grid-F03): the reader's own new messages — a door to the quote's thread at the first new one.
+    const NewMessagesCell = ({ data }: ICellRendererParams<QuoteListRow>) => (data ? <LastMessageCell unread={latest.current.model.unread?.[data.id]} href={`${recordHref(data)}?thread=new`} record={data.number} /> : null)
     const MarginCell = ({ data }: ICellRendererParams<QuoteListRow>) =>
       data ? (
         <span className="fw-q-inline">
@@ -148,6 +180,8 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
       { colId: 'number', headerName: t('list.col.number'), field: 'number', minWidth: 130, flex: 1, cellRenderer: NumberCell },
       { colId: 'customer', headerName: t('list.col.customer'), field: 'partyName', minWidth: 180, flex: 2, cellRenderer: CustomerCell },
       { colId: 'status', headerName: t('list.col.status'), field: 'status', minWidth: 190, flex: 1, cellRenderer: StatusCell },
+      // B-TH-257: not drawn without threads.read (no count is ever made up).
+      ...(model.unread ? ([{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 136, flex: 0.8, sortable: false, valueGetter: ({ data }: { data?: QuoteListRow }) => unreadValue(data ? latest.current.model.unread?.[data.id] : undefined), cellRenderer: NewMessagesCell }] satisfies ColDef<QuoteListRow>[]) : []),
       { colId: 'units', headerName: t('list.col.units'), field: 'units', minWidth: 110, flex: 1, valueFormatter: (params) => (params.data ? t('list.units', { units: params.data.units, lines: params.data.lineCount }) : '') },
       ...(model.grains.price
         ? ([
@@ -162,7 +196,7 @@ function QuotesList({ model, actions }: { model: QuotesListViewModel; actions?: 
       { colId: 'more', headerName: t('list.col.more'), minWidth: 88, maxWidth: 88, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
     // The cells read the words, the language and the person's grains through the closure: a change rebuilds them.
-  }, [t, locale, model.grains.price, model.grains.margin, model.today, recordHref])
+  }, [t, l, locale, model.grains.price, model.grains.margin, model.today, recordHref, model.prefix, model.unread /* B-TH-257 */, model.readsRequests, model.readsOrders])
 
   const state = model.rows.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />

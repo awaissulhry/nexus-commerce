@@ -1,11 +1,13 @@
+import { readFileSync } from 'node:fs'
 import { createElement, type ComponentType } from 'react'
 import { renderToString } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../../lib/api/errors'
 import type { DesignScreen } from '../../../lib/design/design-screen'
 import { LOCALES } from '../../../lib/i18n/locales'
-import { messagesFor } from '../../../lib/i18n/messages'
+import { CATALOGUE, messagesFor } from '../../../lib/i18n/messages'
 import { I18nProvider } from '../../../lib/i18n/provider'
+import { renderView, textOf } from '../../../lib/record-thread/parts/testing' // B-TH-258
 import { DETAIL, DETAIL_IN_FORCE_ONLY, LIST_ROWS, V1, V2, V2_ENTRIES } from './_demo/fixtures'
 import { designScreen as listScreen } from './list/fixtures'
 import {
@@ -20,7 +22,9 @@ import {
   emptyNewList,
   filtersOf,
   filtersOfTile,
+  isWideTab, // B-TH-258
   listsCsv,
+  MERGED_TABS, // B-TH-258
   newListBody,
   newListProblems,
   NO_FILTERS,
@@ -30,6 +34,7 @@ import {
   priceColumnIds,
   pricesHeld,
   raisePlan,
+  RECORD_TABS, // B-TH-258
   rowsShown,
   searchOf,
   stateOfRows,
@@ -214,6 +219,63 @@ describe('every SCR-106 design case draws in both languages with no key left on 
     const readOnly = recordScreen.cases.find((item) => item.id === 'prices-no-money')!.model as { record: { prices: { answer: { entries: object[] } } } }
     expect(sales.record.prices.answer.entries.every((entry) => !('standardCost' in entry) && 'marginPct' in entry)).toBe(true)
     expect(readOnly.record.prices.answer.entries.every((entry) => !('unitPrice' in entry) && !('marginPct' in entry))).toBe(true)
+  })
+})
+
+// ---- B-TH-258: the price list on RecordFrame (the rule of picture 38, the tabs of 08-tabs.tsv) ----
+describe('B-TH-258: the price list on RecordFrame — tabs 5 → 4, every old ?tab= keeps working, the thread docked (notes only)', () => {
+  const draw = (id: string, locale: (typeof LOCALES)[number] = 'en') => renderView(recordScreen.view as ComponentType<{ model: unknown }>, recordScreen.cases.find((item) => item.id === id)!.model, locale)
+
+  it('the tabs: Prices · Breaks & surcharges · Customers · Versions (Activity gone: its tools in the thread’s "⋯")', () => {
+    expect(RECORD_TABS).toEqual(['prices', 'breaks', 'customers', 'versions'])
+    const text = textOf(draw('thread-docked'))
+    for (const tab of ['Prices', 'Customers', 'Versions']) expect(text).toContain(tab)
+    expect(text).not.toMatch(/\bActivity\b/)
+    for (const locale of LOCALES) expect(Object.keys(CATALOGUE[locale].pricelists ?? {}).filter((key) => key.startsWith('tab.')).sort()).toEqual(['tab.customers', 'tab.prices', 'tab.versions'])
+  })
+
+  it('every old ?tab= keeps working (R-8): activity → Prices (the frame opens the thread), the four as they are, anything else → Prices', () => {
+    expect(MERGED_TABS).toEqual({ activity: 'prices' })
+    expect(tabOf('activity')).toBe('prices')
+    for (const tab of RECORD_TABS) expect(tabOf(tab)).toBe(tab)
+    expect(tabOf('contracts')).toBe('prices')
+    expect(tabOf(null)).toBe('prices')
+  })
+
+  it('ONE thread docked beside every tab, R-ACT in its "⋯"; one third on the wide grids (Prices, Breaks & surcharges)', () => {
+    for (const id of ['thread-docked', 'prices-draft', 'breaks', 'versions']) {
+      const html = draw(id)
+      expect(html.match(/class="fw-rcf-dock"/g)?.length, id).toBe(1)
+      expect(html, id).toContain('aria-label="Thread tools"')
+      expect(html, id).not.toContain('fw-rp-tabs')
+    }
+    expect(isWideTab('prices')).toBe(true)
+    expect(isWideTab('breaks')).toBe(true)
+    expect(isWideTab('customers')).toBe(false)
+    expect(isWideTab('versions')).toBe(false)
+  })
+
+  it('notes only: a price list prices many customers — no party, no "Reply to", no customer in its thread (the brand wall)', () => {
+    const container = readFileSync(new URL('./record/PriceListRecord.tsx', import.meta.url), 'utf8')
+    expect(container).toMatch(/<OfficeRecordThread docked record=\{\{ type: 'PriceList'/)
+    expect(container).toContain('party={null}')
+    expect(container).not.toContain('panels=')
+    const text = textOf(draw('thread-docked'))
+    expect(text).not.toMatch(/Reply to/)
+    expect(text).not.toContain('Brand Beta')
+  })
+
+  it('no thread for a person who reads no threads: no dock, no Thread button', () => {
+    const html = draw('no-thread')
+    expect(html).not.toContain('class="fw-rcf-dock"')
+    expect(html).not.toContain('aria-keyshortcuts="Meta+J Control+J"')
+  })
+
+  it('one notice in the body column, never above the thread', () => {
+    const html = draw('changed')
+    const dockAt = html.indexOf('class="fw-rcf-dock"')
+    expect(html.slice(html.indexOf('class="fw-rcf-body"'), dockAt)).toContain('fw-rcf-notices')
+    expect(html.slice(dockAt)).not.toContain('fw-rcf-notices')
   })
 })
 

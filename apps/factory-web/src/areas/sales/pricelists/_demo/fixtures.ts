@@ -1,7 +1,5 @@
 import { createElement, type ReactNode } from 'react'
 import { permissionCheck } from '../../../../lib/session/session'
-import { designScreen as panelsScreen } from '../../../../record-panels/fixtures'
-import type { RecordPanelsViewModel } from '../../../../record-panels/model'
 import { DEMO_COMPANIES, DEMO_TAG, DEMO_USER, rolePermissions } from '../../../../shell/design-data'
 import { officeNavFor } from '../../../../shell/nav/office-nav'
 import { OfficeShellView, type OfficeShellViewModel } from '../../../../shell/office/view/OfficeShellView'
@@ -255,9 +253,6 @@ export const STYLE_DETAIL: StyleDetail = {
 const party = (n: number, legalName: string, code: string, status = 'ACTIVE'): PartyRow => ({ id: uid('6110', n), code, legalName, tradeName: null, status, country: 'IT', taxMode: 'IT_B2B', vatNumber: `IT0000000000${n}`, city: 'Demo', vies: { state: 'NOT_APPLICABLE' } })
 export const CUSTOMER_ROWS: PartyRow[] = [party(1, 'Moda Demo S.r.l.', 'MODA-DEMO'), party(5, 'Nuovo Prova S.p.A.', 'NUOVO-PROVA'), party(6, 'Esempio Abbigliamento Tecnico', 'ESEMPIO-AT'), party(7, 'Bloccato Demo S.r.l.', 'BLOCCATO-DEMO', 'BLOCKED')]
 
-const conversation = panelsScreen.cases.find((item) => item.id === 'conversation')!.model as RecordPanelsViewModel
-export const PANELS: RecordPanelsViewModel = { ...conversation, record: { type: 'PriceList', id: DETAIL.id, companyId: DETAIL.companyId }, title: `${DETAIL.code} · ${DETAIL.name}`, party: null }
-
 export function recordModel(role: PriceListRole, over: Partial<PriceListRecordModel> = {}): PriceListRecordModel {
   const abilities = can(role)
   const entries = abilities.cost ? V2_ENTRIES : abilities.price ? withoutCost(V2_ENTRIES) : withoutMoney(V2_ENTRIES)
@@ -284,7 +279,6 @@ export function recordModel(role: PriceListRole, over: Partial<PriceListRecordMo
     stylePick: { query: '', results: STYLE_ROWS, problem: null, chosen: null, colourwayId: '', price: '' },
     customerPick: { query: '', results: CUSTOMER_ROWS, problem: null, picked: [] },
     compare: { beforeId: V1.id, afterId: V2.id, answer: COMPARE, problem: null, loading: false },
-    panelsPreview: PANELS,
     // B-W2b-343: Breaks & surcharges.
     breaks: breaksModel(role),
     ...over,

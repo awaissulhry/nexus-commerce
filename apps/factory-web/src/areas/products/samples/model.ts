@@ -66,8 +66,6 @@ export interface SamplesCan {
   parties: boolean
   /** The style picker (product.styles.view). */
   styles: boolean
-  /** The round's thread, files and history (threads.read). */
-  thread: boolean
 }
 
 export function samplesCan(permissions: readonly string[]): SamplesCan {
@@ -84,7 +82,6 @@ export function samplesCan(permissions: readonly string[]): SamplesCan {
     price: has('money.price'),
     parties: has('parties.view'),
     styles: has('product.styles.view'),
-    thread: has('threads.read'),
   }
 }
 
@@ -154,18 +151,20 @@ export const listHref = (prefix: string, address: Partial<ListAddress> = {}): st
 
 // ---- the record's address -------------------------------------------------------------------------------------------------------
 
-export const RECORD_TABS = ['request', 'sample', 'fit', 'approval', 'shipments', 'activity'] as const
+// ---- B-TH-262 (threads plan TH-6; the rule of picture 38, the tabs of picture 39 / 08-tabs O-PRD-SMP): the round on RecordFrame — tabs
+// 6 → 5, Activity goes: its thread docks beside every tab and its tools (Add task, Ask a partner to approve, Share with a partner,
+// Followers, Remind me) live in the thread's "⋯" (R-ACT).
+export const RECORD_TABS = ['request', 'sample', 'fit', 'approval', 'shipments'] as const
 export type RecordTab = (typeof RECORD_TABS)[number]
-export const PANELS = ['thread', 'files', 'history', 'approvals', 'tasks'] as const
-export type ActivityPanel = (typeof PANELS)[number]
+
+/** Every old `?tab=` keeps working (R-8): Activity → the Request with the thread opened (RecordFrame reads `tab=activity` and `panel=approvals`). */
+export const MERGED_TABS: Readonly<Record<string, RecordTab>> = { activity: 'request' }
 
 export function recordTabOf(params: { get(name: string): string | null }): RecordTab {
-  return oneOf(RECORD_TABS, params.get('tab')) ?? 'request'
+  const asked = params.get('tab')
+  return oneOf(RECORD_TABS, asked) ?? (asked && Object.hasOwn(MERGED_TABS, asked) ? MERGED_TABS[asked] : undefined) ?? 'request'
 }
-
-export function panelOf(params: { get(name: string): string | null }): ActivityPanel | null {
-  return oneOf(PANELS, params.get('panel'))
-}
+// ---- end B-TH-262
 
 export function recordHref(prefix: string, roundId: string, tab?: RecordTab, extra?: string): string {
   const terms = [tab && tab !== 'request' ? `tab=${tab}` : null, extra ?? null].filter(Boolean).join('&')

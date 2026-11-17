@@ -15,7 +15,7 @@ const same = { ...COMPARED, sections: COMPARED.sections.map((section) => ({ ...s
 
 export const designScreen = defineDesignScreen<CompareVersionsModel>({
   screen: 'SCR-415',
-  title: 'Compare versions (quote): terms, lines per size, prices, use as change note',
+  title: 'Compare revisions (quote): terms, lines per size, prices, use as change note',
   view: CompareVersions,
   cases: [
     { id: 'owner', label: 'Owner · Version 1 → 2: terms, lines, prices', model: model(), note: 'One VersionCompare per section that differs; totals before → after; Use as change note fills the draft\'s What changed.' },

@@ -5,7 +5,7 @@ import type { ProofsPanelModel } from './model'
 import { ProofsPanel } from './view/ProofsPanel'
 
 /**
- * SCR-035-proofs — the quote record's Documents › Proofs (B-W2b-165; SAL-199) — made-up data only: an invented artwork
+ * SCR-035-proofs — the quote record's Approval & sending › Proofs (B-W2b-165; SAL-199) — made-up data only: an invented artwork
  * proof (a PDF in its second version), a size chart and a placement sketch (pictures drawn here as SVG), invented people and
  * fingerprints. Each case is one state the office meets: a draft with proofs, an empty draft, an upload running, a proof
  * being checked or refused, a new version of a sent quote with the earlier proofs to carry over, a sent version (frozen),
@@ -75,7 +75,7 @@ const MANY = Array.from({ length: 12 }, (_, n) => proof(100 + n, { name: `Scheda
 
 export const designScreen = defineDesignScreen<ProofsPanelModel>({
   screen: 'SCR-035-proofs',
-  title: 'Quote record · Documents › Proofs (accepted with the quote)',
+  title: 'Quote record · Approval & sending › Proofs (accepted with the quote)',
   view: ProofsPanel,
   cases: [
     { id: 'draft', label: 'Draft · three proofs ready', model: model(), note: 'Add by drop or choice; each proof: Open, New version, Remove; not shared until the quote is sent.' },

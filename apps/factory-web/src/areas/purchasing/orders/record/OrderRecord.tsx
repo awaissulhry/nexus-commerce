@@ -10,7 +10,7 @@ import { downloadLink } from '../../../../record-panels/api'
 import { WithMessages } from '../../../../record-panels/i18n'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
 import { findMaterials, getMaterial } from '../../../_shared/buying/api'
-import { useCoalesced, useLive, useThreadDock } from '../../../_shared/buying/hooks'
+import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { buyingCan, part, PART_LOADING, phrase, readProblem, todayIn, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
 import { outsideRefusalOf, parseCc, type SendOutside } from '../../../_shared/document-send/model'
 import type { DocumentSendModel } from '../../../_shared/document-send/model'
@@ -28,7 +28,6 @@ import {
   moveConfirmBy,
   remind,
   getAnswer,
-  getDocuments,
   getOrder,
   getSupplierView,
   isWaitingSend,
@@ -41,7 +40,6 @@ import {
   sendNewLink,
   sendOrder,
   updateOrder,
-  type OrderDocuments,
   type OrderReceipt,
   type OrderReminders,
   type OrderRevisions,
@@ -57,15 +55,19 @@ import { PoInvoices } from '../../../finance/payables/po-tab/PoInvoices'
 // B-W2b-333: purchase orders in depth on screen (the depth parts read and written beside the order).
 import { copyableLines, DEPTH } from '../depth/model'
 import { DEPTH_PREFIX, useOrderDepth } from '../depth/use-order-depth'
+// ---- B-TH-263: the docked thread on the PO (RecordFrame; Activity's tools in its "⋯") ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../../shell/print/print-model'
 
 const TIME_ZONE = 'Europe/Rome'
 
 /**
  * `/w/<company>/purchasing/orders/<id>` (SCR-059): loads the order (purchasing.view; prices only with the cost grain),
- * the supplier's answer, its receipts (inventory.stock.view) and documents, and does what the view asks, one write at a
- * time, each with the order's version as read (a 409 reads it again and says so). Send: the shared send dialog over
- * GET send-check (the PDF is made and frozen at the send: the Documents tab keeps it). Live: purchase_order.* and
- * inventory.receipt_* events of this order read it again; with a dialog open the page says it changed.
+ * the supplier's answer, its receipts (inventory.stock.view), its revisions and reminders, and does what the view asks, one
+ * write at a time, each with the order's version as read (a 409 reads it again and says so). Send: the shared send dialog
+ * over GET send-check (the PDF is made and frozen at the send: a file of the order, in the docked thread's Files view —
+ * B-TH-263). Live: purchase_order.* and inventory.receipt_* events of this order read it again; with a dialog open the page
+ * says it changed. B-TH-263: the thread is docked beside every tab (OfficeRecordThread docked, the order's own supplier).
  */
 export function OrderRecord({ orderId }: { orderId: string }) {
   return (
@@ -112,7 +114,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const current = useRef<PurchaseOrder | null>(null)
   const [answer, setAnswer] = useState<Part<SupplierAnswer>>(PART_LOADING)
   const [receipts, setReceipts] = useState<Part<OrderReceipt[]> | null>(can.stockView ? PART_LOADING : null)
-  const [documents, setDocuments] = useState<Part<OrderDocuments>>(PART_LOADING)
   // B-W2a-69: the revisions (in the person's language: the draft's change words) and the reminders.
   const locale = useLocale()
   const [revisions, setRevisions] = useState<Part<OrderRevisions>>(PART_LOADING)
@@ -136,7 +137,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
   const [sendResult, setSendResult] = useState<DocumentSendModel['result']>(null)
   const [preview, setPreview] = useState<{ src: Uint8Array | null; problem: string | null }>({ src: null, problem: null })
   const sendKey = useRef<string | null>(null)
-  const { dockOpen, toggleDock } = useThreadDock('PurchaseOrder')
   const today = todayIn(TIME_ZONE)
 
   const setValue = useCallback((next: PurchaseOrder) => {
@@ -148,9 +148,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
     getAnswer(api, orderId)
       .then((value) => setAnswer(part(value)))
       .catch((error: unknown) => setAnswer({ value: null, problem: readProblem(error) }))
-    getDocuments(api, orderId)
-      .then((value) => setDocuments(part(value)))
-      .catch((error: unknown) => setDocuments({ value: null, problem: readProblem(error) }))
     getRevisions(api, orderId, locale)
       .then((value) => setRevisions(part(value)))
       .catch((error: unknown) => setRevisions({ value: null, problem: readProblem(error) }))
@@ -624,7 +621,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
     order,
     answer,
     receipts,
-    documents,
     revisions,
     reminders,
     sendExtra: dialog?.kind === 'send' ? sendExtra : null,
@@ -633,7 +629,7 @@ function RecordContainer({ orderId }: { orderId: string }) {
     send: sendModel,
     previewHref: can.cost && order.status === 'ready' && order.value.status === 'DRAFT' ? previewHref(orderId) : null,
     live,
-    dockOpen,
+    personId: session.user.id, // B-TH-263
     changed,
     notice,
     busy,
@@ -644,20 +640,21 @@ function RecordContainer({ orderId }: { orderId: string }) {
     depth: depthPart.model,
   }
 
-  const panels =
-    order.status === 'ready' && (tab === 'activity' || dockOpen) ? (
-      <RecordPanels record={{ type: 'PurchaseOrder', id: order.value.id, companyId: order.value.companyId, siteId: order.value.siteId }} title={order.value.number} party={{ id: order.value.partyId, name: order.value.supplier.name, emails: order.value.contact?.email ? [order.value.contact.email] : [] }} />
-    ) : null
+  // B-TH-263: the docked thread (Head with Activity's doors, files line — the frozen PDFs among the order's files —, Files view, feed,
+  // box), the order's own supplier only; the print view keeps the panels' print form.
+  const value = order.status === 'ready' ? order.value : null
+  const record = value ? { type: 'PurchaseOrder', id: value.id, companyId: value.companyId, siteId: value.siteId } : null
+  const title = value ? `${value.number} · ${value.supplier.name}` : ''
 
   return (
     <OrderRecordView
       model={model}
-      panels={panels}
+      thread={value && record ? <OfficeRecordThread docked record={record} title={title} recordLabel={value.number} party={{ id: value.partyId, name: value.supplier.name }} partyRole="supplier" printHref={printHref(pathname, params?.toString() ?? '')} /> : null}
+      printThread={value && record ? <RecordPanels record={record} title={title} party={{ id: value.partyId, name: value.supplier.name, emails: value.contact?.email ? [value.contact.email] : [] }} /> : null}
       invoices={order.status === 'ready' && session.permissions.includes('payables.view') ? <PoInvoices orderId={order.value.id} prefix={prefix} /> : null}
       actions={{
         onRetry: () => void load(),
         onReload: () => void load(),
-        onDock: toggleDock,
         onDialog: (next) => {
           setDialogProblem(null)
           if (next?.kind === 'send') openSend()
@@ -712,7 +709,6 @@ function RecordContainer({ orderId }: { orderId: string }) {
           searchMaterials('')
         },
         onSupplierView: openSupplierView,
-        onDownload: (fileId) => void download(fileId),
         onRetryPart: () => loadParts(),
         daily: {
           onSendExtra: setSendExtra,

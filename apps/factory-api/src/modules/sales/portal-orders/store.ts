@@ -1,6 +1,7 @@
 import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { isUuid } from '@nexus/factory-domain/core/ids'
 import type { BusinessDate } from '@nexus/factory-domain/core/time'
+import { progressSharedOf } from '@nexus/factory-domain/production-brand/levels'
 import type { PromiseMove } from '@nexus/factory-domain/sales/portal-orders/promise'
 
 /**
@@ -265,8 +266,11 @@ export async function firstRelease(db: Reader, lineIds: readonly string[]): Prom
   return first?.releasedAt ?? null
 }
 
-/** The customer shares production progress (C1): its PortalSettings row, read in the tenant's scope. */
+/**
+ * The customer shares production progress (C1): its PortalSettings row, read in the tenant's scope. B-PR-14: the level decides
+ * (PROGRESS or more: production-brand/levels progressSharedOf); progressShared is kept in step by the database until B-PR-40.
+ */
 export async function progressShared(db: Reader, partyId: string): Promise<boolean> {
-  const settings = await db.portalSettings.findUnique({ where: { id: partyId }, select: { partyId: true, progressShared: true } })
-  return settings?.partyId === partyId && settings.progressShared
+  const settings = await db.portalSettings.findUnique({ where: { id: partyId }, select: { partyId: true, productionLevel: true } })
+  return settings?.partyId === partyId && progressSharedOf(settings.productionLevel)
 }
