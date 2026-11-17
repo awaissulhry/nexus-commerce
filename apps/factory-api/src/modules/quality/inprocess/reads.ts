@@ -13,7 +13,9 @@ import { workerGateFor } from '../../people/privacy/worker-gate'
 import { endOfLineDhu } from '../../production/boards/quality'
 import { devicePlaceOf } from '../../production/calls/store'
 import { firstPieceCardOf } from '../../production/terminal/first-piece'
-import { assertOn, checkerOf, floorOf, mayOn, systemOf, type Checker } from './access'
+import { assertOn, checkerOf, floorOf, mayOn, mayOnWork, systemOf, workOrderReachFor, type Checker } from './access'
+// B-PR-06 (the brand wall): B-PR-03's helpers.
+import { assertEveryParty, workOrderWhere } from '../../production/work-orders/scope'
 import { CHECK_COLUMNS, readLine, readOperationsOf, readWorkOrder, type CheckRow, type LineRow, type Reader } from './store'
 import { checkRowOf, lookupsOf } from './views'
 
@@ -71,6 +73,8 @@ export async function listChecks(caller: CommandCaller, query: ListQuery) {
     const where: Prisma.InProcessCheckWhereInput = {
       AND: [
         context.audience === 'office' ? (scopeWhere(actorOf(context), QUALITY_INPROCESS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.InProcessCheckWhereInput) : { siteId: context.siteId },
+        // B-PR-06: a check on a work order follows its customer; a check of a line names none.
+        { OR: [{ workOrderId: null }, { workOrder: { is: workOrderWhere(actorOf(context), QUALITY_INPROCESS_VIEW) } }] },
         ...(siteId ? [{ siteId }] : []),
         ...(query.lineId ? [{ lineId: query.lineId }] : []),
         ...(query.workOrderId ? [{ workOrderId: query.workOrderId }] : []),
@@ -94,6 +98,8 @@ export async function listChecks(caller: CommandCaller, query: ListQuery) {
 export async function lineDhuRead(caller: CommandCaller, query: { readonly lineId?: string | undefined; readonly date?: BusinessDate | undefined }) {
   const context = checkerOf(caller)
   const line = await lineFor(caller, context, query.lineId)
+  // B-PR-06: a line's DHU counts every customer's pieces: it needs every customer (a tablet of the site reaches them all).
+  assertEveryParty(actorOf(context), QUALITY_INPROCESS_VIEW, line)
   return caller.withClient(async (db) => {
     const { day, range } = await dayAt(db, line.siteId, query.date)
     const measured = await endOfLineDhu(db, line.id, range)
@@ -131,6 +137,8 @@ export async function lineDhuRead(caller: CommandCaller, query: { readonly lineI
 export async function rovingBoard(caller: CommandCaller, query: { readonly lineId?: string | undefined; readonly date?: BusinessDate | undefined }) {
   const context = checkerOf(caller)
   const line = await lineFor(caller, context, query.lineId)
+  // B-PR-06: the line's board shows every customer's work orders on it and the line's counts: it needs every customer.
+  assertEveryParty(actorOf(context), QUALITY_INPROCESS_VIEW, line)
   return caller.withClient(async (db) => {
     const { day, range } = await dayAt(db, line.siteId, query.date)
     const stations = await db.station.findMany({ where: { lineId: line.id }, select: { id: true, workCentreId: true } })
@@ -181,7 +189,8 @@ export async function firstPieceRead(caller: CommandCaller, query: { readonly bu
     const bundle = await db.bundle.findUnique({ where: { id: query.bundleId }, select: { id: true, code: true, workOrderId: true, siteId: true } })
     if (!bundle || (context.audience === 'floor' && bundle.siteId !== context.siteId)) throw new NotFoundError('Bundle not found.')
     const order = await readWorkOrder(db, bundle.workOrderId)
-    if (!order || !mayOn(context, PRODUCTION_SCAN, order)) throw new NotFoundError('Bundle not found.')
+    // B-PR-06: and the work order's customer (another customer's bundle is as an unknown one).
+    if (!order || !mayOnWork(context, PRODUCTION_SCAN, order, await workOrderReachFor(db, order.id))) throw new NotFoundError('Bundle not found.')
     const operations = await readOperationsOf(db, [order.id])
     return { bundle: { id: bundle.id, code: bundle.code }, workOrder: { id: order.id, number: order.number }, firstPiece: await firstPieceCardOf(db, bundle, operations.map((operation) => operation.id), order.number) }
   })
@@ -243,7 +252,8 @@ export async function chargesRead(caller: CommandCaller, query: { readonly siteI
     }
     if (query.workOrderId) {
       const order = await readWorkOrder(db, query.workOrderId)
-      if (!order) throw new NotFoundError('Work order not found.')
+      // B-PR-06: another customer's work order is as an unknown one.
+      if (!order || (mayOn(context, QUALITY_INPROCESS_VIEW, order) && !mayOnWork(context, QUALITY_INPROCESS_VIEW, order, await workOrderReachFor(db, order.id)))) throw new NotFoundError('Work order not found.')
       siteId = order.siteId
       companyId = order.companyId
     }
@@ -251,6 +261,8 @@ export async function chargesRead(caller: CommandCaller, query: { readonly siteI
     const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true, companyId: true, timezone: true } })
     if (!site) throw new NotFoundError('Site not found.')
     assertOn(context, QUALITY_INPROCESS_VIEW, QUALITY_INPROCESS_VIEW, { companyId: companyId ?? site.companyId, siteId: site.id }, 'Site')
+    // B-PR-06: a line's or a site's charges count every customer's work: they need every customer (one work order: its own).
+    if (!query.workOrderId) assertEveryParty(actorOf(context), QUALITY_INPROCESS_VIEW, { companyId: companyId ?? site.companyId, siteId: site.id })
     const today = businessDate(now(), site.timezone)
     const from = query.from ?? today
     const to = query.to ?? from

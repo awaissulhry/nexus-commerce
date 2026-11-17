@@ -82,5 +82,10 @@
     "bar_other": "{count} new messages",
     "arrived_one": "{count} new message in the thread",
     "arrived_other": "{count} new messages in the thread"
+  },
+  "unread": {
+    "line_one": "New since your last visit · {count} message",
+    "line_other": "New since your last visit · {count} messages",
+    "lineMany": "New since your last visit · 200+ messages"
   }
 }

@@ -46,6 +46,12 @@ import {
   type RowVerb,
 } from '../model'
 import { InquiriesMessages, isPageKey, NoAccess, NoticeLine, SourceTag, StatusPill, useWords, WaitingTag } from '../parts'
+// B-TH-230: the New messages column (LastMessageCell) and the one waiting rule.
+import { LAST_MESSAGE_NS, LastMessageCell } from '../../../../lib/last-message-cell/view/LastMessageCell'
+import { unreadValue, type UnreadMap } from '../../../../lib/last-message-cell/model'
+import { useT } from '../../../../lib/i18n/provider'
+import { WithMessages } from '../../../../record-panels/i18n'
+import { waitingOf } from '../model'
 import type { InquiryRecordActions, InquiryRecordModel } from '../record-model'
 import { joined, PictureCell, PictureViewer, useRequestPicture, type PictureLoader } from './cells'
 import { AssignDialog, DeclineDialog, type AssignModel, type DeclineModel } from './Dialogs'
@@ -98,6 +104,8 @@ export interface InquiriesModel {
   noticeFacts?: NoticeFacts
   /** Design cases: each row's small preview by row id (no API). */
   demoPictures?: Readonly<Record<string, string>>
+  /** B-TH-230: the reader's own new messages per request on the page (one read); null/absent: no threads.read, no column. */
+  unread?: UnreadMap | null
   /** Design cases: the wide columns forced on (1920) or off. */
   wide?: boolean
   /** Design cases: the rows selected, the keys panel open, every notice listed, the picture of a row open. */
@@ -140,7 +148,10 @@ export interface InquiriesActions {
 export function InquiriesView({ model, actions, slots }: { model: InquiriesModel; actions?: InquiriesActions; slots?: PaneSlots }) {
   return (
     <InquiriesMessages>
-      <List model={model} actions={actions} slots={slots} />
+      {/* B-TH-230: the New messages column's words */}
+      <WithMessages namespaces={[LAST_MESSAGE_NS]}>
+        <List model={model} actions={actions} slots={slots} />
+      </WithMessages>
     </InquiriesMessages>
   )
 }
@@ -175,6 +186,7 @@ const CARD_FIELDS = Object.freeze({
 
 function List({ model, actions, slots }: { model: InquiriesModel; actions?: InquiriesActions; slots?: PaneSlots }) {
   const { t, say, locale, day, when } = useWords()
+  const l = useT(LAST_MESSAGE_NS) // B-TH-230
   const [selected, setSelected] = useState<readonly string[]>(model.selected ?? [])
   const [search, setSearch] = useState(model.address.q)
   const [noticesOpen, setNoticesOpen] = useState(model.noticesOpen ?? false)
@@ -379,13 +391,16 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
               {data.prospect && <Tag tone="info">{t('who.new')}</Tag>}
             </span>
             <span className="fw-inq-hint fw-inq-compact-what">{data.summary || data.number}</span>
+            {/* B-TH-230: the reader's own new messages, a door to the request with its thread at the first new one. */}
+            {m.unread && (m.unread[data.id]?.newCount ?? 0) > 0 && <LastMessageCell unread={m.unread[data.id]} href={openHref(data)} record={data.number} />}
           </span>
         ) : null
       const CompactState = ({ data }: ICellRendererParams<InquiryRow>) =>
         data ? (
           <span className="fw-inq-cell">
             <StatusPill status={data.status} />
-            {data.waiting.for && data.waiting.workingMinutes !== null && <span className={data.waiting.overdue ? 'fw-inq-hint fw-inq-late' : 'fw-inq-hint'}>{say(workingTime(data.waiting.workingMinutes))}</span>}
+            {/* B-TH-230: amber by the one waiting rule (never the danger tone; the customer's wait never amber). */}
+            {data.waiting.for && data.waiting.workingMinutes !== null && <span className={waitingOf(data)?.tone === 'warning' ? 'fw-inq-hint fw-inq-amber' : 'fw-inq-hint'}>{say(workingTime(data.waiting.workingMinutes))}</span>}
           </span>
         ) : null
       return [
@@ -405,6 +420,10 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
       { colId: 'waitingHours', headerName: t('col.waiting'), minWidth: 185, flex: 0.8, valueGetter: (params) => params.data?.waiting.workingMinutes ?? null, cellRenderer: WaitingCell },
       { colId: 'owner', headerName: t('col.owner'), minWidth: 120, flex: 0.5, valueGetter: (params) => (params.data ? (say(assigneePhrase(params.data)) ?? '') : '') },
       { colId: 'status', headerName: t('col.state'), minWidth: 150, flex: 0.7, valueGetter: (params) => (params.data ? t(`status.${params.data.status}`) : ''), cellRenderer: StateCell },
+      // B-TH-230 (list-F01): New messages — the reader's own, only for a reader of threads; a door to the request at the first new one.
+      ...(m.unread
+        ? [{ colId: 'newMessages', headerName: l('column'), headerTooltip: l('columnHint'), minWidth: 116, flex: 0.5, valueGetter: (params: { data?: InquiryRow }) => unreadValue(params.data ? latest.current.model.unread?.[params.data.id] : undefined), cellRenderer: ({ data }: ICellRendererParams<InquiryRow>) => (data ? <LastMessageCell unread={latest.current.model.unread?.[data.id]} href={openHref(data)} record={data.number} /> : null) } satisfies ColDef<InquiryRow>]
+        : []),
       { colId: 'source', headerName: t('col.source'), minWidth: 110, flex: 0.5, hide: !wide, valueGetter: (params) => (params.data ? t(`source.${params.data.source}`) : ''), cellRenderer: SourceCell },
       { colId: 'number', headerName: t('col.number'), minWidth: 140, flex: 0.6, hide: !wide, valueGetter: (params) => params.data?.number ?? '', cellRenderer: NumberCell },
       ...(manyCompanies ? [{ colId: 'company', headerName: t('col.company'), minWidth: 100, flex: 0.4, valueGetter: (params: { data?: InquiryRow }) => (params.data ? (companyName(params.data.companyId) ?? '') : ''), cellRenderer: CompanyCell } satisfies ColDef<InquiryRow>] : []),
@@ -427,7 +446,7 @@ function List({ model, actions, slots }: { model: InquiriesModel; actions?: Inqu
     ]
     // The cells read the latest model and actions through `latest`.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [t, say, day, when, locale, model.prefix, model.can, model.address, offline, manyCompanies, companies, !!model.detail, wide])
+  }, [t, say, day, when, locale, model.prefix, model.can, model.address, offline, manyCompanies, companies, !!model.detail, wide, l, model.unread /* B-TH-230 */])
 
   if (!model.can.view) return <NoAccess />
 

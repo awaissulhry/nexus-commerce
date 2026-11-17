@@ -89,5 +89,58 @@
     "frame718": "Wide dock, about 718 px",
     "frame375": "Phone, 375 px",
     "frameLabel": "Thread column {width} px wide"
+  },
+  "new": {
+    "count_one": "{count} new",
+    "count_other": "{count} new",
+    "many": "99+ new"
+  },
+  "owner": {
+    "label": "Owner: {name}",
+    "nobody": "No owner yet",
+    "inactive": "{name} (inactive)",
+    "change": "Change owner…",
+    "now": "Now: {name}",
+    "title": "Change owner",
+    "subtitle": "Who answers the thread of {record}",
+    "hint": "The office people who read this thread. The record's own owner (the request's assignee, the order's supervisor, else who made it) answers when nobody is chosen.",
+    "search": "Search people",
+    "listLabel": "People who may own the thread",
+    "recordOwn": "The record's own owner",
+    "me": "{name} (me)",
+    "noPeople": "Nobody else reads this thread yet.",
+    "done": "{name} now answers the thread.",
+    "doneRecord": "The record's own owner answers the thread again.",
+    "failed": "The owner could not be changed: {reason}",
+    "source": {
+      "SET": "chosen",
+      "ASSIGNEE": "the request's assignee",
+      "SUPERVISOR": "the order's supervisor",
+      "MAKER": "who made the record"
+    },
+    "cancel": "Cancel",
+    "problem": {
+      "forbidden": "you may not write on this thread.",
+      "invalid": "that person does not read this thread or is no longer active.",
+      "notFound": "the record is no longer there.",
+      "network": "the network is down; try again.",
+      "failed": "something went wrong; try again."
+    },
+    "loading": "Reading who reads this thread…",
+    "peopleFailed": "Who reads this thread could not be read.",
+    "retry": "Try again"
+  },
+  "rule": {
+    "sinceUs": "Waiting on us since {when}.",
+    "since": {
+      "customer": "Waiting on the customer since {when}.",
+      "supplier": "Waiting on the supplier since {when}.",
+      "partner": "Waiting on the partner since {when}."
+    },
+    "working": "Counted in working hours on the company calendar.",
+    "clock": "No company calendar: counted in clock hours.",
+    "amber_one": "Amber after {count} working day waiting on us.",
+    "amber_other": "Amber after {count} working days waiting on us.",
+    "notAmber": "Never amber while it waits on the other side."
   }
 }

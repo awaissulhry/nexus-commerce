@@ -49,6 +49,7 @@ import { command, StaleVersionError, type CommandCaller, type CommandTools, type
 import { actorOf, type OfficeContext } from '../../../core/context'
 import { allocateNumber } from '../../../platform/numbering/allocate'
 import { followInCommand } from '../../../platform/threads/followers'
+import { assertEveryParty, workOrderWhere } from '../../production/work-orders/scope' // B-PR-37
 import { copyRevision, releaseRevision } from '../bom/revisions'
 import { numberIfNeeded } from './requests'
 import {
@@ -327,6 +328,9 @@ export function removeLine(caller: CommandCaller, changeOrderId: string, lineId:
 export function setWorkInProgress(caller: CommandCaller, changeOrderId: string, body: WorkInProgressBody, idempotencyKey?: string): Promise<OrderView> {
   const ids = body.lines.map((line) => line.workOrderId)
   if (new Set(ids).size !== ids.length) badBody('lines', 'A work order is named once.')
+  // B-PR-37 (the brand wall): the set replaces every open work order's line of the style, of every customer: it needs every
+  // customer (403 in words that name none).
+  assertEveryParty(actorOf(officeOf(caller)), PRODUCT_CHANGES_MANAGE)
   return onDraft(caller, changeOrderId, body.version, 'product.changes.setWorkInProgress', { changeOrderId, ...body }, idempotencyKey, async (tools, order) => {
     const { tx, now } = tools
     const workOrders = await tx.workOrder.findMany({ where: { id: { in: ids } }, select: { id: true, number: true, status: true, styleId: true, siteId: true, companyId: true } })
@@ -571,11 +575,13 @@ export async function readOrder(caller: CommandCaller, changeOrderId: string): P
     const names = new Map((await db.user.findMany({ where: { id: { in: approvals.map((approval) => approval.approverId) } }, select: { id: true, displayName: true } })).map((user) => [user.id, user.displayName]))
     const wipIds = items.filter((item) => item.kind === 'WORK_IN_PROGRESS' && item.workOrderId !== null).map((item) => item.workOrderId!)
     const seesWork = can(actorOf(context), WORKORDERS_VIEW, { companyId: row.companyId })
-    const workScope = scopeWhere(actorOf(context), WORKORDERS_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput
+    // B-PR-37 (the brand wall): B-PR-03's workOrderWhere — the open work orders of the customers the caller reaches; the
+    // order's work-in-progress lines only of those (another customer's line is not drawn).
+    const workScope = workOrderWhere(actorOf(context), WORKORDERS_VIEW)
     const open = seesWork
       ? await db.workOrder.findMany({ where: { AND: [workScope, { styleId: row.styleId, status: { in: [...OPEN_WORK] }, id: { notIn: wipIds } }] }, select: { id: true, number: true, status: true, siteId: true, styleRevisionId: true }, orderBy: [{ number: 'asc' }], take: 200 })
       : null
-    const wipOrders = await db.workOrder.findMany({ where: { id: { in: wipIds } }, select: { id: true, number: true, status: true, siteId: true, styleRevisionId: true } })
+    const wipOrders = await db.workOrder.findMany({ where: { AND: [workOrderWhere(actorOf(context), PRODUCT_CHANGES_VIEW), { id: { in: wipIds } }] }, select: { id: true, number: true, status: true, siteId: true, styleRevisionId: true } })
     const revisionNumbers = new Map(
       (await db.styleRevision.findMany({ where: { id: { in: [...wipOrders, ...(open ?? [])].map((order) => order.styleRevisionId).filter((value): value is string => value !== null) } }, select: { id: true, revision: true } })).map((revision) => [revision.id, revision.revision]),
     )

@@ -24,6 +24,9 @@ import { serverClock } from '../../../core/time'
 import { loadTraceFacts, readStart, type StartRecord } from '../../inventory/trace/load'
 import { officeOf } from './holds'
 import { readHold, type HoldRow, type Reader } from './store'
+// B-PR-06 (the brand wall).
+import { assertEveryParty } from '../../production/work-orders/scope'
+import { reachesHold } from '../wall'
 
 /**
  * What a hold reaches (B-W2b-114; QHS-075; design quality.holds qh-genealogy "TraceTree: hides → cut pieces → bundles →
@@ -216,7 +219,8 @@ async function sitesFacts(db: Reader, actor: Actor, nodes: readonly ImpactNode[]
 /** A hold the caller sees (quality.holds.view over its site), else not found. */
 async function seenHold(db: Reader, actor: Actor, holdId: string): Promise<HoldRow> {
   const row = await readHold(db, holdId)
-  if (!row || !can(actor, QUALITY_HOLDS_VIEW, { companyId: row.companyId, siteId: row.siteId })) throw new NotFoundError('Hold not found.')
+  // B-PR-06 (the brand wall): and every customer of the goods it holds (else not found, as an unknown hold).
+  if (!row || !(await reachesHold(db, actor, QUALITY_HOLDS_VIEW, row))) throw new NotFoundError('Hold not found.')
   return row
 }
 
@@ -227,6 +231,8 @@ export async function readGenealogy(caller: CommandCaller, query: { readonly typ
   return caller.withClient(async (client) => {
     const start = await genealogyStart(client, actor, query.type, query.id)
     if (!can(actor, QUALITY_HOLDS_PLACE, start)) throw new ForbiddenError("A hold by genealogy needs the right to put goods on hold at the suspect record's site.")
+    // B-PR-06: a trace runs through every customer's work orders and shipments: it needs every customer.
+    assertEveryParty(actor, QUALITY_HOLDS_PLACE, start)
     const extending = query.holdId ? await seenHold(client, actor, query.holdId) : null
     const impact = await impactOf(client, actor, [start])
     return {
@@ -259,6 +265,8 @@ export async function readAffected(caller: CommandCaller, holdId: string) {
   const actor = actorOf(context)
   return caller.withClient(async (client) => {
     const row = await seenHold(client, actor, holdId)
+    // B-PR-06: what a hold affects is traced through every customer's work: it needs every customer.
+    assertEveryParty(actor, QUALITY_HOLDS_VIEW, row)
     const kind = TRACE_START_OF[row.subjectType as HoldSubjectType]
     const starts: StartRecord[] = []
     if (kind) {

@@ -22,6 +22,9 @@ import { liveParts } from '../../../record-panels/model'
 import { putToStore, sha256Hex, storeUrl, StoreError } from '../../../record-panels/store'
 import { checkReply, postNoteKeyed, readContacts, readDeliveries, readThreadPage, sendReplyKeyed, shareWithParty } from './api'
 import { afterRead, applyNewest, applyOlder, checkProblemOf, EMPTY_SERVER, readStatusOf, replyRefusal, sendReason, uploadReason, type ServerThread, type Work } from './state'
+// B-TH-229: the person's own read mark (B-TH-027).
+import { markThreadRead } from './api'
+import { readMarker } from './state'
 
 /**
  * The office container of RecordThread v1 (B-TH-212): it reads a record's thread (page by page), its mail states and bounce tasks,
@@ -68,6 +71,11 @@ export interface RecordThreadBase {
   readonly loadThread: () => Promise<void>
   readonly loadTimeline: () => Promise<void>
   readonly notify: (notice: Notice | null) => void
+  /** B-TH-229: the reader's own new messages now (the Head's "2 new", the band's "Thread · 2 new"). */
+  readonly newCount: number
+  /** B-TH-229: the people (Change owner's list) — read, being read, or failed; and the read again. */
+  readonly peopleState: 'loading' | 'ready' | 'failed'
+  readonly loadPeople: () => Promise<void>
 }
 
 const EMPTY_WORK = (draft: ComposerDraft = { mode: 'note', body: '', forFloor: false }): Work => ({ draft, notes: [], files: [], to: [], cc: [], subject: '', outbox: [] })
@@ -91,6 +99,8 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   const [filesRead, setFilesRead] = useState(false) // B-TH-300
   const [changes, setChanges] = useState<ThreadApiChange[]>([])
   const [people, setPeople] = useState<Array<{ id: string; name: string }>>([])
+  // B-TH-229: whether the people were read (Change owner says "reading" or "could not be read", never "nobody" before it knows).
+  const [peopleState, setPeopleState] = useState<'loading' | 'ready' | 'failed'>('loading')
   const [contacts, setContacts] = useState<Contact[]>([])
   const [work, setWork] = useState<Work>(() => EMPTY_WORK())
   const [sending, setSending] = useState(false)
@@ -99,6 +109,9 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   const [notice, setNotice] = useState<Notice | null>(null)
   const [offline, setOffline] = useState<{ since: string } | null>(null)
   const [kept, setKept] = useState<LocalDraft | null>(null)
+  // B-TH-229: the reader's reading as it was on arrival (the feed's line); reset with the record.
+  const [arrival, setArrival] = useState<{ firstNewId: string | null; newCount: number } | null>(null)
+  useEffect(() => setArrival(null), [key])
   // The message a link names (`?message=<id>`), read from the address once on arrival.
   const [anchor, setAnchor] = useState<string | null>(null)
   useEffect(() => setAnchor(anchorOf(window.location.search)), [])
@@ -115,8 +128,10 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     try {
       const page = await readThreadPage(api, key, null)
       lastRead.current = new Date().toISOString()
+      // B-TH-229: the reading on arrival draws "New since your last visit" for the whole visit (marking read does not move it).
+      setArrival((seen) => seen ?? { firstNewId: page.reading?.firstNewMessageId ?? null, newCount: page.reading?.newCount ?? 0 })
       setServer((current) => {
-        const next = applyNewest(current, { thread: page.thread ? { status: page.thread.status, version: page.thread.version, partyId: page.thread.partyId } : null, messages: page.messages, nextCursor: page.nextCursor })
+        const next = applyNewest(current, { thread: page.thread ? { status: page.thread.status, version: page.thread.version, partyId: page.thread.partyId } : null, messages: page.messages, nextCursor: page.nextCursor, reading: page.reading, head: page.head })
         setWork((now) => afterRead(now, next))
         return next
       })
@@ -169,10 +184,13 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
   }, [api, key])
   const loadPeople = useCallback(async () => {
     if (!can.post) return
+    setPeopleState('loading')
     try {
       setPeople((await listPeople(api, key)).people)
+      setPeopleState('ready')
     } catch {
-      // Without the list a note mentions nobody.
+      // Without the list a note mentions nobody (Change owner says it could not be read, with Try again).
+      setPeopleState('failed')
     }
   }, [api, key, can.post])
 
@@ -353,6 +371,9 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     older: server.older,
     offline,
     now: new Date().toISOString(),
+    // B-TH-229
+    firstNewId: arrival?.firstNewId ?? null,
+    newSince: arrival?.newCount ?? 0,
   }
 
   const model: RecordThreadModel = {
@@ -524,7 +545,31 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     void go()
   }
 
+  // ── B-TH-229 (T1-F04): reading marks the thread read for this person, forward only and once per message; the server's own mark
+  // is known first, so an older message never sends. Office people only (this container); never the floor; no "seen by" list.
+  const marker = useMemo(
+    () =>
+      readMarker(async (messageId) => {
+        const reading = await markThreadRead(api, key, messageId)
+        setServer((current) => (current.status === 'ready' ? { ...current, reading } : current))
+      }),
+    [api, key],
+  )
+  useEffect(() => {
+    const id = server.reading?.lastReadMessageId
+    const message = id ? server.messages.find((item) => item.id === id) : undefined
+    marker.known(message ? { id: message.id, at: message.at } : null)
+  }, [marker, server.reading?.lastReadMessageId, server.messages])
+  const onSeen = useCallback(
+    (messageId: string) => {
+      const message = server.messages.find((item) => item.id === messageId)
+      if (message && can.read) marker.seen({ id: message.id, at: message.at })
+    },
+    [server.messages, marker, can.read],
+  )
+
   const actions: RecordThreadActions = {
+    onSeen,
     onDraft: (draft, notes) => patch({ draft, notes }),
     onSend: send,
     onReopen: async () => {
@@ -624,6 +669,6 @@ export function useRecordThread(host: RecordThreadHost): { model: RecordThreadMo
     forgetDraft()
   }
 
-  const base: RecordThreadBase = { key, server, files, filesRead, closed, offline, held, can, partyId, people, loadFiles, loadThread, loadTimeline, notify: setNotice }
+  const base: RecordThreadBase = { key, server, files, filesRead, closed, offline, held, can, partyId, people, loadFiles, loadThread, loadTimeline, notify: setNotice, newCount: server.reading?.newCount ?? 0, peopleState, loadPeople }
   return { model, actions, kept, guard: { ask: leave.ask }, base }
 }

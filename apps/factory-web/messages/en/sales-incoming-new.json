@@ -94,7 +94,7 @@
   },
   "held": {
     "busy": "Creating the request…",
-    "unnumbered": "Requests are not numbered at this company yet: Admin › Numbering",
+    "unnumbered": "Requests are not numbered at this company yet: Admin › Documents & numbering",
     "customer": "Pick the customer, or record a prospect",
     "basis": "Choose the lawful basis for the prospect's details",
     "message": "Write what they asked first",

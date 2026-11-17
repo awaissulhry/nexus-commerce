@@ -28,6 +28,7 @@ import { postMoves, type MoveDraft } from '../../inventory/ledger/post-moves'
 import { detailOf, emitHoldChanged, lockActiveHold, officeOf, placeHoldInCommand, refuse, visibleHold } from './holds'
 import { genealogyStart, groupViewOf, impactOf } from './impact'
 import { HOLD_COLUMNS, readHold, type HoldRow, type Reader } from './store'
+import { assertEveryParty } from '../../production/work-orders/scope'
 // B-W2b-289 (SCM-179): the site's default quality place when none is named.
 import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
 // B-W2b-292 (WT1:01): the confirmed move closes the hold's QUARANTINE task in the same command.
@@ -305,6 +306,8 @@ export async function holdByGenealogy(caller: CommandCaller, body: GenealogyBody
     if (problems.length > 0) refuse(problems, 'The hold by genealogy is not valid.')
     const start = await genealogyStart(tx, actor, body.type, body.id)
     if (!can(actor, QUALITY_HOLDS_PLACE, start)) throw new ForbiddenError("A hold by genealogy needs the right to put goods on hold at the suspect record's site.")
+    // B-PR-06 (the brand wall): a hold by genealogy holds what the trace finds across every customer: it needs every customer.
+    assertEveryParty(actor, QUALITY_HOLDS_PLACE, start)
     // Why (the HOLD list), before anything is written.
     const reason = await reasonFor(tx, 'HOLD', body.reasonCode)
     if (!reason || !reason.active) refuse([{ path: 'body/reasonCode', message: 'Pick an active reason of the hold list.' }], 'The reason is not an active hold reason.')

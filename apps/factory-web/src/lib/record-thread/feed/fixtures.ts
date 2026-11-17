@@ -10,8 +10,8 @@ import type { FeedModel } from './view/Feed'
  * SCR-006-feed — the record thread's feed (B-TH-204, T4; picture 1, approved 2026-11-17). Made-up data (the brand-wall helpers'
  * brands, the design kit's people). Each case is a state of the picture: the conversation (oldest at the top, the oldest run
  * folded, two folded lines, the last three open, a record step and grouped changes, day lines), the fold opened, one message,
- * a link to one message, the "2 new messages" bar, empty, loading, could not load, earlier page failed, offline, no permission,
- * and Brand Beta's copy (the brand wall).
+ * a link to one message, the "2 new messages" bar, B-TH-229's "New since your last visit" (read messages folded, 200+), empty,
+ * loading, could not load, earlier page failed, offline, no permission, and Brand Beta's copy (the brand wall).
  */
 
 const context = (partyName: string, more: Partial<CardContext> = {}): CardContext => ({ partyName, canReadFiles: true, canReply: true, canTask: true, ...more })
@@ -50,6 +50,11 @@ export const designScreen = defineDesignScreen<FeedModel>({
     { id: 'one-message', label: 'One message', model: { ...base, messages: thread.slice(-1), events: [], more: false }, note: 'One message: nothing folds.' },
     { id: 'anchor', label: 'A link to one message', model: { ...base, context: { ...base.context, anchorId: thread[4].id } }, note: '?message=<id>: that message opens unfolded and in focus, in the middle of the thread.' },
     { id: 'new-messages', label: '2 new messages', model: { ...base, newCount: 2 }, note: 'You scrolled up while two messages arrived live: nothing jumped; the bar takes you down.' },
+    // ---- B-TH-229: the reader's own reading (B-TH-027)
+    { id: 'unread', label: 'New since your last visit', model: { ...base, firstNewId: thread[thread.length - 2].id, newSince: 2 }, note: 'Two messages are new to you: the read ones fold, the one they answer stays open, “New since your last visit · 2 messages” sits above the first new one and the thread opens there. A second on screen marks them read (your own mark only; nobody sees who read what).' },
+    { id: 'unread-many', label: 'Over 200 new', model: { ...base, firstNewId: 'older-than-this-page', newSince: 240 }, note: 'More new messages than the page holds: the line sits above the first one shown, says “200+”, and nothing folds.' },
+    { id: 'unread-bar', label: 'New since your last visit + the bar', model: { ...base, firstNewId: thread[thread.length - 8].id, newSince: 8, newCount: 8 }, note: 'Eight new: the thread opens at the line, the rest wait below behind “8 new messages”.' },
+    // ---- end B-TH-229
     { id: 'empty', label: 'Empty', model: { ...base, messages: [], events: [], more: false } },
     { id: 'loading', label: 'Loading', model: { ...base, state: 'loading' } },
     { id: 'error', label: 'Could not load', model: { ...base, state: 'error' } },

@@ -8,6 +8,7 @@ import type { Person } from '@nexus/factory-domain/quality/queue/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { inspectorOf, mayOn, signerOf, type Inspector } from '../final/access'
+import { workOrderWhere } from '../../production/work-orders/scope'
 
 /**
  * Who reaches the inspector queue (B-W2b-106): the office and the site's tablets (their own site only). Each kind of record
@@ -39,11 +40,23 @@ export function viewerOf(caller: Pick<CommandCaller, 'factoryContext'>): Viewer 
   return { context, person: signerOf(context), views }
 }
 
+/**
+ * B-PR-06 (the brand wall): a final inspection follows its work order's customer; an in-process check on a work order too (a
+ * check of a line names no customer); an incoming inspection judges a supplier's goods and names no customer.
+ */
+function wallOf(viewer: Viewer, permission: Permission): object {
+  const reach = { workOrder: { is: workOrderWhere(actorOf(viewer.context), permission) } }
+  if (permission === PERMISSIONS.final.view) return reach
+  if (permission === PERMISSIONS.inprocess.view) return { OR: [{ workOrderId: null }, reach] }
+  return {}
+}
+
 /** The rows of a table the viewer may see with the permission (a tablet: its own site), narrowed to a company or site asked. */
 export function scopeOf(viewer: Viewer, permission: Permission, asked: { readonly companyId?: string | undefined; readonly siteId?: string | undefined }): Prisma.InspectionWhereInput & Prisma.IncomingInspectionWhereInput & Prisma.InProcessCheckWhereInput {
   return {
     AND: [
       scopeWhere(actorOf(viewer.context), permission, { company: 'companyId', site: 'siteId' }) as Prisma.InspectionWhereInput,
+      wallOf(viewer, permission),
       viewer.context.audience === 'floor' ? { siteId: viewer.context.siteId } : {},
       asked.companyId ? { companyId: asked.companyId } : {},
       asked.siteId ? { siteId: asked.siteId } : {},

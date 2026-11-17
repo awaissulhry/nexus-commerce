@@ -12,6 +12,8 @@ import type { InquiryRecordActions, InquiryRecordModel } from '../../record-mode
 import { LinesRead } from '../LinesEditor'
 import { PaneActions } from './actions/PaneActions'
 import { Closed, fromLine, MadeFrom, MailCard, ProspectFields, RecordDialogs, RequestEditor } from './sections'
+// B-TH-228: what was made from it — the order and the style drafts.
+import { MadeThings } from './sections'
 import './pane.css'
 
 /**
@@ -459,7 +461,10 @@ function Details({ model, view, companyName, onEdit }: { model: InquiryRecordMod
       </section>
       <section className="fw-rp-sec">
         <h3 className="fw-rp-h3">{t('pane.facts.madeFrom')}</h3>
-        {view.quote ? <MadeFrom model={model} view={view} /> : <p className="fw-inq-hint">{t('pane.facts.nothingMade')}</p>}
+        {view.quote && <MadeFrom model={model} view={view} />}
+        {/* B-TH-228 (pane-facts-F03): the order made straight from it and the style drafts, each with ITS own status, each opens. */}
+        <MadeThings model={model} view={view} />
+        {!view.quote && !view.order && (view.styleDrafts ?? []).length === 0 && <p className="fw-inq-hint">{t('pane.facts.nothingMade')}</p>}
       </section>
       {view.note && (
         <section className="fw-rp-sec">
