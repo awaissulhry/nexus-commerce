@@ -33,7 +33,8 @@
     "alerts.MARGIN_BELOW_FLOOR.FINAL": "Il margine finale dell'ordine {label} è sotto il suo margine minimo.",
     "alerts.MARGIN_BELOW_FLOOR.QUOTED": "Il margine dell'ordine {label} è sotto il suo margine minimo: il suo preventivo era stato approvato sotto.",
     "alerts.STAMP_DUTY_DUE": "L'imposta di bollo del {label} scade il {dueOn} (mancano {days} giorni): pagala con F24 (codice tributo {f24Code}) e registra il pagamento.",
-    "alerts.STAMP_DUTY_DUE.LATE": "L'imposta di bollo del {label} scadeva il {dueOn}: {days} giorni di ritardo. Pagala con F24 (codice tributo {f24Code}) e registra il pagamento."
+    "alerts.STAMP_DUTY_DUE.LATE": "L'imposta di bollo del {label} scadeva il {dueOn}: {days} giorni di ritardo. Pagala con F24 (codice tributo {f24Code}) e registra il pagamento.",
+    "alerts.REQUEST_NUMBERING_MISSING": "{label} riceve richieste ma non ha una numerazione delle richieste attiva (INQUIRY): il Nuovo ordine del portale è sospeso e la posta agli indirizzi delle richieste resta in attesa. Impostate la serie nella numerazione."
   },
   "refused": {
     "title": "Non è tua da aprire",
@@ -186,7 +187,8 @@
       "RETURN_ARRIVED_LATE": "{record} arrivato dopo la scadenza",
       "EXIT_PROOF_MISSING": "{record}: prova dell'uscita mancante",
       "MARGIN_BELOW_FLOOR": "{record} sotto il margine minimo",
-      "STAMP_DUTY_DUE": "{record}: imposta di bollo in scadenza"
+      "STAMP_DUTY_DUE": "{record}: imposta di bollo in scadenza",
+      "REQUEST_NUMBERING_MISSING": "{record}: le richieste non hanno numerazione"
     },
     "snooze": "Rimanda",
     "assign": "Assegna",

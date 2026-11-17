@@ -1,6 +1,8 @@
 import { ADDRESS_RULES } from './addresses'
 import { CHANGE_REQUEST_RULES } from './change-requests'
 import { RECORD_RULES } from './records'
+// B-TH-011: a customer's requests (received, a question from us, declined; a catalogue order not accepted).
+import { REQUEST_NEWS_RULES } from './requests'
 import { TASK_RULES } from './tasks'
 import type { PartnerRule } from './types'
 
@@ -17,4 +19,6 @@ export const PARTNER_RULES: readonly PartnerRule[] = Object.freeze([
   ...CHANGE_REQUEST_RULES,
   // B-W2b-F15: our check of a delivery address the person added (approved, or refused with the reason).
   ...ADDRESS_RULES,
+  // B-TH-011
+  ...REQUEST_NEWS_RULES,
 ])

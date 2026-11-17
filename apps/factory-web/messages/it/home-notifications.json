@@ -297,7 +297,8 @@
         "requestRefused": "{actor} ha rifiutato la tua richiesta di acquisto {record}"
       },
       "inquiries": {
-        "assigned": "{actor} ti ha affidato la richiesta {record}"
+        "assigned": "{actor} ti ha affidato la richiesta {record}",
+        "newRequest": "È arrivata la nuova richiesta {record}: prendila o affidala a qualcuno"
       },
       "mail": {
         "assigned": "{actor} ti ha affidato una mail di {title}: {record}",

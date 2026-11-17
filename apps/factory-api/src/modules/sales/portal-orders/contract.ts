@@ -22,6 +22,8 @@ const pieces = output({ ordered: z.number().int(), shipped: z.number().int(), op
 const named = output({ code: z.string(), name: z.string() })
 const orderParams = input({ orderId: id() })
 const live = output({ events: z.array(z.string()) })
+/** B-TH-105: the customer's own number of a record with its words (null: none). */
+const yourNumber = output({ seq: z.number().int(), words }).nullable()
 
 const nextShipment = output({
   id: id(),
@@ -41,6 +43,8 @@ const row = output({
   /** Their purchase order number (first in the row). */
   customerRef: z.string().nullable(),
   number: z.string().nullable(),
+  /** B-TH-105 (Owner decision PR-06): "Your order 12", the customer's own count beside our number (a request: null). */
+  yourNumber,
   orderedOn: day.nullable(),
   status,
   words,
@@ -121,6 +125,8 @@ export const recordContract = defineContract({
         id: id(),
         customerRef: z.string().nullable(),
         number: z.string(),
+        // B-TH-105
+        yourNumber,
         status,
         words,
         orderDate: day,

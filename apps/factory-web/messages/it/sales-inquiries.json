@@ -199,6 +199,7 @@
     "MAIL_TAKEN": "Da questa mail è già stata creata {number}",
     "QUOTE_TAKEN": "Questo preventivo è già stato creato da un’altra richiesta",
     "MAIL_NOT_WAITING": "Solo una mail già letta (in Posta da smistare o in una conversazione) diventa una richiesta",
+    "READ_ONLY": "Il tuo ruolo legge le richieste; le gestisce l’ufficio vendite",
     "other": "La fabbrica ha rifiutato questa modifica"
   },
   "problem": {

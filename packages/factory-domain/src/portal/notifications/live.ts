@@ -11,6 +11,8 @@ import { PORTAL_SUPPLIER_DOCUMENTS_VIEW, PORTAL_SUPPLIER_PROFILE_VIEW } from '..
 // B-W2b-196: the customer's Account page (its colleagues, its delivery addresses).
 import { PORTAL_COLLEAGUES_VIEW } from '../../auth/partners/permissions'
 import { PORTAL_ADDRESSES_VIEW } from '../../sales/portal-ordering/permissions'
+// B-TH-011: a customer's requests (its list, tiles and request page update).
+import { PORTAL_SALES_ORDERS_VIEW } from '../../sales/portal-orders/permissions'
 
 /**
  * The partner's live channel (B-W2b-167; design portal.frame live "One live channel per partner session, scoped to the
@@ -36,6 +38,9 @@ export interface PartnerLiveRule {
 const tasks = (fields: readonly string[]): PartnerLiveRule => ({ permission: PORTAL_HOME_VIEW, party: 'partyId', fields: ['taskId', 'partyId', 'kind', ...fields] })
 
 export const PARTNER_LIVE_EVENTS: Readonly<Record<string, PartnerLiveRule>> = Object.freeze({
+  // B-TH-011 (W07): a request came in, changed or ended; the live message names its party (B-TH-015), never who in the office
+  // took it or why it was declined: the request's id, number and state code only.
+  ...Object.fromEntries(['inquiry.received', 'inquiry.changed', 'inquiry.closed'].map((event) => [event, { permission: PORTAL_SALES_ORDERS_VIEW, party: 'partyId', fields: ['inquiryId', 'number', 'status', 'partyId'] }])),
   // B-W2b-167: the task list and the badges; the bell.
   'partner_task.opened': tasks(['recordType', 'recordId']),
   'partner_task.closed': tasks(['status']),

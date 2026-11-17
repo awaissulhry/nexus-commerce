@@ -1,4 +1,5 @@
 import { BUSINESS_TIME_ZONE } from '../../core/time'
+import { customerNumberOf } from '../../sales/customer-numbers'
 import { isPartnerTaskKind, taskWords, type PortalLocale } from '../tasks/kinds'
 import type { PartnerEmailTopic } from './topics'
 
@@ -32,6 +33,13 @@ export const PARTNER_MESSAGE_TEMPLATES = {
   // reason of a refusal, which the customer also reads on its address list). Orders need it: a transactional topic.
   'portal.address.approved': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your delivery address {label} was checked: your orders can use it', it: 'Il tuo indirizzo di consegna {label} è stato verificato: i tuoi ordini possono usarlo' },
   'portal.address.refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your delivery address {label} was not accepted{reason}', it: 'Il tuo indirizzo di consegna {label} non è stato accettato{reason}' },
+  // B-TH-011 (threads plan N24, L2-G05, L2-G19): a request's news ({label}: the office number; {yours}: " (your request 7)", or
+  // nothing, from params.yourSeq). Received is the copy of what the person sent (P-CUS-NEW.receipt-F02); a question from us and our no follow; a
+  // catalogue order we did not accept (its words are on the request's page). Orders need them: a transactional topic.
+  'portal.request.received': { topic: 'ORDERS', category: 'FOLLOWING', en: 'We received your request {label}{yours}', it: 'Abbiamo ricevuto la vostra richiesta {label}{yours}' },
+  'portal.request.need_info': { topic: 'ORDERS', category: 'FOLLOWING', en: 'We need something from you on your request {label}{yours}', it: 'Ci serve qualcosa da voi sulla richiesta {label}{yours}' },
+  'portal.request.declined': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your request {label}{yours} was declined', it: 'La vostra richiesta {label}{yours} non è stata accettata' },
+  'portal.order_request.refused': { topic: 'ORDERS', category: 'FOLLOWING', en: 'Your order request {label} was not accepted', it: "La vostra richiesta d'ordine {label} non è stata accettata" },
 } as const satisfies Record<string, { readonly topic: PartnerEmailTopic | null; readonly category: 'ASSIGNMENT' | 'FOLLOWING' | 'SYSTEM'; readonly en: string; readonly it: string }>
 
 export type PartnerMessageKey = keyof typeof PARTNER_MESSAGE_TEMPLATES
@@ -75,7 +83,11 @@ export function partnerSentence(notice: PartnerNotice, locale: PortalLocale, com
   // B-W2b-F15: a reason the office wrote, as it wrote it. Free text (the reason; an address typed by the customer as the
   // label) goes in by a function, so a "$&" in it is never read as a replacement pattern.
   const reason = typeof params.reason === 'string' && params.reason.trim() !== '' ? `: ${params.reason.trim()}` : ''
+  // B-TH-011/105: the customer's own number of a request ("your request 7"), in the reader's language.
+  const yourNumber = customerNumberOf('REQUEST', typeof params.yourSeq === 'number' ? params.yourSeq : null)
+  const yours = yourNumber ? ` (${yourNumber.words[locale].toLowerCase()})` : ''
   return PARTNER_MESSAGE_TEMPLATES[notice.messageKey][locale]
+    .replace('{yours}', yours)
     .replace('{company}', company)
     .replace('{what}', what)
     .replace('{label}', () => notice.recordLabel)
