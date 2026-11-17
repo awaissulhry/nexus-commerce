@@ -13,6 +13,9 @@ import { processPush } from '../push/service'
 import type { PushUrgency } from '../push/web-push'
 import { logDeliveries, NOTIFICATION_COLUMNS } from '../store'
 import { sendInstantMail } from './mail'
+// B-TH-080 (threads plan TH-6, thread-G11): the instant mail quotes the message it is about, cut for its reader.
+import { officeQuotes } from '../../email-out/digest/message-text'
+import type { Actor } from '@nexus/factory-domain/core/permissions'
 import { matrixOf } from './store'
 
 /**
@@ -60,17 +63,24 @@ export async function deliverInstant(caller: CommandCaller, eventId: string): Pr
   if (rows.length === 0) return { mailed: 0, pushed: 0 }
 
   // Each person as they are now: language, address, grains; the names their sentences name; their company's code for links.
-  const people = new Map<string, { email: string; displayName: string; locale: DigestLocale; grains: ReturnType<typeof heldGrains> } | null>()
+  const people = new Map<string, { email: string; displayName: string; locale: DigestLocale; grains: ReturnType<typeof heldGrains>; actor: Actor } | null>()
+  // B-TH-080: per notification mailed, the message it is about (while its reader may read the thread now).
+  const quotes = new Map<string, string>()
   const names = new Map<string, string>()
   const codes = new Map<string, string>()
   await caller.withClient(async (client) => {
     for (const { row } of rows) {
       if (!people.has(row.userId)) {
         const user = await client.user.findFirst({ where: { id: row.userId, status: 'ACTIVE' }, select: { email: true, displayName: true, locale: true } })
-        people.set(row.userId, user ? { email: user.email, displayName: user.displayName, locale: user.locale === 'en' ? 'en' : 'it', grains: heldGrains({ audience: 'office', tenantId, grants: sessionGrants({ requireMfa: false }, await heldRoles(client, row.userId, now), true) }) } : null)
+        const grants = user ? sessionGrants({ requireMfa: false }, await heldRoles(client, row.userId, now), true) : []
+        people.set(row.userId, user ? { email: user.email, displayName: user.displayName, locale: user.locale === 'en' ? 'en' : 'it', grains: heldGrains({ audience: 'office', tenantId, grants }), actor: { audience: 'office', tenantId, grants } } : null)
       }
       const key = row.companyId ?? ''
       if (!codes.has(key)) codes.set(key, await companyCodeOf(client, row.companyId))
+    }
+    for (const { row, email: byMail } of rows) {
+      const person = people.get(row.userId)
+      if (byMail && person) for (const [id, quote] of await officeQuotes(client, person.actor, [row])) quotes.set(id, quote)
     }
     const ids = [...new Set(rows.flatMap(({ row }) => peopleOf(row)))].filter((id) => !names.has(id))
     if (ids.length) for (const user of await client.user.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } })) names.set(user.id, user.displayName)
@@ -89,7 +99,7 @@ export async function deliverInstant(caller: CommandCaller, eventId: string): Pr
       const sentence = sentenceOf({ ...row, params: paramsFor(row.params, person.grains) }, names, person.locale)
       let outcome: { outcome: 'SENT' | 'FAILED'; outboundId: string | null; detail: string | null }
       try {
-        outcome = await sendInstantMail(caller, email, { person: { id: row.userId, email: person.email, displayName: person.displayName, locale: person.locale }, companyId: row.companyId, subject: `${row.recordLabel}: ${sentence}`.slice(0, 200), sentence, link: `${email.webOrigin}${page}` })
+        outcome = await sendInstantMail(caller, email, { person: { id: row.userId, email: person.email, displayName: person.displayName, locale: person.locale }, companyId: row.companyId, subject: `${row.recordLabel}: ${sentence}`.slice(0, 200), sentence, link: `${email.webOrigin}${page}`, quote: quotes.get(row.id) ?? null })
       } catch {
         outcome = { outcome: 'FAILED', outboundId: null, detail: 'the mail could not be made' }
       }
