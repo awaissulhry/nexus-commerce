@@ -37,6 +37,19 @@ export function livePartiesOf(payload: unknown): string[] {
   return [...found].sort()
 }
 
+// ── B-PR-09 ──
+/**
+ * B-PR-09: the `partyIds` of a record that serves several work orders (a cut order, a hold) from its parts' customers: each
+ * once, sorted; [] as soon as one part names no customer (null: a work order of no customer, or one mixed before the rule), so
+ * the message reaches only people of every customer — never a person limited to the other parts' customers (the record itself
+ * is not found for them: production/work-orders scope allPartsWhere).
+ */
+export function partyIdsOf(parties: readonly (string | null | undefined)[]): string[] {
+  if (parties.some((party) => typeof party !== 'string' || !isUuid(party))) return []
+  return [...new Set(parties as readonly string[])].sort()
+}
+// ── end B-PR-09 ──
+
 /** The live message of a published event, or null when its definition shows nothing on a screen. */
 export function liveMessageFor(envelope: EventEnvelope, definition: EventDefinition): LiveMessage | null {
   if (!definition.live || definition.type !== envelope.type || definition.version !== envelope.version) return null

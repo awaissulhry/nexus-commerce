@@ -134,7 +134,7 @@ export async function moveNextStep(caller: CommandCaller, holdId: string, body: 
     if (problem) throw conflict(problem, [{ path: 'body/nextStep', message: problem }])
     const after = await tx.qualityHold.update({ where: { id: current.id }, data: { nextStep: body.nextStep, version: { increment: 1 }, updatedAt: now }, select: HOLD_COLUMNS })
     tools.audit({ action: 'quality.moveHoldNextStep', recordType: 'QualityHold', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { nextStep: current.nextStep }, after: { nextStep: after.nextStep } })
-    emitHoldChanged(tools, current, ['nextStep'])
+    await emitHoldChanged(tools, current, ['nextStep'])
     return { hold: await detailOf(tx, after, now) }
   })
   return result
@@ -170,7 +170,7 @@ export async function askQuarantine(caller: CommandCaller, holdId: string, body:
     if (fields.length === 0) return { hold: await detailOf(tx, current, now) }
     const after = await tx.qualityHold.update({ where: { id: current.id }, data: { quarantine: 'ASKED', quarantineLocationId: placeId, version: { increment: 1 }, updatedAt: now }, select: HOLD_COLUMNS })
     tools.audit({ action: 'quality.askHoldQuarantine', recordType: 'QualityHold', recordId: current.id, companyId: current.companyId, siteId: current.siteId, before: { quarantine: current.quarantine, quarantineLocationId: current.quarantineLocationId }, after: { quarantine: 'ASKED', quarantineLocationId: placeId } })
-    emitHoldChanged(tools, current, fields)
+    await emitHoldChanged(tools, current, fields)
     return { hold: await detailOf(tx, after, now) }
   })
   return result
@@ -234,7 +234,7 @@ export async function moveIntoQuarantineInCommand(tools: CommandTools, current: 
     before: { quarantine: current.quarantine, quarantineLocationId: current.quarantineLocationId },
     after: { quarantine: 'MOVED', quarantineLocationId: place.id, transfers: drafts.length, staysAt: stays.map((entry) => entry.locationId) },
   })
-  emitHoldChanged(tools, current, current.quarantineLocationId === place.id ? ['quarantine'] : ['quarantine', 'quarantineLocationId'])
+  await emitHoldChanged(tools, current, current.quarantineLocationId === place.id ? ['quarantine'] : ['quarantine', 'quarantineLocationId'])
   const tasks = await doneQuarantineTasksInCommand(tools, current.id)
   const at = (entry: HeldBalance) => lying.get(`${entry.locationId}|${entry.lotId}|${entry.hideId}`)
   return {
@@ -355,7 +355,7 @@ export async function holdByGenealogy(caller: CommandCaller, body: GenealogyBody
         const locked = await lockActiveHold(tools, extending.id, extending.version)
         await tx.qualityHold.update({ where: { id: locked.id }, data: { groupId, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
         tools.audit({ action: 'quality.joinHoldGroup', recordType: 'QualityHold', recordId: locked.id, companyId: locked.companyId, siteId: locked.siteId, before: { groupId: null }, after: { groupId } })
-        emitHoldChanged(tools, locked, ['groupId'])
+        await emitHoldChanged(tools, locked, ['groupId'])
       }
     }
 

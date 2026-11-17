@@ -35,14 +35,14 @@ export async function closeByTicketInCommand(tools: CommandTools, ticket: { read
   const request = await openRequestOf(tx, ticket.id)
   if (!request) return null
   await tx.replacementRequest.update({ where: { id: request.id }, data: { status: 'DONE', doneAt: now, version: { increment: 1 }, updatedAt: now }, select: { id: true } })
-  const order = await tx.workOrder.findUnique({ where: { id: request.workOrderId }, select: { number: true } })
+  const order = await tx.workOrder.findUnique({ where: { id: request.workOrderId }, select: { number: true, /* B-PR-09 */ partyId: true } })
   const scope = { companyId: request.companyId, siteId: request.siteId }
   tools.audit({ action: 'production.doneReplacement', recordType: 'ReplacementRequest', recordId: request.id, ...scope, before: { status: 'OPEN' }, after: { status: 'DONE', recutTicketId: ticket.id, recutTicket: ticket.number } })
   tools.emit({
     type: 'production.replacement_changed',
     subject: request.workOrderId,
     ...scope,
-    payload: { workOrderId: request.workOrderId, number: order?.number ?? '', replacementId: request.id, kind: 'RECUT', status: 'DONE', cutLogId: null },
+    payload: { workOrderId: request.workOrderId, number: order?.number ?? '', partyId: order?.partyId ?? null /* B-PR-09 */, replacementId: request.id, kind: 'RECUT', status: 'DONE', cutLogId: null },
   })
   return request.id
 }

@@ -4,7 +4,7 @@ import type { CommandCaller } from '../../../core/command'
 import { listInspections } from '../../../modules/quality/final/lists'
 import { listReleases } from '../../../modules/quality/final/releases'
 import { listLots } from '../../../modules/quality/lab/lots'
-import { defineExportSource } from '../source'
+import { defineExportSource, /* B-PR-09 */ partyTerm } from '../source'
 
 /**
  * Quality › Inspections (SCR-075, `/quality/inspections`): the export of the list as the screen shows it. The page draws
@@ -20,6 +20,9 @@ import { defineExportSource } from '../source'
  * The Due column (B-W2b-17) writes the due time, "· Overdue" when an open inspection is past it.
  * No money. People: who signed or released is said as "you", "at the bench" or "in the office" (never a name in a list,
  * Owner answer W1); an assignee who is an office user is named as the screen names them.
+ * B-PR-09 (the brand wall): the lists' own wall (B-PR-06: an inspection or a release only of a work order whose customer is
+ * reached) and the screen's customer filter (`?party=`, or the API's `partyId`; a malformed one is refused) on inspections and
+ * releases; material lots name no customer, so the lots view has no customer filter (as its screen).
  */
 
 type InspectionRow = Awaited<ReturnType<typeof listInspections>>['inspections'][number]
@@ -32,8 +35,8 @@ type Row =
   | { readonly kind: 'lots'; readonly row: LotRow }
 
 type Query =
-  | { readonly kind: 'inspections'; readonly status?: 'OPEN'; readonly waitingRelease?: boolean; readonly failedUndecided?: boolean; readonly assigned?: 'me'; readonly overdue?: boolean }
-  | { readonly kind: 'releases' }
+  | { readonly kind: 'inspections'; readonly status?: 'OPEN'; readonly waitingRelease?: boolean; readonly failedUndecided?: boolean; readonly assigned?: 'me'; readonly overdue?: boolean; /* B-PR-09 */ readonly partyId?: string }
+  | { readonly kind: 'releases'; /* B-PR-09 */ readonly partyId?: string }
   | { readonly kind: 'lots' }
 
 const VIEWS = ['all', 'open', 'mine', 'overdue', 'waiting', 'failed', 'reversed', 'lots'] as const
@@ -95,19 +98,22 @@ export const inspections = defineExportSource<Query, Row>({
   permission: QUALITY_INSPECTIONS_VIEW,
   query(address) {
     const view = viewOf(address)
-    if (view === 'reversed') return { kind: 'releases' }
     if (view === 'lots') return { kind: 'lots' }
-    if (view === 'open') return { kind: 'inspections', status: 'OPEN' }
-    if (view === 'mine') return { kind: 'inspections', assigned: 'me' }
-    if (view === 'overdue') return { kind: 'inspections', overdue: true }
-    if (view === 'waiting') return { kind: 'inspections', waitingRelease: true }
-    if (view === 'failed') return { kind: 'inspections', failedUndecided: true }
-    return { kind: 'inspections' }
+    // B-PR-09: the screen's customer filter (inspections and releases name their work order's customer).
+    const partyId = partyTerm(address)
+    const party = partyId ? { partyId } : {}
+    if (view === 'reversed') return { kind: 'releases', ...party }
+    if (view === 'open') return { kind: 'inspections', status: 'OPEN', ...party }
+    if (view === 'mine') return { kind: 'inspections', assigned: 'me', ...party }
+    if (view === 'overdue') return { kind: 'inspections', overdue: true, ...party }
+    if (view === 'waiting') return { kind: 'inspections', waitingRelease: true, ...party }
+    if (view === 'failed') return { kind: 'inspections', failedUndecided: true, ...party }
+    return { kind: 'inspections', ...party }
   },
   async read(caller, query) {
     const me = meOf(caller)
     if (query.kind === 'releases') {
-      const page = await listReleases(caller, { reversed: true, limit: ALL_ROWS })
+      const page = await listReleases(caller, { reversed: true, limit: ALL_ROWS, ...(query.partyId ? { partyId: query.partyId } : {}) /* B-PR-09 */ })
       return { rows: page.releases.map((row) => ({ kind: 'releases' as const, me, row })), next: null }
     }
     if (query.kind === 'lots') {
@@ -120,6 +126,7 @@ export const inspections = defineExportSource<Query, Row>({
       ...(query.failedUndecided ? { failedUndecided: true } : {}),
       ...(query.assigned ? { assigned: query.assigned } : {}),
       ...(query.overdue ? { overdue: true } : {}),
+      ...(query.partyId ? { partyId: query.partyId } : {}), // B-PR-09
       limit: ALL_ROWS,
     })
     return { rows: page.inspections.map((row) => ({ kind: 'inspections' as const, me, row })), next: null }

@@ -208,6 +208,7 @@ async function openInCommand(tools: CommandTools, order: OrderRow, body: OpenInp
     payload: {
       workOrderId: workOrder.id,
       number: workOrder.number,
+      partyId: workOrder.partyId, // B-PR-09: its one customer, for the office's live wall
       reworkId: id,
       workOrderSizeId: cell.id,
       bundleId: carrier,
@@ -292,7 +293,7 @@ export async function moveRework(caller: CommandCaller, reworkId: string, move: 
       type: 'production.rework_moved',
       subject: workOrder.id,
       ...scope,
-      payload: { workOrderId: workOrder.id, number: workOrder.number, reworkId: rework.id, bundleId: rework.bundleId, status, goodQuantity: after.goodQuantity, scrapQuantity: after.scrapQuantity, postedBy: postedBy(context) },
+      payload: { workOrderId: workOrder.id, number: workOrder.number, partyId: workOrder.partyId /* B-PR-09 */, reworkId: rework.id, bundleId: rework.bundleId, status, goodQuantity: after.goodQuantity, scrapQuantity: after.scrapQuantity, postedBy: postedBy(context) },
     })
     const [view] = await reworkViews(tx, [after], { office: context.audience === 'office' })
     return { rework: view! }

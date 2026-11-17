@@ -283,7 +283,7 @@ describe("an inspection's Sample & AQL and its plan from a profile (QHS-013, QHS
 
     const applied = await ok('keeper', 'POST', `/quality/aql/inspections/${inspectionId}/profile`, { version: before.inspection.version })
     expect(applied).toMatchObject({ profile: { code: 'AQL-EXM' }, matchesProfile: true, inspection: { codeLetter: 'A', sampleSize: 2, inspectionLevel: 'II', aqlMajor: '1.5', aqlMinor: '2.5', acceptMajor: 0, acceptMinor: 0, version: before.inspection.version + 1 } })
-    expect((await events('quality.inspection_sampling_set')).at(-1)).toEqual({ inspectionId, workOrderId: A.wo1, profileId: A.exm, source: 'CUSTOMER', codeLetter: 'A', lotSize: 2, sampleSize: 2, acceptMajor: 0, acceptMinor: 0 })
+    expect((await events('quality.inspection_sampling_set')).at(-1)).toEqual({ inspectionId, workOrderId: A.wo1, partyId: A.brand /* B-PR-09 */, profileId: A.exm, source: 'CUSTOMER', codeLetter: 'A', lotSize: 2, sampleSize: 2, acceptMajor: 0, acceptMinor: 0 })
     const [audit] = (await audits('Inspection', inspectionId)).slice(-1)
     expect(audit).toMatchObject({ action: 'quality.aql.applyProfile', reason: null, after: { profileCode: 'AQL-EXM', source: 'CUSTOMER', codeLetter: 'A' }, before: { aqlProfileId: null } })
 

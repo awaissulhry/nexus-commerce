@@ -176,7 +176,7 @@ describe('priority and the rush flag (MES-009)', () => {
     expect(workOrder).toMatchObject({ rush: false, priority: 7, version: made.version + 1 })
     const [audit] = await admin(`SELECT before, after FROM "AuditLog" WHERE "recordId" = $1 AND action = 'workorders.update'`, [made.id])
     expect(audit).toMatchObject({ before: { rush: true, priority: 2 }, after: { rush: false, priority: 7 } })
-    expect((await events('workorder.priority_changed', made.id)).map((row) => row.payload)).toEqual([{ workOrderId: made.id, number: made.number, siteId: A.site, priority: 7, rush: false, previousPriority: 2, previousRush: true }])
+    expect((await events('workorder.priority_changed', made.id)).map((row) => row.payload)).toEqual([{ workOrderId: made.id, number: made.number, partyId: A.brand /* B-PR-09 */, siteId: A.site, priority: 7, rush: false, previousPriority: 2, previousRush: true }])
     // A note alone tells the floor nothing.
     await ok('manager', 'PATCH', `/production/work-orders/${made.id}`, { version: workOrder.version, note: 'Pack in pairs' })
     expect(await events('workorder.priority_changed', made.id)).toHaveLength(1)

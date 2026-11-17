@@ -1,10 +1,8 @@
-import { ValidationError } from '@nexus/factory-domain/core/errors'
-import { isUuid } from '@nexus/factory-domain/core/ids'
 import { WORK_ORDER_STATUSES, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { isRelativeDay } from '@nexus/factory-domain/views/quick/relative'
 import { listWorkOrders, type ListQuery } from '../../../modules/production/work-orders/work-orders'
-import { defineExportSource } from '../source'
+import { defineExportSource, /* B-PR-09: shared by the walled lists */ partyTerm } from '../source'
 
 /**
  * Production › Work orders (SCR-069, `/production/work-orders`): the export of the list as the screen shows it. The
@@ -22,16 +20,7 @@ type Row = Awaited<ReturnType<typeof listWorkOrders>>['workOrders'][number]
 const isStatus = (value: string | null): value is WorkOrderStatus => value !== null && (WORK_ORDER_STATUSES as readonly string[]).includes(value)
 
 // ── B-PR-03 ──
-/** The address's customer (`party`, else the API's `partyId`), or undefined; a malformed one is refused. */
-function partyTerm(address: URLSearchParams): string | undefined {
-  for (const name of ['party', 'partyId']) {
-    const value = address.get(name)?.trim()
-    if (!value) continue
-    if (!isUuid(value)) throw new ValidationError('Not a customer: the file would hold more than the screen.', [{ path: `query/${name}`, message: 'An id.' }])
-    return value
-  }
-  return undefined
-}
+// The address's customer (`party`, else the API's `partyId`): ../source partyTerm (B-PR-09 moved it there for every walled list).
 
 /** The customer cell: the work order's customer, then each order with its customer PO ("SO-0001 (PO-42)"). */
 function customerText(row: Row): string | null {

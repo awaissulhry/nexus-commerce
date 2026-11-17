@@ -3,6 +3,8 @@ import { PRODUCTION_REPORTS_VIEW } from '@nexus/factory-domain/production/report
 import { DAILY_REPORT_KEY } from '@nexus/factory-domain/production/reports/subscriptions'
 import { dailyView, previousWorkingDayOf, readDaily, siteFor } from '../../../production/reports/daily'
 import { actorOfRun, runSites } from '../kit'
+// B-PR-09: line totals add up every customer's work.
+import { everyPartySites } from '../../../production/work-orders/scope'
 import { defineReport } from '../report'
 
 /**
@@ -11,6 +13,9 @@ import { defineReport } from '../report'
  * (production.reports.view at the site). The same rows the morning e-mail sends (production REPORT_KEYS
  * `production.daily`): its Schedule tab lists those subscriptions. Per line or work centre, never per person; a line of
  * fewer than 5 people has its efficiency hidden (it would be close to each person's).
+ * B-PR-09 (the brand wall, as B-PR-07's own daily report page): a line's totals add up every customer's work, so the report reads
+ * only the sites where the person reaches every customer; a person limited to some customers gets 403 in words that name none
+ * (the run, the file and the mail alike).
  */
 
 export default defineReport({
@@ -37,10 +42,10 @@ export default defineReport({
   mail: DAILY_REPORT_KEY,
   formats: ['CSV', 'PDF'],
   async read(run) {
-    const sites = await runSites(run, PRODUCTION_REPORTS_VIEW)
+    const actor = actorOfRun(run)
+    const sites = everyPartySites(actor, PRODUCTION_REPORTS_VIEW, await runSites(run, PRODUCTION_REPORTS_VIEW)) // B-PR-09
     const target = sites[0]
     if (!target) return { complete: true, rows: [] }
-    const actor = actorOfRun(run)
     return run.caller.withClient(async (db) => {
       const site = await siteFor(db, actor, PRODUCTION_REPORTS_VIEW, target.id)
       const day = run.filters.day === 'TODAY' ? run.today : await previousWorkingDayOf(db, site.id, run.today)

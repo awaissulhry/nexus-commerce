@@ -89,7 +89,7 @@ async function takeBack(caller: CommandCaller, workOrderId: string, mode: 'undo'
           reason: why,
         })
         const event = { subject: current.id, companyId: current.companyId, siteId: current.siteId }
-        tools.emit({ ...event, type: 'workorder.status_changed', payload: { workOrderId: current.id, number: current.number, from: 'CLOSED', to: 'COMPLETED' } })
+        tools.emit({ ...event, type: 'workorder.status_changed', payload: { workOrderId: current.id, number: current.number, partyId: current.partyId /* B-PR-09 */, from: 'CLOSED', to: 'COMPLETED' } })
         tools.emit({ ...event, type: 'work_order_close.changed', payload: { closeId: live.id, workOrderId: current.id, number: current.number, change: mode === 'undo' ? 'undone' : 'reopened', settled: false, beyond: live.reasonCode !== null } })
         if (reversals.length > 0) {
           tools.emit({ ...event, type: 'work_order_cost.posted', payload: { workOrderId: current.id, number: current.number, entryIds: reversals.map((draft) => draft.id), kinds: [...new Set(reversals.map((draft) => draft.kind))], reversals: reversals.length } })

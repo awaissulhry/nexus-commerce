@@ -1,14 +1,15 @@
 import { PRODUCTION_CUTTING_VIEW } from '@nexus/factory-domain/production/cutting/permissions'
 import { CUT_ORDER_KINDS, type CutOrderKind } from '@nexus/factory-domain/production/cutorders/rules'
 import { CUT_ORDER_VIEWS, listCutOrders, type CutOrderView, type ListQuery } from '../../../modules/production/cutorders/read'
-import { defineExportSource } from '../source'
+import { defineExportSource, /* B-PR-09 */ partyTerm } from '../source'
 
 /**
  * Production › Cutting room › Cutting, the Cut orders grid (`/production/cutting`, SCR-238; B-W2b-112): the export of the cut
  * orders as the list reads them. The address is the list's: `?view=open|planned|released|cutting|cut|cancelled|all` (nothing:
  * open), `?kind=LEATHER|FABRIC`, `?siteId=`, `?q=` (number, marker, material or a work order, at most 60 characters). Read through
  * the module's listCutOrders (production.cutting.view over its companies and sites), page by page with its cursor (200 a page).
- * No money; no person.
+ * No money; no person. B-PR-09 (the brand wall): the list's own wall (B-PR-04b: a cut order only when every customer it cuts for
+ * is reached) and the screen's customer filter (`?party=`, or the API's `partyId`; a malformed one is refused).
  *
  * Registered in ./index.ts by the screen step (B-W2b-129) together with the grid: the registry's test asks for a real Office list
  * page at its address, and the Cutting page still lists W2a's cuts until then.
@@ -26,11 +27,13 @@ export const cutOrders = defineExportSource<Omit<ListQuery, 'limit' | 'cursor'>,
     const kind = address.get('kind') ?? ''
     const siteId = address.get('siteId') ?? ''
     const q = (address.get('q') ?? '').slice(0, 60).trim() || undefined
+    const partyId = partyTerm(address) // B-PR-09
     return {
       view: (CUT_ORDER_VIEWS as readonly string[]).includes(view) ? (view as CutOrderView) : 'open',
       ...((CUT_ORDER_KINDS as readonly string[]).includes(kind) ? { kind: kind as CutOrderKind } : {}),
       ...(/^[0-9a-f-]{36}$/.test(siteId) ? { siteId } : {}),
       ...(q ? { q } : {}),
+      ...(partyId ? { partyId } : {}), // B-PR-09
     }
   },
   async read(caller, query, cursor, limit) {
