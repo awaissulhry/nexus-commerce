@@ -87,6 +87,8 @@ function model(record: OrderRecord, over: Partial<OrderRecordViewModel> = {}): O
 
 const ACTIONS: OrderRecordActions = { onAsk: () => undefined, onRetryProduction: () => undefined }
 const draw = (over: Partial<OrderRecordViewModel> = {}, locale: Locale = 'en', record = betaRecord()) => render(createElement(StatusTab, { model: model(record, over), record, actions: ACTIONS }), locale)
+/** The names of the tables drawn (a DS SummaryTable names itself by `aria-label`, not by a visible caption): read by role and name. */
+const tableNames = (html: string) => [...html.matchAll(/<table\b[^>]*\baria-label="([^"]*)"/g)].map((match) => textOf(match[1]!))
 
 describe('the order’s production on Status & progress, part 1 (every level)', () => {
   it('waiting for you on this order, with the way to what waits (Home until Waiting for you exists)', () => {
@@ -277,8 +279,8 @@ describe('the order’s production on Status & progress, part 2 (by level)', () 
     expect(text).toContain('Gates and dates')
     for (const words of ['PP sample', 'Size set', 'Trims in', 'Leather approved']) expect(text).toContain(words)
     for (const words of ['Waiting on you', 'Waiting on us', 'Passed', 'Started before approval']) expect(text).toContain(words)
-    // Swatch answers are approvals, not gates: their own table.
-    expect(text).toContain('Your material approvals')
+    // Swatch answers are approvals, not gates: their own table (named by its aria-label).
+    expect(tableNames(html)).toContain('Your material approvals')
     expect(text).toContain('Colour')
     expect(text).toContain('Fabric')
     expect(text).toContain('Approved')
@@ -302,8 +304,10 @@ describe('the order’s production on Status & progress, part 2 (by level)', () 
   })
 
   it('Italian: the same sections in Italian words, and the customer is "voi" (never "tu")', () => {
-    const text = textOf(draw(ready(atGates()), 'it'))
-    for (const words of ['Tappe e date', 'Tocca a voi', 'Tocca a noi', 'Superata', 'Le vostre approvazioni dei materiali', 'Inizio del taglio', 'Tagliati e in fasci', 'Vedete cosa vi aspetta']) expect(text).toContain(words)
+    const html = draw(ready(atGates()), 'it')
+    const text = textOf(html)
+    for (const words of ['Tappe e date', 'Tocca a voi', 'Tocca a noi', 'Superata', 'Inizio del taglio', 'Tagliati e in fasci', 'Vedete cosa vi aspetta']) expect(text).toContain(words)
+    expect(tableNames(html)).toContain('Le vostre approvazioni dei materiali')
     const words = CATALOGUE.it['portal-orders']!
     const mine = Object.entries(words).filter(([key]) => /^production\.(gates|approvals|planned|pieces)\./.test(key))
     expect(mine.length).toBeGreaterThan(20)
