@@ -42,7 +42,7 @@
     "rev": "Rev {revision}",
     "daysLate_one": "{count} day late",
     "daysLate_other": "{count} days late",
-    "progressLabel": "Finished garments of {number}",
+    "progressLabel": "Progress of {number}: {figure}",
     "rowMenu": "More for {number}",
     "open": "Open",
     "openNewTab": "Open in a new tab",
@@ -862,5 +862,160 @@
     "plannedCell_one": "{count} garment",
     "plannedCell_other": "{count} garments",
     "offPlan": "Off the plan"
+  },
+  "parts": {
+    "stage": {
+      "PREPARING": "Preparing",
+      "CUTTING": "Cutting",
+      "SEWING": "Sewing",
+      "QUALITY": "Quality check",
+      "READY": "Ready to ship",
+      "label": "Production stages",
+      "unknown": "Stage not known yet",
+      "blocked": "Blocked",
+      "blockedWhy": "Blocked: {why}",
+      "sewingNotCounted": "Sewing not counted here",
+      "loading": "Reading the stages…",
+      "failed": "Could not load the stages",
+      "office": {
+        "planned": "Planned {date}",
+        "promised": "Ex-factory {date}"
+      },
+      "customer": {
+        "expected": "Expected by {date}",
+        "promised": "Expected {date}"
+      }
+    },
+    "waiting": {
+      "office": {
+        "US": "Waiting on us",
+        "BRAND": "Waiting on customer",
+        "SUPPLIER": "Waiting on supplier",
+        "WORKSHOP": "Waiting on workshop"
+      },
+      "customer": {
+        "you": "Waiting on you",
+        "us": "Waiting on us"
+      },
+      "unknown": "Waiting on: not known"
+    },
+    "age": {
+      "minutes": "{count} min",
+      "hours": "{count} h",
+      "days": "{count} d"
+    },
+    "health": {
+      "LATE": "Late",
+      "lateBy": "Late · {count} d",
+      "AT_RISK": "At risk",
+      "NOT_PROMISED": "No date yet",
+      "ON_TIME": "On track",
+      "none": "No plan yet",
+      "unknown": "Health not known",
+      "withReason": "{health} · {reason}",
+      "withNote": "{health}, with a note",
+      "open": "Health: {health}. Show why",
+      "title": "Why: {health}",
+      "fromDates": "From the dates: planned {plan}, promised {promise}",
+      "fromDatesNoPlan": "From the dates: promised {promise}, no planned finish yet",
+      "noPromise": "No date promised yet",
+      "lateDays_one": "late by {count} day",
+      "lateDays_other": "late by {count} days",
+      "raised": "Raised to At risk by a person: {reason}",
+      "officeOnly": "Office only",
+      "note": "{by}, {date}: {note}",
+      "noteBy": "{by}: {note}"
+    },
+    "pieces": {
+      "stages": {
+        "ORDERED": "Ordered",
+        "CUT": "Cut and bundled",
+        "SEWN": "Sewn",
+        "INSPECTED": "Checked",
+        "PACKED": "Packed"
+      },
+      "of": "{done} of {total}",
+      "notCounted": "Not counted here",
+      "stage": "Stage",
+      "size": "Size",
+      "total": "Total",
+      "bars": "Pieces by stage: {name}",
+      "bySize": "Pieces by size: {name}",
+      "nothingCut": "Nothing cut yet",
+      "none": "No pieces to show yet",
+      "loading": "Reading the pieces…",
+      "failed": "Could not load the pieces"
+    },
+    "request": {
+      "label": "Request: {kind}",
+      "kind": {
+        "CHANGE": "Change",
+        "CANCEL": "Cancel",
+        "RUSH": "Urgent – asked",
+        "HOLD": "Pause",
+        "RESUME": "Resume",
+        "SPLIT_SHIPMENT": "Ship what is ready",
+        "SAMPLE_ROUND": "Another sample round"
+      },
+      "office": {
+        "OPEN": "Waiting on us",
+        "COUNTERED": "Counter-offer sent",
+        "ACCEPTED": "Accepted",
+        "REFUSED": "Refused",
+        "WITHDRAWN": "Withdrawn"
+      },
+      "customer": {
+        "OPEN": "Being reviewed",
+        "COUNTERED": "Our counter-offer waits for you",
+        "ACCEPTED": "Accepted",
+        "REFUSED": "Not accepted",
+        "WITHDRAWN": "Withdrawn"
+      },
+      "askedAt": "Asked {when}",
+      "askedBy": "Asked by {name} · {when}",
+      "askedByYou": "You asked {when}",
+      "changes": "What the request changes: {kind}",
+      "was": "Was",
+      "wanted": "Asked",
+      "yourNote": "Your note: {note}",
+      "theirNote": "Their words: {note}",
+      "impact": "Impact",
+      "frozen": "Already fixed",
+      "nothingFrozen": "Nothing is fixed yet",
+      "earliest": "Earliest date",
+      "earliestRange": "{best} at best · {likely} likely · {worst} at worst",
+      "price": "Price",
+      "priceNone": "No price change",
+      "priceMay": "A price may apply",
+      "answer": "Our answer, {date}: {words}",
+      "answered": "Answered {date}",
+      "answerBy": "Answered by {name}, {date}: {words}",
+      "answeredBy": "Answered by {name}, {date}"
+    },
+    "hold": {
+      "office": {
+        "title": "On hold since {date}",
+        "titleWhy": "On hold since {date} · {reason}",
+        "QUALITY": "Goes back to In progress when quality releases it.",
+        "PRODUCTION": "Goes back to In progress when the hold is lifted.",
+        "BRAND": "Paused at the customer's request; goes back to In progress when the hold is lifted."
+      },
+      "customer": {
+        "paused": "Paused at your request since {date}",
+        "title": "On hold since {date}",
+        "titleWhy": "On hold since {date}: {words}",
+        "next": "We tell you when it continues."
+      },
+      "more_one": "{count} more hold",
+      "more_other": "{count} more holds"
+    },
+    "fresh": {
+      "live": "Live · as of {time}",
+      "everyMinute": "Updated {time} · refreshes every minute",
+      "everySeconds": "Updated {time} · refreshes every {count} seconds",
+      "offline": "Offline · as of {time}",
+      "connecting": "Connecting…",
+      "never": "Not read yet"
+    }
   }
 }

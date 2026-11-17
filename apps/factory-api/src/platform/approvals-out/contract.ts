@@ -71,6 +71,8 @@ export const askContract = defineContract({
     fileIds: z.array(id()).max(APPROVAL_LIMITS.files).optional(),
     send: z.boolean(),
     language: locale.optional(),
+    /** B-TH-004: "Send outside this customer" ticked: the address may be another party's contact (recorded). */
+    sendOutside: z.boolean().optional(),
   }),
   response: { 201: output({ request: officeRequestView, url: z.string().nullable(), delivery: z.enum(['SENT', 'FAILED', 'QUEUED']).nullable() }) },
 })

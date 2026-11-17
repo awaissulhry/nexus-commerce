@@ -241,6 +241,8 @@ export interface SendConfirmationBody {
   readonly subject?: string | null | undefined
   readonly message?: string | null | undefined
   readonly language?: DocumentLanguage | undefined
+  /** B-TH-004: the person ticked "Send outside this customer". */
+  readonly sendOutside?: boolean | undefined
 }
 
 /** POST /sales/orders/:orderId/confirmation/send */
@@ -271,6 +273,7 @@ export async function sendConfirmation(files: FilesRuntime, caller: CommandCalle
       sender: { userId: recipient.sender!.id, name: recipient.sender!.displayName, email: recipient.sender!.email },
       to,
       cc: body.cc,
+      sendOutside: body.sendOutside, // B-TH-004
       subject: body.subject?.trim() ? body.subject.trim() : mail.subject,
       body: mail.body,
       attachments: [kept.fileId],

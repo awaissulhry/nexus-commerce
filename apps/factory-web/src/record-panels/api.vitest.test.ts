@@ -65,6 +65,14 @@ describe('the record panels call the API through its one client', () => {
     expect(sent().body).toEqual({ to: ['buyer@example.com'], body: 'Hello', attachments: [] })
   })
 
+  it('B-TH-202: sends the person’s recorded "Send outside this customer" tick only when it was ticked', async () => {
+    const { api, sent } = client(() => json(201, {}))
+    await sendEmail(api, RECORD, { to: ['buyer@example.com'], subject: 'Sizes', body: 'Hello', attachments: [], sendOutside: true })
+    expect(sent().body).toEqual({ to: ['buyer@example.com'], subject: 'Sizes', body: 'Hello', attachments: [], sendOutside: true })
+    await sendEmail(api, RECORD, { to: ['buyer@example.com'], body: 'Hello', attachments: [], sendOutside: false })
+    expect(sent(1).body).toEqual({ to: ['buyer@example.com'], body: 'Hello', attachments: [] })
+  })
+
   it('closes a thread with the version it read (COL-078)', async () => {
     const { api, sent } = client(() => json(200, {}))
     await setThreadStatus(api, RECORD, 'CLOSED', 4)
@@ -128,6 +136,12 @@ describe('a refused mail says what was refused, in the panel\'s words', () => {
     expect(sendNotice(refusal(400, 'validation_failed', ['body/other'])).key).toBe('notice.invalid')
     expect(sendNotice(refusal(409, 'invalid_state')).key).toBe('notice.sendConflict')
     expect(sendNotice(refusal(403, 'forbidden')).key).toBe('notice.forbidden')
+  })
+
+  it('B-TH-202: the recipient rule’s refusals say what to do, in words that name no customer', () => {
+    expect(sendNotice(refusal(409, 'conflict', ['refusal/OTHER_PARTY', 'body/cc/0']))).toEqual({ key: 'notice.outsideCustomer', tone: 'danger' })
+    expect(sendNotice(refusal(409, 'conflict', ['refusal/HIDDEN_OUTSIDE', 'body/bcc/0']))).toEqual({ key: 'notice.hiddenOutside', tone: 'danger' })
+    expect(sendNotice(refusal(409, 'conflict')).key).toBe('notice.sendConflict')
   })
 })
 

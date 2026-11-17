@@ -37,6 +37,8 @@ const EVERYTHING: MisSendCheck = {
     { code: 'INTERNAL_MENTION', items: ['Marco Colombo'] },
   ],
   attachments: [{ id: '0190f0e2-4370-7000-8000-100000000001', name: 'Scheda taglie.pdf', sizeBytes: 182_400, audience: 'PARTY' }],
+  // B-TH-202: the club's contact is another customer's: the send refuses it without "Send outside this customer".
+  outsideCustomer: ['bruno@club.example.invalid'],
 }
 
 const CLEAN: MisSendCheck = {
@@ -44,6 +46,7 @@ const CLEAN: MisSendCheck = {
   recipients: [{ address: 'anna@pista.example.invalid', kind: 'PARTY', source: 'CONTACT', organisation: PISTA, personName: 'Anna Esempio' }],
   warnings: [],
   attachments: [{ id: '0190f0e2-4370-7000-8000-100000000001', name: 'Scheda taglie.pdf', sizeBytes: 182_400, audience: 'PARTY' }],
+  outsideCustomer: [],
 }
 
 const OFFICE_FILE: MisSendCheck = {
@@ -60,8 +63,9 @@ export const designScreen = defineDesignScreen<MisSendModel>({
   title: 'Send to the party? (mis-send guard)',
   view: MisSendDialog,
   cases: [
-    { id: 'warnings', label: 'Every warning', model: base, note: 'Another organisation among the recipients (danger: Send is red), an unknown address, cost words, another customer named, a colleague @mentioned. Send is held until the tick.' },
-    { id: 'acknowledged', label: 'Warnings read', model: { ...base, acknowledged: true }, note: 'The tick is on: Send message may go (Enter).' },
+    { id: 'warnings', label: 'Every warning', model: base, note: 'Another organisation among the recipients (danger: Send is red), an unknown address, cost words, another customer named, a colleague @mentioned. Send is held until "Send outside this customer" (B-TH-202, recorded) and the warnings are ticked.' },
+    { id: 'outside-ticked', label: 'Send outside this customer ticked', model: { ...base, sentOutside: true }, note: 'B-TH-202: the recorded tick is on; the warnings still wait for theirs.' },
+    { id: 'acknowledged', label: 'Warnings read', model: { ...base, acknowledged: true, sentOutside: true }, note: 'Both ticks are on: Send message may go (Enter), with the recorded "Send outside this customer".' },
     { id: 'clean', label: 'Nothing to say', model: { ...base, draft: plain, state: { status: 'ready', check: CLEAN } }, note: 'The customer’s own contact, a shared file: Send may go at once.' },
     { id: 'office-file', label: 'An office-only attachment', model: { ...base, draft: plain, state: { status: 'ready', check: OFFICE_FILE } }, note: 'The send would refuse it: held until the file is taken off (back to edit).' },
     { id: 'checking', label: 'Checking', model: { ...base, state: { status: 'checking' } } },

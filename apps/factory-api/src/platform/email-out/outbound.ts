@@ -1,6 +1,7 @@
-import type { Prisma } from '@nexus/factory-db'
+import type { FactoryClient, Prisma } from '@nexus/factory-db'
 import { EMAIL_SEND, THREADS_READ } from '@nexus/factory-domain/auth/permissions/catalogue'
-import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { DomainError, ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type Issue } from '@nexus/factory-domain/core/errors'
+import { outsideAddressWords, RECIPIENT_REFUSALS, recipientRule, type OutsideAddress } from '@nexus/factory-domain/email/recipient-party' // B-TH-004
 import { newId } from '@nexus/factory-domain/core/ids'
 import { can } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
@@ -27,6 +28,7 @@ import {
   type Recipients,
 } from '@nexus/factory-domain/email/rules'
 import { eventFor } from '@nexus/factory-domain/events/define'
+import { addressOwnership } from './mis-send/check' // B-TH-004
 import { cleanBody, MAX_BODY_LENGTH } from '@nexus/factory-domain/threads/rules'
 import { encodeCursor } from '@nexus/factory-domain/threads/timeline'
 import { COMMAND_SETTINGS, command, runCommand, type CommandCaller, type CommandSpec, type CommandTools, type CommandTx } from '../../core/command'
@@ -176,6 +178,47 @@ export async function suppressedAmong(tx: CommandTx, addresses: readonly string[
   return new Set(rows.map((row) => row.address))
 }
 
+// ---- B-TH-004 (threads plan TH-0, WALL-G03/G04/G05; T20 T21 T24): one recipient rule for every mail on a party's record ---------
+
+/** The names the office reads for parties (trade name, else the registered one). */
+async function partyNamesOf(client: CommandTx | FactoryClient, ids: readonly string[]): Promise<Map<string, string>> {
+  const wanted = [...new Set(ids)]
+  if (wanted.length === 0) return new Map()
+  const rows = await client.party.findMany({ where: { id: { in: wanted } }, select: { id: true, legalName: true, tradeName: true } })
+  return new Map(rows.map((row) => [row.id, row.tradeName?.trim() || row.legalName]))
+}
+
+/**
+ * The recipient rule (factory-domain email/recipient-party) on a record of a party: a To or Cc address of ANOTHER party
+ * (its contact or portal person, and not one of this party's) is refused unless the person ticked "Send outside this
+ * customer"; a Bcc goes only to our own people or the party's own, tick or not. Refused in words: 409 `refusal/OTHER_PARTY`
+ * or `refusal/HIDDEN_OUTSIDE`, each address at its field saying whose it is (the office reads every customer). Returns the
+ * addresses the tick let through, for the send's audit row. A record without a party: nothing to check.
+ */
+export async function checkRecipientRule(
+  client: CommandTx | FactoryClient,
+  input: { readonly recordParty: string | null; readonly to: readonly string[]; readonly cc?: readonly string[] | undefined; readonly bcc?: readonly string[] | undefined; readonly sendOutside?: boolean | undefined; readonly at?: string | undefined; readonly pathOf?: ((address: OutsideAddress) => string) | undefined },
+): Promise<readonly OutsideAddress[]> {
+  if (input.recordParty === null) return []
+  const ownership = await addressOwnership(client, [...input.to, ...(input.cc ?? []), ...(input.bcc ?? [])])
+  const { outside, hiddenOutside } = recipientRule({ recordParty: input.recordParty, to: input.to, cc: input.cc, bcc: input.bcc, ownership })
+  if (outside.length === 0 && hiddenOutside.length === 0) return []
+  const names = await partyNamesOf(client, [...outside, ...hiddenOutside].flatMap((address) => address.parties))
+  const nameOf = (partyId: string) => names.get(partyId) ?? ''
+  const at = input.at ?? 'body'
+  const issuesOf = (list: readonly OutsideAddress[]) => list.map((address) => ({ path: input.pathOf?.(address) ?? `${at}/${address.field}/${address.index}`, message: outsideAddressWords(address, nameOf) }))
+  if (hiddenOutside.length > 0) {
+    const words = RECIPIENT_REFUSALS.HIDDEN_OUTSIDE.en
+    throw new DomainError('conflict', words, [{ path: 'refusal/HIDDEN_OUTSIDE', message: words }, ...issuesOf(hiddenOutside)])
+  }
+  if (input.sendOutside !== true) {
+    const words = RECIPIENT_REFUSALS.OTHER_PARTY.en
+    throw new DomainError('conflict', words, [{ path: 'refusal/OTHER_PARTY', message: words }, ...issuesOf(outside)])
+  }
+  return outside
+}
+// ---- end B-TH-004
+
 export interface ThreadMailInput {
   readonly record: RecordRef
   /** The office user who sends: their name (and address, for PERSON_ADDRESS) make the From line. */
@@ -192,6 +235,11 @@ export interface ThreadMailInput {
   readonly identityId?: string | null | undefined
   /** The language of the mail's fixed text. Default: the company's. */
   readonly locale?: string | null | undefined
+  /**
+   * B-TH-004: the person ticked "Send outside this customer": To and Cc may hold an address of another party of the record's
+   * (recorded in the send's audit row). Without it such an address is refused (checkRecipientRule).
+   */
+  readonly sendOutside?: boolean | undefined
 }
 
 export interface ThreadMailResult {
@@ -231,6 +279,8 @@ export async function sendEmail(tools: SendTools, input: ThreadMailInput): Promi
   }
   problems.push(...suppressionProblems(recipients, await suppressedAmong(tx, allRecipients(recipients))))
   if (problems.length > 0) throw new ValidationError('The mail is not valid.', problems)
+  // B-TH-004: one recipient rule for every mail on a party's record (the thread's party is the record's).
+  const sentOutside = await checkRecipientRule(tx, { recordParty: thread.partyId, to: recipients.to, cc: recipients.cc, bcc: recipients.bcc, sendOutside: input.sendOutside })
 
   const earlier = await tx.message.findMany({
     where: { threadId: thread.id, emailMessageId: { not: null } },
@@ -284,7 +334,17 @@ export async function sendEmail(tools: SendTools, input: ThreadMailInput): Promi
     recordId: outboundId,
     companyId: identity.companyId,
     siteId: thread.siteId,
-    after: { threadId: thread.id, messageId: message.id, identityId: identity.id, templateKey: 'thread.message', recipients: allRecipients(recipients).length, attachments: attachments.length, status: 'QUEUED' },
+    after: {
+      threadId: thread.id,
+      messageId: message.id,
+      identityId: identity.id,
+      templateKey: 'thread.message',
+      recipients: allRecipients(recipients).length,
+      attachments: attachments.length,
+      status: 'QUEUED',
+      // B-TH-004: what the person's "Send outside this customer" let through, and whose each address is.
+      ...(sentOutside.length > 0 ? { sentOutside: sentOutside.map((address) => ({ address: address.address, parties: address.parties })) } : {}),
+    },
   })
   tools.emit(eventFor(queued, { subject: outboundId, companyId: identity.companyId, siteId: thread.siteId, payload: { outboundId, threadId: thread.id, messageId: message.id } }))
   return { thread, messageId: message.id, outbound }
@@ -299,6 +359,8 @@ export interface SendRouteBody {
   readonly attachments?: readonly string[] | undefined
   readonly identityId?: string | undefined
   readonly locale?: string | undefined
+  /** B-TH-004: the person ticked "Send outside this customer". */
+  readonly sendOutside?: boolean | undefined
 }
 
 /** POST /threads/<type>/<id>/emails (email.send): the signed-in person sends a mail from the record's thread. */

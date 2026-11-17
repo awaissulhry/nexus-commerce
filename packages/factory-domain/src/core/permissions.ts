@@ -136,6 +136,30 @@ export function can(actor: Actor, permission: Permission, record: ScopedRecord =
   return decide(actor, permission, record, options).allowed
 }
 
+// ── B-PR-02 (production plan: the brand wall) ─────────────────────────────────────────────────────────────────────────
+/**
+ * The actor holds `permission` over EVERY party at the record's company and site: one of its grants that covers them
+ * reaches all parties (`'all'`; a list never does, however long: tomorrow's customer is not on it). can() lets a record
+ * without a party through a party-limited grant, so what mixes customers or names none asks this as well: a cut order
+ * of two customers, capacity, the Line TV, a work order made before the one-customer rule, a live message that names no
+ * party (events/live.ts). Fails closed: a partner or link session (bound to its one party), a session that lacks what
+ * its audience needs, a record of another tenant, or another site for a floor session never reach every party.
+ */
+export function reachesEveryParty(actor: Actor, permission: Permission, record: ScopedRecord = {}): boolean {
+  if (!audienceIsValid(actor) || PARTY_AUDIENCES.includes(actor.audience)) return false
+  const { tenantId, companyId, siteId } = record
+  if (tenantId && (actor.audience === 'platform' || tenantId !== actor.tenantId)) return false
+  if (actor.audience === 'floor' && siteId && siteId !== actor.siteId) return false
+  return grantsFor(actor, permission).some((grant) => grant.parties === 'all' && (!companyId || reaches(grant.companies, companyId)) && (!siteId || reaches(grant.sites, siteId)))
+}
+
+/** The refusal of a view that mixes customers to a person who does not reach every one: it names none of them. */
+export const EVERY_PARTY_WORDS: Readonly<{ en: string; it: string }> = Object.freeze({
+  en: 'This view mixes customers: it needs access to every customer.',
+  it: "Questa vista mescola più clienti: serve l'accesso a tutti i clienti.",
+})
+// ── end B-PR-02 ───────────────────────────────────────────────────────────────────────────────────────────────────────
+
 /** A scope column of a model, by its field name; `nullable` when a null value means "every company / site". */
 export type ScopeColumn = string | { readonly field: string; readonly nullable: true }
 

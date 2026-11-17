@@ -134,6 +134,11 @@ export interface UploadPath {
   readonly viaModule?: boolean
   /** B-W2b-47 (COL-017): this PHOTO may be a short clip (FLOOR_CLIP_TYPES); only the floor notes' route says so. */
   readonly clip?: boolean
+  /**
+   * B-TH-003 (WALL-G02): the generic route (POST /files): a portal or link share reaches the record's own party only
+   * (files.ts withRecordParty). A module's own upload names its record's party itself.
+   */
+  readonly generic?: boolean
 }
 
 /** The module that owns this record type's files of this kind, or null. */

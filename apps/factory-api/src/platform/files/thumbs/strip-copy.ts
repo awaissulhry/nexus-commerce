@@ -7,6 +7,8 @@ import { GatewayCallFailed, GatewayRefusal } from '../../gateway/gateway'
 import { contextOf, tenantOf } from '../files'
 import { storageKeyFor } from '../rules'
 import type { FilesRuntime } from '../service'
+// B-TH-063: the small preview, made with the stripped copy.
+import { makeSmallPreview, smallKeyOf } from './small'
 
 /**
  * The stripped copy of a picture (COL-058; B-W2b-160): what a portal or a link is shown of a photo. OUTSIDE any
@@ -16,8 +18,11 @@ import type { FilesRuntime } from '../service'
  *   2. its bytes from the store (files.read) → factory-domain files/thumbs/strip.ts: EXIF with its GPS position, XMP,
  *      IPTC, comments and anything after the picture removed, the orientation kept, the image data unchanged;
  *   3. the copy put under a new key of the same store (files.put; never under `legal/`, never the file's own key);
+ *   3b. B-TH-063: its small preview (about 320 px, small.ts: from the copy's pixels, turned the right way up) put under
+ *      the key derived from the copy's key — before step 4, so a file whose `thumbnailKey` is set has its preview;
  *   4. ONE command files.recordStrippedCopy writes `thumbnailKey` + `exifStrippedAt` (the database lets them be set once,
- *      together, while the file is AVAILABLE) with its audit row: what was removed and whether a position was in it.
+ *      together, while the file is AVAILABLE) with its audit row: what was removed, whether a position was in it, and
+ *      how the small preview was made (RESIZED or COPIED, its size).
  *
  * Who runs it: the worker after `file.available` (thumbs/handler.ts) for every picture, and a portal's or a link's own
  * preview or download when the worker has not got to it yet (thumbs/outside.ts). Two at once: the first command wins, the
@@ -61,6 +66,20 @@ export async function makeStrippedCopy(runtime: FilesRuntime, caller: CommandCal
     if (storeDown(error)) return { outcome: 'store_unavailable', key: null }
     throw error
   }
+  // B-TH-063: the small preview, under the key derived from the copy's; if it cannot be put, the copy goes too (the job
+  // tries again with a new key), so no file ever names a copy without its preview.
+  const small = makeSmallPreview(stripped.bytes, row.contentType)
+  const smallBody = Buffer.from(small.bytes.buffer, small.bytes.byteOffset, small.bytes.byteLength)
+  const smallKey = smallKeyOf(key)
+  const removeObject = (objectKey: string) => runtime.storage.remove(caller, row.storeAccountId, { key: objectKey, legalHold: false, retainUntil: null }, now).catch(() => {})
+  try {
+    await runtime.storage.put(caller, row.storeAccountId, { key: smallKey, contentType: row.contentType, body: smallBody, sha256: createHash('sha256').update(smallBody).digest('hex') })
+  } catch (error) {
+    await removeObject(key)
+    if (storeDown(error)) return { outcome: 'store_unavailable', key: null }
+    throw error
+  }
+  const smallFacts = { made: small.made, width: small.width, height: small.height, sizeBytes: smallBody.length, ...(small.reason ? { reason: small.reason } : {}) }
   const { result } = await command(
     caller,
     { name: 'files.recordStrippedCopy', idempotencyKey: `files-strip.${fileId}.${newId()}`, input: { fileId }, record: { type: 'StoredFile', id: fileId } },
@@ -71,13 +90,15 @@ export async function makeStrippedCopy(runtime: FilesRuntime, caller: CommandCal
         return current.thumbnailKey
       }
       await tx.storedFile.update({ where: { id: fileId }, data: { thumbnailKey: key, exifStrippedAt: at }, select: { id: true } })
-      audit({ recordType: 'StoredFile', recordId: fileId, companyId: current.companyId, after: { strippedCopy: true, removed: [...stripped.removed], location: stripped.location, sizeBytes: body.length } })
+      audit({ recordType: 'StoredFile', recordId: fileId, companyId: current.companyId, after: { strippedCopy: true, removed: [...stripped.removed], location: stripped.location, sizeBytes: body.length, smallPreview: smallFacts } })
       return key
     },
   )
   if (result !== key) {
-    // Another run recorded its copy first (or the file went): this object names nothing, so it goes.
-    await runtime.storage.remove(caller, row.storeAccountId, { key, legalHold: false, retainUntil: null }, now).catch(() => {})
+    // Another run recorded its copy first (or the file went): this object names nothing, so it goes (B-TH-063: and its
+    // small preview).
+    await removeObject(key)
+    await removeObject(smallKey)
   }
   return result === key ? { outcome: 'made', key } : { outcome: result ? 'exists' : 'not_available', key: result }
 }

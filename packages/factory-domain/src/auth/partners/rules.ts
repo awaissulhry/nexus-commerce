@@ -129,7 +129,11 @@ export function previewPermissions(kinds: readonly PartnerKind[]): Permission[] 
 const KIND_WORDS: Readonly<Record<PartnerKind, string>> = { CUSTOMER: 'customer', SUPPLIER: 'supplier', SUBCONTRACTOR: 'workshop', GUEST: 'adviser' }
 const CAPABILITY_WORDS: Readonly<Record<Capability, string>> = { comment: 'write messages', upload: 'send files', approve: 'approve or sign' }
 
-/** The refusals in words, said by the office and the portal alike. */
+// ---- B-TH-007: the portal's one neutral invite refusal in both languages (code `refusal/NOT_INVITABLE`).
+export const NOT_INVITABLE = Object.freeze({ code: 'NOT_INVITABLE', it: 'Non abbiamo potuto invitare questo indirizzo. Chiedi a noi.', en: 'We could not invite this address. Ask us.' })
+// ---- end B-TH-007
+
+/** The refusals in words, said by the office and the portal alike (but notInvitable: the portal's alone). */
 export const PARTNER_WORDS = Object.freeze({
   noKind: 'This organisation has no portal: it is neither a customer, a brand, a supplier, a workshop nor an adviser (its roles).',
   kindNeeded: (kinds: readonly PartnerKind[]) => `This organisation has more than one portal (${kinds.map((kind) => KIND_WORDS[kind]).join(', ')}): say which one the person is for.`,
@@ -137,6 +141,9 @@ export const PARTNER_WORDS = Object.freeze({
   blocked: 'This organisation is blocked or archived: unblock it before its people get access.',
   officeAddress: 'This address belongs to a person of the Office. A portal account is a different address.',
   otherOrganisation: 'This address belongs to a person of another organisation: one address is one account. Deactivate that one first, or use another address.',
+  // B-TH-007 (WALL-G10, the brand wall): what the PORTAL hears instead of officeAddress or otherOrganisation, so a brand's admin
+  // never learns that an address has an account with the office or another organisation. The office keeps the real reason.
+  notInvitable: 'We could not invite this address. Ask us.',
   alreadyIn: 'This person already has access to the portal (or is suspended): change their role instead.',
   rolesNotReady: 'The portal roles are not set up in this tenant yet: an administrator brings the role templates up to date (Admin › Roles).',
   ownAccess: 'You cannot change your own access; ask another admin of your organisation, or the factory.',

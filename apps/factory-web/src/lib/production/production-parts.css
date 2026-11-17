@@ -1,0 +1,176 @@
+/*
+ * F-PR-01 — the shared production parts (lib/production/view): LAYOUT only. The controls are the design system's
+ * (MilestoneTracker, Pill, DetailPopover, BarList, SummaryTable, Card, ChangeReview, KeyValue, Banner); this file places
+ * them, with semantic tokens (no colours of its own). The one composed surface, the office-only note in the health
+ * "why", takes the threads kit's one yellow (warning-soft, warning edge): never sent to the customer.
+ */
+.fw-prp-strip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-prp-strip[data-layout='compact'] {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-8);
+}
+
+.fw-prp-strip[data-layout='auto'] > .fw-prp-blocked {
+  align-self: flex-start;
+}
+
+.fw-prp-unknown {
+  color: var(--nds-text-muted);
+}
+
+.fw-prp-sub,
+.fw-prp-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+  font-size: var(--nds-font-size-sm);
+  line-height: 1.45;
+}
+
+.fw-prp-label {
+  color: var(--nds-text-2);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* The health chip's note mark and its "why". */
+.fw-prp-note-mark {
+  margin-inline-start: var(--nds-space-4);
+  vertical-align: -2px;
+}
+
+.fw-prp-pop-trigger {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.fw-prp-pop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  max-width: 340px;
+  padding: var(--nds-space-10) var(--nds-space-12);
+}
+
+.fw-prp-pop-line {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.fw-prp-office-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border-inline-start: 3px solid var(--nds-warning);
+  border-radius: var(--nds-radius-sm);
+  background: var(--nds-warning-soft);
+}
+
+.fw-prp-office-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nds-space-4);
+  color: var(--nds-warning-text);
+  font-size: var(--nds-font-size-sm);
+  font-weight: var(--nds-font-weight-semibold);
+}
+
+/* Pieces: bars, then the size grid — rows = stages on a wide card, rows = sizes on a narrow one (its own width decides). */
+.fw-prp-pieces {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-16);
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.fw-prp-colourway {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-prp-colourway-name {
+  color: var(--nds-text-strong);
+}
+
+.fw-prp-grid-wide,
+.fw-prp-grid-narrow {
+  min-width: 0;
+}
+
+.fw-prp-grid-narrow {
+  display: none;
+}
+
+@container (max-width: 40rem) {
+  .fw-prp-grid-wide {
+    display: none;
+  }
+
+  .fw-prp-grid-narrow {
+    display: block;
+  }
+}
+
+/* A request card: head, changes, words, impact, answer, the one action. */
+.fw-prp-request,
+.fw-prp-request-body {
+  min-width: 0;
+}
+
+.fw-prp-request-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-12);
+}
+
+.fw-prp-request-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-10);
+  min-width: 0;
+}
+
+.fw-prp-quote,
+.fw-prp-answer {
+  margin: 0;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.fw-prp-impact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-prp-request-action {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--nds-space-8);
+}
+
+.fw-prp-fresh {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}

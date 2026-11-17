@@ -236,6 +236,8 @@ export function sendModelOf(
     fields: DocumentSendModel['fields']
     sending: boolean
     problem: string | null
+    /** B-TH-202: what the recipient rule held back, and the person's recorded tick. */
+    outside?: DocumentSendModel['outside']
     result: DocumentSendModel['result']
     canSend: boolean
     recordHref: string
@@ -265,6 +267,8 @@ export function sendModelOf(
     result: input.result,
     canSend: input.canSend,
     timeZone: input.timeZone,
+    // B-TH-202
+    outside: input.outside ?? null,
   }
 }
 
@@ -448,6 +452,8 @@ export interface OrderRecordActions {
     onSend?: () => void
     onRetryChecks?: () => void
     onNewLink?: () => void
+    /** B-TH-202: the person ticks "Send outside this customer". */
+    onSendOutside?: (checked: boolean) => void
   }
   onNewLink?: () => void
   onAccept?: () => void

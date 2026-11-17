@@ -24,6 +24,7 @@ import { testRedis, type TestRedis } from '../../outbox/testing'
 import { createSecretsService } from '../../secrets/envelope'
 import { localKeyProvider } from '../../secrets/local'
 import { SECRET_PURPOSES, storeSecret } from '../../secrets/store'
+import { useThreadRecords } from '../../threads/records' // B-TH-003
 import { prepareFileCopy, recordGeneratedFile } from '../files'
 import { expireLargeUploads } from '../multipart/expiry'
 import { assertOutsideUploadsOpen } from '../multipart/outside'
@@ -138,6 +139,9 @@ function phonePhoto(): Buffer {
 }
 
 beforeAll(async () => {
+  // B-TH-003: the made-up quote's party, as the sales module's thread resolver would answer it (a file shared outside
+  // reaches its record's party only).
+  useThreadRecords({ Quote: async (_client, id) => (id === quote ? { companyId: companyOne, siteId: null, partyId: party } : null) })
   db = await migratedDatabase('files_depth')
   database = await openFactoryDatabase({ connectionString: db.url(RUNTIME_LOGIN), pool: { max: 8 } })
   redis = testRedis()
@@ -185,6 +189,7 @@ beforeAll(async () => {
 beforeEach(() => useScanner(null))
 
 afterAll(async () => {
+  useThreadRecords(undefined)
   useScanner(undefined)
   useFiles(undefined)
   useGateway(undefined)

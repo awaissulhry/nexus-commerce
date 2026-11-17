@@ -1,0 +1,61 @@
+{
+  "title": "Shared production parts",
+  "subtitleOffice": "As the office reads them: every customer it may see. Made-up data.",
+  "subtitleCustomer": "As one customer reads them in its portal. Made-up data.",
+  "section": {
+    "stages": "Stage strip",
+    "waiting": "Waiting on",
+    "health": "Health",
+    "pieces": "Pieces by stage and size",
+    "requests": "Request card",
+    "holds": "Hold banner",
+    "fresh": "Freshness line",
+    "progress": "A bar shows the figure its words name"
+  },
+  "example": {
+    "unknown": "Stage not known",
+    "loading": "Loading",
+    "problem": "Could not load",
+    "full": "Full form: dates, the ex-factory date and how it moved",
+    "blocked": "Blocked",
+    "rows": "Row form for a list cell or a phone card",
+    "mostSerious": "Two holds: the most serious, the other counted",
+    "pause": "A pause the customer asked for",
+    "production": "A production hold"
+  },
+  "note": {
+    "waitingOffice": "Amber: our wait after 1 working day for a request, 3 for anything else; the customer's after its own due date.",
+    "waitingCustomer": "A customer reads only “Waiting on you” or “Waiting on us”: whoever else we wait on stays with us.",
+    "healthOffice": "Press a chip: the dates, and a person's note marked Office only.",
+    "healthCustomer": "The chip and the curated reason only; never the office note.",
+    "requestsCaller": "Loading and read errors belong to the card that lists the requests (the order's Requests card).",
+    "noHold": "No hold: no banner.",
+    "progress": "Before: the bar showed finished garments beside the furthest step's words (0 % beside “Sewn 80 of 100”)."
+  },
+  "action": {
+    "answer": "Answer in Approvals",
+    "withdraw": "Withdraw",
+    "counter": "Accept the counter-offer",
+    "release": "Release the hold"
+  },
+  "data": {
+    "colourway": "JK-210 Rider · {colour}",
+    "black": "Black",
+    "red": "Red",
+    "cell": "Line 10 · {colour} · {size}",
+    "changeNote": "More M, fewer XL for the spring drop.",
+    "frozen": "Sizes fixed at Cut, 08/11/2026",
+    "counter": "We can bring it to 21/11 if the red leather lands on Monday.",
+    "cancelNote": "Line 20 is no longer needed.",
+    "refused": "Line 20 is already cut and sewn.",
+    "qualityReason": "Quality: shade difference on the red panels",
+    "productionReason": "Line moved to an urgent order",
+    "blockedOffice": "Waiting on customer: PP sample",
+    "blockedCustomer": "Waiting on you: PP sample",
+    "material": "Material short",
+    "onUs": "Waiting on us",
+    "ppSample": "PP sample",
+    "sizeSet": "Size set",
+    "healthNote": "Lab test re-run; we catch up Saturday."
+  }
+}
