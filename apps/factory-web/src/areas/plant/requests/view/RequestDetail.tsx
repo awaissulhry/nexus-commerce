@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Check, CircleCheck, ExternalLink, Footprints, GitMerge, Lock, ShieldCheck, Wrench, X } from 'lucide-react'
 import { Banner, Card, KeyValue, type TimelineStep } from '@nexus/ui/components'
@@ -15,6 +15,9 @@ import { escalatedWords, goHeld, groupOfRecord, lightboxPhotos, lockHeld, progre
 import type { RequestsListActions, RequestsListModel } from '../view-model'
 import { MediaList } from './MediaList'
 import { Lightbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS parts in the page's language
+// ---- B-TH-271 (PL6): the request's thread docked in the window (an empty one folds to "Add a note") ----
+import { ReviewWindow } from '../../../_shared/review-window/ReviewWindow'
+import { inWindowThread } from '../../../_shared/review-window/model'
 
 /**
  * The request's detail (design plant.requests/pop:request, a DetailModal opened by Enter or `?open=<request>`): the
@@ -25,9 +28,11 @@ import { Lightbox } from '../../../../lib/i18n/ds-parts' // B-W2b-F41: the DS pa
  * the other open requests of the machine (Merge requests), and the routing and progress trail in time order. Decisions by
  * keys: A acknowledge, M make a job, D merge requests, L lock as unsafe, C close without a job, S sign the machine safe
  * (a technician, a fresh code); J / K the previous and next request (the DS DetailModal's). Each held with its reason. A
- * worker is named only here, and only where the site records workers (the API decides; Owner answer W1).
+ * worker is named only here, and only where the site records workers (the API decides; Owner answer W1). B-TH-271 (PL6, picture
+ * 40): the request's own thread docked in the window's right column beside the content — office notes only (no party), Activity's
+ * tools in its "⋯" (R-ACT); empty, it folds to a slim "Add a note" column; the window's keys stay quiet inside it.
  */
-export function RequestDetail({ model, actions }: { model: RequestsListModel; actions?: RequestsListActions }) {
+export function RequestDetail({ model, actions, thread, threadEmpty }: { model: RequestsListModel; actions?: RequestsListActions; thread?: ReactNode; threadEmpty?: boolean }) {
   const t = useWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -57,6 +62,8 @@ export function RequestDetail({ model, actions }: { model: RequestsListModel; ac
       if (event.metaKey || event.ctrlKey || event.altKey) return
       const target = event.target as HTMLElement | null
       if (target && (target.closest('input, textarea, select, audio, [contenteditable="true"], [role="menu"]') || target.isContentEditable)) return
+      // B-TH-271: the docked thread has its own keys (J / K the messages, R, N): the window's only outside it.
+      if (inWindowThread(target)) return
       const now = latest.current
       const key = event.key.toLowerCase()
       const act = (run: () => void) => {
@@ -127,7 +134,12 @@ export function RequestDetail({ model, actions }: { model: RequestsListModel; ac
           </>
         }
       >
-        {record && request && <DetailBody record={record} request={request} model={model} actions={actions} t={t} place={place} mergeHeld={mergeKeyHeld} />}
+        {record && request && (
+          // B-TH-271 (PL6): the content and, with threads.read, the request's notes docked beside it.
+          <ReviewWindow thread={thread ?? null} threadLabel={t('detail.threadLabel', { machine: request.machine.assetNumber })} notesOnly empty={threadEmpty ?? false} recordKey={request.id}>
+            <DetailBody record={record} request={request} model={model} actions={actions} t={t} place={place} mergeHeld={mergeKeyHeld} />
+          </ReviewWindow>
+        )}
       </DetailModal>
       {record && detail.lightbox !== null && photos.length > 0 && (
         <Lightbox

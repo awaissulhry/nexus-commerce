@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { STARTER_QUESTIONS } from '@nexus/factory-domain/purchasing/questionnaire/starter'
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
-import { inShell, panels, RECORD_CAN, recordModel, SUPPLIERS } from '../../../parties/_shared/fixtures'
+import { inShell, partyThread, RECORD_CAN, recordModel, SUPPLIERS } from '../../../parties/_shared/fixtures'
 import { PartyRecordView } from '../../../parties/_shared/view/PartyRecordView'
 import type { AnswerView, QuestionnaireVersion, SupplierQuestionnaire } from './api'
 import { EMPTY_REVIEW, sendFormOf, type QuestionnaireViewModel } from './model'
@@ -124,8 +124,9 @@ function model(overrides: Partial<QuestionnaireViewModel> = {}): QuestionnaireVi
 }
 
 function SupplierQuestionnaireDesign({ model: tab }: { model: QuestionnaireViewModel }) {
-  const record = recordModel('suppliers', party, { tab: 'questionnaire', can: { ...RECORD_CAN, questionnaire: true } })
-  return inShell(`/purchasing/suppliers/${party.id}`, createElement(PartyRecordView, { model: record, panels: panels(party), questionnaire: createElement(QuestionnaireView, { model: tab }) }))
+  // B-TH-260: the questionnaire is part of Documents & questionnaire; the supplier's thread docked beside it.
+  const record = recordModel('suppliers', party, { tab: 'documents', can: { ...RECORD_CAN, questionnaire: true } })
+  return inShell(`/purchasing/suppliers/${party.id}`, createElement(PartyRecordView, { model: record, thread: partyThread(party, 'suppliers'), questionnaire: createElement(QuestionnaireView, { model: tab }) }))
 }
 
 const OPEN_ONLY: SupplierQuestionnaire = { ...DATA, answers: [], links: [{ id: id(32), state: 'OPEN', email: 'qualita@conceria-demo.example', note: 'Grazie!', sentAt: '2026-11-09T08:30:00.000Z', sentByName: 'Paolo Esempio', expiresAt: '2026-12-09T08:30:00.000Z', answerId: null }] }

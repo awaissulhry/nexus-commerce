@@ -81,9 +81,13 @@ export function abilitiesOf(permissions: readonly string[]): StyleAbilities {
 
 // ---- the studio's tabs ------------------------------------------------------------------------------------------------
 
+// ---- B-TH-261 (threads plan TH-6; the rule of picture 38, the tabs of picture 39 / 08-tabs O-PRD-STY): the style on RecordFrame —
+// tabs 11 → 9. Overview and Colourways & sizes are one tab, "Overview & variants" (nothing lost: a longer page, every action kept);
+// Files & patterns becomes "Patterns" (the versioned pattern files and the pattern pieces stay: they are cutting data; loose files are
+// the thread's Files view); Activity goes: the style's thread docks beside every tab and its tools (Add task, Ask a partner to
+// approve, Share with a partner, Followers, Remind me) live in the thread's "⋯" (R-ACT).
 export type StyleTab =
   | 'overview'
-  | 'variants'
   | 'sizes'
   | 'bom'
   | 'routing'
@@ -91,17 +95,15 @@ export type StyleTab =
   // B-W2b-243: Tech pack, the design's tab after Cost.
   | 'techpack'
   | 'compliance'
-  | 'files'
-  // B-W2b-245: Versions & changes, the design's tab before Activity.
+  | 'patterns'
+  // B-W2b-245: Versions & changes, the design's last tab.
   | 'versions'
-  | 'activity'
 /**
- * The studio's tabs, in the band's order (B-W2b-95: Files & patterns, the design's tab before Activity; B-W2b-233: Sizes &
- * measurements, the design's tab after Colourways & sizes).
+ * The studio's tabs, in the band's order (B-W2b-233: Sizes & measurements after the overview; B-W2b-95: the pattern pieces, now
+ * Patterns, before Versions & changes).
  */
 export const STYLE_TABS: readonly StyleTab[] = [
   'overview',
-  'variants',
   'sizes',
   'bom',
   'routing',
@@ -109,15 +111,30 @@ export const STYLE_TABS: readonly StyleTab[] = [
   // B-W2b-243
   'techpack',
   'compliance',
-  'files',
+  'patterns',
   // B-W2b-245
   'versions',
-  'activity',
 ]
 
+/**
+ * Every old `?tab=` keeps working (R-8): Colourways & sizes → Overview & variants, Files & patterns → Patterns, Activity → the
+ * overview (RecordFrame reads `tab=activity` and opens the thread).
+ */
+export const MERGED_TABS: Readonly<Record<string, StyleTab>> = Object.freeze({ variants: 'overview', files: 'patterns', activity: 'overview' })
+
 export function tabOf(value: string | null | undefined): StyleTab {
-  return (STYLE_TABS as readonly string[]).includes(value ?? '') ? (value as StyleTab) : 'overview'
+  if ((STYLE_TABS as readonly string[]).includes(value ?? '')) return value as StyleTab
+  // Own keys only: "constructor" or "toString" in the address land on the overview.
+  return value && Object.hasOwn(MERGED_TABS, value) ? MERGED_TABS[value]! : 'overview'
 }
+
+/** The tabs with a wide grid (the SKU matrix, the measurement spec, the BOM, the cost by size): the thread takes one third under 1600 px. */
+export const WIDE_TABS: readonly StyleTab[] = ['overview', 'sizes', 'bom', 'cost']
+export const isWideTab = (tab: StyleTab): boolean => WIDE_TABS.includes(tab)
+
+/** Where the range and the colourways sit on Overview & variants: a Fix of a range or colourway problem scrolls there. */
+export const VARIANTS_ANCHOR = 'style-variants'
+// ---- end B-TH-261
 
 /** The tabs a person may open: a tab whose API they cannot read is not drawn (its page is absent, not empty). */
 export function tabsFor(can: StyleAbilities): StyleTab[] {
@@ -126,15 +143,14 @@ export function tabsFor(can: StyleAbilities): StyleTab[] {
     if (tab === 'routing') return can.routingView
     if (tab === 'cost') return can.costView
     if (tab === 'compliance') return can.complianceView
-    // B-W2b-95: the pattern pieces read with the BOM's right.
-    if (tab === 'files') return can.bomView
+    // B-W2b-95: the pattern pieces (and B-W2b-236's pattern files) read with the BOM's right.
+    if (tab === 'patterns') return can.bomView
     // B-W2b-233: Sizes & measurements opens with the style's read (its prepacks); its revision-bound sections ask the BOM's.
     if (tab === 'sizes') return can.view
     // B-W2b-243: the live tech pack reads with the BOM's right (its sections ask theirs).
     if (tab === 'techpack') return can.bomView
     // B-W2b-245: Versions & changes reads the revisions, the compare and the drift with the BOM's right (its changes ask theirs).
     if (tab === 'versions') return can.bomView
-    if (tab === 'activity') return can.thread
     return true
   })
 }
@@ -383,12 +399,17 @@ export function issueWords(issue: BomIssue, bom: Pick<BomView, 'lines' | 'colour
   }
 }
 
-/** Which tab fixes an issue (routing codes on the routing; the rest on the BOM, the range and colourways on Colourways & sizes). */
+/** Which tab fixes an issue (routing codes on the routing; the rest on the BOM, the range and colourways on Overview & variants). */
 export function issueTab(issue: Pick<BomIssue, 'code'>): StyleTab {
   if (isRoutingIssue(issue.code)) return 'routing'
-  if (['NO_SIZE_RANGE', 'NO_ACTIVE_COLOURWAY'].includes(issue.code)) return 'variants'
+  if (isVariantsIssue(issue.code)) return 'overview' // B-TH-261: Colourways & sizes is part of Overview & variants
   return 'bom'
 }
+
+// ---- B-TH-261: a range or colourway problem's Fix goes to the range and colourways on Overview & variants (`#style-variants`).
+const isVariantsIssue = (code: string): boolean => ['NO_SIZE_RANGE', 'NO_ACTIVE_COLOURWAY'].includes(code)
+export const issueHash = (issue: Pick<BomIssue, 'code'>): string => (isVariantsIssue(issue.code) ? `#${VARIANTS_ANCHOR}` : '')
+// ---- end B-TH-261
 
 /** A finding of the routing (blocker or warning), not of the BOM: the domain's one list. */
 export const isRoutingIssue = (code: string): boolean => (ROUTING_ISSUE_CODES as readonly string[]).includes(code)

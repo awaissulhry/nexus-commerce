@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
 import { Camera, CheckCheck, Download, Mic, MoreHorizontal, Play, Printer, TriangleAlert } from 'lucide-react'
 import { EmptyState, Menu, MetricStrip } from '@nexus/ui/components'
@@ -38,15 +38,17 @@ const TILES = [
  * in a list, Owner W1), photos, duplicates and the state. Enter opens the request (its DetailModal, J / K); Report a problem
  * and Start triage in the head; Acknowledge N and Export N for the selection; ⋯ prints the open requests for the shift.
  */
-export function RequestsView({ model, actions }: { model: RequestsListModel; actions?: RequestsListActions }) {
+// B-TH-271 (PL6): `thread` is the open request's docked thread (the page's OfficeRecordThread, or a design case's; none without
+// threads.read), `threadEmpty` whether it holds nothing yet (it then folds to "Add a note").
+export function RequestsView({ model, actions, thread, threadEmpty }: { model: RequestsListModel; actions?: RequestsListActions; thread?: ReactNode; threadEmpty?: boolean }) {
   return (
     <PlantMessages>
-      <Requests model={model} actions={actions} />
+      <Requests model={model} actions={actions} thread={thread} threadEmpty={threadEmpty} />
     </PlantMessages>
   )
 }
 
-function Requests({ model, actions }: { model: RequestsListModel; actions?: RequestsListActions }) {
+function Requests({ model, actions, thread, threadEmpty }: { model: RequestsListModel; actions?: RequestsListActions; thread?: ReactNode; threadEmpty?: boolean }) {
   const t = useWords()
   const locale = useLocale()
   const place = { locale, timeZone: model.timeZone }
@@ -331,7 +333,7 @@ function Requests({ model, actions }: { model: RequestsListModel; actions?: Requ
       </p>
       <DuplicatesPanel model={model} actions={actions} />
 
-      {model.detail && <RequestDetail model={model} actions={actions} />}
+      {model.detail && <RequestDetail model={model} actions={actions} thread={thread} threadEmpty={threadEmpty} />}
       <RequestDialogs model={model} actions={actions} />
       <StepUpDialog state={model.stepUp} onSubmit={actions?.onSubmitStepUp} onCancel={actions?.onCancelStepUp} />
       {help && <KeysModal own={[...ownKeys, { keys: ['J', 'K'], does: t('keys.walk') }, { keys: ['A'], does: t('keys.acknowledge') }, { keys: ['M'], does: t('keys.makeJob') }, { keys: ['D'], does: t('keys.merge') }, { keys: ['L'], does: t('keys.lock') }, { keys: ['C'], does: t('keys.close') }, { keys: ['S'], does: t('keys.signSafe') }]} onClose={() => setHelp(false)} />}

@@ -1,7 +1,8 @@
 import { defineDesignScreen } from '../../../../lib/design/design-screen'
 import { COLOURWAY_IDS, demoBom, demoCompare, demoCost, demoRouting, demoStyle, recordModel, REV, REVISIONS, withoutCost } from '../demo/fixtures'
 import type { StyleRecordViewModel } from '../record/record-model'
-import { StyleRecordView } from '../record/view/StyleRecordView'
+// B-TH-261: the studio with its docked thread (RecordFrame).
+import { StyleDesign } from '../demo/fixtures'
 
 /**
  * SCR-044 Cost of DEMO-JKT-01 — made-up prices and rates only: leather €3.20/ft², lining €4.50/m, membrane €9.80/m,
@@ -18,7 +19,7 @@ const cost = (overrides: Partial<StyleRecordViewModel> = {}, role: 'owner' | 'pr
 export const designScreen = defineDesignScreen<StyleRecordViewModel>({
   screen: 'SCR-044',
   title: 'Style studio: Cost',
-  view: StyleRecordView,
+  view: StyleDesign,
   cases: [
     { id: 'owner', label: 'Released revision 2, base size', model: cost(), note: 'Every figure with ⓘ "How is this made?"; each step opens to its lines; bars show the share.' },
     { id: 'product', label: 'Product office', model: cost({}, 'product') },

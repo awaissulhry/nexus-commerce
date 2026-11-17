@@ -131,12 +131,9 @@
     "tab": {
       "overview": "Panoramica",
       "addresses": "Indirizzi e contatti",
-      "tax": "Fisco e condizioni",
-      "requirements": "Requisiti",
+      "terms": "Condizioni e requisiti",
       "orders": "Preventivi e ordini",
-      "documents": "Documenti",
-      "portal": "Accesso al portale",
-      "activity": "Attività"
+      "portal": "Accesso al portale"
     },
     "side": {
       "contacts": "Contatti principali",
@@ -152,7 +149,9 @@
     },
     "identity": {
       "none": "Ancora nessuna identità fiscale: non si può fatturare finché non c’è."
-    }
+    },
+    "openSheet": "Apri il foglio di questo cliente",
+    "requirementsLabel": "Requisiti in vigore"
   },
   "suppliers": {
     "contactRoleHint": {
@@ -207,16 +206,13 @@
     "blockedBanner": "Bloccato dal {date}: niente nuovi ordini d’acquisto.",
     "activate": "Approva fornitore",
     "tab": {
-      "overview": "Panoramica",
-      "contacts": "Contatti",
+      "overview": "Panoramica e contatti",
       "items": "Articoli e prezzi",
-      "documents": "Documenti e qualifica",
+      "documents": "Documenti e questionario",
       "orders": "Ordini",
       "quality": "Qualità e valutazione",
       "bank": "Coordinate bancarie",
-      "questionnaire": "Questionario",
-      "portal": "Accesso al portale",
-      "activity": "Attività"
+      "portal": "Accesso al portale"
     },
     "side": {
       "contacts": "Chi riceve gli ordini",
@@ -240,7 +236,8 @@
     },
     "identity": {
       "none": "Ancora nessuna identità fiscale: ordini e fatture ne riportano i codici."
-    }
+    },
+    "questionnaireLabel": "Questionario fornitore"
   },
   "quoteStatus": {
     "DRAFT": "Bozza",
@@ -464,7 +461,8 @@
     "bulkMax": "Al massimo {max} alla volta: selezionane meno",
     "nothingToBlock": "Nulla di selezionato si può bloccare (solo gli attivi)",
     "nothingToArchive": "Nulla di selezionato si può archiviare (i bloccati vanno prima sbloccati)",
-    "noEmail": "Serve prima un’email"
+    "noEmail": "Serve prima un’email",
+    "projects": "Per avviare un progetto serve il permesso {right}."
   },
   "csv": {
     "code": "Codice",
@@ -762,12 +760,8 @@
     "open": "Apri la riga",
     "select": "Seleziona la riga",
     "palette": "Cerca ovunque",
-    "help": "Questo elenco",
     "tabs": "Scheda successiva / precedente (nella barra)",
-    "dock": "Conversazione accanto alla scheda (schermi larghi)",
-    "save": "Salva il modulo",
-    "submit": "Conferma una finestra",
-    "close": "Chiudi una finestra"
+    "save": "Salva il modulo"
   },
   "overview": {
     "identity": "Anagrafica",
@@ -841,8 +835,6 @@
     "failedTitle": "Caricamento della scheda non riuscito",
     "loading": "Caricamento della scheda…",
     "tabsLabel": "Sezioni della scheda",
-    "dock": "Conversazione",
-    "dockHint": "Tieni la conversazione accanto alla scheda (⌘J)",
     "dockLabel": "Conversazione della scheda",
     "more": "Altre azioni",
     "copyCode": "Copia il codice {code}",
@@ -852,6 +844,9 @@
     "reload": "Ricarica",
     "blockedReason": "Motivo: {reason}",
     "archivedBanner": "Archiviato: solo lettura finché non viene riattivato (⋯ › Riattiva).",
-    "readOnly": "Puoi vedere, non modificare: il tuo ruolo non gestisce clienti e fornitori."
+    "readOnly": "Puoi vedere, non modificare: il tuo ruolo non gestisce clienti e fornitori.",
+    "dockLabelOf": "Conversazione di {name}",
+    "startProject": "Avvia un progetto…",
+    "projects": "Progetti ({count})"
   }
 }

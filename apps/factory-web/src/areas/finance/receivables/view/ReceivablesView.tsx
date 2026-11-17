@@ -130,6 +130,8 @@ export interface ReceivablesActions {
 export interface ReceivablesDepth {
   stops?: ReactNode
   reminder?: ReactNode
+  /** B-TH-271 (PL6): the open reminder's own thread docked in its window (a customer's answer to it is seen there). */
+  reminderThread?: ReactNode
 }
 
 export function ReceivablesView({ model, actions, credit, depth }: { model: ReceivablesModel; actions?: ReceivablesActions; credit?: ReactNode; depth?: ReceivablesDepth }) {
@@ -861,6 +863,7 @@ function ReceivablesPageView({ model, actions, credit, depth }: { model: Receiva
           onSkip={(reminder, reason) => actions?.onSkip?.(reminder, reason) ?? Promise.resolve(false)}
           onCancel={(reminder, reason) => actions?.onCancel?.(reminder, reason) ?? Promise.resolve(false)}
           depth={depth?.reminder}
+          thread={depth?.reminderThread /* B-TH-271 */}
         />
       )}
 

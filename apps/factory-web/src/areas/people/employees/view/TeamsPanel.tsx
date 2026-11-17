@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import Link from 'next/link'
-import { ArrowRightLeft, MoreHorizontal, Plus } from 'lucide-react'
+import { ArrowRightLeft, MessageSquare, MoreHorizontal, Plus } from 'lucide-react'
 import { Banner, Card, EmptyState, Menu } from '@nexus/ui/components'
 import { SelectionLabel, type ColDef, type ICellRendererParams } from '@nexus/ui/grid'
 import { Button, Select, Skeleton, Tag } from '@nexus/ui/primitives'
@@ -14,6 +14,8 @@ import { ScopeSiteChip } from '../../../../shell/scope/view/ScopeSiteChip'
 import type { Team } from '../../_shared/api'
 import { useWords } from '../../_shared/parts'
 import type { EmployeesListActions, EmployeesListModel, MemberRow, Person } from '../view-model'
+// ---- B-TH-271 (PL6): a team's window with its office notes docked ----
+import { TeamWindow } from '../teams/view/TeamWindow'
 
 /**
  * The Teams view of Employees (design people.employees sec:teams, MES-210): lines, teams and leads with today's loans.
@@ -71,7 +73,7 @@ function useTeamColumns(model: Pick<EmployeesListModel, 'prefix' | 'timeZone'>):
   }, [t, locale, model.prefix, model.timeZone])
 }
 
-export function TeamsPanel({ model, actions, viewSwitch, onHelp }: { model: EmployeesListModel; actions?: EmployeesListActions; viewSwitch: ReactNode; onHelp: () => void }) {
+export function TeamsPanel({ model, actions, viewSwitch, onHelp, thread, threadEmpty }: { model: EmployeesListModel; actions?: EmployeesListActions; viewSwitch: ReactNode; onHelp: () => void; /* B-TH-271 */ thread?: ReactNode; threadEmpty?: boolean }) {
   const t = useWords()
   const locale = useLocale()
   const can = model.can
@@ -96,6 +98,8 @@ export function TeamsPanel({ model, actions, viewSwitch, onHelp }: { model: Empl
   const place = { locale, timeZone: model.timeZone }
   const filterLine = model.address.lineId ? (model.lines.find((line) => line.id === model.address.lineId) ?? null) : null
   const filterTeam = model.address.teamId ? ((model.teams.items ?? []).find((team) => team.id === model.address.teamId) ?? null) : null
+  // B-TH-271: the team whose window is open (an archived or unknown team opens nothing).
+  const openTeam = model.openTeamId ? (teams.find((team) => team.id === model.openTeamId) ?? null) : null
   const ownKeys: ListKey[] = [
     { keys: ['m'], does: t('keys.move') },
     { keys: ['t'], does: t('keys.teams') },
@@ -139,6 +143,8 @@ export function TeamsPanel({ model, actions, viewSwitch, onHelp }: { model: Empl
                     align="right"
                     triggerProps={{ 'aria-label': t('teams.menu', { team: team.code }) }}
                     items={[
+                      // B-TH-271 (PL6): the team's window — its facts and its office notes.
+                      { id: 'open', label: t('teams.open'), onSelect: () => actions?.onOpenTeam?.(team.id) },
                       { id: 'archive', label: t('teams.archive'), disabled: !can.manageTeams || !empty, description: !can.manageTeams ? t('held.noManageTeams') : !empty ? t('held.teamNotEmpty') : undefined, onSelect: () => actions?.onArchiveTeam?.(team) },
                     ]}
                   />
@@ -179,6 +185,12 @@ export function TeamsPanel({ model, actions, viewSwitch, onHelp }: { model: Empl
                       ))}
                     </ul>
                   )}
+                  {/* B-TH-271 (PL6): the team's window, with its office notes docked beside its facts. */}
+                  <span>
+                    <Button size="sm" variant="quiet" onClick={() => actions?.onOpenTeam?.(team.id)} aria-label={t('teams.openNamed', { team: team.code })}>
+                      <MessageSquare size={14} aria-hidden /> {t('teams.open')}
+                    </Button>
+                  </span>
                 </div>
               </Card>
             )
@@ -237,6 +249,8 @@ export function TeamsPanel({ model, actions, viewSwitch, onHelp }: { model: Empl
         </span>
       </div>
       {body}
+      {/* B-TH-271 (PL6): the open team's window (`?view=teams&open=<team>`): its facts and, beside them, its office notes. */}
+      {openTeam && <TeamWindow team={openTeam} teams={teams} prefix={model.prefix} timeZone={model.timeZone} thread={thread} threadEmpty={threadEmpty} onGo={(id) => actions?.onOpenTeam?.(id)} onClose={() => actions?.onOpenTeam?.(null)} />}
     </section>
   )
 }

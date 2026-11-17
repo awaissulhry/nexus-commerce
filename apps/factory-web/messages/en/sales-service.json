@@ -633,15 +633,17 @@
   "tab": {
     "case": "Case",
     "warranty": "Warranty check",
-    "linked": "Linked records",
-    "actions": "Actions",
-    "activity": "Activity"
+    "linked": "Linked records & actions"
   },
   "record": {
     "offline": "Offline: the last copy, with its time. Changes wait.",
     "stale": "This case changed at {time} while you were working on it.",
     "reload": "Read it again",
-    "closedBanner": "Closed on {date} by {name}."
+    "closedBanner": "Closed on {date} by {name}.",
+    "title": "Service case",
+    "dockLabel": "Thread of the case",
+    "dockLabelOf": "Thread of {number}",
+    "tabsLabel": "Parts of the case"
   },
   "mails": {
     "title": "Status-change mails sent to the customer",
@@ -660,9 +662,6 @@
     "COMPLAINED": "Marked as spam",
     "FAILED": "Failed",
     "other": "Unknown"
-  },
-  "activity": {
-    "noThread": "The conversation is not shown"
   },
   "field": {
     "companyId": "The company",

@@ -245,6 +245,10 @@ export interface HeadModel {
   // ones first, each with its page); absent or empty: no chip. A project the reader may not open never comes here (the API's read).
   readonly projects?: readonly HeadProject[]
   // ---- end B-TH-251
+  // ---- TH-5 follow-up (B-TH-249, PROJ.record-F04): the record reopens its thread with itself (a CLOSED project: "Reopen" on the
+  // project's band reopens both in one command; the thread's own Reopen is refused by the API) — no Reopen in the head then.
+  readonly reopenWithRecord?: boolean
+  // ---- end TH-5 follow-up
 }
 
 // ---- B-TH-251: one project the record is in (the chip's first one, the others in its tooltip).
@@ -275,7 +279,7 @@ export type MenuRow =
  * The "⋯" rows: the five R-ACT tools ALWAYS (held with why, also at count 0), the views on a phone, Print, then Close.
  * `folded`: the count chips did not fit the row (a narrow dock): the counts go on their door's line.
  */
-export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' | 'counts' | 'canManage' | 'closed' | 'compact' | 'views' | 'view' | 'print' | 'ownerHeld'>, folded = false): MenuRow[] {
+export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' | 'counts' | 'canManage' | 'closed' | 'compact' | 'views' | 'view' | 'print' | 'ownerHeld' | 'reopenWithRecord'>, folded = false): MenuRow[] {
   const following = model.follow?.following ?? false
   const muted = model.follow?.muted ?? false
   const followers = model.counts.followers?.count
@@ -297,6 +301,7 @@ export function menuRows(model: Pick<HeadModel, 'holds' | 'follow' | 'reminder' 
   if (model.ownerHeld !== undefined) rows.push({ kind: 'owner', held: model.ownerHeld })
   if (model.compact) for (const view of model.views) rows.push({ kind: 'view', view, checked: view === model.view })
   if (model.print) rows.push({ kind: 'print' })
-  if (model.canManage) rows.push({ kind: model.closed ? 'reopen' : 'close' })
+  // TH-5 follow-up: a closed thread its record reopens (a closed project) offers no Reopen here; closing an open one stays.
+  if (model.canManage && !(model.closed && model.reopenWithRecord)) rows.push({ kind: model.closed ? 'reopen' : 'close' })
   return rows
 }

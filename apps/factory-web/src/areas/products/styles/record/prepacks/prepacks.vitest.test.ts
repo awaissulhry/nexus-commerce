@@ -20,8 +20,8 @@ const view = demoPrepacks()
 const byCode = (code: string) => view.prepacks.find((prepack) => prepack.code === code)!
 
 describe('the tab', () => {
-  it('is the design’s tab after Colourways & sizes, opened with the style’s read', () => {
-    expect(STYLE_TABS.slice(0, 3)).toEqual(['overview', 'variants', 'sizes'])
+  it('is the design’s tab after Overview & variants (B-TH-261: Colourways & sizes is part of it), opened with the style’s read', () => {
+    expect(STYLE_TABS.slice(0, 3)).toEqual(['overview', 'sizes', 'bom'])
     expect(tabsFor(abilitiesOf(['product.styles.view']))).toContain('sizes')
     expect(tabsFor(abilitiesOf([]))).not.toContain('sizes')
   })

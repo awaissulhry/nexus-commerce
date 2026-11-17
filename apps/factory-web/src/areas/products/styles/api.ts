@@ -93,6 +93,15 @@ export function getStyle(api: ApiClient, styleId: string): Promise<StyleView> {
   return api.get(stylePath(styleId), { schema: oneStyle }).then((answer) => answer.style)
 }
 
+// ---- B-TH-261: the request a style draft was made from (Make style draft, B-TH-026), for the band's "Made from INQ-… — Open" ----
+const styleSourceSchema = z.object({ inquiry: z.object({ id: z.string(), number: z.string() }).nullable() })
+
+/** GET /sales/inquiries/source?styleId= (sales.inquiries.view; the style read as the style's own read): null — made without a request. */
+export function styleSource(api: ApiClient, styleId: string, signal?: AbortSignal): Promise<{ inquiryId: string; number: string } | null> {
+  return api.get('/sales/inquiries/source', { query: { styleId }, schema: styleSourceSchema, signal }).then((answer) => (answer.inquiry ? { inquiryId: answer.inquiry.id, number: answer.inquiry.number } : null))
+}
+// ---- end B-TH-261
+
 export interface NewStyleInput {
   companyId: string | null
   code: string

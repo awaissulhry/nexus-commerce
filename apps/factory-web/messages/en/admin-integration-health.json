@@ -382,6 +382,10 @@
         }
       },
       "production": {
+        "brandKeeper": {
+          "name": "Customer production states",
+          "what": "Every night: each open order's stage, health and who it waits on are worked out again, so a passed date shows as late."
+        },
         "dailyReport": {
           "name": "Daily production report",
           "what": "Every 15 minutes: the daily report goes to the people subscribed, at their time."

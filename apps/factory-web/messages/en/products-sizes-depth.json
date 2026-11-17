@@ -501,7 +501,7 @@
       "archivedSpec": "This spec is archived: it never changes.",
       "noManage": "Changing the spec needs the right to edit a draft bill of materials (a product developer's role).",
       "rule": "The style's edit rule holds changes in this lifecycle state (Product settings).",
-      "noRange": "The style has no size range yet: set it in the Overview first.",
+      "noRange": "The style has no size range yet: set it on Overview & variants first.",
       "noRelease": "Approving or reopening needs the right to release a revision.",
       "notDraft": "Only a draft spec is approved.",
       "noPoints": "Add points first.",

@@ -78,6 +78,30 @@ test('th1b-request', async () => {
 })
 // ── end B-TH-227 ──
 
+// ── B-TH-284 / B-TH-247 / B-TH-254 (threads plan TH-7, TH-4, TH-5): customer files, the customer sheet and projects, behind the brand
+// wall; each runs alone on a fresh stack (`--stages th7-files`) or after th1b-request in the same run (the two brands made once) ──
+type ThreadsStage = { default: { proves: string; blocked?: string; run: (flow: Flow) => Promise<void> } }
+const THREADS_STAGES: readonly (readonly [string, string, () => Promise<ThreadsStage>])[] = [
+  ['th7-files', 'TH-7', () => import('./golden-flow/th7-files') as Promise<ThreadsStage>],
+  ['th4-sheet', 'TH-4', () => import('./golden-flow/th4-sheet') as Promise<ThreadsStage>],
+  ['th5-projects', 'TH-5', () => import('./golden-flow/th5-projects') as Promise<ThreadsStage>],
+]
+for (const [name, slice, load] of THREADS_STAGES) {
+  test(name, async () => {
+    test.skip(only.size > 0 && !only.has(name), 'not in --stages')
+    const { default: stage } = await load()
+    test.info().annotations.push({ type: 'extra', description: `${slice}: not a stage of PLAN §4.7` }, { type: 'proves', description: stage.proves })
+    if (stage.blocked) test.info().annotations.push({ type: 'blocked', description: stage.blocked })
+    flow.stage = name
+    try {
+      await stage.run(flow)
+    } finally {
+      flow.save()
+    }
+  })
+}
+// ── end B-TH-284 / B-TH-247 / B-TH-254 ──
+
 test('end checks', async () => {
   test.skip(only.size > 0 && !only.has('end-checks'), 'not in --stages')
   flow.stage = 'end-checks'

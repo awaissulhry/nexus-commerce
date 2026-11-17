@@ -7,6 +7,8 @@ import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { useLiveBus } from '../../../../shell/live/use-live'
 import { isStepUpCancelled, useStepUp } from '../../../admin/shared/step-up'
+// B-TH-260: the record's tab as the record reads it (every old `?tab=` mapped: Tax & terms and Requirements are Terms & requirements).
+import { partyTabOf } from '../../../parties/_shared/model'
 import {
   accessCopy,
   addRequirement,
@@ -78,7 +80,7 @@ export function useCustomerDepth(partyId: string) {
   const api = useOfficeApi()
   const session = useOfficeSession()
   const params = useSearchParams()
-  const tab = params?.get('tab') ?? 'overview'
+  const tab = partyTabOf('customers', params?.get('tab')) // B-TH-260
   const can = useMemo(() => depthCan(session.permissions), [session.permissions])
   const today = useMemo(() => todayOf(), [])
   const companyId = session.company?.id ?? null
@@ -108,8 +110,8 @@ export function useCustomerDepth(partyId: string) {
 
   const loadTab = useCallback(() => {
     if (tab === 'overview') void loadGlance()
-    else if (tab === 'tax') void Promise.all([loadHolds(), loadTerms()])
-    else if (tab === 'requirements') void loadRequirements()
+    // B-TH-260: Terms & requirements reads the hold, the PO-number terms and the requirements in force together.
+    else if (tab === 'terms') void Promise.all([loadHolds(), loadTerms(), loadRequirements()])
     else if (tab === 'addresses') void loadPrivacy()
   }, [loadGlance, loadHolds, loadPrivacy, loadRequirements, loadTerms, tab])
 

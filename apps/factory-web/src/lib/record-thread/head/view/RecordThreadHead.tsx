@@ -146,7 +146,8 @@ function Head({ model, actions }: { model: HeadModel; actions?: HeadActions | un
         <span className="fw-rth-closed">
           <Lock size={14} aria-hidden />
           <span>{model.closed.by ? t('closed.by', { name: model.closed.by, date: formatDate(model.closed.at, place) }) : t('closed.noName', { date: formatDate(model.closed.at, place) })}</span>
-          {model.canManage && (
+          {/* TH-5 follow-up: a closed project reopens its thread from its own band, never from here. */}
+          {model.canManage && !model.reopenWithRecord && (
             <Button size="sm" variant="quiet" onClick={() => actions?.onReopen?.()}>
               {t('act.reopen')}
             </Button>

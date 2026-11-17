@@ -142,7 +142,10 @@ describe('B-TH-069: a member of brand A opens, writes in, finds and lists its pr
   it('T38: the member opens the project — name, status, the shared messages only; never an office note, the goal, the lead or the outcome', async () => {
     const answer = await thread(alpha, seeded.active)
     expect(answer.status, JSON.stringify(answer.body)).toBe(200)
-    expect(answer.body.record).toMatchObject({ type: 'Project', id: seeded.active, theirRef: null, ourRef: 'SEED-PRJ-001', subtitle: 'Seed touring jacket family', status: 'ACTIVE' })
+    // TH-5 follow-up (B-TH-303's rule): named by its name, never the office's PRJ series; its target date kept.
+    expect(answer.body.record).toMatchObject({ type: 'Project', id: seeded.active, theirRef: null, ourRef: null, subtitle: 'Seed touring jacket family', status: 'ACTIVE' })
+    expect(answer.body.record.date === null || /^\d{4}-\d{2}-\d{2}T/.test(answer.body.record.date as string)).toBe(true)
+    expect(JSON.stringify(answer.body)).not.toContain('SEED-PRJ-001')
     const bodies = (answer.body.messages as Json[]).map((message) => message.body)
     expect(bodies).toContain(SHARED)
     expect(bodies).not.toContain(NOTE)
@@ -161,8 +164,10 @@ describe('B-TH-069: a member of brand A opens, writes in, finds and lists its pr
   })
 
   it('finds it in the Projects group of the portal search, and lists its projects open first (GET /portal/projects)', async () => {
-    const found = hits(await search(alpha, 'SEED-PRJ-001')).find((result) => result.recordType === 'Project')
-    expect(found).toMatchObject({ recordId: seeded.active, group: 'projects', ourRef: 'SEED-PRJ-001' })
+    // TH-5 follow-up: found by its name (the office number is none of the words a partner types), never shown by that number.
+    const found = hits(await search(alpha, 'touring jacket family')).find((result) => result.recordType === 'Project')
+    expect(found).toMatchObject({ recordId: seeded.active, group: 'projects', ourRef: null })
+    expect(hits(await search(alpha, 'SEED-PRJ-001')).filter((result) => result.recordType === 'Project')).toEqual([])
     const listed = await alpha.get('/portal/projects')
     expect(listed.status, JSON.stringify(listed.body)).toBe(200)
     const ids = (listed.body.projects as Json[]).map((project) => project.id)
@@ -176,7 +181,8 @@ describe('B-TH-069: a member of brand A opens, writes in, finds and lists its pr
   it('a closed project still opens to its member, the outcome the office kept never in its answer', async () => {
     const answer = await thread(alpha, made.closed)
     expect(answer.status, JSON.stringify(answer.body)).toBe(200)
-    expect(answer.body.record).toMatchObject({ ourRef: numbers.closed, status: 'CLOSED' })
+    expect(answer.body.record).toMatchObject({ id: made.closed, ourRef: null, status: 'CLOSED' })
+    expect(JSON.stringify(answer.body.record)).not.toContain(numbers.closed)
     expect(answer.body.thread).toMatchObject({ status: 'CLOSED' })
     expect(JSON.stringify(answer.body)).not.toContain(QUIET_OUTCOME)
   })
@@ -224,9 +230,9 @@ describe('T38 / T09: nobody but the project’s members opens or finds it', { ti
   it('a supplier member reads its own project in the supplier portal; brand A’s is not there for it, nor its project for brand A', async () => {
     const own = await thread(supplier, made.supplier)
     expect(own.status, JSON.stringify(own.body)).toBe(200)
-    expect(own.body.record).toMatchObject({ type: 'Project', ourRef: numbers.supplier, subtitle: 'Made-up mesh lining trials' })
+    expect(own.body.record).toMatchObject({ type: 'Project', ourRef: null, subtitle: 'Made-up mesh lining trials' })
     expect(((await supplier.get('/portal/projects')).body.projects as Json[]).map((project) => project.id)).toEqual([made.supplier])
-    expect(hits(await search(supplier, numbers.supplier)).find((result) => result.recordId === made.supplier)).toMatchObject({ group: 'projects' })
+    expect(hits(await search(supplier, 'mesh lining')).find((result) => result.recordId === made.supplier)).toMatchObject({ group: 'projects', ourRef: null })
     neutral404(await thread(supplier, seeded.active), 'SEED-PRJ-001')
     neutral404(await thread(alpha, made.supplier), numbers.supplier, 'Made-up mesh lining trials')
     expect(hits(await search(alpha, numbers.supplier)).filter((result) => result.recordType === 'Project')).toEqual([])

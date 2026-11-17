@@ -8,7 +8,7 @@ import { Button, Input, Select } from '@nexus/ui/primitives'
 import { Modal, Textarea } from '../../../../../lib/i18n/ds-parts'
 import { useT } from '../../../../../lib/i18n/provider'
 import type { StyleView } from '../../api'
-import { complianceAfterRelease, draftOf, issueTab, issueWords, nextRevisionNumber, releaseHeld, releasedOf, revisionInView } from '../../model'
+import { complianceAfterRelease, draftOf, issueHash, issueTab, issueWords, nextRevisionNumber, releaseHeld, releasedOf, revisionInView } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../record-model'
 import { Swatch } from './VariantsTab'
 
@@ -68,7 +68,7 @@ function ReleaseDialog({ style, model, actions, onClose }: { style: StyleView; m
   if (bom) {
     for (const [index, issue] of bom.issues.entries()) {
       const words = issueWords(issue, bom, routing)
-      checks.push({ id: `b${index}`, ok: false, text: t(words.key, words.params), fix: tabHref(issueTab(issue)) })
+      checks.push({ id: `b${index}`, ok: false, text: t(words.key, words.params), fix: `${tabHref(issueTab(issue))}${issueHash(issue) /* B-TH-261 */}` })
     }
     if (bom.issues.length === 0) {
       checks.push({ id: 'bom', ok: true, text: t('release.okBom', { count: bom.lines.length }) })

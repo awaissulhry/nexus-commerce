@@ -169,3 +169,27 @@ describe('SCR-702 design cases (read by Brand Beta; the supplier’s by a tanner
     expect(html).not.toMatch(/Brand Beta|Brand Alpha|Pelletteria Esempio/)
   })
 })
+
+// ---- TH-5 follow-up (B-TH-253; B-TH-303's rule): the project's conversation names it by its name and keeps its date — never the PRJ number ----
+import { partnerThreadSchema } from '../../shell/api'
+
+describe('TH-5 follow-up — the portal reads a project by its name and date, never the office series', () => {
+  const read = {
+    record: { type: 'Project', id: PROJECT_ID, theirRef: null, ourRef: null, subtitle: 'Winter touring line', status: 'ACTIVE', date: '2027-01-15T00:00:00.000Z' },
+    thread: null,
+    messages: [],
+    nextCursor: null,
+    composer: { canPost: true, reason: null, words: null, replyByEmail: false, hint: null },
+  }
+
+  it('the shared record schema keeps the date the API sends (it was cut before), and the project carries no office number', () => {
+    const parsed = partnerThreadSchema.parse(read)
+    expect(parsed.record.date).toBe('2027-01-15T00:00:00.000Z')
+    expect(parsed.record.ourRef).toBeNull()
+    expect(JSON.stringify(parsed)).not.toMatch(/PRJ-/)
+    // An older answer without the date still reads.
+    const older = { type: 'Project', id: PROJECT_ID, theirRef: null, ourRef: null, subtitle: 'Winter touring line', status: 'ACTIVE' }
+    expect(partnerThreadSchema.parse({ ...read, record: older }).record.date).toBeUndefined()
+  })
+})
+// ---- end TH-5 follow-up

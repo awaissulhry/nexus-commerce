@@ -7,7 +7,7 @@ import { isApiError } from '../../../../lib/api/errors'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { RecordPanels } from '../../../../record-panels/RecordPanels'
-import { isStepUpCancelled, liveMatches, useLive, useRecordTab, useStepUp } from '../../../quality/_shared/hooks'
+import { isStepUpCancelled, liveMatches, useLive, useStepUp } from '../../../quality/_shared/hooks'
 import { problemKey } from '../../../quality/_shared/model'
 import { RecordProblem, RecordSkeleton } from '../../../quality/_shared/parts'
 import {
@@ -28,11 +28,16 @@ import {
   type Repair,
   type RepairPatch,
 } from '../api'
-import { BLANK_CHECKLIST, checklistBody, checklistProblems, ddtBody, MOVE_OF, refusalOf, repairHref, returnsCan, romeToday, type ChecklistDraft, type Words } from '../model'
-import { REPAIR_TABS, type IntakeDraft, type PhotoView, type RepairDialog, type RepairModel } from '../view-model'
+import { BLANK_CHECKLIST, checklistBody, checklistProblems, ddtBody, MOVE_OF, refusalOf, returnsCan, romeToday, type ChecklistDraft, type Words } from '../model'
+import { MERGED_REPAIR_TABS, REPAIR_TABS, tabOfAddress, type IntakeDraft, type PhotoView, type RepairDialog, type RepairModel } from '../view-model'
 import { ReturnsMessages, useWords } from '../view/parts'
 import { useEstimate } from '../estimate/use-estimate'
 import { RepairRecordView } from './view/RepairRecordView'
+// ---- B-TH-259: the repair on RecordFrame — the docked thread shared with its customer (B-TH-081), the states before the read in the frame ----
+import { OfficeRecordThread } from '../../../_shared/record-thread/OfficeRecordThread'
+import { RecordFrame } from '../../../_shared/record-frame/RecordFrame'
+import { printHref } from '../../../../shell/print/print-model'
+import Link from 'next/link'
 
 /**
  * A repair's container (`/w/<company>/sales/returns/repairs/<id>?tab=…`, SCR-112): reads the repair (its steps answered
@@ -51,8 +56,6 @@ export function RepairRecord({ repairId }: { repairId: string }) {
   )
 }
 
-const WIDE = '(min-width: 1280px)'
-const DOCK_KEY = 'fw.returns.dock'
 
 const intakeOf = (repair: Repair): IntakeDraft => ({
   kind: repair.kind,
@@ -100,7 +103,8 @@ function Container({ repairId }: { repairId: string }) {
   const t = useWords()
   const can = useMemo(() => returnsCan(session.permissions), [session.permissions])
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(REPAIR_TABS)
+  // B-TH-259 (R-8): an old `?tab=activity` lands on Intake & photos (the frame opens the thread).
+  const tab = tabOfAddress(REPAIR_TABS, MERGED_REPAIR_TABS, params?.get('tab'))
   const today = romeToday()
   const [offline, setOffline] = useState(false)
   useEffect(() => {
@@ -129,7 +133,6 @@ function Container({ repairId }: { repairId: string }) {
   const [dialog, setDialog] = useState<RepairDialog | null>(null)
   const [dialogBusy, setDialogBusy] = useState(false)
   const [dialogProblem, setDialogProblem] = useState<Words | null>(null)
-  const [dockOpen, setDockOpen] = useState(false)
   const { stepUp, guard, submitStepUp, cancelStepUp } = useStepUp(api)
   const latest = useRef<Repair | null>(null)
   latest.current = repair
@@ -173,13 +176,6 @@ function Container({ repairId }: { repairId: string }) {
   useEffect(() => {
     if (repair) setChecklist(checklistOf(repair))
   }, [repair?.id, checkedAt, repair?.repairedAt])
-  useEffect(() => {
-    try {
-      setDockOpen(window.localStorage.getItem(DOCK_KEY) === '1' && window.matchMedia(WIDE).matches)
-    } catch {
-      setDockOpen(false)
-    }
-  }, [])
 
   const live = useLive(
     (change) => {
@@ -353,10 +349,22 @@ function Container({ repairId }: { repairId: string }) {
     }
   }
 
-  if (problem && !repair) return <RecordProblem problem={problem} back={<a className="fw-q-link" href={`${prefix}/sales/returns`}>{t('record.back')}</a>} onRetry={() => void load()} />
-  if (!repair) return <RecordSkeleton />
+  // B-TH-259: a failed read and the first read sit in the frame with the way back and no thread.
+  if (!repair)
+    return (
+      <RecordFrame recordType="RepairOrder" personId={session.user.id} band={{ back: <Link href={`${prefix}/sales/returns`}>{t('record.back')}</Link>, title: t('record.repairTitle'), moreLabel: t('record.more') }} thread={null} threadLabel={t('record.dockLabel')}>
+        {problem ? <RecordProblem problem={problem} back={<Link className="fw-q-link" href={`${prefix}/sales/returns`}>{t('record.back')}</Link>} onRetry={() => void load()} /> : <RecordSkeleton />}
+      </RecordFrame>
+    )
 
-  const panels = can.threadsRead ? <RecordPanels record={{ type: 'RepairOrder', id: repair.id, companyId: repair.companyId, siteId: repair.site.id }} title={repair.number} party={{ id: repair.party.id, name: repair.party.legalName, emails: [] }} /> : undefined
+  // ---- B-TH-259: the repair's thread docked beside every tab (its Head holds Activity's doors, R-ACT), with threads.read — shared with
+  // its customer since B-TH-081 (the portal repair page reads the same thread); the print view keeps the record panels' print form.
+  // Brand wall (W08, W14, W20, W25, W34): the repair's own customer only.
+  const record = { type: 'RepairOrder', id: repair.id, companyId: repair.companyId, siteId: repair.site.id }
+  const party = { id: repair.party.id, name: repair.party.legalName }
+  const thread = can.threadsRead ? <OfficeRecordThread docked record={record} title={`${repair.number} · ${repair.party.legalName}`} recordLabel={repair.number} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null
+  const printThread = can.threadsRead ? <RecordPanels record={record} title={repair.number} party={{ ...party, emails: [] }} /> : null
+  // ---- end B-TH-259
 
   const model: RepairModel = {
     prefix,
@@ -381,32 +389,19 @@ function Container({ repairId }: { repairId: string }) {
     dialog,
     dialogBusy,
     dialogProblem,
-    dockOpen,
+    personId: session.user.id, // B-TH-259
     estimate: estimate.model,
   }
 
   return (
     <RepairRecordView
       model={model}
-      panels={panels}
+      thread={thread}
+      printThread={printThread}
       actions={{
         ...estimate.actions,
         onReload: () => void load(),
         onDismissReceipt: () => setReceipt(null),
-        onDock: () =>
-          setDockOpen((open) => {
-            const next = !open
-            if (next && !window.matchMedia(WIDE).matches) {
-              router.push(repairHref(prefix, repair.id, '?tab=activity'))
-              return open
-            }
-            try {
-              window.localStorage.setItem(DOCK_KEY, next ? '1' : '0')
-            } catch {
-              // Not kept on this device; the dock still toggles.
-            }
-            return next
-          }),
         onEdit: () => setEdit({ draft: intakeOf(repair), busy: false, problem: null }),
         onEditDraft: (patch) => setEdit((open) => (open ? { ...open, draft: { ...open.draft, ...patch } } : open)),
         onEditSave: () => void saveEdit(),

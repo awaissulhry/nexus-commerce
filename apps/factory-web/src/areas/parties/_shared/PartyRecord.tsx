@@ -1,12 +1,15 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../lib/api/errors'
 import { companyPrefix } from '../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../lib/session/context'
 import { WithMessages } from '../../../record-panels/i18n'
 import { RecordPanels } from '../../../record-panels/RecordPanels'
+// ---- B-TH-260: the party's thread docked beside every tab (RecordFrame; Activity's tools in its "⋯"), its band's Projects (n) ----
+import { OfficeRecordThread } from '../../_shared/record-thread/OfficeRecordThread'
+import { printHref } from '../../../shell/print/print-model'
 import {
   addAddress,
   addContact,
@@ -17,6 +20,7 @@ import {
   listQuotesOf,
   listSalesOrdersOf,
   moveParty,
+  projectCounts,
   setDefaultAddresses,
   updateAddress,
   updateContact,
@@ -30,7 +34,7 @@ import {
   type SalesOrderRow,
   type ViesCheck,
 } from './api'
-import { partyEvent, useLive, useRecordTab, useThreadDock } from './hooks'
+import { partyEvent, useLive } from './hooks'
 import {
   addressBody,
   addressDraftOf,
@@ -41,6 +45,8 @@ import {
   loaded,
   loading,
   partyName,
+  partyTabOf,
+  threadOnArrival,
   partyPatch,
   problemKey,
   refusedFields,
@@ -59,7 +65,8 @@ import { PartyRecordView, type OverviewSlot, type SupplierDepth } from './view/P
 
 /**
  * The record container of both sides (`/w/<company>/sales/customers/<id>` SCR-033, `/w/<company>/purchasing/
- * suppliers/<id>` SCR-057): reads the party (`GET /parties/:id`), its VIES history on Tax & terms, and beside it the
+ * suppliers/<id>` SCR-057; B-TH-260: on RecordFrame, every old `?tab=` mapped, the party's thread docked, "Projects (n)" read with
+ * threads.read): reads the party (`GET /parties/:id`), its VIES history on Terms & requirements, and beside it the
  * customer's quotes and orders or the supplier's purchase orders when the person may read them (money only with its
  * grain: the API leaves the fields out). Every write sends the version read (COL-078): a 409 reads the record again and
  * says someone else changed it. The live stream reads the record again on its party's events; while a dialog or the
@@ -105,10 +112,15 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
     questionnaire: !!questionnaire && held.has('purchasing.questionnaire.view'), // B-W2b-172
     depth: !!depth, // B-W2b-334
     bank: !!depth && held.has('purchasing.bank.view'), // B-W2b-334
+    // B-TH-260: the band's Projects (n) (threads.read reads projects) and Start a project (projects.manage).
+    projects: held.has('threads.read'),
+    projectsManage: held.has('projects.manage'),
   }
   const prefix = companyPrefix(session.company?.code ?? '')
-  const tab = useRecordTab(config.tabs)
-  const { dockOpen, toggleDock } = useThreadDock(side)
+  const pathname = usePathname()
+  // B-TH-260 (R-8): an old `?tab=` lands on its tab today (a customer's Documents: the overview with the thread shown).
+  const asked = params?.get('tab') ?? null
+  const tab = partyTabOf(side, asked)
   const [party, setParty] = useState<Party | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [asOf, setAsOf] = useState<string | null>(null)
@@ -180,8 +192,21 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
     void loadBeside()
   }, [load, loadBeside])
   useEffect(() => {
-    if (tab === 'tax' && can.view) void loadHistory()
+    if (tab === 'terms' && can.view) void loadHistory() // B-TH-260: Tax & terms is part of Terms & requirements
   }, [tab, can.view, loadHistory])
+
+  // ---- B-TH-260 (B-TH-070): "Projects (n)" in the band — this party's projects the reader may see (open, all); null: not read.
+  const [projects, setProjects] = useState<{ open: number; all: number } | null>(null)
+  useEffect(() => {
+    setProjects(null)
+    if (!can.view || !can.projects) return
+    const controller = new AbortController()
+    projectCounts(api, partyId, controller.signal)
+      .then(setProjects)
+      .catch(() => setProjects(null))
+    return () => controller.abort()
+  }, [api, partyId, can.view, can.projects])
+  // ---- end B-TH-260
 
   const live = useLive(
     (change) => {
@@ -190,7 +215,7 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
       if (dialog || dirty.current) setChangedAt(new Date().toISOString())
       else {
         void load()
-        if (change.type === 'party.vies_checked' && tab === 'tax') void loadHistory()
+        if (change.type === 'party.vies_checked' && tab === 'terms') void loadHistory()
       }
     },
     () => {
@@ -245,7 +270,7 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
         tone: answer.check.result === 'VALID' ? 'success' : answer.check.result === 'INVALID' ? 'danger' : 'warning',
         params: { name: partyName(answer.party) },
       })
-      if (tab === 'tax') void loadHistory()
+      if (tab === 'terms') void loadHistory()
     } catch (error) {
       setNotice({ key: isApiError(error) && error.kind === 'conflict' ? 'vies.refused' : problemKey(error), tone: 'danger' })
     } finally {
@@ -298,24 +323,21 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
     return ok
   }
 
+  // ---- B-TH-260: the party's thread docked beside every tab (its Head holds Activity's doors, R-ACT; its Files view the old Documents
+  // tab's files), with threads.read; the print view keeps the record panels' print form. Brand wall (W03, W04, W08, W20, W21, W25,
+  // W34, W35, W36): the party's own thread — "Reply to <this party>" only, files of this party only; the same Party thread as the
+  // other side's page when a party is both customer and supplier.
   const name = party ? partyName(party) : ''
-  const panels =
-    party && can.threads ? (
-      <RecordPanels
-        record={{ type: config.recordType, id: party.id, companyId: party.companyId }}
-        title={name}
-        party={{ id: party.id, name, emails: party.contacts.filter((contact) => contact.status === 'ACTIVE' && contact.email).map((contact) => contact.email!) }}
-      />
+  const record = party ? { type: config.recordType, id: party.id, companyId: party.companyId, siteId: null } : null
+  const thread =
+    party && record && can.threads ? (
+      <OfficeRecordThread docked record={record} title={`${name} · ${party.code}`} recordLabel={party.code} party={{ id: party.id, name }} partyRole={side === 'customers' ? 'customer' : 'supplier'} printHref={printHref(pathname, params?.toString() ?? '')} />
     ) : null
-  const documents =
-    party && can.threads ? (
-      <RecordPanels
-        record={{ type: config.recordType, id: party.id, companyId: party.companyId }}
-        title={name}
-        party={{ id: party.id, name, emails: party.contacts.filter((contact) => contact.status === 'ACTIVE' && contact.email).map((contact) => contact.email!) }}
-        tab="files"
-      />
+  const printThread =
+    party && record && can.threads ? (
+      <RecordPanels record={record} title={name} party={{ id: party.id, name, emails: party.contacts.filter((contact) => contact.status === 'ACTIVE' && contact.email).map((contact) => contact.email!) }} />
     ) : null
+  // ---- end B-TH-260
 
   return (
     <PartyRecordView
@@ -334,7 +356,10 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
         dialog,
         dialogProblem,
         refused,
-        dockOpen,
+        // B-TH-260
+        personId: session.user.id,
+        projects,
+        threadOnArrival: threadOnArrival(side, asked),
         history,
         quotes,
         orders,
@@ -343,12 +368,12 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
         saving,
         deals,
       }}
-      panels={panels}
-      documents={documents}
+      thread={thread}
+      printThread={printThread}
       terms={party && terms ? terms(party, () => void load()) : null}
       items={party && items ? items(party, () => void load()) : null}
       portal={party && portal && tab === 'portal' ? portal(party) : null}
-      questionnaire={party && questionnaire && tab === 'questionnaire' ? questionnaire(party) : null}
+      questionnaire={party && questionnaire && tab === 'documents' ? questionnaire(party) : null /* B-TH-260: Documents & questionnaire */}
       depth={party && depth ? depth(party, () => void load()) : undefined}
       overview={overview}
       actions={{
@@ -363,7 +388,6 @@ function PartyRecordContainer({ side, partyId, terms, items, overview, portal, q
           closeDialog()
           void load()
         },
-        onDock: toggleDock,
         onDialog: (next) => (next ? setDialog(next) : closeDialog()),
         onDismissNotice: () => setNotice(null),
         onSaveParty,

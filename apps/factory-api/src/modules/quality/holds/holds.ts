@@ -31,15 +31,17 @@ import { reasonFor } from '../../../platform/reasons/service'
 import { lockWorkOrderIssues } from '../../inventory/issue/store'
 import { identityOf, madeAny } from '../final/facts'
 import { makersOf } from '../final/store'
-import { activeHoldsOf } from './checks'
 import { placerMayReleaseOf } from './settings'
-import { holdReasonWords, HOLD_COLUMNS, holdView, readHold, readSubjects, viewFactsOf, type HoldRow, type Reader, type Subject } from './store'
+import { HOLD_COLUMNS, holdView, readHold, readSubjects, viewFactsOf, type HoldRow, type Reader, type Subject } from './store'
 // B-PR-06 (the brand wall): a hold names the customers of the goods it holds.
 import { customersOf, /* B-PR-09 */ holdCustomersOf, NO_CUSTOMER, reachesCustomers, reachesHold } from '../wall'
 // B-PR-09: the customers a hold's events name (the office's live wall).
 import { partyIdsOf } from '@nexus/factory-domain/events/live'
 // B-W2b-289 (SCM-179): the site's default quality place when none is named.
 import { defaultPlaceFor } from '../../inventory/locations-depth/defaults'
+// B-PR-21: a work order leaves ON_HOLD only when no hold names it any more (quality's and the plain production holds).
+import { afterHoldEnds } from '@nexus/factory-domain/production/holds/rules'
+import { lockWorkOrderRow, standingHoldsOf } from '../../production/holds/standing'
 
 /**
  * Quality holds: place, change, release, close (B-W2a-26; QHS-074, MES-008; design quality.holds qh-place, qh-release,
@@ -156,29 +158,30 @@ async function holdWorkOrders(tools: CommandTools, ids: readonly string[], hold:
 /**
  * After a hold ends (released or closed): each of its work orders ON_HOLD under it goes back to the status it was held
  * from — unless another ACTIVE hold still names it: then it stays ON_HOLD under that one (its record and reason put
- * right). Answers the work orders lifted.
+ * right). Answers the work orders lifted. B-PR-21: "another hold" is also a plain production or customer hold
+ * (WorkOrderHold): a quality release lifts a work order only when no production hold remains (and the production lift
+ * only when no quality hold remains, modules/production/holds) — one rule for both, factory-domain production/holds/rules
+ * `afterHoldEnds`; each work order's row is locked first, so a production hold placed or lifted at the same time is seen.
  */
 async function liftWorkOrders(tools: CommandTools, hold: HoldRow, why: string): Promise<WorkOrderMove[]> {
   const { tx } = tools
   const lifted: WorkOrderMove[] = []
   if (hold.subjectType !== 'WorkOrder') return lifted
-  const reasons = await holdReasonWords(tx)
   for (const id of sortedIds(hold.subjectIds)) {
+    // ── B-PR-21 ──
+    await lockWorkOrderRow(tx, id)
     const row = await tx.workOrder.findUnique({ where: { id }, select: { id: true, number: true, status: true, heldFromStatus: true, holdRecordType: true, holdRecordId: true, companyId: true, siteId: true, /* B-PR-09 */ partyId: true } })
     if (!row || row.status !== 'ON_HOLD') continue
-    const others = (await activeHoldsOf(tx, 'WorkOrder', [row.id])).filter((other) => other.id !== hold.id)
-    if (others.length > 0) {
-      if (row.holdRecordType === 'QualityHold' && row.holdRecordId === hold.id) {
-        const next = (await tx.qualityHold.findUnique({ where: { id: others[0]!.id }, select: { id: true, reasonCode: true, reasonNote: true } }))!
-        await bumpWorkOrder(tools, row.id)
-        const reason = workOrderHoldReason(reasons.get(next.reasonCode) ?? next.reasonCode, next.reasonNote)
-        await tx.workOrder.update({ where: { id: row.id }, data: { holdRecordId: next.id, holdReason: reason }, select: { id: true } })
-        tools.audit({ action: 'quality.holdWorkOrder', recordType: 'WorkOrder', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { holdRecordId: hold.id }, after: { holdRecordId: next.id, holdReason: reason }, reason: why })
-      }
+    const next = afterHoldEnds({ workOrder: row, ended: { recordType: 'QualityHold', id: hold.id }, standing: await standingHoldsOf(tx, row.id) })
+    // Still held under its own record (another standing hold, or a record of another kind: an NCR lifts its own).
+    if (next.action === 'STAY') continue
+    if (next.action === 'REPOINT') {
+      await bumpWorkOrder(tools, row.id)
+      await tx.workOrder.update({ where: { id: row.id }, data: { holdRecordType: next.to.recordType, holdRecordId: next.to.id, holdReason: next.to.reason }, select: { id: true } })
+      tools.audit({ action: 'quality.holdWorkOrder', recordType: 'WorkOrder', recordId: row.id, companyId: row.companyId, siteId: row.siteId, before: { holdRecordId: row.holdRecordId }, after: { holdRecordId: next.to.id, holdReason: next.to.reason, ...(next.to.recordType !== row.holdRecordType ? { holdRecordType: next.to.recordType } : {}) }, reason: why })
       continue
     }
-    // ON_HOLD under another kind of record (an NCR): that record lifts it.
-    if (row.holdRecordType !== null && row.holdRecordType !== 'QualityHold') continue
+    // ── end B-PR-21 ──
     const back = row.heldFromStatus as DbWorkOrderStatus
     await bumpWorkOrder(tools, row.id)
     await tx.workOrder.update({ where: { id: row.id }, data: { status: back, heldFromStatus: null, heldAt: null, heldById: null, holdReason: null, holdRecordType: null, holdRecordId: null }, select: { id: true } })
