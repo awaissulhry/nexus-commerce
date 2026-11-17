@@ -5,7 +5,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
+import { RecordCustomFields } from '../../../../record-panels/custom-fields/RecordCustomFields' // B-TH-280
 import {
   cancelWorkOrder,
   correctCut,
@@ -364,7 +365,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
   // ---- B-TH-265: the docked thread (ONE at a time, PL1): the work order's own notes — never shareable with a customer (the API's
   // NOT_SHAREABLE), no party, a note may go to the floor with its tick — or, picked beside it, one of its orders' threads (shared with
   // that order's customer), offered only when the order files' route says the reader may read it (agreement T9). With threads.read.
-  // The print view keeps the record panels' print form of the work order's own thread.
+  // The print view prints the thread with ThreadPrint (B-TH-280) of the work order's own thread.
   const value = workOrder.status === 'ready' ? workOrder.value : null
   const orderFiles = useOrderFiles(api, value?.id ?? null)
   const choices = value ? threadChoices(value.orders, orderFiles.model.files) : []
@@ -391,8 +392,12 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
         )}
       </WorkOrderThreads>
     ) : null
-  const printThread = value && own && readsThreads ? <RecordPanels record={own} title={`${value.number} · ${value.style.code}`} /> : null
+  const printThread = value && own && readsThreads ? <ThreadPrint record={own} title={`${value.number} · ${value.style.code}`} /> : null
   // ---- end B-TH-265
+  // ---- B-TH-280: the work order's custom fields at the end of its first tab (Overview & release), as the old panels drew them above
+  // theirs: the record frame's slot (the tab bodies stay the production lane's).
+  const fields = value && tab === 'overview' ? <RecordCustomFields record={{ type: 'WorkOrder', id: value.id }} title={value.number} /> : null
+  // ---- end B-TH-280
 
   const model: WorkOrderRecordModel = {
     prefix,
@@ -441,6 +446,7 @@ function RecordContainer({ workOrderId }: { workOrderId: string }) {
       model={model}
       thread={thread}
       printThread={printThread}
+      fields={fields /* B-TH-280 */}
       actions={{
         onRetry: () => void load(),
         onRetryLabour: labour.retry,

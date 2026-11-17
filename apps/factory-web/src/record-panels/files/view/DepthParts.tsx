@@ -18,9 +18,7 @@ import {
   expiryTag,
   markupHeld,
   markupSaveHeld,
-  moveState,
-  openMoves,
-  requirementTone,
+  missingOf,
   tagHeld,
   type FileDepthModel,
   type MarkupItem,
@@ -30,13 +28,15 @@ import { MarkSketch } from './MarkSketch'
 import '../files.css'
 
 /**
- * The files panel in depth (B-W2b-177), drawn inside SCR-006's Files tab: what each move still needs (the record frame's
- * "What is missing", design shell.panels/sec:guards: GuardList is not in the DS, composed here), each file's document type
- * and expiry, its depth actions (Versions, Mark up, What it is), and the three pop-ups (pop:file-versions with side by side,
- * the document's type and expiry, markup with the DS PhotoCapture). One view model, nothing fetched.
+ * The files in depth (B-W2b-177). B-TH-280: drawn inside the docked thread's Files view (its slots; the old record panels'
+ * Files tab went): above the list what a depth action did, a documents read that failed, how to add what a move needs and
+ * the documents of the record's customer or supplier that count (the Files view's own lines say what each move still needs,
+ * T9-F10); each file's document type and expiry beside its audience marks, its depth actions (Versions, Mark up, What it is),
+ * and the three pop-ups (pop:file-versions with side by side, the document's type and expiry, markup with the DS
+ * PhotoCapture). One view model, nothing fetched.
  */
 
-export const DEPTH_NAMESPACES = ['records', 'record-files', PHOTO_KIT_NAMESPACE, 'shell'] as const
+export const DEPTH_NAMESPACES = ['record-files', PHOTO_KIT_NAMESPACE, 'shell'] as const
 
 const Words = ({ children }: { children: ReactNode }) => <WithMessages namespaces={DEPTH_NAMESPACES}>{children}</WithMessages>
 
@@ -58,34 +58,10 @@ function DepthTopBody({ depth, actions }: { depth: FileDepthModel; actions?: Fil
     <>
       {depth.notice && <Banner tone={depth.notice.tone} title={t(depth.notice.key)} onDismiss={actions?.onDismissNotice} />}
       {docs.status === 'failed' && <Banner tone="warning" title={t('required.unreadable')} action={<Button size="sm" onClick={actions?.onRetryDocuments}>{t('required.retry')}</Button>} />}
-      {docs.status === 'ready' &&
-        openMoves(docs.value.moves).map((move) => {
-          const state = moveState(move)
-          const status = t(`status.${move.toStatus}`)
-          return (
-            <section key={move.toStatus} className="fw-rf-guards" aria-label={t('required.label', { status })}>
-              <Banner
-                tone={state.blocks > 0 ? 'danger' : 'warning'}
-                title={state.blocks > 0 ? t('required.blocks', { status, count: state.blocks }) : t('required.warns', { status, count: state.warnings })}
-              />
-              <ul className="fw-rf-guard-list">
-                {move.requirements.map((requirement) => (
-                  <li key={requirement.ruleId} className="fw-rf-guard">
-                    <Tag tone={requirementTone(requirement)}>{t(`required.reason.${requirement.reason}`)}</Tag>
-                    <span>
-                      {t(`category.${requirement.category}`)}
-                      {requirement.reason === 'EXPIRED' && requirement.expiresOn ? ` · ${t('required.expiredOn', { date: formatDate(requirement.expiresOn, { locale }) })}` : ''}
-                    </span>
-                    <span className="fw-rp-muted fw-rp-small">{t(requirement.level === 'BLOCK' ? 'required.level.BLOCK' : 'required.level.WARN')}</span>
-                  </li>
-                ))}
-              </ul>
-              {move.requirements.some((requirement) => requirement.reason !== 'MET') && <p className="fw-rp-muted fw-rp-small">{t('required.how')}</p>}
-            </section>
-          )
-        })}
+      {/* B-TH-280: the Files view's lines say what is missing; this says how to add it. */}
+      {missingOf(docs).length > 0 && <p className="fw-fd-note">{t('required.how')}</p>}
       {docs.status === 'ready' && docs.value.partyDocuments.length > 0 && (
-        <p className="fw-rp-muted fw-rp-small">
+        <p className="fw-fd-note">
           {t('required.partyDocuments', { names: docs.value.partyDocuments.map((doc) => `${doc.name}${doc.expiresOn ? ` (${formatDate(doc.expiresOn, { locale })})` : ''}`).join(', ') })}
         </p>
       )}
@@ -189,10 +165,10 @@ function VersionsPopup({ depth, actions }: { depth: FileDepthModel; actions?: Fi
       }
     >
       <div className="fw-rf-versions">
-        <p className="fw-rp-muted fw-rp-small">{t('versions.intro')}</p>
+        <p className="fw-fd-note">{t('versions.intro')}</p>
         {dialog.problem && <Banner tone="danger" title={t(dialog.problem)} />}
         {dialog.read.status === 'loading' && (
-          <p className="fw-rp-loading" role="status">
+          <p className="fw-fd-loading" role="status">
             <Spinner size={14} /> {t('versions.loading')}
           </p>
         )}
@@ -210,15 +186,15 @@ function VersionsPopup({ depth, actions }: { depth: FileDepthModel; actions?: Fi
                 <Checkbox key="pick" aria-label={t('versions.pickNamed', { n: row.versionNo })} checked={dialog.picked.includes(row.id)} onChange={(event) => actions?.onPickVersion?.(row.id, event.target.checked)} />,
                 <span key="version" className="fw-rf-version">
                   <strong>{t('versions.number', { n: row.versionNo })}</strong> {row.current ? <Tag tone="success">{t('versions.current')}</Tag> : <Tag tone="neutral">{t('versions.earlier')}</Tag>}
-                  <span className="fw-rp-small">{row.name}</span>
-                  {row.madeByMarkup && <span className="fw-rp-muted fw-rp-small">{t('versions.madeByMarkup', { count: row.madeByMarkup.marks })}{row.madeByMarkup.note ? `: ${row.madeByMarkup.note}` : ''}</span>}
-                  {row.markups > 0 && <span className="fw-rp-muted fw-rp-small">{t('versions.markups', { count: row.markups })}</span>}
+                  <span className="fw-fd-small">{row.name}</span>
+                  {row.madeByMarkup && <span className="fw-fd-note">{t('versions.madeByMarkup', { count: row.madeByMarkup.marks })}{row.madeByMarkup.note ? `: ${row.madeByMarkup.note}` : ''}</span>}
+                  {row.markups > 0 && <span className="fw-fd-note">{t('versions.markups', { count: row.markups })}</span>}
                 </span>,
                 who(row),
                 formatDateTime(row.addedAt, { locale }),
                 sizeWords(row.sizeBytes, locale),
                 row.usedBy.length === 0 ? (
-                  <span key="uses" className="fw-rp-muted">{t('versions.usedByNone')}</span>
+                  <span key="uses" className="fw-fd-muted">{t('versions.usedByNone')}</span>
                 ) : (
                   <ul key="uses" className="fw-rf-uses">
                     {row.usedBy.map((use) => (
@@ -243,7 +219,7 @@ function VersionsPopup({ depth, actions }: { depth: FileDepthModel; actions?: Fi
         {dialog.compare && (
           <section className="fw-rf-compare" aria-label={t('versions.compareLabel')}>
             {dialog.compare.status === 'loading' && (
-              <p className="fw-rp-loading" role="status">
+              <p className="fw-fd-loading" role="status">
                 <Spinner size={14} /> {t('versions.compareLoading')}
               </p>
             )}
@@ -287,7 +263,7 @@ function TagPopup({ depth, actions }: { depth: FileDepthModel; actions?: FileDep
       }
     >
       <div className="fw-rf-form">
-        <p className="fw-rp-muted fw-rp-small">{t('tag.intro')}</p>
+        <p className="fw-fd-note">{t('tag.intro')}</p>
         {dialog.problem && <Banner tone="danger" title={t(dialog.problem)} />}
         <Field label={t('tag.category')} hint={t('tag.categoryHint')}>
           <Select value={dialog.category ?? ''} onChange={(event) => actions?.onTagDraft?.({ category: event.target.value === '' ? null : event.target.value })}>
@@ -317,7 +293,7 @@ function MarkupPopup({ depth, actions }: { depth: FileDepthModel; actions?: File
   return (
     <Modal open onClose={() => actions?.onCloseMarkup?.()} title={t('markup.title', { name: dialog.name })} size="xl" footer={<Button onClick={() => actions?.onCloseMarkup?.()}>{t('markup.close')}</Button>}>
       <div className="fw-rf-markup">
-        <p className="fw-rp-muted fw-rp-small">{t(dialog.target === 'pdf' ? 'markup.introPdf' : 'markup.introPicture')}</p>
+        <p className="fw-fd-note">{t(dialog.target === 'pdf' ? 'markup.introPdf' : 'markup.introPicture')}</p>
         {dialog.problem && <Banner tone="danger" title={t(dialog.problem)} />}
         {dialog.target === 'pdf' && (
           <div className="fw-rf-pages" role="group" aria-label={t('markup.pagesLabel')}>
@@ -337,7 +313,7 @@ function MarkupPopup({ depth, actions }: { depth: FileDepthModel; actions?: File
               <Textarea value={dialog.note} rows={2} limit={2000} onChange={(event) => actions?.onMarkupNote?.(event.target.value)} />
             </Field>
             {dialog.image.status === 'loading' && (
-              <p className="fw-rp-loading" role="status">
+              <p className="fw-fd-loading" role="status">
                 <Spinner size={14} /> {t(dialog.target === 'pdf' ? 'markup.loadingPage' : 'markup.loadingPicture')}
               </p>
             )}
@@ -364,13 +340,13 @@ function MarkupPopup({ depth, actions }: { depth: FileDepthModel; actions?: File
             <h3 className="fw-rf-h">{t(dialog.target === 'pdf' ? 'markup.earlierPage' : 'markup.earlier')}</h3>
             {dialog.markups.status === 'loading' && <Spinner size={14} />}
             {dialog.markups.status === 'failed' && <Banner tone="warning" title={t(dialog.markups.problem)} />}
-            {dialog.markups.status === 'ready' && onPage.length === 0 && <p className="fw-rp-muted fw-rp-small">{t('markup.none')}</p>}
+            {dialog.markups.status === 'ready' && onPage.length === 0 && <p className="fw-fd-note">{t('markup.none')}</p>}
             {image && dialog.target === 'pdf' && onPage.length > 0 && <MarkSketch src={image.src} width={image.width} height={image.height} marks={onPage.flatMap((item) => item.marks)} label={t('markup.overlayLabel', { page: dialog.page })} />}
             <ul className="fw-rf-markup-items">
               {onPage.map((item: MarkupItem) => (
                 <li key={item.id}>
                   <span>{item.note ?? t('markup.noNote')}</span>
-                  <span className="fw-rp-muted fw-rp-small">
+                  <span className="fw-fd-note">
                     {t('markup.itemMeta', { who: item.by ?? t('versions.bySystem'), at: formatDateTime(item.at, { locale }), count: item.marks.length })}
                     {item.versionNo !== null ? ` · ${t('versions.number', { n: item.versionNo })}` : ''}
                     {item.madeVersion ? ` · ${t('markup.madeVersion')}` : ''}

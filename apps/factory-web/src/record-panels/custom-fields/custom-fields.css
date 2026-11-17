@@ -1,11 +1,10 @@
 /*
  * The custom-fields section of a record (B-W2b-431, SCR-520) LAYOUT: the head with Edit, the fields by section (read as
  * label and value pairs, edited as a grid of controls), the money amount beside its currency, and the link picker's
- * results. Every control is the design system's; semantic tokens only; it is as wide as the panels it sits above.
+ * results. Every control is the design system's; semantic tokens only; it is as wide as the record's body column, at the end of its first tab (B-TH-280).
  */
 .fw-cf-card {
   min-width: 0;
-  margin-bottom: var(--nds-space-16);
 }
 
 .fw-cf,

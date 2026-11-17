@@ -5,7 +5,8 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
+import { RecordCustomFields } from '../../../../record-panels/custom-fields/RecordCustomFields' // B-TH-280
 import { useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { pickerReasons, type PickerReason } from '../../../_shared/reasons/api'
 import { listHides, lotRecord, readLedger, stockOverview, type LotRecord as LotRecordValue } from '../../../_shared/stock/api'
@@ -241,7 +242,7 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
   )
 
   // B-TH-264: the lot's ONE thread, docked beside every tab — the same conversation as Compliance › Tests & substances (the Lot
-  // record); its supplier is the only party it may reach. The print view keeps the record panels' print form.
+  // record); its supplier is the only party it may reach. The print view prints the thread with ThreadPrint (B-TH-280).
   const lotRef = value ? { type: 'Lot', id: value.lot.id, companyId: value.lot.companyId, siteId: value.lot.siteId } : null
   const supplier = value?.lot.supplier ?? null
   const thread =
@@ -256,13 +257,15 @@ function LotRecordContainer({ lotId }: { lotId: string }) {
         printHref={printHref(pathname, params?.toString() ?? '')}
       />
     ) : null
-  const printThread = value && lotRef && can.threads ? <RecordPanels record={lotRef} title={value.lot.code} /> : null
+  const printThread = value && lotRef && can.threads ? <ThreadPrint record={lotRef} title={value.lot.code} partyRole="supplier" /> : null
 
   return (
     <LotRecordView
       model={{ prefix, can, tab, record, checklist, moves, live, asOf, changed: null, personId: session.user.id, timeZone: TIME_ZONE, daily, figures, trace, holds, holdReasons, writeOff: writeOff.model, find: find.model, depth: depth.model }}
       thread={thread}
       printThread={printThread}
+      // B-TH-280: the lot's custom fields at the end of its first tab (Overview & quality), as the old panels drew them above theirs.
+      fields={value && tab === 'overview' ? <RecordCustomFields record={{ type: 'Lot', id: value.lot.id }} title={value.lot.code} /> : null}
       actions={{
         onRetry: () => void load(),
         onRetryChecklist: () => void loadChecklist(),

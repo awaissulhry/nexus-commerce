@@ -1,11 +1,10 @@
 'use client'
 
-import { useEffect, type ReactNode } from 'react'
+import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { MessageSquare } from 'lucide-react'
 import { Banner, Card, EmptyState, Tabs, type TabItem } from '@nexus/ui/components'
 import { DetailHeader } from '@nexus/ui/patterns'
-import { Button, Kbd, Skeleton, Spinner } from '@nexus/ui/primitives'
+import { Button, Skeleton, Spinner } from '@nexus/ui/primitives'
 import { CheckList as DsCheckList, type CheckItem } from '@nexus/ui/patterns/checklist/index'
 import { StepUpModal, useDsWords } from '../../../lib/i18n/ds-parts'
 import { formatTime } from '../../../lib/i18n/format'
@@ -165,11 +164,11 @@ export interface RecordTabItem {
 }
 
 /**
- * The record frame (design 00 §2.2; Owner L1: the record's tabs always in view): ‹ back (a real link to the list), the
- * record's name, its identity, its state, at most two actions and ⋯; then the record's sections as link tabs (`?tab=`)
- * with counts. The shell has no slot for a record's band yet (`usePageBand`, 00 §6.3): the record draws its head at the
- * top of the page with the DS DetailHeader. Owner O1: on a wide screen (1280 px and wider) the thread can stay beside
- * any tab (⌘J) when the record has one; narrower the same button opens Activity.
+ * The record frame of the quality pages not on the shared record frame yet (inspections, inline and incoming checks, plans; design
+ * 00 §2.2; Owner L1: the record's tabs always in view): ‹ back (a real link to the list), the record's name, its identity, its
+ * state, at most two actions and ⋯; then the record's sections as link tabs (`?tab=`) with counts. The shell has no slot for a
+ * record's band yet (`usePageBand`, 00 §6.3): the record draws its head at the top of the page with the DS DetailHeader.
+ * B-TH-280: its own ⌘J thread dock went with the old record panels (no page passed one since the record-frame rollout).
  */
 export function RecordFrame({
   back,
@@ -180,9 +179,6 @@ export function RecordFrame({
   tabs,
   active,
   tabHref,
-  dock,
-  dockOpen,
-  onDock,
   children,
 }: {
   back: { href: string; label: string }
@@ -193,59 +189,18 @@ export function RecordFrame({
   tabs: readonly RecordTabItem[]
   active: string
   tabHref: (tab: string) => string
-  dock?: ReactNode
-  dockOpen?: boolean
-  onDock?: () => void
   children?: ReactNode
 }) {
   const t = useT('quality')
-  useEffect(() => {
-    if (!dock || !onDock) return
-    const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'j') {
-        event.preventDefault()
-        onDock()
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [dock, onDock])
-
   const items: TabItem[] = tabs.map((tab) => ({ id: tab.id, label: tab.label, count: tab.count, href: tabHref(tab.id) }))
-  const showDock = !!dock && !!dockOpen
   return (
     <div className="fw-q-record">
       <div className="fw-q-band">
-        <DetailHeader
-          backAsChild
-          backLabel={<Link href={back.href}>{back.label}</Link>}
-          title={title}
-          meta={meta}
-          status={status}
-          actions={
-            <>
-              {actions}
-              {dock && (
-                <Button size="sm" variant={dockOpen ? 'tonal' : 'secondary'} active={!!dockOpen} aria-pressed={!!dockOpen} onClick={() => onDock?.()} title={t('record.dockHint')}>
-                  <MessageSquare size={14} aria-hidden /> {t('record.dock')}
-                  <span className="fw-q-keys" aria-hidden>
-                    <Kbd>⌘</Kbd>
-                    <Kbd>J</Kbd>
-                  </span>
-                </Button>
-              )}
-            </>
-          }
-        />
+        <DetailHeader backAsChild backLabel={<Link href={back.href}>{back.label}</Link>} title={title} meta={meta} status={status} actions={actions} />
         {items.length > 1 && <Tabs ariaLabel={t('record.tabsLabel')} tabs={items} active={active} size="sm" overflow="scroll" />}
       </div>
-      <div className={showDock ? 'fw-q-record-body has-dock' : 'fw-q-record-body'}>
+      <div className="fw-q-record-body">
         <div className="fw-q-record-main">{children}</div>
-        {showDock && (
-          <aside className="fw-q-record-dock" aria-label={t('record.dockLabel')}>
-            {dock}
-          </aside>
-        )}
       </div>
     </div>
   )

@@ -8,7 +8,7 @@ import { Button, Input, Pill, RadioCard, Select, Spinner, Tag } from '@nexus/ui/
 import { FileDropzone, Modal } from '../../../../../lib/i18n/ds-parts'
 import { formatDate } from '../../../../../lib/i18n/format'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
-import { TaskNewDialog } from '../../../../../record-panels/view/TaskNewDialog'
+import { TaskNewDialog } from '../../../../../record-panels/tasks/view/TaskNewDialog'
 import type { CoverageCell, LanguageStatus, StyleComplianceView, StyleTypeChanges, StyleView } from '../../api'
 import { CELL_TONE, CHECK_TONE, documentFileProblem, revisionInView } from '../../model'
 import type { StyleRecordActions, StyleRecordViewModel } from '../../record/record-model'

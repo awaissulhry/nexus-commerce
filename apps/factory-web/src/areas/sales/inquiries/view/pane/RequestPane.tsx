@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Info, Lock, MoreHorizontal, Shirt, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink, Info, Lock, MoreHorizontal, Pin, Shirt, X } from 'lucide-react'
 import { Banner, KeyValue, Menu, type MenuItemDef } from '@nexus/ui/components'
 import { Button, Skeleton, Tag } from '@nexus/ui/primitives'
 import { FileRow, Modal } from '../../../../../lib/i18n/ds-parts'
@@ -186,7 +186,7 @@ function Loaded({ model, actions, slots, nav, onClose, picture, companyName, han
     })
   }
   // ---- end B-TH-290
-  const facts = <Details model={model} view={view} companyName={companyName ?? null} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} production={model.production ? { model: model.production, actions: actions?.production, id: productionId } : null} />
+  const facts = <Details model={model} view={view} companyName={companyName ?? null} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} production={model.production ? { model: model.production, actions: actions?.production, id: productionId } : null} onPinNote={actions?.onPinNote} />
   return (
     <div className={`fw-rp is-${place}`} data-place={place}>
       <PaneHead model={model} view={view} nav={nav ?? null} index={index} picture={picture ?? null} onClose={onClose} rights={rights} onErase={onErase} onCloseThread={onCloseThread} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} place={place} fullHref={fullHref} onInfo={() => setSheet(true)} startProject={model.startProject ? { held: model.startProject.held, onOpen: actions?.startProject?.onOpen } : undefined} production={model.production ? { answers: model.production.answers, held: say(model.production.held), onChip: () => revealProduction(false), onOpen: () => revealProduction(true) } : undefined} />
@@ -231,7 +231,7 @@ function Loaded({ model, actions, slots, nav, onClose, picture, companyName, han
       {sheet && (
         <Modal open sheet size="md" onClose={() => setSheet(false)} title={t('pane.details')} subtitle={`${view.number} · ${fromLine(view, t)}`}>
           {/* B-TH-290: the sheet's own copy of Details (its Production section with its own id). */}
-          <Details model={model} view={view} companyName={companyName ?? null} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} production={model.production ? { model: model.production, actions: actions?.production, id: `${productionId}-sheet` } : null} />
+          <Details model={model} view={view} companyName={companyName ?? null} onEdit={model.can.manage && view.actions.edit.allowed ? () => setEditing(true) : undefined} production={model.production ? { model: model.production, actions: actions?.production, id: `${productionId}-sheet` } : null} onPinNote={actions?.onPinNote} />
         </Modal>
       )}
       <RecordDialogs model={model} view={view} actions={actions} />
@@ -417,7 +417,7 @@ function FirstWords({ model, view, actions }: { model: InquiryRecordModel; view:
  * made from it (the quote with ITS own status), the prospect block with its lawful basis (e-mail and phone only for who answers
  * requests, PR-30), the request note.
  */
-function Details({ model, view, companyName, onEdit, production }: { model: InquiryRecordModel; view: InquiryView; companyName: string | null; onEdit?: () => void; production?: { model: NonNullable<InquiryRecordModel['production']>; actions?: NonNullable<InquiryRecordActions['production']>; id: string } | null }) {
+function Details({ model, view, companyName, onEdit, production, onPinNote }: { model: InquiryRecordModel; view: InquiryView; companyName: string | null; onEdit?: () => void; production?: { model: NonNullable<InquiryRecordModel['production']>; actions?: NonNullable<InquiryRecordActions['production']>; id: string } | null; /* B-TH-286 */ onPinNote?: (() => void) | undefined }) {
   const { t, day, when, locale } = useWords()
   const target = view.targetUnitPrice as string | null | undefined
   const ship = view.shipTo ?? null
@@ -502,6 +502,15 @@ function Details({ model, view, companyName, onEdit, production }: { model: Inqu
         <section className="fw-rp-sec">
           <h3 className="fw-rp-h3">{t('request.note')}</h3>
           <p className="fw-inq-text">{view.note}</p>
+          {/* B-TH-286 (pane-facts-F06): one place for office notes — the note becomes the thread's first pinned office note. */}
+          {model.pinNote && onPinNote && (
+            <p className="fw-inq-hint">
+              <Button size="sm" variant="quiet" heldReason={model.pinNote.held ? t(model.pinNote.held) : null} disabled={model.pinNote.busy} onClick={onPinNote}>
+                <Pin size={13} aria-hidden /> {t('pane.pinNote.action')}
+              </Button>{' '}
+              {t('pane.pinNote.hint')}
+            </p>
+          )}
         </section>
       )}
     </div>

@@ -8,7 +8,7 @@ import { useLocale } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { downloadLink } from '../../../../record-panels/api'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { useLive } from '../../_shared/hooks'
 import {
   addCostLine,
@@ -783,10 +783,10 @@ export function NcrRecord({ ncrId }: { ncrId: string }) {
 
   // B-TH-266: the NCR's ONE thread docked beside every tab (Head with Activity's doors, files line, Files view, feed, box) — internal:
   // no party (the API never shares an NCR's thread, NOT_SHAREABLE; the supplier hears through the claim). Only with threads.read; the
-  // print view keeps the record panels' print form.
+  // print view prints the thread with ThreadPrint (B-TH-280).
   const ref = record ? { type: 'Nonconformance', id: record.ncr.id, companyId: record.ncr.companyId, siteId: record.ncr.siteId } : null
   const title = record ? `${record.ncr.number} · ${record.ncr.title}` : ''
   const thread = record && ref && can.threadsRead ? <OfficeRecordThread docked record={ref} title={title} recordLabel={record.ncr.number} party={null} printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = record && ref && can.threadsRead ? <RecordPanels record={ref} title={title} /> : null
+  const printThread = record && ref && can.threadsRead ? <ThreadPrint record={ref} title={title} /> : null
   return <NcrRecordView model={model} actions={actions} thread={thread} printThread={printThread} />
 }

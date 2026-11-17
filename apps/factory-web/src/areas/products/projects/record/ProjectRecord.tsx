@@ -7,7 +7,7 @@ import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { companyPrefix } from '../../../../lib/session/session'
 import { downloadLink, listFiles, type ApiFile } from '../../../../record-panels/api'
 import type { PanelRead } from '../../../../record-panels/model'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { storeUrl } from '../../../../record-panels/store'
 import { createTask, listAssignees, listTasks, taskReadProblem } from '../../../../record-panels/tasks/api'
 import { addTaskHeld, createBody, type TaskItem } from '../../../../record-panels/tasks/model'
@@ -269,7 +269,7 @@ export function ProjectRecord({ projectId }: { projectId: string }) {
         reopenWithRecord={project.status === 'CLOSED'}
       />
     ) : null
-  const printThread = project && threadRecord ? <RecordPanels record={threadRecord} title={title} party={project.party ? { id: project.party.id, name: project.party.name, emails: [] } : null} /> : null
+  const printThread = project && threadRecord ? <ThreadPrint record={threadRecord} title={title} party={project.party ? { id: project.party.id, name: project.party.name } : null} {...(audience?.partyRole ? { partyRole: audience.partyRole } : {})} /> : null
 
   return (
     <ProjectRecordView

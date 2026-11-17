@@ -41,3 +41,16 @@ div.fw-rtf-line[role="status"] { border-bottom: 1px solid var(--nds-border-subtl
 .fw-rtf-useon-list { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: var(--nds-space-2); max-height: 320px; overflow-y: auto; min-width: 0; }
 .fw-rtf-useon-row { display: inline-flex; align-items: center; gap: var(--nds-space-8); flex-wrap: wrap; min-width: 0; }
 .fw-rtf-useon-failed { margin: var(--nds-space-4) 0 0; padding-left: var(--nds-space-16); }
+
+/* B-TH-286 (T2-F07): "2 pinned" and its popover — one line per pin, a pointer to its message. */
+.fw-rtf-pinchip { display: inline-flex; align-items: center; gap: var(--nds-space-4); }
+.fw-rtf-pins { display: flex; flex-direction: column; gap: var(--nds-space-8); width: min(360px, 86vw); }
+.fw-rtf-pins-title { margin: 0; font-weight: 600; color: var(--nds-text-strong); font-size: var(--nds-font-size-sm); }
+.fw-rtf-pins-lines { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-2); }
+.fw-rtf-pin { display: flex; align-items: flex-start; gap: var(--nds-space-4); }
+.fw-rtf-pin-go { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; padding: var(--nds-space-6) var(--nds-space-8); border: 0; border-radius: var(--nds-radius-md); background: transparent; color: var(--nds-text); font: inherit; text-align: start; cursor: pointer; }
+.fw-rtf-pin-go:hover { background: var(--nds-surface-hover); }
+.fw-rtf-pin-go:focus-visible { outline: 2px solid var(--nds-text); outline-offset: 1px; }
+.fw-rtf-pin-go.is-removed .fw-rtf-pin-words { font-style: italic; color: var(--nds-text-muted); }
+.fw-rtf-pin-words { display: inline-flex; align-items: center; gap: var(--nds-space-4); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--nds-font-size-sm); }
+.fw-rtf-pin-meta { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); }

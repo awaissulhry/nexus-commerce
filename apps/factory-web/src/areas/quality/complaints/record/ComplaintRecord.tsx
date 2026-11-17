@@ -6,7 +6,7 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { recordAddress } from '../../../../lib/records/record-links'
 import { companyPrefix } from '../../../../lib/session/session'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { OFFICE_PAGES } from '../../../../shell/nav/office-nav'
 import { liveMatches, useLive } from '../../_shared/hooks'
 import { problemKey } from '../../_shared/model'
@@ -659,11 +659,11 @@ function RecordContainer({ complaintId }: { complaintId: string }) {
   if (complaint.order) add('SalesOrder', complaint.order.id, complaint.order.number)
 
   // B-TH-266: the complaint's ONE thread docked beside every tab — the same conversation as the customer's portal complaint page; the
-  // complaint's own customer is its only party. Only with threads.read; the print view keeps the record panels' print form.
+  // complaint's own customer is its only party. Only with threads.read; the print view prints the thread with ThreadPrint (B-TH-280).
   const ref = { type: 'Complaint', id: complaint.id, companyId: complaint.companyId, siteId: null }
   const party = { id: complaint.party.id, name: complaint.party.legalName }
   const thread = can.threadsRead ? <OfficeRecordThread docked record={ref} title={`${complaint.number} · ${complaint.party.legalName}`} recordLabel={complaint.number} party={party} partyRole="customer" printHref={printHref(pathname, params?.toString() ?? '')} /> : null
-  const printThread = can.threadsRead ? <RecordPanels record={ref} title={complaint.number} party={{ ...party, emails: complaint.contact?.email ? [complaint.contact.email] : [] }} /> : null
+  const printThread = can.threadsRead ? <ThreadPrint record={ref} title={complaint.number} party={party} /> : null
 
   const triageModel: TriageModel | null = triage ? { ...triage, people: people?.value ?? null, peopleProblem: people?.problem ?? null, styles, photos, offline } : null
 

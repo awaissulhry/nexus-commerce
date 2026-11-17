@@ -349,6 +349,11 @@ describe('"Report a problem" by a claim link', { timeout: SLOW_TEST_TIMEOUT_MS }
     expect(body).toMatchObject({ record: { type: 'Shipment', id: shipmentId }, types: ['RETURN', 'COMPLAINT'], cases: [], link: { usesLeft: 5 } })
     expect(body.items.length).toBeGreaterThan(0)
     expect(body.items.every((item: Json) => item.unitPrice === undefined)).toBe(true)
+    // follow-up (th9-web-b; plan §0.5): the link names the customer's own order ("Your order N", their PO), never the office series.
+    expect(body.items.filter((item: Json) => item.order !== null).every((item: Json) => item.order.number === undefined && 'yourNumber' in item.order && 'yourRef' in item.order)).toBe(true)
+    // The page's own label (and the claim mail's subject) names the delivery note and the customer's own order, never the office order number.
+    const orderNumber = (await admin<{ number: string }>(`SELECT so.number FROM "Shipment" s JOIN "SalesOrder" so ON so."tenantId" = s."tenantId" AND so.id = s."salesOrderId" WHERE s."tenantId" = $1 AND s.id = $2`, [T, shipmentId]))[0]?.number ?? null
+    if (orderNumber) expect(String(body.record.label)).not.toContain(orderNumber)
   })
 
   it('sends a return and a complaint: each a counted use, the draft dropped, the cases on the page; a refused one uses nothing', async () => {
@@ -418,3 +423,39 @@ describe('the investigation’s steps are dated by their Rome day, not their UTC
     ])
   })
 })
+
+// ---- follow-up (th9-web-b; plan §0.5 "counts do not leak"): the portal's start dialog names the customer's OWN order ("Your order 7",
+// else their PO), never the office series (SO-…), which counts every customer's orders.
+describe('the start dialog names the customer’s own order (plan §0.5)', { timeout: SLOW_TEST_TIMEOUT_MS }, () => {
+  it('each item’s order says “Your order N” and the PO they gave, never the office number; another customer is offered none of these orders', async () => {
+    const offer = await ok(browsers.buyer, '/portal/returns/returnable')
+    const withOrder = (offer.items as Json[]).filter((item) => item.order !== null)
+    expect(withOrder.length).toBeGreaterThan(0)
+    const ids = [...new Set(withOrder.map((item) => item.order.id as string))]
+    const rows = await admin<{ id: string; number: string; customerSeq: number | null; customerRef: string | null; partyId: string }>(
+      'SELECT id, number, "customerSeq", "customerRef", "partyId" FROM "SalesOrder" WHERE id = ANY($1::uuid[])',
+      [ids],
+    )
+    expect(rows).toHaveLength(ids.length)
+    // The database gives every order of a customer its own number: these all have one.
+    expect(rows.every((row) => row.customerSeq !== null)).toBe(true)
+    for (const item of withOrder) {
+      const row = rows.find((entry) => entry.id === item.order.id)!
+      expect(row.partyId).toBe(P1)
+      expect(item.order).toEqual({
+        id: row.id,
+        yourNumber: { seq: row.customerSeq, words: { en: `Your order ${row.customerSeq}`, it: `Il vostro ordine ${row.customerSeq}` } },
+        yourRef: row.customerRef,
+        lineSeq: expect.any(Number),
+      })
+    }
+    // The office series appears nowhere in the answer.
+    const text = JSON.stringify(offer)
+    for (const row of rows) expect(text).not.toContain(row.number)
+    // Brand wall: another customer's buyer is offered none of these orders.
+    const other = await ok(browsers.other, '/portal/returns/returnable')
+    expect((other.items as Json[]).filter((item) => item.order !== null && ids.includes(item.order.id))).toEqual([])
+    expect(JSON.stringify(other)).not.toContain(rows[0]!.number)
+  })
+})
+// ---- end follow-up

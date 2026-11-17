@@ -7,7 +7,7 @@ import { isApiError } from '../../../../lib/api/errors'
 import { useT } from '../../../../lib/i18n/provider'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import { pickerReasons, type PickerReason } from '../../../_shared/reasons/api'
 import { downloadText, useCoalesced, useLive } from '../../../_shared/buying/hooks'
 import { buyingCan, csvOf, part, PART_LOADING, phrase, readProblem, writeProblem, type Loaded, type Part, type Phrase } from '../../../_shared/buying/model'
@@ -458,7 +458,7 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
   const dailyModel: ReceiptDailyModel = { can: dCan, discrepancies, reasons, dialog: daily, busy: dailyBusy, problem: dailyProblem, notice: dailyNotice, open: openId, photos, ddtStep, uploading }
   const model: ReceiptRecordModel = { prefix, can, tab, receipt, lots, live, personId: session.user.id, changed, notice, notes: null, busy, dialog, dialogProblem, timeZone: TIME_ZONE, daily: dailyModel }
   // B-TH-264: the receipt's ONE thread, docked beside every tab — its supplier is the only party it may reach ("Request from
-  // supplier" and the discrepancy report write their mails in it). The print view keeps the record panels' print form.
+  // supplier" and the discrepancy report write their mails in it). The print view prints the thread with ThreadPrint (B-TH-280).
   const receiptRef = value ? { type: 'GoodsReceipt', id: value.id, companyId: value.companyId, siteId: value.siteId } : null
 
   return (
@@ -496,7 +496,7 @@ function RecordContainer({ receiptId }: { receiptId: string }) {
           />
         ) : null
       }
-      printThread={value && receiptRef ? <RecordPanels record={receiptRef} title={`${value.number} · ${value.supplier.name}`} /> : null}
+      printThread={value && receiptRef ? <ThreadPrint record={receiptRef} title={`${value.number} · ${value.supplier.name}`} partyRole="supplier" /> : null}
       actions={{
         onRetry: () => void load(),
         onReload: () => void load(),

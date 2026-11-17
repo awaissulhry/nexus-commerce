@@ -346,3 +346,40 @@ describe('B-TH-255 — erased after a privacy request vs files only; the files a
   })
 })
 // ---- end B-TH-255
+
+// ---- B-TH-286 (B-TH-091; T3-F12 "Pin for everyone"; wall W08) ----------------------------------------------------------------------
+import { pinnable } from './model'
+
+describe('B-TH-286 — pin a message for everyone, by right', () => {
+  it('offers Pin for everyone to whoever may write (canPin), Unpin on a pinned card, nothing without the right', () => {
+    expect(cardActions(MAIL, { ...CONTEXT, canPin: true })).toContain('pin')
+    expect(cardActions({ ...MAIL, pinned: true }, { ...CONTEXT, canPin: true })).toContain('unpin')
+    expect(cardActions({ ...MAIL, pinned: true }, { ...CONTEXT, canPin: true })).not.toContain('pin')
+    expect(cardActions(MAIL, CONTEXT)).not.toContain('pin')
+    expect(cardActions(MAIL, { ...CONTEXT, canPin: false })).not.toContain('pin')
+    // Copy link stays last.
+    expect(cardActions(NOTE, { ...CONTEXT, canPin: true }).at(-1)).toBe('link')
+  })
+
+  it('never pins a message on its way, a mail in its 10 seconds or a mail taken back (the API’s HELD)', () => {
+    expect(pinnable({ outbox: { state: 'sending' } })).toBe(false)
+    expect(cardActions({ ...OURS, outbox: { state: 'sending' } }, { ...CONTEXT, canPin: true })).toEqual([])
+    const waiting = { ...OURS, email: { to: ['buyer@example.com'], subject: 'S', status: 'QUEUED' as const, undoUntil: '2026-11-17T10:42:10.000Z' } }
+    expect(pinnable(waiting)).toBe(false)
+    expect(cardActions(waiting, { ...CONTEXT, canPin: true })).not.toContain('pin')
+    expect(pinnable({ ...OURS, email: { to: ['buyer@example.com'], subject: 'S', status: 'WITHDRAWN' as const } })).toBe(false)
+    expect(pinnable({ ...OURS, email: { to: ['buyer@example.com'], subject: 'S', status: 'DELIVERED' as const } })).toBe(true)
+  })
+
+  it('a pinned card says so in words (not colour alone), in it and en; the menu words are there', () => {
+    for (const locale of ['en', 'it'] as const) {
+      const html = card({ ...MAIL, pinned: true }, { ...CONTEXT, canPin: true }, locale)
+      expect(html).toContain('fw-rt-pinned')
+      expect(textOf(html)).toContain(locale === 'en' ? 'Pinned for everyone on this record' : 'Fissato per tutti su questo record')
+      expect(leftKeys(html, ['pin', 'menu'])).toEqual([])
+      for (const key of ['menu.pin', 'menu.pinHint', 'menu.unpin', 'menu.unpinHint', 'pin.pinned']) expect(CATALOGUE[locale]['record-thread-card']?.[key]).toBeTruthy()
+    }
+    expect(card(MAIL, { ...CONTEXT, canPin: true })).not.toContain('fw-rt-pinned')
+  })
+})
+// ---- end B-TH-286

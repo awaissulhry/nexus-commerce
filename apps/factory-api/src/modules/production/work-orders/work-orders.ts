@@ -55,6 +55,9 @@ import { assertUnitCells, assertUnitStarted, unitCellProfile, unitOfRequest } fr
 // B-PR-34 (production plan, the work order list by risk): risk and waiting on per row, the risk and due sorts.
 import type { WaitingOn } from '@nexus/factory-domain/production-brand/waiting'
 import { decodeCursor, pageOf, passes, riskFactsOf, riskRank, type BlockedBy, type ListSort, type RiskRow, type RowFacts, type SortKey, type WorkOrderRisk } from './risk'
+// B-PR-42a (production plan §3 "Supervisor"): the supervisor per row (Me / Someone else / Not set), "Mine", and by name on the record.
+import { supervisorMarkOf, type SupervisorMark } from '@nexus/factory-domain/production-brand/supervisor'
+import { recordSupervisorOf, workOrderSupervisorsOf, type Reader as SupervisorReader, type RecordSupervisor, type WorkOrderOrders } from '../supervisor/resolver'
 
 /**
  * The office's work orders (B-W1-38; MES-001, MES-002, MES-007, MES-305; A2 SCR-069, SCR-070): the list, the record,
@@ -78,9 +81,11 @@ export async function officeWorkOrder(caller: CommandCaller, workOrderId: string
   return row!
 }
 
-export async function getWorkOrder(caller: CommandCaller, workOrderId: string): Promise<{ workOrder: WorkOrderView }> {
+export async function getWorkOrder(caller: CommandCaller, workOrderId: string): Promise<{ workOrder: WorkOrderView & /* B-PR-42a */ RecordSupervisor }> {
   const row = await officeWorkOrder(caller, workOrderId)
-  return { workOrder: await caller.withClient((client) => workOrderView(client, row, todayNow())) }
+  // B-PR-42a: its production supervisor by name (inside one record only) and, for the supervisor himself, his muted follow.
+  const viewerId = officeContextOf(caller).actorId
+  return { workOrder: await caller.withClient(async (client) => ({ ...(await workOrderView(client, row, todayNow())), ...(await recordSupervisorOf(client, row, viewerId)) })) }
 }
 
 export interface ListQuery {
@@ -111,6 +116,8 @@ export interface ListQuery {
   /** Open work orders blocked by a hold, the customer or material (./risk). */
   readonly blockedBy?: BlockedBy | undefined
   // ── end B-PR-34 ──
+  /** B-PR-42a: `me` — the work orders whose production supervisor is the caller ("Mine"; never another person's). */
+  readonly supervisor?: SupervisorFilter | undefined
   /** `newest`: the last row's id; a computed sort: its position token (./risk decodeCursor). */
   readonly cursor?: string | undefined
   readonly limit: number
@@ -198,6 +205,33 @@ const computedFilter = (query: ListQuery) => ({ waitingOn: query.waitingOn, risk
 const hasComputedFilter = (query: ListQuery): boolean => query.waitingOn !== undefined || query.risk !== undefined || query.blockedBy !== undefined
 // ── end B-PR-34 ──
 
+// ── B-PR-42a ──
+/** The list's supervisor filter: only `me` (lists show Me / Someone else / Not set; no view of another person's orders). */
+export const SUPERVISOR_FILTERS = ['me'] as const
+export type SupervisorFilter = (typeof SUPERVISOR_FILTERS)[number]
+
+/** A work order's customer and the sales orders its cells make, from what a list read selects. */
+const ordersOfRow = (row: { id: string; partyId: string | null; sizes: readonly { salesOrderLine: { order: { id: string } } | null }[] }): WorkOrderOrders => ({
+  id: row.id,
+  partyId: row.partyId,
+  orderIds: [...new Set(row.sizes.flatMap((cell) => (cell.salesOrderLine ? [cell.salesOrderLine.order.id] : [])))],
+})
+
+/** The supervisor mark of each row for this viewer (null: a work order of no customer shows none). */
+async function supervisorMarksOf(client: SupervisorReader, rows: readonly WorkOrderOrders[], viewerId: string): Promise<Map<string, SupervisorMark | null>> {
+  const found = await workOrderSupervisorsOf(client, rows)
+  return new Map(
+    rows.map((row): [string, SupervisorMark | null] => {
+      const supervisor = found.get(row.id) ?? null
+      return [row.id, supervisor === null ? null : supervisorMarkOf(supervisor, viewerId)]
+    }),
+  )
+}
+
+/** What a light read selects for the supervisor (the cells' orders and the customer). */
+const SUPERVISOR_SELECT = { id: true, partyId: true, sizes: { select: { salesOrderLine: { select: { order: { select: { id: true } } } } } } } as const satisfies Prisma.WorkOrderSelect
+// ── end B-PR-42a ──
+
 /**
  * The work orders the caller may see (its companies, sites and customers: B-PR-03), newest first, with SCR-069's filters
  * (MES-305). Each row names its one customer (null: a sample of no customer, or `mixedCustomers`, made before the
@@ -212,13 +246,14 @@ export async function listWorkOrders(caller: CommandCaller, query: ListQuery) {
   // ── B-PR-34 ──
   const sort = query.sort ?? 'newest'
   const after = decodeCursor(sort, query.cursor)
-  if (sort !== 'newest' || hasComputedFilter(query)) return listComputed(caller, context, query, sort, after, today)
+  if (sort !== 'newest' || hasComputedFilter(query) || /* B-PR-42a */ query.supervisor !== undefined) return listComputed(caller, context, query, sort, after, today)
   // ── end B-PR-34 ──
   const where: Prisma.WorkOrderWhereInput = { AND: [listWhere(context, query, today), after ? { id: { lt: after.id } } : {}] }
   const rows = await caller.withClient((client) => client.workOrder.findMany({ where, orderBy: { id: 'desc' }, take: query.limit + 1, select: LIST_SELECT }))
   const page = rows.slice(0, query.limit)
   return {
-    workOrders: await caller.withClient(async (client) => listRowsOf(client, page, await riskFactsOf(client, page.map(riskRowOf), today), today)), // B-PR-34: risk facts
+    // B-PR-34: risk facts; B-PR-42a: the supervisor marks of the page.
+    workOrders: await caller.withClient(async (client) => listRowsOf(client, page, await riskFactsOf(client, page.map(riskRowOf), today), today, await supervisorMarksOf(client, page.map(ordersOfRow), context.actorId))),
     nextCursor: rows.length > query.limit ? page[page.length - 1]!.id : null,
   }
 }
@@ -233,18 +268,27 @@ async function listComputed(caller: CommandCaller, context: ReturnType<typeof of
   return caller.withClient(async (client) => {
     const light = await client.workOrder.findMany({ where, select: { id: true, status: true, dueDate: true, siteId: true, site: { select: { timezone: true } } } })
     const facts = await riskFactsOf(client, light.map(riskRowOf), today)
-    const keyed = light.filter((row) => passes(facts.get(row.id), computedFilter(query))).map((row) => ({ key: { rank: riskRank(facts.get(row.id)?.risk ?? null), due: dayOrNull(row.dueDate), id: row.id } }))
+    // B-PR-42a: "Mine" — only the work orders whose supervisor (its order's own, else the customer's default) is the caller.
+    const mine = query.supervisor === 'me' ? await mineOf(client, where, context.actorId) : null
+    const keyed = light.filter((row) => passes(facts.get(row.id), computedFilter(query)) && (mine === null || mine.has(row.id))).map((row) => ({ key: { rank: riskRank(facts.get(row.id)?.risk ?? null), due: dayOrNull(row.dueDate), id: row.id } }))
     const { page, next } = pageOf(keyed, sort, after, query.limit)
     const ids = page.map((row) => row.key.id)
     const rows = ids.length === 0 ? [] : await client.workOrder.findMany({ where: { AND: [where, { id: { in: ids } }] }, select: LIST_SELECT })
     const byId = new Map(rows.map((row) => [row.id, row]))
     const ordered = ids.flatMap((id) => (byId.has(id) ? [byId.get(id)!] : []))
-    return { workOrders: await listRowsOf(client, ordered, facts, today), nextCursor: next }
+    return { workOrders: await listRowsOf(client, ordered, facts, today, await supervisorMarksOf(client, ordered.map(ordersOfRow), context.actorId)), nextCursor: next }
   })
 }
 
+// B-PR-42a: the ids of the work orders (of the list's filters) the viewer supervises.
+async function mineOf(client: Reader, where: Prisma.WorkOrderWhereInput, viewerId: string): Promise<Set<string>> {
+  const rows = (await client.workOrder.findMany({ where, select: SUPERVISOR_SELECT })).map(ordersOfRow)
+  const marks = await supervisorMarksOf(client, rows, viewerId)
+  return new Set(rows.filter((row) => marks.get(row.id) === 'ME').map((row) => row.id))
+}
+
 /** The rows as the list answers them: progress per row (SCR-069: the record's own counts, summed; null for a draft), risk, waiting. */
-async function listRowsOf(client: Reader, page: readonly ListRow[], facts: ReadonlyMap<string, RowFacts>, today: BusinessDate) {
+async function listRowsOf(client: Reader, page: readonly ListRow[], facts: ReadonlyMap<string, RowFacts>, today: BusinessDate, /* B-PR-42a */ marks: ReadonlyMap<string, SupervisorMark | null>) {
   const progress = new Map<string, Awaited<ReturnType<typeof progressTotalsOf>>>()
   for (const row of page) progress.set(row.id, await progressTotalsOf(client, { id: row.id, siteId: row.siteId, styleId: row.style.id, status: row.status }))
   return page.map((row) => {
@@ -283,6 +327,8 @@ async function listRowsOf(client: Reader, page: readonly ListRow[], facts: Reado
       // B-PR-34: its risk and what it waits on (null: finished, or nothing known).
       risk: fact?.risk ?? null,
       waitingOn: fact?.waiting ? { on: fact.waiting.on, since: fact.waiting.since ? toUtcIso(fact.waiting.since) : null } : null,
+      // B-PR-42a: its production supervisor for this viewer — ME / SOMEONE_ELSE / NOT_SET, never a name on a list; null: no customer.
+      supervisor: marks.get(row.id) ?? null,
     }
   })
 }
@@ -303,11 +349,14 @@ export async function countWorkOrders(caller: CommandCaller, query: { readonly s
     const of = (status: WorkOrderStatus) => byStatus.find((row) => row.status === status)?._count._all ?? 0
     const late = await client.workOrder.count({ where: listWhere(context, { ...filter, late: true }, today) })
     // B-PR-34 (06-tree A.3 O-WOL-tiles "At risk", "Waiting on the customer"): over the open work orders, from the stored facts.
-    const open = await client.workOrder.findMany({ where: listWhere(context, { ...filter, open: true }, today), select: { id: true, status: true, dueDate: true, siteId: true, site: { select: { timezone: true } } } })
+    const open = await client.workOrder.findMany({ where: listWhere(context, { ...filter, open: true }, today), select: { id: true, status: true, dueDate: true, siteId: true, site: { select: { timezone: true } }, /* B-PR-42a */ partyId: true, sizes: SUPERVISOR_SELECT.sizes } })
     const facts = [...(await riskFactsOf(client, open.map(riskRowOf), today)).values()]
     const atRisk = facts.filter((fact) => fact.risk?.state === 'AT_RISK').length
     const waitingOnCustomer = facts.filter((fact) => fact.waiting?.on === 'BRAND').length
-    return { counts: { draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: of('DRAFT') + of('RELEASED') + of('IN_PROGRESS'), late, onHold: of('ON_HOLD'), atRisk, waitingOnCustomer } }
+    // B-PR-42a (the "Mine" tile): the open work orders whose production supervisor is the caller.
+    const marks = await supervisorMarksOf(client, open.map(ordersOfRow), context.actorId)
+    const mine = [...marks.values()].filter((mark) => mark === 'ME').length
+    return { counts: { draft: of('DRAFT'), released: of('RELEASED'), inProgress: of('IN_PROGRESS'), completed: of('COMPLETED'), open: of('DRAFT') + of('RELEASED') + of('IN_PROGRESS'), late, onHold: of('ON_HOLD'), atRisk, waitingOnCustomer, mine } }
   })
 }
 

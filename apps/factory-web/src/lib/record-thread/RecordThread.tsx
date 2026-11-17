@@ -15,6 +15,9 @@ import { recipientsHeld, type CheckState, type Contact, type Recipient } from '.
 import { Recipients } from './send-check/view/Recipients'
 import { SendCheckDialog } from './send-check/view/SendCheckDialog'
 import { ThreadMessages } from './parts/ThreadMessages'
+// B-TH-287: the draft on the server; B-TH-289: "Remind me in 3 days if no answer".
+import type { DraftSaved } from './composer/server-draft'
+import { FollowUpTick, type FollowUpModel } from './helpers/view/FollowUp'
 import './record-thread.css'
 
 export interface ThreadComposerModel {
@@ -32,6 +35,8 @@ export interface ThreadComposerModel {
   cc: readonly Recipient[]
   subject: string
   contacts: readonly Contact[]
+  /** B-TH-289 (B-TH-096): the follow-up tick on a message to the customer; null or absent: not offered (an office note). */
+  followUp?: FollowUpModel | null
 }
 
 export interface RecordThreadModel {
@@ -48,6 +53,8 @@ export interface RecordThreadModel {
   leaving?: boolean
   /** A notice over the thread: a key of a record-thread catalogue, with its tone. */
   notice?: { ns: string; key: string; params?: Record<string, string | number>; tone: 'success' | 'info' | 'warning' | 'danger' } | null
+  /** B-TH-287 (B-TH-092): the draft on the server — "Draft saved 10:42", "Not saved · Retry"; null: the device line. */
+  saved?: DraftSaved | null
 }
 
 export interface RecordThreadActions extends FeedActions {
@@ -71,6 +78,12 @@ export interface RecordThreadActions extends FeedActions {
   onStay: () => void
   onDiscard: () => void
   onDismissNotice?: () => void
+  /** B-TH-287: "Retry" after the draft could not be saved on the server. */
+  onRetryDraft?: () => void
+  /** B-TH-289: the follow-up tick. */
+  onFollowUp?: (on: boolean) => void
+  /** B-TH-288 (T1-F08): "/" from anywhere in the column outside a field opens "Search in the thread" (office, docked). */
+  onSlash?: () => void
 }
 
 /**
@@ -123,6 +136,12 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
     if (event.metaKey || event.ctrlKey || event.altKey) return
     const target = event.target as HTMLElement
     const inField = /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName) || target.isContentEditable || Boolean(target.closest('[role="dialog"], [role="menu"]'))
+    // B-TH-288: "/" opens the search over the Head row.
+    if (event.key === '/' && !inField && actions.onSlash) {
+      event.preventDefault()
+      actions.onSlash()
+      return
+    }
     const next = keyMode(event.key, composerModes(composer.context), inField)
     if (!next || model.feed.state !== 'ready') return
     event.preventDefault()
@@ -179,8 +198,18 @@ function Column({ model, actions, remind, slots }: { model: RecordThreadModel; a
             onEscape={() => column.current?.querySelector<HTMLElement>('.fw-rt-feed')?.focus()}
             onFiles={composer.canUpload ? actions.onFiles : undefined}
             onSheets={composer.canUpload ? actions.onSheets : undefined}
-            hint={<DraftLine draft={model.kept ?? null} />}
-            helpers={slots?.helpers}
+            hint={<DraftLine draft={model.kept ?? null} saved={model.saved ?? null} onRetry={actions.onRetryDraft} /* B-TH-287 */ />}
+            helpers={
+              composer.followUp ? (
+                <>
+                  {slots?.helpers}
+                  {/* B-TH-289: beside Saved replies, on a message to the customer. */}
+                  <FollowUpTick model={composer.followUp} onChange={actions.onFollowUp} />
+                </>
+              ) : (
+                slots?.helpers
+              )
+            }
           />
         )}
         <FromRecordPicker open={model.pickerOpen ?? false} files={composer.recordFiles} mode={mode} partyName={party} record={composer.context.recordLabel} onClose={() => actions.onPicker(false)} onAdd={actions.onAddRecordFiles} />

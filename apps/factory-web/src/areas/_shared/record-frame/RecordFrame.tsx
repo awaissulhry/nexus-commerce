@@ -54,7 +54,7 @@ export interface RecordFrameProps {
   readonly threadLabel: string
   /** The tab shows a wide grid (lines, a BOM, sizes, cost, cutting): one third under 1600 px unless a width was chosen. */
   readonly wide?: boolean
-  /** What the print view (`?print=1`) shows of the thread under the body (the record panels' print form); absent: nothing. */
+  /** What the print view (`?print=1`) shows of the thread under the body (ThreadPrint: the thread for paper, B-TH-280); absent: nothing. */
   readonly printThread?: ReactNode
   /** The record's body: its tabs, its one notice, the tab's content. */
   readonly children: ReactNode
@@ -62,6 +62,10 @@ export interface RecordFrameProps {
   // button, ⌘J or an old `?tab=activity` address shows it. A person's own choice to show it lasts while the page is open.
   readonly closed?: boolean
   // ---- end B-TH-269
+  // ---- B-TH-280: the record's custom fields (Admin › Fields & lists; record-panels/custom-fields RecordCustomFields), drawn at the end
+  // of the body column — the page passes it on its first tab only; absent: nothing. The print view prints it after the body.
+  readonly fields?: ReactNode
+  // ---- end B-TH-280
 }
 
 // B-TH-264 follow-up: the body's files in the thread's ONE viewer (the types live in model.ts).
@@ -170,7 +174,7 @@ export function RecordFrame(props: RecordFrameProps) {
   )
 }
 
-function Frame({ recordType, personId, band, thread, threadLabel, wide = false, printThread, children, closed = false /* B-TH-269 */ }: RecordFrameProps) {
+function Frame({ recordType, personId, band, thread, threadLabel, wide = false, printThread, children, closed = false /* B-TH-269 */, fields /* B-TH-280 */ }: RecordFrameProps) {
   const t = useT(FRAME_NS)
   const slot = useBandSlot()
   const printing = usePrintMode()
@@ -419,6 +423,7 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
       <div className="fw-rcf-print">
         {header}
         {children}
+        {fields /* B-TH-280 */}
         {printThread}
       </div>
     )
@@ -434,7 +439,10 @@ function Frame({ recordType, personId, band, thread, threadLabel, wide = false, 
         data-view={viewOpen ? 'thread' : 'body'}
         style={{ ['--fw-rcf-cols' as string]: DOCK_COLUMNS[width] }}
       >
-        <div className="fw-rcf-body">{children}</div>
+        <div className="fw-rcf-body">
+          {children}
+          {fields /* B-TH-280 */}
+        </div>
         {hasThread && (
           <aside id={dockId} className="fw-rcf-dock" aria-label={threadLabel}>
             {mode === 'stacked' && viewOpen && (

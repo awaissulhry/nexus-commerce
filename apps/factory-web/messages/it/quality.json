@@ -36,8 +36,6 @@
     "internal": "Qualcosa non ha funzionato da parte nostra. Riprova."
   },
   "record": {
-    "dock": "Discussione",
-    "dockHint": "Tieni la discussione accanto al record (⌘J)",
     "dockLabel": "Discussione",
     "tabsLabel": "Sezioni del record",
     "loading": "Lettura del record…",

@@ -168,14 +168,6 @@ export function addTaskHeld(permissions: ReadonlySet<string>, onRecord: boolean)
   return null
 }
 
-/** Why a task's own change is held (a message key of `records`), or null. */
-export function changeHeld(task: Pick<TaskItem, 'canChange' | 'status'>, state: { readonly busy: boolean; readonly offline: boolean }): string | null {
-  if (!task.canChange) return 'tasks.held.readOnly'
-  if (state.offline) return 'tasks.held.offline'
-  if (state.busy) return 'tasks.held.busy'
-  return null
-}
-
 /** A live change concerns a record's tasks: a task event naming this record. */
 export function taskChangeFor(change: { readonly type: string; readonly fields: Readonly<Record<string, unknown>> }, record: { readonly type: string; readonly id: string }): boolean {
   return TASK_EVENTS.includes(change.type) && change.fields.recordType === record.type && change.fields.recordId === record.id

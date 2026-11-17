@@ -304,7 +304,7 @@ describe('PW-02: a person limited to customer B never meets customer A', { timeo
       expect(rows.map((row) => row.id), query).not.toContain(w.mixed.workOrderId)
     }
     for (const query of ['', '&sort=risk', '&sort=due', '&risk=LATE', '&waitingOn=US']) expect(await listIds('office.p2', `&partyId=${w.a.partyId}${query}`), query).toEqual([])
-    expect((await ok('office.p2', 'GET', `/production/work-orders/counts?partyId=${w.a.partyId}`)).counts).toEqual({ draft: 0, released: 0, inProgress: 0, completed: 0, open: 0, late: 0, onHold: 0, atRisk: 0, waitingOnCustomer: 0 })
+    expect((await ok('office.p2', 'GET', `/production/work-orders/counts?partyId=${w.a.partyId}`)).counts).toEqual({ draft: 0, released: 0, inProgress: 0, completed: 0, open: 0, late: 0, onHold: 0, atRisk: 0, waitingOnCustomer: 0, mine: 0 /* B-PR-42a */ })
     for (const term of ['Seed Racing', 'SEED-C1', alphaPo, w.a.workOrderNumber]) expect(await listIds('office.p2', `&q=${encodeURIComponent(term)}`), term).toEqual([])
     expect(await exportRows('office.p2', `view=all&sort=risk&party=${w.a.partyId}`)).toEqual([])
     for (const row of await exportRows('office.p2', 'view=all&sort=risk')) expect(row.partyId).toBe(w.b.partyId)

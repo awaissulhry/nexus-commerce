@@ -67,6 +67,20 @@ export interface FilesViewActions {
   onUseOn?: (fileIds: readonly string[]) => void
 }
 
+// ---- B-TH-280: the files in depth (B-W2b-177) in this window — the container (the docked thread) fills these slots with the depth
+// parts of record-panels/files (the old record panels' Files tab went): a document's type and expiry, Versions, Mark up, What it is.
+export interface FilesViewSlots {
+  /** Above the list: what a depth action did, a documents read that failed, how to add what a move needs, the party's documents. */
+  readonly top?: ReactNode
+  /** Beside a document's audience marks: its document type and expiry. */
+  readonly tags?: (fileId: string) => ReactNode
+  /** Beside "Use on another record…": the document's own actions (Versions, Mark up, What it is). */
+  readonly rowActions?: (fileId: string) => ReactNode
+  /** The pop-ups those actions open, drawn after the window (DS Modals stack over it). */
+  readonly overlays?: ReactNode
+}
+// ---- end B-TH-280
+
 const KIND_ICON: Readonly<Record<FileKind, ReactNode>> = {
   PHOTO: <ImageIcon size={18} aria-hidden />,
   DOCUMENT: <FileText size={18} aria-hidden />,
@@ -84,15 +98,15 @@ const KIND_ICON: Readonly<Record<FileKind, ReactNode>> = {
  * on Office), retention, legal hold and quarantine read-only, "Missing before Shipped". Keys: ↑ / ↓ between files, x
  * chooses, Enter opens. Draws one view model, fetches nothing.
  */
-export function FilesView({ model, actions }: { model: FilesViewModel; actions?: FilesViewActions }) {
+export function FilesView({ model, actions, slots }: { model: FilesViewModel; actions?: FilesViewActions; /* B-TH-280 */ slots?: FilesViewSlots }) {
   return (
     <WithMessages namespaces={[FILES_VIEW_NS, 'record-thread-files', 'lists', /* B-TH-231 */ 'search']}>
-      <View model={model} actions={actions} />
+      <View model={model} actions={actions} slots={slots} />
     </WithMessages>
   )
 }
 
-function View({ model, actions }: { model: FilesViewModel; actions?: FilesViewActions | undefined }) {
+function View({ model, actions, slots }: { model: FilesViewModel; actions?: FilesViewActions | undefined; slots?: FilesViewSlots | undefined }) {
   const t = useT(FILES_VIEW_NS)
   const locale = useLocale()
   const place = { locale, ...(model.timeZone ? { timeZone: model.timeZone } : {}) }
@@ -169,6 +183,7 @@ function View({ model, actions }: { model: FilesViewModel; actions?: FilesViewAc
               </ul>
             </Banner>
           )}
+          {slots?.top /* B-TH-280 */}
 
           {model.problem === 'forbidden' ? (
             <EmptyState icon={<Lock size={22} aria-hidden />} title={t('forbidden.title')} description={t('forbidden.body')} />
@@ -232,7 +247,7 @@ function View({ model, actions }: { model: FilesViewModel; actions?: FilesViewAc
                         </h3>
                         <ul className="fw-rtv-rows">
                           {group.series.map((one) => (
-                            <Row key={one.key} series={one} model={model} actions={actions} place={place} chosen={model.selected.includes(one.latest.id)} onChoose={(on, range) => choose(one.latest.id, on, range)} />
+                            <Row key={one.key} series={one} model={model} actions={actions} slots={slots} place={place} chosen={model.selected.includes(one.latest.id)} onChoose={(on, range) => choose(one.latest.id, on, range)} />
                           ))}
                         </ul>
                       </section>
@@ -245,6 +260,7 @@ function View({ model, actions }: { model: FilesViewModel; actions?: FilesViewAc
         </div>
       </Modal>
       {model.upload && <UploadDialog ask={model.upload} party={model.party} busy={model.busy ?? false} actions={actions} />}
+      {slots?.overlays /* B-TH-280 */}
     </>
   )
 }
@@ -255,7 +271,7 @@ function groupWords(group: ReturnType<typeof filesGroups>[number]['group'], part
   return t(`group.origin.${group.origin}`)
 }
 
-function Row({ series, model, actions, place, chosen, onChoose }: { series: FileSeries; model: FilesViewModel; actions?: FilesViewActions | undefined; place: { locale: 'it' | 'en'; timeZone?: string }; chosen: boolean; onChoose: (on: boolean, range: boolean) => void }) {
+function Row({ series, model, actions, slots, place, chosen, onChoose }: { series: FileSeries; model: FilesViewModel; actions?: FilesViewActions | undefined; slots?: FilesViewSlots | undefined; place: { locale: 'it' | 'en'; timeZone?: string }; chosen: boolean; onChoose: (on: boolean, range: boolean) => void }) {
   const t = useT(FILES_VIEW_NS)
   const fileWords = useT('record-thread-files')
   const searchWords = useT('search')
@@ -267,6 +283,8 @@ function Row({ series, model, actions, place, chosen, onChoose }: { series: File
   const { marks, more } = audienceMarks(file, model.party)
   const held = file.status === 'QUARANTINED'
   const lines = keepLines(file, model.now)
+  // B-TH-280: a sheet locked for this reader has no depth actions (they cannot open it).
+  const rowActions = file.locked ? null : (slots?.rowActions?.(file.id) ?? null)
   return (
     <li className={`fw-rtv-row${chosen ? ' is-chosen' : ''}`}>
       <span
@@ -302,17 +320,21 @@ function Row({ series, model, actions, place, chosen, onChoose }: { series: File
             </Tag>
           ))}
           {more > 0 && <Tag tone="neutral">{`+${more}`}</Tag>}
+          {slots?.tags?.(file.id) /* B-TH-280: its document type and expiry */}
           {lines.map((line) => (
             <Tag key={line.key} tone={line.tone}>
               {t(line.key, line.params?.date ? { date: formatDate(String(line.params.date), place) } : undefined)}
             </Tag>
           ))}
         </span>
-        {model.can.upload && actions?.onUseOn && carriable([file]).length > 0 && (
+        {((model.can.upload && actions?.onUseOn && carriable([file]).length > 0) || rowActions) && (
           <span className="fw-rtv-row-actions">
-            <Button size="sm" variant="quiet" heldReason={model.uploadHeld} aria-label={fileWords('useOn.actionFor', { name })} onClick={() => actions.onUseOn?.([file.id])}>
-              <Copy size={14} aria-hidden /> {fileWords('useOn.action')}
-            </Button>
+            {model.can.upload && actions?.onUseOn && carriable([file]).length > 0 && (
+              <Button size="sm" variant="quiet" heldReason={model.uploadHeld} aria-label={fileWords('useOn.actionFor', { name })} onClick={() => actions.onUseOn?.([file.id])}>
+                <Copy size={14} aria-hidden /> {fileWords('useOn.action')}
+              </Button>
+            )}
+            {rowActions /* B-TH-280: Versions, Mark up, What it is */}
           </span>
         )}
         {series.earlier.length > 0 && (

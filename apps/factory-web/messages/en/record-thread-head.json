@@ -68,7 +68,13 @@
     "reopen": "Reopen",
     "openTasks": "{count} open",
     "openApprovals": "{count} waiting for an answer",
-    "invited": "{count} invited"
+    "invited": "{count} invited",
+    "done": "Mark done",
+    "doneHint": "Off the work lists, not closed: the customer can still write, and a new message opens it again.",
+    "openAgain": "Open again",
+    "openAgainHint": "Back on the work lists.",
+    "followUpSet": "Follow-up {at} if no answer",
+    "search": "Search in the thread"
   },
   "held": {
     "noRight": "You need the right “{right}”.",
@@ -149,5 +155,34 @@
     "all": "In projects: {names}",
     "labelMore_one": "In project: {name} and {count} more",
     "labelMore_other": "In project: {name} and {count} more"
+  },
+  "done": {
+    "by": "Done · {name}, {date}",
+    "noName": "Done, {date}",
+    "tip": "Marked done: off the work lists. Not closed — the customer can still write, and a new message opens it again."
+  },
+  "search": {
+    "open": "Search in the thread ( / )",
+    "label": "Search the messages of {record}",
+    "placeholder": "Words or a file name",
+    "close": "Close the search",
+    "results": "Messages that match",
+    "count_one": "{count} message matches",
+    "count_other": "{count} messages match",
+    "more": "The first {shown} of {count}: add a word to narrow it.",
+    "none": "No message has these words.",
+    "short": "Type two letters or more.",
+    "searching": "Searching the messages…",
+    "failed": "The search did not answer.",
+    "retry": "Try again",
+    "go": "Go to the message: {words}",
+    "noWords": "A message with files only",
+    "hint": "Office only. Enter goes to the message, even one not on screen yet.",
+    "side": {
+      "theirs": "From the customer",
+      "ours": "To the customer",
+      "note": "Office note",
+      "other": "Message"
+    }
   }
 }

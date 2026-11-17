@@ -113,11 +113,6 @@ export function addFollower(api: ApiClient, record: RecordKey, userId: string): 
   return api.post(followersPath(record), { body: { userId }, schema: followersSchema, idempotencyKey: newIdempotencyKey() })
 }
 
-/** GET /threads/:type/:id/people: who a note may mention (and a colleague who may be added as a follower). */
-export function listRecordPeople(api: ApiClient, record: RecordKey, signal?: AbortSignal): Promise<{ id: string; name: string }[]> {
-  return api.get(`/threads/${encodeURIComponent(record.type)}/${encodeURIComponent(record.id)}/people`, { schema: z.object({ people: z.array(z.object({ id: z.string(), name: z.string() })) }), signal }).then((answer) => answer.people)
-}
-
 /** A failed read, as a message key of `records`. */
 export function taskReadProblem(error: unknown): string {
   if (!isApiError(error)) return 'tasks.problem.read'

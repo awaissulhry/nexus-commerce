@@ -6,7 +6,7 @@ import { newIdempotencyKey } from '../../../../lib/api/client'
 import { isApiError } from '../../../../lib/api/errors'
 import { useOfficeApi, useOfficeSession } from '../../../../lib/session/context'
 import { WithMessages } from '../../../../record-panels/i18n'
-import { RecordPanels } from '../../../../record-panels/RecordPanels'
+import { ThreadPrint } from '../../../_shared/record-thread/ThreadPrint'
 import {
   addLines,
   addParcel,
@@ -437,7 +437,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
       model={model}
       depth={depth}
       // B-TH-264: the docked thread (Head with Activity's doors, files line, Files view, feed, box) — "Reply to" reaches this shipment's
-      // customer only, the files are this shipment's; the print view keeps the panels' print form.
+      // customer only, the files are this shipment's; the print view prints the thread with ThreadPrint (B-TH-280).
       thread={
         value ? (
           <OfficeRecordThread
@@ -451,7 +451,7 @@ function RecordContainer({ shipmentId }: { shipmentId: string }) {
           />
         ) : null
       }
-      printThread={value ? <RecordPanels record={{ type: 'Shipment', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName, emails: [] }} /> : null}
+      printThread={value ? <ThreadPrint record={{ type: 'Shipment', id: value.id, companyId: value.companyId, siteId: value.siteId }} title={`${value.number} · ${value.party.legalName}`} party={{ id: value.partyId, name: value.party.legalName }} /> : null}
       // B-W2b-170: the customer's tracking page (links.tracking) on Carrier & tracking.
       trackingLink={value ? <TrackingLinkCard shipmentId={value.id} /> : null}
       actions={{

@@ -812,3 +812,11 @@
     flex-direction: column;
   }
 }
+
+/* B-TH-286 (T2-F07): the messages pinned on this record that the customer may read, above the conversation (DS tokens only). */
+.fw-pthread-pins { display: flex; flex-direction: column; gap: var(--nds-space-4); margin: 0 0 var(--nds-space-8); padding: var(--nds-space-8) var(--nds-space-12); border: 1px solid var(--nds-border-subtle); border-radius: var(--nds-radius-lg); background: var(--nds-surface); }
+.fw-pthread-pins-title { margin: 0; display: inline-flex; align-items: center; gap: var(--nds-space-4); font-size: var(--nds-font-size-sm); font-weight: 600; color: var(--nds-text-strong); }
+.fw-pthread-pins-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: var(--nds-space-4); }
+.fw-pthread-pins-list > li { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.fw-pthread-pins-words { font-size: var(--nds-font-size-sm); color: var(--nds-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fw-pthread-pins-meta { font-size: var(--nds-font-size-xs); color: var(--nds-text-muted); }
