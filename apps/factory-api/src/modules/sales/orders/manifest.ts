@@ -39,4 +39,6 @@ export const manifest = defineManifest({
   'GET /sales/orders/customers': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
   // B-TH-017 / B-TH-063: the Picture cell's small preview (the order checked with can(), the file with files.read).
   'GET /sales/orders/:orderId/picture': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
+  // B-TH-058: the overall view's totals (scopeWhere like the list: a customer-limited person reads only its customers' figures).
+  'GET /sales/orders/summary': { audiences: ['office'], permission: 'orders.view', scope: 'record' },
 })

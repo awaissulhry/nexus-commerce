@@ -88,7 +88,8 @@ export async function orderCustomers(caller: CommandCaller, query: CustomersQuer
 
 // ── B-TH-226 ──
 /** The reader's orders.view reaches only some customers: every grant that holds it names its parties. */
-function limitedToSomeCustomers(context: ReturnType<typeof officeContextOf>): boolean {
+// B-TH-058: exported for the overall view's "Your customers" (./summary).
+export function limitedToSomeCustomers(context: ReturnType<typeof officeContextOf>): boolean {
   const grants = grantsFor(actorOf(context), ORDERS_VIEW)
   return grants.length > 0 && grants.every((grant) => grant.parties !== 'all')
 }

@@ -6,7 +6,7 @@ import { copyOrderAsQuoteContract } from '../quotes/contract'
 import { copyOrderAsQuote } from '../quotes/duplicate'
 import { applyAmendment, listAmendments, previewAmendment } from './amend'
 import { closeLines, reopenLines } from './close-lines'
-import { boardContract, closeContract, customersContract, getOrderContract, listOrdersContract, makeOrderContract, orderPictureContract, promiseContract, readyContract } from './contract'
+import { boardContract, closeContract, customersContract, getOrderContract, listOrdersContract, makeOrderContract, orderPictureContract, promiseContract, readyContract, summaryContract } from './contract'
 import {
   applyAmendmentContract,
   cancelCheckContract,
@@ -35,6 +35,8 @@ import { deliveriesContract, getDeliveries } from './delivered'
 import { orderCustomers } from './customers'
 // B-TH-017 / B-TH-063: the Picture cell's small preview.
 import { orderPicture } from './picture'
+// B-TH-058: the overall view's honest totals.
+import { orderSummary } from './summary'
 
 /**
  * Sales orders from the accepted quote (B-W1-25; SAL-200, SAL-203, SAL-204, SAL-206, SAL-214; A2 SCR-038, SCR-039): the
@@ -56,6 +58,9 @@ export default defineRoutes('sales.orders', manifest, async (app) => {
 
   // B-TH-019: the Customer switcher's numbers (registered before /sales/orders/:orderId).
   app.get('/sales/orders/customers', { schema: customersContract }, async (request) => orderCustomers(request, request.query))
+
+  // B-TH-058: the overall view's totals per customer and for the whole view, each with the filter of its rows (before /:orderId).
+  app.get('/sales/orders/summary', { schema: summaryContract }, async (request) => orderSummary(request, request.query))
 
   app.get('/sales/orders/:orderId', { schema: getOrderContract }, async (request) => getOrder(request, request.params.orderId))
 
