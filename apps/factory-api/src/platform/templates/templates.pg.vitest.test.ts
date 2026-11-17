@@ -281,7 +281,8 @@ describe('e-mail templates (PLT-232)', () => {
   it("lists the events with the code's words, writes a company's draft from them, refuses an unknown placeholder, previews it", async () => {
     const offered = await owner.get('/templates/mail/events')
     expect(offered.status).toBe(200)
-    expect(offered.body.events.map((entry: Json) => entry.event)).toEqual(['service.status_changed', 'shipping.tracking_link'])
+    // B-TH-279: the request mails and the new-message notice joined the two of B-W2b-422.
+    expect(offered.body.events.map((entry: Json) => entry.event)).toEqual(['service.status_changed', 'shipping.tracking_link', 'request.received', 'request.need_info', 'request.declined', 'thread.message_posted'])
     const made = await owner.post('/templates/mail', { companyId: companyA, event: 'service.status_changed', language: 'it' })
     expect(made.status, JSON.stringify(made.body)).toBe(201)
     expect(made.body.template).toMatchObject({ companyId: companyA, revision: 1, status: 'DRAFT', subject: 'Pratica di assistenza {{case.number}}: {{case.status}}' })

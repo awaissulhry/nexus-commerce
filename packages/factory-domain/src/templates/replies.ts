@@ -1,7 +1,8 @@
 import type { Issue } from '../core/errors'
-import { isTemplateLanguage } from './language'
 import { COMPANY_PLACEHOLDERS } from './mail'
 import { placeholderProblems } from './placeholders'
+// ---- B-TH-098: saved replies in the five message languages (./message-languages.ts).
+import { isMessageLanguage, MESSAGE_LANGUAGE_WORDS } from './message-languages'
 
 /**
  * Saved replies (B-W2b-422; COL-016 "Message templates per language"; design shell.preview send panel "Message (template per
@@ -30,7 +31,7 @@ export const REPLY_PLACEHOLDERS: Readonly<Record<ReplyRecordType, readonly strin
   Shipment: [...COMMON_REPLY_PLACEHOLDERS, 'shipment.number', 'order.number'],
   Party: COMMON_REPLY_PLACEHOLDERS,
   // B-TH-046: `inquiry.subject` is what the request is about (the subject of the mail it came by, else its first line).
-  Inquiry: [...COMMON_REPLY_PLACEHOLDERS, 'inquiry.number', 'inquiry.subject', 'inquiry.wantedDate'],
+  Inquiry: [...COMMON_REPLY_PLACEHOLDERS, 'inquiry.number', 'inquiry.subject', 'inquiry.wantedDate', /* B-TH-098: the customer's own number (§0.5) */ 'inquiry.yourNumber'],
 })
 
 /** The placeholders a saved reply for this record type (null: any record) may use. */
@@ -50,7 +51,7 @@ export function replyProblems(words: ReplyWords): Issue[] {
   const problems: Issue[] = []
   const name = words.name.trim()
   if (name === '' || name.length > REPLY_LIMITS.name || /[\r\n]/.test(name)) problems.push({ path: 'body/name', message: `One line of 1 to ${REPLY_LIMITS.name} characters.` })
-  if (!isTemplateLanguage(words.language)) problems.push({ path: 'body/language', message: 'Saved replies are written in Italian or English.' })
+  if (!isMessageLanguage(words.language)) problems.push({ path: 'body/language', message: MESSAGE_LANGUAGE_WORDS.en }) // B-TH-098
   if (words.recordType !== null && !isReplyRecordType(words.recordType)) problems.push({ path: 'body/recordType', message: 'Saved replies are for an order, a quote, a purchase order, a service case, a shipment, a customer or supplier, a request, or any record.' })
   const body = words.body.trim()
   if (body === '' || body.length > REPLY_LIMITS.body) problems.push({ path: 'body/body', message: `1 to ${REPLY_LIMITS.body} characters.` })

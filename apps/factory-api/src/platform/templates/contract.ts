@@ -5,6 +5,11 @@ import { DOCUMENT_TEMPLATE_KINDS, MANDATORY_PARTS } from '@nexus/factory-domain/
 import { LANGUAGE_SOURCES, TEMPLATE_LANGUAGES } from '@nexus/factory-domain/templates/language'
 import { MAIL_EVENTS } from '@nexus/factory-domain/templates/mail'
 import { REPLY_RECORD_TYPES } from '@nexus/factory-domain/templates/replies'
+// ---- B-TH-098: saved replies and the fixed mail texts in the five message languages (DE, FR, ES drafted by Claude, read once).
+import { MESSAGE_LANGUAGES } from '@nexus/factory-domain/templates/message-languages'
+const messageLanguage = z.enum(MESSAGE_LANGUAGES)
+const drafted = output({ readBy: z.string().nullable(), readOn: z.string().nullable() })
+// ---- end B-TH-098
 
 /**
  * The template routes' contracts (B-W2b-422; PLT-131, PLT-231, PLT-232, COL-016; the screens are B-W2b-432's). Office only.
@@ -155,8 +160,20 @@ export type EmailTemplateView = z.infer<typeof emailTemplateView>
 export const mailEventsContract = defineContract({
   response: {
     200: output({
-      events: z.array(output({ event: z.enum(MAIL_EVENTS), recordType: z.string(), placeholders: z.array(z.string()), words: z.record(z.string(), output({ subject: z.string(), body: z.string() })) })),
+      events: z.array(
+        output({
+          event: z.enum(MAIL_EVENTS),
+          recordType: z.string(),
+          placeholders: z.array(z.string()),
+          words: z.record(z.string(), output({ subject: z.string(), body: z.string() })),
+          /** B-TH-098: the German, French and Spanish words Claude drafted (to be read once before they go out on their own). */
+          drafts: z.record(z.string(), output({ subject: z.string(), body: z.string() })),
+        }),
+      ),
       languages: z.array(language),
+      /** B-TH-098: the languages a mail may be written in, and each drafted language's reading (who read it once, and when; null: not yet). */
+      messageLanguages: z.array(messageLanguage),
+      review: z.record(z.string(), drafted),
     }),
   },
 })
@@ -228,7 +245,7 @@ export const replyView = output({
   id: id(),
   companyId: id().nullable(),
   name: z.string(),
-  /** As kept (two letters); the API writes Italian and English only. */
+  /** As kept (two letters); B-TH-098: Italian, English, German, French or Spanish. */
   language: z.string(),
   body: z.string(),
   /** As kept: a record type of REPLY_RECORD_TYPES, another table (written another way), or null (any record). */
@@ -244,7 +261,7 @@ export const replyView = output({
 export type ReplyView = z.infer<typeof replyView>
 
 export const listRepliesContract = defineContract({
-  querystring: input({ language: language.optional(), recordType: z.enum(REPLY_RECORD_TYPES).optional(), companyId: id().optional() }),
+  querystring: input({ language: messageLanguage.optional() /* B-TH-098 */, recordType: z.enum(REPLY_RECORD_TYPES).optional(), companyId: id().optional() }),
   response: {
     200: output({
       /** The reader's own and the shared ones, by name (a record type's replies with those for any record). */
@@ -255,13 +272,13 @@ export const listRepliesContract = defineContract({
   },
 })
 
-const replyWords = { name: z.string().max(400), language, body: z.string().max(12000), recordType: z.enum(REPLY_RECORD_TYPES).nullable(), companyId: id().nullable() }
+const replyWords = { name: z.string().max(400), language: messageLanguage /* B-TH-098 */, body: z.string().max(12000), recordType: z.enum(REPLY_RECORD_TYPES).nullable(), companyId: id().nullable() }
 
 export const createReplyContract = defineContract({ body: input({ ...replyWords, shared: z.boolean() }), response: { 201: output({ reply: replyView }) } })
 
 export const updateReplyContract = defineContract({
   params: replyParams,
-  body: input({ version, name: replyWords.name.optional(), language: language.optional(), body: replyWords.body.optional(), recordType: replyWords.recordType.optional(), companyId: replyWords.companyId.optional() }),
+  body: input({ version, name: replyWords.name.optional(), language: messageLanguage.optional() /* B-TH-098 */, body: replyWords.body.optional(), recordType: replyWords.recordType.optional(), companyId: replyWords.companyId.optional() }),
   response: { 200: output({ reply: replyView }) },
 })
 
@@ -274,7 +291,7 @@ export const fillReplyContract = defineContract({
     200: output({
       /** The body with the record's values (the person reads and changes it before sending). */
       body: z.string(),
-      language,
+      language: messageLanguage, // B-TH-098
       /** The placeholders the record had no value for (left empty in the body). */
       missing: z.array(z.string()),
     }),
@@ -287,7 +304,16 @@ const recipientLanguage = output({ language, source: z.enum(LANGUAGE_SOURCES), n
 
 export const recipientLanguageContract = defineContract({
   querystring: input({ partyId: id(), contactId: id().optional() }),
-  response: { 200: output({ partyId: id(), contactId: id().nullable(), ...recipientLanguage.shape }) },
+  response: {
+    200: output({
+      partyId: id(),
+      contactId: id().nullable(),
+      ...recipientLanguage.shape,
+      /** B-TH-098: what is WRITTEN to them (saved replies, the fixed mail texts): their language when it is one of the five, else English;
+       * `read` false: that language's fixed texts are Claude's drafts not read yet (they go in English unless the office ticks). */
+      message: output({ language: messageLanguage, source: z.enum(LANGUAGE_SOURCES), notOffered: z.string().nullable(), read: z.boolean() }),
+    }),
+  },
 })
 
 export const contactLanguagesContract = defineContract({
@@ -311,3 +337,37 @@ export const contactLanguagesContract = defineContract({
     }),
   },
 })
+
+// ---- B-TH-098 / B-TH-279: a mail's starting words for a record, in the recipient's language (the dialogs' "Ask for info", "Decline",
+// the receipt): the company's version in use, else every company's, else the code's words — a German, French or Spanish draft only once
+// read, or with the office's tick "Send it anyway" (recorded).
+export const fillMailEventContract = defineContract({
+  params: input({ event: z.enum(MAIL_EVENTS) }),
+  body: input({
+    recordType: z.enum(REPLY_RECORD_TYPES),
+    recordId: id(),
+    contactId: id().optional(),
+    /** Default: the recipient's message language (their contact's, their organisation's, the company's). */
+    language: messageLanguage.optional(),
+    /** "Send it anyway": use a drafted text not read yet (recorded with who ticked). */
+    sendUnread: z.boolean().optional(),
+  }),
+  response: {
+    200: output({
+      subject: z.string(),
+      body: z.string(),
+      /** The language the words are in (an unread draft without the tick: English). */
+      language: messageLanguage,
+      /** Where the words come from: the company's version, every company's, or the code's words. */
+      source: z.enum(['COMPANY', 'ALL', 'CODE']),
+      /** The asked language's texts were read once by a person (Italian, English and a person's own template: always). */
+      read: z.boolean(),
+      /** English was given instead of an unread draft; `words` says why in the reader's languages. */
+      fellBack: z.boolean(),
+      words: output({ it: z.string(), en: z.string() }).nullable(),
+      /** The placeholders the record had no value for (left empty: the person writes them, as the question or the reason). */
+      missing: z.array(z.string()),
+    }),
+  },
+})
+// ---- end B-TH-098 / B-TH-279
