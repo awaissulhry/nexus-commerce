@@ -78,6 +78,11 @@ import {
 } from './model'
 import { Closed } from './OrdersPage'
 import { OrderRecordView, type OrderDialog, type OrderRecordViewModel } from './view/OrderRecordView'
+// ---- F-PR-12a: the order's production (B-PR-18) on Status & progress, part 1
+import { fetchProductionOrder } from '../production/api'
+import { waitingHrefOf } from '../production/model'
+import { orderNameOf } from './model'
+// ---- end F-PR-12a
 import { useOrderWords } from './words'
 // B-W2b-374: the lines' options and artwork.
 import { PortalLineOptions } from './options/PortalLineOptions'
@@ -136,6 +141,7 @@ function OrderContainer({ id }: { id: string }) {
   const readsDocuments = can('portal.customerDocuments.view')
   const readsPayments = can('portal.payments.view')
   const paysHere = can('portal.payments.pay')
+  const seesProduction = can('portal.production.view') // F-PR-12a
 
   const [record, setRecord] = useState<OrderRecord | null>(null)
   const [state, setState] = useState<OrderRecordViewModel['state'] | 'forbidden'>('loading')
@@ -190,6 +196,22 @@ function OrderContainer({ id }: { id: string }) {
       setProgress((current) => (isApiError(error) && error.kind === 'not_found' ? { state: 'hidden', read: null } : { state: 'error', read: current.read }))
     }
   }, [api, id])
+
+  // ---- F-PR-12a: the order's production for a person who sees production. Not in production, not one of its orders, or not part
+  // of its access (404 / 403): no section and no hint (a section not shared is not drawn).
+  const [production, setProduction] = useState<NonNullable<OrderRecordViewModel['production']>>({ state: seesProduction ? 'loading' : 'hidden', read: null })
+  const loadProduction = useCallback(async () => {
+    if (!seesProduction) return
+    try {
+      setProduction({ state: 'ready', read: await fetchProductionOrder(api, id) })
+    } catch (error) {
+      setProduction((current) => (isApiError(error) && (error.kind === 'not_found' || error.kind === 'forbidden') ? { state: 'hidden', read: null } : { state: 'error', read: current.read }))
+    }
+  }, [api, id, seesProduction])
+  useEffect(() => {
+    void loadProduction()
+  }, [loadProduction])
+  // ---- end F-PR-12a
 
   const loadRequests = useCallback(async () => {
     try {
@@ -302,14 +324,19 @@ function OrderContainer({ id }: { id: string }) {
   // A hint on the live channel (the bell's news of an order confirmed, a promise moved, a shipment shipped, an answer): read again.
   usePortalLive({
     onChange: (change) => {
-      if (!record?.live.events.includes(change.type) && change.type !== 'partner_notification.created' && change.type !== 'partner_task.changed') return
+      const productionEvent = production.read?.live.events.includes(change.type) ?? false // F-PR-12a
+      if (!productionEvent && !record?.live.events.includes(change.type) && change.type !== 'partner_notification.created' && change.type !== 'partner_task.changed') return
+      void loadProduction() // F-PR-12a
       void load()
       void loadRequests()
       void loadRules()
       if (tab === 'shipments') void loadShipments()
       if (tab === 'documents') void loadDocuments()
     },
-    onReconnect: () => void load(),
+    onReconnect: () => {
+      void load()
+      void loadProduction() // F-PR-12a
+    },
   })
 
   // ── J / K: the previous / next order of the list the person came from ──────────────────────────────────────────────
@@ -703,6 +730,9 @@ function OrderContainer({ id }: { id: string }) {
         linkHeld,
         historyOpen,
         dialog: dialogModel,
+        // F-PR-12a: the order's production (hidden: no section) and where "See what waits for you" leads.
+        production: seesProduction ? production : { state: 'hidden', read: null },
+        waitingHref: waitingHrefOf(frame.prefix),
       }}
       actions={{
         onRetry: () => {
@@ -732,6 +762,14 @@ function OrderContainer({ id }: { id: string }) {
         onPreview: previewFile,
         onDownload: download,
         onDismissNotice: () => setNotice(null),
+        // ---- F-PR-12a
+        onRetryProduction: () => {
+          setProduction({ state: 'loading', read: null })
+          void loadProduction()
+        },
+        // The hold banner's "Ask a question": the order's own conversation, its box focused.
+        onAsk: () => (record ? frame.ask({ type: 'SalesOrder', id: record.order.id, label: orderNameOf(record.order, locale, t) }) : undefined),
+        // ---- end F-PR-12a
         dialog: {
           change: {
             onCells: (lineId, sizes) => setDialog((current) => (current?.kind === 'change' ? { ...current, problem: null, draft: { ...current.draft, cells: { ...current.draft.cells, [lineId]: sizes } } } : current)),

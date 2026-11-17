@@ -50,7 +50,9 @@ describe('the permission registry', () => {
       // B-W2b-389: currencies and exchange rates.
       'currencies',
       // B-W2b-421: custom fields and picklists.
-      'fields'])
+      'fields',
+      // B-TH-066: projects (the office's projects.manage; the portal's projects.view is in 'portal').
+      'projects'])
   })
 
   it('refuses a name declared twice, a bad area, a bad risk, an empty description', () => {

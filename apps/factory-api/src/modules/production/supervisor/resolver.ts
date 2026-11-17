@@ -18,8 +18,8 @@ import type { CommandTx } from '../../../core/command'
  * shows the name only inside one record the reader may open (lists say Me / Someone else / Not set). A person made inactive
  * stays named (the record reads "no longer active"; B-PR-42a's routes give such a person no new assignment).
  *
- * The threads platform never imports this module (R-62): the people-tag hook (threads ask T7, "Supervisor" first in the @ list)
- * is not on main yet, so nothing registers there; when it lands it takes `supervisorOf` through its own registration call.
+ * The threads platform never imports this module (R-62): ./threads-hooks registers `supervisorOf` through the threads' own hooks
+ * (T7 "Supervisor" first in a note's @ list, people-tags.ts; T8 a sales order's owner after the thread's own, owner.ts).
  */
 
 export type Reader = FactoryClient | CommandTx
@@ -82,7 +82,7 @@ export async function supervisorOfWorkOrder(db: Reader, workOrderId: string): Pr
 export const SUPERVISED_RECORD_TYPES = ['SalesOrder', 'WorkOrder'] as const
 
 /**
- * THE resolver (B-PR-32, B-PR-43a/b, B-PR-45, B-PR-42b; threads' T7 hook when it lands): the production supervisor of a sales
+ * THE resolver (B-PR-32, B-PR-43a/b, B-PR-45, B-PR-42b; threads' T7 / T8 hooks): the production supervisor of a sales
  * order or a work order, with the customer's backup; null for any other record type, an unknown record or one of no customer.
  */
 export async function supervisorOf(db: Reader, record: { readonly type: string; readonly id: string }): Promise<SupervisorOf | null> {

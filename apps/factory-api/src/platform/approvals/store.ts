@@ -101,6 +101,8 @@ export async function customerWall(db: Reader, actor: Actor): Promise<Prisma.App
     // A return's line is its customer's; a substitute its work order's customer's.
     ReturnLine: ids(await db.returnLine.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, { party: 'partyId' }) as Prisma.ReturnLineWhereInput, select: { id: true } })),
     MaterialSubstitution: ids(await db.materialSubstitution.findMany({ where: { workOrder: { is: work } }, select: { id: true } })),
+    // B-PR-38: a decision for a customer (BRAND_OVERRIDE) is about that customer's own approval request.
+    ApprovalRequest: ids(await db.approvalRequest.findMany({ where: scopeWhere(actor, APPROVALS_VIEW, ofParty) as Prisma.ApprovalRequestWhereInput, select: { id: true } })),
   }
   return { OR: [{ recordType: { notIn: Object.keys(reached) } }, ...Object.entries(reached).map(([recordType, recordIds]) => ({ recordType, recordId: { in: recordIds } }))] }
 }

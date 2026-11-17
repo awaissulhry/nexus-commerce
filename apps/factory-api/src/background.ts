@@ -217,6 +217,10 @@ import { recordedCrons } from './core/cron-runs'
 import { errorCollectorCron } from './platform/admin/errors/collect'
 // B-PR-17: the customer's stage, health and waiting-on of each order kept (its events; nightly for lateness by date).
 import { brandKeeperCron, brandKeeperHandler } from './modules/production/brand/keeper'
+// B-PR-42b: the production supervisor follows the open orders' threads and their work orders' (a change, a new order, a new work order).
+import { supervisorFollowsHandler } from './modules/production/supervisor/follows'
+// B-PR-43b: an issue answered (an office issue by its task done, a customer's by our first shared reply in its order's thread).
+import { issueAnsweredHandler } from './modules/production/issues/answered'
 
 /**
  * The factory's background processes (plan A1 §3.1), one codebase with the API, two Railway services:
@@ -338,6 +342,12 @@ const W2B_GB02_HANDLERS: readonly EventHandler[] = [settleAfterChangesHandler(),
 // sewing scan, quality release, hold, shipment, promise, gate, request and approval events → each named order's customer stage,
 // health and waiting-on (production/brand/keeper.ts; never on brand_production.urgency_changed, R-69).
 const W2B_PR17_HANDLERS: readonly EventHandler[] = [brandKeeperHandler()]
+// B-PR-42b (production plan R-58, R-60; the W2B_ name keeps golden-flow/daily/testing/day.ts's list check): supervisor_changed, a new
+// open order, a new work order → the supervisor follows each record's thread, the one replaced stops (production/supervisor/follows.ts).
+const W2B_PR42B_HANDLERS: readonly EventHandler[] = [supervisorFollowsHandler()]
+// B-PR-43b (production plan R-42, R-43): task.completed / task.changed / thread.message_posted / email.status_changed → the issues answered, reopened or
+// cancelled, and every task of an answered issue closed (production/issues/answered.ts).
+const W2B_PR43B_HANDLERS: readonly EventHandler[] = [issueAnsweredHandler()]
 // B-W2b-11: the reports (one file each in modules/insights/reports/defs/), read by an export of a report.
 await loadReports(fileURLToPath(new URL('.', import.meta.url)))
 // B-W2b-120: the safety calendar's sources (one file each in modules/safety/calendar/sources/), read by an export of the calendar.
@@ -406,7 +416,7 @@ if (mode === 'worker') {
   await moveLiftsAll({ database, log }).catch((error) => log.error({ err: error }, 'the unblocked addresses could not be moved at start'))
   await writeStepsAll({ database, log }).catch((error) => log.error({ err: error }, 'the first-load steps could not be written at start'))
   const relay = startRelay({ database, publish: queuePublisher(kit), log })
-  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS, ...W2B_377_HANDLERS, ...W2B_386_HANDLERS, ...W2B_393_HANDLERS, ...W2B_394_HANDLERS, ...W2B_398_HANDLERS, ...W2B_407_HANDLERS, ...W2B_428_HANDLERS, ...W2B_401_HANDLERS, ...W2B_402_HANDLERS, ...W2B_405_HANDLERS, ...W2B_395_HANDLERS, ...W2B_GB02_HANDLERS, ...W2B_PR17_HANDLERS], database, live: redis, log })
+  const workers = startEventWorkers({ kit, handlers: [...HANDLERS, ...W2A_20_HANDLERS, ...W2A_32_HANDLERS, ...W2A_33_HANDLERS, ...W2A_55_HANDLERS, ...W2A_61_HANDLERS, ...W2A_62_HANDLERS, ...W2B_15_HANDLERS, ...W2B_40_HANDLERS, ...W2B_37_HANDLERS, ...W2B_42_HANDLERS, ...W2B_43_HANDLERS, ...W2B_101_HANDLERS, ...W2B_118_HANDLERS, ...W2B_125_HANDLERS, ...W2B_135_HANDLERS, ...W2B_160_HANDLERS, ...W2B_167_HANDLERS, ...W2B_185_HANDLERS, ...W2B_170_HANDLERS, ...W2B_200_HANDLERS, ...W2B_225_HANDLERS, ...W2B_251_HANDLERS, ...W2B_260_HANDLERS, ...W2B_256_HANDLERS, ...W2B_263_HANDLERS, ...W2B_313_HANDLERS, ...W2B_292_HANDLERS, ...W2B_305_HANDLERS, ...W2B_304_HANDLERS, ...W2B_317_HANDLERS, ...W2B_294_HANDLERS, ...W2B_340_HANDLERS, ...W2B_377_HANDLERS, ...W2B_386_HANDLERS, ...W2B_393_HANDLERS, ...W2B_394_HANDLERS, ...W2B_398_HANDLERS, ...W2B_407_HANDLERS, ...W2B_428_HANDLERS, ...W2B_401_HANDLERS, ...W2B_402_HANDLERS, ...W2B_405_HANDLERS, ...W2B_395_HANDLERS, ...W2B_GB02_HANDLERS, ...W2B_PR17_HANDLERS, ...W2B_PR42B_HANDLERS, ...W2B_PR43B_HANDLERS], database, live: redis, log })
   stops.push(() => relay.stop(), () => workers.close())
 } else {
   const crons: CronJob[] = [outboxLagCron({ database, kit, log }), rolesSyncCron({ database, log }), certificateExpiryCron({ database, log }), sdiPollCron({ database, log }), trackingPollCron({ database, log }), nightlyPlanCron({ database, log }), exportExpiryCron({ database, log })]

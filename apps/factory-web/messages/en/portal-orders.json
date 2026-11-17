@@ -604,5 +604,15 @@
     "madeFromRequestNone": "Made from your request",
     "madeFromQuote": "Made from your quote {label}",
     "madeFromQuoteNone": "Made from your quote"
+  },
+  "production": {
+    "label": "Production of this order",
+    "waitingTitle": "We are waiting for you on this order",
+    "waitingSince": "Since {date}",
+    "waitingLink": "See what waits for you",
+    "ask": "Ask a question",
+    "health": "Health",
+    "waitingOn": "Waiting on",
+    "failed": "Could not load the production of this order"
   }
 }

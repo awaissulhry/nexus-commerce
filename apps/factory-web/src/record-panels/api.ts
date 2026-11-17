@@ -177,9 +177,12 @@ export function readTimeline(api: ApiClient, record: RecordKey, filter: Timeline
   })
 }
 
-/** GET /threads/<type>/<id>/people: who a note on the record may mention. */
-export function listPeople(api: ApiClient, record: RecordKey, signal?: AbortSignal): Promise<{ people: Array<{ id: string; name: string }> }> {
-  return api.get(`${recordPath(record.type, record.id)}/people`, { schema: z.object({ people: z.array(z.object({ id: z.string(), name: z.string() })) }), signal })
+/**
+ * GET /threads/<type>/<id>/people: who a note on the record may mention. T7 (production lane agreement): `tag`, a small label
+ * the API gives (the record's production supervisor), tagged people first — kept here so MentionInput shows it.
+ */
+export function listPeople(api: ApiClient, record: RecordKey, signal?: AbortSignal): Promise<{ people: Array<{ id: string; name: string; /* T7 */ tag?: string | undefined }> }> {
+  return api.get(`${recordPath(record.type, record.id)}/people`, { schema: z.object({ people: z.array(z.object({ id: z.string(), name: z.string(), /* T7 */ tag: z.string().optional() })) }), signal })
 }
 
 /** GET /files?recordType&recordId: the record's files. */

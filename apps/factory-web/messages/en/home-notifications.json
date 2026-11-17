@@ -310,6 +310,12 @@
       "mail": {
         "assigned": "{actor} gave you a mail of {title}: {record}",
         "followUpDue": "No answer yet to {record} ({title}): it is back in your queue"
+      },
+      "production": {
+        "supervisorOfOrder": "You are the production supervisor of order {record}",
+        "supervisorOfOrders": "You are the production supervisor of {count} orders of {record}",
+        "supervisorOfCustomer": "You are the production supervisor of {record}",
+        "backupOfCustomer": "You are the backup of the production supervisor of {record}"
       }
     },
     "fallback": "News on {record}",

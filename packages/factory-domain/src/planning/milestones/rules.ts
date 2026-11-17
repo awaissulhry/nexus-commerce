@@ -163,6 +163,8 @@ export const GATE_REFUSALS = [
   'KEPT',
   /** The owner must be an active person who may keep this order's gates. */
   'OWNER_NOT_ALLOWED',
+  /** B-PR-38: the gate waits for a customer's own round (its portal on): passed by the customer's answer, never by hand. */
+  'CUSTOMER_DECIDES',
 ] as const
 export type GateRefusalCode = (typeof GATE_REFUSALS)[number]
 
@@ -187,8 +189,11 @@ export interface GateFacts {
   readonly overriddenAt: unknown
   readonly ownerId: string | null
   readonly createdById: string | null
-  /** The round the gate names: its decision (null: not decided) and kind. */
-  readonly round: { readonly number: string; readonly decision: string | null; readonly kind: string } | null
+  /**
+   * The round the gate names: its decision (null: not decided) and kind. B-PR-38: `customerDecides` — the round is a customer's
+   * whose portal is on (the customer answers it; the office only through Decide for the customer).
+   */
+  readonly round: { readonly number: string; readonly decision: string | null; readonly kind: string; readonly customerDecides?: boolean } | null
 }
 
 export const orderClosedRefusal = (facts: Pick<GateFacts, 'number' | 'orderStatus'>): GateRefusal | null =>
@@ -197,7 +202,9 @@ export const orderClosedRefusal = (facts: Pick<GateFacts, 'number' | 'orderStatu
 /** A new or changed gate's own shape: OTHER says what it is; a round only on a sample gate; PP_SAMPLE a pre-production round. */
 export function shapeRefusal(kind: GateKind, label: string | null, round: GateFacts['round']): GateRefusal | null {
   if (kind === 'OTHER' && (label === null || label.trim() === '')) return refusal('LABEL_NEEDED', 'Say what the gate is: a gate of kind Other needs its words.')
-  if (round !== null && !isSampleGate(kind)) return refusal('ROUND_ONLY_SAMPLE', 'Only a sample gate (sample approved, pre-production sample) names a sample round.')
+  if (round !== null && !isSampleGate(kind)) return refusal('ROUND_ONLY_SAMPLE', 'Only a sample gate (sample approved, pre-production sample, size set) names a sample round.')
+  // B-PR-29 (plan Appendix C "TOP gates nothing; a refusal tells the office"): a top-of-production round holds no gate.
+  if (round !== null && round.kind === 'TOP_OF_PRODUCTION') return refusal('ROUND_KIND', `${round.number} is a top-of-production round: it gates nothing (the customer's answer is told to the office; quality decides what follows).`)
   if (round !== null && kind === 'PP_SAMPLE' && round.kind !== 'PRE_PRODUCTION') return refusal('ROUND_KIND', `A pre-production sample gate waits for a pre-production round; ${round.number} is a ${round.kind.toLowerCase().replace(/_/g, ' ')} round.`)
   // B-PR-23: the size set gate waits for a size set round (the database's rule).
   if (round !== null && kind === 'SIZE_SET' && round.kind !== 'SIZE_SET') return refusal('ROUND_KIND', `A size set gate waits for a size set round; ${round.number} is a ${round.kind.toLowerCase().replace(/_/g, ' ')} round.`)
@@ -215,6 +222,23 @@ export function passRefusal(facts: GateFacts, day: BusinessDate, today: Business
   }
   return null
 }
+
+// ---- B-PR-38 (production plan §3 "No silent decisions"; review fix R-06: "It still passes gates by hand (PASS_VIAS OFFICE)") ----
+/**
+ * The office's own "Mark done" of a gate (PASS_VIAS OFFICE): as passRefusal, but a gate that waits for a customer's own round
+ * (its portal on) and that round is not approved is refused in words pointing to Decide for the customer — it passes by
+ * itself when the customer approves it. The system's pass by the round's event keeps passRefusal (its approval passes it).
+ * Starting before the gate stays the factory's open override (a reason the customer reads at Gates & dates).
+ */
+export function handPassRefusal(facts: GateFacts, day: BusinessDate, today: BusinessDate): GateRefusal | null {
+  const refused = passRefusal(facts, day, today)
+  if (refused?.code !== 'ROUND_NOT_APPROVED' || !facts.round?.customerDecides) return refused
+  return refusal(
+    'CUSTOMER_DECIDES',
+    `The gate waits for the customer's answer on sample round ${facts.round.number}: it passes by itself when they approve it. To decide for them, use Decide for the customer on the round (a reason they read).`,
+  )
+}
+// ---- end B-PR-38
 
 /** Start the order's work before the gate (the override): not passed, not started before, not by its owner or maker. */
 export function startBeforeRefusal(facts: GateFacts, actorId: string): GateRefusal | null {

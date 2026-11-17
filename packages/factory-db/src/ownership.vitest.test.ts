@@ -53,6 +53,8 @@ describe('model ownership', () => {
       'BomLineAlternate',
       'BomLineColour',
       'BomLineSize',
+      // B-PR-15 (production lane, #1579): a customer's production state of its orders (brand-production.json).
+      'BrandOrderProduction',
       'BrandingSet',
       'Bundle',
       'BundleCoupon',
@@ -393,6 +395,8 @@ describe('model ownership', () => {
       'ProductSettings',
       'ProductTypeProfile',
       'ProductionControlTest',
+      // B-PR-15 (production lane, #1579): an issue that needs an answer, office only (brand-production.json).
+      'ProductionIssue',
       'ProductionSettings',
       'Project',
       'ProjectLink',
@@ -621,6 +625,8 @@ describe('model ownership', () => {
       'WorkOrder',
       'WorkOrderClose',
       'WorkOrderCostEntry',
+      // B-PR-15 (production lane, #1579): a plain production or customer hold on a work order (production.json).
+      'WorkOrderHold',
       'WorkOrderKit',
       'WorkOrderMaterial',
       'WorkOrderOperation',
