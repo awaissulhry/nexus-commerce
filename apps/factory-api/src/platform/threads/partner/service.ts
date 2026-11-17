@@ -19,6 +19,8 @@ import type { PartnerRecord } from '../../search/partner/view'
 import { partnerViewOf, viewFits } from '../../search/partner/views'
 import type { AttachmentView } from '../contract'
 import { afterCursor, cursorOf, ensureThread, type RecordRef } from '../threads'
+// ---- B-TH-050: what a shared message answers or corrects, as the partner may see it.
+import { messageLinksOf, NO_LINKS, type MessageLinks } from '../threads'
 import type { PartnerMessageView } from './contract'
 // ---- B-TH-027: the person's own read mark (their post moves it; "New since your last visit"; the list's new counts).
 import { markThreadRead, moveMark, readingOf, unreadCounts } from '../reads'
@@ -65,6 +67,9 @@ const MESSAGE_PARTNER = {
   bodyHtml: true,
   attachmentFileIds: true,
   at: true,
+  // B-TH-050: the shared message it answers or corrects (partner-readable: a shared message points only at a shared one).
+  replyToMessageId: true,
+  correctsMessageId: true,
 } as const satisfies Prisma.MessageSelect
 type MessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_PARTNER }>
 
@@ -119,8 +124,9 @@ async function minePosts(request: FastifyRequest, caller: PartnerCaller, rows: r
   return new Set(audits.map((row) => row.recordId))
 }
 
-function messageViewOf(caller: PartnerCaller, row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>, mine: ReadonlySet<string>): PartnerMessageView {
+function messageViewOf(caller: PartnerCaller, row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>, mine: ReadonlySet<string>, links: MessageLinks = NO_LINKS): PartnerMessageView {
   const side = sideOf(row.direction)
+  const linked = (id: string | null) => (id ? (links.linked.get(id) ?? null) : null) // B-TH-050
   return {
     id: row.id,
     side,
@@ -132,6 +138,10 @@ function messageViewOf(caller: PartnerCaller, row: MessageRow, attachments: Read
       const seen = attachments.get(fileId)
       return seen ? [seen] : []
     }),
+    // ---- B-TH-050
+    replyTo: linked(row.replyToMessageId),
+    corrects: linked(row.correctsMessageId),
+    correctedBy: links.correctedBy.get(row.id) ?? null,
     at: toUtcIso(row.at),
   }
 }
@@ -177,6 +187,8 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
       shown,
       attachments: await visibleAttachments(client, caller, shown.flatMap((row) => row.attachmentFileIds)),
       composer: await composerFor(client, caller, scope, thread),
+      // B-TH-050: the shared messages these answer or correct, and their corrections (the partner's own scope: shared only).
+      links: thread ? await messageLinksOf(client, thread.id, shown, { sharedOnly: true, workerShown: false }) : NO_LINKS,
       // B-TH-027: the person's own reading.
       reading: thread ? await readingOf(client, thread.id, { userId: caller.context.actorId, office: false }) : null,
     }
@@ -186,7 +198,7 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
   return {
     record: recordViewOf(ref.type, read.record),
     thread: read.thread ? { id: read.thread.id, status: read.thread.status } : null,
-    messages: read.shown.map((row) => messageViewOf(caller, row, read.attachments, mine)),
+    messages: read.shown.map((row) => messageViewOf(caller, row, read.attachments, mine, read.links)),
     nextCursor: read.rows.length > page.limit && last ? encodeCursor(last) : null,
     composer: read.composer,
     reading: read.reading,

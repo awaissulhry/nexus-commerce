@@ -3,6 +3,7 @@ import { defineContract, id, input, instant, output } from '@nexus/factory-domai
 import { MAX_ATTACHMENTS, MAX_BODY_LENGTH, MESSAGE_CHANNELS, RECORD_TYPE, THREAD_STATUSES } from '@nexus/factory-domain/threads/rules'
 import { COMPOSER_REASONS, PARTNER_SIDES, PARTNER_THREADS_MAX, PARTNER_THREADS_PAGE } from '@nexus/factory-domain/threads/partner/rules'
 import { attachmentView } from '../contract'
+import { linkedMessageView } from '../contract' // B-TH-050
 
 /**
  * A record's thread as the partner sees it (B-W2b-168; COL-059, COL-060; design portal.frame › thread, portal.customer.home
@@ -43,6 +44,12 @@ export const partnerMessageView = output({
   bodyHtml: z.string().nullable(),
   /** The attached files the reader may see (shared with the party, available), in order; the others are left out. */
   attachments: z.array(attachmentView),
+  // ---- B-TH-050 (thread-G20): the shared message it answers or corrects, and the newest shared message that corrects it ("Corrected
+  // below"). A shared message points only at a shared one (the database's rule): never at an office note or a mail taken back.
+  replyTo: linkedMessageView.nullable().optional(),
+  corrects: linkedMessageView.nullable().optional(),
+  correctedBy: output({ id: id(), at: instant() }).nullable().optional(),
+  // ---- end B-TH-050
   at: instant(),
 })
 export type PartnerMessageView = z.infer<typeof partnerMessageView>

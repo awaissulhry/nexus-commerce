@@ -40,6 +40,13 @@ import { readingOf, whoOf, type Reading } from './reads'
 // B-TH-083: a measurement sheet on a card is locked for an office reader without sales.measurements.view.
 import { isMeasurementSheet, MEASUREMENT_SHEET_PERMISSION } from '@nexus/factory-domain/files/measurements'
 // ---- end B-TH-027 / B-TH-028
+// ---- B-TH-049: a typed amount on an office note (price grain), and the price check of a note for the floor.
+import { DomainError } from '@nexus/factory-domain/core/errors'
+import { asMoney, markMoney } from '@nexus/factory-domain/money/marked'
+import { AMOUNT_WORDS, amountProblems, floorPriceRefusal, type MessageAmount } from '@nexus/factory-domain/threads/price-check'
+// ---- B-TH-050: messages that point at messages (reply, correct).
+import { excerptOf } from '@nexus/factory-domain/threads/rules'
+// ---- end B-TH-049 / B-TH-050
 
 /**
  * Record threads (plan A1 §2.3, §3.7; features COL-001, COL-003, COL-020):
@@ -97,8 +104,27 @@ const MESSAGE_COMMON = {
   attachmentFileIds: true,
   at: true,
 } as const satisfies Prisma.MessageSelect
-const MESSAGE_OFFICE = { ...MESSAGE_COMMON, authorId: true, mentionedUserIds: true, forFloor: true } as const satisfies Prisma.MessageSelect
-type MessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_COMMON }> & { authorId?: string | null; mentionedUserIds?: string[]; forFloor?: boolean }
+const MESSAGE_OFFICE = {
+  ...MESSAGE_COMMON,
+  authorId: true,
+  mentionedUserIds: true,
+  forFloor: true,
+  // ---- B-TH-049: the typed amount (price grain; the partner role has no grant on it, the floor reads no message).
+  amount: true,
+  amountCurrency: true,
+  // ---- B-TH-050: the message it answers or corrects.
+  replyToMessageId: true,
+  correctsMessageId: true,
+} as const satisfies Prisma.MessageSelect
+type MessageRow = Prisma.MessageGetPayload<{ select: typeof MESSAGE_COMMON }> & {
+  authorId?: string | null
+  mentionedUserIds?: string[]
+  forFloor?: boolean
+  amount?: number | null
+  amountCurrency?: string | null
+  replyToMessageId?: string | null
+  correctsMessageId?: string | null
+}
 
 const FILE_COMMON = {
   id: true,
@@ -192,7 +218,7 @@ export function threadViewOf(row: SeenThread): ThreadView {
 }
 
 /** `workerShown`: the site's PERFORMANCE gate lets the office read who wrote a floor note; without it the note says a person did (B-W2b-F4). */
-function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>, workerShown = true): MessageView {
+function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, AttachmentView>, workerShown = true, links: MessageLinks = NO_LINKS): MessageView {
   const authorHidden = row.authorKind === 'WORKER' && !workerShown
   return {
     id: row.id,
@@ -211,9 +237,104 @@ function messageViewOf(row: MessageRow, attachments: ReadonlyMap<string, Attachm
     }),
     // ---- B-TH-231 / B-TH-029: files of the message the reader may not see are counted, never silently dropped ("One file you cannot open").
     ...hiddenOf(row.attachmentFileIds, attachments),
+    // ---- B-TH-049: the typed amount, the office's only (the answer drops it for a reader without the price grain: money.price).
+    ...('amount' in row ? { amount: asMoney('price', row.amount === null || row.amount === undefined || !row.amountCurrency ? null : { value: row.amount, currency: row.amountCurrency }) } : {}),
+    // ---- B-TH-050: what it answers or corrects, and the newest correction of it, as far as the reader may see them.
+    ...linksOf(row, links),
     at: toUtcIso(row.at),
   }
 }
+
+// ---- B-TH-050 (threads plan TH-3, thread-G19, thread-G20; T3-F07 Reply, T3-F09 Make a task, T3-F11 Correct) -------------------
+/** A message another one points at, as a card shows it ("In reply to Anna, 14 Nov: …"). */
+export interface LinkedMessage {
+  readonly id: string
+  readonly authorName: string | null
+  readonly excerpt: string
+  readonly at: string
+}
+/** The messages a page's messages point at, and the newest correction of each, as far as its reader may see them. */
+export interface MessageLinks {
+  readonly linked: ReadonlyMap<string, LinkedMessage>
+  readonly correctedBy: ReadonlyMap<string, { readonly id: string; readonly at: string }>
+}
+export const NO_LINKS: MessageLinks = Object.freeze({ linked: new Map(), correctedBy: new Map() })
+/** How long the excerpt of a message pointed at is. */
+export const LINKED_EXCERPT_LENGTH = 140
+
+function linksOf(row: Pick<MessageRow, 'id'> & { replyToMessageId?: string | null; correctsMessageId?: string | null }, links: MessageLinks) {
+  if (!('replyToMessageId' in row)) return {}
+  const linked = (id: string | null | undefined) => (id ? (links.linked.get(id) ?? null) : null)
+  return { replyTo: linked(row.replyToMessageId), corrects: linked(row.correctsMessageId), correctedBy: links.correctedBy.get(row.id) ?? null }
+}
+
+/**
+ * The links of a page of one thread's messages, in two reads: the messages they point at, and the messages that correct them.
+ * `sharedOnly`: a portal reader — only messages shared with the party (row-level security keeps out a mail still waiting or taken
+ * back); a link never points across (the database: a shared message points only at a shared one). `workerShown`: a floor worker's
+ * name only while the site's gate is open (B-W2b-F4).
+ */
+export async function messageLinksOf(
+  client: FactoryClient | CommandTx,
+  threadId: string,
+  rows: readonly { readonly id: string; readonly replyToMessageId?: string | null; readonly correctsMessageId?: string | null }[],
+  options: { readonly sharedOnly: boolean; readonly workerShown: boolean },
+): Promise<MessageLinks> {
+  if (rows.length === 0) return NO_LINKS
+  const shared: Prisma.MessageWhereInput = options.sharedOnly ? { audience: 'PARTNER' } : {}
+  const targets = [...new Set(rows.flatMap((row) => [row.replyToMessageId, row.correctsMessageId]).filter((id): id is string => typeof id === 'string'))]
+  const [linkedRows, corrections] = await Promise.all([
+    targets.length === 0 ? [] : client.message.findMany({ where: { AND: [{ threadId, id: { in: targets } }, shared] }, select: { id: true, authorKind: true, authorName: true, bodyText: true, at: true } }),
+    client.message.findMany({ where: { AND: [{ threadId, correctsMessageId: { in: rows.map((row) => row.id) } }, shared] }, orderBy: [{ at: 'desc' }, { id: 'desc' }], select: { id: true, at: true, correctsMessageId: true } }),
+  ])
+  const linked = new Map<string, LinkedMessage>(
+    linkedRows.map((row) => [row.id, { id: row.id, authorName: row.authorKind === 'WORKER' && !options.workerShown ? null : row.authorName, excerpt: excerptOf(row.bodyText, LINKED_EXCERPT_LENGTH), at: toUtcIso(row.at) }]),
+  )
+  const correctedBy = new Map<string, { id: string; at: string }>()
+  for (const row of corrections) if (row.correctsMessageId && !correctedBy.has(row.correctsMessageId)) correctedBy.set(row.correctsMessageId, { id: row.id, at: toUtcIso(row.at) })
+  return { linked, correctedBy }
+}
+
+/** The message a new one answers or corrects (at most one of the two), as a route takes it. */
+export interface MessageLinkInput {
+  readonly replyToMessageId?: string | null | undefined
+  readonly correctsMessageId?: string | null | undefined
+}
+
+/**
+ * What is wrong with what a new message points at (empty: nothing). The database holds the same rules for every login
+ * (…_threads_composer_th_guards); here they are said in words first:
+ *   - one of the two at most: it answers a message or corrects one;
+ *   - a message of this thread (another thread's, or none, reads as not found);
+ *   - a message shared with the party (OUTBOUND, INBOUND) points only at a shared message that is not held: never at an internal
+ *     note, never at a mail still waiting in its undo window or taken back;
+ *   - a correction keeps the direction of what it corrects (a note corrects a note, a message sent a message sent), and a message
+ *     sent goes the same way as the one it corrects (a mail by mail, a portal reply in the portal): who got the first gets the
+ *     correction; a correction of a note on the tablets goes to the tablets too (`forFloor`), so the floor never keeps the wrong one.
+ */
+export async function messageLinkProblems(
+  tx: CommandTx,
+  thread: Pick<ThreadRow, 'id'>,
+  links: MessageLinkInput,
+  facts: { readonly direction: MessageDirection; readonly channel: MessageChannel; readonly forFloor?: boolean },
+): Promise<Issue[]> {
+  const replyTo = links.replyToMessageId ?? null
+  const corrects = links.correctsMessageId ?? null
+  if (replyTo === null && corrects === null) return []
+  if (replyTo !== null && corrects !== null) return [{ path: 'body/correctsMessageId', message: 'A message answers one message or corrects one, not both.' }]
+  const path = replyTo !== null ? 'body/replyToMessageId' : 'body/correctsMessageId'
+  const target = await tx.message.findFirst({ where: { id: (replyTo ?? corrects)!, threadId: thread.id }, select: { audience: true, direction: true, channel: true, held: true, forFloor: true } })
+  if (!target) return [{ path, message: 'Not a message of this conversation.' }]
+  const shared = audienceOf(facts.direction) === 'PARTNER'
+  if (shared && (target.audience !== 'PARTNER' || target.held)) return [{ path, message: 'A message to the customer or supplier answers or corrects only a message they have: never an office note, never a mail still waiting or taken back.' }]
+  if (corrects !== null) {
+    if (target.direction !== facts.direction) return [{ path, message: target.direction === 'INTERNAL_NOTE' ? 'An office note is corrected by an office note.' : target.direction === 'OUTBOUND' ? 'A message we sent is corrected by a message we send.' : "Only the customer or supplier corrects their own message: answer it instead." }]
+    if (target.direction === 'OUTBOUND' && target.channel !== facts.channel) return [{ path, message: target.channel === 'EMAIL' ? 'A mail is corrected by a mail: whoever got it gets the correction.' : 'A reply in the portal is corrected by a reply in the portal.' }]
+    if (target.forFloor && !facts.forFloor) return [{ path: 'body/forFloor', message: "The note you correct is on the floor's tablets: tick 'For the floor', so the floor reads the correction too." }]
+  }
+  return []
+}
+// ---- end B-TH-050
 
 /** B-TH-231: how many of a message's files the reader may not see (left out of `attachments`); absent when none. */
 function hiddenOf(fileIds: readonly string[], attachments: ReadonlyMap<string, AttachmentView>): { hiddenAttachments?: number } {
@@ -315,9 +436,12 @@ export async function readThread(caller: CommandCaller, record: RecordRef, page:
     const reading = who ? await readingOf(client, thread.id, who) : null
     const head = office ? await headOf(client, record, { ...thread, ownerId: (await client.thread.findUnique({ where: { id: thread.id }, select: { ownerId: true } }))?.ownerId ?? null }, serverClock.now()) : undefined
     // ---- end B-TH-027 / B-TH-028
+    // ---- B-TH-050: the office's page points at what its messages answer or correct (a portal or link reader: GET /portal/threads).
+    const workerShown = gates.at(thread.siteId).open
+    const links = office ? await messageLinksOf(client, thread.id, shown, { sharedOnly: false, workerShown }) : NO_LINKS
     return {
       thread: threadViewOf(thread),
-      messages: shown.map((row) => messageViewOf(row, attachments, gates.at(thread.siteId).open)),
+      messages: shown.map((row) => messageViewOf(row, attachments, workerShown, links)),
       nextCursor: rows.length > page.limit && last ? encodeCursor(last) : null,
       reading,
       ...(head ? { head } : {}),
@@ -410,6 +534,12 @@ export interface MessageInput {
   // leaves its window (the database releases it); written only with a mail that has a sendAfter (email-out sendEmail).
   readonly held?: boolean
   // ---- end B-TH-048
+  // ---- B-TH-049: a typed amount (price grain): an internal note that stays in the office only (checked first: amountProblems).
+  readonly amount?: MessageAmount
+  // ---- B-TH-050: the message it answers or corrects, one at most (checked first: messageLinkProblems).
+  readonly replyToMessageId?: string | null
+  readonly correctsMessageId?: string | null
+  // ---- end B-TH-049 / B-TH-050
 }
 
 /**
@@ -428,6 +558,9 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
   if (mentions.length > 0 && input.direction !== 'INTERNAL_NOTE') throw new ApiError('internal_error', 'Only an internal note mentions people.')
   const forFloor = input.forFloor ?? false
   if (forFloor && (input.direction !== 'INTERNAL_NOTE' || !noteMayGoToFloor(thread.recordType))) throw new ApiError('internal_error', FLOOR_NOTE_REFUSAL)
+  // ---- B-TH-049: an amount only on an office note that stays in the office (the routes say it in words first).
+  if (input.amount && (input.direction !== 'INTERNAL_NOTE' || forFloor)) throw new ApiError('internal_error', forFloor ? AMOUNT_WORDS.FLOOR.en : AMOUNT_WORDS.SHARED.en)
+  // ---- end B-TH-049
   const id = newId()
   const at = input.at ?? tools.now
   const row = await tools.tx.message.create({
@@ -450,6 +583,9 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
       at,
       createdAt: tools.now,
       ...(input.held ? { held: true } : {}), // B-TH-048
+      ...(input.amount ? { amount: input.amount.value, amountCurrency: input.amount.currency } : {}), // B-TH-049
+      ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}), // B-TH-050
+      ...(input.correctsMessageId ? { correctsMessageId: input.correctsMessageId } : {}), // B-TH-050
     },
     select: MESSAGE_OFFICE,
   })
@@ -459,7 +595,22 @@ export async function writeMessage(tools: ThreadTools, thread: ThreadRow, input:
     recordId: id,
     companyId: thread.companyId,
     siteId: thread.siteId,
-    after: { threadId: thread.id, recordType: thread.recordType, recordId: thread.recordId, direction: input.direction, audience, channel: input.channel, attachments, mentions, forFloor },
+    after: {
+      threadId: thread.id,
+      recordType: thread.recordType,
+      recordId: thread.recordId,
+      direction: input.direction,
+      audience,
+      channel: input.channel,
+      attachments,
+      mentions,
+      forFloor,
+      // B-TH-049: the amount as marked money (the history shows it only to a reader with the price grain).
+      ...(input.amount ? { amount: markMoney('price', { value: input.amount.value, currency: input.amount.currency }) } : {}),
+      // B-TH-050: what it answers or corrects.
+      ...(input.replyToMessageId ? { replyToMessageId: input.replyToMessageId } : {}),
+      ...(input.correctsMessageId ? { correctsMessageId: input.correctsMessageId } : {}),
+    },
   })
   // B-TH-045: the batch rides on both events (absent for a message of its own).
   const about = { threadId: thread.id, messageId: id, recordType: thread.recordType, recordId: thread.recordId, ...(input.batchId ? { batchId: input.batchId } : {}) }
@@ -560,7 +711,19 @@ export interface NoteInput {
   readonly attachments?: readonly string[] | undefined
   /** "For the floor" (B-W2b-F5): a work order's only. */
   readonly forFloor?: boolean | undefined
+  // ---- B-TH-049: a price in its own field (price grain), never for the floor.
+  readonly amount?: MessageAmount | undefined
+  // ---- B-TH-050: the message it answers or corrects (one at most).
+  readonly replyToMessageId?: string | undefined
+  readonly correctsMessageId?: string | undefined
 }
+
+// ---- B-TH-049: a note for the floor whose words look like a price is held (409 refusal/FLOOR_PRICE, the reason named).
+export function floorPriceHeld(bodyText: string): DomainError | null {
+  const refusal = floorPriceRefusal(bodyText)
+  return refusal ? new DomainError('conflict', refusal.words.en, [{ path: `refusal/${refusal.code}`, message: refusal.words.en }]) : null
+}
+// ---- end B-TH-049
 
 /** POST /threads/<type>/<id>/notes (threads.postNote): an internal note, the thread made with the first one. */
 export async function postNote(caller: CommandCaller, record: RecordRef, input: NoteInput, idempotencyKey?: string): Promise<{ thread: ThreadView; message: MessageView }> {
@@ -568,16 +731,22 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
   if (context.audience !== 'office') throw new ForbiddenError()
   const actor = actorOf(context)
   const draft = { bodyText: cleanBody(input.body), mentions: uniqueIds(input.mentions), attachments: uniqueIds(input.attachments), forFloor: input.forFloor ?? false }
-  const problems = noteProblems(draft)
+  // ---- B-TH-049: the amount's own problems (a whole number of cents, ISO 4217, never for the floor).
+  const problems = [...noteProblems(draft), ...(input.amount ? amountProblems(input.amount, { forFloor: draft.forFloor }) : [])]
   if (problems.length > 0) throw new ValidationError('The note is not valid.', problems)
   const { scope } = await caller.withClient((client) => officeRecord(client, record))
   if (!mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('Record not found.')
   if (!mayOnThread(actor, THREADS_POST, record.type, scope)) throw new ForbiddenError()
   if (draft.forFloor && !noteMayGoToFloor(record.type)) throw new ValidationError('The note is not valid.', [{ path: 'body/forFloor', message: FLOOR_NOTE_REFUSAL }])
+  // ---- B-TH-049: a note for the floor that looks like it holds a price is held before it goes, with the reason.
+  const held = draft.forFloor ? floorPriceHeld(draft.bodyText) : null
+  if (held) throw held
+  // ---- end B-TH-049
+  const links: MessageLinkInput = { replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null } // B-TH-050
 
   const { result } = await command(
     caller,
-    { name: 'threads.postNote', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...draft } },
+    { name: 'threads.postNote', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...draft, amount: input.amount ?? null, ...links } },
     async (tools) => {
       const { thread } = await ensureThread(tools, record, context.actorId)
       // The thread as it is now (made by this command or a racing one): its scope decides (B-PR-08a part 2: with its wall party).
@@ -586,6 +755,7 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
       const issues = [
         ...(await attachmentProblems(tools.tx, context, thread, draft.attachments, 'OFFICE')),
         ...(await mentionProblems(tools.tx, context, thread, draft.mentions, tools.now)),
+        ...(await messageLinkProblems(tools.tx, thread, links, { direction: 'INTERNAL_NOTE', channel: 'APP', forFloor: draft.forFloor })), // B-TH-050
       ]
       if (issues.length > 0) throw new ValidationError('The note is not valid.', issues)
       const author = await tools.tx.user.findUnique({ where: { id: context.actorId }, select: { displayName: true } })
@@ -597,10 +767,13 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
         mentions: draft.mentions,
         attachments: draft.attachments,
         forFloor: draft.forFloor,
+        ...(input.amount ? { amount: input.amount } : {}), // B-TH-049
+        ...links, // B-TH-050
       })
       const current = await tools.tx.thread.findUniqueOrThrow({ where: { id: thread.id }, select: THREAD_OFFICE })
       const attachments = await visibleAttachments(tools.tx, context, message.attachmentFileIds)
-      return { thread: threadViewOf(current), message: messageViewOf(message, attachments) }
+      const linked = await messageLinksOf(tools.tx, thread.id, [message], { sharedOnly: false, workerShown: true }) // B-TH-050
+      return { thread: threadViewOf(current), message: messageViewOf(message, attachments, true, linked) }
     },
   )
   return result

@@ -51,6 +51,8 @@ import {
   type RecordRef,
   type ThreadRow,
 } from '../threads/threads'
+// B-TH-050: a mail names the shared message it answers, or the mail of ours it corrects.
+import { messageLinkProblems } from '../threads/threads'
 import type { EmailView } from './contract'
 import { processEmail, type EmailRuntime } from './service'
 // B-W2b-371: a record type's thread gate (a rider's profile: sales.measurements.view).
@@ -263,6 +265,9 @@ export interface ThreadMailInput {
    * held until then. Only the thread composer's Send (sendFromThread); a module's document mail leaves at once.
    */
   readonly undoWindow?: boolean | undefined
+  // ---- B-TH-050: the shared message it answers ("Reply"), or the mail of ours it corrects ("Correct"), one at most.
+  readonly replyToMessageId?: string | null | undefined
+  readonly correctsMessageId?: string | null | undefined
 }
 
 export interface ThreadMailResult {
@@ -301,6 +306,9 @@ export async function sendEmail(tools: SendTools, input: ThreadMailInput): Promi
     problems.push(...attachmentSizeProblems(sizes.map((file) => file.sizeBytes)))
   }
   problems.push(...suppressionProblems(recipients, await suppressedAmong(tx, allRecipients(recipients))))
+  // B-TH-050: what it answers or corrects (a message of this conversation shared with the party; a mail corrects a mail).
+  const links = { replyToMessageId: input.replyToMessageId ?? null, correctsMessageId: input.correctsMessageId ?? null }
+  problems.push(...(await messageLinkProblems(tx, thread, links, { direction: 'OUTBOUND', channel: 'EMAIL' })))
   if (problems.length > 0) throw new ValidationError('The mail is not valid.', problems)
   // B-TH-004: one recipient rule for every mail on a party's record (the thread's party is the record's).
   const sentOutside = await checkRecipientRule(tx, { recordParty: thread.partyId, to: recipients.to, cc: recipients.cc, bcc: recipients.bcc, sendOutside: input.sendOutside })
@@ -326,6 +334,7 @@ export async function sendEmail(tools: SendTools, input: ThreadMailInput): Promi
     attachments,
     emailMessageId,
     ...(sendAfter ? { held: true } : {}), // B-TH-048
+    ...links, // B-TH-050
   })
   const outbound = await tx.emailOutbound.create({
     data: {
@@ -389,6 +398,9 @@ export interface SendRouteBody {
   readonly locale?: string | undefined
   /** B-TH-004: the person ticked "Send outside this customer". */
   readonly sendOutside?: boolean | undefined
+  // ---- B-TH-050
+  readonly replyToMessageId?: string | undefined
+  readonly correctsMessageId?: string | undefined
 }
 
 /** POST /threads/<type>/<id>/emails (email.send): the signed-in person sends a mail from the record's thread. */
