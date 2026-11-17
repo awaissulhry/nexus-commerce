@@ -10,6 +10,9 @@ import { defineManifest } from '../../../core/manifest'
  * B-PR-22a: the customer's urgency (portal.production.urgency over its party, never a preview; only while its urgency switch is
  * on): mark one or many of its orders Urgent or Regular, order its Urgent list (the drag, "Move to top"), undo one of its own
  * batches — ./urgency.ts.
+ *
+ * B-PR-45: "Report a problem" (portal.production.view + portal.comment over its party, never a preview): one message in each
+ * named order's thread and one issue each, one task for the batch — ./problems.ts.
  */
 export const manifest = defineManifest({
   'GET /portal/production': { audiences: ['partner'], permission: 'portal.production.view', scope: 'party' },
@@ -18,4 +21,6 @@ export const manifest = defineManifest({
   'POST /portal/production/urgency': { audiences: ['partner'], permission: 'portal.production.urgency', scope: 'party' },
   'PUT /portal/production/urgent-order': { audiences: ['partner'], permission: 'portal.production.urgency', scope: 'party' },
   'POST /portal/production/urgency/undo': { audiences: ['partner'], permission: 'portal.production.urgency', scope: 'party' },
+  // B-PR-45: "Report a problem" on one or many of its own orders (the handler also checks portal.comment: it writes in their threads).
+  'POST /portal/production/problems': { audiences: ['partner'], permission: 'portal.production.view', scope: 'party' },
 })
