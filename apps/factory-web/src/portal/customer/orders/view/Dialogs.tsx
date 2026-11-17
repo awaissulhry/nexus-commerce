@@ -499,6 +499,8 @@ export interface PreviewModel {
   title: string
   state: 'loading' | 'error' | 'ready'
   bytes: Uint8Array | null
+  /** F-PR-12c: why it cannot open, in words (a key of `portal-orders`: an inspection report not issued); no Try again then. */
+  problem?: string | null
 }
 
 export function PreviewDialog({ model, onClose, onDownload, onRetry }: { model: PreviewModel; onClose?: () => void; onDownload?: () => void; onRetry?: () => void }) {
@@ -509,7 +511,7 @@ export function PreviewDialog({ model, onClose, onDownload, onRetry }: { model: 
       {model.state === 'loading' ? (
         <Loading rows={1} height={320} />
       ) : model.state === 'error' || !model.bytes ? (
-        <ReadFailed title={t('docs.previewFailed')} onRetry={onRetry} />
+        <ReadFailed title={t(model.problem ?? 'docs.previewFailed') /* F-PR-12c */} onRetry={model.problem ? undefined : onRetry} />
       ) : (
         <PdfViewer src={model.bytes} title={model.title} onDownload={onDownload} labels={pdfViewerLabels(shell)} height="min(70vh, 760px)" />
       )}

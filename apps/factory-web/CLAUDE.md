@@ -193,7 +193,11 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   hidden: no section) — waiting for you on this order, the hold banner (lib/production), the plain stage as the "In production"
   step's note, health and waiting on (StatusTab's F-PR-12a block). F-PR-12b: + Gates & dates (real gates, swatch answers as
   approvals, the published plan's days) and + Progress (lib PiecesGrid per line and size, read again every `refreshSeconds`) from
-  the same read; today's progress card only where that read does not draw (`productionOwnsProgress`).
+  the same read; today's progress card only where that read does not draw (`productionOwnsProgress`). F-PR-12c: + Quality & photos
+  (`view/QualityCard.tsx`) from `GET /portal/production/:orderId/quality`, asked only at the level QUALITY (`qualityShared`) and again
+  with every production read: released / taken back per line and size, checks, final inspections (report PDF from
+  `…/quality/report/:inspectionId` in the order's PDF viewer, saved under our own name), holds, shared photos (`GET /files/:id/preview`,
+  one at a time in `QualityPhotoDialog`). Never the inspection's number, a work order or a person of ours.
 - `src/portal/customer/neworder/` + `src/portal/customer/catalogue/` — New order & reorder and the Catalogue (B-W2b-194, SCR-185,
   SCR-226, on B-W2b-190's API; one catalogue `portal-ordering`): `/p/<party>/orders/new?draft=<id>&way=pick|reorder|upload&styles=
   &reorder=&line=` (`NewOrderPage.tsx`: the draft is the server's; header saved on leaving a field, a line on leaving the line, every

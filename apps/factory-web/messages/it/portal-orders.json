@@ -652,6 +652,78 @@
     },
     "pieces": {
       "oneSize": "Su misura"
+    },
+    "quality": {
+      "title": "Qualità e foto",
+      "label": "Qualità di questo ordine",
+      "failed": "Impossibile caricare la qualità di questo ordine",
+      "none": "Su questo ordine il controllo qualità non ha ancora verificato nulla.",
+      "released": {
+        "title": "Rilasciati dal controllo qualità",
+        "label": "Capi rilasciati dal controllo qualità, per riga",
+        "line": "Riga",
+        "released": "Rilasciati",
+        "reversed": "Ripresi",
+        "reversedHint": "Ripresi: capi già rilasciati che abbiamo ripreso per controllarli di nuovo.",
+        "shared": "{line}: {words}",
+        "sizesOf": "{title}: per taglia"
+      },
+      "checks": {
+        "title": "Controlli durante la produzione",
+        "check": "Controllo",
+        "result": "Ultimo esito",
+        "soFar": "Finora",
+        "lastOn": "Ultimo il",
+        "pieces_one": "{defective} su {pieces} capo con un difetto",
+        "pieces_other": "{defective} su {pieces} capi con un difetto"
+      },
+      "finals": {
+        "title": "Ispezione finale",
+        "lines_one": "Riga {lines}",
+        "lines_other": "Righe {lines}",
+        "allLines": "Questo ordine",
+        "decidedOn": "Esito del {date}",
+        "waiting": "In corso: l’esito arriva quando è deciso.",
+        "sample": "Campione",
+        "sampleOf": "{sample} su {garments} capi",
+        "level": "Livello di ispezione",
+        "aql": "Accettazione (AQL)",
+        "aqlValue": "Maggiori {major}: fino a {acceptMajor} · Minori {minor}: fino a {acceptMinor}",
+        "defects": "Capi con un difetto",
+        "defectsValue": "Critici {critical} · Maggiori {major} · Minori {minor}",
+        "foundOf": "Difetti trovati: {lines}",
+        "defect": "Difetto",
+        "class": "Classe",
+        "garments": "Capi",
+        "openReport": "Aprite il rapporto",
+        "noReport": "Per questa ispezione non è ancora stato emesso un rapporto.",
+        "reportTitle": "Rapporto di ispezione · {lines} · {date}",
+        "reportTitleNoDate": "Rapporto di ispezione · {lines}",
+        "fileName": "Rapporto di ispezione {date}",
+        "reportMissing": "Questo rapporto non è disponibile."
+      },
+      "holds": {
+        "title": "Blocchi",
+        "reason": "Motivo",
+        "state": "Stato",
+        "since": "Dal",
+        "until": "Fino al"
+      },
+      "photos": {
+        "title": "Foto",
+        "sharedOn": "Condivisa il {date}",
+        "view": "Aprite",
+        "count": "{n} di {count}",
+        "previous": "Foto precedente",
+        "next": "Foto successiva",
+        "only": "Questa è l’unica foto.",
+        "first": "Questa è la prima foto.",
+        "last": "Questa è l’ultima foto.",
+        "loading": "Apertura della foto…",
+        "failed": "Non è stato possibile aprire la foto.",
+        "gone": "Questa foto non è più condivisa.",
+        "alt": "Foto {name}"
+      }
     }
   }
 }
