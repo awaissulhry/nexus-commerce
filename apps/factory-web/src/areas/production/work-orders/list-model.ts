@@ -11,6 +11,12 @@ import type { BulkReleaseModel } from './every-shift/model'
 import type { BlockedBy, ListSort, WaitingOn, WorkOrderRisk } from '../_shared/api'
 import type { CustomerFilterState } from '../_shared/customer/model'
 import type { ListTerms } from './list/model'
+// F-PR-21: the production supervisor (Mine, the column, THE assign dialog).
+import type { AssignSupervisorActions, AssignSupervisorModel } from '../../_shared/production-supervisor/model'
+// F-PR-18: the Customer urgency filter.
+import type { CustomerUrgencyState } from '../_shared/api'
+// F-PR-22: "Note to N…" and a row's "Office note…" (THE note dialog, areas/production/_shared/notes).
+import type { NoteDialogActions, NoteDialogModel, NoteFrom } from '../_shared/notes/model'
 
 /** SCR-069 — the work orders list's view model (WorkOrdersListView draws it and fetches nothing). */
 export interface WorkOrdersListModel {
@@ -63,6 +69,22 @@ export interface WorkOrdersListModel {
   /** The clock the waiting ages count from (ms): the read's, so the cells do not move between renders. */
   now?: number
   // ── end F-PR-03
+  // ── F-PR-21 ──
+  /** Mine (`?supervisor=me`). */
+  supervisor?: 'me' | null
+  /** production.brand.manage: "Assign supervisor…" on a selection (held in words without it). */
+  supervisorCan?: { readonly manage: boolean }
+  /** THE assign dialog while open. */
+  assign?: AssignSupervisorModel | null
+  // ── end F-PR-21
+  /** F-PR-18: the Customer urgency filter (`?customerUrgency=`). */
+  customerUrgency?: CustomerUrgencyState | null
+  // ── F-PR-22 ──
+  /** threads.post: "Note to N…" and a row's "Office note…" (held in words without it). */
+  noteCan?: boolean
+  /** THE note dialog while open. */
+  note?: NoteDialogModel | null
+  // ── end F-PR-22
 }
 
 export interface WorkOrdersListActions {
@@ -98,6 +120,16 @@ export interface WorkOrdersListActions {
   /** The columns on screen (a costly column is read only while shown: the readiness word). */
   onShownColumns?: (ids: readonly string[]) => void
   // ── end F-PR-03
+  // ── F-PR-21 ──
+  /** "Assign supervisor…" on these selected work orders (their orders; at most ASSIGN_MAX). */
+  onAssignSupervisor?: (ids: readonly string[]) => void
+  supervisor?: AssignSupervisorActions
+  // ── end F-PR-21
+  // ── F-PR-22 ──
+  /** "Note to N…" on a selection, or a row's "Office note…" (at most NOTE_RECORDS_MAX work orders). */
+  onNote?: (ids: readonly string[], from: Exclude<NoteFrom, 'band'>) => void
+  note?: NoteDialogActions
+  // ── end F-PR-22
 }
 
 export type { BulkReleaseModel }

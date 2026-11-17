@@ -53,7 +53,8 @@ export type NotificationState = (typeof NOTIFICATION_STATES)[number]
  * the web draws the same keys from its own catalogue). Placeholders: {actor} the person who caused it (a user id in
  * `actorId`), {record} the record's label, {title} a task's title, {kind} a Today row's kind in words, {status} a
  * decision, {figure} the amount the reader may see (only when params hold one); B-W2b-385: {count}, {entered}, {left} the
- * rows of a followed saved view (numbers in params).
+ * rows of a followed saved view (numbers in params). F-PR-05b: {customer} the customer's name (params `customer`; told only to a
+ * person who reads that customer's record).
  */
 export const MESSAGE_TEMPLATES = {
   'notifications.mentioned': { en: '{actor} mentioned you on {record}', it: '{actor} ti ha menzionato su {record}' },
@@ -140,6 +141,14 @@ export const MESSAGE_TEMPLATES = {
   'notifications.production.supervisorOfCustomer': { en: 'You are the production supervisor of {record}', it: 'Sei il supervisore di produzione di {record}' },
   'notifications.production.backupOfCustomer': { en: 'You are the backup of the production supervisor of {record}', it: 'Sei il sostituto del supervisore di produzione di {record}' },
   // ---- end B-PR-42b
+  // ---- F-PR-05b (production plan §3 "Issues"; L24; R-42, R-44): a problem a customer reported (its batch task, to the order's supervisor,
+  // else the customer's backup, else the production managers) and an issue nobody answered going up (raise + 1 working day: the
+  // backup, else the production managers; raise + 2: the Owner and Admin). {record}: the order its task sits on; {count}: its orders.
+  'notifications.production.problemReported': { en: '{customer} reported a problem on {record}: answer in the order’s thread', it: '{customer} ha segnalato un problema su {record}: rispondi nella conversazione dell’ordine' },
+  'notifications.production.problemReportedMany': { en: '{customer} reported a problem on {count} orders: answer in the thread of {record}', it: '{customer} ha segnalato un problema su {count} ordini: rispondi nella conversazione di {record}' },
+  'notifications.production.issueEscalatedBackup': { en: 'No answer after 1 working day on {record} ({customer}): it now waits on you', it: 'Senza risposta da 1 giorno lavorativo su {record} ({customer}): ora tocca a te' },
+  'notifications.production.issueEscalatedOwner': { en: 'No answer after 2 working days on {record} ({customer}): it now waits on the Owner and Admin', it: 'Senza risposta da 2 giorni lavorativi su {record} ({customer}): ora tocca al titolare e all’amministratore' },
+  // ---- end F-PR-05b
   'notifications.safety.productReport': { en: 'Product-safety report {record} came in: assess it', it: 'È arrivata la segnalazione di sicurezza {record}: valutala' },
   'notifications.safety.productAccident': { en: 'Product-safety report {record} came in with an accident: assess it and see whether the authority must be told', it: 'È arrivata la segnalazione di sicurezza {record} con un incidente: valutala e verifica se va informata l’autorità' },
   // B-W2b-394 (COL-027): a team-inbox mail given to a person ({record}: its subject, {title}: the inbox), and its follow-up that came
@@ -211,6 +220,8 @@ export function sentenceOf(
     count: typeof params.count === 'number' ? String(params.count) : '',
     entered: typeof params.entered === 'number' ? String(params.entered) : '',
     left: typeof params.left === 'number' ? String(params.left) : '',
+    // F-PR-05b: the customer of an issue's task (told only to a person who reads that customer's record).
+    customer: typeof params.customer === 'string' ? params.customer : '',
   }
   return template.replace(/\{(\w+)\}/g, (_, name: string) => values[name] ?? '')
 }

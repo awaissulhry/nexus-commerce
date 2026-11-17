@@ -201,8 +201,7 @@
   "tab": {
     "overview": "Overview & release",
     "materials": "Materials",
-    "cutting": "Cutting",
-    "bundles": "Bundles",
+    "cutting": "Cutting & bundles",
     "operations": "Operations & WIP",
     "quality": "Quality",
     "labour": "Labour & cost",
@@ -437,9 +436,6 @@
   },
   "cutting": {
     "what": "The cutting log per hide starts",
-    "plan": "Cut against plan",
-    "planHint": "A garment counts as cut when every part cut from hides is cut.",
-    "readyToBundle": "Ready to bundle",
     "partPieces": "{part} {pieces}",
     "hides": "Hides",
     "noHides": "No hide issued yet.",
@@ -462,7 +458,6 @@
       "cell": "Colourway · size",
       "quantity": "To make",
       "cut": "Cut",
-      "toCut": "To cut",
       "parts": "Pieces per part",
       "pieces": "Pieces",
       "area": "Area used",
@@ -496,7 +491,24 @@
     "correctionOf": "This entry corrects the cut of {when}; the reason is in the history.",
     "noWorker": "Not recorded at this site",
     "workerHidden": "A person is on this record. Their name shows only where the site's legal basis is in force.",
-    "workerHiddenShort": "A person is on this record"
+    "workerHiddenShort": "A person is on this record",
+    "cells": {
+      "title": "Cut and bundled per size × colour",
+      "col": {
+        "planned": "Planned",
+        "short": "Short"
+      },
+      "part": "{part} {cut} of {planned}",
+      "partExtra": "{part} {cut}, not in the plan",
+      "partShort": "{count} short",
+      "partRecut": "{count} to recut",
+      "toBundle": "{count} to bundle",
+      "cutInFull": "Cut in full",
+      "total": "Total",
+      "hint": "Short: garments not cut yet against the plan. In bundles: garments in live bundles; a part bundle counts its pieces apart."
+    },
+    "sharedWith_one": "Shared with another work order: {numbers}",
+    "sharedWith_other": "Shared with {count} other work orders: {numbers}"
   },
   "hideState": {
     "FULL": "Whole",
@@ -517,12 +529,8 @@
     "go": "Correct entry"
   },
   "bundles": {
-    "what": "Bundles are made at the cutting table",
-    "cells": "Cut and bundled",
-    "cellsHint": "Whole garments; a part bundle counts its pieces apart.",
     "col": {
       "bundled": "In bundles",
-      "toBundle": "To bundle",
       "code": "Bundle",
       "where": "Where it is",
       "last": "Last scan",
@@ -647,9 +655,6 @@
     "plannedHint": "Each routing step at a work centre of the site; frozen at the release.",
     "readyToComplete": "Every garment is finished: complete the work order.",
     "title": "Operations and work in progress",
-    "viewLabel": "Count by",
-    "byOperation": "Per operation",
-    "bySize": "Good per size",
     "final": "Final",
     "sewn": "Sewn here",
     "bundleCounts": "{done} done · {waiting} waiting · {notReached} not yet",
@@ -665,7 +670,12 @@
     "toToday": "Open Today",
     "toLabour": "Open Labour & corrections",
     "correctionsHint": "The original scan stays; an approved correction adds a row.",
-    "unplanned": "Unplanned"
+    "unplanned": "Unplanned",
+    "sizes": "Per size ({count})",
+    "sizesOf": "{operation} per size",
+    "noSizes": "Not scanned: nothing is counted per size.",
+    "outsourced": "At a workshop",
+    "outsourcedHint": "Counted by the scans of what came back."
   },
   "quality": {
     "what": "Final inspections start",
@@ -689,10 +699,19 @@
       "size": "Colourway · size",
       "pieces": "Pieces",
       "labels": "Labels printed",
-      "releasable": "May be released"
+      "releasable": "May be released",
+      "report": "Report"
     },
     "sizes": "Released per size",
-    "hint": "Released garments may be shipped. Inspecting and releasing are done in Quality and at the inspection bench."
+    "hint": "Released garments may be shipped. Inspecting and releasing are done in Quality and at the inspection bench.",
+    "share": {
+      "open": "Share with the customer…",
+      "mixed": "Mixed work order: not for a customer",
+      "noCustomer": "A work order for stock: no customer to share with",
+      "noResult": "Shared once the inspection has a result",
+      "noRight": "Your role cannot share quality reports"
+    },
+    "scrapPage": "Replace scrapped garments on Scrap & rework"
   },
   "release": {
     "title": "Release {number}",
@@ -740,7 +759,8 @@
     "cancelled": "Cancelled.",
     "saved": "Saved.",
     "sizesSaved": "Sizes saved.",
-    "corrected": "Corrected: a mirror entry is in the log."
+    "corrected": "Corrected: a mirror entry is in the log.",
+    "recutDone": "The recut is marked cut."
   },
   "error": {
     "read": "Nexus Factory didn't answer as expected: try again.",
@@ -1055,9 +1075,8 @@
     "intro": "The orders' own files, their lines' artwork and the made-to-measure worksheets: open them here, nobody types them again.",
     "reading": "Reading the order files…",
     "failed": "Couldn't read the order files",
-    "empty": "This work order's orders have no files yet.",
-    "none": "No files on this order yet.",
-    "customerRef": "Customer PO {ref}",
+    "empty": "This order has no files yet.",
+    "none": "This order has no files yet.",
     "fromOrder": "Order",
     "fromLine": "Line {seq}",
     "fromQuoteLine": "Line {seq} · from the quote",
@@ -1070,13 +1089,25 @@
     "thread": "Open the order's thread",
     "filesLeftOut_one": "{count} file you cannot open",
     "filesLeftOut_other": "{count} files you cannot open",
-    "measurementsLeftOut_one": "{count} measurement sheet needs the right to see measurements",
-    "measurementsLeftOut_other": "{count} measurement sheets need the right to see measurements",
+    "measurementsLeftOut_one": "Measurement sheet: opens with the measurements right ({count})",
+    "measurementsLeftOut_other": "Measurement sheets: open with the measurements right ({count})",
     "ordersLeftOut_one": "{count} more order whose files you cannot see",
     "ordersLeftOut_other": "{count} more orders whose files you cannot see",
     "openFailed": "Couldn't open the file",
     "gone": "This file is no longer there, or it is not one you may open.",
-    "close": "Close"
+    "close": "Close",
+    "section": {
+      "order": "Order",
+      "lines": "Lines",
+      "measurements": "Measurements"
+    },
+    "showNamed": "Open {name} beside the list",
+    "pickHint": "Pick a file: a PDF or a picture opens here, beside the list.",
+    "showing": "Reading {name}…",
+    "showFailed": "Couldn't show {name}",
+    "noPreview": "No preview for this kind of file: download it.",
+    "back": "Back to the files",
+    "orderName": "PO {po} · {number}"
   },
   "thread": {
     "pickLabel": "Which thread",
@@ -1186,5 +1217,162 @@
     "none": "No gates on this order.",
     "gate": "Gate",
     "materials": "Materials: planned, issued and still to issue"
+  },
+  "orderThread": {
+    "button": "Order thread",
+    "menu": "Order threads ({count})",
+    "menuLabel": "Pick the thread of one of {count} orders",
+    "hint": "Shows the order's thread beside the work order: shared with {customer}."
+  },
+  "scrapValue": {
+    "title": "Scrap value",
+    "loading": "Reading the scrap value…",
+    "failed": "The scrap value couldn't be read.",
+    "none": "Nothing scrapped or reworked.",
+    "unknown": "Not known: a rework has no cost per minute in force.",
+    "toQuality": "Scrap and its reasons: Quality"
+  },
+  "customerCard": {
+    "title": "Customer card",
+    "aria": "Customer card of {name}",
+    "mixedBlock_one": "Made before the one-customer rule: this block holds {count} order of this customer only.",
+    "mixedBlock_other": "Made before the one-customer rule: this block holds {count} orders of this customer only.",
+    "failed": "{part} could not be read: {why}",
+    "someone": "someone",
+    "po": "PO {po} · {number}",
+    "row": {
+      "requests": "Requests",
+      "approvals": "Asked of the customer",
+      "urgency": "Customer urgency",
+      "supervisor": "Production supervisor",
+      "problems": "Open problems",
+      "limits": "Limits"
+    },
+    "age": {
+      "now": "just now",
+      "hours_one": "{count} h",
+      "hours_other": "{count} h",
+      "days_one": "{count} d",
+      "days_other": "{count} d"
+    },
+    "requests": {
+      "none": "{name} asked nothing on this order.",
+      "waitingOnUs": "waiting on us {age}",
+      "waitingOnThem": "waiting on the customer (our counter-offer)",
+      "batch_one": "asked with {count} order",
+      "batch_other": "asked with {count} orders",
+      "answer": "Answer in Approvals",
+      "answered": "{kind}: {state} ({date})",
+      "ourAnswer": "our answer: “{answer}”"
+    },
+    "approvals": {
+      "noRight": "What we asked the customer to approve is shown to people who may see partner approvals.",
+      "none": "Nothing asked of the customer on this order.",
+      "open": "{record} · waiting for the answer, due {date}",
+      "decided": "{kind}: {state} ({date})",
+      "byUs": "decided by us for the customer",
+      "status": {
+        "OPEN": "waiting for the answer",
+        "APPROVED": "approved",
+        "APPROVED_WITH_CHANGES": "approved with changes",
+        "REFUSED": "refused",
+        "WITHDRAWN": "withdrawn",
+        "EXPIRED": "expired without an answer"
+      }
+    },
+    "urgency": {
+      "urgentRank": "Urgent (customer) · {rank} of their {max}",
+      "urgent": "Urgent (customer)",
+      "dormant": "Urgent (customer), kept but not used while their urgent orders are off",
+      "asked": "Urgent – asked",
+      "setBack": "Set to regular by us",
+      "setBackWhy": "Set to regular by us: {reason}",
+      "regular": "Regular",
+      "off": "Urgent orders are off for this customer: marks count for nothing in our plan.",
+      "notListed": "This order is not in the customer’s urgency list (not open, or not followed yet).",
+      "locked": "Locked",
+      "lockedHint": "The customer cannot mark it urgent until we unlock it.",
+      "setByUs": "set by {name} (us), {date}",
+      "setByThem": "marked by {name} (customer), {date}",
+      "lockedBy": "locked by {name}, {date}",
+      "hint": "The customer orders its own urgent orders; our level, rank and rush always come first. Setting back, locking and unlocking is our own plan: a fresh code, no second person.",
+      "act": {
+        "regular": "Set to regular…",
+        "lock": "Lock…",
+        "unlock": "Unlock…"
+      },
+      "held": {
+        "noOverride": "Only people who may decide for a customer set its urgency back, lock or unlock it.",
+        "reason": "Write the reason the customer reads.",
+        "line": "The reason is one line, without line breaks.",
+        "long": "The reason is at most {count} characters."
+      },
+      "problem": {
+        "forbidden": "You may not change this customer’s urgency.",
+        "conflict": "Nothing was changed: the order is already so, or it changed meanwhile. The card was read again.",
+        "gone": "This order is no longer in the customer’s urgency list.",
+        "invalid": "The reason was not accepted as it is: check it.",
+        "failed": "It didn't go through: try again."
+      },
+      "notice": {
+        "regular_one": "{count} order set back to Regular.",
+        "regular_other": "{count} orders set back to Regular.",
+        "lock_one": "{count} order locked at Regular: the customer reads your reason.",
+        "lock_other": "{count} orders locked at Regular: the customer reads your reason.",
+        "unlock_one": "{count} order unlocked: the customer may mark it urgent again.",
+        "unlock_other": "{count} orders unlocked: the customer may mark them urgent again."
+      },
+      "outcome": {
+        "regular": "Set back to Regular: {numbers}.",
+        "lock": "Locked at Regular: {numbers}.",
+        "unlock": "Unlocked: {numbers}.",
+        "none": "Nothing was changed.",
+        "notDone": "{number} not changed: {why}",
+        "unchanged": "it is already so.",
+        "notShown_one": "{count} more order was not changed.",
+        "notShown_other": "{count} more orders were not changed."
+      }
+    },
+    "dialog": {
+      "title": {
+        "regular": "Set {numbers} back to Regular",
+        "lock": "Lock {numbers} at Regular",
+        "unlock": "Unlock {numbers}"
+      },
+      "go": {
+        "regular": "Set to regular",
+        "lock": "Lock at Regular",
+        "unlock": "Unlock"
+      },
+      "body": {
+        "regular": "The order counts as Regular in our plan again (from the next Publish on the floor). The customer reads “Changed by us” and may mark it urgent again.",
+        "lock": "The order is Regular and stays so: the customer reads “Set to regular by us” with your reason and cannot mark it urgent until we unlock it.",
+        "unlock": "The customer may mark the order urgent again, within its quota."
+      },
+      "reason": "Reason the customer reads",
+      "reasonHint": "One line, at most {count} characters; kept in the order’s history.",
+      "alsoLock": "Also lock it at Regular (the customer cannot mark it urgent until we unlock it)",
+      "stepUp": "Asks for a fresh authenticator code. No second person: it is our own plan, and the customer loses nothing it signed."
+    },
+    "problems": {
+      "none": "No open problem on this order.",
+      "waitingSince": "Waiting on us since {date}",
+      "noReply": "No reply sent yet",
+      "openThread": "Open thread",
+      "threadHeld": "You may not read this order’s thread here.",
+      "batch_one": "Raised with {count} order: one answer answers them all.",
+      "batch_other": "Raised with {count} orders: one answer answers them all."
+    },
+    "limits": {
+      "noRight": "The customer’s limits are shown to people who may see its portal access.",
+      "urgencyOn": "Urgent orders on (at most {max}, {now} now)",
+      "urgencyOff": "Urgent orders off",
+      "open": "Limits card",
+      "openNoRight": "The limits card opens with the right to see customers."
+    },
+    "sees": {
+      "withoutLimits": "What the customer sees is read with its limits.",
+      "open": "Open as {name}"
+    }
   }
 }

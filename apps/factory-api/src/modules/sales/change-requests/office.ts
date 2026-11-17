@@ -4,7 +4,12 @@ import { scopeWhere } from '@nexus/factory-domain/core/permissions'
 import { businessDate, toUtcIso } from '@nexus/factory-domain/core/time'
 import type { AmendLineInput } from '@nexus/factory-domain/sales/amendments/amendments'
 import { cancelFeeFor, type CancelFee } from '@nexus/factory-domain/sales/change-requests/fee'
-import { amendmentLinesOf, answerProblems, isSalesRequestKind, ORDER_REQUEST_KIND_WORDS, rulesOf, type AskedCell, type OrderRequestKind } from '@nexus/factory-domain/sales/change-requests/rules'
+import { amendmentLinesOf, answerProblems, ORDER_REQUEST_KIND_WORDS, rulesOf, type AskedCell, type OrderRequestKind } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-PR-27a: a line in another colourway (a new line, the old one closed short).
+import { colourInWorkWords, colourKeepsTotal, colourLinesOf } from '@nexus/factory-domain/sales/change-requests/rules'
+// B-PR-27b: ship what is ready is accepted here too (the order ships as ready, the first part's date proposed to sales).
+import { ACCEPT_DONE_WORDS, isProductionAccept } from '@nexus/factory-domain/production-brand/accept'
+import { acceptProposals, proposeInCommand, type AcceptProposals } from '../../planning/promise-keep/repromise'
 import { markMoney } from '@nexus/factory-domain/money/marked'
 import { cancelImpact, closeShortPlan } from '@nexus/factory-domain/sales/orders/daily'
 import { MAX_REASON } from '@nexus/factory-domain/sales/orders/orders'
@@ -21,7 +26,13 @@ import { impactView, readCancelFacts } from '../orders/impact'
 import { cancelOrderInCommand } from '../orders/moves'
 import { lockOrder, readLines, readOrder, readOrderFacts, type LineRecord, type OrderRow } from '../orders/store'
 import { approveWaitingInCommand } from '../portal-ordering/address-check'
+// B-PR-26: our counter-offer (the accept of an agreed one carries it out with the counter); a partly shipped order's cancel.
+import { acceptedWithCounter, officeAnswersOf, type CounterState } from '@nexus/factory-domain/sales/change-requests/counter'
+import type { RequestStatus } from '@nexus/factory-domain/sales/change-requests/rules'
+import { agreedDateOf, answerableIn, counterOfRow, counterStateIn } from './counter'
 import {
+  readCounterStates,
+  askedColourwayNames, // B-PR-27a
   addressesOf,
   dayOrNull,
   feeLinesOf,
@@ -69,8 +80,8 @@ const LIST_MAX = 200
 
 const blankToNull = (value: string | null | undefined): string | null => (typeof value === 'string' && value.trim() !== '' ? value.trim() : null)
 
-/** The office's views of these requests (one query per table, whatever the count). */
-async function officeViews(db: Reader, context: ReturnType<typeof officeContextOf>, rows: readonly OfficeRequestRow[]) {
+/** The office's views of these requests (one query per table, whatever the count). B-PR-26: production/brand-requests reads them too. */
+export async function officeViews(db: Reader, context: ReturnType<typeof officeContextOf>, rows: readonly OfficeRequestRow[]) {
   if (rows.length === 0) return []
   const orderIds = [...new Set(rows.map((row) => row.orderId))]
   const orders = new Map((await db.salesOrder.findMany({ where: { id: { in: orderIds } }, select: { id: true, number: true, customerRef: true, currency: true } })).map((row) => [row.id, row]))
@@ -85,12 +96,16 @@ async function officeViews(db: Reader, context: ReturnType<typeof officeContextO
     if (entry?.colourway) colourways.set(line.colourwayId, entry.colourway)
   }
   const cells = await readCells(db, rows.map((row) => row.id))
+  // B-PR-27a: the colourways the changes ask, by name.
+  for (const [colourwayId, name] of await askedColourwayNames(db, cells.values())) colourways.set(colourwayId, name)
   const addresses = await addressesOf(db, rows.map((row) => row.shipToAddressId))
   const reasons = await reasonWordsOf(db, rows.flatMap((row) => (row.reasonCode ? [row.reasonCode] : [])))
   const people = [...new Set(rows.flatMap((row) => [row.createdById, row.answeredById]).filter((id): id is string => id !== null))]
   const names = new Map((people.length > 0 ? await db.user.findMany({ where: { id: { in: people } }, select: { id: true, displayName: true } }) : []).map((row) => [row.id, row.displayName]))
   const amendmentIds = rows.flatMap((row) => (row.amendmentId ? [row.amendmentId] : []))
   const amendments = new Map((amendmentIds.length > 0 ? await db.salesOrderAmendment.findMany({ where: { id: { in: amendmentIds } }, select: { id: true, revision: true } }) : []).map((row) => [row.id, row]))
+  // B-PR-26: where each counter-offer stands (its approval's status).
+  const counters = await readCounterStates(db, rows)
   // B-W2b-F14: the cancel fee in force per company, for the waiting cancels.
   const feeCompanies = [...new Set(rows.filter((row) => row.kind === 'CANCEL' && row.status === 'OPEN').map((row) => row.companyId))]
   const feePct = new Map<string, string | null>()
@@ -106,7 +121,12 @@ async function officeViews(db: Reader, context: ReturnType<typeof officeContextO
       addresses,
       reasons,
       fee: feePct.has(row.companyId) ? { pct: feePct.get(row.companyId) ?? null, currency: order?.currency ?? 'EUR', lines: feeLinesOf(lines.filter((line) => line.orderId === row.orderId)) } : null,
+      // B-PR-26
+      counters,
+      audience: 'office' as const,
     }
+    // B-PR-26: an OPEN request, or a COUNTERED one the customer said yes to (accept) or whose counter lapsed (refuse).
+    const answers = officeAnswersOf({ kind: row.kind as OrderRequestKind, status: row.status as RequestStatus }, counterStateOfView(row, counters))
     return {
       ...requestView(row, cells.get(row.id) ?? [], facts),
       companyId: row.companyId,
@@ -115,10 +135,15 @@ async function officeViews(db: Reader, context: ReturnType<typeof officeContextO
       answeredBy: row.answeredById ? (names.get(row.answeredById) ?? null) : null,
       amendment: row.amendmentId ? (amendments.get(row.amendmentId) ?? null) : null,
       // B-PR-23: Sales answers CHANGE and CANCEL; a production ask is read here and answered in Home › Approvals (B-PR-26).
-      mayAnswer: row.status === 'OPEN' && isSalesRequestKind(row.kind) && mayOn(context, ORDERS_MANAGE, { companyId: row.companyId, partyId: row.partyId }),
+      // B-PR-27b: and ship what is ready (SPLIT_SHIPMENT: orders.manage, accepted here).
+      mayAnswer: (answers.accept || answers.refuse) && !isProductionAccept(row.kind) && mayOn(context, ORDERS_MANAGE, { companyId: row.companyId, partyId: row.partyId }),
     }
   })
 }
+
+/** B-PR-26: where a request's counter stands, from the states read with the views (null: never countered). */
+const counterStateOfView = (row: Pick<OfficeRequestRow, 'counterApprovalId'>, counters: ReadonlyMap<string, CounterState>): CounterState | null =>
+  row.counterApprovalId ? (counters.get(row.counterApprovalId) ?? 'LAPSED') : null
 
 export interface ListQuery {
   readonly status: 'OPEN' | 'ACCEPTED' | 'REFUSED' | 'WITHDRAWN' | 'COUNTERED' | 'ALL'
@@ -175,12 +200,37 @@ function reasonOf(row: OfficeRequestRow, given: string | undefined): string {
  */
 function amendmentOf(row: OfficeRequestRow, cells: readonly AskedCell[], order: OrderRow, lines: readonly LineRecord[], reason: string): AmendBody | null {
   const { lines: amendLines, changed } = amendmentLinesOf(cells, lines)
-  const asked = dayOrNull(row.requestedDate)
+  // B-PR-26: a request the customer agreed with our counter-offer is carried out with the counter's date.
+  const asked = row.status === 'COUNTERED' ? acceptedWithCounter({ requestedDate: dayOrNull(row.requestedDate) }, counterOfRow(row)).date : dayOrNull(row.requestedDate)
   const dateChanges = asked !== null && asked !== dayOrNull(order.requestedDate)
   if (!changed && !dateChanges) return null
+  // B-PR-27a: a line asked in another colourway: a new line of its style in that colourway, the sizes asked, at the old line's
+  // prices (the old line is closed short after the amendment: a line a request names is never removed).
+  const byId = new Map(lines.map((line) => [line.id, line]))
+  for (const colour of colourLinesOf(cells)) {
+    const from = byId.get(colour.fromLineId)
+    if (!from || colour.sizes.length === 0) continue
+    const own = new Map(from.sizes.map((size) => [size.size, size.unitPrice === null ? null : size.unitPrice.toString()]))
+    amendLines.push({ styleId: from.styleId, colourwayId: colour.colourwayId, unitPrice: from.unitPrice.toString(), sizes: colour.sizes.map((size) => ({ size: size.size, quantity: size.quantity, unitPrice: own.get(size.size) ?? null })), description: from.description, note: from.note })
+  }
   const body: { version: number; reason: string; lines: AmendLineInput[]; requestedDate?: string } = { version: order.version, reason, lines: amendLines }
   if (dateChanges) body.requestedDate = asked
   return body
+}
+
+/**
+ * B-PR-27a: why a line asked in another colourway cannot change now — a work order makes it (not cancelled): a colour change is
+ * then cancel-and-remake, answered by hand (409 `request/COLOUR_IN_WORK`); null when every such line is free.
+ */
+async function colourInWorkProblem(db: Reader, cells: readonly AskedCell[], lines: readonly Pick<LineRecord, 'id' | 'seq'>[]): Promise<Issue | null> {
+  const asked = colourLinesOf(cells).map((colour) => colour.fromLineId)
+  if (asked.length === 0) return null
+  const made = await db.workOrderSize.findMany({ where: { salesOrderLineId: { in: asked }, workOrder: { status: { not: 'CANCELLED' } } }, select: { salesOrderLineId: true, workOrder: { select: { number: true } } }, orderBy: { workOrderId: 'asc' } })
+  const first = asked.find((lineId) => made.some((cell) => cell.salesOrderLineId === lineId))
+  if (!first) return null
+  const numbers = [...new Set(made.filter((cell) => cell.salesOrderLineId === first).map((cell) => cell.workOrder.number))]
+  const words = colourInWorkWords(lines.find((line) => line.id === first)?.seq ?? 0, numbers)
+  return { path: 'request/COLOUR_IN_WORK', message: words.en }
 }
 
 /** Why the delivery address asked cannot be written on the order now; null when it can. */
@@ -206,13 +256,22 @@ export async function officeRecord(caller: CommandCaller, requestId: string, now
     // The request itself is not "another one waiting": the rules are read as if none waited.
     const rules = rulesOf({ status: order.status, promiseDate: dayOrNull(order.promiseDate), lines: ruleLinesOf(lines, cuts), openRequestDay: null }, cutoffs, today)
     let preview = null
-    if (view!.mayAnswer) {
+    // B-PR-26: what accepting does, while it may be accepted (OPEN, or the customer said yes to our counter-offer).
+    const accepts = officeAnswersOf({ kind: row.kind as OrderRequestKind, status: row.status as RequestStatus }, await counterStateIn(client, row)).accept
+    if (view!.mayAnswer && accepts) {
       const cells = (await readCells(client, [row.id])).get(row.id) ?? []
       const problems: Issue[] = []
       let amendment = null
       let cancel = null
       let closes = null
-      if (row.kind === 'CANCEL' && cells.length === 0) {
+      if (row.kind === 'SPLIT_SHIPMENT') {
+        // B-PR-27b: ship what is ready changes no line: the order ships as ready, the first part's date goes to sales as a re-promise.
+      } else if (row.kind === 'CANCEL' && cells.length === 0 && order.status === 'PARTLY_SHIPPED') {
+        // B-PR-26: a partly shipped order's "whole order" is what is still to ship: those lines are closed short.
+        const plan = closeShortPlan(order.status, shortLinesOf(await readOrderFacts(client, order)), [])
+        if (Array.isArray(plan)) problems.push(...plan)
+        else closes = plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity }))
+      } else if (row.kind === 'CANCEL' && cells.length === 0) {
         const impact = cancelImpact(await readCancelFacts(client, order, await readOrderFacts(client, order)))
         cancel = impactView(impact)
         problems.push(...impact.blocks.map((item) => ({ path: `cancel/${item.code}`, message: item.message })))
@@ -221,6 +280,9 @@ export async function officeRecord(caller: CommandCaller, requestId: string, now
         if (Array.isArray(plan)) problems.push(...plan)
         else closes = plan.close.map((line) => ({ lineId: line.id, seq: line.seq, closedShortQuantity: line.closedShortQuantity }))
       } else {
+        // B-PR-27a: a line asked in another colourway changes only while no work order makes it.
+        const inWork = await colourInWorkProblem(client, cells, lines)
+        if (inWork) problems.push(inWork)
         const body = amendmentOf(row, cells, order, lines, reasonOf(row, undefined))
         if (body) {
           const plan = await planAmendment(client, order, order.status, await readOrderFacts(client, order), body, now)
@@ -245,16 +307,19 @@ export async function officeRecord(caller: CommandCaller, requestId: string, now
   })
 }
 
-/** Inside the command: the request locked, OPEN, at the version read. */
-async function openRequestIn(tools: CommandTools, requestId: string, version: number): Promise<OfficeRequestRow> {
+/** Inside the command: the request locked, OPEN (B-PR-26: or COUNTERED, as its counter lets this answer), at the version read. */
+async function openRequestIn(tools: CommandTools, requestId: string, version: number, answer: 'ACCEPTED' | 'REFUSED'): Promise<OfficeRequestRow> {
   await lockRequest(tools.tx, requestId)
   const row = await tools.tx.orderChangeRequest.findUnique({ where: { id: requestId }, select: OFFICE_REQUEST_COLUMNS })
   if (!row) throw new NotFoundError('Change request not found.')
   // B-PR-23: a production ask is answered in Home › Approvals (B-PR-26, B-PR-27a/b), never through Sales' accept or refuse.
-  if (!isSalesRequestKind(row.kind)) {
+  // B-PR-27b: but ship what is ready (SPLIT_SHIPMENT) is Sales' to accept (orders.manage).
+  if (isProductionAccept(row.kind)) {
     const words = ORDER_REQUEST_KIND_WORDS[row.kind as OrderRequestKind]
     throw new DomainError('invalid_state', `This is a production ask ("${words.en}"): it is answered in Home › Approvals, not here.`, [{ path: 'request/PRODUCTION_ASK', message: 'A production ask is answered in Home › Approvals.' }])
   }
+  // B-PR-26: a countered request is accepted once the customer said yes (carried out with the counter), refused once it lapsed.
+  if (row.status === 'COUNTERED') return (await answerableIn(tools, requestId, version, answer)).row
   if (row.status !== 'OPEN') throw new DomainError('invalid_state', row.status === 'WITHDRAWN' ? 'The customer withdrew this request.' : 'This request is already answered.', [{ path: `request/${row.status}`, message: `The request is ${row.status}.` }])
   if (row.version !== version) throw new StaleVersionError('OrderChangeRequest', requestId, row.version, version)
   return row
@@ -284,13 +349,26 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
   assertMay(context, ORDERS_MANAGE, order, 'Change request')
   const problems = answerProblems('ACCEPTED', body.answer)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
+  // B-PR-27b: ship what is ready — the first part's date (asked, or our counter's) proposed to sales for its sizes promised later,
+  // read before the command (planning/promise-keep acceptProposals).
+  const asked = await caller.withClient((client) => client.orderChangeRequest.findUnique({ where: { id: requestId }, select: OFFICE_REQUEST_COLUMNS }))
+  const splitProposals: AcceptProposals | null =
+    asked?.kind === 'SPLIT_SHIPMENT'
+      ? await caller.withClient(async (client) => {
+          const only = new Map<string, Set<string>>()
+          for (const cell of (await readCells(client, [requestId])).get(requestId) ?? []) if (cell.size !== null) only.set(cell.orderLineId, (only.get(cell.orderLineId) ?? new Set<string>()).add(cell.size))
+          return acceptProposals(client, context, { orderId: asked.orderId, date: agreedDateOf(asked), only, now: clock.now() })
+        })
+      : null
   const { result } = await runCommand(caller, { name: 'orders.acceptChangeRequest', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
     const { tx } = tools
-    const row = await openRequestIn(tools, requestId, body.version)
+    const row = await openRequestIn(tools, requestId, body.version, 'ACCEPTED')
     const cells = (await readCells(tx, [requestId])).get(requestId) ?? []
     const reason = reasonOf(row, body.reason)
     let amendmentId: string | null = null
     let orderCancelled = false
+    // B-PR-27b: what ship what is ready did.
+    let split: { shipComplete: boolean; proposals: { id: string; orderLineId: string; seq: number; sizes: { size: string | null; from: string | null; to: string }[] }[]; skipped: AcceptProposals['skipped']; words: { it: string; en: string } } | null = null
     // B-W2b-F14: a cancel's fee as it stands now (before its lines close), kept on the audit rows and shown in the answer:
     // the request has no column for it, and no money moves.
     let cancelFee: CancelFee | null = null
@@ -299,7 +377,27 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       cancelFee = cancelFeeFor(feeLinesOf(orderLines), cells.map((cell) => cell.orderLineId), (await readCutoffs(tx, context.tenantId, order.companyId)).cancelFeePct, order.currency)
     }
     const feeAudit = cancelFee ? { cancelFee: { pct: cancelFee.pct, currency: cancelFee.currency, lines: cancelFee.lines.map((line) => ({ lineId: line.lineId, seq: line.seq, fee: markMoney('price', line.fee) })), totalFee: markMoney('price', cancelFee.totalFee) } } : {}
-    if (row.kind === 'CANCEL' && cells.length === 0) {
+    // B-PR-26: a partly shipped order's "whole order" is what is still to ship: those lines are closed short (the order is not
+    // cancelled: some of it shipped).
+    const partlyShipped = row.kind === 'CANCEL' && cells.length === 0 && (await readOrder(tx, order.id))?.status === 'PARTLY_SHIPPED'
+    if (row.kind === 'SPLIT_SHIPMENT') {
+      // B-PR-27b: the order ships as ready (its row locked, its version moved), then the first part's date proposed to sales.
+      await lockOrder(tx, order.id)
+      const before = await tx.salesOrder.findUniqueOrThrow({ where: { id: order.id }, select: { shipComplete: true } })
+      if (before.shipComplete) {
+        await tx.salesOrder.update({ where: { id: order.id }, data: { shipComplete: false, updatedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
+        tools.audit({ action: 'orders.shipAsReady', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, before: { shipComplete: true }, after: { shipComplete: false, requestId }, reason })
+      }
+      const proposals: NonNullable<typeof split>['proposals'] = []
+      for (const checked of splitProposals?.checked ?? []) {
+        const made = await proposeInCommand(tools, checked)
+        proposals.push({ id: made.proposalId, orderLineId: checked.line.id, seq: checked.line.seq, sizes: made.sizes.map((size) => ({ size: size.size, from: size.from, to: size.to })) })
+      }
+      const words = [ACCEPT_DONE_WORDS.shipsAsReady, ACCEPT_DONE_WORDS.repromised(proposals.length)]
+      split = { shipComplete: false, proposals, skipped: splitProposals?.skipped ?? [], words: { it: words.map((entry) => entry.it).join(' '), en: words.map((entry) => entry.en).join(' ') } }
+    } else if (partlyShipped) {
+      await closeLinesInCommand(tools, context, order, { reason, reasonCode: row.reasonCode ?? undefined, lineIds: [] })
+    } else if (row.kind === 'CANCEL' && cells.length === 0) {
       await cancelOrderInCommand(tools, context.tenantId, order, { reason })
       orderCancelled = true
     } else if (row.kind === 'CANCEL') {
@@ -308,8 +406,16 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
     } else {
       // The order and its lines as they are, read in this transaction: the amendment locks the order at this version.
       const fresh = (await readOrder(tx, order.id))!
-      const amend = amendmentOf(row, cells, fresh, await readLines(tx, order.id), reason)
-      if (amend) amendmentId = (await amendInCommand(tools, context.tenantId, fresh, amend)).amendmentId
+      const freshLines = await readLines(tx, order.id)
+      // B-PR-27a: a line asked in another colourway: only while no work order makes it (else answered by hand, nothing written).
+      const inWork = await colourInWorkProblem(tx, cells, freshLines)
+      if (inWork) throw new DomainError('invalid_state', inWork.message, [inWork])
+      const amend = amendmentOf(row, cells, fresh, freshLines, reason)
+      // B-PR-27a: the same pieces in another colourway at the old line's prices move no money: no re-acceptance (as a split).
+      if (amend) amendmentId = (await amendInCommand(tools, context.tenantId, fresh, amend, colourKeepsTotal(cells) ? { reacceptance: false } : {})).amendmentId
+      // B-PR-27a: then each old line closed short (a line a request names is never removed: W2a's close, with our reason).
+      const coloured = colourLinesOf(cells).filter((colour) => colour.sizes.length > 0).map((colour) => colour.fromLineId)
+      if (coloured.length > 0) await closeLinesInCommand(tools, context, (await readOrder(tx, order.id))!, { reason, lineIds: coloured })
       if (row.shipToAddressId) {
         if (!amend) await lockOrder(tx, order.id, fresh.version)
         // B-W2b-F13b: a delivery address the customer added for this request waits for our check: accepting approves it.
@@ -323,12 +429,12 @@ export async function acceptRequest(caller: CommandCaller, requestId: string, bo
       data: { status: 'ACCEPTED', answer: blankToNull(body.answer), answeredAt: tools.now, answeredById: context.actorId, amendmentId, updatedAt: tools.now, version: { increment: 1 } },
       select: { id: true },
     })
-    tools.audit({ action: 'orders.acceptChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: 'OPEN' }, after: { status: 'ACCEPTED', amendmentId, orderCancelled, answer: blankToNull(body.answer), ...feeAudit } })
+    tools.audit({ action: 'orders.acceptChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: row.status }, after: { status: 'ACCEPTED', amendmentId, orderCancelled, answer: blankToNull(body.answer), ...feeAudit, /* B-PR-26 */ ...(row.status === 'COUNTERED' ? { withCounter: row.counterApprovalId } : {}), ...(partlyShipped ? { closedRest: true } : {}) } })
     tools.audit({ action: 'orders.changeRequestAccepted', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { requestId, kind: row.kind, amendmentId, orderCancelled, ...feeAudit } })
     tools.emit({ type: 'order_change_request.answered', subject: requestId, companyId: row.companyId, payload: { requestId, orderId: order.id, partyId: row.partyId, kind: row.kind, answer: 'ACCEPTED', amendmentId, orderCancelled } })
-    return { orderCancelled, cancelFee }
+    return { orderCancelled, cancelFee, split }
   }, { ...COMMAND_SETTINGS, clock })
-  return { request: await viewAfter(caller, requestId), orderCancelled: result.orderCancelled, cancelFee: result.cancelFee ? feeView(result.cancelFee) : null }
+  return { request: await viewAfter(caller, requestId), orderCancelled: result.orderCancelled, cancelFee: result.cancelFee ? feeView(result.cancelFee) : null, /* B-PR-27b */ split: result.split }
 }
 
 export async function refuseRequest(caller: CommandCaller, requestId: string, body: { readonly version: number; readonly answer: string }, idempotencyKey: string | undefined, clock: Clock) {
@@ -338,10 +444,10 @@ export async function refuseRequest(caller: CommandCaller, requestId: string, bo
   const problems = answerProblems('REFUSED', body.answer)
   if (problems.length > 0) throw new ValidationError(problems[0]!.message, problems)
   await runCommand(caller, { name: 'orders.refuseChangeRequest', idempotencyKey, input: { requestId, ...body } }, async (tools) => {
-    const row = await openRequestIn(tools, requestId, body.version)
+    const row = await openRequestIn(tools, requestId, body.version, 'REFUSED')
     const answer = body.answer.trim()
     await tools.tx.orderChangeRequest.update({ where: { id: requestId }, data: { status: 'REFUSED', answer, answeredAt: tools.now, answeredById: context.actorId, updatedAt: tools.now, version: { increment: 1 } }, select: { id: true } })
-    tools.audit({ action: 'orders.refuseChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: 'OPEN' }, after: { status: 'REFUSED', answer } })
+    tools.audit({ action: 'orders.refuseChangeRequest', recordType: 'OrderChangeRequest', recordId: requestId, companyId: row.companyId, before: { status: row.status }, after: { status: 'REFUSED', answer } })
     tools.audit({ action: 'orders.changeRequestRefused', recordType: 'SalesOrder', recordId: order.id, companyId: order.companyId, after: { requestId, kind: row.kind } })
     tools.emit({ type: 'order_change_request.answered', subject: requestId, companyId: row.companyId, payload: { requestId, orderId: order.id, partyId: row.partyId, kind: row.kind, answer: 'REFUSED', amendmentId: null, orderCancelled: false } })
     return null

@@ -37,8 +37,12 @@ import { ASK_NOT_OPEN_WORDS } from '../../production-brand/words'
 import { suggestedAnswer } from '../inquiries/production-answer'
 import type { FreezeRuleFacts } from '../order-changes/freeze'
 import { acceptedWithCounter, counterAnswerHeld, counterAnswerOf, counteredWords, counterForReader, counterOutcome, counterPriced, counterProblems, counterQuestion, isCounterable } from './counter'
+// B-PR-26: the office's answers, the counter's state and page; every kind in Today's words.
+import { ASKED_ONLY_FROM_COUNTER, counterAnswererHeld, counterFactsOf, counterGoneWords, counterStateOf, COUNTER_STATE_WORDS, COUNTER_STATES, officeAnswerProblem, officeAnswersOf } from './counter'
+import { customerRequestWords } from '../../insights/words'
 import { blockedProblems, earliestWords, IMPACT_NOTES, impactKeepable, impactNamesOnly, impactOf, PRICED_WORDS, type ImpactLine } from './impact'
 import { acceptWayProblems, ASK_RULES, askLineVerdict, askVerdict, changeAcceptWays, FLOOR_TASK_WORDS, productionAskProblems, productionCellsOf, productionColumnsOf, type ProductionAskFacts } from './rules'
+import { colourInWorkWords, colourKeepsTotal, colourLinesOf, sizesAfter } from './rules' // B-PR-27a
 
 const TODAY = '2026-11-07'
 const line = (id: string, seq: number, overrides: Partial<RuleLine> = {}): RuleLine => ({
@@ -66,12 +70,15 @@ const reasons = new Map([
   ['LEAD_TIME', { needsNote: false }],
   ['OTHER', { needsNote: true }],
 ])
+// B-PR-26: a priced counter-offer (the B-PR-24 tests' own is in their describe).
+const COUNTER_B26 = { date: '2026-12-10', fee: 2500, note: 'Only lines 10 and 20.' }
 
 describe('the permission and its roles (B-W2b-183)', () => {
-  it('is a partner write held by the customer Buyer and the customer Admin only', () => {
+  // B-PR-25: and the customer Production role (production plan §5 Roles: it asks every kind its limits open).
+  it('is a partner write held by the customer Buyer, Admin and Production roles only', () => {
     expect(FACTORY_PERMISSIONS.get(PORTAL_SALES_ORDERS_ASK)).toMatchObject({ partner: true, risk: 'write' })
     expect(ORDER_CHANGE_ASKER_TEMPLATES).toEqual(['customer-buyer'])
-    for (const key of ['customer-buyer', 'customer-admin']) expect(partnerTemplateOf(key)?.permissions).toContain(PORTAL_SALES_ORDERS_ASK)
+    for (const key of ['customer-buyer', 'customer-admin', 'customer-production']) expect(partnerTemplateOf(key)?.permissions).toContain(PORTAL_SALES_ORDERS_ASK)
     for (const key of ['customer-finance', 'customer-quality', 'customer-designer', 'customer-viewer', 'supplier-orders', 'supplier-admin', 'subcontractor-jobs', 'guest-accountant', 'partner-approve']) expect(partnerTemplateOf(key)?.permissions).not.toContain(PORTAL_SALES_ORDERS_ASK)
     for (const template of ROLE_TEMPLATES) expect(template.permissions).not.toContain(PORTAL_SALES_ORDERS_ASK)
   })
@@ -79,7 +86,8 @@ describe('the permission and its roles (B-W2b-183)', () => {
   it('declares its events (ids, kinds and states only) and the Approvals kind the office answers with orders.manage', () => {
     for (const type of ['order_change_request.asked', 'order_change_request.withdrawn', 'order_change_request.answered']) expect(EVENT_CATALOGUE.find(type, 1)?.live?.permission).toBe('orders.view')
     expect(() => EVENT_CATALOGUE.parse('order_change_request.asked', 1, { requestId: L1, orderId: L2, partyId: L1, kind: 'CHANGE', lines: 1, wholeOrder: false, note: 'x' })).toThrow()
-    expect(KIND_RULES.ORDER_CHANGE_REQUEST).toMatchObject({ category: 'APPROVAL', view: 'orders.view', act: ['orders.manage'], decide: 'OPEN' })
+    // B-PR-26: every kind a customer asks, each row acted on by its kind's permission (the rows name it: ASK_RULES answeredWith).
+    expect(KIND_RULES.ORDER_CHANGE_REQUEST).toMatchObject({ category: 'APPROVAL', view: 'orders.view', act: ['orders.manage', 'production.brand.manage', 'sales.samples.manage'], decide: 'OPEN' })
     expect(orderChangeRequestWords({ number: 'SO-1', customer: 'Demo Racing', kind: 'CHANGE', sizes: 3, lines: 1 }).sentence.text).toBe('Demo Racing asks to change 3 sizes of order SO-1.')
     expect(orderChangeRequestWords({ number: 'SO-1', customer: 'Demo Racing', kind: 'CHANGE', sizes: 0, lines: 0 }).sentence.text).toBe('Demo Racing asks to change the delivery of order SO-1.')
     expect(orderChangeRequestWords({ number: 'SO-1', customer: 'Demo Racing', kind: 'CANCEL', sizes: 0, lines: 0 }).sentence.text).toBe('Demo Racing asks to cancel order SO-1.')
@@ -91,7 +99,7 @@ describe('the permission and its roles (B-W2b-183)', () => {
     // th2-backend step 7 (#1549, threads plan §0.5): the notice names the order by the customer's own number (the API's
     // orderNamed: chip "#12", params yourKind/yourSeq), never the office's SO-… series; "per" reads right before "il vostro ordine".
     const notice = { messageKey: 'portal.order.change_refused', recordLabel: '#12', params: { yourKind: 'ORDER', yourSeq: 12 } }
-    expect(partnerSentence(notice, 'it', 'Demo')).toBe('La tua richiesta di modifica per il vostro ordine 12 non è stata accettata')
+    expect(partnerSentence(notice, 'it', 'Demo')).toBe('La vostra richiesta di modifica per il vostro ordine 12 non è stata accettata')
     expect(partnerSentence(notice, 'en', 'Demo')).toBe('Your change request on your order 12 was not accepted')
     for (const key of ['portal.order.change_accepted', 'portal.order.change_refused', 'portal.order.cancel_accepted', 'portal.order.cancel_refused'] as const)
       for (const locale of ['it', 'en'] as const) expect(partnerSentence({ ...notice, messageKey: key }, locale, 'Demo'), `${key} ${locale}`).not.toMatch(/SO-|#12/)
@@ -133,7 +141,10 @@ describe('the cut-off rules, before the click (SAL-078)', () => {
     expect(rulesOf(order({ promiseDate: null }), settings, TODAY).cancel.possible).toBe(true)
     expect(rulesOf(order(), cutoffs({ changeStatus: 'CONFIRMED' }), TODAY).change.words.en).toBe('Not possible from the portal: write to us on the order')
     expect(rulesOf(order({ openRequestDay: '2026-11-05' }), NO_CUTOFFS, TODAY).change).toMatchObject({ code: 'OPEN_REQUEST', words: { en: 'Your request of 5 Nov waits for our answer' } })
-    expect(rulesOf(order({ status: 'PARTLY_SHIPPED' }), NO_CUTOFFS, TODAY).cancel).toMatchObject({ code: 'NOT_ASKABLE', words: { en: 'Not possible: the order is already partly shipped' } })
+    // B-PR-26 (plan §3, R-35): a partly shipped order is still asked to cancel what is left to ship (closed short at the answer);
+    // a change of it is not.
+    expect(rulesOf(order({ status: 'PARTLY_SHIPPED' }), NO_CUTOFFS, TODAY).cancel.possible).toBe(true)
+    expect(rulesOf(order({ status: 'PARTLY_SHIPPED' }), NO_CUTOFFS, TODAY).change).toMatchObject({ code: 'NOT_ASKABLE', words: { en: 'Not possible: the order is already partly shipped' } })
   })
 
   it('keeps made-to-measure and closed lines out of what an amendment cannot do; SAL-304 still lets a whole cancel be asked', () => {
@@ -170,7 +181,7 @@ describe('what is asked, at the click (SAL-077, SAL-078)', () => {
     expect(changeProblems({ cells: [], requestedDate: '2026-11-06' }, changeFacts())[0]!.path).toBe('body/requestedDate')
     expect(changeProblems({ cells: [], requestedDate: '2026-12-01' }, changeFacts())[0]!.message).toBe('The order already asks for this date.')
     expect(changeProblems({ cells: [], shipToAddressId: L1 }, changeFacts({ addressOk: false }))[0]!.path).toBe('body/shipToAddressId')
-    expect(changeProblems({ cells: [] }, changeFacts())[0]!.message).toBe('Say what should change: sizes, the date or the delivery address.')
+    expect(changeProblems({ cells: [] }, changeFacts())[0]!.message).toBe('Say what should change: sizes, a colour, the date or the delivery address.') // B-PR-27a: a colour too
     expect(changeProblems({ cells: [] }, changeFacts({ cutoffs: cutoffs({ changeStatus: 'CONFIRMED' }) }))[0]!.path).toBe('body/STATUS')
   })
 
@@ -533,5 +544,154 @@ describe('B-PR-24: our counter-offer — a date, a price or words; answered by t
       expect(EVENT_CATALOGUE.get(type, 1).context, type).toBe('sales-change-requests')
       expect(EVENT_CATALOGUE.get(type, 1).live?.permission, type).toBe('orders.view')
     }
+  })
+})
+
+// ── B-PR-26 (production plan §3 "We accept, counter or refuse with words it reads", "Money", "A partly shipped order may still ask
+// to cancel unshipped lines (close short)"; §5 Home › Approvals; L4, L26; R-05, R-32, R-35): the office's answers, the counter's
+// state and its page, a partly shipped order's cancel, every kind in Today's words. ───────────────────────────────────────────
+describe('B-PR-26: what the office may answer, the counter-offer as the customer reads it, a partly shipped cancel', () => {
+  it('a request waits on us while OPEN; a countered one on the customer, then on us once they said yes (accept) or it lapsed (refuse)', () => {
+    expect(counterStateOf('OPEN')).toBe('WAITING')
+    expect(counterStateOf('APPROVED')).toBe('AGREED')
+    expect(counterStateOf('APPROVED_WITH_CHANGES')).toBe('AGREED')
+    expect(counterStateOf('REFUSED')).toBe('REFUSED')
+    expect(counterStateOf('EXPIRED')).toBe('LAPSED')
+    expect(counterStateOf('WITHDRAWN')).toBe('LAPSED')
+    expect(counterStateOf(null)).toBeNull()
+    const open = officeAnswersOf({ kind: 'HOLD', status: 'OPEN' }, null)
+    expect(open).toMatchObject({ accept: true, refuse: true, counter: true, waitingOn: 'US' })
+    // A resume is accepted or refused, never countered (the pause is the customer's to end).
+    expect(officeAnswersOf({ kind: 'RESUME', status: 'OPEN' }, null)).toMatchObject({ accept: true, refuse: true, counter: false })
+    expect(officeAnswerProblem('COUNTERED', { kind: 'RESUME', status: 'OPEN' }, null)?.path).toBe('request/RESUME')
+    expect(officeAnswersOf({ kind: 'CANCEL', status: 'COUNTERED' }, 'WAITING')).toMatchObject({ accept: false, refuse: false, counter: false, waitingOn: 'CUSTOMER' })
+    expect(officeAnswersOf({ kind: 'CANCEL', status: 'COUNTERED' }, 'AGREED')).toMatchObject({ accept: true, refuse: false, counter: false, waitingOn: 'US' })
+    expect(officeAnswersOf({ kind: 'CANCEL', status: 'COUNTERED' }, 'LAPSED')).toMatchObject({ accept: false, refuse: true, counter: false, waitingOn: 'US' })
+    expect(officeAnswersOf({ kind: 'CANCEL', status: 'COUNTERED' }, 'REFUSED')).toMatchObject({ accept: false, refuse: false, counter: false, waitingOn: null })
+    for (const status of ['ACCEPTED', 'REFUSED', 'WITHDRAWN'] as const) expect(officeAnswersOf({ kind: 'RUSH', status }, null)).toMatchObject({ accept: false, refuse: false, counter: false, waitingOn: null })
+    // Refused in words, by path: the request's state, or the counter's.
+    expect(officeAnswerProblem('ACCEPTED', { kind: 'CHANGE', status: 'COUNTERED' }, 'WAITING')).toEqual({ path: 'request/COUNTER_WAITING', message: 'Our counter-offer waits for the customer’s answer: they answer it first.' })
+    expect(officeAnswerProblem('REFUSED', { kind: 'CHANGE', status: 'COUNTERED' }, 'AGREED')?.path).toBe('request/COUNTER_AGREED')
+    expect(officeAnswerProblem('COUNTERED', { kind: 'CHANGE', status: 'COUNTERED' }, 'LAPSED')?.message).toMatch(/^A request is countered once/)
+    expect(officeAnswerProblem('ACCEPTED', { kind: 'CHANGE', status: 'COUNTERED' }, 'LAPSED')?.path).toBe('request/COUNTER_LAPSED')
+    expect(officeAnswerProblem('REFUSED', { kind: 'CHANGE', status: 'WITHDRAWN' }, null)).toEqual({ path: 'request/WITHDRAWN', message: 'The customer withdrew this request.' })
+    expect(officeAnswerProblem('ACCEPTED', { kind: 'CHANGE', status: 'ACCEPTED' }, null)?.path).toBe('request/ACCEPTED')
+    expect(officeAnswerProblem('ACCEPTED', { kind: 'CHANGE', status: 'OPEN' }, null)).toBeNull()
+    expect(officeAnswerProblem('ACCEPTED', { kind: 'CHANGE', status: 'COUNTERED' }, 'AGREED')).toBeNull()
+    expect(officeAnswerProblem('REFUSED', { kind: 'CHANGE', status: 'COUNTERED' }, 'LAPSED')).toBeNull()
+    // The words of each state, for both audiences; the customer's Italian says "voi".
+    for (const state of COUNTER_STATES) {
+      expect(COUNTER_STATE_WORDS[state].customer.it.length, state).toBeGreaterThan(0)
+      expect(COUNTER_STATE_WORDS[state].office.en.length, state).toBeGreaterThan(0)
+      expect(COUNTER_STATE_WORDS[state].customer.it, state).not.toMatch(/\b(tua|tuo|tuoi|tue|ti)\b/)
+    }
+  })
+
+  it('money: a priced counter-offer is answered only in the portal by a role with prices; its page never names the amount', () => {
+    expect(counterAnswererHeld({ priced: true, via: 'PORTAL', seesPrices: true }, 'en')).toBeNull()
+    expect(counterAnswererHeld({ priced: true, via: 'PORTAL', seesPrices: false }, 'en')).toBe('A price may apply: your buyer answers this counter-offer.')
+    expect(counterAnswererHeld({ priced: true, via: 'PORTAL', seesPrices: false }, 'it')).toBe('Può essere previsto un costo: a questa controproposta risponde il vostro buyer.')
+    expect(counterAnswererHeld({ priced: false, via: 'PORTAL', seesPrices: false }, 'en')).toBeNull()
+    // Never by a link (it answers for no role): in the portal.
+    expect(counterAnswererHeld({ priced: false, via: 'LINK', seesPrices: true }, 'en')).toBe('Answer this counter-offer in your portal.')
+    const facts = counterFactsOf({ kind: 'RUSH', orderNumber: 'SO-1', askedOn: '2026-11-05', requestedDate: '2026-12-20', counter: COUNTER_B26 }, 'en')
+    expect(facts).toEqual([
+      { label: 'Order', value: 'SO-1' },
+      { label: 'Your request', value: 'Urgent – asked · 5 Nov' },
+      { label: 'The date you asked', value: '20 Dec' },
+      { label: 'The date we offer', value: '10 Dec' },
+      { label: 'Price', value: 'A price applies: your buyer sees it' },
+      { label: 'Our words', value: 'Only lines 10 and 20.' },
+    ])
+    for (const locale of ['it', 'en'] as const) expect(JSON.stringify(counterFactsOf({ kind: 'RUSH', orderNumber: 'SO-1', askedOn: '2026-11-05', requestedDate: null, counter: COUNTER_B26 }, locale))).not.toMatch(/2500|25[.,]00|€/)
+    expect(counterFactsOf({ kind: 'HOLD', orderNumber: 'SO-1', askedOn: '2026-11-05', requestedDate: null, counter: { date: null, fee: 0, note: null } }, 'it')).toContainEqual({ label: 'Costo', value: 'Nessun costo' })
+    expect(counterGoneWords('en')).toBe('This counter-offer no longer waits: the request moved on since.')
+    expect(ASKED_ONLY_FROM_COUNTER).toMatch(/Home › Approvals/)
+  })
+
+  it('a partly shipped order: a cancel of what is left (a line shipped in full is not asked); the cut-offs and cut lines still hold', () => {
+    const partly = order({ status: 'PARTLY_SHIPPED', lines: [line(L1, 10, { shippedInFull: true }), line(L2, 20)] })
+    const rules = rulesOf(partly, NO_CUTOFFS, TODAY)
+    expect(rules.cancel.possible).toBe(true)
+    expect(rules.lines[0]!.cancel).toMatchObject({ code: 'NOT_ASKABLE', words: { en: 'Not possible: this line shipped in full' } })
+    expect(rules.lines[1]!.cancel.possible).toBe(true)
+    expect(rules.lines[1]!.change.code).toBe('NOT_ASKABLE')
+    // Everything shipped: nothing is left to cancel.
+    const done = order({ status: 'PARTLY_SHIPPED', lines: [line(L1, 10, { shippedInFull: true }), line(L2, 20, { closedShort: true })] })
+    expect(rulesOf(done, NO_CUTOFFS, TODAY).cancel).toMatchObject({ code: 'NOT_ASKABLE', words: { en: 'Not possible: everything of the order has shipped' } })
+    // A line still to ship but cut holds the whole cancel (the cut of a line shipped in full does not).
+    const cut = { day: '2026-11-01', leather: false }
+    expect(rulesOf(order({ status: 'PARTLY_SHIPPED', lines: [line(L1, 10, { shippedInFull: true, cut }), line(L2, 20)] }), NO_CUTOFFS, TODAY).cancel.possible).toBe(true)
+    expect(rulesOf(order({ status: 'PARTLY_SHIPPED', lines: [line(L1, 10, { shippedInFull: true }), line(L2, 20, { cut })] }), NO_CUTOFFS, TODAY).cancel.code).toBe('CUT')
+    // A status cut-off holds a partly shipped order (it is past READY).
+    expect(rulesOf(partly, cutoffs({ cancelStatus: 'READY' }), TODAY).cancel.code).toBe('STATUS')
+    // The cancel asked of the rest names no line (closed short at the answer), or the lines still to ship.
+    expect(cancelProblems({ reasonCode: 'LEAD_TIME' }, { order: partly, cutoffs: NO_CUTOFFS, today: TODAY, reasons })).toEqual([])
+    expect(cancelProblems({ reasonCode: 'LEAD_TIME', lineIds: [L1] }, { order: partly, cutoffs: NO_CUTOFFS, today: TODAY, reasons })[0]!.path).toBe('body/lineIds/0/NOT_ASKABLE')
+  })
+
+  it('Today: every kind in words, a batch in one row, a counter the customer agreed or that lapsed; each row goes to its kind’s people', () => {
+    const base = { number: 'SO-1', customer: 'Brand Alpha', sizes: 0, lines: 0 }
+    expect(customerRequestWords({ ...base, kind: 'HOLD', state: 'ASKED' }).sentence.text).toBe('Brand Alpha asks to pause order SO-1.')
+    expect(customerRequestWords({ ...base, kind: 'RUSH', state: 'ASKED', needBy: '2026-12-01' }).sentence).toMatchObject({ key: 'ORDER_CHANGE_REQUEST.RUSH_BY', params: { needByDate: '2026-12-01' } })
+    expect(customerRequestWords({ ...base, kind: 'SAMPLE_ROUND', state: 'ASKED' }).sentence.text).toBe('Brand Alpha asks for another sample round on order SO-1.')
+    expect(customerRequestWords({ ...base, kind: 'CANCEL', state: 'ASKED', count: 6 }).sentence.text).toBe('Brand Alpha asks to cancel 6 orders.')
+    expect(customerRequestWords({ ...base, kind: 'CANCEL', state: 'ASKED' }).sentence.text).toBe('Brand Alpha asks to cancel order SO-1.')
+    expect(customerRequestWords({ ...base, kind: 'CHANGE', state: 'AGREED' }).sentence.text).toBe('Brand Alpha said yes to our counter-offer on order SO-1: accept the request to carry it out.')
+    expect(customerRequestWords({ ...base, kind: 'CHANGE', state: 'LAPSED' }).sentence.key).toBe('ORDER_CHANGE_REQUEST.LAPSED')
+    for (const kind of ORDER_REQUEST_KINDS) {
+      expect(customerRequestWords({ ...base, kind, state: 'ASKED' }).sentence.key, kind).toMatch(/^ORDER_CHANGE_REQUEST\./)
+      expect(customerRequestWords({ ...base, kind, state: 'ASKED', count: 2 }).sentence.key, kind).toBe(`ORDER_CHANGE_REQUEST.BATCH_${kind}`)
+      // The row names the people who answer its kind (plan §3); the kind's rule lets each of them act.
+      expect(KIND_RULES.ORDER_CHANGE_REQUEST.act, kind).toContain(ASK_RULES[kind].answeredWith)
+    }
+  })
+})
+
+// ---- B-PR-27a: a line in another colourway of its style (a change) -----------------------------------------------------------
+describe('B-PR-27a: a change asks a line in another colourway', () => {
+  const RED = '00000000-0000-4000-8000-0000000000aa'
+  const NAVY = '00000000-0000-4000-8000-0000000000bb'
+  // Line 10's style has RED (in 50, 52, 54) and NAVY (in 50 only) besides its own colourway; line 20's style none.
+  const colourways = new Map([[L1, new Map([[RED, new Set(['50', '52', '54'])], [NAVY, new Set(['50'])]])]])
+  const facts = (overrides: Partial<Parameters<typeof changeProblems>[1]> = {}) => changeFacts({ colourways, ...overrides })
+
+  it('takes another colourway made in every size the line keeps; stores the line size by size with the colourway', () => {
+    const ask = { cells: [{ lineId: L1, size: '54', quantity: 1 }], colourways: [{ lineId: L1, colourwayId: RED }] }
+    expect(changeProblems(ask, facts())).toEqual([])
+    expect(changeCellsOf(ask, order())).toEqual([
+      { orderLineId: L1, size: '50', quantityBefore: 2, quantity: 2, colourwayId: RED },
+      { orderLineId: L1, size: '52', quantityBefore: 3, quantity: 3, colourwayId: RED },
+      { orderLineId: L1, size: '54', quantityBefore: 0, quantity: 1, colourwayId: RED },
+    ])
+    // A colour alone is a change (no cells, no date).
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, facts())).toEqual([])
+  })
+
+  it('refuses in words: not another colourway of the style, a size not made in it, a line twice, a held line, everything asked away', () => {
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L2, colourwayId: RED }] }, facts())[0]).toEqual({ path: 'body/colourways/0/colourwayId', message: "Not another colourway of line 20's style." })
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: NAVY }] }, facts())[0]).toEqual({ path: 'body/colourways/0/colourwayId', message: 'Line 10: size 52 is not made in this colourway.' })
+    // Dropping size 52 makes NAVY possible.
+    expect(changeProblems({ cells: [{ lineId: L1, size: '52', quantity: 0 }], colourways: [{ lineId: L1, colourwayId: NAVY }] }, facts())).toEqual([])
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }, { lineId: L1, colourwayId: RED }] }, facts()).map((issue) => issue.path)).toEqual(['body/colourways/1/lineId'])
+    const cut = facts({ order: order({ lines: [line(L1, 10, { cut: { day: '2026-10-12', leather: true } }), line(L2, 20)] }) })
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, cut)[0]!.path).toBe('body/colourways/0/LEATHER_CUT')
+    expect(changeProblems({ cells: [{ lineId: L1, size: '50', quantity: 0 }, { lineId: L1, size: '52', quantity: 0 }], colourways: [{ lineId: L1, colourwayId: RED }] }, facts()).some((issue) => /asked away/.test(issue.message))).toBe(true)
+    const tailored = facts({ order: order({ lines: [line(L1, 10, { kind: 'MADE_TO_MEASURE' }), line(L2, 20)] }) })
+    expect(changeProblems({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, tailored)[0]!.message).toMatch(/made to measure/)
+    expect(changeProblems({ cells: [], colourways: [{ lineId: '00000000-0000-4000-8000-0000000000ff', colourwayId: RED }] }, facts())[0]!.path).toBe('body/colourways/0/lineId')
+  })
+
+  it('accepts as a new line in the colourway (the sizes asked) and the old one left as it is for its close; same pieces keep the total', () => {
+    const cells = changeCellsOf({ cells: [{ lineId: L1, size: '50', quantity: 0 }], colourways: [{ lineId: L1, colourwayId: RED }] }, order())
+    expect(colourLinesOf(cells)).toEqual([{ fromLineId: L1, colourwayId: RED, sizes: [{ size: '52', quantity: 3 }] }])
+    // The old line's sizes are not the amendment's: it stays as it is until it is closed short.
+    expect(amendmentLinesOf(cells, [line(L1, 10), line(L2, 20)])).toEqual({ lines: [{ id: L1 }, { id: L2 }], changed: true })
+    expect(colourKeepsTotal(cells)).toBe(false)
+    expect(colourKeepsTotal(changeCellsOf({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, order()))).toBe(true)
+    // A size change of another line moves the total: W2a's own rule decides the re-acceptance.
+    expect(colourKeepsTotal([...changeCellsOf({ cells: [], colourways: [{ lineId: L1, colourwayId: RED }] }, order()), { orderLineId: L2, size: '50', quantityBefore: 2, quantity: 3 }])).toBe(false)
+    expect(sizesAfter(line(L1, 10), [{ lineId: L1, size: '50', quantity: 0 }, { lineId: L2, size: '52', quantity: 9 }])).toEqual([{ size: '50', before: 2, quantity: 0 }, { size: '52', before: 3, quantity: 3 }])
+    expect(colourInWorkWords(10, ['WO-0001']).en).toBe('Line 10 is on a work order already (WO-0001): a colour change is then cancel-and-remake. Answer by hand: refuse with words, or cancel and remake the line.')
   })
 })

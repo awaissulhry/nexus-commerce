@@ -3,6 +3,8 @@ import { ForbiddenError, InvalidStateError, NotFoundError, ValidationError, type
 import { isUuid, newId } from '@nexus/factory-domain/core/ids'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { PRODUCTION_HOLD_LIST, type WorkOrderHoldKind } from '@nexus/factory-domain/production/holds/kinds'
+// B-PR-27a: the words of a customer's pause.
+import { CUSTOMER_PAUSE_REASON, plainHoldWordsOf } from '@nexus/factory-domain/production-brand/accept'
 import { afterHoldEnds, customerWordsOf, liftProblems, placeProblems, productionHoldMove, unholdableWords, wordsOrNull } from '@nexus/factory-domain/production/holds/rules'
 import { WORKORDERS_HOLD, WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import type { WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
@@ -106,7 +108,8 @@ async function holdViews(db: Reader, rows: readonly HoldRow[]) {
   const names = new Map((await db.user.findMany({ where: { id: { in: people } }, select: { id: true, displayName: true } })).map((user) => [user.id, user.displayName]))
   const personOf = (id: string | null) => (id && names.has(id) ? { id, name: names.get(id)! } : null)
   return rows.map((row) => {
-    const reason = words.get(row.reasonCode)?.labelEn ?? row.reasonCode
+    // B-PR-27a: a customer's pause in its own words.
+    const reason = plainHoldWordsOf(row, words.get(row.reasonCode)?.labelEn)
     return {
       id: row.id,
       workOrderId: row.workOrderId,
@@ -197,6 +200,8 @@ export async function placeWorkOrderHoldsInCommand(tools: CommandTools, input: P
     if (reason!.needsDetail && !note) refuse([{ path: 'note', message: `${reason!.labelEn} needs a note: say what is missing or wrong.` }], 'The reason needs a note.')
     reasonWordsEn = reason!.labelEn
   }
+  // B-PR-27a: a customer's pause (its accepted HOLD ask) shows its own words, never a code (factory-domain production-brand/accept).
+  if (input.kind === 'BRAND') reasonWordsEn = CUSTOMER_PAUSE_REASON.en
   const holdReason = plainHoldReason(reasonWordsEn)
 
   // The work orders' issue locks, then their gate locks, then their rows, each in id order; then every one is checked, then held.

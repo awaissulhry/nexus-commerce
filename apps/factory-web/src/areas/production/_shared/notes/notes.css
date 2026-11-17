@@ -1,0 +1,122 @@
+/*
+ * F-PR-22 — the note dialog (Ask the supervisor / Note to N). Layout only, semantic tokens. The box takes the threads kit's Office
+ * note colour (record-thread composer.css: warning-soft with the lock) and says it in words too (colour-blind safe).
+ */
+.fw-pnt {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-pnt-records {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-pnt-on {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--nds-space-6) var(--nds-space-12);
+  margin: 0;
+  padding: 0;
+  border: none;
+  min-width: 0;
+}
+
+.fw-pnt-legend {
+  font-weight: 700;
+}
+
+.fw-pnt-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+  padding: var(--nds-space-8) var(--nds-space-10);
+  border: 1px solid var(--nds-warning);
+  border-radius: var(--nds-radius-lg);
+  background: var(--nds-warning-soft);
+  min-width: 0;
+}
+
+.fw-pnt-box:focus-within {
+  box-shadow: 0 0 0 2px var(--nds-text);
+}
+
+.fw-pnt-mark {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--nds-space-6);
+  font-size: var(--nds-font-size-sm);
+  font-weight: 700;
+  color: var(--nds-warning-text);
+}
+
+.fw-pnt-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--nds-space-6);
+}
+
+/* The text box is the threads MentionInput (a DS Textarea): inside the coloured box the box itself is the field. */
+.fw-pnt-box .fw-pnt-text {
+  width: 100%;
+  min-height: 96px;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: var(--nds-text);
+  font: inherit;
+  padding: 0;
+}
+
+.fw-pnt-box .fw-pnt-text::placeholder {
+  color: var(--nds-placeholder);
+}
+
+.fw-pnt-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+}
+
+.fw-pnt-check {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-6);
+}
+
+.fw-pnt-line,
+.fw-pnt-hint {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-pnt-hint {
+  color: var(--nds-text-muted);
+}
+
+.fw-pnt-named {
+  margin: var(--nds-space-4) 0;
+  padding-left: var(--nds-space-16);
+}
+
+.fw-pnt-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-pnt-result {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}

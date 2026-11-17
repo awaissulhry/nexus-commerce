@@ -1,8 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, Lock, PackageCheck, PauseCircle, Printer, Unlock } from 'lucide-react'
-import { Card, EmptyState, MetricStrip, ProgressBar, SummaryTable } from '@nexus/ui/components'
+import { ArrowRight, Lock, PauseCircle, Printer, Unlock } from 'lucide-react'
+import { Card, EmptyState, Menu, MetricStrip, ProgressBar, SummaryTable } from '@nexus/ui/components'
 import { Button, Pill, Spinner, Tag } from '@nexus/ui/primitives'
 import { formatDate } from '../../../../../lib/i18n/format'
 import type { Locale } from '../../../../../lib/i18n/locales'
@@ -11,12 +11,14 @@ import type { ReadinessWord, WorkOrder } from '../../../_shared/api'
 import { quantityText } from '../../../_shared/model'
 import {
   DAILY_NAMESPACE,
-  finishHeld,
-  flowSteps,
   holdHeld,
   holdReasonWords,
+  leatherMaterials,
+  plainHoldsOf, // F-PR-05b
+  plainHoldWords, // F-PR-05b
   READINESS_TONE,
   readinessPhrase,
+  reserveHeld,
   scrapGroups,
   scrapTotals,
   yieldBars,
@@ -25,7 +27,6 @@ import {
   type Part,
   type ReadinessView,
 } from '../model'
-import type { WorkOrderWip } from '../../../_shared/api'
 import type { Phrase } from '../../../_shared/model'
 import type { ScrapRow } from '../api'
 import '../daily.css'
@@ -41,8 +42,8 @@ export function say(t: (key: string, params?: Record<string, string | number>) =
  * The work order's W2a parts (B-W2a-46), each a DS composition the record's tabs place: the readiness word (Pill),
  * the holds card (wo-side "holds (W2a)", Put on hold / Release the hold), Report finished to stock's card, the yield
  * (wo-yield: MetricStrip and a bar per hide; never by cutter), scrap, rework and holds grouped by operation and reason
- * (wo-scrap), and the OperationFlow (wo-flow: the operations as a row with the pile waiting before each — a part composed
- * here from DS Tag and ProgressBar, named "OperationFlow (new)" in the design). Views only: they fetch nothing.
+ * (wo-scrap), Reserve leather… (F-PR-06: on Materials and Cutting & bundles). The OperationFlow's piles went into the one
+ * operation table of Operations & WIP (F-PR-06). Views only: they fetch nothing.
  */
 
 const day = (value: string, locale: Locale) => formatDate(`${value.slice(0, 10)}T12:00:00Z`, { locale })
@@ -114,6 +115,9 @@ export function HoldsCard({ workOrder, daily, actions }: { workOrder: WorkOrder;
   const own = workOrder.hold ?? null
   const holds = daily.holds?.value ?? null
   const active = (holds ?? []).filter((hold) => hold.status === 'ACTIVE')
+  // F-PR-05b: the plain holds beside the quality ones (B-PR-21) — ours and a customer's accepted pause — and the ones lifted.
+  const plain = plainHoldsOf(daily.productionHolds?.value ?? null)
+  const nothing = active.length === 0 && plain.standing.length === 0
   return (
     <Card padded className="fw-pr-card">
       <div className="fw-pr-card-head">
@@ -124,22 +128,24 @@ export function HoldsCard({ workOrder, daily, actions }: { workOrder: WorkOrder;
           </Button>
         )}
       </div>
-      {/* The page's banner says the hold and where it goes back; here only a hold another record lifts. */}
-      {own && own.recordType && own.recordType !== 'QualityHold' && <p className="fw-pr-hint">{t('holds.underRecord')}</p>}
+      {/* The page's banner says the hold and where it goes back; here only a hold another record lifts (F-PR-05b: a plain hold is
+          one of this card's own, never "another record"). */}
+      {own && own.recordType && own.recordType !== 'QualityHold' && own.recordType !== 'WorkOrderHold' && <p className="fw-pr-hint">{t('holds.underRecord')}</p>}
       {daily.holds === null ? (
         <p className="fw-pr-hint">{t('holds.noRight')}</p>
       ) : !holds ? (
         <PartLine part={daily.holds} label={t('holds.title')} onRetry={() => actions?.onRetry?.('holds')} />
-      ) : active.length === 0 ? (
-        <p className="fw-pr-hint">{t('holds.none')}</p>
-      ) : (
+      ) : null}
+      {daily.productionHolds && !daily.productionHolds.value && <PartLine part={daily.productionHolds} label={t('holds.plainTitle')} onRetry={() => actions?.onRetry?.('productionHolds')} />}
+      {nothing && (holds || daily.holds === null) && (!daily.productionHolds || daily.productionHolds.value) ? <p className="fw-pr-hint">{t('holds.none')}</p> : null}
+      {!nothing && (
         <ul className="fw-wd-holds" aria-label={t('holds.title')}>
           {active.map((hold) => (
             <li key={hold.id} className="fw-wd-hold">
               <Lock size={16} className="fw-pr-ico is-blocked" aria-hidden />
               <span className="fw-pr-check-body">
                 <span>
-                  <b>{holdReasonWords(hold.reasonCode, daily.reasons, locale)}</b> — {t('holds.since', { date: day(hold.placedAt, locale), count: hold.ageDays })}
+                  <Tag tone="warning">{t('holds.kind.QUALITY')}</Tag> <b>{holdReasonWords(hold.reasonCode, daily.reasons, locale)}</b> — {t('holds.since', { date: day(hold.placedAt, locale), count: hold.ageDays })}
                   {hold.overdue && (
                     <>
                       {' '}
@@ -155,36 +161,70 @@ export function HoldsCard({ workOrder, daily, actions }: { workOrder: WorkOrder;
               </Button>
             </li>
           ))}
+          {/* ---- F-PR-05b: the plain holds standing (ours: the reason, the office's note marked Office only, what the customer reads;
+              the customer's accepted pause), each lifted here with why (workorders.hold) ---- */}
+          {plain.standing.map((hold) => (
+            <li key={hold.id} className="fw-wd-hold">
+              <Lock size={16} className="fw-pr-ico is-blocked" aria-hidden />
+              <span className="fw-pr-check-body">
+                <span>
+                  <Tag tone={hold.kind === 'BRAND' ? 'info' : 'neutral'}>{t(`holds.kind.${hold.kind}`)}</Tag> <b>{hold.kind === 'BRAND' ? t('holds.customerPause') : plainHoldWords(hold, daily.reasons, locale)}</b> —{' '}
+                  {t('holds.since', { date: day(hold.placedAt, locale), count: daysSince(hold.placedAt) })}
+                  {hold.placedBy ? ` · ${t('holds.by', { name: hold.placedBy.name })}` : ''}
+                </span>
+                {hold.note && (
+                  <span className="fw-pr-hint">
+                    <Lock size={11} aria-hidden /> {t('holds.officeOnly')}: {hold.note}
+                  </span>
+                )}
+                <span className="fw-pr-hint">{t('holds.customerReads', { words: hold.customerReads })}</span>
+              </span>
+              <Button size="sm" variant="quiet" heldReason={daily.can.productionHold ? null : t('held.noProductionHold')} onClick={() => actions?.onDialog?.({ kind: 'liftHold', holdId: hold.id })}>
+                <Unlock size={13} aria-hidden /> {t('holds.release')}
+              </Button>
+            </li>
+          ))}
         </ul>
       )}
-      <p className="fw-pr-hint">{t('holds.hint')}</p>
+      {plain.lifted.length > 0 && (
+        <ul className="fw-pr-list" aria-label={t('holds.liftedTitle')}>
+          {plain.lifted.slice(0, 5).map((hold) => (
+            <li key={hold.id} className="fw-pr-hint">
+              {t('holds.lifted', {
+                reason: hold.kind === 'BRAND' ? t('holds.customerPause') : plainHoldWords(hold, daily.reasons, locale),
+                date: hold.liftedAt ? day(hold.liftedAt, locale) : '—',
+                name: hold.liftedBy?.name ?? t('holds.someone'),
+                why: hold.liftReason ?? '—',
+              })}
+            </li>
+          ))}
+        </ul>
+      )}
+      {/* ---- end F-PR-05b */}
+      <p className="fw-pr-hint">{daily.productionHolds ? t('holds.hintBoth') : t('holds.hint')}</p>
     </Card>
   )
 }
 
+/** Whole days since an instant (a plain hold's age; the quality API counts its own). */
+const daysSince = (at: string): number => Math.max(0, Math.floor((Date.now() - new Date(at).getTime()) / 86_400_000))
+
 // ---- report finished to stock (wo-finish; wo-bundles "W2a Report finished to stock") ---------------------------------------------
 
-// F-PR-05a: `inBand` — Report finished is the work order band's primary while garments wait (it moved out of the Bundles tab): the
-// card keeps its figures and says where the button is.
-export function FinishedCard({ workOrder, daily, actions, inBand = false }: { workOrder: WorkOrder; daily: DailyModel; actions?: DailyActions; inBand?: boolean }) {
+// F-PR-05a: Report finished is the work order band's primary while garments wait (it moved out of the Bundles tab). F-PR-06: the
+// card on Cutting & bundles keeps the figures only — ONE Report finished button per page, the band's — and says where it is.
+export function FinishedCard({ daily, actions }: { daily: DailyModel; actions?: DailyActions }) {
   const t = useT(DAILY_NAMESPACE)
   const locale = useLocale()
   const part = daily.finished
   if (!part) return null
   const finished = part.value
-  const held = finishHeld(workOrder, finished, daily.can)
-  const heldWords = say(t, held)
   return (
     <Card padded className="fw-pr-card">
       <div className="fw-pr-card-head">
         <h2 className="fw-pr-h2">{t('finished.title')}</h2>
-        {!inBand && (
-          <Button size="sm" variant="primary" heldReason={heldWords} onClick={() => actions?.onDialog?.({ kind: 'finish' })}>
-            <PackageCheck size={14} aria-hidden /> {finished && finished.garments.canReport > 0 ? t('finished.report', { count: finished.garments.canReport }) : t('finished.reportNone')}
-          </Button>
-        )}
       </div>
-      {inBand && <p className="fw-pr-hint">{t('finished.inBand')}</p>}
+      <p className="fw-pr-hint">{t('finished.inBand')}</p>
       {!finished ? (
         <PartLine part={part} label={t('finished.title')} onRetry={() => actions?.onRetry?.('finished')} />
       ) : (
@@ -216,6 +256,28 @@ export function FinishedCard({ workOrder, daily, actions, inBand = false }: { wo
       )}
     </Card>
   )
+}
+
+// ---- Reserve leather… (wo-leather: the Find hides dialog) -------------------------------------------------------------------------
+
+/**
+ * Reserve leather… for the work order's leathers (one: a button; more: a menu, a leather each), held with its reason. F-PR-06: on
+ * Materials and on Cutting & bundles' hides (the Cut record's Allocate hides), the same dialog and the same reservation.
+ */
+export function ReserveLeather({ workOrder, daily, actions }: { workOrder: WorkOrder; daily: DailyModel; actions?: DailyActions }) {
+  const t = useT(DAILY_NAMESPACE)
+  const leathers = leatherMaterials(workOrder)
+  const wait = say(t, reserveHeld(workOrder, daily.can))
+  const reserve = (material: (typeof leathers)[number]) => actions?.onDialog?.({ kind: 'reserve', itemId: material.itemId, itemColourId: material.itemColourId ?? null })
+  if (leathers.length === 0) return null
+  if (leathers.length === 1) {
+    return (
+      <Button size="sm" heldReason={wait} onClick={() => reserve(leathers[0]!)}>
+        {t('reserve.button')}
+      </Button>
+    )
+  }
+  return <Menu label={t('reserve.button')} align="right" items={leathers.map((material) => ({ id: `${material.itemId}:${material.itemColourId ?? ''}`, label: [material.itemCode, material.colourCode].filter(Boolean).join(' · '), disabled: !!wait, description: wait ?? undefined, onSelect: () => reserve(material) }))} />
 }
 
 // ---- yield (wo-yield) -------------------------------------------------------------------------------------------------------------
@@ -337,44 +399,6 @@ function ScrapBody({ rows, holds, locale }: { rows: ScrapRow[]; holds: number; l
       )}
       <p className="fw-pr-hint">{t('scrap.hint')}</p>
     </>
-  )
-}
-
-// ---- the operation flow (wo-flow "W2a OperationFlow") -------------------------------------------------------------------------
-
-export function OperationFlow({ wip }: { wip: WorkOrderWip | null }) {
-  const t = useT(DAILY_NAMESPACE)
-  const steps = flowSteps(wip)
-  if (steps.length === 0) return null
-  return (
-    <Card padded className="fw-pr-card">
-      <div className="fw-pr-card-head">
-        <h2 className="fw-pr-h2">{t('flow.title')}</h2>
-        <span className="fw-pr-hint">{t('flow.hint')}</span>
-      </div>
-      <ol className="fw-wd-flow" aria-label={t('flow.title')}>
-        {steps.map((step) => (
-          <li key={step.seq} className={step.bottleneck ? 'fw-wd-flow-step is-bottleneck' : 'fw-wd-flow-step'}>
-            <span className="fw-wd-pile" aria-label={t('flow.waitingLabel', { count: step.waiting, code: step.code })}>
-              <span className="fw-wd-pile-n">{step.waiting}</span>
-              <span className="fw-pr-cell-sub">{t('flow.waiting')}</span>
-            </span>
-            <span className="fw-wd-op">
-              <span className="fw-pr-code">
-                {step.seq} · {step.code}
-              </span>
-              <span className="fw-pr-cell-sub fw-pr-ellipsis">{step.name}</span>
-              <span className="fw-wd-row">
-                <Tag tone="success">{t('flow.good', { count: step.good })}</Tag>
-                {step.scrap > 0 && <Tag tone="danger">{t('flow.scrap', { count: step.scrap })}</Tag>}
-                {step.rework > 0 && <Tag tone="warning">{t('flow.rework', { count: step.rework })}</Tag>}
-              </span>
-              {step.bottleneck && <Tag tone="warning">{t('flow.bottleneck')}</Tag>}
-            </span>
-          </li>
-        ))}
-      </ol>
-    </Card>
   )
 }
 

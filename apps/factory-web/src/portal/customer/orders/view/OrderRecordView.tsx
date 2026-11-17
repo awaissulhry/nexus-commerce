@@ -8,6 +8,9 @@ import type { ApprovalPage, ChangeRequest, DocumentsRead, OrderRecord, ProgressR
 import type { RecordTab } from '../model'
 import { useOrderWords } from '../words'
 import type { ProductionOrder } from '../../production/api' // F-PR-12a
+import type { ProductionQuality } from '../../production/api' // F-PR-12c
+import { QualityPhotoDialog, type QualityCardActions, type QualityPhotoModel } from './QualityCard' // F-PR-12c
+import { AskDialog, type AskDialogActions, type AskDialogModel } from './AskDialog' // F-PR-13
 // ---- B-TH-275: the order docks its conversation (the portal record frame, B-TH-273): no Messages tab, no Ask modal.
 import { PortalRecordFrame } from '../../../shell/record/PortalRecordFrame'
 import type { PortalFrameMode } from '../../../shell/record/model'
@@ -39,6 +42,10 @@ export type OrderDialog =
   | { kind: 'reconfirm'; model: ReconfirmDialogModel }
   | { kind: 'pay'; model: PayDialogModel }
   | { kind: 'preview'; model: PreviewModel }
+  // F-PR-12c: a photo the factory shared on the order, full size (Status & progress › Quality and photos).
+  | { kind: 'photo'; model: QualityPhotoModel }
+  // F-PR-13: the Ask dialog (what, the details of a production ask, what it means before Send).
+  | { kind: 'ask'; model: AskDialogModel }
 
 export interface OrderRecordViewModel {
   /** B-W2b-374 (XF3:04): the lines' options and artwork (OrderPage mounts PortalLineOptions), drawn on the Lines tab. */
@@ -93,9 +100,13 @@ export interface OrderRecordViewModel {
   /** Where "See what waits for you" leads (Waiting for you once built, until then Home). */
   waitingHref?: string | null
   // ---- end F-PR-12a
+  // ---- F-PR-12c: + Quality & photos (GET /portal/production/:orderId/quality, B-PR-19), read only at the level that shares it
+  /** `hidden`: the level does not share it, not in production, not its order or not part of its access: not drawn; absent: the same. */
+  quality?: { state: 'loading' | 'error' | 'ready' | 'hidden'; read: ProductionQuality | null }
+  // ---- end F-PR-12c
 }
 
-export interface OrderRecordActions {
+export interface OrderRecordActions extends QualityCardActions /* F-PR-12c: onRetryQuality, onReport, onPhoto */ {
   onRetry?: () => void
   onRetryRevision?: () => void
   onRetryProgress?: () => void
@@ -123,6 +134,10 @@ export interface OrderRecordActions {
     reconfirm?: ReconfirmDialogActions
     pay?: PayDialogActions
     preview?: { onClose?: () => void; onDownload?: () => void; onRetry?: () => void }
+    // F-PR-12c
+    photo?: { onIndex?: (index: number) => void; onClose?: () => void; onRetry?: () => void }
+    // F-PR-13
+    ask?: AskDialogActions
   }
 }
 
@@ -178,6 +193,10 @@ export function OrderRecordView({ model, actions, children }: { model: OrderReco
         {dialog?.kind === 'reconfirm' ? <ReconfirmDialog model={dialog.model} actions={actions?.dialog?.reconfirm} /> : null}
         {dialog?.kind === 'pay' ? <PayDialog model={dialog.model} actions={actions?.dialog?.pay} /> : null}
         {dialog?.kind === 'preview' ? <PreviewDialog model={dialog.model} onClose={actions?.dialog?.preview?.onClose} onDownload={actions?.dialog?.preview?.onDownload} onRetry={actions?.dialog?.preview?.onRetry} /> : null}
+        {/* F-PR-12c */}
+        {/* F-PR-13 */}
+        {dialog?.kind === 'ask' ? <AskDialog model={dialog.model} actions={actions?.dialog?.ask} /> : null}
+        {dialog?.kind === 'photo' ? <QualityPhotoDialog model={dialog.model} onIndex={actions?.dialog?.photo?.onIndex} onClose={actions?.dialog?.photo?.onClose} onRetry={actions?.dialog?.photo?.onRetry} /> : null}
       </div>
     </PortalRecordFrame>
   )

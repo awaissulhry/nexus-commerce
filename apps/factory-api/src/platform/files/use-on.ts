@@ -47,6 +47,8 @@ export const USE_ON_WORDS = Object.freeze({
   otherParty: (name: string) => `${name} belongs to another customer's record: a file is carried only to a record of the same customer, or to one of no customer.`,
   sameRecord: 'The file is on this record already.',
   ownedTarget: "This record's files are kept by its own screen: add the file there.",
+  // END CHECK (fix wave 3c): the files.manage refusal in words (it was "You may not do this.").
+  shareNeedsManage: "Sharing the copy with the record's customer needs the right to manage files: carry it for the office only, or ask a colleague who may.",
 })
 
 export async function useFileOn(runtime: FilesRuntime, caller: CommandCaller, fileId: string, body: UseOnBody, idempotencyKey?: string): Promise<{ file: FileView }> {
@@ -78,7 +80,13 @@ export async function useFileOn(runtime: FilesRuntime, caller: CommandCaller, fi
   const sharing = await withRecordParty(caller, body, { visibility: normaliseVisibility(body.visibility ?? ['OFFICE']), companyId: target.companyId ?? null, floorSiteId: null, partyId: null })
   mayWrite(caller, FILES_UPLOAD, sharing)
   // B-TH-231: shared beyond the office it is files.manage, as at upload and afterwards (COL-050).
-  if (sharing.visibility.length > 1) mayWrite(caller, FILES_MANAGE, sharing)
+  // END CHECK (fix wave 3c; B-TH-025/026 on B-TH-231): a copy shared as its source already is — with the same customer's portal —
+  // tells that customer nothing new, so files.upload carries it (the carry of Make order and Make style draft, done by sales or
+  // the production manager, who share nothing anew). Shared anew (an office-only source, a link, another party) it is files.manage,
+  // refused in words.
+  const keepsItsSharing = source.partyId !== null && source.partyId === sharing.partyId && source.visibility.includes('PARTNER') && sharing.visibility.every((audience) => audience === 'OFFICE' || audience === 'PARTNER')
+  if (sharing.visibility.length > 1 && !keepsItsSharing && !can(actor, FILES_MANAGE, { companyId: sharing.companyId, siteId: sharing.floorSiteId, partyId: sharing.partyId })) throw new ForbiddenError(USE_ON_WORDS.shareNeedsManage)
+  // ---- end END CHECK
   const prepared = await prepareFileCopy(runtime, caller, source.id, { companyId: sharing.companyId, recordType: body.recordType, recordId: body.recordId, kind, visibility: sharing.visibility, floorSiteId: null, partyId: sharing.partyId })
   const { result } = await command(caller, { name: 'files.useOn', idempotencyKey, input: { fileId, ...body } }, async (tools) => {
     const file = await recordGeneratedFile(tools, prepared, {

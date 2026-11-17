@@ -6,11 +6,11 @@ import { HIDE_STATES, WORK_ORDER_STATUSES } from '../_shared/api'
 /**
  * The cutting office (B-W2a-60; SCR-238): every call of its screens, each answer checked by its schema — the cuts across
  * work orders with the tiles (`GET /production/cutting/cuts`, production.cutting.view), the room's yield of a day
- * (`GET /production/yield`), a work order's yield (`GET /production/yield/work-orders/:id`), its recuts
- * (`/production/replacements`, production.scrap.view; done by a cut log entry with production.scrap), the hides
- * allocated to it (`GET /inventory/reservations`, inventory.stock.view) and the void of a bundle
- * (`POST /production/bundles/:id/void`). The cut log, the bundles and their reprint are the work order's own calls
- * (`_shared/api.ts`); the Find hides dialog's availability and reserve are the work order's too (`work-orders/daily/api.ts`).
+ * (`GET /production/yield`), the shape of a work order's yield (read by the work order, `work-orders/daily/api.ts`) and a
+ * work order's recuts (`/production/replacements`, production.scrap.view; done by a cut log entry with production.scrap: the
+ * work order's Cutting & bundles tab, F-PR-06). The cut log, the bundles and their reprint are the work order's own calls
+ * (`_shared/api.ts`); the Find hides dialog's availability and reserve are the work order's too (`work-orders/daily/api.ts`);
+ * a bundle is voided on its own record (Production › Bundles).
  * No money is read here: areas, pieces and percentages only.
  */
 
@@ -98,11 +98,6 @@ export const workOrderYieldSchema = z.object({
 })
 export type WorkOrderYield = z.infer<typeof workOrderYieldSchema>
 
-/** workorders.view: a work order's hides, its yield against its style's plan (never by cutter). */
-export function getWorkOrderYield(api: ApiClient, workOrderId: string, signal?: AbortSignal): Promise<WorkOrderYield> {
-  return api.get(`/production/yield/work-orders/${encodeURIComponent(workOrderId)}`, { schema: workOrderYieldSchema, signal })
-}
-
 /** production.cutting.view: the room's yield between two instants (the tile "Yield today vs plan"). */
 export async function roomYield(api: ApiClient, range: { from: string; to: string }, signal?: AbortSignal): Promise<YieldFigures> {
   return (await api.get('/production/yield', { query: { from: range.from, to: range.to }, schema: z.object({ overall: yieldFiguresSchema }), signal })).overall
@@ -134,7 +129,7 @@ export const replacementSchema = z.object({
 })
 export type Replacement = z.infer<typeof replacementSchema>
 
-/** production.scrap.view: the work order's recuts, open and done (its Pieces tab). */
+/** production.scrap.view: the work order's recuts, open and done (its Cutting & bundles tab). */
 export async function getRecuts(api: ApiClient, workOrderId: string, signal?: AbortSignal): Promise<Replacement[]> {
   return (await api.get('/production/replacements', { query: { workOrderId, kind: 'RECUT', status: 'OPEN,DONE', limit: 200 }, schema: z.object({ replacements: z.array(replacementSchema) }), signal })).replacements
 }
@@ -142,30 +137,4 @@ export async function getRecuts(api: ApiClient, workOrderId: string, signal?: Ab
 /** production.scrap: a recut cut by this cut log entry (an entry of its cell, with pieces of its part). */
 export function recutDone(api: ApiClient, replacementId: string, body: { version: number; cutLogId: string }, idempotencyKey = newIdempotencyKey()) {
   return api.post(`/production/replacements/${encodeURIComponent(replacementId)}/done`, { body, schema: z.object({ replacement: replacementSchema }), idempotencyKey })
-}
-
-// ---- hides allocated (reservations, B-W2a-11) --------------------------------------------------------------------------------
-
-export const allocationSchema = z.object({
-  id: z.string(),
-  status: z.enum(['ACTIVE', 'ISSUED', 'RELEASED']),
-  hide: z.object({ id: z.string(), code: z.string() }).nullable(),
-  lot: z.object({ id: z.string(), code: z.string(), qualityStatus: z.string() }).nullable(),
-  item: z.object({ id: z.string(), code: z.string(), baseUom: z.string() }).passthrough(),
-  quantity: z.string(),
-  createdAt: z.string(),
-})
-export type Allocation = z.infer<typeof allocationSchema>
-
-/** inventory.stock.view: the hides reserved whole for the work order and not issued yet. */
-export async function getAllocated(api: ApiClient, workOrderId: string, signal?: AbortSignal): Promise<Allocation[]> {
-  const page = await api.get('/inventory/reservations', { query: { workOrderId, status: 'ACTIVE', limit: 200 }, schema: z.object({ reservations: z.array(allocationSchema.passthrough()) }), signal })
-  return page.reservations.filter((row) => row.hide !== null)
-}
-
-// ---- tickets --------------------------------------------------------------------------------------------------------------------
-
-/** production.bundles: a bundle made by mistake, voided before any scan (its ticket no longer scans). */
-export function voidBundle(api: ApiClient, bundleId: string, reason: string, idempotencyKey = newIdempotencyKey()) {
-  return api.post(`/production/bundles/${encodeURIComponent(bundleId)}/void`, { body: { reason }, schema: z.object({ bundle: z.object({ id: z.string() }).passthrough() }), idempotencyKey })
 }

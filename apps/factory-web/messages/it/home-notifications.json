@@ -211,6 +211,7 @@
   "w": {
     "notifications": {
       "mentioned": "{actor} ti ha menzionato su {record}",
+      "mentionedOn": "{actor} ti ha menzionato su {records} ordini",
       "following": {
         "note": "{actor} ha scritto una nota su {record}, che segui",
         "mail_in": "È arrivata una risposta su {record}, che segui",
@@ -315,7 +316,11 @@
         "supervisorOfOrder": "Sei il supervisore di produzione dell’ordine {record}",
         "supervisorOfOrders": "Sei il supervisore di produzione di {count} ordini di {record}",
         "supervisorOfCustomer": "Sei il supervisore di produzione di {record}",
-        "backupOfCustomer": "Sei il sostituto del supervisore di produzione di {record}"
+        "backupOfCustomer": "Sei il sostituto del supervisore di produzione di {record}",
+        "problemReported": "{customer} ha segnalato un problema su {record}: rispondi nella conversazione dell’ordine",
+        "problemReportedMany": "{customer} ha segnalato un problema su {count} ordini: rispondi nella conversazione di {record}",
+        "issueEscalatedBackup": "Senza risposta da 1 giorno lavorativo su {record} ({customer}): ora tocca a te",
+        "issueEscalatedOwner": "Senza risposta da 2 giorni lavorativi su {record} ({customer}): ora tocca al titolare e all’amministratore"
       }
     },
     "fallback": "Novità su {record}",

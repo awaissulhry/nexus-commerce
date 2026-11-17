@@ -123,7 +123,7 @@ export interface ReturnFacts {
 
 /** What happens next on a return, in the customer's words. */
 export function returnNextStep(facts: ReturnFacts): NextStep {
-  if (facts.openTask && isOpenReturn(facts.status)) return { forYou: true, code: 'ANSWER_US', words: { en: 'We asked you something: answer us in the messages.', it: 'Ti abbiamo chiesto qualcosa: rispondici nei messaggi.' } }
+  if (facts.openTask && isOpenReturn(facts.status)) return { forYou: true, code: 'ANSWER_US', words: { en: 'We asked you something: answer us in the messages.', it: 'Vi abbiamo chiesto qualcosa: rispondeteci nei messaggi.' } }
   switch (facts.status) {
     case 'REQUESTED':
       return {
@@ -138,8 +138,8 @@ export function returnNextStep(facts: ReturnFacts): NextStep {
         forYou: true,
         code: 'SEND_IT_BACK',
         words: facts.goodsDueBy
-          ? { en: `Print the return instructions and send it back by ${dayWords(facts.goodsDueBy, 'en')}.`, it: `Stampa le istruzioni di reso e rispediscilo entro il ${dayWords(facts.goodsDueBy, 'it')}.` }
-          : { en: 'Print the return instructions and send it back.', it: 'Stampa le istruzioni di reso e rispediscilo.' },
+          ? { en: `Print the return instructions and send it back by ${dayWords(facts.goodsDueBy, 'en')}.`, it: `Stampate le istruzioni di reso e rispeditelo entro il ${dayWords(facts.goodsDueBy, 'it')}.` }
+          : { en: 'Print the return instructions and send it back.', it: 'Stampate le istruzioni di reso e rispeditelo.' },
       }
     case 'RECEIVED':
       return { forYou: false, code: 'WE_INSPECT', words: { en: 'We received the goods and are inspecting them.', it: 'Abbiamo ricevuto la merce e la stiamo controllando.' } }
@@ -160,11 +160,11 @@ export function returnNextStep(facts: ReturnFacts): NextStep {
 
 /** What a decided line gives the customer (never the internal cause, a stock move or an amount). */
 export const DISPOSITION_WORDS: Readonly<Record<ReturnDisposition, Words>> = Object.freeze({
-  REPAIR: { en: 'We repair it and send it back', it: 'Lo ripariamo e te lo rispediamo' },
+  REPAIR: { en: 'We repair it and send it back', it: 'Lo ripariamo e ve lo rispediamo' },
   REMAKE: { en: 'We make it again', it: 'Lo rifacciamo' },
   REPLACE: { en: 'A replacement', it: 'Una sostituzione' },
   CREDIT_ONLY: { en: 'A credit note', it: 'Una nota di credito' },
-  RETURN_UNCHANGED: { en: 'Sent back to you as it came', it: 'Ti viene rispedito com’è arrivato' },
+  RETURN_UNCHANGED: { en: 'Sent back to you as it came', it: 'Vi viene rispedito com’è arrivato' },
   SCRAP: { en: 'Not sent back', it: 'Non viene rispedito' },
   // B-W2b-346 (SAL-351).
   SIZE_EXCHANGE: { en: 'The same garment in another size', it: 'Lo stesso capo in un’altra taglia' },
@@ -240,8 +240,8 @@ export function returnMilestones(facts: MilestoneFacts): Milestone[] {
 export function decisionWords(facts: Pick<ReturnFacts, 'status' | 'goodsDueBy' | 'rejectReason'> & { readonly authorised: boolean }): Words | null {
   if (facts.authorised) {
     return facts.goodsDueBy
-      ? { en: `Approved: send it back by ${dayWords(facts.goodsDueBy, 'en')}.`, it: `Approvato: rispediscilo entro il ${dayWords(facts.goodsDueBy, 'it')}.` }
-      : { en: 'Approved: send it back.', it: 'Approvato: rispediscilo.' }
+      ? { en: `Approved: send it back by ${dayWords(facts.goodsDueBy, 'en')}.`, it: `Approvato: rispeditelo entro il ${dayWords(facts.goodsDueBy, 'it')}.` }
+      : { en: 'Approved: send it back.', it: 'Approvato: rispeditelo.' }
   }
   if (facts.status === 'REJECTED') return facts.rejectReason ? { en: `Not accepted: ${facts.rejectReason}`, it: `Non accettato: ${facts.rejectReason}` } : { en: 'Not accepted.', it: 'Non accettato.' }
   return null
@@ -250,7 +250,7 @@ export function decisionWords(facts: Pick<ReturnFacts, 'status' | 'goodsDueBy' |
 /** Why the customer may not cancel a return now (null: it may): only before the goods leave them. */
 export function cancelHeld(status: ReturnStatus): Words | null {
   if (status === 'REQUESTED' || status === 'AUTHORISED') return null
-  if (status === 'RECEIVED' || status === 'INSPECTED') return { en: 'The goods are with us already: write to us in the messages instead.', it: 'La merce è già da noi: scrivici nei messaggi.' }
+  if (status === 'RECEIVED' || status === 'INSPECTED') return { en: 'The goods are with us already: write to us in the messages instead.', it: 'La merce è già da noi: scriveteci nei messaggi.' }
   return { en: 'This return is closed already.', it: 'Questo reso è già chiuso.' }
 }
 
@@ -289,7 +289,7 @@ export interface ComplaintFacts {
 }
 
 export function complaintNextStep(facts: ComplaintFacts): NextStep {
-  if (facts.openTask && facts.status !== 'CLOSED') return { forYou: true, code: 'ANSWER_US', words: { en: 'We asked you something: answer us in the messages.', it: 'Ti abbiamo chiesto qualcosa: rispondici nei messaggi.' } }
+  if (facts.openTask && facts.status !== 'CLOSED') return { forYou: true, code: 'ANSWER_US', words: { en: 'We asked you something: answer us in the messages.', it: 'Vi abbiamo chiesto qualcosa: rispondeteci nei messaggi.' } }
   switch (facts.status) {
     case 'NEW':
     case 'TRIAGED':
@@ -303,7 +303,7 @@ export function complaintNextStep(facts: ComplaintFacts): NextStep {
       }
     case 'ANSWERED':
       return facts.readsAnswer
-        ? { forYou: true, code: 'READ_ANSWER', words: { en: 'We answered: read our letter.', it: 'Abbiamo risposto: leggi la nostra lettera.' } }
+        ? { forYou: true, code: 'READ_ANSWER', words: { en: 'We answered: read our letter.', it: 'Abbiamo risposto: leggete la nostra lettera.' } }
         : { forYou: false, code: 'ANSWERED', words: { en: 'We answered your quality contact.', it: 'Abbiamo risposto al vostro referente qualità.' } }
     case 'CLOSED':
       return { forYou: false, code: 'DONE', words: { en: 'Closed.', it: 'Chiuso.' } }

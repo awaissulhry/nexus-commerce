@@ -1,7 +1,7 @@
 import { createElement } from 'react'
 import { defineDesignScreen } from '../../../lib/design/design-screen'
 import type { OpenLines, OrderOption, WorkOrderRow } from '../_shared/api'
-import { at, canOf, COUNTS, inShell, LIST_ROWS, OPEN_ROWS, PREFIX, type Role } from '../_shared/fixtures'
+import { at, canOf, COUNTS, inShell, LIST_ROWS, OPEN_ROWS, PREFIX, /* F-PR-22 */ ROLES, type Role } from '../_shared/fixtures'
 import { NO_NEW_ORDER, type NewWorkOrderModel, type WorkOrdersListModel } from './list-model'
 import { WorkOrdersListView } from './view/WorkOrdersListView'
 import { DAILY_ROLE_OF, dailyDemo } from './daily/demo/fixtures'
@@ -9,6 +9,10 @@ import type { ReadinessRow } from './daily/api'
 import type { ReleasePreviewRow } from './every-shift/api'
 // F-PR-03: the list by risk (made-up customers, orders, POs, risks and waits).
 import type { CustomerFilterState } from '../_shared/customer/model'
+// F-PR-21
+import { targetsOfRows, type AssignSupervisorModel } from '../../_shared/production-supervisor/model'
+// F-PR-22: THE note dialog (made-up records, people, check answers and a result).
+import { NOTE_CHECK_HOLD, NOTE_RESULT, noteModel } from '../_shared/notes/fixtures'
 
 /**
  * SCR-069 — Work orders (design production.workorders) with made-up data only: every state of the list (loading, error,
@@ -72,12 +76,40 @@ const base = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => 
     // B-W2a-46: the readiness word per row, Hold N.
     readiness: READINESS_ROWS,
     daily: dailyDemo(DAILY_ROLE_OF[role]),
+    // F-PR-22: "Note to N…" and a row's "Office note…" (threads.post).
+    noteCan: (ROLES[role] as readonly string[]).includes('threads.post'),
     ...over,
   },
 })
 
 /** F-PR-03: a case of the list by risk (rows with their risk, the customer filter, the tiles with At risk and Waiting on customer). */
 const risky = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => base(role, { sort: 'risk', rows: { items: RISK_OPEN, more: false, problem: null }, counts: RISK_COUNTS, customers: CUSTOMERS, now: NOW, ...over })
+
+// ---- F-PR-21: the production supervisor on Work orders (made-up): the column says Me / Someone else / Not set (never a name), the
+// Mine tile (`?supervisor=me`), "Assign supervisor…" on a selection of two customers' work orders, THE assign dialog's states.
+const MARKS = ['ME', 'SOMEONE_ELSE', 'NOT_SET'] as const
+const SUPERVISED_ROWS: WorkOrderRow[] = RISK_OPEN.map((row, index) => ({ ...row, supervisor: row.customer ? MARKS[index % MARKS.length]! : null }))
+const SUPERVISED_COUNTS = { ...RISK_COUNTS, mine: SUPERVISED_ROWS.filter((row) => row.supervisor === 'ME').length }
+const PICKED = [SUPERVISED_ROWS.find((row) => row.customer?.id === ALPHA.id)!, SUPERVISED_ROWS.find((row) => row.customer?.id === BETA.id)!]
+const PICKED_TARGETS = targetsOfRows(PICKED, true).targets
+const ME = { id: '0190f0e2-7777-7000-8000-000000000001', name: 'Alex Demo', me: true }
+const BEA = { id: '0190f0e2-7777-7000-8000-000000000002', name: 'Bea Esempio', me: false }
+const assignOf = (over: Partial<AssignSupervisorModel> = {}): AssignSupervisorModel => ({ targets: PICKED_TARGETS, leftOut: 0, current: null, people: { status: 'ready', people: [ME, BEA], complete: true }, busy: false, problem: null, result: null, ...over })
+const supervised = (role: Role, over: Partial<WorkOrdersListModel> = {}): ListCase => risky(role, { rows: { items: SUPERVISED_ROWS, more: false, problem: null }, counts: SUPERVISED_COUNTS, supervisorCan: { manage: role === 'manager' || role === 'owner' }, ...over })
+// ---- end F-PR-21
+
+// ---- F-PR-18: the customer's urgency per row (made-up): Urgent 2 (its place in the customer's OWN list), Urgent – asked, Regular, Set
+// to regular by us, and none (no order whose urgency counts) — the column under Columns ▾ and the Customer urgency filter.
+const URGENCY_STATES = [
+  { urgencyState: 'URGENT', customerUrgency: 'URGENT', urgentRank: 2 },
+  { urgencyState: 'ASKED', customerUrgency: 'REGULAR', urgentRank: null },
+  { urgencyState: 'REGULAR', customerUrgency: 'REGULAR', urgentRank: null },
+  { urgencyState: 'SET_BACK', customerUrgency: 'REGULAR', urgentRank: null },
+  { urgencyState: null, customerUrgency: null, urgentRank: null },
+] as const
+export const URGENCY_ROWS: WorkOrderRow[] = RISK_OPEN.map((row, index) => ({ ...row, ...(row.customer ? URGENCY_STATES[index % URGENCY_STATES.length]! : URGENCY_STATES[4]) }))
+// ---- end F-PR-18
+
 
 const WORDS: ReadinessRow['word'][] = ['NOT_BOOKED', 'EXPECTED', 'NOT_ENOUGH', 'RECEIVED', 'REQUESTED', 'DELAYED', 'NOT_PLANNED']
 const READINESS_ROWS: Record<string, ReadinessRow> = Object.fromEntries(
@@ -210,5 +242,49 @@ export const designScreen = defineDesignScreen<ListCase>({
     { id: 'risk-limited', label: 'F-PR-03 · An office person limited to one customer: All my customers, its code (no parties.view), nothing of the other', model: risky('sales', { customers: { options: [BETA], party: null, everyCustomer: false, names: false }, counts: GROUP_COUNTS[BETA.id], rows: { items: RISK_OPEN.filter((row) => row.customer?.id === BETA.id), more: false, problem: null } }) },
     { id: 'risk-board', label: 'F-PR-03 · Board by state: each card the customer code, its health and who it waits on', model: risky('manager', { mode: 'board', view: 'all', rows: { items: RISK_ROWS, more: false, problem: null }, today: '2026-10-29' }) },
     { id: 'risk-no-match', label: 'F-PR-03 · Blocked by Hold matches nothing: Clear filters (the sort and the grouping stay)', model: risky('manager', { blockedBy: 'HOLD', rows: { items: [], more: false, problem: null } }) },
+    // ---- F-PR-21 ----
+    { id: 'supervisor-column', label: 'F-PR-21 · The Supervisor column: Me / Someone else / Not set (names only inside one record); the Mine tile', model: supervised('manager') },
+    { id: 'supervisor-mine', label: 'F-PR-21 · Mine pressed (`?supervisor=me`): the work orders I supervise; the export and a saved view follow it', model: supervised('manager', { supervisor: 'me', rows: { items: SUPERVISED_ROWS.filter((row) => row.supervisor === 'ME'), more: false, problem: null } }) },
+    { id: 'supervisor-selected', label: 'F-PR-21 · Two customers\u2019 work orders selected: Assign supervisor… in the bar', model: supervised('manager', { selected: PICKED.map((row) => row.id) }) },
+    { id: 'supervisor-held', label: 'F-PR-21 · Without production.brand.manage: Assign supervisor… held in words', model: supervised('sales', { selected: PICKED.map((row) => row.id) }) },
+    { id: 'supervisor-assign', label: 'F-PR-21 · THE assign dialog: the orders named, 2 customers, only people allowed on both, Customer default', model: supervised('manager', { selected: PICKED.map((row) => row.id), assign: assignOf() }) },
+    { id: 'supervisor-assign-loading', label: 'F-PR-21 · The assign dialog while it reads who may supervise', model: supervised('manager', { assign: assignOf({ people: { status: 'loading' } }) }) },
+    { id: 'supervisor-assign-failed', label: 'F-PR-21 · The assign dialog: who may supervise could not be read (Try again)', model: supervised('manager', { assign: assignOf({ people: { status: 'error', problem: 'problem.people' } }) }) },
+    { id: 'supervisor-assign-nobody', label: 'F-PR-21 · Nobody may take both customers: what a supervisor needs, in words; Customer default still offered', model: supervised('manager', { assign: assignOf({ people: { status: 'ready', people: [], complete: true } }) }) },
+    {
+      id: 'supervisor-assign-result',
+      label: 'F-PR-21 · After Send: one result per order (Done, Already so, Not done: why), one more counted, never named',
+      model: supervised('manager', {
+        assign: assignOf({
+          result: {
+            supervisor: { name: BEA.name, active: true },
+            lines: [
+              { orderId: PICKED_TARGETS[0]!.orderId, number: PICKED_TARGETS[0]!.number, state: 'changed' },
+              { orderId: PICKED_TARGETS[1]!.orderId, number: PICKED_TARGETS[1]!.number, state: 'skipped', key: 'skip.NO_MEASUREMENTS' },
+            ],
+            unknown: 1,
+          },
+        }),
+      }),
+    },
+    // ---- end F-PR-21
+    // ---- F-PR-18 ----
+    { id: 'urgency-rows', label: 'F-PR-18 · The customer’s urgency per row (Columns ▾ Customer urgency): Urgent 2 · Urgent – asked · Regular · Set to regular by us', model: risky('manager', { rows: { items: URGENCY_ROWS, more: false, problem: null } }), note: 'The column is under Columns ▾ (its header tells what it is); the Quick filters ▾ Customer urgency is the API’s filter, over every page.' },
+    { id: 'urgency-filter', label: 'F-PR-18 · The Customer urgency filter “Urgent – asked” as a chip (`?customerUrgency=ASKED`)', model: risky('manager', { customerUrgency: 'ASKED', rows: { items: URGENCY_ROWS.filter((row) => row.urgencyState === 'ASKED'), more: false, problem: null } }) },
+    { id: 'urgency-none', label: 'F-PR-18 · The Customer urgency filter matching nothing: Clear filters', model: risky('manager', { customerUrgency: 'SET_BACK', rows: { items: [], more: false, problem: null } }) },
+    // ---- end F-PR-18
+    // ---- F-PR-22 ----
+    { id: 'note-selection', label: 'F-PR-22 · Two customers’ work orders selected: Note to 2… in the bar (a row’s ⋯ has Office note…)', model: supervised('manager', { selected: PICKED.map((row) => row.id) }) },
+    { id: 'note-held', label: 'F-PR-22 · Without threads.post: Note to N… held in words', model: supervised('manager', { selected: PICKED.map((row) => row.id), noteCan: false }) },
+    { id: 'note-dialog', label: 'F-PR-22 · Office note on 12 work orders: Dora Campione cannot read 2 of 12, 2 customers, the supervisor tagged first in @', model: risky('manager', { note: noteModel() }), note: 'Write on each work order or their sales orders; the yellow Office note, never shown to a customer; Each record’s supervisor ticked; Needs an answer.' },
+    { id: 'note-needs-answer', label: 'F-PR-22 · Needs an answer ticked: a task for each record’s supervisor; the two with none said', model: risky('manager', { note: noteModel({ draft: { needsAnswer: true } }) }) },
+    { id: 'note-hold', label: 'F-PR-22 · The text names another customer: those records named, Send held until the text changes or the tick', model: risky('manager', { note: noteModel({ answer: NOTE_CHECK_HOLD }) }) },
+    { id: 'note-hold-ticked', label: 'F-PR-22 · “This text names no other customer” ticked: checked again, then Send may go', model: risky('manager', { note: noteModel({ answer: { ...NOTE_CHECK_HOLD, held: false }, draft: { namesNoOtherCustomer: true } }) }) },
+    { id: 'note-checking', label: 'F-PR-22 · The draft being checked: Send waits with words', model: risky('manager', { note: noteModel({ answer: null }) }) },
+    { id: 'note-check-failed', label: 'F-PR-22 · The check failed: Try again; Send held', model: risky('manager', { note: { ...noteModel(), check: { status: 'failed', key: 'x' } } }) },
+    { id: 'note-offline', label: 'F-PR-22 · Offline: the note waits in the dialog, Send held in words', model: risky('manager', { note: noteModel({ offline: true }) }) },
+    { id: 'note-problem', label: 'F-PR-22 · Send refused (the network went): the text kept, Try again', model: risky('manager', { note: noteModel({ problem: 'problem.offline' }) }) },
+    { id: 'note-result', label: 'F-PR-22 · After Send: one result per record; a refused one named, 2 counted, never named', model: risky('manager', { note: noteModel({ result: NOTE_RESULT }) }) },
+    // ---- end F-PR-22
   ],
 })

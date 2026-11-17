@@ -43,6 +43,8 @@ import { erasedForOutside } from '../feed-depth'
 import { clearDraftInCommand } from '../draft-keys'
 // ---- B-TH-093: their post makes a conversation marked done open work again (the same bookkeeping as its last activity).
 import { reopenOnSharedMessage } from '../work-state'
+// ---- fix-wall-1: a file whose content is another customer's (an old copy of a mixed lot's photo) is never shown, counted or attached.
+import { walledForOutside } from '../../files/content-wall'
 
 /**
  * A record's thread in a portal session (B-W2b-168; COL-059, COL-060; design portal.frame › thread "Ask a question /
@@ -228,6 +230,8 @@ export async function readPartnerThread(request: FastifyRequest, ref: RecordRef,
     }
   })
   const mine = await minePosts(request, caller, read.shown)
+  // fix-wall-1: a walled file is left out of its message's files (and so of what the page counts).
+  for (const fileId of await walledForOutside(request as CommandCaller, read.attachments.keys())) read.attachments.delete(fileId)
   const last = read.shown.at(-1)
   const erased = await erasedForOutside(request as CommandCaller, caller.context.tenantId, read.shown) // B-TH-079
   return {
@@ -286,6 +290,8 @@ export async function listPartnerThreads(request: FastifyRequest, query: { reado
     // ---- B-TH-027: each conversation's messages new to the person (one grouped read).
     const counts = conversations.length === 0 ? new Map<string, number>() : new Map((await unreadCounts(request as CommandCaller, conversations.map(({ thread }) => ({ type: thread.recordType, id: thread.recordId })))).counts.map((count) => [`${count.recordType}:${count.recordId}`, count.newCount]))
     // ---- end B-TH-027
+    // fix-wall-1: the last message's count leaves out a file whose content is another customer's.
+    const walled = await walledForOutside(request as CommandCaller, conversations.flatMap(({ last }) => last.attachmentFileIds))
     return {
       conversations: conversations.map(({ thread, record, last }) => {
         const side = sideOf(last.direction)
@@ -298,7 +304,7 @@ export async function listPartnerThreads(request: FastifyRequest, query: { reado
             channel: last.channel,
             authorName: last.authorName ?? (side === 'COMPANY' ? caller.session.company.name : null),
             excerpt: excerptOf(last.bodyText),
-            attachmentCount: last.attachmentFileIds.length,
+            attachmentCount: last.attachmentFileIds.filter((fileId) => !walled.has(fileId)).length, // fix-wall-1
             at: toUtcIso(last.at),
           },
           newCount: counts.get(`${thread.recordType}:${thread.recordId}`) ?? 0,
@@ -309,7 +315,7 @@ export async function listPartnerThreads(request: FastifyRequest, query: { reado
 }
 
 /** What is wrong with the files a portal post attaches: files of the record, shared with the party, available, readable. */
-async function attachmentProblems(tx: CommandTx, caller: PartnerCaller, thread: ThreadRow, fileIds: readonly string[]): Promise<Issue[]> {
+async function attachmentProblems(tx: CommandTx, caller: PartnerCaller, thread: ThreadRow, fileIds: readonly string[], /* fix-wall-1 */ walled: ReadonlySet<string> = new Set()): Promise<Issue[]> {
   if (fileIds.length === 0) return []
   const rows = new Map((await tx.storedFile.findMany({ where: { id: { in: [...fileIds] } }, select: FILE_PARTNER })).map((row) => [row.id, row]))
   const viewer = { audience: 'partner' as const, partyId: caller.context.partyId }
@@ -317,7 +323,7 @@ async function attachmentProblems(tx: CommandTx, caller: PartnerCaller, thread: 
   fileIds.forEach((fileId, index) => {
     const path = `body/attachments/${index}`
     const row = rows.get(fileId)
-    if (!row || !audienceSees(viewer, { ...row, visibility: row.visibility as FileAudience[] }) || !can(caller.actor, FILES_READ, { companyId: row.companyId, partyId: row.partyId })) {
+    if (!row || walled.has(fileId) /* fix-wall-1: as a wrong id */ || !audienceSees(viewer, { ...row, visibility: row.visibility as FileAudience[] }) || !can(caller.actor, FILES_READ, { companyId: row.companyId, partyId: row.partyId })) {
       problems.push({ path, message: 'File not found.' })
     } else if (row.recordType !== thread.recordType || row.recordId !== thread.recordId) problems.push({ path, message: 'Only a file of this record can be attached.' })
     else if (row.status !== 'AVAILABLE') problems.push({ path, message: `This file is ${row.status}; only an available file can be attached.` })
@@ -367,6 +373,8 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
   if (thread.status === 'CLOSED') throw closedRefusal(caller)
 
   const known = thread
+  // fix-wall-1: read before the post's own transaction (as the tenant's system).
+  const walled = await walledForOutside(request as CommandCaller, draft.attachments)
   const { result } = await command(
     request as CommandCaller,
     { name: POST_ACTION, idempotencyKey, input: { recordType: ref.type, recordId: ref.id, ...draft } },
@@ -375,7 +383,7 @@ export async function postPartnerMessage(request: FastifyRequest, ref: RecordRef
       const current = await threadOf(tools.tx, ref)
       if (!current || current.id !== known.id || current.partyId !== caller.context.partyId) throw new NotFoundError('Record not found.')
       if (current.status === 'CLOSED') throw closedRefusal(caller)
-      const issues = await attachmentProblems(tools.tx, caller, current, draft.attachments)
+      const issues = await attachmentProblems(tools.tx, caller, current, draft.attachments, walled)
       if (issues.length > 0) throw new ValidationError('The message is not valid.', issues)
       const id = newId()
       const row = await tools.tx.message.create({

@@ -79,7 +79,8 @@
     "invite": "Invite partner people",
     "manage": "Change partner people's access and the portal's switches",
     "preview": "Preview a partner's portal",
-    "requests": "Ask partners for something"
+    "requests": "Ask partners for something",
+    "productionManage": "Set customers' production limits"
   },
   "held": {
     "needs": "Needs the right: {right}.",
@@ -131,7 +132,8 @@
       "invite": "Inviting partner people (or stopping an invitation) needs a fresh code from your authenticator app.",
       "settings": "Changing a partner's portal needs a fresh code from your authenticator app.",
       "person": "Changing a partner person's access needs a fresh code from your authenticator app.",
-      "status": "Suspending, reactivating or deactivating partner people needs a fresh code from your authenticator app."
+      "status": "Suspending, reactivating or deactivating partner people needs a fresh code from your authenticator app.",
+      "production": "Changing what a customer sees and may do in production needs a fresh code from your authenticator app."
     },
     "problem": {
       "wrong": "That code is wrong or was already used. Type the next one.",
@@ -169,8 +171,6 @@
     "portalOn": "Portal on",
     "portalOnHint": "Their people can sign in, see what is theirs and get our e-mails.",
     "portalOffHint": "Off: nobody of theirs signs in and nothing reaches them from the portal; links still work.",
-    "progress": "Production progress",
-    "progressHint": "Shows each order's production steps in their portal. Off by default.",
     "maxUsers": "People at most",
     "maxUsersHint": "Empty: no limit. {taken} invited or active now.",
     "noLimit": "No limit",
@@ -317,7 +317,13 @@
     "reactivate_one": "1 person reactivated",
     "reactivate_other": "{count} people reactivated",
     "deactivate_one": "1 person deactivated",
-    "deactivate_other": "{count} people deactivated"
+    "deactivate_other": "{count} people deactivated",
+    "production": "The production limits of {name} are saved.",
+    "supervisor": "The supervisor of {name} is saved.",
+    "productionAndSupervisor": "The production limits and the supervisor of {name} are saved.",
+    "freeze": "The freeze rule of {name} is saved.",
+    "freezeReset": "{name} follows the company’s freeze points for this field again.",
+    "previewProduction": "My production of {name} opened in a new tab, read-only, for an hour."
   },
   "notice": {
     "refused_one": "1 refused",
@@ -462,5 +468,172 @@
     "failed": "Couldn't load the organisation",
     "notFound": "This person is not in the organisation any more",
     "notFoundHint": "Read the page again; they may have been moved by someone else."
+  },
+  "limits": {
+    "title": "Production",
+    "intro": "What {name} sees of its orders in production and what it may do there. Everything starts off: Status only, no urgent orders, no production requests.",
+    "loading": "Reading the production limits…",
+    "readFailed": "The production limits could not be read.",
+    "preset": "Production partner",
+    "presetHint": "Production partner fills + Progress, urgent orders on (at most 3) and every production request in one click; Apply saves it.",
+    "presetFilled": "Production partner filled in: + Progress, urgent orders on (at most 3), every production request. Apply to save.",
+    "preview": {
+      "saveFirst": "Save first: the preview shows the saved limits."
+    },
+    "previewOpen": "Open My production as {name}",
+    "portalOff": "Their portal is off: these limits apply once it is on. A supervisor works without a portal: saving one opens nothing for them.",
+    "limitsSavedNotSupervisor": "The limits are saved; the supervisor was not changed.",
+    "sees": {
+      "title": "What {name} sees",
+      "always": "Every level shows the stage, the expected date and its moves, health, who acts next, holds and requests. Also:",
+      "shown": "{what}: shown",
+      "hidden": "{what}: not shown"
+    },
+    "level": {
+      "STATUS": "Status only",
+      "PROGRESS": "+ Progress",
+      "GATES": "+ Gates & dates",
+      "QUALITY": "+ Quality & photos"
+    },
+    "levelLine": {
+      "STATUS": "The stage, the expected date and its moves, health and who acts next. The start for every customer.",
+      "PROGRESS": "+ the pieces of each line and size: cut, sewn, checked, packed.",
+      "GATES": "+ their gates (PP sample, size set, leather, trims, lab) with planned and done dates, from the published plan only.",
+      "QUALITY": "+ inspection results and photos of their own goods (work orders of theirs alone)."
+    },
+    "section": {
+      "progress": "Pieces",
+      "gates": "Gates & dates",
+      "quality": "Quality & photos"
+    },
+    "mayDo": {
+      "title": "What {name} may do"
+    },
+    "urgency": {
+      "label": "Urgent orders",
+      "rule": "They mark their own orders urgent. Inside the limit and before Cutting a mark counts at once; over the limit, or from Cutting on, a mark becomes a request we answer. Back to regular is always free.",
+      "offHint": "Off: they cannot mark orders urgent.",
+      "max": "Urgent at once, at most",
+      "maxHint": "At most {max} urgent at once · {now} urgent now.",
+      "maxRange": "A whole number from 0 to 20.",
+      "less": "One fewer",
+      "more": "One more"
+    },
+    "asks": {
+      "title": "Production requests they may make",
+      "rules": "“Urgent – asked” comes with Urgent orders. Changes and cancels follow the company’s cut-offs, not this list.",
+      "open": "Their Ask menu offers now: {list}.",
+      "openNone": "Their Ask menu offers no production request now."
+    },
+    "ask": {
+      "RUSH": "Urgent – asked",
+      "HOLD": "Ask to pause",
+      "RESUME": "Ask to resume",
+      "SPLIT_SHIPMENT": "Ask to ship what is ready",
+      "SAMPLE_ROUND": "Ask for another sample round"
+    },
+    "askLine": {
+      "HOLD": "They ask us to pause an order; we accept or refuse.",
+      "RESUME": "They ask us to go on with an order paused at their request.",
+      "SPLIT_SHIPMENT": "They ask us to ship what is ready now and the rest later.",
+      "SAMPLE_ROUND": "They ask for one more sample round before production."
+    },
+    "approver": {
+      "title": "Who answers on their side",
+      "ANYONE": "Anyone with the Production role",
+      "NAMED": "One named person",
+      "person": "Person who answers",
+      "search": "Search their people…",
+      "pick": "Pick the person who answers.",
+      "inactive": "no longer active",
+      "inactiveSaved": "{name} is no longer active: it counts as nobody named until you pick another.",
+      "none": "Nobody of theirs is active in the portal yet: invite someone first.",
+      "covers": "For their production approvals: PP sample, size set, top of production, fabric and trims. Artwork stays with their Designers, concessions with their Quality."
+    },
+    "approverLine": {
+      "ANYONE": "Every person of theirs who may approve answers.",
+      "NAMED": "Only this person answers; the others read “Waiting for” and the name."
+    },
+    "fourEyes": {
+      "title": "Overrides need a second person",
+      "label": "A second person",
+      "onHint": "On: when we decide for {name} or undo what they did, a second person of ours grants it.",
+      "offHint": "Off: whoever holds the override right decides for {name} alone, with a reason they read."
+    },
+    "freeze": {
+      "title": "Freeze points",
+      "intro": "From which production stage a field of their orders freezes, at {company}. Their own rules replace the company’s for that field.",
+      "reading": "Reading the freeze points…",
+      "failed": "The freeze points could not be read.",
+      "noCompany": "Open this customer from one company to see its freeze points.",
+      "col": {
+        "field": "Field",
+        "company": "Company",
+        "more": "Change"
+      },
+      "rule": "{stage}: {action}",
+      "action": {
+        "CHANGE_REQUEST": "a priced change they accept",
+        "BLOCKED": "no change any more"
+      },
+      "stage": {
+        "RELEASED": "Released to production",
+        "CUT": "Cutting started",
+        "SEWING": "Sewing started",
+        "FINISHED": "Pieces finished",
+        "SHIPPED": "Shipped"
+      },
+      "open": "Open at every stage",
+      "follows": "Follows the company",
+      "theirs": "Their own decide",
+      "set": "Set…",
+      "setFor": "Set the freeze of {field} for {name}",
+      "dialog": {
+        "title": "Freeze of {field} for {name}",
+        "company": "The company’s ({company})",
+        "own": "{name}’s own",
+        "add": "A rule of {name}’s own",
+        "stage": "From",
+        "action": "Then",
+        "note": "Words beside the field (optional)",
+        "noteHint": "One line, at most 200 characters; they read it on the order.",
+        "save": "Save the rule",
+        "reset": "Back to the company’s",
+        "resetHint": "Back to the company’s switches their own rules of this field off: the company’s decide again.",
+        "atOnce": "A rule is saved at once, apart from Apply."
+      },
+      "problem": {
+        "twin": "They have a rule of their own from this stage already: switch it off first.",
+        "loosens": "After a block, a later stage cannot open the field again for a priced change.",
+        "note": "The words are one line of at most 200 characters."
+      }
+    },
+    "supervisor": {
+      "title": "Who looks after {name} here",
+      "officeOnly": "Office only",
+      "intro": "Never in their portal or the preview, and they are not told who it is. Shown while their portal is off too: a supervisor needs no portal.",
+      "label": "Production supervisor",
+      "backup": "Backup",
+      "backupHint": "Gets the unanswered problems after 1 working day.",
+      "none": "Nobody",
+      "notListed": "{name} (not on the list now)",
+      "moves_one": "Changing the supervisor moves {count} order that has no supervisor of its own.",
+      "moves_other": "Changing the supervisor moves {count} orders that have no supervisor of their own.",
+      "clears_one": "{count} order without a supervisor of its own will have none.",
+      "clears_other": "{count} orders without a supervisor of their own will have none.",
+      "movesNone": "No open order follows the customer default now.",
+      "backupAlone": "A backup comes only beside a supervisor.",
+      "backupSame": "The backup is another person than the supervisor.",
+      "heldEveryCompany": "Setting this customer’s supervisor needs the right to manage its production at every company it works with.",
+      "readFailed": "Who may supervise could not be read."
+    },
+    "problem": {
+      "onlyCustomers": "Production limits are set only for a customer.",
+      "approver": "The person who answers must be active in their portal: pick another.",
+      "nothing": "Nothing changes: these are the limits already."
+    },
+    "unsaved_one": "1 change to the production limits not saved",
+    "unsaved_other": "{count} changes to the production limits not saved",
+    "apply": "Apply"
   }
 }

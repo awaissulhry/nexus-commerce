@@ -1,0 +1,44 @@
+/* F-PR-21 — the production supervisor's band fact and assign dialog. Layout only, semantic tokens. */
+.fw-psv-fact {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--nds-space-6);
+  min-width: 0;
+}
+
+.fw-psv-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-8);
+  min-width: 0;
+}
+
+.fw-psv-orders {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fw-psv-hint {
+  margin: 0;
+  color: var(--nds-text-muted);
+}
+
+.fw-psv-people {
+  min-width: 0;
+}
+
+.fw-psv-results {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nds-space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fw-psv-result {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--nds-space-6);
+}

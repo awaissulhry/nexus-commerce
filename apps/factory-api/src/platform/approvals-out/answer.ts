@@ -27,6 +27,8 @@ import { adapterOf } from './records'
 import { settleRequest } from './settle'
 import { localeOf, lockRequest, readPartner, RECORD, refOf, sourceKeyOf, type PartnerRow } from './store'
 import { clientAddressOf } from '../../core/client-address'
+// B-PR-26: a priced counter-offer is answered only by a customer role with prices, in the portal.
+import { heldGrains } from '@nexus/factory-domain/auth/grains/grains'
 
 /**
  * The partner's answer (B-W2b-184; design links.approve "Your decision: approve · approve with comments (where the kind
@@ -90,6 +92,9 @@ async function prepare(app: FastifyInstance, request: FastifyRequest, who: Answe
   // customer's own colleague.
   const named = await system.withClient((client) => approverVerdict(client, row, who, who.locale, now))
   if (named && !named.may) throw who.via === 'LINK' ? new InvalidStateError(named.held!) : new ForbiddenError(named.held!)
+  // B-PR-26: who of the party answers it (a priced counter-offer: only a role with prices, in the portal), in their words.
+  const answerer = await answererHeldOf(system, row, who, seesPricesOf(request, who), who.locale)
+  if (answerer) throw who.via === 'LINK' ? new InvalidStateError(answerer) : new ForbiddenError(answerer)
   const problems = answerProblems({ kind, decision: body.decision, answer: body.answer, typedName: body.typedName })
   let markupFile: { id: string; companyId: string | null; recordType: string; recordId: string } | null = null
   if (body.markup) {
@@ -170,6 +175,19 @@ async function answer(app: FastifyInstance, request: FastifyRequest, who: Answer
   return { ...(await partnerPage(prepared.system, row, who.locale, clockOf(app).now())), receipt: settled.receipt }
 }
 
+// ---- B-PR-26: the answerer's own hold (an adapter's `answererHeld`: a priced counter-offer) ------------------------------------
+
+/** Whether the answerer sees prices: the portal person's role holds the price grain; a link answers for no role. */
+const seesPricesOf = (request: FastifyRequest, who: Pick<Answerer, 'via'>): boolean => who.via === 'PORTAL' && heldGrains(actorOf(requireContext(request))).has('price')
+
+/** Why this answerer may not answer the request (null: they may), read as the tenant's system (the adapter's record). */
+async function answererHeldOf(system: CommandCaller, row: PartnerRow, who: Pick<Answerer, 'via'>, seesPrices: boolean, locale: ApprovalLocale): Promise<string | null> {
+  const adapter = adapterOf(row.kind as ApprovalKind, row.recordType)
+  if (!adapter?.answererHeld) return null
+  return system.withClient((client) => adapter.answererHeld!(client, refOf(row), { via: who.via, seesPrices }, locale))
+}
+// ---- end B-PR-26
+
 // ---- the link -----------------------------------------------------------------------------------------------------------
 
 function approvalLink(request: FastifyRequest) {
@@ -197,7 +215,9 @@ export async function linkApproval(app: FastifyInstance, request: FastifyRequest
   const page = await partnerPage(system, row, locale, now)
   // B-PR-29: a request of the customer's named approver is answered in the portal, by that person.
   const named = await system.withClient((client) => approverVerdict(client, row, { via: 'LINK', userId: null }, locale, now))
-  const may = named && !named.may ? { answer: false, withChanges: false, held: page.may.held ?? named.held } : page.may
+  // B-PR-26: a counter-offer is answered in the portal, never by a link.
+  const answerer = row.status === 'OPEN' ? await answererHeldOf(system, row, { via: 'LINK' }, false, locale) : null
+  const may = named && !named.may ? { answer: false, withChanges: false, held: page.may.held ?? named.held } : answerer ? { answer: false, withChanges: false, held: page.may.held ?? answerer } : page.may
   return { ...page, may, link: { expiresAt: toUtcIso(link.expiresAt), usesLeft: Math.max(0, link.maxUses - link.uses) } }
 }
 
@@ -248,7 +268,11 @@ export async function portalApprovals(app: FastifyInstance, request: FastifyRequ
     const page = await partnerPage(system, row, who.locale, now)
     // B-PR-29: an open production approval another colleague answers reads "Waiting for <name>" (F-PR-14).
     const named = row.status === 'OPEN' ? await system.withClient((client) => approverVerdict(client, row, who, who.locale, now)) : null
-    items.push({ id: row.id, kind: page.request.kind, words: page.request.words, question: row.question, dueAt: page.request.dueAt, status: page.request.status, decided: page.request.decided, waitingFor: named && !named.may ? named.name : null })
+    // ---- F-PR-14: a priced counter-offer the reader may not answer (no prices) reads "Waiting for your buyer" in Waiting for you;
+    // the same rule as the page's and the answer's (B-PR-26 answererHeldOf). Never the amount: yes or no only.
+    const waitingForBuyer = row.status === 'OPEN' && (named === null || named.may) ? (await answererHeldOf(system, row, who, seesPricesOf(request, who), who.locale)) !== null : false
+    // ---- end F-PR-14
+    items.push({ id: row.id, kind: page.request.kind, words: page.request.words, question: row.question, dueAt: page.request.dueAt, status: page.request.status, decided: page.request.decided, waitingFor: named && !named.may ? named.name : null, waitingForBuyer })
   }
   return { state, items }
 }
@@ -270,14 +294,16 @@ export async function portalApproval(app: FastifyInstance, request: FastifyReque
   const mayApprove = !who.preview && can(actorOf(requireContext(request)), PORTAL_APPROVE, { companyId: row.companyId, partyId: row.partyId })
   // B-PR-29: with a named approver, the customer's other people read its production approvals ("Waiting for <name>").
   const named = row.status === 'OPEN' ? await system.withClient((client) => approverVerdict(client, row, who, who.locale, now)) : null
-  const mine = mayApprove && (named === null || named.may)
+  // B-PR-26: a priced counter-offer waits for a role with prices (the Buyer, the Admin): the others read it, "your buyer answers".
+  const answerer = row.status === 'OPEN' ? await answererHeldOf(system, row, who, seesPricesOf(request, who), who.locale) : null
+  const mine = mayApprove && (named === null || named.may) && answerer === null
   return {
     ...page,
     may: {
       ...page.may,
       answer: page.may.answer && mine,
       withChanges: page.may.withChanges && mine,
-      held: page.may.held ?? (!mayApprove ? 'Your access lets you read this request, not answer it: ask your admin for the right to approve.' : (named?.held ?? null)),
+      held: page.may.held ?? (!mayApprove ? 'Your access lets you read this request, not answer it: ask your admin for the right to approve.' : (named?.held ?? answerer ?? null)),
     },
   }
 }

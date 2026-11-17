@@ -5,9 +5,9 @@ import { WorkOrderRecord } from '../../../../../../../areas/production/work-orde
 export const metadata: Metadata = { title: 'Work order · Nexus Factory' }
 
 /**
- * Production › a work order (SCR-070 … SCR-072; `?tab=overview|materials|cutting|bundles|operations|quality|labour`, B-TH-265: an old
- * `documents` or `activity` opens Overview, `activity` with the docked thread; `?at=<seq>` the bundles waiting at an operation). The
- * company layout above loaded the session and the shell.
+ * Production › a work order (SCR-070 … SCR-072; `?tab=overview|materials|cutting|operations|quality|labour`, B-TH-265: an old
+ * `documents` or `activity` opens Overview, `activity` with the docked thread; F-PR-06: `cutting` is Cutting & bundles, an old
+ * `bundles` opens it; `?at=<seq>` the bundles waiting at an operation). The company layout above loaded the session and the shell.
  */
 export default async function ProductionWorkOrderPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

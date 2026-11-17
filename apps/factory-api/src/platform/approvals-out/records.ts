@@ -7,6 +7,10 @@ import { SAMPLE_DECISION_ADAPTERS } from '../../modules/sales/sample-decisions/a
 import type { RecordAdapter } from './adapter'
 import { PROOF_ADAPTER } from './proof'
 import { SAMPLE_ADAPTERS } from './samples'
+// B-PR-28: a new promise date asked of the customer (REPROMISE) joins the sales order's adapter (one adapter per record type).
+import { withRepromise } from '../../modules/planning/promise-keep/brand-answer'
+// B-PR-26: our counter-offer to a customer's request (COUNTER_OFFER), the change request's own adapter.
+import { COUNTER_OFFER_ADAPTER } from '../../modules/sales/change-requests/counter'
 
 /**
  * What each record type shares when the office asks a partner to approve it (B-W2b-184): one adapter per record type, its
@@ -16,19 +20,21 @@ import { SAMPLE_ADAPTERS } from './samples'
  * the kinds allow (factory-domain approvals-out/kinds).
  */
 
-const ADAPTERS: readonly RecordAdapter[] = Object.freeze([CONCESSION_ADAPTER, REACCEPTANCE_ADAPTER, SIGNATURE_ADAPTER, PROOF_ADAPTER, ...SAMPLE_ADAPTERS, ...SAMPLE_DECISION_ADAPTERS])
+const ADAPTERS: readonly RecordAdapter[] = Object.freeze([CONCESSION_ADAPTER, REACCEPTANCE_ADAPTER, SIGNATURE_ADAPTER, PROOF_ADAPTER, ...SAMPLE_ADAPTERS.map(withRepromise), ...SAMPLE_DECISION_ADAPTERS, COUNTER_OFFER_ADAPTER])
 
 const byType = new Map<string, RecordAdapter>()
 for (const adapter of ADAPTERS) {
   if (byType.has(adapter.recordType)) throw new Error(`Approval record ${adapter.recordType} is registered twice.`)
-  for (const kind of adapter.kinds) if (!KIND_RULES[kind].recordTypes.includes(adapter.recordType)) throw new Error(`A ${kind} is not asked on a ${adapter.recordType}.`)
+  // B-PR-28: the kinds only their own command asks are checked the same way.
+  for (const kind of [...adapter.kinds, ...(adapter.commandKinds ?? [])]) if (!KIND_RULES[kind].recordTypes.includes(adapter.recordType)) throw new Error(`A ${kind} is not asked on a ${adapter.recordType}.`)
   byType.set(adapter.recordType, adapter)
 }
 
 /** The adapter of a record type for a kind, or undefined when that kind is not asked on it. */
 export function adapterOf(kind: ApprovalKind, recordType: string): RecordAdapter | undefined {
   const adapter = byType.get(recordType)
-  return adapter?.kinds.includes(kind) ? adapter : undefined
+  // B-PR-28: a kind its own command asks (REPROMISE) is read, answered and settled here too; "Ask for approval" offers `kinds` only.
+  return adapter?.kinds.includes(kind) || adapter?.commandKinds?.includes(kind) ? adapter : undefined
 }
 
 /** The adapter of a record type, whatever the kind (the office's list of a record's requests). */

@@ -66,7 +66,42 @@
     "COLOUR": "Colour",
     "LEATHER": "Leather",
     "FABRIC": "Fabric",
-    "TRIM": "Trim"
+    "TRIM": "Trim",
+    "add": {
+      "open": "Add a swatch",
+      "title": "Add a swatch",
+      "subtitle": "{number} · for {customer}",
+      "submit": "Add swatch",
+      "kind": "Swatch of",
+      "kindHint": {
+        "COLOUR": "A colour of any material, for the customer's colour approval.",
+        "LEATHER": "A leather, for the customer's leather approval.",
+        "FABRIC": "A textile, lining, membrane or padding, for the customer's fabric approval.",
+        "TRIM": "A trim, hardware, thread or label, for the customer's trims approval."
+      },
+      "material": "Material",
+      "search": "Search materials by code or name",
+      "pickMaterial": "Pick the material",
+      "noMaterials": "No material of this kind matches",
+      "colour": "Colour of the material",
+      "colourHint": "The colour that is sent.",
+      "pickColour": "Pick the colour",
+      "pickMaterialFirst": "Pick the material first",
+      "noColours": "This material has no colour yet: add one in Materials & trims",
+      "note": "Note (office only)",
+      "noteHint": "At most {max} characters.",
+      "materialsFailed": "Couldn't load the materials",
+      "coloursFailed": "Couldn't load the material's colours",
+      "after": "It is recorded as not sent: mark it sent when it leaves, then record the customer's answer or ask the customer.",
+      "done": "The swatch is added: mark it sent when it leaves."
+    },
+    "held": {
+      "noMaterials": "Your role cannot read materials: a swatch names one.",
+      "internal": "An internal round of our own style has no customer to send a swatch to.",
+      "material": "Pick the material.",
+      "colour": "Pick the colour that is sent.",
+      "long": "The note is longer than {max} characters."
+    }
   },
   "wo": {
     "status": {
@@ -403,6 +438,16 @@
     "noRevision": "No revision yet",
     "revisionOption": "Revision {revision} ({status})",
     "kind": "Type",
+    "kindHint": {
+      "PROTO": "The first try of a new style.",
+      "FIT": "A sample to check the fit on a body or form.",
+      "SALESMAN": "Samples for selling the collection.",
+      "PRE_PRODUCTION": "The last sample before bulk: its approval passes the order's pre-production sample gate.",
+      "CERTIFICATION": "A sample for the notified body's CE test.",
+      "BRAND": "A sample the customer asked for its own use.",
+      "SIZE_SET": "One piece of each size before bulk: its approval passes the order's size set gate.",
+      "TOP_OF_PRODUCTION": "The first pieces off the line: the customer's answer is told to us; it gates nothing."
+    },
     "roundNo": "Round number",
     "roundNoHint": "Empty: the next round of this type.",
     "roundNoNext": "Next",
@@ -615,7 +660,7 @@
     "noResult": "No result yet",
     "certificate": "Certificate",
     "certificateLine": "{number} · {standard} · notified body {body}",
-    "swatches": "Leather swatch and colour approvals",
+    "swatches": "Swatch approvals: colour, leather, fabric and trims",
     "noSwatches": "No swatch sent for this round.",
     "swatchLine": "{kind}: {item} · {colour}",
     "notSentYet": "Not sent yet",

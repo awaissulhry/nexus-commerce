@@ -48,6 +48,11 @@ describe('the indexers folder is the registry (B-W2a-32)', () => {
   it("makes an entry's row: cleaned words, the title falls back to the number, the text from them all", () => {
     const indexer = defineIndexer({ recordType: 'SalesOrder', area: 'sales', viewPermission: 'orders.view', on: { 'sales_order.created': 'subject' }, read })
     const row = entryOf(indexer, { recordId: 'x', companyId: null, siteId: null, partyId: null, number: ' ORD-2026-00042 ', title: '  ', subtitle: 'Rif.\n PR-7', status: 'CONFIRMED', words: ['SEED-C1'] })
-    expect(row).toEqual({ companyId: null, siteId: null, partyId: null, number: 'ORD-2026-00042', title: 'ORD-2026-00042', subtitle: 'Rif. PR-7', status: 'CONFIRMED', area: 'sales', viewPermission: 'orders.view', searchText: 'ord-2026-00042 rif pr-7 seed-c1' })
+    // B-PR-08a part 2 (#1557): the row says whether it is an entry of every customer (false unless the indexer says so).
+    expect(row).toEqual({ companyId: null, siteId: null, partyId: null, number: 'ORD-2026-00042', title: 'ORD-2026-00042', subtitle: 'Rif. PR-7', status: 'CONFIRMED', area: 'sales', viewPermission: 'orders.view', searchText: 'ord-2026-00042 rif pr-7 seed-c1', everyParty: false })
+    // B-PR-08a part 2: an entry of every customer names none of them, even when the document carries one.
+    const everyone = entryOf(indexer, { recordId: 'y', companyId: null, siteId: null, partyId: 'party-a', everyParty: true, number: 'WO-1', title: 'Cut order', subtitle: null, status: null })
+    expect(everyone).toMatchObject({ partyId: null, everyParty: true })
+    // ---- end B-PR-08a part 2
   })
 })

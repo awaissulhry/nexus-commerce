@@ -39,7 +39,8 @@
     "newOrder": "New order",
     "downloadAll": "Download all (Excel)",
     "downloading": "Preparing the file…",
-    "downloadAllHint": "Every order of this view with your columns, in one Excel file."
+    "downloadAllHint": "Every order of this view with your columns, in one Excel file.",
+    "ask": "Ask us…"
   },
   "keys": {
     "search": "Search your orders",
@@ -613,6 +614,278 @@
     "ask": "Ask a question",
     "health": "Health",
     "waitingOn": "Waiting on",
-    "failed": "Could not load the production of this order"
+    "failed": "Could not load the production of this order",
+    "gates": {
+      "title": "Gates and dates",
+      "label": "Gates of this order",
+      "step": "Gate",
+      "state": "State",
+      "planned": "Planned",
+      "done": "Done on",
+      "review": "See what waits for you",
+      "none": "No gates or dates planned for this order yet.",
+      "states": {
+        "WAITING_YOU": "Waiting on you",
+        "WAITING_US": "Waiting on us",
+        "PASSED": "Passed",
+        "STARTED_BEFORE": "Started before approval"
+      }
+    },
+    "approvals": {
+      "label": "Your material approvals",
+      "material": "Material",
+      "sent": "Sent",
+      "answered": "Answered on",
+      "states": {
+        "WAITING_YOU": "Waiting on you",
+        "APPROVED": "Approved",
+        "APPROVED_WITH_COMMENTS": "Approved with comments",
+        "REFUSED": "Refused"
+      }
+    },
+    "planned": {
+      "label": "Our production days",
+      "cutStart": "Cutting starts",
+      "sewStart": "Sewing starts",
+      "finish": "Production ends",
+      "hint": "From our published production plan; these days may still move.",
+      "none": "No production days in our plan yet."
+    },
+    "pieces": {
+      "oneSize": "Made to measure"
+    },
+    "quality": {
+      "title": "Quality and photos",
+      "label": "Quality of this order",
+      "failed": "Could not load the quality of this order",
+      "none": "Nothing on this order has been checked by quality yet.",
+      "released": {
+        "title": "Released by quality",
+        "label": "Pieces released by quality, per line",
+        "line": "Line",
+        "released": "Released",
+        "reversed": "Taken back",
+        "reversedHint": "Taken back: pieces released earlier that we took back to check again.",
+        "shared": "{line}: {words}",
+        "sizesOf": "{title}: per size"
+      },
+      "checks": {
+        "title": "Checks during production",
+        "check": "Check",
+        "result": "Last result",
+        "soFar": "So far",
+        "lastOn": "Last on",
+        "pieces_one": "{defective} of {pieces} piece with a defect",
+        "pieces_other": "{defective} of {pieces} pieces with a defect"
+      },
+      "finals": {
+        "title": "Final inspection",
+        "lines_one": "Line {lines}",
+        "lines_other": "Lines {lines}",
+        "allLines": "This order",
+        "decidedOn": "Decided on {date}",
+        "waiting": "Being checked: the result comes once it is decided.",
+        "sample": "Sample",
+        "sampleOf": "{sample} of {garments} garments",
+        "level": "Inspection level",
+        "aql": "Accepted (AQL)",
+        "aqlValue": "Major {major}: up to {acceptMajor} · Minor {minor}: up to {acceptMinor}",
+        "defects": "Garments with a defect",
+        "defectsValue": "Critical {critical} · Major {major} · Minor {minor}",
+        "foundOf": "Defects found: {lines}",
+        "defect": "Defect",
+        "class": "Class",
+        "garments": "Garments",
+        "openReport": "Open the report",
+        "noReport": "No report has been issued for this inspection yet.",
+        "reportTitle": "Inspection report · {lines} · {date}",
+        "reportTitleNoDate": "Inspection report · {lines}",
+        "fileName": "Inspection report {date}",
+        "reportMissing": "This report is not available."
+      },
+      "holds": {
+        "title": "Holds",
+        "reason": "Reason",
+        "state": "State",
+        "since": "Since",
+        "until": "Until"
+      },
+      "photos": {
+        "title": "Photos",
+        "sharedOn": "Shared on {date}",
+        "view": "View",
+        "count": "{n} of {count}",
+        "previous": "Previous photo",
+        "next": "Next photo",
+        "only": "This is the only photo.",
+        "first": "This is the first photo.",
+        "last": "This is the last photo.",
+        "loading": "Opening the photo…",
+        "failed": "The photo could not be opened.",
+        "gone": "This photo is no longer shared.",
+        "alt": "Photo {name}"
+      }
+    }
+  },
+  "ask": {
+    "title": "Ask us · {number}",
+    "step": {
+      "what": "Step 1 of 3 · What you would like",
+      "details": "Step 2 of 3 · The details",
+      "impact": "Step 3 of 3 · What it means"
+    },
+    "hint": "Pick what you would like to ask. We decide and answer you here and in the order's conversation.",
+    "what": "What you would like to ask",
+    "next": "Next",
+    "send": "Send the request",
+    "failed": "We could not read what you may ask on this order.",
+    "waiting": "Your request of {day} waits for our answer.",
+    "waitingNoDay": "Your request waits for our answer.",
+    "counter": "We suggest something else: answer it in Waiting for you",
+    "colourNote": "A colour change: write to us in the order's conversation.",
+    "sent": "Your request was sent. We answer here and by e-mail.",
+    "kind": {
+      "CHANGE": {
+        "title": "Change sizes, quantities, the date or the delivery address",
+        "hint": "You pick the sizes and the date; before you send, we tell you what it means."
+      },
+      "CANCEL": {
+        "title": "Cancel the order or some lines",
+        "hint": "Tell us which lines and why."
+      },
+      "RUSH": {
+        "title": "Make it urgent (Urgent – asked)",
+        "hint": "We look at the date again and answer you; you may say the date you need it by."
+      },
+      "HOLD": {
+        "title": "Pause the work",
+        "hint": "We stop working on the order until you ask us to resume."
+      },
+      "RESUME": {
+        "title": "Resume the work",
+        "hint": "We take the work on the order up again and confirm your date."
+      },
+      "SPLIT_SHIPMENT": {
+        "title": "Ship what is ready first",
+        "hint": "Name the pieces that should ship first; the rest ships when it is ready."
+      },
+      "SAMPLE_ROUND": {
+        "title": "Another sample",
+        "hint": "Pick the line and the kind of sample."
+      }
+    },
+    "verdict": {
+      "NOT_OPEN": "This request is not open for your orders. Write to us in the order's conversation.",
+      "NOT_ASKABLE": "Not possible at this stage of the order.",
+      "WAITING": "Your request of {day} waits for our answer.",
+      "WAITING_NO_DAY": "Your request waits for our answer.",
+      "READY": "No need: everything is ready to ship already.",
+      "READY_HOLD": "Everything is ready to ship already: to hold the shipment, write to us in the order's conversation.",
+      "LOCKED": "We set this order back to Regular: ask us in the order's conversation.",
+      "ALREADY_URGENT": "The order is urgent already: give the date you need it by to ask for more.",
+      "PAUSED": "The order is paused already: ask us to resume it when you are ready.",
+      "NOT_PAUSED": "The order is not paused.",
+      "SHIPS_AS_READY": "The order already ships in parts as they are ready.",
+      "CLOSED_SHORT": "Not possible: this line is closed.",
+      "CUT": "Not possible: cutting started on {day}. You can ask for a top-of-production sample.",
+      "CUT_NO_DAY": "Not possible: cutting has started. You can ask for a top-of-production sample.",
+      "LEATHER_CUT": "Not possible: the leather was cut on {day}. You can ask for a top-of-production sample.",
+      "LEATHER_CUT_NO_DAY": "Not possible: the leather has been cut. You can ask for a top-of-production sample."
+    },
+    "held": {
+      "closed": "This request is not possible now: its card says why.",
+      "waiting": "A request of this kind waits for our answer: withdraw it first, or answer our suggestion."
+    },
+    "problem": {
+      "choose": "Pick what you would like to ask.",
+      "long": "Your words are too long: at most 2000 characters.",
+      "past": "Pick a date from today on.",
+      "rushLater": "The order is promised for that date or earlier already: pick an earlier date, or leave it empty.",
+      "holdWhy": "Say why you want to pause, in a few words.",
+      "splitNothing": "Name the pieces of each size that should ship first.",
+      "splitWhole": "That is the whole order: it ships as one already. Name only what should ship first.",
+      "sampleLine": "Pick the line the sample is of.",
+      "sampleKind": "Pick the kind of sample.",
+      "sampleClosed": "This kind of sample is not possible on this line now."
+    },
+    "details": {
+      "RUSH": "Tell us when you need it. We look at the date again and answer you: your date changes only when we confirm it.",
+      "HOLD": "We pause the work on the order until you ask us to resume. A pause may move your date.",
+      "RESUME": "We take the work up again and confirm your date.",
+      "SPLIT_SHIPMENT": "Name the pieces of each size that should ship first. The rest ships when it is ready.",
+      "SAMPLE_ROUND": "Pick the line and the kind of sample. A pre-production sample or a size set is possible only before cutting starts."
+    },
+    "split": {
+      "caption": "Pieces to ship first",
+      "most": "At most {count}"
+    },
+    "sample": {
+      "line": "Line",
+      "linePick": "Pick a line…",
+      "kind": "Kind of sample",
+      "kinds": {
+        "PRE_PRODUCTION": "Pre-production sample",
+        "SIZE_SET": "Size set",
+        "TOP_OF_PRODUCTION": "Top of production (the first pieces)",
+        "BRAND": "A sample for your brand"
+      },
+      "hints": {
+        "PRE_PRODUCTION": "Made as the order will be made, before cutting starts.",
+        "SIZE_SET": "One piece of each size, before cutting starts.",
+        "TOP_OF_PRODUCTION": "The first pieces from the line.",
+        "BRAND": "A sample for your own use (shows, photos)."
+      }
+    },
+    "date": {
+      "RUSH": "Needed by (optional)",
+      "SPLIT_SHIPMENT": "First part by (optional)",
+      "promise": "We promise {date} now.",
+      "optional": "Leave it empty if any date is fine."
+    },
+    "note": {
+      "label": "Your words (optional)",
+      "hint": "Anything we should know.",
+      "why": "Why do you want to pause?",
+      "whyHint": "A few words are enough."
+    },
+    "review": {
+      "hint": "Check what you ask and what it means. Nothing changes until we answer.",
+      "what": "You ask",
+      "first": "Ships first",
+      "cell": "Line {seq}, size {size}: {count}",
+      "go": "See what it means"
+    },
+    "impact": {
+      "title": "What it means",
+      "nothingFrozen": "Nothing you ask is frozen.",
+      "frozen": "Part of what you ask is frozen: it becomes a priced change.",
+      "blocked": "Part of what you ask cannot change any more.",
+      "frozenLabel": "What is frozen",
+      "state": {
+        "BLOCKED": "Cannot change",
+        "CHANGE_REQUEST": "Priced change"
+      },
+      "cost": "Cost",
+      "fee": "A fee of {fee} applies.",
+      "mayApply": "A price may apply: we will tell you.",
+      "noPrice": "No price applies.",
+      "earliestLabel": "Earliest date",
+      "earliest": "From about {date} — we confirm it.",
+      "earliestLater": "From about {date}, later than the date you asked — we confirm it.",
+      "earliestNone": "We give you a date once we have planned it.",
+      "partial": "(Some lines are not dated yet.)",
+      "note": {
+        "RUSH": "We look at the date again and confirm it to you.",
+        "HOLD": "A pause may move your date.",
+        "RESUME": "When the work starts again, we confirm your date.",
+        "SPLIT_SHIPMENT": "The rest ships when it is ready.",
+        "SAMPLE_ROUND": "Another sample may move your date."
+      },
+      "afterRelease": "Once we have released a line to production, changing its sizes or quantities means we cancel that line and make it again, or close it short.",
+      "failed": "We could not read what it means.",
+      "reading": "Still reading what it means…",
+      "failedHeld": "Read what it means first: Try again above.",
+      "blockedHeld": "Part of what you ask cannot change any more: go back and change your request."
+    }
   }
 }

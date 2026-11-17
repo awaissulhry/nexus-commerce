@@ -1,0 +1,123 @@
+{
+  "open": {
+    "row": "Nota d'ufficio…",
+    "selection_one": "Nota a {count}…",
+    "selection_other": "Nota a {count}…",
+    "ask": "Chiedi al supervisore",
+    "askFact": "Chiedi",
+    "askHint": "Una nota d'ufficio al supervisore di produzione di questo ordine di lavoro: mai mostrata al cliente."
+  },
+  "title": {
+    "ask": "Chiedi al supervisore · {number}",
+    "one": "Nota d'ufficio su {number}",
+    "workOrders_one": "Nota d'ufficio su {count} ordine di lavoro",
+    "workOrders_other": "Nota d'ufficio su {count} ordini di lavoro",
+    "salesOrders_one": "Nota d'ufficio su {count} ordine di vendita",
+    "salesOrders_other": "Nota d'ufficio su {count} ordini di vendita"
+  },
+  "records": {
+    "label": "I record su cui si scrive la nota",
+    "showAll": "Mostra tutti e {count}",
+    "showFewer": "Mostra meno",
+    "customers_one": "{count} cliente",
+    "customers_other": "{count} clienti"
+  },
+  "on": {
+    "legend": "Scrivi su",
+    "workOrders_one": "l'ordine di lavoro",
+    "workOrders_other": "ogni ordine di lavoro ({count})",
+    "salesOrders_one": "il suo ordine di vendita ({count})",
+    "salesOrders_other": "i loro ordini di vendita ({count})",
+    "noOrder": "Nessun ordine di vendita: questi ordini di lavoro non ne producono.",
+    "tooMany": "{count} ordini di vendita: al massimo {max} alla volta.",
+    "withoutOrder_one": "{count} ordine di lavoro non produce un ordine di vendita: per esso non si scrive alcuna nota.",
+    "withoutOrder_other": "{count} ordini di lavoro non producono un ordine di vendita: per essi non si scrive alcuna nota."
+  },
+  "box": {
+    "mark": "Nota d'ufficio · mai mostrata a un cliente",
+    "label": "Nota d'ufficio",
+    "placeholder": "Scrivi la nota · @ menziona un collega",
+    "supervisor": "Il supervisore di ogni record",
+    "supervisorHint": "Il supervisore di produzione di ogni record viene menzionato nella sua nota."
+  },
+  "needsAnswer": {
+    "label": "Serve una risposta",
+    "hint": "Un'attività per il supervisore di ogni record, da fare entro 1 giorno lavorativo alle 08:00; in ritardo, passa al sostituto."
+  },
+  "people": {
+    "failed": "Non è stato possibile leggere chi puoi menzionare.",
+    "partial": "Chi puoi menzionare è stato letto solo per alcuni di questi record: in @ può mancare un nome.",
+    "retry": "Riprova"
+  },
+  "check": {
+    "checking": "Verifica di chi può leggerli…",
+    "failed": "Non è stato possibile verificare chi può leggerli.",
+    "retry": "Riprova",
+    "cannotRead": "{name} non può leggere {count} su {of}: lì non viene menzionato ({records}). La nota viene comunque scritta.",
+    "customers": "Questi record sono di {count} clienti. Le note d'ufficio non arrivano mai a un cliente.",
+    "notWritable": "Non puoi scrivere su {records} (il tuo ruolo): restano fuori.",
+    "unknown_one": "{count} di essi non puoi vederlo: contato, non scritto.",
+    "unknown_other": "{count} di essi non puoi vederli: contati, non scritti.",
+    "noSupervisor": "Ancora nessun supervisore di produzione su {records}: lì non si chiede a nessuno.",
+    "noSupervisorTask": "Ancora nessun supervisore di produzione su {records}: la loro attività non va ancora a nessuno.",
+    "noIssue": "{records}: un ordine di lavoro di più clienti o di nessuno non apre una domanda; la sua nota viene comunque scritta.",
+    "namesOther": "Il testo nomina un altro cliente su {records}: un collega che può leggere solo il cliente di quel record lo leggerebbe.",
+    "namesOtherNamed": "{record} nomina {names}",
+    "namesOtherHint": "Cambia il testo, oppure spunta questa casella se quel nome qui non è un cliente.",
+    "namesOtherTick": "Questo testo non nomina altri clienti"
+  },
+  "held": {
+    "noRight": "Il tuo ruolo non scrive note d'ufficio.",
+    "noRecords": "Non c'è niente su cui scrivere.",
+    "tooMany": "{count} record: al massimo {max} alla volta.",
+    "empty": "Prima scrivi la nota.",
+    "offline": "Sei offline: la nota resta qui finché la rete non torna.",
+    "busy": "Scrittura delle note…",
+    "checking": "Prima si verifica chi può leggerli…",
+    "checkFailed": "Non è stato possibile verificare chi può leggerli: prima riprova.",
+    "noneWritable": "Non puoi scrivere su nessuno di questi record.",
+    "namesOther": "Il testo nomina un altro cliente: cambialo, oppure spunta «Questo testo non nomina altri clienti»."
+  },
+  "send_one": "Scrivi su {count}",
+  "send_other": "Scrivi su {count}",
+  "cancel": "Annulla",
+  "close": "Chiudi",
+  "problem": {
+    "namesOther": "Il testo nomina un altro cliente: non è stato scritto niente. Cambialo, oppure spunta «Questo testo non nomina altri clienti».",
+    "noneFound": "Nessuno di questi record è stato trovato: non è stato scritto niente.",
+    "cannotPost": "Il tuo ruolo non scrive note su questi record: non è stato scritto niente.",
+    "notAPerson": "Una persona che hai menzionato non è più una persona attiva dell'ufficio: non è stato scritto niente.",
+    "invalid": "La nota non può essere scritta così com'è.",
+    "offline": "La rete non c'è: non è stato scritto niente. Il tuo testo resta: riprova.",
+    "failed": "Non è stato possibile scrivere le note. Il tuo testo resta: riprova."
+  },
+  "result": {
+    "title_one": "Scritta su {count} record",
+    "title_other": "Scritta su {count} record",
+    "none": "Non è stato scritto niente.",
+    "label": "Un risultato per record",
+    "written": "Scritta",
+    "mentioned_one": "{count} menzionato",
+    "mentioned_other": "{count} menzionati",
+    "supervisorAsked": "chiesto al supervisore",
+    "issue": "domanda aperta",
+    "notWritten": "Non scritta: {why}",
+    "unknown_one": "Ancora {count} che non puoi vedere: contato, non nominato.",
+    "unknown_other": "Ancora {count} che non puoi vedere: contati, non nominati.",
+    "notMentioned": "{name} non è stato menzionato su {records}: non può leggerli.",
+    "taskAssigned_one": "Un'attività su {record} per il suo supervisore ({count} record).",
+    "taskAssigned_other": "Un'attività su {record} per il suo supervisore ({count} record).",
+    "taskNobody_one": "Un'attività su {record} ({count} record): lì non può ancora essere data a nessuno.",
+    "taskNobody_other": "Un'attività su {record} ({count} record): lì non può ancora essere data a nessuno.",
+    "notRaised": "{record}: nessuna domanda aperta ({why})."
+  },
+  "skip": {
+    "CANNOT_POST": "il tuo ruolo non scrive note su questo record",
+    "THREAD_CLOSED": "la sua conversazione è chiusa: riaprila per scrivere una nota",
+    "other": "non è stato possibile scriverla"
+  },
+  "issue": {
+    "noCustomer": "un ordine di lavoro di più clienti o di nessuno",
+    "other": "qui nessuna"
+  }
+}

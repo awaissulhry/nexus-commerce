@@ -211,6 +211,7 @@
   "w": {
     "notifications": {
       "mentioned": "{actor} mentioned you on {record}",
+      "mentionedOn": "{actor} mentioned you on {records} orders",
       "following": {
         "note": "{actor} wrote a note on {record}, which you follow",
         "mail_in": "A reply arrived on {record}, which you follow",
@@ -315,7 +316,11 @@
         "supervisorOfOrder": "You are the production supervisor of order {record}",
         "supervisorOfOrders": "You are the production supervisor of {count} orders of {record}",
         "supervisorOfCustomer": "You are the production supervisor of {record}",
-        "backupOfCustomer": "You are the backup of the production supervisor of {record}"
+        "backupOfCustomer": "You are the backup of the production supervisor of {record}",
+        "problemReported": "{customer} reported a problem on {record}: answer in the order’s thread",
+        "problemReportedMany": "{customer} reported a problem on {count} orders: answer in the thread of {record}",
+        "issueEscalatedBackup": "No answer after 1 working day on {record} ({customer}): it now waits on you",
+        "issueEscalatedOwner": "No answer after 2 working days on {record} ({customer}): it now waits on the Owner and Admin"
       }
     },
     "fallback": "News on {record}",

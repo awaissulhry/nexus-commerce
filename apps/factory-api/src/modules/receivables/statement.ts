@@ -231,7 +231,7 @@ export async function sendStatement(caller: CommandCaller, partyId: string, body
     const text = [
       language === 'it' ? `Gentile ${data.customer.legalName},` : `Dear ${data.customer.legalName},`,
       '',
-      language === 'it' ? "le inviamo in allegato l'estratto conto del periodo indicato." : 'please find attached your statement of account for the period.',
+      language === 'it' ? "vi inviamo in allegato l'estratto conto del periodo indicato." : 'please find attached your statement of account for the period.',
       ...(body.message ? ['', body.message] : []),
       '',
       language === 'it' ? 'Cordiali saluti,' : 'Kind regards,',

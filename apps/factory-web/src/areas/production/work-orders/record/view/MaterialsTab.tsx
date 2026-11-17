@@ -1,14 +1,14 @@
 'use client'
 
-import { Card, Menu, SummaryTable } from '@nexus/ui/components'
-import { Button, Tag } from '@nexus/ui/primitives'
+import { Card, SummaryTable } from '@nexus/ui/components'
+import { Tag } from '@nexus/ui/primitives'
 import { useLocale, useT } from '../../../../../lib/i18n/provider'
 import type { WorkOrder } from '../../../_shared/api'
 import { quantityText } from '../../../_shared/model'
 import type { WorkOrderRecordActions, WorkOrderRecordModel } from '../record-model'
 import { PartState } from './WorkOrderRecordView'
-import { DAILY_NAMESPACE, leatherMaterials, readinessView, reserveHeld } from '../../daily/model'
-import { PrintButton, ReadinessPill, say } from '../../daily/view/DailyParts'
+import { DAILY_NAMESPACE, readinessView } from '../../daily/model'
+import { PrintButton, ReadinessPill, ReserveLeather } from '../../daily/view/DailyParts'
 // B-W2b-130: Leather (wo-leather W2b: the shade lots and the one shade lot rule).
 import { LeatherPanel } from '../leather/view/LeatherPanel'
 // B-W2b-320 (wo-materials "Substitute… (W2b)"): the warehouse's Use a substitute.
@@ -31,9 +31,6 @@ export function MaterialsTab({ workOrder, model, actions }: { workOrder: WorkOrd
   const daily = model.daily ?? null
   const readiness = readinessView(workOrder, model.check.value, daily?.readiness?.value ?? null)
   const wordOf = (itemId: string, itemColourId: string | null) => readiness?.materials.find((entry) => entry.itemId === itemId && (entry.itemColourId ?? null) === itemColourId) ?? null
-  const leathers = leatherMaterials(workOrder)
-  const reserveWait = daily ? say(tw, reserveHeld(workOrder, daily.can)) : null
-  const reserve = (material: (typeof leathers)[number]) => daily && actions?.daily?.onDialog?.({ kind: 'reserve', itemId: material.itemId, itemColourId: material.itemColourId ?? null })
   return (
     <div className="fw-pr-stack">
       {model.leather && <LeatherPanel model={{ prefix: model.prefix, read: model.leather }} onRetry={() => actions?.onRetryPart?.('leather')} />}
@@ -43,14 +40,8 @@ export function MaterialsTab({ workOrder, model, actions }: { workOrder: WorkOrd
           <span className="fw-pr-actions">
             <span className="fw-pr-hint">{workOrder.spec.frozen ? t('materials.frozen') : t('materials.wouldFreeze')}</span>
             {model.substitute && <WorkOrderSubstitute model={model.substitute} prefix={model.prefix} actions={actions?.substitute} />}
-            {daily && leathers.length === 1 && (
-              <Button size="sm" heldReason={reserveWait} onClick={() => reserve(leathers[0]!)}>
-                {tw('reserve.button')}
-              </Button>
-            )}
-            {daily && leathers.length > 1 && (
-              <Menu label={tw('reserve.button')} align="right" items={leathers.map((material) => ({ id: `${material.itemId}:${material.itemColourId ?? ''}`, label: [material.itemCode, material.colourCode].filter(Boolean).join(' · '), disabled: !!reserveWait, description: reserveWait ?? undefined, onSelect: () => reserve(material) }))} />
-            )}
+            {/* F-PR-06: the same Reserve leather… as on Cutting & bundles' hides. */}
+            {daily && <ReserveLeather workOrder={workOrder} daily={daily} actions={actions?.daily} />}
           </span>
         </div>
         {materials.length === 0 ? (

@@ -11,8 +11,8 @@ import type { Notification, NotificationRow } from './model'
  * Placeholders: {actor} the person who caused it (by id, named in `people`; none: "the system"), {record} the record's
  * label, {title} a task's or a rule's title, {kind} a Today row's kind in words, {status} a decision (`w.status.<code>`),
  * {figure} the amount the reader may see — only when the params still hold it (the API drops an amount whose grain the
- * reader lost); {count}, {entered}, {left} the rows of a followed saved view (B-W2b-385). An unknown key says "News on
- * {record}".
+ * reader lost); {count}, {entered}, {left} the rows of a followed saved view (B-W2b-385); {customer} the customer of an issue's
+ * task (F-PR-05b). An unknown key says "News on {record}".
  */
 
 /** A marked amount `{ $money, value }` (kept by the API only for a reader with its grain), or the bare value. */
@@ -31,11 +31,20 @@ export function figureWords(params: Readonly<Record<string, unknown>>, t: Transl
   return parts.length === 0 ? '' : t('w.figure', { parts: parts.join(', ') })
 }
 
+const paramsOf = (notification: Pick<Notification, 'params'>): Record<string, unknown> =>
+  (notification.params && typeof notification.params === 'object' && !Array.isArray(notification.params) ? notification.params : {}) as Record<string, unknown>
+
+/** Who caused it, by name ("the system" when nobody did; "someone" when the reader may not know who). */
+function actorWords(notification: Pick<Notification, 'params' | 'actor' | 'people'>, t: Translate): string {
+  const params = paramsOf(notification)
+  const actorId = typeof params.actorId === 'string' ? params.actorId : (notification.actor?.id ?? null)
+  return actorId ? (notification.people[actorId] ?? (notification.actor?.id === actorId ? notification.actor.name : null) ?? t('w.someone')) : t('w.system')
+}
+
 /** The notification's sentence, as its reader reads it now. */
 export function sentenceWords(notification: Pick<Notification, 'messageKey' | 'params' | 'record' | 'actor' | 'people'>, t: Translate, locale: Locale): string {
-  const params = (notification.params && typeof notification.params === 'object' && !Array.isArray(notification.params) ? notification.params : {}) as Record<string, unknown>
-  const actorId = typeof params.actorId === 'string' ? params.actorId : (notification.actor?.id ?? null)
-  const actor = actorId ? (notification.people[actorId] ?? (notification.actor?.id === actorId ? notification.actor.name : null) ?? t('w.someone')) : t('w.system')
+  const params = paramsOf(notification)
+  const actor = actorWords(notification, t)
   const statusCode = typeof params.status === 'string' ? params.status : ''
   const statusKey = `w.status.${statusCode}`
   const status = statusCode ? (t(statusKey) === statusKey ? statusCode : t(statusKey)) : ''
@@ -50,6 +59,8 @@ export function sentenceWords(notification: Pick<Notification, 'messageKey' | 'p
     count: typeof params.count === 'number' ? formatNumber(params.count, locale) : '',
     entered: typeof params.entered === 'number' ? formatNumber(params.entered, locale) : '',
     left: typeof params.left === 'number' ? formatNumber(params.left, locale) : '',
+    // F-PR-05b: the customer of an issue's task (a reported problem, an issue going up; told only to a reader of its record).
+    customer: typeof params.customer === 'string' ? params.customer : '',
   }
   const key = `w.${notification.messageKey}`
   const text = t(key, values)
@@ -57,6 +68,15 @@ export function sentenceWords(notification: Pick<Notification, 'messageKey' | 'p
 }
 
 /** B-TH-239: a row's words — folded new requests say "5 new requests came in" (the numbers stay on the chip), any other its sentence. */
-export function rowWords(row: Pick<NotificationRow, 'messageKey' | 'params' | 'record' | 'actor' | 'people' | 'fold'>, t: Translate, locale: Locale): string {
-  return row.fold ? t('fold.newRequests', { count: row.fold.requests }) : sentenceWords(row, t, locale)
+export function rowWords(row: Pick<NotificationRow, 'messageKey' | 'params' | 'record' | 'actor' | 'people' | 'fold'> & { readonly group?: { readonly records?: number | undefined } }, t: Translate, locale: Locale): string {
+  if (row.fold) return t('fold.newRequests', { count: row.fold.requests })
+  // ---- F-PR-22: one "Note to N" batch on several records is one row (threads T6, B-TH-045's batch group): "Alex Demo mentioned you on
+  // 12 orders" — the records this reader may read only (the API's `records`), never another customer's count.
+  const records = row.group?.records ?? 1
+  if (row.messageKey === MENTION_KEY && records > 1) return t('w.notifications.mentionedOn', { actor: actorWords(row, t), records: formatNumber(records, locale) })
+  // ---- end F-PR-22
+  return sentenceWords(row, t, locale)
 }
+
+/** F-PR-22: the message key of a mention (factory-domain notifications/rules MESSAGE_TEMPLATES). */
+const MENTION_KEY = 'notifications.mentioned'

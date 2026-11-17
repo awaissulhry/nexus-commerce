@@ -189,8 +189,19 @@ const roundNoOf = async (db: Reader, styleId: string, kind: SampleKind): Promise
 
 // ---- create --------------------------------------------------------------------------------------------------------------
 
-/** POST /sales/samples/rounds */
-export async function createRound(caller: CommandCaller, body: CreateRoundBody, idempotencyKey?: string): Promise<RoundView> {
+/** B-PR-27b: what a new round names, as its checks found it (the style, its revision, the company it is numbered in). */
+export interface RoundChecked {
+  readonly style: Prisma.StyleGetPayload<{ select: typeof STYLE_COLUMNS }>
+  readonly revision: { readonly id: string; readonly revision: number; readonly status: string }
+  readonly companyId: string
+}
+
+/**
+ * The checks of a new round, before its command (the route's, and B-PR-27b's accept of a customer's sample round ask): the style
+ * the caller sees (another customer's private label is not found), its company, its revision, the customer, the cells, the charge
+ * and the test zones; then sales.samples.manage over the company and the customer (else forbidden).
+ */
+export async function roundChecks(caller: CommandCaller, body: CreateRoundBody): Promise<RoundChecked> {
   const context = officeOf(caller)
   const amount = body.chargeAmountMinor as number | undefined
   assertCharge(amount, body.chargeCurrency)
@@ -224,48 +235,64 @@ export async function createRound(caller: CommandCaller, body: CreateRoundBody, 
   if (!may(context, SALES_SAMPLES_MANAGE, { companyId: checked.companyId, partyId: body.partyId ?? null })) {
     throw new ForbiddenError('Your role does not ask for sample rounds for this company or customer.')
   }
+  return checked
+}
+
+/**
+ * The round written INSIDE the caller's command (the route's own, and B-PR-27b's accept of a customer's sample round ask, which
+ * names it on the request in the same command): numbered SR-…, its maker follows it, audited (the charge marked as a price),
+ * sample_round.requested.
+ */
+export async function createRoundInCommand(tools: CommandTools, checked: RoundChecked, body: CreateRoundBody, id: string): Promise<{ readonly id: string; readonly number: string }> {
+  const { tx, now } = tools
+  const amount = body.chargeAmountMinor as number | undefined
+  const { formatted: number } = await allocateNumber(tools, { companyId: checked.companyId, kind: 'SAMPLE_ROUND' }, { type: 'SampleRound', id })
+  const createdById = authorOf(tools)
+  const roundNo = body.roundNo ?? (await roundNoOf(tx, checked.style.id, body.kind))
+  const data = {
+    id,
+    companyId: checked.companyId,
+    number,
+    styleId: checked.style.id,
+    revisionId: checked.revision.id,
+    kind: body.kind,
+    roundNo,
+    partyId: body.partyId ?? null,
+    cells: storedCells(body.cells),
+    dueDate: body.dueDate ? asDay(body.dueDate) : null,
+    instructions: body.instructions ?? null,
+    chargeAmountMinor: amount ?? null,
+    chargeCurrency: body.chargeCurrency ?? null,
+    testZones: body.testZones ?? null,
+    createdAt: now,
+    updatedAt: now,
+    createdById,
+  }
+  await tx.sampleRound.create({ data, select: { id: true } })
+  tools.audit({
+    action: 'sales.samples.request',
+    recordType: 'SampleRound',
+    recordId: id,
+    companyId: checked.companyId,
+    after: { ...data, stage: 'REQUESTED', dueDate: body.dueDate ?? null, chargeAmountMinor: markMoney('price', data.chargeAmountMinor), createdAt: toUtcIso(now), updatedAt: undefined },
+  })
+  if (createdById) await followInCommand(tools, { type: 'SampleRound', id, companyId: checked.companyId, siteId: null }, createdById, 'CREATOR', createdById)
+  tools.emit({
+    type: 'sample_round.requested',
+    subject: id,
+    companyId: checked.companyId,
+    payload: { sampleRoundId: id, number, styleId: checked.style.id, revisionId: checked.revision.id, kind: body.kind, roundNo, partyId: data.partyId },
+  })
+  return { id, number }
+}
+
+/** POST /sales/samples/rounds */
+export async function createRound(caller: CommandCaller, body: CreateRoundBody, idempotencyKey?: string): Promise<RoundView> {
+  const amount = body.chargeAmountMinor as number | undefined
+  // B-PR-27b: the checks and the write are shared with the accept of a customer's sample round ask.
+  const checked = await roundChecks(caller, body)
   const id = newId()
-  await command(caller, { name: 'sales.samples.request', idempotencyKey, input: { ...body, chargeAmountMinor: markMoney('price', amount ?? null) } }, async (tools) => {
-    const { tx, now } = tools
-    const { formatted: number } = await allocateNumber(tools, { companyId: checked.companyId, kind: 'SAMPLE_ROUND' }, { type: 'SampleRound', id })
-    const createdById = authorOf(tools)
-    const roundNo = body.roundNo ?? (await roundNoOf(tx, checked.style.id, body.kind))
-    const data = {
-      id,
-      companyId: checked.companyId,
-      number,
-      styleId: checked.style.id,
-      revisionId: checked.revision.id,
-      kind: body.kind,
-      roundNo,
-      partyId: body.partyId ?? null,
-      cells: storedCells(body.cells),
-      dueDate: body.dueDate ? asDay(body.dueDate) : null,
-      instructions: body.instructions ?? null,
-      chargeAmountMinor: amount ?? null,
-      chargeCurrency: body.chargeCurrency ?? null,
-      testZones: body.testZones ?? null,
-      createdAt: now,
-      updatedAt: now,
-      createdById,
-    }
-    await tx.sampleRound.create({ data, select: { id: true } })
-    tools.audit({
-      action: 'sales.samples.request',
-      recordType: 'SampleRound',
-      recordId: id,
-      companyId: checked.companyId,
-      after: { ...data, stage: 'REQUESTED', dueDate: body.dueDate ?? null, chargeAmountMinor: markMoney('price', data.chargeAmountMinor), createdAt: toUtcIso(now), updatedAt: undefined },
-    })
-    if (createdById) await followInCommand(tools, { type: 'SampleRound', id, companyId: checked.companyId, siteId: null }, createdById, 'CREATOR', createdById)
-    tools.emit({
-      type: 'sample_round.requested',
-      subject: id,
-      companyId: checked.companyId,
-      payload: { sampleRoundId: id, number, styleId: checked.style.id, revisionId: checked.revision.id, kind: body.kind, roundNo, partyId: data.partyId },
-    })
-    return { id }
-  }).catch(databaseRefusal)
+  await command(caller, { name: 'sales.samples.request', idempotencyKey, input: { ...body, chargeAmountMinor: markMoney('price', amount ?? null) } }, (tools) => createRoundInCommand(tools, checked, body, id)).catch(databaseRefusal)
   return readRound(caller, id)
 }
 

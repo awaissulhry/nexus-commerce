@@ -1,0 +1,74 @@
+{
+  "page": {
+    "title": "Waiting for you",
+    "updated": "Updated {time}"
+  },
+  "loading": "Reading what waits for you…",
+  "failed": "We could not read what waits for you.",
+  "retry": "Try again",
+  "empty": "Nothing waits for you.",
+  "notice": {
+    "hide": "Hide",
+    "undone": "Your answer was taken back: nothing was sent."
+  },
+  "group": {
+    "production": "Production approvals",
+    "order": "Order",
+    "quality": "Quality",
+    "mtm": "Made-to-measure",
+    "payment": "Payment",
+    "other": "Other approvals"
+  },
+  "row": {
+    "SAMPLE": "Approve the sample {label}",
+    "FABRIC": "Approve the fabric {label}",
+    "TRIM": "Approve the trim {label}",
+    "COLOUR": "Approve the colour {label}",
+    "LEATHER": "Approve the leather {label}",
+    "ARTWORK": "Approve the artwork {label}",
+    "REVISED_ORDER": "Re-confirm the revised order {label}",
+    "REPROMISE": "Answer the new date {label}",
+    "COUNTER_OFFER": "Answer our suggestion {label}",
+    "CONCESSION": "Answer the concession {label}",
+    "PROOF": "Approve the design proof {label}",
+    "SIGNATURE": "Sign {label}",
+    "PAY_DEPOSIT": "Pay the deposit for {label}",
+    "PAY_INVOICE": "Pay invoice {label}"
+  },
+  "verb": {
+    "review": "Review",
+    "reconfirm": "Re-confirm",
+    "answerDate": "Answer",
+    "answerCounter": "Answer",
+    "sign": "Sign",
+    "view": "View",
+    "pay": "Pay"
+  },
+  "heldFor": {
+    "person": "Waiting for {name}",
+    "buyer": "Waiting for your buyer"
+  },
+  "askedBy": "Asked by {name}",
+  "amount": "{amount} to pay",
+  "done": {
+    "pending": {
+      "APPROVED": "Approved: it goes to us in a few seconds",
+      "APPROVED_WITH_CHANGES": "Approved with changes: it goes to us in a few seconds",
+      "REFUSED": "Refused: it goes to us in a few seconds"
+    },
+    "sent": {
+      "APPROVED": "Approved: sent to us",
+      "APPROVED_WITH_CHANGES": "Approved with changes: sent to us",
+      "REFUSED": "Refused: sent to us"
+    },
+    "sending": "Sending…"
+  },
+  "problem": {
+    "gone": "This request no longer waits for an answer.",
+    "forbidden": "Your access does not let you answer this request.",
+    "changed": "This request changed in the meantime: open it again.",
+    "invalid": "Your answer is not complete: open it again.",
+    "unavailable": "We could not reach the server: your answer was not sent. Try again.",
+    "internal": "Something went wrong: your answer was not sent. Try again."
+  }
+}

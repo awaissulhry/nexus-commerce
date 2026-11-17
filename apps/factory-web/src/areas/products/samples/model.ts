@@ -15,6 +15,8 @@ import {
   type SampleStage,
 } from '@nexus/factory-domain/sales/samples/rules'
 import { DECISION_LIMITS, DECISION_REFUSALS } from '@nexus/factory-domain/sales/sample-decisions/rules'
+import { SWATCH_KINDS, SWATCH_MATERIAL_KINDS, type SwatchKind } from '@nexus/factory-domain/sales/sample-decisions/rules' // F-PR-19
+import type { ItemKind } from '@nexus/factory-domain/product/materials/rules' // F-PR-19
 import type { CreateRoundBody, UpdateRoundBody } from '@nexus/factory-domain/sales/samples/contracts'
 import { isApiError, issuePath } from '../../../lib/api/errors'
 import type { ApprovalView, FitView, RoundRow, RoundView, ShipmentView, StyleDetail } from './api'
@@ -66,6 +68,8 @@ export interface SamplesCan {
   parties: boolean
   /** The style picker (product.styles.view). */
   styles: boolean
+  /** F-PR-19: the material picker of "Add a swatch" (product.materials.view). */
+  materials: boolean
 }
 
 export function samplesCan(permissions: readonly string[]): SamplesCan {
@@ -82,6 +86,7 @@ export function samplesCan(permissions: readonly string[]): SamplesCan {
     price: has('money.price'),
     parties: has('parties.view'),
     styles: has('product.styles.view'),
+    materials: has('product.materials.view'), // F-PR-19
   }
 }
 
@@ -668,3 +673,64 @@ export function shipmentValueProblem(field: 'carrierName' | 'trackingNumber' | '
   const max = field === 'carrierName' ? SAMPLE_LIMITS.carrierName : field === 'trackingNumber' ? SAMPLE_LIMITS.trackingNumber : field === 'trackingUrl' ? SAMPLE_LIMITS.trackingUrl : SAMPLE_LIMITS.shipmentNote
   return text.length > max ? { key: 'ship.problem.long', params: { max } } : null
 }
+
+// ---- F-PR-19: "Add a swatch" on the round's Approval tab (colour, leather and the new fabric and trim swatches) --------------------
+export { SWATCH_KINDS }
+export type { SwatchKind }
+
+/** A material or one of its colours as the dialog lists it. */
+export interface SwatchOption {
+  readonly id: string
+  readonly code: string
+  readonly name: string
+}
+
+/** What "Add a swatch" holds: the kind, the material search and pick, the colour of it, a note. */
+export interface SwatchDraft {
+  readonly kind: SwatchKind
+  readonly q: string
+  readonly itemId: string
+  readonly itemColourId: string
+  readonly note: string
+}
+
+export const emptySwatchDraft = (kind: SwatchKind = 'COLOUR'): SwatchDraft => ({ kind, q: '', itemId: '', itemColourId: '', note: '' })
+
+/**
+ * The material kinds a swatch of this kind is of — the database's rule (factory-domain sample-decisions SWATCH_MATERIAL_KINDS), so
+ * the picker lists only what the API takes: leather for a leather swatch; a textile, lining, membrane or padding for a fabric one;
+ * a trim, hardware, thread or label for a trim one; any material (a colour of it) for a colour swatch (undefined: no filter).
+ */
+export const swatchMaterialKinds = (kind: SwatchKind): readonly ItemKind[] | undefined => (SWATCH_MATERIAL_KINDS[kind] as readonly ItemKind[] | null) ?? undefined
+
+/** Why "Add a swatch" cannot open on this round (null: it may). */
+export function swatchAddHeld(round: Pick<RoundView, 'stage' | 'party' | 'style'>, can: SamplesCan, offline: boolean): Phrase | null {
+  if (!can.manage) return { key: 'held.noManage' }
+  if (!can.materials) return { key: 'swatch.held.noMaterials' }
+  if (round.stage === 'CANCELLED') return { key: 'refusal.SWATCH_ROUND_CANCELLED' }
+  // The swatch goes to the round's customer, else the style's brand (the API's rule): an internal round of an own style has none.
+  if (!round.party && !round.style.brandPartyId) return { key: 'swatch.held.internal' }
+  if (offline) return { key: 'held.offline' }
+  return null
+}
+
+/** Why "Add" is held in the dialog (null: it may be sent). */
+export function swatchDraftHeld(draft: SwatchDraft): Phrase | null {
+  if (!draft.itemId) return { key: 'swatch.held.material' }
+  if (!draft.itemColourId) return { key: 'swatch.held.colour' }
+  if (draft.note.trim().length > DECISION_LIMITS.swatchNote) return { key: 'swatch.held.long', params: { max: DECISION_LIMITS.swatchNote } }
+  return null
+}
+
+/** The body of POST /sales/samples/swatches from the draft: the round's style and the round (its customer is the swatch's). */
+export function swatchBodyOf(round: Pick<RoundView, 'id' | 'style'>, draft: SwatchDraft) {
+  return {
+    styleId: round.style.id,
+    roundId: round.id,
+    kind: draft.kind,
+    itemId: draft.itemId,
+    itemColourId: draft.itemColourId,
+    ...(draft.note.trim() ? { note: draft.note.trim() } : {}),
+  }
+}
+// ---- end F-PR-19

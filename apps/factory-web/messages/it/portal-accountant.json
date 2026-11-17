@@ -9,15 +9,15 @@
     "hide": "Nascondi"
   },
   "access": {
-    "title": "Il tuo accesso",
+    "title": "Il vostro accesso",
     "body": "Accesso in sola lettura per {firm} alla contabilità di {company}, dato da {name}. Termina il {date}. Ogni download viene registrato.",
     "bodyNoName": "Accesso in sola lettura per {firm} alla contabilità di {company}. Termina il {date}. Ogni download viene registrato.",
     "preview": "Stai guardando lo spazio di {firm} come ufficio: mostra i file di {company} come li vede il commercialista e da un'anteprima non si scarica nulla.",
-    "endsSoon": "Il tuo accesso termina presto:"
+    "endsSoon": "Il vostro accesso termina presto:"
   },
   "period": {
     "title": "Periodo",
-    "hint": "Scegli un mese, un trimestre o un anno. Il resto della pagina segue il periodo; vedi i mesi che l'amministrazione ha consegnato.",
+    "hint": "Scegliete un mese, un trimestre o un anno. Il resto della pagina segue il periodo; vedete i mesi che l'amministrazione ha consegnato.",
     "kindLabel": "Mostra per",
     "kind": {
       "MONTH": "Mese",
@@ -32,17 +32,17 @@
       "SOFT": "Bloccato il {date}",
       "HARD": "Chiuso definitivamente il {date}"
     },
-    "someMissing_one": "{count} mese di questo periodo non è ancora consegnato: chiedi all'amministrazione.",
-    "someMissing_other": "{count} mesi di questo periodo non sono ancora consegnati: chiedi all'amministrazione.",
+    "someMissing_one": "{count} mese di questo periodo non è ancora consegnato: chiedete all'amministrazione.",
+    "someMissing_other": "{count} mesi di questo periodo non sono ancora consegnati: chiedete all'amministrazione.",
     "noneYet": "L'amministrazione non ha ancora consegnato nessun periodo",
-    "noneYetBody": "Un mese compare qui quando l'amministrazione ne ha fatto l'esportazione contabile. Scrivi all'amministrazione qui sotto.",
+    "noneYetBody": "Un mese compare qui quando l'amministrazione ne ha fatto l'esportazione contabile. Scrivete all'amministrazione qui sotto.",
     "refusedTitle": "Non ancora consegnato"
   },
   "exports": {
     "title": "Esportazioni contabili",
-    "hint": "Le esportazioni numerate che l'amministrazione ha preparato per te. Una riesportazione contiene solo ciò che è cambiato rispetto a quella che modifica.",
+    "hint": "Le esportazioni numerate che l'amministrazione ha preparato per voi. Una riesportazione contiene solo ciò che è cambiato rispetto a quella che modifica.",
     "empty": "Nessuna esportazione per questo periodo",
-    "emptyBody": "Chiedi all'amministrazione."
+    "emptyBody": "Chiedete all'amministrazione."
   },
   "einvoices": {
     "title": "Fatture elettroniche",
@@ -126,11 +126,11 @@
     "MANUAL": "Registrata a mano",
     "loading": "Caricamento…",
     "slow": "Ancora in caricamento…",
-    "failed": "Non siamo riusciti a leggere i tuoi file contabili",
-    "failedBody": "Non si è perso nulla. Riprova tra poco.",
+    "failed": "Non siamo riusciti a leggere i vostri file contabili",
+    "failedBody": "Non si è perso nulla. Riprovate tra poco.",
     "retry": "Riprova",
     "listFailed": "Non siamo riusciti a leggere questo periodo",
-    "listFailedBody": "Non si è perso nulla. Riprova tra poco."
+    "listFailedBody": "Non si è perso nulla. Riprovate tra poco."
   },
   "kind": {
     "INVOICE": "Fattura",
@@ -158,30 +158,30 @@
   },
   "held": {
     "preview": "Questa è l'anteprima dell'ufficio: da qui non si scarica nulla.",
-    "offline": "Nessuna connessione: i download aspettano che tu sia di nuovo online.",
+    "offline": "Nessuna connessione: i download aspettano che siate di nuovo online.",
     "busy": "Un download è in corso.",
-    "choose": "Scegli prima i file.",
+    "choose": "Scegliete prima i file.",
     "noXml": "Nessun XML in questo periodo.",
     "reading": "Il periodo è ancora in lettura.",
     "nothing": "In questo periodo non c'è nessun file."
   },
   "refusal": {
-    "NOT_ACCOUNTANT": "Questa pagina è del commercialista: il tuo accesso non la apre.",
-    "PERIOD_NOT_SHARED": "L'amministrazione non ha ancora consegnato questo periodo: non ha un'esportazione contabile. Chiedi all'amministrazione.",
+    "NOT_ACCOUNTANT": "Questa pagina è del commercialista: il vostro accesso non la apre.",
+    "PERIOD_NOT_SHARED": "L'amministrazione non ha ancora consegnato questo periodo: non ha un'esportazione contabile. Chiedete all'amministrazione.",
     "FILE_NOT_IN_PERIOD": "Questo file non è tra quelli del periodo: il periodo è stato letto di nuovo.",
-    "TOO_MANY_FILES": "Uno zip contiene al massimo 400 file: scegli un periodo più breve o meno file.",
-    "TOO_LARGE": "Uno zip contiene al massimo 100 MB: scegli un periodo più breve o meno file.",
+    "TOO_MANY_FILES": "Uno zip contiene al massimo 400 file: scegliete un periodo più breve o meno file.",
+    "TOO_LARGE": "Uno zip contiene al massimo 100 MB: scegliete un periodo più breve o meno file.",
     "NOTHING_TO_ZIP": "Non c'è nessun file da mettere nello zip.",
-    "FILE_UNAVAILABLE": "Nessuno di questi file è più nell'archivio dei file, quindi lo zip non si può creare. Chiedi all'amministrazione.",
-    "generic": "Il download non è riuscito. Riprova.",
-    "network": "La fabbrica non risponde. Riprova tra poco."
+    "FILE_UNAVAILABLE": "Nessuno di questi file è più nell'archivio dei file, quindi lo zip non si può creare. Chiedete all'amministrazione.",
+    "generic": "Il download non è riuscito. Riprovate.",
+    "network": "La fabbrica non risponde. Riprovate tra poco."
   },
   "done": {
     "file": "Download di {name} in corso.",
     "zip": "{name} è salvato su questo dispositivo."
   },
   "noAccess": {
-    "title": "Non fa parte del tuo accesso",
+    "title": "Non fa parte del vostro accesso",
     "body": "Questa pagina è lo spazio del commercialista per la contabilità dell'azienda.",
     "home": "Vai alla Home"
   },

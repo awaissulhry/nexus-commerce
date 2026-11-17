@@ -11,6 +11,7 @@ import { actorOf } from '../../core/context'
 import { erasedAmong, erasedForOutside } from './feed-depth'
 import { mayOnThread, mayShare, wallScopeOf } from './records'
 import { contextOf, ensureThread, officeRecord, scopeOfThread, writeMessage, type RecordRef } from './threads'
+import { walledForOutside } from '../files/content-wall' // fix-wall-1
 
 /**
  * B-TH-091 (threads plan TH-9, N4, L2-G11; T2-F07 "2 pinned", T3-F12 "Pin for everyone", PROJ.thread-F06, O-SAL-INQ-LIST.pane-facts-F06;
@@ -91,12 +92,12 @@ async function pinsOf(client: Reader, threadId: string, office: boolean): Promis
   }
 }
 
-function viewsOf(read: Awaited<ReturnType<typeof pinsOf>>, removed: ReadonlySet<string>, office: boolean): PinView[] {
+function viewsOf(read: Awaited<ReturnType<typeof pinsOf>>, removed: ReadonlySet<string>, office: boolean, /* fix-wall-1 */ walled: ReadonlySet<string> = new Set()): PinView[] {
   return read.pins.map((pin) => {
     const message = read.messages.get(pin.messageId)!
     return {
       ...pin,
-      message: { authorName: message.authorName, excerpt: excerptOf(message.bodyText), at: toUtcIso(message.at), ...(office ? { audience: message.audience } : {}), attachmentCount: message.attachmentFileIds.length, removed: removed.has(message.id) },
+      message: { authorName: message.authorName, excerpt: excerptOf(message.bodyText), at: toUtcIso(message.at), ...(office ? { audience: message.audience } : {}), attachmentCount: message.attachmentFileIds.filter((fileId) => !walled.has(fileId)).length /* fix-wall-1 */, removed: removed.has(message.id) },
     }
   })
 }
@@ -124,7 +125,9 @@ export async function listPins(caller: CommandCaller, record: RecordRef): Promis
   })
   if (!read) return { pins: [] }
   const removed = read.removed ?? (await erasedForOutside(caller, context.tenantId, [...read.pins.messages.values()]))
-  return { pins: viewsOf(read.pins, removed, office) }
+  // fix-wall-1: a portal reader's count leaves out a file whose content is another customer's (it never sees it).
+  const walled = office ? new Set<string>() : await walledForOutside(caller, [...read.pins.messages.values()].flatMap((message) => message.attachmentFileIds))
+  return { pins: viewsOf(read.pins, removed, office, walled) }
 }
 
 /** The office writer's thread of the record (threads.post over it), or the refusal. */

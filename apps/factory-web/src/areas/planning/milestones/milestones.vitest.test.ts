@@ -3,6 +3,12 @@ import { ApiError } from '../../../lib/api/errors'
 import { refusalOf as boardRefusalOf } from '../board/model'
 import { FIXTURES } from './fixtures'
 import { bodyOf, canOf, controlsOf, draftHeld, emptyDraft, heldOf, kindsLeft, milestoneName, queryOf, reasonHeld, refusalOf, rowsOf, selectableHeld, stateTone, trackerSteps, visibleOrders, visibleRows } from './model'
+// F-PR-19
+import { GATE_KINDS, isSampleGate, shapeRefusal } from '@nexus/factory-domain/planning/milestones/rules'
+import { SAMPLE_KINDS } from '@nexus/factory-domain/sales/samples/rules'
+import { CATALOGUE } from '../../../lib/i18n/messages'
+import { designScreen } from './fixtures'
+import { GATE_PICKER_KINDS, roundFitsGate, roundsForGate } from './model'
 
 /** Time & action's screen rules (B-W2b-263, SCR-253): made-up data from the design cases. */
 
@@ -66,8 +72,8 @@ describe('held in our words', () => {
     expect(draftHeld(emptyDraft('OTHER'), t)).toBe('refusal.LABEL_NEEDED')
     expect(draftHeld({ ...emptyDraft('LAB_PASSED'), sampleRoundId: 'x' }, t)).toBe('refusal.ROUND_ONLY_SAMPLE')
     expect(bodyOf({ ...emptyDraft('LAB_PASSED'), sampleRoundId: 'x', label: '  ' })).toEqual({ kind: 'LAB_PASSED', label: null, targetDate: null, sampleRoundId: null, ownerId: null })
-    // B-PR-23 (#1590, production lane): GateKind SIZE_SET joined GATE_KINDS (after OTHER, in the domain's order); it is a sample gate.
-    expect(kindsLeft(FIXTURES.ORDERS[1]!)).toEqual(['SAMPLE_APPROVED', 'TRIMS_IN', 'PP_SAMPLE', 'OTHER', 'SIZE_SET'])
+    // B-PR-23 (#1590, production lane): GateKind SIZE_SET joined GATE_KINDS; it is a sample gate. F-PR-19: the picker reads Other last.
+    expect(kindsLeft(FIXTURES.ORDERS[1]!)).toEqual(['SAMPLE_APPROVED', 'TRIMS_IN', 'PP_SAMPLE', 'SIZE_SET', 'OTHER'])
     expect(draftHeld({ ...emptyDraft('SIZE_SET'), sampleRoundId: 'x' }, t)).toBeNull()
     // end B-PR-23
   })
@@ -77,5 +83,74 @@ describe('held in our words', () => {
     expect(refusalOf(new Error('x'))).toBe('refusal.failed')
     expect(boardRefusalOf(conflict(['gate/g1', 'gate/g2', 'refusal/GATE_NOT_PASSED']))).toEqual({ code: 'GATE_NOT_PASSED', gates: ['g1', 'g2'] })
     expect(canOf(['planning.view', 'planning.milestones.manage'])).toEqual({ view: true, manage: true, override: false })
+  })
+})
+
+// ---- F-PR-19 -------------------------------------------------------------------------------------------------------------------
+/**
+ * F-PR-19 (production plan §5 "Samples, Milestones, Promises: new kinds"; threads lead 11-17 (a) and (b)): the gate-kind picker
+ * reads Other last; a sample gate offers only the rounds its kind accepts — a size set gate its size set rounds, a pre-production
+ * sample gate its pre-production rounds, "sample approved" any round but a top-of-production one (a TOP round gates nothing) — so
+ * the dialog never offers what the API refuses. Made-up data.
+ */
+describe('F-PR-19: the size set gate and the rounds each gate accepts', () => {
+  it('the picker: every kind once, in the domain’s order, Other last', () => {
+    expect([...GATE_PICKER_KINDS].sort()).toEqual([...GATE_KINDS].sort())
+    expect(GATE_PICKER_KINDS.at(-1)).toBe('OTHER')
+    expect(GATE_PICKER_KINDS.indexOf('SIZE_SET')).toBeLessThan(GATE_PICKER_KINDS.indexOf('OTHER'))
+    // An order with every kind but Other: Other is still offered (as many as needed), last.
+    const full = { ...FIXTURES.ORDERS[1]!, gates: GATE_KINDS.filter((kind) => kind !== 'OTHER').map((kind) => ({ ...FIXTURES.ORDERS[1]!.gates[0]!, kind })) }
+    expect(kindsLeft(full)).toEqual(['OTHER'])
+  })
+
+  it('roundFitsGate says what the API’s own rule says, for every gate kind and every round kind', () => {
+    for (const kind of GATE_KINDS) {
+      for (const roundKind of SAMPLE_KINDS) {
+        const api = shapeRefusal(kind, kind === 'OTHER' ? 'Hang tag' : null, { number: 'SR-DEMO-0001', decision: null, kind: roundKind })
+        expect(roundFitsGate(kind, roundKind), `${kind} × ${roundKind}`).toBe(api === null)
+      }
+    }
+    expect(roundFitsGate('SIZE_SET', 'SIZE_SET')).toBe(true)
+    expect(roundFitsGate('SIZE_SET', 'TOP_OF_PRODUCTION')).toBe(false)
+    expect(roundFitsGate('SAMPLE_APPROVED', 'TOP_OF_PRODUCTION')).toBe(false)
+    expect(roundFitsGate('PP_SAMPLE', 'SIZE_SET')).toBe(false)
+  })
+
+  it('each sample gate is offered only its own rounds; a gate that is not a sample gate none', () => {
+    const rounds = FIXTURES.CHOICES_ALL_KINDS.rounds
+    const ids = (kind: (typeof GATE_KINDS)[number]) => roundsForGate(kind, rounds).map((round) => round.number)
+    expect(ids('SIZE_SET')).toEqual([FIXTURES.ROUND_SIZE_SET.number])
+    expect(ids('PP_SAMPLE')).toEqual(['SR-DEMO-0031'])
+    expect(ids('SAMPLE_APPROVED')).not.toContain(FIXTURES.ROUND_TOP.number)
+    expect(ids('SAMPLE_APPROVED')).toContain(FIXTURES.ROUND_SIZE_SET.number)
+    for (const kind of GATE_KINDS.filter((entry) => !isSampleGate(entry))) expect(ids(kind), kind).toEqual([])
+    // A TOP round gates nothing: no gate kind offers it.
+    for (const kind of GATE_KINDS) expect(ids(kind), kind).not.toContain(FIXTURES.ROUND_TOP.number)
+  })
+
+  it('a named round the kind does not accept (a gate kept from before) holds Save with the rule’s words', () => {
+    const rounds = FIXTURES.CHOICES_ALL_KINDS.rounds
+    const pp = rounds.find((round) => round.kind === 'PRE_PRODUCTION')!
+    expect(draftHeld({ ...emptyDraft('SIZE_SET'), sampleRoundId: pp.id }, t, rounds)).toBe('refusal.ROUND_KIND')
+    expect(draftHeld({ ...emptyDraft('SIZE_SET'), sampleRoundId: FIXTURES.ROUND_SIZE_SET.id }, t, rounds)).toBeNull()
+    expect(draftHeld({ ...emptyDraft('SAMPLE_APPROVED'), sampleRoundId: FIXTURES.ROUND_TOP.id }, t, rounds)).toBe('refusal.ROUND_KIND')
+    // Without the order's rounds (not read yet) nothing is guessed: the API decides.
+    expect(draftHeld({ ...emptyDraft('SIZE_SET'), sampleRoundId: pp.id }, t)).toBeNull()
+  })
+
+  it('the size set design case exists and the words of the dialog exist in both languages', () => {
+    expect(designScreen.cases.some((item) => item.id === 'add-size-set')).toBe(true)
+    for (const locale of ['it', 'en'] as const) {
+      const words = CATALOGUE[locale]['planning-milestones']!
+      for (const key of ['form.roundHint', 'form.roundHintPp', 'form.roundHintSizeSet', 'kind.SIZE_SET', 'kindHint.SIZE_SET', 'roundKind.SIZE_SET', 'roundKind.TOP_OF_PRODUCTION', 'refusal.ROUND_KIND']) expect(words[key], `${locale} ${key}`).toBeTruthy()
+    }
+  })
+
+  it('PW-06 (dialog): the rounds drawn are only the order’s own choices the API sent, filtered — the web adds none', () => {
+    const choices = FIXTURES.CHOICES_ALL_KINDS
+    for (const kind of GATE_KINDS) {
+      const drawn = roundsForGate(kind, choices.rounds)
+      expect(drawn.every((round) => choices.rounds.includes(round)), kind).toBe(true)
+    }
   })
 })

@@ -30,6 +30,10 @@ import { WaitingOnPill } from '../../../../lib/production/view/WaitingOnPill'
 import { CustomerFilter } from '../../_shared/customer/view/CustomerFilter'
 import type { ListGroups } from '../../../../list-frame/groups/model'
 import type { ListSort } from '../../_shared/api'
+// F-PR-21: the production supervisor — the column (Me / Someone else / Not set), "Assign supervisor…", THE assign dialog.
+import { UserCog } from 'lucide-react'
+import { assignHeld, markKeyOf, SUPERVISOR_NS, targetsOfRows } from '../../../_shared/production-supervisor/model'
+import { AssignSupervisorDialog } from '../../../_shared/production-supervisor/view/AssignSupervisorDialog'
 import {
   blockedKeyOf,
   boardMarksOf,
@@ -50,7 +54,13 @@ import {
   termsOf,
   waitingInputOf,
   type ListTerms,
+  // F-PR-18: the Customer urgency column (under Columns ▾) and its filter.
+  customerUrgencyCellOf,
 } from '../list/model'
+// F-PR-22: "Note to N…" on a selection and a row's "Office note…" (THE note dialog).
+import { MessageSquareLock } from 'lucide-react'
+import { NOTES_NS, openHeld } from '../../_shared/notes/model'
+import { NoteDialog } from '../../_shared/notes/view/NoteDialog'
 // ---- end F-PR-03
 
 export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
@@ -61,7 +71,8 @@ export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
  * Done (finished, bar and words one figure) · Due · Health (late, at risk, blocked, on track) · Waiting on · Blocked by · ⋯, with
  * Pieces, Readiness, Priority and Site under Columns ▾; the customer filter and the quick filters Waiting on, Health, Blocked by
  * (each a chip); Group ▾ By customer (each header the server's figures for that customer); the tiles At risk and Waiting on
- * customer; board cards with the customer code, the health and who the work waits on. Hold N as before. Key hints only in the
+ * customer; board cards with the customer code, the health and who the work waits on. Hold N opens THE one "Put on hold" dialog
+ * (F-PR-05b: the picked reason decides a quality hold or a plain production hold, each with its own right). Key hints only in the
  * footer's information icon (the frame's).
  *
  * SCR-069 — Work orders (Production; design production.workorders, 00 §2.1 list frame): the tiles (each a saved view),
@@ -75,7 +86,7 @@ export type { WorkOrdersListActions, WorkOrdersListModel } from '../list-model'
  */
 export function WorkOrdersListView({ model, actions }: { model: WorkOrdersListModel; actions?: WorkOrdersListActions }) {
   return (
-    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists']}>
+    <WithMessages namespaces={['production', DAILY_NAMESPACE, SHIFT_NAMESPACE, 'lists', /* F-PR-21 */ SUPERVISOR_NS, /* F-PR-22 */ NOTES_NS]}>
       <WorkOrdersList model={model} actions={actions} />
     </WithMessages>
   )
@@ -133,8 +144,19 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
   const daily = model.daily ?? null
   const holdWait = daily ? say(tw, bulkHoldHeld(picked, daily.can)) : null
   const ownKeys: ListKey[] = [{ keys: ['c'], does: t('list.keyNew') }]
+  // F-PR-21: why "Assign supervisor…" waits (no right, no customer order, over 100 orders).
+  const tsv = useT(SUPERVISOR_NS)
+  const assignWait = assignHeld(model.supervisorCan ?? { manage: false }, targetsOfRows(picked, false))
+  const assignWaitWords = assignWait ? tsv(assignWait.key, assignWait.params) : null
   // F-PR-03: a customer cell names the customer with parties.view, else its code (06-tree A.0).
   const names = model.customers?.names ?? false
+  // F-PR-22: why "Note to N…" / a row's "Office note…" waits (no threads.post, over 100 work orders).
+  const tn = useT(NOTES_NS)
+  const noteCan = model.noteCan ?? false
+  const noteWait = openHeld(noteCan, picked.length)
+  const noteWaitWords = noteWait ? tn(noteWait.key, noteWait.params) : null
+  const rowNoteWait = openHeld(noteCan, 1)
+  const rowNoteWaitWords = rowNoteWait ? tn(rowNoteWait.key, rowNoteWait.params) : null
 
   const columns = useMemo<ColDef<WorkOrderRow>[]>(() => {
     const href = (row: WorkOrderRow) => `${model.prefix}/production/work-orders/${row.id}`
@@ -233,6 +255,18 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       const key = blockedKeyOf(data)
       return key ? <Tag tone="warning">{t(key)}</Tag> : <span>—</span>
     }
+    // F-PR-21: the supervisor for the reader — never a name on a list (names only inside one record); no customer: "—".
+    const SupervisorCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
+      if (!data) return null
+      const key = markKeyOf(data.supervisor)
+      return key ? <span>{tsv(key)}</span> : <span>—</span>
+    }
+    // F-PR-18: the customer's own urgency (Urgent 2 · Urgent – asked · Regular · Set to regular by us); none: "—".
+    const UrgencyCell = ({ data }: ICellRendererParams<WorkOrderRow>) => {
+      if (!data) return null
+      const cell = customerUrgencyCellOf(data)
+      return cell ? <Tag tone={cell.tone}>{tw(cell.key, cell.params)}</Tag> : <span>—</span>
+    }
     const DueCell = ({ data }: ICellRendererParams<WorkOrderRow>) =>
       data ? (
         data.dueDate ? (
@@ -270,8 +304,9 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
             { id: 'open', label: t('list.open'), href: href(data) },
             { id: 'tab', label: t('list.openNewTab'), href: href(data), target: '_blank' },
             { id: 'cutting', label: t('tab.cutting'), href: `${href(data)}?tab=cutting` },
-            { id: 'bundles', label: t('tab.bundles'), href: `${href(data)}?tab=bundles` },
             { id: 'traveller', label: ts('docs.openTraveller'), href: travellersHref(model.prefix, [data.id]), target: '_blank' },
+            // F-PR-22: an office note on this work order (or its sales orders), with @ and its supervisor asked.
+            { id: 'note', label: tn('open.row'), ...(rowNoteWaitWords ? { disabled: true, description: rowNoteWaitWords } : { onSelect: () => latest.current.actions?.onNote?.([data.id], 'row') }) },
           ]}
         />
       ) : null
@@ -287,13 +322,17 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       { colId: 'risk', headerName: t('col.health'), minWidth: 120, flex: 0.8, sortable: false, cellRenderer: HealthCell },
       { colId: 'waitingOn', headerName: t('col.waitingOn'), minWidth: 150, flex: 1, sortable: false, cellRenderer: WaitingCell },
       { colId: 'blockedBy', headerName: t('col.blockedBy'), minWidth: 110, flex: 0.7, sortable: false, cellRenderer: BlockedCell },
+      // F-PR-21 (the export's column id `supervisor`).
+      { colId: 'supervisor', headerName: tw('supervisor.column'), minWidth: 120, flex: 0.7, sortable: false, cellRenderer: SupervisorCell },
       later({ colId: 'pieces', headerName: t('col.pieces'), field: 'pieces', minWidth: 76, flex: 0.5, type: 'rightAligned' }),
       later({ colId: 'readiness', headerName: tw('readiness.column'), minWidth: 130, flex: 0.9, cellRenderer: ReadinessCell }),
       later({ colId: 'priority', headerName: t('col.priority'), field: 'priority', minWidth: 112, flex: 0.6, type: 'rightAligned', cellRenderer: PriorityCell }),
       later({ colId: 'site', headerName: t('col.site'), field: 'siteCode', minWidth: 80, flex: 0.5 }),
+      // F-PR-18 (the export's column id `customerUrgency`): under Columns ▾.
+      later({ colId: 'customerUrgency', headerName: tw('urgency.column'), headerTooltip: tw('urgency.hint'), minWidth: 150, flex: 0.9, sortable: false, cellRenderer: UrgencyCell }),
       { colId: 'more', headerName: t('col.more'), minWidth: 72, maxWidth: 72, pinned: 'right', sortable: false, suppressHeaderMenuButton: true, suppressMovable: true, cellRenderer: MoreCell },
     ]
-  }, [t, tw, ts, locale, model.prefix, model.can.orders, model.now, names, readiness])
+  }, [t, tw, ts, tsv, locale, model.prefix, model.can.orders, model.now, names, readiness, /* F-PR-22 */ tn, rowNoteWaitWords])
 
   // B-W2b-13 — the W2b list frame: board by state, calendar by due date, cards, the due quick filter, inline and bulk edit.
   const final = (row: WorkOrderRow) => (row.status === 'CLOSED' || row.status === 'CANCELLED' ? t('w2b.heldFinal') : null)
@@ -318,8 +357,10 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
       { id: 'waitingOn', kind: 'choice', label: t('filter.waitingOn'), choices: FILTER_CHOICES.waitingOn.map((choice) => ({ value: choice.value, label: t(choice.key) })) },
       { id: 'risk', kind: 'choice', label: t('filter.health'), choices: FILTER_CHOICES.risk.map((choice) => ({ value: choice.value, label: t(choice.key) })) },
       { id: 'blockedBy', kind: 'choice', label: t('filter.blockedBy'), choices: FILTER_CHOICES.blockedBy.map((choice) => ({ value: choice.value, label: t(choice.key) })) },
+      // F-PR-18: the Customer urgency filter (the API's computed term `customerUrgency`).
+      { id: 'customerUrgency', kind: 'choice', label: tw('urgency.filter'), choices: FILTER_CHOICES.customerUrgency.map((choice) => ({ value: choice.value, label: tw(choice.key) })) },
     ],
-    values: { due: model.due ?? null, rush: model.rush ? 'true' : null, waitingOn: model.waitingOn ?? null, risk: model.risk ?? null, blockedBy: model.blockedBy ?? null },
+    values: { due: model.due ?? null, rush: model.rush ? 'true' : null, waitingOn: model.waitingOn ?? null, risk: model.risk ?? null, blockedBy: model.blockedBy ?? null, /* F-PR-18 */ customerUrgency: model.customerUrgency ?? null },
     onChange: (id, value) => {
       if (id === 'rush') actions?.onRush?.(value === 'true')
       else if (id === 'due') actions?.onDue?.(value as never)
@@ -351,6 +392,8 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
     blockedBy: model.blockedBy ?? null,
     party: model.customers?.party ?? null,
     group: model.group ?? null,
+    supervisor: model.supervisor ?? null, // F-PR-21
+    customerUrgency: model.customerUrgency ?? null, // F-PR-18
   }
   const state = model.rows.problem ? (
     <EmptyState title={t('list.failed')} description={t(model.rows.problem)} action={<Button size="sm" onClick={() => actions?.onRetry?.()}>{t('common.retry')}</Button>} />
@@ -366,7 +409,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
               setQuery('')
               // F-PR-03: every filter off in one address (the sort, the mode and the grouping stay).
               const off = cleared(terms)
-              actions?.onTerms?.({ view: off.view, q: off.q, due: off.due, rush: off.rush, waitingOn: null, risk: null, blockedBy: null, party: null })
+              actions?.onTerms?.({ view: off.view, q: off.q, due: off.due, rush: off.rush, waitingOn: null, risk: null, blockedBy: null, party: null, /* F-PR-21, F-PR-18 */ supervisor: off.supervisor, customerUrgency: off.customerUrgency })
             }}
           >
             {t('list.clearFilters')}
@@ -441,7 +484,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
 
       <MetricStrip
         metrics={tiles.map((tile) => ({
-          label: t(`tile.${tile.id}`),
+          label: tile.id === 'mine' ? tw('supervisor.tile') : t(`tile.${tile.id}`), // F-PR-21: Mine
           value: tile.count === null ? '—' : String(tile.count),
           onClick: () => actions?.onTerms?.(tile.next),
           active: tile.active,
@@ -511,6 +554,14 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
                   <PauseCircle size={13} aria-hidden /> <SelectionLabel>{tw('bulk.hold', { count: picked.length })}</SelectionLabel>
                 </Button>
               )}
+              {/* F-PR-21: Assign supervisor… on the selection's orders (up to 100; held in words). */}
+              <Button size="sm" aria-label={tw('supervisor.assign')} heldReason={assignWaitWords} onClick={() => actions?.onAssignSupervisor?.(picked.map((row) => row.id))}>
+                <UserCog size={13} aria-hidden /> <SelectionLabel>{tw('supervisor.assign')}</SelectionLabel>
+              </Button>
+              {/* F-PR-22: one office note on each picked work order (or their sales orders), up to 100; held in words. */}
+              <Button size="sm" aria-label={tn('open.selection', { count: picked.length })} heldReason={noteWaitWords} onClick={() => actions?.onNote?.(picked.map((row) => row.id), 'selection')}>
+                <MessageSquareLock size={13} aria-hidden /> <SelectionLabel>{tn('open.selection', { count: picked.length })}</SelectionLabel>
+              </Button>
               {travellerWaitWords ? (
                 <Button size="sm" aria-label={ts('travellers.printSelected', { count: picked.length })} heldReason={travellerWaitWords}>
                   <Printer size={13} aria-hidden /> <SelectionLabel>{ts('travellers.printSelected', { count: picked.length })}</SelectionLabel>
@@ -555,7 +606,7 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
                 { label: t('col.pieces'), value: String(row.pieces) },
                 ...(row.dueDate ? [{ label: t('col.due'), value: formatDate(`${row.dueDate}T12:00:00Z`, { locale }) }] : []),
               ],
-              marks: row.risk !== undefined ? boardMarksOf(row, model.now ?? Date.now()).map((mark) => ({ label: mark.words.map((words) => t(words.key, words.params)).join(' · '), tone: mark.tone })) : row.daysLate ? [{ label: t('list.daysLate', { count: row.daysLate }), tone: 'danger' as const }] : [],
+              marks: row.risk !== undefined ? boardMarksOf(row, model.now ?? Date.now()).map((mark) => ({ label: mark.words.map((words) => heldWords(words.key, words.params)).join(' · '), tone: mark.tone })) : row.daysLate ? [{ label: t('list.daysLate', { count: row.daysLate }), tone: 'danger' as const }] : [],
             }),
             heldReason: t('w2b.boardHeld'),
           },
@@ -583,6 +634,10 @@ function WorkOrdersList({ model, actions }: { model: WorkOrdersListModel; action
         />
       )}
       {daily?.dialog?.kind === 'hold' && <HoldDialog numbers={daily.dialog.numbers} workOrderIds={daily.dialog.workOrderIds} daily={daily} actions={actions?.daily} />}
+      {/* F-PR-21 */}
+      {model.assign && <AssignSupervisorDialog model={model.assign} actions={actions?.supervisor} />}
+      {/* F-PR-22 */}
+      {model.note && <NoteDialog model={model.note} actions={actions?.note} />}
       {help && (
         <Modal open onClose={() => setHelp(false)} title={t('list.keysTitle')} size="sm">
           <ul className="fw-pr-list">

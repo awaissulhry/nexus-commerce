@@ -67,7 +67,7 @@ describe('where a node opens', () => {
   it('opens each kind on its record; a hidden party nowhere', () => {
     const byCode = (code: string | null) => LOT_TRACE.nodes.find((node) => node.code === code)!
     expect(nodeRecord(byCode('HD-DEMO-0003'))).toMatchObject({ type: 'Hide' })
-    expect(nodeRecord(byCode('BN-D-0101'))).toMatchObject({ type: 'WorkOrder', tab: 'bundles' })
+    expect(nodeRecord(byCode('BN-D-0101'))).toMatchObject({ type: 'WorkOrder', tab: 'cutting' })
     expect(nodeRecord(byCode('BLK 50'))).toMatchObject({ type: 'WorkOrder' })
     expect(nodeRecord(byCode('GR-D-0012'))).toMatchObject({ type: 'GoodsReceipt' })
     expect(nodeRecord(byCode('MOTO-ESEMPIO'))).toMatchObject({ type: 'Party' })

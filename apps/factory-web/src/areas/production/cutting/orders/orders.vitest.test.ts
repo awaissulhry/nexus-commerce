@@ -13,7 +13,7 @@ import { createTranslator, messagesFor } from '../../../../lib/i18n/messages'
 import { I18nProvider } from '../../../../lib/i18n/provider'
 import { RECORD_PAGES, recordAddress } from '../../../../lib/records/record-links'
 import { isWindowPage, OFFICE_PAGES } from '../../../../shell/nav/office-nav'
-import { CUT_LOG, CUTTING, OPEN_CUTS, WORK_ORDER_YIELD, ALLOCATED } from '../demo/fixtures'
+import { CUT_LOG, CUTTING, OPEN_CUTS, WORK_ORDER_YIELD } from '../demo/fixtures'
 import { designScreen as listScreen } from '../fixtures'
 import { allocateRolls, createCutOrder, listCutOrders, printTicket, reconcileCutOrder, voidTicket } from './api'
 import {
@@ -65,7 +65,6 @@ import {
   releaseHeld,
   rollHeld,
   rollsGate,
-  shadeLots,
   sheetAddressOf,
   sheetHref,
   ticketFacts,
@@ -81,7 +80,7 @@ import { rightRef } from '../../../../lib/i18n/rights'
 /**
  * Cutting in depth (B-W2b-129): the pure rules of cut orders (the list beside the leather cuts, New cut order, the lays and
  * their rolls by shade and shrinkage group, the tickets, Reconcile cut, the yield's issued vs used vs returned, the supplier lot
- * feedback, the same shade lot check, the lay sheet), the calls as the API of B-W2b-112 / B-W2b-116 takes them (the lay's
+ * feedback, the lay sheet), the calls as the API of B-W2b-112 / B-W2b-116 takes them (the lay's
  * version, a key per write), the pages in the map, the words of every domain code, and every design case drawn in Italian and
  * English with no message key or placeholder left on screen, no money and no person's name.
  */
@@ -274,11 +273,6 @@ describe('Reconcile cut and the yield', () => {
     expect(feedbackHeld({ supplier: null }, true)).toEqual({ key: 'feedback.held.noSupplier' })
   })
 
-  it('the same shade lot check: lot and shade of the hides cut, the allocated hides of a known lot join it', () => {
-    expect(shadeLots([{ lotCode: 'L1', shade: 'N2' }, { lotCode: 'L1', shade: 'N2' }], ALLOCATED)).toEqual([{ lot: 'L1', shade: 'N2', hides: 2 }, { lot: 'DEMO-LOT-0101', shade: null, hides: 2 }])
-    expect(shadeLots([{ lotCode: 'DEMO-LOT-0101', shade: 'N2' }], ALLOCATED)).toEqual([{ lot: 'DEMO-LOT-0101', shade: 'N2', hides: 3 }])
-    expect(shadeLots([], [])).toEqual([])
-  })
 })
 
 describe('the lay sheet', () => {

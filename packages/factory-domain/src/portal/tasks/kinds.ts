@@ -45,8 +45,11 @@ export const isPartnerTaskKind = (value: unknown): value is PartnerTaskKind => t
 export const PARTNER_TASK_STATUSES = ['OPEN', 'DONE', 'CANCELLED'] as const
 export type PartnerTaskStatus = (typeof PARTNER_TASK_STATUSES)[number]
 
-/** The partner's areas (design portal.frame rail): a task's badge sits on one. */
-export const PORTAL_AREAS = ['home', 'orders', 'quotes', 'deliveries', 'documents', 'returns', 'account'] as const
+/**
+ * The partner's areas (design portal.frame rail): a task's badge sits on one. B-PR-20: + `production` (the customer's Production
+ * area, F-PR-10: My production), where its Home's production counts link to.
+ */
+export const PORTAL_AREAS = ['home', 'orders', 'quotes', 'deliveries', 'documents', 'returns', 'account', /* B-PR-20 */ 'production'] as const
 export type PortalArea = (typeof PORTAL_AREAS)[number]
 
 export type PortalLocale = 'it' | 'en'

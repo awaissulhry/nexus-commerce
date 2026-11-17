@@ -25,12 +25,12 @@ const TEXT = {
   it: {
     subject: (company: string, count: number, secure: boolean) => `${secure ? 'File riservati' : 'Documenti'} da ${company} (${count} ${count === 1 ? 'file' : 'file'})`,
     hello: 'Buongiorno,',
-    shared: (company: string, count: number) => `${company} ha condiviso con lei ${count === 1 ? 'un file' : `${count} file`}:`,
-    open: 'Li può aprire e scaricare da questa pagina:',
+    shared: (company: string, count: number) => `${company} ha condiviso con voi ${count === 1 ? 'un file' : `${count} file`}:`,
+    open: 'Potete aprirli e scaricarli da questa pagina:',
     renewal: 'Questo nuovo link sostituisce quello che non si apriva più.',
-    password: 'Per aprirli serve la password che le diamo a parte: non la inviamo mai insieme al link.',
+    password: 'Per aprirli serve la password che vi diamo a parte: non la inviamo mai insieme al link.',
     terms: (when: string, uses: number, secure: boolean) => `Il link funziona fino al ${when} e per ${uses} ${secure ? (uses === 1 ? 'scaricamento' : 'scaricamenti') : uses === 1 ? 'apertura' : 'aperture'}. Ogni scaricamento viene registrato.`,
-    private: 'Non inoltri questo messaggio: il link è personale.',
+    private: 'Non inoltrate questo messaggio: il link è personale.',
   },
   en: {
     subject: (company: string, count: number, secure: boolean) => `${secure ? 'Secure files' : 'Documents'} from ${company} (${count} ${count === 1 ? 'file' : 'files'})`,

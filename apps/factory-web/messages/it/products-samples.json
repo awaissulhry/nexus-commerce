@@ -66,7 +66,42 @@
     "COLOUR": "Colore",
     "LEATHER": "Pelle",
     "FABRIC": "Tessuto",
-    "TRIM": "Accessorio"
+    "TRIM": "Accessorio",
+    "add": {
+      "open": "Aggiungi un campione di materiale",
+      "title": "Aggiungi un campione di materiale",
+      "subtitle": "{number} · per {customer}",
+      "submit": "Aggiungi campione",
+      "kind": "Campione di",
+      "kindHint": {
+        "COLOUR": "Un colore di qualsiasi materiale, per l'approvazione del colore da parte del cliente.",
+        "LEATHER": "Una pelle, per l'approvazione della pelle da parte del cliente.",
+        "FABRIC": "Un tessuto, una fodera, una membrana o un'imbottitura, per l'approvazione del tessuto da parte del cliente.",
+        "TRIM": "Un accessorio, una minuteria, un filo o un'etichetta, per l'approvazione degli accessori da parte del cliente."
+      },
+      "material": "Materiale",
+      "search": "Cerca i materiali per codice o nome",
+      "pickMaterial": "Scegli il materiale",
+      "noMaterials": "Nessun materiale di questo tipo corrisponde",
+      "colour": "Colore del materiale",
+      "colourHint": "Il colore che viene inviato.",
+      "pickColour": "Scegli il colore",
+      "pickMaterialFirst": "Prima scegli il materiale",
+      "noColours": "Questo materiale non ha ancora un colore: aggiungilo in Materiali e accessori",
+      "note": "Nota (solo ufficio)",
+      "noteHint": "Al massimo {max} caratteri.",
+      "materialsFailed": "Impossibile caricare i materiali",
+      "coloursFailed": "Impossibile caricare i colori del materiale",
+      "after": "Viene registrato come non inviato: segnalo inviato quando parte, poi registra la risposta del cliente o chiedila al cliente.",
+      "done": "Campione aggiunto: segnalo inviato quando parte."
+    },
+    "held": {
+      "noMaterials": "Il tuo ruolo non può leggere i materiali: un campione ne indica uno.",
+      "internal": "Un giro interno di un nostro modello non ha un cliente a cui inviare un campione.",
+      "material": "Scegli il materiale.",
+      "colour": "Scegli il colore che viene inviato.",
+      "long": "La nota supera {max} caratteri."
+    }
   },
   "wo": {
     "status": {
@@ -403,6 +438,16 @@
     "noRevision": "Ancora nessuna revisione",
     "revisionOption": "Revisione {revision} ({status})",
     "kind": "Tipo",
+    "kindHint": {
+      "PROTO": "La prima prova di un nuovo modello.",
+      "FIT": "Un campione per provare la vestibilità su un corpo o un manichino.",
+      "SALESMAN": "Campioni per vendere la collezione.",
+      "PRE_PRODUCTION": "L'ultimo campione prima della produzione: la sua approvazione supera il gate del campione di pre-produzione dell'ordine.",
+      "CERTIFICATION": "Un campione per la prova CE dell'organismo notificato.",
+      "BRAND": "Un campione chiesto dal cliente per uso proprio.",
+      "SIZE_SET": "Un capo per taglia prima della produzione: la sua approvazione supera il gate del set di taglie dell'ordine.",
+      "TOP_OF_PRODUCTION": "I primi capi usciti dalla linea: la risposta del cliente ci viene comunicata; non blocca nulla."
+    },
     "roundNo": "Numero del giro",
     "roundNoHint": "Vuoto: il giro successivo di questo tipo.",
     "roundNoNext": "Successivo",
@@ -615,7 +660,7 @@
     "noResult": "Ancora nessun risultato",
     "certificate": "Certificato",
     "certificateLine": "{number} · {standard} · organismo notificato {body}",
-    "swatches": "Approvazioni di campioni pelle e colore",
+    "swatches": "Approvazioni dei campioni: colore, pelle, tessuto e accessori",
     "noSwatches": "Nessun campione colore inviato per questo giro.",
     "swatchLine": "{kind}: {item} · {colour}",
     "notSentYet": "Non ancora inviato",

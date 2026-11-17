@@ -67,7 +67,7 @@ describe('the link states render (SCR-028, SAL-099)', () => {
 
   it('links the sender\'s privacy notice (GAP-005, GDPR art. 13/14) on every link page, in both languages', () => {
     expect(decode(render({ sender, title: null, body: linkBody('valid') }))).toContain(`<a href="/privacy/${COMPANY}">How Officina Demo S.r.l. uses your data (privacy notice)</a>`)
-    expect(decode(render({ sender, title: null, body: linkBody('used') }, 'it'))).toContain(`<a href="/privacy/${COMPANY}">Come Officina Demo S.r.l. usa i tuoi dati (informativa privacy)</a>`)
+    expect(decode(render({ sender, title: null, body: linkBody('used') }, 'it'))).toContain(`<a href="/privacy/${COMPANY}">Come Officina Demo S.r.l. usa i vostri dati (informativa privacy)</a>`)
     // Without a known sender the page says where the notice is instead of linking nowhere.
     expect(decode(render({ sender: null, title: null, body: linkBody('unavailable') }))).toContain('privacy notice is linked in the email')
   })

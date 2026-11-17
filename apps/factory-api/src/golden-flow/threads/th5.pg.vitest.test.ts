@@ -164,7 +164,9 @@ describe('B-TH-074 golden flow TH-5 (T00, T38): a project for brand A, its peopl
     G.project = made.project
     expect((await admin<Json>(w, 'SELECT "partyId", "companyId", status::text AS status FROM "Project" WHERE id = $1', [G.project.id]))[0]).toEqual({ partyId: P1(), companyId: companyA(), status: 'ACTIVE' })
     await settle()
-    const told = ((await ok(P.sales, 'GET', '/notifications')).items as Json[]).find((item) => item.record.id === G.project.id)
+    // END CHECK (fix wave 3c): the colleague follows the project, so the style link's note reaches them too (FOLLOWING, newest):
+    // the ASSIGNMENT is looked up by its own key, not as the project's first item.
+    const told = ((await ok(P.sales, 'GET', '/notifications')).items as Json[]).find((item) => item.record.id === G.project.id && item.messageKey === 'notifications.projects.addedYou')
     expect(told).toMatchObject({ category: 'ASSIGNMENT', messageKey: 'notifications.projects.addedYou', actor: { id: P.owner.id } })
     const page = await ok(P.owner, 'GET', `/projects/${G.project.id}`)
     expect(page.people.office.people.find((entry: Json) => entry.userId === P.sales.id)).toMatchObject({ reason: 'ADDED', addedBy: { id: P.owner.id } })

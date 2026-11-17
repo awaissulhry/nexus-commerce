@@ -44,7 +44,7 @@ describe('how to pay it (Q12: bank transfer)', () => {
     const instructions = paymentInstructions({ amount: 228384, currency: 'EUR', dueDate: '2026-11-05', kind: 'ACCONTO', documentNumber: 'Q-2026-0001 v2', bank: EXAMPLE_BANK, language: 'it' })
     expect(instructions).toMatchObject({ method: 'BANK_TRANSFER', reference: 'Acconto offerta Q-2026-0001 v2', bank: EXAMPLE_BANK })
     expect(instructions.text).toBe(
-      "Le chiediamo un acconto di € 2.283,84 entro il 05/11/2026, con bonifico bancario sul conto intestato a Conceria Finta S.r.l., IBAN IT60X0542811101000000123456, BIC EXMPITMMXXX (Banca Finta), causale «Acconto offerta Q-2026-0001 v2».",
+      "Vi chiediamo un acconto di € 2.283,84 entro il 05/11/2026, con bonifico bancario sul conto intestato a Conceria Finta S.r.l., IBAN IT60X0542811101000000123456, BIC EXMPITMMXXX (Banca Finta), causale «Acconto offerta Q-2026-0001 v2».",
     )
   })
 

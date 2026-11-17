@@ -258,8 +258,8 @@ export async function returnRecord(db: Reader, place: Place, row: CaseRma, optio
       replacementOrder: replacement ? { id: replacement.id, number: replacement.number } : null,
     },
     actions: {
-      cancel: { allowed: options.mayRequest && cancel === null, held: cancel ?? (options.mayRequest ? null : { en: 'Your access does not ask for returns.', it: 'Il tuo accesso non chiede resi.' }) },
-      addPhotos: { allowed: options.mayUpload && takesPhotos, held: takesPhotos ? (options.mayUpload ? null : { en: 'Your access does not send files.', it: 'Il tuo accesso non invia file.' }) : { en: 'We decided already: write to us in the messages.', it: 'Abbiamo già deciso: scrivici nei messaggi.' } },
+      cancel: { allowed: options.mayRequest && cancel === null, held: cancel ?? (options.mayRequest ? null : { en: 'Your access does not ask for returns.', it: 'Il vostro accesso non chiede resi.' }) },
+      addPhotos: { allowed: options.mayUpload && takesPhotos, held: takesPhotos ? (options.mayUpload ? null : { en: 'Your access does not send files.', it: 'Il vostro accesso non invia file.' }) : { en: 'We decided already: write to us in the messages.', it: 'Abbiamo già deciso: scriveteci nei messaggi.' } },
     },
   }
 }
@@ -327,7 +327,7 @@ export async function complaintRecord(db: Reader, place: Place, row: CaseComplai
     progress: { answerBy, answeredAt: isoOrNull(row.answeredAt) },
     investigation,
     actions: {
-      addPhotos: { allowed: options.mayUpload && takesPhotos, held: takesPhotos ? (options.mayUpload ? null : { en: 'Your access does not send files.', it: 'Il tuo accesso non invia file.' }) : { en: 'We answered already: write to us in the messages.', it: 'Abbiamo già risposto: scrivici nei messaggi.' } },
+      addPhotos: { allowed: options.mayUpload && takesPhotos, held: takesPhotos ? (options.mayUpload ? null : { en: 'Your access does not send files.', it: 'Il vostro accesso non invia file.' }) : { en: 'We answered already: write to us in the messages.', it: 'Abbiamo già risposto: scriveteci nei messaggi.' } },
     },
   }
 }

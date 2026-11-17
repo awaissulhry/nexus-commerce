@@ -137,7 +137,7 @@ export function nodeRecord(node: TraceNode): { type: string; id: string; tab?: s
     case 'CELL':
       return node.cell ? { type: 'WorkOrder', id: node.cell.workOrderId } : null
     case 'BUNDLE':
-      return node.bundle ? { type: 'WorkOrder', id: node.bundle.workOrderId, tab: 'bundles' } : null
+      return node.bundle ? { type: 'WorkOrder', id: node.bundle.workOrderId, tab: 'cutting' } : null
     case 'SERIAL':
       return node.serial ? { type: 'WorkOrder', id: node.serial.workOrderId } : null
     case 'SHIPMENT':

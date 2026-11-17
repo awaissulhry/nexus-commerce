@@ -51,6 +51,8 @@ import { sharingNarrows, supersedeEarlierVersions } from './versions/supersede'
 import { fileRecordScope, reachesFileRecord } from './record-scope'
 // B-TH-083: measurement sheets are body data (the tick at upload, the permission that opens them, each opening recorded).
 import { isMeasurementSheet, MEASUREMENT_SHEET_CATEGORY, MEASUREMENT_SHEET_PERMISSION, measurementSheetProblem } from '@nexus/factory-domain/files/measurements'
+// fix-wall-1: a portal or link reader is never shown a file whose content is another customer's (an old copy of a mixed lot's photo).
+import { walledForOutside } from './content-wall'
 
 /**
  * Files on R2 (plan A1 §3.6; features COL-045, COL-050, PLT-011; PLAN §2.8), the flow:
@@ -238,6 +240,8 @@ export async function readVisible(caller: CommandCaller, fileId: string, path: U
   if (office && !throughModule && !(await officeReachesRecord(caller, row))) throw new NotFoundError('File not found.')
   // B-TH-083: a measurement sheet opens only with sales.measurements.view (the same 404 for everyone else in the office).
   if (isMeasurementSheet(row) && !(await opensMeasurementSheets(caller, row))) throw new NotFoundError('File not found.')
+  // fix-wall-1: by id (the file, its download, preview and versions) the same 404 as a wrong id for a walled file outside the office.
+  if (!office && (await walledForOutside(caller, [row.id])).has(row.id)) throw new NotFoundError('File not found.')
   return row
 }
 
@@ -846,9 +850,12 @@ export async function listFiles(caller: CommandCaller, record: { readonly record
       flag ? { visibility: { has: flag }, status: 'AVAILABLE' } : { status: { not: 'DELETED' } },
     ],
   }
-  const rows = (await caller.withClient((client) =>
+  const listed = (await caller.withClient((client) =>
     client.storedFile.findMany({ where, select: selectFor(context), orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], take: 500 }),
   )) as Row[]
+  // fix-wall-1: outside the office a file whose content is another customer's is left out, uncounted (none for the office).
+  const walled = await walledForOutside(caller, listed.map((row) => row.id))
+  const rows = listed.filter((row) => !walled.has(row.id))
   // B-TH-083: an office reader without sales.measurements.view sees a record's sheets locked (counted, never named).
   const opens = !rows.some(isMeasurementSheet) || (await opensMeasurementSheets(caller, { ...record, companyId: rows[0]?.companyId ?? null }))
   const views = rows.filter((row) => audienceSees(viewerOf(context), row)).map((row) => (isMeasurementSheet(row) && !opens ? lockedView(viewOf(row)) : viewOf(row)))
