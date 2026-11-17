@@ -1,3 +1,5 @@
+import { ValidationError } from '@nexus/factory-domain/core/errors'
+import { isUuid } from '@nexus/factory-domain/core/ids'
 import { WORK_ORDER_STATUSES, type WorkOrderStatus } from '@nexus/factory-domain/production/work-orders/machine'
 import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/permissions'
 import { isRelativeDay } from '@nexus/factory-domain/views/quick/relative'
@@ -10,11 +12,34 @@ import { defineExportSource } from '../source'
  * DRAFT|…|all`, or the API's own `?late=true` / `?status=…`, `?q=` and the quick filter `?due=<relative day>` (B-W2b-13);
  * nothing: the open ones. Read through the
  * module's listWorkOrders (workorders.view, its companies and sites). Totals per work order only: no person, no money.
+ * B-PR-03 (the brand wall): the list's own wall (its customers too) and its customer filter (`?party=`, or the API's own
+ * `partyId`, as Sales › Orders' file reads it); a malformed one is refused, never dropped (a file of every customer for one
+ * customer's list). The customer cell names the work order's one customer, and each order with its customer PO.
  */
 
 type Row = Awaited<ReturnType<typeof listWorkOrders>>['workOrders'][number]
 
 const isStatus = (value: string | null): value is WorkOrderStatus => value !== null && (WORK_ORDER_STATUSES as readonly string[]).includes(value)
+
+// ── B-PR-03 ──
+/** The address's customer (`party`, else the API's `partyId`), or undefined; a malformed one is refused. */
+function partyTerm(address: URLSearchParams): string | undefined {
+  for (const name of ['party', 'partyId']) {
+    const value = address.get(name)?.trim()
+    if (!value) continue
+    if (!isUuid(value)) throw new ValidationError('Not a customer: the file would hold more than the screen.', [{ path: `query/${name}`, message: 'An id.' }])
+    return value
+  }
+  return undefined
+}
+
+/** The customer cell: the work order's customer, then each order with its customer PO ("SO-0001 (PO-42)"). */
+function customerText(row: Row): string | null {
+  const orders = row.orders.map((order) => `${order.number}${order.customerRef ? ` (${order.customerRef})` : ''}`).join(', ')
+  const customer = row.customer?.name ?? [...new Set(row.orders.map((order) => order.partyName))].join(', ')
+  return [customer, orders].filter((part) => part !== '').join(' · ') || null
+}
+// ── end B-PR-03 ──
 
 export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>, Row>({
   listKey: 'production.work-orders',
@@ -27,11 +52,12 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     // B-W2b-51 (MES-009): the rush quick filter, as the list reads it.
     const rushWord = address.get('rush')
     const rush = rushWord === 'true' ? true : rushWord === 'false' ? false : undefined
+    const partyId = partyTerm(address) // B-PR-03
     const view = address.get('view') ?? (address.get('late') === 'true' ? 'late' : (address.get('status') ?? 'open'))
-    if (view === 'late') return { late: true, q, due, rush }
-    if (view === 'all') return { q, due, rush }
-    if (isStatus(view)) return { status: view, q, due, rush }
-    return { open: true, q, due, rush }
+    if (view === 'late') return { late: true, q, due, rush, partyId }
+    if (view === 'all') return { q, due, rush, partyId }
+    if (isStatus(view)) return { status: view, q, due, rush, partyId }
+    return { open: true, q, due, rush, partyId }
   },
   async read(caller, query, cursor, limit) {
     const page = await listWorkOrders(caller, { ...query, cursor: cursor ?? undefined, limit })
@@ -41,7 +67,7 @@ export const workOrders = defineExportSource<Omit<ListQuery, 'cursor' | 'limit'>
     number: { value: (row) => row.number },
     status: { value: (row, words) => words(`status.${row.status}`) },
     style: { value: (row) => `${row.styleCode} · ${row.styleName}${row.revision !== null ? ` r${row.revision}` : ''}` },
-    customer: { value: (row) => row.orders.map((order) => `${order.number} ${order.partyName}`).join(', ') || null },
+    customer: { value: (row) => customerText(row) }, // B-PR-03
     pieces: { value: (row) => row.pieces },
     progress: { value: (row) => row.progress?.finished ?? null },
     due: { value: (row) => (row.dueDate ? { day: row.dueDate } : null) },

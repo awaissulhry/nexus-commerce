@@ -71,7 +71,8 @@ async function readRepair(db: Reader, repairOrderId: string): Promise<RepairRow 
 async function officeRepair(caller: CommandCaller, repairOrderId: string, permission: Permission = WORKORDERS_MANAGE): Promise<RepairRow> {
   const context = officeContextOf(caller)
   const repair = await caller.withClient((client) => readRepair(client, repairOrderId))
-  const scope = repair ? { companyId: repair.companyId, siteId: repair.siteId } : null
+  // B-PR-03: and its customer (another customer's repair is not found).
+  const scope = repair ? { companyId: repair.companyId, siteId: repair.siteId, partyId: repair.partyId } : null
   if (!repair || !can(actorOf(context), WORKORDERS_VIEW, scope!)) throw new NotFoundError('Repair order not found.')
   if (!can(actorOf(context), permission, scope!)) throw new ForbiddenError()
   return repair
