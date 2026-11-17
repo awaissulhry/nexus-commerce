@@ -5,6 +5,9 @@ import { createCatalogue } from './catalogue'
 import { defineEvent } from './define'
 import type { EventEnvelope } from './envelope'
 import { liveMessageFor, liveViewFor } from './live'
+// B-PR-09: the brand wall of production's live messages.
+import { EVENT_CATALOGUE } from './catalogue'
+import { partyIdsOf } from './live'
 
 const TENANT = '0190a000-0000-7000-8000-000000000001'
 const OTHER_TENANT = '0190a000-0000-7000-8000-000000000002'
@@ -218,3 +221,108 @@ describe('liveViewFor', () => {
     expect(liveViewFor(quote, { audience: 'system', tenantId: TENANT, grants: [all] }, catalogue)).toBeNull()
   })
 })
+
+// ── B-PR-09 ──
+/**
+ * B-PR-09 (production plan §2, the brand wall; PW-04): production's live messages name their customer, so an office person
+ * limited to brand B never receives a message about brand A's work order, cut, bundle, rework, scrap, hold or inspection, and a
+ * message of several brands reaches only who reaches every one of them. The production unit (every customer) receives them all.
+ */
+describe('production events name their customer (B-PR-09, PW-04)', () => {
+  const P1 = '0190a000-0000-7000-8000-0000000000b1'
+  const P2 = '0190a000-0000-7000-8000-0000000000b2'
+  /** One work order's events: `partyId`, the work order's one customer (null: none). */
+  const ONE = [
+    'workorder.created',
+    'workorder.changed',
+    'workorder.priority_changed',
+    'workorder.released',
+    'workorder.status_changed',
+    'workorder.finished_to_stock',
+    'workorder.finished_reversed',
+    'production.cut_logged',
+    'production.hide_closed',
+    'production.cut_reversed',
+    'production.bundle_created',
+    'production.bundle_reprinted',
+    'production.bundle_voided',
+    'production.rework_opened',
+    'production.rework_moved',
+    'production.replacement_requested',
+    'production.replacement_changed',
+    'production.scrap_posted',
+    'quality.inspection_opened',
+    'quality.inspection_decided',
+    'quality.inspection_cancelled',
+    'quality.inspection_assigned',
+    'quality.inspection_sampling_set',
+    'quality.garments_released',
+    'quality.release_reversed',
+    'final_inspection.recorded',
+  ]
+  /** Shared records' events: `partyIds`, the customers of the work orders they serve. */
+  const SEVERAL = ['cut_order.changed', 'cut_ticket.changed', 'ply_run.changed', 'quality.hold_placed', 'quality.hold_released', 'quality.hold_changed']
+  const definitionOf = (type: string) => EVENT_CATALOGUE.get(type, 1)
+  /** An office person holding the event's live permission, over every customer or some. */
+  const viewerOf = (type: string, parties: Grant['parties']): Actor => office([{ permissions: [definitionOf(type).live!.permission], companies: 'all', sites: 'all', parties }])
+  const messageOf = (type: string, payloadParty: Record<string, unknown>) => {
+    const definition = definitionOf(type)
+    return { ...liveMessageFor(envelope(definition, payloadParty), definition)!, subject: 'record-of-a-brand' }
+  }
+
+  it('partyIdsOf: each customer once, sorted; none as soon as one part names no customer', () => {
+    expect(partyIdsOf([P2, P1, P2])).toEqual([P1, P2])
+    expect(partyIdsOf([P1, null])).toEqual([])
+    expect(partyIdsOf([P1, undefined])).toEqual([])
+    expect(partyIdsOf([P1, 'not-an-id'])).toEqual([])
+    expect(partyIdsOf([])).toEqual([])
+  })
+
+  it.each(ONE)('%s declares an optional, nullable partyId (an id only) and shows on the office screens', (type) => {
+    const definition = definitionOf(type)
+    const field = definition.payload.shape.partyId
+    expect(field, `${type} names its work order's customer`).toBeDefined()
+    expect(field!.safeParse(P1).success).toBe(true)
+    expect(field!.safeParse(null).success).toBe(true)
+    expect(field!.safeParse(undefined).success).toBe(true)
+    expect(field!.safeParse('Seed Racing').success).toBe(false)
+    expect(definition.live).not.toBeNull()
+  })
+
+  it.each(SEVERAL)('%s declares an optional list partyIds (ids only)', (type) => {
+    const field = definitionOf(type).payload.shape.partyIds
+    expect(field, `${type} names the customers it serves`).toBeDefined()
+    expect(field!.safeParse([P1, P2]).success).toBe(true)
+    expect(field!.safeParse([]).success).toBe(true)
+    expect(field!.safeParse(undefined).success).toBe(true)
+    expect(field!.safeParse(['Seed Racing']).success).toBe(false)
+  })
+
+  it.each(ONE)("%s: a person limited to brand B never receives brand A's; B's own reaches them; the production unit gets both", (type) => {
+    const ofA = messageOf(type, { partyId: P1 })
+    const ofB = messageOf(type, { partyId: P2 })
+    const ofNone = messageOf(type, { partyId: null })
+    expect(ofA.partyIds).toEqual([P1])
+    expect(liveViewFor(ofA, viewerOf(type, [P2]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ofB, viewerOf(type, [P2]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(ofA, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+    // A work order of no customer (one mixed before the rule): every-customer viewers only.
+    expect(liveViewFor(ofNone, viewerOf(type, [P1]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(ofNone, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+    // The view never carries the parties.
+    expect(liveViewFor(ofB, viewerOf(type, [P2]), EVENT_CATALOGUE)).not.toHaveProperty('partyIds')
+  })
+
+  it.each(SEVERAL)('%s: a message of two brands reaches only who reaches both; one part of no customer: every-customer viewers only', (type) => {
+    const both = messageOf(type, { partyIds: [P1, P2] })
+    expect(liveViewFor(both, viewerOf(type, [P2]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(both, viewerOf(type, [P1]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(both, viewerOf(type, [P1, P2]), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(both, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+    expect(liveViewFor(messageOf(type, { partyIds: [P2] }), viewerOf(type, [P2]), EVENT_CATALOGUE)).not.toBeNull()
+    const unnamed = messageOf(type, { partyIds: partyIdsOf([P2, null]) })
+    expect(liveViewFor(unnamed, viewerOf(type, [P2]), EVENT_CATALOGUE)).toBeNull()
+    expect(liveViewFor(unnamed, viewerOf(type, 'all'), EVENT_CATALOGUE)).not.toBeNull()
+  })
+})
+// ── end B-PR-09 ──

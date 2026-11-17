@@ -111,7 +111,7 @@ export async function reportFinished(caller: CommandCaller, workOrderId: string,
       subject: current.id,
       companyId: current.companyId,
       siteId: current.siteId,
-      payload: { workOrderId: current.id, number: current.number, siteId: current.siteId, reportId, locationId: place.id, moveIds: moves.map((move) => move.id), cells, pieces, allInStock: after.allInStock },
+      payload: { workOrderId: current.id, number: current.number, partyId: current.partyId /* B-PR-09 */, siteId: current.siteId, reportId, locationId: place.id, moveIds: moves.map((move) => move.id), cells, pieces, allInStock: after.allInStock },
     })
     return { report: { id: reportId, locationId: place.id, locationCode: place.code, moveIds: moves.map((move) => move.id), cells, pieces, valued: moves.every((move) => move.valued) }, finished: after }
   })
@@ -150,7 +150,7 @@ export async function reverseReport(caller: CommandCaller, workOrderId: string, 
       subject: current.id,
       companyId: current.companyId,
       siteId: current.siteId,
-      payload: { workOrderId: current.id, number: current.number, siteId: current.siteId, reportId, moveIds: moves.map((move) => move.id), pieces },
+      payload: { workOrderId: current.id, number: current.number, partyId: current.partyId /* B-PR-09 */, siteId: current.siteId, reportId, moveIds: moves.map((move) => move.id), pieces },
     })
     return { reversed: { reportId, moveIds: moves.map((move) => move.id), pieces }, overReserved, finished: completionView(await readCompletionFacts(tx, current)) }
   })

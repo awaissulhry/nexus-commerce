@@ -511,7 +511,9 @@ describe('leather cut orders, back to planning and cancel', () => {
 describe('search and export of cut orders', () => {
   it('indexes a cut order by number, material and work orders; exports the list as it reads', async () => {
     const [entry] = await asOffice((tx) => cutOrderIndexer.read(tx, { ids: [CO.fabric!.cutOrder.id] }, 10))
-    expect(entry).toMatchObject({ recordId: CO.fabric!.cutOrder.id, companyId: A.companyA, siteId: A.siteA1, partyId: null, number: CO.fabric!.cutOrder.number, status: 'CUT' })
+    // B-PR-08a part 2 (#1557): the entry names the cut order's one customer (both its work orders are A.brand's); found red by
+    // B-PR-09's run.
+    expect(entry).toMatchObject({ recordId: CO.fabric!.cutOrder.id, companyId: A.companyA, siteId: A.siteA1, partyId: A.brand, everyParty: false, number: CO.fabric!.cutOrder.number, status: 'CUT' })
     expect(entry!.words).toEqual(expect.arrayContaining(['SEED-LIN-200', 'MK-T1', 'fabric', WO.a.number, WO.b.number]))
     const caller = callerFor(database, completeContext(SESSIONS.viewer!, newId()))
     const page = await cutOrdersExport.read(caller, cutOrdersExport.query(new URLSearchParams('view=all&q=MK-T1')), null, 50)

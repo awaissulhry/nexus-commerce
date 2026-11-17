@@ -321,23 +321,25 @@ function assertCells(requests: readonly (CellRequest & { index: number })[], lin
 
 export const actorIdOf = (tools: Pick<CommandTools, 'context'>): string | null => (tools.context.audience === 'office' ? tools.context.actorId : null)
 
-export const changedEvent = (tools: CommandTools, workOrder: Pick<Header, 'id' | 'number' | 'companyId' | 'siteId'>, changes: ('cells' | 'revision' | 'details' | 'split')[], cells: { quantity: number }[]) =>
+// B-PR-09 (the brand wall): every work order event names its one customer (`partyId`, null: none), so the office's live
+// screens send it only to people who reach that customer (factory-domain events/live.ts).
+export const changedEvent = (tools: CommandTools, workOrder: Pick<Header, 'id' | 'number' | 'companyId' | 'siteId' | 'partyId'>, changes: ('cells' | 'revision' | 'details' | 'split')[], cells: { quantity: number }[]) =>
   tools.emit({
     type: 'workorder.changed',
     subject: workOrder.id,
     companyId: workOrder.companyId,
     siteId: workOrder.siteId,
-    payload: { workOrderId: workOrder.id, number: workOrder.number, changes, cells: cells.length, pieces: cells.reduce((sum, cell) => sum + cell.quantity, 0) },
+    payload: { workOrderId: workOrder.id, number: workOrder.number, partyId: workOrder.partyId /* B-PR-09 */, changes, cells: cells.length, pieces: cells.reduce((sum, cell) => sum + cell.quantity, 0) },
   })
 
 /** B-W2b-51 (MES-009): a work order's priority or rush flag changed (the floor's lists reorder). */
-export const priorityEvent = (tools: CommandTools, before: Pick<Header, 'id' | 'number' | 'companyId' | 'siteId' | 'priority' | 'rush'>, after: Pick<Header, 'priority' | 'rush'>) =>
+export const priorityEvent = (tools: CommandTools, before: Pick<Header, 'id' | 'number' | 'companyId' | 'siteId' | 'priority' | 'rush' | 'partyId'>, after: Pick<Header, 'priority' | 'rush'>) =>
   tools.emit({
     type: 'workorder.priority_changed',
     subject: before.id,
     companyId: before.companyId,
     siteId: before.siteId,
-    payload: { workOrderId: before.id, number: before.number, siteId: before.siteId, priority: after.priority, rush: after.rush, previousPriority: before.priority, previousRush: before.rush },
+    payload: { workOrderId: before.id, number: before.number, partyId: before.partyId /* B-PR-09 */, siteId: before.siteId, priority: after.priority, rush: after.rush, previousPriority: before.priority, previousRush: before.rush },
   })
 
 // ---- create -------------------------------------------------------------------------------------------------------------
@@ -514,7 +516,7 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
         cells: rows.map((row) => ({ id: row.id, salesOrderLineId: row.salesOrderLineId, colourwayId: row.colourwayId, size: row.size, quantity: row.quantity, /* B-W2b-368 */ ...(row.measurementProfileId ? { measurementProfileId: row.measurementProfileId } : {}) })),
       },
     })
-    createdEvent(tools, { workOrderId: id, number: number.formatted, companyId: site.companyId, siteId: site.id, styleId: style.id, salesOrderIds, cells: rows.length, pieces })
+    createdEvent(tools, { workOrderId: id, number: number.formatted, partyId: first.partyId /* B-PR-09 */, companyId: site.companyId, siteId: site.id, styleId: style.id, salesOrderIds, cells: rows.length, pieces })
     if (sample) await sample.inCommand(tools, { id, number: number.formatted })
     // B-W2b-293: the planned work order it was made from becomes CONVERTED in this transaction.
     if (planned) await planned.inCommand(tools, { id, number: number.formatted, pieces })
@@ -524,7 +526,7 @@ export async function createWorkOrder(caller: CommandCaller, body: CreateInput, 
 }
 
 /** `workorder.created` of a new DRAFT (B-W2b-284: one emit for both creates; a sample work order without an order line names no order). */
-function createdEvent(tools: CommandTools, made: { workOrderId: string; number: string; companyId: string; siteId: string; styleId: string; salesOrderIds: string[]; cells: number; pieces: number }): void {
+function createdEvent(tools: CommandTools, made: { workOrderId: string; number: string; /* B-PR-09 */ partyId: string | null; companyId: string; siteId: string; styleId: string; salesOrderIds: string[]; cells: number; pieces: number }): void {
   const { companyId, ...payload } = made
   tools.emit({ type: 'workorder.created', subject: made.workOrderId, companyId, siteId: made.siteId, payload })
 }
@@ -645,7 +647,7 @@ export async function createSampleWorkOrder(
         cells: rows.map((row) => ({ id: row.id, salesOrderLineId: null, colourwayId: row.colourwayId, size: row.size, quantity: row.quantity, /* B-W2b-365 */ optionValueIds: row.optionValueIds })),
       },
     })
-    createdEvent(tools, { workOrderId: id, number: number.formatted, companyId: site.companyId, siteId: site.id, styleId: style.id, salesOrderIds: [], cells: rows.length, pieces })
+    createdEvent(tools, { workOrderId: id, number: number.formatted, partyId: sample.partyId /* B-PR-09 */, companyId: site.companyId, siteId: site.id, styleId: style.id, salesOrderIds: [], cells: rows.length, pieces })
     await sample.inCommand(tools, { id, number: number.formatted })
     return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, id))!, todayOfCommand(tools)) }
   })

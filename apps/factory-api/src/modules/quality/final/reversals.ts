@@ -164,6 +164,7 @@ export async function reverseRelease(caller: CommandCaller, releaseId: string, b
         releaseId: release.id,
         workOrderId: release.workOrderId,
         number: header.number,
+        partyId: header.partyId, // B-PR-09: its work order's one customer
         workOrderSizeId: release.workOrderSizeId,
         quantity: body.quantity,
         reasonCode: body.reasonCode,

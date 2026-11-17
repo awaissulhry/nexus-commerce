@@ -521,7 +521,18 @@ generated into `src/generated/prisma` (git-ignored), never into `node_modules`, 
    `…_config_brand_fields_th_guards` (wave 7/9, B-TH-055: its own triggers `CustomField_party_check` (a field for one customer: an
    active CUSTOMER of the tenant, of the field's company or every company, on a record type whose records name their customer;
    never changed) and `CustomFieldValue_party_check` (its values only on that customer's records, read with the files step's
-   `factory_file_record_party`); no earlier function redefined):
+   `factory_file_record_party`); no earlier function redefined),
+   `…_production_brand_limits_guards` (production plan schema wave 2/5, B-PR-12, a customer's production limits: it redefines
+   portal identity's `factory_portal_settings_guard` (every earlier rule kept; progressShared kept equal to "productionLevel is
+   PROGRESS or more", one written moving the other; the urgent quota 0 to 20; the supervisor with since when, both or neither;
+   the backup only beside a supervisor, never the same person; each an active office person when named or changed; the
+   production asks HOLD, RESUME, SPLIT_SHIPMENT and SAMPLE_ROUND only, each once (RUSH follows the urgency switch); the named
+   approver an active portal person of the party itself; these limits only for a customer or a brand) and orders in depth's
+   `factory_order_freeze_rule_check` with its partial unique `OrderFreezeRule_one_active`, now per customer (a rule's
+   customer fixed, a CUSTOMER or BRAND party; one active rule per company, customer or none, field and stage; no loosening
+   inside one set, the company's set keeping its lock key); its data step `…_production_brand_limits_copy` (hand-written,
+   between the schema and the guards folders) sets the level PROGRESS where progress was shared and overrideFourEyes for the
+   customers listed for a second person at release, and raises a NOTICE of both counts):
    triggers, partial unique indexes and deferred
    constraint triggers) are not regenerated: `git mv` the branch's one, unchanged, to a timestamp between its new schema and policy folders; keep it
    out of `prisma/migrations` while `npm run migration` runs (it replays every folder, and the triggers need the new

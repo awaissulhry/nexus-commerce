@@ -84,7 +84,7 @@ export async function scrapStock(caller: CommandCaller, body: ScrapStockInput, i
   const withCost = heldGrains(actorOf(context)).has('cost')
   const { result } = await command(caller, { name: 'production.scrapStock', idempotencyKey, input: body }, async (tools) => {
     const { tx } = tools
-    const workOrder = (await tx.workOrder.findUnique({ where: { id: order.id }, select: { id: true, companyId: true, siteId: true, number: true, status: true } }))!
+    const workOrder = (await tx.workOrder.findUnique({ where: { id: order.id }, select: { id: true, companyId: true, siteId: true, number: true, status: true, /* B-PR-09 */ partyId: true } }))!
     if (!(SCRAP_STATUSES as readonly string[]).includes(workOrder.status)) {
       throw new ValidationError(`Work order ${workOrder.number} is ${workOrder.status}: material is scrapped for it while it is RELEASED, IN_PROGRESS, ON_HOLD or COMPLETED.`, [{ path: 'body/workOrderId', message: 'Not a work order material is scrapped for now.' }])
     }
@@ -204,6 +204,7 @@ export async function scrapStock(caller: CommandCaller, body: ScrapStockInput, i
       payload: {
         workOrderId: workOrder.id,
         number: workOrder.number,
+        partyId: workOrder.partyId, // B-PR-09: its one customer, for the office's live wall
         scrapId,
         moveIds: moves.map((move) => move.id),
         itemIds: [...new Set(moves.map((move) => move.itemId))],

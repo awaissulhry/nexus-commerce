@@ -3,7 +3,7 @@ import { QUALITY_NCR_VIEW } from '@nexus/factory-domain/quality/ncr/permissions'
 import type { NcrSource } from '@nexus/factory-domain/quality/ncr/rules'
 import { decimalText } from '@nexus/factory-domain/views/exports'
 import { listNcrs, type ListQuery } from '../../../modules/quality/ncr/reads'
-import { defineExportSource } from '../source'
+import { defineExportSource, /* B-PR-09 */ partyTerm } from '../source'
 
 /**
  * Quality › Nonconformances (`/quality/ncr`, the list mode; the board mode has no list frame): the export of the list
@@ -11,7 +11,9 @@ import { defineExportSource } from '../source'
  * ncrQueryOf): `?view=open|mine|critical|supplier|waiting|overdue|closed|all` (nothing: open), `?q=` (number or title,
  * at most 80 characters), `?site=<uuid>`. Read through the module's listNcrs (quality.ncr.view, its companies and
  * sites). The module answers at most its list limit (200, newest first, with `truncated`) and has no cursor: the file
- * holds those rows. No money. The owner is named as the screen names them (an office person, inside the NCR list).
+ * holds those rows. No money. The owner is named as the screen names them (an office person, inside the NCR list). B-PR-09
+ * (the brand wall): the list's own wall (B-PR-06: an NCR only when every customer it names is reached) and the screen's customer
+ * filter (`?party=`, or the API's `partyId`; a malformed one is refused).
  */
 
 type Summary = Awaited<ReturnType<typeof listNcrs>>['items'][number]
@@ -44,7 +46,8 @@ export const ncrs = defineExportSource<Query, Row>({
     const view = (VIEWS as readonly string[]).includes(asked) ? (asked as (typeof VIEWS)[number]) : 'open'
     const q = (address.get('q') ?? '').slice(0, 80).trim() || undefined
     const site = address.get('site') ?? ''
-    const base: Query = { ...(q ? { q } : {}), ...(UUID.test(site) ? { siteId: site } : {}) }
+    const partyId = partyTerm(address) // B-PR-09
+    const base: Query = { ...(q ? { q } : {}), ...(UUID.test(site) ? { siteId: site } : {}), ...(partyId ? { partyId } : {}) }
     if (view === 'mine') return { ...base, ownerId: 'me' }
     if (view === 'critical') return { ...base, severity: 'CRITICAL' as DefectClass }
     if (view === 'supplier') return { ...base, source: 'SUPPLIER' as NcrSource }

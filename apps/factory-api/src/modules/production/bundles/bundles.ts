@@ -396,7 +396,7 @@ async function makeInCommand(tools: CommandTools, workOrderId: string, body: Mak
     tools.emit({
       ...event,
       type: 'production.bundle_created',
-      payload: { workOrderId: workOrder.id, number: workOrder.number, bundleId: row.id, code: row.code, workOrderSizeId: row.workOrderSizeId, part: row.part, quantity: row.quantity, postedBy: 'FLOOR' },
+      payload: { workOrderId: workOrder.id, number: workOrder.number, partyId: workOrder.partyId /* B-PR-09 */, bundleId: row.id, code: row.code, workOrderSizeId: row.workOrderSizeId, part: row.part, quantity: row.quantity, postedBy: 'FLOOR' },
     })
   }
   tools.audit({
@@ -539,7 +539,7 @@ async function reprintInCommand(tools: CommandTools, bundleId: string, body: Rep
   const scope = { companyId: workOrder.companyId, siteId: workOrder.siteId }
   tools.audit({ recordType: 'Bundle', recordId: bundle.id, ...scope, before: { code: bundle.code, replacedCodes: bundle.replacedCodes }, after: { code, replacedCodes: [...bundle.replacedCodes, bundle.code] }, reason })
   tools.audit({ recordType: 'WorkOrder', recordId: workOrder.id, ...scope, after: { bundleId: bundle.id, code, replacedCode: bundle.code }, reason })
-  tools.emit({ type: 'production.bundle_reprinted', subject: workOrder.id, ...scope, payload: { workOrderId: workOrder.id, number: workOrder.number, bundleId: bundle.id, code: code!, replacedCode: bundle.code, postedBy: postedBy(context) } })
+  tools.emit({ type: 'production.bundle_reprinted', subject: workOrder.id, ...scope, payload: { workOrderId: workOrder.id, number: workOrder.number, partyId: workOrder.partyId /* B-PR-09 */, bundleId: bundle.id, code: code!, replacedCode: bundle.code, postedBy: postedBy(context) } })
   const labels = await readCellLabels(tx, workOrder.id)
   const after = (await readBundle(tx, bundle.id))!
   return { bundle: bundleView(after, labels), replacedCode: bundle.code, ticket: { bundleId: bundle.id, ticket: ticketOf(await ticketBase(tx, workOrder, body.language ?? 'it'), after, labels) } }
@@ -589,7 +589,7 @@ export async function voidBundle(caller: CommandCaller, bundleId: string, body: 
       type: 'production.bundle_voided',
       subject: workOrder.id,
       ...scope,
-      payload: { workOrderId: workOrder.id, number: workOrder.number, bundleId: bundle.id, code: bundle.code, workOrderSizeId: bundle.workOrderSizeId, quantity: bundle.quantity, postedBy: postedBy(context) },
+      payload: { workOrderId: workOrder.id, number: workOrder.number, partyId: workOrder.partyId /* B-PR-09 */, bundleId: bundle.id, code: bundle.code, workOrderSizeId: bundle.workOrderSizeId, quantity: bundle.quantity, postedBy: postedBy(context) },
     })
     const labels = await readCellLabels(tx, workOrder.id)
     const cell = (await countsOf(tx, workOrder)).cells.find((row) => row.cellId === bundle.workOrderSizeId)!

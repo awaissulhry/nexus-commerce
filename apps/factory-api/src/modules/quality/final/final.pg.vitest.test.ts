@@ -959,7 +959,7 @@ describe('inspections every day (B-W2a-67; design qi-assign, ins-defects, qi-met
     expect(assigned.inspections).toEqual([{ id: opened.id, version: opened.version + 1, assigned: { kind: 'USER', userId: inspector2.id, workerId: null, name: 'inspector two' } }])
     // The same assignee again changes nothing: the answer as it stands, no write, no second event (a no-op is no command).
     expect((await as(inspector1.browser, 'POST', '/quality/inspections/assign', { inspections: [{ id: opened.id, version: opened.version + 1 }], assigneeId: inspector2.id })).inspections[0]).toMatchObject({ version: opened.version + 1 })
-    expect(await admin('SELECT payload FROM "OutboxEvent" WHERE type = $1 AND subject = $2', ['quality.inspection_assigned', opened.id])).toEqual([{ payload: { inspectionId: opened.id, workOrderId: WO.override.id, number: WO.override.number, assigned: true } }])
+    expect(await admin('SELECT payload FROM "OutboxEvent" WHERE type = $1 AND subject = $2', ['quality.inspection_assigned', opened.id])).toEqual([{ payload: { inspectionId: opened.id, workOrderId: WO.override.id, number: WO.override.number, partyId: A.brand /* B-PR-09 */, assigned: true } }])
     expect(await admin('SELECT action FROM "AuditLog" WHERE "recordId" = $1 AND action = $2', [opened.id, 'quality.inspection.assign'])).toHaveLength(1)
     // The opener no longer records it; the assignee does, and becomes its inspector.
     expect((await as(inspector1.browser, 'GET', `/quality/inspections/${opened.id}`)).yours).toBe(false)

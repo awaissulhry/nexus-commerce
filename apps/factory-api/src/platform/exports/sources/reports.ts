@@ -1,5 +1,7 @@
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
-import type { Actor } from '@nexus/factory-domain/core/permissions'
+import { EVERY_PARTY_WORDS, reachesEveryParty, type Actor } from '@nexus/factory-domain/core/permissions'
+// B-PR-09: the production reports add up every customer's work.
+import { PRODUCTION_REPORTS_VIEW } from '@nexus/factory-domain/production/reports/permissions'
 import { businessDate } from '@nexus/factory-domain/core/time'
 import { REPORT_ROW_LIMIT, type ReportColumn } from '@nexus/factory-domain/insights/reports/definition'
 import { HOME_REPORTS_VIEW } from '@nexus/factory-domain/insights/reports/permissions'
@@ -162,11 +164,20 @@ export function reportCell(column: ReportColumn, row: ReportRow, words: (code: s
   }
 }
 
+// ── B-PR-09 ──
+/**
+ * B-PR-09 (the brand wall): the reports of the production reports' permission (the daily production report: what each line made)
+ * add up every customer's work: only a person whose grants reach every customer exports one (their run answers the same 403).
+ */
+const addsUpEveryCustomer = (report: Pick<ReportDefinition, 'permission'>): boolean => report.permission === PRODUCTION_REPORTS_VIEW
+// ── end B-PR-09 ──
+
 /** Why the person may not export this report (the library's held states), or null. */
 function refusalOf(report: ReportDefinition, actor: Actor): string | null {
   const { state, grain } = libraryState(actor, report)
   if (state === 'NO_ACCESS') return 'This report reads a list you cannot read.'
   if (state === 'NEEDS_GRAIN') return `This report needs ${grain} rights.`
+  if (addsUpEveryCustomer(report) && !reachesEveryParty(actor, report.permission)) return EVERY_PARTY_WORDS.en // B-PR-09
   return null
 }
 

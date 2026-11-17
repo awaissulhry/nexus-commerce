@@ -79,7 +79,7 @@ export async function moveWorkOrder(
       subject: current.id,
       companyId: current.companyId,
       siteId: current.siteId,
-      payload: { workOrderId: current.id, number: current.number, from: current.status, to },
+      payload: { workOrderId: current.id, number: current.number, partyId: current.partyId /* B-PR-09 */, from: current.status, to },
     })
     return { workOrder: await workOrderView(tx, (await readWorkOrder(tx, current.id))!, todayOfCommand(tools)) }
   }
@@ -136,7 +136,7 @@ export async function startOnFirstWork(caller: CommandCaller, workOrderId: strin
           subject: row.id,
           companyId: row.companyId,
           siteId: row.siteId,
-          payload: { workOrderId: row.id, number: row.number, from: row.status, to: 'IN_PROGRESS' },
+          payload: { workOrderId: row.id, number: row.number, partyId: row.partyId /* B-PR-09 */, from: row.status, to: 'IN_PROGRESS' },
         })
         return { started: true }
       },

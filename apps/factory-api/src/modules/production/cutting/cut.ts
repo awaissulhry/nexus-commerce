@@ -541,6 +541,7 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
       payload: {
         workOrderId: workOrder.id,
         number: workOrder.number,
+        partyId: workOrder.partyId, // B-PR-09: its one customer, for the office's live wall
         cutLogId: entry.id,
         hideId: hide.id,
         lotId: hide.lotId,
@@ -561,7 +562,7 @@ async function cutInCommand(tools: CommandTools, workOrderId: string, body: CutI
     tools.emit({
       ...event,
       type: 'production.hide_closed',
-      payload: { workOrderId: workOrder.id, number: workOrder.number, hideId: hide.id, lotId: hide.lotId, cutLogId: entry?.id ?? null, remnantMoveId: remnant?.id ?? null, baseRemnantArea: decision.remnant, hideState: decision.hideState, postedBy: 'FLOOR' },
+      payload: { workOrderId: workOrder.id, number: workOrder.number, partyId: workOrder.partyId /* B-PR-09 */, hideId: hide.id, lotId: hide.lotId, cutLogId: entry?.id ?? null, remnantMoveId: remnant?.id ?? null, baseRemnantArea: decision.remnant, hideState: decision.hideState, postedBy: 'FLOOR' },
     })
   }
   return {
@@ -781,6 +782,7 @@ async function reverseInCommand(tools: CommandTools, original: EntryRow, options
     payload: {
       workOrderId: workOrder.id,
       number: workOrder.number,
+      partyId: workOrder.partyId, // B-PR-09
       cutLogId: id,
       reversedId: original.id,
       undo: options.undo,

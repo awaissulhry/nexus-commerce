@@ -22,7 +22,8 @@ const none = office(grant('all', ['planning.view']))
 describe('the work orders a person reaches (B-PR-03)', () => {
   it('lists by company, site and customer: a person of every customer has no customer clause, a limited one only its list', () => {
     expect(workOrderWhere(all, VIEW)).toEqual({ companyId: { in: [C] } })
-    expect(workOrderWhere(onlyP2, VIEW)).toEqual({ AND: [{ companyId: { in: [C] } }, { partyId: { in: [P2] } }] })
+    // B-PR-09: the customer clause is null-safe (a work order of no customer never slips through a negation such as `every`).
+    expect(workOrderWhere(onlyP2, VIEW)).toEqual({ AND: [{ companyId: { in: [C] } }, { partyId: { in: [P2], not: null } }] })
     expect(workOrderWhere(none, VIEW)).toBe(NO_ROWS)
   })
 

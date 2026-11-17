@@ -194,6 +194,7 @@ export async function releaseWorkOrder(caller: CommandCaller, workOrderId: strin
       payload: {
         workOrderId: current.id,
         number: current.number,
+        partyId: current.partyId, // B-PR-09: its one customer, for the office's live wall
         batchNumber: batch.formatted,
         siteId: current.siteId,
         styleId: current.styleId,

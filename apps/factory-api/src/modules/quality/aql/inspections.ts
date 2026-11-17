@@ -257,7 +257,7 @@ export async function applyProfile(caller: CommandCaller, inspectionId: string, 
       subject: row.id,
       companyId: row.companyId,
       siteId: row.siteId,
-      payload: { inspectionId: row.id, workOrderId: row.workOrderId, profileId: answer.profile.id, source, codeLetter: plan.codeLetter, lotSize, sampleSize: plan.sampleSize, acceptMajor: accept.acceptMajor, acceptMinor: accept.acceptMinor },
+      payload: { inspectionId: row.id, workOrderId: row.workOrderId, partyId: header.partyId /* B-PR-09 */, profileId: answer.profile.id, source, codeLetter: plan.codeLetter, lotSize, sampleSize: plan.sampleSize, acceptMajor: accept.acceptMajor, acceptMinor: accept.acceptMinor },
     })
     return { id: row.id }
   })
