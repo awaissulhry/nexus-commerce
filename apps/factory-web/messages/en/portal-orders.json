@@ -36,7 +36,10 @@
     "pay": "Pay the deposit",
     "history": "Promise date history",
     "confirmation": "Order confirmation PDF",
-    "newOrder": "New order"
+    "newOrder": "New order",
+    "downloadAll": "Download all (Excel)",
+    "downloading": "Preparing the file…",
+    "downloadAllHint": "Every order of this view with your columns, in one Excel file."
   },
   "keys": {
     "search": "Search your orders",
@@ -586,5 +589,11 @@
       "OPEN_REQUESTS": "Sent, not an order yet",
       "OPEN_ORDERS": "Not delivered yet"
     }
+  },
+  "sheet": {
+    "yes": "Yes",
+    "no": "No",
+    "columnHint": "A column your supplier keeps for you",
+    "downloadFailed": "The file could not be prepared. Try again."
   }
 }

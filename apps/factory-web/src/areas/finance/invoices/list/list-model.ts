@@ -74,3 +74,19 @@ export interface InvoicesDepthSlots {
   more?: MenuItemDef[]
   dialogs?: ReactNode
 }
+
+// ── B-TH-244 (threads plan TH-4, ORD-G06; feature SHEET.overall-F07): the From-DDTs dialog opened with its DDTs chosen ──
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * `?new=1` opens "Invoice shipped goods"; with `&ddts=<id,id>` (Sales › Orders' "Invoice shipped goods for N": one draft per
+ * customer and company) the DDTs come chosen and `&party=<id>` names their customer. Ids that are not ids are left out; at most 100
+ * (the API's limit). Null: the address opens no such dialog.
+ */
+export function fromDdtsOfAddress(params: { get(name: string): string | null } | null): { kind: 'fromDdts'; ddtIds: string[]; partyId: string | null } | null {
+  if (params?.get('new') !== '1') return null
+  const ddtIds = [...new Set((params.get('ddts') ?? '').split(',').map((part) => part.trim().toLowerCase()).filter((part) => UUID.test(part)))].slice(0, 100)
+  const party = params.get('party')?.trim().toLowerCase() ?? ''
+  return { kind: 'fromDdts', ddtIds, partyId: UUID.test(party) ? party : null }
+}
+// ── end B-TH-244 ──

@@ -310,3 +310,23 @@ describe('every design case draws in both languages with no key left on screen',
     }
   })
 })
+
+// ── B-TH-244 (threads plan TH-4, ORD-G06; feature SHEET.overall-F07): Sales › Orders' "Invoice shipped goods for N" lands here ──
+import { fromDdtsOfAddress } from './invoices/list/list-model'
+
+describe('?new=1&ddts= opens Invoice shipped goods with those DDTs chosen (B-TH-244)', () => {
+  const D1 = '0190f0e2-dd01-7000-8000-000000000001'
+  const D2 = '0190f0e2-dd01-7000-8000-000000000002'
+  const P = '0190f0e2-aaaa-7000-8000-000000000001'
+  const at = (query: string) => new URLSearchParams(query)
+  it('the DDTs chosen and their customer; ids that are not ids are left out', () => {
+    expect(fromDdtsOfAddress(at(`new=1&ddts=${D1},${D2},nope&party=${P}`))).toEqual({ kind: 'fromDdts', ddtIds: [D1, D2], partyId: P })
+    expect(fromDdtsOfAddress(at(`new=1&ddts=${D1},${D1}`))).toEqual({ kind: 'fromDdts', ddtIds: [D1], partyId: null })
+  })
+  it('?new=1 alone opens it empty (pick the customer); without new=1 nothing opens', () => {
+    expect(fromDdtsOfAddress(at('new=1'))).toEqual({ kind: 'fromDdts', ddtIds: [], partyId: null })
+    expect(fromDdtsOfAddress(at(`ddts=${D1}`))).toBeNull()
+    expect(fromDdtsOfAddress(null)).toBeNull()
+  })
+})
+// ── end B-TH-244 ──

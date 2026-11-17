@@ -284,6 +284,14 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   The transport gained `bulkPreview` / `bulkApply`. First list on it: Production › Work orders (due date, priority).
   B-W2b-18: the phone card list is ON for every list (leave `cards` out for the defaults; `cards={null}` keeps a table on a
   phone); an `endless` list gets "Show more" on its cards.
+  B-TH-241 (threads plan TH-4), two more opt-ins: `custom` { recordType, companyId?, partyId?, partyOf? } (`list-frame/custom/`)
+  draws the record type's custom fields as columns `cf:<code>` read through the transport's `fields` seam (`GET /fields` in the
+  list's scope, `POST /fields/rows/:type` for the loaded rows, 200 ids a read, only while one is in view): OPT-IN columns
+  (`ColDef.context.optIn`: hidden until a layout orders them — tools/model.ts — so lists and views saved before keep theirs),
+  "… (custom field)" in Customise, written by Export when shown; a field for one customer shows only on that customer's rows.
+  `groups` { keyOf, groups: [{ key, name, label, summary, state?, more? }], collapsed, onToggle, total? } (`list-frame/groups/`):
+  full-width group lines (header with the fold toggle, its name a door, the LIST's figures — never summed from loaded rows —,
+  "Show more of …", reading / failed), the grand total pinned under the grid (sticky), a section per group on a phone.
 - `src/areas/search/` — global search (B-W2a-32): All results (SCR-248, `/w/<company>/search?q=&type=`, a frame page
   with no navigation row) and the shared parts of the palette's record groups (`model.ts`: where a result opens —
   its company's Office, `recordAddress`, a supplier on the buying side —, the type/status words of `search.json`;
@@ -397,6 +405,16 @@ http://localhost:3200/design (every screen by SCR id) → a screen (every case i
   (every read, the tiles and the export follow). Wide columns (Ordered, Margin %, Priority, Season, From quote) from 1800 px.
   Keys `o` / ⌘↵ / Space live in the footer icon. Export N = the frame's `selection.exportSelected` (the export job with ids).
   List frame opt-ins added here: `exportAbout`, `onRowClick`, `ColDef.context.exportWith` (a cell's second fact in the file).
+  B-TH-243 / B-TH-244 (threads plan TH-4): ONE Views ▾ — the rows views are the frame's `builtInViews` on top of the saved ones
+  (no Rows ▾ on the list; the board keeps it), Save view as starts from "<customer> — tracking" (`viewName`), someone else's view
+  changed reads "Changed · Save as your own". The overall view: `?group=party` (All customers grouped by customer; never on a
+  customer's sheet) reads `GET /sales/orders/summary?group=party` and each open group's own pages (`list/sheet/overall.ts`: every
+  figure of a header and of the pinned grand total is the server's and a door — `model.ts doorAddress` turns the API's filter into
+  the page's address; the terms beside the rows view are `extraFromAddress`, each a chip); the built-in "Shipped, not invoiced" =
+  the API's `shippedNotInvoiced=true` (factory-domain `shippedNotInvoiced`); the later columns (Open pcs, Progress — read with
+  `progress=true` only while shown: the frame's `onShownColumns` —, Paid, Balance, Site, Order note, At risk, Customer's mark) are
+  opt-in columns; "Invoice shipped goods for N" (invoices.manage) reads `GET /invoicing/from-ddts/candidates` and opens Finance's
+  From-DDTs dialog per draft (`/finance/invoices?new=1&ddts=…&party=…`). The sheet passes `custom` (ORDER, its customer).
 - `src/areas/finance/` — Finance (area order 10, Italian "Amministrazione"; SCR-080 … SCR-083): `_shared/` (api.ts every call + zod,
   model.ts the pure rules — saved views ⇄ address = the API's own `?status=` `?docType=`, journey, next step held with its
   reason, the checks in words with where to fix, payment state, placement oldest first, CSV, problems —, hooks.ts live,
