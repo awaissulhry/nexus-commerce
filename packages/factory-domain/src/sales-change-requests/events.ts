@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { defineEvent } from '../events/define'
-import { REQUEST_KINDS } from '../sales/change-requests/rules'
+// B-PR-24: every kind of request (the production asks beside change and cancel) and the customer's answer to our counter-offer.
+import { COUNTER_ANSWERS } from '../sales/change-requests/counter'
+import { ORDER_REQUEST_KINDS } from '../sales/change-requests/rules'
 
 /**
  * Change and cancel requests from the portal (B-W2b-183; SAL-077, SAL-078). apps/factory-api's modules/sales/change-requests
@@ -16,6 +18,16 @@ import { REQUEST_KINDS } from '../sales/change-requests/rules'
  *
  * Reach the office's order screens and Today (orders.view over the order's company and customer): ids, kinds and states
  * only; never a name, a quantity or an amount.
+ *
+ * B-PR-24 (production plan §3, 08-backend §4.2 and §6): the kind is every kind of request — CHANGE and CANCEL, and the
+ * production asks RUSH ("Urgent – asked"), HOLD, RESUME, SPLIT_SHIPMENT and SAMPLE_ROUND — on asked, withdrawn and answered.
+ * Two more, about our counter-offer (a COUNTER_OFFER approval request the customer answers):
+ *
+ *   order_change_request.countered        the office answered an OPEN request with a counter-offer (it is now COUNTERED: the
+ *                                         customer answers it in Waiting for you)
+ *   order_change_request.counter_answered the customer said yes (ACCEPTED: the request is carried out with the counter) or no
+ *                                         (REFUSED: the request is withdrawn) to our counter-offer
+ * Never the counter's date, fee or words: ids, kinds and the answer only.
  */
 
 const live = (fields: readonly string[]) => ({ permission: 'orders.view', fields }) as const
@@ -24,15 +36,15 @@ export const events = [
   defineEvent({
     type: 'order_change_request.asked',
     context: 'sales-change-requests',
-    description: "A customer asked, from the portal, to change an order (sizes, date, delivery address) or to cancel it (the whole order or some lines).",
-    payload: z.strictObject({ requestId: z.uuid(), orderId: z.uuid(), partyId: z.uuid(), kind: z.enum(REQUEST_KINDS), lines: z.number().int().min(0), wholeOrder: z.boolean() }),
+    description: "A customer asked, from the portal, to change an order (sizes, date, delivery address) or to cancel it (the whole order or some lines), or made a production ask (urgent, pause, resume, ship what is ready, another sample).",
+    payload: z.strictObject({ requestId: z.uuid(), orderId: z.uuid(), partyId: z.uuid(), kind: z.enum(ORDER_REQUEST_KINDS), lines: z.number().int().min(0), wholeOrder: z.boolean() }),
     live: live(['requestId', 'orderId', 'kind']),
   }),
   defineEvent({
     type: 'order_change_request.withdrawn',
     context: 'sales-change-requests',
     description: 'The customer withdrew a change or cancel request while it waited for the answer.',
-    payload: z.strictObject({ requestId: z.uuid(), orderId: z.uuid(), partyId: z.uuid(), kind: z.enum(REQUEST_KINDS) }),
+    payload: z.strictObject({ requestId: z.uuid(), orderId: z.uuid(), partyId: z.uuid(), kind: z.enum(ORDER_REQUEST_KINDS) }),
     live: live(['requestId', 'orderId', 'kind']),
   }),
   defineEvent({
@@ -43,13 +55,28 @@ export const events = [
       requestId: z.uuid(),
       orderId: z.uuid(),
       partyId: z.uuid(),
-      kind: z.enum(REQUEST_KINDS),
+      kind: z.enum(ORDER_REQUEST_KINDS),
       answer: z.enum(['ACCEPTED', 'REFUSED']),
       /** The amendment an accepted change (or partial cancel) made; null otherwise. */
       amendmentId: z.uuid().nullable(),
       /** An accepted whole-order cancel cancelled the order. */
       orderCancelled: z.boolean(),
     }),
+    live: live(['requestId', 'orderId', 'kind', 'answer']),
+  }),
+  // ---- B-PR-24: our counter-offer and the customer's answer to it ------------------------------------------------------------
+  defineEvent({
+    type: 'order_change_request.countered',
+    context: 'sales-change-requests',
+    description: "The office answered a customer's request with a counter-offer (another date, a price or words): the customer answers it.",
+    payload: z.strictObject({ requestId: z.uuid(), orderId: z.uuid(), partyId: z.uuid(), kind: z.enum(ORDER_REQUEST_KINDS), approvalRequestId: z.uuid() }),
+    live: live(['requestId', 'orderId', 'kind']),
+  }),
+  defineEvent({
+    type: 'order_change_request.counter_answered',
+    context: 'sales-change-requests',
+    description: "The customer said yes (the request is carried out with the counter-offer) or no (the request is withdrawn) to our counter-offer.",
+    payload: z.strictObject({ requestId: z.uuid(), orderId: z.uuid(), partyId: z.uuid(), kind: z.enum(ORDER_REQUEST_KINDS), answer: z.enum(COUNTER_ANSWERS) }),
     live: live(['requestId', 'orderId', 'kind', 'answer']),
   }),
 ] as const
