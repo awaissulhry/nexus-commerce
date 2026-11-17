@@ -34,6 +34,8 @@ export const CUT_HEADER = {
   dueDate: true,
   priority: true,
   version: true,
+  // B-PR-04b: its one customer, for the brand wall (cut.ts mayCut).
+  partyId: true,
 } as const satisfies Prisma.WorkOrderSelect
 export type CutHeader = Prisma.WorkOrderGetPayload<{ select: typeof CUT_HEADER }>
 

@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { PRINT_VIEW } from '@nexus/factory-domain/auth/permissions/catalogue'
 import { NotFoundError, ValidationError } from '@nexus/factory-domain/core/errors'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { can } from '@nexus/factory-domain/core/permissions'
 import { toUtcIso } from '@nexus/factory-domain/core/time'
 import { parseScanId, tenantTag } from '@nexus/factory-domain/numbering/scan-id'
 import { PRODUCTION_BUNDLES } from '@nexus/factory-domain/production/bundles/permissions'
@@ -11,6 +11,7 @@ import { WORKORDERS_VIEW } from '@nexus/factory-domain/production/work-orders/pe
 import type { CommandCaller } from '../../../core/command'
 import { actorOf } from '../../../core/context'
 import { standardBundleSizeFor } from '../settings/bundle-size'
+import { workOrderWhere } from '../work-orders/scope' // B-PR-04a
 import { bundleView, bundleWorkOrder, cellView, countsOf, mayBundle, ticketBase, ticketOf, workerOf } from './bundles'
 // W2b B-W2b-41.
 import { couponScan } from '@nexus/factory-domain/production/bundles/coupons'
@@ -40,6 +41,8 @@ function standingOperations(scans: readonly ScanRow[]): Set<string> {
 
 export interface BundleWorkOrdersQuery {
   readonly number?: string | undefined
+  /** B-PR-04a: one customer's (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly limit: number
 }
 
@@ -48,10 +51,12 @@ export async function bundleWorkOrders(caller: CommandCaller, query: BundleWorkO
   const context = workerOf(caller)
   const where: Prisma.WorkOrderWhereInput = {
     AND: [
-      scopeWhere(actorOf(context), PRODUCTION_BUNDLES, { company: 'companyId', site: 'siteId' }) as Prisma.WorkOrderWhereInput,
+      // B-PR-04a (the brand wall): the work orders the caller reaches, by company, site and customer.
+      workOrderWhere(actorOf(context), PRODUCTION_BUNDLES),
       { status: { in: [...CUTTABLE_STATUSES] } },
       context.audience === 'floor' ? { siteId: context.siteId } : {},
       query.number ? { number: query.number.trim() } : {},
+      query.partyId ? { partyId: query.partyId } : {},
     ],
   }
   return caller.withClient(async (db) => {

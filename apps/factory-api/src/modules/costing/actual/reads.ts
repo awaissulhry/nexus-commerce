@@ -1,7 +1,7 @@
 import type { Prisma } from '@nexus/factory-db'
 import { NotFoundError } from '@nexus/factory-domain/core/errors'
 import { isUuid } from '@nexus/factory-domain/core/ids'
-import { can, scopeWhere } from '@nexus/factory-domain/core/permissions'
+import { reachesEveryParty, scopeWhere, type Actor } from '@nexus/factory-domain/core/permissions'
 import { businessDate, businessDayRange, businessDayStart, toUtcIso } from '@nexus/factory-domain/core/time'
 import { fromMinorUnits, toMinorUnits } from '@nexus/factory-domain/core/money'
 import { pickRate, type LabourRate } from '@nexus/factory-domain/costing/inputs'
@@ -51,6 +51,7 @@ import { ledgerViews } from './views'
 // B-W2b-F46: what arrived after the close of a CLOSED work order.
 import type { AfterCloseView } from '@nexus/factory-domain/costing/close/after-close'
 import { afterCloseOf } from './after-close'
+import { reachesWorkOrder, viaWorkOrder, workOrderWhere } from '../../production/work-orders/scope' // B-PR-05
 
 /**
  * Estimated vs actual and the cost ledger, read (B-W2a-21; FIN-026, FIN-027, FIN-033, FIN-038; design finance.costing
@@ -62,6 +63,16 @@ import { afterCloseOf } from './after-close'
  */
 
 const SCOPE = { company: 'companyId', site: 'siteId' } as const
+
+// ── B-PR-05 (production plan §2, the brand wall) ──
+/** The lists' customer filter (`partyId`: one customer's, inside the caller's reach). */
+interface PartyFilter {
+  readonly partyId?: string | undefined
+}
+
+/** The actor with only its grants that reach every customer: what a total that mixes customers may count. */
+const everyPartyOf = (actor: Actor): Actor => ({ ...actor, grants: actor.grants.filter((grant) => grant.parties === 'all') })
+// ── end B-PR-05 ──
 const OPEN_STATUSES = ['RELEASED', 'IN_PROGRESS', 'ON_HOLD', 'COMPLETED', 'CLOSED'] as const
 const FINAL = new Set(['COMPLETED', 'CLOSED'])
 
@@ -246,11 +257,13 @@ function rowOf(computed: Computed): WorkOrderCostRowView {
   }
 }
 
-const orderWhere = (caller: CommandCaller, query: Pick<WorkOrderCostsQuery, 'companyId' | 'siteId' | 'status' | 'q' | 'completedFrom' | 'completedTo' | 'closedFrom' | 'closedTo'>): Prisma.WorkOrderWhereInput => {
+const orderWhere = (caller: CommandCaller, query: Pick<WorkOrderCostsQuery, 'companyId' | 'siteId' | 'status' | 'q' | 'completedFrom' | 'completedTo' | 'closedFrom' | 'closedTo'> & PartyFilter): Prisma.WorkOrderWhereInput => {
   const actor = actorOf(contextOf(caller))
   return {
     AND: [
-      scopeWhere(actor, COSTING_VIEW, SCOPE) as Prisma.WorkOrderWhereInput,
+      // B-PR-05 (the brand wall): the work orders the caller reaches, by company, site and customer (the tiles count the same).
+      workOrderWhere(actor, COSTING_VIEW),
+      query.partyId ? { partyId: query.partyId } : {},
       query.companyId ? { companyId: query.companyId } : {},
       query.siteId ? { siteId: query.siteId } : {},
       { status: { in: query.status && query.status.length > 0 ? [...query.status] : [...OPEN_STATUSES] } },
@@ -268,7 +281,7 @@ const orderWhere = (caller: CommandCaller, query: Pick<WorkOrderCostsQuery, 'com
 }
 
 /** GET /costing/work-orders: a page of work orders, standard vs actual, and the tiles over every one in scope. */
-export async function workOrderCosts(caller: CommandCaller, query: WorkOrderCostsQuery) {
+export async function workOrderCosts(caller: CommandCaller, query: WorkOrderCostsQuery & PartyFilter) {
   const now = serverClock.now()
   const where = orderWhere(caller, query)
   return caller.withClient(async (db) => {
@@ -296,12 +309,16 @@ async function tilesOf(caller: CommandCaller, db: Reader, where: Prisma.WorkOrde
     }
   }
   const currencies = unique(all.map((row) => row.currency))
-  const stockScope = scopeWhere(actor, COSTING_VIEW, SCOPE) as Prisma.StockValuationWhereInput
-  const values = await db.stockValuation.groupBy({ by: ['currency'], where: stockScope, _sum: { valueAmount: true } })
+  // B-PR-05 (the brand wall): the stock's value and its unvalued moves are totals that mix customers: only over the places the
+  // caller reaches EVERY customer at (its grants of every party); a person limited to some customers gets no stock value.
+  const everyParty = everyPartyOf(actor)
+  const stockScope = scopeWhere(everyParty, COSTING_VIEW, SCOPE) as Prisma.StockValuationWhereInput
+  const seesStock = reachesEveryParty(actor, COSTING_VIEW)
+  const values = seesStock ? await db.stockValuation.groupBy({ by: ['currency'], where: stockScope, _sum: { valueAmount: true } }) : []
   const unvaluedMoves = await db.stockMove.count({
     where: {
       AND: [
-        scopeWhere(actor, COSTING_VIEW, SCOPE) as Prisma.StockMoveWhereInput,
+        scopeWhere(everyParty, COSTING_VIEW, SCOPE) as Prisma.StockMoveWhereInput,
         { valuations: { none: {} } },
         { OR: [{ fromLocationId: null, toLocationId: { not: null } }, { fromLocationId: { not: null }, toLocationId: null }] },
       ],
@@ -311,7 +328,7 @@ async function tilesOf(caller: CommandCaller, db: Reader, where: Prisma.WorkOrde
   return {
     overStandard: all.length === 0 ? 0 : overStandard,
     varianceThisMonth: asMoney('cost', oneCurrency ? varianceThisMonth : null),
-    stockValue: asMoney('cost', values.length === 0 ? 0 : values.length === 1 ? (values[0]!._sum.valueAmount ?? 0) : null),
+    stockValue: asMoney('cost', !seesStock ? null : values.length === 0 ? 0 : values.length === 1 ? (values[0]!._sum.valueAmount ?? 0) : null),
     unvaluedMoves,
     wipValue: asMoney('cost', null),
     currency: oneCurrency ? (currencies[0] ?? values[0]?.currency ?? null) : null,
@@ -332,7 +349,8 @@ export async function workOrderCost(caller: CommandCaller, workOrderId: string):
   const now = serverClock.now()
   return caller.withClient(async (db) => {
     const workOrder = isUuid(workOrderId) ? (await readWorkOrders(db, { id: workOrderId }))[0] : undefined
-    if (!workOrder || !can(actorOf(context), COSTING_VIEW, { companyId: workOrder.companyId, siteId: workOrder.siteId }) || workOrder.status === 'DRAFT') throw new NotFoundError('Work order not found.')
+    // B-PR-05 (the brand wall): with the work order's one customer (another customer's is not found).
+    if (!workOrder || !reachesWorkOrder(actorOf(context), COSTING_VIEW, workOrder) || workOrder.status === 'DRAFT') throw new NotFoundError('Work order not found.')
     const [facts] = await costFactsOf(db, [workOrder], now)
     const computed = compute(facts!)
     const row = rowOf(computed)
@@ -444,11 +462,13 @@ export async function workOrderCost(caller: CommandCaller, workOrderId: string):
 }
 
 /** GET /costing/ledger: the entries the caller may see, newest first, in pages. */
-export async function ledger(caller: CommandCaller, query: LedgerQuery): Promise<{ entries: LedgerEntryView[]; nextCursor: string | null }> {
+export async function ledger(caller: CommandCaller, query: LedgerQuery & PartyFilter): Promise<{ entries: LedgerEntryView[]; nextCursor: string | null }> {
   const actor = actorOf(contextOf(caller))
   const where: Prisma.WorkOrderCostEntryWhereInput = {
     AND: [
-      scopeWhere(actor, COSTING_VIEW, SCOPE) as Prisma.WorkOrderCostEntryWhereInput,
+      // B-PR-05 (the brand wall): through the entry's work order (company, site and customer), of one customer when asked.
+      viaWorkOrder(actor, COSTING_VIEW) as Prisma.WorkOrderCostEntryWhereInput,
+      query.partyId ? { workOrder: { is: { partyId: query.partyId } } } : {},
       query.companyId ? { companyId: query.companyId } : {},
       query.siteId ? { siteId: query.siteId } : {},
       query.workOrderId ? { workOrderId: query.workOrderId } : {},

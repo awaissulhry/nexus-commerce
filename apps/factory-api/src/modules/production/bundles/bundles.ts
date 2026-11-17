@@ -32,6 +32,7 @@ import { holdOnBundles } from '../../quality/holds/checks'
 import { cutForBundles } from '../cutting/views'
 import { standardBundleSizeFor } from '../settings/bundle-size'
 import { floorRecordSubjectFor } from '../settings/subject'
+import { reachesWorkOrder, type WorkOrderReach } from '../work-orders/scope' // B-PR-04a
 // W2b B-W2b-41: a voided bundle's coupons go with it.
 import { voidCouponsOf } from './coupons'
 import { asTenantSystem, withTicketCodes, type TicketCodes } from './codes'
@@ -116,11 +117,17 @@ function floorOf(caller: Pick<CommandCaller, 'factoryContext'>): FloorContext {
   return context
 }
 
-/** May the caller work on this work order with the permission? (A floor device: only at its own site.) */
-export function mayBundle(context: Worker, permission: Permission, workOrder: { readonly companyId: string; readonly siteId: string }): boolean {
+// ── B-PR-04a (production plan §2, the brand wall) ──
+/**
+ * May the caller work on this work order with the permission? (A floor device: only at its own site.) And over its one
+ * customer (../work-orders/scope): another customer's work order, or one of no customer for a person limited to some
+ * customers, is not reached (every caller answers it as an unknown one).
+ */
+export function mayBundle(context: Worker, permission: Permission, workOrder: WorkOrderReach): boolean {
   if (context.audience === 'floor' && context.siteId !== workOrder.siteId) return false
-  return can(actorOf(context), permission, { companyId: workOrder.companyId, siteId: workOrder.siteId })
+  return reachesWorkOrder(actorOf(context), permission, workOrder)
 }
+// ── end B-PR-04a ──
 
 /** The work order the caller bundles for or reads: one it may reach with the permission (else not found). */
 export async function bundleWorkOrder(caller: CommandCaller, workOrderId: string, permission: Permission): Promise<BundleHeader> {

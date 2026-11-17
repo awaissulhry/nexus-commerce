@@ -3,6 +3,9 @@ import { can, scopeWhere, type Permission } from '@nexus/factory-domain/core/per
 import type { CallRefusal } from '@nexus/factory-domain/production/calls/rules'
 import type { CommandCaller } from '../../../core/command'
 import { actorOf, type FloorContext, type OfficeContext } from '../../../core/context'
+import type { Prisma } from '@nexus/factory-db'
+import { reachesWorkOrder, workOrderWhere } from '../work-orders/scope' // B-PR-04a
+import { scopeOfCall, type CallRow } from './store'
 
 /**
  * Who may do what with help calls (B-W2b-35): each call and type is checked with can() against its company and site; a
@@ -41,6 +44,30 @@ export function may(context: CallContext, permission: Permission, record: { read
 export function assertMay(context: CallContext, permission: Permission, record: { readonly companyId: string; readonly siteId: string }, what: string): void {
   if (!may(context, permission, record)) throw new NotFoundError(`${what} not found.`)
 }
+
+// ── B-PR-04a (production plan §2, the brand wall) ──
+/**
+ * May the caller do this on a call? Its company and site (may), and for a call on a work order that work order's one
+ * customer (../work-orders/scope): a call on another customer's work order is not found. A call of no work order (a machine,
+ * a material run) names no customer and stays.
+ */
+export function mayCall(context: CallContext, permission: Permission, row: Pick<CallRow, 'siteId' | 'station' | 'workOrder'>): boolean {
+  const scope = scopeOfCall(row)
+  if (!may(context, permission, scope)) return false
+  return row.workOrder === null || reachesWorkOrder(actorOf(context), permission, { ...scope, partyId: row.workOrder.partyId })
+}
+
+/** The same, or a 404 (a record the caller may not see is not found). */
+export function assertMayCall(context: CallContext, permission: Permission, row: Pick<CallRow, 'siteId' | 'station' | 'workOrder'>, what = 'Call'): void {
+  if (!mayCall(context, permission, row)) throw new NotFoundError(`${what} not found.`)
+}
+
+/** A list's filter of calls by the brand wall: the calls of no work order, and those on a work order the caller reaches. */
+export function callWall(context: CallContext, permission: Permission, partyId?: string): Prisma.HelpCallWhereInput {
+  const reach = { AND: [workOrderWhere(actorOf(context), permission), partyId ? { partyId } : {}] }
+  return partyId ? { workOrder: { is: reach } } : { OR: [{ workOrderId: null }, { workOrder: { is: reach } }] }
+}
+// ── end B-PR-04a ──
 
 /** A list's filter over the sites (and their companies) the permission reaches; a floor device: its own site. */
 export function siteScopeOf(context: CallContext, permission: Permission): Record<string, unknown> {

@@ -15,7 +15,7 @@ import { serverClock } from '../../../core/time'
 import { floorReadinessFor } from '../../../platform/privacy/read'
 import { activeHoldsOf } from '../../quality/holds/checks'
 import { asTenantSystem } from '../bundles/codes'
-import { floorOf, may, officeOf, refuse, workerOf } from './access'
+import { floorOf, may, officeOf, partiesOf, refuse, ticketParties, ticketWall, workerOf } from './access'
 import { emitOrder, emitTicket } from './emit'
 import { makeTicket } from './plan'
 import { jobKey, labelTarget, queueLabel } from './printing'
@@ -50,14 +50,21 @@ const SCAN_CARD_WORDS: Readonly<Record<Language, { readonly next: Readonly<Recor
 async function ticketByCode(db: Reader, context: OfficeContext | FloorContext, code: string): Promise<TicketRow> {
   const scan = scanCodeOf(code)
   const ticket = scan === '' ? null : await db.cutTicket.findFirst({ where: { scanCode: scan }, select: TICKET_COLUMNS })
-  if (!ticket || !may(context, PRODUCTION_CUT, ticket)) throw new NotFoundError(`No cut ticket ${scan} at this site.`)
+  if (!ticket || !may(context, PRODUCTION_CUT, ticket, await ticketParties(db, ticket.id))) throw new NotFoundError(`No cut ticket ${scan} at this site.`)
   return ticket
 }
 
 /** GET /production/cut-tickets/waiting: the site's CUT tickets OPEN or STARTED of released or running cut orders, oldest first. */
-export async function waitingTickets(caller: CommandCaller, query: { readonly siteId?: string | undefined }) {
+export async function waitingTickets(caller: CommandCaller, query: { readonly siteId?: string | undefined; readonly partyId?: string | undefined }) {
   const context = workerOf(caller)
-  const scope = scopeWhere(actorOf(context), PRODUCTION_CUT, { company: 'companyId', site: 'siteId' }) as Prisma.CutTicketWhereInput
+  // B-PR-04b (the brand wall): a ticket of a cut order with a cell of a customer the caller does not reach is left out.
+  const scope: Prisma.CutTicketWhereInput = {
+    AND: [
+      scopeWhere(actorOf(context), PRODUCTION_CUT, { company: 'companyId', site: 'siteId' }) as Prisma.CutTicketWhereInput,
+      ticketWall(context, PRODUCTION_CUT),
+      query.partyId ? { cutOrder: { is: { lines: { some: { workOrderSize: { is: { workOrder: { is: { partyId: query.partyId } } } } } } } } } : {},
+    ],
+  }
   const siteId = context.audience === 'floor' ? context.siteId : query.siteId
   return caller.withClient(async (db) => {
     const tickets = await db.cutTicket.findMany({
@@ -243,8 +250,8 @@ async function managedTicket(caller: CommandCaller, ticketId: string): Promise<{
     const order = ticket?.cutOrderId ? await readCutOrder(db, ticket.cutOrderId) : null
     return { ticket, order }
   })
-  if (!found.ticket || !found.order || !may(context, PRODUCTION_CUTTING_VIEW, found.order)) throw new NotFoundError('Cut ticket not found.')
-  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, found.order)) throw new ForbiddenError('Tickets are voided and printed with the right to plan cut orders at the site.')
+  if (!found.ticket || !found.order || !may(context, PRODUCTION_CUTTING_VIEW, found.order, partiesOf(found.order))) throw new NotFoundError('Cut ticket not found.')
+  if (!may(context, PRODUCTION_CUTORDERS_MANAGE, found.order, partiesOf(found.order))) throw new ForbiddenError('Tickets are voided and printed with the right to plan cut orders at the site.')
   return { context, ticket: found.ticket, order: found.order }
 }
 

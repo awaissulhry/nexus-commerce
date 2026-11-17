@@ -4,7 +4,7 @@ import { PRODUCTION_CALLS_MANAGE, PRODUCTION_CALLS_VIEW } from '@nexus/factory-d
 import { CALL_REFUSALS, nextTypeOrder, typeDraftProblems, type CallKind } from '@nexus/factory-domain/production/calls/rules'
 import { command, type CommandCaller, type CommandTx } from '../../../core/command'
 import type { OfficeContext } from '../../../core/context'
-import { assertMay, may, officeOf, problemsError, refuse } from './access'
+import { assertMay, callWall, may, officeOf, problemsError, refuse } from './access'
 import { lockType, readType, siteOf, typesOfSite, typeViews, type Reader, type SiteRow, type TypeRow } from './store'
 
 /**
@@ -70,7 +70,7 @@ export async function listTypes(caller: CommandCaller, query: { readonly siteId:
   const site = await knownSite(caller, context, query.siteId)
   return caller.withClient(async (db) => ({
     site: { id: site.id, code: site.code, name: site.name },
-    types: await typeViews(db, await typesOfSite(db, site.id, query.active === undefined ? {} : { active: query.active })),
+    types: await typeViews(db, await typesOfSite(db, site.id, query.active === undefined ? {} : { active: query.active }), callWall(context, PRODUCTION_CALLS_VIEW)), // B-PR-04a
     canManage: may(context, PRODUCTION_CALLS_MANAGE, { companyId: site.companyId, siteId: site.id }),
   }))
 }
@@ -117,7 +117,7 @@ export async function createType(caller: CommandCaller, body: CreateTypeBody, id
     const type = (await readType(tx, id))!
     tools.audit({ recordType: 'HelpCallType', recordId: id, companyId: site.companyId, siteId: site.id, after: { code, ...routingAudit(type) } })
     tools.emit({ type: 'help_call_type.changed', subject: id, companyId: site.companyId, siteId: site.id, payload: { typeId: id, code, kind: body.kind, change: 'ADDED', fields: [] } })
-    return { type: (await typeViews(tx, [type]))[0]! }
+    return { type: (await typeViews(tx, [type], callWall(context, PRODUCTION_CALLS_MANAGE)))[0]! } // B-PR-04a
   })
   return { ...result, replayed }
 }
@@ -155,7 +155,7 @@ export async function updateType(caller: CommandCaller, typeId: string, body: Up
     tools.audit({ recordType: 'HelpCallType', recordId: typeId, companyId: site.companyId, siteId: site.id, before: pick(before), after: pick(after) })
     const change = fields.includes('active') ? (after.active ? 'SWITCHED_ON' : 'SWITCHED_OFF') : 'CHANGED'
     tools.emit({ type: 'help_call_type.changed', subject: typeId, companyId: site.companyId, siteId: site.id, payload: { typeId, code: after.code, kind: after.kind as CallKind, change, fields } })
-    return { type: (await typeViews(tx, [after]))[0]! }
+    return { type: (await typeViews(tx, [after], callWall(context, PRODUCTION_CALLS_MANAGE)))[0]! } // B-PR-04a
   })
   return { ...result, replayed }
 }

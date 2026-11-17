@@ -30,7 +30,8 @@ import { activeHoldsOf } from '../../quality/holds/checks'
 import { assertFloorReady } from '../bundles/bundles'
 import { asTenantSystem } from '../bundles/codes'
 import type { BundleRow } from '../bundles/store'
-import { floorOf, may, officeOf, refuse, seen, workerOf } from '../cutissue/access'
+import { floorOf, may, officeOf, ofWorkOrder, refuse, seen, workerOf, workOrderParties } from '../cutissue/access'
+import { ticketParties, ticketWall } from '../cutorders/access' // B-PR-04b, B-PR-05
 import { emitRecut } from '../cutissue/emit'
 import { cellCutFacts, cellText, findBundle, liveOf, readBundles, readCells, readLot, readLots, readOrder, readOrders, readStyles, shadeLotsOf, type OrderRow, type Reader } from '../cutissue/store'
 import { jobKey, labelTarget, queueLabel } from '../cutorders/printing'
@@ -138,6 +139,14 @@ async function readRecut(db: Reader, ticketId: string): Promise<RecutRow | null>
   return db.cutTicket.findUnique({ where: { id: ticketId }, select: RECUT_COLUMNS })
 }
 
+/** B-PR-04b (the brand wall): the recut ticket with its cell's customer (../cutorders/access ticketParties). */
+async function recutAndParties(caller: CommandCaller, ticketId: string): Promise<{ ticket: RecutRow | null; parties: (string | null)[] }> {
+  return caller.withClient(async (db) => {
+    const ticket = await readRecut(db, ticketId)
+    return { ticket, parties: ticket ? await ticketParties(db, ticket.id) : [] }
+  })
+}
+
 // ---- lists --------------------------------------------------------------------------------------------------------------------
 
 export const RECUT_VIEWS = ['open', 'started', 'done', 'void', 'all'] as const
@@ -150,6 +159,8 @@ export interface RecutListQuery {
   readonly workOrderId?: string | undefined
   readonly bundleId?: string | undefined
   readonly q?: string | undefined
+  /** B-PR-05: one customer's recuts (inside the caller's reach). */
+  readonly partyId?: string | undefined
   readonly cursor?: string | undefined
   readonly limit?: number | undefined
 }
@@ -157,7 +168,14 @@ export interface RecutListQuery {
 /** GET /production/recut-tickets: the office's list, newest first, with a tile per status. */
 export async function listRecuts(caller: CommandCaller, query: RecutListQuery) {
   const context = officeOf(caller)
-  const scope = scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.CutTicketWhereInput
+  // B-PR-05 (the brand wall): a recut through its cell's work order (company, site and customer), of one customer when asked.
+  const scope: Prisma.CutTicketWhereInput = {
+    AND: [
+      scopeWhere(actorOf(context), PRODUCTION_CUTTING_VIEW, { company: 'companyId', site: 'siteId' }) as Prisma.CutTicketWhereInput,
+      ticketWall(context, PRODUCTION_CUTTING_VIEW),
+      query.partyId ? { workOrderSize: { is: { workOrder: { is: { partyId: query.partyId } } } } } : {},
+    ],
+  }
   const limit = Math.min(query.limit ?? 50, RECUT_LIMITS.rows)
   const q = query.q?.trim()
   const base: Prisma.CutTicketWhereInput[] = [
@@ -190,7 +208,8 @@ export async function listRecuts(caller: CommandCaller, query: RecutListQuery) {
 /** GET /production/recut-tickets/waiting: the site's recuts to cut (floor: its own site), started first, then due, then oldest. */
 export async function waitingRecuts(caller: CommandCaller, query: { readonly siteId?: string | undefined }) {
   const context = workerOf(caller)
-  const scope = scopeWhere(actorOf(context), PRODUCTION_CUT, { company: 'companyId', site: 'siteId' }) as Prisma.CutTicketWhereInput
+  // B-PR-05 (the brand wall): the recuts of the work orders the caller reaches.
+  const scope: Prisma.CutTicketWhereInput = { AND: [scopeWhere(actorOf(context), PRODUCTION_CUT, { company: 'companyId', site: 'siteId' }) as Prisma.CutTicketWhereInput, ticketWall(context, PRODUCTION_CUT)] }
   const siteId = context.audience === 'floor' ? context.siteId : query.siteId
   return caller.withClient(async (db) => {
     const rows = await db.cutTicket.findMany({ where: { AND: [scope, siteId ? { siteId } : {}, { kind: 'RECUT', status: { in: ['OPEN', 'STARTED'] } }] }, select: RECUT_COLUMNS, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], take: RECUT_LIMITS.rows })
@@ -205,7 +224,7 @@ export async function waitingRecuts(caller: CommandCaller, query: { readonly sit
 async function recutByCode(db: Reader, context: OfficeContext | FloorContext, code: string): Promise<RecutRow> {
   const scan = code.trim().toUpperCase()
   const ticket = scan === '' ? null : await db.cutTicket.findFirst({ where: { scanCode: scan }, select: RECUT_COLUMNS })
-  if (!ticket || !may(context, PRODUCTION_CUT, ticket)) throw new NotFoundError(`No cut ticket ${scan} at this site.`)
+  if (!ticket || !may(context, PRODUCTION_CUT, ticket, await ticketParties(db, ticket.id))) throw new NotFoundError(`No cut ticket ${scan} at this site.`)
   if (ticket.kind !== 'RECUT') refuse({ code: 'TICKET_IS_CUT', message: `Ticket ${ticket.number} cuts a cut order: scan it on the cut ticket, not as a recut.` })
   return ticket
 }
@@ -247,7 +266,7 @@ export async function recutOptions(caller: CommandCaller, query: { readonly code
   return caller.withClient(async (db) => {
     const bundle = await findBundle(db, query)
     const order = bundle ? await readOrder(db, bundle.workOrderId) : null
-    seen(context, PRODUCTION_RECUTS, order, 'Bundle')
+    seen(context, PRODUCTION_RECUTS, order, 'Bundle', ofWorkOrder)
     const found = await bundleFacts(db, bundle!)
     const replacements =
       context.audience === 'office'
@@ -372,7 +391,7 @@ export async function makeRecut(caller: CommandCaller, body: MakeBody, idempoten
       const bundle = await findBundle(db, body)
       return bundle ? readOrder(db, bundle.workOrderId) : null
     })
-    seen(context, PRODUCTION_RECUTS, order, 'Bundle')
+    seen(context, PRODUCTION_RECUTS, order, 'Bundle', ofWorkOrder)
     await assertFloorReady(caller, context, context.siteId)
     const system = asTenantSystem(caller, context)
     const { result, replayed } = await inWords(() => command(system, { name: 'production.makeRecutTicket', idempotencyKey: `${context.deviceId}.${idempotencyKey}`.slice(0, 128), input: { ...body, deviceId: context.deviceId } }, async (tools) => makeInCommand(tools, body, { floor: context })))
@@ -381,15 +400,18 @@ export async function makeRecut(caller: CommandCaller, body: MakeBody, idempoten
   }
   const office = officeOf(caller)
   if (body.replacementId) {
-    const replacement = await caller.withClient((db) => readReplacement(db, body.replacementId!))
-    seen(office, PRODUCTION_RECUTS, replacement, 'Replacement')
+    const { replacement, parties } = await caller.withClient(async (db) => {
+      const row = await readReplacement(db, body.replacementId!)
+      return { replacement: row, parties: row ? await workOrderParties(db, row.workOrderId) : [] } // B-PR-04b
+    })
+    seen(office, PRODUCTION_RECUTS, replacement, 'Replacement', () => parties)
   } else {
     const order = await caller.withClient(async (db) => {
       const bundle = await findBundle(db, body)
       return bundle ? readOrder(db, bundle.workOrderId) : null
     })
     if (!body.code && !body.bundleId) throw new ValidationError('Scan or name the bundle the new panels join.', [{ path: 'body/code', message: 'Scan the bundle’s ticket.' }])
-    seen(office, PRODUCTION_RECUTS, order, 'Bundle')
+    seen(office, PRODUCTION_RECUTS, order, 'Bundle', ofWorkOrder)
   }
   const { result, replayed } = await inWords(() => command(caller, { name: 'production.makeRecutTicket', idempotencyKey, input: body }, async (tools) => makeInCommand(tools, body, { floor: null })))
   return { ...result, replayed }
@@ -431,9 +453,9 @@ export interface PrintBody {
 /** POST /production/recut-tickets/:ticketId/print: the label on a label printer of the site (the station's, the site's only one). */
 export async function printRecut(caller: CommandCaller, ticketId: string, body: PrintBody, idempotencyKey?: string) {
   const context = workerOf(caller)
-  const ticket = await caller.withClient((db) => readRecut(db, ticketId))
+  const { ticket, parties } = await recutAndParties(caller, ticketId)
   if (!ticket || ticket.kind !== 'RECUT') throw new NotFoundError('Recut ticket not found.')
-  seen(context, PRODUCTION_CUT, ticket, 'Recut ticket')
+  seen(context, PRODUCTION_CUT, ticket, 'Recut ticket', () => parties)
   if (ticket.status === 'DONE' || ticket.status === 'VOID') refuse({ code: ticket.status === 'DONE' ? 'TICKET_DONE' : 'TICKET_VOID', message: `Recut ticket ${ticket.number} is ${ticket.status.toLowerCase()}: it is not printed again.` })
   const language = body.language ?? 'it'
   const label = await caller.withClient((db) => labelOf(db, ticket, language))
@@ -520,9 +542,9 @@ export async function finishRecut(caller: CommandCaller, body: { readonly code: 
 /** POST /production/recut-tickets/:ticketId/void: the office voids a lost or wrong one with the reason. */
 export async function voidRecut(caller: CommandCaller, ticketId: string, body: { readonly version: number; readonly reason: string }, idempotencyKey?: string) {
   const context = officeOf(caller)
-  const ticket = await caller.withClient((db) => readRecut(db, ticketId))
+  const { ticket, parties } = await recutAndParties(caller, ticketId)
   if (!ticket || ticket.kind !== 'RECUT') throw new NotFoundError('Recut ticket not found.')
-  seen(context, PRODUCTION_RECUTS, ticket, 'Recut ticket')
+  seen(context, PRODUCTION_RECUTS, ticket, 'Recut ticket', () => parties)
   if (ticket.status === 'DONE' || ticket.status === 'VOID') refuse({ code: ticket.status === 'DONE' ? 'TICKET_DONE' : 'TICKET_VOID', message: `Recut ticket ${ticket.number} is ${ticket.status.toLowerCase()}: it is not voided.` })
   const { result } = await command(caller, { name: 'production.voidRecutTicket', idempotencyKey, input: { ticketId, ...body }, record: { type: 'CutTicket', id: ticketId, expectedVersion: body.version } }, async (tools) => {
     const { tx, now } = tools

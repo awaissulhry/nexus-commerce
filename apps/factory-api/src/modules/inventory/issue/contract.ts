@@ -42,6 +42,8 @@ export const pickingWorkOrdersContract = defineContract({
     siteId: id().optional(),
     /** A scanned or typed work order number (exact). */
     number: z.string().trim().min(1).max(60).optional(),
+    /** B-PR-05: one customer's work orders (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
   }),
   response: {
@@ -316,6 +318,8 @@ export const pickListsContract = defineContract({
     siteId: id().optional(),
     view: z.enum(PICK_VIEWS).default('all'),
     q: z.string().trim().max(80).optional(),
+    /** B-PR-05: one customer's work orders (inside the caller's reach: another customer's gives none). */
+    partyId: id().optional(),
     limit: z.coerce.number().int().min(1).max(200).default(50),
     cursor: z.string().regex(/^\d+$/).optional(),
   }),
