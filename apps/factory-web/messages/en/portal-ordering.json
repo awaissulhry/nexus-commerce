@@ -513,6 +513,8 @@
     "body": "Subject: {subject}",
     "next": "Someone in sales reads it and answers on the request's page and by e-mail.",
     "copy": "We send you a copy by e-mail. The request's page always shows what you sent.",
+    "copySent": "We sent you a copy by e-mail. The request’s page always shows what you sent.",
+    "copyFailed": "We could not e-mail you a copy. The request’s page always shows what you sent.",
     "sent": "What you sent",
     "subject": "Subject",
     "ref": "Your PO",

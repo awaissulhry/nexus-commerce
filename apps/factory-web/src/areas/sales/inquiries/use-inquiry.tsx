@@ -74,6 +74,7 @@ import type { StyleRead } from './view/LinesEditor'
 import { endOfDay } from '../../admin/users/partners/model' // B-TH-234: a task's due day ends at the site's midnight
 // B-TH-217 / B-TH-218: the request's thread (RecordThread v1) with Ask for info.
 import { RequestThread, type AskInfo, type AskSend } from './pane/RequestThread'
+import { fillMailEvent } from '../../_shared/document-send/template/api' // th-backend-g step 2: the dialogs' starting words
 
 export interface UseInquiryOptions {
   /** The inquiry to show; null: none open (the hook then reads nothing). */
@@ -357,6 +358,22 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
     [api, after, refused, load],
   )
 
+  // ---- th-backend-g step 2 (B-TH-279): the decline's message starts from the mail template request.declined (the company's words
+  // in the customer's language, else the code's), filled from THIS request; the person writes the reason where "…" stands. Read
+  // when the dialog opens; put in the message only while it is empty (what the person typed is never replaced).
+  const startDecline = useCallback(
+    (now: InquiryView) => {
+      if (messageReach(now, can).held) return
+      fillMailEvent(api, 'request.declined', { recordType: 'Inquiry', recordId: now.id })
+        .then((start) =>
+          setDialog((open) => (open?.kind === 'decline' && !open.draft.message.trim() ? { ...open, draft: { ...open.draft, message: start.body }, start: { fellBack: start.fellBack ? start.words : null } } : open)),
+        )
+        .catch(() => undefined)
+    },
+    [api, can],
+  )
+  // ---- end th-backend-g step 2
+
   const onVerb = useCallback(
     (verb: RecordVerb) => {
       const now = viewRef.current
@@ -364,7 +381,10 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
       verbKey.current = null
       setNotice(null)
       if (verb === 'assign') readPeople(now)
-      else if (verb === 'decline') setDialog({ kind: 'decline', draft: emptyDecline, busy: false, notice: null })
+      else if (verb === 'decline') {
+        setDialog({ kind: 'decline', draft: emptyDecline, busy: false, notice: null })
+        startDecline(now) // th-backend-g step 2
+      }
       // ---- B-TH-234: "Not an order" (closed without counting as declined; nothing is sent), make or match the customer, a task
       else if (verb === 'notAnOrder') setDialog({ kind: 'decline', draft: { ...emptyDecline, reason: 'NOT_AN_ORDER' }, busy: false, notice: null })
       else if (verb === 'customer') readCheck(now)
@@ -383,12 +403,18 @@ export function useInquiry(options: UseInquiryOptions): { model: InquiryRecordMo
       // ---- end B-TH-228
       else if (verb === 'askInfo') {
         // B-TH-218: the box switches to the reply with the question; the pane says where it goes.
-        setAsk({ token: Date.now(), question: '', portal: now.source === 'PORTAL' })
-        setNotice({ key: now.source === 'PORTAL' ? 'pane.ask.portal' : 'pane.ask.mail', params: { customer: now.party?.name ?? now.fromWords }, tone: 'info' })
+        const portal = now.source === 'PORTAL'
+        setNotice({ key: portal ? 'pane.ask.portal' : 'pane.ask.mail', params: { customer: now.party?.name ?? now.fromWords }, tone: 'info' })
+        // th-backend-g step 2 (B-TH-279): the question starts from the mail template request.need_info (the company's words in the
+        // customer's language, else the code's), filled from THIS request; the person writes the question where "…" stands. A
+        // failed read starts empty, as before.
+        fillMailEvent(api, 'request.need_info', { recordType: 'Inquiry', recordId: now.id })
+          .then((start) => setAsk({ token: Date.now(), question: start.body, subject: portal ? '' : start.subject, portal }))
+          .catch(() => setAsk({ token: Date.now(), question: '', subject: '', portal }))
       }
       else void runSimple(verb)
     },
-    [readPeople, runSimple, can, api, readCheck],
+    [readPeople, runSimple, can, api, readCheck, startDecline],
   )
 
   // A row's verb from the list, once the inquiry is read.

@@ -5,6 +5,9 @@ import { buildMime } from '@nexus/factory-domain/email/mime'
 import { identityReady, normalizeAddress } from '@nexus/factory-domain/email/rules'
 import { portalEmailSettingsUrl } from '@nexus/factory-domain/portal/home/links'
 import { composeDigestMail, composeNotificationMail, PORTAL_MAIL_TEMPLATES, unsubscribeToken, unsubscribeUrl, type ComposedMail, type MailItem } from '@nexus/factory-domain/portal/notifications/mail'
+// th-backend-g step 2: a notification in an e-mail template's words.
+import { composeTemplatedNotificationMail } from '@nexus/factory-domain/portal/notifications/mail'
+import type { MailWords } from '@nexus/factory-domain/templates/mail'
 import { abuseKey } from '../../abuse/guard'
 import { authSecrets, type AuthSecrets } from '../../auth/sessions/secrets'
 import { command, COMMAND_SETTINGS, runCommand, type CommandCaller } from '../../../core/command'
@@ -45,6 +48,8 @@ export interface MailPerson {
 export type PartnerMailBody =
   | { readonly kind: 'notification'; readonly item: MailItem & { readonly notificationId: string } }
   | { readonly kind: 'digest'; readonly weekly: boolean; readonly items: readonly (MailItem & { readonly notificationId: string })[]; readonly more: number }
+  // th-backend-g step 2 (B-TH-279): one notification in an e-mail template's filled words (a new message: thread.message_posted).
+  | { readonly kind: 'templated'; readonly notificationId: string; readonly words: MailWords }
 
 export interface SentMail {
   readonly outcome: 'SENT' | 'FAILED'
@@ -71,8 +76,11 @@ export async function sendPartnerMail(caller: CommandCaller, input: { readonly t
   const mail: ComposedMail =
     body.kind === 'notification'
       ? composeNotificationMail({ recipientName: person.displayName, item: body.item, links, footer, locale: person.locale })
-      : composeDigestMail({ recipientName: person.displayName, company: companyName, weekly: body.weekly, items: body.items, more: body.more, links, footer, locale: person.locale })
-  const templateKey = PORTAL_MAIL_TEMPLATES[body.kind]
+      : body.kind === 'templated'
+        ? composeTemplatedNotificationMail({ words: body.words, links, footer, locale: person.locale }) // th-backend-g step 2
+        : composeDigestMail({ recipientName: person.displayName, company: companyName, weekly: body.weekly, items: body.items, more: body.more, links, footer, locale: person.locale })
+  // th-backend-g step 2: a templated notice is still one notification's mail (portal.notification).
+  const templateKey = PORTAL_MAIL_TEMPLATES[body.kind === 'templated' ? 'notification' : body.kind]
   const from = fromLine(identity, null)
   const outboundId = newId()
   const emailMessageId = messageIdFor(outboundId, identity.domain)

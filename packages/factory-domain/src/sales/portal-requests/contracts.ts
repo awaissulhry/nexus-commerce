@@ -117,7 +117,14 @@ export const portalRequestList = output({
 /** The answer of a send: the request as the customer now reads it, and its receipt (P-CUS-NEW.receipt). */
 export const sendRequestAnswer = output({
   request: portalRequestView,
-  receipt: output({ number: z.string(), yourNumber, subject: z.string(), words }),
+  receipt: output({
+    number: z.string(),
+    yourNumber,
+    subject: z.string(),
+    words,
+    /** th-backend-g step 2 (P-CUS-NEW.receipt-F02): the receipt mail went to the person who sent it (false: the page says it could not). */
+    mailed: z.boolean(),
+  }),
 })
 
 /** GET /portal/inquiries/open (B-TH-012): whether "New order" takes a request for the session's company, with the reason. */

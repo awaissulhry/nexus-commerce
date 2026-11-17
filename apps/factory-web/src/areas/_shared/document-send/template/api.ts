@@ -41,3 +41,27 @@ export const listReplies = (api: ApiClient, query: { language?: MessageLanguage;
 /** th-backend-g step 1: `audience` OFFICE for an office note (the office's numbers); else the customer's own numbers (the default). */
 export const fillReply = (api: ApiClient, replyId: string, body: { recordType: ReplyRecordType; recordId: string; contactId?: string | null; audience?: ReplyAudience }) =>
   api.post(`/templates/replies/${encodeURIComponent(replyId)}/fill`, { body: { recordType: body.recordType, recordId: body.recordId, ...(body.contactId ? { contactId: body.contactId } : {}), ...(body.audience ? { audience: body.audience } : {}) }, schema: fillAnswer })
+
+// ---- th-backend-g step 2 (B-TH-279: the new mail templates are read) --------------------------------------------------------------
+/**
+ * A mail's starting words for a record (POST /templates/mail/events/:event/fill): the company's template in use in the recipient's
+ * language, else the code's words — the dialogs' "Ask for info" (request.need_info) and "Decline" (request.declined) start from them.
+ * Only returned: the person reads, writes the question or the reason where "…" stands, and sends. A German, French or Spanish text
+ * by Claude not read yet comes in English (`fellBack`, `words` say why). Mirrors platform/templates/contract.ts fillMailEventContract.
+ */
+const mailFillAnswer = z.object({
+  subject: z.string(),
+  body: z.string(),
+  language: z.enum(MESSAGE_LANGUAGES),
+  source: z.enum(['TEMPLATE', 'CODE']),
+  read: z.boolean(),
+  fellBack: z.boolean(),
+  words: z.object({ it: z.string(), en: z.string() }).nullable(),
+  missing: z.array(z.string()),
+})
+export type MailStart = z.infer<typeof mailFillAnswer>
+export type StartEvent = 'request.need_info' | 'request.declined'
+
+export const fillMailEvent = (api: ApiClient, event: StartEvent, body: { recordType: ReplyRecordType; recordId: string }, signal?: AbortSignal) =>
+  api.post(`/templates/mail/events/${encodeURIComponent(event)}/fill`, { body: { recordType: body.recordType, recordId: body.recordId }, schema: mailFillAnswer, signal })
+// ---- end th-backend-g step 2

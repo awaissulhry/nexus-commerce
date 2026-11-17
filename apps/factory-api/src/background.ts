@@ -180,6 +180,7 @@ import { ecbDailyCron } from './platform/currency/feed'
 import { mailRouteHandler } from './platform/email-in/team-inbox/route'
 import { followUpsCron } from './platform/email-in/team-inbox/follow-ups'
 import { inquiryFromAddressHandler } from './modules/sales/inquiries/from-mail'
+import { requestReceiptHandler } from './modules/sales/inquiries/receipt' // th-backend-g step 2: the receipt of a request made from a customer's mail
 // B-TH-013: the customer's answer takes a request waiting for it up again.
 import { resumeOnReplyHandler } from './modules/sales/inquiries/resume-on-reply'
 import { bounceTaskHandler } from './platform/email-out/delivery-status/tasks'
@@ -313,7 +314,7 @@ const W2B_386_HANDLERS: readonly EventHandler[] = [systemHoldsHandler()]
 // B-W2b-F55: + money placed on a deposit request by any other command (payments.record, payments.allocate, deposit received without it, an online late success) → its deposit invoice (TD02), the same rule.
 const W2B_393_HANDLERS: readonly EventHandler[] = [...suggestionHandlers(), bankDepositInvoiceHandler(), allocatedDepositInvoiceHandler()]
 // B-W2b-394: a sorted mail → the capture address's match and its team inbox; a mail to an inquiry address → its inquiry; a bounce → the sender's task.
-const W2B_394_HANDLERS: readonly EventHandler[] = [mailRouteHandler(), inquiryFromAddressHandler(), bounceTaskHandler(), /* B-TH-013 */ resumeOnReplyHandler()]
+const W2B_394_HANDLERS: readonly EventHandler[] = [mailRouteHandler(), inquiryFromAddressHandler(), bounceTaskHandler(), /* B-TH-013 */ resumeOnReplyHandler(), /* th-backend-g step 2 */ requestReceiptHandler()]
 // B-W2b-398
 const W2B_398_HANDLERS: readonly EventHandler[] = [customerNoticeHandler(), trackingProblemsHandler(), carrierPodHandler(), returnLabelsUsedHandler()]
 // B-W2b-407: a receipt posted or reversed, a supplier invoice approved or voided → its purchase price variances; a shipment left or came back from the carrier → its cost of goods sold (GATE-ACCOUNTANT: only while the company's switch is on).

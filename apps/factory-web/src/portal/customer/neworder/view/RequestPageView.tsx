@@ -46,6 +46,8 @@ export interface RequestReceipt {
   shipTo: string | null
   at: string
   requestHref: string
+  /** th-backend-g step 2 (P-CUS-NEW.receipt-F02): the copy by e-mail went (true), could not go (false), or is not known (null). */
+  mailed?: boolean | null
 }
 
 export interface RequestPageModel {
@@ -155,7 +157,7 @@ export function RequestPageView({ model, actions, day }: { model: RequestPageMod
         <EndState
           title={receipt.seq !== null ? t('receipt.title', { seq: receipt.seq }) : t('receipt.titleNone')}
           body={t('receipt.body', { subject: receipt.subject })}
-          next={[t('receipt.next'), t('receipt.copy')]}
+          next={[t('receipt.next'), t(receipt.mailed === true ? 'receipt.copySent' : receipt.mailed === false ? 'receipt.copyFailed' : 'receipt.copy')]}
           facts={facts}
           actions={[
             { label: t('receipt.open'), href: receipt.requestHref, variant: 'primary' },

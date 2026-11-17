@@ -5,6 +5,10 @@ import { DRAFTED_LANGUAGES, LANGUAGE_REVIEW, messageLanguageOf, unreadWords } fr
 import { BRAND_ALPHA, BRAND_BETA } from '../../golden-flow/portal/testing/two-brands'
 import { addTenant, addUser, Browser, enrolTotp, startHarness, type Harness, type TestTenant } from '../auth/sessions/testing/harness'
 import { MAIL_FILL_WORDS } from './replies'
+// th-backend-g step 2: the receipt of a request (the language rule of B-TH-098, the one who sent it) and its worker.
+import { callerFor } from '../../core/command'
+import { systemContext } from '../outbox/system'
+import { requestReceiptHandler, sendRequestReceipt } from '../../modules/sales/inquiries/receipt'
 
 /**
  * B-TH-098 (threads plan TH-9, thread-G07; T8-F02 "Saved replies ▾ in the customer's language"; plan decision: "mail texts in DE/FR/ES
@@ -33,6 +37,13 @@ const portuguese = newId()
 const germanContact = newId()
 const portugueseContact = newId()
 const germanRequest = newId()
+// th-backend-g step 2: more of brand A's requests (8, 9, 10) for the receipt; the mails two of them were made from.
+const germanRequest2 = newId()
+const mailRequest = newId()
+const forwardedRequest = newId()
+const ownMail = newId()
+const forwardedMail = newId()
+const system = () => callerFor(h.database, systemContext(tenant.id, `test-${newId()}`))
 
 const admin = async (sql: string, values: unknown[] = []): Promise<Json[]> => (await h.db.admin.query(sql, values)).rows as Json[]
 
@@ -51,6 +62,24 @@ beforeAll(async () => {
     INSERT INTO "Inquiry" (id, "tenantId", "companyId", source, "receivedAt", status, number, "partyId", "contactId", request, "customerSeq")
     VALUES ('${germanRequest}', '${tenant.id}', '${companyId}', 'OFFICE', now(), 'NEW', 'INQ-2026-0042', '${german}', '${germanContact}', 'Made-up: 40 jackets for the spring', 7);
   END $$`)
+  // ---- th-backend-g step 2: a sending address (the FAKE mail account), brand A's requests 8 (typed), 9 (from its contact's own mail,
+  // DMARC passed) and 10 (made from a mail of another address), written past their triggers: test data only.
+  await h.database.withScope({ audience: 'office', tenantId: tenant.id, actorId: newId() }, async (client) => {
+    const accountId = newId()
+    await client.integrationAccount.create({ data: { id: accountId, provider: 'SES', code: 'ses-tpl-lang', label: 'Mail (fake)', mode: 'FAKE', rateLimitPerMinute: 6000, rateLimitBurst: 1000 } })
+    await client.emailIdentity.create({ data: { id: newId(), companyId, kind: 'NOTIFICATION', domain: 'mail.tpl-lang.example.com', fromAddress: 'noreply@mail.tpl-lang.example.com', displayName: 'Esempio Moto', displayNamePolicy: 'COMPANY', replyDomain: 'reply.tpl-lang.example.com', accountId, verificationStatus: 'SUCCESS', dkimStatus: 'SUCCESS', isDefault: true } })
+  })
+  await admin(`DO $$ BEGIN
+    SET LOCAL session_replication_role = replica;
+    INSERT INTO "InboundEmail" (id, "tenantId", "companyId", "accountId", "receiptId", "sesMessageId", "s3Bucket", "s3Key", "receivedAt", "fromAddress", subject, "spfVerdict", "dkimVerdict", "dmarcVerdict", "spamVerdict", "virusVerdict", status)
+    VALUES ('${ownMail}', '${tenant.id}', '${companyId}', '${newId()}', '${newId()}', 'ses-own', 'bucket', 'own', now(), '${BRAND_ALPHA.contact.email.toLowerCase()}', 'Made-up: 20 vests', 'PASS', 'PASS', 'PASS', 'PASS', 'PASS', 'RECEIVED'),
+           ('${forwardedMail}', '${tenant.id}', '${companyId}', '${newId()}', '${newId()}', 'ses-fwd', 'bucket', 'fwd', now(), 'someone@forwarder.example.com', 'Fwd: 5 vests', 'PASS', 'PASS', 'PASS', 'PASS', 'PASS', 'RECEIVED');
+    INSERT INTO "Inquiry" (id, "tenantId", "companyId", source, "sourceEmailId", "receivedAt", status, number, "partyId", "contactId", request, "customerSeq") VALUES
+      ('${germanRequest2}', '${tenant.id}', '${companyId}', 'OFFICE', NULL, now(), 'NEW', 'INQ-2026-0043', '${german}', '${germanContact}', 'Made-up: 12 jackets', 8),
+      ('${mailRequest}', '${tenant.id}', '${companyId}', 'MAIL', '${ownMail}', now(), 'NEW', 'INQ-2026-0044', '${german}', '${germanContact}', 'Made-up: 20 vests', 9),
+      ('${forwardedRequest}', '${tenant.id}', '${companyId}', 'MAIL', '${forwardedMail}', now(), 'NEW', 'INQ-2026-0045', '${german}', '${germanContact}', 'Made-up: 5 vests', 10);
+  END $$`)
+  // ---- end th-backend-g step 2
   const user = await addUser(h, tenant, { email: 'owner@tpl-lang.example.com', role: 'owner' })
   owner = new Browser(h.app)
   const answer = await owner.signIn(tenant.slug, user.email, user.password)
@@ -150,3 +179,41 @@ describe('B-TH-279 / B-TH-098: the request mails and the new-message notice as e
     expect(wrongRecord.status).toBe(400)
   })
 })
+
+// ---- th-backend-g step 2 (B-TH-279 "request received — the receipt with its number"; B-TH-098's language rule) ---------------------
+describe('th-backend-g step 2: the receipt of a request, in the customer’s language, to the one who sent it', () => {
+  const receiptsOf = (inquiryId: string) => admin(`SELECT "to", subject, locale FROM "EmailOutbound" WHERE "recordId" = $1 AND "templateKey" = 'request.received'`, [inquiryId])
+  const received = (inquiryId: string, source: string, sourceEmailId: string | null) =>
+    ({ eventId: newId(), type: 'inquiry.received', version: 1, context: 'sales-inquiries', tenantId: tenant.id, companyId, siteId: null, subject: inquiryId, correlationId: newId(), causationId: null, source: 'factory-api', occurredAt: new Date().toISOString(), payload: { inquiryId, number: 'INQ-x', source, status: 'NEW', partyId: german, sourceEmailId } }) as never
+
+  it('German customer, German not read yet: the receipt goes in English, with its own number, never the office series', async () => {
+    const outcome = await sendRequestReceipt(system(), h.email, { inquiryId: germanRequest, to: { email: BRAND_ALPHA.contact.email, name: BRAND_ALPHA.contact.name, language: 'de' }, clock: h.clock })
+    expect(outcome).toMatchObject({ sent: true, language: 'en' })
+    expect(await receiptsOf(germanRequest)).toEqual([{ to: [BRAND_ALPHA.contact.email.toLowerCase()], subject: 'We received your request 7', locale: 'en' }])
+    expect(JSON.stringify(await receiptsOf(germanRequest))).not.toContain('INQ-2026-0042')
+  })
+
+  it('the company’s own German receipt goes in German (a person’s words need no reading)', async () => {
+    const made = await owner.post('/templates/mail', { companyId, event: 'request.received', language: 'de', subject: 'Anfrage {{inquiry.yourNumber}} erhalten', body: 'Guten Tag {{contact.name}},\nIhre Anfrage {{inquiry.yourNumber}} ist bei uns.\n\n{{company.name}}' })
+    expect(made.status, JSON.stringify(made.body)).toBe(201)
+    const published = await owner.post(`/templates/mail/${made.body.template.id}/publish`, { version: made.body.template.version })
+    expect(published.status, JSON.stringify(published.body)).toBe(200)
+    const outcome = await sendRequestReceipt(system(), h.email, { inquiryId: germanRequest2, to: { email: BRAND_ALPHA.contact.email, name: BRAND_ALPHA.contact.name, language: 'de' }, clock: h.clock })
+    expect(outcome).toMatchObject({ sent: true, language: 'de' })
+    expect(await receiptsOf(germanRequest2)).toEqual([{ to: [BRAND_ALPHA.contact.email.toLowerCase()], subject: 'Anfrage 8 erhalten', locale: 'de' }])
+  })
+
+  it('the worker sends the receipt of a request made from the contact’s own mail; a mail of another address and a typed request get none', async () => {
+    const handler = requestReceiptHandler({ runtime: () => h.email, clock: h.clock })
+    await handler.handle(received(mailRequest, 'MAIL', ownMail), { caller: system(), attempt: 1 })
+    expect((await receiptsOf(mailRequest)).map((row) => row.to)).toEqual([[BRAND_ALPHA.contact.email.toLowerCase()]])
+    await handler.handle(received(forwardedRequest, 'MAIL', forwardedMail), { caller: system(), attempt: 1 })
+    expect(await receiptsOf(forwardedRequest)).toEqual([])
+    const before = (await admin(`SELECT count(*)::int AS n FROM "EmailOutbound" WHERE "templateKey" = 'request.received'`))[0]!.n
+    await handler.handle(received(germanRequest, 'OFFICE', null), { caller: system(), attempt: 1 })
+    expect((await admin(`SELECT count(*)::int AS n FROM "EmailOutbound" WHERE "templateKey" = 'request.received'`))[0]!.n).toBe(before)
+    // Brand B never got any receipt.
+    expect((await admin(`SELECT "to" FROM "EmailOutbound" WHERE "templateKey" = 'request.received'`)).flatMap((row) => row.to)).not.toContain(BRAND_BETA.contact.email.toLowerCase())
+  })
+})
+// ---- end th-backend-g step 2

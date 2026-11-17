@@ -439,7 +439,7 @@ export function RecordDialogs({ model, view, actions }: { model: InquiryRecordMo
   if (dialog.kind === 'assign')
     return <AssignDialog model={{ subject, current: view.assignee, people: dialog.people, busy: dialog.busy, notice: dialog.notice, offline }} actions={{ onAssign: actions?.dialog?.onAssign, onRetry: actions?.dialog?.onRetryPeople, onClose: close }} />
   if (dialog.kind === 'decline')
-    return <DeclineDialog model={{ subject, draft: dialog.draft, message: messageReach(view, model.can), busy: dialog.busy, notice: dialog.notice, offline }} actions={{ onDraft: actions?.dialog?.onDecline, onSubmit: actions?.dialog?.onSubmit, onClose: close }} />
+    return <DeclineDialog model={{ subject, draft: dialog.draft, message: messageReach(view, model.can), start: dialog.start ?? null /* th-backend-g step 2 */, busy: dialog.busy, notice: dialog.notice, offline }} actions={{ onDraft: actions?.dialog?.onDecline, onSubmit: actions?.dialog?.onSubmit, onClose: close }} />
   // ---- B-TH-234: make or match the customer (the check first), "Ask <customer> for…"
   if (dialog.kind === 'customer')
     return <CustomerDialog model={{ view, check: dialog.check, choice: dialog.choice, confirmed: dialog.confirmed, can: model.can, busy: dialog.busy, notice: dialog.notice, offline }} actions={{ onCustomer: actions?.dialog?.onCustomer, onRetry: actions?.dialog?.onRetryCheck, onSubmit: actions?.dialog?.onSubmit, onClose: close }} />

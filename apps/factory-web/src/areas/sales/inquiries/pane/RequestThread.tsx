@@ -26,6 +26,8 @@ export interface AskInfo {
   /** A new number each time Ask for info is pressed: the box switches to the reply with this question. */
   readonly token: number
   readonly question: string
+  /** th-backend-g step 2: the mail's subject from the template request.need_info (empty: none, or a portal request). */
+  readonly subject?: string
   /** The request came from the portal: the question goes there (no address, no send check). */
   readonly portal: boolean
 }
@@ -64,6 +66,8 @@ export function RequestThread({ host, ask = null, onAsk, replyLanguage = null }:
     const composer = latest.current.model.composer
     const switched = switchMode(composer.draft, 'reply', composer.context.people)
     latest.current.actions.onDraft({ ...switched.draft, body: switched.draft.body.trim() || ask.question, forFloor: false }, switched.notes)
+    // th-backend-g step 2: a mail's subject from the template, unless the person wrote one already.
+    if (!ask.portal && ask.subject && !composer.subject.trim()) latest.current.actions.onLines({ to: [...composer.to], cc: [...composer.cc], subject: ask.subject })
   }, [ask])
 
   const send = async () => {

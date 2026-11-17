@@ -633,14 +633,19 @@
     "held": {
       "reason": "Pick a reason",
       "long": "At most {max} characters",
-      "message": "Write the message, or untick \"Send\""
+      "message": "Write the message, or untick \"Send\"",
+      "blank": "Write the reason where “…” stands"
     },
     "send": "Send a message to the customer with the decline",
     "messagePortal": "The customer reads it in its portal, with the decline",
     "messageLanguage": "Write it in {language}: the customer’s language",
+    "blankHint": "The message starts from the company’s e-mail template: write the reason where “…” stands.",
     "language": {
       "it": "Italian",
-      "en": "English"
+      "en": "English",
+      "de": "German",
+      "fr": "French",
+      "es": "Spanish"
     },
     "previewPortal": "Preview — what the customer reads in its portal",
     "finalSend": "The decline and its message go together: if one is refused, neither happens. A closed request changes no more (only its note)."

@@ -513,6 +513,8 @@
     "body": "Oggetto: {subject}",
     "next": "Una persona dell'ufficio vendite la legge e risponde nella pagina della richiesta e per e-mail.",
     "copy": "Vi mandiamo una copia per e-mail. La pagina della richiesta mostra sempre ciò che avete inviato.",
+    "copySent": "Vi abbiamo mandato una copia per e-mail. La pagina della richiesta mostra sempre ciò che avete inviato.",
+    "copyFailed": "Non siamo riusciti a mandarvi una copia per e-mail. La pagina della richiesta mostra sempre ciò che avete inviato.",
     "sent": "Ciò che avete inviato",
     "subject": "Oggetto",
     "ref": "Vostro numero d'ordine",
