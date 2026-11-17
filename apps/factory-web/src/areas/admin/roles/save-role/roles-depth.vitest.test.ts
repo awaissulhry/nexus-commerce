@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { ApiError } from '../../../../lib/api/errors'
 import { CATALOGUE, createTranslator } from '../../../../lib/i18n/messages'
 import { ROLES } from '../../shared/fixtures'
+import { scopeWords } from '../../shared/model' // B-TH-232
+import { scanText } from '../../../../lib/testing/brand-scan' // B-TH-232
+import { BRAND_ALPHA } from '../../../../lib/testing/two-brands' // B-TH-232
+import { ALWAYS_RULES, holdersOf } from '../model' // B-TH-232
 import type { RoleTemplate } from '../new-role/api'
 import { copyName, createProblem, newRoleErrors, offeredTemplates, slugOf, templateHeld } from '../new-role/model'
 import { bodyOf, draftDiff, draftOf, editHeld, grainToggled, refusalWords, reviewRows, saveProblem, toggled, type RoleReview } from './model'
@@ -68,3 +72,40 @@ describe('change role', () => {
     expect(saveProblem(new ApiError('forbidden', 403, 'forbidden', 'x', null, [{ path: 'roles/held' }])).key).toBe('saveRole.problem.refused')
   })
 })
+
+// ── B-TH-232 (threads plan decision 17, WALL-G11, W27: the office side of the wall in words) ──
+describe('B-TH-232 the role screen says plainly what a customer limit covers', () => {
+  const words = (locale: 'it' | 'en') => createTranslator(locale, CATALOGUE[locale].admin ?? {})
+  it('every role’s Scope rules hold “A customer limit covers customer records”, with what it does not limit, in it and en', () => {
+    expect(ALWAYS_RULES).toContain('customerLimit')
+    expect(words('en')('role.rule.customerLimit.title')).toBe('A customer limit covers customer records')
+    for (const locale of ['it', 'en'] as const) {
+      const t = words(locale)
+      for (const rule of ALWAYS_RULES) {
+        expect(t(`role.rule.${rule}.title`), `${locale} ${rule}`).not.toMatch(/^role\.rule\./)
+        expect(t(`role.rule.${rule}.why`), `${locale} ${rule}`).not.toMatch(/^role\.rule\./)
+      }
+    }
+    // It says what stays unlimited (decision 17: no full office wall), never a customer's name.
+    expect(words('en')('role.rule.customerLimit.why')).toMatch(/work orders/)
+    for (const locale of ['it', 'en'] as const) expect(scanText(words(locale)('role.rule.customerLimit.why'), BRAND_ALPHA)).toEqual([])
+  })
+
+  it('a holder limited to some customers never reads as every company alone: “· 2 customers only”', () => {
+    const t = words('en')
+    const customers = (count: number) => t('scope.customers', { count })
+    const companies = [{ id: 'c1', name: 'Made-up Factory', sites: [] }]
+    expect(scopeWords({ allCompanies: true, companyIds: [], siteIds: [], partyIds: ['p1', 'p2'] }, companies, t('scope.all'), customers)).toBe(`${t('scope.all')} · 2 customers only`)
+    expect(scopeWords({ allCompanies: false, companyIds: ['c1'], siteIds: [], partyIds: ['p1'] }, companies, t('scope.all'), customers)).toBe('Made-up Factory · 1 customer only')
+    expect(scopeWords({ allCompanies: true, companyIds: [], siteIds: [], partyIds: [] }, companies, t('scope.all'), customers)).toBe(t('scope.all'))
+    // Without the words (an older caller): as before.
+    expect(scopeWords({ allCompanies: true, companyIds: [], siteIds: [], partyIds: ['p1'] }, companies, t('scope.all'))).toBe(t('scope.all'))
+  })
+
+  it('the Users tab reads each holder’s customers from the assignment', () => {
+    const role = ROLES[0]!
+    const user = { id: 'u1', email: 'made-up@example.com', displayName: 'Made-up person', locale: 'en', status: 'ACTIVE', roles: [{ assignmentId: 'a1', roleId: role.id, roleKey: role.key, roleName: role.name, allCompanies: true, companyIds: [], siteIds: [], partyIds: ['p1', 'p2'], validTo: null }], mfaEnabled: false, lastSignInAt: null } as unknown as Parameters<typeof holdersOf>[1][number]
+    expect(holdersOf(role, [user])[0]!.scope.partyIds).toEqual(['p1', 'p2'])
+  })
+})
+// ── end B-TH-232 ──

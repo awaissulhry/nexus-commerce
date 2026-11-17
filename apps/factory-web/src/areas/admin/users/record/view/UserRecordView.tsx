@@ -222,7 +222,7 @@ function RolesTab({ model, open, selected, onSelect, actions }: { model: UserRec
             <ul className="fw-adm-guards">
               {live.map((assignment) => (
                 <li key={assignment.id}>
-                  <strong>{words.name({ key: assignment.roleKey, name: assignment.roleName })}</strong> — {words.description({ key: assignment.roleKey, description: roleOf(assignment.roleId)?.description ?? null }) ?? t('roles.noDescription')} · {scopeWords(assignment, model.companies, t('scope.all'))}
+                  <strong>{words.name({ key: assignment.roleKey, name: assignment.roleName })}</strong> — {words.description({ key: assignment.roleKey, description: roleOf(assignment.roleId)?.description ?? null }) ?? t('roles.noDescription')} · {scopeWords(assignment, model.companies, t('scope.all'), (count) => t('scope.customers', { count }) /* B-TH-232 */)}
                 </li>
               ))}
             </ul>

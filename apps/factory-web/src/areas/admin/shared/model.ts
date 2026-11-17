@@ -160,8 +160,15 @@ export interface ScopeOption {
 export const EVERYWHERE: ScopeChoice = { allCompanies: true, companyIds: [], siteIds: [] }
 
 /** Where a role applies, in words: "All companies", or "Officina Demo S.r.l. › Plant 1". */
-export function scopeWords(scope: { allCompanies: boolean; companyIds: readonly string[]; siteIds: readonly string[] }, companies: readonly ScopeOption[], all: string): string {
-  if (scope.allCompanies) return all
+// B-TH-232 (decision 17, WALL-G11): `customers` — the words of an assignment limited to some customers ("2 customers only"), added
+// after its companies, so a customer-limited person never reads as "All companies" alone.
+export function scopeWords(scope: { allCompanies: boolean; companyIds: readonly string[]; siteIds: readonly string[]; partyIds?: readonly string[] }, companies: readonly ScopeOption[], all: string, customers?: (count: number) => string): string {
+  const limit = customers && scope.partyIds && scope.partyIds.length > 0 ? customers(scope.partyIds.length) : null
+  const places = scope.allCompanies ? all : placesOf(scope, companies)
+  return limit ? [places, limit].filter(Boolean).join(' · ') : places
+}
+
+function placesOf(scope: { companyIds: readonly string[]; siteIds: readonly string[] }, companies: readonly ScopeOption[]): string {
   const sites = new Set(scope.siteIds)
   return scope.companyIds
     .map((id) => {

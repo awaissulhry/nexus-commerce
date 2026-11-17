@@ -222,10 +222,13 @@ export async function reportsOf(caller: CommandCaller, inspectionId: string) {
     // B-TH-032 (WALL-G07): a shipment whose customer is not the work order's only one cannot take the report as is.
     const made = await workOrderPartiesOf(db, inspection.workOrderId)
     const problemOf = (shipment: { readonly status: string; readonly partyId: string }) => attachStateProblem(shipment.status as never) ?? sharedProductionProblem(made, shipment.partyId, header.number)
+    // B-TH-232 (the office side of the wall in words): which hold it is, so the screen says it in its words and offers the
+    // shipment's certificate of conformity instead of the report of a work order of several customers.
+    const heldOf = (shipment: { readonly status: string; readonly partyId: string }): 'STATE' | 'SHARED_PRODUCTION' | null => (attachStateProblem(shipment.status as never) !== null ? 'STATE' : sharedProductionProblem(made, shipment.partyId, header.number) !== null ? 'SHARED_PRODUCTION' : null)
     return {
       inspection: { id: inspection.id, number: inspection.number ?? `${header.number} · inspection`, status: inspection.status, workOrderId: inspection.workOrderId, signed },
       versions: versions.map((version) => versionView(version, names)),
-      shipments: shipments.map((shipment) => ({ id: shipment.id, number: shipment.number, status: shipment.status, customer: parties.get(shipment.partyId) ?? null, shareable: problemOf(shipment) === null, problem: problemOf(shipment) })),
+      shipments: shipments.map((shipment) => ({ id: shipment.id, number: shipment.number, status: shipment.status, customer: parties.get(shipment.partyId) ?? null, shareable: problemOf(shipment) === null, problem: problemOf(shipment), held: heldOf(shipment) /* B-TH-232 */ })),
       shares: copies.map((copy) => shareView(copy, numbers)),
       ready: { ok: holds.length === 0, held: holds },
       may: { make: signed && inspectionMay(context, QUALITY_DOCUMENTS_MAKE, inspection), share: signed && versions.length > 0 && inspectionMay(context, QUALITY_DOCUMENTS_SHARE, inspection) },

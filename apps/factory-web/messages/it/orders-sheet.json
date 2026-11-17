@@ -94,7 +94,8 @@
     "brand": "Marchio: {name}",
     "company": "Azienda: {name}",
     "remove": "Togli “{name}”",
-    "clearAll": "Togli tutti"
+    "clearAll": "Togli tutti",
+    "cf": "Campi personalizzati: {terms}"
   },
   "switcher": {
     "title": "Cliente",
@@ -142,5 +143,19 @@
     "doorTab": "Aprilo in una nuova scheda",
     "peek": "Uno sguardo al cliente o all'ordine (sul suo link)"
   },
-  "shippedOf": "{shipped} di {units}"
+  "shippedOf": "{shipped} di {units}",
+  "sort": {
+    "label": "Ordina",
+    "newest": "Più recenti prima",
+    "customer": "Cliente A–Z",
+    "customerBack": "Cliente Z–A",
+    "brand": "Marchio A–Z",
+    "brandBack": "Marchio Z–A",
+    "promise": "Data promessa, prima la più vicina",
+    "promiseBack": "Data promessa, prima la più lontana",
+    "daysLate": "Giorni di ritardo, prima i più",
+    "daysLateBack": "Giorni di ritardo, prima i meno",
+    "ordered": "Data ordine, prima la più vecchia",
+    "orderedBack": "Data ordine, prima la più recente"
+  }
 }
