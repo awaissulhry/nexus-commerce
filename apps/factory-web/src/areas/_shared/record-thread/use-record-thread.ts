@@ -5,8 +5,8 @@ import { useRouter } from 'next/navigation'
 import { newIdempotencyKey } from '../../../lib/api/client'
 import { addDropped, contentTypeOf, draftOfRecordFile, kindOf, sendable, uploadAudience, type DraftFile, type RecordFile } from '../../../lib/record-thread/attachments/model'
 import { messageLink, type CardMessage } from '../../../lib/record-thread/card/model'
-import { mentionsOf, startDraft, switchMode, type ComposerContext } from '../../../lib/record-thread/composer/model'
-import type { FeedModel } from '../../../lib/record-thread/feed/model'
+import { mentionsOf, startDraft, switchMode, type ComposerContext, type ComposerDraft } from '../../../lib/record-thread/composer/model'
+import type { FeedModel } from '../../../lib/record-thread/feed/view/Feed'
 import { anchorOf, cardOf, closedBy, eventOf, feedShowsChange, withOutbox, type ThreadApiChange, type ThreadApiDelivery, type ThreadApiEmail } from '../../../lib/record-thread/model'
 import type { RecordThreadActions, RecordThreadModel } from '../../../lib/record-thread/RecordThread'
 import { classify, cleanAddress, defaultSubject, defaultTo, sendBody, type CheckState, type Contact, type Recipient } from '../../../lib/record-thread/send-check/model'
@@ -44,7 +44,7 @@ export interface RecordThreadHost {
 
 type Notice = NonNullable<RecordThreadModel['notice']>
 
-const EMPTY_WORK = (draft = { mode: 'note' as const, body: '', forFloor: false }): Work => ({ draft, notes: [], files: [], to: [], cc: [], subject: '', outbox: [] })
+const EMPTY_WORK = (draft: ComposerDraft = { mode: 'note', body: '', forFloor: false }): Work => ({ draft, notes: [], files: [], to: [], cc: [], subject: '', outbox: [] })
 
 export function useRecordThread(host: RecordThreadHost): { model: RecordThreadModel; actions: RecordThreadActions; guard: { pending: string | null } } {
   const api = useOfficeApi()
