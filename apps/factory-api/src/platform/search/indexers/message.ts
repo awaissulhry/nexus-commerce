@@ -3,13 +3,15 @@ import { holdsAmount, withoutAmounts } from '@nexus/factory-domain/search/text'
 import type { CommandTx } from '../../../core/command'
 import { recordLabelOf } from '../../threads/labels'
 import { THREAD_GATES } from '../../threads/records'
+import { mayShare, wallPartiesOf } from '../../threads/records' // B-PR-08a part 2
+import { EVERY_PARTY_MARKER } from '../../../modules/quality/wall' // B-PR-08a part 2
 import { defineIndexer, idWhere, type SearchDocument } from '../indexer'
 
 /**
  * Messages of record threads (B-TH-097; threads plan TH-9, G11 "search inside messages", office only; design thread T1 "Search
  * in the thread", PROJ.thread "Search in the project"): every note, mail and portal message by its words and the names of its
  * files, so the office finds the conversation where something was said. The entry is the thread's: its company, site and party
- * (as GET /threads reads it), seen with threads.read — and ../search.ts reads each hit again against its thread (the record type's
+ * (as GET /threads reads it; B-PR-08a: a work order's, hold's or NCR's customer), seen with threads.read — and ../search.ts reads each hit again against its thread (the record type's
  * gate, the thread's scope now) before showing it, with the record it opens. Never in the portal: no partner view names a
  * message (a portal or link session's search never reaches one, of its own party or another's, nor an office note).
  *
@@ -29,6 +31,15 @@ async function documentsOf(tx: CommandTx, rows: readonly MessageRow[]): Promise<
     (await tx.storedFile.findMany({ where: { id: { in: [...new Set(rows.flatMap((row) => row.attachmentFileIds))] } }, select: { id: true, originalName: true } })).map((file) => [file.id, file.originalName]),
   )
   const labels = new Map<string, string | null>()
+  // ---- B-PR-08a part 2: a work order's, hold's or NCR's thread is party-less (never shared); its messages are found through the
+  // record's customer (its wall party: one → it; several or none named → every customer only), as its thread is read.
+  const walls = await wallPartiesOf(tx, rows.filter((row) => !mayShare(row.thread.recordType)).map((row) => ({ type: row.thread.recordType, id: row.thread.recordId })))
+  const placeOf = (thread: MessageRow['thread']): { partyId: string | null; everyParty: boolean } => {
+    if (mayShare(thread.recordType)) return { partyId: thread.partyId, everyParty: false }
+    const wall = walls.get(`${thread.recordType}:${thread.recordId}`) ?? EVERY_PARTY_MARKER
+    return wall === EVERY_PARTY_MARKER ? { partyId: null, everyParty: true } : { partyId: wall, everyParty: false }
+  }
+  // ---- end B-PR-08a
   const documents: SearchDocument[] = []
   for (const row of rows) {
     const key = `${row.thread.recordType}:${row.thread.recordId}`
@@ -40,7 +51,7 @@ async function documentsOf(tx: CommandTx, rows: readonly MessageRow[]): Promise<
       recordId: row.id,
       companyId: row.thread.companyId,
       siteId: row.thread.siteId,
-      partyId: row.thread.partyId,
+      ...placeOf(row.thread), // B-PR-08a part 2
       number: null,
       title: label === null || holdsAmount(label) ? row.thread.recordType : label,
       subtitle: words === '' ? null : excerptOf(words, EXCERPT),

@@ -32,6 +32,7 @@ import type { AttachmentView, MessageView, ThreadView } from './contract'
 import { followInCommand } from './followers'
 import { mayOnThread, resolveRecord, type RecordScope } from './records'
 import { mayShare, notShareableRefusal } from './records' // B-PR-08a
+import { wallScopeOf, type WallScope } from './records' // B-PR-08a part 2
 // ---- B-TH-027 / B-TH-028: the reader's own read mark; the office's head (who answers, what waits).
 import { serverClock } from '../../core/time'
 import { headOf } from './owner'
@@ -159,13 +160,17 @@ export function afterCursor(cursor: TimelineCursor | null, field: string): Recor
  * The record as the office sees it: its thread (if it has one) and its scope, the thread's own when it exists, else the
  * record's from its resolver. A record type without a thread, or a record that does not exist, is not found.
  */
-export async function officeRecord(client: FactoryClient | CommandTx, record: RecordRef): Promise<{ thread: ThreadRow | null; scope: ScopedRecord }> {
+// ---- B-PR-08a part 2: a work order's, hold's or NCR's scope carries its WALL party (records.ts), its share party stays none — also
+// when its thread exists (the row is party-less): every office check through here (read, note, mention list, follow, owner, mail,
+// timeline) reaches it only through its customer.
+export async function officeRecord(client: FactoryClient | CommandTx, record: RecordRef): Promise<{ thread: ThreadRow | null; scope: WallScope }> {
   const thread = await client.thread.findFirst({ where: recordWhere(record), select: THREAD_OFFICE })
-  if (thread) return { thread, scope: scopeOfThread(thread) }
+  if (thread) return { thread, scope: await wallScopeOf(client, thread) }
   const scope = await resolveRecord(client, record.type, record.id)
   if (!scope) throw new NotFoundError('Record not found.')
-  return { thread: null, scope }
+  return { thread: null, scope: mayShare(record.type) ? scope : { ...scope, partyId: null } }
 }
+// ---- end B-PR-08a
 
 export function threadViewOf(row: SeenThread): ThreadView {
   return {
@@ -473,6 +478,7 @@ export async function mentionProblems(tx: CommandTx, context: RequestContext, th
   if (userIds.length === 0) return []
   if (context.audience === 'platform') throw new ApiError('internal_error', 'Mentions belong to a tenant.')
   const active = new Set((await tx.user.findMany({ where: { id: { in: [...userIds] }, status: 'ACTIVE' }, select: { id: true } })).map((user) => user.id))
+  const scope = await wallScopeOf(tx, thread) // B-PR-08a part 2: a work order's, hold's or NCR's customer decides who may be mentioned
   const problems: Issue[] = []
   for (const [index, userId] of userIds.entries()) {
     const path = `body/mentions/${index}`
@@ -482,7 +488,7 @@ export async function mentionProblems(tx: CommandTx, context: RequestContext, th
     }
     // Their grants as a signed-in session would hold them (two-factor taken as proved: they will prove it to open it).
     const reader: Actor = { audience: 'office', tenantId: context.tenantId, grants: sessionGrants({ requireMfa: false }, await heldRoles(tx, userId, now), true) }
-    if (!mayOnThread(reader, THREADS_READ, thread.recordType, scopeOfThread(thread))) problems.push({ path, message: "This person cannot read this record's thread." })
+    if (!mayOnThread(reader, THREADS_READ, thread.recordType, scope)) problems.push({ path, message: "This person cannot read this record's thread." })
   }
   return problems
 }
@@ -544,8 +550,8 @@ export async function postNote(caller: CommandCaller, record: RecordRef, input: 
     { name: 'threads.postNote', idempotencyKey, input: { recordType: record.type, recordId: record.id, ...draft } },
     async (tools) => {
       const { thread } = await ensureThread(tools, record, context.actorId)
-      // The thread as it is now (made by this command or a racing one): its scope decides.
-      if (!mayOnThread(actor, THREADS_POST, record.type, scopeOfThread(thread))) throw new ForbiddenError()
+      // The thread as it is now (made by this command or a racing one): its scope decides (B-PR-08a part 2: with its wall party).
+      if (!mayOnThread(actor, THREADS_POST, record.type, await wallScopeOf(tools.tx, thread))) throw new ForbiddenError()
       if (thread.status !== 'OPEN') throw new InvalidStateError('This thread is closed; reopen it to write a note.')
       const issues = [
         ...(await attachmentProblems(tools.tx, context, thread, draft.attachments, 'OFFICE')),
@@ -579,9 +585,14 @@ export async function setThreadStatus(
 ): Promise<ThreadView> {
   const context = contextOf(caller)
   const actor = actorOf(context)
-  const thread = await caller.withClient((client) => client.thread.findFirst({ where: recordWhere(record), select: THREAD_OFFICE }))
-  if (!thread || !mayOnThread(actor, THREADS_READ, record.type, scopeOfThread(thread))) throw new NotFoundError('This record has no thread.')
-  if (!mayOnThread(actor, THREADS_MANAGE, record.type, scopeOfThread(thread))) throw new ForbiddenError()
+  // ---- B-PR-08a part 2: closing or reopening a work order's, hold's or NCR's thread asks its wall party too.
+  const { thread, scope } = await caller.withClient(async (client) => {
+    const found = await client.thread.findFirst({ where: recordWhere(record), select: THREAD_OFFICE })
+    return { thread: found, scope: found ? await wallScopeOf(client, found) : null }
+  })
+  if (!thread || !scope || !mayOnThread(actor, THREADS_READ, record.type, scope)) throw new NotFoundError('This record has no thread.')
+  if (!mayOnThread(actor, THREADS_MANAGE, record.type, scope)) throw new ForbiddenError()
+  // ---- end B-PR-08a
   const { result } = await command(
     caller,
     {
